@@ -4,10 +4,13 @@
 #   push to main          release X.Y.Z (prod channel), then the back-merge PR and the AUR
 #   workflow_dispatch     any branch, channel dev|prod; `publish: false` builds and publishes nothing
 #
-# Order (a build never starts before the checks are green):
+# Order (builds run alongside the checks; nothing is published until the checks are green):
 #
-#   version -> checks (ci.yml) -> frontend (dist/ once) -> build (linux, android, windows; fail-fast)
-#           -> package (pacman, flatpak) -> publish (+ prune of old pre-releases) -> aur, backmerge
+#   version, images -> frontend (dist/ once) -> build (linux, android, windows; fail-fast)
+#                   -> checks (ci.yml), in parallel with the builds
+#   checks, build   -> package (pacman, flatpak)
+#   checks, package -> publish (+ prune of old pre-releases) -> aur, backmerge
+#   checks red      -> cancel-on-red stops the whole run
 #
 # What each job does and the secrets it needs: docs/ci.md, "release.yml". The release notes, the
 # tag and the checksums are `cargo xtask publish`; the version is `cargo xtask version`.
@@ -100,11 +103,21 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # ------------------------------------------------------------------ images
+  # The CI images the frontend and the builds run in (a tag already in ghcr is not built again).
+  # ci.yml calls the same workflow; by then the tag exists, so it costs seconds.
+  images:
+    uses: ./.github/workflows/images.yml
+    permissions:
+      contents: read
+      packages: write
+
   # ------------------------------------------------------------------ checks
-  # ci.yml as a reusable workflow (images, deps, check-linux, check-frontend, check-android,
+  # ci.yml as a reusable workflow (deps, check-linux, check-frontend, check-android,
   # clippy-windows, ci-ok): the same lanes as in a PR. Its push trigger is gone, this is the run.
+  # The builds do not wait for it; `publish` does, and a red result cancels the run.
   checks:
-    needs: version
+    needs: [version, images]
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
@@ -115,11 +128,11 @@ jobs:
   # `vite build` once for every platform: dist/ goes to the builds as an artifact, and their Tauri
   # overlays have no beforeBuildCommand.
   frontend:
-    needs: [version, checks]
+    needs: [version, images]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
-      image: ${{ needs.checks.outputs.base }}/ci-node:${{ needs.checks.outputs.tag }}
+      image: ${{ needs.images.outputs.base }}/ci-node:${{ needs.images.outputs.tag }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -160,12 +173,13 @@ jobs:
   # One group: the first failure cancels the others (fail-fast). linux and android run
   # `cargo xtask build` on the runner, which starts the ci-linux / ci-android image from ghcr
   # (podman or docker, as on a developer machine); windows is the native script, WiX makes the MSI
-  # there. Pre-releases build with thin LTO and 16 codegen units, releases with the full LTO of
-  # [profile.release]. Pre-releases also take compiled crates from the lane's sccache (key from
-# lane-key.sh build-<name>: dependencies, image, LTO switches), saved once per key; releases from
-# main build from scratch, as in ci.yml.
+  # there. The release profile follows the channel (xtask and build-windows.ps1 set it): dev
+  # builds without LTO on 16 codegen units, prod keeps the full LTO of [profile.release].
+  # Pre-releases also take compiled crates from the lane's sccache (key from lane-key.sh
+  # build-<name>: dependencies, image, channel), saved once per key; releases from main build
+  # from scratch, as in ci.yml. The builds do not wait for the checks.
   build:
-    needs: [version, checks, frontend]
+    needs: [version, images, frontend]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
     strategy:
@@ -186,8 +200,6 @@ jobs:
       BUILD_VERSION: ${{ needs.version.outputs.version }}
       ANDROID_VERSION_CODE: ${{ needs.version.outputs.version_code }}
       CARGO_INCREMENTAL: "0"
-      CARGO_PROFILE_RELEASE_LTO: ${{ needs.version.outputs.channel == 'dev' && 'thin' || 'true' }}
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ needs.version.outputs.channel == 'dev' && '16' || '1' }}
       # linuxdeploy (AppImage) is an AppImage itself: no FUSE in containers.
       APPIMAGE_EXTRACT_AND_RUN: "1"
       NO_STRIP: "true"
@@ -275,6 +287,11 @@ jobs:
           MWT_TAURI_CONFIG: ${{ github.workspace }}\.cache\tauri-ci-windows.json
         run: ./scripts/ci/build-windows.ps1 -OutDir release
 
+      # The containers write the sccache directory as root; the cache action (tar, as the runner
+      # user) fails on it with "Permission denied". Hand it back, also after a failed build.
+      - name: Hand the container cache back to the runner user
+        if: always() && env.USE_CACHE == 'true' && matrix.name != 'windows'
+        run: sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/sccache" || true
       - name: Save the lane cache
         if: env.USE_CACHE == 'true' && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -301,7 +318,7 @@ jobs:
   # `build-macos` to the `needs` and to the `if` of `publish` (it accepts `skipped` today), and pass
   # `macos` as the third argument of check-release-files.sh.
   build-macos:
-    needs: [version, checks, frontend]
+    needs: [version, frontend]
     if: false
     runs-on: macos-latest
     timeout-minutes: 120
@@ -310,8 +327,6 @@ jobs:
     env:
       RELEASE_CHANNEL: ${{ needs.version.outputs.channel }}
       BUILD_VERSION: ${{ needs.version.outputs.version }}
-      CARGO_PROFILE_RELEASE_LTO: ${{ needs.version.outputs.channel == 'dev' && 'thin' || 'true' }}
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ needs.version.outputs.channel == 'dev' && '16' || '1' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -346,7 +361,7 @@ jobs:
   # Both run in archlinux:base-devel under the container engine (flatpak-builder needs
   # --privileged for bubblewrap).
   package:
-    needs: [version, build]
+    needs: [version, checks, build]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -392,9 +407,11 @@ jobs:
   # TODO(updater): latest.json + .sig (build rewrite plan, decision 16) are not produced: the app
   # has no updater plugin and the bundles are not signed with TAURI_SIGNING_PRIVATE_KEY yet.
   publish:
-    needs: [version, build, build-macos, package]
-    # build-macos is skipped while it is paused; any other result than success stops the release.
-    if: ${{ !cancelled() && needs.version.outputs.publish == 'true' && needs.build.result == 'success' && needs.package.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.build-macos.result) }}
+    needs: [version, checks, build, build-macos, package]
+    # The builds run alongside the checks, so the checks gate the release here: `checks` must be
+    # a success (not skipped), as must build and package. build-macos is skipped while it is
+    # paused; any other result than success or skipped stops the release.
+    if: ${{ !cancelled() && needs.version.outputs.publish == 'true' && needs.checks.result == 'success' && needs.build.result == 'success' && needs.package.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.build-macos.result) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -430,6 +447,24 @@ jobs:
         if: needs.version.outputs.pre == 'true'
         continue-on-error: true
         run: bin/xtask prune-prereleases
+
+  # ------------------------------------------------------------------ cancel-on-red
+  # The builds are not gated by the checks; when a check fails there is nothing to publish, so the
+  # rest of the run (builds, packaging) is stopped instead of burning an hour of runners.
+  cancel-on-red:
+    needs: checks
+    if: ${{ !cancelled() && needs.checks.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID"
 
   # ------------------------------------------------------------------ aur
   # multi-wallet-tracker-bin for Arch, from the published tarball. No AUR_SSH_PRIVATE_KEY: skipped

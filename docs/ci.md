@@ -92,11 +92,16 @@
   (`saas-linux-medium-amd64`, 4 vCPU; лёгкие job'ы — на small, 2 vCPU).
   Быстрее — `saas-linux-large-amd64` (8 vCPU: `build:linux` 433 с против 1113 с
   на small), дешевле — `saas-linux-small-amd64`.
-- **Пре-релизы — thin LTO.** В `development` (и ручных/плановых пайплайнах)
-  `CARGO_PROFILE_RELEASE_LTO=thin` и `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16`:
-  финальная оптимизация идёт параллельно, а не в один поток. Релизы из
-  `main` собираются с полным LTO и одной единицей (`[profile.release]` в
-  `Cargo.toml`) — самый маленький и быстрый бинарник.
+- **Пре-релизы — без LTO.** Канал dev (пре-релизы из `development`, ручные и
+  локальные сборки) собирается с `CARGO_PROFILE_RELEASE_LTO=off` и
+  `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16`: финальная оптимизация идёт
+  параллельно, а не в один поток. Переменные выставляет сам `cargo xtask
+  build` по каналу (`Channel::build_env`; в контейнер они пробрасываются) и
+  `scripts/ci/build-windows.ps1` по `RELEASE_CHANNEL`; значение, заданное в
+  окружении явно, главнее. Релизы из `main` (prod) собираются с полным LTO и
+  одной единицей (`[profile.release]` в `Cargo.toml`) — самый маленький и
+  быстрый бинарник. Старый GitLab-пайплайн (`.gitlab-ci.yml`) пока держит
+  thin.
 - Быстрое сжатие кэша и артефактов (`FF_USE_FASTZIP`), без debug-info в
   проверках (`CARGO_PROFILE_DEV_DEBUG=0`).
 
@@ -201,9 +206,10 @@ flatpak нет cargo), поэтому имена канала и конфиг Ta
 `X.Y.Z` prod-канала; PR выпуск не запускает. Граф (`needs`):
 
 ```
-version ──► checks (ci.yml) ──► frontend ──► build (linux | android | windows) ──► package (pacman | flatpak)
-   │                                │                                                   │
-   │                                └──► build-macos (пауза)                            │
+version, images ──► frontend ──► build (linux | android | windows) ──► package (pacman | flatpak)
+   │      │                    │                                                     │
+   │      │                    └──► build-macos (пауза)                              │
+   │      └──► checks (ci.yml), параллельно со сборками ──► cancel-on-red (если красные)
    └──────────────────────────────────────────────────────────► publish ◄───────────────┘
                                                                   ├──► aur       (только prod)
                                                                   └──► backmerge (только prod)
@@ -214,15 +220,22 @@ version ──► checks (ci.yml) ──► frontend ──► build (linux | an
   артефактом во все следующие job'ы), считает `X.Y.Z[-N]`
   (`cargo xtask version`: падает, если тег `vX.Y.Z` уже есть) и пишет оверлей
   Tauri для Windows. Номер `N` и Android `versionCode` — `GITHUB_RUN_NUMBER`.
-- `checks` — `ci.yml` целиком; ни одна сборка не стартует без зелёных проверок.
+- `images` — образы CI (`images.yml`); от них зависят `frontend`, сборки и
+  `checks`. Сборки проверок не ждут: идут параллельно с ними.
+- `checks` — `ci.yml` целиком. `publish` требует `checks` в статусе
+  `success`; красные проверки запускают `cancel-on-red` (`actions: write`,
+  `gh run cancel`), и оставшиеся сборки гасятся.
 - `frontend` — `pnpm build` один раз, `dist/` уходит артефактом; сборки зовут
   `--prebuilt-frontend` (оверлей без `beforeBuildCommand`).
 - `build` — одна группа с `fail-fast: true`: первая упавшая сборка отменяет
   остальные (перезапуск — «Re-run failed jobs»). linux и android —
   `xtask build <платформа>` на раннере с образами `ci-linux`/`ci-android` из
   ghcr (docker), windows — `scripts/ci/build-windows.ps1` на `windows-latest`
-  (MSI собирает WiX). Пре-релизы идут с thin LTO и 16 codegen units, релиз — с
-  LTO из `[profile.release]`.
+  (MSI собирает WiX). Пре-релизы идут без LTO на 16 codegen units, релиз — с
+  LTO из `[profile.release]`. Кэш sccache контейнерных сборок перед
+  сохранением возвращается пользователю раннера (`chown`): docker пишет его
+  от root. Ключ кэша (`lane-key.sh`) включает канал; на Windows
+  `SCCACHE_IDLE_TIMEOUT=0` держит сервер живым на хвосте LTO.
 - `package` — pacman и Flatpak из Linux-тарболла (`xtask build pacman|flatpak`,
   контейнер archlinux, Flatpak `--privileged`).
 - `publish` — единственный job с `contents: write`: проверка набора файлов

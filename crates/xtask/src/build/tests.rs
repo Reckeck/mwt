@@ -203,3 +203,21 @@ fn container_gets_the_ci_build_switches_by_name() {
         assert!(at.is_some_and(|at| cmd.args[at - 1] == "-e"), "{name}");
     }
 }
+
+#[test]
+fn dev_container_builds_without_lto_unless_the_run_chose() {
+    let mut shared = env();
+    Arc::get_mut(&mut shared).unwrap().engine = Some("docker".into());
+    let Ok(cmd) = shared.run_ci("linux", "image", "true", Vec::new()) else {
+        panic!("no command");
+    };
+    for (name, value) in [
+        ("CARGO_PROFILE_RELEASE_LTO", "off"),
+        ("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "16"),
+    ] {
+        if std::env::var_os(name).is_none() {
+            let pair = format!("{name}={value}");
+            assert!(cmd.args.contains(&pair), "{pair}");
+        }
+    }
+}

@@ -5,7 +5,9 @@
 #   - the sccache version (entries of another version never hit),
 #     a build-* lane has no rustc on the runner: the image tag (Dockerfile + mise.toml [tools])
 #     and SCCACHE_PIN (the sccache the Windows job installs),
-#   - the release profile switches (thin LTO for pre-releases),
+#   - the channel (RELEASE_CHANNEL: dev builds without LTO, prod with the full one; xtask sets the
+#     switches itself, so the key must name the channel) and any release profile switch set in
+#     the workflow env,
 #   - the CI image tag (CI_IMAGE_TAG, empty off-image),
 #   - the dev profile switches set in the workflow env,
 #   - the external packages of Cargo.lock (workspace crates, whose version a release
@@ -34,6 +36,7 @@ digest() {
   fi
   echo "image=${CI_IMAGE_TAG:-}"
   echo "debug=${CARGO_PROFILE_DEV_DEBUG:-}"
+  echo "channel=${RELEASE_CHANNEL:-}"
   echo "lto=${CARGO_PROFILE_RELEASE_LTO:-} units=${CARGO_PROFILE_RELEASE_CODEGEN_UNITS:-}"
   cat .cargo/config.toml .github/scripts/deps-cook.sh
   awk -v RS= '/(^|\n)source = /' Cargo.lock
