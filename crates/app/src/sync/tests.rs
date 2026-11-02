@@ -1623,3 +1623,148 @@ async fn a_live_link_receives_an_edit_made_just_before_a_sync_call() {
     })
     .await;
 }
+
+// -- hand-over bookkeeping and forgotten devices ------------------------------------
+
+fn trusted(host: &TestHost, device_id: &str) -> bool {
+    host.with_vault(|vault| {
+        Ok(vault
+            .sync_state()
+            .peers
+            .iter()
+            .any(|peer| peer.device_id == device_id && peer.revoked.is_none()))
+    })
+    .unwrap()
+}
+
+#[test]
+fn pending_trust_survives_a_restart() {
+    use trade_core::appconfig::{load_settings, save_settings};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut vault, _) = same_vault(dir.path());
+    let path = dir.path().join("left.wallet");
+    let now = 1_000_000;
+
+    let mut settings = AppSettings::default();
+    super::pending::remember(&mut settings, &path, "laptop-id", "Laptop", "key-1", now);
+    save_settings(dir.path(), &settings).unwrap();
+
+    // The process is killed: the next start reads the settings file again.
+    let mut restarted = load_settings(dir.path());
+    // Another file's entry is not taken.
+    assert!(super::pending::take(&mut restarted, &dir.path().join("other.wallet"), now).is_empty());
+    let taken = super::pending::take(&mut restarted, &path, now + 60_000);
+    assert_eq!(taken.len(), 1);
+    super::pending::apply(&mut vault, &taken[0]).unwrap();
+    assert!(
+        vault
+            .sync_state()
+            .peers
+            .iter()
+            .any(|peer| peer.device_id == "laptop-id" && peer.revoked.is_none())
+    );
+    // Consumed once.
+    assert!(super::pending::take(&mut restarted, &path, now + 60_000).is_empty());
+
+    // An entry nobody unlocked for a week is dropped.
+    super::pending::remember(&mut restarted, &path, "laptop-id", "Laptop", "key-1", now);
+    let late = now + super::pending::PENDING_TTL_MS + 1;
+    assert!(super::pending::take(&mut restarted, &path, late).is_empty());
+    assert!(restarted.pending_trusts.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_new_transfer_after_a_decline_links_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, right) = same_vault(dir.path());
+    let (main, main_events) = device("Laptop", left, SyncRole::Main);
+    let (client, client_events) = device("Phone", right, SyncRole::Client);
+    seed(&main, "salary on the laptop");
+    client.0.settings.lock().unwrap().sync.confirm_first = true;
+    let main_id = main.settings().device_id;
+    let client_id = client.settings().device_id;
+    let _main_seen = responder(main.clone(), main_events, Some(true));
+    let client_seen = responder(client.clone(), client_events, Some(false));
+    connect(&main, &client).await;
+    until("the decline pauses the laptop", || {
+        paused(&client, &main_id)
+    })
+    .await;
+    until("links gone", || {
+        main.hub().links.is_empty() && client.hub().links.is_empty()
+    })
+    .await;
+    connect(&main, &client).await;
+    until("the laptop is told", || {
+        cut_reason(&main, &client_id) == Some(SyncCutReason::Paused)
+    })
+    .await;
+
+    // A new transfer: the laptop sends the vault again, the phone unlocks it.
+    let delivered = super::transfer::Delivered {
+        device_id: client_id.clone(),
+        device_name: "Phone".into(),
+        device_key: client.0.key.public_hex(),
+    };
+    main.with_vault(|vault| super::pending::record_delivery(vault, &delivered, false).map(|_| ()))
+        .unwrap();
+    assert_eq!(cut_reason(&main, &client_id), None);
+    assert!(!paused(&main, &client_id));
+    let pending = trade_core::appconfig::PendingTrustPref {
+        path: String::new(),
+        device_id: main_id.clone(),
+        device_name: "Laptop".into(),
+        device_key: main.0.key.public_hex(),
+        expires_ms: u64::MAX,
+    };
+    client
+        .with_vault(|vault| super::pending::apply(vault, &pending))
+        .unwrap();
+    assert!(!paused(&client, &main_id));
+    assert_eq!(cut_reason(&client, &main_id), None);
+
+    client.0.settings.lock().unwrap().sync.confirm_first = false;
+    connect(&main, &client).await;
+    until("linked and exchanging again", || {
+        live(&main) && live(&client) && comments(&client) == comments(&main)
+    })
+    .await;
+    assert!(trusted(&client, &main_id));
+    assert_eq!(client_seen.plans(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_forgotten_device_can_pair_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, right) = same_vault(dir.path());
+    let (laptop, laptop_events) = device("Laptop", left, SyncRole::Main);
+    let (phone, phone_events) = device("Phone", right, SyncRole::Client);
+    let laptop_id = laptop.settings().device_id;
+    let laptop_key = laptop.0.key.public_hex();
+    // The phone trusted the laptop, then the user forgot it.
+    phone
+        .with_vault(|vault| {
+            vault.sync_trust_peer(&laptop_id, "Laptop", &laptop_key)?;
+            vault.sync_forget_peer(&laptop_id)
+        })
+        .unwrap();
+    assert!(!trusted(&phone, &laptop_id));
+    seed(&laptop, "salary on the laptop");
+    let _laptop_seen = responder(laptop.clone(), laptop_events, Some(true));
+    let _phone_seen = responder(phone.clone(), phone_events, Some(true));
+    let (addr, _dials) = serve(laptop.clone()).await;
+    sight(&phone, "Laptop", addr);
+
+    // An earlier handshake told the phone which address the laptop is.
+    phone
+        .hub()
+        .run
+        .as_mut()
+        .unwrap()
+        .peer_instances
+        .insert(laptop_id.clone(), "Laptop".into());
+    super::pair_again(&phone, &laptop_id).unwrap();
+    until("paired and live", || live(&laptop) && live(&phone)).await;
+    assert!(trusted(&phone, &laptop_id));
+    assert_eq!(comments(&phone), comments(&laptop));
+}

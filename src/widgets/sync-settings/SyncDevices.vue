@@ -14,12 +14,12 @@ import { SettingsSection } from '@/shared/ui/settings-section'
 
 /**
  * Trusted devices: this one first (marked `main` when it is), then the paired
- * ones (forget one), and `Add a device`: one device nearby is paired at once (the code
+ * ones (forget one), the forgotten ones with `Pair again`, and `Add a device`: one device nearby is paired at once (the code
  * dialog follows), several or none are listed under the button.
  */
 const { t } = useI18n()
 const { status, offers } = useSyncStatus()
-const { peers, list } = useSyncPeers()
+const { peers, list, forgotten } = useSyncPeers()
 const { pair, pairAgain, forget, resume } = useSyncActions()
 const ago = useSyncAgo()
 const isPhone = useIsPhone()
@@ -102,6 +102,33 @@ function lastLine(peer: SyncPeerView) {
           />
         </li>
       </ul>
+
+      <div v-if="forgotten.length" class="grid gap-1" data-tour="sync-forgotten-devices">
+        <p class="text-sm font-medium">{{ t('sync.devices.forgottenTitle') }}</p>
+        <p class="text-xs text-muted-foreground">{{ t('sync.devices.forgottenHint') }}</p>
+        <ul class="grid">
+          <li v-for="peer in forgotten" :key="peer.device_id" class="flex items-center gap-3 border-b border-border py-2.5 last:border-b-0">
+            <span class="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+              <MonitorSmartphone class="size-4" aria-hidden="true" />
+            </span>
+            <div class="grid min-w-0 flex-1 gap-0.5">
+              <span class="flex min-w-0 items-center gap-2">
+                <span class="truncate text-sm font-medium">{{ peer.name }}</span>
+                <Badge variant="secondary" class="shrink-0">{{ t('sync.devices.forgottenBadge') }}</Badge>
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              class="shrink-0"
+              :disabled="pairAgain.isPending.value"
+              :loading="pairAgain.isPending.value"
+              @click="pairAgain.mutate(peer.device_id)"
+            >
+              {{ t('sync.devices.pairAgain') }}
+            </Button>
+          </li>
+        </ul>
+      </div>
 
       <div v-if="showNearby" class="grid gap-2 rounded-md border border-border p-3">
         <p class="text-sm font-medium">{{ t('sync.devices.nearby') }}</p>

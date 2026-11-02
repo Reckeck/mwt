@@ -206,6 +206,24 @@ pub struct TransferRecord {
 pub const MAX_TRANSFERS: usize = 50;
 
 impl SyncState {
+    /// Adopt the record metadata (stamps, deletions) and the trusted devices of
+    /// `remote`, keeping every other field of `self` as it is. The record
+    /// metadata describes the data that arrives with `remote`; everything else
+    /// (undo batches, journal, transfers, `tombstones_seen`, `paused`, `cut_by`)
+    /// is this device's own bookkeeping. The one place that knows which fields
+    /// are device-local: a pull of an external copy keeps the current state
+    /// here, a received file starts from [`SyncState::default`].
+    pub fn take_records_from(&mut self, remote: SyncState, now: u64) {
+        self.tombstones_seen
+            .retain(|key, _| remote.tombstones.contains_key(key));
+        for key in remote.tombstones.keys() {
+            self.tombstones_seen.entry(key.clone()).or_insert(now);
+        }
+        self.stamps = remote.stamps;
+        self.tombstones = remote.tombstones;
+        self.merge_peers(&remote.peers, now);
+    }
+
     /// The latest stamp anywhere, to start the clock after it.
     pub fn latest_stamp(&self) -> Option<&Stamp> {
         self.stamps
@@ -239,8 +257,9 @@ impl SyncState {
 
     /// Take in another device's list: per device, the later entry wins, with
     /// two limits. An entry stamped further ahead of `now` than a clock can be
-    /// is skipped. A revocation is never lifted by a list, only by pairing
-    /// here ([`crate::UnlockedVault::sync_trust_peer`]).
+    /// is skipped. Revoke and trust are decided by stamp alone: a re-pairing
+    /// (a newer, live entry) lifts an older revocation, an older entry never
+    /// lifts a newer one. A live entry cannot swap the key of a live one.
     pub fn merge_peers(&mut self, remote: &[TrustedPeer], now: u64) -> bool {
         let limit = now.saturating_add(super::session::SKEW_REFUSE_MS);
         let mut changed = false;
@@ -257,7 +276,8 @@ impl SyncState {
                     let mine = &self.peers[index];
                     let accept = theirs.stamp > mine.stamp
                         && (theirs.revoked.is_some()
-                            || (mine.revoked.is_none() && mine.public_key == theirs.public_key));
+                            || mine.revoked.is_some()
+                            || mine.public_key == theirs.public_key);
                     if accept {
                         self.peers[index] = theirs.clone();
                         changed = true;
@@ -302,12 +322,15 @@ mod tests {
     }
 
     #[test]
-    fn a_merged_list_never_lifts_a_revocation() {
-        let mut state = state_with(vec![entry("dev", "kk", 10, true)]);
-        // A newer, not revoked entry for the same device is refused.
-        assert!(!state.merge_peers(&[entry("dev", "kk", 20, false)], NOW));
+    fn a_merged_list_never_lifts_a_revocation_with_an_older_entry() {
+        let mut state = state_with(vec![entry("dev", "kk", 20, true)]);
+        // An older, not revoked entry for the same device is refused.
+        assert!(!state.merge_peers(&[entry("dev", "kk", 10, false)], NOW));
         assert!(state.is_revoked("kk"));
-        // So is a key change on a live entry.
+        // A newer re-pairing lifts it.
+        assert!(state.merge_peers(&[entry("dev", "kk", 30, false)], NOW));
+        assert!(!state.is_revoked("kk"));
+        // A key change on a live entry is refused.
         let mut live = state_with(vec![entry("dev", "kk", 10, false)]);
         assert!(!live.merge_peers(&[entry("dev", "other", 20, false)], NOW));
         assert_eq!(live.peers[0].public_key, "kk");

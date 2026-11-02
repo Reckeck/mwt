@@ -76,6 +76,14 @@ nor an automation). The copy that goes away hands the remaining one its later fi
 edits (with their stamps); the deletion and the field move are
 written into the batch, so undoing the batch restores both copies.
 
+## Confirm preview
+
+The question about a list of changes carries, for each change, `fields`
+(readable "field: before → after" lines) and `after` (capital and wallet
+balances before → after), computed on a sandbox copy of the vault. Caches
+(`Collection.cache`: `fx_cache`, `price_cache`) never ask, and points this
+device would thin are neither offered nor requested (`sync_diff`).
+
 ## Undo
 
 A batch stores each record "before" and the stamps "after". Undo restores the records
@@ -225,6 +233,17 @@ SPAKE2, file check), `crates/app/src/sync/transfer.rs` (sessions),
    journal — it reaches all linked devices. The sender trusts the
    receiver immediately; the receiver does so after the first unlock
    of that file. Sync is turned on on the new device.
+8. **Fresh trust.** A transfer is a new trust on both sides: it clears the
+   pause, the cut-off and the revocation of that device, so a forgotten or
+   declined device is linked again. The receiver keeps the pending trust in
+   the app settings for 7 days, keyed by the file path, and applies it on
+   the first unlock of that file. On that unlock `adopt_received_copy` resets
+   the device-local bookkeeping the copy brought from the sender
+   (`take_records_from` is the single list of what is taken from a copy and
+   what stays local), so the new device starts with its own journal, undo
+   batches and counters.
+9. **Peer-list merge** is by stamp: a newer explicit trust lifts an older
+   revocation, an older entry never lifts a newer one.
 
 Port 53319 is included in the "Open the port" rule together with 53318. The sync
 protocol was raised to 2: the notification log may now carry the `security`

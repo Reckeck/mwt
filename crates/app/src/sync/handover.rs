@@ -57,14 +57,6 @@ struct Seen {
     fingerprint: String,
 }
 
-/// The device that sent the vault, trusted once the file is unlocked here.
-struct PendingTrust {
-    path: PathBuf,
-    device_id: String,
-    device_name: String,
-    device_key: String,
-}
-
 #[derive(Default)]
 struct State {
     generation: u64,
@@ -72,7 +64,6 @@ struct State {
     sending: Option<Sending>,
     browsing: Option<ServiceDaemon>,
     nearby: BTreeMap<String, Seen>,
-    pending_trust: Option<PendingTrust>,
 }
 
 /// Managed state: `app.manage(Handover::default())`.
@@ -414,36 +405,40 @@ fn save(app: &AppHandle, received: super::transfer::Received) -> Result<PathBuf>
         settings.sync.enabled = true;
         crate::commands::app_settings::save(&dir, &settings).ok();
     }
-    state(app).pending_trust = Some(PendingTrust {
-        path: path.clone(),
-        device_id: received.offer.device_id,
-        device_name: received.offer.device_name,
-        device_key: received.sender_key,
-    });
+    // Written down, not held in memory: the process may be killed before the
+    // first unlock (Android).
+    let mut settings = trade_core::appconfig::load_settings(&dir);
+    super::pending::remember(
+        &mut settings,
+        &path,
+        &received.offer.device_id,
+        &received.offer.device_name,
+        &received.sender_key,
+        now_ms(),
+    );
+    crate::commands::app_settings::save(&dir, &settings)?;
     Ok(path)
 }
 
 /// After an unlock: the vault that just arrived trusts the device it came from.
 pub fn trust_sender(app: &AppHandle) {
-    let Some(pending) = state(app).pending_trust.take() else {
-        return;
-    };
+    let dir = crate::commands::app_settings::config_dir(app);
     let app_state = app.state::<AppState>();
     let Ok(mut guard) = app_state.vault.lock() else {
         return;
     };
-    match guard.as_mut() {
-        Some(vault) if vault.path == pending.path => {
-            vault
-                .sync_trust_peer(
-                    &pending.device_id,
-                    &pending.device_name,
-                    &pending.device_key,
-                )
-                .ok();
-        }
-        // Another vault was opened: keep waiting for that one.
-        _ => state(app).pending_trust = Some(pending),
+    let Some(vault) = guard.as_mut() else {
+        return;
+    };
+    let mut settings = trade_core::appconfig::load_settings(&dir);
+    let waiting = settings.pending_trusts.len();
+    let mine = super::pending::take(&mut settings, &vault.path, now_ms());
+    for pending in &mine {
+        super::pending::apply(vault, pending).ok();
+    }
+    // Entries of other files stay; consumed and expired ones go.
+    if settings.pending_trusts.len() != waiting {
+        crate::commands::app_settings::save(&dir, &settings).ok();
     }
 }
 
@@ -678,12 +673,7 @@ fn record(app: &AppHandle, delivered: &super::transfer::Delivered) -> Result<()>
             .lock()
             .map_err(|_| Error::Crypto("lock poisoned".into()))?;
         let vault = guard.as_mut().ok_or(Error::RequiresUnlock)?;
-        vault.sync_record_transfer(
-            &delivered.device_id,
-            &delivered.device_name,
-            &delivered.device_key,
-            ru,
-        )?
+        super::pending::record_delivery(vault, delivered, ru)?
     };
     crate::scheduler::deliver(app, vec![notice], true);
     Ok(())

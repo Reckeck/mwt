@@ -16,6 +16,7 @@ pub mod handover;
 mod host;
 pub mod keystore;
 mod link;
+mod pending;
 #[cfg(test)]
 mod tests;
 mod transfer;

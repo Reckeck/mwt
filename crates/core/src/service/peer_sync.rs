@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 
 use super::UnlockedVault;
 use crate::error::{Error, Result};
-use crate::ipc_contract::SyncCutReason;
+use crate::ipc_contract::{AfterApply, StoreBalanceChange, SyncCutReason};
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::storage::VaultFile;
@@ -188,8 +188,12 @@ impl UnlockedVault {
         self.track_changes()?;
         let value = self.doc_value()?;
         let records = view::records(&value);
+        let keeps_fx = self.fx_history_filter();
         let mut manifest = Manifest::new();
         for key in records.keys() {
+            if !self.wants_cache_key(key, &keeps_fx) {
+                continue;
+            }
             if let (Some(since), Some((coll, _))) = (union_since_ms, split_key(key))
                 && let Some(field) = coll.age
                 && let Some(Value::String(at)) = records[key].get(field)
@@ -205,6 +209,28 @@ impl UnlockedVault {
             }
         }
         Ok(manifest)
+    }
+
+    /// Whether a cache point is worth syncing here: rates of a currency that
+    /// is not in use are thinned to one point right after a merge (the rule
+    /// of `thin_rate_caches`), so asking for or offering them only repeats
+    /// the same list in every session. Other keys always qualify.
+    fn wants_cache_key(&self, key: &str, keeps_fx: &impl Fn(&str) -> bool) -> bool {
+        match key.strip_prefix("fx_cache:") {
+            Some(point) => keeps_fx(point.split_once('|').map_or(point, |(code, _)| code)),
+            None => true,
+        }
+    }
+
+    /// `(to_request, to_send)` for two manifests: [`diff`] without the cache
+    /// points this device would thin away as soon as they arrive.
+    ///
+    /// [`diff`]: crate::sync::manifest::diff
+    pub fn sync_diff(&self, mine: &Manifest, theirs: &Manifest) -> (Vec<String>, Vec<String>) {
+        let keeps_fx = self.fx_history_filter();
+        let (mut request, send) = crate::sync::manifest::diff(mine, theirs);
+        request.retain(|key| self.wants_cache_key(key, &keeps_fx));
+        (request, send)
     }
 
     /// The full state of each asked record (absent keys come back empty).
@@ -249,6 +275,67 @@ impl UnlockedVault {
         let value = self.doc_value()?;
         let records = view::records(&value);
         Ok(crate::sync::plan::plan(incoming, |key| self.state_of(&records, key)).summary)
+    }
+
+    /// Capital and the balances of the stores the batch moves, as they would
+    /// be once applied: the batch goes into an in-memory copy of the vault
+    /// (a sandbox writes nothing), this vault is not touched.
+    pub fn sync_preview_after(
+        &mut self,
+        incoming: &BTreeMap<String, RecordState>,
+    ) -> Result<Option<AfterApply>> {
+        Self::check_incoming(incoming)?;
+        self.track_changes()?;
+        let mut copy = self.sandbox();
+        let peer = PeerRef {
+            device_id: String::new(),
+            name: String::new(),
+        };
+        // A sandbox never persists, mirrors or announces: the copy takes the
+        // batch exactly as the real apply would and is dropped.
+        if copy.apply_batch(incoming, &peer, true)?.is_none() {
+            return Ok(None);
+        }
+        let (currency, fx) = self.base_and_fx();
+        let (_, copy_fx) = copy.base_and_fx();
+        let before = self.store_values_usd();
+        let after = copy.store_values_usd();
+        let names: HashMap<&str, &str> = self
+            .doc
+            .stores
+            .iter()
+            .chain(&copy.doc.stores)
+            .map(|store| (store.id.as_str(), store.name.as_str()))
+            .collect();
+        let mut stores: Vec<StoreBalanceChange> = Vec::new();
+        for id in before.keys().chain(after.keys()) {
+            if stores.iter().any(|store| &store.id == id) {
+                continue;
+            }
+            let old = before.get(id).copied().unwrap_or_default() * fx;
+            let new = after.get(id).copied().unwrap_or_default() * copy_fx;
+            if old == new {
+                continue;
+            }
+            stores.push(StoreBalanceChange {
+                id: id.clone(),
+                name: names
+                    .get(id.as_str())
+                    .copied()
+                    .unwrap_or_default()
+                    .to_string(),
+                before: old,
+                after: new,
+                currency: currency.clone(),
+            });
+        }
+        stores.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+        Ok(Some(AfterApply {
+            currency,
+            net_worth_before: self.net_worth().net,
+            net_worth_after: copy.net_worth().net,
+            stores,
+        }))
     }
 
     /// Merge records from another device and save. `None` when nothing
@@ -409,7 +496,7 @@ impl UnlockedVault {
         }
         let mine = self.sync_manifest(None)?;
         let theirs = other.sync_manifest(None)?;
-        let (wanted, _) = crate::sync::manifest::diff(&mine, &theirs);
+        let (wanted, _) = self.sync_diff(&mine, &theirs);
         let incoming = other.sync_records(&wanted)?;
         let peer = PeerRef {
             device_id: EXTERNAL_COPY_DEVICE.into(),
@@ -453,15 +540,7 @@ impl UnlockedVault {
         // travel between devices, so they are merged by their own rules.
         let mut sync = std::mem::take(&mut self.doc.sync);
         let remote_sync = std::mem::take(&mut copy.doc.sync);
-        let now = crate::sync::stamp::now_ms();
-        sync.tombstones_seen
-            .retain(|key, _| remote_sync.tombstones.contains_key(key));
-        for key in remote_sync.tombstones.keys() {
-            sync.tombstones_seen.entry(key.clone()).or_insert(now);
-        }
-        sync.stamps = remote_sync.stamps;
-        sync.tombstones = remote_sync.tombstones;
-        sync.merge_peers(&remote_sync.peers, now);
+        sync.take_records_from(remote_sync, crate::sync::stamp::now_ms());
         self.doc = std::mem::take(&mut copy.doc);
         self.doc.sync = sync;
         self.answer_crypto();
@@ -935,6 +1014,22 @@ impl UnlockedVault {
         }
         // Paired afresh: whatever it told us before no longer holds.
         self.doc.sync.cut_by.remove(device_id);
+        self.doc.sync.paused.remove(device_id);
+        self.persist()
+    }
+
+    /// A vault file that arrived by transfer carries the sender's sync
+    /// bookkeeping verbatim. Keep the record metadata and the trusted devices,
+    /// drop everything device-local (undo batches, journal, transfers,
+    /// pauses, cut-offs, deletion arrival times) and the peers' last-sync times.
+    pub fn adopt_received_copy(&mut self) -> Result<()> {
+        let received = std::mem::take(&mut self.doc.sync);
+        let mut fresh = crate::sync::SyncState::default();
+        fresh.take_records_from(received, crate::sync::stamp::now_ms());
+        for peer in &mut fresh.peers {
+            peer.last_synced_at = None;
+        }
+        self.doc.sync = fresh;
         self.persist()
     }
 
@@ -1128,6 +1223,11 @@ fn applied_of(batch: &SyncBatch) -> AppliedBatch {
 }
 
 #[cfg(test)]
+mod preview_tests;
+#[cfg(test)]
+mod transfer_tests;
+
+#[cfg(test)]
 mod tests {
     use super::super::test_support::{empty_vault, income};
     use super::*;
@@ -1135,7 +1235,7 @@ mod tests {
     use crate::sync::manifest::diff;
 
     /// The same vault on two devices: a copy of one file, opened twice.
-    fn two_devices() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
+    pub(super) fn two_devices() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
         let (dir, mut left) = empty_vault();
         left.set_device("aaaaaaaa-left");
         left.persist().unwrap();
@@ -1154,13 +1254,14 @@ mod tests {
     }
 
     /// One exchange as a session runs it; returns what each side applied.
-    fn exchange(
+    pub(super) fn exchange(
         left: &mut UnlockedVault,
         right: &mut UnlockedVault,
     ) -> (Option<AppliedBatch>, Option<AppliedBatch>) {
         let left_manifest = left.sync_manifest(None).unwrap();
         let right_manifest = right.sync_manifest(None).unwrap();
-        let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
+        let (left_wants, _) = left.sync_diff(&left_manifest, &right_manifest);
+        let (right_wants, _) = right.sync_diff(&right_manifest, &left_manifest);
         let to_left = right.sync_records(&left_wants).unwrap();
         let to_right = left.sync_records(&right_wants).unwrap();
         let applied_left = left.sync_apply(&to_left, &peer("right")).unwrap();
@@ -1169,7 +1270,7 @@ mod tests {
     }
 
     /// Exchange until nothing moves; both sides must then agree.
-    fn settle(left: &mut UnlockedVault, right: &mut UnlockedVault) {
+    pub(super) fn settle(left: &mut UnlockedVault, right: &mut UnlockedVault) {
         for _ in 0..4 {
             if exchange(left, right) == (None, None) {
                 break;
@@ -1217,6 +1318,89 @@ mod tests {
             "the edit was stamped by the sync call and never announced: {sent:?}"
         );
         drop(right);
+    }
+
+    fn fx_point(currency: &str, ts: &str) -> crate::model::vault::FxPoint {
+        crate::model::vault::FxPoint {
+            currency: currency.into(),
+            per_usd: crate::Amount::from(2u32),
+            ts: ts.into(),
+            source: "test".into(),
+        }
+    }
+
+    /// How many cache records the next exchange would move, both ways.
+    fn cache_records_moving(left: &mut UnlockedVault, right: &mut UnlockedVault) -> usize {
+        let left_manifest = left.sync_manifest(None).unwrap();
+        let right_manifest = right.sync_manifest(None).unwrap();
+        let (left_wants, _) = left.sync_diff(&left_manifest, &right_manifest);
+        let (right_wants, _) = right.sync_diff(&right_manifest, &left_manifest);
+        left_wants
+            .iter()
+            .chain(&right_wants)
+            .filter(|key| key.starts_with("fx_cache:") || key.starts_with("price_cache:"))
+            .count()
+    }
+
+    #[test]
+    fn an_fx_refresh_on_each_copy_asks_nothing() {
+        let (_dir, mut left, mut right) = two_devices();
+        let currencies = ["chf", "jpy", "pln"];
+        left.apply_fx(&currencies.map(|code| fx_point(code, "2026-11-03T10:00:00Z")));
+        right.apply_fx(&currencies.map(|code| fx_point(code, "2026-11-03T12:00:00Z")));
+        // Whatever an older peer would still offer, point by point.
+        let keys: Vec<String> = left
+            .doc
+            .fx_cache
+            .iter()
+            .map(|point| format!("fx_cache:{}|{}", point.currency, point.ts))
+            .collect();
+        assert!(!keys.is_empty());
+        let incoming = left.sync_records(&keys).unwrap();
+        let summary = right.sync_preview(&incoming).unwrap();
+        assert_eq!(
+            summary.total, 0,
+            "cache points reached the question: {summary:?}"
+        );
+        assert!(summary.collections.is_empty(), "{summary:?}");
+    }
+
+    #[test]
+    fn thinned_cache_points_are_not_requested_again() {
+        let (_dir, mut left, mut right) = two_devices();
+        // The base currency is a device setting: only the left copy keeps
+        // euro history; the right one thins whatever arrives to one point.
+        left.base_currency = "eur".into();
+        for hour in ["08", "10", "12"] {
+            left.apply_fx(&[fx_point("eur", &format!("2026-11-03T{hour}:00:00Z"))]);
+        }
+        exchange(&mut left, &mut right);
+        exchange(&mut left, &mut right);
+        assert_eq!(cache_records_moving(&mut left, &mut right), 0);
+    }
+
+    #[test]
+    fn a_cache_point_of_a_currency_in_use_still_syncs() {
+        let (_dir, mut left, mut right) = two_devices();
+        for vault in [&mut left, &mut right] {
+            vault.doc.settings.budget_currency = "eur".into();
+            vault.persist().unwrap();
+        }
+        left.apply_fx(&[fx_point("eur", "2026-11-03T10:00:00Z")]);
+        right.apply_fx(&[fx_point("eur", "2026-11-03T12:00:00Z")]);
+        settle(&mut left, &mut right);
+        for vault in [&left, &right] {
+            let stamps: Vec<&str> = vault
+                .doc
+                .fx_cache
+                .iter()
+                .filter(|point| point.currency == "eur")
+                .map(|point| point.ts.as_str())
+                .collect();
+            assert!(stamps.contains(&"2026-11-03T10:00:00Z"), "{stamps:?}");
+            assert!(stamps.contains(&"2026-11-03T12:00:00Z"), "{stamps:?}");
+        }
+        assert_eq!(cache_records_moving(&mut left, &mut right), 0);
     }
 
     fn snapshot(
@@ -1761,7 +1945,13 @@ mod tests {
         left.persist().unwrap();
         let report = left.sync_undo(&batch.id).unwrap();
         assert_eq!(report.restored, 1);
-        assert_eq!(report.skipped, vec!["kept and edited".to_string()]);
+        // The readable label of the record: its comment, date and amount.
+        assert_eq!(report.skipped.len(), 1);
+        assert!(
+            report.skipped[0].starts_with("kept and edited"),
+            "{:?}",
+            report.skipped
+        );
         assert_eq!(comments(&left), vec!["kept and edited"]);
     }
 
@@ -2281,8 +2471,8 @@ mod tests {
     #[test]
     fn merging_a_peer_list_leaves_the_pause_alone() {
         let (_dir, mut vault) = empty_vault();
-        vault.sync_pause_peer("dev-a").unwrap();
         vault.sync_trust_peer("dev-a", "A", "key-a").unwrap();
+        vault.sync_pause_peer("dev-a").unwrap();
         let remote = vault.sync_state().peers.clone();
         vault.sync_merge_peers(&remote).unwrap();
         assert!(vault.sync_is_paused("dev-a"));

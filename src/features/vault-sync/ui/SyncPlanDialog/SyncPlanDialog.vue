@@ -8,6 +8,7 @@ import { Dialog } from '@/shared/ui/dialog'
 
 import { useSyncActions } from '../../model/use-sync-actions'
 import { useSyncStatus } from '../../model/use-sync-status'
+import { SyncAfter } from '../SyncAfter'
 import { SyncChanges } from '../SyncChanges'
 
 /**
@@ -52,6 +53,7 @@ function decide(accept: boolean) {
   >
     <div v-if="session?.plan" class="grid gap-3">
       <p class="text-sm">{{ t('sync.plan.total', { count: session.plan.summary.total }) }}</p>
+      <SyncAfter v-if="session.plan.after" :after="session.plan.after" />
       <SyncChanges :summary="session.plan.summary" />
       <p class="text-xs text-muted-foreground">{{ t('sync.plan.safety') }}</p>
       <p class="text-xs text-muted-foreground">{{ t('sync.plan.declineHint') }}</p>

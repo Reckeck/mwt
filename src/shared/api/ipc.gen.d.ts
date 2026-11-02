@@ -100,6 +100,20 @@ type AdjustmentTx = { meta: TxMeta, store_id: string, lines: Array<AdjustmentLin
  */
 fee: Fee | null, };
 
+/**
+ * What the vault would show after a batch is applied, worked out on an
+ * in-memory copy (nothing is written).
+ */
+type AfterApply = { 
+/**
+ * The base currency of both net worths and every store balance.
+ */
+currency: string, net_worth_before: Amount, net_worth_after: Amount, 
+/**
+ * Stores whose balance the batch moves (or that it adds or removes).
+ */
+stores: Array<StoreBalanceChange>, };
+
 type AlertCondition = "above" | "below";
 
 /**
@@ -1111,7 +1125,19 @@ unpriced: number, };
  */
 type Chain = "bitcoin" | "ethereum" | "bsc" | "solana" | "polygon" | "arbitrum" | "optimism" | "avalanche" | "base" | "tron" | "litecoin" | "dogecoin" | "cardano" | "xrp" | "polkadot" | "cosmos" | "near" | "ton" | "algorand" | "fiat";
 
-type ChangeItem = { kind: ChangeKind, label: string, };
+type ChangeItem = { kind: ChangeKind, 
+/**
+ * Readable name of the record (never its raw key); may be empty.
+ */
+label: string, 
+/**
+ * The record's key inside its collection, for identity.
+ */
+key: string, 
+/**
+ * What an updated record changes, field by field.
+ */
+fields: Array<FieldChange>, };
 
 type ChangeKind = "added" | "updated" | "deleted";
 
@@ -2022,6 +2048,20 @@ warning: string | null, };
 type Fee = { asset: AssetRef, amount: Amount, price: PriceStamp, };
 
 type FeeInput = { asset: AssetIdent, amount: Amount, };
+
+/**
+ * One user-meaningful field of an updated record, as display-ready text.
+ */
+type FieldChange = { 
+/**
+ * Dotted field name (`meta.comment`); the UI maps it to a label.
+ */
+field: string, before: string | null, after: string | null, 
+/**
+ * Set when the values are amounts of this currency or asset: the UI
+ * shows them with `<Money>`.
+ */
+money_currency: string | null, };
 
 type FileFormat = "csv" | "xlsx";
 
@@ -5363,6 +5403,8 @@ deposit?: DepositTerms,
  */
 asset_class?: string, };
 
+type StoreBalanceChange = { id: string, name: string, before: Amount, after: Amount, currency: string, };
+
 /**
  * What to do with an account.
  */
@@ -5752,16 +5794,24 @@ paused: boolean,
 /**
  * The device refused this one on purpose and told so.
  */
-cut_by: SyncCutReason | null, };
+cut_by: SyncCutReason | null, 
+/**
+ * The user forgot this device here: no exchange until "Pair again".
+ */
+forgotten: boolean, };
 
-type SyncPendingPlan = { reason: SyncConfirmReason, summary: SyncSummary, };
+type SyncPendingPlan = { reason: SyncConfirmReason, summary: SyncSummary, 
+/**
+ * Capital and balances once applied; `None` when it could not be worked out.
+ */
+after: AfterApply | null, };
 
 type SyncPhase = "connecting" | "offer" | "pairing" | "exchanging" | "awaiting_confirm" | "live";
 
 /**
  * `sync-plan-ready`: what a batch would change, waiting for the user.
  */
-type SyncPlanEvent = { session_id: string, peer_name: string, reason: SyncConfirmReason, summary: SyncSummary, };
+type SyncPlanEvent = { session_id: string, peer_name: string, reason: SyncConfirmReason, summary: SyncSummary, after: AfterApply | null, };
 
 /**
  * Vault sync preferences of this device. Everything is off until the user

@@ -48,6 +48,10 @@ pub struct Collection {
     /// fields only make sense together, or that may be `null`): the later
     /// write wins as a whole, never field by field.
     pub whole: bool,
+    /// Derived data each device refreshes on its own (cached prices and
+    /// rates): it still unions in silently, but never reaches the question,
+    /// the window or the journal.
+    pub cache: bool,
 }
 
 const fn records(name: &'static str, key: &'static [&'static str]) -> Collection {
@@ -61,6 +65,7 @@ const fn records(name: &'static str, key: &'static [&'static str]) -> Collection
         secret: false,
         secret_fields: &[],
         whole: false,
+        cache: false,
     }
 }
 
@@ -80,6 +85,7 @@ const fn log(
         secret: false,
         secret_fields: &[],
         whole: false,
+        cache: false,
     }
 }
 
@@ -94,6 +100,7 @@ const fn single(name: &'static str, skip: &'static [&'static str]) -> Collection
         secret: false,
         secret_fields: &[],
         whole: false,
+        cache: false,
     }
 }
 
@@ -133,6 +140,7 @@ pub static COLLECTIONS: &[Collection] = &[
         secret: false,
         secret_fields: &[],
         whole: false,
+        cache: true,
     },
     Collection {
         name: "fx_cache",
@@ -144,6 +152,7 @@ pub static COLLECTIONS: &[Collection] = &[
         secret: false,
         secret_fields: &[],
         whole: false,
+        cache: true,
     },
     Collection {
         secret: true,
@@ -229,6 +238,7 @@ pub static COLLECTIONS: &[Collection] = &[
         secret: false,
         secret_fields: &[],
         whole: false,
+        cache: false,
     },
 ];
 

@@ -105,7 +105,7 @@ a process crash or power loss — at most ~3 s of the latest edits.
 |---|---|
 | nothing, bytes are equal | `InSync` |
 | only the local one (or there is no copy) | `PushLocal` — write the copy |
-| only the copy (an edit on another device) | `PullRemote` — the local one goes to `.bak`, the copy's data becomes the vault's data, `stamps` and `tombstones` are taken from the copy (they are record metadata), `peers` are merged by the `merge_peers` rules, and the undo batches, the journal, `transfers`, `tombstones_seen`, `paused`, `cut_by` **stay local** |
+| only the copy (an edit on another device) | `PullRemote` — the local one goes to `.bak`, the copy's data becomes the vault's data, `stamps` and `tombstones` are taken from the copy (they are record metadata), `peers` are merged by the `merge_peers` rules, and the undo batches, the journal, `transfers`, `tombstones_seen`, `paused`, `cut_by` **stay local** (`take_records_from` is the single source of what is taken from a copy) |
 | both (including a copy written blindly by an old app) | `Conflict` → a **merge** into the open vault, with no questions |
 
   The merge (`links::take_in`, `UnlockedVault::merge_external_copy`): the copy

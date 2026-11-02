@@ -7,11 +7,23 @@
 
 import { emitMock } from '../mock-bus'
 import { resolve } from './core'
+import { mockRecents } from './commands-vault-files'
 import type { MockCommands } from './core'
 
 const CODE = '482913'
 const SIZE = 3 * 1_048_576
 const PHONE: TransferNearby = { id: 'mock-phone._mwt-recv._tcp.local.', name: 'Сочный Апельсин', kind: 'mobile' }
+
+const RECEIVED_PATH = '/tmp/mock/received.wallet'
+
+/** The received file joins the recents; `?plainReceived` makes it a vault without a password. */
+function rememberReceived() {
+  const encrypted = !new URLSearchParams(globalThis.location?.search ?? '').has('plainReceived')
+  const row = { path: RECEIVED_PATH, opened: Math.floor(Date.now() / 1000), exists: true, encrypted }
+  const index = mockRecents.findIndex((recent) => recent.path === RECEIVED_PATH)
+  if (index >= 0) mockRecents.splice(index, 1)
+  mockRecents.push(row)
+}
 
 let receive: TransferReceiveView | null = null
 let sendView: TransferSendView | null = null
@@ -70,7 +82,10 @@ export const transferCommands: MockCommands = {
       later(3000, () =>
         stream(
           (edit) => pushReceive({ ...edit, code: null }),
-          () => pushReceive({ phase: 'done', saved_path: '/tmp/mock/received.wallet' }),
+          () => {
+            rememberReceived()
+            pushReceive({ phase: 'done', saved_path: RECEIVED_PATH })
+          },
         ),
       )
     } else pushReceive({ phase: 'waiting', sender_name: null, error: 'SYNC_TRANSFER_DECLINED' })

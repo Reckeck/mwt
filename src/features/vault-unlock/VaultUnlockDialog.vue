@@ -52,9 +52,14 @@ const form = useFormValidation(
 )
 
 // Every opening starts clean, for whichever vault it was opened for.
-watch(open, (isOpen) => {
-  if (isOpen) reset(props.path)
-})
+// `immediate`: a dialog mounted already open (a received vault) must not start empty.
+watch(
+  open,
+  (isOpen) => {
+    if (isOpen) reset(props.path)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>

@@ -359,6 +359,13 @@ impl UnlockedVault {
     }
 
     pub fn open(path: PathBuf, password: &str) -> Result<Self> {
+        Self::open_as(path, password, None)
+    }
+
+    /// Like [`Self::open`], with this device's id known up front so that the
+    /// stamps written while opening (default categories, pruning, scrubbing)
+    /// already carry its tag instead of an empty one.
+    pub fn open_as(path: PathBuf, password: &str, device_id: Option<&str>) -> Result<Self> {
         let (decoded, fmt, key) = VaultFile::open_keyed(&path, password)?;
         // A file without a password opens whatever was typed; none is kept.
         let password = if key.is_plain() { "" } else { password };
@@ -386,6 +393,9 @@ impl UnlockedVault {
             key: Some(std::sync::Arc::new(key)),
             save: saving::SaveState::default(),
         };
+        if let Some(device_id) = device_id {
+            vault.set_device(device_id);
+        }
         vault.answer_crypto();
         vault.start_tracking()?;
         // A vault from before the single cash wallet gets one on first open.

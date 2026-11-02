@@ -7,23 +7,45 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::fields::changed_fields;
 use super::merge::merge;
 use super::registry::Collection;
 use super::state::RecordState;
 use super::view::{label, split_key};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub enum ChangeKind {
+    #[default]
     Added,
     Updated,
     Deleted,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 pub struct ChangeItem {
     pub kind: ChangeKind,
+    /// Readable name of the record (never its raw key); may be empty.
     pub label: String,
+    /// The record's key inside its collection, for identity.
+    #[serde(default)]
+    pub key: String,
+    /// What an updated record changes, field by field.
+    #[serde(default)]
+    pub fields: Vec<FieldChange>,
+}
+
+/// One user-meaningful field of an updated record, as display-ready text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct FieldChange {
+    /// Dotted field name (`meta.comment`); the UI maps it to a label.
+    pub field: String,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    /// Set when the values are amounts of this currency or asset: the UI
+    /// shows them with `<Money>`.
+    #[serde(default)]
+    pub money_currency: Option<String>,
 }
 
 /// Changes to one collection (`transactions`, `stores`, …).
@@ -70,6 +92,10 @@ impl SyncSummary {
             for item in &mut changes.items {
                 if !item.label.is_empty() {
                     item.label.clear();
+                    changed = true;
+                }
+                if !item.fields.is_empty() {
+                    item.fields.clear();
                     changed = true;
                 }
             }
@@ -135,7 +161,7 @@ pub fn plan(
     let mut out = SyncPlan::default();
     let mut groups: BTreeMap<&'static str, CollectionChanges> = BTreeMap::new();
     for (key, remote) in incoming {
-        let Some((coll, _)) = split_key(key) else {
+        let Some((coll, inner)) = split_key(key) else {
             continue;
         };
         let before = local(key);
@@ -155,8 +181,9 @@ pub fn plan(
             .or(before.value.as_ref())
             .map(|value| label(coll, value))
             .unwrap_or_default();
-        // Only stamps moved (the value is the same): nothing to show.
-        if merged.state.value != before.value {
+        // Only stamps moved (the value is the same): nothing to show. A
+        // cache point applies silently.
+        if merged.state.value != before.value && !coll.cache {
             let group = groups
                 .entry(coll.name)
                 .or_insert_with(|| CollectionChanges {
@@ -169,9 +196,15 @@ pub fn plan(
                 ChangeKind::Deleted => group.deleted += 1,
             }
             if group.items.len() < MAX_ITEMS {
+                let fields = match (&before.value, &merged.state.value) {
+                    (Some(old), Some(new)) => changed_fields(coll, old, new),
+                    _ => Vec::new(),
+                };
                 group.items.push(ChangeItem {
                     kind,
                     label: shown.clone(),
+                    key: inner.to_string(),
+                    fields,
                 });
             }
             out.summary.total += 1;
@@ -223,6 +256,20 @@ mod tests {
     fn plan_of(key: &str, local: RecordState, remote: RecordState) -> SyncPlan {
         let incoming = BTreeMap::from([(key.to_string(), remote)]);
         plan(&incoming, |_| local.clone())
+    }
+
+    #[test]
+    fn a_cache_collection_is_applied_but_never_shown() {
+        let point = json!({"currency": "chf", "per_usd": "0.9", "ts": "2026-11-03T10:00:00Z"});
+        let key = "fx_cache:chf|2026-11-03T10:00:00Z";
+        let planned = plan_of(key, RecordState::default(), live(point, None));
+        assert_eq!(planned.summary.total, 0);
+        assert!(planned.summary.collections.is_empty());
+        assert!(planned.summary.overwritten.is_empty());
+        assert!(
+            planned.changes.contains_key(key),
+            "the point must still apply"
+        );
     }
 
     fn assert_no_secret(summary: &SyncSummary, secrets: &[&str]) {
