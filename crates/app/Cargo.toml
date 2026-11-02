@@ -23,7 +23,7 @@ workspace = true
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
-base64 = "0.22"
+base64 = "0.23"
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-fs = { workspace = true }
 trade-core = { path = "../core" }
