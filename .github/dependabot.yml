@@ -1,5 +1,6 @@
 # Weekly version updates into development. Minor and patch updates of one ecosystem come as a
-# single grouped PR; each major update gets its own PR. Security updates are not grouped and
+# single grouped PR; each major update gets its own PR. Every Sunday 06:00 Moscow time
+# dependabot-merge.yml merges the green minor/patch ones; majors wait for review. Security updates are not grouped and
 # arrive as soon as an advisory appears (repository setting, independent of this schedule).
 version: 2
 updates:
@@ -48,3 +49,4 @@ updates:
     groups:
       actions:
         patterns: ['*']
+        update-types: [minor, patch]
