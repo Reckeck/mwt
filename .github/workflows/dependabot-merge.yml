@@ -1,0 +1,37 @@
+# Every Sunday 06:00 Moscow time: merge the green minor/patch Dependabot PRs into development
+# and start the dev pre-release (a merge by GITHUB_TOKEN starts no push workflows).
+# Majors, red checks and conflicts stay open for review. Rules: .github/scripts/dependabot-merge.sh.
+# By hand: Actions -> dependabot-merge -> Run workflow (dry_run lists what would be merged).
+name: dependabot-merge
+
+on:
+  schedule:
+    - cron: "0 3 * * 0" # 03:00 UTC = 06:00 MSK (UTC+3 all year)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only list what would be merged
+        type: boolean
+        default: false
+
+concurrency:
+  group: dependabot-merge
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: .github/scripts/dependabot-merge.sh
