@@ -37,10 +37,10 @@ jobs:
     outputs:
       tag: ${{ steps.build.outputs.tag }}
       base: ${{ steps.build.outputs.base }}
-    # Image builds queue one by one: the second run finds the tag the first pushed.
-    concurrency:
-      group: ci-images
-      cancel-in-progress: false
+    # No concurrency group: GitHub keeps one pending run per group and cancels the
+    # older pending one, so a burst of PRs (Dependabot) lost its images job and
+    # with it every check. A run with an unchanged tag ends after the registry
+    # probe; two runs building a new tag at once push the same image, which is harmless.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
