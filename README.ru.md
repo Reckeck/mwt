@@ -8,7 +8,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Reckeck/mwt/ci.yml?branch=development&label=CI&logo=github)](https://github.com/Reckeck/mwt/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Reckeck/mwt?include_prereleases&sort=semver)](https://github.com/Reckeck/mwt/releases/latest)
-[![License: MIT](https://img.shields.io/github/license/Reckeck/mwt)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-informational)](#установка)
 
 [Скачать](#установка) · [Документация](docs/user-guide.md) · [Сообщить об ошибке](https://github.com/Reckeck/mwt/issues) · [English](README.md)
