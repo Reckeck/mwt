@@ -42,3 +42,6 @@ packaging/flatpak/mwt.app.*
 
 # graphify: code knowledge graph (graphify update .)
 graphify-out/
+
+# Design canvases live outside the repo (../mwt-design/): each save is a full zip copy
+*.figcraft

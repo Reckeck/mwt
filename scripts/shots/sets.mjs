@@ -714,7 +714,7 @@ const batch3 = BATCH3_NAMES.flatMap((name) => {
   return found ? [{ ...found, scenarios: ['year'], canvas: undefined }] : []
 })
 
-/** Task 216 · the report: the key screens next to their frames in templates/MWT-canvas.figcraft, year scenario, no canvas pairs. */
+/** Task 216 · the report: the key screens next to their frames in the design canvas (../mwt-design/MWT-canvas.figcraft, outside the repo), year scenario, no canvas pairs. */
 const REPORT_NAMES = [
   'home', 'spending', 'where', 'plan', 'ops', 'opform-pay', 'ops-calendar', 'tx-card', 'stores', 'table-open', 'wallet-exchange',
   'auto-mine', 'auto-salary', 'set-money', 'login-recents', 'palette-empty',
