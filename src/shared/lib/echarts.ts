@@ -3,6 +3,8 @@ import type { ComposeOption } from 'echarts/core'
 import { BarChart, LineChart, PieChart, CandlestickChart, ScatterChart, GraphChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TitleComponent, TooltipComponent, DataZoomComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+// echarts 6 moved grid.containLabel out of the core; the charts still size their grids with it.
+import { LegacyGridContainLabel } from 'echarts/features'
 import { type PropType, computed, defineComponent, h } from 'vue'
 import VChart from 'vue-echarts'
 
@@ -35,6 +37,7 @@ use([
   TooltipComponent,
   DataZoomComponent,
   CanvasRenderer,
+  LegacyGridContainLabel,
 ])
 
 /** Below this chart width (px) the phone layout applies: it follows the chart, not the window. */
@@ -110,9 +113,14 @@ export function themedOption(option: Raw, colors: ChartColors): Raw {
   }
   if (isObject(out.legend)) {
     const legend = out.legend
+    // Page arrows of a scrolling legend (a narrow chart): ECharts' own colours change between
+    // versions and were near-black on the dark theme.
     out.legend = {
+      pageIconColor: colors.popoverText,
+      pageIconInactiveColor: colors.border,
       ...legend,
       textStyle: { color: colors.muted, ...(isObject(legend.textStyle) ? legend.textStyle : {}) },
+      pageTextStyle: { color: colors.muted, ...(isObject(legend.pageTextStyle) ? legend.pageTextStyle : {}) },
     }
   }
   return out
