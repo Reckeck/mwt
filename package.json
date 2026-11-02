@@ -68,15 +68,5 @@
     "vite": "^8.3.5",
     "vitest": "4.1.12",
     "vue-tsc": "^2.2.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "vue-demi"
-    ],
-    "overrides": {
-      "glob@>=9.0.0 <14.0.2": "^14.0.2",
-      "minimatch@<11.0.1": "^11.0.1"
-    }
   }
 }
