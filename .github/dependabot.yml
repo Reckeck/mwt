@@ -1,0 +1,50 @@
+# Weekly version updates into development. Minor and patch updates of one ecosystem come as a
+# single grouped PR; each major update gets its own PR. Security updates are not grouped and
+# arrive as soon as an advisory appears (repository setting, independent of this schedule).
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Moscow
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: fix(deps)
+    groups:
+      cargo-minor:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Moscow
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: fix(deps)
+      prefix-development: chore(deps)
+    groups:
+      npm-minor:
+        update-types: [minor, patch]
+
+  # Actions are pinned by commit SHA with the version in a comment; Dependabot updates both.
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Moscow
+    commit-message:
+      prefix: chore(ci)
+    groups:
+      actions:
+        patterns: ['*']

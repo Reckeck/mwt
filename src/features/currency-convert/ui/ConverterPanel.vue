@@ -18,7 +18,7 @@ const { t } = useI18n()
 const table = useQuery({ queryKey: ['fx-table'], queryFn: () => call<FxTable>('get_fx_table') })
 const codes = computed(() => [table.data.value?.base ?? 'usd', ...(table.data.value?.rows ?? []).map((row) => row.currency)])
 
-const from = ref('')
+const fromCode = ref('')
 const to = ref('')
 const amount = ref('100')
 const date = ref('')
@@ -26,11 +26,11 @@ watch(
   [() => table.data.value, () => props.from],
   ([data, start]) => {
     if (!data) return
-    from.value = start ?? from.value ?? data.base
-    if (!from.value) from.value = data.base
-    if (!to.value || to.value === from.value) {
+    fromCode.value = start ?? fromCode.value ?? data.base
+    if (!fromCode.value) fromCode.value = data.base
+    if (!to.value || to.value === fromCode.value) {
       to.value =
-        (from.value === data.base ? data.rows.find((row) => row.tracked)?.currency : data.base) ??
+        (fromCode.value === data.base ? data.rows.find((row) => row.tracked)?.currency : data.base) ??
         data.rows[0]?.currency ??
         'usd'
     }
@@ -38,21 +38,21 @@ watch(
   { immediate: true },
 )
 const converted = useQuery({
-  queryKey: computed(() => ['convert', from.value, to.value, amount.value, date.value]),
+  queryKey: computed(() => ['convert', fromCode.value, to.value, amount.value, date.value]),
   placeholderData: keepPreviousData,
   queryFn: () =>
     call<ConvertedAmount>('convert_amount', {
       input: {
-        from: from.value,
+        from: fromCode.value,
         to: to.value,
         amount: amount.value.trim() || '0',
         at: date.value ? new Date(`${date.value}T12:00`).toISOString() : null,
       },
     }),
-  enabled: computed(() => Boolean(from.value && to.value && Number(amount.value) > 0)),
+  enabled: computed(() => Boolean(fromCode.value && to.value && Number(amount.value) > 0)),
 })
 function swap() {
-  ;[from.value, to.value] = [to.value, from.value]
+  ;[fromCode.value, to.value] = [to.value, fromCode.value]
 }
 </script>
 
@@ -61,7 +61,7 @@ function swap() {
     <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
       <div class="grid gap-1.5">
         <Label for="convert-from">{{ t('rates.from') }}</Label>
-        <CurrencyPicker id="convert-from" v-model="from" label="" compact :extra="codes" />
+        <CurrencyPicker id="convert-from" v-model="fromCode" label="" compact :extra="codes" />
       </div>
       <Button variant="ghost" size="icon"  :aria-label="t('rates.swap')" @click="swap">
         <ArrowLeftRight class="size-4" />
