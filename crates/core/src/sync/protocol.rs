@@ -95,6 +95,10 @@ pub struct Hello {
     /// firewall drops incoming connections).
     #[serde(default)]
     pub unreached: bool,
+    /// The sender's app version, for the message of a refusal. Informational:
+    /// never decides anything. Empty from a build that does not send it.
+    #[serde(default)]
+    pub app_version: String,
 }
 
 pub fn encode(message: &Message) -> Result<Vec<u8>> {
@@ -131,5 +135,74 @@ mod tests {
     fn garbage_is_an_error_not_a_panic() {
         assert!(decode(&[0xc1, 0xff, 0x00]).is_err());
         assert!(decode(&[]).is_err());
+    }
+
+    /// A `Hello` as a build from before `instance`, `unreached` and `app_version` wrote it.
+    #[test]
+    fn an_older_hello_without_new_fields_decodes() {
+        #[derive(Serialize)]
+        struct OldHello {
+            protocol: u32,
+            format: u32,
+            device_id: String,
+            device_name: String,
+            proof: Vec<u8>,
+            now_ms: u64,
+            main: bool,
+            prefer_main: bool,
+            needs_pairing: bool,
+            rank: u32,
+        }
+        let old = OldHello {
+            protocol: PROTOCOL_VERSION,
+            format: 3,
+            device_id: "d".into(),
+            device_name: "Old".into(),
+            proof: vec![1, 2, 3],
+            now_ms: 7,
+            main: true,
+            prefer_main: false,
+            needs_pairing: false,
+            rank: 2,
+        };
+        let bytes = rmp_serde::to_vec_named(&serde_json::json!({ "hello": old })).unwrap();
+        let Message::Hello(hello) = decode(&bytes).unwrap() else {
+            panic!("not a hello");
+        };
+        assert_eq!(hello.device_name, "Old");
+        assert_eq!(hello.rank, 2);
+        assert_eq!(hello.instance, "");
+        assert!(!hello.unreached);
+        assert_eq!(hello.app_version, "");
+    }
+
+    #[test]
+    fn an_app_version_round_trips_in_the_hello() {
+        let mut hello = Hello {
+            protocol: PROTOCOL_VERSION,
+            format: 3,
+            device_id: "d".into(),
+            device_name: "New".into(),
+            proof: vec![],
+            now_ms: 1,
+            main: false,
+            prefer_main: false,
+            needs_pairing: false,
+            rank: 0,
+            instance: String::new(),
+            unreached: false,
+            app_version: "1.2.3".into(),
+        };
+        let message = Message::Hello(hello.clone());
+        assert_eq!(decode(&encode(&message).unwrap()).unwrap(), message);
+        hello.app_version.clear();
+        assert_eq!(hello.app_version, "");
+    }
+
+    #[test]
+    fn an_unknown_message_variant_is_an_error_not_a_panic() {
+        let bytes =
+            rmp_serde::to_vec_named(&serde_json::json!({"from_a_newer_build": {"x": 1}})).unwrap();
+        assert!(decode(&bytes).is_err());
     }
 }

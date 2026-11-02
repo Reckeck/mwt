@@ -427,6 +427,7 @@ pub fn run() {
             commands::sync::sync_decide_plan,
             commands::sync::sync_peers,
             commands::sync::sync_forget_peer,
+            commands::sync::sync_resume_peer,
             commands::sync::sync_history,
             commands::sync::sync_journal,
             commands::sync::sync_undo,

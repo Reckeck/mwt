@@ -75,6 +75,12 @@ pub struct Fields {
 pub const WHOLE: &str = "";
 
 pub fn split(coll: &Collection, value: &Value) -> Fields {
+    if coll.whole {
+        return Fields {
+            tag: None,
+            fields: BTreeMap::from([(WHOLE.to_string(), value.clone())]),
+        };
+    }
     let (tag, body) = match (tagged(coll), variant(value)) {
         (true, Some((tag, body))) => (Some(tag.clone()), body),
         _ => (None, value),
@@ -187,6 +193,10 @@ pub fn write(doc: &mut Value, full: &str, value: Option<&Value>) {
     let Some(root) = doc.as_object_mut() else {
         return;
     };
+    if coll.rule == Rule::Single && coll.whole {
+        root.insert(coll.name.to_string(), value.cloned().unwrap_or(Value::Null));
+        return;
+    }
     if coll.rule == Rule::Single {
         let Some(Value::Object(incoming)) = value else {
             return;
@@ -251,6 +261,10 @@ pub fn trim(doc: &mut Value) {
 
 /// A short human label of a record, for the list of what a sync changes.
 pub fn label(coll: &Collection, value: &Value) -> String {
+    // A credential is never a label; the window shows the collection name.
+    if coll.secret {
+        return String::new();
+    }
     let body = match (tagged(coll), variant(value)) {
         (true, Some((_, body))) => body,
         _ => value,
@@ -268,13 +282,21 @@ pub fn label(coll: &Collection, value: &Value) -> String {
         "key",
         "date",
     ] {
+        // A credential field is never a label.
+        if coll.secret_fields.contains(&path) {
+            continue;
+        }
         if let Some(Value::String(text)) = lookup(body, path)
             && !text.trim().is_empty()
         {
             return text.chars().take(80).collect();
         }
     }
-    record_key(coll, value).unwrap_or_default()
+    record_key(coll, value)
+        .unwrap_or_default()
+        .chars()
+        .take(80)
+        .collect()
 }
 
 #[cfg(test)]

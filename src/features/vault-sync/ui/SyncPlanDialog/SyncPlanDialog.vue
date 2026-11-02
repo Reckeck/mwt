@@ -54,6 +54,7 @@ function decide(accept: boolean) {
       <p class="text-sm">{{ t('sync.plan.total', { count: session.plan.summary.total }) }}</p>
       <SyncChanges :summary="session.plan.summary" />
       <p class="text-xs text-muted-foreground">{{ t('sync.plan.safety') }}</p>
+      <p class="text-xs text-muted-foreground">{{ t('sync.plan.declineHint') }}</p>
     </div>
     <template #footer>
       <Button variant="outline" @click="decide(false)">{{ t('sync.plan.decline') }}</Button>

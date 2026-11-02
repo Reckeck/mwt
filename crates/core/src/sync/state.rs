@@ -1,7 +1,7 @@
 //! What a vault keeps about sync: change stamps, deletions, trusted devices
 //! and the batches it took in (for undo). Stored in [`crate::VaultDoc::sync`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -107,7 +107,7 @@ pub struct TrustedPeer {
     /// RFC3339 of the last batch exchanged with it.
     #[serde(default)]
     pub last_synced_at: Option<String>,
-    /// Set by «Забыть устройство» on any device; a revoked key is refused everywhere.
+    /// Set by «Забыть устройство» on any device; a revoked key is refused until it is paired again (a newer entry).
     #[serde(default)]
     pub revoked: Option<Stamp>,
     /// When this entry last changed; the later entry wins between devices.
@@ -158,6 +158,11 @@ pub struct SyncState {
     /// `collection:key` → when it was deleted.
     #[serde(default)]
     pub tombstones: BTreeMap<String, Stamp>,
+    /// `collection:key` → local Unix ms when this device took the deletion in.
+    /// Bookkeeping like the rest: a deletion that arrives late is kept for the
+    /// full retention from then, not from when it was made. Never synced.
+    #[serde(default)]
+    pub tombstones_seen: BTreeMap<String, u64>,
     #[serde(default)]
     pub peers: Vec<TrustedPeer>,
     /// Newest last.
@@ -169,6 +174,22 @@ pub struct SyncState {
     /// The journal of taken batches, newest last (at most `MAX_JOURNAL`).
     #[serde(default)]
     pub journal: Vec<super::journal::SyncJournalEntry>,
+    /// Device ids whose exchange the user paused («Отклонить» on a list of
+    /// changes). Local bookkeeping: never synced, never part of `peers`.
+    #[serde(default)]
+    pub paused: BTreeSet<String>,
+    /// Devices that cut this one off on purpose (they paused it or forgot it),
+    /// as they told us. Local bookkeeping: never synced, never part of `peers`.
+    #[serde(default)]
+    pub cut_by: BTreeMap<String, CutBy>,
+}
+
+/// Why and when another device refused this one on purpose.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CutBy {
+    pub reason: crate::ipc_contract::SyncCutReason,
+    /// RFC3339 of the first time it told us.
+    pub at: String,
 }
 
 /// The vault was handed to a new device from this one.
@@ -191,43 +212,179 @@ impl SyncState {
             .values()
             .map(RecordStamps::latest)
             .chain(self.tombstones.values())
+            .chain(self.peers.iter().map(|peer| &peer.stamp))
             .max()
     }
 
-    /// A trusted, not revoked peer by its key.
+    /// The newest entry for a key: it decides whether the key is trusted.
+    fn latest_entry(&self, public_key: &str) -> Option<&TrustedPeer> {
+        self.peers
+            .iter()
+            .filter(|peer| peer.public_key == public_key)
+            .max_by(|left, right| left.stamp.cmp(&right.stamp))
+    }
+
+    /// A trusted peer by its key: the newest entry for the key, if not revoked.
     pub fn trusted(&self, public_key: &str) -> Option<&TrustedPeer> {
-        self.peers
-            .iter()
-            .find(|peer| peer.public_key == public_key && peer.revoked.is_none())
+        self.latest_entry(public_key)
+            .filter(|peer| peer.revoked.is_none())
     }
 
-    /// Whether this key was trusted once and then forgotten.
+    /// Whether this key was trusted once and then forgotten: its newest entry
+    /// is revoked. A later pairing makes a newer entry and lifts it.
     pub fn is_revoked(&self, public_key: &str) -> bool {
-        self.peers
-            .iter()
-            .any(|peer| peer.public_key == public_key && peer.revoked.is_some())
+        self.latest_entry(public_key)
+            .is_some_and(|peer| peer.revoked.is_some())
     }
 
-    /// Take in another device's list: per device, the later entry wins.
-    pub fn merge_peers(&mut self, remote: &[TrustedPeer]) -> bool {
+    /// Take in another device's list: per device, the later entry wins, with
+    /// two limits. An entry stamped further ahead of `now` than a clock can be
+    /// is skipped. A revocation is never lifted by a list, only by pairing
+    /// here ([`crate::UnlockedVault::sync_trust_peer`]).
+    pub fn merge_peers(&mut self, remote: &[TrustedPeer], now: u64) -> bool {
+        let limit = now.saturating_add(super::session::SKEW_REFUSE_MS);
         let mut changed = false;
         for theirs in remote {
-            match self
+            if theirs.stamp.wall > limit {
+                continue;
+            }
+            let position = self
                 .peers
-                .iter_mut()
-                .find(|mine| mine.device_id == theirs.device_id)
-            {
-                Some(mine) if theirs.stamp > mine.stamp => {
-                    *mine = theirs.clone();
-                    changed = true;
+                .iter()
+                .position(|mine| mine.device_id == theirs.device_id);
+            match position {
+                Some(index) => {
+                    let mine = &self.peers[index];
+                    let accept = theirs.stamp > mine.stamp
+                        && (theirs.revoked.is_some()
+                            || (mine.revoked.is_none() && mine.public_key == theirs.public_key));
+                    if accept {
+                        self.peers[index] = theirs.clone();
+                        changed = true;
+                    }
                 }
-                Some(_) => {}
                 None => {
+                    if theirs.revoked.is_none() && self.is_revoked(&theirs.public_key) {
+                        continue;
+                    }
                     self.peers.push(theirs.clone());
                     changed = true;
                 }
             }
         }
         changed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const NOW: u64 = 1_000_000_000;
+
+    fn entry(device_id: &str, key: &str, wall: u64, revoked: bool) -> TrustedPeer {
+        let stamp = Stamp::new(wall, 0, "remote");
+        TrustedPeer {
+            device_id: device_id.into(),
+            name: device_id.into(),
+            public_key: key.into(),
+            revoked: revoked.then(|| stamp.clone()),
+            stamp,
+            ..TrustedPeer::default()
+        }
+    }
+
+    fn state_with(peers: Vec<TrustedPeer>) -> SyncState {
+        SyncState {
+            peers,
+            ..SyncState::default()
+        }
+    }
+
+    #[test]
+    fn a_merged_list_never_lifts_a_revocation() {
+        let mut state = state_with(vec![entry("dev", "kk", 10, true)]);
+        // A newer, not revoked entry for the same device is refused.
+        assert!(!state.merge_peers(&[entry("dev", "kk", 20, false)], NOW));
+        assert!(state.is_revoked("kk"));
+        // So is a key change on a live entry.
+        let mut live = state_with(vec![entry("dev", "kk", 10, false)]);
+        assert!(!live.merge_peers(&[entry("dev", "other", 20, false)], NOW));
+        assert_eq!(live.peers[0].public_key, "kk");
+    }
+
+    #[test]
+    fn a_newer_revocation_is_taken_and_a_newer_live_entry_for_a_live_one_too() {
+        let mut state = state_with(vec![entry("dev", "kk", 10, false)]);
+        assert!(state.merge_peers(&[entry("dev", "kk", 20, false)], NOW));
+        assert_eq!(state.peers[0].stamp.wall, 20);
+        assert!(state.merge_peers(&[entry("dev", "kk", 30, true)], NOW));
+        assert!(state.is_revoked("kk"));
+    }
+
+    #[test]
+    fn an_unknown_device_for_a_revoked_key_is_not_added_unless_revoked_itself() {
+        let mut state = state_with(vec![entry("dev", "kk", 10, true)]);
+        assert!(!state.merge_peers(&[entry("clone", "kk", 20, false)], NOW));
+        assert_eq!(state.peers.len(), 1);
+        assert!(state.merge_peers(&[entry("clone", "kk", 20, true)], NOW));
+        assert_eq!(state.peers.len(), 2);
+        assert!(state.merge_peers(&[entry("fresh", "new", 20, false)], NOW));
+        assert!(state.trusted("new").is_some());
+    }
+
+    #[test]
+    fn an_entry_stamped_far_in_the_future_is_skipped() {
+        let mut state = state_with(vec![entry("dev", "kk", 10, false)]);
+        let ahead = NOW + super::super::session::SKEW_REFUSE_MS + 1;
+        assert!(!state.merge_peers(&[entry("dev", "kk", ahead, true)], NOW));
+        assert!(!state.merge_peers(&[entry("other", "oo", ahead, false)], NOW));
+        assert_eq!(state.peers.len(), 1);
+        assert!(state.trusted("kk").is_some());
+    }
+
+    #[test]
+    fn state_saved_without_tombstones_seen_still_loads() {
+        let state: SyncState = serde_json::from_str(r#"{"stamps":{},"tombstones":{}}"#).unwrap();
+        assert!(state.tombstones_seen.is_empty());
+        let bare: SyncState = serde_json::from_str("{}").unwrap();
+        assert_eq!(bare, SyncState::default());
+    }
+
+    #[test]
+    fn the_latest_stamp_includes_the_peers() {
+        let state = state_with(vec![entry("dev", "kk", 77, false)]);
+        assert_eq!(state.latest_stamp().map(|stamp| stamp.wall), Some(77));
+    }
+    #[test]
+    fn the_pause_round_trips_in_json_and_messagepack() {
+        let mut state = SyncState::default();
+        state.paused.insert("dev-a".into());
+        let json = serde_json::to_string(&state).unwrap();
+        assert_eq!(serde_json::from_str::<SyncState>(&json).unwrap(), state);
+        let pack = rmp_serde::to_vec_named(&state).unwrap();
+        assert_eq!(rmp_serde::from_slice::<SyncState>(&pack).unwrap(), state);
+        // A vault saved before the field existed opens with nobody paused.
+        let old: SyncState = serde_json::from_str(r#"{"peers":[]}"#).unwrap();
+        assert!(old.paused.is_empty());
+    }
+
+    #[test]
+    fn cut_by_round_trips_in_json_and_messagepack_and_old_vaults_open() {
+        let mut state = SyncState::default();
+        state.cut_by.insert(
+            "dev-a".into(),
+            CutBy {
+                reason: crate::ipc_contract::SyncCutReason::Paused,
+                at: "2026-11-02T10:00:00Z".into(),
+            },
+        );
+        let json = serde_json::to_string(&state).unwrap();
+        assert_eq!(serde_json::from_str::<SyncState>(&json).unwrap(), state);
+        let pack = rmp_serde::to_vec_named(&state).unwrap();
+        assert_eq!(rmp_serde::from_slice::<SyncState>(&pack).unwrap(), state);
+        // A vault saved before the field existed opens with nobody cut off.
+        let old: SyncState = serde_json::from_str(r#"{"peers":[]}"#).unwrap();
+        assert!(old.cut_by.is_empty());
     }
 }

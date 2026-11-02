@@ -19,7 +19,13 @@ use trade_core::ipc_contract::SyncRole;
 use trade_core::sync::session::{day_of, discovery_tag};
 use trade_core::sync::stamp::now_ms;
 
-use super::{Order, Run, hub};
+use super::host::Host;
+use super::{Hub, Order, Run};
+
+/// The hub of any host (the app's handle or a test host).
+fn hub<H: Host>(app: &H) -> std::sync::MutexGuard<'_, Hub> {
+    app.hub()
+}
 
 pub const SERVICE: &str = "_mwt-sync._tcp.local.";
 /// The port sync listens on, so a firewall rule can name it; a random one
@@ -38,8 +44,39 @@ const MAX_DIAL_FAILURES: u32 = 3;
 
 /// A device of the group that is not the main one, as discovery saw it.
 pub(crate) struct Seen {
-    addrs: Vec<SocketAddr>,
-    next_call: Instant,
+    pub(crate) addrs: Vec<SocketAddr>,
+    pub(crate) next_call: Instant,
+}
+
+/// Instances of the devices this device must not dial: the ones that told it
+/// they cut it off (`SyncState::cut_by`) and, with `own_pauses`, the ones it
+/// paused itself. Their own calls are still accepted (the handshake does not
+/// look here). The vault is read before the hub is locked.
+pub(crate) fn skipped_instances<H: Host>(
+    app: &H,
+    own_pauses: bool,
+) -> std::collections::BTreeSet<String> {
+    let devices: Vec<String> = app
+        .with_vault(|vault| {
+            let state = vault.sync_state();
+            let mut ids: Vec<String> = state.cut_by.keys().cloned().collect();
+            if own_pauses {
+                ids.extend(state.paused.iter().cloned());
+            }
+            Ok(ids)
+        })
+        .unwrap_or_default();
+    if devices.is_empty() {
+        return Default::default();
+    }
+    let hub = hub(app);
+    let Some(run) = hub.run.as_ref() else {
+        return Default::default();
+    };
+    devices
+        .iter()
+        .filter_map(|device| run.peer_instances.get(device).cloned())
+        .collect()
 }
 
 /// This device's address on the local network: the one multicast leaves from.
@@ -103,7 +140,7 @@ fn random_instance() -> String {
     trade_core::sync::session::hex(&bytes)
 }
 
-fn current(app: &AppHandle, generation: u64) -> bool {
+fn current<H: Host>(app: &H, generation: u64) -> bool {
     hub(app)
         .run
         .as_ref()
@@ -134,6 +171,7 @@ pub(crate) async fn start(app: &AppHandle, generation: u64, vault_id: &str) -> R
             announcer.shutdown();
             return Ok(());
         }
+        hub.last_error = None;
         hub.run = Some(Run {
             generation,
             role: SyncRole::Searching,
@@ -150,6 +188,9 @@ pub(crate) async fn start(app: &AppHandle, generation: u64, vault_id: &str) -> R
             backup_done: false,
             declined: Default::default(),
             retries: 0,
+            dial_attempt: 0,
+            peer_instances: Default::default(),
+            pair_intent: Default::default(),
             stop,
             announce: Some(announcer),
         });
@@ -280,13 +321,14 @@ fn instance_of(fullname: &str) -> Option<String> {
 }
 
 /// A device with the same vault showed up (or changed its main flag).
-async fn found(
-    app: &AppHandle,
+async fn found<H: Host>(
+    app: &H,
     generation: u64,
     other: String,
     addrs: Vec<SocketAddr>,
     main: bool,
 ) {
+    let skipped = skipped_instances(app, false);
     let connect_to = {
         let mut hub = hub(app);
         let Some(run) = hub.run.as_mut().filter(|run| run.generation == generation) else {
@@ -305,6 +347,10 @@ async fn found(
         }
         run.others.remove(&other);
         run.mains.insert(other.clone(), addrs.clone());
+        if skipped.contains(&other) {
+            // It cut this device off: wait for its call, do not dial.
+            return;
+        }
         match run.role {
             SyncRole::Searching => Some(addrs),
             // Two main devices: the one with the larger instance steps down.
@@ -339,8 +385,16 @@ pub(crate) fn demote(app: &AppHandle) {
     super::emit_status(app);
 }
 
-async fn connect(app: &AppHandle, generation: u64, instance: String, addrs: Vec<SocketAddr>) {
-    {
+pub(crate) async fn connect<H: Host>(
+    app: &H,
+    generation: u64,
+    instance: String,
+    addrs: Vec<SocketAddr>,
+) {
+    if skipped_instances(app, false).contains(&instance) {
+        return;
+    }
+    let attempt = {
         let mut hub = hub(app);
         let Some(run) = hub.run.as_mut().filter(|run| run.generation == generation) else {
             return;
@@ -350,7 +404,9 @@ async fn connect(app: &AppHandle, generation: u64, instance: String, addrs: Vec<
             return;
         }
         run.role = SyncRole::Client;
-    }
+        run.dial_attempt += 1;
+        run.dial_attempt
+    };
     super::emit_status(app);
     for addr in addrs {
         if let Ok(Ok(stream)) =
@@ -361,6 +417,7 @@ async fn connect(app: &AppHandle, generation: u64, instance: String, addrs: Vec<
                 run.dial_failures = 0;
             }
             super::link::run(app.clone(), stream, addr, generation, true).await;
+            release_unlinked_client(app, generation, attempt);
             return;
         }
     }
@@ -392,8 +449,45 @@ async fn connect(app: &AppHandle, generation: u64, instance: String, addrs: Vec<
     );
 }
 
+/// A session we dialed ended before it ever became the link to the main
+/// device (a failed handshake, a refusal): the role set for it must not stay.
+pub(crate) fn release_unlinked_client<H: Host>(app: &H, generation: u64, attempt: u64) {
+    let stuck = {
+        let hub = Host::hub(app);
+        hub.run.as_ref().is_some_and(|run| {
+            run.generation == generation
+                && run.dial_attempt == attempt
+                && run.role == SyncRole::Client
+        }) && !hub.links.values().any(|link| link.to_main)
+    };
+    if stuck {
+        app.main_lost(generation);
+    }
+}
+
+/// Look for the main device again at once, and have the main device call
+/// the devices it sees without waiting for the next retry.
+pub(crate) fn reconnect(app: &AppHandle) {
+    let generation = {
+        let mut guard = hub(app);
+        let Some(run) = guard.run.as_mut() else {
+            return;
+        };
+        let now = Instant::now();
+        for seen in run.others.values_mut() {
+            seen.next_call = now;
+        }
+        run.generation
+    };
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        elect(&app, generation).await;
+    });
+}
+
 /// On the main device: the devices seen for a while with no link to them.
-fn due_callbacks(app: &AppHandle, generation: u64) -> Vec<Vec<SocketAddr>> {
+pub(crate) fn due_callbacks<H: Host>(app: &H, generation: u64) -> Vec<Vec<SocketAddr>> {
+    let skipped = skipped_instances(app, true);
     let mut guard = hub(app);
     let hub = &mut *guard;
     let linked: std::collections::BTreeSet<&str> = hub
@@ -411,7 +505,11 @@ fn due_callbacks(app: &AppHandle, generation: u64) -> Vec<Vec<SocketAddr>> {
     let now = Instant::now();
     run.others
         .iter_mut()
-        .filter(|(instance, seen)| !linked.contains(instance.as_str()) && seen.next_call <= now)
+        .filter(|(instance, seen)| {
+            !linked.contains(instance.as_str())
+                && !skipped.contains(instance.as_str())
+                && seen.next_call <= now
+        })
         .map(|(_, seen)| {
             seen.next_call = now + CALLBACK_RETRY;
             seen.addrs.clone()
@@ -421,7 +519,7 @@ fn due_callbacks(app: &AppHandle, generation: u64) -> Vec<Vec<SocketAddr>> {
 
 /// Connect to a device of the group from the main device (a failure is
 /// retried after [`CALLBACK_RETRY`]).
-async fn callback(app: &AppHandle, generation: u64, addrs: Vec<SocketAddr>) {
+pub(crate) async fn callback<H: Host>(app: &H, generation: u64, addrs: Vec<SocketAddr>) {
     for addr in addrs {
         if let Ok(Ok(stream)) =
             tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await
@@ -433,7 +531,7 @@ async fn callback(app: &AppHandle, generation: u64, addrs: Vec<SocketAddr>) {
 }
 
 /// [`elect`] later, on its own task (breaks the `connect` ↔ `elect` cycle).
-fn elect_later(app: &AppHandle, generation: u64, after: Duration) {
+fn elect_later<H: Host>(app: &H, generation: u64, after: Duration) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(after).await;
@@ -445,14 +543,15 @@ fn elect_later(app: &AppHandle, generation: u64, after: Duration) {
 }
 
 /// No main device in sight: become one; one in sight: connect to it.
-pub(crate) async fn elect(app: &AppHandle, generation: u64) {
+pub(crate) async fn elect<H: Host>(app: &H, generation: u64) {
     if let Some((instance, addrs)) = elect_step(app, generation) {
         connect(app, generation, instance, addrs).await;
     }
 }
 
 /// The decision part of [`elect`]: `Some` = connect there.
-fn elect_step(app: &AppHandle, generation: u64) -> Option<(String, Vec<SocketAddr>)> {
+pub(crate) fn elect_step<H: Host>(app: &H, generation: u64) -> Option<(String, Vec<SocketAddr>)> {
+    let skipped = skipped_instances(app, false);
     let next = {
         let mut hub = hub(app);
         let run = hub
@@ -462,8 +561,15 @@ fn elect_step(app: &AppHandle, generation: u64) -> Option<(String, Vec<SocketAdd
         if run.role != SyncRole::Searching {
             return None;
         }
-        match run.mains.iter().next() {
+        let usable = run
+            .mains
+            .iter()
+            .find(|(instance, _)| !skipped.contains(instance.as_str()));
+        match usable {
             Some((instance, addrs)) => Some((instance.clone(), addrs.clone())),
+            // Every main device in sight cut this one off: wait for its call.
+            // Becoming main here would split the group.
+            None if !run.mains.is_empty() => None,
             None => {
                 become_main_locked(run);
                 None
@@ -506,7 +612,7 @@ pub(crate) fn main_lost(app: &AppHandle, generation: u64) {
         let Some(run) = hub.run.as_mut().filter(|run| run.generation == generation) else {
             return;
         };
-        if still_linked {
+        if still_linked || run.role == SyncRole::Main {
             return;
         }
         run.role = SyncRole::Searching;

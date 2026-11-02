@@ -60,9 +60,87 @@ pub fn reconcile(
     }
 }
 
+/// What a push found in the external copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PushOutcome {
+    /// The copy held the last synced bytes (or nothing) and now holds ours.
+    Written,
+    /// The copy already holds exactly these bytes.
+    AlreadyThere,
+    /// The copy changed on another device since the last sync: nothing was
+    /// written. It is merged in when the vault is opened next.
+    RemoteChanged,
+}
+
+/// Compare-and-swap push: read the copy, write only if it still holds the
+/// bytes of the last sync (or does not exist). A blind write would drop
+/// whatever another device saved there meanwhile.
+pub fn compare_and_push<Err>(
+    read_remote: impl FnOnce() -> Result<Option<Vec<u8>>, Err>,
+    write_remote: impl FnOnce(&[u8]) -> Result<(), Err>,
+    last_synced: Option<&str>,
+    bytes: &[u8],
+) -> Result<PushOutcome, Err> {
+    if let Some(remote) = read_remote()? {
+        let remote = content_hash(&remote);
+        if remote == content_hash(bytes) {
+            return Ok(PushOutcome::AlreadyThere);
+        }
+        if last_synced != Some(remote.as_str()) {
+            return Ok(PushOutcome::RemoteChanged);
+        }
+    }
+    write_remote(bytes)?;
+    Ok(PushOutcome::Written)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+
+    fn push_to(remote: Option<&[u8]>, last: Option<&str>, bytes: &[u8]) -> (PushOutcome, Vec<u8>) {
+        let written = RefCell::new(Vec::new());
+        let outcome = compare_and_push::<()>(
+            || Ok(remote.map(<[u8]>::to_vec)),
+            |data| {
+                written.replace(data.to_vec());
+                Ok(())
+            },
+            last,
+            bytes,
+        )
+        .unwrap();
+        (outcome, written.into_inner())
+    }
+
+    #[test]
+    fn cas_refuses_to_write_over_a_changed_remote() {
+        let last = content_hash(b"old");
+        let (outcome, written) = push_to(Some(b"theirs"), Some(&last), b"mine");
+        assert_eq!(outcome, PushOutcome::RemoteChanged);
+        assert!(written.is_empty());
+        // No common past with an existing copy is a change too.
+        let (outcome, written) = push_to(Some(b"theirs"), None, b"mine");
+        assert_eq!(outcome, PushOutcome::RemoteChanged);
+        assert!(written.is_empty());
+    }
+
+    #[test]
+    fn cas_writes_over_the_last_synced_copy_or_a_missing_one() {
+        let last = content_hash(b"old");
+        assert_eq!(
+            push_to(Some(b"old"), Some(&last), b"mine"),
+            (PushOutcome::Written, b"mine".to_vec())
+        );
+        assert_eq!(
+            push_to(None, Some(&last), b"mine"),
+            (PushOutcome::Written, b"mine".to_vec())
+        );
+        let (outcome, written) = push_to(Some(b"mine"), None, b"mine");
+        assert_eq!(outcome, PushOutcome::AlreadyThere);
+        assert!(written.is_empty());
+    }
 
     #[test]
     fn hashes_are_stable_hex() {

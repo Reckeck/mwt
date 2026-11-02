@@ -68,10 +68,22 @@ pub async fn sync_open_firewall(app: AppHandle) -> Result<SyncStatus, String> {
     Ok(sync::status(&app))
 }
 
-/// «Сопрячь» on the banner: both screens show the code.
+/// «Сопрячь» on the banner: both screens show the code. With a `device_id`
+/// instead of a session (the device list, «Сопрячь заново»): the device cut
+/// this one off, so it is dialed once with the pairing request.
 #[tauri::command]
-pub async fn sync_pair(app: AppHandle, session_id: String) -> Result<(), String> {
-    send(&app, &session_id, Order::StartPairing)
+pub async fn sync_pair(
+    app: AppHandle,
+    session_id: Option<String>,
+    device_id: Option<String>,
+) -> Result<(), String> {
+    match (session_id, device_id) {
+        (Some(session_id), _) => send(&app, &session_id, Order::StartPairing),
+        (None, Some(device_id)) => sync::pair_again(&app, &device_id).map_err(err_to_string),
+        (None, None) => Err(err_to_string(trade_core::Error::InvalidInput(
+            "a session or a device is needed".into(),
+        ))),
+    }
 }
 
 /// «Не сейчас» on the banner: the device is not offered again until sync restarts.
@@ -130,6 +142,8 @@ pub async fn sync_peers(
             paired_at: peer.paired_at.clone(),
             last_synced_at: peer.last_synced_at.clone(),
             online: online.contains(&peer.device_id),
+            paused: vault.sync_is_paused(&peer.device_id),
+            cut_by: vault.sync_cut_reason(&peer.device_id),
         })
         .collect())
 }
@@ -149,6 +163,26 @@ pub async fn sync_forget_peer(
         vault.sync_forget_peer(&device_id).map_err(err_to_string)?;
     }
     sync::forget_device(&app, &device_id);
+    sync::emit_status(&app);
+    Ok(())
+}
+
+/// «Продолжить»: lift the pause set by declining a list of changes and
+/// connect again; the list is asked about again.
+#[tauri::command]
+pub async fn sync_resume_peer(
+    app: AppHandle,
+    device_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    {
+        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let vault = guard
+            .as_mut()
+            .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
+        vault.sync_resume_peer(&device_id).map_err(err_to_string)?;
+    }
+    sync::reconnect(&app);
     sync::emit_status(&app);
     Ok(())
 }

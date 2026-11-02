@@ -226,10 +226,11 @@ impl Assembler {
         if offer.size == 0 || offer.size > MAX_VAULT_BYTES || offer.sha256.len() != 32 {
             return Err(Error::PeerSync(PeerSyncFailure::NotAVault));
         }
-        let capacity = usize::try_from(offer.size).unwrap_or(0);
+        // Not reserved up front: the size is the sender's word until the code
+        // is confirmed, so the buffer grows as parts arrive.
         Ok(Self {
             offer,
-            bytes: Vec::with_capacity(capacity),
+            bytes: Vec::new(),
             next: 0,
         })
     }

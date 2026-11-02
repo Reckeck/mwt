@@ -113,6 +113,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'settings-groups', key: 'settings.groups', side: 'right' },
     { target: 'settings-tabs', key: 'settings.tabs', side: 'bottom' },
     { target: 'vault-security', key: 'settings.security', side: 'top' },
+    { target: 'sync-device-list', key: 'settings.deviceList', side: 'top' },
     { target: 'sync-add-device', key: 'settings.addDevice', side: 'top' },
     { target: 'sync-pending', key: 'settings.pending', side: 'bottom' },
     { target: 'sync-history', key: 'settings.history', side: 'top' },

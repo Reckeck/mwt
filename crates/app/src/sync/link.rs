@@ -15,15 +15,16 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use trade_core::error::{Error, PeerSyncFailure, Result};
 use trade_core::ipc_contract::{
-    SyncClockEvent, SyncConfirmReason, SyncOfferEvent, SyncPairingEvent, SyncPendingPlan,
-    SyncPhase, SyncPlanEvent, SyncProgress, SyncRole, SyncSessionView, VaultSyncedEvent,
+    SyncClockEvent, SyncConfirmReason, SyncCutReason, SyncOfferEvent, SyncPairingEvent,
+    SyncPendingPlan, SyncPhase, SyncPlanEvent, SyncProgress, SyncRole, SyncSessionView,
+    VaultSyncedEvent,
 };
 use trade_core::service::PeerRef;
 use trade_core::sync::RecordState;
 use trade_core::sync::journal::SyncJournalOutcome;
 use trade_core::sync::manifest::{Manifest, diff};
 use trade_core::sync::protocol::{
-    Hello, MANIFEST_PER_MESSAGE, Message, PROTOCOL_VERSION, RECORDS_PER_MESSAGE, decode, encode,
+    Hello, MANIFEST_PER_MESSAGE, Message, RECORDS_PER_MESSAGE, decode, encode,
 };
 use trade_core::sync::registry::UNION_DAYS;
 use trade_core::sync::session::{Channel, ClockWatch, Handshake, Skew, skew_of};
@@ -36,9 +37,21 @@ use super::{
 };
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+/// A device that forgot the caller waits this long for an explicit pairing
+/// request; without one it tells the caller it was forgotten.
+#[cfg(not(test))]
+const FORGOTTEN_GRACE: Duration = Duration::from_secs(1);
+#[cfg(test)]
+const FORGOTTEN_GRACE: Duration = Duration::from_millis(300);
 const PAIRING_TIMEOUT: Duration = Duration::from_secs(300);
+#[cfg(not(test))]
 const DECISION_TIMEOUT: Duration = Duration::from_secs(600);
+#[cfg(test)]
+const DECISION_TIMEOUT: Duration = Duration::from_millis(2500);
+#[cfg(not(test))]
 const DEBOUNCE: Duration = Duration::from_secs(1);
+#[cfg(test)]
+const DEBOUNCE: Duration = Duration::from_millis(50);
 const TIME_EVERY: Duration = Duration::from_secs(30);
 const SILENCE_LIMIT: Duration = Duration::from_secs(95);
 /// Notices older than this that arrive by sync are logged, not shown.
@@ -49,6 +62,13 @@ const FRESH_NOTICE_MS: i64 = 3600 * 1000;
 enum Stop {
     Quiet,
     Failed(Error),
+    /// The peer runs an incompatible version: told with its name and versions.
+    Incompatible {
+        device_id: String,
+        name: String,
+        version: String,
+        own: String,
+    },
 }
 
 impl From<Error> for Stop {
@@ -141,7 +161,7 @@ pub(crate) async fn run<H: Host>(
         .hub()
         .links
         .remove(&session_id)
-        .map(|link| link.view.name);
+        .map(|link| (link.view.device_id, link.view.name));
     if let Err(Stop::Failed(err)) = &result {
         if matches!(
             err,
@@ -151,7 +171,25 @@ pub(crate) async fn run<H: Host>(
         ) {
             super::note_failure(&app, addr.ip());
         }
-        super::emit_error(&app, err, peer.as_deref());
+        super::emit_error(
+            &app,
+            err,
+            peer.as_ref().map(|(id, name)| (id.as_str(), name.as_str())),
+        );
+    }
+    if let Err(Stop::Incompatible {
+        device_id,
+        name,
+        version,
+        own,
+    }) = &result
+    {
+        super::emit_error_with(
+            &app,
+            &Error::PeerSync(PeerSyncFailure::VersionMismatch),
+            Some((device_id.as_str(), name.as_str())),
+            Some((version.as_str(), own.as_str())),
+        );
     }
     if to_main {
         app.main_lost(generation);
@@ -164,6 +202,36 @@ struct Peer {
     device_id: String,
     name: String,
     remote_key: String,
+    /// The vault this session was opened for (taken at the hello): a vault
+    /// switched under a running session must not receive its records.
+    vault_id: String,
+}
+
+/// Merge the other side's trusted devices and tell the other links; whether
+/// the other side's own key is revoked now. Refuses (quietly) when the open
+/// vault is no longer the session's.
+fn take_peers<H: Host>(
+    app: &H,
+    peer: &Peer,
+    peers: &[trade_core::sync::TrustedPeer],
+) -> Flow<bool> {
+    let taken = app.with_vault(|vault| {
+        if vault.doc.id != peer.vault_id {
+            return Ok(None);
+        }
+        let changed = vault.sync_merge_peers(peers)?;
+        Ok(Some((
+            changed,
+            vault.sync_state().is_revoked(&peer.remote_key),
+        )))
+    })?;
+    let Some((changed, revoked)) = taken else {
+        return Err(Stop::Quiet);
+    };
+    if changed {
+        super::peers_changed(app, &peer.session_id);
+    }
+    Ok(revoked)
 }
 
 async fn session<H: Host>(
@@ -221,11 +289,12 @@ async fn session<H: Host>(
     let remote_key = wire.channel.remote_hex();
 
     // -- hello --
-    let (vault_id, trusted, revoked) = app.with_vault(|vault| {
+    // A forgotten (revoked) key is not trusted, so it asks for pairing: it only
+    // returns through a pairing code confirmed on both devices.
+    let (vault_id, trusted) = app.with_vault(|vault| {
         Ok((
             vault.doc.id.clone(),
             vault.sync_state().trusted(&remote_key).is_some(),
-            vault.sync_state().is_revoked(&remote_key),
         ))
     })?;
     let settings = app.settings();
@@ -241,9 +310,10 @@ async fn session<H: Host>(
             None => return Err(Stop::Quiet),
         }
     };
+    let versions = app.versions();
     wire.send(&Message::Hello(Hello {
-        protocol: PROTOCOL_VERSION,
-        format: trade_core::VAULT_FORMAT_VERSION,
+        protocol: versions.0,
+        format: versions.1,
         device_id: settings.device_id.clone(),
         device_name: super::device_name(&settings),
         proof: wire.channel.proof(&vault_id),
@@ -254,6 +324,7 @@ async fn session<H: Host>(
         rank,
         instance,
         unreached,
+        app_version: app.app_version(),
     }))
     .await?;
     let theirs = match tokio::time::timeout(HANDSHAKE_TIMEOUT, wire.next())
@@ -267,15 +338,40 @@ async fn session<H: Host>(
     if !wire.channel.verify_proof(&vault_id, &theirs.proof) {
         return Err(failure(PeerSyncFailure::OtherVault));
     }
-    if theirs.protocol != PROTOCOL_VERSION || theirs.format != trade_core::VAULT_FORMAT_VERSION {
-        return Err(failure(PeerSyncFailure::VersionMismatch));
+    if (theirs.protocol, theirs.format) != versions {
+        return Err(Stop::Incompatible {
+            device_id: theirs.device_id.clone(),
+            name: theirs.device_name.clone(),
+            version: theirs.app_version.clone(),
+            own: app.app_version(),
+        });
+    }
+    // Which address is this device: discovery needs it to skip a device that
+    // cut this one off (or that was paused here), even when the session ends
+    // right below.
+    if !theirs.instance.is_empty()
+        && let Some(run) = app.hub().run.as_mut()
+    {
+        run.peer_instances
+            .insert(theirs.device_id.clone(), theirs.instance.clone());
     }
     let declined = app
         .hub()
         .run
         .as_ref()
         .is_some_and(|run| run.declined.contains(&theirs.device_id));
+    // Paused by the user (a declined list of changes): close without a word.
+    let paused = app.with_vault(|vault| Ok(vault.sync_is_paused(&theirs.device_id)))?;
     if theirs.device_id == settings.device_id || declined {
+        return Err(Stop::Quiet);
+    }
+    if paused {
+        // Told, not left to knock: the other side stops calling and says why.
+        let _ = wire
+            .send(&Message::Bye {
+                reason: SyncCutReason::Paused.wire().into(),
+            })
+            .await;
         return Err(Stop::Quiet);
     }
     // Exactly one side of a link is the main device; two main devices sort
@@ -283,17 +379,27 @@ async fn session<H: Host>(
     if main_here == theirs.main {
         return Err(Stop::Quiet);
     }
+    // A forgotten key only returns through a pairing somebody asked for: a
+    // pairing request right after the hellos. Anything else is told so.
+    let mut asked_to_pair = false;
+    if app.with_vault(|vault| Ok(vault.sync_state().is_revoked(&remote_key)))? {
+        match tokio::time::timeout(FORGOTTEN_GRACE, wire.next()).await {
+            Ok(Ok(Some(Message::PairRequest))) => asked_to_pair = true,
+            Ok(Ok(Some(Message::Bye { .. }) | None)) => return Err(Stop::Quiet),
+            Ok(Err(stop)) => return Err(stop),
+            Ok(Ok(Some(_))) | Err(_) => {
+                let _ = wire
+                    .send(&Message::Bye {
+                        reason: SyncCutReason::Forgotten.wire().into(),
+                    })
+                    .await;
+                return Err(Stop::Quiet);
+            }
+        }
+    }
     let to_main = theirs.main;
     *to_main_out = to_main;
     let callback = dialer == main_here;
-    if revoked {
-        let _ = wire
-            .send(&Message::Bye {
-                reason: "revoked".into(),
-            })
-            .await;
-        return Err(failure(PeerSyncFailure::Revoked));
-    }
     let mut watch = ClockWatch::new(theirs.now_ms, now_ms());
     match skew_of(watch.offset()) {
         Skew::Refuse(_) => return Err(failure(PeerSyncFailure::ClockSkew)),
@@ -312,12 +418,15 @@ async fn session<H: Host>(
     }
 
     let (orders_in, mut orders) = mpsc::unbounded_channel();
+    let intent;
     {
         let mut guard = app.hub();
         let hub = &mut *guard;
         let Some(run) = hub.run.as_mut().filter(|run| run.generation == generation) else {
             return Err(Stop::Quiet);
         };
+        // The user asked to pair this device again: the request goes out first.
+        intent = dialer && run.pair_intent.remove(&theirs.device_id);
         if to_main {
             // A client called back while it was still looking.
             if run.role == SyncRole::Main {
@@ -370,6 +479,7 @@ async fn session<H: Host>(
                 to_main,
                 callback,
                 instance: theirs.instance.clone(),
+                remote_key: remote_key.clone(),
                 prefer_main: theirs.prefer_main,
                 applied_once: false,
             },
@@ -381,11 +491,12 @@ async fn session<H: Host>(
         device_id: theirs.device_id.clone(),
         name: theirs.device_name.clone(),
         remote_key,
+        vault_id: vault_id.clone(),
     };
 
     let mut reason = None;
     if !trusted || theirs.needs_pairing {
-        pair(app, &mut wire, &mut orders, &peer).await?;
+        pair(app, &mut wire, &mut orders, &peer, intent, asked_to_pair).await?;
         reason = Some(SyncConfirmReason::Paired);
     }
     let _ = addr;
@@ -410,6 +521,8 @@ async fn pair<H: Host>(
     wire: &mut Wire,
     orders: &mut mpsc::UnboundedReceiver<Order>,
     peer: &Peer,
+    ask_now: bool,
+    asked: bool,
 ) -> Flow<()> {
     set_phase(app, &peer.session_id, SyncPhase::Offer);
     app.emit(
@@ -440,6 +553,15 @@ async fn pair<H: Host>(
     let deadline = tokio::time::sleep(PAIRING_TIMEOUT);
     tokio::pin!(deadline);
     let (mut shown, mut mine, mut theirs) = (false, false, false);
+    // The pairing was asked for before this point: the user's («Сопрячь
+    // заново») or the other side's request that opened the session.
+    if ask_now || asked {
+        shown = true;
+        show_code(app);
+    }
+    if ask_now {
+        wire.send(&Message::PairRequest).await?;
+    }
     loop {
         tokio::select! {
             () = &mut deadline => {
@@ -483,7 +605,8 @@ async fn pair<H: Host>(
                     }
                     theirs = true;
                 }
-                Some(Message::Bye { .. }) | None => return Err(Stop::Quiet),
+                Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),
+                None => return Err(Stop::Quiet),
                 Some(_) => {}
             },
         }
@@ -498,6 +621,31 @@ async fn pair<H: Host>(
             return Ok(());
         }
     }
+}
+
+/// The other device said goodbye with a reason. `paused` and `forgotten` mean
+/// it cut this device off on purpose: remember it (so discovery stops dialing
+/// it) and tell the user once. Any other reason is a plain quiet close, as
+/// before (older builds send none of these).
+fn heard_bye<H: Host>(app: &H, peer: &Peer, reason: &str) -> Stop {
+    let Some(cut) = SyncCutReason::from_wire(reason) else {
+        return Stop::Quiet;
+    };
+    let news = app
+        .with_vault(|vault| vault.sync_cut_by(&peer.device_id, cut))
+        .unwrap_or(false);
+    if news {
+        let failure = match cut {
+            SyncCutReason::Paused => PeerSyncFailure::PausedByPeer,
+            SyncCutReason::Forgotten => PeerSyncFailure::ForgottenByPeer,
+        };
+        super::emit_error(
+            app,
+            &Error::PeerSync(failure),
+            Some((peer.device_id.as_str(), peer.name.as_str())),
+        );
+    }
+    Stop::Quiet
 }
 
 /// Do not offer this device again until sync restarts.
@@ -615,11 +763,7 @@ async fn exchange<H: Host>(
             },
             message = wire.next() => match message? {
                 Some(Message::Peers { peers }) => {
-                    let revoked = app.with_vault(|vault| {
-                        vault.sync_merge_peers(&peers)?;
-                        Ok(vault.sync_state().is_revoked(&peer.remote_key))
-                    })?;
-                    if revoked {
+                    if take_peers(app, peer, &peers)? {
                         return Err(failure(PeerSyncFailure::Revoked));
                     }
                 }
@@ -656,14 +800,20 @@ async fn exchange<H: Host>(
                     }
                 }
                 Some(Message::Presence { focused }) => presence(app, peer, focused),
-                Some(Message::Bye { .. }) | None => return Err(Stop::Quiet),
+                Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),
+                None => return Err(Stop::Quiet),
                 Some(_) => {}
             },
         }
     }
     set_progress(app, &peer.session_id, None);
     apply(app, wire, orders, peer, watch, incoming, reason, pending).await?;
-    app.with_vault(|vault| vault.sync_mark_synced(&peer.device_id))?;
+    app.with_vault(|vault| {
+        vault.sync_mark_synced(&peer.device_id)?;
+        // It talks to us again: whatever it told us before is over.
+        vault.sync_clear_cut(&peer.device_id).map(|_| ())
+    })?;
+    super::peer_recovered(app, &peer.device_id);
     Ok(())
 }
 
@@ -680,6 +830,13 @@ fn presence<H: Host>(app: &H, peer: &Peer, focused: bool) {
 }
 
 /// Apply records from the other device, asking first when needed.
+///
+/// Records that arrive while the question is open are held, never applied
+/// with the answer: the answer covers the list the user saw. They go
+/// through a new list and a new question of their own (and, when they
+/// change nothing, are dropped). Held records are keyed by record, so they
+/// stay bounded by the vault; an unanswered question ends the session
+/// after [`DECISION_TIMEOUT`] and the next session sends them again.
 #[allow(clippy::too_many_arguments)]
 async fn apply<H: Host>(
     app: &H,
@@ -687,9 +844,47 @@ async fn apply<H: Host>(
     orders: &mut mpsc::UnboundedReceiver<Order>,
     peer: &Peer,
     watch: &mut ClockWatch,
-    mut incoming: BTreeMap<String, RecordState>,
+    incoming: BTreeMap<String, RecordState>,
     reason: Option<SyncConfirmReason>,
     pending: &mut BTreeSet<String>,
+) -> Flow<()> {
+    let mut next = incoming;
+    let mut reason = reason;
+    let mut first = true;
+    loop {
+        let mut held = BTreeMap::new();
+        let mut asked = None;
+        apply_shown(
+            app, wire, orders, peer, watch, next, reason, pending, &mut held, &mut asked, first,
+        )
+        .await?;
+        if held.is_empty() {
+            return Ok(());
+        }
+        // Asked once, so asked again: the same reason, a fresh list.
+        next = held;
+        reason = asked;
+        first = false;
+    }
+}
+
+/// One round of [`apply`]: `incoming` is exactly what the question shows.
+/// `held` takes what arrives during the question; `asked` the reason it was
+/// asked for. A round that is not the `first` one applies nothing when its
+/// list is empty.
+#[allow(clippy::too_many_arguments)]
+async fn apply_shown<H: Host>(
+    app: &H,
+    wire: &mut Wire,
+    orders: &mut mpsc::UnboundedReceiver<Order>,
+    peer: &Peer,
+    watch: &mut ClockWatch,
+    incoming: BTreeMap<String, RecordState>,
+    reason: Option<SyncConfirmReason>,
+    pending: &mut BTreeSet<String>,
+    held: &mut BTreeMap<String, RecordState>,
+    asked: &mut Option<SyncConfirmReason>,
+    first: bool,
 ) -> Flow<()> {
     if incoming.is_empty() {
         return Ok(());
@@ -710,7 +905,11 @@ async fn apply<H: Host>(
     });
     if let Some(reason) = reason {
         let summary = app.with_vault(|vault| vault.sync_preview(&incoming))?;
+        if summary.is_empty() && !first {
+            return Ok(());
+        }
         if !summary.is_empty() {
+            *asked = Some(reason);
             update_link(app, &peer.session_id, |link| {
                 link.view.phase = SyncPhase::AwaitingConfirm;
                 link.view.plan = Some(SyncPendingPlan {
@@ -729,11 +928,15 @@ async fn apply<H: Host>(
             );
             let deadline = tokio::time::sleep(DECISION_TIMEOUT);
             tokio::pin!(deadline);
-            let accept = loop {
+            // The other side closes a silent session: keep telling it the time.
+            let mut ticker = tokio::time::interval(TIME_EVERY);
+            // `None`: no answer in time. That is not a decline.
+            let decision = loop {
                 tokio::select! {
-                    () = &mut deadline => break false,
+                    () = &mut deadline => break None,
+                    _ = ticker.tick() => wire.send(&Message::Time { now_ms: now_ms() }).await?,
                     order = orders.recv() => match order {
-                        Some(Order::Decide(accept)) => break accept,
+                        Some(Order::Decide(accept)) => break Some(accept),
                         Some(Order::Changed(keys)) => pending.extend(keys),
                         Some(Order::Presence(focused)) => wire.send(&Message::Presence { focused }).await?,
                         Some(Order::Close) | None => return Err(Stop::Quiet),
@@ -742,7 +945,7 @@ async fn apply<H: Host>(
                     message = wire.next() => match message? {
                         Some(Message::Changed { records }) => {
                             check_stamps(app, peer, watch, &records);
-                            incoming.extend(records);
+                            held.extend(records);
                         }
                         Some(Message::Time { now_ms: remote }) => {
                             if watch.observe(remote, now_ms()).is_some() {
@@ -750,22 +953,35 @@ async fn apply<H: Host>(
                             }
                         }
                         Some(Message::Presence { focused }) => presence(app, peer, focused),
-                        Some(Message::Bye { .. }) | None => return Err(Stop::Quiet),
+                        Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),
+                        None => return Err(Stop::Quiet),
                         Some(_) => {}
                     },
                 }
             };
             update_link(app, &peer.session_id, |link| link.view.plan = None);
-            if !accept {
-                let _ = app.with_vault(|vault| {
-                    vault.sync_journal_record(&peer.name, &summary, SyncJournalOutcome::Declined)
-                });
+            if decision != Some(true) {
+                let declined = decision == Some(false);
+                if declined {
+                    // «Отклонить» pauses exchange with this device until the
+                    // user resumes it; a timeout only closes this session.
+                    let _ = app.with_vault(|vault| {
+                        vault.sync_journal_record(
+                            &peer.name,
+                            &summary,
+                            SyncJournalOutcome::Declined,
+                        )?;
+                        vault.sync_pause_peer(&peer.device_id)
+                    });
+                }
                 let _ = wire
                     .send(&Message::Bye {
-                        reason: "declined".into(),
+                        reason: if declined { "declined" } else { "timeout" }.into(),
                     })
                     .await;
-                return Err(failure(PeerSyncFailure::Rejected));
+                // The user's own decision or silence: neither a failure to
+                // show nor one to count against the address.
+                return Err(Stop::Quiet);
             }
         }
     }
@@ -781,15 +997,20 @@ async fn apply<H: Host>(
         name: peer.name.clone(),
     };
     let applied = app.with_vault(|vault| {
+        // Checked in the same step as the write: a vault switched under the
+        // session gets nothing.
+        if vault.doc.id != peer.vault_id {
+            return Ok(None);
+        }
         if backup {
             vault.sync_backup()?;
         }
         let Some(batch) = vault.sync_apply(&incoming, &peer_ref)? else {
-            return Ok(None);
+            return Ok(Some(None));
         };
         let keys = vault.sync_batch_keys(&batch.id);
         let notices = vault.sync_batch_notices(&batch.id);
-        Ok(Some((batch, keys, notices)))
+        Ok(Some(Some((batch, keys, notices))))
     });
     let applied = match applied {
         Ok(applied) => applied,
@@ -803,6 +1024,9 @@ async fn apply<H: Host>(
             });
             return Err(err.into());
         }
+    };
+    let Some(applied) = applied else {
+        return Err(Stop::Quiet);
     };
     app.hub().last_activity = Some(std::time::Instant::now());
     update_link(app, &peer.session_id, |link| link.applied_once = true);
@@ -844,6 +1068,9 @@ async fn live<H: Host>(
     }
     hand_over_if_preferred(app, peer);
     super::send_presence(&mut app.hub());
+    // SendPeers orders are dropped while exchanging: say where we stand now.
+    let peers = app.with_vault(|vault| Ok(vault.sync_state().peers.clone()))?;
+    wire.send(&Message::Peers { peers }).await?;
 
     let mut flush_at = (!pending.is_empty()).then(|| Instant::now() + DEBOUNCE);
     let mut ticker = tokio::time::interval(TIME_EVERY);
@@ -905,16 +1132,13 @@ async fn live<H: Host>(
                     }
                     Some(Message::Presence { focused }) => presence(app, peer, focused),
                     Some(Message::Peers { peers }) => {
-                        let revoked = app.with_vault(|vault| {
-                            vault.sync_merge_peers(&peers)?;
-                            Ok(vault.sync_state().is_revoked(&peer.remote_key))
-                        })?;
-                        if revoked {
+                        if take_peers(app, peer, &peers)? {
                             return Err(failure(PeerSyncFailure::Revoked));
                         }
                     }
                     Some(Message::TakeMain) => app.become_main(),
-                    Some(Message::Bye { .. }) | None => return Err(Stop::Quiet),
+                    Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),
+                    None => return Err(Stop::Quiet),
                     Some(_) => {}
                 }
             }

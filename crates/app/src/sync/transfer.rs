@@ -24,6 +24,9 @@ use super::link::{read_frame, write_frame};
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 /// A step the other device takes by itself (no person in between).
 const STEP_TIMEOUT: Duration = Duration::from_secs(60);
+/// A step a person takes (accept the request, type the code): bounded like the
+/// receive window, so a stalled sender cannot hold the receiver for ever.
+const PERSON_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn failure(kind: PeerSyncFailure) -> Error {
     Error::PeerSync(kind)
@@ -141,7 +144,11 @@ pub(crate) async fn receive(
     report(Incoming::Request {
         sender_name: offer.device_name.clone(),
     });
-    if decisions.recv().await != Some(true) {
+    let decision = tokio::time::timeout(PERSON_TIMEOUT, decisions.recv())
+        .await
+        .ok()
+        .flatten();
+    if decision != Some(true) {
         let _ = pipe.send(&TransferMessage::Declined).await;
         return Err(failure(PeerSyncFailure::TransferDeclined));
     }
@@ -160,8 +167,8 @@ pub(crate) async fn receive(
             message: attempt.message().to_vec(),
         })
         .await?;
-        // A person types the code there: no step timeout, the window closes it.
-        let TransferMessage::Pake { message } = pipe.next().await? else {
+        // A person types the code there: a longer limit than a step.
+        let TransferMessage::Pake { message } = pipe.next_within(PERSON_TIMEOUT).await? else {
             return Err(failure(PeerSyncFailure::Channel));
         };
         let shared = attempt.finish(&message, pipe.channel.handshake_hash())?;

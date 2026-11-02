@@ -2421,6 +2421,34 @@ pub struct TransferSendInput {
     pub password: String,
 }
 
+/// Why another device refused this one on purpose (`Bye` reasons).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncCutReason {
+    /// It paused the exchange with this device («Отклонить» there).
+    Paused,
+    /// It forgot this device.
+    Forgotten,
+}
+
+impl SyncCutReason {
+    /// The `Bye` reason on the wire.
+    pub fn wire(self) -> &'static str {
+        match self {
+            Self::Paused => "paused",
+            Self::Forgotten => "forgotten",
+        }
+    }
+
+    pub fn from_wire(reason: &str) -> Option<Self> {
+        match reason {
+            "paused" => Some(Self::Paused),
+            "forgotten" => Some(Self::Forgotten),
+            _ => None,
+        }
+    }
+}
+
 /// A trusted device as the settings list shows it.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SyncPeerView {
@@ -2429,6 +2457,12 @@ pub struct SyncPeerView {
     pub paired_at: String,
     pub last_synced_at: Option<String>,
     pub online: bool,
+    /// The user declined its list of changes: no exchange until «Продолжить».
+    #[serde(default)]
+    pub paused: bool,
+    /// The device refused this one on purpose and told so.
+    #[serde(default)]
+    pub cut_by: Option<SyncCutReason>,
 }
 
 /// Partial update of this device's sync settings.
@@ -2497,6 +2531,13 @@ pub struct SyncErrorEvent {
     pub code: String,
     pub message: String,
     pub peer_name: Option<String>,
+    /// `SYNC_VERSION_MISMATCH` only: the peer's app version (empty: an old
+    /// build that does not send it).
+    #[serde(default)]
+    pub peer_version: Option<String>,
+    /// `SYNC_VERSION_MISMATCH` only: this app's version.
+    #[serde(default)]
+    pub own_version: Option<String>,
 }
 
 /// `sync-clock`: the other device's clock differs or jumped.

@@ -5641,12 +5641,26 @@ type SyncClockEvent = { session_id: string, peer_name: string, offset_ms: number
 
 type SyncConfirmReason = "first" | "paired" | "unreliable";
 
+/**
+ * Why another device refused this one on purpose (`Bye` reasons).
+ */
+type SyncCutReason = "paused" | "forgotten";
+
 type SyncDecisionInput = { session_id: string, accept: boolean, };
 
 /**
  * `sync-error`: a session ended or refused to start; `code` is a `SYNC_*` code.
  */
-type SyncErrorEvent = { code: string, message: string, peer_name: string | null, };
+type SyncErrorEvent = { code: string, message: string, peer_name: string | null, 
+/**
+ * `SYNC_VERSION_MISMATCH` only: the peer's app version (empty: an old
+ * build that does not send it).
+ */
+peer_version: string | null, 
+/**
+ * `SYNC_VERSION_MISMATCH` only: this app's version.
+ */
+own_version: string | null, };
 
 /**
  * How a firewall that drops incoming sync connections can be opened here.
@@ -5730,7 +5744,15 @@ type SyncPairingEvent = { session_id: string, peer_name: string, code: string, }
 /**
  * A trusted device as the settings list shows it.
  */
-type SyncPeerView = { device_id: string, name: string, paired_at: string, last_synced_at: string | null, online: boolean, };
+type SyncPeerView = { device_id: string, name: string, paired_at: string, last_synced_at: string | null, online: boolean, 
+/**
+ * The user declined its list of changes: no exchange until «Продолжить».
+ */
+paused: boolean, 
+/**
+ * The device refused this one on purpose and told so.
+ */
+cut_by: SyncCutReason | null, };
 
 type SyncPendingPlan = { reason: SyncConfirmReason, summary: SyncSummary, };
 

@@ -6,14 +6,23 @@ import { FilePlus2, FolderOpen } from 'lucide-vue-next'
 import { Button } from '@/shared/ui/button'
 import { SectionState } from '@/shared/ui/section-state'
 import { formatDateTime } from '@/shared/lib/format'
+import { parseError } from '@/shared/api/ipc'
 
 import { useVaultLink } from './useVaultLink'
 
 /** The body of the «Копия во внешнем файле» card: whether it is on, where, and the buttons. */
-const { t } = useI18n()
+const { t, te } = useI18n()
 const { status, link, unlink } = useVaultLink()
 
 const current = computed(() => status.data.value)
+/** «CODE: text» from the backend: a known code shows its translation, anything else stays as it came. */
+const failure = computed(() => {
+  const raw = current.value?.last_error
+  if (!raw) return null
+  const { code } = parseError(raw)
+  if (code === 'VAULT_REMOTE_CHANGED' && te(`errors.${code}`)) return { paused: true, text: t(`errors.${code}`) }
+  return { paused: false, text: raw }
+})
 const busy = computed(() => link.isPending.value || unlink.isPending.value)
 </script>
 
@@ -32,8 +41,9 @@ const busy = computed(() => link.isPending.value || unlink.isPending.value)
         <template v-if="current.last_synced_at && !current.last_error"> · {{ formatDateTime(current.last_synced_at) }}</template>
       </p>
       <p v-else class="font-medium text-muted-foreground">{{ t('vaultLink.statusOff') }}</p>
-      <p v-if="current?.last_error" role="alert" class="text-xs text-destructive">
-        {{ t('vaultLink.lastFailed') }}: {{ current.last_error }}
+      <p v-if="failure" role="alert" class="text-xs text-destructive">
+        <template v-if="failure.paused">{{ failure.text }}</template>
+        <template v-else>{{ t('vaultLink.lastFailed') }}: {{ failure.text }}</template>
       </p>
     </div>
 

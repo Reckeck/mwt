@@ -41,6 +41,15 @@ const summary: SyncSummary = {
 /** What the backend already journaled before this session: applied, declined, sent. */
 const seedJournal = (): SyncJournalEntry[] => [
   {
+    id: 'journal-4',
+    at: '2026-10-23T08:00:00Z',
+    peer_name: 'Внешняя копия',
+    counts: [{ collection: 'transactions', count: 3 }],
+    label: null,
+    outcome: 'applied',
+    batch_id: null,
+  },
+  {
     id: 'journal-3',
     at: '2026-10-22T09:40:00Z',
     peer_name: 'Pixel 8',
@@ -75,7 +84,19 @@ const seedJournal = (): SyncJournalEntry[] => [
 /** The real handshake gives the code five minutes. */
 const PAIRING_MS = 5 * 60_000
 
+/** A second demo device that forgot this one: the list shows its badge and «Сопрячь заново». */
+const LAPTOP: SyncPeerView = {
+  device_id: 'mock-laptop',
+  name: 'Ноутбук',
+  paired_at: '2026-10-20T20:00:00Z',
+  last_synced_at: '2026-10-21T18:00:00Z',
+  online: false,
+  paused: false,
+  cut_by: 'forgotten',
+}
+
 const state = {
+  laptop: LAPTOP as SyncPeerView | null,
   pairingStart: 0,
   phase: null as SyncPhase | null,
   peers: [] as SyncPeerView[],
@@ -172,7 +193,12 @@ export const syncCommands: MockCommands = {
     push()
     return resolve(status())
   },
-  sync_pair: () => {
+  sync_pair: ({ args }) => {
+    // From the device list: the demo laptop is dialed, the way back is taken.
+    if (args?.deviceId && state.laptop) {
+      state.laptop = { ...state.laptop, cut_by: null, online: true, last_synced_at: new Date().toISOString() }
+      return resolve(null)
+    }
     state.phase = 'pairing'
     state.pairingStart = Date.now()
     push()
@@ -186,7 +212,16 @@ export const syncCommands: MockCommands = {
   sync_confirm_pairing: ({ body }) => {
     const accept = Boolean((body as SyncDecisionInput).accept)
     if (accept) {
-      state.peers = [{ ...PHONE, paired_at: new Date().toISOString(), last_synced_at: null, online: true }]
+      state.peers = [
+        {
+          ...PHONE,
+          paired_at: new Date().toISOString(),
+          last_synced_at: null,
+          online: true,
+          paused: false,
+          cut_by: null,
+        },
+      ]
       state.phase = 'awaiting_confirm'
     } else state.phase = null
     push()
@@ -195,6 +230,8 @@ export const syncCommands: MockCommands = {
   sync_decide_plan: ({ body }) => {
     const accept = Boolean((body as SyncDecisionInput).accept)
     state.phase = accept ? 'live' : null
+    // Declining pauses exchange with the device until «Продолжить».
+    if (!accept) state.peers = state.peers.map((peer) => ({ ...peer, paused: true }))
     const batchId = `batch-${state.history.length + 1}`
     state.journal = [journalLine(accept ? 'applied' : 'declined', accept ? batchId : null), ...state.journal]
     if (accept) {
@@ -215,10 +252,25 @@ export const syncCommands: MockCommands = {
     push()
     return resolve(null)
   },
-  sync_peers: () => resolve(state.peers.map((peer) => ({ ...peer, online: state.phase === 'live' }))),
-  sync_forget_peer: () => {
+  sync_peers: () =>
+    resolve([
+      ...state.peers.map((peer) => ({ ...peer, online: state.phase === 'live' })),
+      ...(state.laptop && mockAppSettings.sync.enabled ? [state.laptop] : []),
+    ]),
+  sync_forget_peer: ({ args }) => {
+    if (args?.deviceId === LAPTOP.device_id) {
+      state.laptop = null
+      return resolve(null)
+    }
     state.peers = []
     state.phase = null
+    push()
+    return resolve(null)
+  },
+  sync_resume_peer: ({ args }) => {
+    const id = String(args?.deviceId ?? '')
+    state.peers = state.peers.map((peer) => (peer.device_id === id ? { ...peer, paused: false } : peer))
+    state.phase = 'live'
     push()
     return resolve(null)
   },

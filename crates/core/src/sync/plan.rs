@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::merge::merge;
+use super::registry::Collection;
 use super::state::RecordState;
 use super::view::{label, split_key};
 
@@ -57,6 +58,40 @@ impl SyncSummary {
     pub fn is_empty(&self) -> bool {
         self.total == 0
     }
+
+    /// Blank the labels and values of secret collections (summaries written
+    /// before they were hidden). `true` when something changed.
+    pub fn scrub_secrets(&mut self) -> bool {
+        let mut changed = false;
+        for changes in &mut self.collections {
+            if !super::registry::is_secret(&changes.collection) {
+                continue;
+            }
+            for item in &mut changes.items {
+                if !item.label.is_empty() {
+                    item.label.clear();
+                    changed = true;
+                }
+            }
+        }
+        for field in &mut self.overwritten {
+            let whole = super::registry::is_secret(&field.collection);
+            if !whole && !super::registry::is_secret_field(&field.collection, &field.field) {
+                continue;
+            }
+            if whole && !field.label.is_empty() {
+                field.label.clear();
+                changed = true;
+            }
+            for text in [&mut field.before, &mut field.after] {
+                if text != MASK {
+                    *text = MASK.to_string();
+                    changed = true;
+                }
+            }
+        }
+        changed
+    }
 }
 
 /// Items listed per collection; the counts cover the rest.
@@ -76,7 +111,13 @@ pub struct SyncPlan {
     pub changes: BTreeMap<String, PlannedChange>,
 }
 
-fn short(value: &Value) -> String {
+/// Shown instead of a value of a secret collection.
+pub const MASK: &str = "•••";
+
+fn short(coll: &Collection, field: &str, value: &Value) -> String {
+    if coll.secret || coll.secret_fields.contains(&field) {
+        return MASK.to_string();
+    }
     let text = match value {
         Value::String(text) => text.clone(),
         Value::Null => String::new(),
@@ -139,9 +180,9 @@ pub fn plan(
             out.summary.overwritten.push(OverwrittenField {
                 collection: coll.name.to_string(),
                 label: shown.clone(),
-                field: overwrite.field,
-                before: short(&overwrite.before),
-                after: short(&overwrite.after),
+                field: overwrite.field.clone(),
+                before: short(coll, &overwrite.field, &overwrite.before),
+                after: short(coll, &overwrite.field, &overwrite.after),
             });
         }
         out.changes.insert(
@@ -154,4 +195,200 @@ pub fn plan(
     }
     out.summary.collections = groups.into_values().collect();
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::sync::stamp::Stamp;
+    use crate::sync::state::RecordStamps;
+
+    fn live(value: Value, field: Option<(&str, u64)>) -> RecordState {
+        let mut stamps = RecordStamps::created(Stamp::new(1, 0, "a"));
+        if let Some((name, wall)) = field {
+            stamps
+                .fields
+                .insert(name.to_string(), Stamp::new(wall, 0, "a"));
+        }
+        RecordState {
+            value: Some(value),
+            stamps: Some(stamps),
+            tombstone: None,
+        }
+    }
+
+    /// The plan of one incoming record against the local one.
+    fn plan_of(key: &str, local: RecordState, remote: RecordState) -> SyncPlan {
+        let incoming = BTreeMap::from([(key.to_string(), remote)]);
+        plan(&incoming, |_| local.clone())
+    }
+
+    fn assert_no_secret(summary: &SyncSummary, secrets: &[&str]) {
+        let text = serde_json::to_string(summary).expect("summary");
+        for secret in secrets {
+            assert!(!text.contains(secret), "{secret} leaked into {text}");
+        }
+    }
+
+    #[test]
+    fn an_exchange_change_shows_no_api_secret() {
+        let old =
+            json!({"bybit": [{"store_id": "s", "api_key": "OLDKEY", "api_secret": "OLDSECRET"}]});
+        let new =
+            json!({"bybit": [{"store_id": "s", "api_key": "NEWKEY", "api_secret": "NEWSECRET"}]});
+        let secrets = ["OLDKEY", "OLDSECRET", "NEWKEY", "NEWSECRET"];
+        // Added.
+        let added = plan_of(
+            "exchanges:",
+            RecordState::default(),
+            live(new.clone(), None),
+        );
+        assert_eq!(added.summary.total, 1);
+        assert_no_secret(&added.summary, &secrets);
+        // Updated over an edit made here: the overwritten preview.
+        let updated = plan_of(
+            "exchanges:",
+            live(old, Some(("bybit", 5))),
+            live(new, Some(("bybit", 9))),
+        );
+        assert_eq!(updated.summary.overwritten.len(), 1);
+        assert_eq!(updated.summary.overwritten[0].before, "•••");
+        assert_eq!(updated.summary.overwritten[0].after, "•••");
+        assert_no_secret(&updated.summary, &secrets);
+    }
+
+    #[test]
+    fn an_attachment_key_change_shows_no_sealing_key() {
+        let old = json!({"id": "att1", "key": "OLDSEALINGKEY"});
+        let new = json!({"id": "att1", "key": "NEWSEALINGKEY"});
+        let secrets = ["OLDSEALINGKEY", "NEWSEALINGKEY"];
+        let added = plan_of(
+            "attachment_keys:att1",
+            RecordState::default(),
+            live(new.clone(), None),
+        );
+        assert_eq!(added.summary.total, 1);
+        assert_no_secret(&added.summary, &secrets);
+        let updated = plan_of(
+            "attachment_keys:att1",
+            live(old, Some(("key", 5))),
+            live(new, Some(("key", 9))),
+        );
+        assert_eq!(updated.summary.overwritten.len(), 1);
+        assert_no_secret(&updated.summary, &secrets);
+    }
+
+    #[test]
+    fn a_data_source_url_is_masked_but_its_name_shows() {
+        let old = json!({"id": "d1", "name": "Rate", "url": "https://x.test/?token=OLDTOKEN"});
+        let new = json!({"id": "d1", "name": "Rate", "url": "https://x.test/?token=NEWTOKEN"});
+        let secrets = ["OLDTOKEN", "NEWTOKEN"];
+        let added = plan_of(
+            "data_sources:d1",
+            RecordState::default(),
+            live(new.clone(), None),
+        );
+        assert_eq!(added.summary.collections[0].items[0].label, "Rate");
+        assert_no_secret(&added.summary, &secrets);
+        let updated = plan_of(
+            "data_sources:d1",
+            live(old.clone(), Some(("url", 5))),
+            live(new.clone(), Some(("url", 9))),
+        );
+        assert_eq!(updated.summary.overwritten[0].field, "url");
+        assert_eq!(updated.summary.overwritten[0].before, "•••");
+        assert_eq!(updated.summary.overwritten[0].after, "•••");
+        assert_eq!(updated.summary.overwritten[0].label, "Rate");
+        assert_no_secret(&updated.summary, &secrets);
+        // Another field of the same record shows as usual.
+        let renamed_old =
+            json!({"id": "d1", "name": "Mine", "url": "https://x.test/?token=OLDTOKEN"});
+        let renamed_new =
+            json!({"id": "d1", "name": "Theirs", "url": "https://x.test/?token=OLDTOKEN"});
+        let renamed = plan_of(
+            "data_sources:d1",
+            live(renamed_old, Some(("name", 5))),
+            live(renamed_new, Some(("name", 9))),
+        );
+        assert_eq!(renamed.summary.overwritten[0].before, "Mine");
+        assert_eq!(renamed.summary.overwritten[0].after, "Theirs");
+        assert_no_secret(&renamed.summary, &secrets);
+        // The journal line holds no secret either.
+        let entry = crate::sync::journal::SyncJournalEntry::of(
+            "Phone",
+            &updated.summary,
+            crate::sync::journal::SyncJournalOutcome::Applied,
+        );
+        let text = serde_json::to_string(&entry).expect("entry");
+        assert!(!text.contains("TOKEN"), "{text}");
+    }
+
+    #[test]
+    fn a_workflow_var_value_is_masked_but_its_name_shows() {
+        let old =
+            json!({"scope": "global", "name": "limit", "value": "OLDVALUE", "updated_at": "a"});
+        let new =
+            json!({"scope": "global", "name": "limit", "value": "NEWVALUE", "updated_at": "a"});
+        let secrets = ["OLDVALUE", "NEWVALUE"];
+        let added = plan_of(
+            "workflow_vars:global|limit",
+            RecordState::default(),
+            live(new.clone(), None),
+        );
+        assert_eq!(added.summary.collections[0].items[0].label, "limit");
+        assert_no_secret(&added.summary, &secrets);
+        let updated = plan_of(
+            "workflow_vars:global|limit",
+            live(old, Some(("value", 5))),
+            live(new, Some(("value", 9))),
+        );
+        assert_eq!(updated.summary.overwritten[0].before, "•••");
+        assert_eq!(updated.summary.overwritten[0].after, "•••");
+        assert_no_secret(&updated.summary, &secrets);
+    }
+
+    #[test]
+    fn the_scrub_masks_old_field_previews_and_is_idempotent() {
+        let mut summary = SyncSummary {
+            total: 1,
+            collections: Vec::new(),
+            overwritten: vec![
+                OverwrittenField {
+                    collection: "data_sources".into(),
+                    label: "Rate".into(),
+                    field: "url".into(),
+                    before: "https://x.test/?token=OLDTOKEN".into(),
+                    after: "https://x.test/?token=NEWTOKEN".into(),
+                },
+                OverwrittenField {
+                    collection: "data_sources".into(),
+                    label: "Rate".into(),
+                    field: "name".into(),
+                    before: "Mine".into(),
+                    after: "Theirs".into(),
+                },
+            ],
+        };
+        assert!(summary.scrub_secrets());
+        assert_eq!(summary.overwritten[0].before, "•••");
+        assert_eq!(summary.overwritten[0].after, "•••");
+        assert_eq!(summary.overwritten[1].before, "Mine");
+        assert_eq!(summary.overwritten[1].label, "Rate");
+        assert!(!summary.scrub_secrets());
+    }
+
+    #[test]
+    fn an_ordinary_collection_still_shows_labels_and_values() {
+        let old = json!({"id": "s", "name": "Mine"});
+        let new = json!({"id": "s", "name": "Theirs"});
+        let updated = plan_of(
+            "stores:s",
+            live(old, Some(("name", 5))),
+            live(new, Some(("name", 9))),
+        );
+        assert_eq!(updated.summary.overwritten[0].before, "Mine");
+        assert_eq!(updated.summary.overwritten[0].label, "Theirs");
+    }
 }
