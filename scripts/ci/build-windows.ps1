@@ -1,4 +1,4 @@
-# Windows release build on a GitLab Windows runner: NSIS installer (.exe),
+# Windows release build on a GitHub Windows runner: NSIS installer (.exe),
 # MSI (one per language) and a portable zip with the bare .exe.
 #
 #   pwsh scripts/ci/build-windows.ps1 -OutDir release
@@ -32,7 +32,7 @@ $versionCode = $env:ANDROID_VERSION_CODE
 if (-not $versionCode) { $versionCode = '1' }
 Write-Host "Multi Wallet Tracker $version - rust $rustVersion, node $nodeVersion, pnpm $pnpmVersion"
 
-# MSVC linker: present on the GitLab image; install the build tools otherwise.
+# MSVC linker: present on the runner image; install the build tools otherwise.
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $hasVc = (Test-Path $vswhere) -and (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
 if (-not $hasVc) {
@@ -94,11 +94,11 @@ $env:Path = "$nodeDir;$env:Path"
 # --prefix: the GitHub Windows image points the global npm prefix outside this Node.
 Invoke-Native npm install -g --prefix $nodeDir "pnpm@$pnpmVersion"
 # pnpm straight through node: the npm shims (pnpm.ps1 / pnpm.cmd) handed it
-# the whole argument list as one string on the GitLab Windows runner.
+# the whole argument list as one string on the Windows runner.
 $pnpmCli = Join-Path $nodeDir 'node_modules\pnpm\bin\pnpm.cjs'
 if (-not (Test-Path $pnpmCli)) { throw "pnpm not found at $pnpmCli" }
 function Invoke-Pnpm { Invoke-Native node $pnpmCli @args }
-# The store goes in the GitLab cache; pnpm reads npm_config_* settings itself.
+# The store goes in the Actions cache; pnpm reads npm_config_* settings itself.
 $env:npm_config_store_dir = Join-Path $cache 'pnpm'
 Invoke-Pnpm --version
 Invoke-Pnpm install --frozen-lockfile --prefer-offline

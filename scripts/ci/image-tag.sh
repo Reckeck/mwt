@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Print the CI image tag: a hash of everything baked into the images — the
 # Dockerfile, the apt package lists and the [tools] of mise.toml (tasks and
-# env do not matter). CI_IMAGE_TAG in .gitlab-ci.yml must equal it; the
-# ci:image job refuses to build otherwise.
+# env do not matter). images.yml builds and pushes the images under it
+# (cargo xtask image-tag prints the same value).
 #
 #   scripts/ci/image-tag.sh            # → e.g. 3f9c2a1b7d4e
 set -euo pipefail

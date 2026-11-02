@@ -121,7 +121,7 @@ struct VersionArgs {
     /// Without it: the plain app version. `prod` is X.Y.Z, `dev` X.Y.Z-<N> (one past the last published pre-release), `none` X.Y.Z-<run>.
     #[arg(long, value_parser = ["dev", "prod", "none"])]
     channel: Option<String>,
-    /// The run number, and the pre-release number too when given (default: $GITHUB_RUN_NUMBER, $CI_PIPELINE_IID, 1).
+    /// The run number, and the pre-release number too when given (default: $GITHUB_RUN_NUMBER, 1).
     #[arg(long)]
     run: Option<u64>,
     /// Append BUILD_VERSION, ANDROID_VERSION_CODE and RELEASE_CHANNEL as KEY=VALUE lines
