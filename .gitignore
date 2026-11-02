@@ -28,7 +28,7 @@ data/
 *.wallet
 *.wallet.bak
 
-# CI (scripts/ci, .gitlab-ci.yml): caches, collected bundles, generated projects
+# CI (scripts/ci, .github/workflows): caches, collected bundles, generated projects
 .cache/
 /release/
 crates/app/gen/android/

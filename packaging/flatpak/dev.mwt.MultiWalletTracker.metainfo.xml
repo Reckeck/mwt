@@ -14,7 +14,7 @@
     <p xml:lang="ru">Офлайн-учёт операций, портфель, цены и графики. Один пароль открывает один зашифрованный файл-хранилище.</p>
   </description>
   <launchable type="desktop-id">dev.mwt.MultiWalletTracker.desktop</launchable>
-  <url type="homepage">https://gitlab.com/Reckeck/trade-app</url>
+  <url type="homepage">https://github.com/Reckeck/mwt</url>
   <categories>
     <category>Finance</category>
     <category>Office</category>

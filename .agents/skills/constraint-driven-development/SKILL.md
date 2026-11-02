@@ -49,7 +49,7 @@ Never ask what you can read. Before the first question, gather:
 | Test runner | dev dependencies, `test` script, existing test files |
 | Existing linters | `eslint.config.*`, `biome.json`, `.ruff.toml` |
 | Coverage today | `coverage/` output, or run the suite once |
-| CI | `.github/workflows/`, `.gitlab-ci.yml` |
+| CI | `.github/workflows/` |
 | Agent harness | `.claude/`, `.codex/`, `AGENTS.md` |
 
 Report what you found in two lines, then ask only what's left.

@@ -178,7 +178,7 @@ impl Env {
         }
     }
 
-    /// The command in a CI image with the project at /src, as a GitLab job would see it.
+    /// The command in a CI image with the project at /src, as a GitHub Actions job would see it.
     /// `lane` names the volumes (`mwt-build-<checkout>-<lane>-{target,node,home}`).
     pub fn run_ci(
         &self,

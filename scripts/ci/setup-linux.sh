@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CI bootstrap for the Linux jobs. Sourced, so PATH sticks for the job;
-# relies on the job shell running with `set -eo pipefail` (GitLab does).
+# relies on the job shell running with `set -eo pipefail` (bash steps in Actions do).
 #
 # In the CI image (scripts/ci/ci.Dockerfile) everything is baked in and this
 # only wires caches; on a bare ubuntu:22.04 (CI_*_IMAGE overridden) it
@@ -17,7 +17,7 @@ export MISE_TRUSTED_CONFIG_PATHS="$CI_PROJECT_DIR"
 if [[ -f /etc/mwt-ci-image ]]; then
   # The tools are baked in; `mise run` would otherwise re-run rustup first.
   export MISE_TASK_RUN_AUTO_INSTALL=false
-  # Cargo's download cache lives in the project so GitLab can keep it. The
+  # Cargo's download cache lives in the project so the Actions cache can keep it. The
   # node image has no Rust (and no $CARGO_HOME): nothing to link there.
   if command -v cargo >/dev/null; then
     mkdir -p "$CI_PROJECT_DIR/.cache/cargo-registry" "$CARGO_HOME"
@@ -63,7 +63,7 @@ eval "$(mise env -s bash)"
 # Absolute: `tauri build` runs cargo from crates/app, a relative dir would land there.
 export CARGO_TARGET_DIR="$CI_PROJECT_DIR/.rust-target"
 
-# Compiled crates come back from the GitLab cache through sccache.
+# Compiled crates come back from the Actions cache through sccache.
 if command -v sccache >/dev/null; then
   export RUSTC_WRAPPER=sccache
   export SCCACHE_DIR="${SCCACHE_DIR:-$CI_PROJECT_DIR/.cache/sccache}"

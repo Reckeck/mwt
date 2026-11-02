@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Static checks of the CI scripts, run by `mise run check-ci` and the ci:lint
-# job — the mistakes that otherwise only show up on a GitLab runner:
+# Static checks of the CI scripts, run by `mise run check-ci` and the ci-lint
+# check — the mistakes that otherwise only show up on a CI runner:
 #   - *.ps1 must be ASCII: Windows PowerShell 5.1 reads UTF-8 without a BOM as
 #     cp1252, where the bytes of «—» contain 0x94 = ” and end a string early;
 #     and a bare a,b among command arguments is an array, not one argument;

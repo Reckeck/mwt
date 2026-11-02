@@ -1,61 +1,50 @@
-# CI/CD (GitLab) и платформы
+# CI/CD (GitHub Actions) и платформы
 
 Как работать с ветками `feature/*`, `hotfix/*`, `development`, `main` и
-выпуском — [workflow.md](workflow.md). Здесь — устройство пайплайна.
+выпуском — [workflow.md](workflow.md). Здесь — устройство CI.
 
-Пайплайн описан в `.gitlab-ci.yml`, вся логика — в `scripts/ci/*`, манифесты
-упаковки — в `packaging/`. Версии Rust/Node/pnpm берутся из `mise.toml`
-(на Linux через сам mise, на Windows скрипт читает их из файла).
+CI и выпуск живут в GitHub Actions (`.github/workflows/`), логика — в
+`cargo xtask` (`crates/xtask`), скриптах `scripts/ci/*` и `.github/scripts/*`,
+манифесты упаковки — в `packaging/`. Версии Rust/Node/pnpm берутся из
+`mise.toml` (на Linux через сам mise, на Windows скрипт читает их из файла).
+GitLab (`Reckeck/trade-app`) — только зеркало без CI.
 
-## Стадии
+## Workflows
 
-| Стадия | Job | Что делает |
+| Файл | Когда идёт | Что делает |
 |---|---|---|
-| .pre | `ci:image` | только когда меняются входы образов: собирает и пушит CI-образы (см. ниже) |
-| check | `frontend:check` | `mise run lint`, `typecheck`, `test-frontend`, `test-e2e`, `check-onboarding`, `check-forms` |
-| check | `rust:fmt` | `cargo fmt --check` — без компиляции, секунды |
-| check | `rust:clippy` | `mise run clippy` |
-| check | `rust:test` | `mise run test`, `gen-types` + проверка, что `ipc.gen.d.ts` закоммичен актуальным |
-| check | `ci:lint` | `scripts/ci/lint-ci.sh`: `*.ps1` только ASCII (Windows PowerShell 5.1), `bash -n` всех скриптов |
-| check | `version` | только где есть сборки: версия сборки (`cargo xtask version`, dotenv `BUILD_VERSION`), стоп, если `vX.Y.Z` уже выпущен |
-| check | `sast`, `secret_detection` | шаблоны GitLab Security |
-| build | `build:linux` | `.deb`, `.rpm`, `.AppImage`, `tar.gz` с бинарником (Ubuntu 22.04 — старый glibc, файлы запускаются на новых дистрибутивах) |
-| build | `build:windows` | NSIS-установщик `.exe`, MSI (по одному на `en-US` и `ru-RU`), portable `.zip` с голым `.exe` |
-| build | `build:macos` | только при `MACOS_BUILD=true`: универсальный `.dmg` и `.app.tar.gz` (Apple Silicon + Intel) |
-| build | `build:android` | универсальные APK и AAB (`aarch64`, `armv7`, `x86_64`), подписанные |
-| package | `package:flatpak` | `.flatpak`-бандл (рантайм GNOME 50) из Linux-tarball |
-| package | `package:pacman` | `multi-wallet-tracker-bin-*.pkg.tar.zst` из того же tarball |
-| release | `prerelease` | `development`: всё из `release/` + `SHA256SUMS` → Package Registry, Release «Pre-release X.Y.Z-N» (тег создаёт API) |
-| release | `prerelease:cleanup` | `development`: оставить последние `PRERELEASES_KEPT` пре-релизов (нужен `RELEASE_TOKEN`) |
-| release | `release` | `main`: то же для `X.Y.Z`, заметки из раздела `CHANGELOG.md` |
-| release | `backmerge` | `main`: MR `main` → `development` после выпуска (нужен `RELEASE_TOKEN`) |
-| release | `aur:publish` | `main`, вручную, при заданном `AUR_SSH_PRIVATE_KEY`: пуш `PKGBUILD` + `.SRCINFO` в AUR |
+| `ci.yml` | PR в `development`/`main`, вручную, `workflow_call` из `release.yml` | проверки: Rust, фронтенд, layout/links шардами, Android, clippy под Windows/macOS, итог `ci-ok` |
+| `images.yml` | вызывается из `ci.yml`, вручную | собирает и пушит CI-образы в ghcr, если такого тега ещё нет |
+| `release.yml` | пуш в `development` (пре-релиз `X.Y.Z-N`) и `main` (релиз `X.Y.Z`), вручную | версия, проверки, сборки, пакеты, публикация GitHub Release |
+| `audit.yml` | PR, пуш в `development`/`main`, ежедневно, вручную | аудит зависимостей (`cargo xtask audit`) |
+| `dependabot-merge.yml` | воскресенье, вручную | влитие зелёных обновлений Dependabot |
+| `cache-cleanup.yml` | закрытие PR, удаление ветки | удаляет кэши ветки |
 
-Сборки (`build`, `package`) идут в `development`, `main`, при ручном запуске
-(Run pipeline) и по расписанию — и только когда **все** проверки зелёные.
-Фиче-ветки, хотфиксы и MR — только проверки. Ручной запуск и расписание
-ничего не публикуют. Теговых пайплайнов нет: теги создают job'ы выпуска.
+Фиче-ветки и хотфиксы получают только проверки (через PR); сборки и выпуск —
+только `development` и `main` и только после зелёных проверок. Теги
+`vX.Y.Z` создаёт job `publish` вместе с релизом. Проверка workflow —
+`mise x actionlint@1.7.12 -- actionlint`.
 
 ## Скорость
 
-Что делает пайплайн быстрым и что не надо ломать:
+Что делает CI быстрым и что не надо ломать:
 
 - **Готовые образы.** Job'ы идут в образах из `scripts/ci/ci.Dockerfile`
-  (GitLab Container Registry проекта): `ci-node` (mise + node/pnpm,
-  фронтенд), `ci-linux` (+ библиотеки Tauri, Rust, sccache), `ci-android`
-  (+ JDK 17, SDK/NDK, Rust-таргеты). Job не ставит ни apt-пакеты, ни
-  тулчейн — `setup-linux.sh` только подключает кэши. Тег образа —
-  `CI_IMAGE_TAG`, хеш входов (Dockerfile, `apt-packages.sh`, `[tools]` из
-  `mise.toml`): поменял что-то из этого — обнови тег
-  (`scripts/ci/image-tag.sh` печатает новый, `ci:image` без этого упадёт и
-  подскажет). Сборка образов идёт только в пайплайне, где входы поменялись;
-  уже запушенный тег не пересобирается (`FORCE_CI_IMAGE=1` — принудительно).
-  Без образов (`CI_NODE_IMAGE`/`CI_LINUX_IMAGE`/`CI_ANDROID_IMAGE` =
-  `ubuntu:22.04`) всё ставится скриптом — медленно, но работает.
-- **sccache.** Скомпилированные крейты лежат в GitLab-кэше
-  (`.cache/sccache`, ключ на job и `CI_IMAGE_TAG`) и возвращаются через
-  `RUSTC_WRAPPER=sccache`, в том числе на Windows. Скачанные крейты —
-  `.cache/cargo-registry`.
+  (ghcr.io, `ghcr.io/<владелец>/<репозиторий>/ci-<вид>:<тег>`): `ci-node`
+  (mise + node/pnpm, фронтенд), `ci-linux` (+ библиотеки Tauri, Rust,
+  sccache), `ci-android` (+ JDK 17, SDK/NDK, Rust-таргеты). Job не ставит ни
+  apt-пакеты, ни тулчейн — `setup-linux.sh` только подключает кэши. Тег
+  образа — хеш входов (Dockerfile, `apt-packages.sh`, `install-chrome.sh`,
+  `[tools]` из `mise.toml`), его печатают `scripts/ci/image-tag.sh` и
+  `mise run ci-image-tag`. Тег вручную нигде не прописывается: `images.yml`
+  (`.github/scripts/build-images.sh`) сам собирает недостающие образы, уже
+  запушенный тег не пересобирается (у ручного запуска есть `force`).
+- **sccache.** Скомпилированные крейты лежат в кэше Actions (`.cache/sccache`,
+  по полосам: `ci.yml`, job `deps`, ключ — `.github/scripts/lane-key.sh`,
+  включает тег образа) и возвращаются через `RUSTC_WRAPPER=sccache`. Кэш
+  полосы пишет только `deps` (и только когда для ключа его ещё нет),
+  остальные jobs читают. Кэш виден своей ссылке, базовой ветке PR и
+  `development`; `main` идёт без кэшей (релиз собирается с нуля).
 - **sccache локально.** `cargo xtask` (`mise run check`, `check-platforms`)
   ставит `RUSTC_WRAPPER=sccache` всем cargo-задачам на хосте и запускает
   сервер до графа; кэш один на машину: `~/.cache/sccache/host` (16 GB,
@@ -67,31 +56,14 @@
   (`mise use -g sccache`); `XTASK_SCCACHE=0` выключает его везде. В конце
   прогона xtask печатает `sccache: N requests, H hits, M misses`.
   Инкрементальные крейты воркспейса sccache не кэширует, только зависимости.
-  В GitLab CI ничего не меняется: `setup-linux.sh` берёт `SCCACHE_DIR` из
+  В CI ничего не меняется: `setup-linux.sh` берёт `SCCACHE_DIR` из
   окружения, а по умолчанию остаётся `.cache/sccache`.
-- **Кэш пишет только `main`.** В MR, ветках и тегах кэш только читается
-  (`CACHE_POLICY`), поэтому они не тратят время на выгрузку.
-- **Тесты быстрые.** KDF vault (Argon2id, 64 MiB × 3) идёт на каждом
+- **Тесты быстрые.** KDF vault (Argon2id, 64 MiB x 3) идёт на каждом
   сохранении; `argon2`/`blake2` собираются с `opt-level = 3` даже в debug
   (`Cargo.toml`), иначе `cargo test` шёл ~5,5 мин вместо ~30 с. Параметры
   KDF не менялись.
-- **Лишнее не запускается.** В MR и ветках job'ы Rust идут, только если
-  менялись `crates/`, `Cargo.*`, `ipc.gen.d.ts`, CI или `mise.toml`;
-  фронтенд — если менялись `src/`, конфиги фронта, `pnpm-lock.yaml`. На
-  `main` и тегах идёт всё.
-- **Новый пуш отменяет старый пайплайн** (`interruptible` +
-  `auto_cancel: on_new_commit`); выпуск и AUR не прерываются.
-- **Кэш пишут `development` и `main`**, остальные читают; ключи
-  постоянные (не от хеша lock-файлов), так что смена зависимостей стартует
-  с прошлого кэша. Чтобы фиче-ветки видели кэш защищённых веток, в GitLab
-  выключено «Use separate caches for protected branches» (см.
-  [workflow.md](workflow.md)). `AccessDenied … (or it may not exist)` от
-  `storage.googleapis.com/gitlab-com-runners-cache` — промах кэша, не ошибка.
-- **Большие раннеры для компиляции.** `rust:clippy`, `rust:test`,
-  `build:linux`, `build:android` идут на `CI_HEAVY_RUNNER_TAG`
-  (`saas-linux-medium-amd64`, 4 vCPU; лёгкие job'ы — на small, 2 vCPU).
-  Быстрее — `saas-linux-large-amd64` (8 vCPU: `build:linux` 433 с против 1113 с
-  на small), дешевле — `saas-linux-small-amd64`.
+- **Новый пуш отменяет старый прогон** (`concurrency` с `cancel-in-progress`
+  во всех ветках, кроме `main`): выпуск из `main` не прерывается.
 - **Пре-релизы — без LTO.** Канал dev (пре-релизы из `development`, ручные и
   локальные сборки) собирается с `CARGO_PROFILE_RELEASE_LTO=off` и
   `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16`: финальная оптимизация идёт
@@ -100,10 +72,8 @@
   `scripts/ci/build-windows.ps1` по `RELEASE_CHANNEL`; значение, заданное в
   окружении явно, главнее. Релизы из `main` (prod) собираются с полным LTO и
   одной единицей (`[profile.release]` в `Cargo.toml`) — самый маленький и
-  быстрый бинарник. Старый GitLab-пайплайн (`.gitlab-ci.yml`) пока держит
-  thin.
-- Быстрое сжатие кэша и артефактов (`FF_USE_FASTZIP`), без debug-info в
-  проверках (`CARGO_PROFILE_DEV_DEBUG=0`).
+  быстрый бинарник.
+- Без debug-info в проверках (`CARGO_PROFILE_DEV_DEBUG=0`).
 
 ## Выпуск версии
 
@@ -112,7 +82,7 @@
 `cargo xtask version --channel dev|prod|none` (dev — `X.Y.Z-N`, где `N` — последний опубликованный тег того же `X.Y.Z` плюс один; ручные — `X.Y.Z-<номер прогона>`,
 prod — `X.Y.Z`); в сборку она попадает через `tauri build --config`
 (`cargo xtask tauri-config`), вместе с Android `versionCode` = номер
-пайплайна.
+запуска (`GITHUB_RUN_NUMBER`).
 
 ### Выпуск через xtask (GitHub)
 
@@ -126,9 +96,9 @@ prod — `X.Y.Z`); в сборку она попадает через `tauri bui
 | `cargo xtask backmerge --version V` | PR `main` в `development` после выпуска |
 | `cargo xtask publish-aur --version V --dir D` | пуш `multi-wallet-tracker-bin` в AUR (`AUR_SSH_PRIVATE_KEY`) |
 
-Токен — `GH_TOKEN` (или `GITHUB_TOKEN`) вместо `RELEASE_TOKEN` GitLab.
-Вызывает их `.github/workflows/release.yml` (раздел «GitHub Actions»); до
-первого настоящего прогона проверены только тесты, `--dry-run` и `actionlint`.
+Токен — `GH_TOKEN` (или `GITHUB_TOKEN`).
+Вызывает их `.github/workflows/release.yml` (раздел «Проверки в ci.yml» и
+«release.yml» ниже).
 
 ### Каналы: релиз и dev-приложение
 
@@ -169,11 +139,10 @@ flatpak нет cargo), поэтому имена канала и конфиг Ta
   `MWT_APP_FLATPAK_ID`, `MWT_APP_ICONS` — значения канала из `Channel::env()`
   (`crates/xtask/src/channel.rs`).
 
-## GitHub Actions
+## Проверки в ci.yml
 
-Проверки на GitHub идут в `.github/workflows/ci.yml` (образы — `images.yml`,
-очистка кэша — `cache-cleanup.yml`), выпуск — в `release.yml`; GitLab-часть
-ниже описывает прежний пайплайн и переписывается отдельным этапом.
+Проверки идут в `.github/workflows/ci.yml` (образы — `images.yml`,
+очистка кэша — `cache-cleanup.yml`), выпуск — в `release.yml`.
 `ci.yml` запускается на PR и вызывается из `release.yml` (`workflow_call`):
 пуш в `development`/`main` проверяет именно этот вызов, отдельного запуска
 `ci.yml` на пуш нет.
@@ -323,34 +292,32 @@ Keystore не пишется на диск раннера: `ANDROID_KEYSTORE_BAS
 
 ## Раннеры
 
-- Linux-job'ы — любые docker-раннеры. `package:flatpak` нужен
-  **privileged** docker (bubblewrap); общие раннеры GitLab.com такие.
-- `build:windows` — Windows-раннер с тегом из `WINDOWS_RUNNER_TAG`
-  (по умолчанию `saas-windows-medium-amd64`, общий раннер GitLab.com; для своего
-  раннера — его тег). MSVC Build Tools ставятся через choco, если их нет.
-- `build:macos` — macOS-раннер GitLab.com (`MACOS_RUNNER_TAG`, по умолчанию
-  `saas-macos-medium-m1`, образ `MACOS_IMAGE`). Такие раннеры есть только в
-  планах Premium/Ultimate, поэтому job выключен, пока переменная
-  `MACOS_BUILD` не равна `true` (иначе пайплайн вечно ждёт раннер). Свой Mac
-  с GitLab Runner — его тег в `MACOS_RUNNER_TAG`.
+- Проверки и Linux-сборки — `ubuntu-latest` с docker; сборки идут в образах
+  `ci-linux`/`ci-android` из ghcr. Flatpak собирается в контейнере с
+  `--privileged` (bubblewrap).
+- Windows — `windows-latest` (`scripts/ci/build-windows.ps1`; MSVC Build Tools
+  ставятся через choco, если их нет; MSI собирает WiX).
+- macOS в CI на паузе (`clippy-macos`, `build-macos` выключены).
 - Android-сборка длинная (release + LTO, три архитектуры —
   `ANDROID_TARGETS`): timeout 2 ч.
-- `ci:image` — docker-in-docker (`docker:27-dind`), нужен privileged-раннер
-  и включённый Container Registry проекта.
+- `images.yml` нужен docker и `packages: write` у `GITHUB_TOKEN`.
 
-## CI/CD-переменные (Settings → CI/CD → Variables)
+## Секреты (Settings → Secrets and variables → Actions)
 
-| Переменная | Нужна для | Примечание |
+Секреты, которые читают workflows (кроме автоматического `GITHUB_TOKEN`):
+
+| Секрет | Нужен для | Примечание |
 |---|---|---|
-| `ANDROID_KEYSTORE_BASE64` | релизная подпись APK/AAB | `base64 -w0 release.keystore`; masked |
-| `ANDROID_KEYSTORE_PASSWORD` | то же | masked |
+| `ANDROID_KEYSTORE_BASE64` | релизная подпись APK/AAB | `base64 -w0 release.keystore` |
+| `ANDROID_KEYSTORE_PASSWORD` | то же | |
 | `ANDROID_KEY_ALIAS` | то же | |
 | `ANDROID_KEY_PASSWORD` | то же | по умолчанию = пароль хранилища |
-| `AUR_SSH_PRIVATE_KEY` | `aur:publish` | тип **File**; ключ, добавленный в аккаунт AUR |
-| `MACOS_BUILD` | `build:macos` | `true` включает macOS-сборку (нужен macOS-раннер) |
-| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | подпись macOS | base64 `.p12` Developer ID; masked. Без них — подпись ad hoc |
-| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | нотаризация macOS | пароль приложения Apple ID; masked |
-| `RELEASE_TOKEN` (в GitHub Actions его заменяет `GH_TOKEN`) | `prerelease:cleanup`, `backmerge`; `release`, если `CI_JOB_TOKEN` не хватает прав | project access token, роль Maintainer, scope `api` |
+| `AUR_SSH_PRIVATE_KEY` | `aur` (`publish-aur`) | ключ, добавленный в аккаунт AUR |
+| `BACKMERGE_TOKEN` | `backmerge` | PAT/токен приложения; иначе `GITHUB_TOKEN` |
+| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | подпись macOS (job выключен) | base64 `.p12` Developer ID; без них — ad hoc |
+| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | нотаризация macOS (job выключен) | пароль приложения Apple ID |
+
+Подробности «без секрета» — таблица секретов в разделе «release.yml».
 
 Без ключа Android APK подписывается одноразовым тестовым ключом и получает
 суффикс `-testkey`: ставится для проверки, но не обновляет предыдущую
@@ -393,8 +360,7 @@ keytool -genkeypair -v -keystore release.keystore -alias mwt \
   Данные — в `~/.var/app/<ID>/`. Автозапуск из sandbox не
   работает. Для Flathub нужен отдельный PR в flathub с этим манифестом.
 - **AUR / pacman.** Пакет `multi-wallet-tracker-bin` ставит готовый бинарник из
-  Package Registry, поэтому проект (или хотя бы его пакеты) должен быть
-  публичным. Шаблон — `packaging/aur/PKGBUILD.in`, рендер —
+  GitHub Releases, поэтому репозиторий должен быть публичным. Шаблон — `packaging/aur/PKGBUILD.in`, рендер —
   `packaging/aur/render.sh`.
 - **macOS.** Универсальная сборка (`--target universal-apple-darwin`),
   `scripts/ci/build-macos.sh`. Без сертификата Developer ID приложение
@@ -462,7 +428,7 @@ mise run build:all -- --list linux pacman  # граф задач без запу
 `android`, `windows`, `linux` (тяжёлые, не больше `--heavy` за раз) →
 `pacman`, `flatpak` (после `linux`); `macos` не ждёт никого. Платформенные
 `tauri build` не запускают фронт повторно: оверлей `cargo xtask tauri-config
---prebuilt-frontend` содержит пустой `beforeBuildCommand` (GitLab CI флаг не задаёт). `pacman` и `flatpak` без `linux` в списке
+--prebuilt-frontend` содержит пустой `beforeBuildCommand` (CI флаг не задаёт). `pacman` и `flatpak` без `linux` в списке
 берут tarball из папки результата, а если его там нет — ошибка до начала
 сборки («build it first»).
 
@@ -475,8 +441,9 @@ mise run build:all -- --list linux pacman  # граф задач без запу
 | `windows` | `ci-linux` + `cargo-xwin` (`scripts/local/windows-cross.Dockerfile`) | NSIS `-setup.exe`, portable `.zip`; MSI нет — WiX работает только на Windows, его делает CI |
 | `macos` | на Mac — сразу; с Linux — на `MACOS_BUILD_HOST=user@mac` по ssh (rsync туда и обратно, фронт собирает сам Mac) | `.dmg`, `.app.tar.gz`; без Mac — SKIP |
 
-- Образы берутся из Container Registry проекта по `CI_IMAGE_TAG` (публичные),
-  если их там нет — собираются из `scripts/ci/ci.Dockerfile`.
+- Образы берутся из ghcr.io (`ghcr.io/reckeck/mwt/ci-<вид>:<тег>`, тег — `mise run
+  ci-image-tag`; другой реестр — `MWT_CI_REGISTRY`), если их там нет — собираются из
+  `scripts/ci/ci.Dockerfile`.
 - Сборочные каталоги контейнеров — тома `mwt-build-<хэш пути копии>-*`
   (свои у каждой копии: cargo сверяет время файлов, и чужие артефакты
   выглядели бы свежими; `.rust-target`,

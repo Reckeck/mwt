@@ -1,4 +1,4 @@
-//! `cargo xtask build`: bundles for every platform, with the scripts and images GitLab CI uses
+//! `cargo xtask build`: bundles for every platform, with the scripts and images GitHub Actions uses
 //! (`scripts/ci/build-*.sh`). The frontend is built once on the host; the platforms that do not
 //! depend on each other run side by side.
 
