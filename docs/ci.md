@@ -9,7 +9,8 @@ CI and releases live in GitHub Actions (`.github/workflows/`); the logic is in
 `.github/scripts/*`, and the packaging manifests in `packaging/`. The
 Rust/Node/pnpm versions come from `mise.toml` (on Linux through mise itself, on
 Windows the script reads them from the file). GitLab (`Reckeck/trade-app`) is
-only a mirror without CI.
+only a mirror without CI, kept in sync by `mirror.yml` (GitLab.com Free has no
+pull mirroring).
 
 ## Workflows
 
@@ -21,6 +22,7 @@ only a mirror without CI.
 | `audit.yml` | PR, push to `development`/`main`, daily, manually | dependency audit (`cargo xtask audit`) |
 | `dependabot-merge.yml` | Sunday, manually | merges green Dependabot updates |
 | `cache-cleanup.yml` | PR closed, branch deleted | deletes the branch's caches |
+| `mirror.yml` | push to `development`/`main`, a `v*` tag, manually | pushes those branches and the tags to the GitLab mirror (`scripts/ci/mirror-gitlab.sh`) |
 
 Feature branches and hotfixes get only checks (through a PR); builds and
 releases belong only to `development` and `main`, and only after the checks are
@@ -337,6 +339,7 @@ The secrets that the workflows read (besides the automatic `GITHUB_TOKEN`):
 | `ANDROID_KEY_PASSWORD` | the same | by default = the keystore password |
 | `AUR_SSH_PRIVATE_KEY` | `aur` (`publish-aur`) | a key added to the AUR account |
 | `BACKMERGE_TOKEN` | `backmerge` | a PAT/app token; otherwise `GITHUB_TOKEN` |
+| `GITLAB_MIRROR_KEY` | `mirror.yml` | private half of an SSH deploy key with write access on `Reckeck/trade-app`; GitLab's protected `development`/`main` allow that key to push and force-push |
 | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | macOS signing (the job is turned off) | base64 `.p12` Developer ID; without them, ad hoc |
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | macOS notarization (the job is turned off) | an Apple ID app password |
 
