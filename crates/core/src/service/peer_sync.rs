@@ -8,16 +8,18 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use zeroize::Zeroizing;
 
 use super::UnlockedVault;
 use crate::error::{Error, Result};
+use crate::ipc_contract::SyncCutReason;
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::storage::VaultFile;
 use crate::sync::journal::SyncJournalOutcome;
 use crate::sync::manifest::{Manifest, digest};
 use crate::sync::registry::Rule;
-use crate::sync::state::{BATCH_DAYS, MAX_BATCHES, TOMBSTONE_DAYS};
+use crate::sync::state::{BATCH_DAYS, CutBy, MAX_BATCHES, TOMBSTONE_DAYS};
 use crate::sync::track::Tracker;
 use crate::sync::view::{self, record_key, split_key};
 use crate::sync::{BatchEntry, RecordState, Stamp, SyncBatch, SyncSummary, TrustedPeer};
@@ -55,6 +57,19 @@ pub struct UndoReport {
     /// Labels of records changed again since the batch: left as they are.
     pub skipped: Vec<String>,
 }
+
+/// What came of reading an external copy into the open vault.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExternalMerge {
+    /// The copy was taken in; the batch it produced, if it changed anything.
+    Done(Option<AppliedBatch>),
+    /// The copy does not open with this password or is another vault: the
+    /// caller falls back to asking the user which side to keep.
+    Unmergeable,
+}
+
+/// Device id on batches that came from the external copy.
+const EXTERNAL_COPY_DEVICE: &str = "external-copy";
 
 /// Rotated backups kept before the first batch of each session.
 pub const PRESYNC_BACKUPS: usize = 3;
@@ -95,15 +110,35 @@ impl UnlockedVault {
             tracker,
             doc,
             clock,
+            announce,
             ..
         } = self;
         match tracker {
-            Some(tracker) => Ok(tracker.stamp(&value, &mut doc.sync, clock)),
+            Some(tracker) => {
+                let changed = tracker.stamp(&value, &mut doc.sync, clock);
+                announce.extend(changed.iter().cloned());
+                Ok(changed)
+            }
             None => {
                 *tracker = Some(Tracker::capture(&value));
                 Ok(Vec::new())
             }
         }
+    }
+
+    /// A deletion in a capped log (the change tracker reads a missing
+    /// entry there as a trim): drops its stamps, leaves a tombstone, and
+    /// offers the key to a live session.
+    pub(super) fn sync_forget_log_record(&mut self, key: &str) -> Result<()> {
+        if self.sandbox {
+            return Ok(());
+        }
+        self.track_changes()?;
+        let deleted = self.clock.tick();
+        self.doc.sync.stamps.remove(key);
+        self.doc.sync.tombstones.insert(key.to_string(), deleted);
+        self.announce.insert(key.to_string());
+        Ok(())
     }
 
     /// This installation's id, for the stamps of its changes.
@@ -223,6 +258,18 @@ impl UnlockedVault {
         incoming: &BTreeMap<String, RecordState>,
         peer: &PeerRef,
     ) -> Result<Option<AppliedBatch>> {
+        self.apply_batch(incoming, peer, true)
+    }
+
+    /// [`Self::sync_apply`]; `carry` off is the earlier dedupe (the copy
+    /// made later goes with its edits), which the tests keep as the other
+    /// side of a pair of different versions.
+    fn apply_batch(
+        &mut self,
+        incoming: &BTreeMap<String, RecordState>,
+        peer: &PeerRef,
+        carry: bool,
+    ) -> Result<Option<AppliedBatch>> {
         Self::check_incoming(incoming)?;
         self.track_changes()?;
         for state in incoming.values() {
@@ -251,14 +298,33 @@ impl UnlockedVault {
                 None => doc.sync.stamps.remove(key),
             };
             match &change.after.tombstone {
-                Some(stamp) => doc.sync.tombstones.insert(key.clone(), stamp.clone()),
-                None => doc.sync.tombstones.remove(key),
+                Some(stamp) => {
+                    // Kept from when it arrived, whatever its own stamp says.
+                    doc.sync
+                        .tombstones_seen
+                        .insert(key.clone(), crate::sync::stamp::now_ms());
+                    doc.sync.tombstones.insert(key.clone(), stamp.clone())
+                }
+                None => {
+                    doc.sync.tombstones_seen.remove(key);
+                    doc.sync.tombstones.remove(key)
+                }
             };
         }
         // Log entries the cap cut off keep no stamps.
         let kept = view::records(&value);
         doc.sync.stamps.retain(|key, _| kept.contains_key(key));
         self.doc = doc;
+        // A union of two devices' caches can overshoot the caps: thin it the
+        // way a refresh does, before the baseline is taken, so the dropped
+        // points are neither stamped nor sent as deletions.
+        if plan
+            .changes
+            .keys()
+            .any(|key| key.starts_with("price_cache:") || key.starts_with("fx_cache:"))
+        {
+            self.thin_rate_caches();
+        }
         // The typed document may serialize a little differently from the
         // merged JSON (defaults, number forms): the tracker starts from what
         // a save will actually see, or the next save would restamp the batch.
@@ -296,10 +362,118 @@ impl UnlockedVault {
         self.compact_tombstones();
         // Both devices may have run the same automation or import before
         // they met; the copy made later goes (as an ordinary deletion).
-        self.dedupe_generated();
+        self.dedupe_generated(&applied.id, carry)?;
         self.recompute_holdings();
         self.persist()?;
         Ok(Some(applied))
+    }
+
+    /// Read another copy of this vault (its sealed bytes) without locking,
+    /// writing or syncing anything. Only for reading records out of it.
+    fn open_copy(&self, remote: &[u8], password: &str) -> Result<UnlockedVault> {
+        let (plaintext, fmt, _key) = crate::crypto::open_bytes_keyed(remote, password.as_bytes())?;
+        let decoded = crate::storage::decode_versioned(&plaintext, fmt)?;
+        Ok(UnlockedVault {
+            path: self.path.clone(),
+            fmt: fmt.for_writing(),
+            doc: decoded.doc,
+            base_currency: self.base_currency.clone(),
+            password: Zeroizing::new(String::new()),
+            _lock: crate::storage::VaultLock::detached(),
+            // Nothing in the copy is ever written back.
+            sandbox: true,
+            mirror: None,
+            tracker: None,
+            clock: self.clock.clone(),
+            sync_tap: None,
+            announce: std::collections::BTreeSet::new(),
+            key: None,
+            save: super::saving::SaveState::default(),
+        })
+    }
+
+    /// Bring the records of `other` (the same vault, another copy) into this
+    /// one the way a peer would: what only `other` has or changed later
+    /// arrives, what only this vault has stays. Only records travel: `other`'s
+    /// batches, journal, peers and pauses are never taken.
+    pub fn merge_from(
+        &mut self,
+        other: &mut UnlockedVault,
+        name: &str,
+    ) -> Result<Option<AppliedBatch>> {
+        if self.doc.id != other.doc.id {
+            return Err(Error::InvalidInput(
+                "merge: the copy is another vault".into(),
+            ));
+        }
+        let mine = self.sync_manifest(None)?;
+        let theirs = other.sync_manifest(None)?;
+        let (wanted, _) = crate::sync::manifest::diff(&mine, &theirs);
+        let incoming = other.sync_records(&wanted)?;
+        let peer = PeerRef {
+            device_id: EXTERNAL_COPY_DEVICE.into(),
+            name: name.into(),
+        };
+        self.sync_apply(&incoming, &peer)
+    }
+
+    /// Merge an external copy (sealed bytes, same password) in; the result is
+    /// written. `Unmergeable` when it does not open or is another vault.
+    pub fn merge_external_copy(
+        &mut self,
+        remote: &[u8],
+        password: &str,
+        name: &str,
+    ) -> Result<ExternalMerge> {
+        let Ok(mut copy) = self.open_copy(remote, password) else {
+            return Ok(ExternalMerge::Unmergeable);
+        };
+        if copy.doc.id != self.doc.id {
+            return Ok(ExternalMerge::Unmergeable);
+        }
+        let applied = self.merge_from(&mut copy, name)?;
+        self.persist_now()?;
+        Ok(ExternalMerge::Done(applied))
+    }
+
+    /// The external copy is the newer one and this vault has no changes of its
+    /// own (the file equals the last sync): take its data. The sync
+    /// bookkeeping stays this device's own: the copy may come from a device
+    /// with other batches, a journal and pauses.
+    pub fn take_external_copy(&mut self, remote: &[u8], password: &str) -> Result<ExternalMerge> {
+        let Ok(mut copy) = self.open_copy(remote, password) else {
+            return Ok(ExternalMerge::Unmergeable);
+        };
+        if copy.doc.id != self.doc.id {
+            return Ok(ExternalMerge::Unmergeable);
+        }
+        // Stamps and tombstones describe the records, so they come with the
+        // data; the rest is this device's own bookkeeping. Trusted peers
+        // travel between devices, so they are merged by their own rules.
+        let mut sync = std::mem::take(&mut self.doc.sync);
+        let remote_sync = std::mem::take(&mut copy.doc.sync);
+        let now = crate::sync::stamp::now_ms();
+        sync.tombstones_seen
+            .retain(|key, _| remote_sync.tombstones.contains_key(key));
+        for key in remote_sync.tombstones.keys() {
+            sync.tombstones_seen.entry(key.clone()).or_insert(now);
+        }
+        sync.stamps = remote_sync.stamps;
+        sync.tombstones = remote_sync.tombstones;
+        sync.merge_peers(&remote_sync.peers, now);
+        self.doc = std::mem::take(&mut copy.doc);
+        self.doc.sync = sync;
+        self.answer_crypto();
+        self.start_tracking()?;
+        self.ensure_cash_wallet("Cash")?;
+        self.ensure_default_categories();
+        self.migrate_workflow_graphs();
+        self.disable_incomplete_workflows(crate::calendar::now_secs());
+        self.prune_attachments();
+        self.scrub_sync_secrets();
+        self.recompute_holdings();
+        self.persist_now()?;
+        Ok(ExternalMerge::Done(None))
     }
 
     /// Keys a kept batch changed (to pass on to the other devices).
@@ -468,6 +642,8 @@ impl UnlockedVault {
     }
 
     /// Forget deletions old enough that every trusted device has synced since.
+    /// A deletion counts from the later of its own stamp and the time it
+    /// reached this device: one that arrives late is not compacted at once.
     fn compact_tombstones(&mut self) {
         let cutoff = crate::sync::stamp::now_ms().saturating_sub(day_ms(TOMBSTONE_DAYS));
         let peers: Vec<u64> = self
@@ -484,9 +660,15 @@ impl UnlockedVault {
                     .unwrap_or(0)
             })
             .collect();
-        self.doc.sync.tombstones.retain(|_, stamp| {
-            stamp.wall >= cutoff || peers.iter().any(|synced| *synced <= stamp.wall)
+        let sync = &mut self.doc.sync;
+        let seen = &sync.tombstones_seen;
+        sync.tombstones.retain(|key, stamp| {
+            let counted = stamp.wall.max(seen.get(key).copied().unwrap_or(0));
+            counted >= cutoff || peers.iter().any(|synced| *synced <= counted)
         });
+        let tombstones = &sync.tombstones;
+        sync.tombstones_seen
+            .retain(|key, _| tombstones.contains_key(key));
     }
 
     fn created_of(&self, key: &str) -> Stamp {
@@ -499,51 +681,93 @@ impl UnlockedVault {
     }
 
     /// Keep one of each operation an automation or an import made twice
-    /// (once per device): the one created first, then the smaller id.
-    fn dedupe_generated(&mut self) {
-        let mut best: HashMap<String, (Stamp, String)> = HashMap::new();
-        for tx in &self.doc.transactions {
-            let meta = tx.meta();
-            let natural = match &meta.origin {
-                TxOrigin::Import { exec_id } => format!("import:{exec_id}"),
+    /// (once per device): the one created first, then the smaller id. What
+    /// the other copy was edited to, later than the kept one, moves into the
+    /// kept one (per field, with the stamps it had), so no edit is lost.
+    ///
+    /// A workflow run may book several operations for one planned moment, so
+    /// there the earliest operation picks the winning run, and everything of
+    /// that run stays, and so does everything made on the same device (a
+    /// separate run of its own). Only another run on another device goes. An
+    /// operation without a stamp is never deleted.
+    ///
+    /// Removals and carried fields are saved in the batch `batch_id`, so its
+    /// undo puts them back. `carry` off is the earlier rule (tests only).
+    fn dedupe_generated(&mut self, batch_id: &str, carry: bool) -> Result<()> {
+        struct Winner {
+            rank: (Stamp, String),
+            run_id: Option<String>,
+        }
+        fn natural_key(origin: &TxOrigin) -> Option<(String, Option<&str>)> {
+            match origin {
+                TxOrigin::Import { exec_id } => Some((format!("import:{exec_id}"), None)),
                 // An automation is a workflow now and kept its id: both
                 // kinds of origin name the same planned moment alike.
                 TxOrigin::Automation {
                     automation_id: maker,
                     planned_at,
-                }
-                | TxOrigin::Workflow {
+                } => Some((format!("auto:{maker}:{planned_at}"), None)),
+                TxOrigin::Workflow {
                     workflow_id: maker,
+                    run_id,
                     planned_at: Some(planned_at),
                     ..
-                } => format!("auto:{maker}:{planned_at}"),
-                _ => continue,
+                } => Some((format!("auto:{maker}:{planned_at}"), Some(run_id))),
+                _ => None,
+            }
+        }
+
+        // (key of the record that goes, key of the record it passes edits to)
+        let mut removals: Vec<(String, Option<String>)> = Vec::new();
+
+        let mut best: HashMap<String, Winner> = HashMap::new();
+        for tx in &self.doc.transactions {
+            let meta = tx.meta();
+            let Some((natural, run)) = natural_key(&meta.origin) else {
+                continue;
             };
             let rank = (
                 self.created_of(&format!("transactions:{}", meta.id)),
                 meta.id.clone(),
             );
-            best.entry(natural)
-                .and_modify(|kept| {
-                    if rank < *kept {
-                        *kept = rank.clone();
-                    }
-                })
-                .or_insert(rank);
+            let winner = Winner {
+                rank: rank.clone(),
+                run_id: run.map(str::to_string),
+            };
+            match best.get_mut(&natural) {
+                Some(kept) if rank < kept.rank => *kept = winner,
+                Some(_) => {}
+                None => {
+                    best.insert(natural, winner);
+                }
+            }
         }
-        let keep: std::collections::HashSet<String> =
-            best.into_values().map(|(_, id)| id).collect();
-        self.doc.transactions.retain(|tx| {
+        for tx in &self.doc.transactions {
             let meta = tx.meta();
-            matches!(
-                meta.origin,
-                TxOrigin::Manual
-                    | TxOrigin::Workflow {
-                        planned_at: None,
-                        ..
-                    }
-            ) || keep.contains(&meta.id)
-        });
+            let Some((natural, run)) = natural_key(&meta.origin) else {
+                continue;
+            };
+            let Some(winner) = best.get(&natural) else {
+                continue;
+            };
+            if winner.rank.1 == meta.id {
+                continue;
+            }
+            let stamp = self.created_of(&format!("transactions:{}", meta.id));
+            // No stamp: nobody can tell which copy is later, so none goes.
+            let keep = stamp.device.is_empty()
+                // Only workflow operations travel in runs.
+                || (run.is_some()
+                    && (run == winner.run_id.as_deref() || stamp.device == winner.rank.0.device));
+            if !keep {
+                // Operations of different runs are different bookings: only
+                // a plain copy of one operation takes the other's edits.
+                let into = run
+                    .is_none()
+                    .then(|| format!("transactions:{}", winner.rank.1));
+                removals.push((format!("transactions:{}", meta.id), into));
+            }
+        }
 
         let mut first: HashMap<String, (Stamp, String)> = HashMap::new();
         for reminder in &self.doc.reminders {
@@ -563,17 +787,136 @@ impl UnlockedVault {
                 })
                 .or_insert(rank);
         }
-        let keep: std::collections::HashSet<String> =
-            first.into_values().map(|(_, id)| id).collect();
-        self.doc
-            .reminders
-            .retain(|reminder| reminder.source_key.is_empty() || keep.contains(&reminder.id));
+        for reminder in &self.doc.reminders {
+            if let Some((_, kept)) = first.get(&reminder.source_key)
+                && !reminder.source_key.is_empty()
+                && *kept != reminder.id
+            {
+                removals.push((
+                    format!("reminders:{}", reminder.id),
+                    Some(format!("reminders:{kept}")),
+                ));
+            }
+        }
+        self.remove_duplicates(removals, batch_id, carry)
+    }
+
+    /// Delete the records of `removals` as ordinary deletions (a tombstone
+    /// each), after moving their later-edited fields into the record named
+    /// beside them. Everything is recorded in the batch for undo and offered
+    /// to a live session; the change tracker is rebased so none of it is
+    /// stamped a second time.
+    fn remove_duplicates(
+        &mut self,
+        removals: Vec<(String, Option<String>)>,
+        batch_id: &str,
+        carry: bool,
+    ) -> Result<()> {
+        if removals.is_empty() {
+            return Ok(());
+        }
+        let mut value = self.doc_value()?;
+        let records = view::records(&value);
+        let mut sync = self.doc.sync.clone();
+        let mut touched: BTreeMap<String, RecordState> = BTreeMap::new();
+        let mut after: BTreeMap<String, RecordState> = BTreeMap::new();
+        for (loser, into) in removals {
+            touched
+                .entry(loser.clone())
+                .or_insert_with(|| self.state_of(&records, &loser));
+            if carry
+                && let Some(winner) = &into
+                && let Some((coll, _)) = split_key(winner)
+                && let (Some(from), Some(to)) =
+                    (view::read(&value, &loser), view::read(&value, winner))
+            {
+                touched
+                    .entry(winner.clone())
+                    .or_insert_with(|| self.state_of(&records, winner));
+                let loser_fields = view::split(coll, &from);
+                let mut kept_fields = view::split(coll, &to);
+                if loser_fields.tag == kept_fields.tag {
+                    let loser_stamps = sync.stamps.get(&loser).cloned().unwrap_or_default();
+                    let mut kept_stamps = sync.stamps.get(winner).cloned().unwrap_or_default();
+                    let mut moved = false;
+                    for (name, stamp) in &loser_stamps.fields {
+                        let Some(edited) = loser_fields.fields.get(name) else {
+                            continue;
+                        };
+                        // The key never moves, and an equal value has
+                        // nothing to carry.
+                        if coll.key.iter().any(|path| path.ends_with(name.as_str()))
+                            || kept_fields.fields.get(name) == Some(edited)
+                            || stamp <= kept_stamps.field(name)
+                        {
+                            continue;
+                        }
+                        kept_fields.fields.insert(name.clone(), edited.clone());
+                        kept_stamps.fields.insert(name.clone(), stamp.clone());
+                        moved = true;
+                    }
+                    if moved {
+                        view::write(&mut value, winner, Some(&view::join(coll, &kept_fields)));
+                        sync.stamps.insert(winner.clone(), kept_stamps.clone());
+                        after.insert(
+                            winner.clone(),
+                            RecordState {
+                                value: None,
+                                stamps: Some(kept_stamps),
+                                tombstone: None,
+                            },
+                        );
+                        self.announce.insert(winner.clone());
+                    }
+                }
+            }
+            view::write(&mut value, &loser, None);
+            sync.stamps.remove(&loser);
+            let deleted = self.clock.tick();
+            sync.tombstones.insert(loser.clone(), deleted.clone());
+            after.insert(
+                loser.clone(),
+                RecordState {
+                    value: None,
+                    stamps: None,
+                    tombstone: Some(deleted),
+                },
+            );
+            self.announce.insert(loser);
+        }
+        let mut doc: VaultDoc = serde_json::from_value(value)
+            .map_err(|err| Error::InvalidInput(format!("sync dedupe: {err}")))?;
+        if let Some(batch) = sync.batches.iter_mut().find(|batch| batch.id == batch_id) {
+            for (key, marks) in after {
+                match batch.entries.iter_mut().find(|entry| entry.key == key) {
+                    Some(entry) => entry.after = marks,
+                    None => batch.entries.push(BatchEntry {
+                        before: touched.remove(&key).unwrap_or_default(),
+                        key,
+                        after: marks,
+                    }),
+                }
+            }
+        }
+        doc.sync = sync;
+        self.doc = doc;
+        let settled = self.doc_value()?;
+        if let Some(tracker) = self.tracker.as_mut() {
+            tracker.rebase(&settled);
+        }
+        Ok(())
     }
 
     // -- trusted devices ------------------------------------------------------
 
     /// Trust a device after both sides confirmed the pairing code.
     pub fn sync_trust_peer(&mut self, device_id: &str, name: &str, public_key: &str) -> Result<()> {
+        // The new entry must sort after whatever is known of this device/key.
+        for known in &self.doc.sync.peers {
+            if known.device_id == device_id || known.public_key == public_key {
+                self.clock.observe(&known.stamp);
+            }
+        }
         let stamp = self.clock.tick();
         let peer = TrustedPeer {
             device_id: device_id.to_string(),
@@ -589,12 +932,23 @@ impl UnlockedVault {
             Some(known) => *known = peer,
             None => peers.push(peer),
         }
+        // Paired afresh: whatever it told us before no longer holds.
+        self.doc.sync.cut_by.remove(device_id);
         self.persist()
     }
 
     /// «Забыть устройство»: its key is refused here and, once this reaches
     /// them, on every other device.
     pub fn sync_forget_peer(&mut self, device_id: &str) -> Result<()> {
+        if let Some(known) = self
+            .doc
+            .sync
+            .peers
+            .iter()
+            .find(|peer| peer.device_id == device_id)
+        {
+            self.clock.observe(&known.stamp);
+        }
         let stamp = self.clock.tick();
         let Some(peer) = self
             .doc
@@ -607,19 +961,82 @@ impl UnlockedVault {
         };
         peer.revoked = Some(stamp.clone());
         peer.stamp = stamp;
+        // A forgotten device pairs afresh; an old pause must not block that.
+        self.doc.sync.paused.remove(device_id);
+        self.doc.sync.cut_by.remove(device_id);
         self.persist()
     }
 
     /// Take in another device's list of trusted devices.
     pub fn sync_merge_peers(&mut self, remote: &[TrustedPeer]) -> Result<bool> {
-        for peer in remote {
+        let now = crate::sync::stamp::now_ms();
+        let limit = now.saturating_add(crate::sync::session::SKEW_REFUSE_MS);
+        for peer in remote.iter().filter(|peer| peer.stamp.wall <= limit) {
             self.clock.observe(&peer.stamp);
         }
-        let changed = self.doc.sync.merge_peers(remote);
+        let changed = self.doc.sync.merge_peers(remote, now);
         if changed {
             self.persist()?;
         }
         Ok(changed)
+    }
+
+    /// Pause exchange with a device (the user declined its list of changes).
+    /// Kept in this vault only; it is never sent to other devices.
+    pub fn sync_pause_peer(&mut self, device_id: &str) -> Result<()> {
+        if self.doc.sync.paused.insert(device_id.to_string()) {
+            self.persist()?;
+        }
+        Ok(())
+    }
+
+    /// «Продолжить»: exchange with the device may run again.
+    pub fn sync_resume_peer(&mut self, device_id: &str) -> Result<()> {
+        if self.doc.sync.paused.remove(device_id) {
+            self.persist()?;
+        }
+        Ok(())
+    }
+
+    pub fn sync_is_paused(&self, device_id: &str) -> bool {
+        self.doc.sync.paused.contains(device_id)
+    }
+
+    /// The device told us it cut this one off (`reason`). Returns whether this
+    /// is news (a new device or another reason); only news is saved.
+    pub fn sync_cut_by(&mut self, device_id: &str, reason: SyncCutReason) -> Result<bool> {
+        if self
+            .doc
+            .sync
+            .cut_by
+            .get(device_id)
+            .is_some_and(|known| known.reason == reason)
+        {
+            return Ok(false);
+        }
+        self.doc.sync.cut_by.insert(
+            device_id.to_string(),
+            CutBy {
+                reason,
+                at: now_iso(),
+            },
+        );
+        self.persist()?;
+        Ok(true)
+    }
+
+    /// The way back was taken (an exchange, a pairing): the device may be
+    /// dialed again. Returns whether there was anything to clear.
+    pub fn sync_clear_cut(&mut self, device_id: &str) -> Result<bool> {
+        if self.doc.sync.cut_by.remove(device_id).is_none() {
+            return Ok(false);
+        }
+        self.persist()?;
+        Ok(true)
+    }
+
+    pub fn sync_cut_reason(&self, device_id: &str) -> Option<SyncCutReason> {
+        self.doc.sync.cut_by.get(device_id).map(|cut| cut.reason)
     }
 
     /// Note a finished exchange with a device (not synced as a change).
@@ -666,6 +1083,13 @@ impl UnlockedVault {
         self.flush_pending()?;
         std::fs::copy(&self.path, &target).map_err(|err| Error::Io(err.to_string()))?;
         Ok(target)
+    }
+
+    /// Delete every pre-sync backup (a missing file is fine).
+    pub(super) fn remove_sync_backups(&self) {
+        for index in 0..PRESYNC_BACKUPS {
+            let _ = std::fs::remove_file(self.presync_path(index));
+        }
     }
 
     /// Whether a pre-sync backup exists.
@@ -757,6 +1181,125 @@ mod tests {
         );
     }
 
+    struct NoWake;
+    impl super::super::saving::SaveHook for NoWake {
+        fn dirty(&self) {}
+    }
+
+    /// Collects what the vault announces, in place of a live link.
+    #[derive(Default)]
+    struct Announced(std::sync::Mutex<Vec<String>>);
+
+    impl SyncTap for Announced {
+        fn changed(&self, keys: &[String]) {
+            self.0.lock().unwrap().extend(keys.iter().cloned());
+        }
+    }
+
+    #[test]
+    fn an_edit_just_before_a_sync_call_is_pushed_in_the_same_session() {
+        let (_dir, mut left, right) = two_devices();
+        let tap = Arc::new(Announced::default());
+        left.set_sync_tap(Some(tap.clone()));
+        left.set_write_behind(Some(Arc::new(NoWake)));
+        left.start_tracking().unwrap();
+        let cash = cash_id(&left);
+        left.doc.stores[0].name = "Renamed in a hurry".into();
+        left.persist().unwrap();
+        // A sync call stamps the pending edit before the save-time push.
+        left.sync_manifest(None).unwrap();
+        let job = left.prepare_flush().unwrap().expect("dirty");
+        drop(job);
+        let sent = tap.0.lock().unwrap().clone();
+        assert!(
+            sent.iter().any(|key| key.contains(&cash)),
+            "the edit was stamped by the sync call and never announced: {sent:?}"
+        );
+        drop(right);
+    }
+
+    fn snapshot(
+        month: &str,
+        color: crate::model::planning::HealthColor,
+        reasons: Vec<crate::model::planning::HealthReasonCode>,
+    ) -> Option<crate::model::planning::HealthSnapshot> {
+        Some(crate::model::planning::HealthSnapshot {
+            month: month.into(),
+            color,
+            reasons,
+        })
+    }
+
+    #[test]
+    fn health_last_with_an_empty_slot_converges() {
+        use crate::model::planning::{HealthColor, HealthReasonCode};
+        let (_dir, mut left, mut right) = two_devices();
+        left.doc.health_last = snapshot(
+            "2026-10",
+            HealthColor::Yellow,
+            vec![HealthReasonCode::NoHistory],
+        );
+        left.persist().unwrap();
+        settle(&mut left, &mut right);
+        assert_eq!(right.doc.health_last, left.doc.health_last);
+        assert!(right.doc.health_last.is_some());
+
+        // Emptying the slot travels like any other edit.
+        left.doc.health_last = None;
+        left.persist().unwrap();
+        settle(&mut left, &mut right);
+        assert_eq!(right.doc.health_last, None);
+        assert_eq!(left.doc.health_last, None);
+    }
+
+    #[test]
+    fn two_health_snapshots_do_not_mix_fields() {
+        use crate::model::planning::{HealthColor, HealthReasonCode};
+        let (_dir, mut left, mut right) = two_devices();
+        let base = snapshot("2026-09", HealthColor::Green, vec![]);
+        left.doc.health_last = base.clone();
+        left.persist().unwrap();
+        settle(&mut left, &mut right);
+        // The right device writes a whole snapshot first ...
+        let earlier = snapshot(
+            "2026-10",
+            HealthColor::Red,
+            vec![HealthReasonCode::NoHistory],
+        );
+        right.doc.health_last = earlier;
+        right.persist().unwrap();
+        // ... the left one a later snapshot that keeps the colour of the base.
+        let later = snapshot(
+            "2026-10",
+            HealthColor::Green,
+            vec![HealthReasonCode::CostlyLoan],
+        );
+        left.doc.health_last = later.clone();
+        left.persist().unwrap();
+        settle(&mut left, &mut right);
+        assert_eq!(left.doc.health_last, later, "the later snapshot wins whole");
+        assert_eq!(right.doc.health_last, later);
+    }
+
+    #[test]
+    fn a_repeated_session_with_equal_health_makes_no_batch() {
+        use crate::model::planning::{HealthColor, HealthReasonCode};
+        let (_dir, mut left, mut right) = two_devices();
+        // Both empty.
+        settle(&mut left, &mut right);
+        assert_eq!(exchange(&mut left, &mut right), (None, None));
+        // Both equal after a sync.
+        left.doc.health_last = snapshot(
+            "2026-10",
+            HealthColor::Red,
+            vec![HealthReasonCode::NoHistory],
+        );
+        left.persist().unwrap();
+        settle(&mut left, &mut right);
+        assert_eq!(exchange(&mut left, &mut right), (None, None));
+        assert_eq!(exchange(&mut left, &mut right), (None, None));
+    }
+
     fn cash_id(vault: &UnlockedVault) -> String {
         vault.doc.stores[0].id.clone()
     }
@@ -770,6 +1313,334 @@ mod tests {
             .collect();
         out.sort();
         out
+    }
+
+    /// `count` hourly BTC quotes from 2025-01-01, `offset` seconds late.
+    fn hourly_prices(count: i64, offset: i64) -> Vec<crate::model::vault::PricePoint> {
+        use time::format_description::well_known::Rfc3339;
+        let base = 1_735_689_600;
+        (0..count)
+            .map(|hour| crate::model::vault::PricePoint {
+                asset_key: "crypto:btc".into(),
+                value_usd: crate::Amount::from(u32::try_from(hour).unwrap() + 1),
+                ts: time::OffsetDateTime::from_unix_timestamp(base + hour * 3600 + offset)
+                    .unwrap()
+                    .format(&Rfc3339)
+                    .unwrap(),
+                source: "test".into(),
+                change_24h_pct: None,
+            })
+            .collect()
+    }
+
+    fn price_keys(vault: &UnlockedVault) -> Vec<String> {
+        let mut keys: Vec<String> = vault
+            .doc
+            .price_cache
+            .iter()
+            .map(|point| format!("{}@{}", point.asset_key, point.ts))
+            .collect();
+        keys.sort();
+        keys
+    }
+
+    fn set_prices(vault: &mut UnlockedVault, points: Vec<crate::model::vault::PricePoint>) {
+        vault.doc.price_cache = points;
+        vault.persist().unwrap();
+    }
+
+    fn within_caps(vault: &UnlockedVault) -> bool {
+        use crate::pricing::history::{HISTORY_CAP, HOURLY_KEEP};
+        vault.doc.price_cache.len() <= HISTORY_CAP
+            && vault.doc.price_cache.len() < 2 * HOURLY_KEEP + 400
+    }
+
+    fn file_bytes(vault: &UnlockedVault) -> Vec<u8> {
+        std::fs::read(&vault.path).unwrap()
+    }
+
+    const COPY: &str = "Внешняя копия";
+
+    #[test]
+    fn merge_keeps_an_edit_made_only_locally_and_one_made_only_remotely() {
+        // A edits X and locks; C saves without X; A opens: X must survive.
+        let (_dir, mut left, mut right) = two_devices();
+        let cash = cash_id(&left);
+        left.add_transaction(income(&cash, "10", "X")).unwrap();
+        right.add_transaction(income(&cash, "20", "Y")).unwrap();
+
+        let outcome = left
+            .merge_external_copy(&file_bytes(&right), "pw", COPY)
+            .unwrap();
+        let ExternalMerge::Done(Some(batch)) = outcome else {
+            panic!("expected an applied batch, got {outcome:?}");
+        };
+        assert_eq!(batch.peer_name, COPY);
+        assert_eq!(comments(&left), ["X", "Y"]);
+        // What a push would now send holds both.
+        let reopened = UnlockedVault::open(left.path.clone(), "pw").unwrap();
+        assert_eq!(comments(&reopened), ["X", "Y"]);
+    }
+
+    #[test]
+    fn merge_refuses_another_vault() {
+        let (_dir, mut left, _right) = two_devices();
+        let (_other_dir, other) = empty_vault();
+        assert_ne!(left.doc.id, other.doc.id);
+        let mut other = other;
+        assert!(left.merge_from(&mut other, COPY).is_err());
+        assert_eq!(
+            left.merge_external_copy(&file_bytes(&other), "pw", COPY)
+                .unwrap(),
+            ExternalMerge::Unmergeable
+        );
+    }
+
+    #[test]
+    fn merge_keeps_the_local_bookkeeping_and_leaves_the_remote_one() {
+        let (_dir, mut left, mut right) = two_devices();
+        let cash = cash_id(&left);
+        left.add_transaction(income(&cash, "10", "mine")).unwrap();
+        right
+            .add_transaction(income(&cash, "20", "theirs"))
+            .unwrap();
+        // The remote carries bookkeeping of its own.
+        right.doc.sync.paused.insert("foreign-device".into());
+        right
+            .doc
+            .sync
+            .tombstones_seen
+            .insert("transactions:foreign".into(), 1);
+        right.persist().unwrap();
+        let remote_batches = right.doc.sync.batches.clone();
+        let remote_journal = right.doc.sync.journal.clone();
+
+        let batches_before: Vec<String> = left
+            .doc
+            .sync
+            .batches
+            .iter()
+            .map(|batch| batch.id.clone())
+            .collect();
+        let journal_before = left.doc.sync.journal.len();
+        left.merge_external_copy(&file_bytes(&right), "pw", COPY)
+            .unwrap();
+
+        let batches_after: Vec<String> = left
+            .doc
+            .sync
+            .batches
+            .iter()
+            .map(|batch| batch.id.clone())
+            .collect();
+        assert_eq!(batches_after[..batches_before.len()], batches_before[..]);
+        // Only the merge's own batch was added.
+        assert_eq!(batches_after.len(), batches_before.len() + 1);
+        assert!(
+            remote_batches
+                .iter()
+                .all(|batch| !batches_after.contains(&batch.id))
+        );
+        assert_eq!(left.doc.sync.journal.len(), journal_before + 1);
+        assert!(
+            remote_journal
+                .iter()
+                .all(|entry| !left.doc.sync.journal.contains(entry))
+        );
+        assert!(!left.doc.sync.paused.contains("foreign-device"));
+        assert!(
+            !left
+                .doc
+                .sync
+                .tombstones_seen
+                .contains_key("transactions:foreign")
+        );
+    }
+
+    #[test]
+    fn merge_with_a_wrong_password_is_unmergeable() {
+        let (_dir, mut left, mut right) = two_devices();
+        let cash = cash_id(&left);
+        right
+            .add_transaction(income(&cash, "20", "theirs"))
+            .unwrap();
+        assert_eq!(
+            left.merge_external_copy(&file_bytes(&right), "not-the-password", COPY)
+                .unwrap(),
+            ExternalMerge::Unmergeable
+        );
+        assert!(comments(&left).is_empty());
+    }
+
+    #[test]
+    fn a_pull_from_a_copy_with_a_foreign_sync_state_keeps_the_local_one() {
+        let (_dir, mut left, mut right) = two_devices();
+        let cash = cash_id(&left);
+        right
+            .add_transaction(income(&cash, "20", "theirs"))
+            .unwrap();
+        right.doc.sync.paused.insert("foreign-device".into());
+        right
+            .sync_trust_peer("foreign-id", "Foreign", "key")
+            .unwrap();
+        left.doc.sync.paused.insert("local-device".into());
+        left.persist().unwrap();
+        let local_sync = left.doc.sync.clone();
+
+        let outcome = left.take_external_copy(&file_bytes(&right), "pw").unwrap();
+        assert_eq!(outcome, ExternalMerge::Done(None));
+        assert_eq!(comments(&left), ["theirs"]);
+        assert_eq!(left.doc.sync.paused, local_sync.paused);
+        // Trusted peers travel between devices: the copy's join the local ones.
+        assert!(
+            local_sync
+                .peers
+                .iter()
+                .all(|peer| left.doc.sync.peers.contains(peer))
+        );
+        assert!(
+            left.doc
+                .sync
+                .peers
+                .iter()
+                .any(|peer| peer.device_id == "foreign-id")
+        );
+        assert_eq!(left.doc.sync.batches, local_sync.batches);
+        assert_eq!(left.doc.sync.journal, local_sync.journal);
+        let reopened = UnlockedVault::open(left.path.clone(), "pw").unwrap();
+        assert_eq!(comments(&reopened), ["theirs"]);
+        assert!(!reopened.doc.sync.paused.contains("foreign-device"));
+    }
+
+    fn tx_key(vault: &mut UnlockedVault) -> String {
+        vault
+            .sync_manifest(None)
+            .unwrap()
+            .keys()
+            .find(|key| key.starts_with("transactions:"))
+            .cloned()
+            .expect("a transaction record")
+    }
+
+    fn set_comment(vault: &mut UnlockedVault, comment: &str) {
+        let mut tx = vault.doc.transactions[0].clone();
+        let id = tx.meta().id.clone();
+        tx.meta_mut().comment = comment.into();
+        vault.update_transaction(&id, tx).unwrap();
+    }
+
+    /// One shared transaction on both sides.
+    fn shared_transaction() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
+        let (dir, mut left, mut right) = two_devices();
+        let cash = cash_id(&left);
+        left.add_transaction(income(&cash, "10", "shared")).unwrap();
+        settle(&mut left, &mut right);
+        let key = tx_key(&mut left);
+        (dir, left, right, key)
+    }
+
+    #[test]
+    fn a_pulled_edit_keeps_its_remote_stamp() {
+        let (_dir, mut left, mut right, key) = shared_transaction();
+        // A peer's edit, older than the one the copy holds.
+        set_comment(&mut right, "peer edit");
+        let older = right.sync_records(std::slice::from_ref(&key)).unwrap();
+        set_comment(&mut right, "copy edit");
+        let remote_stamps = right.doc.sync.stamps[&key].clone();
+
+        left.take_external_copy(&file_bytes(&right), "pw").unwrap();
+        assert_eq!(comments(&left), ["copy edit"]);
+        assert_eq!(left.doc.sync.stamps[&key], remote_stamps);
+        // The older edit must not win over the pulled value.
+        assert_eq!(left.sync_apply(&older, &peer("third")).unwrap(), None);
+        assert_eq!(comments(&left), ["copy edit"]);
+    }
+
+    #[test]
+    fn a_deletion_in_the_pulled_copy_stays_deleted() {
+        let (_dir, mut left, mut right, key) = shared_transaction();
+        let alive = left.sync_records(std::slice::from_ref(&key)).unwrap();
+        let id = right.doc.transactions[0].meta().id.clone();
+        right.delete_transaction(&id).unwrap();
+
+        left.take_external_copy(&file_bytes(&right), "pw").unwrap();
+        assert!(left.doc.transactions.is_empty());
+        assert!(left.doc.sync.tombstones.contains_key(&key));
+        // A peer that still offers the old record does not bring it back.
+        assert_eq!(left.sync_apply(&alive, &peer("third")).unwrap(), None);
+        assert!(left.doc.transactions.is_empty());
+    }
+
+    #[test]
+    fn a_pull_from_another_vault_is_unmergeable() {
+        let (_dir, mut left, _right) = two_devices();
+        let (_other_dir, other) = empty_vault();
+        assert_eq!(
+            left.take_external_copy(&file_bytes(&other), "pw").unwrap(),
+            ExternalMerge::Unmergeable
+        );
+    }
+
+    #[test]
+    fn caches_thinned_apart_converge_to_one_thinned_set() {
+        use crate::pricing::history::thin_prices;
+        let (_dir, mut left, mut right) = two_devices();
+        let mut own_left = hourly_prices(500, 0);
+        let mut own_right = hourly_prices(500, 1800);
+        thin_prices(&mut own_left);
+        thin_prices(&mut own_right);
+        set_prices(&mut left, own_left);
+        set_prices(&mut right, own_right);
+
+        exchange(&mut left, &mut right);
+        // The union overshoots a single device's thinning; both cut it back.
+        let mut expected = left.doc.price_cache.clone();
+        thin_prices(&mut expected);
+        assert_eq!(left.doc.price_cache.len(), expected.len());
+        assert!(within_caps(&left));
+        assert_eq!(price_keys(&left), price_keys(&right));
+
+        // A second diff of the price collections is empty.
+        let left_manifest = left.sync_manifest(None).unwrap();
+        let right_manifest = right.sync_manifest(None).unwrap();
+        let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
+        assert!(left_wants.is_empty() && right_wants.is_empty());
+        settle(&mut left, &mut right);
+    }
+
+    #[test]
+    fn a_peer_that_never_thins_does_not_grow_this_side() {
+        let (_dir, mut left, mut right) = two_devices();
+        let dense = hourly_prices(800, 0);
+        let mut seen = None;
+        for _ in 0..4 {
+            // The old peer still holds (and offers) every point it ever had.
+            set_prices(&mut right, dense.clone());
+            exchange(&mut left, &mut right);
+            assert!(within_caps(&left));
+            let len = left.doc.price_cache.len();
+            assert!(len < dense.len(), "left kept {len} of {}", dense.len());
+            if let Some(before) = seen {
+                assert_eq!(before, len, "the cache grew between exchanges");
+            }
+            seen = Some(len);
+        }
+    }
+
+    #[test]
+    fn undo_of_a_batch_with_thinned_away_points_does_not_panic() {
+        let (_dir, mut left, mut right) = two_devices();
+        set_prices(&mut right, hourly_prices(800, 0));
+        let (applied, _) = exchange(&mut left, &mut right);
+        let batch = applied.expect("left received prices");
+        assert!(left.doc.price_cache.len() < 800);
+        let report = left.sync_undo(&batch.id).unwrap();
+        assert!(report.restored > 0);
+        assert!(left.doc.price_cache.len() <= 800);
+        // The next thinning cuts anything the undo brought back.
+        let mut again = left.doc.price_cache.clone();
+        crate::pricing::history::thin_prices(&mut again);
+        assert!(again.len() <= left.doc.price_cache.len());
     }
 
     #[test]
@@ -913,6 +1784,263 @@ mod tests {
         assert_eq!(right.doc.transactions, left.doc.transactions);
     }
 
+    /// An automation's operation for one planned moment; its id.
+    fn rent(vault: &mut UnlockedVault, comment: &str) -> String {
+        let cash = cash_id(vault);
+        let mut tx = income(&cash, "100", comment);
+        if let Transaction::Topup(topup) = &mut tx {
+            topup.meta.origin = TxOrigin::Automation {
+                automation_id: "rent".into(),
+                planned_at: "2026-11-01".into(),
+            };
+        }
+        vault.add_transaction(tx).unwrap().meta().id.clone()
+    }
+
+    fn edit_comment(vault: &mut UnlockedVault, id: &str, text: &str) {
+        for tx in &mut vault.doc.transactions {
+            if let Transaction::Topup(topup) = tx
+                && topup.meta.id == id
+            {
+                topup.meta.comment = text.into();
+            }
+        }
+        vault.persist().unwrap();
+    }
+
+    fn pause() {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+
+    /// [`exchange`] with the right side still running the earlier dedupe.
+    fn exchange_with_old_right(left: &mut UnlockedVault, right: &mut UnlockedVault) -> bool {
+        let left_manifest = left.sync_manifest(None).unwrap();
+        let right_manifest = right.sync_manifest(None).unwrap();
+        let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
+        let to_left = right.sync_records(&left_wants).unwrap();
+        let to_right = left.sync_records(&right_wants).unwrap();
+        let applied_left = left.sync_apply(&to_left, &peer("right")).unwrap();
+        let applied_right = right.apply_batch(&to_right, &peer("left"), false).unwrap();
+        applied_left.is_some() || applied_right.is_some()
+    }
+
+    #[test]
+    fn dedupe_keeps_the_later_edit_of_either_copy() {
+        // The copy made later is edited: its edit survives in the kept one.
+        let (_dir, mut left, mut right) = two_devices();
+        rent(&mut left, "rent");
+        pause();
+        let late = rent(&mut right, "rent");
+        pause();
+        edit_comment(&mut right, &late, "rent, corrected");
+        settle(&mut left, &mut right);
+        assert_eq!(comments(&left), vec!["rent, corrected"]);
+        assert_eq!(comments(&right), comments(&left));
+
+        // The kept copy is edited after the other one: its edit stays.
+        let (_dir, mut left, mut right) = two_devices();
+        let early = rent(&mut left, "rent");
+        pause();
+        let late = rent(&mut right, "rent");
+        pause();
+        edit_comment(&mut right, &late, "from the later copy");
+        pause();
+        edit_comment(&mut left, &early, "from the kept copy");
+        settle(&mut left, &mut right);
+        assert_eq!(comments(&left), vec!["from the kept copy"]);
+        assert_eq!(comments(&right), comments(&left));
+    }
+
+    #[test]
+    fn a_pair_with_the_earlier_dedupe_converges_to_one_record() {
+        let (_dir, mut left, mut right) = two_devices();
+        rent(&mut left, "rent");
+        pause();
+        let late = rent(&mut right, "rent");
+        pause();
+        edit_comment(&mut right, &late, "rent, corrected");
+        let mut rounds = 0;
+        while exchange_with_old_right(&mut left, &mut right) {
+            rounds += 1;
+            assert!(rounds <= 3, "the pair keeps deleting and recreating");
+        }
+        assert_eq!(comments(&left), vec!["rent, corrected"]);
+        assert_eq!(comments(&right), comments(&left));
+        assert_eq!(
+            left.sync_manifest(None).unwrap(),
+            right.sync_manifest(None).unwrap()
+        );
+    }
+
+    #[test]
+    fn dedupe_leaves_unstamped_imports_and_automations() {
+        let (_dir, mut left, _right) = two_devices();
+        let cash = cash_id(&left);
+        for (index, origin) in [
+            TxOrigin::Import {
+                exec_id: "exec-1".into(),
+            },
+            TxOrigin::Automation {
+                automation_id: "rent".into(),
+                planned_at: "2026-11-01".into(),
+            },
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for copy in 0..2 {
+                let mut tx = income(&cash, "100", &format!("{index}-{copy}"));
+                if let Transaction::Topup(topup) = &mut tx {
+                    topup.meta.origin = origin.clone();
+                }
+                left.doc.transactions.push(tx);
+            }
+        }
+        left.doc.sync.stamps.clear();
+        left.dedupe_generated("no-batch", true).unwrap();
+        assert_eq!(
+            left.doc.transactions.len(),
+            4,
+            "an unstamped one was deleted"
+        );
+    }
+
+    #[test]
+    fn undo_after_dedupe_restores_both_copies() {
+        // Both copies are here when an unrelated batch arrives.
+        let (_dir, mut left, mut right) = two_devices();
+        rent(&mut left, "first");
+        pause();
+        let late = rent(&mut left, "second");
+        pause();
+        edit_comment(&mut left, &late, "second, edited");
+        right.doc.stores[0].color = "#123456".into();
+        right.persist().unwrap();
+        let (applied_left, _) = exchange(&mut left, &mut right);
+        let batch = applied_left.expect("left applied the store change");
+        assert_eq!(comments(&left), vec!["second, edited"]);
+        let report = left.sync_undo(&batch.id).unwrap();
+        assert!(report.skipped.is_empty(), "{:?}", report.skipped);
+        assert_eq!(comments(&left), vec!["first", "second, edited"]);
+        // Dedupe runs again with the next batch: the restored copy is a new
+        // local change, later than the kept one, so it goes again. Undo
+        // gives the copies back for a look; it does not outlaw the rule.
+        right.doc.stores[0].name = "Renamed".into();
+        right.persist().unwrap();
+        settle(&mut left, &mut right);
+        // The restored copy carries no field stamps (a restored record is
+        // stamped new), so its edit is not carried a second time.
+        assert_eq!(comments(&left), vec!["first"]);
+        assert_eq!(comments(&right), comments(&left));
+
+        // The other copy came in the batch itself: undo leaves the local one.
+        let (_dir, mut left, mut right) = two_devices();
+        rent(&mut right, "rent");
+        pause();
+        rent(&mut left, "rent");
+        let (applied_left, _) = exchange(&mut left, &mut right);
+        let batch = applied_left.expect("left took the earlier copy");
+        assert_eq!(left.doc.transactions.len(), 1);
+        left.sync_undo(&batch.id).unwrap();
+        assert_eq!(left.doc.transactions.len(), 1, "undo left neither copy");
+    }
+
+    /// A workflow transaction of `run`, planned for `moment`.
+    fn workflow_tx(vault: &mut UnlockedVault, run: &str, comment: &str) {
+        let cash = cash_id(vault);
+        let mut tx = income(&cash, "100", comment);
+        if let Transaction::Topup(topup) = &mut tx {
+            topup.meta.origin = TxOrigin::Workflow {
+                workflow_id: "salary".into(),
+                run_id: run.into(),
+                planned_at: Some("2026-11-01".into()),
+                estimated: false,
+            };
+        }
+        vault.add_transaction(tx).unwrap();
+    }
+
+    /// Makes both devices apply something, so the dedupe runs on each.
+    fn touch_and_settle(left: &mut UnlockedVault, right: &mut UnlockedVault) {
+        left.doc.stores[0].name = "Left".into();
+        left.persist().unwrap();
+        right.doc.stores[0].color = "#123456".into();
+        right.persist().unwrap();
+        settle(left, right);
+    }
+
+    #[test]
+    fn one_workflow_run_with_several_operations_for_one_moment_keeps_them_all() {
+        let (_dir, mut left, mut right) = two_devices();
+        workflow_tx(&mut left, "run-1", "salary");
+        workflow_tx(&mut left, "run-1", "tax");
+        touch_and_settle(&mut left, &mut right);
+        assert_eq!(comments(&left), vec!["salary", "tax"]);
+        assert_eq!(comments(&right), comments(&left));
+    }
+
+    #[test]
+    fn two_runs_on_one_device_for_one_moment_are_both_kept() {
+        let (_dir, mut left, mut right) = two_devices();
+        workflow_tx(&mut left, "run-1", "first");
+        workflow_tx(&mut left, "run-2", "second");
+        touch_and_settle(&mut left, &mut right);
+        assert_eq!(comments(&left), vec!["first", "second"]);
+        assert_eq!(comments(&right), comments(&left));
+    }
+
+    #[test]
+    fn the_same_moment_run_on_two_devices_keeps_the_earlier_run_whole() {
+        let (_dir, mut left, mut right) = two_devices();
+        workflow_tx(&mut left, "run-left", "left salary");
+        workflow_tx(&mut left, "run-left", "left tax");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        workflow_tx(&mut right, "run-right", "right salary");
+        workflow_tx(&mut right, "run-right", "right tax");
+        settle(&mut left, &mut right);
+        assert_eq!(comments(&left), vec!["left salary", "left tax"]);
+        assert_eq!(comments(&right), comments(&left));
+    }
+
+    #[test]
+    fn a_deletion_that_arrives_late_survives_the_compaction_of_the_same_apply() {
+        let (_dir, mut left, _right) = two_devices();
+        let old = crate::sync::stamp::now_ms() - 200 * 24 * 3600 * 1000;
+        let key = "contacts:gone".to_string();
+        let incoming: BTreeMap<String, RecordState> = [(
+            key.clone(),
+            RecordState {
+                value: None,
+                stamps: None,
+                tombstone: Some(Stamp::new(old, 0, "bbbbbbbb")),
+            },
+        )]
+        .into();
+        left.sync_apply(&incoming, &peer("right"))
+            .unwrap()
+            .expect("taken");
+        assert!(left.doc.sync.tombstones.contains_key(&key));
+        assert!(left.doc.sync.tombstones_seen.contains_key(&key));
+        // The bookkeeping is not part of what is described to others.
+        assert!(left.sync_manifest(None).unwrap().contains_key(&key));
+    }
+
+    #[test]
+    fn a_compacted_deletion_takes_its_seen_time_with_it() {
+        let (_dir, mut left, _right) = two_devices();
+        let now = crate::sync::stamp::now_ms();
+        let old = now - 400 * 24 * 3600 * 1000;
+        let key = "contacts:gone".to_string();
+        left.doc
+            .sync
+            .tombstones
+            .insert(key.clone(), Stamp::new(old, 0, "bbbbbbbb"));
+        left.doc.sync.tombstones_seen.insert(key.clone(), old);
+        left.compact_tombstones();
+        assert!(!left.doc.sync.tombstones.contains_key(&key));
+        assert!(!left.doc.sync.tombstones_seen.contains_key(&key));
+    }
+
     #[test]
     fn device_settings_never_travel() {
         let (_dir, mut left, mut right) = two_devices();
@@ -992,6 +2120,71 @@ mod tests {
     }
 
     #[test]
+    fn trusting_a_forgotten_device_again_clears_the_revocation() {
+        let (_dir, mut left, _right) = two_devices();
+        left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+        left.sync_forget_peer("dev-c").unwrap();
+        assert!(left.sync_state().is_revoked("cc"));
+        left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+        assert!(!left.sync_state().is_revoked("cc"));
+        assert!(left.sync_state().trusted("cc").is_some());
+    }
+
+    #[test]
+    fn an_older_revoked_entry_under_another_device_id_does_not_revoke_a_new_trust() {
+        let (_dir, mut left, _right) = two_devices();
+        left.sync_trust_peer("dev-old", "Tablet", "cc").unwrap();
+        left.sync_forget_peer("dev-old").unwrap();
+        left.sync_trust_peer("dev-new", "Tablet", "cc").unwrap();
+        assert!(!left.sync_state().is_revoked("cc"));
+        assert_eq!(
+            left.sync_state().trusted("cc").unwrap().device_id,
+            "dev-new"
+        );
+    }
+
+    #[test]
+    fn a_merged_older_revocation_does_not_beat_a_newer_trust() {
+        let (_dir, mut left, mut right) = two_devices();
+        left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+        left.sync_forget_peer("dev-c").unwrap();
+        let revoked = left.sync_state().peers.clone();
+        right.sync_merge_peers(&revoked).unwrap();
+        right.sync_trust_peer("dev-c2", "Tablet", "cc").unwrap();
+        right.sync_merge_peers(&revoked).unwrap();
+        assert!(right.sync_state().trusted("cc").is_some());
+        assert!(!right.sync_state().is_revoked("cc"));
+    }
+
+    #[test]
+    fn pairing_after_a_merged_future_revocation_still_sorts_newer() {
+        let (_dir, mut left, _right) = two_devices();
+        let ahead = crate::sync::stamp::now_ms() + 3_600_000;
+        let revoked = TrustedPeer {
+            device_id: "dev-c".into(),
+            public_key: "cc".into(),
+            revoked: Some(Stamp::new(ahead, 0, "remote")),
+            stamp: Stamp::new(ahead, 0, "remote"),
+            ..TrustedPeer::default()
+        };
+        assert!(left.sync_merge_peers(&[revoked]).unwrap());
+        assert!(left.sync_state().is_revoked("cc"));
+        left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+        assert!(left.sync_state().trusted("cc").is_some());
+    }
+
+    #[test]
+    fn forgetting_the_newest_entry_still_revokes_the_key() {
+        let (_dir, mut left, _right) = two_devices();
+        left.sync_trust_peer("dev-old", "Tablet", "cc").unwrap();
+        left.sync_forget_peer("dev-old").unwrap();
+        left.sync_trust_peer("dev-new", "Tablet", "cc").unwrap();
+        left.sync_forget_peer("dev-new").unwrap();
+        assert!(left.sync_state().is_revoked("cc"));
+        assert!(left.sync_state().trusted("cc").is_none());
+    }
+
+    #[test]
     fn the_backup_restores_the_vault_as_before_the_sync() {
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
@@ -1053,5 +2246,88 @@ mod tests {
             history[0].transferred_to.as_deref(),
             Some("Сочный Апельсин")
         );
+    }
+    #[test]
+    fn a_pause_survives_a_reopen_and_is_never_a_peer_field() {
+        let (dir, mut vault) = empty_vault();
+        assert!(!vault.sync_is_paused("dev-a"));
+        vault.sync_pause_peer("dev-a").unwrap();
+        // Pausing twice changes nothing.
+        vault.sync_pause_peer("dev-a").unwrap();
+        assert!(vault.sync_is_paused("dev-a"));
+        assert!(!vault.sync_is_paused("dev-b"));
+        let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
+        assert!(reopened.sync_is_paused("dev-a"));
+        // The list that goes to other devices does not carry it.
+        assert!(reopened.sync_state().peers.is_empty());
+        let mut reopened = reopened;
+        reopened.sync_resume_peer("dev-a").unwrap();
+        assert!(!reopened.sync_is_paused("dev-a"));
+        let again = UnlockedVault::open(reopened.path.clone(), "pw").unwrap();
+        assert!(!again.sync_is_paused("dev-a"));
+        drop(dir);
+    }
+
+    #[test]
+    fn forgetting_a_device_lifts_its_pause() {
+        let (_dir, mut vault) = empty_vault();
+        vault.sync_trust_peer("dev-a", "A", "key-a").unwrap();
+        vault.sync_pause_peer("dev-a").unwrap();
+        vault.sync_forget_peer("dev-a").unwrap();
+        assert!(!vault.sync_is_paused("dev-a"));
+    }
+
+    #[test]
+    fn merging_a_peer_list_leaves_the_pause_alone() {
+        let (_dir, mut vault) = empty_vault();
+        vault.sync_pause_peer("dev-a").unwrap();
+        vault.sync_trust_peer("dev-a", "A", "key-a").unwrap();
+        let remote = vault.sync_state().peers.clone();
+        vault.sync_merge_peers(&remote).unwrap();
+        assert!(vault.sync_is_paused("dev-a"));
+    }
+
+    #[test]
+    fn cut_by_is_saved_once_survives_a_reopen_and_is_never_a_peer_field() {
+        let (dir, mut vault) = empty_vault();
+        assert_eq!(vault.sync_cut_reason("dev-a"), None);
+        assert!(vault.sync_cut_by("dev-a", SyncCutReason::Paused).unwrap());
+        // The same news again changes nothing; another reason does.
+        assert!(!vault.sync_cut_by("dev-a", SyncCutReason::Paused).unwrap());
+        let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
+        assert_eq!(
+            reopened.sync_cut_reason("dev-a"),
+            Some(SyncCutReason::Paused)
+        );
+        assert!(reopened.sync_state().peers.is_empty());
+        let mut reopened = reopened;
+        assert!(
+            reopened
+                .sync_cut_by("dev-a", SyncCutReason::Forgotten)
+                .unwrap()
+        );
+        // A merged list leaves it alone.
+        let remote = reopened.sync_state().peers.clone();
+        reopened.sync_merge_peers(&remote).unwrap();
+        assert_eq!(
+            reopened.sync_cut_reason("dev-a"),
+            Some(SyncCutReason::Forgotten)
+        );
+        assert!(reopened.sync_clear_cut("dev-a").unwrap());
+        assert!(!reopened.sync_clear_cut("dev-a").unwrap());
+        drop(dir);
+    }
+
+    #[test]
+    fn pairing_or_forgetting_a_device_clears_what_it_told_us() {
+        let (_dir, mut vault) = empty_vault();
+        vault
+            .sync_cut_by("dev-a", SyncCutReason::Forgotten)
+            .unwrap();
+        vault.sync_trust_peer("dev-a", "A", "key-a").unwrap();
+        assert_eq!(vault.sync_cut_reason("dev-a"), None);
+        vault.sync_cut_by("dev-a", SyncCutReason::Paused).unwrap();
+        vault.sync_forget_peer("dev-a").unwrap();
+        assert_eq!(vault.sync_cut_reason("dev-a"), None);
     }
 }

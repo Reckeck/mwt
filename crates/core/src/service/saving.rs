@@ -151,7 +151,10 @@ impl UnlockedVault {
             .key
             .clone()
             .ok_or_else(|| Error::Crypto("the vault has no key to save with".into()))?;
-        let changed = self.track_changes()?;
+        self.track_changes()?;
+        // Everything stamped since the last push, by this save or by a sync
+        // call in between.
+        let changed: Vec<String> = std::mem::take(&mut self.announce).into_iter().collect();
         if !changed.is_empty()
             && let Some(tap) = &self.sync_tap
         {

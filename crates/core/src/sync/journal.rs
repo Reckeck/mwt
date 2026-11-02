@@ -48,6 +48,16 @@ pub struct SyncJournalEntry {
 }
 
 impl SyncJournalEntry {
+    /// Drop the label of a line about a secret collection (written before
+    /// they were hidden). `true` when something changed.
+    pub fn scrub_secrets(&mut self) -> bool {
+        let secret = self
+            .counts
+            .iter()
+            .any(|count| super::registry::is_secret(&count.collection));
+        secret && self.label.take().is_some()
+    }
+
     /// A line for `summary`, without the id and time (the vault sets them).
     pub fn of(peer_name: &str, summary: &SyncSummary, outcome: SyncJournalOutcome) -> Self {
         let counts = summary
@@ -67,7 +77,9 @@ impl SyncJournalEntry {
                     .find_map(|changes| changes.items.first())
                     .map(|item| item.label.clone())
             })
-            .flatten();
+            .flatten()
+            // A secret collection has no label: the window names the collection.
+            .filter(|label| !label.is_empty());
         Self {
             id: String::new(),
             at: String::new(),
@@ -85,4 +97,33 @@ pub fn push(log: &mut Vec<SyncJournalEntry>, entry: SyncJournalEntry) {
     log.push(entry);
     let extra = log.len().saturating_sub(MAX_JOURNAL);
     log.drain(..extra);
+}
+
+#[cfg(test)]
+mod secret_tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::sync::plan::plan;
+    use crate::sync::state::RecordStamps;
+    use crate::sync::{RecordState, stamp::Stamp};
+
+    #[test]
+    fn a_single_secret_change_leaves_no_secret_in_the_journal() {
+        let remote = RecordState {
+            value: Some(json!({"bybit": [{"api_key": "JKEY", "api_secret": "JSECRET"}]})),
+            stamps: Some(RecordStamps::created(Stamp::new(1, 0, "a"))),
+            tombstone: None,
+        };
+        let incoming = std::collections::BTreeMap::from([("exchanges:".to_string(), remote)]);
+        let summary = plan(&incoming, |_| RecordState::default()).summary;
+        assert_eq!(summary.total, 1);
+        let entry = SyncJournalEntry::of("Phone", &summary, SyncJournalOutcome::Applied);
+        let text = serde_json::to_string(&entry).expect("entry");
+        assert!(
+            !text.contains("JKEY") && !text.contains("JSECRET"),
+            "{text}"
+        );
+        assert!(entry.label.is_none());
+    }
 }

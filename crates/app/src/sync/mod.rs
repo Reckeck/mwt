@@ -80,6 +80,8 @@ pub(crate) struct Link {
     pub callback: bool,
     /// The other side's mDNS instance.
     pub instance: String,
+    /// The other side's static Noise key, hex.
+    pub remote_key: String,
     /// The other side asked to be the main device.
     pub prefer_main: bool,
     /// A batch was applied on it this session (for «спрашивать»).
@@ -111,6 +113,15 @@ pub(crate) struct Run {
     /// Sessions with the main device that ended before going live, in a row:
     /// each waits longer before connecting again.
     pub retries: u32,
+    /// Counts the attempts to dial a main device: a finished attempt only
+    /// releases the role set by itself, not by a newer one.
+    pub dial_attempt: u64,
+    /// Device id → the mDNS instance it showed in a session of this run: how
+    /// discovery knows which address belongs to a device that cut this one off.
+    pub peer_instances: BTreeMap<String, String>,
+    /// Devices the user asked to pair again («Сопрячь заново»): the next dial
+    /// to one sends the pairing request at once.
+    pub pair_intent: std::collections::BTreeSet<String>,
     pub stop: tokio::sync::watch::Sender<bool>,
     pub announce: Option<discovery::Announcer>,
 }
@@ -123,6 +134,9 @@ pub(crate) struct Hub {
     /// Another device could not connect here (see `Hello::unreached`).
     pub inbound_blocked: bool,
     pub last_error: Option<String>,
+    /// Errors already announced, per (code, peer device id): the same failure
+    /// repeating is shown once, another peer's is still shown.
+    pub announced: std::collections::BTreeSet<(String, Option<String>)>,
     /// The last batch applied or change sent (the background lock counts from it).
     pub last_activity: Option<Instant>,
     failures: HashMap<IpAddr, Vec<Instant>>,
@@ -186,6 +200,7 @@ fn vault_id(app: &AppHandle) -> Option<String> {
 /// Stop, then start again if sync is on and a vault is open.
 pub fn restart(app: &AppHandle) {
     stop(app);
+    clear_errors(&mut Host::hub(app));
     if !sync_enabled(app) {
         emit_status(app);
         return;
@@ -223,16 +238,7 @@ pub fn restart(app: &AppHandle) {
 }
 
 pub fn stop(app: &AppHandle) {
-    let (run, links) = {
-        let mut hub = Host::hub(app);
-        hub.inbound_blocked = false;
-        let links: Vec<_> = std::mem::take(&mut hub.links).into_values().collect();
-        (hub.run.take(), links)
-    };
-    for link in links {
-        let _ = link.orders.send(Order::Close);
-    }
-    if let Some(run) = run {
+    if let Some(run) = teardown(app) {
         #[cfg(target_os = "android")]
         {
             crate::platform_net::multicast(app, false);
@@ -243,13 +249,26 @@ pub fn stop(app: &AppHandle) {
             announce.shutdown();
         }
     }
-    let state = app.state::<AppState>();
-    if let Ok(mut guard) = state.vault.lock()
-        && let Some(vault) = guard.as_mut()
-    {
-        vault.set_sync_tap(None);
+}
+
+/// The part of [`stop`] that does not need the app handle: close the links,
+/// take the run, detach from the vault. A start error stays in `last_error`.
+pub(crate) fn teardown<H: Host>(app: &H) -> Option<Run> {
+    let (run, links) = {
+        let mut hub = Host::hub(app);
+        hub.inbound_blocked = false;
+        let links: Vec<_> = std::mem::take(&mut hub.links).into_values().collect();
+        (hub.run.take(), links)
+    };
+    for link in links {
+        let _ = link.orders.send(Order::Close);
     }
+    let _ = app.with_vault(|vault| {
+        vault.set_sync_tap(None);
+        Ok(())
+    });
     emit_status(app);
+    run
 }
 
 // -- roles ----------------------------------------------------------------------
@@ -317,7 +336,9 @@ pub(crate) fn broadcast<H: Host>(app: &H, keys: &[String], origin: Option<&str>)
     let mut hub = Host::hub(app);
     let mut sent = false;
     for (id, link) in &hub.links {
-        if Some(id.as_str()) != origin && link.view.phase == SyncPhase::Live {
+        // Every phase: a link still exchanging or awaiting the user's answer
+        // keeps the keys and sends them once it is live.
+        if Some(id.as_str()) != origin {
             sent |= link.orders.send(Order::Changed(keys.to_vec())).is_ok();
         }
     }
@@ -333,9 +354,94 @@ pub(crate) fn send<H: Host>(app: &H, session_id: &str, order: Order) -> bool {
         .is_some_and(|link| link.orders.send(order).is_ok())
 }
 
-/// A device was forgotten: close its links, tell everyone else.
-pub fn forget_device(app: &AppHandle, device_id: &str) {
+/// The trusted devices changed here by a merge from `origin_session`: close
+/// the links of devices that are now revoked, tell the others.
+pub(crate) fn peers_changed<H: Host>(app: &H, origin_session: &str) {
+    let links: Vec<(String, String)> = Host::hub(app)
+        .links
+        .iter()
+        .map(|(id, link)| (id.clone(), link.remote_key.clone()))
+        .collect();
+    let revoked: Vec<bool> = app
+        .with_vault(|vault| {
+            Ok(links
+                .iter()
+                .map(|(_, key)| vault.sync_state().is_revoked(key))
+                .collect())
+        })
+        .unwrap_or_default();
     let hub = Host::hub(app);
+    for (index, (id, _)) in links.iter().enumerate() {
+        let Some(link) = hub.links.get(id) else {
+            continue;
+        };
+        // A link that is still pairing (or re-pairing a forgotten key) has no
+        // trust to lose yet, and no list to receive.
+        if matches!(
+            link.view.phase,
+            SyncPhase::Connecting | SyncPhase::Offer | SyncPhase::Pairing
+        ) {
+            continue;
+        }
+        if revoked.get(index).copied().unwrap_or(false) {
+            let _ = link.orders.send(Order::Close);
+        } else if id != origin_session {
+            let _ = link.orders.send(Order::SendPeers);
+        }
+    }
+}
+
+/// Try the devices again now instead of at the next backoff step (a pause
+/// was lifted).
+pub fn reconnect(app: &AppHandle) {
+    discovery::reconnect(app);
+}
+
+/// «Сопрячь заново» for a device that cut this one off: forget what it told
+/// us, remember that the user asked for a pairing, and dial it once with the
+/// request. Needs the device to be in sight (discovery saw it in this run).
+pub(crate) fn pair_again<H: Host>(app: &H, device_id: &str) -> trade_core::Result<()> {
+    let (generation, addrs) = {
+        let mut hub = Host::hub(app);
+        let not_in_sight =
+            || trade_core::Error::NotFound("the other device is not in sight".into());
+        let run = hub.run.as_mut().ok_or_else(not_in_sight)?;
+        let instance = run.peer_instances.get(device_id).ok_or_else(not_in_sight)?;
+        let addrs = run
+            .mains
+            .get(instance)
+            .or_else(|| run.others.get(instance).map(|seen| &seen.addrs))
+            .cloned()
+            .ok_or_else(not_in_sight)?;
+        run.pair_intent.insert(device_id.to_string());
+        (run.generation, addrs)
+    };
+    app.with_vault(|vault| vault.sync_clear_cut(device_id).map(|_| ()))?;
+    // Its refusal, if it comes again, is news again.
+    peer_recovered(app, device_id);
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        discovery::callback(&app, generation, addrs).await;
+    });
+    Ok(())
+}
+
+/// A device was forgotten: close its links, tell everyone else.
+pub fn forget_device<H: Host>(app: &H, device_id: &str) {
+    let mut hub = Host::hub(app);
+    // The main device we dialed is no longer a candidate; pairing with it
+    // again is allowed at once.
+    let instances: Vec<String> = hub
+        .links
+        .values()
+        .filter(|link| link.view.device_id == device_id)
+        .map(|link| link.instance.clone())
+        .collect();
+    if let Some(run) = hub.run.as_mut() {
+        for instance in &instances {
+            run.mains.remove(instance);
+        }
+    }
     for link in hub.links.values() {
         let order = if link.view.device_id == device_id {
             Order::Close
@@ -417,18 +523,62 @@ fn network_view(hub: &Hub) -> SyncNetworkView {
     }
 }
 
+/// An exchange with the device completed: its errors may be announced again.
+pub(crate) fn peer_recovered<H: Host>(app: &H, device_id: &str) {
+    app.hub()
+        .announced
+        .retain(|(_, peer)| peer.as_deref() != Some(device_id));
+}
+
+/// Forget which errors were announced (a new start of sync).
+pub(crate) fn clear_errors(hub: &mut Hub) {
+    hub.last_error = None;
+    hub.announced.clear();
+}
+
 pub(crate) fn emit_status<H: Host>(app: &H) {
     app.emit(STATUS_EVENT, status(app));
 }
 
-pub(crate) fn emit_error<H: Host>(app: &H, err: &trade_core::Error, peer: Option<&str>) {
-    app.hub().last_error = Some(err.code().to_string());
+pub(crate) fn emit_error<H: Host>(app: &H, err: &trade_core::Error, peer: Option<(&str, &str)>) {
+    emit_error_with(app, err, peer, None);
+}
+
+/// [`emit_error`] with the peer's and this app's versions, for a refusal over
+/// incompatible versions (`(peer, own)`; the peer's is empty for an old build).
+pub(crate) fn emit_error_with<H: Host>(
+    app: &H,
+    err: &trade_core::Error,
+    peer: Option<(&str, &str)>,
+    versions: Option<(&str, &str)>,
+) {
+    let code = err.code().to_string();
+    // The same failure of the same peer repeating (a retry loop) is announced
+    // once; the same code from another peer is a different failure.
+    let repeated = {
+        let mut hub = app.hub();
+        // A device that cut this one off is not a network fault: the network
+        // card keeps its own last error.
+        if !matches!(
+            code.as_str(),
+            "SYNC_PAUSED_BY_PEER" | "SYNC_FORGOTTEN_BY_PEER"
+        ) {
+            hub.last_error = Some(code.clone());
+        }
+        !hub.announced
+            .insert((code.clone(), peer.map(|(id, _)| id.to_string())))
+    };
+    if repeated {
+        return;
+    }
     app.emit(
         ERROR_EVENT,
         trade_core::ipc_contract::SyncErrorEvent {
-            code: err.code().to_string(),
+            code,
             message: err.to_string(),
-            peer_name: peer.map(str::to_string),
+            peer_name: peer.map(|(_, name)| name.to_string()),
+            peer_version: versions.map(|(theirs, _)| theirs.to_string()),
+            own_version: versions.map(|(_, own)| own.to_string()),
         },
     );
 }

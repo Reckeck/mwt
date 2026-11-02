@@ -68,17 +68,10 @@ pub fn lock_now(app: &AppHandle) {
         }
         return;
     }
-    // Unsaved changes first: if they cannot be written, the vault stays open.
-    if let Err(err) = crate::vault_writer::flush_now(app) {
-        let _ = app.emit(crate::vault_writer::SAVE_FAILED_EVENT, err.to_string());
+    if close_in_order(&mut AppLockSteps { app }).is_err() {
         return;
     }
-    crate::scheduler::snapshot_tick(app, true);
-    crate::sync::on_lock(app);
     let state = app.state::<AppState>();
-    if let Ok(mut guard) = lock_vault(&state) {
-        *guard = None;
-    }
     if let Ok(status) = status_of(&state) {
         let _ = app.emit("vault-changed", status);
     }
@@ -151,9 +144,20 @@ pub async fn unlock_vault(
     let path =
         crate::platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
     // A linked vault first takes in what changed in its external copy.
-    crate::platform_fs::links::sync_before_open(&app, &path).map_err(err_to_string)?;
+    let open_sync =
+        crate::platform_fs::links::sync_before_open(&app, &path).map_err(err_to_string)?;
     let mut vault = UnlockedVault::open(path.clone(), &input.password)
         .map_err(crate::commands::err_to_string)?;
+    // Edits made elsewhere reach the opened vault; the password is only
+    // needed for this call and is not kept.
+    if crate::platform_fs::links::take_in(&app, &mut vault, open_sync, &input.password)
+        .map_err(err_to_string)?
+        == crate::platform_fs::links::TakeIn::Reopen
+    {
+        drop(vault);
+        vault = UnlockedVault::open(path.clone(), &input.password)
+            .map_err(crate::commands::err_to_string)?;
+    }
     crate::platform_fs::attach_mirror(&app, &mut vault);
     crate::vault_writer::install(&mut vault);
     store_vault(&state, vault)?;
@@ -185,16 +189,109 @@ pub async fn lock_vault_cmd(app: AppHandle, state: State<'_, AppState>) -> Resul
     if crate::commands::sandbox::leave(&app, &state) {
         return Ok(());
     }
-    // The last word before the vault closes: what to remind of while locked.
-    crate::scheduler::snapshot_tick(&app, true);
-    crate::sync::on_lock(&app);
-    let mut guard = lock_vault(&state).map_err(err_to_string)?;
-    // Batched changes go to disk before the vault closes; a failed write keeps it open.
-    if let Some(vault) = guard.as_mut() {
-        vault.flush_pending().map_err(err_to_string)?;
-    }
-    *guard = None;
+    close_in_order(&mut AppLockSteps { app: &app }).map_err(err_to_string)
+}
+
+/// The four steps of locking, so the order can be tested without Tauri.
+trait LockSteps {
+    /// Write the batched changes to disk.
+    fn flush(&mut self) -> trade_core::Result<()>;
+    /// The last word before the vault closes: what to remind of while locked.
+    fn snapshot(&mut self);
+    /// Stop sync.
+    fn stop_sync(&mut self);
+    /// Drop the unlocked vault.
+    fn close(&mut self);
+}
+
+/// Flush first: if the changes cannot be written, nothing is stopped and the
+/// vault stays open with sync and the scheduler running.
+fn close_in_order(steps: &mut impl LockSteps) -> trade_core::Result<()> {
+    steps.flush()?;
+    steps.snapshot();
+    steps.stop_sync();
+    steps.close();
     Ok(())
+}
+
+struct AppLockSteps<'a> {
+    app: &'a AppHandle,
+}
+
+impl LockSteps for AppLockSteps<'_> {
+    fn flush(&mut self) -> trade_core::Result<()> {
+        // The guard is released inside `flush_now`, before the next steps.
+        crate::vault_writer::flush_now(self.app).inspect_err(|err| {
+            let _ = self
+                .app
+                .emit(crate::vault_writer::SAVE_FAILED_EVENT, err.to_string());
+        })
+    }
+
+    fn snapshot(&mut self) {
+        crate::scheduler::snapshot_tick(self.app, true);
+    }
+
+    fn stop_sync(&mut self) {
+        crate::sync::on_lock(self.app);
+    }
+
+    fn close(&mut self) {
+        let state = self.app.state::<AppState>();
+        if let Ok(mut guard) = lock_vault(&state) {
+            *guard = None;
+        }
+    }
+}
+
+#[cfg(test)]
+mod lock_order_tests {
+    use super::*;
+
+    struct Recorder {
+        calls: Vec<&'static str>,
+        flush_fails: bool,
+    }
+
+    impl LockSteps for Recorder {
+        fn flush(&mut self) -> trade_core::Result<()> {
+            self.calls.push("flush");
+            if self.flush_fails {
+                Err(trade_core::Error::Crypto("disk full".into()))
+            } else {
+                Ok(())
+            }
+        }
+        fn snapshot(&mut self) {
+            self.calls.push("snapshot");
+        }
+        fn stop_sync(&mut self) {
+            self.calls.push("stop_sync");
+        }
+        fn close(&mut self) {
+            self.calls.push("close");
+        }
+    }
+
+    #[test]
+    fn lock_flushes_before_snapshot_sync_stop_and_close() {
+        let mut steps = Recorder {
+            calls: vec![],
+            flush_fails: false,
+        };
+        close_in_order(&mut steps).unwrap();
+        assert_eq!(steps.calls, ["flush", "snapshot", "stop_sync", "close"]);
+    }
+
+    #[test]
+    fn a_failed_flush_leaves_sync_and_the_vault_running() {
+        let mut steps = Recorder {
+            calls: vec![],
+            flush_fails: true,
+        };
+        assert!(close_in_order(&mut steps).is_err());
+        assert_eq!(steps.calls, ["flush"]);
+    }
 }
 
 /// Put a freshly opened vault in place, writing the previous one's batched

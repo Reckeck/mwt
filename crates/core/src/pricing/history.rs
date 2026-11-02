@@ -6,7 +6,7 @@
 //! one per series per hour, the newest week at that resolution, older points
 //! thinned to one a day, and never more than [`HISTORY_CAP`] per series.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::Amount;
 use crate::model::vault::{FxPoint, PricePoint};
@@ -89,9 +89,26 @@ fn merge<P: Point>(cache: &mut Vec<P>, fresh: &[P], keep_history: impl Fn(&str) 
         .partition(|point| touched.contains(point.series()));
     *cache = rest;
     series_points.extend(fresh.iter().cloned());
+    cache.extend(thin(series_points, keep_history));
+}
 
-    let mut by_series: HashMap<String, Vec<(i64, P)>> = HashMap::new();
-    for point in series_points {
+/// Thin every series of the FX cache by the rules a refresh applies, adding
+/// nothing. A sync unions the caches of two devices, which can overshoot them.
+pub fn thin_fx(cache: &mut Vec<FxPoint>, keep_history: impl Fn(&str) -> bool) {
+    *cache = thin(std::mem::take(cache), keep_history);
+}
+
+/// Thin every series of the price cache, adding nothing.
+pub fn thin_prices(cache: &mut Vec<PricePoint>) {
+    *cache = thin(std::mem::take(cache), |_| true);
+}
+
+/// One hour bucket, the newest week hourly and older days thinned, the cap
+/// per series. Points with an unreadable timestamp are dropped. The result is
+/// grouped by series, oldest first, and depends only on the set of points.
+fn thin<P: Point>(points: Vec<P>, keep_history: impl Fn(&str) -> bool) -> Vec<P> {
+    let mut by_series: BTreeMap<String, Vec<(i64, P)>> = BTreeMap::new();
+    for point in points {
         if let Some(secs) = unix_secs(point.ts()) {
             by_series
                 .entry(point.series().to_string())
@@ -99,10 +116,8 @@ fn merge<P: Point>(cache: &mut Vec<P>, fresh: &[P], keep_history: impl Fn(&str) 
                 .push((secs, point));
         }
     }
-    for key in touched {
-        let Some(mut points) = by_series.remove(&key) else {
-            continue;
-        };
+    let mut out = Vec::new();
+    for (key, mut points) in by_series {
         // Stable sort keeps a fresh point after a cached one of the same
         // second, so the fresh one wins the hourly bucket.
         points.sort_by_key(|(secs, _)| *secs);
@@ -117,8 +132,9 @@ fn merge<P: Point>(cache: &mut Vec<P>, fresh: &[P], keep_history: impl Fn(&str) 
         if points.len() > HISTORY_CAP {
             points.drain(..points.len() - HISTORY_CAP);
         }
-        cache.extend(points.into_iter().map(|(_, point)| point));
+        out.extend(points.into_iter().map(|(_, point)| point));
     }
+    out
 }
 
 /// Keep the newest point of every `width`-second bucket. `points` is sorted.

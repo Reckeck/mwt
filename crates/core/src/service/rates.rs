@@ -397,8 +397,22 @@ impl UnlockedVault {
     /// Add a fetched FX table to the cache. Does not persist: the refresh
     /// that fetched it writes once at the end.
     pub fn apply_fx(&mut self, fresh: &[FxPoint]) {
+        let keep_history = self.fx_history_filter();
+        history::merge_fx(&mut self.doc.fx_cache, fresh, keep_history);
+    }
+
+    /// Which currencies keep their rate history: the ones in use. Owns its
+    /// data, so it can be used while the cache is borrowed mutably.
+    pub(crate) fn fx_history_filter(&self) -> impl Fn(&str) -> bool + use<> {
         let tracked = self.fx_currencies_in_use();
-        history::merge_fx(&mut self.doc.fx_cache, fresh, |code| tracked.contains(code));
+        move |code| tracked.contains(code)
+    }
+
+    /// Thin both rate caches by the refresh rules, adding nothing.
+    pub(crate) fn thin_rate_caches(&mut self) {
+        let keep_history = self.fx_history_filter();
+        history::thin_fx(&mut self.doc.fx_cache, keep_history);
+        history::thin_prices(&mut self.doc.price_cache);
     }
 
     /// Add fetched quotes to the cache. Does not persist.

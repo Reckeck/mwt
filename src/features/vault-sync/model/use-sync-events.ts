@@ -7,6 +7,7 @@ import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { notify } from '@/shared/lib/notify'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { syncErrorDescription } from '../lib/sync-error-text'
 import { keysOfBatch, touchesSettings } from '../lib/sync-keys'
 
 import { SYNC_HISTORY_KEY, SYNC_JOURNAL_KEY, SYNC_PEERS_KEY, SYNC_STATUS_KEY } from './use-sync-status'
@@ -67,7 +68,12 @@ export function useSyncEvents() {
   useBackendEvent<SyncErrorEvent>('sync-error', (event) => {
     const error = { code: event.code, message: event.message }
     void queryClient.invalidateQueries({ queryKey: SYNC_JOURNAL_KEY })
-    notify.error(error, event.peer_name ? t('sync.failedWith', { name: event.peer_name }) : 'sync.failed')
+    void queryClient.invalidateQueries({ queryKey: SYNC_PEERS_KEY })
+    // Cut off on purpose or an incompatible version: the sentence names the device.
+    const description = syncErrorDescription(event, t)
+    notify.error(error, event.peer_name ? t('sync.failedWith', { name: event.peer_name }) : 'sync.failed', {
+      description,
+    })
   })
 
   useBackendEvent<SyncClockEvent>('sync-clock', (event) => {

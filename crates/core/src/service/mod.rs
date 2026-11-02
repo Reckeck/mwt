@@ -73,7 +73,7 @@ mod shared_events;
 mod sync_journal;
 mod vehicle;
 mod where_went;
-pub use peer_sync::{AppliedBatch, PeerRef, SyncTap, UndoReport};
+pub use peer_sync::{AppliedBatch, ExternalMerge, PeerRef, SyncTap, UndoReport};
 mod preview;
 mod price_info;
 mod rates;
@@ -280,6 +280,9 @@ pub struct UnlockedVault {
     clock: crate::sync::Clock,
     /// Told every save's changed keys while a sync session is live.
     sync_tap: Option<std::sync::Arc<dyn SyncTap>>,
+    /// Keys stamped by any path (save, sync calls) and not yet announced: only
+    /// the save-time push drains it, so a sync call cannot swallow an edit.
+    announce: std::collections::BTreeSet<String>,
     /// The key derived at unlock: saves seal with it, Argon2 does not run again.
     key: Option<std::sync::Arc<SealKey>>,
     /// Unsaved changes and the batched writer (see `saving`).
@@ -321,6 +324,7 @@ impl UnlockedVault {
             tracker: None,
             clock: crate::sync::Clock::default(),
             sync_tap: None,
+            announce: std::collections::BTreeSet::new(),
             key: Some(std::sync::Arc::new(key)),
             save: saving::SaveState::default(),
         };
@@ -373,6 +377,7 @@ impl UnlockedVault {
             tracker: None,
             clock: crate::sync::Clock::default(),
             sync_tap: None,
+            announce: std::collections::BTreeSet::new(),
             key: Some(std::sync::Arc::new(key)),
             save: saving::SaveState::default(),
         };
@@ -387,11 +392,14 @@ impl UnlockedVault {
         let incomplete = vault.disable_incomplete_workflows(crate::calendar::now_secs());
         // Files removed last session (their «Отменить» is long gone) go now.
         let attachments_pruned = vault.prune_attachments();
+        // Sync history written before secrets were hidden.
+        let secrets_scrubbed = vault.scrub_sync_secrets();
         if migrated
             || categories_added
             || graphs_migrated
             || incomplete
             || attachments_pruned
+            || secrets_scrubbed
             || fmt != vault.fmt
         {
             vault.persist()?;
@@ -455,6 +463,7 @@ impl UnlockedVault {
             tracker: None,
             clock: self.clock.clone(),
             sync_tap: None,
+            announce: std::collections::BTreeSet::new(),
             key: None,
             save: saving::SaveState::default(),
         }
@@ -502,7 +511,8 @@ impl UnlockedVault {
     ///
     /// The current password is checked against the file on disk (decryption is
     /// the verifier), so an unlocked but unattended session cannot be re-keyed
-    /// by whoever sits down at it. No `.bak` is written on purpose: a copy that
+    /// by whoever sits down at it. No `.bak` is written on purpose (and the
+    /// pre-sync backups are deleted): a copy that
     /// still opens with the old password would defeat changing a leaked one.
     pub fn change_password(&mut self, current_password: &str, new_password: &str) -> Result<()> {
         if new_password.is_empty() {
@@ -521,7 +531,10 @@ impl UnlockedVault {
             new_password.as_bytes(),
         )?));
         self.password = Zeroizing::new(new_password.to_string());
-        self.persist_now()
+        self.persist_now()?;
+        // Pre-sync copies are sealed under the old password: gone with it.
+        self.remove_sync_backups();
+        Ok(())
     }
 
     /// Re-encode on disk (dev JSON <-> prod binary) — mostly used by tests.
@@ -4348,6 +4361,24 @@ mod tests {
             UnlockedVault::open(path, "old"),
             Err(Error::Secret)
         ));
+    }
+
+    #[test]
+    fn change_password_deletes_the_pre_sync_backups() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pw.wallet");
+        let mut vault = UnlockedVault::create(path.clone(), "old").unwrap();
+        vault.sync_backup().unwrap();
+        vault.sync_backup().unwrap();
+        assert!(vault.has_sync_backup());
+        vault.change_password("old", "new").unwrap();
+        assert!(!vault.has_sync_backup());
+        let leftovers = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".presync"))
+            .count();
+        assert_eq!(leftovers, 0);
     }
 
     #[test]

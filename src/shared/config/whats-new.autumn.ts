@@ -3,6 +3,23 @@ import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_AUTUMN: WhatsNewEntry[] = [
   {
+    id: 'propertyTypes',
+    date: '2026-10-22',
+    points: [
+      { key: 'types', route: 'wallet-settings' },
+      { key: 'car', route: 'wallet-settings' },
+      { key: 'taxes', route: 'automations-reminders' },
+    ],
+  },
+  {
+    id: 'bonuses',
+    date: '2026-10-22',
+    points: [
+      { key: 'tab', route: 'transactions-bonuses' },
+      { key: 'wallets', route: 'transactions-bonuses' },
+    ],
+  },
+  {
     id: 'assetClasses',
     date: '2026-10-21',
     points: [
