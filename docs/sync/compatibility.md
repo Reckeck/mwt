@@ -84,6 +84,33 @@ exchanged and nothing is changed in either vault.
   exception: a deletion that an old build already compacted can come back from
   the other side until both are updated.
 
+## Lists inside a record, and the envelope journal
+
+Between new devices an array field of a record (the purchases, people and
+settlements of a shared event, the exchange keys, the envelope `moves`) merges
+per entry by its id, so two devices adding to the same list both keep their
+entry. A removed entry travels as the stamp of that entry.
+
+With an old device the whole field is still one value:
+
+- An old device's stamp of the whole field is a floor for every entry that has
+  no stamp of its own. A head stamp equal to the newest entry stamp is what a
+  new device adds for old receivers; it is derived and is no floor.
+- An item deleted on an old device does not travel to new devices (an old
+  device cannot say an entry is gone, so the new side keeps it).
+- Envelope `allocated` is derived from `moves` between new devices: it is
+  recomputed after every merge and stamped with the newest entry stamp, so a
+  recomputation is never mistaken for an edit. An old device just writes
+  `allocated`; a new device turns a write newer than what it holds into one
+  correction entry `fix:<envelope id>:<stamp>` (its id comes only from the
+  write, so it is made once however often it arrives). If the stamp of a
+  correction equals the stamp of a real entry, the value was a new device's
+  that an old one forwarded without the array stamp: the correction is
+  withdrawn when the real entry arrives, and its stamp stays as the removal
+  mark.
+- Manifest digests of the affected records change once after the update, so
+  the devices re-exchange them once.
+
 ## Rules for every sync change
 
 1. A new `Hello` or message field is `#[serde(default)]`, and its absence means

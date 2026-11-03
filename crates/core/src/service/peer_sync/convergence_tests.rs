@@ -18,6 +18,7 @@ use crate::model::store::{Binding, StoreKind, SubType};
 use crate::model::transaction::Transaction;
 use crate::service::StoreExtras;
 use crate::service::contacts::ContactDraft;
+use crate::service::envelopes::EnvelopeDraft;
 use crate::service::test_support::{amount, income, store, usd};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -46,6 +47,10 @@ const ENABLED_KINDS: &[Edit] = &[
     Edit::DeleteSavings,
     Edit::ToggleEmergency,
     Edit::SetInflation,
+    Edit::CreateEnvelope,
+    Edit::FundEnvelope,
+    Edit::MoveBetweenEnvelopes,
+    Edit::DeleteEnvelope,
 ];
 
 const DEFAULT_SEEDS: &[u64] = &[1, 2, 3, 4, 5];
@@ -77,6 +82,10 @@ enum Edit {
     DeleteSavings,
     ToggleEmergency,
     SetInflation,
+    CreateEnvelope,
+    FundEnvelope,
+    MoveBetweenEnvelopes,
+    DeleteEnvelope,
 }
 
 /// splitmix64: tiny, deterministic, good enough for choosing steps.
@@ -270,6 +279,10 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
         Edit::CreateSavings | Edit::DeleteSavings | Edit::ToggleEmergency | Edit::SetInflation => {
             apply_fund(kind, vault, rng, ledger);
         }
+        Edit::CreateEnvelope
+        | Edit::FundEnvelope
+        | Edit::MoveBetweenEnvelopes
+        | Edit::DeleteEnvelope => apply_envelope(kind, vault, rng, ledger),
         Edit::DeleteContact => {
             let ids: Vec<String> = vault
                 .doc
@@ -421,6 +434,65 @@ fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &m
                 if settled.is_ok() {
                     break;
                 }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn envelope_ids(vault: &UnlockedVault) -> Vec<String> {
+    vault
+        .doc
+        .envelopes
+        .iter()
+        .map(|envelope| envelope.id.clone())
+        .collect()
+}
+
+/// Envelope journal edits. A refusal (nothing free, nothing to release) is a
+/// normal outcome of a random edit.
+fn apply_envelope(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+    let number = ledger.fresh();
+    let ids = envelope_ids(vault);
+    match kind {
+        Edit::CreateEnvelope => {
+            let store_id = vault.doc.stores[0].id.clone();
+            let _ = vault.create_envelope(EnvelopeDraft {
+                store_id,
+                name: format!("envelope {number}"),
+                asset: usd(),
+                target: None,
+                goal_id: None,
+            });
+        }
+        Edit::FundEnvelope => {
+            let Some(id) = pick(rng, &ids).cloned() else {
+                return;
+            };
+            // Mostly top-ups, sometimes a release.
+            let sign = if rng.below(4) == 0 { "-" } else { "" };
+            let by = amount(&format!("{sign}{}", 1 + rng.below(20)));
+            if vault.fund_envelope(&id, by).is_ok() {
+                ledger.touched_after.insert(format!("envelopes:{id}"));
+            }
+        }
+        Edit::MoveBetweenEnvelopes => {
+            let (Some(from), Some(to)) = (pick(rng, &ids).cloned(), pick(rng, &ids).cloned())
+            else {
+                return;
+            };
+            let by = amount(&format!("{}", 1 + rng.below(10)));
+            if from != to && vault.move_between_envelopes(&from, &to, by).is_ok() {
+                ledger.touched_after.insert(format!("envelopes:{from}"));
+                ledger.touched_after.insert(format!("envelopes:{to}"));
+            }
+        }
+        Edit::DeleteEnvelope => {
+            let Some(id) = pick(rng, &ids).cloned() else {
+                return;
+            };
+            if vault.delete_envelope(&id).is_ok() {
+                ledger.deleted.insert(format!("envelopes:{id}"));
             }
         }
         _ => {}
@@ -590,6 +662,23 @@ fn run(seed: u64, steps: usize) {
                     "{context}: removed entry {key} came back on device {index}"
                 );
             }
+        }
+    }
+    for (index, device) in devices.iter().enumerate() {
+        for envelope in &device.doc.envelopes {
+            assert_eq!(
+                envelope.allocated,
+                envelope.moves_sum(),
+                "{context}: envelope {} is not the sum of its moves on device {index}",
+                envelope.id
+            );
+            assert!(
+                !envelope
+                    .moves
+                    .iter()
+                    .any(|entry| entry.id.starts_with("fix:")),
+                "{context}: a correction appeared between new devices on device {index}"
+            );
         }
     }
     for (index, device) in devices.iter().enumerate() {

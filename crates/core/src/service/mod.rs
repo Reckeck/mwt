@@ -401,6 +401,9 @@ impl UnlockedVault {
             vault.set_device(device_id);
         }
         vault.answer_crypto();
+        // Before tracking starts, so the opening entries of envelopes (the
+        // same on every device) are never stamped as an edit.
+        let envelopes_settled = vault.settle_envelopes();
         vault.start_tracking()?;
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
@@ -414,6 +417,7 @@ impl UnlockedVault {
         // Sync history written before secrets were hidden.
         let secrets_scrubbed = vault.scrub_sync_secrets();
         if migrated
+            || envelopes_settled
             || categories_added
             || graphs_migrated
             || incomplete

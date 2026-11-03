@@ -3,7 +3,7 @@
 import { emptyTxFilter } from '@/shared/lib/tx-filter'
 import { txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockListTxs, mockTxGraph } from './explore'
-import { mockEnvelopeView, mockEnvelopes, mockWalletCatalog } from './catalog'
+import { mockEnvelopeView, mockEnvelopes, mockWalletCatalog, recordEnvelopeMove } from './catalog'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockFilterTxs, mockStores } from './demo'
@@ -33,6 +33,7 @@ export const walletsCommands: MockCommands = {
       name: draft.name.trim(),
       asset: draft.asset,
       allocated: '0',
+      moves: [],
       target: draft.target,
       goal_id: draft.goal_id,
       created_at: new Date().toISOString(),
@@ -56,7 +57,7 @@ export const walletsCommands: MockCommands = {
     if (amount > 0 && Number(view.free) < amount)
       throw { code: 'INSUFFICIENT_FUNDS', message: `only ${view.free} is free` }
     if (Number(envelope.allocated) + amount < 0) throw { code: 'INVALID_INPUT', message: 'the envelope holds less' }
-    envelope.allocated = String(Number(envelope.allocated) + amount)
+    recordEnvelopeMove(envelope, amount)
     return resolve(envelope)
   },
   fund_goal: ({ body }) => {
@@ -75,6 +76,7 @@ export const walletsCommands: MockCommands = {
         name: goal.name,
         asset: position.asset,
         allocated: '0',
+        moves: [],
         target: null,
         goal_id: goal.id,
         created_at: new Date().toISOString(),
@@ -82,7 +84,7 @@ export const walletsCommands: MockCommands = {
       mockEnvelopes.push(envelope)
     }
     const take = Math.max(0, Math.min(Number(input.amount), Number(mockEnvelopeView(envelope).free)))
-    envelope.allocated = String(Number(envelope.allocated) + take)
+    recordEnvelopeMove(envelope, take)
     return resolve(String(take))
   },
   move_between_envelopes: ({ body }) => {
@@ -90,8 +92,8 @@ export const walletsCommands: MockCommands = {
     const from = mockEnvelopes.find((entry) => entry.id === input.from)
     const to = mockEnvelopes.find((entry) => entry.id === input.to)
     if (!from || !to) throw { code: 'MISSING', message: 'envelope' }
-    from.allocated = String(Number(from.allocated) - Number(input.amount))
-    to.allocated = String(Number(to.allocated) + Number(input.amount))
+    recordEnvelopeMove(from, -Number(input.amount))
+    recordEnvelopeMove(to, Number(input.amount))
     return resolve({})
   },
   delete_envelope: ({ args }) => {

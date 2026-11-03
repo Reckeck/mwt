@@ -509,6 +509,10 @@ impl UnlockedVault {
         // The typed document may serialize a little differently from the
         // merged JSON (defaults, number forms): the tracker starts from what
         // a save will actually see, or the next save would restamp the batch.
+        // Envelopes that arrived whole (made by a device with no journal) get
+        // their opening entry; a merged journal's total is re-derived. Both
+        // are the same on every device, so they are not stamped as edits.
+        self.settle_envelopes();
         let settled = self.doc_value()?;
         if let Some(tracker) = self.tracker.as_mut() {
             tracker.rebase(&settled);
@@ -1427,6 +1431,8 @@ fn applied_of(batch: &SyncBatch) -> AppliedBatch {
 mod clock_tests;
 #[cfg(test)]
 mod convergence_tests;
+#[cfg(test)]
+mod envelope_tests;
 #[cfg(test)]
 mod log_tests;
 #[cfg(test)]

@@ -18,6 +18,13 @@ export function mockImportSettings(): ImportSettings {
 }
 
 export const mockEnvelopes: Envelope[] = []
+/** Change what an envelope holds the way the core does: an entry of its journal, `allocated` is the sum. */
+export function recordEnvelopeMove(envelope: Envelope, delta: number): void {
+  if (delta === 0) return
+  envelope.moves.push({ id: crypto.randomUUID(), delta: String(delta), at: new Date().toISOString() })
+  envelope.allocated = String(envelope.moves.reduce((sum, entry) => sum + Number(entry.delta), 0))
+}
+
 export const mockDebtTerms: DebtTerms[] = []
 
 export function mockEnvelopeView(envelope: Envelope): EnvelopeView {

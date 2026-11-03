@@ -172,12 +172,16 @@ The rules are checked on write (`validate_placement`, `check_sub_account` in
 
 ### Envelopes
 
-`VaultDoc.envelopes: Vec<Envelope { id, store_id, name, asset, allocated, target?, goal_id?, created_at }>` —
+`VaultDoc.envelopes: Vec<Envelope { id, store_id, name, asset, allocated, moves, target?, goal_id?, created_at }>` —
 a virtual marking of the balance: money does not move, part of the asset's remainder in
 the wallet is marked as taken. Money can be set aside only from the free
 remainder (`INSUFFICIENT_FUNDS`); a spend dipping into envelopes is allowed, but the
 preview warns (`PreviewWarning::IntoEnvelopes`), and the envelope
 is shown as `short`. A goal linked to an envelope counts progress from it.
+`moves: Vec<EnvelopeMove { id, delta, at }>` is the journal of changes (additive,
+`#[serde(default)]`); `allocated` is always its sum and is written only through
+`Envelope::record_move`, so top-ups made on two devices both count after sync. An envelope
+from before the journal gets the entry `open:<envelope id>` on open.
 
 ### StoreScope — the report area
 

@@ -105,6 +105,7 @@ impl UnlockedVault {
             name: draft.name.trim().to_string(),
             asset: draft.asset,
             allocated: Amount::ZERO,
+            moves: Vec::new(),
             target: draft.target,
             goal_id: draft.goal_id,
             created_at: now_iso(),
@@ -158,9 +159,7 @@ impl UnlockedVault {
                 "the envelope holds less than that".into(),
             ));
         }
-        let target = self.envelope_mut(id)?;
-        target.allocated += amount;
-        let out = target.clone();
+        let out = self.shift_envelope(id, amount)?;
         self.persist()?;
         Ok(out)
     }
@@ -189,8 +188,8 @@ impl UnlockedVault {
                 "the envelope holds less than that".into(),
             ));
         }
-        self.envelope_mut(from)?.allocated -= amount;
-        self.envelope_mut(to)?.allocated += amount;
+        self.shift_envelope(from, -amount)?;
+        self.shift_envelope(to, amount)?;
         self.persist()
     }
 
@@ -278,6 +277,26 @@ impl UnlockedVault {
                 .unwrap_or(Amount::ZERO)
         });
         Some(total)
+    }
+
+    /// Change what an envelope holds by `delta` as an entry of its journal
+    /// (the only way to touch `allocated`).
+    fn shift_envelope(&mut self, id: &str, delta: Amount) -> Result<Envelope> {
+        let at = now_iso();
+        let envelope = self.envelope_mut(id)?;
+        envelope.record_move(delta, &at);
+        Ok(envelope.clone())
+    }
+
+    /// Give every envelope its opening entry and re-derive `allocated` from
+    /// the journal (on open, and after a sync brought records in). True when
+    /// something changed.
+    pub(crate) fn settle_envelopes(&mut self) -> bool {
+        let mut changed = false;
+        for envelope in &mut self.doc.envelopes {
+            changed |= envelope.settle_moves();
+        }
+        changed
     }
 
     fn envelope_mut(&mut self, id: &str) -> Result<&mut Envelope> {
@@ -383,5 +402,78 @@ mod tests {
             vault.fund_goal(&goal.id, &cash, amount("10")).unwrap(),
             Amount::ZERO
         );
+    }
+
+    #[test]
+    fn allocated_is_the_sum_of_moves() {
+        use crate::model::store::StoreScope;
+        use crate::service::GoalDraft;
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        vault.add_transaction(income(&cash, "500", "pay")).unwrap();
+        let check = |vault: &UnlockedVault| {
+            for envelope in &vault.doc.envelopes {
+                assert_eq!(
+                    envelope.allocated,
+                    envelope.moves_sum(),
+                    "{}",
+                    envelope.name
+                );
+            }
+        };
+        let trip = vault.create_envelope(draft(&cash, "Trip")).unwrap();
+        let tax = vault.create_envelope(draft(&cash, "Tax")).unwrap();
+        assert!(trip.moves.is_empty(), "a new envelope holds nothing");
+        check(&vault);
+        // fund, release, move, update, goal
+        let funded = vault.fund_envelope(&trip.id, amount("70")).unwrap();
+        assert_eq!(funded.moves.len(), 1);
+        check(&vault);
+        vault.fund_envelope(&trip.id, amount("-10")).unwrap();
+        check(&vault);
+        vault
+            .move_between_envelopes(&trip.id, &tax.id, amount("20"))
+            .unwrap();
+        check(&vault);
+        assert_eq!(vault.doc.envelopes[0].allocated, amount("40"));
+        assert_eq!(vault.doc.envelopes[1].allocated, amount("20"));
+        vault
+            .update_envelope(&trip.id, draft(&cash, "Trip 2"))
+            .unwrap();
+        check(&vault);
+        let goal = vault
+            .create_goal(GoalDraft {
+                name: "Cushion".into(),
+                active: true,
+                target_amount: amount("500"),
+                currency: "usd".into(),
+                starts_at: "2026-01-01T00:00:00Z".into(),
+                deadline: None,
+                priority: 3,
+                monthly_commitment: None,
+                scope: StoreScope {
+                    store_ids: vec![cash.clone()],
+                    include_children: true,
+                },
+                scenario_id: None,
+                expected_return: None,
+            })
+            .unwrap();
+        vault.fund_goal(&goal.id, &cash, amount("100")).unwrap();
+        vault.fund_goal(&goal.id, &cash, amount("50")).unwrap();
+        check(&vault);
+        // a zero change leaves no entry
+        let before = vault.doc.envelopes[0].moves.len();
+        vault.fund_envelope(&trip.id, Amount::ZERO).unwrap();
+        assert_eq!(vault.doc.envelopes[0].moves.len(), before);
+        // an envelope from before the journal gets its opening entry
+        vault.doc.envelopes[1].moves.clear();
+        assert!(vault.settle_envelopes());
+        assert_eq!(
+            vault.doc.envelopes[1].moves[0].id,
+            format!("open:{}", tax.id)
+        );
+        assert!(!vault.settle_envelopes());
+        check(&vault);
     }
 }
