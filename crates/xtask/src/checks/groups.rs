@@ -200,15 +200,17 @@ mod tests {
         assert!(choose(&known, &strings(&["fmt"]), &strings(&["fmt"])).is_err());
     }
 
-    /// Mirrors the selections of ci.yml (check-linux, check-frontend, frontend-layout, the platform jobs).
+    /// Mirrors the selections of ci.yml (check-linux, frontend-static, frontend-e2e, frontend-layout, the
+    /// platform jobs).
     #[test]
     fn the_ci_selections_cover_every_task() {
         let known = names();
         let mut covered = choose(&known, &[], &strings(&["@frontend", "@platforms"])).unwrap();
+        covered.extend(choose(&known, &strings(&["@static"]), &[]).unwrap());
         covered.extend(
             choose(
                 &known,
-                &strings(&["@frontend"]),
+                &strings(&["@browser"]),
                 &strings(&["layout", "links"]),
             )
             .unwrap(),

@@ -113,7 +113,7 @@ jobs:
       packages: write
 
   # ------------------------------------------------------------------ checks
-  # ci.yml as a reusable workflow (deps, check-linux, check-frontend, check-android,
+  # ci.yml as a reusable workflow (deps, check-linux, frontend-static/-e2e/-layout, check-android,
   # clippy-windows, ci-ok): the same lanes as in a PR. Its push trigger is gone, this is the run.
   # The builds do not wait for it; `publish` does, and a red result cancels the run.
   checks:
