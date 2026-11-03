@@ -107,10 +107,12 @@ pub(crate) struct Run {
     pub started_ms: i64,
     /// Given by the main device: our place in the queue to take over.
     pub rank: u32,
-    pub next_rank: u32,
     pub backup_done: bool,
     /// Devices the user declined or put off: not offered again until sync restarts.
     pub declined: std::collections::BTreeSet<String>,
+    /// Instances whose clock is too far off to sync with: not dialed until the
+    /// user retries (`reconnect`) or sync restarts.
+    pub skewed: std::collections::BTreeSet<String>,
     /// Sessions with the main device that ended before going live, in a row:
     /// each waits longer before connecting again.
     pub retries: u32,
@@ -272,15 +274,33 @@ pub(crate) fn teardown<H: Host>(app: &H) -> Option<Run> {
     run
 }
 
+/// This device's role in the current run (`None` while sync is off).
+pub fn current_role(app: &AppHandle) -> Option<SyncRole> {
+    Host::hub(app).run.as_ref().map(|run| run.role)
+}
+
+/// Whether some connected device has its window focused.
+pub fn any_link_focused(app: &AppHandle) -> bool {
+    Host::hub(app).links.values().any(|link| link.view.focused)
+}
+
 // -- roles ----------------------------------------------------------------------
 
 /// Whether the background jobs (automations, workflows, imports, alerts,
 /// reminders) run here: everywhere but on a client of a main device.
-pub fn runs_jobs(app: &AppHandle) -> bool {
+///
+/// While searching, they wait too if a usable main device is in sight: it is
+/// about to be connected to.
+pub fn runs_jobs<H: Host>(app: &H) -> bool {
+    let skipped = discovery::skipped_instances(app, false);
     Host::hub(app)
         .run
         .as_ref()
-        .is_none_or(|run| run.role != SyncRole::Client)
+        .is_none_or(|run| match run.role {
+            SyncRole::Client => false,
+            SyncRole::Searching => run.mains.keys().all(|main| skipped.contains(main)),
+            _ => true,
+        })
 }
 
 /// Whether a system notification should show on this device: here when
@@ -439,8 +459,10 @@ pub fn forget_device<H: Host>(app: &H, device_id: &str) {
         .map(|link| link.instance.clone())
         .collect();
     if let Some(run) = hub.run.as_mut() {
-        for instance in &instances {
+        let known = run.peer_instances.get(device_id).cloned();
+        for instance in instances.iter().chain(known.iter()) {
             run.mains.remove(instance);
+            run.others.remove(instance);
         }
     }
     for link in hub.links.values() {

@@ -41,6 +41,23 @@ const CALLBACK_EVERY: Duration = Duration::from_secs(5);
 const CALLBACK_RETRY: Duration = Duration::from_secs(30);
 /// Failed connections to a main device before it is taken for gone.
 const MAX_DIAL_FAILURES: u32 = 3;
+/// How long after handing the main role over this device looks for the new main.
+const DEMOTE_ELECTION: Duration = Duration::from_secs(1);
+/// The spread of the per-instance jitter added to a retry.
+const JITTER_MS: u64 = 3000;
+
+/// When a device that lost or failed to reach the main device elects again:
+/// `base`, plus 2 s per place in the queue, plus a jitter fixed per instance
+/// (FNV-1a of its name), so devices of equal rank do not all elect at once.
+pub(crate) fn retry_delay(instance: &str, rank: u32, base: Duration) -> Duration {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in instance.bytes() {
+        hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
+    }
+    base + Duration::from_millis(
+        u64::from(rank.min(super::link::MAX_RANK)) * 2000 + hash % JITTER_MS,
+    )
+}
 
 /// A device of the group that is not the main one, as discovery saw it.
 pub(crate) struct Seen {
@@ -49,7 +66,7 @@ pub(crate) struct Seen {
 }
 
 /// Instances of the devices this device must not dial: the ones that told it
-/// they cut it off (`SyncState::cut_by`) and, with `own_pauses`, the ones it
+/// they cut it off (`SyncState::cut_by`), the forgotten ones and, with `own_pauses`, the ones it
 /// paused itself. Their own calls are still accepted (the handshake does not
 /// look here). The vault is read before the hub is locked.
 pub(crate) fn skipped_instances<H: Host>(
@@ -60,15 +77,15 @@ pub(crate) fn skipped_instances<H: Host>(
         .with_vault(|vault| {
             let state = vault.sync_state();
             let mut ids: Vec<String> = state.cut_by.keys().cloned().collect();
+            // A forgotten device is not dialed (it can still call, and pairing
+            // again lifts the revocation).
+            ids.extend(state.revoked_device_ids());
             if own_pauses {
                 ids.extend(state.paused.iter().cloned());
             }
             Ok(ids)
         })
         .unwrap_or_default();
-    if devices.is_empty() {
-        return Default::default();
-    }
     let hub = hub(app);
     let Some(run) = hub.run.as_ref() else {
         return Default::default();
@@ -76,6 +93,7 @@ pub(crate) fn skipped_instances<H: Host>(
     devices
         .iter()
         .filter_map(|device| run.peer_instances.get(device).cloned())
+        .chain(run.skewed.iter().cloned())
         .collect()
 }
 
@@ -184,9 +202,9 @@ pub(crate) async fn start(app: &AppHandle, generation: u64, vault_id: &str) -> R
             port,
             started_ms: i64::try_from(now_ms()).unwrap_or(i64::MAX),
             rank: 0,
-            next_rank: 0,
             backup_done: false,
             declined: Default::default(),
+            skewed: Default::default(),
             retries: 0,
             dial_attempt: 0,
             peer_instances: Default::default(),
@@ -379,10 +397,19 @@ fn demote_locked(hub: &mut super::Hub) {
     }
 }
 
-/// Hand the main role over (the preferred device is here).
-pub(crate) fn demote(app: &AppHandle) {
-    demote_locked(&mut hub(app));
+/// Hand the main role over (the preferred device is here). The new main is
+/// already in `mains`, so the election follows shortly and this device
+/// connects to it.
+pub(crate) fn demote<H: Host>(app: &H) {
+    let generation = {
+        let mut hub = hub(app);
+        demote_locked(&mut hub);
+        hub.run.as_ref().map(|run| run.generation)
+    };
     super::emit_status(app);
+    if let Some(generation) = generation {
+        elect_later(app, generation, DEMOTE_ELECTION);
+    }
 }
 
 pub(crate) async fn connect<H: Host>(
@@ -442,10 +469,15 @@ pub(crate) async fn connect<H: Host>(
         }
     }
     super::emit_status(app);
+    let (own, rank) = hub(app)
+        .run
+        .as_ref()
+        .map(|run| (run.instance.clone(), run.rank))
+        .unwrap_or_default();
     elect_later(
         app,
         generation,
-        CALLBACK_AFTER + CALLBACK_EVERY + ELECTION_WAIT,
+        retry_delay(&own, rank, CALLBACK_AFTER + CALLBACK_EVERY + ELECTION_WAIT),
     );
 }
 
@@ -474,6 +506,7 @@ pub(crate) fn reconnect(app: &AppHandle) {
             return;
         };
         let now = Instant::now();
+        run.skewed.clear();
         for seen in run.others.values_mut() {
             seen.next_call = now;
         }
@@ -584,7 +617,6 @@ pub(crate) fn elect_step<H: Host>(app: &H, generation: u64) -> Option<(String, V
 
 fn become_main_locked(run: &mut Run) {
     run.role = SyncRole::Main;
-    run.next_rank = 0;
     if let Some(announce) = &run.announce {
         let _ = announce.register(true);
     }
@@ -604,7 +636,7 @@ pub(crate) fn become_main(app: &AppHandle) {
 /// The link to the main device closed: wait our turn, then take over or
 /// connect to whoever did.
 pub(crate) fn main_lost(app: &AppHandle, generation: u64) {
-    let (rank, retries) = {
+    let (own, rank, retries) = {
         let mut guard = hub(app);
         let hub = &mut *guard;
         // A twin of a live link closed: the main device is still here.
@@ -617,7 +649,7 @@ pub(crate) fn main_lost(app: &AppHandle, generation: u64) {
         }
         run.role = SyncRole::Searching;
         run.retries = run.retries.saturating_add(1);
-        (run.rank, run.retries)
+        (run.instance.clone(), run.rank, run.retries)
     };
     super::emit_status(app);
     // A session that keeps failing (declined, refused, unreachable) is not
@@ -632,6 +664,6 @@ pub(crate) fn main_lost(app: &AppHandle, generation: u64) {
     elect_later(
         app,
         generation,
-        Duration::from_millis(1000 + u64::from(rank.min(30)) * 2000 + backoff),
+        retry_delay(&own, rank, Duration::from_millis(1000 + backoff)),
     );
 }

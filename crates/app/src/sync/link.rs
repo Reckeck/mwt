@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -29,13 +29,32 @@ use trade_core::sync::protocol::{
 };
 use trade_core::sync::registry::UNION_DAYS;
 use trade_core::sync::session::{Channel, ClockWatch, Handshake, Skew, skew_of};
-use trade_core::sync::stamp::now_ms;
+use trade_core::sync::stamp::{device_tag, now_ms};
 
 use super::host::Host;
 use super::{
     CLOCK_EVENT, Link, OFFER_EVENT, Order, PAIRING_EVENT, PLAN_EVENT, SYNCED_EVENT, set_phase,
     set_progress, update_link,
 };
+
+/// The largest place in the queue to take over the main role.
+pub(crate) const MAX_RANK: u32 = 5;
+
+/// The rank handed to a client at hello time: the number of clients that are
+/// live at the main device now (so reconnects do not make it grow).
+pub(crate) fn client_rank(hub: &super::Hub) -> u32 {
+    let live = hub
+        .links
+        .values()
+        .filter(|link| link.view.phase == SyncPhase::Live)
+        .count();
+    u32::try_from(live).unwrap_or(MAX_RANK).min(MAX_RANK)
+}
+
+/// An older main device counts ranks up for ever: the client caps them.
+pub(crate) fn capped_rank(rank: u32) -> u32 {
+    rank.min(MAX_RANK)
+}
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 /// A device that forgot the caller waits this long for an explicit pairing
@@ -53,6 +72,7 @@ const DECISION_TIMEOUT: Duration = Duration::from_millis(2500);
 const DEBOUNCE: Duration = Duration::from_secs(1);
 #[cfg(test)]
 const DEBOUNCE: Duration = Duration::from_millis(50);
+pub(super) const STABLE_TIME_REPORTS: u32 = 3;
 const TIME_EVERY: Duration = Duration::from_secs(30);
 const SILENCE_LIMIT: Duration = Duration::from_secs(95);
 /// Notices older than this that arrive by sync are logged, not shown.
@@ -158,11 +178,7 @@ pub(crate) async fn run<H: Host>(
         &mut to_main,
     )
     .await;
-    let peer = app
-        .hub()
-        .links
-        .remove(&session_id)
-        .map(|link| (link.view.device_id, link.view.name));
+    let peer = forget_link(&app, &session_id);
     if let Err(Stop::Failed(err)) = &result {
         if matches!(
             err,
@@ -198,19 +214,33 @@ pub(crate) async fn run<H: Host>(
     super::emit_status(&app);
 }
 
-struct Peer {
-    session_id: String,
-    device_id: String,
-    name: String,
-    remote_key: String,
+/// Drop the link from the hub; the device id and name it showed.
+pub(super) fn forget_link<H: Host>(app: &H, session_id: &str) -> Option<(String, String)> {
+    let mut hub = app.hub();
+    let gone = hub
+        .links
+        .remove(session_id)
+        .map(|link| (link.view.device_id, link.view.name));
+    // The closed link may have been the focused one: tell the rest.
+    super::send_presence(&mut hub);
+    gone
+}
+
+pub(super) struct Peer {
+    pub(super) session_id: String,
+    pub(super) device_id: String,
+    pub(super) name: String,
+    pub(super) remote_key: String,
     /// The vault this session was opened for (taken at the hello): a vault
     /// switched under a running session must not receive its records.
-    vault_id: String,
+    pub(super) vault_id: String,
     /// The other side handed the main role over while this session was not
     /// live yet (pairing, exchange, a question): done when `live` starts.
-    take_main_heard: AtomicBool,
+    pub(super) take_main_heard: AtomicBool,
     /// Same for the order to hand it over (`hand_over_if_preferred`).
-    take_main_ordered: AtomicBool,
+    pub(super) take_main_ordered: AtomicBool,
+    /// Consecutive `Time` reports within the warn bound since the last drift.
+    pub(super) stable_reports: AtomicU32,
 }
 
 /// Merge the other side's trusted devices and tell the other links; whether
@@ -305,12 +335,10 @@ async fn session<H: Host>(
     })?;
     let settings = app.settings();
     let (main_here, rank, instance, unreached) = {
-        let mut hub = app.hub();
-        match hub.run.as_mut().filter(|run| run.generation == generation) {
+        let hub = app.hub();
+        match hub.run.as_ref().filter(|run| run.generation == generation) {
             Some(run) if run.role == SyncRole::Main => {
-                let rank = run.next_rank;
-                run.next_rank += 1;
-                (true, rank, run.instance.clone(), false)
+                (true, client_rank(&hub), run.instance.clone(), false)
             }
             Some(run) => (false, 0, run.instance.clone(), run.unreached),
             None => return Err(Stop::Quiet),
@@ -408,7 +436,15 @@ async fn session<H: Host>(
     let callback = dialer == main_here;
     let mut watch = ClockWatch::new(theirs.now_ms, now_ms());
     match skew_of(watch.offset()) {
-        Skew::Refuse(_) => return Err(failure(PeerSyncFailure::ClockSkew)),
+        Skew::Refuse(_) => {
+            // Redialing cannot help: skip this device until the user retries.
+            if !theirs.instance.is_empty()
+                && let Some(run) = app.hub().run.as_mut()
+            {
+                run.skewed.insert(theirs.instance.clone());
+            }
+            return Err(failure(PeerSyncFailure::ClockSkew));
+        }
         Skew::Warn(_) => {
             app.emit(
                 CLOCK_EVENT,
@@ -439,7 +475,7 @@ async fn session<H: Host>(
                 return Err(Stop::Quiet);
             }
             run.role = SyncRole::Client;
-            run.rank = theirs.rank;
+            run.rank = capped_rank(theirs.rank);
         }
         // Both connections came up at once: keep the one the client dialed.
         let twins: Vec<(String, bool)> = hub
@@ -500,6 +536,7 @@ async fn session<H: Host>(
         vault_id: vault_id.clone(),
         take_main_heard: AtomicBool::new(false),
         take_main_ordered: AtomicBool::new(false),
+        stable_reports: AtomicU32::new(0),
     };
 
     let mut reason = None;
@@ -679,23 +716,67 @@ fn decline<H: Host>(app: &H, peer: &Peer) {
 
 // -- first exchange -------------------------------------------------------------
 
-fn check_stamps<H: Host>(
+pub(super) fn check_stamps<H: Host>(
     app: &H,
     peer: &Peer,
     watch: &ClockWatch,
     records: &[(String, RecordState)],
 ) {
     let now = now_ms();
+    let own_tag = device_tag(&peer.device_id);
     if records
         .iter()
         .filter_map(|(_, state)| state.latest())
+        // Only what the peer wrote itself: a stamp it relays says nothing
+        // about its own clock.
+        .filter(|stamp| stamp.device == own_tag)
         .any(|stamp| watch.check_stamp(stamp.wall, now).is_some())
     {
         mark_unreliable(app, peer, watch);
     }
 }
 
+/// A `Time` message from the peer, seen at `local` (ms).
+pub(super) fn time_report<H: Host>(
+    app: &H,
+    peer: &Peer,
+    watch: &mut ClockWatch,
+    remote: u64,
+    local: u64,
+) {
+    if watch.observe(remote, local).is_some() {
+        mark_unreliable(app, peer, watch);
+        return;
+    }
+    let stable = peer.stable_reports.fetch_add(1, Ordering::SeqCst) + 1;
+    if stable >= STABLE_TIME_REPORTS {
+        clear_unreliable(app, peer, watch);
+    }
+}
+
+fn clear_unreliable<H: Host>(app: &H, peer: &Peer, watch: &ClockWatch) {
+    let marked = app
+        .hub()
+        .links
+        .get(&peer.session_id)
+        .is_some_and(|link| link.view.unreliable);
+    if !marked {
+        return;
+    }
+    update_link(app, &peer.session_id, |link| link.view.unreliable = false);
+    app.emit(
+        CLOCK_EVENT,
+        SyncClockEvent {
+            session_id: peer.session_id.clone(),
+            peer_name: peer.name.clone(),
+            offset_ms: watch.offset(),
+            unreliable: false,
+        },
+    );
+}
+
 fn mark_unreliable<H: Host>(app: &H, peer: &Peer, watch: &ClockWatch) {
+    peer.stable_reports.store(0, Ordering::SeqCst);
     let already = app
         .hub()
         .links
@@ -820,9 +901,7 @@ async fn exchange<H: Host>(
                     }
                 }
                 Some(Message::Time { now_ms: remote }) => {
-                    if watch.observe(remote, now_ms()).is_some() {
-                        mark_unreliable(app, peer, watch);
-                    }
+                    time_report(app, peer, watch, remote, now_ms());
                 }
                 Some(Message::Presence { focused }) => presence(app, peer, focused),
                 Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),
@@ -997,9 +1076,7 @@ async fn apply_shown<H: Host>(
                         }
                         Some(Message::TakeMain) => peer.take_main_heard.store(true, Ordering::SeqCst),
                         Some(Message::Time { now_ms: remote }) => {
-                            if watch.observe(remote, now_ms()).is_some() {
-                                mark_unreliable(app, peer, watch);
-                            }
+                            time_report(app, peer, watch, remote, now_ms());
                         }
                         Some(Message::Presence { focused }) => presence(app, peer, focused),
                         Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),
@@ -1198,9 +1275,7 @@ async fn live<H: Host>(
                         }
                     }
                     Some(Message::Time { now_ms: remote }) => {
-                        if watch.observe(remote, now_ms()).is_some() {
-                            mark_unreliable(app, peer, watch);
-                        }
+                        time_report(app, peer, watch, remote, now_ms());
                     }
                     Some(Message::Presence { focused }) => presence(app, peer, focused),
                     Some(Message::Peers { peers }) => {

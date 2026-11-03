@@ -87,12 +87,20 @@ pub struct NotificationSnapshot {
     pub fx: HashMap<String, Amount>,
     /// Title shown for a notice whose details are hidden.
     pub hidden_body: String,
+    /// The device was a sync client when this was written: the main shows
+    /// the notices, so a locked client fires none. An older snapshot has no
+    /// field and counts as not a client.
+    #[serde(default)]
+    pub role_client: bool,
 }
 
 impl NotificationSnapshot {
     /// The scheduled notices whose time came and that were not shown yet,
     /// stamped as shown now.
     pub fn due(&self, now: i64, shown: &HashSet<String>) -> Vec<NoticeRecord> {
+        if self.role_client {
+            return Vec::new();
+        }
         self.notices
             .iter()
             .filter(|scheduled| {
@@ -118,6 +126,9 @@ impl NotificationSnapshot {
         fired: &HashSet<String>,
         ru: bool,
     ) -> Vec<(String, NoticeRecord)> {
+        if self.role_client {
+            return Vec::new();
+        }
         self.alerts
             .iter()
             .filter(|alert| !fired.contains(&alert.alert_id))
@@ -292,6 +303,7 @@ impl UnlockedVault {
             } else {
                 "Details after unlocking".into()
             },
+            role_client: false,
         }
     }
 
@@ -379,6 +391,60 @@ mod tests {
                 .due_notices(april + 120, "UTC", true)
                 .unwrap()
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_locked_client_snapshot_fires_nothing() {
+        let (_dir, mut vault) = empty_vault();
+        vault
+            .create_reminder("Аренда", "2026-03-05T09:00:00Z", None)
+            .unwrap();
+        vault
+            .doc
+            .price_alerts
+            .push(crate::model::planning::PriceAlert {
+                id: "alert".into(),
+                asset: btc(),
+                condition: AlertCondition::Above,
+                price: amount("60000"),
+                currency: "usd".into(),
+                active: true,
+                triggered_at: None,
+                store_id: None,
+                repeats: false,
+            });
+        let mut snapshot =
+            vault.notification_snapshot(secs_or_now("2026-03-01T00:00:00Z"), "UTC", true);
+        let later = secs_or_now("2026-03-05T10:00:00Z");
+        let prices = HashMap::from([(btc().key(), amount("61000"))]);
+        assert_eq!(snapshot.due(later, &HashSet::new()).len(), 1);
+        assert_eq!(snapshot.alert_hits(&prices, &HashSet::new(), true).len(), 1);
+        snapshot.role_client = true;
+        assert!(snapshot.due(later, &HashSet::new()).is_empty());
+        assert!(
+            snapshot
+                .alert_hits(&prices, &HashSet::new(), true)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn an_old_snapshot_without_role_still_fires() {
+        let (_dir, mut vault) = empty_vault();
+        vault
+            .create_reminder("Аренда", "2026-03-05T09:00:00Z", None)
+            .unwrap();
+        let snapshot =
+            vault.notification_snapshot(secs_or_now("2026-03-01T00:00:00Z"), "UTC", true);
+        let mut value = serde_json::to_value(&snapshot).unwrap();
+        value.as_object_mut().unwrap().remove("role_client");
+        let old: NotificationSnapshot = serde_json::from_value(value).unwrap();
+        assert!(!old.role_client);
+        assert_eq!(
+            old.due(secs_or_now("2026-03-05T10:00:00Z"), &HashSet::new())
+                .len(),
+            1
         );
     }
 

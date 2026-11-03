@@ -140,9 +140,9 @@ fn device(name: &str, mut vault: UnlockedVault, role: SyncRole) -> (TestHost, Ev
         port: 0,
         started_ms: 0,
         rank: 0,
-        next_rank: 0,
         backup_done: false,
         declined: Default::default(),
+        skewed: Default::default(),
         retries: 0,
         dial_attempt: 0,
         peer_instances: Default::default(),
@@ -1937,4 +1937,377 @@ async fn take_main_outside_live_is_not_dropped() {
         !demoted_early.load(std::sync::atomic::Ordering::SeqCst),
         "the main device must not step down before the client answered"
     );
+}
+
+// -- stage T: time and presence ---------------------------------------------------
+
+fn peer_of(session: &str, device_id: &str) -> super::link::Peer {
+    super::link::Peer {
+        session_id: session.into(),
+        device_id: device_id.into(),
+        name: "Peer".into(),
+        remote_key: String::new(),
+        vault_id: String::new(),
+        take_main_heard: Default::default(),
+        take_main_ordered: Default::default(),
+        stable_reports: Default::default(),
+    }
+}
+
+fn unreliable(host: &TestHost, session: &str) -> bool {
+    host.hub()
+        .links
+        .get(session)
+        .is_some_and(|link| link.view.unreliable)
+}
+
+fn single_device_host() -> (tempfile::TempDir, TestHost) {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, _right) = same_vault(dir.path());
+    let (host, _events) = device("Laptop", left, SyncRole::Main);
+    (dir, host)
+}
+
+#[tokio::test]
+async fn relayed_future_stamp_does_not_mark_relay_unreliable() {
+    use trade_core::sync::RecordState;
+    use trade_core::sync::session::ClockWatch;
+    use trade_core::sync::stamp::{Stamp, device_tag, now_ms};
+
+    let (_dir, host) = single_device_host();
+    let _orders = fake_link(&host, "relay", "key", SyncPhase::Live);
+    let peer = peer_of("relay", "relay-device-1234567890");
+    let watch = ClockWatch::new(now_ms(), now_ms());
+    let future = now_ms() + trade_core::sync::session::SKEW_FINE_MS * 4;
+    let stamped = |device: &str| {
+        vec![(
+            "key".to_string(),
+            RecordState {
+                tombstone: Some(Stamp::new(future, 0, &device_tag(device))),
+                ..Default::default()
+            },
+        )]
+    };
+
+    // Authored by a third device: the relay is not to blame.
+    super::link::check_stamps(&host, &peer, &watch, &stamped("third-device-abcdefgh"));
+    assert!(!unreliable(&host, "relay"));
+    // Authored by the relay itself.
+    super::link::check_stamps(&host, &peer, &watch, &stamped("relay-device-1234567890"));
+    assert!(unreliable(&host, "relay"));
+}
+
+#[tokio::test]
+async fn unreliable_clears_after_stable_time_reports() {
+    use trade_core::sync::session::{ClockWatch, DRIFT_MS};
+
+    let (_dir, host) = single_device_host();
+    let _orders = fake_link(&host, "link", "key", SyncPhase::Live);
+    let peer = peer_of("link", "peer-device-1234567890");
+    let base = 1_000_000_000u64;
+    let mut watch = ClockWatch::new(base, base);
+
+    // A clock that went backwards marks the link.
+    let mut local = base + 30_000;
+    super::link::time_report(&host, &peer, &mut watch, base - 1, local);
+    assert!(unreliable(&host, "link"));
+    // Reports back within the bound: two are not enough, the third clears.
+    for step in 1..=3u64 {
+        local += 30_000;
+        super::link::time_report(&host, &peer, &mut watch, local + 1_000, local);
+        let expected = step < super::link::STABLE_TIME_REPORTS as u64;
+        assert_eq!(unreliable(&host, "link"), expected, "after report {step}");
+    }
+    // A new drift sets it again.
+    local += 30_000;
+    super::link::time_report(&host, &peer, &mut watch, local + DRIFT_MS + 5_000, local);
+    assert!(unreliable(&host, "link"));
+}
+
+#[tokio::test]
+async fn clock_skew_refusal_is_not_retried() {
+    use trade_core::sync::protocol::{Hello, Message, encode};
+    use trade_core::sync::session::{Handshake, SKEW_REFUSE_MS};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (left, _right) = same_vault(dir.path());
+    let (main, main_events) = device("Laptop", left, SyncRole::Main);
+    let main_errors = errors_only(main_events);
+    let raw_key = DeviceKey::generate().unwrap();
+    let public_key = raw_key.public_hex();
+    main.with_vault(|vault| vault.sync_trust_peer("raw-device", "Raw", &public_key))
+        .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = main.clone();
+    let session = tokio::spawn(async move {
+        let (stream, peer) = listener.accept().await.unwrap();
+        super::link::run(server, stream, peer, 1, false).await;
+    });
+
+    let stream = TcpStream::connect(addr).await.unwrap();
+    let (mut reader, mut writer) = stream.into_split();
+    let mut handshake = Handshake::initiator(&raw_key).unwrap();
+    while !handshake.is_finished() {
+        if handshake.my_turn() {
+            super::link::write_frame(&mut writer, &handshake.write().unwrap())
+                .await
+                .unwrap();
+        } else {
+            handshake
+                .read(&super::link::read_frame(&mut reader).await.unwrap())
+                .unwrap();
+        }
+    }
+    let mut channel = handshake.finish().unwrap();
+    let vault_id = main.with_vault(|vault| Ok(vault.doc.id.clone())).unwrap();
+    let hello = Message::Hello(Hello {
+        protocol: trade_core::sync::protocol::PROTOCOL_VERSION,
+        format: trade_core::VAULT_FORMAT_VERSION,
+        device_id: "raw-device".into(),
+        device_name: "Raw".into(),
+        proof: channel.proof(&vault_id),
+        now_ms: trade_core::sync::stamp::now_ms() + SKEW_REFUSE_MS + 3_600_000,
+        main: false,
+        prefer_main: false,
+        needs_pairing: false,
+        rank: 0,
+        instance: "skewed-instance".into(),
+        unreached: false,
+        app_version: String::new(),
+    });
+    for frame in channel.seal(&encode(&hello).unwrap()).unwrap() {
+        super::link::write_frame(&mut writer, &frame).await.unwrap();
+    }
+    let joined = tokio::time::timeout(Duration::from_secs(10), session)
+        .await
+        .expect("session task ended");
+    assert!(joined.is_ok());
+    until("the refusal is reported", || {
+        !main_errors.lock().unwrap().is_empty()
+    })
+    .await;
+
+    // The instance is not dialed or called back any more.
+    assert!(super::discovery::skipped_instances(&main, false).contains("skewed-instance"));
+    assert!(super::discovery::skipped_instances(&main, true).contains("skewed-instance"));
+    main.hub().run.as_mut().unwrap().role = SyncRole::Searching;
+    super::discovery::connect(&main, 1, "skewed-instance".into(), vec![addr]).await;
+    assert_eq!(main.hub().run.as_ref().unwrap().role, SyncRole::Searching);
+    assert_eq!(
+        main_errors.lock().unwrap().len(),
+        1,
+        "the error is shown once"
+    );
+
+    // A manual retry clears it.
+    main.hub().run.as_mut().unwrap().skewed.clear();
+    assert!(!super::discovery::skipped_instances(&main, false).contains("skewed-instance"));
+}
+
+#[tokio::test]
+async fn presence_is_resent_when_a_link_closes() {
+    let (_dir, host) = single_device_host();
+    let mut stays = fake_link(&host, "stays", "key-a", SyncPhase::Live);
+    let _leaves = fake_link(&host, "leaves", "key-b", SyncPhase::Live);
+    host.hub().links.get_mut("leaves").unwrap().view.focused = true;
+
+    super::link::forget_link(&host, "leaves");
+
+    let order = tokio::time::timeout(Duration::from_secs(5), stays.recv())
+        .await
+        .expect("an order arrives");
+    assert!(matches!(order, Some(Order::Presence(false))));
+}
+
+// -- stage T: roles and time (slice 2) --------------------------------------------
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn ex_main_connects_to_the_new_main_after_handover() {
+    let (_dir, host) = single_device_host();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    host.hub()
+        .run
+        .as_mut()
+        .unwrap()
+        .mains
+        .insert("new-main".into(), vec![addr]);
+
+    super::discovery::demote(&host);
+
+    assert_eq!(host.hub().run.as_ref().unwrap().role, SyncRole::Searching);
+    // The election follows the handover on its own, no discovery event needed.
+    let accepted = tokio::time::timeout(Duration::from_secs(10), listener.accept()).await;
+    assert!(accepted.is_ok(), "the ex-main dials the new main");
+    assert_eq!(host.hub().run.as_ref().unwrap().role, SyncRole::Client);
+}
+
+#[test]
+fn clients_do_not_all_become_main_after_a_failed_dial() {
+    use super::discovery::retry_delay;
+    let base = Duration::from_secs(14);
+    // Same rank, different instances: different delays, inside [base, base + 3 s).
+    let delays: Vec<Duration> = ["phone-a1b2", "tablet-c3d4", "laptop-e5f6", "watch-0718"]
+        .iter()
+        .map(|instance| retry_delay(instance, 1, base))
+        .collect();
+    for delay in &delays {
+        assert!(*delay >= base + Duration::from_secs(2));
+        assert!(*delay < base + Duration::from_secs(2) + Duration::from_millis(3000));
+    }
+    let distinct: std::collections::BTreeSet<_> = delays.iter().collect();
+    assert!(
+        distinct.len() > 1,
+        "instances must not elect at the same moment"
+    );
+    // Deterministic per instance.
+    assert_eq!(retry_delay("phone-a1b2", 1, base), delays[0]);
+    // The rank still orders the queue.
+    assert!(retry_delay("phone-a1b2", 2, base) > retry_delay("phone-a1b2", 1, base));
+}
+
+#[tokio::test]
+async fn searching_with_a_main_in_sight_runs_no_jobs() {
+    let (_dir, host) = single_device_host();
+    let addr: std::net::SocketAddr = "127.0.0.1:1".parse().unwrap();
+    let set_role = |role: SyncRole| host.hub().run.as_mut().unwrap().role = role;
+    set_role(SyncRole::Searching);
+    assert!(super::runs_jobs(&host), "nobody in sight: jobs run");
+    host.hub()
+        .run
+        .as_mut()
+        .unwrap()
+        .mains
+        .insert("seen-main".into(), vec![addr]);
+    assert!(!super::runs_jobs(&host), "a main in sight: no jobs");
+    // A main that skipped this device (clock) does not count as in sight.
+    host.hub()
+        .run
+        .as_mut()
+        .unwrap()
+        .skewed
+        .insert("seen-main".into());
+    assert!(super::runs_jobs(&host));
+    set_role(SyncRole::Main);
+    assert!(super::runs_jobs(&host));
+    set_role(SyncRole::Client);
+    assert!(!super::runs_jobs(&host));
+}
+
+#[tokio::test]
+async fn rank_does_not_grow_with_reconnects() {
+    let (_dir, host) = single_device_host();
+    let _first = fake_link(&host, "one", "k1", SyncPhase::Live);
+    for _ in 0..10 {
+        assert_eq!(super::link::client_rank(&host.hub()), 1);
+    }
+    let _second = fake_link(&host, "two", "k2", SyncPhase::Live);
+    let _pending = fake_link(&host, "three", "k3", SyncPhase::Exchanging);
+    assert_eq!(super::link::client_rank(&host.hub()), 2);
+    let mut keep = Vec::new();
+    for number in 0..8 {
+        keep.push(fake_link(
+            &host,
+            &format!("more{number}"),
+            "k",
+            SyncPhase::Live,
+        ));
+    }
+    assert_eq!(super::link::client_rank(&host.hub()), super::link::MAX_RANK);
+    // An old main hands out an ever larger rank: the client caps it.
+    assert_eq!(super::link::capped_rank(40), super::link::MAX_RANK);
+    assert_eq!(super::link::capped_rank(2), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn handover_during_an_open_question_keeps_one_main() {
+    use std::sync::atomic::Ordering;
+    let both_down = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (main, client, _seen) = question_with(
+        |phone| phone.0.settings.lock().unwrap().sync.prefer_main = true,
+        Duration::from_millis(900),
+        |_, _| {},
+    )
+    .await;
+    // Sample while the question is open: the main steps down only after the
+    // client took the role, so some device is always main.
+    let watcher = {
+        let (main, client, flag) = (main.clone(), client.clone(), both_down.clone());
+        tokio::spawn(async move {
+            for _ in 0..600 {
+                let demoted = main.0.demoted.load(Ordering::SeqCst) > 0;
+                let took = client.0.took_main.load(Ordering::SeqCst) > 0;
+                if demoted && !took {
+                    flag.store(true, Ordering::SeqCst);
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+    };
+    bounded("the handover completes", async {
+        until("both sides handed over", || {
+            client.0.took_main.load(Ordering::SeqCst) == 1
+                && main.0.demoted.load(Ordering::SeqCst) == 1
+        })
+        .await;
+    })
+    .await;
+    watcher.await.unwrap();
+    assert!(
+        !both_down.load(Ordering::SeqCst),
+        "never two non-main devices"
+    );
+    assert_eq!(main.0.took_main.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_forgotten_main_is_not_dialed_again() {
+    let (_dir, host) = single_device_host();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    host.with_vault(|vault| vault.sync_trust_peer("dev-main", "Main", "main-key"))
+        .unwrap();
+    {
+        let mut hub = host.hub();
+        let run = hub.run.as_mut().unwrap();
+        run.role = SyncRole::Searching;
+        run.peer_instances
+            .insert("dev-main".into(), "inst-main".into());
+        run.mains.insert("inst-main".into(), vec![addr]);
+        run.others.insert(
+            "inst-main".into(),
+            super::discovery::Seen {
+                addrs: vec![addr],
+                next_call: std::time::Instant::now(),
+            },
+        );
+    }
+    host.with_vault(|vault| vault.sync_forget_peer("dev-main"))
+        .unwrap();
+    super::forget_device(&host, "dev-main");
+    {
+        let hub = host.hub();
+        let run = hub.run.as_ref().unwrap();
+        assert!(run.mains.is_empty() && run.others.is_empty());
+    }
+    // Discovery shows it again: it is skipped, no dial, no election.
+    host.hub()
+        .run
+        .as_mut()
+        .unwrap()
+        .mains
+        .insert("inst-main".into(), vec![addr]);
+    assert!(super::discovery::skipped_instances(&host, false).contains("inst-main"));
+    assert!(super::discovery::elect_step(&host, 1).is_none());
+    super::discovery::connect(&host, 1, "inst-main".into(), vec![addr]).await;
+    let dialed = tokio::time::timeout(Duration::from_millis(500), listener.accept()).await;
+    assert!(dialed.is_err(), "a forgotten device is not dialed");
+    assert_eq!(host.hub().run.as_ref().unwrap().role, SyncRole::Searching);
+
+    // Pairing it again lifts the skip.
+    host.with_vault(|vault| vault.sync_trust_peer("dev-main", "Main", "main-key"))
+        .unwrap();
+    assert!(!super::discovery::skipped_instances(&host, false).contains("inst-main"));
 }
