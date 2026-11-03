@@ -219,7 +219,7 @@ pub fn workspace_version(cargo_toml: &str) -> Option<String> {
 /// The remote the release tags live on: `MWT_RELEASE_REMOTE`, else `github` (a working copy
 /// whose `origin` is not GitHub, e.g. a mirror), else `origin` (in GitHub Actions the checkout's
 /// origin is GitHub itself, and there is no `github` remote).
-fn release_remote(root: &Path) -> String {
+pub fn release_remote(root: &Path) -> String {
     if let Some(remote) = std::env::var("MWT_RELEASE_REMOTE")
         .ok()
         .filter(|value| !value.is_empty())

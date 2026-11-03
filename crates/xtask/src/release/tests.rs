@@ -109,3 +109,118 @@ fn metainfo_adds_or_redates_a_release() {
     assert!(set_metainfo_release("<component/>", "0.2.0", "2026-11-01").is_err());
     assert!(set_metainfo_release("<release version=\"0.2.0\"/>", "0.2.0", "2026-11-01").is_err());
 }
+
+#[test]
+fn tag_versions_come_with_or_without_the_boundary_prefix() {
+    assert_eq!(tag_version("v1.2.3"), Some([1, 2, 3]));
+    assert_eq!(tag_version("release-base/v1.2.3\n"), Some([1, 2, 3]));
+    assert_eq!(tag_version("release-base/v1.2.3-4"), None);
+    assert_eq!(tag_version(""), None);
+}
+
+#[test]
+fn the_commit_range_starts_at_the_boundary_or_covers_the_unreleased() {
+    assert_eq!(
+        list_args(Some("release-base/v0.2.0")),
+        ["release-base/v0.2.0..HEAD", "--strip", "all"]
+    );
+    assert_eq!(list_args(None), ["--unreleased", "--strip", "all"]);
+}
+
+#[test]
+fn cliff_counts_from_the_release_base_tag() {
+    let cliff =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../cliff.toml")).unwrap();
+    assert!(cliff.contains(r#"tag_pattern = "^release-base/v[0-9]+\\.[0-9]+\\.[0-9]+$""#));
+    assert!(cliff.contains(&format!(r#"initial_tag = "{BASE_TAG_PREFIX}0.1.0""#)));
+}
+
+fn git_in(dir: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args([
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "init.defaultBranch=development",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+fn temp_repo(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("xtask-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    git_in(&dir, &["init", "-q"]);
+    dir
+}
+
+fn commit_in(dir: &Path, message: &str) {
+    git_in(dir, &["commit", "-q", "--allow-empty", "-m", message]);
+}
+
+/// The history a release leaves: the release tip is squashed into main (the tag `vX.Y.Z` is on
+/// the squash, which is no ancestor of development), main is merged back with `-s ours`.
+#[test]
+fn the_boundary_follows_the_release_base_through_the_squash_and_the_back_merge() {
+    let dir = temp_repo("boundary");
+    assert_eq!(boundary(&dir), None, "no commits yet");
+    commit_in(&dir, "feat: one");
+    let first = git_in(&dir, &["rev-parse", "HEAD"]);
+    assert_eq!(boundary(&dir), None, "before the first release");
+    commit_in(&dir, "chore(release): v0.2.0");
+    git_in(&dir, &["tag", "release-base/v0.2.0"]);
+    git_in(&dir, &["tag", "v0.2.0-1"]);
+    commit_in(&dir, "fix: during the release");
+    // the squash on main: its parent is not in development
+    git_in(&dir, &["switch", "-q", "-c", "main", &first]);
+    commit_in(&dir, "chore(release): v0.2.0 (squash)");
+    git_in(&dir, &["tag", "v0.2.0"]);
+    git_in(&dir, &["switch", "-q", "development"]);
+    assert_eq!(
+        boundary(&dir).as_deref(),
+        Some("release-base/v0.2.0"),
+        "the squash tag is not an ancestor of development"
+    );
+    // the back-merge: the release tip + main by `-s ours`, merged into development
+    git_in(
+        &dir,
+        &[
+            "switch",
+            "-q",
+            "-C",
+            "backmerge/v0.2.0",
+            "release-base/v0.2.0",
+        ],
+    );
+    git_in(&dir, &["merge", "-q", "-s", "ours", "-m", "back", "main"]);
+    git_in(&dir, &["switch", "-q", "development"]);
+    git_in(
+        &dir,
+        &["merge", "-q", "--no-ff", "-m", "merge", "backmerge/v0.2.0"],
+    );
+    commit_in(&dir, "feat: next");
+    git_in(&dir, &["tag", "v0.2.1-1"]);
+    assert_eq!(
+        boundary(&dir).as_deref(),
+        Some("release-base/v0.2.0"),
+        "the tag of main is behind the release base, a pre-release is no boundary"
+    );
+    // a hotfix branch from main: the release tag is the boundary
+    git_in(&dir, &["switch", "-q", "-c", "hotfix/x", "main"]);
+    commit_in(&dir, "fix: hot");
+    assert_eq!(boundary(&dir).as_deref(), Some("v0.2.0"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

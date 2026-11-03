@@ -5,7 +5,7 @@ use clap::{Args, Parser, Subcommand};
 use crate::bundle::BundleArgs;
 use crate::output::OutputArgs;
 use crate::version::Kind;
-use crate::{checks, publish, tauri_config};
+use crate::{checks, publish, release, tauri_config};
 
 #[derive(Parser)]
 #[command(name = "xtask", about = "Build and check engine")]
@@ -39,7 +39,11 @@ pub enum Command {
     /// Delete the old pre-releases (and their tags) beyond the newest N.
     #[command(hide = true)]
     PrunePrereleases(publish::PruneArgs),
-    /// Open the pull request main -> development after a release.
+    /// Start a release: branch release/vX.Y.Z from development with the bump, the tag
+    /// release-base/vX.Y.Z, a PR into main with auto-merge (squash).
+    #[command(hide = true)]
+    ReleaseStart(release::start::StartArgs),
+    /// Bring main back into development after a release (`--merge`: a branch, a PR, auto-merge).
     #[command(hide = true)]
     Backmerge(publish::BackmergeArgs),
     /// Push multi-wallet-tracker-bin to the AUR (for an archlinux container).

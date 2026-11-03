@@ -18,6 +18,7 @@ only a mirror without CI.
 | `ci.yml` | PR into `development`/`main`, manually, `workflow_call` from `release.yml` | checks: Rust, frontend, layout/links in shards, Android, clippy for Windows/macOS, the `ci-ok` summary |
 | `images.yml` | called from `ci.yml`, manually | builds and pushes the CI images to ghcr if the tag does not exist yet |
 | `release.yml` | push to `development` (pre-release `X.Y.Z-N`) and `main` (release `X.Y.Z`), manually | version, checks, builds, packages, GitHub Release publication |
+| `release-start.yml` | manually (on `development`, no inputs) | `cargo xtask release-start`: branch `release/vX.Y.Z`, bump, tag `release-base/vX.Y.Z`, PR into `main` with auto-merge (squash) |
 | `audit.yml` | PR, push to `development`/`main`, daily, manually | dependency audit (`cargo xtask audit`) |
 | `dependabot-merge.yml` | Sunday, manually | merges green Dependabot updates |
 | `cache-cleanup.yml` | PR closed, branch deleted | deletes the branch's caches |
@@ -101,7 +102,8 @@ commands and does nothing on GitHub):
 |---|---|
 | `cargo xtask publish --version V --dir D [--pre]` | `SHA256SUMS`, then `gh release create`; `--pre` for a pre-release `X.Y.Z-N` from `development` |
 | `cargo xtask prune-prereleases [--keep N]` | keep the `N` latest pre-releases (by default `PRERELEASES_KEPT` or 10), delete the rest and their tags |
-| `cargo xtask backmerge --version V` | a PR `main` into `development` after a release |
+| `cargo xtask release-start [--dry-run]` | start a release from `development`: `release/vX.Y.Z` with the bump and CHANGELOG, tag `release-base/vX.Y.Z`, PR into `main` (creates `main` the first time), `gh pr merge --auto --squash`; real runs in GitHub Actions only |
+| `cargo xtask backmerge --version V --merge` | after a release: branch `backmerge/vX.Y.Z` (release tip + `merge -s ours main` after the tree check; a plain merge of `main` after a hotfix), PR into `development`, `gh pr merge --auto --merge`; without `--merge` only a plain PR `main` into `development` |
 | `cargo xtask publish-aur --version V --dir D` | push `multi-wallet-tracker-bin` to AUR (`AUR_SSH_PRIVATE_KEY`) |
 
 The token is `GH_TOKEN` (or `GITHUB_TOKEN`). They are called by
@@ -308,10 +310,13 @@ version, images ──► frontend ──► build (linux | android | windows) �
   error does not fail the run).
 - `aur` (prod) is `publish-aur` in an archlinux container; without the secret
   `AUR_SSH_PRIVATE_KEY` the step is skipped with a warning.
-- `backmerge` (prod, `pull-requests: write`) is a PR `main` → `development`; the
-  token is `GITHUB_TOKEN` (the setting
-  "Allow GitHub Actions to create and approve pull requests" is needed); an
-  error does not fail the run.
+- `backmerge` (prod) is `xtask backmerge --merge`: the token is the GitHub App's
+  (`actions/create-github-app-token`, secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY`), so the
+  PR into `development` gets its checks; the checkout has the full history. A conflict (or
+  a `main` whose tree is not the release tip's) fails the job after the release is already published,
+  with the reason in the Job Summary and the plain PR `main` → `development` left open.
+- `version` is skipped on a push that creates a branch (`github.event.created`): the first
+  `release-start` creates `main` from `development`, and that push must not release anything.
 - `build-macos` is written but turned off (`if: false`, like `clippy-macos`): to
   turn it on, remove `if: false`, add it to `needs` and to the `publish`
   condition, and pass `--macos` to `xtask check-release-files`.
@@ -392,10 +397,34 @@ The secrets that the workflows read (besides the automatic `GITHUB_TOKEN`):
 | `ANDROID_KEY_ALIAS` | the same | |
 | `AUR_SSH_PRIVATE_KEY` | `aur` (`publish-aur`) | a key added to the AUR account |
 | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | updater signatures (`release.yml`, Linux and Windows builds) | the content of `updater.key` and its password; no signatures without them |
+| `RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY` | the token of the release GitHub App (`release-start.yml`, the `backmerge` job of `release.yml`) | the App id and the content of its private key (.pem); the App needs contents, pull requests and workflows write. Without them the release cannot start (a PR or a push from `GITHUB_TOKEN` does not start the checks) |
 
 The key files (`updater.key`, `updater.key.pub`, the Android keystore and passwords) live outside the
 repository on the maintainer machine (`~/.mwt-keys/`). The Android keystore was regenerated on
 2026-11-03.
+
+Repository settings the release flow needs (Settings → General → Pull Requests): `allow_auto_merge`
+and `allow_merge_commit` on (and squash merging, which is on already); `gh api -X PATCH repos/OWNER/REPO
+-F allow_auto_merge=true -F allow_merge_commit=true` sets them. The ruleset of `main` and `development`
+requires `ci-ok` and has no bypass actor.
+
+### Release flow: release-start, release.yml, backmerge
+
+```
+release-start.yml (by hand, development)
+  └─ xtask release-start: main from development (first run) ─ release/vX.Y.Z (bump, tag release-base/vX.Y.Z)
+       └─ PR release/vX.Y.Z -> main, auto-merge (squash)   ── ci.yml must be green
+            └─ squash commit on main ─► release.yml: publish vX.Y.Z ─► aur, backmerge
+                 └─ xtask backmerge --merge: backmerge/vX.Y.Z = release tip + `merge -s ours main`
+                      └─ PR -> development, auto-merge (merge commit)
+```
+
+Why: one commit per release on `main` (squash), and the tag `vX.Y.Z` on it is not an ancestor of
+development. Version and CHANGELOG are therefore counted from `release-base/*` (`cliff.toml`
+`tag_pattern`, `xtask::release::boundary`), which development reaches through the back-merge;
+`vX.Y.Z` serves the release itself and the pre-release numbering (`xtask version` reads the tags of the
+remote, `release-base/*` does not match `v*`). The pre-release notes start at the nearest
+tag of `v*` and `release-base/*` (`publish::describe_since`). Details: [workflow.md](workflow.md#release).
 
 For the details of "without the secret", see the secrets table in the
 "release.yml" section.

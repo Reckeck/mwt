@@ -2,6 +2,11 @@
 //! list of CHANGELOG.md and the next version from the Conventional Commits (git-cliff,
 //! cliff.toml). See docs/workflow.md. Needs a git checkout with the history (a jj side
 //! workspace has no `.git`).
+//!
+//! What counts as "since the last release": a release is squashed into `main`, so its tag
+//! `vX.Y.Z` is not an ancestor of development. The boundary is the tag `release-base/vX.Y.Z`
+//! on the tip of the release branch (`start`), which development reaches through the back-merge.
+//! On a hotfix branch (from main) the nearest `vX.Y.Z` is the boundary.
 
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -9,6 +14,12 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, bail};
 
 use crate::changelog::{self, EMPTY_LIST};
+
+pub mod flow;
+pub mod start;
+
+/// The tag on the tip of a release branch: the boundary of "since the last release".
+pub const BASE_TAG_PREFIX: &str = "release-base/v";
 
 const METAINFO: &str = "packaging/flatpak/dev.mwt.MultiWalletTracker.metainfo.xml";
 
@@ -37,6 +48,12 @@ fn last_release(tags: &str) -> Option<Version> {
     tags.lines()
         .filter_map(|tag| parse(tag.strip_prefix('v')?))
         .max()
+}
+
+/// The version in a git-cliff tag name: `v1.2.3` and `release-base/v1.2.3` both give 1.2.3.
+fn tag_version(text: &str) -> Option<Version> {
+    let name = text.trim().rsplit('/').next()?;
+    parse(name.strip_prefix('v').unwrap_or(name))
 }
 
 /// The version `level` asks for. `released` is the last release, `bumped` is what git-cliff
@@ -189,8 +206,45 @@ fn cliff(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+/// The nearest release boundary in the history of HEAD: a `release-base/vX.Y.Z` or a release tag
+/// `vX.Y.Z` (never a pre-release `vX.Y.Z-N`). `None` before the first release.
+fn boundary(root: &Path) -> Option<String> {
+    let output = Command::new("git")
+        .args([
+            "describe",
+            "--tags",
+            "--abbrev=0",
+            "--match",
+            "release-base/v[0-9]*.[0-9]*.[0-9]*",
+            "--match",
+            "v[0-9]*.[0-9]*.[0-9]*",
+            "--exclude",
+            "v*-*",
+            "HEAD",
+        ])
+        .current_dir(root)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    let tag = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (output.status.success() && !tag.is_empty()).then_some(tag)
+}
+
+/// The git-cliff arguments for the commits since `boundary`.
+fn list_args(boundary: Option<&str>) -> Vec<String> {
+    let mut args = match boundary {
+        Some(tag) => vec![format!("{tag}..HEAD")],
+        None => vec!["--unreleased".to_string()],
+    };
+    args.extend(["--strip".to_string(), "all".to_string()]);
+    args
+}
+
 fn commit_list(root: &Path) -> Result<String> {
-    let body = cliff(root, &["--unreleased", "--strip", "all"])?;
+    let args = list_args(boundary(root).as_deref());
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let body = cliff(root, &args)?;
     Ok(if body.is_empty() {
         EMPTY_LIST.into()
     } else {
@@ -214,7 +268,8 @@ pub fn run_changelog(root: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn run_bump(root: &Path, level: &str) -> Result<()> {
+/// The next version for `level`, with a note for the log: nothing is written.
+pub fn next_for(root: &Path, level: &str) -> Result<(String, String)> {
     require_git(root)?;
     let current_text = crate::version::tauri_version(root)?;
     let current = parse(&current_text)
@@ -222,8 +277,7 @@ pub fn run_bump(root: &Path, level: &str) -> Result<()> {
     let released = last_release(&git_tags(root)?);
     let next = next_version(level, current, released, || {
         let text = cliff(root, &["--bumped-version"])?;
-        parse(text.trim_start_matches('v'))
-            .with_context(|| format!("git-cliff said «{text}», not a version"))
+        tag_version(&text).with_context(|| format!("git-cliff said «{text}», not a version"))
     })?;
     if let Some(last) = released
         && next <= last
@@ -234,41 +288,50 @@ pub fn run_bump(root: &Path, level: &str) -> Result<()> {
             show(last)
         );
     }
-    let (next, date) = (
+    let note = released.map_or(" (first release)".into(), |last| {
+        format!(" (last release {})", show(last))
+    });
+    Ok((
         show(next),
-        chrono::Utc::now().format("%Y-%m-%d").to_string(),
-    );
+        format!("version {current_text} → {}{note}", show(next)),
+    ))
+}
 
+/// Writes the version `next` (X.Y.Z) into every file and promotes `[Unreleased]` to its section.
+pub fn write_bump(root: &Path, next: &str) -> Result<()> {
+    let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
     // Everything is computed before the first write: a failing file leaves the tree untouched.
     let listed = changelog::with_commits(&read(root, "CHANGELOG.md")?, &commit_list(root)?)?;
     let mut edits = vec![
-        ("CHANGELOG.md", changelog::promote(&listed, &next, &date)?),
+        ("CHANGELOG.md", changelog::promote(&listed, next, &date)?),
         (
             "crates/app/tauri.conf.json",
-            set_tauri_version(&read(root, "crates/app/tauri.conf.json")?, &next)?,
+            set_tauri_version(&read(root, "crates/app/tauri.conf.json")?, next)?,
         ),
         (
             "Cargo.toml",
-            set_workspace_version(&read(root, "Cargo.toml")?, &next)?,
+            set_workspace_version(&read(root, "Cargo.toml")?, next)?,
         ),
     ];
     let mut lock = read(root, "Cargo.lock")?;
     for krate in ["trade-app", "trade-core"] {
-        lock = set_lock_version(&lock, krate, &next)?;
+        lock = set_lock_version(&lock, krate, next)?;
     }
     edits.push(("Cargo.lock", lock));
     edits.push((
         METAINFO,
-        set_metainfo_release(&read(root, METAINFO)?, &next, &date)?,
+        set_metainfo_release(&read(root, METAINFO)?, next, &date)?,
     ));
     for (rel, text) in &edits {
         write(root, rel, text)?;
     }
+    Ok(())
+}
 
-    let note = released.map_or(" (first release)".into(), |last| {
-        format!(" (last release {})", show(last))
-    });
-    println!("version {current_text} → {next}{note}");
+pub fn run_bump(root: &Path, level: &str) -> Result<()> {
+    let (next, note) = next_for(root, level)?;
+    write_bump(root, &next)?;
+    println!("{note}");
     println!("commit it: jj describe -m \"chore(release): v{next}\"");
     Ok(())
 }

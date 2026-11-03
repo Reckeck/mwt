@@ -2,6 +2,7 @@
 #
 #   push to development   pre-release X.Y.Z-N (dev channel: "Multi Wallet Tracker Dev")
 #   push to main          release X.Y.Z (prod channel), then the back-merge PR and the AUR
+#                         (main comes from release-start.yml: a squashed release PR, or a hotfix)
 #   workflow_dispatch     any branch, channel dev|prod; `publish: false` builds and publishes nothing
 #
 # Order (builds run alongside the checks; nothing is published until the checks are green):
@@ -50,6 +51,8 @@ jobs:
   # every later job runs: only this job compiles Rust. The tag lookup needs the checkout's
   # credentials (read-only token).
   version:
+    # Creating `main` (release-start does it once) is a push too: no release comes of it.
+    if: ${{ !(github.event_name == 'push' && github.event.created) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -517,30 +520,37 @@ jobs:
         run: bin/xtask publish-aur --version "$BUILD_VERSION" --dir release
 
   # ------------------------------------------------------------------ backmerge
-  # The PR main -> development after a release, from GITHUB_TOKEN: needs Settings -> Actions ->
-  # "Allow GitHub Actions to create and approve pull requests", and its checks do not start by
-  # themselves. A failure is only a message: the PR can be opened by hand.
+  # Main goes back into development (`xtask backmerge --merge`): a branch backmerge/vX.Y.Z, a PR into
+  # development, auto-merge with a merge commit. The App token (not GITHUB_TOKEN) so that the PR's
+  # checks start. A conflict leaves the PR main -> development open and fails this job with the
+  # reason in the Job Summary; the release itself is already published.
   backmerge:
     needs: [version, publish]
     if: ${{ needs.version.outputs.channel == 'prod' && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     permissions:
       contents: read
-      pull-requests: write
     steps:
+      - name: App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      # Full history and the App token as the push credential.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: xtask
           path: bin
       - name: Make xtask executable
         run: chmod +x bin/xtask
-      - name: Open the PR
+      - name: Merge main back into development
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BUILD_VERSION: ${{ needs.version.outputs.version }}
-        run: bin/xtask backmerge --version "$BUILD_VERSION"
+        run: bin/xtask backmerge --merge --version "$BUILD_VERSION"

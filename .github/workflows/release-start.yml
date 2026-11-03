@@ -1,0 +1,47 @@
+# Starts a release by hand (Actions -> release-start -> Run workflow, on development; no inputs):
+# `cargo xtask release-start` makes the branch release/vX.Y.Z from development with the bump and the
+# CHANGELOG section, tags its tip release-base/vX.Y.Z and opens a PR into main with auto-merge
+# (squash). Green checks merge it, release.yml publishes the release and runs the back-merge.
+# The first run creates `main` from development. Flow and settings: docs/workflow.md, docs/ci.md.
+name: release-start
+
+on:
+  workflow_dispatch:
+
+# One release start at a time; a second dispatch waits, nothing is cancelled half way.
+concurrency:
+  group: release-start
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  start:
+    if: ${{ github.ref == 'refs/heads/development' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # The App token (contents, pull requests, workflows: write), not GITHUB_TOKEN: the pushes and
+      # the PR it makes must start the checks (`ci-ok`) that auto-merge waits for.
+      - name: App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      # Full history and tags (git-cliff, the last release) and the token as the push credential.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+      # node, pnpm and Rust as mise.toml pins them (no versions in this file); git-cliff is an npm tool.
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          cache: false
+      - name: Install npm tools
+        run: cargo xtask ci-pnpm-install
+      - name: Start the release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: cargo xtask release-start

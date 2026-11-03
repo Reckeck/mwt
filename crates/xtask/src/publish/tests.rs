@@ -358,3 +358,57 @@ fn an_unset_or_empty_aur_key_is_missing() {
     assert!(!super::aur::key_missing(Some("/root/key")));
     assert!(super::aur::NO_KEY_WARNING.starts_with("::warning::"));
 }
+
+fn git_run(dir: &Path, args: &[&str]) -> String {
+    let output = std::process::Command::new("git")
+        .args(["-c", "user.name=test", "-c", "user.email=t@example.com"])
+        .args(["-c", "commit.gpgsign=false"])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "git {args:?}");
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+#[test]
+fn the_first_pre_release_after_a_release_starts_at_the_release_base() {
+    let dir = std::env::temp_dir().join(format!("xtask-since-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let commit = |message: &str| git_run(&dir, &["commit", "-q", "--allow-empty", "-m", message]);
+    git_run(&dir, &["init", "-q", "-b", "development"]);
+    commit("feat: old");
+    let first = git_run(&dir, &["rev-parse", "HEAD"]);
+    commit("chore(release): v0.2.0");
+    git_run(&dir, &["tag", "release-base/v0.2.0"]);
+    // main: the squash of the release, tagged; merged back with `-s ours`
+    git_run(&dir, &["switch", "-q", "-c", "main", &first]);
+    commit("chore(release): v0.2.0 (squash)");
+    git_run(&dir, &["tag", "v0.2.0"]);
+    git_run(&dir, &["switch", "-q", "development"]);
+    git_run(&dir, &["merge", "-q", "-s", "ours", "-m", "back", "main"]);
+    commit("feat: next");
+    let sha = git_run(&dir, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        describe_since(&dir, "v0.2.1-1", &sha).as_deref(),
+        Some("release-base/v0.2.0")
+    );
+    // a pre-release tag is closer still
+    git_run(&dir, &["tag", "v0.2.1-1"]);
+    commit("fix: later");
+    let later = git_run(&dir, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        describe_since(&dir, "v0.2.1-2", &later).as_deref(),
+        Some("v0.2.1-1")
+    );
+    // no tag at all: the whole history
+    let bare = std::env::temp_dir().join(format!("xtask-since-bare-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&bare);
+    std::fs::create_dir_all(&bare).unwrap();
+    git_run(&bare, &["init", "-q"]);
+    git_run(&bare, &["commit", "-q", "--allow-empty", "-m", "feat: x"]);
+    assert_eq!(describe_since(&bare, "v0.1.0", "HEAD"), None);
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&bare);
+}

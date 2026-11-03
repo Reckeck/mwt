@@ -92,7 +92,7 @@ src/                  # frontend (Vue 3 + Pinia + TanStack Query + vue-i18n + EC
 mise.toml             # tools + env + tasks
 .github/workflows/    # CI/CD (GitHub Actions): checks, images, Linux/Windows/Android builds, Flatpak/pacman, release (docs/ci.md)
 scripts/ci/           # CI job logic (bootstrap, bundle collection, Android signing, release, AUR)
-crates/xtask/         # cargo xtask: the gate (check with task groups) and bundles (build)
+crates/xtask/         # cargo xtask: the gate (check with task groups), bundles (build), release (release/, publish/)
 packaging/            # flatpak/ (manifest + metainfo), aur/ (PKGBUILD.in + render.sh), linux/ (postrm deb/rpm)
 docs/                 # architecture, data-model, ipc, security, roadmap, ui-design, json-editor, ci
 ```
@@ -237,7 +237,7 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
 
 CI and releases are workflows in `.github/workflows/` (`ci.yml` — checks on PRs and
 via `workflow_call` from `release.yml`; `images.yml` — CI images in ghcr;
-`release.yml` — pre-releases and the release; `audit.yml`; `cache-cleanup.yml`;
+`release.yml` — pre-releases and the release; `release-start.yml` — the manual start of a release; `audit.yml`; `cache-cleanup.yml`;
 `dependabot-merge.yml`). All logic is in `cargo xtask` and the scripts
 `scripts/ci/*`, `.github/scripts/*`; packaging manifests are in `packaging/`;
 the design and secrets are in `docs/ci.md`; branches and releases are in `docs/workflow.md`.
@@ -248,11 +248,14 @@ check it with `mise x actionlint@1.7.12 -- actionlint`. GitLab is only a mirror 
 - **Branches.** `feature/*` (from `development`) and `hotfix/*` (from `main`) — checks
   only; `development` — pre-release `X.Y.Z-N` on every push; `main` —
   release `X.Y.Z` on every merge. Work goes through PRs, CI creates tags.
+  `release/vX.Y.Z` and `backmerge/vX.Y.Z` are made by CI: `release-start.yml` (run by the
+  user) opens the PR into `main`, it is squashed when green, the back-merge goes into
+  `development` by `-s ours` (`docs/workflow.md`).
 - **A release waits for checks.** Builds run in parallel with the checks (they need
   only `version` and the images), publishing (`publish` and everything after it) requires
   green `checks`, a red check cancels the run (`cancel-on-red`).
-- **Version and CHANGELOG — only via `mise run bump` / `mise run changelog`**
-  (git-cliff by Conventional Commits): the version in files is not changed by hand, the commit
+- **Version and CHANGELOG — only via `release-start` in CI, `mise run bump` (local use,
+  hotfixes) / `mise run changelog`** (git-cliff by Conventional Commits): the version in files is not changed by hand, the commit
   type (`feat`/`fix`/`perf`/…) decides where it lands and what the next
   version will be. CI will not release from `main` without a `## [X.Y.Z]` section in
   `CHANGELOG.md`.
@@ -299,12 +302,14 @@ check it with `mise x actionlint@1.7.12 -- actionlint`. GitLab is only a mirror 
   "Multi Wallet Tracker Dev", `multi-wallet-tracker-dev`. The Rust crates `trade-core`/`trade-app`
   remain internal names. Do not touch the vault magic bytes and the export format
   `trade-app-workflow` — reading old files depends on them.
-- **Release — tag `vX.Y.Z`.** The version is the same in `crates/app/tauri.conf.json`,
+- **Release — tag `vX.Y.Z`,** plus `release-base/vX.Y.Z` on the tip of the release
+  branch, which version accounting counts from. The version is the same in `crates/app/tauri.conf.json`,
   `[workspace.package]` of `Cargo.toml` and `<release>` in
   `packaging/flatpak/*.metainfo.xml`; `version:check` checks the tag. A tag and
   `jj git push` — only when the user asks.
 - **Secrets — only in GitHub secrets** (Android signing key, updater key
-  `TAURI_SIGNING_*`, AUR SSH key). No keys or keystores in the repository.
+  `TAURI_SIGNING_*`, AUR SSH key, release GitHub App `RELEASE_APP_ID` +
+  `RELEASE_APP_PRIVATE_KEY`). No keys or keystores in the repository.
 - **Generated files are not committed:** the Gradle project `crates/app/gen/android/`,
   `release/`, `.cache/`, `.flatpak-*` (in `.gitignore`).
 
