@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/vue-query'
 import type { StagedAttachment } from '@/entities/attachment'
 import { call } from '@/shared/api/ipc'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
-import { txId } from '@/shared/lib/transactions'
+import { useEditBase } from '@/shared/lib/form'
+import { emptyTxFilter } from '@/shared/lib/tx-filter'
+import { txId, txStoreId } from '@/shared/lib/transactions'
 
 import { emptyForm, formFromTransaction } from '../transaction-form.model'
 import type { TransactionFormProps } from '../transaction-form.types'
@@ -43,6 +45,37 @@ export function useTxFormState(props: TransactionFormProps) {
   if (props.initial && !props.transaction) {
     if (props.initial.amount) form.amount = props.initial.amount
     if (props.initial.comment) form.comment = props.initial.comment
+  }
+
+  /**
+   * B3: the operation as the sync keeps it now (re-read after `vault-synced`; the prop may be a
+   * copy made once). The form sends what it opened with as `base` and offers `Refresh`.
+   */
+  const liveRows = useQuery({
+    // no placeholder: another wallet's rows say nothing about this operation
+    queryKey: computed(() => ['transactions', 'edit-live', props.transaction ? txStoreId(props.transaction) : '']),
+    queryFn: () =>
+      call<Transaction[]>('list_transactions', {
+        filter: emptyTxFilter({
+          scope: { store_ids: [txStoreId(props.transaction as Transaction)], include_children: false },
+        }),
+      }),
+    enabled: editing,
+  })
+  const edit = useEditBase({
+    open: true,
+    entity: () => (editing.value ? props.transaction : null),
+    live: () => {
+      const id = props.transaction ? txId(props.transaction) : ''
+      return liveRows.data.value?.find((row) => txId(row) === id)
+    },
+    model: (entity: Transaction) => ({ ...formFromTransaction(entity, props.storeId) }),
+  })
+  function refreshFromOtherDevice() {
+    edit.refresh(
+      () => ({ ...form }),
+      (model) => Object.assign(form, model),
+    )
   }
 
   /** What this wallet holds: property to sell, and the asset a new operation starts with. */
@@ -106,6 +139,9 @@ export function useTxFormState(props: TransactionFormProps) {
     isProperty,
     isCrypto,
     form,
+    editBase: edit.base,
+    changedElsewhere: edit.changedElsewhere,
+    refreshFromOtherDevice,
     overview,
     heldAssets,
     contacts,

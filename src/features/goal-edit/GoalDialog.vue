@@ -1,21 +1,23 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
-import { firstError, nonNegativeAmount, positiveAmount, required, useFormValidation } from '@/shared/lib/form'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
+import { firstError, nonNegativeAmount, positiveAmount, required, useEditBase, useFormValidation } from '@/shared/lib/form'
 import { parseDecimal } from '@/shared/lib/decimal'
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
-import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
+import { PLANNING_KEYS, localDate } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { matchesHotkey } from '@/shared/lib/hotkeys'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { GOAL_INCOME_CATEGORY, GOAL_SAVE_PCT } from './goal-edit.constants'
 import type { GoalDialogProps, GoalField } from './goal-edit.types'
+import { fieldsOfGoal, goalInputOf, goalInputOfFields, type GoalFields } from './lib/goal-fields'
 import GoalWhatStep from './ui/GoalWhatStep.vue'
 import GoalWhereStep from './ui/GoalWhereStep.vue'
 
@@ -60,24 +62,72 @@ const scenarioId = ref<string | null>(null)
 const fund = ref(false)
 const autosave = ref(false)
 
+/** Writes fields into the form; `Refresh` and opening both go through it. */
+function load(fields: GoalFields) {
+  name.value = fields.name
+  target.value = fields.target
+  currency.value = fields.currency
+  startsAt.value = fields.startsAt
+  deadline.value = fields.deadline
+  priority.value = fields.priority
+  commitment.value = fields.commitment
+  expectedReturn.value = fields.expectedReturn
+  storeIds.value = fields.storeIds
+  active.value = fields.active
+  scenarioId.value = fields.scenarioId
+}
+const currentFields = (): GoalFields => ({
+  name: name.value,
+  target: target.value,
+  currency: currency.value,
+  startsAt: startsAt.value,
+  deadline: deadline.value,
+  priority: priority.value,
+  commitment: commitment.value,
+  expectedReturn: expectedReturn.value,
+  storeIds: [...storeIds.value],
+  active: active.value,
+  scenarioId: scenarioId.value,
+})
+
 watch(open, (isOpen) => {
   if (!isOpen) return
   // A draft (a goal from a calculator scenario) fills a new goal like a saved one.
-  const goal = props.goal ?? props.draft
-  name.value = goal?.name ?? ''
-  target.value = goal?.target_amount ?? ''
-  currency.value = goal?.currency ?? props.remainder?.currency ?? (settings.vault?.budget_currency || settings.baseCurrency)
-  startsAt.value = isoToDateInput(goal?.starts_at) || localDate(new Date())
-  deadline.value = isoToDateInput(goal?.deadline)
-  priority.value = goal?.priority ?? 3
-  commitment.value = goal?.monthly_commitment ?? ''
-  expectedReturn.value = goal?.expected_return ?? ''
-  storeIds.value = goal?.scope.store_ids.length ? [...goal.scope.store_ids] : props.storeId ? [props.storeId] : []
-  active.value = goal?.active ?? true
-  scenarioId.value = goal?.scenario_id ?? null
+  const filled = fieldsOfGoal(props.goal ?? props.draft)
+  const defaults: GoalFields = {
+    name: '',
+    target: '',
+    currency: props.remainder?.currency ?? (settings.vault?.budget_currency || settings.baseCurrency),
+    startsAt: localDate(new Date()),
+    deadline: '',
+    priority: 3,
+    commitment: '',
+    expectedReturn: '',
+    storeIds: props.storeId ? [props.storeId] : [],
+    active: true,
+    scenarioId: null,
+  }
+  load({
+    ...defaults,
+    ...filled,
+    startsAt: filled.startsAt || defaults.startsAt,
+    storeIds: filled.storeIds?.length ? filled.storeIds : defaults.storeIds,
+  })
   fund.value = false
   autosave.value = false
 })
+
+/** The goal as the sync keeps it now (`['goals']` is re-read after `vault-synced`); the prop may be a stale copy. */
+const goals = useQuery({ queryKey: ['goals'], queryFn: () => call<Goal[]>('list_goals'), enabled: open })
+const edit = useEditBase({
+  open,
+  entity: () => props.goal,
+  live: () => (props.goal ? goals.data.value?.find((entry) => entry.id === props.goal?.id) : undefined),
+  model: (entity: Goal) => fieldsOfGoal(entity),
+})
+function refreshFromOtherDevice() {
+  edit.refresh(currentFields, (model) => load({ ...currentFields(), ...model }))
+}
 
 const creating = computed(() => !props.goal)
 
@@ -107,20 +157,10 @@ const saveLabel = computed(() => {
 
 const save = useMutation({
   mutationFn: async () => {
-    const input: GoalInput = {
-      name: name.value.trim(),
-      active: active.value,
-      target_amount: target.value.trim(),
-      currency: currency.value,
-      starts_at: dateInputToIso(startsAt.value),
-      deadline: deadline.value ? dateInputToIso(deadline.value) : null,
-      priority: priority.value,
-      monthly_commitment: commitment.value.trim() || null,
-      scope: { store_ids: storeIds.value, include_children: true },
-      scenario_id: scenarioId.value,
-      expected_return: expectedReturn.value.trim() || null,
-    }
-    if (props.goal) return call<Goal>('update_goal', { input: { id: props.goal.id, goal: input } })
+    const input = goalInputOfFields(currentFields())
+    if (props.goal) return call<Goal>('update_goal', {
+        input: { id: props.goal.id, goal: input, base: edit.base.value && goalInputOf(edit.base.value) },
+      })
     const goal = await call<Goal>('create_goal', { input })
     try {
       const home = storeIds.value[0]
@@ -163,6 +203,7 @@ function submit(event: Event) {
   <Dialog overlay="goal" v-model:open="open" :title="title" size="form">
     <fieldset class="grid min-w-0 gap-4" @keydown="onKeydown">
     <form id="goal-form" class="grid gap-4" @submit.prevent="submit">
+      <SyncChangedBanner v-if="edit.changedElsewhere.value" @refresh="refreshFromOtherDevice" />
       <p v-if="creating && props.fromCalc" class="text-sm text-muted-foreground">{{ t('goal.fromCalcNote', { name: props.fromCalc.scenario }) }}</p>
       <GoalWhatStep v-model:name="name" v-model:target="target" v-model:currency="currency" :form="form" />
       <GoalWhereStep

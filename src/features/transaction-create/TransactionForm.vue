@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { TxPreviewCard } from '@/entities/transaction'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 
 import { provideTxForm } from './model/use-tx-form'
 import { formToInput } from './transaction-form.model'
@@ -52,7 +53,7 @@ const emit = defineEmits<{ saved: [tx: Transaction]; submit: [] }>()
 
 /** Bumped after each save: the next operation in a series starts with fresh pickers and no errors. */
 const round = ref(0)
-const { form, check, save, valid, showFills, debouncedDraft, preview, isProperty } = provideTxForm(props, (tx) => {
+const { form, check, save, valid, showFills, debouncedDraft, preview, isProperty, changedElsewhere, refreshFromOtherDevice } = provideTxForm(props, (tx) => {
   check.reset()
   round.value += 1
   emit('saved', tx)
@@ -100,6 +101,7 @@ defineExpose({
     class="flex flex-col gap-4"
     @submit.prevent="check.submit(submit, $event)"
   >
+    <SyncChangedBanner v-if="changedElsewhere" @refresh="refreshFromOtherDevice" />
     <TxKindTabs v-if="props.compact" />
     <TxKindPicker v-else />
     <slot name="hint" />

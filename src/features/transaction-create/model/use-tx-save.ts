@@ -33,7 +33,7 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
   const queryClient = useQueryClient()
   const settings = useSettingsStore()
   const lookup = useTradeLookupStore()
-  const { props, form, editing, attachments, serverErrors, sharedEventId } = state
+  const { props, form, editing, attachments, serverErrors, sharedEventId, editBase } = state
 
   const linked = computed(() => !props.template && isLinked(form))
 
@@ -50,7 +50,9 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
     const input = formToInput(form)
     if (!input) throw { code: 'INVALID_INPUT', message: t('form.assetRequired') }
     return props.transaction
-      ? call<Transaction>('update_transaction', { input: { id: txId(props.transaction), transaction: input } })
+      ? call<Transaction>('update_transaction', {
+          input: { id: txId(props.transaction), transaction: input, base: editing.value ? editBase.value : undefined },
+        })
       : call<Transaction>('add_transaction', { input })
   }
 

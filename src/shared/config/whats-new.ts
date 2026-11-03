@@ -63,6 +63,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'runOnce', route: 'settings:sync:sync-devices' },
       { key: 'deletionsStay', route: 'settings:sync:sync-devices' },
       { key: 'rolesSteady', route: 'settings:sync:sync-devices' },
+      { key: 'editBanner', route: 'settings:sync:sync-devices' },
     ],
   },
   {
