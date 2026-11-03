@@ -1448,6 +1448,8 @@ mod reminder_tests;
 #[cfg(test)]
 mod run_key_tests;
 #[cfg(test)]
+mod terminal_tests;
+#[cfg(test)]
 mod tombstone_tests;
 #[cfg(test)]
 mod transfer_tests;

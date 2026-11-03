@@ -181,9 +181,12 @@ pub static COLLECTIONS: &[Collection] = &[
         flatten: &["inflation_mode", "inflation_source"],
         ..single("settings", DEVICE_SETTINGS)
     },
-    // Exchange and property details merge per field.
+    // Exchange and property details merge per field; a car's papers and
+    // mileage one level further. The terminal of an exchange (watchlist,
+    // drawings, layout) belongs to the device and never travels.
     Collection {
-        flatten: &["exchange", "property"],
+        flatten: &["exchange", "property", "property.car"],
+        skip: &["exchange.terminal"],
         ..records("stores", ID)
     },
     Collection {

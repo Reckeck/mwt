@@ -152,6 +152,38 @@ pub struct Fields {
 /// Field name of a record that is not an object (a plain string).
 pub const WHOLE: &str = "";
 
+/// One field of a record body, by its (possibly dotted) path: dropped when
+/// device-only, split one level further when it is a `flatten` head holding
+/// an object (`property` -> `property.car` -> `property.car.mileage_km`), an
+/// array split by item, or kept as it is.
+fn split_field(coll: &Collection, name: &str, field: &Value, fields: &mut BTreeMap<String, Value>) {
+    if coll.skip.contains(&name) {
+        return;
+    }
+    match (field, coll.item_key(name)) {
+        (Value::Object(inner), _) if coll.flatten.contains(&name) => {
+            for (sub, sub_value) in inner {
+                split_field(coll, &format!("{name}.{sub}"), sub_value, fields);
+            }
+        }
+        (Value::Array(items), Some(path)) => match split_array(name, path, items) {
+            Some(entries) => {
+                // An empty array has no entry to say it exists.
+                if entries.is_empty() {
+                    fields.insert(name.to_string(), field.clone());
+                }
+                fields.extend(entries);
+            }
+            None => {
+                fields.insert(name.to_string(), field.clone());
+            }
+        },
+        _ => {
+            fields.insert(name.to_string(), field.clone());
+        }
+    }
+}
+
 pub fn split(coll: &Collection, value: &Value) -> Fields {
     if coll.whole {
         return Fields {
@@ -167,31 +199,7 @@ pub fn split(coll: &Collection, value: &Value) -> Fields {
     match body {
         Value::Object(map) => {
             for (name, field) in map {
-                if coll.skip.contains(&name.as_str()) {
-                    continue;
-                }
-                match (field, coll.item_key(name)) {
-                    (Value::Object(inner), _) if coll.flatten.contains(&name.as_str()) => {
-                        for (sub, sub_value) in inner {
-                            fields.insert(format!("{name}.{sub}"), sub_value.clone());
-                        }
-                    }
-                    (Value::Array(items), Some(path)) => match split_array(name, path, items) {
-                        Some(entries) => {
-                            // An empty array has no entry to say it exists.
-                            if entries.is_empty() {
-                                fields.insert(name.clone(), field.clone());
-                            }
-                            fields.extend(entries);
-                        }
-                        None => {
-                            fields.insert(name.clone(), field.clone());
-                        }
-                    },
-                    _ => {
-                        fields.insert(name.clone(), field.clone());
-                    }
-                }
+                split_field(coll, name, field, &mut fields);
             }
         }
         other => {
@@ -234,6 +242,121 @@ fn array_entry<'name>(coll: &Collection, name: &'name str) -> Option<(&'static s
     })
 }
 
+/// `(head, rest)` when `name` is a field of a `flatten` head, the longest
+/// head first (`property.car` before `property`). The rest is one key of the
+/// object, dots and all.
+fn flatten_head<'name>(coll: &Collection, name: &'name str) -> Option<(&'static str, &'name str)> {
+    coll.flatten
+        .iter()
+        .copied()
+        .filter_map(|head| {
+            name.strip_prefix(head)
+                .and_then(|rest| rest.strip_prefix('.'))
+                .map(|rest| (head, rest))
+        })
+        .max_by_key(|(head, _)| head.len())
+}
+
+/// The object at the dotted `path` of `body`, created on the way; `None`
+/// when something else sits there.
+fn object_at<'body>(
+    body: &'body mut Map<String, Value>,
+    path: &str,
+) -> Option<&'body mut Map<String, Value>> {
+    let (first, rest) = match path.split_once('.') {
+        None => (path, None),
+        Some((first, rest)) => (first, Some(rest)),
+    };
+    let slot = body
+        .entry(first.to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let Value::Object(inner) = slot else {
+        return None;
+    };
+    match rest {
+        None => Some(inner),
+        Some(rest) => object_at(inner, rest),
+    }
+}
+
+/// Dotted device-only paths (`exchange.terminal`): a sub-field of a record
+/// that stays on the device while the rest of the record travels.
+fn nested_skips(coll: &Collection) -> impl Iterator<Item = &'static str> {
+    coll.skip.iter().copied().filter(|name| name.contains('.'))
+}
+
+/// Whether `name` (a field or an entry) is device-only: listed in `skip`, or
+/// inside a listed field.
+pub fn is_device_field(coll: &Collection, name: &str) -> bool {
+    coll.skip.iter().any(|skipped| {
+        name == *skipped
+            || name
+                .strip_prefix(skipped)
+                .is_some_and(|rest| rest.starts_with('.'))
+    })
+}
+
+/// The body of a record, mutable (the enum variant's content for a tagged one).
+fn body_mut<'doc>(coll: &Collection, value: &'doc mut Value) -> Option<&'doc mut Value> {
+    if !tagged(coll) {
+        return Some(value);
+    }
+    match value {
+        Value::Object(map) if map.len() == 1 => map.values_mut().next(),
+        _ => None,
+    }
+}
+
+fn take_path(body: &mut Value, path: &str) -> Option<Value> {
+    match path.split_once('.') {
+        None => body.as_object_mut()?.remove(path),
+        Some((first, rest)) => take_path(body.as_object_mut()?.get_mut(first)?, rest),
+    }
+}
+
+/// A record of an ordinary collection without its dotted device-only
+/// fields: what travels, what the digest covers.
+fn strip_device_fields<'doc>(coll: &Collection, value: &'doc Value) -> Cow<'doc, Value> {
+    if nested_skips(coll).next().is_none() {
+        return Cow::Borrowed(value);
+    }
+    let mut copy = value.clone();
+    if let Some(body) = body_mut(coll, &mut copy) {
+        for path in nested_skips(coll) {
+            take_path(body, path);
+        }
+    }
+    Cow::Owned(copy)
+}
+
+/// Put the dotted device-only fields `local` has into `target`.
+pub(super) fn keep_nested_device_fields(coll: &Collection, target: &mut Value, local: &Value) {
+    let mut kept = Vec::new();
+    for path in nested_skips(coll) {
+        let mut copy = local.clone();
+        if let Some(body) = body_mut(coll, &mut copy)
+            && let Some(value) = take_path(body, path)
+        {
+            kept.push((path, value));
+        }
+    }
+    if kept.is_empty() {
+        return;
+    }
+    if let Some(Value::Object(body)) = body_mut(coll, target) {
+        for (path, value) in kept {
+            // Only into an object the record still has (a store that is no
+            // exchange any more gets no terminal back).
+            let parent_is_object = path.rsplit_once('.').is_none_or(|(parent, _)| {
+                lookup(&Value::Object(body.clone()), parent).is_some_and(Value::is_object)
+            });
+            if parent_is_object {
+                insert_path(body, path, value);
+            }
+        }
+    }
+}
+
 pub(super) fn insert_path(body: &mut Map<String, Value>, path: &str, value: Value) {
     match path.split_once('.') {
         None => {
@@ -272,16 +395,13 @@ pub fn join_with(coll: &Collection, fields: &Fields, order: &Order) -> Value {
                 .insert(key.to_string(), value.clone());
             continue;
         }
-        match name.split_once('.') {
-            Some((head, sub)) if coll.flatten.contains(&head) => {
-                let slot = body
-                    .entry(head.to_string())
-                    .or_insert_with(|| Value::Object(Map::new()));
-                if let Value::Object(inner) = slot {
+        match flatten_head(coll, name) {
+            Some((head, sub)) => {
+                if let Some(inner) = object_at(&mut body, head) {
                     inner.insert(sub.to_string(), value.clone());
                 }
             }
-            _ => {
+            None => {
                 body.insert(name.clone(), value.clone());
             }
         }
@@ -339,7 +459,7 @@ pub fn records(doc: &Value) -> BTreeMap<String, Value> {
             // A repeated key: the first record wins, as in `read` and `write`.
             if let Some(key) = record_key(coll, item) {
                 out.entry(full_key(coll.name, &key))
-                    .or_insert_with(|| item.clone());
+                    .or_insert_with(|| strip_device_fields(coll, item).into_owned());
             }
         }
     }
@@ -356,7 +476,7 @@ pub fn read(doc: &Value, full: &str) -> Option<Value> {
     part.as_array()?
         .iter()
         .find(|item| record_key(coll, item).as_deref() == Some(key))
-        .cloned()
+        .map(|item| strip_device_fields(coll, item).into_owned())
 }
 
 /// Put a record into a serialized document (`None` removes it). A single
@@ -398,12 +518,18 @@ pub fn write(doc: &mut Value, full: &str, value: Option<&Value>) {
     let position = items
         .iter()
         .position(|item| record_key(coll, item).as_deref() == Some(key));
-    match (position, value) {
-        (Some(index), Some(value)) => items[index] = value.clone(),
+    // The device-only fields come from this device, never from the record
+    // that arrives (an older device sends them): a new record gets none.
+    let incoming = value.map(|value| strip_device_fields(coll, value).into_owned());
+    match (position, incoming) {
+        (Some(index), Some(mut value)) => {
+            keep_nested_device_fields(coll, &mut value, &items[index]);
+            items[index] = value;
+        }
         (Some(index), None) => {
             items.remove(index);
         }
-        (None, Some(value)) => items.push(value.clone()),
+        (None, Some(value)) => items.push(value),
         (None, None) => {}
     }
 }

@@ -455,3 +455,71 @@ fn a_key_path_with_plus_joins_its_parts() {
         value
     );
 }
+
+const NESTED: Collection = Collection {
+    name: "stores",
+    rule: Rule::Records,
+    key: &["id"],
+    flatten: &["exchange", "property", "property.car"],
+    flatten_by: &[],
+    derived: &[],
+    recomputed: &[],
+    skip: &["exchange.terminal"],
+    age: None,
+    secret: false,
+    secret_fields: &[],
+    whole: false,
+    cache: false,
+};
+
+#[test]
+fn a_dotted_skip_drops_the_sub_field_and_a_dotted_flatten_splits_one_level_further() {
+    let record = json!({
+        "id": "s",
+        "exchange": {"provider": "bybit", "terminal": {"timeframe": "4h"}},
+        "property": {"address": "x", "car": {"mileage_km": 5, "osago_until": null}}
+    });
+    let fields = split(&NESTED, &record).fields;
+    assert_eq!(fields.get("exchange.provider"), Some(&json!("bybit")));
+    assert!(
+        !fields
+            .keys()
+            .any(|name| name.starts_with("exchange.terminal"))
+    );
+    assert_eq!(fields.get("property.address"), Some(&json!("x")));
+    assert_eq!(fields.get("property.car.mileage_km"), Some(&json!(5)));
+    assert_eq!(fields.get("property.car.osago_until"), Some(&Value::Null));
+    assert!(!fields.contains_key("property.car"));
+
+    // Joining gives the record back, without the device-only sub-field.
+    let joined = view::join(&NESTED, &split(&NESTED, &record));
+    let mut expected = record.clone();
+    expected["exchange"]
+        .as_object_mut()
+        .unwrap()
+        .remove("terminal");
+    assert_eq!(joined, expected);
+
+    // A null car stays one field.
+    let none = json!({"id": "s", "property": {"address": "x", "car": null}});
+    let fields = split(&NESTED, &none).fields;
+    assert_eq!(fields.get("property.car"), Some(&Value::Null));
+    assert_eq!(view::join(&NESTED, &split(&NESTED, &none)), none);
+}
+
+#[test]
+fn a_car_that_is_null_on_one_side_and_edited_on_the_other_settles_both_ways() {
+    let none = state(
+        json!({"id": "s", "property": {"address": "x", "car": null}}),
+        &[("property.car", at(5, "a"))],
+    );
+    let some = state(
+        json!({"id": "s", "property": {"address": "x", "car": {"mileage_km": 9}}}),
+        &[("property.car.mileage_km", at(7, "b"))],
+    );
+    let merged = both_ways(&none, &some);
+    assert_eq!(
+        merged.value,
+        Some(json!({"id": "s", "property": {"address": "x", "car": {"mileage_km": 9}}}))
+    );
+}

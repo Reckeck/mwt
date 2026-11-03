@@ -54,6 +54,9 @@ const ENABLED_KINDS: &[Edit] = &[
     Edit::CountBalance,
     Edit::RecountBalance,
     Edit::BackdatedTx,
+    Edit::TerminalTimeframe,
+    Edit::CarMileage,
+    Edit::CarInsurance,
 ];
 
 const DEFAULT_SEEDS: &[u64] = &[1, 2, 3, 4, 5];
@@ -92,6 +95,9 @@ enum Edit {
     CountBalance,
     RecountBalance,
     BackdatedTx,
+    TerminalTimeframe,
+    CarMileage,
+    CarInsurance,
 }
 
 /// splitmix64: tiny, deterministic, good enough for choosing steps.
@@ -146,6 +152,9 @@ struct Ledger {
     /// Full keys created or edited after being deleted (exempt from the check).
     touched_after: BTreeSet<String>,
     counter: usize,
+    /// The exchange and the car every device starts with (see `add_shared_stores`).
+    exchange_id: String,
+    car_id: String,
 }
 
 impl Ledger {
@@ -291,6 +300,9 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
         | Edit::DeleteEnvelope => apply_envelope(kind, vault, rng, ledger),
         Edit::CountBalance | Edit::RecountBalance | Edit::BackdatedTx => {
             apply_adjustment(kind, vault, rng, ledger);
+        }
+        Edit::TerminalTimeframe | Edit::CarMileage | Edit::CarInsurance => {
+            apply_device_and_car(kind, vault, rng, ledger);
         }
         Edit::DeleteContact => {
             let ids: Vec<String> = vault
@@ -631,6 +643,82 @@ fn apply_adjustment(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger
     }
 }
 
+/// An exchange (its terminal is device-local, its import settings sync) and a
+/// car (mileage and insurance are separate fields), made on device 0 and
+/// pulled by the others before the random edits start.
+fn add_shared_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
+    ledger.exchange_id = devices[0]
+        .create_store_with(
+            "conv exchange",
+            StoreKind::Exchange,
+            "",
+            "",
+            None,
+            StoreExtras {
+                provider: Some(crate::model::store::ExchangeProvider::Bybit),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id;
+    ledger.car_id = devices[0]
+        .create_store_with(
+            "conv car",
+            StoreKind::Property,
+            "#555",
+            "",
+            None,
+            StoreExtras {
+                property: Some(crate::model::store::PropertyInfo {
+                    category: crate::model::store::PropertyCategory::Car,
+                    car: Some(crate::model::store::CarInfo::default()),
+                    ..Default::default()
+                }),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id;
+    for to in 1..DEVICES {
+        pull(devices, 0, to);
+    }
+}
+
+const TIMEFRAMES: &[&str] = &["1m", "15m", "1h", "4h", "1d"];
+const INSURED_UNTIL: &[&str] = &["2027-01-01", "2027-02-01", "2027-03-01"];
+
+/// The terminal edit is device-local: it must never reach another device.
+fn apply_device_and_car(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+    match kind {
+        Edit::TerminalTimeframe => {
+            let patch = crate::service::TerminalPatch {
+                timeframe: Some(TIMEFRAMES[rng.below(TIMEFRAMES.len())].into()),
+                ..Default::default()
+            };
+            vault
+                .update_terminal_state(&ledger.exchange_id, patch)
+                .unwrap();
+        }
+        Edit::CarMileage => {
+            let day = chrono::NaiveDate::from_ymd_opt(2026, 3, 1 + rng.below(28) as u32).unwrap();
+            vault
+                .vehicle_update_mileage(&ledger.car_id, 1000 + rng.below(90_000) as u32, day)
+                .unwrap();
+        }
+        _ => {
+            let until = INSURED_UNTIL[rng.below(INSURED_UNTIL.len())];
+            for store in &mut vault.doc.stores {
+                if store.id == ledger.car_id
+                    && let Some(car) = store.property.as_mut().and_then(|info| info.car.as_mut())
+                {
+                    car.osago_until = Some(until.into());
+                }
+            }
+            vault.persist().unwrap();
+        }
+    }
+}
+
 fn created_categories(vault: &UnlockedVault) -> Vec<String> {
     vault
         .doc
@@ -653,6 +741,7 @@ fn run(seed: u64, steps: usize) {
     let mut rng = Rng(seed);
     let mut ledger = Ledger::default();
     let trace = std::env::var("MWT_CONV_TRACE").is_ok();
+    add_shared_stores(&mut devices, &mut ledger);
 
     for _ in 0..steps {
         if rng.below(10) < 6 {
