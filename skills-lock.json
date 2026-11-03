@@ -85,24 +85,6 @@
       "skillPath": "skills/git-workflow-and-versioning/SKILL.md",
       "computedHash": "e8e0d1cc98c0a6b81d2979442ae92addae32cd5194fb5c4eac4ac5228b408770"
     },
-    "gitlab-ci-generator": {
-      "source": "akin-ozer/cc-devops-skills",
-      "sourceType": "github",
-      "skillPath": "devops-skills-plugin/skills/gitlab-ci-generator/SKILL.md",
-      "computedHash": "e4d30bb79401d499c0ed012f21a004b2bee51e8eb8b5c80c22ff7405a3cc4655"
-    },
-    "gitlab-ci-validator": {
-      "source": "akin-ozer/cc-devops-skills",
-      "sourceType": "github",
-      "skillPath": "devops-skills-plugin/skills/gitlab-ci-validator/SKILL.md",
-      "computedHash": "170ffe7b08323722ba060e31e062861a866026b324ab295b20471c4757432941"
-    },
-    "glab": {
-      "source": "henricook/claude-glab-skill",
-      "sourceType": "github",
-      "skillPath": "SKILL.md",
-      "computedHash": "115f4052ea6a93436e302487edab7d94d8fbac34c04f873054ed982e0780fbdd"
-    },
     "idea-refine": {
       "source": "addyosmani/agent-skills",
       "sourceType": "github",
