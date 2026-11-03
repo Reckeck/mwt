@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
+use super::flatten::{Order, join_arrays, split_array};
 use super::registry::{COLLECTIONS, Collection, Rule, find};
+use super::state::RecordStamps;
 
 /// `collection:key` — the collection name has no `:`, the key may.
 pub fn full_key(coll: &str, key: &str) -> String {
@@ -45,6 +47,11 @@ fn key_text(value: &Value) -> String {
         Value::String(text) => text.clone(),
         other => other.to_string(),
     }
+}
+
+/// The key of an item of a split array (`Collection.flatten_by`).
+pub(super) fn item_key(item: &Value, path: &str) -> Option<String> {
+    lookup(item, path).map(key_text)
 }
 
 /// The record's key inside its collection; `None` for a record without one.
@@ -92,12 +99,24 @@ pub fn split(coll: &Collection, value: &Value) -> Fields {
                 if coll.skip.contains(&name.as_str()) {
                     continue;
                 }
-                match field {
-                    Value::Object(inner) if coll.flatten.contains(&name.as_str()) => {
+                match (field, coll.item_key(name)) {
+                    (Value::Object(inner), _) if coll.flatten.contains(&name.as_str()) => {
                         for (sub, sub_value) in inner {
                             fields.insert(format!("{name}.{sub}"), sub_value.clone());
                         }
                     }
+                    (Value::Array(items), Some(path)) => match split_array(name, path, items) {
+                        Some(entries) => {
+                            // An empty array has no entry to say it exists.
+                            if entries.is_empty() {
+                                fields.insert(name.clone(), field.clone());
+                            }
+                            fields.extend(entries);
+                        }
+                        None => {
+                            fields.insert(name.clone(), field.clone());
+                        }
+                    },
                     _ => {
                         fields.insert(name.clone(), field.clone());
                     }
@@ -112,14 +131,27 @@ pub fn split(coll: &Collection, value: &Value) -> Fields {
 }
 
 pub fn join(coll: &Collection, fields: &Fields) -> Value {
+    join_with(coll, fields, &Order::default())
+}
+
+/// [`join`] with the order the items of split arrays had on the devices the
+/// fields come from.
+pub fn join_with(coll: &Collection, fields: &Fields, order: &Order) -> Value {
     if let Some(whole) = fields.fields.get(WHOLE)
         && fields.fields.len() == 1
     {
         return whole.clone();
     }
     let mut body = Map::new();
+    let mut arrays: BTreeMap<&str, BTreeMap<String, Value>> = BTreeMap::new();
     for (name, value) in &fields.fields {
         match name.split_once('.') {
+            Some((head, sub)) if coll.item_key(head).is_some() => {
+                arrays
+                    .entry(head)
+                    .or_default()
+                    .insert(sub.to_string(), value.clone());
+            }
             Some((head, sub)) if coll.flatten.contains(&head) => {
                 let slot = body
                     .entry(head.to_string())
@@ -133,6 +165,7 @@ pub fn join(coll: &Collection, fields: &Fields) -> Value {
             }
         }
     }
+    join_arrays(coll, arrays, order, &mut body);
     match &fields.tag {
         Some(tag) => {
             let mut outer = Map::new();
@@ -148,7 +181,12 @@ pub fn shareable(coll: &Collection, value: &Value) -> Value {
     if coll.skip.is_empty() {
         return value.clone();
     }
-    join(coll, &split(coll, value))
+    let stamps = RecordStamps::default();
+    join_with(
+        coll,
+        &split(coll, value),
+        &Order::new(coll, &[value], &stamps),
+    )
 }
 
 /// Every synced record of a serialized document, by full key.
@@ -163,8 +201,10 @@ pub fn records(doc: &Value) -> BTreeMap<String, Value> {
             continue;
         }
         for item in part.as_array().into_iter().flatten() {
+            // A repeated key: the first record wins, as in `read` and `write`.
             if let Some(key) = record_key(coll, item) {
-                out.insert(full_key(coll.name, &key), item.clone());
+                out.entry(full_key(coll.name, &key))
+                    .or_insert_with(|| item.clone());
             }
         }
     }

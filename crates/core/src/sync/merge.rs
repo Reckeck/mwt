@@ -7,10 +7,12 @@
 
 use serde_json::Value;
 
+use super::flatten::{Order, cannot_express, entry_stamp, is_entry, settle_heads};
 use super::registry::{Collection, Rule};
-use super::stamp::Stamp;
 use super::state::{RecordStamps, RecordState};
-use super::view::{Fields, join, split};
+use super::view::{Fields, join_with, split};
+
+pub use super::flatten::with_legacy_heads;
 
 /// A field the merge took from the other device although this one had
 /// edited it too: shown in the summary as "overwritten".
@@ -127,35 +129,56 @@ fn merge_fields(
         fields: Default::default(),
     };
     let mut overwrote = Vec::new();
-    let names: std::collections::BTreeSet<&String> = local_fields
+    // Entries that vanished keep their stamp: it is what removes them on a
+    // device that still has them.
+    let stamped_entries = |stamps: &'_ RecordStamps| {
+        stamps
+            .fields
+            .keys()
+            .filter(|name| is_entry(coll, name))
+            .cloned()
+            .collect::<Vec<String>>()
+    };
+    let names: std::collections::BTreeSet<String> = local_fields
         .fields
         .keys()
         .chain(remote_fields.fields.keys())
+        .cloned()
+        .chain(stamped_entries(&local_stamps))
+        .chain(stamped_entries(&remote_stamps))
         .collect();
-    for name in names {
+    for name in &names {
         let local_value = local_fields.fields.get(name);
         let remote_value = remote_fields.fields.get(name);
         // A whole record has one stamp: the newest of anything written to it
         // (an older peer stamps its fields one by one).
+        let unstamped =
+            !local_stamps.fields.contains_key(name) && !remote_stamps.fields.contains_key(name);
         let (local_stamp, remote_stamp) = if coll.whole {
             (local_stamps.latest(), remote_stamps.latest())
+        } else if unstamped && local_value == remote_value {
+            // The same value and no stamp of its own on either side: a floor
+            // would only move a stamp, not the record.
+            (local_stamps.field(name), remote_stamps.field(name))
         } else {
             (
-                legacy_head(coll, &local_stamps, name).unwrap_or_else(|| local_stamps.field(name)),
-                legacy_head(coll, &remote_stamps, name)
-                    .unwrap_or_else(|| remote_stamps.field(name)),
+                entry_stamp(coll, &local_stamps, name),
+                entry_stamp(coll, &remote_stamps, name),
             )
         };
-        // A whole map stamped by an older device says nothing about entries
-        // it does not list: those stay.
-        let take_remote =
-            if remote_value.is_none() && legacy_head(coll, &remote_stamps, name).is_some() {
-                false
-            } else if local_value.is_none() && legacy_head(coll, &local_stamps, name).is_some() {
-                true
-            } else {
-                remote_wins(local_stamp, remote_stamp, local_value, remote_value)
-            };
+        // A whole field stamped by an older device says nothing about
+        // entries it does not list: those stay.
+        let take_remote = if remote_value.is_none()
+            && cannot_express(coll, &remote_fields.fields, &remote_stamps, name)
+        {
+            false
+        } else if local_value.is_none()
+            && cannot_express(coll, &local_fields.fields, &local_stamps, name)
+        {
+            true
+        } else {
+            remote_wins(local_stamp, remote_stamp, local_value, remote_value)
+        };
         let (value, stamp) = if take_remote {
             (remote_value, remote_stamp)
         } else {
@@ -178,7 +201,9 @@ fn merge_fields(
             stamps.fields.insert(name.clone(), stamp.clone());
         }
     }
-    let mut value = join(coll, &merged);
+    settle_heads(coll, &mut merged.fields, &stamps);
+    let order = Order::new(coll, &[mine, theirs], &stamps);
+    let mut value = join_with(coll, &merged, &order);
     keep_device_fields(coll, &mut value, mine);
     Merged {
         state: RecordState {
@@ -187,43 +212,6 @@ fn merge_fields(
             tombstone: None,
         },
         overwrote,
-    }
-}
-
-/// The stamp of the whole map an older device writes for a flattened field
-/// (`marks`), when `name` is one of its entries and `stamps` has no per-entry
-/// stamp at all. A device that stamps per entry never looks like this.
-fn legacy_head<'stamps>(
-    coll: &Collection,
-    stamps: &'stamps RecordStamps,
-    name: &str,
-) -> Option<&'stamps Stamp> {
-    let (head, _) = name.split_once('.')?;
-    if !coll.flatten.contains(&head) || stamps.fields.contains_key(name) {
-        return None;
-    }
-    let entries = format!("{head}.");
-    if stamps.fields.keys().any(|key| key.starts_with(&entries)) {
-        return None;
-    }
-    stamps.fields.get(head)
-}
-
-/// What an older device reads: a stamp for each flattened field as a whole,
-/// the newest of its entries. Added only to what is sent, never stored.
-pub fn with_legacy_heads(coll: &Collection, stamps: &mut RecordStamps) {
-    for head in coll.flatten {
-        let entries = format!("{head}.");
-        let newest = stamps
-            .fields
-            .iter()
-            .filter(|(name, _)| name.starts_with(&entries))
-            .map(|(_, stamp)| stamp)
-            .max()
-            .cloned();
-        if let Some(newest) = newest {
-            stamps.fields.insert((*head).to_string(), newest);
-        }
     }
 }
 
