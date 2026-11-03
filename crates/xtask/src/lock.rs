@@ -12,6 +12,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::output::Output;
 use crate::sink::Sink;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -46,7 +47,7 @@ pub fn find_root() -> Result<PathBuf> {
     anyhow::bail!("no Cargo.toml with [workspace] above {}", start.display())
 }
 
-pub async fn enter(root: &Path, cmdline: &str) -> Result<Role> {
+pub async fn enter(root: &Path, cmdline: &str, output: Output) -> Result<Role> {
     let dir = root.join(".cache/xtask");
     std::fs::create_dir_all(&dir)?;
     let lock_path = dir.join("run.lock");
@@ -54,7 +55,7 @@ pub async fn enter(root: &Path, cmdline: &str) -> Result<Role> {
     loop {
         let lock = open_lock(&lock_path)?;
         match lock.try_lock() {
-            Ok(()) => return own(&dir, lock, cmdline),
+            Ok(()) => return own(&dir, lock, cmdline, output),
             Err(TryLockError::Error(error)) => return Err(error).context("run.lock"),
             Err(TryLockError::WouldBlock) => {}
         }
@@ -90,7 +91,7 @@ fn open_lock(path: &Path) -> Result<File> {
         .open(path)?)
 }
 
-fn own(dir: &Path, lock: File, cmdline: &str) -> Result<Role> {
+fn own(dir: &Path, lock: File, cmdline: &str, output: Output) -> Result<Role> {
     let _ = std::fs::remove_file(dir.join("run.json"));
     let events = File::create(dir.join("run.events"))?;
     let info = RunInfo {
@@ -103,7 +104,7 @@ fn own(dir: &Path, lock: File, cmdline: &str) -> Result<Role> {
     std::fs::rename(&tmp, dir.join("run.json"))?;
     Ok(Role::Owner(RunGuard {
         _lock: lock,
-        sink: Arc::new(Sink::new(Some(events))),
+        sink: Arc::new(Sink::with_output(Some(events), output)),
     }))
 }
 

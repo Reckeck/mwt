@@ -198,6 +198,7 @@ async fn android_in_container(ctx: &Ctx) -> Outcome {
             "-e",
             "CI_SKIP_GUI_LIBS=1",
         ])
+        .args(crate::exec::container_progress_args())
         .args(crate::sccache::container_mount())
         .args([image.as_str(), "bash", "-c", IN_CONTAINER]);
     finish(ctx, cmd).await

@@ -1,6 +1,8 @@
 //! The `check` graph: the same set of checks the old `mise run check` ran,
 //! plus `cargo fmt --check` and the platform builds.
 
+pub mod groups;
+
 use std::path::{Path, PathBuf};
 
 use crate::exec::{Cmd, Ctx, ExecEnd};
@@ -60,11 +62,11 @@ const QUIET_AFTER: [&str; 10] = [
     "platform:macos",
 ];
 
-/// How layout and links run: `--quick` unless `full`, one share of the units (`--shard K/N`, the CI matrix),
+/// How layout and links run: in full unless `quick`, one share of the units (`--shard K/N`, the CI matrix),
 /// processes per share (`--jobs`; the script picks by cores when empty).
 #[derive(Clone, Default, Debug)]
 pub struct BrowserOpts {
-    pub full: bool,
+    pub quick: bool,
     pub shard: Option<String>,
     pub jobs: Option<usize>,
 }
@@ -76,7 +78,7 @@ fn browser_check(name: &str, opts: &BrowserOpts) -> Task {
 
 fn browser_cmd(name: &str, opts: &BrowserOpts) -> Cmd {
     let mut cmd = Cmd::new("node").args(["scripts/run-browser-check.mjs", name]);
-    if !opts.full {
+    if opts.quick {
         cmd = cmd.arg("--quick");
     }
     if let Some(shard) = &opts.shard {
@@ -109,14 +111,7 @@ fn clippy_workspace(root: &Path) -> Task {
     Task::cmd("clippy", Class::Heavy, &[], cmd)
 }
 
-/// Declaration order is the start order: the long tasks first.
-/// The checks of the web part: need `node_modules` (CI runs them in a job of their own).
-pub const FRONTEND: [&str; 5] = ["biome", "vue-tsc", "unit", "checks", "e2e"];
-
-/// The browser sweeps: CI cuts them into shards (`--shard K/N`, job `frontend-layout`), so neither
-/// `--frontend` nor `--no-frontend` runs them there.
-pub const SHARDED: [&str; 2] = ["layout", "links"];
-
+/// Declaration order is the start order: the long tasks first. Groups of the tasks: `groups.rs`.
 pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpts) -> Vec<Task> {
     let mut tasks = vec![
         Task::cmd(
@@ -205,22 +200,22 @@ fn gen_types(_root: &Path) -> Task {
 mod tests {
     use super::{BrowserOpts, browser_cmd, parse_shard};
 
-    fn opts(full: bool, shard: Option<&str>, jobs: Option<usize>) -> BrowserOpts {
+    fn opts(quick: bool, shard: Option<&str>, jobs: Option<usize>) -> BrowserOpts {
         BrowserOpts {
-            full,
+            quick,
             shard: shard.map(String::from),
             jobs,
         }
     }
 
     #[test]
-    fn browser_checks_are_quick_unless_full() {
+    fn browser_checks_are_full_unless_quick() {
         assert_eq!(
-            browser_cmd("layout", &opts(false, None, None)).display(),
+            browser_cmd("layout", &opts(true, None, None)).display(),
             "node scripts/run-browser-check.mjs layout --quick"
         );
         assert_eq!(
-            browser_cmd("links", &opts(true, None, None)).display(),
+            browser_cmd("links", &opts(false, None, None)).display(),
             "node scripts/run-browser-check.mjs links"
         );
     }
@@ -228,7 +223,7 @@ mod tests {
     #[test]
     fn browser_checks_pass_the_shard_and_jobs_on() {
         assert_eq!(
-            browser_cmd("layout", &opts(true, Some("2/6"), Some(1))).display(),
+            browser_cmd("layout", &opts(false, Some("2/6"), Some(1))).display(),
             "node scripts/run-browser-check.mjs layout --shard 2/6 --jobs 1"
         );
     }

@@ -54,6 +54,28 @@ impl Cmd {
     }
 }
 
+/// Cargo prints its progress bar only on a terminal; task logs are files, so ask for it
+/// (a value the user set wins). The `\r` redraws are collapsed again when a log is shown.
+const PROGRESS_ENV: [(&str, &str); 2] = [
+    ("CARGO_TERM_PROGRESS_WHEN", "always"),
+    ("CARGO_TERM_PROGRESS_WIDTH", "160"),
+];
+
+fn progress_env() -> Vec<(&'static str, &'static str)> {
+    PROGRESS_ENV
+        .into_iter()
+        .filter(|(name, _)| std::env::var_os(name).is_none())
+        .collect()
+}
+
+/// `-e NAME=value` pairs for `podman run`: a container does not inherit the environment.
+pub fn container_progress_args() -> Vec<String> {
+    progress_env()
+        .into_iter()
+        .flat_map(|(name, value)| ["-e".to_string(), format!("{name}={value}")])
+        .collect()
+}
+
 pub enum ExecEnd {
     /// The process ended on its own with this exit code.
     Done(i32),
@@ -87,6 +109,7 @@ impl Ctx {
         let mut command = Command::new(&cmd.program);
         command
             .args(&cmd.args)
+            .envs(progress_env())
             .envs(crate::sccache::host_env(&cmd.program, &cmd.env))
             .envs(cmd.env.iter().map(|(key, value)| (key, value)))
             .current_dir(&self.root)

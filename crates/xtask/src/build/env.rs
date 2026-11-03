@@ -43,7 +43,7 @@ pub struct Env {
 impl Env {
     pub fn detect(
         root: PathBuf,
-        channel: &str,
+        channel: Channel,
         version: &str,
         native: bool,
         version_code: u32,
@@ -56,7 +56,6 @@ impl Env {
                     .or_else(|| which("docker"))
                     .map(|path| path.display().to_string())
             });
-        let channel = Channel::parse(channel)?;
         Ok(Self {
             channel,
             version: version.to_string(),
@@ -235,6 +234,7 @@ impl Env {
             cmd = cmd.args(["-e", name]);
         }
         Ok(cmd
+            .args(crate::exec::container_progress_args())
             .args(crate::sccache::container_mount_on(sccache_port(lane)))
             .args(more)
             .args([

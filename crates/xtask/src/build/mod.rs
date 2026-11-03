@@ -149,6 +149,13 @@ pub fn print_output(env: &Env, sink: &Sink) {
         env.version,
         env.out
     ));
+    for (name, size) in bundles(env) {
+        sink.raw(&format!("    {name}  ({} MB)", size / 1_000_000));
+    }
+}
+
+/// The bundle files of this version in the output folder, with their sizes, sorted by name.
+pub fn bundles(env: &Env) -> Vec<(String, u64)> {
     let mut files: Vec<(String, u64)> = std::fs::read_dir(env.root.join(&env.out))
         .into_iter()
         .flatten()
@@ -161,9 +168,7 @@ pub fn print_output(env: &Env, sink: &Sink) {
         })
         .collect();
     files.sort();
-    for (name, size) in files {
-        sink.raw(&format!("    {name}  ({} MB)", size / 1_000_000));
-    }
+    files
 }
 
 #[cfg(test)]

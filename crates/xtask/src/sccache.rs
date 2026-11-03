@@ -167,16 +167,40 @@ pub fn host_env(program: &str, own: &[(String, String)]) -> Vec<(String, String)
         .unwrap_or_default()
 }
 
-/// The summary line for the end of the run (only when this run used sccache).
-pub fn stats_line() -> Option<String> {
+/// What `sccache --show-stats` says (only when this run used sccache).
+pub fn stats_text() -> Option<String> {
     let env = HOST_ENV.get()?;
     let mut command = Command::new("sccache");
     command
         .arg("--show-stats")
         .envs(env.iter().map(|(key, value)| (key, value)));
     let output = command.stderr(Stdio::null()).output().ok()?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    Some(format_stats(&text))
+    Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// The counters of a run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stats {
+    pub requests: u64,
+    pub hits: u64,
+    pub misses: u64,
+}
+
+impl Stats {
+    /// Hits among the lookups that were answered, in percent.
+    pub fn hit_rate(&self) -> Option<u64> {
+        let answered = self.hits + self.misses;
+        (answered > 0).then(|| self.hits * 100 / answered)
+    }
+}
+
+pub fn parse_stats(text: &str) -> Option<Stats> {
+    let number = |label| count(text, label)?.parse().ok();
+    Some(Stats {
+        requests: number("Compile requests")?,
+        hits: number("Cache hits")?,
+        misses: number("Cache misses")?,
+    })
 }
 
 fn count(text: &str, label: &str) -> Option<String> {
@@ -261,6 +285,15 @@ mod tests {
     fn stats_line_reads_counters() {
         let text = "Compile requests                    12\nCache hits                           7\nCache misses                         5\n";
         assert_eq!(format_stats(text), "sccache: 12 requests, 7 hits, 5 misses");
+    }
+
+    #[test]
+    fn stats_numbers() {
+        let text = "Compile requests  12\nCache hits  9\nCache misses  3\n";
+        let stats = parse_stats(text).unwrap();
+        assert_eq!((stats.requests, stats.hits, stats.misses), (12, 9, 3));
+        assert_eq!(stats.hit_rate(), Some(75));
+        assert!(parse_stats("nothing").is_none());
     }
 
     #[test]

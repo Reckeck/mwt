@@ -6,7 +6,7 @@
 # its stubs into the tree it runs in.
 #
 # Each lane cooks what that lane's job compiles:
-#   check-linux     cargo xtask check: cargo test/run (dev build) and clippy, whole workspace
+#   check-linux     cargo xtask check --exclude @frontend --exclude @platforms: cargo test/run (dev build) and clippy, whole workspace
 #   clippy-android  xtask (dev build, host) + clippy -p trade-app for aarch64-linux-android
 #   clippy-macos    xtask (dev build, host) + clippy -p trade-app
 #   clippy-windows  clippy -p trade-app (no xtask there, see ci.yml)

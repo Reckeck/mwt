@@ -30,8 +30,12 @@ RUST_LOG = "info"
 "check-links" = { description = "Runs the app (mock) in headless Chromium: every entity mention opens its card or page and Back returns, glances open with a way out, internal links resolve; new errors past scripts/check-links.baseline.json fail; --quick = 1280 only; --update rewrites the baseline; --jobs N, --shard K/N, --update-weights as in check-layout", run = "node scripts/run-browser-check.mjs links" }
 "check-fsd" = { description = "FSD boundaries (Steiger, steiger.config.ts): no new problems past scripts/check-fsd.baseline.json; --update shrinks it", run = "node scripts/run-check.mjs fsd" }
 "shots" = { description = "Screenshots of a set (scripts/shots/sets.mjs) on the mock scenarios, desktop and phone, both themes, with canvas pairs; not a gate: mise run shots -- <set>", run = "node scripts/shots.mjs" }
-"check" = { description = "The gate, in parallel with fail-fast (cargo xtask): biome, vue-tsc, vitest unit + checks (onboarding/routes/forms/ui/fsd), CI scripts, fmt, clippy, tests, gen-types, platforms, then e2e + layout + links (quick); logs in .cache/xtask/; --list shows the graph, task names filter", run = "cargo xtask check" }
-"check-platforms" = { description = "Compile check (clippy) for linux, windows, android, macos: run after the last edit, before landing or a commit; SKIP = this machine cannot check it; mise run check-platforms -- windows", run = "cargo xtask check-platforms" }
+"check" = { description = "The gate, in parallel with fail-fast (cargo xtask check --quick): biome, vue-tsc, vitest unit + checks (onboarding/routes/forms/ui/fsd), CI scripts, fmt, clippy, tests, gen-types, platforms, then e2e + layout + links (quick); logs in .cache/xtask/; extra arguments go to xtask: --list shows the graph, --dry-run the commands, names and @groups select", run = "cargo xtask check --quick" }
+"check-platforms" = { description = "Compile check (clippy) for linux, windows, android, macos: run after the last edit, before landing or a commit; SKIP = this machine cannot check it; mise run check-platforms -- windows android", run = """
+# mise appends the extra arguments to the last line, so it is a function call: no arguments mean all platforms.
+platforms() { if [ "$#" -eq 0 ]; then set -- clippy @platforms; fi; exec cargo xtask check "$@"; }
+platforms
+""" }
 "check-ci" = { description = "CI scripts: ASCII-only PowerShell, shell scripts parse", run = "scripts/ci/lint-ci.sh" }
 "audit" = { description = "Dependency advisories: cargo-audit + pnpm audit minus the reasoned exceptions of audit-ignore.toml (not part of check; CI: audit.yml); needs cargo install cargo-audit --locked --version 0.22.2", run = "cargo xtask audit" }
 "changelog" = { description = "CHANGELOG.md: refresh the [Unreleased] commit list from the commits (git-cliff)", run = "cargo xtask changelog" }

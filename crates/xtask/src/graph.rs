@@ -12,7 +12,7 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::exec::{Cmd, Ctx, ExecEnd};
-use crate::sink::{Sink, fmt_secs};
+use crate::sink::{Sink, TaskEnd};
 
 /// What a task is limited by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,6 +44,8 @@ pub struct Task {
     /// Soft ordering: waits for these when they are in the graph, never pulls them in.
     pub after: Vec<String>,
     pub class: Class,
+    /// What it runs, for `--dry-run`; `None` for a built-in function.
+    pub description: Option<String>,
     action: Action,
 }
 
@@ -58,6 +60,7 @@ impl Task {
             deps: deps.iter().map(|dep| (*dep).to_string()).collect(),
             after: Vec::new(),
             class,
+            description: None,
             action: Box::new(move |ctx| Box::pin(action(ctx))),
         }
     }
@@ -69,10 +72,13 @@ impl Task {
     }
 
     pub fn cmd(name: &str, class: Class, deps: &[&str], cmd: Cmd) -> Self {
-        Self::func(name, class, deps, move |ctx| {
+        let description = short(&cmd.display());
+        let mut task = Self::func(name, class, deps, move |ctx| {
             let cmd = cmd.clone();
             async move { run_cmd(&ctx, &cmd).await }
-        })
+        });
+        task.description = Some(description);
+        task
     }
 }
 
@@ -100,6 +106,8 @@ fn short(text: &str) -> String {
 pub struct Opts {
     pub heavy: usize,
     pub browser: usize,
+    /// A FAIL does not cancel the others; only the tasks that depend on it are not run.
+    pub keep_going: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -121,7 +129,7 @@ pub fn log_name(name: &str) -> String {
     name.replace([':', '/'], "-")
 }
 
-/// Runs the graph. The first FAIL cancels everything running and not started yet.
+/// Runs the graph. The first FAIL cancels everything running and not started yet, unless `Opts::keep_going`.
 pub async fn run_graph(
     tasks: Vec<Task>,
     opts: Opts,
@@ -133,20 +141,29 @@ pub async fn run_graph(
     let _ = std::fs::create_dir_all(log_dir);
     let heavy = Arc::new(Semaphore::new(opts.heavy.max(1)));
     let browser = Arc::new(Semaphore::new(opts.browser.max(1)));
-    let done: HashMap<String, watch::Sender<bool>> = tasks
+    let done: HashMap<String, watch::Sender<Option<Status>>> = tasks
         .iter()
-        .map(|task| (task.name.clone(), watch::channel(false).0))
+        .map(|task| (task.name.clone(), watch::channel(None).0))
         .collect();
     let order: Vec<String> = tasks.iter().map(|task| task.name.clone()).collect();
     let mut set = JoinSet::new();
     for (index, task) in tasks.into_iter().enumerate() {
-        let waits: Vec<watch::Receiver<bool>> = task
-            .deps
-            .iter()
-            .chain(&task.after)
-            .filter_map(|dep| done.get(dep))
-            .map(watch::Sender::subscribe)
-            .collect();
+        let waits = Waits {
+            deps: task
+                .deps
+                .iter()
+                .filter_map(|dep| {
+                    done.get(dep)
+                        .map(|sender| (dep.clone(), sender.subscribe()))
+                })
+                .collect(),
+            after: task
+                .after
+                .iter()
+                .filter_map(|dep| done.get(dep))
+                .map(watch::Sender::subscribe)
+                .collect(),
+        };
         let finished = done[&task.name].clone();
         let semaphore = match task.class {
             Class::Light => None,
@@ -162,15 +179,15 @@ pub async fn run_graph(
         set.spawn(async move {
             // Semaphores are fair: staggering the start keeps the declared order (the long tasks first).
             tokio::time::sleep(Duration::from_millis(3 * index as u64)).await;
-            let report = run_one(task, ctx, waits, semaphore, &sink).await;
-            let _ = finished.send(true);
+            let report = run_one(task, ctx, waits, semaphore, &sink, opts.keep_going).await;
+            let _ = finished.send(Some(report.0.status));
             report
         });
     }
     let mut reports = HashMap::new();
     while let Some(joined) = set.join_next().await {
         if let Ok((report, failed)) = joined {
-            if failed {
+            if failed && !opts.keep_going {
                 cancel.cancel();
             }
             reports.insert(report.name.clone(), report);
@@ -183,14 +200,14 @@ pub async fn run_graph(
 }
 
 /// In CI the task output stays in its log until the end, and a silent job looks hung:
-/// every minute a line with the elapsed time and the last line of the log.
+/// every minute a line with the elapsed time and the last line of the log (`Sink::wants_progress`).
 async fn with_progress(
     name: &str,
     ctx: &Ctx,
     action: impl Future<Output = Outcome>,
     sink: &Sink,
 ) -> Outcome {
-    if std::env::var_os("CI").is_none() {
+    if !sink.wants_progress() {
         return action.await;
     }
     let began = Instant::now();
@@ -200,77 +217,97 @@ async fn with_progress(
     loop {
         tokio::select! {
             outcome = &mut action => return outcome,
-            _ = ticks.tick() => sink.line(&format!(
-                "...    {name} {}: {}",
-                fmt_secs(began.elapsed()),
-                last_line(&ctx.log, 160)
-            )),
+            _ = ticks.tick() => sink.progress(name, began.elapsed(), &last_line(&ctx.log, 160)),
         }
     }
+}
+
+/// What a task waits for: `deps` also decide whether it runs, `after` only order it.
+struct Waits {
+    deps: Vec<(String, watch::Receiver<Option<Status>>)>,
+    after: Vec<watch::Receiver<Option<Status>>>,
+}
+
+/// Waits until the task reports; `None` when its sender is gone.
+async fn finished(wait: &mut watch::Receiver<Option<Status>>) -> Option<Status> {
+    wait.wait_for(Option::is_some)
+        .await
+        .ok()
+        .and_then(|status| *status)
 }
 
 async fn run_one(
     task: Task,
     ctx: Ctx,
-    waits: Vec<watch::Receiver<bool>>,
+    waits: Waits,
     semaphore: Option<Arc<Semaphore>>,
     sink: &Sink,
+    keep_going: bool,
 ) -> (Report, bool) {
-    let cancelled = |took| {
+    let cancelled = |took, note: String| {
         (
             Report {
                 name: task.name.clone(),
                 status: Status::Cancelled,
                 took,
-                note: String::new(),
+                note,
             },
             false,
         )
     };
     let _ = std::fs::remove_file(&ctx.log);
-    for mut wait in waits {
+    for mut wait in waits.after {
         tokio::select! {
-            _ = wait.wait_for(|finished| *finished) => {}
-            () = ctx.cancel.cancelled() => return cancelled(Duration::ZERO),
+            _ = finished(&mut wait) => {}
+            () = ctx.cancel.cancelled() => return cancelled(Duration::ZERO, String::new()),
+        }
+    }
+    for (dep, mut wait) in waits.deps {
+        let status = tokio::select! {
+            status = finished(&mut wait) => status,
+            () = ctx.cancel.cancelled() => return cancelled(Duration::ZERO, String::new()),
+        };
+        if matches!(status, Some(Status::Fail | Status::Cancelled)) {
+            let note = format!("dependency {dep} failed");
+            sink.line(&format!("CANCELLED {} ({note})", task.name));
+            return cancelled(Duration::ZERO, note);
         }
     }
     let _permit = match semaphore {
         Some(semaphore) => tokio::select! {
             permit = semaphore.acquire_owned() => permit.ok(),
-            () = ctx.cancel.cancelled() => return cancelled(Duration::ZERO),
+            () = ctx.cancel.cancelled() => return cancelled(Duration::ZERO, String::new()),
         },
         None => None,
     };
     if ctx.cancel.is_cancelled() {
-        return cancelled(Duration::ZERO);
+        return cancelled(Duration::ZERO, String::new());
     }
-    sink.line(&format!("start  {}", task.name));
+    sink.task_start(&task.name, &ctx.log);
     let began = Instant::now();
     let outcome = with_progress(&task.name, &ctx, (task.action)(ctx.clone()), sink).await;
     let took = began.elapsed();
     let log_hint = format!("{} ({})", task.name, rel(&ctx.root, &ctx.log));
     let (status, note) = match outcome {
-        Outcome::Ok => {
-            sink.line(&format!("OK     {} {}", task.name, fmt_secs(took)));
-            (Status::Ok, String::new())
-        }
-        Outcome::Skip(reason) => {
-            sink.line(&format!("SKIP   {}: {reason}", task.name));
-            (Status::Skip, reason)
-        }
+        Outcome::Ok => (Status::Ok, String::new()),
+        Outcome::Skip(reason) => (Status::Skip, reason),
         Outcome::Fail(reason) => {
             ctx.note(&format!("xtask: {reason}"));
-            sink.line(&format!("FAIL   {log_hint} {}: {reason}", fmt_secs(took)));
-            sink.raw(&tail(&ctx.log, 40));
             (Status::Fail, reason)
         }
-        Outcome::Cancelled => {
-            sink.line(&format!("CANCELLED {} {}", task.name, fmt_secs(took)));
-            (Status::Cancelled, String::new())
-        }
+        Outcome::Cancelled => (Status::Cancelled, String::new()),
     };
+    sink.task_end(&TaskEnd {
+        name: &task.name,
+        status,
+        took,
+        reason: &note,
+        root: &ctx.root,
+        log: &ctx.log,
+        log_hint: &log_hint,
+    });
     let failed = status == Status::Fail;
-    if failed {
+    if failed && !keep_going {
         // At once, not when the collector gets round to it: no task may start in between.
         ctx.cancel.cancel();
     }
@@ -286,7 +323,7 @@ async fn run_one(
 }
 
 mod report;
-pub use report::{last_line, rel, select, summary, tail};
+pub use report::{last_line, list_text, plan_text, rel, select, summary, tail};
 
 #[cfg(all(test, unix))]
 mod tests;
