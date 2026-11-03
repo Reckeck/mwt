@@ -263,6 +263,11 @@ version, images ──► frontend ──► build (linux | android | windows) �
 - `images` are the CI images (`images.yml`); `frontend`, the builds and `checks`
   depend on them. The builds do not wait for the checks: they run in parallel
   with them.
+- One run per branch (`concurrency`): a push to `development` cancels the older
+  pre-release run, the newer one supersedes it (a run cancelled during `publish`
+  can leave an incomplete pre-release `X.Y.Z-N`; the next one takes N+1 and
+  `prune-prereleases` removes it later). A release from `main` and a manual run
+  wait for the running one instead.
 - `checks` is the whole `ci.yml`. `publish` requires `checks` to be `success`;
   red checks start `cancel-on-red` (`actions: write`, `gh run cancel`), and the
   remaining builds are cancelled.
