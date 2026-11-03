@@ -196,6 +196,9 @@ fn checksum_line(name: &str, bytes: &[u8]) -> String {
     format!("{:x}  {name}\n", Sha256::digest(bytes))
 }
 
+/// The most commits a pre-release lists; the compare link has the rest.
+const LOG_LIMIT: usize = 80;
+
 pub fn run_publish(root: &Path, args: &PublishArgs) -> Result<()> {
     check_version(&args.version, args.pre)?;
     let files = release_files(&args.dir)?;
@@ -214,6 +217,9 @@ pub fn run_publish(root: &Path, args: &PublishArgs) -> Result<()> {
         .or_else(|| git(root, &["rev-parse", "HEAD"]))
         .context("no commit: GITHUB_SHA is unset and git rev-parse HEAD failed")?;
     let (title, text) = if args.pre {
+        // The closest release tag of any kind in this commit's history: the previous pre-release
+        // or release. A tag outside the history (another branch, a rewritten past) is not a
+        // boundary, and the tag being published is skipped when a rerun finds it on this commit.
         let since = git(
             root,
             &[
@@ -223,7 +229,7 @@ pub fn run_publish(root: &Path, args: &PublishArgs) -> Result<()> {
                 "--match",
                 "v[0-9]*",
                 "--exclude",
-                "v*-*",
+                &tag,
                 &sha,
             ],
         );
@@ -235,7 +241,7 @@ pub fn run_publish(root: &Path, args: &PublishArgs) -> Result<()> {
             &[
                 "log",
                 "-n",
-                "60",
+                &(LOG_LIMIT + 1).to_string(),
                 "--no-merges",
                 "--format=%H%x1f%s",
                 &range,
@@ -246,13 +252,10 @@ pub fn run_publish(root: &Path, args: &PublishArgs) -> Result<()> {
             .ok()
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| "development".into());
-        let text = notes::prerelease_notes(
-            &repo,
-            &branch,
-            &sha,
-            since.as_deref(),
-            &notes::parse_log(&log),
-        );
+        let mut commits = notes::parse_log(&log);
+        let more = commits.len() > LOG_LIMIT;
+        commits.truncate(LOG_LIMIT);
+        let text = notes::prerelease_notes(&repo, &branch, &sha, since.as_deref(), &commits, more);
         (format!("Pre-release {}", args.version), text)
     } else {
         let changelog = std::fs::read_to_string(root.join("CHANGELOG.md")).unwrap_or_default();

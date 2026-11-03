@@ -421,7 +421,8 @@ jobs:
       BUILD_VERSION: ${{ needs.version.outputs.version }}
       PRE: ${{ needs.version.outputs.pre }}
     steps:
-      # The notes list the commits since the last release tag.
+      # Pre-release notes: the commits since the closest release tag in this history, grouped like
+      # the CHANGELOG; a release takes its CHANGELOG section (cargo xtask publish).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0

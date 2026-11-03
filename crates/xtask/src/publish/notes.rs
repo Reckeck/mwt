@@ -49,30 +49,99 @@ pub fn release_notes(changelog: &str, version: &str, repo: &str) -> String {
     }
 }
 
+/// The CHANGELOG groups of cliff.toml, in its order; `None` drops the commit (release commits).
+fn group(subject: &str) -> Option<&'static str> {
+    let kind = subject.split([':', '(', '!']).next().unwrap_or_default();
+    Some(match kind {
+        "feat" => "Added",
+        "fix" => "Fixed",
+        "perf" => "Performance",
+        "refactor" => "Internal changes",
+        "docs" => "Documentation",
+        "ci" | "build" => "Build and CI",
+        "test" => "Tests",
+        "chore" if subject.starts_with("chore(release)") => return None,
+        _ => "Other",
+    })
+}
+
+const GROUPS: [&str; 8] = [
+    "Added",
+    "Fixed",
+    "Performance",
+    "Internal changes",
+    "Documentation",
+    "Build and CI",
+    "Tests",
+    "Other",
+];
+
+/// `feat(ui): add x` -> `**ui:** Add x`, like the CHANGELOG lines of cliff.toml.
+fn line(subject: &str) -> String {
+    let Some((head, message)) = subject.split_once(": ") else {
+        return subject.to_string();
+    };
+    if head.contains(' ') {
+        return subject.to_string();
+    }
+    let mut chars = message.chars();
+    let message = chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect::<String>())
+        .unwrap_or_default();
+    let scope = head
+        .split_once('(')
+        .and_then(|(_, rest)| rest.split_once(')'))
+        .map(|(scope, _)| scope);
+    match scope {
+        Some(scope) => format!("**{scope}:** {message}"),
+        None => message,
+    }
+}
+
+/// The pre-release notes: the commits since the closest published release tag (`since`),
+/// grouped like the CHANGELOG. `more` says the log was cut, so the compare link has the rest.
 pub fn prerelease_notes(
     repo: &str,
     branch: &str,
     sha: &str,
     since: Option<&str>,
     commits: &[Commit],
+    more: bool,
 ) -> String {
     let link = |full: &str| {
         let short: String = full.chars().take(7).collect();
         format!("[`{short}`](https://github.com/{repo}/commit/{full})")
     };
-    let list = if commits.is_empty() {
-        "_no commits_".to_string()
-    } else {
-        commits
+    let mut sections = Vec::new();
+    for name in GROUPS {
+        let lines: Vec<String> = commits
             .iter()
-            .map(|commit| format!("- {} ({})", commit.subject, link(&commit.sha)))
-            .collect::<Vec<_>>()
-            .join("\n")
+            .filter(|commit| group(&commit.subject) == Some(name))
+            .map(|commit| format!("- {} ({})", line(&commit.subject), link(&commit.sha)))
+            .collect();
+        if !lines.is_empty() {
+            sections.push(format!("#### {name}\n\n{}", lines.join("\n")));
+        }
+    }
+    let heading = match since {
+        Some(tag) => format!(
+            "### Changes since {tag}\n\n[Full diff {tag}...{short}](https://github.com/{repo}/compare/{tag}...{sha})",
+            short = sha.chars().take(7).collect::<String>()
+        ),
+        None => "### Changes since the start of the project".to_string(),
     };
+    let mut body = if sections.is_empty() {
+        "_no changes_".to_string()
+    } else {
+        sections.join("\n\n")
+    };
+    if more {
+        body.push_str("\n\n_Older commits are in the full diff._");
+    }
     format!(
-        "**Pre-release** from `{branch}` (commit {}) - for testing, not for working with real data.\n\n### Changes since {}\n\n{list}",
-        link(sha),
-        since.unwrap_or("the start of the project")
+        "**Pre-release** from `{branch}` (commit {}) - for testing, not for working with real data.\n\n{heading}\n\n{body}",
+        link(sha)
     )
 }
 
