@@ -7,7 +7,7 @@ const EVENT_DIALOG = '[data-overlay="shared-event-edit"]'
 test('a contact typed in a form is created on the spot, picked, and lands in the directory', async ({ app }) => {
   await app.unlock()
   // Visit the directory first: Vite may reload the page when a route first needs a dependency, which would wipe the mock.
-  await app.at('/transactions/contacts')
+  await app.at('/contacts')
   await app.at('/money/together')
   await app.click('[data-tour="shared-new"]')
   await app.waitFor(`return document.querySelector('${EVENT_DIALOG}') !== null`, 'the new event dialog')
@@ -33,7 +33,7 @@ test('a contact typed in a form is created on the spot, picked, and lands in the
   await app.waitFor(`return document.querySelector('${EVENT_DIALOG}') === null`, 'the event dialog to close')
 
   // The contact is real: it is in the directory.
-  await app.at('/transactions/contacts')
+  await app.at('/contacts')
   await app.waitFor(
     `return /Гриша/.test(document.querySelector('main')?.textContent ?? document.body.textContent)`,
     'Гриша in the contacts directory',

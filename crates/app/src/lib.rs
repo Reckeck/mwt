@@ -148,6 +148,7 @@ pub fn run() {
             contacts::delete_contact,
             contacts::get_contact_turnover,
             contacts::get_contact_balances,
+            contacts::list_contact_summaries,
             contacts::list_debt_terms,
             contacts::set_debt_terms,
             // shared events (shared sit-down events)

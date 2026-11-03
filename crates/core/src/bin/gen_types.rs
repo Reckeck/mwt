@@ -502,6 +502,7 @@ fn main() {
         trade_core::service::ContactTurnover,
         trade_core::service::TurnoverRow,
         trade_core::service::ContactBalance,
+        trade_core::service::ContactSummary,
         trade_core::model::shared_event::GuestDetails,
         trade_core::model::shared_event::Participant,
         trade_core::model::shared_event::PriceMode,

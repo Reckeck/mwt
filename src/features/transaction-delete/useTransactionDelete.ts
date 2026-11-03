@@ -8,6 +8,7 @@ const STALE_KEYS: ReadonlyArray<readonly string[]> = [
   ...LEDGER_KEYS,
   ...PLANNING_KEYS,
   ['contacts', 'balances'],
+  ['contacts', 'summaries'],
   ['entity-card'],
 ]
 

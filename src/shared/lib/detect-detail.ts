@@ -40,6 +40,18 @@ const CRYPTO: { pattern: RegExp; network: Chain }[] = [
 ]
 
 /**
+ * A phone number, normalized to `+<digits>`, or `null`. Accepts `+` followed by digits,
+ * and a Russian number written with `8` or `7` and ten more digits (spaces, brackets and
+ * hyphens allowed): `8 (912) 345-67-89` becomes `+79123456789`. A bare ten digits stay ambiguous.
+ */
+export function looksLikePhone(value: string): string | null {
+  const text = value.trim()
+  if (/^\+\d[\d\s()-]{8,}$/.test(text)) return `+${text.replace(/\D/g, '')}`
+  if (/^[78](?:[\s()-]*\d){10}$/.test(text) && /^[\d\s()-]+$/.test(text)) return `+7${text.replace(/\D/g, '').slice(1)}`
+  return null
+}
+
+/**
  * Guess what a pasted requisite is. Never throws: an unknown string is
  * `other`, so the user can always correct the guess by hand.
  */
@@ -52,9 +64,8 @@ export function detectDetail(raw: string): DetectedDetail {
   if (/^https?:\/\//i.test(value) || /^[\w-]+(\.[\w-]+)*\.[a-z]{2,}(\/\S*)?$/i.test(value)) {
     return { kind: 'url', network: null, value }
   }
-  if (/^\+\d[\d\s()-]{8,}$/.test(value)) {
-    return { kind: 'phone', network: null, value: `+${value.replace(/\D/g, '')}` }
-  }
+  const phone = looksLikePhone(value)
+  if (phone) return { kind: 'phone', network: null, value: phone }
   if (/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/i.test(compact)) {
     return { kind: 'iban', network: null, value: compact.toUpperCase() }
   }

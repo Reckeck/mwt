@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { accountCounts, maskDetail } from '@/entities/contact'
 import { Button } from '@/shared/ui/button'
-import { Kbd } from '@/shared/ui/kbd'
+import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 import { copyText } from '@/shared/lib/clipboard'
 import { pluralForm } from '@/shared/lib/format'
@@ -84,6 +84,14 @@ function toggle(account: ContactAccount) {
   change(props.contact.accounts.map((entry) => (entry.id === account.id ? { ...entry, active: !entry.active } : entry)))
 }
 
+function asPhone(account: ContactAccount, phone: string) {
+  change(
+    props.contact.accounts.map((entry) =>
+      entry.id === account.id ? { ...entry, kind: 'phone', value: phone, network: null } : entry,
+    ),
+  )
+}
+
 function copy(account: ContactAccount) {
   const label = account.label || t(`detailKind.${account.kind}`)
   void copyText(account.value, t('contacts.copiedAccount', { label, masked: maskDetail(account.kind, account.value) }))
@@ -99,66 +107,74 @@ useEventListener(document, 'paste', (event: ClipboardEvent) => {
   open(text)
 })
 
-async function pasteFromClipboard() {
-  const text = await navigator.clipboard?.readText?.().catch(() => '')
-  open(text?.trim() ?? '')
-}
 </script>
 
 <template>
-  <section class="grid min-w-0 grid-cols-1 gap-3" data-tour="contact-accounts">
-    <div class="flex flex-wrap items-baseline gap-x-3">
-      <h3 class="text-base font-semibold">{{ t('contacts.accounts') }}</h3>
-      <span v-if="props.contact.accounts.length" class="text-xs text-muted-foreground">
-        {{ plural('contacts.activeCount', counts.active)
-        }}<template v-if="counts.inactive"> · {{ plural('contacts.inactiveCount', counts.inactive) }}</template>
-      </span>
+  <section class="@container grid min-w-0 grid-cols-1 gap-3" data-tour="contact-accounts">
+    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div class="flex min-w-0 flex-wrap items-baseline gap-x-3">
+        <h3 class="text-sm font-semibold text-muted-foreground">{{ t('contacts.accountsMain') }}</h3>
+        <span v-if="props.contact.accounts.length" class="text-xs text-muted-foreground">
+          {{ plural('contacts.activeCount', counts.active)
+          }}<template v-if="counts.inactive"> · {{ plural('contacts.inactiveCount', counts.inactive) }}</template>
+        </span>
+      </div>
+      <!-- Always there, disabled while the form is open: the heading row never changes. -->
+      <Button
+        variant="outline"
+        :disabled="editing !== null"
+        data-tour="contact-add-account"
+        data-contact-paste
+        @click="open()"
+      >
+        <Plus class="size-4" />{{ t('contacts.addRequisite') }}
+      </Button>
     </div>
 
+    <!-- The new requisite is the first row of the list. -->
     <ContactAccountForm
-      v-if="editing !== null"
-      :key="editing || pasted"
-      :initial="editedAccount"
+      v-if="editing === ''"
+      :key="pasted || 'new'"
+      :initial="null"
       :value="pasted"
       :groups="groups"
       :pending="save.isPending.value"
       @submit="submit"
       @cancel="editing = null"
     />
-    <!-- A quick contact (made by name only): the first requisite is one tap away. -->
-    <div
-      v-else-if="!props.contact.accounts.length"
-      class="grid justify-items-start gap-2 rounded-lg border border-dashed p-4"
+
+    <EmptyState
+      v-if="!props.contact.accounts.length && editing === null"
+      compact
+      :title="t('contacts.quick.noAccounts')"
       data-contact-no-accounts
     >
-      <p class="text-sm text-muted-foreground">{{ t('contacts.quick.noAccounts') }}</p>
-      <Button size="sm" data-contact-add-accounts @click="open()">
-        <Plus class="size-4" />{{ t('contacts.quick.addAccounts') }}
-      </Button>
-    </div>
-    <Button
-      v-else
-      variant="outline"
-      class="h-auto w-full min-w-0 justify-start gap-3 border-dashed px-3 py-3 text-left font-normal text-muted-foreground"
-      data-contact-paste
-      @click="pasteFromClipboard"
-    >
-      <Plus class="size-4 shrink-0" />
-      <span class="min-w-0 flex-1 truncate">{{ t('contacts.pasteHint') }}</span>
-      <Kbd v-if="!coarse">Ctrl V</Kbd>
-    </Button>
+      <Button data-contact-add-accounts @click="open()"><Plus class="size-4" />{{ t('contacts.quick.addAccounts') }}</Button>
+    </EmptyState>
 
     <div v-if="ordered.length" class="divide-y rounded-lg border bg-card px-3">
-      <ContactAccountRow
-        v-for="account in ordered"
-        :key="account.id"
-        :account="account"
-        :transfer-disabled="props.transferDisabled"
-        @copy="copy(account)"
-        @transfer="emit('transfer', account)"
-        @edit="editing = account.id"
-        @toggle="toggle(account)"
-      />
+      <template v-for="account in ordered" :key="account.id">
+        <ContactAccountForm
+          v-if="editing === account.id"
+          class="my-3"
+          :initial="editedAccount"
+          :value="''"
+          :groups="groups"
+          :pending="save.isPending.value"
+          @submit="submit"
+          @cancel="editing = null"
+        />
+        <ContactAccountRow
+          v-else
+          :account="account"
+          :transfer-disabled="props.transferDisabled"
+          @copy="copy(account)"
+          @transfer="emit('transfer', account)"
+          @edit="editing = account.id"
+          @toggle="toggle(account)"
+          @as-phone="asPhone(account, $event)"
+        />
+      </template>
     </div>
     <p v-if="counts.inactive && !coarse" class="text-xs text-muted-foreground">{{ t('contacts.inactiveHint') }}</p>
     <p v-if="coarse && ordered.length" class="text-xs text-muted-foreground">{{ t('contacts.tapHint') }}</p>

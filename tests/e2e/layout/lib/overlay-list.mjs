@@ -100,7 +100,7 @@ export const OVERLAYS = [
   // On a phone the wallets are a list inside the filters panel (money-wallets-filter), not a field of their own.
   { id: 'store-multiselect', route: '/money', open: [{ click: 'button[aria-label="Кошельки"]' }], layer: overlay('store-multiselect') },
   { id: 'tx-save-filter', route: '/transactions?kind=payment', open: [{ click: '[data-tour="tx-save-filter"]' }], layer: overlay('tx-save-filter') },
-  { id: 'contact-edit', route: '/transactions/contacts', phone: true, open: [{ click: '[data-tour="contact-quick-create"]' }], layer: overlay('contact-edit') },
+  { id: 'contact-edit', route: '/contacts', phone: true, open: [{ click: '[data-tour="contact-quick-create"]' }], layer: overlay('contact-edit') },
   { id: 'bonus-program', route: '/transactions/bonuses', phone: true, open: [{ click: '[data-tour="bonuses-add"]' }], layer: overlay('bonus-program') },
 
   // 3.4 Wallets
@@ -116,7 +116,6 @@ export const OVERLAYS = [
   { id: 'store-menu', route: '/stores', open: [{ click: '[aria-label^="Действия с"]' }], layer: '[role="menu"]' },
   { id: 'tx-edit', route: '/transactions', open: [{ context: '[data-tx-row]' }, { click: '[role="menuitem"]', text: 'Изменить' }], layer: overlay('tx-edit') },
 
-  { id: 'contact-menu', route: '/transactions/contacts', open: [{ context: '[data-tour="contact-groups"] li button' }], layer: '[data-context-menu]' },
 
   // 3.5 Money
   { id: 'category-sheet', route: '/money', phone: true, open: [{ query: { category: 'groceries' } }], layer: overlay('category-sheet'), keys: ['category'] },

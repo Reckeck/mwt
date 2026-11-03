@@ -32,7 +32,7 @@ Terms:
 
 `store, tx, category, contact, goal, budget, automation, workflow, reminder, alert, asset, scenario` (`ENTITY_KINDS`). The host handles `?open=` once, in `AppShell`. The core (`relations.rs`) can produce a card for each; `automation` and `workflow` are looked up with one query (the id is shared). For `store`, `workflow`, `scenario` a card is never produced by `entityLocation` — only if the address is typed by hand.
 
-Other address parameters that links lead to and that are handled: `?edit=<id>` (automations; `use-new-from-route.ts:31`), `?new=salary|blank` (automations), `?new=limit&category=` (`PlanLimits.vue:80`), `?category=` (Spending, `SpendingCategories.vue:78`), `?contact=` (`TransactionsContacts.vue:49`), `?scenario=` (`MoneyCalculator.vue:19`), `?tab=`/`?view=` (wallet, `use-wallet-view.ts:65`; wallet settings, `use-settings-groups.ts:57`), `?program=` (bonuses), `?store=,from=,to=,cat=,kind=,q=,...` (the transaction list, `tx-filter.ts`). All found `settings`/`section` values in the code exist in `SETTINGS_GROUPS`.
+Other address parameters that links lead to and that are handled: `?edit=<id>` (automations; `use-new-from-route.ts:31`), `?new=salary|blank` (automations), `?new=limit&category=` (`PlanLimits.vue:80`), `?category=` (Spending, `SpendingCategories.vue:78`), `?contact=` (the `contacts` page, `shared/lib/contact-selection.ts`), `?scenario=` (`MoneyCalculator.vue:19`), `?tab=`/`?view=` (wallet, `use-wallet-view.ts:65`; wallet settings, `use-settings-groups.ts:57`), `?program=` (bonuses), `?store=,from=,to=,cat=,kind=,q=,...` (the transaction list, `tx-filter.ts`). All found `settings`/`section` values in the code exist in `SETTINGS_GROUPS`.
 
 ## 2. Table: the entity, where it is mentioned, how it is shown, where it leads, the way back
 
@@ -61,7 +61,7 @@ The "Canvas" column: **yes** — it is on the frame, **no** — beyond the canva
 | | The overview "Top category", Home limits, the limit list | Text (findings 6, 7) | — | — | no |
 | **Contact and debt** | A transaction row | Text (finding 4); in the menu "Contact Y" (`openEntity`) | The `contact` card -> "Transactions", "Contacts" | "← Back" | yes (menu) |
 | | `TxFacts.vue:81` (the transaction card) | `EntityLink` | Card | | no |
-| | The "Contacts" page | A list, a contact card on the right with the debt and actions (return, give, take) | `?contact=<id>` | On a phone "‹" (`TransactionsContacts.vue:93`) | yes |
+| | The "Contacts" page (`/contacts`, sidebar bottom group) | A table with debt totals and filters; the contact card opens as a side sheet (desktop) or a bottom drawer (phone) with tabs Operations / Requisites / Shared events | `?contact=<id>` | Back, Esc or × removes `?contact=`; `/transactions/contacts` redirects here | yes |
 | | Debt | Shown only in the contact card (`ContactDebtPhrase`, `DebtTermsPopover`); in transaction cards the "borrowed/returned" badge is text | — | — | no |
 | **Goal** | Home (`DashboardGoals`), "Plan" (`PlanGoals`), `GoalList`, `GoalFacts` | `EntityLink` | The `goal` card (its own `GoalDetailsSheet` sheet) -> "Goals" (`money-plan`) | Cross, Esc | no |
 | | The wallet card ("Goals" group) | `EntityLink` | Card | "← Back" | no |

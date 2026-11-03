@@ -24,7 +24,7 @@ import { hotkeyLabel } from '@/shared/lib/hotkeys'
 import { BrandMark } from '@/shared/ui/brand-mark'
 import { useVaultStore } from '@/shared/store/vault'
 
-import { NAV_ITEMS, type NavItem } from '../../app-shell.constants'
+import { CONTACTS_ITEM, NAV_ITEMS, type NavItem } from '../../app-shell.constants'
 
 /**
  * Shell · 7: the five sections, the favourites, then settings, lock and
@@ -98,6 +98,14 @@ const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.pr
 
     <SidebarFooter>
       <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton as-child :is-active="isActive(CONTACTS_ITEM)" :tooltip="t(CONTACTS_ITEM.key)" data-tour="open-contacts">
+            <RouterLink :to="{ name: CONTACTS_ITEM.name }">
+              <component :is="CONTACTS_ITEM.icon" />
+              <span>{{ t(CONTACTS_ITEM.key) }}</span>
+            </RouterLink>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton :tooltip="t('settingsShell.title')" data-tour="open-settings" @click="emit('openSettings')">
             <Settings />

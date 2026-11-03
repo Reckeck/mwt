@@ -35,7 +35,7 @@ export function sourceLink(source: ReminderSource): RouteLocationRaw | null {
     case 'goal_deadline':
       return { name: 'money-plan' }
     case 'debt':
-      return { name: 'transactions-contacts' }
+      return { name: 'contacts' }
     case 'rent':
     case 'property_tax':
     case 'interest_tax':

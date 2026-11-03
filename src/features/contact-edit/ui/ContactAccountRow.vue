@@ -5,6 +5,7 @@ import { onLongPress } from '@vueuse/core'
 import { ArrowRight, Copy, Lock, LockOpen, Pencil } from 'lucide-vue-next'
 
 import { maskDetail } from '@/entities/contact'
+import { looksLikePhone } from '@/shared/lib/detect-detail'
 import { ActionMenu, ActionSheet } from '@/shared/ui/action-menu'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -22,7 +23,7 @@ import type { ContactAccountRowProps } from '../contact-edit.types'
  * «⋯» or the right click; a finger copies with a tap and holds for the menu.
  */
 const props = defineProps<ContactAccountRowProps>()
-const emit = defineEmits<{ copy: []; transfer: []; edit: []; toggle: [] }>()
+const emit = defineEmits<{ copy: []; transfer: []; edit: []; toggle: []; asPhone: [phone: string] }>()
 
 const { t } = useI18n()
 const coarse = useCoarsePointer()
@@ -34,6 +35,11 @@ const tag = computed(() =>
   [props.account.currency?.toUpperCase(), props.account.network && CHAIN_LABELS[props.account.network].toUpperCase()]
     .filter(Boolean)
     .join(' · '),
+)
+
+/** An `other`/`account` requisite that is really a phone: offered once, never rewritten by itself. */
+const phoneGuess = computed(() =>
+  props.account.kind === 'other' || props.account.kind === 'account' ? looksLikePhone(props.account.value) : null,
 )
 
 const actions = computed<UiAction[]>(() => [
@@ -74,6 +80,7 @@ function tap() {
 </script>
 
 <template>
+  <div>
   <ContextMenu :actions="actions" :disabled="coarse">
     <div
       ref="row"
@@ -130,6 +137,13 @@ function tap() {
       </Button>
       <ActionMenu v-if="!coarse" :actions="actions" :label="t('actions.more')" />
     </div>
+    <p v-if="phoneGuess" class="-mt-1 flex flex-wrap items-center gap-2 pb-2 pl-12 text-xs text-muted-foreground" data-contact-phone-hint>
+      <span>{{ t('contacts.account.looksLikePhone') }}</span>
+      <Button type="button" variant="outline" size="sm" data-contact-phone-yes @click="emit('asPhone', phoneGuess)">
+        {{ t('actions.yes') }}
+      </Button>
+    </p>
   </ContextMenu>
   <ActionSheet v-if="coarse" v-model:open="sheetOpen" :actions="actions" :title="title" :description="masked" />
+  </div>
 </template>

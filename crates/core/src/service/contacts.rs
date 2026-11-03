@@ -42,6 +42,24 @@ pub struct ContactBalance {
     pub payable: Amount,
 }
 
+/// One row of the contacts table: activity and debts in the base currency.
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct ContactSummary {
+    pub contact_id: String,
+    /// Operations with the contact; internal moves do not count.
+    pub tx_count: u32,
+    pub last_tx_at: Option<String>,
+    /// Signed from the user's side (negative: money went to the contact).
+    pub last_amount: Option<Amount>,
+    pub last_asset: Option<String>,
+    /// What they owe me, in the base currency.
+    pub receivable_base: Amount,
+    /// What I owe them (positive), in the base currency.
+    pub payable_base: Amount,
+    /// A debt currency had no rate: it is left out of the base sums.
+    pub missing_rate: bool,
+}
+
 /// What the UI sends to create or edit a contact. Accounts without an id are new.
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct ContactDraft {
@@ -259,6 +277,71 @@ impl UnlockedVault {
         }
         out.rows = rows.into_values().collect();
         Ok(out)
+    }
+
+    /// One summary per contact: operation count, the latest operation and the
+    /// debts converted to the base currency with the cached rates (no network).
+    pub fn contact_summaries(&self) -> Result<Vec<ContactSummary>> {
+        let (base, _) = self.base_and_fx();
+        let book = self.rate_book();
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
+        let mut out: BTreeMap<String, ContactSummary> = self
+            .doc
+            .contacts
+            .iter()
+            .map(|contact| {
+                (
+                    contact.id.clone(),
+                    ContactSummary {
+                        contact_id: contact.id.clone(),
+                        ..ContactSummary::default()
+                    },
+                )
+            })
+            .collect();
+        let mut latest: BTreeMap<String, i64> = BTreeMap::new();
+        for tx in &self.doc.transactions {
+            if tx.is_internal(|id| self.root_of(id)) {
+                continue;
+            }
+            let secs = secs_or_now(&tx.meta().timestamp);
+            for (contact_id, summary) in out.iter_mut() {
+                if !Self::involves(tx, contact_id, None) {
+                    continue;
+                }
+                summary.tx_count += 1;
+                if latest.get(contact_id).is_some_and(|seen| *seen > secs) {
+                    continue;
+                }
+                latest.insert(contact_id.clone(), secs);
+                summary.last_tx_at = Some(tx.meta().timestamp.clone());
+                let leg = tx
+                    .legs()
+                    .into_iter()
+                    .find(|leg| leg.role == LegRole::Principal);
+                summary.last_amount = leg.as_ref().map(|leg| leg.amount);
+                summary.last_asset = leg.map(|leg| leg.asset.symbol);
+            }
+        }
+        for balance in self.contact_balances() {
+            let Some(summary) = out.get_mut(&balance.contact_id) else {
+                continue;
+            };
+            let symbol = &balance.asset.symbol;
+            for (sum, value) in [
+                (&mut summary.receivable_base, balance.receivable),
+                (&mut summary.payable_base, balance.payable),
+            ] {
+                if value.is_zero() {
+                    continue;
+                }
+                match book.convert(value, symbol, &base, now) {
+                    Some(converted) => *sum += converted,
+                    None => summary.missing_rate = true,
+                }
+            }
+        }
+        Ok(out.into_values().collect())
     }
 
     /// Personal debts per contact and asset, from transfers marked as debts only.
@@ -524,6 +607,111 @@ mod tests {
         assert_eq!(all.rows[0].received, amount("50"));
         let one = vault.contact_turnover(&contact.id, Some(&account)).unwrap();
         assert_eq!(one.tx_count, 1);
+    }
+
+    fn summary_of(vault: &UnlockedVault, contact_id: &str) -> ContactSummary {
+        vault
+            .contact_summaries()
+            .unwrap()
+            .into_iter()
+            .find(|summary| summary.contact_id == contact_id)
+            .unwrap()
+    }
+
+    #[test]
+    fn summary_of_a_contact_without_operations_is_empty() {
+        let (_dir, mut vault) = setup();
+        let contact = ann(&mut vault);
+        let summary = summary_of(&vault, &contact.id);
+        assert_eq!(
+            summary,
+            ContactSummary {
+                contact_id: contact.id.clone(),
+                ..ContactSummary::default()
+            }
+        );
+    }
+
+    #[test]
+    fn summary_converts_debts_both_ways_and_skips_internal_moves() {
+        let (_dir, mut vault) = setup();
+        vault.set_base_currency("usd");
+        quote_usd(&mut vault);
+        vault.doc.fx_cache.push(crate::model::vault::FxPoint {
+            currency: "eur".into(),
+            per_usd: amount("0.5"),
+            ts: "2000-01-01T00:00:00Z".into(),
+            source: "test".into(),
+        });
+        let store = vault.doc.stores[1].id.clone();
+        let sub = vault
+            .create_store("Sub", StoreKind::Exchange, "", "", Some(store.clone()))
+            .unwrap()
+            .id;
+        let contact = ann(&mut vault);
+        let mine = || AccountRef::Store(store.clone());
+        let theirs = || AccountRef::Contact {
+            contact_id: contact.id.clone(),
+            account_id: None,
+        };
+        let eur = crate::model::store::AssetRef::fiat("EUR", "Euro");
+        vault
+            .add_transaction(income(&store, "10000", "in"))
+            .unwrap();
+        // they owe me 100 USD; I owe them 50 EUR (= 100 USD at 0.5 EUR per USD)
+        vault
+            .add_transaction(with_debt(
+                transfer_between(mine(), theirs(), usd(), "100"),
+                DebtEffect::Lend,
+            ))
+            .unwrap();
+        vault
+            .add_transaction(with_debt(
+                transfer_between(theirs(), mine(), eur, "50"),
+                DebtEffect::Borrow,
+            ))
+            .unwrap();
+        let mut internal = transfer_between(mine(), AccountRef::Store(sub), usd(), "10");
+        internal.meta_mut().contact_id = Some(contact.id.clone());
+        vault.add_transaction(internal).unwrap();
+
+        let summary = summary_of(&vault, &contact.id);
+        assert_eq!(summary.tx_count, 2);
+        assert_eq!(summary.receivable_base, amount("100"));
+        assert_eq!(summary.payable_base, amount("100"));
+        assert!(!summary.missing_rate);
+        assert!(summary.last_tx_at.is_some());
+        assert_eq!(summary.last_asset.as_deref(), Some("EUR"));
+        assert_eq!(summary.last_amount, Some(amount("50")));
+    }
+
+    #[test]
+    fn summary_flags_a_debt_currency_without_a_rate() {
+        let (_dir, mut vault) = setup();
+        vault.set_base_currency("usd");
+        quote_usd(&mut vault);
+        let store = vault.doc.stores[1].id.clone();
+        let contact = ann(&mut vault);
+        let eur = crate::model::store::AssetRef::fiat("EUR", "Euro");
+        vault.add_transaction(income(&store, "1000", "in")).unwrap();
+        vault
+            .add_transaction(with_debt(
+                transfer_between(
+                    AccountRef::Store(store),
+                    AccountRef::Contact {
+                        contact_id: contact.id.clone(),
+                        account_id: None,
+                    },
+                    eur,
+                    "30",
+                ),
+                DebtEffect::Lend,
+            ))
+            .unwrap();
+        let summary = summary_of(&vault, &contact.id);
+        assert!(summary.missing_rate);
+        assert_eq!(summary.receivable_base, Amount::ZERO);
+        assert_eq!(summary.last_amount, Some(amount("-30")));
     }
 
     #[test]

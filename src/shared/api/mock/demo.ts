@@ -1,11 +1,11 @@
 /** The demo wallets and their history, seeded on first use. */
-
 import { txId, txLegs, txMeta } from '@/shared/lib/transactions'
 import { mockTransactionFrom } from './ledger'
 import { seedUtilityDemo } from './planning'
 import { mockImportSettings, mockTerminal } from './catalog'
 import { mockStore } from './tree'
 import { priceOf } from './prices'
+import { demoContactDebts } from './demo-contacts'
 
 /** Demo history: a salary, a payment, a trade, a debt and a conversion via an exchanger. */
 export function demoTransactions(): Transaction[] {
@@ -36,6 +36,7 @@ export function demoTransactions(): Transaction[] {
   const btc = { symbol: 'BTC', name: 'Bitcoin', coingecko_id: 'bitcoin', chain: 'bitcoin' as Chain, contract: null }
   const usdt = { symbol: 'USDT', name: 'Tether', coingecko_id: 'tether', chain: null, contract: null }
   const rub = { symbol: 'RUB', name: 'Рубль', coingecko_id: null, chain: 'fiat' as Chain, contract: null }
+  const usd = { symbol: 'USD', name: 'Доллар США', coingecko_id: null, chain: 'fiat' as Chain, contract: null }
   const details: KindDetails = { cash_breakdown: null, unit_price: null, network: null, tx_hash: null }
   const inputs: TransactionInput[] = [
     {
@@ -138,6 +139,7 @@ export function demoTransactions(): Transaction[] {
       fee: null,
       rate_override: '93.75',
     },
+    ...demoContactDebts(common, bank.id, rub, usd),
   ]
   return inputs.map((input) => mockTransactionFrom(input, priceOf))
 }

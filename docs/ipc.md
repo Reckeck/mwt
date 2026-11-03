@@ -231,6 +231,7 @@ A file is encrypted with its own random key (XChaCha20-Poly1305, AAD — the att
 | `delete_contact` | `id` | `()` — only if nothing references the contact |
 | `get_contact_turnover` | `ContactTurnoverInput { contact_id, account_id? }` | `ContactTurnover { rows[{ asset, sent, received }], sent_base, received_base, tx_count }` |
 | `get_contact_balances` | — | `Vec<ContactBalance { contact_id, asset, receivable, payable }>` — personal debts (the amount is computed from transfers with `debt`) |
+| `list_contact_summaries` | — | `Vec<ContactSummary { contact_id, tx_count, last_tx_at, last_amount, last_asset, receivable_base, payable_base, missing_rate }>` — one row per contact for the contacts table; debts in the base currency from the cached rates, `missing_rate` when a currency had none |
 | `list_debt_terms` | `contactId?` | `DebtTerms[] { id, contact_id, asset, due_at?, note }` — only the term and note, no amount |
 | `set_debt_terms` | `DebtTermsDraft { contact_id, asset, due_at?, note }` | `DebtTerms \| null` — replaces a contact's debt terms in this asset; an empty term and note delete them. An overdue or near term goes into `get_upcoming` (`kind: debt`) |
 

@@ -7,3 +7,4 @@
 export { mockCategories, mockContacts, mockRules, mockKindsFor } from './seed'
 export { mockTransactionFrom } from './transaction-from'
 export * from './contacts'
+export * from './contact-summaries'

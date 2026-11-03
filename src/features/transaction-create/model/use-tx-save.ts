@@ -16,7 +16,13 @@ import { emptyForm, formToInput, formToInputs, isLinked } from '../transaction-f
 import type { TxFormState } from './use-tx-form-state'
 
 /** Every query a saved operation can show up in. */
-const STALE_KEYS = [...LEDGER_KEYS, ...PLANNING_KEYS, ['contacts', 'balances'], ['entity-card']]
+const STALE_KEYS = [
+  ...LEDGER_KEYS,
+  ...PLANNING_KEYS,
+  ['contacts', 'balances'],
+  ['contacts', 'summaries'],
+  ['entity-card'],
+]
 
 /**
  * Writing the operation: one, or a linked chain when the money lands on

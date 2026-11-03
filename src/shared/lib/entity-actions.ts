@@ -119,7 +119,7 @@ const ACTIONS: Record<EntityKind, EntityAction[]> = {
   ],
   contact: [
     operations((id) => emptyTxFilter({ contact_id: id })),
-    page('entity.action.openContact', (target) => ({ name: 'transactions-contacts', query: { contact: target.id } })),
+    page('entity.action.openContact', (target) => ({ name: 'contacts', query: { contact: target.id } })),
   ],
   goal: [focusPage('entity.action.openGoals', 'money-plan')],
   scenario: [

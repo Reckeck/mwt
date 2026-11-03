@@ -14,6 +14,24 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'contactsSection',
+    date: '2026-11-03',
+    points: [
+      { key: 'section', route: 'contacts' },
+      { key: 'table', route: 'contacts' },
+      { key: 'sheet', route: 'contacts' },
+      { key: 'requisite', route: 'contacts' },
+    ],
+  },
+  {
+    id: 'phoneRequisites',
+    date: '2026-11-03',
+    points: [
+      { key: 'recognize', route: 'contacts' },
+      { key: 'kind', route: 'contacts' },
+    ],
+  },
+  {
     id: 'syncTransfer',
     date: '2026-11-03',
     points: [
@@ -55,14 +73,14 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'settle', route: 'money-together-event' },
       { key: 'payShare', route: 'money-together-event' },
       { key: 'share', route: 'money-together-event' },
-      { key: 'contact', route: 'transactions-contacts' },
+      { key: 'contact', route: 'contacts' },
       { key: 'dashboard', route: 'dashboard' },
     ],
   },
   {
     id: 'quickContacts',
     date: '2026-10-29',
-    points: [{ key: 'create' }, { key: 'fillIn', route: 'transactions-contacts' }],
+    points: [{ key: 'create' }, { key: 'fillIn', route: 'contacts' }],
   },
   {
     id: 'amountCalculator',
@@ -269,24 +287,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'uses', route: 'automations-sources' },
       { key: 'guard', route: 'automations-sources' },
       { key: 'workflows', route: 'automations' },
-    ],
-  },
-  {
-    id: 'propertyLinks',
-    date: '2026-10-22',
-    points: [
-      { key: 'field', route: 'transactions' },
-      { key: 'rent', route: 'automations' },
-      { key: 'summary', route: 'stores' },
-    ],
-  },
-  {
-    id: 'propertyValuations',
-    date: '2026-10-22',
-    points: [
-      { key: 'history', route: 'wallet-settings' },
-      { key: 'rule', route: 'wallet-settings' },
-      { key: 'purchase', route: 'wallet-settings' },
     ],
   },
   ...WHATS_NEW_AUTUMN,

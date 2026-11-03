@@ -15,7 +15,7 @@ import { Skeleton } from '@/shared/ui/skeleton'
  * `Shared events` in a contact's card: the events I share with them, each with the balance
  * between us (green: they owe me, red: I owe them). Without events it says so in a row of the same height.
  */
-const props = defineProps<{ contactId: string }>()
+const props = defineProps<{ contactId: string; hideTitle?: boolean }>()
 
 const ROW_CLASS = [
   'flex min-h-[3.25rem] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm hover:bg-muted/50',
@@ -36,8 +36,8 @@ const rows = computed(() =>
 </script>
 
 <template>
-  <section class="grid gap-2" data-tour="contact-shared-events">
-    <h3 class="text-base font-semibold">{{ t('contacts.sharedEvents.title') }}</h3>
+  <section class="grid grid-cols-1 gap-2" data-tour="contact-shared-events">
+    <h3 v-if="!props.hideTitle" class="text-base font-semibold">{{ t('contacts.sharedEvents.title') }}</h3>
     <!-- One row tall while loading and while empty, so the card below does not move when the events arrive. -->
     <div class="min-h-14 divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <Skeleton v-if="events.isPending.value" class="h-[3.25rem] w-full rounded-none" />

@@ -10,7 +10,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 import { cn } from '@/shared/lib/utils'
 import { useVaultStore } from '@/shared/store/vault'
 
-import { type NavItem, navItem } from '../../app-shell.constants'
+import { CONTACTS_ITEM, type NavItem, navItem } from '../../app-shell.constants'
 
 /**
  * The phone's bar (Shell · 6): Home, Transactions, a new transaction, Money and
@@ -27,12 +27,14 @@ const tree = useStoreTree()
 const left = [navItem('dashboard'), navItem('transactions')]
 const right = [navItem('money')]
 const rest = [navItem('stores'), navItem('automations')]
+/** «More» is lit on contacts too. */
+const moreLit = (): boolean => isActive(CONTACTS_ITEM)
 
 function isActive(item: NavItem): boolean {
   return item.prefix ? route.path.startsWith(item.prefix) : route.name === item.name
 }
 /** «More» is lit on a section the bar does not show. */
-const elsewhere = computed(() => rest.some(isActive))
+const elsewhere = computed(() => rest.some(isActive) || moreLit())
 const walletCount = computed(() => tree.data.value?.length ?? 0)
 
 const moreOpen = ref(false)
@@ -102,6 +104,14 @@ const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px
           </span>
           <span v-if="item.name === 'stores' && walletCount" class="text-muted-foreground">
             {{ t('nav.walletCount', { count: walletCount }) }}
+          </span>
+          <ChevronRight class="size-4 text-muted-foreground" />
+        </Button>
+        <Button variant="ghost" :class="ROW" @click="pick(() => router.push({ name: CONTACTS_ITEM.name }))">
+          <component :is="CONTACTS_ITEM.icon" class="size-5 text-muted-foreground" />
+          <span class="grid min-w-0 flex-1 gap-0.5 py-1.5">
+            <span class="truncate">{{ t(CONTACTS_ITEM.key) }}</span>
+            <span class="truncate text-xs text-muted-foreground">{{ t('nav.contactsHint') }}</span>
           </span>
           <ChevronRight class="size-4 text-muted-foreground" />
         </Button>

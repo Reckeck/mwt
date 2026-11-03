@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Check, X } from 'lucide-vue-next'
 
 import { cardBrand } from '@/entities/contact'
+import { DETAIL_KINDS } from '../contact-edit.constants'
 import { Button } from '@/shared/ui/button'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
@@ -29,7 +30,12 @@ const label = ref(props.initial?.label ?? '')
 const group = ref(props.initial?.group ?? '')
 const guess = computed(() => detectDetail(value.value))
 const network = ref<Chain | ''>(props.initial?.network ?? '')
-const kind = computed(() => (props.initial && props.initial.value === value.value ? props.initial.kind : guess.value.kind))
+/** The kind the user chose by hand; until then the detection (or the stored kind) decides. */
+const pickedKind = ref<DetailKind | ''>('')
+const kind = computed<DetailKind>(() => {
+  if (pickedKind.value) return pickedKind.value
+  return props.initial && props.initial.value === value.value ? props.initial.kind : guess.value.kind
+})
 const shownNetwork = computed(() => network.value || guess.value.network || '')
 /** Mir cards are rouble cards; other currencies are kept from the stored requisite. */
 const currency = computed(() => {
@@ -64,7 +70,7 @@ function save() {
     kind: kind.value,
     value: kind.value === guess.value.kind ? guess.value.value : value.value.trim(),
     currency: currency.value,
-    network: (shownNetwork.value as Chain) || null,
+    network: kind.value === 'crypto_address' ? (shownNetwork.value as Chain) || null : null,
     active: props.initial?.active ?? true,
   })
 }
@@ -121,6 +127,16 @@ onMounted(() => {
         <datalist id="contact-account-groups">
           <option v-for="entry in props.groups" :key="entry" :value="entry" />
         </datalist>
+      </FormField>
+      <FormField for="contact-account-kind" :label="t('contacts.accountKind')" :hint="t('contacts.kindHint')">
+        <Select
+          id="contact-account-kind"
+          :model-value="kind"
+          :aria-label="t('contacts.accountKind')"
+          @update:model-value="pickedKind = $event as DetailKind"
+        >
+          <SelectItem v-for="entry in DETAIL_KINDS" :key="entry" :value="entry">{{ t(`detailKind.${entry}`) }}</SelectItem>
+        </Select>
       </FormField>
       <FormField
         v-if="kind === 'crypto_address'"

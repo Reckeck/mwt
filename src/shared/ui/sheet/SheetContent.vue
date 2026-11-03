@@ -21,6 +21,8 @@ interface SheetContentProps extends DialogContentProps {
   hideClose?: boolean
   /** Name of the layer for `data-overlay`. */
   overlay?: string
+  /** No dim layer: the page stays visible and clickable (use with `<Sheet :modal="false">`). */
+  noOverlay?: boolean
 }
 
 defineOptions({
@@ -32,7 +34,7 @@ const props = withDefaults(defineProps<SheetContentProps>(), {
 })
 const emits = defineEmits<DialogContentEmits>()
 
-const delegatedProps = reactiveOmit(props, "class", "side", "hideClose", "overlay")
+const delegatedProps = reactiveOmit(props, "class", "side", "hideClose", "overlay", "noOverlay")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 const { t } = useI18n()
@@ -40,7 +42,7 @@ const { t } = useI18n()
 
 <template>
   <DialogPortal>
-    <SheetOverlay />
+    <SheetOverlay v-if="!props.noOverlay" />
     <DialogContent
       data-slot="sheet-content"
       :data-overlay="props.overlay"

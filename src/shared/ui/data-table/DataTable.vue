@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<DataTableProps<TData>>(), {
   stickyFirstColumn: false,
   emptyText: undefined,
   clickable: false,
+  rowClass: undefined,
 })
 const emit = defineEmits<{ 'row-click': [row: TData] }>()
 
@@ -121,7 +122,7 @@ function headerLabel(column: Column<TData, unknown>): string {
         <TableRow
           v-for="row in table.getRowModel().rows"
           :key="row.id"
-          :class="cn(props.clickable && 'cursor-pointer focus-visible:bg-muted/50 focus-visible:outline-none')"
+          :class="cn(props.clickable && 'cursor-pointer focus-visible:bg-muted/50 focus-visible:outline-none', props.rowClass?.(row.original))"
           :tabindex="props.clickable ? 0 : undefined"
           @click="props.clickable && emit('row-click', row.original)"
           @keydown.enter="props.clickable && emit('row-click', row.original)"
