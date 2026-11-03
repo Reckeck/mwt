@@ -8,7 +8,7 @@ use super::{PruneArgs, capture, has_token, is_prerelease_tag, repo, run_logged, 
 const DEFAULT_KEPT: usize = 10;
 
 /// The pre-release tags to delete: `tags` are newest first, `keep` pre-releases stay.
-/// Only `vX.Y.Z-N` tags are ever picked, so a release `vX.Y.Z` cannot be deleted.
+/// Only `vX.Y.Z-N` tags are ever picked, so a release `vX.Y.Z` and the `updater-dev` manifest release cannot be deleted.
 pub fn select(tags: &[String], keep: usize) -> Vec<String> {
     tags.iter()
         .filter(|tag| is_prerelease_tag(tag))

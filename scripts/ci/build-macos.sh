@@ -11,7 +11,8 @@
 # Signing: with APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD and
 # APPLE_SIGNING_IDENTITY (+ APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID to
 # notarize) tauri signs itself; without them the app is signed ad hoc and
-# Gatekeeper asks to confirm the first start (docs/ci.md).
+# Gatekeeper asks to confirm the first start. The APPLE_* secrets are not set up in
+# GitHub and release.yml does not pass them yet.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 

@@ -3,6 +3,7 @@
 
 mod aur;
 mod backmerge;
+mod manifest;
 mod notes;
 mod prune;
 #[cfg(test)]
@@ -272,10 +273,14 @@ pub fn run_publish(root: &Path, args: &PublishArgs) -> Result<()> {
     std::fs::write(&notes_file, &text).context("write the release notes")?;
     println!("--- {title} ---\n{text}\n---");
 
+    let manifest_path = write_manifest(&args.dir, &files, &repo, &tag, &args.version, &title)?;
     let names: Vec<String> = files
         .iter()
         .map(|(name, _)| args.dir.join(name).display().to_string())
-        .chain([args.dir.join(SUMS).display().to_string()])
+        .chain([
+            args.dir.join(SUMS).display().to_string(),
+            manifest_path.display().to_string(),
+        ])
         .collect();
     let gh_args = notes::release_args(&notes::Release {
         repo: &repo,
@@ -288,7 +293,72 @@ pub fn run_publish(root: &Path, args: &PublishArgs) -> Result<()> {
     });
     let result = run_logged("gh", &gh_args, args.dry_run);
     let _ = std::fs::remove_file(&notes_file);
-    result
+    result?;
+    if args.pre {
+        publish_dev_manifest(&repo, &sha, &manifest_path, args.dry_run)?;
+    }
+    Ok(())
+}
+
+/// Builds the updater manifest from the `.sig` files of `files` and writes it next to them.
+fn write_manifest(
+    dir: &Path,
+    files: &[(String, Vec<u8>)],
+    repo: &str,
+    tag: &str,
+    version: &str,
+    title: &str,
+) -> Result<PathBuf> {
+    let names: Vec<String> = files.iter().map(|(name, _)| name.clone()).collect();
+    let signatures = manifest::signed_names(&names)
+        .into_iter()
+        .filter_map(|bundle| {
+            let sig = files
+                .iter()
+                .find(|(name, _)| *name == format!("{bundle}.sig"))?;
+            Some((bundle, String::from_utf8_lossy(&sig.1).into_owned()))
+        })
+        .collect();
+    let (value, warnings) = manifest::build(&manifest::Input {
+        repo,
+        tag,
+        version,
+        notes: title,
+        pub_date: &chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        names: &names,
+        signatures: &signatures,
+    });
+    for warning in warnings {
+        eprintln!("WARNING: {warning}");
+    }
+    let path = dir.join(manifest::file_name(version.contains('-')));
+    std::fs::write(&path, serde_json::to_string_pretty(&value)? + "\n")
+        .context("write the manifest")?;
+    println!(
+        "manifest {}:\n{}",
+        path.display(),
+        std::fs::read_to_string(&path)?
+    );
+    Ok(path)
+}
+
+/// The dev channel reads its manifest from the `updater-dev` pre-release: create it or replace the file.
+fn publish_dev_manifest(repo: &str, sha: &str, file: &Path, dry: bool) -> Result<()> {
+    let file = file.display().to_string();
+    let view = ["release", "view", manifest::DEV_RELEASE_TAG, "--repo", repo].map(String::from);
+    let exists = !dry
+        && Command::new("gh")
+            .args(&view)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success());
+    run_logged(
+        "gh",
+        &manifest::dev_release_args(repo, sha, &file, exists),
+        dry,
+    )
 }
 
 pub use backmerge::run as run_backmerge;

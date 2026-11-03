@@ -7,6 +7,8 @@
 #   Linux    .deb .rpm .AppImage, linux-x86_64.tar.gz (the AUR source), .pkg.tar.zst (pacman), .flatpak
 #   Android  universal APK and AAB
 #   Windows  NSIS setup.exe, an .msi per language, the portable zip
+#   Updater  the .sig files of the AppImage, the setup.exe and the .msi files, when
+#            TAURI_SIGNING_PRIVATE_KEY is set (the manifest is made later, by `cargo xtask publish`)
 #   macOS    universal .dmg and the .app tarball (only with the third argument)
 set -euo pipefail
 
@@ -33,6 +35,11 @@ want "${prefix}-${version}-android-universal.aab"
 want "${prefix}-${version}-x64-setup.exe"
 want_glob "${prefix}-${version}-x64-*.msi"
 want "${prefix}-${version}-windows-x64-portable.zip"
+if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+  want "${prefix}-${version}-x86_64.AppImage.sig"
+  want "${prefix}-${version}-x64-setup.exe.sig"
+  want_glob "${prefix}-${version}-x64-*.msi.sig"
+fi
 if [[ "${3:-}" == macos ]]; then
   want "${prefix}-${version}-macos-universal.dmg"
   want "${prefix}-${version}-macos-universal.app.tar.gz"

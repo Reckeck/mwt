@@ -231,3 +231,114 @@ fn aur_steps_never_carry_the_key() {
     assert!(text.contains("render.sh 0.1.0 /rel/multi-wallet-tracker-0.1.0-linux-x86_64.tar.gz https://github.com/Reckeck/mwt/releases/download/v0.1.0/"));
     assert!(text.trim_end().ends_with("push origin HEAD:master"));
 }
+
+fn manifest_names(version: &str, with_apk: bool) -> Vec<String> {
+    let mut names = vec![
+        format!("multi-wallet-tracker-{version}-x86_64.AppImage"),
+        format!("multi-wallet-tracker-{version}-x86_64.AppImage.sig"),
+        format!("multi-wallet-tracker-{version}-x64-setup.exe"),
+        format!("multi-wallet-tracker-{version}-x64-setup.exe.sig"),
+        format!("multi-wallet-tracker-{version}-x64-en-US.msi"),
+        format!("multi-wallet-tracker-{version}-x64-en-US.msi.sig"),
+    ];
+    if with_apk {
+        names.push(format!(
+            "multi-wallet-tracker-{version}-android-universal.apk"
+        ));
+    }
+    names
+}
+
+fn manifest_for(names: &[String]) -> (serde_json::Value, Vec<String>) {
+    let signatures = super::manifest::signed_names(names)
+        .into_iter()
+        .map(|name| {
+            let sig = format!("sig-of-{name}\n");
+            (name, sig)
+        })
+        .collect();
+    super::manifest::build(&super::manifest::Input {
+        repo: "Reckeck/mwt",
+        tag: "v1.2.3",
+        version: "1.2.3",
+        notes: "Multi Wallet Tracker 1.2.3",
+        pub_date: "2026-11-03T10:00:00Z",
+        names,
+        signatures: &signatures,
+    })
+}
+
+#[test]
+fn manifest_lists_signed_platforms_with_urls() {
+    let (value, warnings) = manifest_for(&manifest_names("1.2.3", true));
+    assert!(warnings.is_empty());
+    assert_eq!(value["version"], "1.2.3");
+    assert_eq!(value["pub_date"], "2026-11-03T10:00:00Z");
+    let linux = &value["platforms"]["linux-x86_64"];
+    assert_eq!(
+        linux["url"],
+        "https://github.com/Reckeck/mwt/releases/download/v1.2.3/multi-wallet-tracker-1.2.3-x86_64.AppImage"
+    );
+    assert_eq!(
+        linux["signature"],
+        "sig-of-multi-wallet-tracker-1.2.3-x86_64.AppImage"
+    );
+    for key in ["windows-x86_64", "windows-x86_64-nsis"] {
+        assert!(
+            value["platforms"][key]["url"]
+                .as_str()
+                .unwrap()
+                .ends_with("-x64-setup.exe")
+        );
+    }
+    assert!(
+        value["platforms"]["windows-x86_64-msi"]["url"]
+            .as_str()
+            .unwrap()
+            .ends_with("en-US.msi")
+    );
+    assert_eq!(
+        value["release_url"],
+        "https://github.com/Reckeck/mwt/releases/tag/v1.2.3"
+    );
+    assert!(
+        value["apk_url"]
+            .as_str()
+            .unwrap()
+            .ends_with("-android-universal.apk")
+    );
+}
+
+#[test]
+fn manifest_skips_unsigned_platforms_and_keeps_the_links() {
+    let (value, warnings) = manifest_for(&manifest_names("1.2.3", false)[..0]);
+    assert_eq!(warnings.len(), 3);
+    assert!(value["platforms"].as_object().unwrap().is_empty());
+    assert!(value["apk_url"].is_null());
+    assert!(value["release_url"].is_string());
+    let (partial, warnings) = manifest_for(&manifest_names("1.2.3", false)[..2]);
+    assert_eq!(warnings.len(), 2);
+    assert_eq!(partial["platforms"].as_object().unwrap().len(), 1);
+}
+
+#[test]
+fn manifest_file_names_and_dev_release() {
+    assert_eq!(super::manifest::file_name(false), "latest.json");
+    assert_eq!(super::manifest::file_name(true), "latest-dev.json");
+    let create = super::manifest::dev_release_args("o/r", "cafe", "d/latest-dev.json", false);
+    assert_eq!(
+        &create[..3],
+        &strings(&["release", "create", "updater-dev"])[..]
+    );
+    assert!(create.contains(&"--prerelease".to_string()));
+    let upload = super::manifest::dev_release_args("o/r", "cafe", "d/latest-dev.json", true);
+    assert_eq!(&upload[..2], &strings(&["release", "upload"])[..]);
+    assert!(upload.contains(&"--clobber".to_string()));
+}
+
+#[test]
+fn prune_never_picks_the_updater_release() {
+    let tags = strings(&["v1.0.0-3", "updater-dev", "v1.0.0", "v1.0.0-2", "v1.0.0-1"]);
+    assert_eq!(select(&tags, 1), strings(&["v1.0.0-2", "v1.0.0-1"]));
+    assert_eq!(select(&strings(&["updater-dev"]), 0), Vec::<String>::new());
+}

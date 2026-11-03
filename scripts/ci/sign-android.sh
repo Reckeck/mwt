@@ -7,7 +7,7 @@
 #   ANDROID_KEYSTORE_BASE64   base64 of the .jks/.keystore file
 #   ANDROID_KEYSTORE_PASSWORD store password
 #   ANDROID_KEY_ALIAS         key alias
-#   ANDROID_KEY_PASSWORD      key password (defaults to the store password)
+# The key password is the store password.
 # Without them a throwaway key signs the APK so it installs for testing; such
 # builds cannot update each other and must not be published.
 set -euo pipefail
@@ -32,7 +32,7 @@ else
     -dname "CN=Multi Wallet Tracker test build" >/dev/null 2>&1
   suffix="-testkey"
 fi
-export ANDROID_KEY_PASSWORD="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+export ANDROID_KEY_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
 
 mkdir -p "$out"
 apk_out="$out/multi-wallet-tracker-${version}-android-universal${suffix}.apk"

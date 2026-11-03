@@ -225,7 +225,9 @@ impl Env {
             "ANDROID_KEYSTORE_BASE64",
             "ANDROID_KEYSTORE_PASSWORD",
             "ANDROID_KEY_ALIAS",
-            "ANDROID_KEY_PASSWORD",
+            // Updater signing: the build scripts make .sig files when the key is set.
+            "TAURI_SIGNING_PRIVATE_KEY",
+            "TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
             // CI: AppImage without FUSE, Gradle without a daemon.
             "APPIMAGE_EXTRACT_AND_RUN",
             "NO_STRIP",

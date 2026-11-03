@@ -287,7 +287,7 @@ version, images ──► frontend ──► build (linux | android | windows) �
 - `aur` (prod) is `publish-aur` in an archlinux container; without the secret
   `AUR_SSH_PRIVATE_KEY` the step is skipped with a warning.
 - `backmerge` (prod, `pull-requests: write`) is a PR `main` → `development`; the
-  token is `BACKMERGE_TOKEN` (if present), otherwise `GITHUB_TOKEN` (the setting
+  token is `GITHUB_TOKEN` (the setting
   "Allow GitHub Actions to create and approve pull requests" is needed); an
   error does not fail the run.
 - `build-macos` is written but turned off (`if: false`, like `clippy-macos`): to
@@ -303,18 +303,29 @@ The release files (`<v>` is the version, decision 12 of the plan):
 | Android | `multi-wallet-tracker-<v>-android-universal.apk` and `.aab` |
 | Windows | `multi-wallet-tracker-<v>-x64-setup.exe` (NSIS), `multi-wallet-tracker-<v>-x64-<language>.msi`, `multi-wallet-tracker-<v>-windows-x64-portable.zip` |
 | macOS (paused) | `multi-wallet-tracker-<v>-macos-universal.dmg`, `.app.tar.gz` |
+| Updater (with `TAURI_SIGNING_PRIVATE_KEY`) | `multi-wallet-tracker-<v>-x86_64.AppImage.sig`, `...-x64-setup.exe.sig`, `...-x64-<language>.msi.sig`, and the manifest `latest.json` (pre-releases: `latest-dev.json`) |
 | All | `SHA256SUMS` |
+
+**Updater manifest.** `cargo xtask publish` builds it after `SHA256SUMS` from the `.sig` files in the
+release folder (Tauri static JSON: `version`, `notes`, `pub_date`, `platforms` `linux-x86_64` ->
+AppImage, `windows-x86_64` and `windows-x86_64-nsis` -> setup.exe, `windows-x86_64-msi` -> the first
+signed MSI, each `{signature, url}`; plus our `release_url` and `apk_url` for notice-only installs)
+and attaches it to the release. A platform without a `.sig` is left out with a warning. On the dev
+channel the same `latest-dev.json` is also put on the pre-release `updater-dev` (created if missing,
+file replaced with `--clobber`), which has a stable URL; `prune-prereleases` only deletes `vX.Y.Z-N`
+tags, so `updater-dev` stays. The public key is `plugins.updater.pubkey` in `tauri.conf.json`; the
+endpoint is set by the app at run time (`endpoints` is empty). `createUpdaterArtifacts` is not in
+`tauri.conf.json`: tauri fails a build that has it on but no `TAURI_SIGNING_PRIVATE_KEY`, so
+`build-linux.sh` and `build-windows.ps1` add it through an extra `--config` only when the key is
+set. Local and fork builds therefore still work and simply make no `.sig` files.
 
 **Secrets** (Settings → Secrets and variables → Actions):
 
 | Secret | Purpose | Without it |
 |---|---|---|
 | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` | signing the APK/AAB; the previous keystore, otherwise the installed app will not update | on a release the Android build fails; without a release the APK is signed with a test key (`*-testkey`), and such files are not published |
-| `ANDROID_KEY_PASSWORD` | the key password, if it differs from the keystore password | the keystore password is used |
 | `AUR_SSH_PRIVATE_KEY` | push to AUR | the step is skipped with a warning |
-| `BACKMERGE_TOKEN` | a PAT/app token for the PR `main` → `development` (it starts the checks) | the PR is made by `GITHUB_TOKEN` |
-| `APPLE_*` | macOS signing (when it is turned on) | ad hoc signing |
-| `TAURI_SIGNING_PRIVATE_KEY` | signing updates: `latest.json` + `.sig` (decision 16) | not used: the app has no update plugin yet |
+| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | signing the updater bundles (`.sig`) for the manifest | no `.sig` files and no updater entries; `check-release-files.sh` asks for the `.sig` files only when the key is set |
 
 The keystore is not written to the runner's disk: `ANDROID_KEYSTORE_BASE64`
 reaches the container as an environment variable (GitHub masks the value in the
@@ -356,11 +367,12 @@ The secrets that the workflows read (besides the automatic `GITHUB_TOKEN`):
 | `ANDROID_KEYSTORE_BASE64` | release signing of the APK/AAB | `base64 -w0 release.keystore` |
 | `ANDROID_KEYSTORE_PASSWORD` | the same | |
 | `ANDROID_KEY_ALIAS` | the same | |
-| `ANDROID_KEY_PASSWORD` | the same | by default = the keystore password |
 | `AUR_SSH_PRIVATE_KEY` | `aur` (`publish-aur`) | a key added to the AUR account |
-| `BACKMERGE_TOKEN` | `backmerge` | a PAT/app token; otherwise `GITHUB_TOKEN` |
-| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | macOS signing (the job is turned off) | base64 `.p12` Developer ID; without them, ad hoc |
-| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | macOS notarization (the job is turned off) | an Apple ID app password |
+| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | updater signatures (`release.yml`, Linux and Windows builds) | the content of `updater.key` and its password; no signatures without them |
+
+The key files (`updater.key`, `updater.key.pub`, the Android keystore and passwords) live outside the
+repository on the maintainer machine (`~/.mwt-keys/`). The Android keystore was regenerated on
+2026-11-03.
 
 For the details of "without the secret", see the secrets table in the
 "release.yml" section.
