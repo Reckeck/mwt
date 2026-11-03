@@ -1,4 +1,4 @@
-//! One build task per platform: the same scripts and images as GitHub Actions (`scripts/ci/build-*.sh`).
+//! One build task per platform: the same scripts and images as GitHub Actions (`xtask bundle`, `scripts/ci/build-*`).
 
 use std::sync::Arc;
 
@@ -12,7 +12,7 @@ use crate::tauri_config;
 /// (builds run side by side). The frontend is built once on the host (`build:frontend`), so the
 /// overlay has an empty `beforeBuildCommand`.
 pub const OVERLAY_VAR: &str = "MWT_TAURI_CONFIG";
-/// build-android.sh leaves the committed icons alone when they are a private copy.
+/// `xtask bundle android` leaves the committed icons alone when they are a private copy.
 pub const ICONS_VAR: &str = "MWT_ICONS_ISOLATED";
 
 /// Writes the lane's overlay on the host; the path as the build script sees it: the working
@@ -52,6 +52,16 @@ pub fn with_names(mut cmd: Cmd, channel: Channel) -> Cmd {
     cmd
 }
 
+/// The static xtask mounted in the container, packaging a platform.
+fn bundle_line(env: &Env, platform: &str) -> String {
+    format!(
+        "{} bundle {platform} --version '{}' --out '{}'",
+        super::musl::MOUNT,
+        env.version,
+        env.out
+    )
+}
+
 fn quoted(env: &Env) -> String {
     format!("'{}' '{}'", env.version, env.out)
 }
@@ -62,8 +72,19 @@ pub async fn linux(env: Arc<Env>, ctx: Ctx) -> Outcome {
             Ok(path) => path,
             Err(outcome) => return outcome,
         };
+        let exe = match std::env::current_exe() {
+            Ok(path) => path.display().to_string(),
+            Err(error) => return Outcome::Fail(format!("cannot find the running xtask: {error}")),
+        };
         let cmd = with_names(
-            Cmd::new("scripts/ci/build-linux.sh").args([&env.version, &env.out]),
+            Cmd::new(&exe).args([
+                "bundle",
+                "linux",
+                "--version",
+                &env.version,
+                "--out",
+                &env.out,
+            ]),
             env.channel,
         )
         .env(OVERLAY_VAR, &config);
@@ -73,7 +94,7 @@ pub async fn linux(env: Arc<Env>, ctx: Ctx) -> Outcome {
         Ok(image) => image,
         Err(outcome) => return outcome,
     };
-    let script = format!("scripts/ci/build-linux.sh {}", quoted(&env));
+    let script = bundle_line(&env, "linux");
     let more = match tauri_args(&env, "linux", false) {
         Ok(more) => more,
         Err(outcome) => return outcome,
@@ -106,8 +127,8 @@ pub async fn android(env: Arc<Env>, ctx: Ctx) -> Outcome {
         format!("{ICONS_VAR}=1"),
     ]);
     let script = format!(
-        "source scripts/ci/setup-android.sh; scripts/ci/build-android.sh {}",
-        quoted(&env)
+        "source scripts/ci/setup-android.sh; {}",
+        bundle_line(&env, "android")
     );
     match env.run_ci("android", &image, &script, more) {
         Ok(cmd) => env.finish(&ctx, "android", cmd).await,
@@ -116,6 +137,9 @@ pub async fn android(env: Arc<Env>, ctx: Ctx) -> Outcome {
 }
 
 pub async fn windows(env: Arc<Env>, ctx: Ctx) -> Outcome {
+    if env.native || cfg!(windows) {
+        return super::windows::native(env, ctx).await;
+    }
     let image = match env.windows_image(&ctx).await {
         Ok(image) => image,
         Err(outcome) => return outcome,
@@ -132,7 +156,7 @@ pub async fn windows(env: Arc<Env>, ctx: Ctx) -> Outcome {
 }
 
 pub async fn pacman(env: Arc<Env>, ctx: Ctx) -> Outcome {
-    let script = format!("scripts/ci/build-pacman.sh {}", quoted(&env));
+    let script = bundle_line(&env, "pacman");
     match env.run_arch("pacman", &script, &[]) {
         Ok(cmd) => env.finish(&ctx, "pacman", cmd).await,
         Err(outcome) => outcome,
@@ -141,14 +165,25 @@ pub async fn pacman(env: Arc<Env>, ctx: Ctx) -> Outcome {
 
 pub async fn flatpak(env: Arc<Env>, ctx: Ctx) -> Outcome {
     if env.native && which("flatpak-builder").is_some() {
+        let exe = match std::env::current_exe() {
+            Ok(path) => path.display().to_string(),
+            Err(error) => return Outcome::Fail(format!("cannot find the running xtask: {error}")),
+        };
         let cmd = with_names(
-            Cmd::new("scripts/ci/build-flatpak.sh").args([&env.version, &env.out]),
+            Cmd::new(&exe).args([
+                "bundle",
+                "flatpak",
+                "--version",
+                &env.version,
+                "--out",
+                &env.out,
+            ]),
             env.channel,
         );
         return crate::graph::run_cmd(&ctx, &cmd).await;
     }
     // flatpak-builder needs bubblewrap.
-    let script = format!("scripts/ci/build-flatpak.sh {}", quoted(&env));
+    let script = bundle_line(&env, "flatpak");
     match env.run_arch("flatpak", &script, &["--privileged"]) {
         Ok(cmd) => env.finish(&ctx, "flatpak", cmd).await,
         Err(outcome) => outcome,

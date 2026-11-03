@@ -75,7 +75,7 @@ What makes CI fast and what must not be broken:
   the final optimization runs in parallel instead of in a single thread. The
   variables are set by `cargo xtask build` itself according to the channel
   (`Channel::build_env`; they are forwarded into the container) and by
-  `scripts/ci/build-windows.ps1` according to `RELEASE_CHANNEL`; a value set
+  `xtask build windows` (native) according to `RELEASE_CHANNEL`; a value set
   explicitly in the environment takes precedence. Releases from `main` (prod)
   are built with full LTO and a single codegen unit (`[profile.release]` in
   `Cargo.toml`), which gives the smallest and fastest binary.
@@ -113,8 +113,8 @@ The token is `GH_TOKEN` (or `GITHUB_TOKEN`). They are called by
 Builds of `main` (`RELEASE_CHANNEL=prod`) and `development` (`dev`) are two
 different apps: they install side by side, and each has its own data. The names
 are set by `crates/xtask/src/channel.rs`; the overlay `cargo xtask tauri-config`
-puts them into the build (`build-windows.ps1` repeats them, `mise run check-ci`
-compares them):
+puts them into the build (the native Windows build writes the same overlay itself; the
+unit tests of `crates/xtask` compare the names):
 
 | | prod (`main`, release) | dev (`development`, manual, local) |
 |---|---|---|
@@ -133,14 +133,14 @@ compares them):
   `crates/app/windows/autostart-cleanup.wxs`).
 - The TradeApp data migration (`legacy.rs`) is done only by dev: the release
   under `mwt.desktop` starts with a clean directory.
-- The Flatpak manifest in the repository is dev; the release `build-flatpak.sh`
+- The Flatpak manifest in the repository is dev; the release `xtask bundle flatpak`
   renders it from that under its own ID.
 
 ### Overlay and channel names for the build scripts
 
-The `scripts/ci/build-*.sh` scripts do not call xtask (there is no cargo in the
-pacman and flatpak containers), so the channel names and the Tauri config reach
-them from outside:
+The container steps (`xtask bundle`, the Windows and macOS scripts) do not ask
+xtask for the channel (there is no cargo in the containers), so the channel names
+and the Tauri config reach them from outside as variables:
 
 - `MWT_TAURI_CONFIG` is the path to the overlay (`tauri build --config`), written
   by `cargo xtask tauri-config` (by default `.cache/tauri-ci.json`; `cargo xtask
@@ -271,8 +271,9 @@ version, images ──► frontend ──► build (linux | android | windows) �
 - `build` is one group with `fail-fast: true`: the first failed build cancels
   the others (restart with "Re-run failed jobs"). linux and android are
   `xtask build <platform>` on a runner with the `ci-linux`/`ci-android` images
-  from ghcr (docker), windows is `scripts/ci/build-windows.ps1` on
-  `windows-latest` (the MSI is built by WiX). Pre-releases go without LTO on 16
+  from ghcr (docker), windows is `xtask.exe build windows --native` on
+  `windows-latest` (a prebuilt `xtask-exe` from the `xtask-windows` job; rust, node
+  and pnpm from mise; the MSI is built by WiX). Pre-releases go without LTO on 16
   codegen units, a release with the LTO from `[profile.release]`. The sccache
   cache of the container builds is handed back to the runner user (`chown`)
   before saving: docker writes it as root. The cache key (`xtask lane-key`)
@@ -316,7 +317,7 @@ file replaced with `--clobber`), which has a stable URL; `prune-prereleases` onl
 tags, so `updater-dev` stays. The public key is `plugins.updater.pubkey` in `tauri.conf.json`; the
 endpoint is set by the app at run time (`endpoints` is empty). `createUpdaterArtifacts` is not in
 `tauri.conf.json`: tauri fails a build that has it on but no `TAURI_SIGNING_PRIVATE_KEY`, so
-`build-linux.sh` and `build-windows.ps1` add it through an extra `--config` only when the key is
+`xtask bundle linux` and `xtask build windows` add it through an extra `--config` only when the key is
 set. Local and fork builds therefore still work and simply make no `.sig` files.
 
 **Secrets** (Settings → Secrets and variables → Actions):
@@ -329,7 +330,7 @@ set. Local and fork builds therefore still work and simply make no `.sig` files.
 
 The keystore is not written to the runner's disk: `ANDROID_KEYSTORE_BASE64`
 reaches the container as an environment variable (GitHub masks the value in the
-log), `sign-android.sh` lays it out into a temporary file inside the container,
+log), `xtask bundle android` lays it out into a temporary file inside the container,
 and that file disappears together with the container.
 
 **Manual run** (Actions → release → Run workflow, or
@@ -351,8 +352,9 @@ a cache of compiled crates (on `main` this is intended, decision 26).
 - The checks and Linux builds run on `ubuntu-latest` with docker; the builds run
   in the `ci-linux`/`ci-android` images from ghcr. Flatpak is built in a
   container with `--privileged` (bubblewrap).
-- Windows is `windows-latest` (`scripts/ci/build-windows.ps1`; MSVC Build Tools
-  are installed through choco if they are missing; the MSI is built by WiX).
+- Windows is `windows-latest` (`xtask build windows --native`, `build/windows.rs`; MSVC
+  Build Tools must be on the image: xtask checks with vswhere and fails otherwise, it
+  installs nothing; the MSI is built by WiX; the zip is made by the `zip` crate).
 - macOS in CI is paused (`clippy-macos`, `build-macos` are turned off).
 - The Android build is long (release + LTO, three architectures,
   `ANDROID_TARGETS`): a 2 h timeout.
@@ -396,7 +398,7 @@ Losing the key means being unable to update the app for users.
   for both channels into `crates/app/icons/prod/` and `dev/` and
   `public/favicon.svg`; the PNGs are committed, CI draws nothing.
   `tauri.conf.json` points to `dev/`, the overlay `cargo xtask tauri-config` /
-  `build-windows.ps1` to the channel's folder (`Channel::icons` in
+  `xtask build windows` to the channel's folder (`Channel::icons` in
   `channel.rs`). Sizes of 32 px and smaller come from `*-small.svg` (without the
   back edges of the cube); dev has an orange DEV stripe.
 
@@ -468,7 +470,7 @@ mise run check-platforms -- windows android # selectively
 ### All platforms: `mise run build:all`
 
 `cargo xtask build` builds the bundles with the same code as CI
-(`scripts/ci/build-*.sh`), in the same images; the machine needs only podman (or
+(`xtask bundle`, `scripts/ci/build-*`), in the same images; the machine needs only podman (or
 docker: `CONTAINER_ENGINE=docker`). The channel is `--channel dev` (the default)
 or `prod` (see "Channels"). The result goes to `.cache/build-all/builds/<channel>/`,
 the log of each task to `.cache/xtask/build-<platform>.log`, and at the end
@@ -488,12 +490,24 @@ mise run build:all -- --list linux pacman  # the task graph without running
 
 The graph: `build:frontend` (`pnpm build` on the host, once, into `dist/`) →
 `android`, `windows`, `linux` (heavy, no more than `--heavy` at a time) →
-`pacman`, `flatpak` (after `linux`); `macos` waits for nobody. The per-platform
+`pacman`, `flatpak` (after `linux`); `macos` waits for nobody. Every task that runs in a
+container also waits for `build:xtask` (see below). The per-platform
 `tauri build` runs do not run the frontend again: the overlay `cargo xtask
 tauri-config --prebuilt-frontend` has an empty `beforeBuildCommand` (CI does
 not pass the flag). `pacman` and `flatpak` without `linux` in the list take the
 tarball from the result folder, and if it is not there, it is an error before
 the build starts ("build it first").
+
+**The static xtask.** The build containers are Ubuntu 22.04 and archlinux, so a
+glibc xtask of the host does not run in both. The containers get a static musl
+xtask, mounted read-only at `/usr/local/bin/xtask`, and run the packaging steps
+as `xtask bundle <platform> --version V --out DIR` (`linux`, `android`, `pacman`, `flatpak`:
+tauri build, signing, the release names, the tarball) instead of shell scripts. In CI the
+binary is built by the `xtask` job of `ci.yml` / the `version` job of
+`release.yml` for `x86_64-unknown-linux-musl` and is `bin/xtask` on the build
+runner; a local run is its own musl binary or builds one in the `build:xtask`
+task (`rustup target add x86_64-unknown-linux-musl` if missing, then `cargo build
+-p xtask --target x86_64-unknown-linux-musl --target-dir .cache/xtask-musl`).
 
 | Platform | Where it is built | What you get |
 |---|---|---|
@@ -501,7 +515,7 @@ the build starts ("build it first").
 | `pacman` | `archlinux:base-devel`, after `linux` | `.pkg.tar.zst` |
 | `flatpak` | `archlinux:base-devel` `--privileged`, after `linux` | `.flatpak` |
 | `android` | the `ci-android` image | APK and AAB; without `ANDROID_KEYSTORE_*` a test key, suffix `-testkey` |
-| `windows` | `ci-linux` + `cargo-xwin` (`scripts/local/windows-cross.Dockerfile`) | NSIS `-setup.exe`, portable `.zip`; no MSI: WiX works only on Windows, CI makes it |
+| `windows` | `ci-linux` + `cargo-xwin` (`scripts/local/windows-cross.Dockerfile`) | NSIS `-setup.exe`, portable `.zip`; no MSI: WiX works only on Windows, a Windows host (`build windows --native`) makes it |
 | `macos` | on a Mac immediately; from Linux on `MACOS_BUILD_HOST=user@mac` over ssh (rsync there and back, the Mac builds the frontend itself) | `.dmg`, `.app.tar.gz`; without a Mac, SKIP |
 
 - The images come from ghcr.io (`ghcr.io/reckeck/mwt/ci-<kind>:<tag>`, the tag is
@@ -527,6 +541,6 @@ the build starts ("build it first").
 
 ```bash
 mise run build                                       # deb/rpm/AppImage
-scripts/ci/collect-linux.sh "$(cargo xtask version)" release
+mise run build:all -- linux --native         # the bundles under release names
 packaging/aur/render.sh 0.1.0 release/multi-wallet-tracker-0.1.0-linux-x86_64.tar.gz > PKGBUILD
 ```

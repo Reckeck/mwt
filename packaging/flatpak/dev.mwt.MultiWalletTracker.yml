@@ -1,7 +1,7 @@
 # Flatpak of the CI-built Linux binary (repackaged, like Tauri's guide does
 # with the .deb). CI puts the tarball next to this file as
 # multi-wallet-tracker-linux-x86_64.tar.gz and clones flathub/shared-modules here.
-# This is the dev app's; build-flatpak.sh renders the release's
+# This is the dev app's; `xtask bundle flatpak` renders the release's
 # (mwt.app.MultiWalletTracker) from it.
 #
 #   flatpak-builder --user --install-deps-from=flathub --force-clean \

@@ -266,7 +266,7 @@ check it with `mise x actionlint@1.7.12 -- actionlint`. GitLab is only a mirror 
   logic in xtask or a script (`scripts/ci/*`, `.github/scripts/*`), not in a
   multi-line `run:` — then it can be run and checked locally.
 - **Tool versions — only from `mise.toml`.** CI installs node/pnpm/rust
-  via mise (the Windows script reads the same lines); do not hardcode versions in YAML.
+  via mise (jdx/mise-action on Windows too); do not hardcode versions in YAML.
 - **CI images.** Linux jobs run in prebuilt images
   (`scripts/ci/ci.Dockerfile`, images `ci-node`/`ci-linux`/`ci-android` in ghcr).
   The tag is a hash of the inputs (the Dockerfile, `apt-packages.sh`, `install-chrome.sh`,

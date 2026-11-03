@@ -2,6 +2,7 @@
 
 use clap::{Args, Parser, Subcommand};
 
+use crate::bundle::BundleArgs;
 use crate::output::OutputArgs;
 use crate::version::Kind;
 use crate::{checks, publish, tauri_config};
@@ -47,6 +48,9 @@ pub enum Command {
     /// Write the Tauri config overlay of a build and print its absolute path.
     #[command(hide = true)]
     TauriConfig(TauriConfigArgs),
+    /// The packaging step of a platform build (runs in the build containers with the static xtask).
+    #[command(hide = true)]
+    Bundle(BundleArgs),
     /// The CI image tag: a hash of the Dockerfile, the apt lists and the [tools] of mise.toml.
     #[command(hide = true)]
     ImageTag,

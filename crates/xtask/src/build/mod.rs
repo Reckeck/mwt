@@ -1,10 +1,12 @@
 //! `cargo xtask build`: bundles for every platform, with the scripts and images GitHub Actions uses
-//! (`scripts/ci/build-*.sh`). The frontend is built once on the host; the platforms that do not
+//! (`xtask bundle`, `scripts/ci/build-*`). The frontend is built once on the host; the platforms that do not
 //! depend on each other run side by side.
 
 mod env;
 mod macos;
+mod musl;
 mod targets;
+mod windows;
 
 use std::sync::Arc;
 
@@ -13,7 +15,7 @@ use anyhow::{Result, bail};
 pub use env::Env;
 pub use macos::MacFacts;
 
-use crate::exec::Cmd;
+use crate::exec::{Cmd, which};
 use crate::graph::{Class, Outcome, Task, run_cmd};
 use crate::sink::Sink;
 
@@ -63,6 +65,7 @@ pub fn graph(env: &Arc<Env>, chosen: &[String], facts: &Facts) -> Result<Vec<Tas
     let wanted = |name: &str| chosen.is_empty() || chosen.iter().any(|item| item == name);
     let frontend = task_name("frontend");
     let linux = task_name("linux");
+    let static_xtask = musl::task_name();
     let after_frontend = if facts.prebuilt_frontend {
         Vec::new()
     } else {
@@ -72,16 +75,35 @@ pub fn graph(env: &Arc<Env>, chosen: &[String], facts: &Facts) -> Result<Vec<Tas
     for platform in PLATFORMS.into_iter().filter(|name| wanted(name)) {
         let name = task_name(platform);
         let shared = env.clone();
+        // What runs in a container needs the static xtask mounted into it.
+        let mut with_xtask = after_frontend.clone();
+        with_xtask.push(static_xtask.as_str());
         let task = match platform {
-            "android" => Task::func(&name, Class::Heavy, &after_frontend, move |ctx| {
+            "android" => Task::func(&name, Class::Heavy, &with_xtask, move |ctx| {
                 targets::android(shared.clone(), ctx)
             }),
-            "windows" => Task::func(&name, Class::Heavy, &after_frontend, move |ctx| {
-                targets::windows(shared.clone(), ctx)
-            }),
-            "linux" => Task::func(&name, Class::Heavy, &after_frontend, move |ctx| {
-                targets::linux(shared.clone(), ctx)
-            }),
+            // A Windows host builds natively; elsewhere the cross build runs in a container.
+            "windows" => Task::func(
+                &name,
+                Class::Heavy,
+                if env.native || cfg!(windows) {
+                    &after_frontend
+                } else {
+                    &with_xtask
+                },
+                move |ctx| targets::windows(shared.clone(), ctx),
+            ),
+            // Natively the running xtask does the bundling.
+            "linux" => Task::func(
+                &name,
+                Class::Heavy,
+                if env.native {
+                    &after_frontend
+                } else {
+                    &with_xtask
+                },
+                move |ctx| targets::linux(shared.clone(), ctx),
+            ),
             "macos" => {
                 let mac = facts.mac.clone();
                 let deps = if mac.local() {
@@ -94,7 +116,7 @@ pub fn graph(env: &Arc<Env>, chosen: &[String], facts: &Facts) -> Result<Vec<Tas
                 })
             }
             _ => {
-                let deps = if wanted("linux") {
+                let mut deps = if wanted("linux") {
                     vec![linux.as_str()]
                 } else if facts.tarball {
                     Vec::new()
@@ -105,6 +127,9 @@ pub fn graph(env: &Arc<Env>, chosen: &[String], facts: &Facts) -> Result<Vec<Tas
                         env.tarball().display()
                     );
                 };
+                if platform == "pacman" || !(env.native && which("flatpak-builder").is_some()) {
+                    deps.push(static_xtask.as_str());
+                }
                 if platform == "pacman" {
                     Task::func(&name, Class::Light, &deps, move |ctx| {
                         targets::pacman(shared.clone(), ctx)
@@ -117,6 +142,15 @@ pub fn graph(env: &Arc<Env>, chosen: &[String], facts: &Facts) -> Result<Vec<Tas
             }
         };
         tasks.push(task);
+    }
+    if tasks.iter().any(|task| task.deps.contains(&static_xtask)) {
+        let shared = env.clone();
+        tasks.insert(
+            0,
+            Task::func(&static_xtask, Class::Light, &[], move |ctx| {
+                musl::prepare(shared.clone(), ctx)
+            }),
+        );
     }
     if !facts.prebuilt_frontend && tasks.iter().any(|task| task.deps.contains(&frontend)) {
         // The first to start: everything else waits for it.
