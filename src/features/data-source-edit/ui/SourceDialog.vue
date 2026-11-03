@@ -35,6 +35,8 @@ const pick = useSourcePick(state, actions)
 const form = useFormValidation(() => state.rules(), { resetOn: open })
 
 const INTERVALS = ['hour', 'day', 'week'] as const
+/** In the script, not the template: vue-tsc 3 misreads the `//` of a static attribute and fails every `.value` after it. */
+const URL_PLACEHOLDER = 'https://'
 
 watch(open, (value) => {
   if (!value) return
@@ -71,7 +73,7 @@ function save() {
   >
     <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end" data-tour="source-url">
       <FormField for="source-url" :label="t('sources.url')" required :error="form.error('url') ?? pick.previewError.value ?? undefined">
-        <Input id="source-url" v-model="state.url.value" type="url" inputmode="url" placeholder="https://" />
+        <Input id="source-url" v-model="state.url.value" type="url" inputmode="url" :placeholder="URL_PLACEHOLDER" />
       </FormField>
       <Button
         type="button"
