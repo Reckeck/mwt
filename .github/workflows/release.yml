@@ -31,10 +31,12 @@ on:
         type: boolean
         default: false
 
-# One run per branch at a time. A release is never cancelled half way: a newer push waits.
+# One run per branch at a time. A push to development cancels the older pre-release run (the
+# newer one supersedes it; runs never overlap, so the pre-release number N taken from the tags
+# stays unique). A release from main and a manual run are never cancelled half way: they wait.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
 
 permissions:
   contents: read
