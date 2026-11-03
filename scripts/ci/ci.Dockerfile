@@ -52,6 +52,8 @@ RUN curl -fsSL "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_
 FROM linux AS android
 ARG ANDROID_PLATFORM=android-35
 ARG ANDROID_BUILD_TOOLS=35.0.0
+# Gradle plugins compile against these; a missing one is downloaded on every build.
+ARG ANDROID_SDK_EXTRA="platforms;android-36 platforms;android-37.0 build-tools;36.0.0"
 ARG ANDROID_NDK_VERSION=27.2.12479018
 ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
@@ -70,6 +72,7 @@ RUN mkdir -p /opt/android-sdk/cmdline-tools \
  && rm -rf /tmp/tools /tmp/tools.zip \
  && (yes || true) | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null \
  && /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" \
-      "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" "ndk;${ANDROID_NDK_VERSION}" >/dev/null
+      "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" "ndk;${ANDROID_NDK_VERSION}" \
+      ${ANDROID_SDK_EXTRA} >/dev/null
 RUN rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android \
  && touch /etc/mwt-ci-android

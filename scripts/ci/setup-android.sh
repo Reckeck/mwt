@@ -12,6 +12,8 @@ export ANDROID_HOME="$CI_PROJECT_DIR/.cache/android-sdk"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 ANDROID_PLATFORM="${ANDROID_PLATFORM:-android-35}"
 ANDROID_BUILD_TOOLS="${ANDROID_BUILD_TOOLS:-35.0.0}"
+# Gradle plugins compile against these; a missing one is downloaded on every build.
+ANDROID_SDK_EXTRA=("platforms;android-36" "platforms;android-37.0" "build-tools;36.0.0")
 ANDROID_NDK_VERSION="${ANDROID_NDK_VERSION:-27.2.12479018}" # r27c
 CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
 
@@ -30,7 +32,7 @@ fi
 # `yes` dies of SIGPIPE once the licenses are accepted; that is not a failure.
 (yes || true) | "$sdkmanager" --licenses >/dev/null
 "$sdkmanager" --install "platform-tools" "platforms;$ANDROID_PLATFORM" \
-  "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK_VERSION" >/dev/null
+  "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK_VERSION" "${ANDROID_SDK_EXTRA[@]}" >/dev/null
 
 export NDK_HOME="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
 export ANDROID_NDK_HOME="$NDK_HOME"
