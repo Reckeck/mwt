@@ -1,0 +1,38 @@
+diff --git a/lib/index.js b/lib/index.js
+index cd01bb1f1563571946c1470dfdea9d009655d9cd..c9ecffee0fa73abcb63b3cb750c34314ce9c6e15 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -305,12 +305,12 @@ const TIME_BEFORE_UNMOUNT = 200;
+ //#region src/packages/hooks.ts
+ function useIsDocumentHidden() {
+ 	const isDocumentHidden = ref(false);
+-	watchEffect(() => {
++	watchEffect((onCleanup) => {
+ 		const callback = () => {
+ 			isDocumentHidden.value = document.hidden;
+ 		};
+ 		document.addEventListener("visibilitychange", callback);
+-		return () => window.removeEventListener("visibilitychange", callback);
++		onCleanup(() => document.removeEventListener("visibilitychange", callback));
+ 	});
+ 	return { isDocumentHidden };
+ }
+diff --git a/src/packages/hooks.ts b/src/packages/hooks.ts
+index 9b618b688f339f76e73efca151b095b35d59e6ef..c8f34526f6dc6c01759ef49a3a8d79fc1f3d3266 100644
+--- a/src/packages/hooks.ts
++++ b/src/packages/hooks.ts
+@@ -6,12 +6,12 @@ import { MOBILE_VIEWPORT_OFFSET, VIEWPORT_OFFSET } from './constant'
+ export function useIsDocumentHidden() {
+   const isDocumentHidden = ref(false)
+ 
+-  watchEffect(() => {
++  watchEffect((onCleanup) => {
+     const callback = () => {
+       isDocumentHidden.value = document.hidden
+     }
+     document.addEventListener('visibilitychange', callback)
+-    return () => window.removeEventListener('visibilitychange', callback)
++    onCleanup(() => document.removeEventListener('visibilitychange', callback))
+   })
+ 
+   return {
