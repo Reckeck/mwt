@@ -1,19 +1,19 @@
-<script setup lang="ts" generic="TData">
+<script setup lang="ts" generic="TData extends RowData">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next'
 import {
   FlexRender,
   type Column,
+  type RowData,
   type SortingState,
-  getCoreRowModel,
-  getSortedRowModel,
-  useVueTable,
+  useTable,
 } from '@tanstack/vue-table'
 
 import { cn } from '@/shared/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 
+import { type DataTableFeatures, dataTableFeatures } from './data-table.features'
 import type { DataTableProps } from './data-table.types'
 
 /**
@@ -39,7 +39,8 @@ const { t } = useI18n()
 
 const sorting = ref<SortingState>(props.initialSorting)
 
-const table = useVueTable({
+const table = useTable({
+  features: dataTableFeatures,
   get data() {
     return props.data
   },
@@ -55,23 +56,21 @@ const table = useVueTable({
   onSortingChange: (updater) => {
     sorting.value = typeof updater === 'function' ? updater(sorting.value) : updater
   },
-  getCoreRowModel: getCoreRowModel(),
-  getSortedRowModel: getSortedRowModel(),
 })
 
 const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' } as const
 
-function alignOf(column: Column<TData, unknown>): string {
+function alignOf(column: Column<DataTableFeatures, TData, unknown>): string {
   return ALIGN[column.columnDef.meta?.align ?? 'left']
 }
 
-function ariaSort(column: Column<TData, unknown>): 'ascending' | 'descending' | undefined {
+function ariaSort(column: Column<DataTableFeatures, TData, unknown>): 'ascending' | 'descending' | undefined {
   const dir = column.getIsSorted()
   if (!dir) return undefined
   return dir === 'asc' ? 'ascending' : 'descending'
 }
 
-function headerLabel(column: Column<TData, unknown>): string {
+function headerLabel(column: Column<DataTableFeatures, TData, unknown>): string {
   const header = column.columnDef.header
   return typeof header === 'string' ? header : column.id
 }
@@ -107,12 +106,12 @@ function headerLabel(column: Column<TData, unknown>): string {
               :aria-label="t('ui.sortBy', { column: headerLabel(header.column) })"
               @click="header.column.toggleSorting(undefined, false)"
             >
-              <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
+              <FlexRender :header="header" />
               <ArrowUp v-if="header.column.getIsSorted() === 'asc'" class="size-3.5" />
               <ArrowDown v-else-if="header.column.getIsSorted() === 'desc'" class="size-3.5" />
               <ArrowUpDown v-else class="size-3.5 opacity-40" />
             </button>
-            <FlexRender v-else :render="header.column.columnDef.header" :props="header.getContext()" />
+            <FlexRender v-else :header="header" />
           </template>
         </TableHead>
       </TableRow>
@@ -128,7 +127,7 @@ function headerLabel(column: Column<TData, unknown>): string {
           @keydown.enter="props.clickable && emit('row-click', row.original)"
         >
           <TableCell
-            v-for="(cell, index) in row.getVisibleCells()"
+            v-for="(cell, index) in row.getAllCells()"
             :key="cell.id"
             :class="
               cn(
@@ -139,7 +138,7 @@ function headerLabel(column: Column<TData, unknown>): string {
               )
             "
           >
-            <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
+            <FlexRender :cell="cell" />
           </TableCell>
         </TableRow>
       </template>

@@ -1,8 +1,10 @@
-import type { ColumnDef, RowData, SortingState } from '@tanstack/vue-table'
+import type { CellData, ColumnDef as TableColumnDef, RowData, SortingState, TableFeatures } from '@tanstack/vue-table'
+
+import type { DataTableFeatures } from './data-table.features'
 
 declare module '@tanstack/vue-table' {
   // The generics must match the library's declaration, even unused.
-  interface ColumnMeta<TData extends RowData, TValue> {
+  interface ColumnMeta<TFeatures extends TableFeatures, TData extends RowData, TValue extends CellData = CellData> {
     /** Numbers (amounts, quantities, prices) go right so their places line up. */
     align?: 'left' | 'right' | 'center'
     /** Extra classes for this column's cells, header included. */
@@ -10,7 +12,10 @@ declare module '@tanstack/vue-table' {
   }
 }
 
-export interface DataTableProps<TData> {
+/** A column of the app's table; the features are fixed by DataTable. */
+export type ColumnDef<TData extends RowData, TValue = unknown> = TableColumnDef<DataTableFeatures, TData, TValue>
+
+export interface DataTableProps<TData extends RowData> {
   // biome-ignore lint/suspicious/noExplicitAny: a column's value type differs per column.
   columns: ColumnDef<TData, any>[]
   data: TData[]
@@ -35,4 +40,4 @@ export interface DataTableProps<TData> {
   rowClass?: (row: TData) => string | undefined
 }
 
-export type { ColumnDef, SortingState }
+export type { SortingState }
