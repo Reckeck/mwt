@@ -114,6 +114,12 @@ pub struct AppSettings {
     /// that used to keep it ([`Self::adopt_device_settings`]).
     #[serde(default)]
     pub minimize_to_tray: Option<bool>,
+    /// Check for app updates on start and in the background; `None` = on.
+    #[serde(default)]
+    pub auto_update: Option<bool>,
+    /// When the last update check finished (RFC 3339).
+    #[serde(default)]
+    pub last_update_check: Option<String>,
     /// How often prices and rates refresh here, seconds; `None` = not taken over yet.
     #[serde(default)]
     pub fx_refresh_interval_sec: Option<u32>,
@@ -222,6 +228,8 @@ impl Default for AppSettings {
             device_name: None,
             sync: SyncPrefs::default(),
             minimize_to_tray: None,
+            auto_update: None,
+            last_update_check: None,
             fx_refresh_interval_sec: None,
             display_decimals: None,
             installed_at: None,
@@ -287,6 +295,12 @@ impl AppSettings {
         if let Some(minimize) = patch.minimize_to_tray {
             self.minimize_to_tray = Some(minimize);
         }
+        if let Some(auto_update) = patch.auto_update {
+            self.auto_update = Some(auto_update);
+        }
+        if let Some(stamp) = &patch.last_update_check {
+            self.last_update_check = Some(stamp.clone());
+        }
         if let Some(interval) = patch.fx_refresh_interval_sec {
             self.fx_refresh_interval_sec = Some(interval.clamp(30, 3600));
         }
@@ -347,6 +361,10 @@ impl AppSettings {
                 self.fx_refresh_interval_sec,
                 self.display_decimals,
             )
+    }
+
+    pub fn auto_update(&self) -> bool {
+        self.auto_update.unwrap_or(true)
     }
 
     pub fn minimize_to_tray(&self) -> bool {
@@ -458,6 +476,11 @@ pub struct UpdateAppSettingsInput {
     pub sync: Option<SyncPrefs>,
     #[serde(default)]
     pub minimize_to_tray: Option<bool>,
+    #[serde(default)]
+    pub auto_update: Option<bool>,
+    /// RFC 3339 time of the last update check.
+    #[serde(default)]
+    pub last_update_check: Option<String>,
     #[serde(default)]
     pub fx_refresh_interval_sec: Option<u32>,
     #[serde(default)]
@@ -910,6 +933,8 @@ mod tests {
                 background_lock_min: Some(15),
             },
             minimize_to_tray: Some(false),
+            auto_update: Some(false),
+            last_update_check: Some("2026-11-03T10:00:00Z".into()),
             fx_refresh_interval_sec: Some(900),
             display_decimals: Some(2),
             installed_at: Some("2026-10-19".into()),
@@ -1112,6 +1137,16 @@ mod tests {
         assert!(!settings.sync.enabled);
         assert!(settings.minimize_to_tray());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn old_settings_file_reads_without_update_fields() {
+        let settings: AppSettings =
+            serde_json::from_str(r#"{"theme":"auto","locale":"auto","base_currency":"usd"}"#)
+                .expect("old file");
+        assert_eq!(settings.auto_update, None);
+        assert!(settings.auto_update());
+        assert_eq!(settings.last_update_check, None);
     }
 
     #[test]

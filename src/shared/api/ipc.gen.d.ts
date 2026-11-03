@@ -195,6 +195,14 @@ sync: SyncPrefs,
  */
 minimize_to_tray: boolean | null, 
 /**
+ * Check for app updates on start and in the background; `None` = on.
+ */
+auto_update: boolean | null, 
+/**
+ * When the last update check finished (RFC 3339).
+ */
+last_update_check: string | null, 
+/**
  * How often prices and rates refresh here, seconds; `None` = not taken over yet.
  */
 fx_refresh_interval_sec: number | null, 
@@ -1142,6 +1150,8 @@ fields: Array<FieldChange>, };
 type ChangeKind = "added" | "updated" | "deleted";
 
 type ChangePasswordInput = { current_password: string, new_password: string, };
+
+type Channel = "prod" | "dev";
 
 /**
  * The part of the financial capital in one basket; `class_id: None` is
@@ -2766,6 +2776,8 @@ fetched: boolean, info: TxInfo | null, hints: Array<TxFieldHint>,
  */
 notice: string | null, };
 
+type InstallKind = "app_image" | "windows_nsis" | "windows_msi" | "deb" | "rpm" | "pacman" | "flatpak" | "android" | "mac_app" | "unknown";
+
 /**
  * The tax on deposit interest for a year.
  */
@@ -3177,6 +3189,11 @@ unit: LoyaltyUnit, };
  * What a programme's points are called on screen: "1 240 points", "2 coupons".
  */
 type LoyaltyUnit = "points" | "miles" | "coupons";
+
+/**
+ * What to tell the user when the app cannot update itself.
+ */
+type ManualHint = "none" | "release_page" | "package_manager" | "apk";
 
 /**
  * A hand-set value of a non-financial asset; applies to its whole history
@@ -6591,7 +6608,11 @@ seen_whats_new: Array<string> | null,
 /**
  * An empty name goes back to the host name.
  */
-device_name: string | null, sync: SyncPrefs | null, minimize_to_tray: boolean | null, fx_refresh_interval_sec: number | null, display_decimals: number | null, dashboard_today_collapsed: boolean | null, 
+device_name: string | null, sync: SyncPrefs | null, minimize_to_tray: boolean | null, auto_update: boolean | null, 
+/**
+ * RFC 3339 time of the last update check.
+ */
+last_update_check: string | null, fx_refresh_interval_sec: number | null, display_decimals: number | null, dashboard_today_collapsed: boolean | null, 
 /**
  * Whether screens offer their tour on the first visit.
  */
@@ -6637,6 +6658,17 @@ period: string,
  * Day of the month (1–31); `None` = the month's end.
  */
 day: number | null, };
+
+/**
+ * What the UI shows when a newer version exists.
+ */
+type UpdateOffer = { version: string, notes: string | null, release_url: string | null, download_url: string | null, can_self_update: boolean, hint: ManualHint, };
+
+/**
+ * Where the update check stands (event `update-state` carries the whole
+ * [`UpdateStatusDto`]).
+ */
+type UpdatePhase = { "type": "idle" } | { "type": "checking" } | { "type": "up_to_date" } | { "type": "downloading", percent: number, } | { "type": "ready", version: string, } | { "type": "available", offer: UpdateOffer, } | { "type": "error", message: string, };
 
 type UpdatePriceAlertInput = { id: string, alert: PriceAlertInput, };
 
@@ -6684,6 +6716,12 @@ type UpdateSharedItemInput = { event_id: string, item_id: string, item: SharedIt
 type UpdateSharedParticipantInput = { event_id: string, participant_id: string, participant: SharedParticipantDraft, };
 
 type UpdateSharedPurchaseInput = { event_id: string, purchase_id: string, purchase: SharedPurchaseDraft, };
+
+type UpdateStatusDto = { phase: UpdatePhase, current_version: string, install_kind: InstallKind, channel: Channel, auto_update: boolean, 
+/**
+ * RFC 3339 time of the last finished check.
+ */
+last_check: string | null, };
 
 type UpdateStoreInput = { id: string, name: string, color: string, note: string, 
 /**

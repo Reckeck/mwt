@@ -14,6 +14,7 @@ import { sharedEventCommands } from './commands-shared-events'
 import { sharedMoneyCommands } from './commands-shared-money'
 import { sharedSettleCommands } from './commands-shared-settle'
 import { ratesCommands } from './commands-rates'
+import { updatesCommands } from './commands-updates'
 import { sourcesCommands } from './commands-sources'
 import { storeTreeCommands } from './commands-store-tree'
 import { valuationCommands } from './commands-valuation'
@@ -60,6 +61,7 @@ const MOCK_COMMANDS: MockCommands = {
   ...sharedSettleCommands,
   ...sharedMoneyCommands,
   ...ratesCommands,
+  ...updatesCommands,
   ...sourcesCommands,
   ...exchangeAccountsCommands,
   ...devReportCommands,

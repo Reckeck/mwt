@@ -42,6 +42,7 @@ The frontend parses the code and shows a localized message.
 | `vault-changed` | `VaultStatus` | the vault was locked without a window request (Android: background lock, the button on the sync notification); the window goes to the unlock screen |
 | `vault-save-failed` | `string` or `{ reason, exiting }` | the batched vault write failed (it retries by itself); `exiting` — on exit, the window offers "Retry" / "Quit without saving" |
 | `vault-saved` | — | a write succeeded again after an error |
+| `update-state` | `UpdateStatusDto` | the update check changed phase: checking, downloading (`percent`), ready, available (hand-updated installs), up to date, error |
 
 Background tasks live in `crates/app/src/scheduler.rs`: one thread, a tick every 30 s,
 only while the vault is unlocked — Bybit import, automations, alerts (prices of their
@@ -129,6 +130,18 @@ The design — `docs/sync.md`. Works while the vault is unlocked and sync is on.
 | `sync_journal` | — | `Vec<SyncJournalEntry { id, at, peer_name, counts[{collection,count}], label, batch_id, outcome: applied/declined/failed/sent }>`, newest first (a ring of 200 rows; without record values) |
 | `sync_undo` | `batchId` | `UndoReport { restored, skipped }`; the rollback is a new edit, it goes to the other devices too |
 | `sync_restore_backup` | — | `()`; the vault as before the first batch of the last session (`<vault>.presync.bak`) |
+
+### updates (`crates/app/src/commands/updates.rs`, logic `crates/app/src/updates.rs`, core `crates/core/src/updates`)
+
+| Command | Input | Output |
+|---|---|---|
+| `update_status` | — | `UpdateStatusDto { phase, current_version, install_kind, channel, auto_update, last_check }`; `phase` is tagged `type`: `idle` / `checking` / `up_to_date` / `downloading { percent }` / `ready { version }` / `available { offer: UpdateOffer }` / `error { message }` |
+| `update_check_now` | — | `UpdateStatusDto` after a manual check (errors land in `phase`, not as a rejected call) |
+| `update_restart_now` | — | `()`: saves the vault, installs the downloaded package and restarts; no-op without a `ready` update |
+
+AppImage, NSIS/MSI and macOS .app installs download in the background and install on exit; other installs
+(deb, rpm, Pacman, Flatpak, Android) only get `available` with a hint. Debug builds read the manifest from
+`MWT_UPDATE_URL` when set.
 
 ### stores
 | `list_stores` | — | `Vec<Store>` (flat) |

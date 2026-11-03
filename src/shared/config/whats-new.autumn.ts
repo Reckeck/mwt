@@ -1,7 +1,17 @@
-/** `What's new` of 21–22 October: after the newest entries, before the older archive. */
+/** `What's new` of 21–22 October (the 22nd entries first): after the newest entries, before the older archive. */
 import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_AUTUMN: WhatsNewEntry[] = [
+  {
+    id: 'dataSources',
+    date: '2026-10-22',
+    points: [
+      { key: 'pick', route: 'automations-sources' },
+      { key: 'uses', route: 'automations-sources' },
+      { key: 'guard', route: 'automations-sources' },
+      { key: 'workflows', route: 'automations' },
+    ],
+  },
   {
     id: 'propertyLinks',
     date: '2026-10-22',

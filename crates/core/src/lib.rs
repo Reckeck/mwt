@@ -21,6 +21,7 @@ pub mod service;
 pub mod storage;
 pub mod sync;
 pub mod txinfo;
+pub mod updates;
 pub mod utilities_formula;
 pub mod vault_io;
 pub mod workflow;

@@ -2853,3 +2853,41 @@ pub struct SharedShareTextInput {
     #[serde(default)]
     pub locale: String,
 }
+
+// -- updates -----------------------------------------------------------------
+
+/// Where the update check stands (event `update-state` carries the whole
+/// [`UpdateStatusDto`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum UpdatePhase {
+    Idle,
+    Checking,
+    UpToDate,
+    /// A self-updating install is fetching the package in the background.
+    Downloading {
+        percent: u8,
+    },
+    /// Downloaded and verified; applied on exit or by `update_restart_now`.
+    Ready {
+        version: String,
+    },
+    /// A newer version exists but this install updates by hand.
+    Available {
+        offer: crate::updates::UpdateOffer,
+    },
+    Error {
+        message: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct UpdateStatusDto {
+    pub phase: UpdatePhase,
+    pub current_version: String,
+    pub install_kind: crate::updates::InstallKind,
+    pub channel: crate::updates::Channel,
+    pub auto_update: bool,
+    /// RFC 3339 time of the last finished check.
+    pub last_check: Option<String>,
+}

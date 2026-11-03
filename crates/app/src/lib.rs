@@ -17,13 +17,14 @@ mod shortcut;
 mod sync;
 #[cfg(desktop)]
 mod tray;
+mod updates;
 mod vault_writer;
 
 use commands::{
     AppState, analytics, app_settings, attachments, auth, calc, categories, contacts, enrichment,
     exchange, losses, mobile, notifications, planning, portfolio, pricing, rates, sandbox,
-    settings, shared_events, sources, stores, transactions, transactions_bulk, vault_backups,
-    vault_link, vault_recents, workflows,
+    settings, shared_events, sources, stores, transactions, transactions_bulk,
+    updates as update_commands, vault_backups, vault_link, vault_recents, workflows,
 };
 use tauri::Manager;
 
@@ -60,11 +61,13 @@ pub fn run() {
             Some(vec!["--hidden"]),
         ))
         .plugin(shortcut::plugin())
-        .plugin(tauri_plugin_window_state::Builder::default().build());
+        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .manage(AppState::new())
         .manage(sync::SyncHub::default())
         .manage(sync::handover::Handover::default())
+        .manage(updates::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             // auth
             auth::vault_status,
@@ -403,6 +406,9 @@ pub fn run() {
             planning::get_property_summary,
             planning::get_utility_payment_draft,
             // vault recents
+            update_commands::update_status,
+            update_commands::update_check_now,
+            update_commands::update_restart_now,
             vault_recents::recent_vaults,
             vault_recents::forget_recent_vault,
             vault_recents::restore_recent_vault,
@@ -550,6 +556,10 @@ pub fn run() {
             tauri::RunEvent::Exit => {
                 if let Err(err) = vault_writer::flush_now(app) {
                     eprintln!("vault: unsaved changes lost on exit: {err}");
+                }
+                // A downloaded update goes in only on a real exit, after the save.
+                if let Err(err) = updates::apply_pending(app) {
+                    eprintln!("updates: install on exit failed: {err}");
                 }
                 // The demo data does not outlive the run.
                 sandbox::erase_on_exit(app);
