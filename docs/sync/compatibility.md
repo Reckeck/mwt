@@ -123,6 +123,25 @@ With an old device the whole field is still one value:
   a whole, and that stamp is a floor for every line without a stamp of its
   own, so it can win over a newer-looking edit exactly as before. The limit
   ends when every device is updated.
+- The terminal of an exchange wallet (`exchange.terminal`: watchlist, active
+  symbol, timeframe, indicators, drawings, layout) is device-local. A new
+  device never stamps it, sends it, takes it from a peer or lets an undo touch
+  it (`stores` has `skip: ["exchange.terminal"]`); the import settings beside it
+  (`exchange.import`, `exchange.provider`, `exchange.import_interval_sec`) still
+  sync. Limit with an old device: it still sends its terminal inside the store
+  and stamps it, and a new device ignores both, so the old device's terminal
+  never reaches a new one. The new device sends the store without a terminal,
+  and an old device keeps a store as one whole record, so every store edit from
+  a new device that wins there resets the old device's terminal to the default
+  (a store received for the first time gets the default too). A store that
+  reaches a new device from a peer is created with the default terminal.
+- A car (`property.car`) splits one level further, per field
+  (`property.car.mileage_km`, `property.car.osago_until`, ...), so a mileage
+  update on one device and an insurance date on another both survive; a car
+  that is `null` on one side follows the null-head rule of `settle_heads`. An
+  old device stamps the whole car (`property.car`), and that stamp is a floor
+  for every field without a stamp of its own, exactly as for the other split
+  objects. `property.revalue` was already a field of its own.
 - Manifest digests of the affected records change once after the update, so
   the devices re-exchange them once.
 

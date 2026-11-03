@@ -164,8 +164,8 @@ These registry flags shape how a record splits into mergeable fields.
 
 | Flag | Meaning | Examples |
 |---|---|---|
-| `flatten` | one object field is split a level further, so two devices editing different entries both win | `transactions.meta` (comment on one device, categories on another); `workflow_state.marks` (one entry per trigger) |
-| `skip` | fields that belong to the device and never travel; a merge keeps the local value, and the digest ignores them | `workflow_state.tx_cursor`, `workflow_state.tx_index` (the device-local transaction cursor of a trigger); `settings.display_decimals`, `fx_refresh_interval_sec`, `minimize_to_tray` |
+| `flatten` | one object field is split a level further, so two devices editing different entries both win | `transactions.meta` (comment on one device, categories on another); `workflow_state.marks` (one entry per trigger); `stores.exchange`, `stores.property` and `stores.property.car` (a dotted name splits one level further: mileage and insurance of a car are separate fields) |
+| `skip` | fields that belong to the device and never travel; a merge keeps the local value, and the digest ignores them | `workflow_state.tx_cursor`, `workflow_state.tx_index` (the device-local transaction cursor of a trigger); `settings.display_decimals`, `fx_refresh_interval_sec`, `minimize_to_tray`; `stores` `exchange.terminal` (a dotted name skips a sub-field of a record: it is left out of the digest, the value sent and the stamps, and a write keeps the local one) |
 | `whole` | the record is one value with one stamp (its fields only make sense together, or it may be null); the later write wins entirely | `health_last` |
 | `secret` | a credentials collection: no label or value is shown in the question, batches or journal | exchanges, attachment_keys |
 | `secret_fields` | individual credential fields are shown as a mask | `data_sources.url`, `workflow_vars.value` |

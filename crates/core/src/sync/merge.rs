@@ -11,7 +11,7 @@ use super::derived;
 use super::flatten::{Order, cannot_express, edited_here, entry_stamp, is_entry, settle_heads};
 use super::registry::{Collection, Rule};
 use super::state::{RecordStamps, RecordState};
-use super::view::{Fields, comparable, join_with, split};
+use super::view::{Fields, comparable, is_device_field, join_with, split};
 
 pub use super::flatten::with_legacy_heads;
 
@@ -145,7 +145,7 @@ fn merge_fields(
         stamps
             .fields
             .keys()
-            .filter(|name| is_entry(coll, name))
+            .filter(|name| is_entry(coll, name) && !is_device_field(coll, name))
             .cloned()
             .collect::<Vec<String>>()
     };
@@ -264,6 +264,7 @@ fn keep_device_fields(coll: &Collection, merged: &mut Value, local: &Value) {
     if coll.skip.is_empty() {
         return;
     }
+    super::view::keep_nested_device_fields(coll, merged, local);
     let (Value::Object(body), Value::Object(mine)) = (merged, local) else {
         return;
     };
