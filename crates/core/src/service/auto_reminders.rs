@@ -60,6 +60,30 @@ pub fn category_of(kind: ReminderSourceKind) -> NoticeCategory {
     }
 }
 
+/// The part of a source that never changes with its schedule: its kind and
+/// the id of the entity (loan, property, deposit...) behind it.
+pub(crate) fn source_identity(source: &ReminderSource) -> String {
+    let kind = serde_json::to_value(source.kind)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_string))
+        .unwrap_or_default();
+    format!("{kind}/{}", source.id)
+}
+
+/// The id an automatic reminder gets: the same on every device, so two
+/// devices that place it meet in one record. Reminders made before this had
+/// random ids; sync dedupe matches them by [`source_identity`].
+fn auto_reminder_id(source: &ReminderSource) -> String {
+    format!("auto-{}", source_identity(source).replace('/', "-"))
+}
+
+/// What a reminder's `source_key` is for a source and a schedule: the source
+/// identity in front, so two loans due at the same time never share a key.
+/// Before it, the key was the schedule alone (it has no `/`).
+fn keyed(source: &ReminderSource, schedule: &str) -> String {
+    format!("{}/{schedule}", source_identity(source))
+}
+
 /// Days the meters are read before the utilities are paid.
 const METER_LEAD_DAYS: i64 = 3;
 
@@ -458,7 +482,7 @@ impl UnlockedVault {
 
         for spec in specs {
             let lead = i64::from(settings.category(spec.category).lead_days);
-            let key = format!(
+            let schedule = format!(
                 "{}|{lead}|{hour:02}:{minute:02}",
                 match spec.when {
                     When::Monthly(day) => format!("m{day}"),
@@ -466,6 +490,7 @@ impl UnlockedVault {
                     When::Once(date) => format!("d{date}"),
                 }
             );
+            let key = keyed(&spec.source, &schedule);
             let place = || -> Option<(String, Option<ReminderRepeat>)> {
                 let (event, repeat) = match spec.when {
                     When::Monthly(day) => {
@@ -513,6 +538,13 @@ impl UnlockedVault {
                         reminder.text = spec.text.clone();
                         changed = true;
                     }
+                    // A key of the old form (the schedule alone) that still
+                    // names this schedule is the same placement: only its
+                    // form is brought up to date, «done» and the rest stay.
+                    if reminder.source_key == schedule {
+                        reminder.source_key = key.clone();
+                        changed = true;
+                    }
                     if !reminder.user_edited && reminder.source_key != key {
                         if let Some((due_at, repeat)) = place() {
                             reminder.due_at = due_at;
@@ -529,6 +561,7 @@ impl UnlockedVault {
                         continue;
                     };
                     let mut reminder = Reminder::new(&spec.text, &due_at);
+                    reminder.id = auto_reminder_id(&spec.source);
                     reminder.repeat = repeat;
                     reminder.source = Some(spec.source.clone());
                     reminder.source_key = key;

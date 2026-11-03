@@ -140,6 +140,7 @@ pub(crate) fn draft_to_transaction(
         run_id: String::new(),
         planned_at: (!planned_at.is_empty()).then(|| planned_at.to_string()),
         estimated: false,
+        run_key: None,
     };
     for (_, stamp) in tx.stamps_mut() {
         *stamp = PriceStamp::default();

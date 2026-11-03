@@ -146,6 +146,11 @@ pub struct Settings {
     /// answers it from the wallets it already has.
     #[serde(default)]
     pub crypto: Option<bool>,
+    /// The IANA zone schedule moments are computed in, the same on every
+    /// device so they agree on which moment it is. `None` until the first
+    /// device that runs a schedule writes its own zone.
+    #[serde(default)]
+    pub schedule_timezone: Option<String>,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -222,6 +227,7 @@ impl Default for Settings {
             dashboard_period: DashPeriod::Month,
             onboarding_checklist_hidden: false,
             crypto: None,
+            schedule_timezone: None,
         }
     }
 }

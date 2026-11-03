@@ -58,48 +58,50 @@ function lastLine(peer: SyncPeerView) {
           </div>
           <Badge v-if="isMain" variant="secondary">{{ t('sync.devices.main') }}</Badge>
         </li>
-        <li v-for="peer in list" :key="peer.device_id" class="flex items-center gap-3 border-b border-border py-2.5 last:border-b-0">
+        <li v-for="peer in list" :key="peer.device_id" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border py-2.5 last:border-b-0 md:flex-nowrap">
           <span class="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
             <MonitorSmartphone class="size-4" aria-hidden="true" />
           </span>
-          <div class="grid min-w-0 flex-1 gap-0.5">
-            <span class="flex min-w-0 items-center gap-2">
-              <span class="truncate text-sm font-medium">{{ peer.name }}</span>
+          <div class="grid min-w-0 flex-1 basis-40 grid-cols-1 gap-0.5">
+            <span class="flex min-w-0 flex-col items-start gap-1 md:flex-row md:items-center md:gap-2">
+              <span class="max-w-full truncate text-sm font-medium">{{ peer.name }}</span>
               <Badge v-if="peer.paused" variant="warning" class="shrink-0">{{ t('sync.devices.paused') }}</Badge>
               <Badge v-if="peer.cut_by" variant="warning" class="shrink-0">
                 {{ t(peer.cut_by === 'paused' ? 'sync.devices.cutPaused' : 'sync.devices.cutForgotten') }}
               </Badge>
             </span>
-            <span class="text-xs text-muted-foreground">{{ lastLine(peer) }}</span>
+            <span class="truncate text-xs text-muted-foreground">{{ lastLine(peer) }}</span>
           </div>
-          <Button
-            v-if="peer.paused"
-            variant="outline"
-            class="shrink-0"
-            :disabled="resume.isPending.value"
-            :loading="resume.isPending.value"
-            @click="resume.mutate(peer.device_id)"
-          >
-            {{ t('sync.devices.resume') }}
-          </Button>
-          <Button
-            v-if="peer.cut_by === 'forgotten'"
-            variant="outline"
-            class="shrink-0"
-            :disabled="pairAgain.isPending.value"
-            :loading="pairAgain.isPending.value"
-            @click="pairAgain.mutate(peer.device_id)"
-          >
-            {{ t('sync.devices.pairAgain') }}
-          </Button>
-          <ConfirmButton
-            show-label
-            :label="t('sync.devices.forgetShort')"
-            :confirm-label="t('sync.devices.forgetConfirm', { name: peer.name })"
-            :action-label="t('sync.devices.forgetShort')"
-            :disabled="forget.isPending.value"
-            @confirm="forget.mutate(peer.device_id)"
-          />
+          <div class="flex shrink-0 items-center gap-2 max-md:w-full max-md:justify-end">
+            <Button
+              v-if="peer.paused"
+              variant="outline"
+              class="shrink-0"
+              :disabled="resume.isPending.value"
+              :loading="resume.isPending.value"
+              @click="resume.mutate(peer.device_id)"
+            >
+              {{ t('sync.devices.resume') }}
+            </Button>
+            <Button
+              v-if="peer.cut_by === 'forgotten'"
+              variant="outline"
+              class="shrink-0"
+              :disabled="pairAgain.isPending.value"
+              :loading="pairAgain.isPending.value"
+              @click="pairAgain.mutate(peer.device_id)"
+            >
+              {{ t('sync.devices.pairAgain') }}
+            </Button>
+            <ConfirmButton
+              show-label
+              :label="t('sync.devices.forgetShort')"
+              :confirm-label="t('sync.devices.forgetConfirm', { name: peer.name })"
+              :action-label="t('sync.devices.forgetShort')"
+              :disabled="forget.isPending.value"
+              @confirm="forget.mutate(peer.device_id)"
+            />
+          </div>
         </li>
       </ul>
 

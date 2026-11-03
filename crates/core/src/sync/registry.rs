@@ -198,7 +198,13 @@ pub static COLLECTIONS: &[Collection] = &[
     // The queue, waits and trigger marks sync so a new main device picks
     // them up; only the main device runs them.
     records("workflow_queue", ID),
-    records("workflow_state", &["workflow_id"]),
+    // Marks merge per trigger (an older device stamps the whole map: see
+    // `merge::legacy_head`); the cursor belongs to the device.
+    Collection {
+        flatten: &["marks"],
+        skip: &["tx_cursor", "tx_index"],
+        ..records("workflow_state", &["workflow_id"])
+    },
     records("workflow_waits", ID),
     records("calc_scenarios", ID),
     // A revised month replaces the old reading instead of piling up.

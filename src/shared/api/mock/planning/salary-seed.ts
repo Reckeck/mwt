@@ -48,7 +48,13 @@ function seedAutomation(
     const meta = txMeta(tx)
     const runId = uuid()
     meta.origin = {
-      workflow: { workflow_id: automation.id, run_id: runId, planned_at: meta.timestamp, estimated: false },
+      workflow: {
+        workflow_id: automation.id,
+        run_id: runId,
+        planned_at: meta.timestamp,
+        estimated: false,
+        run_key: null,
+      },
     }
     // The details object is shared between the demo's operations: a copy, not a write.
     if ('topup' in tx && forMonthOffset !== undefined) {

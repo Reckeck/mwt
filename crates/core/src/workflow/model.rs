@@ -181,9 +181,13 @@ pub struct WorkflowState {
     pub workflow_id: String,
     /// Trigger node id → last moment it fired (RFC3339) or last side of a
     /// threshold (`above` / `below`).
+    #[serde(default)]
     pub marks: BTreeMap<String, String>,
     /// The last operation an «operation added» trigger looked at, and where it was.
+    /// Device-local since sync: never merged, see `sync::registry`.
+    #[serde(default)]
     pub tx_cursor: Option<String>,
+    #[serde(default)]
     pub tx_index: usize,
 }
 
