@@ -23,6 +23,8 @@ pub fn parse_locations(text: &str, root: &Path, is_file: &dyn Fn(&str) -> bool) 
     let text = strip_ansi(text);
     let mut found: Vec<Location> = Vec::new();
     let mut pending: Option<String> = None;
+    // The last `Error: ...` line: a stack frame below it points at the place, the line says what failed.
+    let mut thrown: Option<String> = None;
     let mut push = |file: &str, line: u32, col: Option<u32>, message: &str| {
         let Some(file) = relative(file, root).filter(|file| is_file(file)) else {
             return;
@@ -53,12 +55,32 @@ pub fn parse_locations(text: &str, root: &Path, is_file: &dyn Fn(&str) -> bool) 
             pending = Some(message.to_string());
         } else {
             pending = None;
+            if let Some(error) = thrown_error(line) {
+                thrown = Some(error.to_string());
+            }
             if let Some((file, number, col)) = generic(line) {
-                push(file, number, col, line.trim());
+                let message = match &thrown {
+                    Some(error) if is_stack_frame(line) => error.as_str(),
+                    _ => line.trim(),
+                };
+                push(file, number, col, message);
             }
         }
     }
     found
+}
+
+/// `Error: msg`, `AssertionError: msg`, `TypeError: msg` (JS, vitest), trimmed.
+fn thrown_error(line: &str) -> Option<&str> {
+    let line = line.trim();
+    let (name, _) = line.split_once(": ")?;
+    (name.ends_with("Error") && name.chars().all(char::is_alphanumeric)).then_some(line)
+}
+
+/// A JS stack frame as vitest (`❯ fn path:l:c`) or node (`at fn (path:l:c)`) prints it.
+fn is_stack_frame(line: &str) -> bool {
+    let line = line.trim_start();
+    line.starts_with('❯') || line.starts_with("at ")
 }
 
 fn static_check(line: &str) -> Option<(&str, u32, &str)> {
@@ -165,6 +187,17 @@ mod tests {
             "tests/x.test.ts",
         ];
         parse_locations(text, Path::new("/repo"), &|file| known.contains(&file))
+    }
+
+    #[test]
+    fn a_stack_frame_takes_the_message_of_the_error_above_it() {
+        let text =
+            "Error: page.eval hung for 60000 ms\n ❯ Timeout.<anonymous> tests/x.test.ts:114:16\n";
+        let found = parse(text);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].file, "tests/x.test.ts");
+        assert_eq!(found[0].line, 114);
+        assert_eq!(found[0].message, "Error: page.eval hung for 60000 ms");
     }
 
     #[test]
