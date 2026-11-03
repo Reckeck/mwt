@@ -8,6 +8,11 @@ overrides:
   glob@>=9.0.0 <14.0.2: ^14.0.2
   minimatch@<11.0.1: ^11.0.1
 
+patchedDependencies:
+  vue-sonner@2.0.9:
+    hash: 3f997e18922ae1f41faa96a4c4e3eb0e9b46efb81d17fb0dad6c86d6a4319311
+    path: patches/vue-sonner@2.0.9.patch
+
 importers:
 
   .:
@@ -119,7 +124,7 @@ importers:
         version: 5.4.0(@vue/compiler-sfc@3.5.44)(esbuild@0.28.2)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@5.8.3)(vue@3.5.44(typescript@5.8.3)))(rolldown@1.2.16)(vite@8.3.5(@types/node@22.20.4)(esbuild@0.28.2)(jiti@2.7.0))(vue@3.5.44(typescript@5.8.3))
       vue-sonner:
         specifier: ^2.0.9
-        version: 2.0.9
+        version: 2.0.9(patch_hash=3f997e18922ae1f41faa96a4c4e3eb0e9b46efb81d17fb0dad6c86d6a4319311)
     devDependencies:
       '@biomejs/biome':
         specifier: 2.6.4
@@ -4004,7 +4009,7 @@ snapshots:
       - unloader
       - webpack
 
-  vue-sonner@2.0.9: {}
+  vue-sonner@2.0.9(patch_hash=3f997e18922ae1f41faa96a4c4e3eb0e9b46efb81d17fb0dad6c86d6a4319311): {}
 
   vue-tsc@2.2.12(typescript@5.8.3):
     dependencies:
