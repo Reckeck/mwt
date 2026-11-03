@@ -33,24 +33,38 @@ fn section_is_empty(version: &str) -> bool {
 }
 
 #[test]
-fn prerelease_notes_list_commits_with_links() {
+fn prerelease_notes_group_commits_like_the_changelog() {
     let sha = "0123456789abcdef0123456789abcdef01234567";
     let commits = parse_log(&format!(
-        "{sha}\u{1f}fix: one\nabcdef1234567\u{1f}feat: two\n\n"
+        "{sha}\u{1f}fix(ui): one\nabcdef1234567\u{1f}feat: two\nbbbbbbb\u{1f}chore(release): 0.2.0\ncccccccc\u{1f}Merge stuff\n\n"
     ));
-    assert_eq!(commits.len(), 2);
-    let notes = prerelease_notes("Reckeck/mwt", "development", sha, Some("v0.1.0"), &commits);
+    assert_eq!(commits.len(), 4);
+    let notes = prerelease_notes(
+        "Reckeck/mwt",
+        "development",
+        sha,
+        Some("v0.1.0-3"),
+        &commits,
+        false,
+    );
     assert_eq!(
         notes,
-        "**Pre-release** from `development` (commit [`0123456`](https://github.com/Reckeck/mwt/commit/0123456789abcdef0123456789abcdef01234567)) - for testing, not for working with real data.\n\n### Changes since v0.1.0\n\n- fix: one ([`0123456`](https://github.com/Reckeck/mwt/commit/0123456789abcdef0123456789abcdef01234567))\n- feat: two ([`abcdef1`](https://github.com/Reckeck/mwt/commit/abcdef1234567))"
+        "**Pre-release** from `development` (commit [`0123456`](https://github.com/Reckeck/mwt/commit/0123456789abcdef0123456789abcdef01234567)) - for testing, not for working with real data.\n\n\
+### Changes since v0.1.0-3\n\n\
+[Full diff v0.1.0-3...0123456](https://github.com/Reckeck/mwt/compare/v0.1.0-3...0123456789abcdef0123456789abcdef01234567)\n\n\
+#### Added\n\n- Two ([`abcdef1`](https://github.com/Reckeck/mwt/commit/abcdef1234567))\n\n\
+#### Fixed\n\n- **ui:** One ([`0123456`](https://github.com/Reckeck/mwt/commit/0123456789abcdef0123456789abcdef01234567))\n\n\
+#### Other\n\n- Merge stuff ([`ccccccc`](https://github.com/Reckeck/mwt/commit/cccccccc))"
     );
+    assert!(!notes.contains("chore(release)") && !notes.contains("0.2.0"));
 }
 
 #[test]
 fn prerelease_notes_without_a_release_or_commits() {
-    let notes = prerelease_notes("o/r", "development", "abc1234", None, &[]);
+    let notes = prerelease_notes("o/r", "development", "abc1234", None, &[], false);
     assert!(notes.contains("since the start of the project"));
-    assert!(notes.ends_with("_no commits_"));
+    assert!(!notes.contains("compare"));
+    assert!(notes.ends_with("_no changes_"));
     assert_eq!(
         parse_log("a\u{1f}b"),
         [Commit {
@@ -58,6 +72,14 @@ fn prerelease_notes_without_a_release_or_commits() {
             subject: "b".into()
         }]
     );
+}
+
+#[test]
+fn prerelease_notes_say_when_the_list_is_cut() {
+    let commits = parse_log("abc\u{1f}docs!: breaking docs");
+    let notes = prerelease_notes("o/r", "development", "abc", Some("v1.0.0"), &commits, true);
+    assert!(notes.contains("#### Documentation\n\n- Breaking docs"));
+    assert!(notes.ends_with("_Older commits are in the full diff._"));
 }
 
 fn release<'a>(files: &'a [String], pre: bool) -> Release<'a> {
