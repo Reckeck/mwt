@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { CategorySelect } from '@/features/category-select'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 import { WizardSteps } from '@/shared/ui/wizard-steps'
 import { call } from '@/shared/api/ipc'
 import { useCategories, useStoreTree } from '@/shared/api/queries'
@@ -14,11 +15,12 @@ import { formatMoney } from '@/shared/lib/format'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { markFreshBudget } from '@/shared/lib/planning-fresh'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
-import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
+import { positiveAmount, required, useEditBase, useFormValidation } from '@/shared/lib/form'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import type { BudgetTargetKind } from './budget-edit.constants'
 import type { BudgetDialogProps, BudgetField } from './budget-edit.types'
+import { budgetInputOf, budgetInputOfFields, fieldsOfBudget, type BudgetFields } from './lib/budget-fields'
 import BudgetDeleteDialog from './BudgetDeleteDialog.vue'
 import BudgetAmountStep from './ui/BudgetAmountStep.vue'
 import BudgetTargetStep from './ui/BudgetTargetStep.vue'
@@ -53,20 +55,55 @@ const currency = ref('')
 const warn = ref(true)
 const active = ref(true)
 
+/** Writes fields into the form; `Refresh` and opening both go through it. */
+function load(fields: BudgetFields) {
+  targetKind.value = fields.targetKind
+  category.value = fields.category
+  storeId.value = fields.storeId
+  period.value = fields.period
+  limit.value = fields.limit
+  currency.value = fields.currency
+  warn.value = fields.warn
+  active.value = fields.active
+}
+const currentFields = (): BudgetFields => ({
+  targetKind: targetKind.value,
+  category: category.value,
+  storeId: storeId.value,
+  period: period.value,
+  limit: limit.value,
+  currency: currency.value,
+  warn: warn.value,
+  active: active.value,
+})
+
 watch(open, (isOpen) => {
   if (!isOpen) return
-  const budget = props.budget
-  const target = budget?.target ?? (props.category ? { category: props.category } : { category: '' })
   step.value = 1
-  targetKind.value = target === 'total' ? 'total' : 'category' in target ? 'category' : 'store'
-  category.value = typeof target === 'object' && 'category' in target ? target.category : ''
-  storeId.value = typeof target === 'object' && 'store' in target ? (target.store.store_ids[0] ?? '') : ''
-  period.value = budget?.period ?? 'month'
-  limit.value = budget?.limit ?? ''
-  currency.value = budget?.currency ?? (settings.vault?.budget_currency || settings.baseCurrency)
-  warn.value = budget?.warn ?? true
-  active.value = budget?.active ?? true
+  load(
+    fieldsOfBudget(
+      props.budget ?? {
+        active: true,
+        target: { category: props.category },
+        period: 'month',
+        limit: '',
+        currency: settings.vault?.budget_currency || settings.baseCurrency,
+      },
+    ),
+  )
 })
+
+/** The limit as the sync keeps it now (`['budgets']` is re-read after `vault-synced`); the prop may be a stale copy. */
+const budgets = useQuery({ queryKey: ['budgets'], queryFn: () => call<Budget[]>('list_budgets'), enabled: open })
+const edit = useEditBase({
+  open,
+  entity: () => props.budget,
+  live: () => (props.budget ? budgets.data.value?.find((entry) => entry.id === props.budget?.id) : undefined),
+  model: (entity: Budget) => fieldsOfBudget(entity),
+})
+function refreshFromOtherDevice() {
+  edit.refresh(currentFields, load)
+}
 
 const target = computed<BudgetTarget>(() => {
   if (targetKind.value === 'total') return 'total'
@@ -101,7 +138,9 @@ const currentName = computed(() => (props.budget ? targetName({ ...props.budget,
 const save = useMutation({
   mutationFn: (input: BudgetInput) =>
     props.budget
-      ? call<Budget>('update_budget', { input: { id: props.budget.id, budget: input } })
+      ? call<Budget>('update_budget', {
+          input: { id: props.budget.id, budget: input, base: edit.base.value && budgetInputOf(edit.base.value) },
+        })
       : call<Budget>('create_budget', { input }),
   onSuccess: (budget) => {
     if (!props.budget) markFreshBudget(budget.id)
@@ -136,14 +175,7 @@ function submit(event: Event) {
   }
   form.submit(
     () =>
-      save.mutate({
-        active: active.value,
-        target: target.value,
-        period: period.value,
-        limit: limit.value.trim(),
-        currency: currency.value.trim().toLowerCase(),
-        warn: warn.value,
-      }),
+      save.mutate(budgetInputOfFields(currentFields())),
     event,
   )
 }
@@ -152,6 +184,7 @@ function submit(event: Event) {
 <template>
   <Dialog overlay="budget" v-model:open="open" :title="title">
     <form id="budget-form" class="grid gap-4" @submit.prevent="submit">
+      <SyncChangedBanner v-if="edit.changedElsewhere.value" @refresh="refreshFromOtherDevice" />
       <WizardSteps v-if="!onePage" :step="step" :titles="steps" />
       <BudgetTargetStep
         v-if="step === 1 || onePage"

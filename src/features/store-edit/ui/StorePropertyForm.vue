@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { CurrencyPicker } from '@/entities/currency'
@@ -10,10 +10,11 @@ import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 import { useSettingsStore } from '@/shared/store/settings'
 
-import { type CarField, carDraftOf, carErrors, carInfoOf } from '../model/car-draft'
-import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
+import { type CarDraft, type CarField, carDraftOf, carErrors, carInfoOf } from '../model/car-draft'
+import { useStoreFormEdit } from '../model/use-store-form-edit'
 import type { StoreFormProps } from '../store-edit.types'
 import { CarFields } from './car-fields'
 
@@ -36,26 +37,48 @@ const located = computed(() => home.value || category.value === 'land')
 
 const form = useFormValidation<CarField>(() => (isCar.value ? carErrors(car.value) : {}), { resetOn: () => props.store.id })
 
-watch(
-  () => props.store,
-  (store) => {
+interface PropertyFields {
+  category: PropertyCategory
+  address: string
+  area: string
+  currency: string
+  payDay: string
+  car: CarDraft
+}
+const edit = useStoreFormEdit<PropertyFields>({
+  store: () => props.store,
+  model: (store) => {
     const info = store.property
-    category.value = shownPropertyCategory(info?.category)
-    address.value = info?.address ?? ''
-    area.value = info?.area ?? ''
-    currency.value = info?.currency || settings.baseCurrency.toLowerCase()
-    payDay.value = info?.utilities_pay_day ? String(info.utilities_pay_day) : ''
-    car.value = carDraftOf(info?.car)
+    return {
+      category: shownPropertyCategory(info?.category),
+      address: info?.address ?? '',
+      area: info?.area ?? '',
+      currency: info?.currency || settings.baseCurrency.toLowerCase(),
+      payDay: info?.utilities_pay_day ? String(info.utilities_pay_day) : '',
+      car: carDraftOf(info?.car),
+    }
   },
-  { immediate: true },
-)
-
-const save = useStoreUpdate()
+  current: () => ({
+    category: category.value,
+    address: address.value,
+    area: area.value,
+    currency: currency.value,
+    payDay: payDay.value,
+    car: { ...car.value },
+  }),
+  load: (fields) => {
+    category.value = fields.category
+    address.value = fields.address
+    area.value = fields.area
+    currency.value = fields.currency
+    payDay.value = fields.payDay
+    car.value = fields.car
+  },
+})
 
 function submit() {
-  save.mutate(
-    updateInputOf(props.store, {
-      property: {
+  edit.save({
+    property: {
         category: category.value,
         address: located.value ? address.value.trim() : '',
         area: located.value ? area.value.trim() || null : null,
@@ -66,14 +89,14 @@ function submit() {
         utilities_pay_day:
           home.value && payDay.value ? Math.min(31, Math.max(1, Number(payDay.value))) : undefined,
         car: isCar.value ? carInfoOf(car.value, props.store.property?.car) : undefined,
-      },
-    }),
-  )
+    },
+  })
 }
 </script>
 
 <template>
   <form class="@container grid gap-4" @submit.prevent="form.submit(submit, $event)">
+    <SyncChangedBanner v-if="edit.changedElsewhere.value" @refresh="edit.refreshFromOtherDevice" />
     <div class="grid gap-4 @mid:grid-cols-2">
       <div class="grid gap-1.5" data-tour="property-category">
         <Label for="property-category">{{ t('propertyCategory.title') }}</Label>
@@ -99,7 +122,7 @@ function submit() {
       <Input id="property-pay-day" v-model="payDay" type="text" inputmode="numeric" min="1" max="31" :placeholder="t('utilities.payDayHint')" />
     </div>
     <div>
-      <Button type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button type="submit" :disabled="edit.isPending.value">{{ t('actions.save') }}</Button>
     </div>
   </form>
 </template>

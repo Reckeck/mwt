@@ -7,10 +7,11 @@ import { Input } from '@/shared/ui/input'
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Select, SelectItem } from '@/shared/ui/select'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 import { Textarea } from '@/shared/ui/textarea'
 import { call } from '@/shared/api/ipc'
 import { useContacts } from '@/shared/api/queries'
-import { required, useFormValidation } from '@/shared/lib/form'
+import { required, useEditBase, useFormValidation } from '@/shared/lib/form'
 
 import { CONTACT_KINDS } from '../contact-edit.constants'
 import type { ContactEditDialogProps } from '../contact-edit.types'
@@ -36,6 +37,19 @@ watch(open, (now) => {
   group.value = props.contact?.group ?? ''
   note.value = props.contact?.note ?? ''
 })
+
+interface ContactFields {
+  name: string
+  kind: ContactKind
+  group: string
+  note: string
+}
+const fieldsOf = (contact: Contact): ContactFields => ({
+  name: contact.name,
+  kind: contact.kind,
+  group: contact.group,
+  note: contact.note,
+})
 const form = useFormValidation(() => ({ name: required(name.value) }), { resetOn: open })
 
 /** Groups already in use, offered as the user types. */
@@ -46,11 +60,37 @@ const groups = computed(() =>
   ),
 )
 
+/** The contact as the sync keeps it now (`['contacts']` is re-read after `vault-synced`); the prop may be a stale copy. */
+const edit = useEditBase({
+  open,
+  entity: () => props.contact,
+  live: () => (props.contact ? contacts.data.value?.find((entry) => entry.id === props.contact?.id) : undefined),
+  model: fieldsOf,
+})
+function refreshFromOtherDevice() {
+  edit.refresh(
+    () => ({ name: name.value, kind: kind.value, group: group.value, note: note.value }),
+    (model) => {
+      name.value = model.name
+      kind.value = model.kind
+      group.value = model.group
+      note.value = model.note
+    },
+  )
+}
+
 const save = useMutation({
   mutationFn: () => {
     const fields = { name: name.value.trim(), kind: kind.value, group: group.value.trim(), note: note.value.trim() }
     return props.contact
-      ? call<Contact>('update_contact', { input: { id: props.contact.id, contact: draftOf(props.contact, fields) } })
+      ? call<Contact>('update_contact', {
+          input: {
+            id: props.contact.id,
+            // Requisites are not on this form: they come from the snapshot, so they count as untouched.
+            contact: draftOf(edit.base.value ?? props.contact, fields),
+            base: edit.base.value && draftOf(edit.base.value),
+          },
+        })
       : call<Contact>('create_contact', { input: { ...fields, accounts: [] } })
   },
   onSuccess: (contact) => {
@@ -79,6 +119,7 @@ function onDeleted() {
     :pending="save.isPending.value"
     @submit="form.submit(save.mutate, $event)"
   >
+    <SyncChangedBanner v-if="edit.changedElsewhere.value" @refresh="refreshFromOtherDevice" />
     <FormField for="contact-edit-name" :label="t('contacts.name')" required :error="form.error('name')">
       <Input id="contact-edit-name" v-model="name" autocomplete="off" />
     </FormField>

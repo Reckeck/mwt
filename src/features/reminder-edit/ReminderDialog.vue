@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
@@ -10,15 +10,23 @@ import { Input } from '@/shared/ui/input'
 import { TimeInput } from '@/shared/ui/time-input'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
-import { required, useFormValidation } from '@/shared/lib/form'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
+import { required, useEditBase, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
-import { PLANNING_KEYS, localDate } from '@/shared/lib/planning'
+import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { formatDayMonth, formatWeekday } from '@/shared/lib/format'
 
 import { REPEAT_UNITS } from './reminder-edit.constants'
 import type { ReminderDialogProps } from './reminder-edit.types'
-import { WHEN_PRESETS, type WhenPreset, presetOf, repeatOf } from './lib/when-presets'
+import {
+  type ReminderFields,
+  dueAtOfFields,
+  fieldsOfReminder,
+  reminderBaseOf,
+  reminderInputOfFields,
+} from './lib/reminder-fields'
+import { WHEN_PRESETS, type WhenPreset } from './lib/when-presets'
 import { ReminderPayField } from './ui/reminder-pay-field'
 
 const props = withDefaults(defineProps<ReminderDialogProps>(), { reminder: null })
@@ -37,27 +45,43 @@ const unit = ref<RepeatUnit>('month')
 const every = ref('1')
 const pay = ref<ReminderPay | null>(null)
 
-const pad = (value: number) => String(value).padStart(2, '0')
+/** Writes fields into the form; `Refresh` and opening both go through it. */
+function load(fields: ReminderFields) {
+  text.value = fields.text
+  date.value = fields.date
+  time.value = fields.time
+  preset.value = fields.preset
+  unit.value = fields.unit
+  every.value = fields.every
+  pay.value = fields.pay
+}
+const currentFields = (): ReminderFields => ({
+  text: text.value,
+  date: date.value,
+  time: time.value,
+  preset: preset.value,
+  unit: unit.value,
+  every: every.value,
+  pay: pay.value,
+})
 
 watch(open, (isOpen) => {
-  if (!isOpen) return
-  const reminder = props.reminder
-  text.value = reminder?.text ?? ''
-  const due = reminder ? new Date(reminder.due_at) : new Date(Date.now() + 86_400_000)
-  date.value = localDate(due)
-  time.value = reminder ? `${pad(due.getHours())}:${pad(due.getMinutes())}` : '09:00'
-  preset.value = presetOf(reminder?.repeat)
-  unit.value = reminder?.repeat?.unit ?? 'month'
-  every.value = String(reminder?.repeat?.every ?? 1)
-  pay.value = reminder?.pay ?? null
+  if (isOpen) load(fieldsOfReminder(props.reminder))
 }, { immediate: true })
 
-const dueAt = computed(() => {
-  if (!date.value || !time.value) return null
-  const parsed = new Date(`${date.value}T${time.value}`)
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+/** The reminder as the sync keeps it now (`['reminders']` is re-read after `vault-synced`); the prop may be a stale copy. */
+const reminders = useQuery({ queryKey: ['reminders'], queryFn: () => call<Reminder[]>('list_reminders'), enabled: open })
+const edit = useEditBase({
+  open,
+  entity: () => props.reminder,
+  live: () => (props.reminder ? reminders.data.value?.find((entry) => entry.id === props.reminder?.id) : undefined),
+  model: (entity: Reminder) => fieldsOfReminder(entity),
 })
-const repeat = computed(() => repeatOf(preset.value, { unit: unit.value, every: Number(every.value) }))
+function refreshFromOtherDevice() {
+  edit.refresh(currentFields, load)
+}
+
+const dueAt = computed(() => dueAtOfFields({ date: date.value, time: time.value }))
 
 /** `Every 10th`, `Every week · Fri`: the day comes from the date. */
 function presetLabel(entry: WhenPreset) {
@@ -77,9 +101,11 @@ const form = useFormValidation(
 
 const save = useMutation({
   mutationFn: () => {
-    const input: ReminderInput = { text: text.value.trim(), due_at: dueAt.value ?? '', repeat: repeat.value, pay: pay.value ?? undefined }
+    const input = reminderInputOfFields(currentFields())
     return props.reminder
-      ? call<Reminder>('update_reminder', { input: { id: props.reminder.id, reminder: input } })
+      ? call<Reminder>('update_reminder', {
+          input: { id: props.reminder.id, reminder: input, base: edit.base.value && reminderBaseOf(edit.base.value) },
+        })
       : call<Reminder>('create_reminder', { input })
   },
   onSuccess: () => {
@@ -93,6 +119,7 @@ const save = useMutation({
 <template>
   <Dialog overlay="reminder" v-model:open="open" size="form" :title="props.reminder ? t('reminder.edit') : t('reminder.new')">
     <form id="reminder-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
+      <SyncChangedBanner v-if="edit.changedElsewhere.value" @refresh="refreshFromOtherDevice" />
       <FormField for="reminder-text" :label="t('reminder.text')" required :error="form.error('text')">
         <Input id="reminder-text" v-model="text" />
       </FormField>

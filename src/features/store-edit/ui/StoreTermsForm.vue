@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { emptyLiabilityTerms, LiabilityTermsFields, StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 
-import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
+import { useStoreFormEdit } from '../model/use-store-form-edit'
 import type { StoreFormProps } from '../store-edit.types'
 import { useStoreTree } from '@/shared/api/queries'
 
@@ -22,25 +23,31 @@ const properties = computed(() =>
   (tree.data.value ?? []).filter((node) => node.store.kind === 'property' && !node.store.archived),
 )
 
-watch(
-  () => props.store,
-  (store) => {
-    terms.value = store.liability ? { ...store.liability } : emptyLiabilityTerms()
-    securedBy.value = store.secured_by ?? ''
+interface TermsFields {
+  terms: LiabilityTerms
+  securedBy: string
+}
+const edit = useStoreFormEdit<TermsFields>({
+  store: () => props.store,
+  model: (store) => ({
+    terms: store.liability ? { ...store.liability } : emptyLiabilityTerms(),
+    securedBy: store.secured_by ?? '',
+  }),
+  current: () => ({ terms: { ...terms.value }, securedBy: securedBy.value }),
+  load: (fields) => {
+    terms.value = fields.terms
+    securedBy.value = fields.securedBy
   },
-  { immediate: true },
-)
+})
 
-const save = useStoreUpdate()
+function submit() {
+  edit.save({ liability: terms.value, secured_by: isLoan.value ? securedBy.value || null : null })
+}
 </script>
 
 <template>
-  <form
-    class="grid gap-4"
-    @submit.prevent="
-      save.mutate(updateInputOf(props.store, { liability: terms, secured_by: isLoan ? securedBy || null : null }))
-    "
-  >
+  <form class="grid gap-4" @submit.prevent="submit">
+    <SyncChangedBanner v-if="edit.changedElsewhere.value" @refresh="edit.refreshFromOtherDevice" />
     <LiabilityTermsFields v-model="terms" />
     <div v-if="isLoan" class="grid gap-1.5">
       <Label for="store-secured-by">{{ t('property.securedBy') }}</Label>
@@ -53,7 +60,7 @@ const save = useStoreUpdate()
       />
     </div>
     <div>
-      <Button type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button type="submit" :disabled="edit.isPending.value">{{ t('actions.save') }}</Button>
     </div>
   </form>
 </template>

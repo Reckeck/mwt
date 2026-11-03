@@ -9,6 +9,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 import { WizardSteps } from '@/shared/ui/wizard-steps'
 
 import { useSaveUtility } from './model/use-save-utility'
@@ -28,7 +29,8 @@ const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
 
 const state = provideUtilityForm(props, open)
-const { editing, step, name, kind, propertyName, storeId, category, nodes, form } = state
+const { editing, step, name, kind, propertyName, storeId, category, nodes, form, changedElsewhere, refreshFromOtherDevice } =
+  state
 const save = useSaveUtility(props, state, () => (open.value = false))
 
 const secondTitle = computed(() => t(`utilityEdit.step.${kind.value}`))
@@ -50,6 +52,7 @@ function submit(event?: Event) {
 <template>
   <Dialog overlay="utility" v-model:open="open" :title="title" size="bill">
     <form id="utility-form" class="@container grid gap-4" @submit.prevent="submit($event)">
+      <SyncChangedBanner v-if="changedElsewhere" @refresh="refreshFromOtherDevice" />
       <WizardSteps v-if="!editing" :step="step" :titles="[t('utilityEdit.step.kind'), secondTitle]" />
       <UtilityKindStep v-if="step === 1" :ask-property="!props.propertyId" @next="submit()" />
       <template v-else>

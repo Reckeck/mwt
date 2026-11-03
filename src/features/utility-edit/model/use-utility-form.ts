@@ -8,6 +8,7 @@ import {
   nonNegativeAmount,
   positiveAmount,
   required,
+  useEditBase,
   useFormValidation,
 } from '@/shared/lib/form'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
@@ -15,6 +16,7 @@ import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { utilityInputOf } from '../lib/utility-fields'
 import { type MeterMode, useFormulaPreview, zoneKey } from '../meter-formula'
 import type { UtilityKindName, ZoneCount } from '../utility-edit.constants'
 import type { UtilityDialogProps } from '../utility-edit.types'
@@ -68,10 +70,8 @@ function setup(props: UtilityDialogProps, open: Ref<boolean>) {
     zoneNames.value = count === 'one' ? [] : t(`utilityEdit.zoneNames.${count}`).split(', ')
   }
 
-  watch(open, (isOpen) => {
-    if (!isOpen) return
-    const item = props.item
-    step.value = item ? 2 : 1
+  /** Writes an item (or the blank default) into the form; opening and `Refresh` both go through it. */
+  function fill(item: UtilityInput | null) {
     name.value = item?.name ?? ''
     const current = item?.kind ?? null
     kind.value = !current || 'metered' in current ? 'metered' : 'static' in current ? 'static' : 'housing'
@@ -95,6 +95,11 @@ function setup(props: UtilityDialogProps, open: Ref<boolean>) {
     storeId.value = item?.store_id ?? ''
     propertyId.value = item?.property_id || props.propertyId || properties.value[0]?.store.id || ''
     category.value = item?.category ?? 'utilities'
+  }
+  watch(open, (isOpen) => {
+    if (!isOpen) return
+    step.value = props.item ? 2 : 1
+    fill(props.item ? utilityInputOf(props.item) : null)
   })
   /** A new item is in the money of the property's other items (Wallets-3 · 17), else the budget's. */
   const items = useQuery({
@@ -148,6 +153,28 @@ function setup(props: UtilityDialogProps, open: Ref<boolean>) {
       },
     }
   })
+
+  /** The item as the form would save it; `active` is not on the form, an edited item keeps it. */
+  const currentInput = (): UtilityInput => ({
+    name: name.value.trim(),
+    active: props.item?.active ?? true,
+    kind: utilityKind.value,
+    currency: currency.value,
+    property_id: propertyId.value,
+    store_id: storeId.value || null,
+    category: category.value,
+  })
+
+  /** The item as the sync keeps it now (`['utilities']` is re-read after `vault-synced`); the prop may be a stale copy. */
+  const edit = useEditBase({
+    open,
+    entity: () => props.item,
+    live: () => (props.item ? items.data.value?.find((entry) => entry.id === props.item?.id) : undefined),
+    model: utilityInputOf,
+  })
+  function refreshFromOtherDevice() {
+    edit.refresh(currentInput, fill)
+  }
 
   /** Up to 4 zones, each named once — what `check_utility` refuses. */
   const zonesError = computed(() => {
@@ -214,6 +241,10 @@ function setup(props: UtilityDialogProps, open: Ref<boolean>) {
     nodes,
     properties,
     propertyName,
+    currentInput,
+    editBase: edit.base,
+    changedElsewhere: edit.changedElsewhere,
+    refreshFromOtherDevice,
   }
 }
 

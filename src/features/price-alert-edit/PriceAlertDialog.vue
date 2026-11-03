@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { CurrencyPicker, Money } from '@/entities/currency'
 import { AssetInput, resolveTicker } from '@/entities/asset'
@@ -11,11 +11,13 @@ import { Dialog } from '@/shared/ui/dialog'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { SwitchRow } from '@/shared/ui/switch-row'
-import { positiveAmount, required, useFormValidation } from '@/shared/lib/form'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
+import { positiveAmount, required, useEditBase, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 
 import type { PriceAlertDialogProps } from './price-alert-edit.types'
+import { alertInputOf, alertInputOfFields, fieldsOfAlert, type AlertFields } from './lib/alert-fields'
 import { useCurrentPrice } from './model/use-current-price'
 
 /**
@@ -35,16 +37,44 @@ const price = ref('')
 const currency = ref('usd')
 const once = ref(true)
 
+/** Writes fields into the form; `Refresh` and opening both go through it. */
+function load(fields: AlertFields) {
+  asset.value = fields.asset
+  condition.value = fields.condition
+  price.value = fields.price
+  currency.value = fields.currency
+  once.value = fields.once
+}
+const currentFields = (): AlertFields => ({
+  asset: asset.value,
+  condition: condition.value,
+  price: price.value,
+  currency: currency.value,
+  once: once.value,
+})
+
 watch(open, async (isOpen) => {
   if (!isOpen) return
   const preset = props.alert ? null : props.preset
-  asset.value = props.alert?.asset ?? null
-  condition.value = props.alert?.condition ?? preset?.condition ?? 'above'
-  price.value = props.alert?.price ?? preset?.price ?? ''
-  currency.value = props.alert?.currency ?? 'usd'
-  once.value = !props.alert?.repeats
+  load(
+    props.alert
+      ? fieldsOfAlert(props.alert)
+      : { asset: null, condition: preset?.condition ?? 'above', price: preset?.price ?? '', currency: 'usd', once: true },
+  )
   if (preset) asset.value = await resolveTicker(preset.symbol)
 }, { immediate: true })
+
+/** The alert as the sync keeps it now (`['price-alerts']` is re-read after `vault-synced`); the prop may be a stale copy. */
+const alerts = useQuery({ queryKey: ['price-alerts'], queryFn: () => call<PriceAlert[]>('list_price_alerts'), enabled: open })
+const edit = useEditBase({
+  open,
+  entity: () => props.alert,
+  live: () => (props.alert ? alerts.data.value?.find((entry) => entry.id === props.alert?.id) : undefined),
+  model: (entity: PriceAlert) => fieldsOfAlert(entity),
+})
+function refreshFromOtherDevice() {
+  edit.refresh(currentFields, load)
+}
 
 const current = useCurrentPrice(asset, currency)
 
@@ -59,25 +89,15 @@ const form = useFormValidation(
 
 const save = useMutation({
   mutationFn: () => {
-    const picked = asset.value as AssetRef
-    const input: PriceAlertInput = {
-      asset: {
-        symbol: picked.symbol,
-        name: picked.name,
-        coingecko_id: picked.coingecko_id,
-        chain: picked.chain,
-        contract: picked.contract,
-      },
-      condition: condition.value,
-      price: price.value.trim(),
-      currency: currency.value,
-      // Switched off from `Mine`; the dialog keeps it as it was.
+    // Switched off from `Mine`; the dialog keeps it as it was.
+    const input = alertInputOfFields(currentFields(), {
       active: props.alert?.active ?? true,
-      store_id: (props.alert ? props.alert.store_id : props.storeId) ?? undefined,
-      repeats: !once.value,
-    }
+      storeId: (props.alert ? props.alert.store_id : props.storeId) ?? undefined,
+    })
     return props.alert
-      ? call<PriceAlert>('update_price_alert', { input: { id: props.alert.id, alert: input } })
+      ? call<PriceAlert>('update_price_alert', {
+          input: { id: props.alert.id, alert: input, base: edit.base.value && alertInputOf(edit.base.value) },
+        })
       : call<PriceAlert>('create_price_alert', { input })
   },
   onSuccess: () => {
@@ -91,6 +111,7 @@ const save = useMutation({
 <template>
   <Dialog overlay="price-alert" v-model:open="open" :title="props.alert ? t('alert.edit') : t('alert.newPrice')" size="form">
     <form id="price-alert-form" class="grid gap-4" @submit.prevent="form.submit(save.mutate, $event)">
+      <SyncChangedBanner v-if="edit.changedElsewhere.value" @refresh="refreshFromOtherDevice" />
       <div class="grid items-start gap-4 sm:grid-cols-2">
         <AssetInput v-model="asset" :label="t('alert.asset')" required :error="form.error('asset')" />
         <FormField for="alert-condition" :label="t('alert.condition')" required>

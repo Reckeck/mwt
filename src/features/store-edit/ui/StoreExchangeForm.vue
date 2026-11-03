@@ -43,7 +43,8 @@ const { hasKey } = useExchangeKeyStatus(
 
 function pick(value: ExchangeProvider) {
   if (value === provider.value) return
-  save.mutate(updateInputOf(props.store, { provider: value }))
+  // A click saves at once: the wallet as the page shows it is the base.
+  save.mutate(updateInputOf(props.store, { provider: value, base: props.store }))
 }
 
 const setInterval = useMutation({
