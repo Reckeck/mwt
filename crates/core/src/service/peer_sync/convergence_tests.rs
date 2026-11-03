@@ -6,16 +6,23 @@
 
 use super::tests::two_devices;
 use super::*;
+use crate::ipc_contract::{
+    SettleSharedInput, SharedEventDraft, SharedItemDraft, SharedParticipantDraft,
+    SharedPurchaseDraft,
+};
 use crate::model::category::CategoryGroup;
 use crate::model::contact::ContactKind;
+use crate::model::inflation::InflationMode;
+use crate::model::shared_event::{PriceMode, SettleDirection};
+use crate::model::store::{Binding, StoreKind, SubType};
 use crate::model::transaction::Transaction;
+use crate::service::StoreExtras;
 use crate::service::contacts::ContactDraft;
-use crate::service::test_support::income;
+use crate::service::test_support::{amount, income, store, usd};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Edit kinds the harness may pick. Later stages (B3 slices) add kinds here:
-/// shared-event participants/items/settlements, envelope moves, exchange keys,
-/// settings maps, adjustment lines, emergency scope.
+/// envelope moves, exchange keys, adjustment lines.
 const ENABLED_KINDS: &[Edit] = &[
     Edit::CreateTx,
     Edit::ChangeTxAmount,
@@ -27,6 +34,18 @@ const ENABLED_KINDS: &[Edit] = &[
     Edit::CreateContact,
     Edit::RenameContact,
     Edit::DeleteContact,
+    Edit::SharedCreateEvent,
+    Edit::SharedAddParticipant,
+    Edit::SharedRemoveParticipant,
+    Edit::SharedAddItem,
+    Edit::SharedEditItem,
+    Edit::SharedRemoveItem,
+    Edit::SharedPurchase,
+    Edit::SharedSettle,
+    Edit::CreateSavings,
+    Edit::DeleteSavings,
+    Edit::ToggleEmergency,
+    Edit::SetInflation,
 ];
 
 const DEFAULT_SEEDS: &[u64] = &[1, 2, 3, 4, 5];
@@ -34,7 +53,7 @@ const DEFAULT_STEPS: usize = 200;
 const DEVICES: usize = 3;
 const MAX_SETTLE_ROUNDS: usize = 10;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Edit {
     CreateTx,
     ChangeTxAmount,
@@ -46,6 +65,18 @@ enum Edit {
     CreateContact,
     RenameContact,
     DeleteContact,
+    SharedCreateEvent,
+    SharedAddParticipant,
+    SharedRemoveParticipant,
+    SharedAddItem,
+    SharedEditItem,
+    SharedRemoveItem,
+    SharedPurchase,
+    SharedSettle,
+    CreateSavings,
+    DeleteSavings,
+    ToggleEmergency,
+    SetInflation,
 }
 
 /// splitmix64: tiny, deterministic, good enough for choosing steps.
@@ -228,6 +259,17 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
                 .unwrap();
             ledger.touched_after.insert(format!("contacts:{id}"));
         }
+        Edit::SharedCreateEvent
+        | Edit::SharedAddParticipant
+        | Edit::SharedRemoveParticipant
+        | Edit::SharedAddItem
+        | Edit::SharedEditItem
+        | Edit::SharedRemoveItem
+        | Edit::SharedPurchase
+        | Edit::SharedSettle => apply_shared(kind, vault, rng, ledger),
+        Edit::CreateSavings | Edit::DeleteSavings | Edit::ToggleEmergency | Edit::SetInflation => {
+            apply_fund(kind, vault, rng, ledger);
+        }
         Edit::DeleteContact => {
             let ids: Vec<String> = vault
                 .doc
@@ -241,6 +283,203 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
             vault.delete_contact(&id).unwrap();
             ledger.deleted.insert(format!("contacts:{id}"));
         }
+    }
+}
+
+fn event_ids(vault: &UnlockedVault) -> Vec<String> {
+    vault
+        .doc
+        .shared_events
+        .iter()
+        .map(|event| event.id.clone())
+        .collect()
+}
+
+fn guest(name: String) -> SharedParticipantDraft {
+    SharedParticipantDraft {
+        name,
+        ..Default::default()
+    }
+}
+
+/// Shared-event edits. A refusal of the core (a busy participant, a
+/// settlement over the debt) is a normal outcome of a random edit.
+fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+    let number = ledger.fresh();
+    let Some(event) = pick(rng, &event_ids(vault)).cloned() else {
+        if matches!(kind, Edit::SharedCreateEvent | Edit::SharedAddParticipant) {
+            vault
+                .create_shared_event(SharedEventDraft {
+                    title: format!("event {number}"),
+                    currency: "usd".into(),
+                    participants: vec![guest(format!("guest {number}"))],
+                    ..Default::default()
+                })
+                .unwrap();
+        }
+        return;
+    };
+    let current = vault
+        .doc
+        .shared_events
+        .iter()
+        .find(|candidate| candidate.id == event)
+        .unwrap()
+        .clone();
+    match kind {
+        Edit::SharedCreateEvent => {
+            vault
+                .create_shared_event(SharedEventDraft {
+                    title: format!("event {number}"),
+                    currency: "usd".into(),
+                    participants: vec![guest(format!("guest {number}"))],
+                    ..Default::default()
+                })
+                .unwrap();
+        }
+        Edit::SharedAddParticipant => {
+            vault
+                .add_shared_participant(&event, guest(format!("guest {number}")))
+                .unwrap();
+        }
+        Edit::SharedRemoveParticipant => {
+            let Some(person) = pick(rng, &current.participants).cloned() else {
+                return;
+            };
+            if vault.remove_shared_participant(&event, &person.id).is_ok() {
+                ledger
+                    .deleted
+                    .insert(format!("{event}/participant/{}", person.id));
+            }
+        }
+        Edit::SharedAddItem => {
+            vault
+                .add_shared_item(
+                    &event,
+                    SharedItemDraft {
+                        title: format!("item {number}"),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+        }
+        Edit::SharedEditItem => {
+            let Some(item) = pick(rng, &current.items).cloned() else {
+                return;
+            };
+            let draft = SharedItemDraft {
+                title: format!("edited {number}"),
+                unit: item.unit.clone(),
+                category_id: item.category_id.clone(),
+                plan: item.plan.clone(),
+                cancelled: item.cancelled,
+            };
+            if vault.update_shared_item(&event, &item.id, draft).is_ok() {
+                ledger
+                    .touched_after
+                    .insert(format!("{event}/item/{}", item.id));
+            }
+        }
+        Edit::SharedRemoveItem => {
+            let Some(item) = pick(rng, &current.items).cloned() else {
+                return;
+            };
+            if vault.delete_shared_item(&event, &item.id).is_ok() {
+                ledger.deleted.insert(format!("{event}/item/{}", item.id));
+            }
+        }
+        Edit::SharedPurchase => {
+            let Some(person) = pick(rng, &current.participants).cloned() else {
+                return;
+            };
+            let _ = vault.add_shared_purchase(
+                &event,
+                SharedPurchaseDraft {
+                    new_item_title: Some(format!("bought {number}")),
+                    buyer: person.id,
+                    qty: amount("1"),
+                    amount: amount(&format!("{}", 10 + rng.below(90))),
+                    currency: "usd".into(),
+                    price_mode: PriceMode::Total,
+                    ..Default::default()
+                },
+            );
+        }
+        Edit::SharedSettle => {
+            let Some(person) = pick(rng, &current.participants).cloned() else {
+                return;
+            };
+            for direction in [SettleDirection::ToOrganizer, SettleDirection::FromOrganizer] {
+                let settled = vault.settle_shared(SettleSharedInput {
+                    event_id: event.clone(),
+                    participant_id: person.id.clone(),
+                    direction,
+                    amount: amount("1"),
+                    store_id: None,
+                    at: None,
+                });
+                if settled.is_ok() {
+                    break;
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn savings_ids(vault: &UnlockedVault) -> Vec<String> {
+    vault
+        .doc
+        .stores
+        .iter()
+        .filter(|candidate| candidate.name.starts_with("sv"))
+        .map(|candidate| candidate.id.clone())
+        .collect()
+}
+
+/// Emergency-fund scope and per-currency inflation modes.
+fn apply_fund(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+    let number = ledger.fresh();
+    match kind {
+        Edit::CreateSavings => {
+            let bank = store(vault, &format!("bank {number}"), StoreKind::Bank, None);
+            let extras = StoreExtras {
+                sub_type: Some(SubType::Savings),
+                binding: Some(Binding::Asset(usd())),
+                ..StoreExtras::default()
+            };
+            vault
+                .create_store_with(
+                    &format!("sv{number}"),
+                    StoreKind::Bank,
+                    "#000",
+                    "",
+                    Some(bank),
+                    extras,
+                )
+                .unwrap();
+        }
+        Edit::DeleteSavings => {
+            let Some(id) = pick(rng, &savings_ids(vault)).cloned() else {
+                return;
+            };
+            if vault.delete_store(&id).is_ok() {
+                ledger.deleted.insert(format!("stores:{id}"));
+            }
+        }
+        Edit::ToggleEmergency => {
+            let Some(id) = pick(rng, &savings_ids(vault)).cloned() else {
+                return;
+            };
+            let on = rng.below(3) != 0;
+            vault.emergency_fund_toggle(&id, on).unwrap();
+        }
+        Edit::SetInflation => {
+            let currency = ["usd", "eur", "thb"][rng.below(3)];
+            let mode = (rng.below(4) != 0).then_some(InflationMode::Manual);
+            vault.set_inflation_mode(currency, mode).unwrap();
+        }
+        _ => {}
     }
 }
 
@@ -266,17 +505,27 @@ fn run(seed: u64, steps: usize) {
     let (_dir, mut devices) = three_devices();
     let mut rng = Rng(seed);
     let mut ledger = Ledger::default();
+    let trace = std::env::var("MWT_CONV_TRACE").is_ok();
 
     for _ in 0..steps {
         if rng.below(10) < 6 {
             let device = rng.below(DEVICES);
             let kind = ENABLED_KINDS[rng.below(ENABLED_KINDS.len())];
+            if trace {
+                eprintln!("edit {kind:?} on {device}");
+            }
             apply_edit(kind, &mut devices[device], &mut rng, &mut ledger);
         } else {
             let from = rng.below(DEVICES);
             let to = (from + 1 + rng.below(DEVICES - 1)) % DEVICES;
+            if trace {
+                eprintln!("pull {from} -> {to}");
+            }
             pull(&mut devices, from, to);
             if rng.below(2) == 0 {
+                if trace {
+                    eprintln!("pull {to} -> {from}");
+                }
                 pull(&mut devices, to, from);
             }
         }
@@ -318,6 +567,36 @@ fn run(seed: u64, steps: usize) {
             assert!(
                 !view.contains_key(key),
                 "{context}: deleted record {key} came back on device {index}"
+            );
+        }
+        // `<event>/item/<id>` and `<event>/participant/<id>`: entries inside a record.
+        if let Some((event, rest)) = key.split_once('/') {
+            for (index, device) in devices.iter().enumerate() {
+                let Some(found) = device
+                    .doc
+                    .shared_events
+                    .iter()
+                    .find(|found| found.id == event)
+                else {
+                    continue;
+                };
+                let present = match rest.split_once('/') {
+                    Some(("item", id)) => found.items.iter().any(|item| item.id == id),
+                    Some((_, id)) => found.participants.iter().any(|person| person.id == id),
+                    None => false,
+                };
+                assert!(
+                    !present,
+                    "{context}: removed entry {key} came back on device {index}"
+                );
+            }
+        }
+    }
+    for (index, device) in devices.iter().enumerate() {
+        for id in &device.doc.emergency_fund.scope.store_ids {
+            assert!(
+                device.find_store(id).is_some(),
+                "{context}: the emergency fund names a missing store {id} on device {index}"
             );
         }
     }

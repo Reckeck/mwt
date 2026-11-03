@@ -7,7 +7,7 @@
 
 use serde_json::Value;
 
-use super::flatten::{Order, cannot_express, entry_stamp, is_entry, settle_heads};
+use super::flatten::{Order, cannot_express, edited_here, entry_stamp, is_entry, settle_heads};
 use super::registry::{Collection, Rule};
 use super::state::{RecordStamps, RecordState};
 use super::view::{Fields, join_with, split};
@@ -184,10 +184,7 @@ fn merge_fields(
         } else {
             (local_value, local_stamp)
         };
-        if take_remote
-            && local_value != remote_value
-            && local_stamps.fields.contains_key(name.as_str())
-        {
+        if take_remote && local_value != remote_value && edited_here(coll, &local_stamps, name) {
             overwrote.push(Overwrite {
                 field: name.clone(),
                 before: local_value.cloned().unwrap_or(Value::Null),

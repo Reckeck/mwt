@@ -32,7 +32,7 @@ fn variant(value: &Value) -> Option<(&String, &Value)> {
     map.iter().next().filter(|(_, body)| body.is_object())
 }
 
-fn lookup<'doc>(value: &'doc Value, path: &str) -> Option<&'doc Value> {
+pub(super) fn lookup<'doc>(value: &'doc Value, path: &str) -> Option<&'doc Value> {
     path.split('.').try_fold(value, |node, step| {
         if step == "*" {
             variant(node).map(|(_, body)| body)
@@ -50,7 +50,11 @@ fn key_text(value: &Value) -> String {
 }
 
 /// The key of an item of a split array (`Collection.flatten_by`).
+/// An empty path means the item itself is the key (an array of strings).
 pub(super) fn item_key(item: &Value, path: &str) -> Option<String> {
+    if path.is_empty() {
+        return Some(key_text(item));
+    }
     lookup(item, path).map(key_text)
 }
 
@@ -127,7 +131,56 @@ pub fn split(coll: &Collection, value: &Value) -> Fields {
             fields.insert(WHOLE.to_string(), other.clone());
         }
     }
+    split_nested_arrays(coll, &mut fields);
     Fields { tag, fields }
+}
+
+/// Arrays inside an object that is itself split one level (`scope` ->
+/// `scope.store_ids`): the head is a dotted name, and the array splits into
+/// `scope.store_ids.<key>` entries after the object has split.
+fn split_nested_arrays(coll: &Collection, fields: &mut BTreeMap<String, Value>) {
+    for (head, path) in coll
+        .flatten_by
+        .iter()
+        .filter(|(head, _)| head.contains('.'))
+    {
+        let Some(Value::Array(items)) = fields.get(*head) else {
+            continue;
+        };
+        let Some(entries) = split_array(head, path, items) else {
+            continue;
+        };
+        // An empty array keeps its head: the marker of "nothing left".
+        if !entries.is_empty() {
+            fields.remove(*head);
+        }
+        fields.extend(entries);
+    }
+}
+
+/// `(head, key)` when `name` is the entry `head.<key>` of a split array.
+fn array_entry<'name>(coll: &Collection, name: &'name str) -> Option<(&'static str, &'name str)> {
+    coll.flatten_by.iter().find_map(|(head, _)| {
+        name.strip_prefix(head)
+            .and_then(|rest| rest.strip_prefix('.'))
+            .map(|key| (*head, key))
+    })
+}
+
+pub(super) fn insert_path(body: &mut Map<String, Value>, path: &str, value: Value) {
+    match path.split_once('.') {
+        None => {
+            body.insert(path.to_string(), value);
+        }
+        Some((first, rest)) => {
+            let slot = body
+                .entry(first.to_string())
+                .or_insert_with(|| Value::Object(Map::new()));
+            if let Value::Object(inner) = slot {
+                insert_path(inner, rest, value);
+            }
+        }
+    }
 }
 
 pub fn join(coll: &Collection, fields: &Fields) -> Value {
@@ -145,13 +198,14 @@ pub fn join_with(coll: &Collection, fields: &Fields, order: &Order) -> Value {
     let mut body = Map::new();
     let mut arrays: BTreeMap<&str, BTreeMap<String, Value>> = BTreeMap::new();
     for (name, value) in &fields.fields {
+        if let Some((head, key)) = array_entry(coll, name) {
+            arrays
+                .entry(head)
+                .or_default()
+                .insert(key.to_string(), value.clone());
+            continue;
+        }
         match name.split_once('.') {
-            Some((head, sub)) if coll.item_key(head).is_some() => {
-                arrays
-                    .entry(head)
-                    .or_default()
-                    .insert(sub.to_string(), value.clone());
-            }
             Some((head, sub)) if coll.flatten.contains(&head) => {
                 let slot = body
                     .entry(head.to_string())
@@ -166,6 +220,20 @@ pub fn join_with(coll: &Collection, fields: &Fields, order: &Order) -> Value {
         }
     }
     join_arrays(coll, arrays, order, &mut body);
+    // A nested array with no entry and no marker still has to exist when its
+    // parent does: the typed document may require it.
+    for (head, _) in coll
+        .flatten_by
+        .iter()
+        .filter(|(head, _)| head.contains('.'))
+    {
+        if let Some((parent, last)) = head.rsplit_once('.')
+            && let Some(Value::Object(inner)) = lookup(&Value::Object(body.clone()), parent)
+            && !inner.contains_key(last)
+        {
+            insert_path(&mut body, head, Value::Array(Vec::new()));
+        }
+    }
     match &fields.tag {
         Some(tag) => {
             let mut outer = Map::new();

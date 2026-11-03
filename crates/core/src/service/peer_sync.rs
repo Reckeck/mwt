@@ -544,6 +544,15 @@ impl UnlockedVault {
         // Both devices may have run the same automation or import before
         // they met; the copy made later goes (as an ordinary deletion).
         self.dedupe_generated(&applied.id, carry)?;
+        // Things another device deleted may still be named by a record that
+        // arrived with the batch (an emergency account, an inflation source).
+        // The same pruning runs on every device and the persist below stamps
+        // it like a local edit, so it settles to one result without
+        // resurrecting anything. Shared events keep their references: a
+        // settlement or item that names a removed participant is user data
+        // and is left for the invariant pass of stage M.
+        self.prune_emergency_fund();
+        self.prune_inflation_sources();
         self.recompute_holdings();
         self.persist()?;
         Ok(Some(applied))
@@ -1422,6 +1431,8 @@ mod convergence_tests;
 mod log_tests;
 #[cfg(test)]
 mod marks_tests;
+#[cfg(test)]
+mod nested_tests;
 #[cfg(test)]
 mod preview_tests;
 #[cfg(test)]

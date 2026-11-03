@@ -287,3 +287,94 @@ fn unkeyed_items_keep_the_array_whole() {
     assert!(fields.fields.contains_key("items"));
     assert_eq!(view::join(&LISTS, &fields), value);
 }
+
+const FUND: Collection = Collection {
+    name: "emergency_fund",
+    rule: Rule::Single,
+    key: &[],
+    flatten: &["scope"],
+    flatten_by: &[("scope.store_ids", "")],
+    skip: &[],
+    age: None,
+    secret: false,
+    secret_fields: &[],
+    whole: false,
+    cache: false,
+};
+
+fn fund(ids: &[&str]) -> Value {
+    json!({"scope": {"store_ids": ids, "include_children": false}, "target_months": 6})
+}
+
+fn ids_of(merged: &RecordState) -> Vec<String> {
+    merged.value.as_ref().expect("alive")["scope"]["store_ids"]
+        .as_array()
+        .expect("array")
+        .iter()
+        .map(|id| id.as_str().expect("string").to_string())
+        .collect()
+}
+
+fn fund_both_ways(left: &RecordState, right: &RecordState) -> RecordState {
+    let there = merge(&FUND, left, right).state;
+    let back = merge(&FUND, right, left).state;
+    assert_eq!(there, back, "merge must not depend on the side");
+    there
+}
+
+#[test]
+fn a_set_of_strings_splits_one_entry_per_id() {
+    let fields = split(&FUND, &fund(&["a", "b"]));
+    assert_eq!(fields.fields["scope.store_ids.a"], json!("a"));
+    assert_eq!(fields.fields["scope.store_ids.b"], json!("b"));
+    assert!(!fields.fields.contains_key("scope.store_ids"));
+    assert_eq!(view::join(&FUND, &fields), fund(&["a", "b"]));
+    // Empty: the marker keeps the array alive.
+    let empty = split(&FUND, &fund(&[]));
+    assert_eq!(view::join(&FUND, &empty), fund(&[]));
+}
+
+#[test]
+fn ids_added_on_two_devices_both_stay_and_a_removal_travels() {
+    let base = ["a"];
+    let left = state(fund(&["a", "x"]), &[("scope.store_ids.x", at(5, "a"))]);
+    let right = state(fund(&["a", "y"]), &[("scope.store_ids.y", at(6, "b"))]);
+    let merged = fund_both_ways(&left, &right);
+    let mut ids = ids_of(&merged);
+    ids.sort();
+    assert_eq!(ids, vec!["a", "x", "y"]);
+    let _ = base;
+
+    let remover = state(fund(&[]), &[("scope.store_ids.a", at(9, "a"))]);
+    let keeper = state(fund(&["a"]), &[("scope.store_ids.a", at(3, "b"))]);
+    assert!(ids_of(&fund_both_ways(&keeper, &remover)).is_empty());
+}
+
+#[test]
+fn a_whole_scope_stamp_of_an_older_device_is_a_floor_for_ids() {
+    let local = state(
+        fund(&["a", "mine"]),
+        &[("scope.store_ids.mine", at(5, "a"))],
+    );
+    let old_peer = state(fund(&["a", "theirs"]), &[("scope", at(7, "b"))]);
+    let merged = fund_both_ways(&local, &old_peer);
+    let mut ids = ids_of(&merged);
+    ids.sort();
+    assert_eq!(ids, vec!["a", "mine", "theirs"]);
+}
+
+#[test]
+fn last_item_removed_beside_a_concurrent_add() {
+    // One device removes the only item (the empty array is stamped as a
+    // marker), the other adds a different one.
+    let remover = state(
+        record(vec![]),
+        &[("items.a", at(9, "a")), ("items", at(9, "a"))],
+    );
+    let adder = state(
+        record(vec![item("a", "a0"), item("b", "b0")]),
+        &[("items.b", at(12, "b"))],
+    );
+    let merged = both_ways(&remover, &adder);
+    assert_eq!(items_of(&merged), vec![item("b", "b0")]);
+}

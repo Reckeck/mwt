@@ -149,8 +149,17 @@ pub const DEVICE_SETTINGS: &[&str] = &[
 pub const UNION_DAYS: u64 = 90;
 
 pub static COLLECTIONS: &[Collection] = &[
-    single("settings", DEVICE_SETTINGS),
-    records("stores", ID),
+    // Per-currency maps merge per currency: two devices choosing the
+    // inflation of different currencies both keep their choice.
+    Collection {
+        flatten: &["inflation_mode", "inflation_source"],
+        ..single("settings", DEVICE_SETTINGS)
+    },
+    // Exchange and property details merge per field.
+    Collection {
+        flatten: &["exchange", "property"],
+        ..records("stores", ID)
+    },
     Collection {
         flatten: &["meta"],
         flatten_by: &[],
@@ -185,9 +194,16 @@ pub static COLLECTIONS: &[Collection] = &[
     },
     Collection {
         secret: true,
+        flatten_by: &[("bybit", "store_id")],
         ..single("exchanges", &[])
     },
-    single("emergency_fund", &[]),
+    // The accounts of the fund are a set: `scope` splits one level, and its
+    // `store_ids` splits into one entry per id (the item is its own key).
+    Collection {
+        flatten: &["scope"],
+        flatten_by: &[("scope.store_ids", "")],
+        ..single("emergency_fund", &[])
+    },
     Collection {
         whole: true,
         ..single("health_last", &[])
@@ -205,7 +221,16 @@ pub static COLLECTIONS: &[Collection] = &[
     records("manual_prices", &["asset_key"]),
     records("envelopes", ID),
     records("debt_terms", ID),
-    records("shared_events", ID),
+    // People, purchases and settlements added on different devices all stay.
+    Collection {
+        flatten_by: &[
+            ("participants", "id"),
+            ("items", "id"),
+            ("settlements", "id"),
+            ("adjustments", "participant_id"),
+        ],
+        ..records("shared_events", ID)
+    },
     records("key_rates", &["date"]),
     log(
         "notification_log",
