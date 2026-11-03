@@ -58,14 +58,6 @@ jobs:
       version_code: ${{ steps.version.outputs.ANDROID_VERSION_CODE }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Plan
-        id: plan
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REF_NAME: ${{ github.ref_name }}
-          INPUT_CHANNEL: ${{ inputs.channel }}
-          INPUT_PUBLISH: ${{ inputs.publish }}
-        run: .github/scripts/release-plan.sh
       # Rust as mise.toml pins it (no version in this file).
       - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
         with:
@@ -76,6 +68,14 @@ jobs:
         run: |
           rustup target add x86_64-unknown-linux-musl
           cargo build -p xtask --locked --target x86_64-unknown-linux-musl
+      - name: Plan
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: .rust-target/x86_64-unknown-linux-musl/debug/xtask release-plan
       - name: Version
         id: version
         env:
@@ -334,7 +334,7 @@ jobs:
   # macOS: a universal .dmg and the .app tarball, signed ad hoc (Apple signing is not set up:
   # add APPLE_* secrets and pass them to the build step, see build-macos.sh). Paused like clippy-macos in ci.yml; to switch it on remove `if: false` and add
   # `build-macos` to the `needs` and to the `if` of `publish` (it accepts `skipped` today), and pass
-  # `macos` as the third argument of check-release-files.sh.
+  # `macos` as `--macos` of `xtask check-release-files`.
   build-macos:
     needs: [version, frontend]
     if: false
@@ -454,10 +454,11 @@ jobs:
       - name: Every file of the release is there
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: .github/scripts/check-release-files.sh release "$BUILD_VERSION"
-      - name: Release
         run: |
           chmod +x bin/xtask
+          bin/xtask check-release-files release "$BUILD_VERSION"
+      - name: Release
+        run: |
           flags=()
           if [[ "$PRE" == true ]]; then flags+=(--pre); fi
           bin/xtask publish --version "$BUILD_VERSION" --dir release "${flags[@]}"

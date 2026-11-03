@@ -36,7 +36,7 @@ Always use `mise run …` (the `mise.toml` task file), do not hardcode versions:
 | `mise run changelog` | update the commit list in `## [Unreleased]` of CHANGELOG.md (git-cliff) |
 | `mise run bump` | next version (`auto`/`patch`/`minor`/`major`/`X.Y.Z`) in all files + a CHANGELOG section |
 | `mise run check-platforms` | compilation (clippy) for linux, windows, android, macos; `SKIP` — the machine cannot check that platform (the "Building on all platforms" rule); runs `cargo xtask check clippy @platforms`; the same tasks are part of `mise run check`; selected platforms — `mise run check-platforms -- windows android` |
-| `mise run check-ci` | CI scripts: `*.ps1` ASCII only, shell scripts parse (`scripts/ci/lint-ci.sh`) |
+| `mise run check-ci` | CI scripts (`cargo xtask check ci-scripts`, `crates/xtask/src/ci/lint.rs`): `*.ps1` ASCII only, shell scripts parse |
 | `mise run audit` | dependency audit of Rust (cargo-audit) and npm (`pnpm audit`); exceptions with reasons are in `audit-ignore.toml`; not part of `check`, in CI it is `audit.yml` |
 | `mise run check-layout` | the app on the mock backend in headless Chromium at 1920…720 and 390/360, dark and light theme: no overflow and no sideways scroll, hover and loading shift nothing, a dialog opens in place, listeners do not pile up, "Back" closes a layer, touch targets ≥ 40 px, neighbouring blocks of one container do not overlap (rule 17); `--quick` — 1280 and 390, `--report` — without failing, `--jobs N` — N processes (default min(4, cores/2)), `--shard K/N` — the K-th share of N, `--update-weights` — weights from a measurement; screenshots in `.cache/check-layout/` |
 | `mise run check` | `cargo xtask check --quick`: lint + typecheck + test-frontend + static checks (vitest `checks`: onboarding/routes/forms/ui/fsd) + ci + fmt + clippy + tests + gen-types + platforms in parallel, then one at a time test-e2e, layout and links (`--quick`); fail-fast — the first error stops the rest; logs in `.cache/xtask/<task>.log`; task names and groups (`@static @browser @frontend @rust @platforms`, `checks/groups.rs`) select, `--exclude` removes, `--keep-going` does not stop on the first error, `--list` / `--dry-run` show the graph / the commands, `--output auto\|tty\|plain\|github` and `-v`/`-q` shape the output (GitHub: a group per task, `::error` at file:line, a Job Summary); plain `cargo xtask check` runs layout and links in full; a second run in the same working copy attaches to the running one |
@@ -257,7 +257,7 @@ check it with `mise x actionlint@1.7.12 -- actionlint`. GitLab is only a mirror 
   version will be. CI will not release from `main` without a `## [X.Y.Z]` section in
   `CHANGELOG.md`.
 - **`*.ps1` — ASCII only** (Windows PowerShell 5.1 reads them as cp1252:
-  "—" breaks parsing); `mise run check-ci` (`scripts/ci/lint-ci.sh`) catches it.
+  "—" breaks parsing); `mise run check-ci` (`crates/xtask/src/ci/lint.rs`) catches it.
 
 - **CI repeats the local gate.** A new check in `mise run check`
   is added to `cargo xtask check` as well and into a group of `crates/xtask/src/checks/groups.rs`

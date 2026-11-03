@@ -1,5 +1,5 @@
 # The CI images (scripts/ci/ci.Dockerfile: ci-node, ci-linux, ci-android) in ghcr.io.
-# The tag is scripts/ci/image-tag.sh (a hash of the Dockerfile, apt-packages.sh,
+# The tag is `xtask image-tag` (a hash of the Dockerfile, apt-packages.sh,
 # install-chrome.sh and the [tools] of mise.toml); a target that is already in
 # the registry is not built again, so a run with unchanged inputs costs seconds.
 #
@@ -12,7 +12,7 @@ on:
   workflow_call:
     outputs:
       tag:
-        description: Image tag (scripts/ci/image-tag.sh)
+        description: Image tag (xtask image-tag)
         value: ${{ jobs.images.outputs.tag }}
       base:
         description: Registry path without the target, e.g. ghcr.io/reckeck/mwt
@@ -45,6 +45,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Rust as mise.toml pins it (no version in this file); xtask is built here on the runner
+      # (no container: docker needs the host), its dependencies come from the Actions cache.
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        with:
+          install_args: rust
+          cache: false
+      - name: Compiled xtask dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/xtask-target
+          key: xtask-images-${{ hashFiles('Cargo.lock', 'crates/xtask/**', 'mise.toml', '.cargo/config.toml') }}
+      - name: Build xtask
+        run: cargo build -p xtask --locked --target-dir .cache/xtask-target
       - name: Log in to ghcr.io
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,4 +67,5 @@ jobs:
         id: build
         env:
           FORCE: ${{ inputs.force && '1' || '' }}
-        run: .github/scripts/build-images.sh
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: .cache/xtask-target/debug/xtask ci-images

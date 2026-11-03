@@ -90,21 +90,4 @@ mod tests {
         assert_ne!(one, hash(&[b"b".to_vec()], "[tools]\nnode = \"1\"\n"));
         assert_ne!(one, hash(&[b"a".to_vec()], "[tools]\nnode = \"2\"\n"));
     }
-
-    /// GitHub's images job still computes the tag with scripts/ci/image-tag.sh (no cargo build
-    /// there): the two must agree.
-    #[cfg(unix)]
-    #[test]
-    fn the_shell_script_and_this_agree() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let output = std::process::Command::new("scripts/ci/image-tag.sh")
-            .current_dir(&root)
-            .output()
-            .unwrap();
-        assert!(output.status.success());
-        assert_eq!(
-            String::from_utf8_lossy(&output.stdout).trim(),
-            tag(&root).unwrap()
-        );
-    }
 }

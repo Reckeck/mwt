@@ -39,8 +39,8 @@ What makes CI fast and what must not be broken:
   neither apt packages nor a toolchain: `setup-linux.sh` only attaches the
   caches. The image tag is a hash of the inputs (Dockerfile,
   `apt-packages.sh`, `install-chrome.sh`, `[tools]` from `mise.toml`); it is
-  printed by `scripts/ci/image-tag.sh` and `mise run ci-image-tag`. The tag is
-  written by hand nowhere: `images.yml` (`.github/scripts/build-images.sh`)
+  printed by `mise run ci-image-tag` (`cargo xtask image-tag`). The tag is
+  written by hand nowhere: `images.yml` (`xtask ci-images`, built on the runner with the Actions cache)
   builds the missing images itself, and a tag that is already pushed is not
   rebuilt (a manual run has `force`).
 - **sccache.** Compiled crates live in the Actions cache (`.cache/sccache`, per
@@ -254,7 +254,7 @@ version, images ──► frontend ──► build (linux | android | windows) �
 ```
 
 - `version` decides the channel and whether a release is needed
-  (`.github/scripts/release-plan.sh`), builds `xtask` (the only Rust compiler in
+  (`xtask release-plan`), builds `xtask` (the only Rust compiler in
   the run; the binary goes as an artifact to all the following jobs), computes
   `X.Y.Z[-N]` (`cargo xtask version`: fails if the tag `vX.Y.Z` already exists)
   and writes the Tauri overlay for Windows. The Android `versionCode` is
@@ -282,7 +282,7 @@ version, images ──► frontend ──► build (linux | android | windows) �
 - `package` is pacman and Flatpak from the Linux tarball (`xtask build
   pacman|flatpak`, an archlinux container, Flatpak `--privileged`).
 - `publish` is the only job with `contents: write`: a check of the file set
-  (`.github/scripts/check-release-files.sh`), `SHA256SUMS`, the tag and the
+  (`xtask check-release-files`), `SHA256SUMS`, the tag and the
   release (`cargo xtask publish [--pre]`), then `prune-prereleases` (keep 10; an
   error does not fail the run).
 - `aur` (prod) is `publish-aur` in an archlinux container; without the secret
@@ -293,7 +293,7 @@ version, images ──► frontend ──► build (linux | android | windows) �
   error does not fail the run.
 - `build-macos` is written but turned off (`if: false`, like `clippy-macos`): to
   turn it on, remove `if: false`, add it to `needs` and to the `publish`
-  condition, and pass `macos` as the third argument of `check-release-files.sh`.
+  condition, and pass `--macos` to `xtask check-release-files`.
 
 The release files (`<v>` is the version, decision 12 of the plan):
 
@@ -326,7 +326,7 @@ set. Local and fork builds therefore still work and simply make no `.sig` files.
 |---|---|---|
 | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` | signing the APK/AAB; the previous keystore, otherwise the installed app will not update | on a release the Android build fails; without a release the APK is signed with a test key (`*-testkey`), and such files are not published |
 | `AUR_SSH_PRIVATE_KEY` | push to AUR | the step is skipped with a warning |
-| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | signing the updater bundles (`.sig`) for the manifest | no `.sig` files and no updater entries; `check-release-files.sh` asks for the `.sig` files only when the key is set |
+| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | signing the updater bundles (`.sig`) for the manifest | no `.sig` files and no updater entries; `xtask check-release-files` asks for the `.sig` files only when the key is set |
 
 The keystore is not written to the runner's disk: `ANDROID_KEYSTORE_BASE64`
 reaches the container as an environment variable (GitHub masks the value in the

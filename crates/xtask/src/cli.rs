@@ -54,6 +54,26 @@ pub enum Command {
     /// The CI image tag: a hash of the Dockerfile, the apt lists and the [tools] of mise.toml.
     #[command(hide = true)]
     ImageTag,
+    /// What a release.yml run builds and whether it publishes (EVENT_NAME, REF_NAME, INPUT_CHANNEL,
+    /// INPUT_PUBLISH in; channel, publish, pre, kind to $GITHUB_OUTPUT).
+    #[command(hide = true)]
+    ReleasePlan,
+    /// Every file of a release is in the directory and none is signed with the Android test key.
+    #[command(hide = true)]
+    CheckReleaseFiles {
+        dir: std::path::PathBuf,
+        version: String,
+        /// The macOS files are required too.
+        #[arg(long)]
+        macos: bool,
+    },
+    /// Build and push the CI images that are not in ghcr yet (needs a docker login).
+    #[command(hide = true)]
+    CiImages {
+        /// Rebuild even when the tag is pushed (FORCE set does the same).
+        #[arg(long)]
+        force: bool,
+    },
     /// The cache key of a CI lane: `<lane>-<16 hex>` (check-linux, build-linux-dev, node ...).
     #[command(hide = true)]
     LaneKey { lane: String },

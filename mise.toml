@@ -36,7 +36,7 @@ RUST_LOG = "info"
 platforms() { if [ "$#" -eq 0 ]; then set -- clippy @platforms; fi; exec cargo xtask check "$@"; }
 platforms
 """ }
-"check-ci" = { description = "CI scripts: ASCII-only PowerShell, shell scripts parse", run = "scripts/ci/lint-ci.sh" }
+"check-ci" = { description = "CI scripts: ASCII-only PowerShell, shell scripts parse", run = "cargo xtask check ci-scripts" }
 "audit" = { description = "Dependency advisories: cargo-audit + pnpm audit minus the reasoned exceptions of audit-ignore.toml (not part of check; CI: audit.yml); needs cargo install cargo-audit --locked --version 0.22.2", run = "cargo xtask audit" }
 "changelog" = { description = "CHANGELOG.md: refresh the [Unreleased] commit list from the commits (git-cliff)", run = "cargo xtask changelog" }
 "bump" = { description = "Next version (auto|patch|minor|major|X.Y.Z) in every file + CHANGELOG section", run = "cargo xtask bump" }
