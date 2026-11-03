@@ -54,10 +54,9 @@ export const router = createRouter({
               meta: { i18n: 'nav.transactions' },
             },
             {
+              // Contacts left the Transactions section; old links keep their query.
               path: 'contacts',
-              name: 'transactions-contacts',
-              component: () => import('@/pages/transactions').then((page) => page.TransactionsContacts),
-              meta: { i18n: 'nav.transactions' },
+              redirect: (to) => ({ name: 'contacts', query: to.query, hash: to.hash }),
             },
             {
               path: 'calendar',
@@ -72,6 +71,12 @@ export const router = createRouter({
               meta: { i18n: 'nav.transactions' },
             },
           ],
+        },
+        {
+          path: 'contacts',
+          name: 'contacts',
+          component: () => import('@/pages/contacts').then((page) => page.Contacts),
+          meta: { i18n: 'nav.contacts' },
         },
         moneyRoutes,
         ...automationsRoutes,

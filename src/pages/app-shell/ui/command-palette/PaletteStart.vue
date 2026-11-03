@@ -10,7 +10,7 @@ import { entityKey, entityLocation } from '@/shared/lib/entity-link'
 import { SECTION_HOTKEYS, hotkeyLabel } from '@/shared/lib/hotkeys'
 import { openQuickAdd } from '@/shared/lib/quick-add'
 
-import { NAV_ITEMS } from '../../app-shell.constants'
+import { CONTACTS_ITEM, NAV_ITEMS } from '../../app-shell.constants'
 import type { RecentRow } from './use-palette-recent'
 
 /**
@@ -70,6 +70,10 @@ function openRow(row: RecentRow) {
       <component :is="item.icon" />
       <span class="min-w-0 flex-1 truncate">{{ t(item.key) }}</span>
       <CommandShortcut v-if="SECTION_HOTKEYS[index]" class="tracking-normal">{{ hotkeyLabel(SECTION_HOTKEYS[index]) }}</CommandShortcut>
+    </CommandItem>
+    <CommandItem :value="`screen-${CONTACTS_ITEM.name}`" @select="go({ name: CONTACTS_ITEM.name })">
+      <component :is="CONTACTS_ITEM.icon" />
+      <span class="min-w-0 flex-1 truncate">{{ t(CONTACTS_ITEM.key) }}</span>
     </CommandItem>
   </CommandGroup>
   <CommandGroup :heading="t('palette.record')" data-palette-record>

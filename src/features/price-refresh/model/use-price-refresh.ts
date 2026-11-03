@@ -7,7 +7,15 @@ import { call } from '@/shared/api/ipc'
  * Everything a fresh quote or rate changes. Refreshed by the shell on
  * `prices-updated` (whoever started it: this button, the tray, the timer).
  */
-export const PRICED_KEYS = [['store'], ['store-history'], ['stores'], ['summary'], ['fx-table'], ['net-worth']]
+export const PRICED_KEYS = [
+  ['store'],
+  ['store-history'],
+  ['stores'],
+  ['summary'],
+  ['fx-table'],
+  ['net-worth'],
+  ['contacts', 'summaries'],
+]
 
 /**
  * Fetch new quotes and exchange rates for everything held — one action from

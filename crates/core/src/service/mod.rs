@@ -110,7 +110,9 @@ pub use automations::{
 };
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use bulk::{DeletedTransaction, TxCategories, TxStore};
-pub use contacts::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft, TurnoverRow};
+pub use contacts::{
+    ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft, TurnoverRow,
+};
 pub use dashboard::{SpendingDay, SpendingOverview};
 pub use dashboard_tiles::{CategoryGrowth, MonthPace, NetWorthTrend};
 pub use dashboard_today::{DashboardToday, ScenarioStatus, TODAY_TODOS, TodayTodo, TodayTodoKind};

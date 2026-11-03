@@ -31,6 +31,8 @@ export interface DataTableProps<TData> {
   emptyText?: string
   /** Rows react to a click (`row-click`) and look clickable. */
   clickable?: boolean
+  /** Extra classes of a row (a selected one is tinted). */
+  rowClass?: (row: TData) => string | undefined
 }
 
 export type { ColumnDef, SortingState }

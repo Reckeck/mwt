@@ -1,5 +1,5 @@
 import { type MaybeRefOrGetter, toRef } from 'vue'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 
@@ -20,6 +20,26 @@ export const useStoreTree = (enabled: MaybeRefOrGetter<boolean> = true) =>
 
 export const useContacts = (enabled: MaybeRefOrGetter<boolean> = true) =>
   useQuery({ queryKey: ['contacts'], queryFn: () => call<Contact[]>('list_contacts'), enabled: toRef(enabled) })
+
+/** Net debt per contact and asset (`get_contact_balances`). */
+export const useContactBalances = (enabled: MaybeRefOrGetter<boolean> = true) =>
+  useQuery({
+    queryKey: ['contacts', 'balances'],
+    queryFn: () => call<ContactBalance[]>('get_contact_balances'),
+    placeholderData: keepPreviousData,
+    enabled: toRef(enabled),
+  })
+
+/** One summary per contact for the contacts table (`list_contact_summaries`); operations and prices refresh it. */
+export const CONTACT_SUMMARIES_KEY = ['contacts', 'summaries']
+
+export const useContactSummaries = (enabled: MaybeRefOrGetter<boolean> = true) =>
+  useQuery({
+    queryKey: CONTACT_SUMMARIES_KEY,
+    queryFn: () => call<ContactSummary[]>('list_contact_summaries'),
+    placeholderData: keepPreviousData,
+    enabled: toRef(enabled),
+  })
 
 export const useCategories = (enabled: MaybeRefOrGetter<boolean> = true) =>
   useQuery({ queryKey: ['categories'], queryFn: () => call<Category[]>('list_categories'), enabled: toRef(enabled) })

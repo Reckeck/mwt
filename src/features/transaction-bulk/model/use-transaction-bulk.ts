@@ -6,7 +6,12 @@ import { pluralForm } from '@/shared/lib/format'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
 
 /** Every query an operation can show up in. */
-const STALE_KEYS: ReadonlyArray<readonly string[]> = [...LEDGER_KEYS, ...PLANNING_KEYS, ['contacts', 'balances']]
+const STALE_KEYS: ReadonlyArray<readonly string[]> = [
+  ...LEDGER_KEYS,
+  ...PLANNING_KEYS,
+  ['contacts', 'balances'],
+  ['contacts', 'summaries'],
+]
 
 export interface BulkCategory {
   ids: string[]

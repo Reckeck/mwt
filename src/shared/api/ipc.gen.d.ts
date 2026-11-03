@@ -1257,6 +1257,31 @@ amount: Amount, due_at: string | null, };
 
 type ContactKind = "person" | "company" | "exchanger";
 
+/**
+ * One row of the contacts table: activity and debts in the base currency.
+ */
+type ContactSummary = { contact_id: string, 
+/**
+ * Operations with the contact; internal moves do not count.
+ */
+tx_count: number, last_tx_at: string | null, 
+/**
+ * Signed from the user's side (negative: money went to the contact).
+ */
+last_amount: Amount | null, last_asset: string | null, 
+/**
+ * What they owe me, in the base currency.
+ */
+receivable_base: Amount, 
+/**
+ * What I owe them (positive), in the base currency.
+ */
+payable_base: Amount, 
+/**
+ * A debt currency had no rate: it is left out of the base sums.
+ */
+missing_rate: boolean, };
+
 type ContactTurnover = { contact_id: string, account_id: string | null, base_currency: string, rows: Array<TurnoverRow>, 
 /**
  * Sums at the price stamped on each transaction; unpriced legs count as zero.

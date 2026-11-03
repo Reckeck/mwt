@@ -337,17 +337,17 @@ const stage3 = [
   { name: 'ops-select-category', route: '/transactions', steps: [{ wait: 600 }, ...PICK_TWO, { desktop: [{ click: { text: 'Категория', within: '[data-tx-bulk]' } }] }, { phone: [{ click: '[data-tx-bulk] button[aria-label="Изменить"]' }, { wait: 300 }, { click: { text: 'Категория', within: '[role="dialog"]' } }] }, { wait: 400 }] },
   { name: 'ops-select-deleted', route: '/transactions', steps: [{ wait: 600 }, ...PICK_TWO, { desktop: [{ click: { text: 'Удалить', within: '[data-tx-bulk]' } }] }, { phone: [{ click: '[data-tx-bulk] button[aria-label="Удалить"]' }] }, { wait: 600 }] },
   { name: 'ops-calendar', route: '/transactions/calendar', canvas: { board: 'Ops-1', frame: '5.' } },
-  { name: 'ops-contacts', route: '/transactions/contacts', steps: [{ wait: 600 }], canvas: { board: 'Ops-1', frame: '6.' } },
+  { name: 'ops-contacts', route: '/contacts', steps: [{ wait: 600 }], canvas: { board: 'Ops-1', frame: '6.' } },
   { name: 'ops-bonuses', route: '/transactions/bonuses', canvas: { board: 'Ops-2', frame: '12.' } },
-  { name: 'ops-contact-menu', route: '/transactions/contacts?contact=mock-contact-mom', steps: [{ desktop: [{ click: '[data-contact-account] button[aria-label="Ещё"]' }] }], canvas: { board: 'Ops-2', frame: '7.' } },
+  { name: 'ops-contact-menu', route: '/contacts?contact=mock-contact-mom', steps: [{ desktop: [{ click: '[data-contact-account] button[aria-label="Ещё"]' }] }], canvas: { board: 'Ops-2', frame: '7.' } },
   {
     name: 'ops-contact-paste',
-    route: '/transactions/contacts?contact=mock-contact-mom',
+    route: '/contacts?contact=mock-contact-mom',
     steps: [{ click: '[data-contact-paste]' }, { fill: ['#contact-account-value', '2202 2061 3348 7798'] }, { wait: 300 }],
     canvas: { board: 'Ops-2', frame: '8.' } },
   {
     name: 'ops-contact-copied',
-    route: '/transactions/contacts?contact=mock-contact-mom',
+    route: '/contacts?contact=mock-contact-mom',
     steps: [{ click: '[data-contact-copy]' }, { wait: 300 }],
     canvas: { board: 'Ops-2', frame: '9.' } },
   {

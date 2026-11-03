@@ -30,7 +30,7 @@ const STATIC_ROUTES = [
   // The wallets table with every wallet that has sub-accounts unfolded.
   'stores:unfolded',
   '/transactions',
-  '/transactions/contacts',
+  '/contacts',
   '/transactions/calendar',
   '/transactions/bonuses',
   '/money',

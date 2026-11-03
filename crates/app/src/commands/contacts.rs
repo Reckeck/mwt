@@ -2,7 +2,9 @@ use tauri::State;
 
 use trade_core::ipc_contract::{ContactTurnoverInput, UpdateContactInput};
 use trade_core::model::contact::{Contact, DebtTerms};
-use trade_core::service::{ContactBalance, ContactDraft, ContactTurnover, DebtTermsDraft};
+use trade_core::service::{
+    ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft,
+};
 
 use crate::commands::{AppState, err_to_string, require_vault};
 
@@ -83,6 +85,19 @@ pub async fn get_contact_balances(
 ) -> Result<Vec<ContactBalance>, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
     Ok(guard.as_ref().unwrap().contact_balances())
+}
+
+/// One summary per contact for the contacts table: activity and debts in base currency.
+#[tauri::command]
+pub async fn list_contact_summaries(
+    state: State<'_, AppState>,
+) -> Result<Vec<ContactSummary>, String> {
+    let guard = require_vault(&state).map_err(err_to_string)?;
+    guard
+        .as_ref()
+        .unwrap()
+        .contact_summaries()
+        .map_err(err_to_string)
 }
 
 /// Due dates and notes of debts, of one contact or of all.
