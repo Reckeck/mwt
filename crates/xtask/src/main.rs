@@ -3,6 +3,7 @@
 mod annotate;
 mod audit;
 mod build;
+mod bundle;
 mod cache;
 mod changelog;
 mod channel;
@@ -137,6 +138,10 @@ async fn run() -> Result<i32> {
                 },
             )?;
             println!("{}", path.display());
+            return Ok(0);
+        }
+        Command::Bundle(args) => {
+            bundle::run(&root, args)?;
             return Ok(0);
         }
         Command::ImageTag => {

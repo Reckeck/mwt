@@ -1,6 +1,7 @@
 //! What every build task shares: channel, version, container engine, image names, volumes.
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use tokio::sync::Mutex;
 
@@ -38,6 +39,8 @@ pub struct Env {
     pub checkout: String,
     /// Images are pulled or built one at a time (linux and windows share the ci-linux image).
     images: Mutex<()>,
+    /// The static xtask the containers mount, set by the `build:xtask` task.
+    musl_xtask: OnceLock<PathBuf>,
 }
 
 impl Env {
@@ -70,6 +73,7 @@ impl Env {
                 .unwrap_or_else(|| "host".into()),
             checkout: crate::platforms::checkout_hash(&root),
             images: Mutex::new(()),
+            musl_xtask: OnceLock::new(),
             root,
         })
     }
@@ -80,6 +84,18 @@ impl Env {
             "multi-wallet-tracker-{}-linux-x86_64.tar.gz",
             self.version
         ))
+    }
+
+    pub fn set_musl_xtask(&self, path: PathBuf) -> Result<(), PathBuf> {
+        self.musl_xtask.set(path)
+    }
+
+    /// `-v <static xtask>:/usr/local/bin/xtask:ro`: the container runs `xtask bundle ...`.
+    fn xtask_mount(&self) -> Result<Vec<String>, Outcome> {
+        self.musl_xtask
+            .get()
+            .map(|path| super::musl::mount_args(path))
+            .ok_or_else(|| Outcome::Fail("the static xtask is not built (task build:xtask)".into()))
     }
 
     fn podman(&self) -> bool {
@@ -222,6 +238,8 @@ impl Env {
             "CARGO_PROFILE_RELEASE_LTO",
             "CARGO_PROFILE_RELEASE_CODEGEN_UNITS",
             "ANDROID_TARGETS",
+            // `xtask bundle android` refuses a published build without the release key.
+            "PUBLISH",
             "ANDROID_KEYSTORE_BASE64",
             "ANDROID_KEYSTORE_PASSWORD",
             "ANDROID_KEY_ALIAS",
@@ -238,6 +256,7 @@ impl Env {
         Ok(cmd
             .args(crate::exec::container_progress_args())
             .args(crate::sccache::container_mount_on(sccache_port(lane)))
+            .args(self.xtask_mount()?)
             .args(more)
             .args([
                 image,
@@ -267,6 +286,7 @@ impl Env {
                     .iter()
                     .flat_map(|(name, value)| ["-e".to_string(), format!("{name}={value}")]),
             )
+            .args(self.xtask_mount()?)
             .args(more)
             .args(["-v", &format!("{}:/src", self.root.display()), "-w", "/src"])
             .args([

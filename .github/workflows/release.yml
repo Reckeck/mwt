@@ -73,34 +73,49 @@ jobs:
         with:
           install_args: rust
           cache: false
+      # A static (musl) binary: the build jobs mount it into their containers (archlinux, Ubuntu).
       - name: Build xtask
-        run: cargo build -p xtask --locked
+        run: |
+          rustup target add x86_64-unknown-linux-musl
+          cargo build -p xtask --locked --target x86_64-unknown-linux-musl
       - name: Version
         id: version
         env:
           KIND: ${{ steps.plan.outputs.kind }}
-        run: .rust-target/debug/xtask version --channel "$KIND" --output "$GITHUB_OUTPUT"
-      # The Windows runner has no Rust of its own for this: its overlay (names, version,
-      # versionCode, prebuilt dist/) is written here.
-      - name: Tauri overlay for the Windows build
-        env:
-          CHANNEL: ${{ steps.plan.outputs.channel }}
-          BUILD_VERSION: ${{ steps.version.outputs.BUILD_VERSION }}
-          VERSION_CODE: ${{ steps.version.outputs.ANDROID_VERSION_CODE }}
-        run: |
-          .rust-target/debug/xtask tauri-config --channel "$CHANNEL" --version "$BUILD_VERSION" \
-            --version-code "$VERSION_CODE" --prebuilt-frontend --out .cache/tauri-ci-windows.json
+        run: .rust-target/x86_64-unknown-linux-musl/debug/xtask version --channel "$KIND" --output "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: xtask
-          path: .rust-target/debug/xtask
+          path: .rust-target/x86_64-unknown-linux-musl/debug/xtask
           include-hidden-files: true
           retention-days: 1
           if-no-files-found: error
+
+  # xtask.exe for the Windows build job (the Linux binary above is static musl). The artifact is
+  # not called xtask-windows: ci.yml, called below in the same run, has one of that name.
+  xtask-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Rust as mise.toml pins it (no version in this file).
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        with:
+          install_args: rust
+          cache: false
+      - name: Build xtask
+        run: cargo build -p xtask --locked --target-dir .cache/xtask-target
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: tauri-config
-          path: .cache/tauri-ci-windows.json
+          name: xtask-exe
+          path: .cache/xtask-target/debug/xtask.exe
           include-hidden-files: true
           retention-days: 1
           if-no-files-found: error
@@ -174,14 +189,14 @@ jobs:
   # ------------------------------------------------------------------ build
   # One group: the first failure cancels the others (fail-fast). linux and android run
   # `cargo xtask build` on the runner, which starts the ci-linux / ci-android image from ghcr
-  # (podman or docker, as on a developer machine); windows is the native script, WiX makes the MSI
-  # there. The release profile follows the channel (xtask and build-windows.ps1 set it): dev
+  # (podman or docker, as on a developer machine); windows is `xtask build windows` natively, WiX makes
+  # the MSI there. The release profile follows the channel (xtask sets it): dev
   # builds without LTO on 16 codegen units, prod keeps the full LTO of [profile.release].
   # Pre-releases also take compiled crates from the lane's sccache (key from `xtask lane-key
   # build-<name>`: dependencies, image, channel), saved once per key; releases from main build
   # from scratch, as in ci.yml. The builds do not wait for the checks.
   build:
-    needs: [version, images, frontend]
+    needs: [version, images, frontend, xtask-windows]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
     strategy:
@@ -209,7 +224,7 @@ jobs:
       ANDROID_TARGETS: aarch64 armv7 x86_64
       CONTAINER_ENGINE: docker
       SCCACHE_PIN: 0.19.0
-      # xtask mounts ~/.cache/sccache/containers into the build image; the Windows script uses .cache\sccache.
+      # xtask mounts ~/.cache/sccache/containers into the build image; the native Windows build uses .cache\sccache.
       SCCACHE_PATH: ${{ matrix.name == 'windows' && '.cache/sccache' || '~/.cache/sccache/containers' }}
       USE_CACHE: ${{ needs.version.outputs.channel == 'dev' }}
     steps:
@@ -220,13 +235,10 @@ jobs:
         with:
           name: dist
           path: dist
-      # The prebuilt xtask is a Linux binary: the Windows runner has no use for it and runs the
-      # cache commands through `cargo xtask` (the runner's own Rust; build-windows.ps1 installs
-      # the pinned one only later).
+      # The prebuilt xtask: a static Linux binary, or xtask.exe on the Windows runner.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: matrix.name != 'windows'
         with:
-          name: xtask
+          name: ${{ matrix.name == 'windows' && 'xtask-exe' || 'xtask' }}
           path: bin
       - name: Make xtask executable
         if: matrix.name != 'windows'
@@ -235,7 +247,7 @@ jobs:
         id: key
         if: env.USE_CACHE == 'true'
         shell: bash
-        run: echo "key=$(${{ matrix.name == 'windows' && 'cargo xtask' || 'bin/xtask' }} lane-key 'build-${{ matrix.name }}')" >>"$GITHUB_OUTPUT"
+        run: echo "key=$(${{ matrix.name == 'windows' && 'bin/xtask.exe' || 'bin/xtask' }} lane-key 'build-${{ matrix.name }}')" >>"$GITHUB_OUTPUT"
       - name: Restore the lane cache
         id: cache
         if: env.USE_CACHE == 'true'
@@ -260,9 +272,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bin/xtask build linux --prebuilt-frontend --channel "$RELEASE_CHANNEL" --version "$BUILD_VERSION"
       # The Android image is large; the signing key reaches the container as an environment
-      # variable (masked here, never printed) and sign-android.sh decodes it into a temporary
+      # variable (masked here, never printed) and `xtask bundle android` decodes it into a temporary
       # file that disappears with the container. Without the key the build is signed with a
-      # throwaway one (the files are named *-testkey): fine for a build-only run, never published.
+      # throwaway one (the files are named *-testkey): fine for a build-only run, never published
+      # (`xtask bundle android` fails a published build that has no key).
       - name: Android (APK, AAB)
         if: matrix.name == 'android'
         env:
@@ -271,32 +284,28 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          if [[ "$PUBLISH" == true && -z "$ANDROID_KEYSTORE_BASE64" ]]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 is not set: an APK signed with another key cannot update the installed app"
-            exit 1
-          fi
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
           bin/xtask build android --prebuilt-frontend --channel "$RELEASE_CHANNEL" --version "$BUILD_VERSION" \
             --version-code "$ANDROID_VERSION_CODE"
 
       # ---- windows
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      # Rust, node and pnpm as mise.toml pins them. MSVC is on the runner image (xtask checks it).
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
         if: matrix.name == 'windows'
         with:
-          name: tauri-config
-          path: .cache
+          install_args: rust node pnpm
+          cache: false
       - uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         if: matrix.name == 'windows' && env.USE_CACHE == 'true'
         with:
           tool: sccache@${{ env.SCCACHE_PIN }}
       - name: Windows (NSIS, MSI, portable zip)
         if: matrix.name == 'windows'
-        shell: pwsh
+        shell: bash
         env:
-          MWT_TAURI_CONFIG: ${{ github.workspace }}\.cache\tauri-ci-windows.json
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: ./scripts/ci/build-windows.ps1 -OutDir release
+        run: bin/xtask.exe build windows --native --prebuilt-frontend --channel "$RELEASE_CHANNEL" --version "$BUILD_VERSION" --version-code "$ANDROID_VERSION_CODE"
 
       # The containers write the sccache directory as root; the cache action (tar, as the runner
       # user) fails on it with "Permission denied". Hand it back, also after a failed build.
@@ -314,12 +323,12 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ${{ matrix.name == 'windows' && 'cargo xtask' || 'bin/xtask' }} deps-prune 'build-${{ matrix.name }}' '${{ steps.key.outputs.key }}'
+        run: ${{ matrix.name == 'windows' && 'bin/xtask.exe' || 'bin/xtask' }} deps-prune 'build-${{ matrix.name }}' '${{ steps.key.outputs.key }}'
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bundle-${{ matrix.name }}
-          path: ${{ matrix.name == 'windows' && 'release' || format('.cache/build-all/builds/{0}', needs.version.outputs.channel) }}
+          path: .cache/build-all/builds/${{ needs.version.outputs.channel }}
           include-hidden-files: true
           retention-days: 7
           if-no-files-found: error

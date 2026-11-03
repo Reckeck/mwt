@@ -58,6 +58,7 @@ fn all_platforms_share_one_frontend() {
         names(&tasks),
         [
             "build:frontend",
+            "build:xtask",
             "build:android",
             "build:windows",
             "build:linux",
@@ -67,8 +68,22 @@ fn all_platforms_share_one_frontend() {
         ]
     );
     for name in ["build:android", "build:windows", "build:linux"] {
-        assert_eq!(deps(&tasks, name), ["build:frontend"], "{name}");
+        assert_eq!(
+            deps(&tasks, name),
+            ["build:frontend", "build:xtask"],
+            "{name}"
+        );
     }
+    // The static xtask the containers mount is built once, with nothing to wait for.
+    assert!(deps(&tasks, "build:xtask").is_empty());
+    assert_eq!(
+        tasks
+            .iter()
+            .find(|task| task.name == "build:xtask")
+            .unwrap()
+            .class,
+        Class::Light
+    );
     // Over ssh (or skipped) macOS does not wait for the host frontend: the Mac builds its own.
     assert!(deps(&tasks, "build:macos").is_empty());
     let heavy: Vec<&str> = tasks
@@ -82,8 +97,11 @@ fn all_platforms_share_one_frontend() {
 #[test]
 fn pacman_and_flatpak_wait_for_linux() {
     let tasks = graph(&env(), &[], &facts(false, None)).unwrap();
-    assert_eq!(deps(&tasks, "build:pacman"), ["build:linux"]);
-    assert_eq!(deps(&tasks, "build:flatpak"), ["build:linux"]);
+    assert_eq!(deps(&tasks, "build:pacman"), ["build:linux", "build:xtask"]);
+    assert_eq!(
+        deps(&tasks, "build:flatpak"),
+        ["build:linux", "build:xtask"]
+    );
 }
 
 #[test]
@@ -91,20 +109,30 @@ fn platform_filter_keeps_only_what_is_needed() {
     let tasks = graph(&env(), &chosen(&["linux", "pacman"]), &facts(false, None)).unwrap();
     assert_eq!(
         names(&tasks),
-        ["build:frontend", "build:linux", "build:pacman"]
+        [
+            "build:frontend",
+            "build:xtask",
+            "build:linux",
+            "build:pacman"
+        ]
     );
     let tasks = graph(&env(), &chosen(&["pacman", "android"]), &facts(true, None)).unwrap();
     assert_eq!(
         names(&tasks),
-        ["build:frontend", "build:android", "build:pacman"]
+        [
+            "build:frontend",
+            "build:xtask",
+            "build:android",
+            "build:pacman"
+        ]
     );
-    assert!(deps(&tasks, "build:pacman").is_empty());
+    assert_eq!(deps(&tasks, "build:pacman"), ["build:xtask"]);
 }
 
 #[test]
 fn no_frontend_when_nothing_needs_it() {
     let tasks = graph(&env(), &chosen(&["flatpak"]), &facts(true, None)).unwrap();
-    assert_eq!(names(&tasks), ["build:flatpak"]);
+    assert_eq!(names(&tasks), ["build:xtask", "build:flatpak"]);
     let tasks = graph(&env(), &chosen(&["macos"]), &facts(false, None)).unwrap();
     assert_eq!(names(&tasks), ["build:macos"]);
 }
@@ -167,12 +195,23 @@ fn prebuilt_frontend_drops_the_frontend_task() {
     let mut prebuilt = facts(false, None);
     prebuilt.prebuilt_frontend = true;
     let tasks = graph(&env(), &chosen(&["linux", "android"]), &prebuilt).unwrap();
-    assert_eq!(names(&tasks), ["build:android", "build:linux"]);
-    assert!(deps(&tasks, "build:android").is_empty());
-    assert!(deps(&tasks, "build:linux").is_empty());
+    assert_eq!(
+        names(&tasks),
+        ["build:xtask", "build:android", "build:linux"]
+    );
+    assert_eq!(deps(&tasks, "build:android"), ["build:xtask"]);
+    assert_eq!(deps(&tasks, "build:linux"), ["build:xtask"]);
     // pacman still waits for the Linux build it starts from.
     let tasks = graph(&env(), &chosen(&["linux", "pacman"]), &prebuilt).unwrap();
-    assert_eq!(deps(&tasks, "build:pacman"), ["build:linux"]);
+    assert_eq!(deps(&tasks, "build:pacman"), ["build:linux", "build:xtask"]);
+}
+
+#[test]
+fn native_linux_needs_no_static_xtask() {
+    let mut native = env();
+    Arc::get_mut(&mut native).unwrap().native = true;
+    let tasks = graph(&native, &chosen(&["linux"]), &facts(false, None)).unwrap();
+    assert_eq!(names(&tasks), ["build:frontend", "build:linux"]);
 }
 
 #[test]
@@ -191,9 +230,14 @@ fn android_overlay_carries_the_version_code() {
 fn container_gets_the_ci_build_switches_by_name() {
     let mut shared = env();
     Arc::get_mut(&mut shared).unwrap().engine = Some("docker".into());
+    let _ = shared.set_musl_xtask("/tmp/xtask".into());
     let Ok(cmd) = shared.run_ci("linux", "image", "true", Vec::new()) else {
         panic!("no command");
     };
+    assert!(
+        cmd.args
+            .contains(&"/tmp/xtask:/usr/local/bin/xtask:ro".to_string())
+    );
     for name in [
         "CARGO_PROFILE_RELEASE_LTO",
         "CARGO_PROFILE_RELEASE_CODEGEN_UNITS",
@@ -210,6 +254,7 @@ fn container_gets_the_ci_build_switches_by_name() {
 fn dev_container_builds_without_lto_unless_the_run_chose() {
     let mut shared = env();
     Arc::get_mut(&mut shared).unwrap().engine = Some("docker".into());
+    let _ = shared.set_musl_xtask("/tmp/xtask".into());
     let Ok(cmd) = shared.run_ci("linux", "image", "true", Vec::new()) else {
         panic!("no command");
     };
@@ -222,4 +267,12 @@ fn dev_container_builds_without_lto_unless_the_run_chose() {
             assert!(cmd.args.contains(&pair), "{pair}");
         }
     }
+}
+
+#[test]
+fn native_windows_needs_no_static_xtask() {
+    let mut native = env();
+    Arc::get_mut(&mut native).unwrap().native = true;
+    let tasks = graph(&native, &chosen(&["windows"]), &facts(false, None)).unwrap();
+    assert_eq!(names(&tasks), ["build:frontend", "build:windows"]);
 }

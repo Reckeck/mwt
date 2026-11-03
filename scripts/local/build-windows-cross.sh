@@ -2,7 +2,7 @@
 # Windows NSIS installer and portable zip, cross-built from Linux with
 # cargo-xwin, inside the image of windows-cross.Dockerfile (after
 # setup-linux.sh). The MSI needs WiX, which runs on Windows only: that one
-# comes from CI (build-windows.ps1). Names match build-windows.ps1.
+# comes from the native build (`xtask build windows` on Windows). Names match it.
 #
 #   MWT_TAURI_CONFIG=<overlay> MWT_APP_BIN=... scripts/local/build-windows-cross.sh <version> <out-dir>
 set -euo pipefail

@@ -14,6 +14,7 @@ cd "$(dirname "$0")/../.."
 
 failed=0
 for script in scripts/ci/*.ps1; do
+  [[ -e "$script" ]] || continue
   if grep -nP '[^\x00-\x7F]' "$script"; then
     echo "$script: non-ASCII characters (above) break Windows PowerShell 5.1 — use ASCII" >&2
     failed=1

@@ -28,7 +28,7 @@ for channel in prod dev; do
   render "$src/icon$suffix.svg" 1024 "$tmp/icon.png"
   rm -rf "$out"
   pnpm --silent tauri icon "$tmp/icon.png" -o "$out" >"$tmp/log" 2>&1 || { cat "$tmp/log" >&2; exit 1; }
-  # Not shipped: the generic Android set (build-android.sh makes the adaptive
+  # Not shipped: the generic Android set (`xtask bundle android` makes the adaptive
   # one), iOS (no target) and Appx logos (no MSIX bundle).
   rm -rf "$out/android" "$out/ios" "$out"/Square*Logo.png "$out/StoreLogo.png"
 
@@ -37,7 +37,7 @@ for channel in prod dev; do
   cp "$tmp/small-32.png" "$out/32x32.png"
   magick "$tmp"/small-{16,24,32}.png "$tmp"/big-{48,64,256}.png "$out/icon.ico"
 
-  # Android adaptive icon: build-android.sh runs `tauri icon` on this manifest.
+  # Android adaptive icon: `xtask bundle android` runs `tauri icon` on this manifest.
   mkdir -p "$out/android"
   render "$src/android-background.svg" 1024 "$out/android/background.png"
   render "$src/android-foreground$suffix.svg" 1024 "$out/android/foreground.png"

@@ -17,6 +17,8 @@ pub struct Cmd {
     pub program: String,
     pub args: Vec<String>,
     pub env: Vec<(String, String)>,
+    /// Working directory; the repository root when absent.
+    pub dir: Option<PathBuf>,
 }
 
 impl Cmd {
@@ -25,7 +27,13 @@ impl Cmd {
             program: program.to_string(),
             args: Vec::new(),
             env: Vec::new(),
+            dir: None,
         }
+    }
+
+    pub fn dir(mut self, dir: impl AsRef<Path>) -> Self {
+        self.dir = Some(dir.as_ref().to_path_buf());
+        self
     }
 
     pub fn args<I, S>(mut self, args: I) -> Self
@@ -76,6 +84,23 @@ pub fn container_progress_args() -> Vec<String> {
         .collect()
 }
 
+/// Runs a command to the end with this process's stdout and stderr (the steps `xtask bundle`
+/// runs inside a build container, where the container's output is the log). Stops on a failure.
+pub fn run_inherited(root: &Path, cmd: &Cmd) -> anyhow::Result<()> {
+    eprintln!("$ {}", cmd.display());
+    let status = std::process::Command::new(&cmd.program)
+        .args(&cmd.args)
+        .envs(progress_env())
+        .envs(cmd.env.iter().map(|(key, value)| (key, value)))
+        .current_dir(cmd.dir.as_deref().unwrap_or(root))
+        .status()
+        .map_err(|source| anyhow::anyhow!("cannot start `{}`: {source}", cmd.program))?;
+    if !status.success() {
+        anyhow::bail!("`{}` exited with {status}", cmd.display());
+    }
+    Ok(())
+}
+
 pub enum ExecEnd {
     /// The process ended on its own with this exit code.
     Done(i32),
@@ -112,7 +137,7 @@ impl Ctx {
             .envs(progress_env())
             .envs(crate::sccache::host_env(&cmd.program, &cmd.env))
             .envs(cmd.env.iter().map(|(key, value)| (key, value)))
-            .current_dir(&self.root)
+            .current_dir(cmd.dir.as_deref().unwrap_or(&self.root))
             .stdin(Stdio::null())
             .stdout(Stdio::from(out))
             .stderr(Stdio::from(err))
@@ -215,4 +240,22 @@ async fn terminate(child: &mut tokio::process::Child, pid: Option<u32>) {
     }
     let _ = tokio::time::timeout(GRACE, child.wait()).await;
     let _ = child.kill().await;
+}
+
+/// Runs a command to the end and returns its stdout; stderr goes through to this process.
+/// Stops on a failure.
+pub fn output(root: &Path, cmd: &Cmd) -> anyhow::Result<String> {
+    eprintln!("$ {}", cmd.display());
+    let out = std::process::Command::new(&cmd.program)
+        .args(&cmd.args)
+        .envs(cmd.env.iter().map(|(key, value)| (key, value)))
+        .current_dir(cmd.dir.as_deref().unwrap_or(root))
+        .stdin(Stdio::null())
+        .stderr(Stdio::inherit())
+        .output()
+        .map_err(|source| anyhow::anyhow!("cannot start `{}`: {source}", cmd.program))?;
+    if !out.status.success() {
+        anyhow::bail!("`{}` exited with {}", cmd.display(), out.status);
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
