@@ -29,6 +29,11 @@ export async function spawnBrowser(binary, port) {
       '--no-sandbox',
       '--disable-gpu',
       '--hide-scrollbars=false',
+      // Raster on dedicated tile worker threads instead of a ThreadPool job: with the job (Chromium
+      // 131 and 155 alike) the task that marks a pending tree's tiles ready to activate is sometimes
+      // never run, the tree never activates, and the renderer main thread waits forever for the next
+      // commit (every evaluate, input and screenshot then hangs until the unit times out).
+      '--disable-features=UseCompositorJob',
       // The app window is WebKitGTK with a mouse: pointer fine and hover (headless reports none).
       // Touch emulation below switches a phone view to coarse / no hover.
       '--blink-settings=primaryPointerType=4,availablePointerTypes=4,primaryHoverType=2,availableHoverTypes=2',
