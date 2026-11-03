@@ -38,6 +38,13 @@ pub struct Collection {
     /// devices adding or editing different items both keep their change, and a
     /// removed item travels as the stamp of its entry.
     pub flatten_by: &'static [(&'static str, &'static str)],
+    /// Fields computed from a split array, as `(field, array)`: `allocated`
+    /// is the sum of `moves`. Between devices that know the array the field is
+    /// never a change of its own: it is re-derived after a merge and sent with
+    /// the stamp of the newest entry, so a recomputed value cannot be mistaken
+    /// for an edit. A device that does not know the array just writes the
+    /// field; the merge turns that into one correction entry (`derived.rs`).
+    pub derived: &'static [(&'static str, &'static str)],
     /// Fields that belong to the device and never travel.
     pub skip: &'static [&'static str],
     /// Field holding an RFC3339 time; the first sync sends only recent
@@ -84,6 +91,7 @@ const fn records(name: &'static str, key: &'static [&'static str]) -> Collection
         key,
         flatten: &[],
         flatten_by: &[],
+        derived: &[],
         skip: &[],
         age: None,
         secret: false,
@@ -105,6 +113,7 @@ const fn log(
         key,
         flatten: &[],
         flatten_by: &[],
+        derived: &[],
         skip: &[],
         age: None,
         secret: false,
@@ -121,6 +130,7 @@ const fn single(name: &'static str, skip: &'static [&'static str]) -> Collection
         key: &[],
         flatten: &[],
         flatten_by: &[],
+        derived: &[],
         skip,
         age: None,
         secret: false,
@@ -172,6 +182,7 @@ pub static COLLECTIONS: &[Collection] = &[
         key: &["asset_key", "ts"],
         flatten: &[],
         flatten_by: &[],
+        derived: &[],
         skip: &[],
         age: Some("ts"),
         secret: false,
@@ -185,6 +196,7 @@ pub static COLLECTIONS: &[Collection] = &[
         key: &["currency", "ts"],
         flatten: &[],
         flatten_by: &[],
+        derived: &[],
         skip: &[],
         age: Some("ts"),
         secret: false,
@@ -219,7 +231,12 @@ pub static COLLECTIONS: &[Collection] = &[
     records("meter_readings", ID),
     records("enrichments", ID),
     records("manual_prices", &["asset_key"]),
-    records("envelopes", ID),
+    // The allocation is a journal of moves, so two top-ups both count.
+    Collection {
+        flatten_by: &[("moves", "id")],
+        derived: &[("allocated", "moves")],
+        ..records("envelopes", ID)
+    },
     records("debt_terms", ID),
     // People, purchases and settlements added on different devices all stay.
     Collection {
@@ -257,6 +274,7 @@ pub static COLLECTIONS: &[Collection] = &[
     Collection {
         flatten: &["marks"],
         flatten_by: &[],
+        derived: &[],
         skip: &["tx_cursor", "tx_index"],
         ..records("workflow_state", &["workflow_id"])
     },
@@ -295,6 +313,7 @@ pub static COLLECTIONS: &[Collection] = &[
         key: &[],
         flatten: &[],
         flatten_by: &[],
+        derived: &[],
         skip: &[],
         age: None,
         secret: false,

@@ -717,6 +717,72 @@ impl MeterReading {
     }
 }
 
+/// One entry of an envelope's journal: how much was put in (positive) or
+/// taken out (negative).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+pub struct EnvelopeMove {
+    /// Unique per entry. Two kinds are derived, so devices that make them
+    /// independently make the same entry: `open:<envelope id>` (what the
+    /// envelope held before it had a journal) and `fix:<envelope id>:<stamp>`
+    /// (an edit of `allocated` by a device that has no journal).
+    pub id: String,
+    pub delta: Amount,
+    /// RFC3339.
+    pub at: String,
+}
+
+impl EnvelopeMove {
+    /// Id of the entry that carries what an envelope held before it had a journal.
+    pub fn opening_id(envelope_id: &str) -> String {
+        format!("open:{envelope_id}")
+    }
+}
+
+impl Envelope {
+    /// Sum of the journal.
+    pub fn moves_sum(&self) -> Amount {
+        self.moves
+            .iter()
+            .fold(Amount::ZERO, |sum, entry| sum + entry.delta)
+    }
+
+    /// Change the allocation by `delta`: the one way to do it. A zero change
+    /// leaves no entry.
+    pub fn record_move(&mut self, delta: Amount, at: &str) {
+        if delta.is_zero() {
+            return;
+        }
+        self.moves.push(EnvelopeMove {
+            id: uuid::Uuid::new_v4().to_string(),
+            delta,
+            at: at.to_string(),
+        });
+        self.allocated = self.moves_sum();
+    }
+
+    /// Bring the journal and `allocated` in line: an envelope that held money
+    /// before it had a journal gets its opening entry (the same on every
+    /// device, so nothing differs between them), otherwise `allocated` is
+    /// re-derived from the journal. True when something changed.
+    pub fn settle_moves(&mut self) -> bool {
+        if self.moves.is_empty() {
+            if self.allocated.is_zero() {
+                return false;
+            }
+            self.moves.push(EnvelopeMove {
+                id: EnvelopeMove::opening_id(&self.id),
+                delta: self.allocated,
+                at: self.created_at.clone(),
+            });
+            return true;
+        }
+        let sum = self.moves_sum();
+        let changed = sum != self.allocated;
+        self.allocated = sum;
+        changed
+    }
+}
+
 /// An envelope: a named, earmarked part of one asset's balance in one store
 /// ("vacation", "Taxes"). Nothing physically moves — the store still holds the
 /// money; envelopes only mark how much of it is spoken for.
@@ -726,8 +792,14 @@ pub struct Envelope {
     pub store_id: String,
     pub name: String,
     pub asset: AssetRef,
-    /// How much is earmarked now, in `asset`.
+    /// How much is earmarked now, in `asset`. Always the sum of `moves` once
+    /// any exist; it stays a stored field for readers (and older devices).
     pub allocated: Amount,
+    /// The journal of changes to `allocated`: two devices topping up the same
+    /// envelope both keep their entry, so the sum adds up. Written only
+    /// through [`Envelope::record_move`].
+    #[serde(default)]
+    pub moves: Vec<EnvelopeMove>,
     /// What the envelope is filling up to, in `asset`.
     pub target: Option<Amount>,
     /// A goal whose progress is this envelope.

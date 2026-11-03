@@ -1947,9 +1947,16 @@ type EntityRef = { kind: EntityKind, id: string, };
  */
 type Envelope = { id: string, store_id: string, name: string, asset: AssetRef, 
 /**
- * How much is earmarked now, in `asset`.
+ * How much is earmarked now, in `asset`. Always the sum of `moves` once
+ * any exist; it stays a stored field for readers (and older devices).
  */
 allocated: Amount, 
+/**
+ * The journal of changes to `allocated`: two devices topping up the same
+ * envelope both keep their entry, so the sum adds up. Written only
+ * through [`Envelope::record_move`].
+ */
+moves: Array<EnvelopeMove>, 
 /**
  * What the envelope is filling up to, in `asset`.
  */
@@ -1963,6 +1970,23 @@ goal_id: string | null, created_at: string, };
  * What creating or editing an envelope takes.
  */
 type EnvelopeDraft = { store_id: string, name: string, asset: AssetRef, target: Amount | null, goal_id: string | null, };
+
+/**
+ * One entry of an envelope's journal: how much was put in (positive) or
+ * taken out (negative).
+ */
+type EnvelopeMove = { 
+/**
+ * Unique per entry. Two kinds are derived, so devices that make them
+ * independently make the same entry: `open:<envelope id>` (what the
+ * envelope held before it had a journal) and `fix:<envelope id>:<stamp>`
+ * (an edit of `allocated` by a device that has no journal).
+ */
+id: string, delta: Amount, 
+/**
+ * RFC3339.
+ */
+at: string, };
 
 /**
  * An envelope with what its store can still give it.

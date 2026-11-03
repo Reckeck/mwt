@@ -7,6 +7,7 @@
 
 use serde_json::Value;
 
+use super::derived;
 use super::flatten::{Order, cannot_express, edited_here, entry_stamp, is_entry, settle_heads};
 use super::registry::{Collection, Rule};
 use super::state::{RecordStamps, RecordState};
@@ -139,6 +140,12 @@ fn merge_fields(
             .cloned()
             .collect::<Vec<String>>()
     };
+    // Whether a derived field (`allocated`) is settled from the entries after
+    // the merge: some side knows the array it is derived from.
+    let derives = coll.derived.iter().any(|(_, head)| {
+        derived::knows_array(&local_fields.fields, head)
+            || derived::knows_array(&remote_fields.fields, head)
+    });
     let names: std::collections::BTreeSet<String> = local_fields
         .fields
         .keys()
@@ -168,7 +175,16 @@ fn merge_fields(
         };
         // A whole field stamped by an older device says nothing about
         // entries it does not list: those stay.
-        let take_remote = if remote_value.is_none()
+        // The same for an array a field is derived from: a side that does not
+        // know the array lists no entry and removes none.
+        let unknown_array = |fields: &std::collections::BTreeMap<String, Value>| {
+            derived::source_of(coll, name).is_some_and(|head| !derived::knows_array(fields, head))
+        };
+        let take_remote = if remote_value.is_none() && unknown_array(&remote_fields.fields) {
+            false
+        } else if local_value.is_none() && unknown_array(&local_fields.fields) {
+            true
+        } else if remote_value.is_none()
             && cannot_express(coll, &remote_fields.fields, &remote_stamps, name)
         {
             false
@@ -184,7 +200,11 @@ fn merge_fields(
         } else {
             (local_value, local_stamp)
         };
-        if take_remote && local_value != remote_value && edited_here(coll, &local_stamps, name) {
+        if take_remote
+            && local_value != remote_value
+            && !(derives && derived::is_derived(coll, name))
+            && edited_here(coll, &local_stamps, name)
+        {
             overwrote.push(Overwrite {
                 field: name.clone(),
                 before: local_value.cloned().unwrap_or(Value::Null),
@@ -197,6 +217,23 @@ fn merge_fields(
         if *stamp != created {
             stamps.fields.insert(name.clone(), stamp.clone());
         }
+    }
+    if derives {
+        let local_side = derived::Side {
+            fields: &local_fields.fields,
+            stamps: &local_stamps,
+        };
+        let remote_side = derived::Side {
+            fields: &remote_fields.fields,
+            stamps: &remote_stamps,
+        };
+        derived::settle(
+            coll,
+            &local_side,
+            &remote_side,
+            &mut merged.fields,
+            &mut stamps,
+        );
     }
     settle_heads(coll, &mut merged.fields, &stamps);
     let order = Order::new(coll, &[mine, theirs], &stamps);

@@ -79,13 +79,16 @@ export function seedGoal() {
     expected_return: null,
   }
   goals.push(goal)
+  const envelopeId = uuid()
   mockEnvelopes.push({
-    id: uuid(),
+    id: envelopeId,
     store_id: cash.id,
     name: goal.name,
     asset: USD,
     // What the three deposits put into the wallet, so the envelope never holds more than the wallet.
     allocated: String(deposits.length * 157.5),
+    // The opening entry of an envelope seeded with money, as the core makes it.
+    moves: [{ id: `open:${envelopeId}`, delta: String(deposits.length * 157.5), at: created }],
     target: goal.target_amount,
     goal_id: goal.id,
     created_at: created,

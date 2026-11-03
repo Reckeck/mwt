@@ -290,6 +290,12 @@ pub fn with_legacy_heads(coll: &Collection, stamps: &mut RecordStamps) {
             stamps.fields.insert(head.to_string(), newest);
         }
     }
+    // A derived field (`allocated`) says nothing but the newest entry it sums.
+    for (field, head) in coll.derived {
+        if let Some(newest) = super::derived::newest_entry(stamps, head).cloned() {
+            stamps.fields.insert((*field).to_string(), newest);
+        }
+    }
 }
 
 /// Build the body entries of the split arrays into `body`.
