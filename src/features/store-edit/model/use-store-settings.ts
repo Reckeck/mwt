@@ -3,7 +3,9 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 import { usePins } from '@/shared/api/pins'
-import { required, useFormValidation } from '@/shared/lib/form'
+import { useStoreTree } from '@/shared/api/queries'
+import { required, useEditBase, useFormValidation } from '@/shared/lib/form'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { textOf } from '@/shared/lib/notify'
 
 import { STORE_STALE_KEYS, updateInputOf, useStoreUpdate } from './use-store-update'
@@ -53,12 +55,32 @@ export function useStoreSettings(store: () => Store, open: Ref<boolean>, onDone:
 
   const form = useFormValidation(() => ({ name: required(name.value) }), { resetOn: [open] })
 
+  /** The wallet as the sync keeps it now: the tree is re-read after `vault-synced`, the prop may be a stale copy. */
+  const tree = useStoreTree(open)
+  const edit = useEditBase({
+    open,
+    entity: store,
+    live: () => flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === store().id)?.store,
+    model: (entity: Store) => ({ name: entity.name, purpose: entity.purpose }),
+  })
+  /** `Refresh`: the other device's name and purpose come in, what the user typed stays. */
+  function refreshFromOtherDevice() {
+    edit.refresh(
+      () => ({ name: name.value, purpose: purpose.value }),
+      (model) => {
+        name.value = model.name
+        purpose.value = model.purpose
+      },
+    )
+  }
+
   const update = useStoreUpdate()
   function save() {
     update.mutate(
-      updateInputOf(store(), {
+      updateInputOf(edit.base.value ?? store(), {
         name: name.value.trim(),
         purpose: purposeEditable.value ? purpose.value : null,
+        base: edit.base.value,
       }),
       {
         onSuccess: () => {
@@ -81,5 +103,17 @@ export function useStoreSettings(store: () => Store, open: Ref<boolean>, onDone:
     },
   })
 
-  return { name, purpose, favorite, inBudget, purposeEditable, form, save, pending: update.isPending, archive }
+  return {
+    name,
+    purpose,
+    favorite,
+    inBudget,
+    purposeEditable,
+    form,
+    save,
+    changedElsewhere: edit.changedElsewhere,
+    refreshFromOtherDevice,
+    pending: update.isPending,
+    archive,
+  }
 }

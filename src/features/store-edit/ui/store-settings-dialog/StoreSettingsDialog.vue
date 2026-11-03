@@ -10,6 +10,7 @@ import { Input } from '@/shared/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { Separator } from '@/shared/ui/separator'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 import { SwitchRow } from '@/shared/ui/switch-row'
 import { cn } from '@/shared/lib/utils'
 
@@ -29,7 +30,7 @@ const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ adjust: []; changeKind: []; more: [] }>()
 const { t } = useI18n()
 
-const { name, purpose, favorite, inBudget, purposeEditable, form, save, pending, archive } = useStoreSettings(
+const { name, purpose, favorite, inBudget, purposeEditable, form, save, pending, archive, changedElsewhere, refreshFromOtherDevice } = useStoreSettings(
   () => props.store,
   open,
   () => (open.value = false),
@@ -72,6 +73,7 @@ function leave(event: 'adjust' | 'more') {
     phone-submit-only
     @submit="form.submit(save, $event)"
   >
+    <SyncChangedBanner v-if="changedElsewhere" @refresh="refreshFromOtherDevice" />
     <div class="grid gap-4 @md:grid-cols-2">
       <FormField for="store-settings-name" :label="t('stores.name')" required :error="form.error('name')">
         <Input id="store-settings-name" v-model="name" />
