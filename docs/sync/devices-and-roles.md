@@ -63,10 +63,12 @@ stateDiagram-v2
 - With two main devices, the one with the larger random mDNS instance id steps
   down (it returns to Searching and connects to the other).
 - When the main device leaves, each client waits its turn before it tries to
-  take over: about `1 s + rank * 2 s` (the rank was given by the main device,
-  capped at 30), plus a backoff of 5 s, 10 s, 20 s up to 5 minutes when sessions
+  take over: about `1 s + rank * 2 s` (the rank is the number of live clients the main device
+  sees, capped at 5 on the client; the wait is jittered, and so is the retry
+  after a failed dial), plus a backoff of 5 s, 10 s, 20 s up to 5 minutes when sessions
   keep failing. The first to finish waiting becomes main; the others connect to
-  it.
+  it. A device that handed the role over and later lost the new main elects
+  itself again like any other client. A forgotten main is not dialed.
 - "Make this device the main one" (`prefer_main`) hands the role to a device
   after its first exchange is through, never in the middle of a transfer. The
   current main sends `TakeMain` over the live link and steps down only after the
@@ -100,7 +102,8 @@ refresh. The scheduler thread (`crates/app/src/scheduler.rs`) asks
 runs_jobs = sync is off  OR  role != Client
 ```
 
-So **Off, Searching and Main all run jobs; only a Client does not.** Clients
+So **Off, Searching and Main all run jobs; only a Client does not.** A
+Searching device runs jobs only while no main is in sight. Clients
 receive the results through sync.
 
 This differs from the older wording "only the main device runs jobs". The
@@ -119,6 +122,11 @@ Two further rules in the scheduler:
   `merge_locked` applies this only when `runs_jobs` is true. A client drops the
   locked findings: the main device owns alerts and the notification log, and a
   stale snapshot would only fight what comes by sync.
+- A hidden main device (window closed to the tray) still refreshes prices and
+  rates while any linked device has its window focused.
+- The notification snapshot kept for the locked screen records whether the
+  device was a client. A locked client fires no reminders or alerts from it;
+  the main device does.
 - A manual price refresh works on every device: price and rate caches are
   merged as unions.
 

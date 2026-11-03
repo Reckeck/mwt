@@ -21,7 +21,7 @@ use tauri_plugin_notification::NotificationExt;
 
 use trade_core::appconfig::{Locale, load_settings};
 use trade_core::calendar::now_secs;
-use trade_core::ipc_contract::AutomationRejectedEvent;
+use trade_core::ipc_contract::{AutomationRejectedEvent, SyncRole};
 use trade_core::model::notify::{NoticeCategory, NoticeRecord};
 use trade_core::model::planning::{AlertCondition, RejectReason};
 use trade_core::model::transaction::Transaction;
@@ -112,6 +112,12 @@ fn updates_tick(app: &AppHandle, memory: &mut Memory) {
     tauri::async_runtime::spawn(crate::updates::run_check(app.clone(), false));
 }
 
+/// Whether quotes are worth fetching now: the window is on screen, or this is
+/// the main device and the user works on another device of the group.
+fn should_refresh_prices(visible: bool, role: SyncRole, any_link_focused: bool) -> bool {
+    visible || (role == SyncRole::Main && any_link_focused)
+}
+
 /// Refresh prices and rates every «Price refresh interval» (Settings → This
 /// device; 0 = off) while the window is on screen: a window hidden in the tray
 /// does not need fresh quotes, and the next look refreshes them anyway.
@@ -138,7 +144,8 @@ fn prices_tick(app: &AppHandle, memory: &mut Memory) {
     let visible = app
         .get_webview_window("main")
         .is_some_and(|window| window.is_visible().unwrap_or(true));
-    if !visible {
+    let role = crate::sync::current_role(app).unwrap_or(SyncRole::Main);
+    if !should_refresh_prices(visible, role, crate::sync::any_link_focused(app)) {
         return;
     }
     memory.last_price_refresh = Some(Instant::now());
@@ -283,7 +290,9 @@ pub fn snapshot_tick(app: &AppHandle, force: bool) {
         let Some(vault) = guard.as_ref() else {
             return;
         };
-        vault.notification_snapshot(now_secs(), &zone, ru)
+        let mut snapshot = vault.notification_snapshot(now_secs(), &zone, ru);
+        snapshot.role_client = matches!(crate::sync::current_role(app), Some(SyncRole::Client));
+        snapshot
     };
     if let Ok(mut notify) = state.notify.lock() {
         // The same notices as a minute ago: no keyring call, no encrypted write.
@@ -391,6 +400,7 @@ fn locked_tick(app: &AppHandle) {
         let fresh = snapshot.due(now, &shown);
         notify.shown.extend(fresh.iter().cloned());
         let check_alerts = !snapshot.alerts.is_empty()
+            && !snapshot.role_client
             && notify
                 .last_alert_check
                 .is_none_or(|last| last.elapsed() >= Duration::from_secs(ALERT_REFRESH_SEC));
@@ -891,6 +901,30 @@ fn reminders_tick(app: &AppHandle, _memory: &mut Memory) {
 #[cfg(test)]
 mod tests {
     use super::pick;
+
+    #[test]
+    fn prices_refresh_when_visible_or_a_main_serves_a_focused_device() {
+        use super::should_refresh_prices;
+        use trade_core::ipc_contract::SyncRole::{Client, Main, Searching};
+        // (visible, role, any_link_focused, expected)
+        let table = [
+            (true, Main, false, true),
+            (true, Client, false, true),
+            (true, Searching, true, true),
+            (false, Main, true, true),
+            (false, Main, false, false),
+            (false, Client, true, false),
+            (false, Searching, true, false),
+            (false, Client, false, false),
+        ];
+        for (visible, role, focused, expected) in table {
+            assert_eq!(
+                should_refresh_prices(visible, role, focused),
+                expected,
+                "visible={visible} role={role:?} focused={focused}"
+            );
+        }
+    }
 
     #[test]
     fn pick_follows_the_interface_language() {

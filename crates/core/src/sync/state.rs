@@ -299,6 +299,21 @@ impl SyncState {
             .is_some_and(|peer| peer.revoked.is_some())
     }
 
+    /// Device ids whose newest entry is revoked (forgotten and not paired
+    /// again): discovery does not dial them.
+    pub fn revoked_device_ids(&self) -> Vec<String> {
+        let keys: std::collections::BTreeSet<&str> = self
+            .peers
+            .iter()
+            .map(|peer| peer.public_key.as_str())
+            .collect();
+        keys.into_iter()
+            .filter_map(|key| self.latest_entry(key))
+            .filter(|peer| peer.revoked.is_some())
+            .map(|peer| peer.device_id.clone())
+            .collect()
+    }
+
     /// Take in another device's list: per device, the later entry wins, with
     /// two limits. An entry stamped further ahead of `now` than a clock can be
     /// is skipped. Revoke and trust are decided by stamp alone: a re-pairing
@@ -435,6 +450,17 @@ mod tests {
         let mut other = state_with(vec![]);
         other.merge_peers(&[theirs], NOW);
         assert_eq!(other.peers[0].last_synced_at, None);
+    }
+
+    #[test]
+    fn revoked_device_ids_lists_only_devices_whose_newest_entry_is_revoked() {
+        let state = state_with(vec![
+            entry("gone", "k1", 20, true),
+            entry("back", "k2", 10, true),
+            entry("back", "k2", 30, false),
+            entry("live", "k3", 10, false),
+        ]);
+        assert_eq!(state.revoked_device_ids(), vec!["gone".to_string()]);
     }
 
     #[test]

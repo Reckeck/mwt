@@ -107,7 +107,10 @@ source (the loan), not only by the date.
   too far ahead" names the device.
 - If a device's time jumped during a session, it is "temporarily untrusted": every
   batch from it waits for you. Fix the date and time on that device (turn on
-  automatic time) and reconnect.
+  automatic time) and reconnect. The mark clears by itself after 3 stable time
+  reports in a row.
+- A device refused for clock skew is not redialed until you press Retry, and the
+  error is shown once, not every 5 minutes.
 
 ## I accepted changes by mistake
 

@@ -118,6 +118,10 @@ In `crates/core/src/sync/protocol.rs` and `crates/app/src/sync/tests.rs`:
   from an old peer converges (`crates/core/src/service/peer_sync/marks_tests.rs`,
   `run_key_tests.rs`).
 
+The locked-screen notification snapshot gained a `role_client` field. It lives
+in the notify store outside the vault and is additive (`#[serde(default)]`): an
+old snapshot reads as not a client and still fires.
+
 ## What an old peer still gets wrong
 
 - It may drop an edited duplicate (the creation-stamp dedupe) and show secrets
@@ -127,6 +131,8 @@ In `crates/core/src/sync/protocol.rs` and `crates/app/src/sync/tests.rs`:
   that it never removes itself.
 - It compacts tombstones by its own rule, so a deletion can come back from it.
 - It re-sends thinned cache points every session.
+- An old main sends a rank that grows with every client it has seen; the new
+  client caps it at 5, so the takeover wait stays short.
 - It applies records that arrive during a change question together with the
   answer.
 - It does not understand "paused" or "forgotten" reasons, so it keeps knocking
