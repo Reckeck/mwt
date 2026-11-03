@@ -9,9 +9,7 @@ overrides:
   minimatch@<11.0.1: ^11.0.1
 
 patchedDependencies:
-  vue-sonner@2.0.9:
-    hash: 3f997e18922ae1f41faa96a4c4e3eb0e9b46efb81d17fb0dad6c86d6a4319311
-    path: patches/vue-sonner@2.0.9.patch
+  vue-sonner@2.0.9: 3f997e18922ae1f41faa96a4c4e3eb0e9b46efb81d17fb0dad6c86d6a4319311
 
 importers:
 
@@ -96,8 +94,8 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
       lightweight-charts-drawing:
-        specifier: ^0.4.0
-        version: 0.4.0(lightweight-charts@5.2.1)
+        specifier: ^0.6.2
+        version: 0.6.2(lightweight-charts@5.2.1)
       lucide-vue-next:
         specifier: ^0.468.0
         version: 0.468.0(vue@3.5.44(typescript@5.8.3))
@@ -1685,8 +1683,8 @@ packages:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
 
-  lightweight-charts-drawing@0.4.0:
-    resolution: {integrity: sha512-1jJyRwmD1F4XXMJNTAGynTnL0ZM6Fq0SrQb87DeHEl05FO6LknNYwpBIEhXb9PZpjM9nefSj8TelBUvBwRh7ng==}
+  lightweight-charts-drawing@0.6.2:
+    resolution: {integrity: sha512-KyT0vzrN52z2PvPYmpqUfYhVE80KyxtNRvlT5yb70/swQhVB/mTP8qSJiKxp/1V07Eohkl1waxHpFqOpmBTC1A==}
     peerDependencies:
       lightweight-charts: ^5.0.0
 
@@ -3610,7 +3608,7 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
 
-  lightweight-charts-drawing@0.4.0(lightweight-charts@5.2.1):
+  lightweight-charts-drawing@0.6.2(lightweight-charts@5.2.1):
     dependencies:
       lightweight-charts: 5.2.1
 
