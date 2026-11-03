@@ -64,7 +64,7 @@ tauri-plugin-autostart = "2"
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "apple-native", "windows-native"] }
 # Moving the TradeApp-era directories and autostart entry (src/legacy.rs).
 dirs = "7"
-auto-launch = "0.5"
+auto-launch = "0.6"
 # Self-update of AppImage / NSIS / MSI / .app builds (src/updates.rs).
 tauri-plugin-updater = "2"
 
