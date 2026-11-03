@@ -342,3 +342,19 @@ fn prune_never_picks_the_updater_release() {
     assert_eq!(select(&tags, 1), strings(&["v1.0.0-2", "v1.0.0-1"]));
     assert_eq!(select(&strings(&["updater-dev"]), 0), Vec::<String>::new());
 }
+
+#[test]
+fn pre_env_is_true_only_for_the_word_true() {
+    assert!(pre_from_env(Some("true")));
+    assert!(!pre_from_env(Some("false")));
+    assert!(!pre_from_env(Some("")));
+    assert!(!pre_from_env(None));
+}
+
+#[test]
+fn an_unset_or_empty_aur_key_is_missing() {
+    assert!(super::aur::key_missing(None));
+    assert!(super::aur::key_missing(Some("")));
+    assert!(!super::aur::key_missing(Some("/root/key")));
+    assert!(super::aur::NO_KEY_WARNING.starts_with("::warning::"));
+}

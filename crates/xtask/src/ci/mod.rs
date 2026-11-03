@@ -2,7 +2,11 @@
 //! image build and the static checks of the CI scripts.
 
 pub mod build_images;
+pub mod cache_cleanup;
+pub mod ci_ok;
+pub mod container_env;
 pub mod lint;
+pub mod pnpm_install;
 pub mod release_files;
 pub mod release_plan;
 

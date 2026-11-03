@@ -70,6 +70,11 @@ fn print_only(plan: &Plan) -> Option<i32> {
 
 async fn run() -> Result<i32> {
     let cli = Cli::parse();
+    // No checkout in that job: no workspace root either.
+    if matches!(cli.command, Command::CiOk) {
+        ci::ci_ok::run()?;
+        return Ok(0);
+    }
     let root = lock::find_root()?;
     let mut built = None;
     let plan = match &cli.command {
@@ -178,6 +183,22 @@ async fn run() -> Result<i32> {
             cache::ci_env::run()?;
             return Ok(0);
         }
+        Command::CiContainerEnv { cargo } => {
+            ci::container_env::run(*cargo)?;
+            return Ok(0);
+        }
+        Command::CiOk => {
+            ci::ci_ok::run()?;
+            return Ok(0);
+        }
+        Command::CiPnpmInstall => {
+            ci::pnpm_install::run()?;
+            return Ok(0);
+        }
+        Command::CacheCleanup => {
+            ci::cache_cleanup::run()?;
+            return Ok(0);
+        }
         Command::InstallChef => {
             cache::install_chef::run()?;
             return Ok(0);
@@ -189,6 +210,9 @@ async fn run() -> Result<i32> {
                 None => version::tauri_version(&root)?,
             };
             build::check_version(&version)?;
+            if args.free_disk {
+                build::free_disk();
+            }
             let env = Arc::new(build::Env::detect(
                 root.clone(),
                 channel,

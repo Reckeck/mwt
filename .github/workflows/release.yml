@@ -67,9 +67,7 @@ jobs:
           cache: false
       # A static (musl) binary: the build jobs mount it into their containers (archlinux, Ubuntu).
       - name: Build xtask
-        run: |
-          rustup target add x86_64-unknown-linux-musl
-          cargo build -p xtask --locked --target x86_64-unknown-linux-musl
+        run: rustup target add x86_64-unknown-linux-musl && cargo build -p xtask --locked --target x86_64-unknown-linux-musl
       - name: Plan
         id: plan
         env:
@@ -164,19 +162,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
       - name: Toolchain from the image
-        run: |
-          echo /opt/mise/shims >>"$GITHUB_PATH"
-          mise trust "$GITHUB_WORKSPACE/mise.toml"
+        run: bin/xtask ci-container-env
       - name: pnpm store
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/pnpm
           key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - name: pnpm install
-        run: |
-          pnpm config set store-dir "$GITHUB_WORKSPACE/.cache/pnpm"
-          pnpm install --frozen-lockfile --prefer-offline
+        run: bin/xtask ci-pnpm-install
       - name: pnpm build
         run: pnpm build
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -263,8 +263,7 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
-        run: |
-          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
       - name: Linux (deb, rpm, AppImage, tar.gz)
         if: matrix.name == 'linux'
         env:
@@ -283,10 +282,7 @@ jobs:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
-          bin/xtask build android --prebuilt-frontend --channel "$RELEASE_CHANNEL" --version "$BUILD_VERSION" \
-            --version-code "$ANDROID_VERSION_CODE"
+        run: bin/xtask build android --free-disk --prebuilt-frontend --channel "$RELEASE_CHANNEL" --version "$BUILD_VERSION" --version-code "$ANDROID_VERSION_CODE"
 
       # ---- windows
       # Rust, node and pnpm as mise.toml pins them. MSVC is on the runner image (xtask checks it).
@@ -403,12 +399,12 @@ jobs:
         with:
           name: bundle-linux
           path: .cache/build-all/builds/${{ needs.version.outputs.channel }}
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
       - name: Package
         env:
           BUILD_VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          chmod +x bin/xtask
-          bin/xtask build "${{ matrix.name }}" --channel "$CHANNEL" --version "$BUILD_VERSION"
+        run: bin/xtask build "${{ matrix.name }}" --channel "$CHANNEL" --version "$BUILD_VERSION"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bundle-${{ matrix.name }}
@@ -453,17 +449,15 @@ jobs:
           pattern: bundle-*
           merge-multiple: true
           path: release
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
       - name: Every file of the release is there
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          chmod +x bin/xtask
-          bin/xtask check-release-files release "$BUILD_VERSION"
+        run: bin/xtask check-release-files release "$BUILD_VERSION"
+      # PRE (true on a pre-release) is read by xtask itself.
       - name: Release
-        run: |
-          flags=()
-          if [[ "$PRE" == true ]]; then flags+=(--pre); fi
-          bin/xtask publish --version "$BUILD_VERSION" --dir release "${flags[@]}"
+        run: bin/xtask publish --version "$BUILD_VERSION" --dir release
       - name: Old pre-releases
         if: needs.version.outputs.pre == 'true'
         continue-on-error: true
@@ -501,41 +495,26 @@ jobs:
     env:
       BUILD_VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - name: Key
-        id: key
-        env:
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          if [[ -z "$AUR_SSH_PRIVATE_KEY" ]]; then
-            echo "::warning::AUR_SSH_PRIVATE_KEY is not set: multi-wallet-tracker-bin is not pushed to the AUR"
-            echo "present=false" >>"$GITHUB_OUTPUT"
-          else
-            echo "present=true" >>"$GITHUB_OUTPUT"
-          fi
       - name: git
-        if: steps.key.outputs.present == 'true'
         run: pacman -Sy --noconfirm --needed git
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.key.outputs.present == 'true'
         with:
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: steps.key.outputs.present == 'true'
         with:
           name: xtask
           path: bin
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: steps.key.outputs.present == 'true'
         with:
           name: bundle-linux
           path: release
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      # Without AUR_SSH_PRIVATE_KEY xtask warns and pushes nothing.
       - name: Push to the AUR
-        if: steps.key.outputs.present == 'true'
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          chmod +x bin/xtask
-          bin/xtask publish-aur --version "$BUILD_VERSION" --dir release
+        run: bin/xtask publish-aur --version "$BUILD_VERSION" --dir release
 
   # ------------------------------------------------------------------ backmerge
   # The PR main -> development after a release, from GITHUB_TOKEN: needs Settings -> Actions ->
@@ -558,10 +537,10 @@ jobs:
         with:
           name: xtask
           path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
       - name: Open the PR
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD_VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          chmod +x bin/xtask
-          bin/xtask backmerge --version "$BUILD_VERSION"
+        run: bin/xtask backmerge --version "$BUILD_VERSION"

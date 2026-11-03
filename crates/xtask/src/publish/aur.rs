@@ -13,6 +13,14 @@ use crate::exec::Cmd;
 const PACKAGE: &str = "multi-wallet-tracker-bin";
 const KEY_VAR: &str = "AUR_SSH_PRIVATE_KEY";
 
+/// The workflow annotation for a run without a key (nothing is pushed, the job stays green).
+pub const NO_KEY_WARNING: &str =
+    "::warning::AUR_SSH_PRIVATE_KEY is not set: multi-wallet-tracker-bin is not pushed to the AUR";
+
+pub fn key_missing(value: Option<&str>) -> bool {
+    value.is_none_or(str::is_empty)
+}
+
 /// Where everything is; the key is not here on purpose.
 pub struct Plan {
     pub version: String,
@@ -272,6 +280,10 @@ pub fn run(root: &Path, args: &AurArgs) -> Result<()> {
         for step in &all {
             println!("$ {}", step.show());
         }
+        return Ok(());
+    }
+    if key_missing(std::env::var(KEY_VAR).ok().as_deref()) {
+        println!("{NO_KEY_WARNING}");
         return Ok(());
     }
     if !plan.tarball.is_file() {

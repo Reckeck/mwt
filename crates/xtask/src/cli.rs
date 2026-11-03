@@ -86,6 +86,22 @@ pub enum Command {
     /// Append the shared job environment (sccache, RUST_LOG) to $GITHUB_ENV.
     #[command(hide = true)]
     CiEnv,
+    /// The toolchain of a job container: mise shims (and with `--cargo` cargo) on PATH, mise trust.
+    #[command(hide = true)]
+    CiContainerEnv {
+        /// `/opt/cargo/bin` too (the images that have Rust).
+        #[arg(long)]
+        cargo: bool,
+    },
+    /// The required status check: RESULTS (the needed jobs' results) must be success or skipped.
+    #[command(hide = true)]
+    CiOk,
+    /// `pnpm install` into the cached store `.cache/pnpm`.
+    #[command(hide = true)]
+    CiPnpmInstall,
+    /// Delete the Actions caches of a closed PR or a deleted branch (EVENT, PR_NUMBER, BRANCH, GH_REPO).
+    #[command(hide = true)]
+    CacheCleanup,
     /// Install the pinned cargo-chef.
     #[command(hide = true)]
     InstallChef,
@@ -197,6 +213,9 @@ pub struct BuildArgs {
     /// The Android versionCode (`cargo xtask version --channel ... --output` prints it).
     #[arg(long, default_value_t = 1)]
     pub version_code: u32,
+    /// Delete the preinstalled toolchains of a GitHub runner first (disk space for the Android image).
+    #[arg(long)]
+    pub free_disk: bool,
     /// Cargo builds at once (android, windows, linux).
     #[arg(long, default_value_t = 2)]
     pub heavy: usize,

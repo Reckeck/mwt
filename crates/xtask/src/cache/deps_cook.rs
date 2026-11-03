@@ -130,7 +130,22 @@ fn extract_head(root: &Path, into: &Path) -> Result<()> {
     Ok(())
 }
 
+/// cargo-chef is installed when `cargo chef` does not answer; the lane's sccache statistics end the run.
 pub fn run(root: &Path, lane: &str) -> Result<()> {
+    let chef_present = Command::new("cargo")
+        .args(["chef", "--version"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+    if !chef_present {
+        super::install_chef::run()?;
+    }
+    cook_all(root, lane)?;
+    run_checked(Command::new("sccache").arg("--show-stats"))
+}
+
+fn cook_all(root: &Path, lane: &str) -> Result<()> {
     let target = root.join(".rust-target").display().to_string();
     let ndk = std::env::var("ANDROID_NDK_HOME")
         .ok()

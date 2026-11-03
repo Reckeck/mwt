@@ -48,6 +48,22 @@ pub fn check_version(version: &str) -> Result<()> {
     Ok(())
 }
 
+/// What a GitHub runner has preinstalled and the Android image does not need (`--free-disk`).
+pub const FREEABLE: [&str; 4] = [
+    "/usr/share/dotnet",
+    "/opt/ghc",
+    "/usr/local/lib/android",
+    "/opt/hostedtoolcache/CodeQL",
+];
+
+/// `sudo rm -rf` of [`FREEABLE`]; a failure is ignored (the build may still fit).
+pub fn free_disk() {
+    let _ = std::process::Command::new("sudo")
+        .args(["rm", "-rf"])
+        .args(FREEABLE)
+        .status();
+}
+
 /// The tasks for the chosen platforms (all when empty) plus what they need:
 /// - `frontend` once, for the builds that tauri would otherwise each start `pnpm build` for;
 /// - pacman and flatpak start from the Linux tarball: after `linux` when it is chosen too, from the
