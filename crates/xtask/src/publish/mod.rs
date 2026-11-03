@@ -21,7 +21,7 @@ const SUMS: &str = "SHA256SUMS";
 
 #[derive(Args)]
 pub struct PublishArgs {
-    /// A pre-release (X.Y.Z-N) from development instead of a release (X.Y.Z) from main.
+    /// A pre-release (X.Y.Z-N) from development instead of a release (X.Y.Z) from main. `PRE=true` does the same.
     #[arg(long)]
     pre: bool,
     #[arg(long)]
@@ -200,7 +200,18 @@ fn checksum_line(name: &str, bytes: &[u8]) -> String {
 /// The most commits a pre-release lists; the compare link has the rest.
 const LOG_LIMIT: usize = 80;
 
+/// `PRE=true` (the release.yml output `pre`) means `--pre`; unset, empty or `false` does not.
+pub fn pre_from_env(value: Option<&str>) -> bool {
+    value == Some("true")
+}
+
 pub fn run_publish(root: &Path, args: &PublishArgs) -> Result<()> {
+    let args = &PublishArgs {
+        pre: args.pre || pre_from_env(std::env::var("PRE").ok().as_deref()),
+        version: args.version.clone(),
+        dir: args.dir.clone(),
+        dry_run: args.dry_run,
+    };
     check_version(&args.version, args.pre)?;
     let files = release_files(&args.dir)?;
     let sums: String = files

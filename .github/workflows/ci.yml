@@ -84,11 +84,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The job that builds xtask has no xtask yet: the one shell line `xtask ci-container-env --cargo` replaces.
       - name: Toolchain from the image
-        run: |
-          echo /opt/mise/shims >>"$GITHUB_PATH"
-          echo /opt/cargo/bin >>"$GITHUB_PATH"
-          mise trust "$GITHUB_WORKSPACE/mise.toml"
+        run: printf '%s\n' /opt/mise/shims /opt/cargo/bin >>"$GITHUB_PATH" && mise trust "$GITHUB_WORKSPACE/mise.toml"
       - name: Compiled xtask dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -98,9 +96,7 @@ jobs:
       # A static (musl) binary: it also runs in the archlinux and Ubuntu containers the builds
       # mount it into, not only in the images of the jobs.
       - name: Build xtask
-        run: |
-          rustup target add x86_64-unknown-linux-musl
-          cargo build -p xtask --locked --target x86_64-unknown-linux-musl --target-dir .cache/xtask-target
+        run: rustup target add x86_64-unknown-linux-musl && cargo build -p xtask --locked --target x86_64-unknown-linux-musl --target-dir .cache/xtask-target
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: xtask-linux
@@ -170,16 +166,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Toolchain from the image
-        run: |
-          echo /opt/mise/shims >>"$GITHUB_PATH"
-          mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: xtask-linux
           path: bin
       - name: Make xtask executable
         run: chmod +x bin/xtask
+      - name: Toolchain from the image
+        run: bin/xtask ci-container-env
       - name: Cache key
         id: key
         run: echo "key=$(bin/xtask lane-key node)" >>"$GITHUB_OUTPUT"
@@ -239,17 +233,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Toolchain from the image
-        run: |
-          echo /opt/mise/shims >>"$GITHUB_PATH"
-          echo /opt/cargo/bin >>"$GITHUB_PATH"
-          mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: xtask-linux
           path: bin
       - name: Make xtask executable
         run: chmod +x bin/xtask
+      - name: Toolchain from the image
+        run: bin/xtask ci-container-env --cargo
       - name: Cache key
         id: key
         run: echo "key=$(bin/xtask lane-key '${{ matrix.lane }}')" >>"$GITHUB_OUTPUT"
@@ -272,10 +263,7 @@ jobs:
           restore-keys: ${{ matrix.lane }}-
       - name: Compile the dependencies
         if: steps.lookup.outputs.cache-hit != 'true'
-        run: |
-          bin/xtask install-chef
-          bin/xtask deps-cook '${{ matrix.lane }}'
-          sccache --show-stats
+        run: bin/xtask deps-cook '${{ matrix.lane }}'
       - name: Save the lane cache
         if: steps.lookup.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -350,9 +338,7 @@ jobs:
           restore-keys: ${{ matrix.lane }}-
       - name: Compile the dependencies
         if: steps.lookup.outputs.cache-hit != 'true'
-        run: |
-          ${{ matrix.xtask }} deps-cook '${{ matrix.lane }}'
-          sccache --show-stats
+        run: ${{ matrix.xtask }} deps-cook '${{ matrix.lane }}'
       - name: Save the lane cache
         if: steps.lookup.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -389,17 +375,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Toolchain from the image
-        run: |
-          echo /opt/mise/shims >>"$GITHUB_PATH"
-          echo /opt/cargo/bin >>"$GITHUB_PATH"
-          mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: xtask-linux
           path: bin
       - name: Make xtask executable
         run: chmod +x bin/xtask
+      - name: Toolchain from the image
+        run: bin/xtask ci-container-env --cargo
       - name: Environment
         run: bin/xtask ci-env
       - name: Cache key
@@ -448,16 +431,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Toolchain from the image
-        run: |
-          echo /opt/mise/shims >>"$GITHUB_PATH"
-          mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: xtask-linux
           path: bin
       - name: Make xtask executable
         run: chmod +x bin/xtask
+      - name: Toolchain from the image
+        run: bin/xtask ci-container-env
       # node_modules from deps-node; never installed here.
       - name: node_modules
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -500,16 +481,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Toolchain from the image
-        run: |
-          echo /opt/mise/shims >>"$GITHUB_PATH"
-          mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: xtask-linux
           path: bin
       - name: Make xtask executable
         run: chmod +x bin/xtask
+      - name: Toolchain from the image
+        run: bin/xtask ci-container-env
       # node_modules from deps-node; never installed here.
       - name: node_modules
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -560,16 +539,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Toolchain from the image
-        run: |
-          echo /opt/mise/shims >>"$GITHUB_PATH"
-          mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: xtask-linux
           path: bin
       - name: Make xtask executable
         run: chmod +x bin/xtask
+      - name: Toolchain from the image
+        run: bin/xtask ci-container-env
       # node_modules from deps-node; never installed here.
       - name: node_modules
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -617,17 +594,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Toolchain from the image
-        run: |
-          echo /opt/mise/shims >>"$GITHUB_PATH"
-          echo /opt/cargo/bin >>"$GITHUB_PATH"
-          mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: xtask-linux
           path: bin
       - name: Make xtask executable
         run: chmod +x bin/xtask
+      - name: Toolchain from the image
+        run: bin/xtask ci-container-env --cargo
       - name: Environment
         run: bin/xtask ci-env
       - name: Cache key
@@ -755,13 +729,13 @@ jobs:
     timeout-minutes: 5
     permissions: {}
     steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
       - name: Every lane succeeded (deps are skipped on main)
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
-        run: |
-          echo "results: $RESULTS"
-          for result in $RESULTS; do
-            if [[ "$result" != success && "$result" != skipped ]]; then
-              exit 1
-            fi
-          done
+        run: bin/xtask ci-ok

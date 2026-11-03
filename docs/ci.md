@@ -164,6 +164,19 @@ of `ci.yml` on a push.
   and runs `bin/xtask ...` instead of `cargo xtask ...`; the cache helpers are
   hidden xtask commands (`lane-key`, `deps-cook`, `deps-prune`, `ci-env`,
   `install-chef`, in `crates/xtask/src/cache/`), the former `.github/scripts/*.sh`.
+  **Every workflow step is one line** (no `run: |` blocks); the rest of the logic is
+  hidden xtask commands in `crates/xtask/src/ci/`: `ci-container-env [--cargo]` (mise
+  shims and cargo on PATH, `mise trust`; it comes right after the xtask download),
+  `ci-ok` (the `RESULTS` of the lanes; needs no checkout), `ci-pnpm-install`
+  (`release.yml` frontend), `cache-cleanup` (`cache-cleanup.yml`: `EVENT`, `PR_NUMBER`,
+  `BRANCH`, `GH_REPO`; that workflow compiles xtask with `cargo xtask`). `deps-cook`
+  installs cargo-chef itself when missing and ends with `sccache --show-stats`;
+  `publish` reads `PRE=true` as `--pre`; `publish-aur` warns and pushes nothing
+  without `AUR_SSH_PRIVATE_KEY`; `build android --free-disk` clears the runner's
+  preinstalled toolchains first. Shell one-liners remain only where xtask does not
+  exist yet or the step is a pipe with a secret: the `xtask` job's PATH/`mise trust`
+  and `rustup target add ... && cargo build` (xtask itself, here and in `release.yml`),
+  and `docker login` in `release.yml`.
   The Linux binary is built in `ci-linux` (ubuntu 22.04, like `ci-node` and
   `ci-android`). Only the paused macOS job still uses `cargo xtask`. The
   Windows build in `release.yml` also compiles xtask for its cache steps: the

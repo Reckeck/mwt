@@ -276,3 +276,13 @@ fn native_windows_needs_no_static_xtask() {
     let tasks = graph(&native, &chosen(&["windows"]), &facts(false, None)).unwrap();
     assert_eq!(names(&tasks), ["build:frontend", "build:windows"]);
 }
+
+#[test]
+fn free_disk_only_touches_absolute_runner_paths() {
+    assert!(
+        FREEABLE
+            .iter()
+            .all(|path| path.starts_with("/usr/") || path.starts_with("/opt/"))
+    );
+    assert!(FREEABLE.contains(&"/usr/local/lib/android"));
+}
