@@ -112,6 +112,10 @@ async fn run() -> Result<i32> {
             release::run_bump(&root, level)?;
             return Ok(0);
         }
+        Command::ReleaseStart(args) => {
+            release::start::run(&root, args)?;
+            return Ok(0);
+        }
         Command::Audit => {
             return audit::run(&root);
         }
@@ -124,7 +128,7 @@ async fn run() -> Result<i32> {
             return Ok(0);
         }
         Command::Backmerge(args) => {
-            publish::run_backmerge(args)?;
+            publish::run_backmerge(&root, args)?;
             return Ok(0);
         }
         Command::PublishAur(args) => {
