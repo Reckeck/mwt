@@ -123,7 +123,15 @@ $appBin = (Get-Content $tauriConfig -Raw | ConvertFrom-Json).mainBinaryName
 # Bundles of an earlier build (the other channel names them differently)
 # would be collected as well.
 Remove-Item -Recurse -Force (Join-Path $env:CARGO_TARGET_DIR 'release\bundle') -ErrorAction SilentlyContinue
-Invoke-Pnpm tauri build --ci --bundles 'nsis,msi' --config $tauriConfig
+# Updater artifacts (.sig) only with the signing key: tauri fails the build when
+# createUpdaterArtifacts is on and the key is missing.
+$tauriArgs = @('--config', $tauriConfig)
+if ($env:TAURI_SIGNING_PRIVATE_KEY) {
+  $signConfig = Join-Path $cache 'tauri-updater.json'
+  Set-Content -Path $signConfig -Value '{"bundle":{"createUpdaterArtifacts":true}}' -Encoding ascii
+  $tauriArgs += @('--config', $signConfig)
+}
+Invoke-Pnpm tauri build --ci --bundles 'nsis,msi' @tauriArgs
 
 # Collect under stable names
 $bundle = Join-Path $env:CARGO_TARGET_DIR 'release\bundle'
@@ -131,11 +139,17 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null
 $setup = Get-ChildItem "$bundle\nsis\*-setup.exe" | Select-Object -First 1
 if (-not $setup) { throw 'NSIS installer not found' }
 Copy-Item $setup.FullName "$OutDir\multi-wallet-tracker-$version-x64-setup.exe"
+if (Test-Path "$($setup.FullName).sig") {
+  Copy-Item "$($setup.FullName).sig" "$OutDir\multi-wallet-tracker-$version-x64-setup.exe.sig"
+}
 $msis = Get-ChildItem "$bundle\msi\*.msi"
 if (-not $msis) { throw 'MSI not found' }
 foreach ($msi in $msis) {
   $lang = [regex]::Match($msi.Name, '_([a-z]{2}-[A-Z]{2})\.msi$').Groups[1].Value
   Copy-Item $msi.FullName "$OutDir\multi-wallet-tracker-$version-x64-$lang.msi"
+  if (Test-Path "$($msi.FullName).sig") {
+    Copy-Item "$($msi.FullName).sig" "$OutDir\multi-wallet-tracker-$version-x64-$lang.msi.sig"
+  }
 }
 
 # Portable: the bare exe (needs the WebView2 runtime, built into Windows 10/11)

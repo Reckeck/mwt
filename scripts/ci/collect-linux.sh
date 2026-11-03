@@ -24,6 +24,10 @@ cp "$deb" "$out/multi-wallet-tracker_${version}_amd64.deb"
 cp "$(one "$bundle/rpm/*.rpm")" "$out/multi-wallet-tracker-${version}-1.x86_64.rpm"
 cp "$(one "$bundle/appimage/*.AppImage")" "$out/multi-wallet-tracker-${version}-x86_64.AppImage"
 chmod +x "$out/multi-wallet-tracker-${version}-x86_64.AppImage"
+# The updater signature, present when the build had TAURI_SIGNING_PRIVATE_KEY.
+if compgen -G "$bundle/appimage/*.AppImage.sig" >/dev/null; then
+  cp "$(one "$bundle/appimage/*.AppImage.sig")" "$out/multi-wallet-tracker-${version}-x86_64.AppImage.sig"
+fi
 
 work="$(mktemp -d)"
 deb_abs="$(realpath "$deb")"

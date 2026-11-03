@@ -46,7 +46,7 @@ jobs:
   # ------------------------------------------------------------------ version
   # The plan (channel, publish or not), the version the builds ship under and the xtask binary
   # every later job runs: only this job compiles Rust. The tag lookup needs the checkout's
-  # credentials (read-only token), the repository being private for now.
+  # credentials (read-only token).
   version:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -253,6 +253,9 @@ jobs:
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
       - name: Linux (deb, rpm, AppImage, tar.gz)
         if: matrix.name == 'linux'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bin/xtask build linux --prebuilt-frontend --channel "$RELEASE_CHANNEL" --version "$BUILD_VERSION"
       # The Android image is large; the signing key reaches the container as an environment
       # variable (masked here, never printed) and sign-android.sh decodes it into a temporary
@@ -265,7 +268,6 @@ jobs:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [[ "$PUBLISH" == true && -z "$ANDROID_KEYSTORE_BASE64" ]]; then
             echo "::error::ANDROID_KEYSTORE_BASE64 is not set: an APK signed with another key cannot update the installed app"
@@ -290,6 +292,8 @@ jobs:
         shell: pwsh
         env:
           MWT_TAURI_CONFIG: ${{ github.workspace }}\.cache\tauri-ci-windows.json
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: ./scripts/ci/build-windows.ps1 -OutDir release
 
       # The containers write the sccache directory as root; the cache action (tar, as the runner
@@ -318,8 +322,8 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  # macOS: a universal .dmg and the .app tarball, unsigned (ad hoc) until the APPLE_* secrets are
-  # set. Paused like clippy-macos in ci.yml; to switch it on remove `if: false` and add
+  # macOS: a universal .dmg and the .app tarball, signed ad hoc (Apple signing is not set up:
+  # add APPLE_* secrets and pass them to the build step, see build-macos.sh). Paused like clippy-macos in ci.yml; to switch it on remove `if: false` and add
   # `build-macos` to the `needs` and to the `if` of `publish` (it accepts `skipped` today), and pass
   # `macos` as the third argument of check-release-files.sh.
   build-macos:
@@ -346,12 +350,8 @@ jobs:
           cache: false
       - name: macOS (dmg, app tarball)
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: cargo xtask build macos --prebuilt-frontend --channel "$RELEASE_CHANNEL" --version "$BUILD_VERSION"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -409,8 +409,9 @@ jobs:
   # ------------------------------------------------------------------ publish
   # The only job that writes to the repository: SHA256SUMS, tag, release (`cargo xtask publish`),
   # then the old pre-releases beyond PRERELEASES_KEPT (10) go (a failure there does not fail the run).
-  # TODO(updater): latest.json + .sig (build rewrite plan, decision 16) are not produced: the app
-  # has no updater plugin and the bundles are not signed with TAURI_SIGNING_PRIVATE_KEY yet.
+  # The updater manifest (latest.json, latest-dev.json on the dev channel) is built from the .sig files
+  # next to the bundles (cargo xtask publish); the dev channel also refreshes the `updater-dev`
+  # pre-release that holds latest-dev.json under a stable URL.
   publish:
     needs: [version, checks, build, build-macos, package]
     # The builds run alongside the checks, so the checks gate the release here: `checks` must be
@@ -442,6 +443,8 @@ jobs:
           merge-multiple: true
           path: release
       - name: Every file of the release is there
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: .github/scripts/check-release-files.sh release "$BUILD_VERSION"
       - name: Release
         run: |
@@ -523,10 +526,9 @@ jobs:
           bin/xtask publish-aur --version "$BUILD_VERSION" --dir release
 
   # ------------------------------------------------------------------ backmerge
-  # The PR main -> development after a release. BACKMERGE_TOKEN (a PAT or app token that may open
-  # PRs and start workflows) is optional; without it the PR comes from GITHUB_TOKEN, which needs
-  # Settings -> Actions -> "Allow GitHub Actions to create and approve pull requests", and its
-  # checks do not start by themselves. A failure is only a message: the PR can be opened by hand.
+  # The PR main -> development after a release, from GITHUB_TOKEN: needs Settings -> Actions ->
+  # "Allow GitHub Actions to create and approve pull requests", and its checks do not start by
+  # themselves. A failure is only a message: the PR can be opened by hand.
   backmerge:
     needs: [version, publish]
     if: ${{ needs.version.outputs.channel == 'prod' && needs.publish.result == 'success' }}
@@ -546,7 +548,7 @@ jobs:
           path: bin
       - name: Open the PR
         env:
-          GH_TOKEN: ${{ secrets.BACKMERGE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           BUILD_VERSION: ${{ needs.version.outputs.version }}
         run: |
           chmod +x bin/xtask

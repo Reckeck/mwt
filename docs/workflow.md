@@ -125,7 +125,6 @@ The workflow files themselves are checked with `mise x actionlint@1.7.12 -- acti
 3. **Automatic branch deletion** (Settings → General → "Automatically delete head
    branches"): `cache-cleanup.yml` then cleans the caches of merged branches.
 4. **Secrets and permissions** (Settings → Secrets and variables → Actions):
-   the Android signing keys, `AUR_SSH_PRIVATE_KEY`, and if needed
-   `BACKMERGE_TOKEN` — see [ci.md](ci.md#secrets-settings--secrets-and-variables--actions);
+   the Android signing keys, the updater key `TAURI_SIGNING_*`, `AUR_SSH_PRIVATE_KEY` — see [ci.md](ci.md#secrets-settings--secrets-and-variables--actions);
    turn on "Allow GitHub Actions to create and approve pull requests" for
    `backmerge`.
