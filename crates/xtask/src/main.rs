@@ -8,6 +8,7 @@ mod cache;
 mod changelog;
 mod channel;
 mod checks;
+mod ci;
 mod cli;
 mod exec;
 mod graph;
@@ -147,6 +148,19 @@ async fn run() -> Result<i32> {
         Command::ImageTag => {
             println!("{}", images::tag(&root)?);
             return Ok(0);
+        }
+        Command::ReleasePlan => {
+            return ci::release_plan::run();
+        }
+        Command::CheckReleaseFiles {
+            dir,
+            version,
+            macos,
+        } => {
+            return ci::release_files::run(dir, version, *macos);
+        }
+        Command::CiImages { force } => {
+            return ci::build_images::run(&root, *force);
         }
         Command::LaneKey { lane } => {
             println!("{}", cache::lane_key::run(&root, lane)?);

@@ -143,12 +143,7 @@ pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpt
         vitest("unit", Class::Light, "unit"),
         // onboarding, routes, forms, ui, fsd (tests/checks)
         vitest("checks", Class::Light, "checks"),
-        Task::cmd(
-            "ci-scripts",
-            Class::Light,
-            &[],
-            Cmd::new("scripts/ci/lint-ci.sh"),
-        ),
+        ci_scripts(),
         Task::cmd(
             "fmt",
             Class::Light,
@@ -157,6 +152,24 @@ pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpt
         ),
     ]);
     tasks
+}
+
+/// Static checks of the CI scripts (`ci::lint`).
+fn ci_scripts() -> Task {
+    Task::func("ci-scripts", Class::Light, &[], |ctx: Ctx| async move {
+        let problems = crate::ci::lint::check(&ctx.root);
+        for problem in &problems {
+            ctx.note(problem);
+        }
+        if problems.is_empty() {
+            Outcome::Ok
+        } else {
+            Outcome::Fail(format!(
+                "{} problem(s) in the CI scripts, see the log",
+                problems.len()
+            ))
+        }
+    })
 }
 
 /// Regenerates ipc.gen.d.ts and fails when it differs from the committed file; the file is put back.
