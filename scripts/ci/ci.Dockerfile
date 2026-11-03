@@ -5,8 +5,8 @@
 #   linux    + build tools, Tauri libraries, Rust,   Rust checks, Linux build
 #            sccache
 #   android  + JDK 17, Android SDK/NDK, Rust targets Android build
-# Built and pushed by images.yml (.github/scripts/build-images.sh) under the
-# tag scripts/ci/image-tag.sh computes from this file, apt-packages.sh and
+# Built and pushed by images.yml (`xtask ci-images`) under the
+# tag `xtask image-tag` computes from this file, apt-packages.sh and
 # the [tools] of mise.toml.
 
 FROM docker.io/library/ubuntu:22.04 AS node
