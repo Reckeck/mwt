@@ -33,6 +33,11 @@ pub struct Collection {
     /// Object fields split one level further, so editing a transaction's
     /// comment on one device and its categories on another both survive.
     pub flatten: &'static [&'static str],
+    /// Array fields split into one entry per item, as `(field, key path)`:
+    /// the path (dotted, like `key`) names the item inside the array. Two
+    /// devices adding or editing different items both keep their change, and a
+    /// removed item travels as the stamp of its entry.
+    pub flatten_by: &'static [(&'static str, &'static str)],
     /// Fields that belong to the device and never travel.
     pub skip: &'static [&'static str],
     /// Field holding an RFC3339 time; the first sync sends only recent
@@ -54,12 +59,31 @@ pub struct Collection {
     pub cache: bool,
 }
 
+impl Collection {
+    /// Key path of the items of the array field `name`, when it is split.
+    pub fn item_key(&self, name: &str) -> Option<&'static str> {
+        self.flatten_by
+            .iter()
+            .find(|(field, _)| *field == name)
+            .map(|(_, path)| *path)
+    }
+
+    /// Fields that sync as separate entries (`field.<entry>`).
+    pub fn heads(&self) -> impl Iterator<Item = &'static str> {
+        self.flatten
+            .iter()
+            .copied()
+            .chain(self.flatten_by.iter().map(|(field, _)| *field))
+    }
+}
+
 const fn records(name: &'static str, key: &'static [&'static str]) -> Collection {
     Collection {
         name,
         rule: Rule::Records,
         key,
         flatten: &[],
+        flatten_by: &[],
         skip: &[],
         age: None,
         secret: false,
@@ -80,6 +104,7 @@ const fn log(
         rule: Rule::Log { cap, order },
         key,
         flatten: &[],
+        flatten_by: &[],
         skip: &[],
         age: None,
         secret: false,
@@ -95,6 +120,7 @@ const fn single(name: &'static str, skip: &'static [&'static str]) -> Collection
         rule: Rule::Single,
         key: &[],
         flatten: &[],
+        flatten_by: &[],
         skip,
         age: None,
         secret: false,
@@ -127,6 +153,7 @@ pub static COLLECTIONS: &[Collection] = &[
     records("stores", ID),
     Collection {
         flatten: &["meta"],
+        flatten_by: &[],
         ..records("transactions", &["*.meta.id"])
     },
     records("categories", &["key"]),
@@ -135,6 +162,7 @@ pub static COLLECTIONS: &[Collection] = &[
         rule: Rule::Union { cap: None },
         key: &["asset_key", "ts"],
         flatten: &[],
+        flatten_by: &[],
         skip: &[],
         age: Some("ts"),
         secret: false,
@@ -147,6 +175,7 @@ pub static COLLECTIONS: &[Collection] = &[
         rule: Rule::Union { cap: None },
         key: &["currency", "ts"],
         flatten: &[],
+        flatten_by: &[],
         skip: &[],
         age: Some("ts"),
         secret: false,
@@ -202,6 +231,7 @@ pub static COLLECTIONS: &[Collection] = &[
     // `merge::legacy_head`); the cursor belongs to the device.
     Collection {
         flatten: &["marks"],
+        flatten_by: &[],
         skip: &["tx_cursor", "tx_index"],
         ..records("workflow_state", &["workflow_id"])
     },
@@ -239,6 +269,7 @@ pub static COLLECTIONS: &[Collection] = &[
         },
         key: &[],
         flatten: &[],
+        flatten_by: &[],
         skip: &[],
         age: None,
         secret: false,

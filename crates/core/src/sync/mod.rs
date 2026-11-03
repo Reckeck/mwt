@@ -5,6 +5,7 @@
 
 pub mod alias;
 pub mod fields;
+pub mod flatten;
 pub mod journal;
 pub mod manifest;
 pub mod merge;
@@ -23,3 +24,6 @@ pub use plan::{
 };
 pub use stamp::{Clock, Stamp};
 pub use state::{BatchEntry, RecordStamps, RecordState, SyncBatch, SyncState, TrustedPeer};
+
+#[cfg(test)]
+mod flatten_tests;
