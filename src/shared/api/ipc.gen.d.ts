@@ -6658,9 +6658,21 @@ tour_offers: boolean | null,
  */
 declined_tours: Array<string> | null, };
 
-type UpdateAutomationInput = { id: string, automation: AutomationInput, };
+type UpdateAutomationInput = { id: string, automation: AutomationInput, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: AutomationInput, };
 
-type UpdateBudgetInput = { id: string, budget: BudgetInput, };
+type UpdateBudgetInput = { id: string, budget: BudgetInput, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: BudgetInput, };
 
 type UpdateCategoryInput = { key: string, 
 /**
@@ -6674,13 +6686,37 @@ essential: boolean | null,
 /**
  * Passive income flag for `Income`; `None` keeps it.
  */
-passive: boolean | null, };
+passive: boolean | null, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: Category, };
 
-type UpdateContactInput = { id: string, contact: ContactDraft, };
+type UpdateContactInput = { id: string, contact: ContactDraft, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: ContactDraft, };
 
-type UpdateEnvelopeInput = { id: string, draft: EnvelopeDraft, };
+type UpdateEnvelopeInput = { id: string, draft: EnvelopeDraft, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: EnvelopeDraft, };
 
-type UpdateGoalInput = { id: string, goal: GoalInput, };
+type UpdateGoalInput = { id: string, goal: GoalInput, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: GoalInput, };
 
 /**
  * Correct a recorded meter reading.
@@ -6706,9 +6742,21 @@ type UpdateOffer = { version: string, notes: string | null, release_url: string 
  */
 type UpdatePhase = { "type": "idle" } | { "type": "checking" } | { "type": "up_to_date" } | { "type": "downloading", percent: number, } | { "type": "ready", version: string, } | { "type": "available", offer: UpdateOffer, } | { "type": "error", message: string, };
 
-type UpdatePriceAlertInput = { id: string, alert: PriceAlertInput, };
+type UpdatePriceAlertInput = { id: string, alert: PriceAlertInput, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: PriceAlertInput, };
 
-type UpdateReminderInput = { id: string, reminder: ReminderInput, };
+type UpdateReminderInput = { id: string, reminder: ReminderInput, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: ReminderInput, };
 
 type UpdateRuleInput = { id: string, pattern: string, category: string, active: boolean, };
 
@@ -6780,16 +6828,34 @@ property: PropertyInfo | null, secured_by: string | null,
 /**
  * `None` keeps the current exchange.
  */
-provider: ExchangeProvider | null, };
+provider: ExchangeProvider | null, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: Store, };
 
 type UpdateTerminalStateInput = { store_id: string, patch: TerminalPatch, };
 
 /**
  * Replace a stored transaction with a new version of it.
  */
-type UpdateTransactionInput = { id: string, transaction: TransactionInput, };
+type UpdateTransactionInput = { id: string, transaction: TransactionInput, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: Transaction, };
 
-type UpdateUtilityInput = { id: string, item: UtilityInput, };
+type UpdateUtilityInput = { id: string, item: UtilityInput, 
+/**
+ * The version the form loaded. When set, only the fields the user changed against it are
+ * applied onto the current document (an edit never overwrites a remote change to another
+ * field); `None` keeps the whole-input behaviour.
+ */
+base?: UtilityInput, };
 
 /**
  * Every active utility of a property for one month, to be paid at once.

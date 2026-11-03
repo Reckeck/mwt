@@ -181,6 +181,12 @@ pub struct CreateStoreInput {
 pub struct UpdateEnvelopeInput {
     pub id: String,
     pub draft: crate::service::EnvelopeDraft,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<crate::service::EnvelopeDraft>,
 }
 
 /// `amount > 0` earmarks from the free balance, `< 0` releases.
@@ -254,6 +260,12 @@ pub struct UpdateStoreInput {
     /// `None` keeps the current exchange.
     #[serde(default)]
     pub provider: Option<ExchangeProvider>,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<crate::model::store::Store>,
 }
 
 /// Re-hang a sub-account; `parent_id: None` makes it a top-level wallet.
@@ -768,6 +780,12 @@ pub struct AddLinkedTransactionsInput {
 pub struct UpdateTransactionInput {
     pub id: String,
     pub transaction: TransactionInput,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<crate::model::transaction::Transaction>,
 }
 
 /// A draft to preview; `replaces` is the id of the transaction being edited.
@@ -948,6 +966,12 @@ impl WalletCatalog {
 pub struct UpdateContactInput {
     pub id: String,
     pub contact: ContactDraft,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<ContactDraft>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -1015,6 +1039,12 @@ pub struct UpdateCategoryInput {
     /// Passive income flag for `Income`; `None` keeps it.
     #[serde(default)]
     pub passive: Option<bool>,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<crate::model::category::Category>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -1325,6 +1355,12 @@ pub struct ConfirmEstimatedInput {
 pub struct UpdateAutomationInput {
     pub id: String,
     pub automation: AutomationInput,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<AutomationInput>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -1357,6 +1393,12 @@ impl From<BudgetInput> for BudgetDraft {
 pub struct UpdateBudgetInput {
     pub id: String,
     pub budget: BudgetInput,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<BudgetInput>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -1401,6 +1443,12 @@ impl From<GoalInput> for GoalDraft {
 pub struct UpdateGoalInput {
     pub id: String,
     pub goal: GoalInput,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<GoalInput>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -1437,6 +1485,12 @@ pub struct SnoozeReminderInput {
 pub struct UpdateReminderInput {
     pub id: String,
     pub reminder: ReminderInput,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<ReminderInput>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -1473,6 +1527,12 @@ impl From<PriceAlertInput> for PriceAlertDraft {
 pub struct UpdatePriceAlertInput {
     pub id: String,
     pub alert: PriceAlertInput,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<PriceAlertInput>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -1506,6 +1566,12 @@ impl From<UtilityInput> for crate::service::UtilityDraft {
 pub struct UpdateUtilityInput {
     pub id: String,
     pub item: UtilityInput,
+    /// The version the form loaded. When set, only the fields the user changed against it are
+    /// applied onto the current document (an edit never overwrites a remote change to another
+    /// field); `None` keeps the whole-input behaviour.
+    #[serde(default)]
+    #[ts(optional)]
+    pub base: Option<UtilityInput>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]

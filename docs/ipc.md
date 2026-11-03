@@ -143,6 +143,15 @@ AppImage, NSIS/MSI and macOS .app installs download in the background and instal
 (deb, rpm, Pacman, Flatpak, Android) only get `available` with a hint. Debug builds read the manifest from
 `MWT_UPDATE_URL` when set.
 
+**Edit forms and `base`.** The update inputs of edit forms (`update_store`, `update_transaction`, `update_contact`,
+`update_category`, `update_automation`, `update_budget`, `update_goal`, `update_reminder`, `update_price_alert`,
+`update_utility_item`, `update_envelope`) take an optional `base`: the version of the entity the form loaded
+(`Transaction` / `Store` / `Category` for the first, the form's own input type for the others). When it is set, the core
+applies only the fields that differ between `base` and the edit onto the current document (nested objects are merged
+per key, arrays and scalars whole), so a change another device synced into a different field while the form was open
+is not overwritten with the stale value; when both changed one field, the edit wins. Without `base` the whole input is
+applied as before (old frontends, the JSON editor). Nothing in the vault file changes.
+
 ### stores
 | `list_stores` | — | `Vec<Store>` (flat) |
 | `get_store_tree` | — | `Vec<StoreTreeNode { store, depth, path, own_usd, own_base, subtree_usd, subtree_base, own_tx_count, can_add_child, children, top_assets, last_tx_at }>` (`top_assets` — up to three largest assets, `last_tx_at` — the last transaction including sub-accounts) — a tree with sums; the source for the sidebar, the "Wallets" page and node selection |

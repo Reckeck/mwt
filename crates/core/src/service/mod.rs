@@ -77,6 +77,7 @@ pub use peer_sync::{AppliedBatch, ExternalMerge, PeerRef, SyncTap, UndoReport};
 mod preview;
 mod price_info;
 mod rates;
+mod rebase;
 mod recurring;
 mod relations;
 mod reports;
