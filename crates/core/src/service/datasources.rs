@@ -264,6 +264,26 @@ impl UnlockedVault {
         })
     }
 
+    /// Drop the inflation choices that point at a source that no longer
+    /// exists (deleted on another device while this one chose it). Callers
+    /// persist.
+    pub(crate) fn prune_inflation_sources(&mut self) {
+        let dangling: Vec<String> = self
+            .doc
+            .settings
+            .inflation_source
+            .iter()
+            .filter(|(_, source)| self.data_source(source).is_none())
+            .map(|(currency, _)| currency.clone())
+            .collect();
+        for currency in dangling {
+            self.doc.settings.inflation_source.remove(&currency);
+            if self.doc.settings.inflation_mode.get(&currency) == Some(&InflationMode::Source) {
+                self.doc.settings.inflation_mode.remove(&currency);
+            }
+        }
+    }
+
     fn clear_source_uses(&mut self, id: &str) {
         let currencies: Vec<String> = self
             .doc

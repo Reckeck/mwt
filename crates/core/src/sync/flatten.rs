@@ -13,17 +13,42 @@ use serde_json::{Map, Value};
 use super::registry::Collection;
 use super::stamp::Stamp;
 use super::state::RecordStamps;
-use super::view::{body_of_value, item_key};
+use super::view::{body_of_value, insert_path, item_key, lookup};
 
-/// The head of an entry name (`items` of `items.7`), when it is one.
-fn head_of<'name>(coll: &Collection, name: &'name str) -> Option<&'name str> {
-    let (head, _) = name.split_once('.')?;
-    coll.heads().any(|known| known == head).then_some(head)
+/// Whether `head` is a field that `name` is an entry of (`items` of
+/// `items.7`).
+fn under(head: &str, name: &str) -> bool {
+    name.strip_prefix(head)
+        .is_some_and(|rest| rest.starts_with('.'))
+}
+
+/// The innermost head of an entry name (`scope.store_ids` of
+/// `scope.store_ids.7`, where `scope` is split too), when it is one.
+fn head_of(coll: &Collection, name: &str) -> Option<&'static str> {
+    coll.heads()
+        .filter(|head| under(head, name))
+        .max_by_key(|head| head.len())
 }
 
 /// Whether `name` is an entry of a split field.
 pub fn is_entry(coll: &Collection, name: &str) -> bool {
     head_of(coll, name).is_some()
+}
+
+/// The stamp of the whole field `head` when it says something of its own: an
+/// older device wrote the field as one, or the field was last written empty.
+/// A head stamp that only repeats the newest of its entries is what
+/// [`with_legacy_heads`] adds for older receivers; it is no floor, or every
+/// entry the sender never touched would look as new as its newest one.
+fn whole_stamp<'stamps>(stamps: &'stamps RecordStamps, head: &str) -> Option<&'stamps Stamp> {
+    let own = stamps.fields.get(head)?;
+    let newest = stamps
+        .fields
+        .iter()
+        .filter(|(name, _)| under(head, name))
+        .map(|(_, stamp)| stamp)
+        .max();
+    (newest != Some(own)).then_some(own)
 }
 
 /// When the entry `name` last changed: its own stamp, else the stamp of the
@@ -36,10 +61,25 @@ pub fn entry_stamp<'stamps>(
     if let Some(own) = stamps.fields.get(name) {
         return own;
     }
-    match head_of(coll, name).and_then(|head| stamps.fields.get(head)) {
+    // Every head above the entry may carry the stamp of an older device.
+    let floor = coll
+        .heads()
+        .filter(|head| under(head, name))
+        .filter_map(|head| whole_stamp(stamps, head))
+        .max();
+    match floor {
         Some(floor) if *floor > stamps.created => floor,
         _ => &stamps.created,
     }
+}
+
+/// Whether the side edited the entry: its own stamp, or the stamp of a whole
+/// field above it (an older device writes the field as one).
+pub fn edited_here(coll: &Collection, stamps: &RecordStamps, name: &str) -> bool {
+    stamps.fields.contains_key(name)
+        || coll
+            .heads()
+            .any(|head| under(head, name) && whole_stamp(stamps, head).is_some())
 }
 
 /// A side whose whole field was stamped but that lists no value for the
@@ -54,7 +94,10 @@ pub fn cannot_express(
     let Some(head) = head_of(coll, name) else {
         return false;
     };
-    if stamps.fields.contains_key(name) || !stamps.fields.contains_key(head) {
+    let head_stamped = coll
+        .heads()
+        .any(|above| under(above, name) && stamps.fields.contains_key(above));
+    if stamps.fields.contains_key(name) || !head_stamped {
         return false;
     }
     fields.get(head).is_none_or(is_empty_container)
@@ -142,7 +185,7 @@ impl<'doc> Order<'doc> {
             .iter()
             .map(|body| {
                 let mut seen = HashSet::new();
-                body.get(head)
+                lookup(body, head)
                     .and_then(Value::as_array)
                     .into_iter()
                     .flatten()
@@ -257,8 +300,9 @@ pub fn join_arrays(
     body: &mut Map<String, Value>,
 ) {
     for (head, entries) in arrays {
-        body.insert(
-            head.to_string(),
+        insert_path(
+            body,
+            head,
             Value::Array(join_array(coll, head, &entries, order)),
         );
     }
