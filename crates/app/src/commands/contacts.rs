@@ -33,9 +33,9 @@ pub async fn update_contact(
     state: State<'_, AppState>,
 ) -> Result<Contact, String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
+    let vault = guard.as_mut().unwrap();
+    let input = vault.rebase_contact_input(input).map_err(err_to_string)?;
+    vault
         .update_contact(&input.id, input.contact)
         .map_err(err_to_string)
 }

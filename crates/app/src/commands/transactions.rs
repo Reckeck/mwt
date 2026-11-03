@@ -145,12 +145,11 @@ pub async fn update_transaction(
         vault
             .resolve_input_price(&mut draft)
             .map_err(err_to_string)?;
+        let edited = vault
+            .rebase_transaction(&input.id, input.base.as_ref(), draft.to_transaction())
+            .map_err(err_to_string)?;
         vault
-            .update_transaction_for(
-                &input.id,
-                draft.to_transaction(),
-                draft.property_id().as_deref(),
-            )
+            .update_transaction_for(&input.id, edited, draft.property_id().as_deref())
             .map_err(err_to_string)?
     };
     enrich_in_background(&app, saved.meta().id.clone());

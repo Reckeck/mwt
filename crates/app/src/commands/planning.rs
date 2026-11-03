@@ -68,8 +68,11 @@ pub async fn update_automation(
     input: UpdateAutomationInput,
     state: State<'_, AppState>,
 ) -> Result<Automation, String> {
-    let draft = input.automation.to_draft().map_err(err_to_string)?;
-    with_vault_mut(&state, |vault| vault.update_automation(&input.id, draft))
+    with_vault_mut(&state, |vault| {
+        let input = vault.rebase_automation_input(input)?;
+        let draft = input.automation.to_draft()?;
+        vault.update_automation(&input.id, draft)
+    })
 }
 
 #[tauri::command]
@@ -174,6 +177,7 @@ pub async fn update_budget(
     state: State<'_, AppState>,
 ) -> Result<Budget, String> {
     with_vault_mut(&state, |vault| {
+        let input = vault.rebase_budget_input(input)?;
         vault.update_budget(&input.id, input.budget.into())
     })
 }
@@ -234,6 +238,7 @@ pub async fn update_goal(
     state: State<'_, AppState>,
 ) -> Result<Goal, String> {
     with_vault_mut(&state, |vault| {
+        let input = vault.rebase_goal_input(input)?;
         vault.update_goal(&input.id, input.goal.into())
     })
 }
@@ -350,6 +355,7 @@ pub async fn update_reminder(
     state: State<'_, AppState>,
 ) -> Result<Reminder, String> {
     with_vault_mut(&state, |vault| {
+        let input = vault.rebase_reminder_input(input)?;
         vault.update_reminder_paying(
             &input.id,
             &input.reminder.text,
@@ -415,6 +421,7 @@ pub async fn update_price_alert(
     state: State<'_, AppState>,
 ) -> Result<PriceAlert, String> {
     with_vault_mut(&state, |vault| {
+        let input = vault.rebase_price_alert_input(input)?;
         vault.update_price_alert(&input.id, input.alert.into())
     })
 }
@@ -608,6 +615,7 @@ pub async fn update_utility_item(
     state: State<'_, AppState>,
 ) -> Result<UtilityItem, String> {
     with_vault_mut(&state, |vault| {
+        let input = vault.rebase_utility_input(input)?;
         vault.update_utility_item(&input.id, input.item.into())
     })
 }

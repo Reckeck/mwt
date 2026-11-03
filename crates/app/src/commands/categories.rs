@@ -33,9 +33,9 @@ pub async fn update_category(
     state: State<'_, AppState>,
 ) -> Result<Category, String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
+    let vault = guard.as_mut().unwrap();
+    let input = vault.rebase_category_input(input).map_err(err_to_string)?;
+    vault
         .update_category(
             &input.key,
             input.name.as_deref(),

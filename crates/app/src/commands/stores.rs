@@ -73,6 +73,7 @@ pub async fn update_store(
 ) -> Result<Store, String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
+    let input = vault.rebase_store_input(input).map_err(err_to_string)?;
     vault
         .update_store(
             &input.id,
@@ -195,9 +196,9 @@ pub async fn update_envelope(
     state: State<'_, AppState>,
 ) -> Result<Envelope, String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
+    let vault = guard.as_mut().unwrap();
+    let input = vault.rebase_envelope_input(input).map_err(err_to_string)?;
+    vault
         .update_envelope(&input.id, input.draft)
         .map_err(err_to_string)
 }
