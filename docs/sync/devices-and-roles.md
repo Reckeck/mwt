@@ -69,7 +69,10 @@ stateDiagram-v2
   it.
 - "Make this device the main one" (`prefer_main`) hands the role to a device
   after its first exchange is through, never in the middle of a transfer. The
-  current main sends `TakeMain` over the live link and steps down.
+  current main sends `TakeMain` over the live link and steps down only after the
+  client answers with its `Peers` list (sent when the client reaches live mode),
+  because a client in the middle of a question only queues the hand-over. A
+  `TakeMain` heard or ordered before `live` starts is queued, not dropped.
 - **Port and the return call.** Sync listens on TCP 53318 (a random port if
   that one is busy). A client that cannot connect to the main device does not
   make itself main; it waits. After 6 seconds the main device calls back every

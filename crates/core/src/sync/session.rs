@@ -310,7 +310,7 @@ pub fn day_of(ms: u64) -> u64 {
 /// Up to this difference the clocks are taken as equal.
 pub const SKEW_FINE_MS: u64 = 5 * 60 * 1000;
 /// Beyond this the devices refuse to sync.
-pub const SKEW_REFUSE_MS: u64 = 24 * 3600 * 1000;
+pub const SKEW_REFUSE_MS: u64 = super::stamp::MAX_FUTURE_MS;
 /// A drift of the measured offset beyond this within a session is a jump.
 pub const DRIFT_MS: u64 = 2 * 60 * 1000;
 

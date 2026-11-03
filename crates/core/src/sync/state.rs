@@ -147,6 +147,38 @@ pub const MAX_BATCHES: usize = 20;
 pub const BATCH_DAYS: i64 = 7;
 /// Deletions older than this are forgotten once every trusted device has synced since.
 pub const TOMBSTONE_DAYS: u64 = 180;
+/// A forgotten (revoked) device still holds back compaction for this many days
+/// after its revocation: it may be paired again and bring old records with it.
+pub const REVOKED_GATE_DAYS: u64 = 365;
+
+/// How far a peer's manifest vouches for our deletions: the largest `counted`
+/// such that every deletion with `counted <= it` is in `theirs` with the same
+/// digest. `deletions` are `(counted, key, our digest)`. Never below `previous`.
+pub fn acked_through<'item>(
+    deletions: impl IntoIterator<Item = (u64, &'item str, u64)>,
+    theirs: &std::collections::BTreeMap<String, u64>,
+    previous: u64,
+) -> u64 {
+    let mut sorted: Vec<(u64, &str, u64)> = deletions.into_iter().collect();
+    sorted.sort_unstable();
+    let mut result = previous;
+    let mut finished: Option<u64> = None;
+    for (counted, key, digest) in sorted {
+        if let Some(done) = finished
+            && done != counted
+        {
+            result = result.max(done);
+        }
+        if theirs.get(key) != Some(&digest) {
+            return result;
+        }
+        finished = Some(counted);
+    }
+    if let Some(done) = finished {
+        result = result.max(done);
+    }
+    result
+}
 
 /// Sync bookkeeping of a vault.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -163,6 +195,11 @@ pub struct SyncState {
     /// full retention from then, not from when it was made. Never synced.
     #[serde(default)]
     pub tombstones_seen: BTreeMap<String, u64>,
+    /// `device id` → every local deletion with `counted <=` this value was seen in
+    /// that device's manifest. Device-local like `tombstones_seen`: never sent,
+    /// never taken from a received copy. Missing means 0: keep the deletions.
+    #[serde(default)]
+    pub tombstone_acks: BTreeMap<String, u64>,
     #[serde(default)]
     pub peers: Vec<TrustedPeer>,
     /// Newest last.
@@ -226,11 +263,18 @@ impl SyncState {
 
     /// The latest stamp anywhere, to start the clock after it.
     pub fn latest_stamp(&self) -> Option<&Stamp> {
+        self.latest_stamp_within(u64::MAX)
+    }
+
+    /// The latest stamp not beyond `limit` (ms): a poisoned stamp must not
+    /// hide the real latest one when the clock starts.
+    pub fn latest_stamp_within(&self, limit: u64) -> Option<&Stamp> {
         self.stamps
             .values()
             .map(RecordStamps::latest)
             .chain(self.tombstones.values())
             .chain(self.peers.iter().map(|peer| &peer.stamp))
+            .filter(|stamp| stamp.wall <= limit)
             .max()
     }
 
@@ -265,6 +309,11 @@ impl SyncState {
         let mut changed = false;
         for theirs in remote {
             if theirs.stamp.wall > limit {
+                // Core has no logger; the device id is not a secret.
+                eprintln!(
+                    "sync: peer entry for device {} skipped: its stamp is too far ahead",
+                    theirs.device_id
+                );
                 continue;
             }
             let position = self
@@ -279,7 +328,10 @@ impl SyncState {
                             || mine.revoked.is_some()
                             || mine.public_key == theirs.public_key);
                     if accept {
+                        // The sender's last sync time is its own bookkeeping.
+                        let synced = mine.last_synced_at.clone();
                         self.peers[index] = theirs.clone();
+                        self.peers[index].last_synced_at = synced;
                         changed = true;
                     }
                 }
@@ -287,7 +339,9 @@ impl SyncState {
                     if theirs.revoked.is_none() && self.is_revoked(&theirs.public_key) {
                         continue;
                     }
-                    self.peers.push(theirs.clone());
+                    let mut fresh = theirs.clone();
+                    fresh.last_synced_at = None;
+                    self.peers.push(fresh);
                     changed = true;
                 }
             }
@@ -319,6 +373,68 @@ mod tests {
             peers,
             ..SyncState::default()
         }
+    }
+
+    fn manifest(entries: &[(&str, u64)]) -> BTreeMap<String, u64> {
+        entries
+            .iter()
+            .map(|(key, digest)| ((*key).to_string(), *digest))
+            .collect()
+    }
+
+    #[test]
+    fn acked_through_stops_before_the_first_missing_deletion() {
+        let deletions = [(10, "a", 1), (20, "b", 2), (30, "c", 3)];
+        let theirs = manifest(&[("a", 1), ("c", 3)]);
+        assert_eq!(acked_through(deletions, &theirs, 0), 10);
+    }
+
+    #[test]
+    fn acked_through_treats_another_digest_as_missing() {
+        let deletions = [(10, "a", 1), (20, "b", 2)];
+        let theirs = manifest(&[("a", 1), ("b", 99)]);
+        assert_eq!(acked_through(deletions, &theirs, 0), 10);
+    }
+
+    #[test]
+    fn acked_through_credits_a_moment_only_when_all_its_deletions_are_there() {
+        let deletions = [(10, "a", 1), (10, "b", 2), (20, "c", 3)];
+        assert_eq!(
+            acked_through(deletions, &manifest(&[("a", 1), ("c", 3)]), 0),
+            0
+        );
+        assert_eq!(
+            acked_through(deletions, &manifest(&[("a", 1), ("b", 2)]), 0),
+            10
+        );
+        assert_eq!(
+            acked_through(deletions, &manifest(&[("a", 1), ("b", 2), ("c", 3)]), 0),
+            20
+        );
+    }
+
+    #[test]
+    fn acked_through_never_decreases() {
+        let deletions = [(10, "a", 1)];
+        assert_eq!(acked_through(deletions, &manifest(&[]), 50), 50);
+        assert_eq!(acked_through([], &manifest(&[]), 7), 7);
+    }
+
+    #[test]
+    fn a_merged_entry_keeps_the_local_last_sync_time() {
+        let mut mine = entry("dev", "kk", 10, false);
+        mine.last_synced_at = Some("2026-01-01T00:00:00Z".into());
+        let mut theirs = entry("dev", "kk", 20, false);
+        theirs.last_synced_at = Some("2026-02-02T00:00:00Z".into());
+        let mut state = state_with(vec![mine]);
+        assert!(state.merge_peers(&[theirs.clone()], NOW));
+        assert_eq!(
+            state.peers[0].last_synced_at.as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
+        let mut other = state_with(vec![]);
+        other.merge_peers(&[theirs], NOW);
+        assert_eq!(other.peers[0].last_synced_at, None);
     }
 
     #[test]

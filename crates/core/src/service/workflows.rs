@@ -801,7 +801,16 @@ impl UnlockedVault {
         if self.doc.workflows.len() == before {
             return Err(Error::Missing(format!("workflow {id}")));
         }
-        self.doc.workflow_runs.retain(|run| run.workflow_id != id);
+        let runs: Vec<String> = self
+            .doc
+            .workflow_runs
+            .iter()
+            .filter(|run| run.workflow_id == id)
+            .map(|run| run.id.clone())
+            .collect();
+        for run_id in &runs {
+            self.forget_run(run_id)?;
+        }
         self.doc
             .workflow_vars
             .retain(|var| var.scope != VarScope::Workflow(id.to_string()));

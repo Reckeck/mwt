@@ -246,10 +246,18 @@ pub fn trim(doc: &mut Value) {
             continue;
         };
         if let Some(order) = order {
+            // Equal times fall back to the key: array order differs per
+            // device, and every device must keep the same records at the cap.
             items.sort_by(|left, right| {
-                let left = left.get(order).and_then(Value::as_str).unwrap_or("");
-                let right = right.get(order).and_then(Value::as_str).unwrap_or("");
-                left.cmp(right)
+                let time = |item: &Value| {
+                    item.get(order)
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string()
+                };
+                time(left)
+                    .cmp(&time(right))
+                    .then_with(|| record_key(coll, left).cmp(&record_key(coll, right)))
             });
         }
         if items.len() > cap {

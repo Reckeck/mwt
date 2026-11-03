@@ -20,7 +20,12 @@ RecordStamps { created: Stamp, fields: { field name -> Stamp } }
 - A field stamp is stored only if the field was edited after the record was
   created; otherwise the field is "as created".
 - The clock never goes back (`Clock::tick_at`) and takes in every stamp it sees
-  (`observe`), so the next local edit sorts after anything received.
+  (`observe`), so the next local edit sorts after anything received. It ignores
+  a stamp more than 24 hours ahead (`SKEW_REFUSE_MS`): such a record is stored
+  with its stamp, but the clock does not follow it, so one bad device clock
+  cannot push every later stamp past the limit. A vault already poisoned that
+  way is clamped when it opens, and an own peer entry stamped beyond the limit
+  is re-stamped with a fresh tick before it is sent.
 - `SyncState` holds: `stamps` (`collection:key` to `RecordStamps`), `tombstones`,
   `tombstones_seen` (local time a deletion arrived here, never synced),
   `peers`, `batches` (undo, last 20 and not older than 7 days), `transfers`,
@@ -145,7 +150,7 @@ fails the test `every_vault_field_has_a_sync_rule`.
 |---|---|---|
 | `Records` | records by key, merge per field, deletion is a tombstone | stores (accounts), transactions, categories, contacts, budgets, goals, reminders, price_alerts, categorization_rules, utility_items, meter_readings, enrichments, manual_prices, envelopes, debt_terms, shared_events, key_rates, pending_imports, workflows, workflow_vars, workflow_queue, workflow_state, workflow_waits, calc_scenarios, inflation_points, asset_classes, asset_class_of, valuations, tx_properties, data_sources, asset_price_sources, deposit_rate_sources, attachments, attachment_keys |
 | `Single` | one object whose fields merge like a record's | settings, exchanges, emergency_fund, health_last |
-| `Log { cap, order }` | merged like `Records`, then ordered by a time field and cut to a cap; trimming is not a deletion | notification_log (500, `delivered_at`), workflow_runs (1000, `started_at`), import_runs (500, `at`) |
+| `Log { cap, order }` | merged like `Records`, then ordered by a time field (ties broken by key, so every device keeps the same records) and cut to a cap; trimming is not a deletion. A record the cap cuts at once is not counted as added and makes no batch entry, but it is still requested each session | notification_log (500, `delivered_at`), workflow_runs (1000, `started_at`), import_runs (500, `at`) |
 | `Union { cap }` | union of immutable points, no stamps | price_cache, fx_cache (first session sends 90 days), discarded_imports (cap 20 000) |
 | not synced (`LOCAL`) | identity, schema and derived data | `version`, `id`, `created_at`, `holdings` (recomputed), `sync` |
 
@@ -193,9 +198,25 @@ them. On open, old previews of these fields are masked too (idempotently).
 A tombstone is the stamp of a deletion, kept so the record does not come back
 from a device that still has it.
 
-- A tombstone is compacted after 180 days (`TOMBSTONE_DAYS`) **and** only when
-  every trusted, non-revoked device has synced since. A device that never
-  synced counts as "not yet", so its tombstones are kept.
+- A tombstone is compacted only when it is older than 180 days
+  (`TOMBSTONE_DAYS`) **and** every gating device has it. Having synced is not
+  enough: `last_synced_at` only says this device applied the peer's records.
+- **Acks come from the manifest, with no wire change.** When a peer's manifest
+  arrives (and the exchange is applied, so a declined session acks nothing),
+  every local tombstone whose digest it contains is acked by that peer.
+  `SyncState.tombstone_acks` (device id to `acked_through`, device-local, never
+  sent) keeps the largest `counted` time such that every local tombstone up to
+  it is in the peer's manifest. It never decreases. A missing entry (an old
+  vault, a new peer) means 0, so tombstones are kept until the next session.
+- **Gating devices** are the trusted ones and, for 365 days
+  (`REVOKED_GATE_DAYS`) after the revocation stamp, the forgotten ones too.
+  Past that a re-paired device can bring deleted records back.
+- A tombstone older than 180 days that arrives for a key with no local value and
+  no local tombstone (a compacted deletion coming back from a device that kept
+  it) is dropped: it is not stored, does not restart the age, and alone makes no
+  batch, journal line or sync event. The peer still lists the key in its
+  manifest, so it is requested again each session; the manifest has no age to
+  filter it earlier.
 - The age counts from the later of the deletion stamp and the local time it
   arrived here (`tombstones_seen`). A deletion that arrives late is not
   compacted at once, so the record cannot resurrect from other devices.
@@ -203,8 +224,14 @@ from a device that still has it.
   a deletion. A real deletion in a log (for example forgetting a run) goes
   through `sync_forget_log_record`, which writes a tombstone and offers the key
   to a live session.
-- A deletion older than the retention on one side can come back from a device
-  that was offline longer than that.
+- An old peer without acks (a build before this rule) is not a problem for the
+  new side: it simply keeps its tombstones until the peer's manifest holds them.
+- A deletion from a Log (undo of an added record, deleting a budget with its
+  notices) goes through the same tombstone path. A Union point cannot be
+  deleted.
+- A deletion that passed both the 180 days and the acks of every gating device
+  cannot come back. One older than 365 days from a forgotten device that is
+  paired again can.
 
 ## Caches (price_cache, fx_cache)
 

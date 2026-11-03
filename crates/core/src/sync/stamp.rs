@@ -36,6 +36,11 @@ impl Stamp {
     }
 }
 
+/// How far ahead of the wall clock a stamp may be and still move a clock, and
+/// the skew at which devices refuse to sync (`session::SKEW_REFUSE_MS` is this).
+/// A record stamped beyond it is stored as it is, but never drags a clock along.
+pub const MAX_FUTURE_MS: u64 = 24 * 3600 * 1000;
+
 /// The part of a device id a stamp carries.
 pub fn device_tag(device_id: &str) -> String {
     device_id
@@ -95,7 +100,17 @@ impl Clock {
     }
 
     /// Take in a stamp from elsewhere, so the next local change sorts after it.
+    /// A stamp further ahead of the wall clock than [`MAX_FUTURE_MS`] is not
+    /// followed: one device with a wrong date must not poison every other.
     pub fn observe(&mut self, stamp: &Stamp) {
+        self.observe_at(stamp, now_ms());
+    }
+
+    /// [`Clock::observe`] with an explicit `now` (ms).
+    pub fn observe_at(&mut self, stamp: &Stamp, now: u64) {
+        if stamp.wall > now.saturating_add(MAX_FUTURE_MS) {
+            return;
+        }
         if (stamp.wall, stamp.count) > (self.wall, self.count) {
             self.wall = stamp.wall;
             self.count = stamp.count;
@@ -131,5 +146,20 @@ mod tests {
         clock.observe(&Stamp::new(500, 3, "zz"));
         let next = clock.tick_at(10);
         assert!(next > Stamp::new(500, 3, "zz"));
+    }
+
+    #[test]
+    fn a_stamp_beyond_the_limit_is_not_followed() {
+        let mut clock = Clock::new("a");
+        clock.observe_at(&Stamp::new(1_000 + MAX_FUTURE_MS + 1, 0, "zz"), 1_000);
+        let next = clock.tick_at(1_000);
+        assert_eq!(next.wall, 1_000);
+    }
+
+    #[test]
+    fn a_stamp_at_the_limit_is_followed() {
+        let mut clock = Clock::new("a");
+        clock.observe_at(&Stamp::new(1_000 + MAX_FUTURE_MS, 0, "zz"), 1_000);
+        assert_eq!(clock.tick_at(1_000).wall, 1_000 + MAX_FUTURE_MS);
     }
 }
