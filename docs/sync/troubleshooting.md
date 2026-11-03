@@ -85,13 +85,26 @@ source (the loan), not only by the date.
 - Trust is kept. The pair joins by itself after the update.
 - "an old version" means that device runs a build that does not report its
   version.
-- Records are not lost. A deletion older than the retention window on one side
-  can come back from the other after the update.
+- Records are not lost. Update every device: an old build keeps its own
+  tombstone rules and can still bring back a deletion.
+
+## Deleted records came back
+
+- Deletions stay for as long as some trusted device may not have them, and for a
+  year after a device is forgotten. If a forgotten device is paired again after
+  more than a year, records deleted meanwhile can return: delete them again.
+- A mixed pair with an old build can bring a deletion back until both devices
+  are updated.
 
 ## A clock warning, or every change waits for confirmation
 
 - A skew of up to 5 minutes is normal. Up to 24 hours you get a warning; more is
   a refusal (`SYNC_CLOCK_SKEW`).
+- A device whose clock is far in the future (more than 24 hours) no longer
+  pushes the others' clocks along: its records are stored, but later edits and
+  revocations still sort normally. Its own entries are re-stamped. Fix the
+  date on that device. The log line "peer entry for device <id> skipped: its stamp is
+  too far ahead" names the device.
 - If a device's time jumped during a session, it is "temporarily untrusted": every
   batch from it waits for you. Fix the date and time on that device (turn on
   automatic time) and reconnect.

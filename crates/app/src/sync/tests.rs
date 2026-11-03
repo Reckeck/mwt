@@ -34,6 +34,9 @@ struct Inner {
     versions: Mutex<(u32, u32)>,
     /// What this device announces as its app version.
     app_version: Mutex<String>,
+    /// How often `become_main` / `demote` were called.
+    took_main: std::sync::atomic::AtomicUsize,
+    demoted: std::sync::atomic::AtomicUsize,
 }
 
 #[derive(Clone)]
@@ -68,8 +71,16 @@ impl Host for TestHost {
     }
 
     fn deliver(&self, _notices: Vec<NoticeRecord>) {}
-    fn become_main(&self) {}
-    fn demote(&self) {}
+    fn become_main(&self) {
+        self.0
+            .took_main
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+    fn demote(&self) {
+        self.0
+            .demoted
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
     fn main_lost(&self, generation: u64) {
         self.0.lost.lock().unwrap().push(generation);
     }
@@ -110,6 +121,8 @@ fn device(name: &str, mut vault: UnlockedVault, role: SyncRole) -> (TestHost, Ev
             trade_core::VAULT_FORMAT_VERSION,
         )),
         app_version: Mutex::new(env!("CARGO_PKG_VERSION").to_string()),
+        took_main: Default::default(),
+        demoted: Default::default(),
     }));
     vault.set_device(&settings.device_id);
     vault.set_sync_tap(Some(Arc::new(Tap(host.clone()))));
@@ -1774,4 +1787,154 @@ async fn a_forgotten_device_can_pair_again() {
     until("paired and live", || live(&laptop) && live(&phone)).await;
     assert!(trusted(&phone, &laptop_id));
     assert_eq!(comments(&phone), comments(&laptop));
+}
+
+/// A laptop with one operation and a phone that asks about the list. While
+/// the first question is open `then(laptop, phone)` runs, and the answer
+/// (accept) waits `hold` for its effects. `phone_setup` runs before connecting.
+async fn question_with(
+    phone_setup: impl FnOnce(&TestHost),
+    hold: Duration,
+    then: impl Fn(&TestHost, &TestHost) + Send + 'static,
+) -> (TestHost, TestHost, Seen) {
+    let dir = tempfile::tempdir().unwrap();
+    let (left, right) = same_vault(dir.path());
+    let (main, main_events) = device("Laptop", left, SyncRole::Main);
+    let (client, client_events) = device("Phone", right, SyncRole::Client);
+    seed(&main, "first");
+    client.0.settings.lock().unwrap().sync.confirm_first = true;
+    phone_setup(&client);
+    let _main_seen = responder(main.clone(), main_events, Some(true));
+    let (laptop, phone) = (main.clone(), client.clone());
+    let seen = hooked(client.clone(), client_events, move |number, _total| {
+        if number == 1 {
+            then(&laptop, &phone);
+            std::thread::sleep(hold);
+        }
+        Some(true)
+    });
+    std::mem::forget(dir);
+    connect(&main, &client).await;
+    (main, client, seen)
+}
+
+fn device_id_of(host: &TestHost) -> String {
+    host.settings().device_id
+}
+
+async fn bounded(what: &str, work: impl std::future::Future<Output = ()>) {
+    tokio::time::timeout(Duration::from_secs(30), work)
+        .await
+        .unwrap_or_else(|_| panic!("timed out: {what}"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_revocation_during_the_question_is_not_lost() {
+    // The laptop's list says the laptop's own key was forgotten (another
+    // device did it) and the laptop sends that list while the phone asks.
+    let (_main, client, seen) = question_with(
+        |_| {},
+        Duration::from_millis(800),
+        |laptop, phone| {
+            let laptop_key = trade_core::sync::session::hex(&laptop.0.key.public);
+            let mut entry = phone
+                .with_vault(|vault| {
+                    Ok(vault
+                        .sync_state()
+                        .peers
+                        .iter()
+                        .find(|peer| peer.public_key == laptop_key)
+                        .cloned())
+                })
+                .unwrap()
+                .expect("the phone trusts the laptop after pairing");
+            let stamp = trade_core::sync::stamp::Stamp::new(
+                trade_core::sync::stamp::now_ms() + 60_000,
+                0,
+                "zzzzzzzz",
+            );
+            entry.revoked = Some(stamp.clone());
+            entry.stamp = stamp;
+            laptop
+                .with_vault(|vault| vault.sync_merge_peers(&[entry]))
+                .unwrap();
+            let session = laptop.hub().links.keys().next().cloned().unwrap();
+            super::send(laptop, &session, Order::SendPeers);
+        },
+    )
+    .await;
+    bounded("the revocation is noticed", async {
+        until("the phone reports the revocation", || {
+            has(&seen.errors, "SYNC_REVOKED")
+        })
+        .await;
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    assert!(
+        comments(&client).is_empty(),
+        "nothing is applied after the revocation"
+    );
+    assert!(client.hub().links.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_peer_forgotten_during_the_question_is_not_applied() {
+    let (_main, client, _seen) = question_with(
+        |_| {},
+        Duration::from_millis(300),
+        |laptop, phone| {
+            let id = device_id_of(laptop);
+            phone
+                .with_vault(|vault| vault.sync_forget_peer(&id))
+                .unwrap();
+        },
+    )
+    .await;
+    bounded("the link closes", async {
+        until("the phone link is gone", || client.hub().links.is_empty()).await;
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(
+        comments(&client).is_empty(),
+        "a forgotten peer's batch is dropped"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn take_main_outside_live_is_not_dropped() {
+    let demoted_early = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = demoted_early.clone();
+    let (main, client, _seen) = question_with(
+        |phone| phone.0.settings.lock().unwrap().sync.prefer_main = true,
+        Duration::from_millis(900),
+        move |laptop, _phone| {
+            // The question has been open for a while by now: the laptop is
+            // live and has handed the role over.
+            std::thread::sleep(Duration::from_millis(700));
+            if laptop.0.demoted.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        },
+    )
+    .await;
+    bounded("the phone takes the main role", async {
+        until("the phone became main", || {
+            client.0.took_main.load(std::sync::atomic::Ordering::SeqCst) == 1
+        })
+        .await;
+    })
+    .await;
+    bounded("the laptop steps down", async {
+        until("the laptop demoted", || {
+            main.0.demoted.load(std::sync::atomic::Ordering::SeqCst) == 1
+        })
+        .await;
+    })
+    .await;
+    assert!(
+        !demoted_early.load(std::sync::atomic::Ordering::SeqCst),
+        "the main device must not step down before the client answered"
+    );
 }

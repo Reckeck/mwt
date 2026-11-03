@@ -2402,6 +2402,7 @@
   "whatsNew.syncRepair.laterRecords": "If new records arrive while the question about a list of changes is open, they are not applied with your answer: a second list with only them follows. An empty second list asks nothing.",
   "whatsNew.syncRepair.duplicates": "Repeated operations and reminders now keep edits: fields changed later in the copy that goes are moved into the one that stays, and undoing the batch brings both copies back. A device on an older version can still lose an edited copy, so update the app on every device.",
   "whatsNew.syncRepair.runOnce": "A scheduled workflow, a transaction trigger, a question and a reminder now run once across devices, even when two devices fire the same job. Two loans on one day keep two reminders. Update the app on every device: an older version can still create duplicates.",
+  "whatsNew.syncRepair.deletionsStay": "Deleted records no longer come back after a long break or after pairing a forgotten device again (within a year). Update the app on every device: an older version can still bring a deletion back.",
   "whatsNew.togetherEvents.title": "“Together” events",
   "whatsNew.togetherEvents.create": "Money → Together: events with a day or a range of days, people from your contacts and guests.",
   "whatsNew.togetherEvents.items": "The plan against what was bought: “Bought”, the difference from the plan, purchases off the plan; a purchase of yours becomes a payment by itself.",

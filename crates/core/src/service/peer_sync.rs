@@ -21,7 +21,9 @@ use crate::storage::VaultFile;
 use crate::sync::journal::SyncJournalOutcome;
 use crate::sync::manifest::{Manifest, digest};
 use crate::sync::registry::Rule;
-use crate::sync::state::{BATCH_DAYS, CutBy, MAX_BATCHES, TOMBSTONE_DAYS};
+use crate::sync::state::{
+    BATCH_DAYS, CutBy, MAX_BATCHES, REVOKED_GATE_DAYS, TOMBSTONE_DAYS, acked_through,
+};
 use crate::sync::track::Tracker;
 use crate::sync::view::{self, record_key, split_key};
 use crate::sync::{BatchEntry, RecordState, Stamp, SyncBatch, SyncSummary, TrustedPeer};
@@ -96,10 +98,48 @@ impl UnlockedVault {
         }
         let value = self.doc_value()?;
         self.tracker = Some(Tracker::capture(&value));
-        if let Some(latest) = self.doc.sync.latest_stamp().cloned() {
+        // A poisoned stamp (a record from a wrong clock) stays stored, but the
+        // clock starts after the latest one that is plausible.
+        let limit = crate::sync::stamp::now_ms().saturating_add(crate::sync::stamp::MAX_FUTURE_MS);
+        if let Some(latest) = self.doc.sync.latest_stamp_within(limit).cloned() {
             self.clock.observe(&latest);
         }
         Ok(())
+    }
+
+    /// Our own peer entries (a revocation or trust made while the clock was
+    /// poisoned) stamped beyond the limit would be skipped by every peer.
+    /// Give them a fresh bounded stamp. True when something changed.
+    fn restamp_poisoned_peers(&mut self) -> bool {
+        let now = crate::sync::stamp::now_ms();
+        let limit = now.saturating_add(crate::sync::stamp::MAX_FUTURE_MS);
+        let mine = self.clock.device().to_string();
+        let mut changed = false;
+        for index in 0..self.doc.sync.peers.len() {
+            let entry = &self.doc.sync.peers[index];
+            if entry.stamp.wall <= limit || entry.stamp.device != mine {
+                continue;
+            }
+            let stamp = self.clock.tick_at(now);
+            let entry = &mut self.doc.sync.peers[index];
+            if entry.revoked.is_some() {
+                entry.revoked = Some(stamp.clone());
+            }
+            entry.stamp = stamp;
+            changed = true;
+        }
+        changed
+    }
+
+    /// The trusted devices as they go on the wire. Re-stamps our own entries
+    /// that a poisoned clock pushed beyond the limit, here (the single exit
+    /// toward peers) and not only at open, because the device id is set after
+    /// open and an entry can also arrive in a copy.
+    pub fn sync_peers_to_send(&mut self) -> Result<Vec<TrustedPeer>> {
+        if self.restamp_poisoned_peers() {
+            self.persist()?;
+        }
+        Ok(self.doc.sync.peers.clone())
     }
 
     /// Stamp what changed since the last save; the changed keys.
@@ -389,14 +429,45 @@ impl UnlockedVault {
         }
         let mut value = self.doc_value()?;
         let records = view::records(&value);
-        let plan = crate::sync::plan::plan(incoming, |key| self.state_of(&records, key));
+        // A deletion old enough to be compacted, for a key this device knows
+        // nothing about, is not news: the senders had it acked everywhere
+        // else. Storing it would only restart its age.
+        let incoming = &self.without_compacted(incoming, &records);
+        let mut plan = crate::sync::plan::plan(incoming, |key| self.state_of(&records, key));
         if plan.changes.is_empty() {
             return Ok(None);
         }
+        let mut applied_value = value.clone();
         for (key, change) in &plan.changes {
-            view::write(&mut value, key, change.after.value.as_ref());
+            view::write(&mut applied_value, key, change.after.value.as_ref());
         }
-        view::trim(&mut value);
+        view::trim(&mut applied_value);
+        // A record the cap cuts at once is not news: plan again without it,
+        // so it is neither counted nor listed.
+        let kept = view::records(&applied_value);
+        let cut: Vec<&String> = plan
+            .changes
+            .iter()
+            .filter(|(key, change)| change.after.value.is_some() && !kept.contains_key(*key))
+            .map(|(key, _)| key)
+            .collect();
+        if !cut.is_empty() {
+            let rest: BTreeMap<String, RecordState> = incoming
+                .iter()
+                .filter(|(key, _)| !cut.contains(key))
+                .map(|(key, state)| (key.clone(), state.clone()))
+                .collect();
+            plan = crate::sync::plan::plan(&rest, |key| self.state_of(&records, key));
+            if plan.changes.is_empty() {
+                return Ok(None);
+            }
+            applied_value = value.clone();
+            for (key, change) in &plan.changes {
+                view::write(&mut applied_value, key, change.after.value.as_ref());
+            }
+            view::trim(&mut applied_value);
+        }
+        value = applied_value;
         // Rebuilding the typed document is the schema check: a record that
         // does not fit fails here and nothing is applied.
         let mut doc: VaultDoc = serde_json::from_value(value.clone())
@@ -476,6 +547,32 @@ impl UnlockedVault {
         self.recompute_holdings();
         self.persist()?;
         Ok(Some(applied))
+    }
+
+    /// `incoming` without the deletions that were already compacted: tombstone
+    /// only, older than `TOMBSTONE_DAYS`, for a key with no value and no
+    /// tombstone here.
+    fn without_compacted(
+        &self,
+        incoming: &BTreeMap<String, RecordState>,
+        records: &BTreeMap<String, Value>,
+    ) -> BTreeMap<String, RecordState> {
+        let cutoff = crate::sync::stamp::now_ms().saturating_sub(day_ms(TOMBSTONE_DAYS));
+        incoming
+            .iter()
+            .filter(|(key, state)| {
+                let old_deletion = state.value.is_none()
+                    && state.stamps.is_none()
+                    && state
+                        .tombstone
+                        .as_ref()
+                        .is_some_and(|stamp| stamp.wall < cutoff);
+                let unknown =
+                    !records.contains_key(*key) && !self.doc.sync.tombstones.contains_key(*key);
+                !(old_deletion && unknown)
+            })
+            .map(|(key, state)| (key.clone(), state.clone()))
+            .collect()
     }
 
     /// Read another copy of this vault (its sealed bytes) without locking,
@@ -710,10 +807,21 @@ impl UnlockedVault {
         let mut value = self.doc_value()?;
         let records = view::records(&value);
         let mut report = UndoReport::default();
+        // Log records the batch added: removed with a tombstone, or the peer
+        // would send them back.
+        let mut forgotten = Vec::new();
         for entry in &entries {
             let current = self.state_of(&records, &entry.key);
-            if current.same_marks(&entry.after) {
+            let union = split_key(&entry.key)
+                .is_some_and(|(coll, _)| matches!(coll.rule, Rule::Union { .. }));
+            if !union && current.same_marks(&entry.after) {
                 view::write(&mut value, &entry.key, entry.before.value.as_ref());
+                let added_log = entry.before.value.is_none()
+                    && split_key(&entry.key)
+                        .is_some_and(|(coll, _)| matches!(coll.rule, Rule::Log { .. }));
+                if added_log {
+                    forgotten.push(entry.key.clone());
+                }
                 report.restored += 1;
             } else if let Some((coll, inner)) = split_key(&entry.key) {
                 let shown = current
@@ -733,6 +841,9 @@ impl UnlockedVault {
         doc.sync = std::mem::take(&mut self.doc.sync);
         doc.sync.batches[index].undone_at = Some(now_iso());
         self.doc = doc;
+        for key in &forgotten {
+            self.sync_forget_log_record(key)?;
+        }
         // An undone mark must not make a booked moment fire again.
         self.keep_schedule_marks();
         self.recompute_holdings();
@@ -750,30 +861,36 @@ impl UnlockedVault {
         self.doc.sync.batches.drain(..extra);
     }
 
-    /// Forget deletions old enough that every trusted device has synced since.
+    /// Forget deletions old enough that every device that counts has them.
     /// A deletion counts from the later of its own stamp and the time it
     /// reached this device: one that arrives late is not compacted at once.
+    /// Counting devices are the trusted ones and those forgotten less than
+    /// `REVOKED_GATE_DAYS` ago; each must have acked the deletion (its manifest
+    /// held it, see `sync_ack_tombstones`). No ack yet means keep.
     fn compact_tombstones(&mut self) {
-        let cutoff = crate::sync::stamp::now_ms().saturating_sub(day_ms(TOMBSTONE_DAYS));
-        let peers: Vec<u64> = self
-            .doc
-            .sync
+        let now = crate::sync::stamp::now_ms();
+        let cutoff = now.saturating_sub(day_ms(TOMBSTONE_DAYS));
+        let revoked_cutoff = now.saturating_sub(day_ms(REVOKED_GATE_DAYS));
+        let sync = &mut self.doc.sync;
+        let acks: Vec<u64> = sync
             .peers
             .iter()
-            .filter(|peer| peer.revoked.is_none())
+            .filter(|peer| {
+                peer.revoked
+                    .as_ref()
+                    .is_none_or(|revoked| revoked.wall >= revoked_cutoff)
+            })
             .map(|peer| {
-                peer.last_synced_at
-                    .as_deref()
-                    .map(crate::model::vault::iso_to_millis)
-                    .and_then(|ms| u64::try_from(ms).ok())
+                sync.tombstone_acks
+                    .get(&peer.device_id)
+                    .copied()
                     .unwrap_or(0)
             })
             .collect();
-        let sync = &mut self.doc.sync;
         let seen = &sync.tombstones_seen;
         sync.tombstones.retain(|key, stamp| {
             let counted = stamp.wall.max(seen.get(key).copied().unwrap_or(0));
-            counted >= cutoff || peers.iter().any(|synced| *synced <= counted)
+            counted >= cutoff || acks.iter().any(|acked| *acked < counted)
         });
         let tombstones = &sync.tombstones;
         sync.tombstones_seen
@@ -1062,6 +1179,7 @@ impl UnlockedVault {
         // Paired afresh: whatever it told us before no longer holds.
         self.doc.sync.cut_by.remove(device_id);
         self.doc.sync.paused.remove(device_id);
+        self.doc.sync.tombstone_acks.remove(device_id);
         self.persist()
     }
 
@@ -1113,9 +1231,8 @@ impl UnlockedVault {
     /// Take in another device's list of trusted devices.
     pub fn sync_merge_peers(&mut self, remote: &[TrustedPeer]) -> Result<bool> {
         let now = crate::sync::stamp::now_ms();
-        let limit = now.saturating_add(crate::sync::session::SKEW_REFUSE_MS);
-        for peer in remote.iter().filter(|peer| peer.stamp.wall <= limit) {
-            self.clock.observe(&peer.stamp);
+        for peer in remote {
+            self.clock.observe_at(&peer.stamp, now);
         }
         let changed = self.doc.sync.merge_peers(remote, now);
         if changed {
@@ -1180,6 +1297,34 @@ impl UnlockedVault {
 
     pub fn sync_cut_reason(&self, device_id: &str) -> Option<SyncCutReason> {
         self.doc.sync.cut_by.get(device_id).map(|cut| cut.reason)
+    }
+
+    /// Record what the manifest `theirs` of `device_id` vouches for: how far
+    /// our deletions are all in it. Call it only for an exchange that was
+    /// applied: a declined or failed one proves nothing. Never goes down.
+    pub fn sync_ack_tombstones(&mut self, device_id: &str, theirs: &Manifest) -> Result<()> {
+        let ours = self.sync_manifest(None)?;
+        let sync = &self.doc.sync;
+        let deletions: Vec<(u64, &str, u64)> = sync
+            .tombstones
+            .iter()
+            .filter_map(|(key, stamp)| {
+                let counted = stamp
+                    .wall
+                    .max(sync.tombstones_seen.get(key).copied().unwrap_or(0));
+                Some((counted, key.as_str(), *ours.get(key)?))
+            })
+            .collect();
+        let previous = sync.tombstone_acks.get(device_id).copied().unwrap_or(0);
+        let acked = acked_through(deletions, theirs, previous);
+        if acked != previous {
+            self.doc
+                .sync
+                .tombstone_acks
+                .insert(device_id.to_string(), acked);
+            self.persist()?;
+        }
+        Ok(())
     }
 
     /// Note a finished exchange with a device (not synced as a change).
@@ -1270,6 +1415,10 @@ fn applied_of(batch: &SyncBatch) -> AppliedBatch {
 }
 
 #[cfg(test)]
+mod clock_tests;
+#[cfg(test)]
+mod log_tests;
+#[cfg(test)]
 mod marks_tests;
 #[cfg(test)]
 mod preview_tests;
@@ -1277,6 +1426,8 @@ mod preview_tests;
 mod reminder_tests;
 #[cfg(test)]
 mod run_key_tests;
+#[cfg(test)]
+mod tombstone_tests;
 #[cfg(test)]
 mod transfer_tests;
 
@@ -1873,7 +2024,10 @@ mod tests {
         let batch = applied.expect("left received prices");
         assert!(left.doc.price_cache.len() < 800);
         let report = left.sync_undo(&batch.id).unwrap();
-        assert!(report.restored > 0);
+        // Cached points are a union: it has no deletion, so undo lists them
+        // as skipped instead of removing what a peer would send back.
+        assert_eq!(report.restored, 0);
+        assert!(!report.skipped.is_empty());
         assert!(left.doc.price_cache.len() <= 800);
         // The next thinning cuts anything the undo brought back.
         let mut again = left.doc.price_cache.clone();
@@ -2251,7 +2405,24 @@ mod tests {
     fn a_deletion_that_arrives_late_survives_the_compaction_of_the_same_apply() {
         let (_dir, mut left, _right) = two_devices();
         let old = crate::sync::stamp::now_ms() - 200 * 24 * 3600 * 1000;
-        let key = "contacts:gone".to_string();
+        // The record is still here (stamped before the deletion), so the
+        // deletion is news; one for an unknown key is dropped (see
+        // `tombstone_tests`).
+        let contact = left
+            .create_contact(crate::service::contacts::ContactDraft {
+                name: "Gone".into(),
+                kind: crate::model::contact::ContactKind::Person,
+                note: String::new(),
+                accounts: Vec::new(),
+                group: String::new(),
+            })
+            .unwrap();
+        let key = format!("contacts:{}", contact.id);
+        left.doc.sync.stamps.insert(
+            key.clone(),
+            crate::sync::RecordStamps::created(Stamp::new(old - 1000, 0, "aaaaaaaa")),
+        );
+        left.persist().unwrap();
         let incoming: BTreeMap<String, RecordState> = [(
             key.clone(),
             RecordState {

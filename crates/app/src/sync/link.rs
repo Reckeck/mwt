@@ -6,6 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -205,6 +206,11 @@ struct Peer {
     /// The vault this session was opened for (taken at the hello): a vault
     /// switched under a running session must not receive its records.
     vault_id: String,
+    /// The other side handed the main role over while this session was not
+    /// live yet (pairing, exchange, a question): done when `live` starts.
+    take_main_heard: AtomicBool,
+    /// Same for the order to hand it over (`hand_over_if_preferred`).
+    take_main_ordered: AtomicBool,
 }
 
 /// Merge the other side's trusted devices and tell the other links; whether
@@ -492,6 +498,8 @@ async fn session<H: Host>(
         name: theirs.device_name.clone(),
         remote_key,
         vault_id: vault_id.clone(),
+        take_main_heard: AtomicBool::new(false),
+        take_main_ordered: AtomicBool::new(false),
     };
 
     let mut reason = None;
@@ -553,6 +561,10 @@ async fn pair<H: Host>(
     let deadline = tokio::time::sleep(PAIRING_TIMEOUT);
     tokio::pin!(deadline);
     let (mut shown, mut mine, mut theirs) = (false, false, false);
+    // The other side's list of devices is not merged from a device nobody has
+    // confirmed yet (that would let it add trusted devices): kept, and taken
+    // in once the pairing is through.
+    let mut held_peers: Option<Vec<trade_core::sync::TrustedPeer>> = None;
     // The pairing was asked for before this point: the user's ("Pair
     // again") or the other side's request that opened the session.
     if ask_now || asked {
@@ -588,10 +600,15 @@ async fn pair<H: Host>(
                     }
                     mine = true;
                 }
+                Some(Order::TakeMain) => peer.take_main_ordered.store(true, Ordering::SeqCst),
+                // The exchange that follows the pairing sends our list anyway,
+                // and nothing is told to a device that is not confirmed.
                 Some(Order::Close) | None => return Err(Stop::Quiet),
                 Some(_) => {}
             },
             message = wire.next() => match message? {
+                Some(Message::Peers { peers }) => held_peers = Some(peers),
+                Some(Message::TakeMain) => peer.take_main_heard.store(true, Ordering::SeqCst),
                 Some(Message::PairRequest) => {
                     if !shown {
                         shown = true;
@@ -618,6 +635,11 @@ async fn pair<H: Host>(
             app.with_vault(|vault| {
                 vault.sync_trust_peer(&peer.device_id, &peer.name, &peer.remote_key)
             })?;
+            if let Some(peers) = held_peers.take()
+                && take_peers(app, peer, &peers)?
+            {
+                return Err(failure(PeerSyncFailure::Revoked));
+            }
             return Ok(());
         }
     }
@@ -727,7 +749,7 @@ async fn exchange<H: Host>(
     pending: &mut BTreeSet<String>,
 ) -> Flow<()> {
     set_phase(app, &peer.session_id, SyncPhase::Exchanging);
-    let peers = app.with_vault(|vault| Ok(vault.sync_state().peers.clone()))?;
+    let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
     wire.send(&Message::Peers { peers }).await?;
     let since = now_ms().saturating_sub(UNION_DAYS * 24 * 3600 * 1000);
     let mine = app.with_vault(|vault| vault.sync_manifest(Some(since)))?;
@@ -758,7 +780,9 @@ async fn exchange<H: Host>(
             order = orders.recv() => match order {
                 Some(Order::Changed(keys)) => pending.extend(keys),
                 Some(Order::Presence(focused)) => wire.send(&Message::Presence { focused }).await?,
+                Some(Order::TakeMain) => peer.take_main_ordered.store(true, Ordering::SeqCst),
                 Some(Order::Close) | None => return Err(Stop::Quiet),
+                // `live` starts with a fresh list.
                 Some(_) => {}
             },
             message = wire.next() => match message? {
@@ -767,6 +791,7 @@ async fn exchange<H: Host>(
                         return Err(failure(PeerSyncFailure::Revoked));
                     }
                 }
+                Some(Message::TakeMain) => peer.take_main_heard.store(true, Ordering::SeqCst),
                 Some(Message::Manifest { entries, last }) => {
                     theirs.extend(entries);
                     if last {
@@ -810,6 +835,9 @@ async fn exchange<H: Host>(
     apply(app, wire, orders, peer, watch, incoming, reason, pending).await?;
     app.with_vault(|vault| {
         vault.sync_mark_synced(&peer.device_id)?;
+        // Only an applied exchange vouches for our deletions: its manifest
+        // says which of them the peer holds.
+        vault.sync_ack_tombstones(&peer.device_id, &theirs)?;
         // It talks to us again: whatever it told us before is over.
         vault.sync_clear_cut(&peer.device_id).map(|_| ())
     })?;
@@ -946,6 +974,11 @@ async fn apply_shown<H: Host>(
                         Some(Order::Decide(accept)) => break Some(accept),
                         Some(Order::Changed(keys)) => pending.extend(keys),
                         Some(Order::Presence(focused)) => wire.send(&Message::Presence { focused }).await?,
+                        Some(Order::TakeMain) => peer.take_main_ordered.store(true, Ordering::SeqCst),
+                        Some(Order::SendPeers) => {
+                            let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
+                            wire.send(&Message::Peers { peers }).await?;
+                        }
                         Some(Order::Close) | None => return Err(Stop::Quiet),
                         Some(_) => {}
                     },
@@ -954,6 +987,15 @@ async fn apply_shown<H: Host>(
                             check_stamps(app, peer, watch, &records);
                             held.extend(records);
                         }
+                        Some(Message::Peers { peers }) => {
+                            if take_peers(app, peer, &peers)? {
+                                // Forgotten while the question was open: the
+                                // question closes, nothing is applied.
+                                update_link(app, &peer.session_id, |link| link.view.plan = None);
+                                return Err(failure(PeerSyncFailure::Revoked));
+                            }
+                        }
+                        Some(Message::TakeMain) => peer.take_main_heard.store(true, Ordering::SeqCst),
                         Some(Message::Time { now_ms: remote }) => {
                             if watch.observe(remote, now_ms()).is_some() {
                                 mark_unreliable(app, peer, watch);
@@ -1003,11 +1045,20 @@ async fn apply_shown<H: Host>(
         device_id: peer.device_id.clone(),
         name: peer.name.clone(),
     };
+    let mut dropped = false;
     let applied = app.with_vault(|vault| {
         // Checked in the same step as the write: a vault switched under the
         // session gets nothing.
         if vault.doc.id != peer.vault_id {
             return Ok(None);
+        }
+        // The question can be open for minutes: a device forgotten meanwhile
+        // (here, or through another link) gets nothing.
+        if vault.sync_state().trusted(&peer.remote_key).is_none() {
+            let summary = vault.sync_preview(&incoming).unwrap_or_default();
+            vault.sync_journal_record(&peer.name, &summary, SyncJournalOutcome::Declined)?;
+            dropped = true;
+            return Ok(Some(None));
         }
         if backup {
             vault.sync_backup()?;
@@ -1032,6 +1083,10 @@ async fn apply_shown<H: Host>(
             return Err(err.into());
         }
     };
+    if dropped {
+        update_link(app, &peer.session_id, |link| link.view.plan = None);
+        return Err(failure(PeerSyncFailure::Revoked));
+    }
     let Some(applied) = applied else {
         return Err(Stop::Quiet);
     };
@@ -1073,10 +1128,20 @@ async fn live<H: Host>(
     if let Some(run) = app.hub().run.as_mut() {
         run.retries = 0;
     }
-    hand_over_if_preferred(app, peer);
+    // Handed over while this session was still pairing or exchanging.
+    if peer.take_main_heard.swap(false, Ordering::SeqCst) {
+        app.become_main();
+    }
+    let mut handing_over = hand_over_if_preferred(app, peer);
+    if peer.take_main_ordered.swap(false, Ordering::SeqCst) {
+        wire.send(&Message::TakeMain).await?;
+        handing_over = true;
+    }
     super::send_presence(&mut app.hub());
     // SendPeers orders are dropped while exchanging: say where we stand now.
-    let peers = app.with_vault(|vault| Ok(vault.sync_state().peers.clone()))?;
+    // The client sends this right after taking the main role, so it is also
+    // the (wire-compatible) confirmation the main device waits for.
+    let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
     wire.send(&Message::Peers { peers }).await?;
 
     let mut flush_at = (!pending.is_empty()).then(|| Instant::now() + DEBOUNCE);
@@ -1112,7 +1177,7 @@ async fn live<H: Host>(
                 Some(Order::Presence(focused)) => wire.send(&Message::Presence { focused }).await?,
                 Some(Order::TakeMain) => wire.send(&Message::TakeMain).await?,
                 Some(Order::SendPeers) => {
-                    let peers = app.with_vault(|vault| Ok(vault.sync_state().peers.clone()))?;
+                    let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
                     wire.send(&Message::Peers { peers }).await?;
                 }
                 Some(Order::Close) | None => {
@@ -1142,8 +1207,19 @@ async fn live<H: Host>(
                         if take_peers(app, peer, &peers)? {
                             return Err(failure(PeerSyncFailure::Revoked));
                         }
+                        // The client that was handed the main role has taken
+                        // it (it lists its devices from `live` onwards): now
+                        // this device steps down.
+                        if std::mem::take(&mut handing_over) {
+                            app.demote();
+                        }
                     }
-                    Some(Message::TakeMain) => app.become_main(),
+                    Some(Message::TakeMain) => {
+                        app.become_main();
+                        // The answer the main device waits for before it steps down.
+                        let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
+                        wire.send(&Message::Peers { peers }).await?;
+                    }
                     Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),
                     None => return Err(Stop::Quiet),
                     Some(_) => {}
@@ -1154,8 +1230,11 @@ async fn live<H: Host>(
 }
 
 /// On the main device: a client that prefers the main role gets it, once
-/// its first exchange is through (never in the middle of a transfer).
-fn hand_over_if_preferred<H: Host>(app: &H, peer: &Peer) {
+/// its first exchange is through (never in the middle of a transfer). True
+/// when the order went out: stepping down waits for the client's answer (its
+/// first list of devices from `live`), because a client still in a question
+/// only queues the hand-over; closing its link now would end the question.
+fn hand_over_if_preferred<H: Host>(app: &H, peer: &Peer) -> bool {
     let prefer_here = app.settings().sync.prefer_main;
     let hand_over = {
         let hub = app.hub();
@@ -1169,13 +1248,8 @@ fn hand_over_if_preferred<H: Host>(app: &H, peer: &Peer) {
                 .get(&peer.session_id)
                 .is_some_and(|link| link.prefer_main && !link.to_main)
     };
-    if !hand_over {
-        return;
+    if hand_over {
+        super::send(app, &peer.session_id, Order::TakeMain);
     }
-    super::send(app, &peer.session_id, Order::TakeMain);
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        app.demote();
-    });
+    hand_over
 }

@@ -61,6 +61,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'laterRecords', route: 'settings:sync:sync-devices' },
       { key: 'duplicates', route: 'settings:sync:sync-devices' },
       { key: 'runOnce', route: 'settings:sync:sync-devices' },
+      { key: 'deletionsStay', route: 'settings:sync:sync-devices' },
     ],
   },
   {

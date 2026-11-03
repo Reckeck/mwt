@@ -69,6 +69,10 @@ flowchart TD
   question with the fresh diff; the second question has the same reason as the
   first. A held list that changes nothing asks nothing and is dropped. Held
   records are keyed by record, so they stay bounded by the vault.
+- **Revocation during the question.** `Peers` messages are handled while the
+  question is open. If the device is forgotten meanwhile, the question closes
+  and nothing is applied. The trust is checked once more right before
+  `sync_apply`; a device that is no longer trusted is recorded as declined.
 - **Decline** records "declined" in the sync journal and pauses exchange with the
   device (see [Pairing and trust](pairing.md)). The user presses Resume in the
   device list to ask again.
@@ -123,6 +127,14 @@ stamps **after**. `sync_undo(batch_id)`:
 The undo is a **new local edit** with fresh stamps, and it goes to the other
 devices. Two copies of one vault cannot diverge forever on one record: the
 restored state is the newest state everywhere.
+
+Undo and deletions:
+
+- A Log record the batch added (`before` is empty) is removed through the
+  tombstone path and counted as restored, so it does not come back from another
+  device.
+- A Union entry (a price or rate point, a discarded import) cannot be deleted.
+  It is listed in `skipped` with a reason and not counted as restored.
 
 What undo covers:
 

@@ -44,7 +44,14 @@ lacks:
 | Run keys | skips a booked key, merges duplicates by key or `planned_at` | may still run the same occasion twice |
 | Marks per trigger | merges `marks` entry by entry, never drops an entry the old map lacks, sends a whole-map head for the old side | stamps and sends the whole map |
 | Transaction cursor | device-local, ignores the incoming value | still sends and takes `tx_cursor` |
+| Tombstones | compacts only when every gating device (forgotten ones for 365 days) has them in its manifest, drops an old compacted tombstone coming back | compacts by its own rule (180 days and its own sync times) |
+| Peers during the question | merges them, re-checks trust before applying | drops `Peers` there |
+| Log ties | breaks ties by key, same records everywhere | keeps insertion order, may keep other records at the cap |
 | Reminder ids | `auto-<kind>-<entity>` | random ids; dedupe bridges both by source |
+
+The new side keeps tombstones longer, so a record deleted on the new side does
+not come back from an old peer that kept it. Nothing new goes on the wire:
+`SyncState.tombstone_acks` is device-local and a missing entry means "keep".
 
 A mixed pair converges: an old device that double-runs a job produces a
 duplicate, the new side merges it after the next exchange (two exchanges at
@@ -74,8 +81,8 @@ exchanged and nothing is changed in either vault.
   main as lost and takes part in a new election. Old devices exchange among
   themselves and new ones among themselves.
 - After the update, records merge per field by stamps, with no data lost. One
-  exception: a deletion older than the tombstone retention on one side can come
-  back from the other.
+  exception: a deletion that an old build already compacted can come back from
+  the other side until both are updated.
 
 ## Rules for every sync change
 
@@ -118,6 +125,7 @@ In `crates/core/src/sync/protocol.rs` and `crates/app/src/sync/tests.rs`:
 - It may run a scheduled job, a transaction trigger or a question a second time;
   the new side merges the result, but the old device may also post a duplicate
   that it never removes itself.
+- It compacts tombstones by its own rule, so a deletion can come back from it.
 - It re-sends thinned cache points every session.
 - It applies records that arrive during a change question together with the
   answer.

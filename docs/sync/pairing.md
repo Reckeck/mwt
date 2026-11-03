@@ -99,7 +99,9 @@ Merge rule (`SyncState::merge_peers`), per device id:
 
 - The entry with the larger `stamp` wins, provided it is about the same key, or
   either entry is a revocation.
-- An entry stamped more than 24 hours ahead of the local clock is skipped.
+- An entry stamped more than 24 hours ahead of the local clock is skipped, with
+  a stderr line naming the device id (no secrets).
+- `last_synced_at` is local bookkeeping and is not taken from the received entry.
 - A new device id whose key is currently revoked here is not added unless the
   incoming entry is itself a revocation.
 - The newest entry for a key decides whether it is trusted
@@ -123,6 +125,17 @@ here.)
 3. A revocation that arrives on a live session closes the session with the
    forgotten device (`SYNC_REVOKED`). On a client that forgot its main device,
    the main is removed from the candidate list so pairing can start at once.
+
+A forgotten device still gates tombstone compaction for 365 days after the
+revocation: if it is paired again within a year, deletions made meanwhile stay
+deleted. After a year the tombstones may be gone, and records deleted on the
+group can come back from that device.
+
+During pairing and during the change question the session now handles `Peers`
+too: a revocation that arrives mid-session is not lost (during pairing the
+other side's list is held and merged once the pairing is through). Before a
+batch is applied the remote key is checked again; a device forgotten while the
+question was open gets nothing, and the question closes as declined.
 
 A forgotten device is shown in the list under "Forgotten devices" with
 **Pair again**. It is refused until a pairing code is confirmed on both devices:

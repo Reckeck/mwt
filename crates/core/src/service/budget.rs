@@ -382,10 +382,21 @@ impl UnlockedVault {
             return Err(Error::Missing(format!("budget {id}")));
         }
         // A deleted limit takes its notices with it: "exceeded" about nothing is stale.
+        // Each goes with a tombstone, or another device would send it back.
         let prefix = format!("budget:{id}:");
+        let gone: Vec<String> = self
+            .doc
+            .notification_log
+            .iter()
+            .filter(|record| record.key.starts_with(&prefix))
+            .map(|record| record.key.clone())
+            .collect();
         self.doc
             .notification_log
             .retain(|record| !record.key.starts_with(&prefix));
+        for key in &gone {
+            self.sync_forget_log_record(&format!("notification_log:{key}"))?;
+        }
         self.persist()
     }
 
