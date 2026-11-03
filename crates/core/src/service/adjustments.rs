@@ -13,6 +13,8 @@ use crate::model::store::AssetRef;
 use crate::model::transaction::{AdjustmentLine, PriceStamp, Transaction};
 use crate::model::vault::now_iso;
 use crate::pricing::history::secs_or_now;
+use crate::sync::stamp::Stamp;
+use crate::sync::view::full_key;
 
 use super::UnlockedVault;
 
@@ -109,15 +111,37 @@ impl UnlockedVault {
     /// next change. Corrections of one account at the same moment see only
     /// the ones before them in the list, so the result does not flip-flop.
     pub(crate) fn rebase_adjustments(&mut self) {
-        let mut order: Vec<(i64, usize)> = self
+        // Corrections at one moment go in the order they were created: by the
+        // stamp the record got when it was made, which every device holds the
+        // same, so the result does not depend on the order of the list after a
+        // sync. One not stamped yet was just added and is the newest; without
+        // stamps at all the list order decides.
+        let mut order: Vec<(i64, bool, Option<Stamp>, usize)> = self
             .doc
             .transactions
             .iter()
             .enumerate()
             .filter(|(_, tx)| matches!(tx, Transaction::Adjustment(_)))
-            .map(|(index, tx)| (secs_or_now(&tx.meta().timestamp), index))
+            .map(|(index, tx)| {
+                let created = self
+                    .doc
+                    .sync
+                    .stamps
+                    .get(&full_key("transactions", &tx.meta().id))
+                    .map(|stamps| stamps.created.clone());
+                (
+                    secs_or_now(&tx.meta().timestamp),
+                    created.is_none(),
+                    created,
+                    index,
+                )
+            })
             .collect();
         order.sort_unstable();
+        let order: Vec<(i64, usize)> = order
+            .into_iter()
+            .map(|(secs, _, _, index)| (secs, index))
+            .collect();
         for (rank, &(secs, index)) in order.iter().enumerate() {
             let Transaction::Adjustment(inner) = &self.doc.transactions[index] else {
                 continue;

@@ -11,7 +11,7 @@ use super::derived;
 use super::flatten::{Order, cannot_express, edited_here, entry_stamp, is_entry, settle_heads};
 use super::registry::{Collection, Rule};
 use super::state::{RecordStamps, RecordState};
-use super::view::{Fields, join_with, split};
+use super::view::{Fields, comparable, join_with, split};
 
 pub use super::flatten::with_legacy_heads;
 
@@ -43,6 +43,15 @@ fn remote_wins(
     }
     let canon = |value: Option<&Value>| value.map(Value::to_string).unwrap_or_default();
     canon(remote_value) > canon(local_value)
+}
+
+/// Whether two values of a field are the same edit: a recomputed item field
+/// (`Collection.recomputed`) does not count.
+fn same_edit(coll: &Collection, name: &str, left: Option<&Value>, right: Option<&Value>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => comparable(coll, name, left) == comparable(coll, name, right),
+        (left, right) => left == right,
+    }
 }
 
 pub fn merge(coll: &Collection, local: &RecordState, remote: &RecordState) -> Merged {
@@ -163,7 +172,7 @@ fn merge_fields(
             !local_stamps.fields.contains_key(name) && !remote_stamps.fields.contains_key(name);
         let (local_stamp, remote_stamp) = if coll.whole {
             (local_stamps.latest(), remote_stamps.latest())
-        } else if unstamped && local_value == remote_value {
+        } else if unstamped && same_edit(coll, name, local_value, remote_value) {
             // The same value and no stamp of its own on either side: a floor
             // would only move a stamp, not the record.
             (local_stamps.field(name), remote_stamps.field(name))
@@ -201,7 +210,7 @@ fn merge_fields(
             (local_value, local_stamp)
         };
         if take_remote
-            && local_value != remote_value
+            && !same_edit(coll, name, local_value, remote_value)
             && !(derives && derived::is_derived(coll, name))
             && edited_here(coll, &local_stamps, name)
         {

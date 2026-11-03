@@ -17,6 +17,7 @@ const LISTS: Collection = Collection {
     flatten: &["marks"],
     flatten_by: &[("items", "id")],
     derived: &[],
+    recomputed: &[],
     skip: &[],
     age: None,
     secret: false,
@@ -296,6 +297,7 @@ const FUND: Collection = Collection {
     flatten: &["scope"],
     flatten_by: &[("scope.store_ids", "")],
     derived: &[],
+    recomputed: &[],
     skip: &[],
     age: None,
     secret: false,
@@ -379,4 +381,77 @@ fn last_item_removed_beside_a_concurrent_add() {
     );
     let merged = both_ways(&remover, &adder);
     assert_eq!(items_of(&merged), vec![item("b", "b0")]);
+}
+
+const LINED: Collection = Collection {
+    name: "transactions",
+    rule: Rule::Records,
+    key: &["*.meta.id"],
+    flatten: &["meta"],
+    flatten_by: &[(
+        "lines",
+        "asset.symbol+asset.coingecko_id+asset.chain+asset.contract",
+    )],
+    derived: &[],
+    recomputed: &[("lines", "before")],
+    skip: &[],
+    age: None,
+    secret: false,
+    secret_fields: &[],
+    whole: false,
+    cache: false,
+};
+
+#[test]
+fn a_key_path_with_plus_joins_its_parts() {
+    let line = |symbol: &str, contract: Value| {
+        json!({
+            "asset": {"symbol": symbol, "coingecko_id": null, "chain": {"custom": "x.y"}, "contract": contract},
+            "before": "1", "after": "2"
+        })
+    };
+    let first = line("USDT", json!("0xabc.def:1"));
+    let second = line("USDT", Value::Null);
+    let key = |item: &Value| {
+        view::item_key(
+            item,
+            "asset.symbol+asset.coingecko_id+asset.chain+asset.contract",
+        )
+    };
+    assert_eq!(
+        key(&first).as_deref(),
+        Some(r#"USDT|null|{"custom":"x.y"}|0xabc.def:1"#)
+    );
+    assert_ne!(key(&first), key(&second));
+    // A part that is missing altogether gives no key.
+    assert_eq!(
+        view::item_key(
+            &json!({"asset": {"symbol": "A"}}),
+            "asset.symbol+asset.nope"
+        ),
+        None
+    );
+
+    // The tagged record splits into one entry per asset and joins back.
+    let value = json!({"adjustment": {
+        "meta": {"id": "t1"}, "store_id": "s", "fee": null,
+        "lines": [first.clone(), second.clone()]
+    }});
+    let fields = split(&LINED, &value);
+    assert_eq!(fields.tag.as_deref(), Some("adjustment"));
+    let entries: Vec<&String> = fields
+        .fields
+        .keys()
+        .filter(|name| name.starts_with("lines."))
+        .collect();
+    assert_eq!(entries.len(), 2, "{entries:?}");
+    assert!(!fields.fields.contains_key("lines"));
+    assert_eq!(
+        view::join_with(
+            &LINED,
+            &fields,
+            &super::flatten::Order::new(&LINED, &[&value], &RecordStamps::default())
+        ),
+        value
+    );
 }

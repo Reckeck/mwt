@@ -34,7 +34,9 @@ pub struct Collection {
     /// comment on one device and its categories on another both survive.
     pub flatten: &'static [&'static str],
     /// Array fields split into one entry per item, as `(field, key path)`:
-    /// the path (dotted, like `key`) names the item inside the array. Two
+    /// the path (dotted, like `key`) names the item inside the array. A path
+    /// may hold several dotted paths joined by `+` (the key of an adjustment
+    /// line is its whole asset); their texts are joined by `|`. Two
     /// devices adding or editing different items both keep their change, and a
     /// removed item travels as the stamp of its entry.
     pub flatten_by: &'static [(&'static str, &'static str)],
@@ -45,6 +47,14 @@ pub struct Collection {
     /// for an edit. A device that does not know the array just writes the
     /// field; the merge turns that into one correction entry (`derived.rs`).
     pub derived: &'static [(&'static str, &'static str)],
+    /// Item fields of a split array that every device recomputes from its own
+    /// data, as `(array, item field)`: an adjustment line's `before` is the
+    /// ledger balance, so a device that receives a backdated operation
+    /// rewrites it. The field stays in the stored and sent value (an older
+    /// device requires it), but it is never a change: `prints`, the merge and
+    /// the plan compare [`comparable`](super::view::comparable) forms, which
+    /// leave it out.
+    pub recomputed: &'static [(&'static str, &'static str)],
     /// Fields that belong to the device and never travel.
     pub skip: &'static [&'static str],
     /// Field holding an RFC3339 time; the first sync sends only recent
@@ -92,6 +102,7 @@ const fn records(name: &'static str, key: &'static [&'static str]) -> Collection
         flatten: &[],
         flatten_by: &[],
         derived: &[],
+        recomputed: &[],
         skip: &[],
         age: None,
         secret: false,
@@ -114,6 +125,7 @@ const fn log(
         flatten: &[],
         flatten_by: &[],
         derived: &[],
+        recomputed: &[],
         skip: &[],
         age: None,
         secret: false,
@@ -131,6 +143,7 @@ const fn single(name: &'static str, skip: &'static [&'static str]) -> Collection
         flatten: &[],
         flatten_by: &[],
         derived: &[],
+        recomputed: &[],
         skip,
         age: None,
         secret: false,
@@ -158,6 +171,9 @@ pub const DEVICE_SETTINGS: &[&str] = &[
 /// Most days of cached prices and rates the first sync sends.
 pub const UNION_DAYS: u64 = 90;
 
+/// Identity of an adjustment line: the whole asset reference.
+const LINE_KEY: &str = "asset.symbol+asset.coingecko_id+asset.chain+asset.contract";
+
 pub static COLLECTIONS: &[Collection] = &[
     // Per-currency maps merge per currency: two devices choosing the
     // inflation of different currencies both keep their choice.
@@ -172,7 +188,9 @@ pub static COLLECTIONS: &[Collection] = &[
     },
     Collection {
         flatten: &["meta"],
-        flatten_by: &[],
+        // A correction syncs per asset; `before` is the ledger's, not an edit.
+        flatten_by: &[("lines", LINE_KEY)],
+        recomputed: &[("lines", "before")],
         ..records("transactions", &["*.meta.id"])
     },
     records("categories", &["key"]),
@@ -183,6 +201,7 @@ pub static COLLECTIONS: &[Collection] = &[
         flatten: &[],
         flatten_by: &[],
         derived: &[],
+        recomputed: &[],
         skip: &[],
         age: Some("ts"),
         secret: false,
@@ -197,6 +216,7 @@ pub static COLLECTIONS: &[Collection] = &[
         flatten: &[],
         flatten_by: &[],
         derived: &[],
+        recomputed: &[],
         skip: &[],
         age: Some("ts"),
         secret: false,
@@ -275,6 +295,7 @@ pub static COLLECTIONS: &[Collection] = &[
         flatten: &["marks"],
         flatten_by: &[],
         derived: &[],
+        recomputed: &[],
         skip: &["tx_cursor", "tx_index"],
         ..records("workflow_state", &["workflow_id"])
     },
@@ -314,6 +335,7 @@ pub static COLLECTIONS: &[Collection] = &[
         flatten: &[],
         flatten_by: &[],
         derived: &[],
+        recomputed: &[],
         skip: &[],
         age: None,
         secret: false,

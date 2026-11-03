@@ -5,6 +5,7 @@
 //! covers every collection; the document is rebuilt with serde afterwards,
 //! which also refuses a record that does not fit the schema.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
@@ -55,7 +56,73 @@ pub(super) fn item_key(item: &Value, path: &str) -> Option<String> {
     if path.is_empty() {
         return Some(key_text(item));
     }
+    if path.contains('+') {
+        let parts: Option<Vec<String>> = path
+            .split('+')
+            .map(|part| lookup(item, part).map(key_text))
+            .collect();
+        return parts.map(|parts| parts.join("|"));
+    }
     lookup(item, path).map(key_text)
+}
+
+/// [`item_key`] for tests outside this module.
+#[cfg(test)]
+pub fn item_key_for_tests(item: &Value, path: &str) -> Option<String> {
+    item_key(item, path)
+}
+
+fn strip_item_field(items: &mut [Value], field: &str) {
+    for item in items {
+        if let Value::Object(map) = item {
+            map.remove(field);
+        }
+    }
+}
+
+/// The form of a field value that counts as "changed" (`Collection.recomputed`):
+/// the entry `head.<key>`, or the whole array `head`, without the item field
+/// every device recomputes.
+pub fn comparable<'doc>(coll: &Collection, name: &str, value: &'doc Value) -> Cow<'doc, Value> {
+    for (head, field) in coll.recomputed {
+        if name == *head {
+            if let Value::Array(items) = value {
+                let mut copy = items.clone();
+                strip_item_field(&mut copy, field);
+                return Cow::Owned(Value::Array(copy));
+            }
+        } else if name
+            .strip_prefix(head)
+            .is_some_and(|rest| rest.starts_with('.'))
+            && let Value::Object(map) = value
+            && map.contains_key(*field)
+        {
+            let mut copy = map.clone();
+            copy.remove(*field);
+            return Cow::Owned(Value::Object(copy));
+        }
+    }
+    Cow::Borrowed(value)
+}
+
+/// A whole record in its comparable form (see [`comparable`]).
+pub fn comparable_record<'doc>(coll: &Collection, value: &'doc Value) -> Cow<'doc, Value> {
+    if coll.recomputed.is_empty() {
+        return Cow::Borrowed(value);
+    }
+    let mut copy = value.clone();
+    let body = match (tagged(coll), &mut copy) {
+        (true, Value::Object(map)) if map.len() == 1 => map.values_mut().next(),
+        _ => Some(&mut copy),
+    };
+    if let Some(body) = body {
+        for (head, field) in coll.recomputed {
+            if let Some(Value::Array(items)) = body.get_mut(*head) {
+                strip_item_field(items, field);
+            }
+        }
+    }
+    Cow::Owned(copy)
 }
 
 /// The record's key inside its collection; `None` for a record without one.
