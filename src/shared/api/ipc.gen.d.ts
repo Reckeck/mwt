@@ -156,7 +156,7 @@ timezone: string | null,
  * Annual inflation, percent, by lowercase currency code (plan §6.5).
  * Used only by analytics, for «in today's money»; marked as reference.
  */
-inflation: { [key: string]: Amount }, 
+inflation: { [key in string]: Amount }, 
 /**
  * Consent to send transaction hashes to public explorers (plan §8.2);
  * `None` = not asked yet.
@@ -1791,7 +1791,7 @@ trigger_node: string | null,
  * Answers to "Wait for confirmation" given so far, by node id; a question
  * without one pauses the emulation (outcome `asking`).
  */
-answers?: { [key: string]: boolean }, };
+answers?: { [key in string]: boolean }, };
 
 /**
  * The emergency fund (plan C1): savings accounts set aside for bad times,
@@ -2647,7 +2647,7 @@ type ImportSource = "auto" | "manual";
 /**
  * A workflow file's text and the wallet swaps (file id to this vault's id).
  */
-type ImportWorkflowInput = { json: string, stores: { [key: string]: string }, };
+type ImportWorkflowInput = { json: string, stores: { [key in string]: string }, };
 
 /**
  * Imported operations of one exchange wallet, newest first, a page at a time.
@@ -2939,7 +2939,7 @@ type ItemShareView = { participant_id: string, amount: Amount, };
 /**
  * Who shares an item.
  */
-type ItemSplit = { "equal": { among: Array<string>, } } | { "by_units": { units: { [key: string]: Amount }, } };
+type ItemSplit = { "equal": { among: Array<string>, } } | { "by_units": { units: { [key in string]: Amount }, } };
 
 type ItemView = { item_id: string, 
 /**
@@ -4688,7 +4688,7 @@ event_runs: Array<WorkflowRun>,
 /**
  * Data wire id → the value that went along it, for the editor.
  */
-edge_values: { [key: string]: string }, };
+edge_values: { [key in string]: string }, };
 
 type RunWorkflowInput = { id: string, trigger_node: string | null, };
 
@@ -4966,11 +4966,11 @@ onboarding_skipped: Array<string>,
  * Where each currency's inflation comes from; a currency missing here
  * reads as [`crate::service::inflation`] decides.
  */
-inflation_mode: { [key: string]: InflationMode }, 
+inflation_mode: { [key in string]: InflationMode }, 
 /**
  * The data source of each currency in `InflationMode::Source`.
  */
-inflation_source: { [key: string]: string }, 
+inflation_source: { [key in string]: string }, 
 /**
  * The user's usual monthly income in the budget currency, used until
  * three months of history exist (plan B).
@@ -6000,7 +6000,7 @@ type TerminalState = { watchlist: Array<string>, active_symbol: string | null, t
 /**
  * Symbol → the drawing manager's JSON export.
  */
-drawings: { [key: string]: string }, layout: TerminalLayout, };
+drawings: { [key in string]: string }, layout: TerminalLayout, };
 
 /**
  * What a test expects; `None` = not checked.
@@ -6106,7 +6106,7 @@ type TraceStep = { node_id: string, kind: string, status: StepStatus, text_ru: s
 /**
  * Output port → its value as text.
  */
-values: { [key: string]: string }, };
+values: { [key in string]: string }, };
 
 /**
  * Opening or closing (part of) a futures position.
@@ -6608,7 +6608,7 @@ timezone: string | null,
 /**
  * Replaces the whole inflation table.
  */
-inflation: { [key: string]: Amount } | null, enrichment_opt_in: boolean | null, 
+inflation: { [key in string]: Amount } | null, enrichment_opt_in: boolean | null, 
 /**
  * Replaces the list of tours already shown; `[]` shows them all again.
  */
@@ -7195,7 +7195,7 @@ type WfValue = { "type": "null" } | { "type": "number", "value": Amount } | { "t
 /**
  * Lowercase code: `rub`, `usdt`.
  */
-currency: string, } } | { "type": "asset", "value": AssetRef } | { "type": "currency", "value": string } | { "type": "account", "value": AccountRef } | { "type": "category", "value": string } | { "type": "bool", "value": boolean } | { "type": "text", "value": string } | { "type": "date", "value": string } | { "type": "duration", "value": bigint } | { "type": "transaction", "value": Transaction } | { "type": "list", "value": Array<WfValue> } | { "type": "record", "value": { [key: string]: WfValue } };
+currency: string, } } | { "type": "asset", "value": AssetRef } | { "type": "currency", "value": string } | { "type": "account", "value": AccountRef } | { "type": "category", "value": string } | { "type": "bool", "value": boolean } | { "type": "text", "value": string } | { "type": "date", "value": string } | { "type": "duration", "value": bigint } | { "type": "transaction", "value": Transaction } | { "type": "list", "value": Array<WfValue> } | { "type": "record", "value": { [key in string]: WfValue } };
 
 /**
  * One thing behind a row: a category, a loan, a move, a buy.
@@ -7319,7 +7319,7 @@ type WorkflowEdge = { id: string, from: string, from_port: string, to: string, t
 /**
  * A workflow from a gallery template: the form's fields by key.
  */
-type WorkflowFromTemplateInput = { template_id: string, params: { [key: string]: string }, };
+type WorkflowFromTemplateInput = { template_id: string, params: { [key in string]: string }, };
 
 type WorkflowGraph = { version: number, nodes: Array<WorkflowNode>, edges: Array<WorkflowEdge>, comments: Array<WorkflowComment>, };
 
@@ -7407,7 +7407,7 @@ type WorkflowState = { workflow_id: string,
  * Trigger node id → last moment it fired (RFC3339) or last side of a
  * threshold (`above` / `below`).
  */
-marks: { [key: string]: string }, 
+marks: { [key in string]: string }, 
 /**
  * The last operation an «operation added» trigger looked at, and where it was.
  * Device-local since sync: never merged, see `sync::registry`.
@@ -7440,7 +7440,7 @@ at: string | null,
  * Answers to "Wait for confirmation" questions, by node id; a question
  * without one ends the emulation as `waiting`.
  */
-answers?: { [key: string]: boolean }, expect: TestExpect, };
+answers?: { [key in string]: boolean }, expect: TestExpect, };
 
 /**
  * How a test went.

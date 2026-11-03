@@ -662,10 +662,11 @@ fn main() {
 }
 
 fn export_ty<T: ts_rs::TS + 'static>(out_dir: &Path) -> bool {
-    match T::export_all_to(out_dir) {
+    let cfg = ts_rs::Config::new().with_out_dir(out_dir);
+    match T::export_all(&cfg) {
         Ok(()) => true,
         Err(err) => {
-            eprintln!("gen-types: failed for {}: {err}", T::name());
+            eprintln!("gen-types: failed for {}: {err}", T::name(&cfg));
             false
         }
     }

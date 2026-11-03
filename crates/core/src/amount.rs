@@ -233,29 +233,30 @@ impl<'de> Deserialize<'de> for Amount {
 
 impl ts_rs::TS for Amount {
     type WithoutGenerics = Self;
+    type OptionInnerType = Self;
 
-    fn name() -> String {
+    fn name(_cfg: &ts_rs::Config) -> String {
         "Amount".into()
     }
 
-    fn ident() -> String {
+    fn ident(_cfg: &ts_rs::Config) -> String {
         "Amount".into()
     }
 
-    fn decl() -> String {
+    fn decl(_cfg: &ts_rs::Config) -> String {
         "type Amount = string;".into()
     }
 
-    fn decl_concrete() -> String {
-        Self::decl()
+    fn decl_concrete(cfg: &ts_rs::Config) -> String {
+        <Self as ts_rs::TS>::decl(cfg)
     }
 
-    fn inline() -> String {
+    fn inline(_cfg: &ts_rs::Config) -> String {
         "string".into()
     }
 
-    fn inline_flattened() -> String {
-        Self::inline()
+    fn inline_flattened(cfg: &ts_rs::Config) -> String {
+        <Self as ts_rs::TS>::inline(cfg)
     }
 
     fn visit_dependencies(_: &mut impl ts_rs::TypeVisitor) {}
