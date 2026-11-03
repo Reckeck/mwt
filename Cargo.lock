@@ -1391,6 +1391,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2972feb8dffe7bc8c5463b1dacda1b0dfbed3710e50f977d965429692d74cd8"
 
 [[package]]
+name = "ego-tree"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bd50d24b1b75aa817bb0339cb9f2e0e664bdfab1e160a69a0fda9145b77fab2"
+
+[[package]]
 name = "embed-resource"
 version = "3.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4353,7 +4359,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93cecd86d6259499c844440546d02f55f3e17bd286e529e48d1f9f67e92315cb"
 dependencies = [
  "cssparser 0.36.0",
- "ego-tree",
+ "ego-tree 0.10.0",
  "html5ever 0.36.1",
  "precomputed-hash",
  "selectors 0.33.0",
@@ -5911,7 +5917,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "csv",
- "ego-tree",
+ "ego-tree 0.11.1",
  "hmac",
  "rand 0.8.8",
  "regex",
