@@ -61,6 +61,23 @@ describe('useEditBase', () => {
     expect(edit.changedElsewhere.value).toBe(true)
   })
 
+  it('ignores a live change outside the form model', async () => {
+    const open = ref(true)
+    const live = ref({ name: 'a', note: 'x' })
+    const edit = useEditBase({
+      open,
+      entity: () => ({ name: 'a', note: 'x' }),
+      live: () => live.value,
+      model: (entity: { name: string; note: string }) => ({ name: entity.name }),
+    })
+    live.value = { name: 'a', note: 'changed elsewhere' }
+    await nextTick()
+    expect(edit.changedElsewhere.value).toBe(false)
+    live.value = { name: 'b', note: 'changed elsewhere' }
+    await nextTick()
+    expect(edit.changedElsewhere.value).toBe(true)
+  })
+
   it('refresh merges, moves the base and clears the flag', async () => {
     const { open, live, edit } = setup()
     open.value = true
@@ -73,6 +90,17 @@ describe('useEditBase', () => {
     )
     expect(loaded).toEqual({ name: 'b', note: 'mine' })
     expect(edit.base.value).toEqual({ name: 'b', note: 'y' })
+    expect(edit.changedElsewhere.value).toBe(false)
+  })
+
+  it('rebase takes a new snapshot and clears the flag', async () => {
+    const { open, live, edit } = setup()
+    open.value = true
+    live.value = { name: 'b', note: 'x' }
+    await nextTick()
+    expect(edit.changedElsewhere.value).toBe(true)
+    edit.rebase({ name: 'b', note: 'x' })
+    expect(edit.base.value).toEqual({ name: 'b', note: 'x' })
     expect(edit.changedElsewhere.value).toBe(false)
   })
 

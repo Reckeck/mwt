@@ -1,22 +1,24 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
-import { TransactionForm } from '@/features/transaction-create'
+import { TransactionForm, formFromTransaction, formToInput } from '@/features/transaction-create'
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { FormField } from '@/shared/ui/form-field'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 import { call } from '@/shared/api/ipc'
-import { PLANNING_KEYS, dateInputToIso, isoToDateInput, localDate } from '@/shared/lib/planning'
+import { PLANNING_KEYS, localDate } from '@/shared/lib/planning'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { txLegs } from '@/shared/lib/transactions'
-import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
+import { firstError, integerInRange, required, sameData, useEditBase, useFormValidation } from '@/shared/lib/form'
 
-import type { ScheduleKind } from './automation-edit.constants'
 import type { AutomationDialogProps } from './automation-edit.types'
+import { automationBaseOf, automationInputOfFields, fieldsOfAutomation } from './lib/automation-fields'
+import { useAutomationFields } from './model/use-automation-fields'
 import { AutomationScheduleFields } from './ui/automation-schedule-fields'
 import { useStoreTree } from '@/shared/api/queries'
 import { SwitchRow } from '@/shared/ui/switch-row'
@@ -31,28 +33,36 @@ const queryClient = useQueryClient()
 const tree = useStoreTree()
 const liveNodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
-const name = ref('')
-const active = ref(true)
 const storeId = ref('')
-const scheduleKind = ref<ScheduleKind>('monthly')
-const day = ref('1')
-const weekday = ref('0')
-const everyDays = ref('7')
-const startsAt = ref('')
-const varies = ref(false)
-const workdayShift = ref<WorkdayShift>('none')
+const {
+  name,
+  active,
+  scheduleKind,
+  day,
+  weekday,
+  everyDays,
+  startsAt,
+  varies,
+  workdayShift,
+  load,
+  currentFields,
+  schedule,
+} = useAutomationFields()
 /** The property the automation's operations belong to (plan G4). */
 const propertyId = ref('')
 
+/** The automation the form shows: the prop at opening, the live record after `Refresh`. */
+const source = ref<Automation | null>(null)
+/** Changes when the operation form must start over with the (refreshed) template. */
+const templateKey = ref(0)
 /** The stored template as a transaction the form can prefill from. */
-const template = computed(() => (props.automation?.template as Transaction | undefined) ?? null)
+const template = computed(() => (source.value?.template as Transaction | undefined) ?? null)
 
 // Every opening starts from the automation as stored (or blank).
 watch(open, (isOpen) => {
   if (!isOpen) return
   const automation = props.automation
-  name.value = automation?.name ?? (props.preset ? t(`preset.${props.preset.preset}`) : '')
-  active.value = automation?.active ?? true
+  source.value = automation
   // A property takes no money: a preset opened on it books to the everyday wallet and links the property.
   const opener = liveNodes.value.find((node) => node.store.id === props.storeId)?.store
   propertyId.value = automation ? (automation.property_id ?? '') : opener?.kind === 'property' ? opener.id : ''
@@ -61,32 +71,47 @@ watch(open, (isOpen) => {
     (propertyId.value && !automation ? '' : props.storeId) ||
     (liveNodes.value.find((node) => node.store.purpose === 'everyday') ?? liveNodes.value[0])?.store.id ||
     ''
-  const schedule = automation?.schedule ?? { monthly: { day: new Date().getDate() } }
-  if ('monthly' in schedule) {
-    scheduleKind.value = 'monthly'
-    day.value = String(schedule.monthly.day)
-  } else if ('weekly' in schedule) {
-    scheduleKind.value = 'weekly'
-    weekday.value = String(schedule.weekly.weekday)
-  } else {
-    scheduleKind.value = 'every_n_days'
-    everyDays.value = String(schedule.every_n_days.days)
-  }
-  startsAt.value = isoToDateInput(automation?.starts_at) || localDate(new Date())
-  varies.value = automation?.amount_mode === 'varies'
-  // Salaries come on the working day before a day off.
-  workdayShift.value = automation?.workday_shift ?? (props.preset?.preset === 'salary' ? 'back' : 'none')
+  const defaults = fieldsOfAutomation(
+    {
+      name: props.preset ? t(`preset.${props.preset.preset}`) : '',
+      active: true,
+      schedule: { monthly: { day: new Date().getDate() } },
+      starts_at: '',
+      amount_mode: 'fixed',
+      // Salaries come on the working day before a day off.
+      workday_shift: props.preset?.preset === 'salary' ? 'back' : 'none',
+    },
+    localDate(new Date()),
+  )
+  load(automation ? fieldsOfAutomation(automation, localDate(new Date())) : defaults)
 })
 
-const schedule = computed<Schedule | null>(() => {
-  if (scheduleKind.value === 'monthly') {
-    const value = Number(day.value)
-    return value >= 1 && value <= 31 ? { monthly: { day: value } } : null
+/** The automation as the sync keeps it now (`['automations']` is re-read after `vault-synced`); the prop may be a stale copy. */
+const automations = useQuery({ queryKey: ['automations'], queryFn: () => call<Automation[]>('list_automations'), enabled: open })
+const liveAutomation = () =>
+  props.automation ? automations.data.value?.find((entry) => entry.id === props.automation?.id) : undefined
+const edit = useEditBase({ open, entity: () => props.automation, live: liveAutomation, model: fieldsOfAutomation })
+/** The base the core gets: the stored automation written the way this form saves it. */
+const baseInput = () => {
+  const base = edit.base.value
+  if (!base) return null
+  const tx = formFromTransaction(base.template as unknown as Transaction, storeId.value)
+  if (base.property_id) tx.propertyId = base.property_id
+  return automationBaseOf(base, formToInput(tx))
+}
+/**
+ * `Refresh` merges the schedule fields; the operation template is replaced by the other device's
+ * only when the user has not touched it (its input still equals the base's).
+ */
+function refreshFromOtherDevice() {
+  const live = liveAutomation()
+  const untouched = sameData(form.value?.input, baseInput()?.template)
+  edit.refresh(currentFields, load)
+  if (live && untouched) {
+    source.value = live
+    templateKey.value += 1
   }
-  if (scheduleKind.value === 'weekly') return { weekly: { weekday: Number(weekday.value) } }
-  const value = Number(everyDays.value)
-  return Number.isInteger(value) && value >= 1 ? { every_n_days: { days: value } } : null
-})
+}
 
 /** What a preset starts the template as. */
 const initialTx = computed(() =>
@@ -134,20 +159,16 @@ const save = useMutation({
   mutationFn: () => {
     const templateInput = form.value?.input
     if (!templateInput || !schedule.value) throw { code: 'INVALID_INPUT', message: t('form.assetRequired') }
-    const input: AutomationInput = {
-      name: name.value.trim(),
-      active: active.value,
-      preset: props.automation?.preset ?? props.preset?.preset ?? null,
-      schedule: schedule.value,
-      starts_at: dateInputToIso(startsAt.value),
+    const input = automationInputOfFields(currentFields(), schedule.value, {
+      preset: source.value?.preset ?? props.preset?.preset ?? null,
+      time: source.value?.time ?? null,
+      asks: source.value?.asks ?? false,
       template: templateInput,
-      amount_mode: varies.value ? 'varies' : 'fixed',
-      workday_shift: workdayShift.value,
-      time: props.automation?.time ?? null,
-      asks: props.automation?.asks ?? false,
-    }
+    })
     return props.automation
-      ? call<Automation>('update_automation', { input: { id: props.automation.id, automation: input } })
+      ? call<Automation>('update_automation', {
+          input: { id: props.automation.id, automation: input, base: baseInput() ?? undefined },
+        })
       : call<Automation>('create_automation', { input })
   },
   onSuccess: (automation) => {
@@ -173,6 +194,7 @@ const save = useMutation({
   >
     <!-- biome-ignore lint/a11y/useSemanticElements: a fieldset would wrap the operation form inside; this only catches Enter from the schedule fields. -->
     <div class="@container grid gap-4" role="group" @keydown.enter="saveOnEnter">
+      <SyncChangedBanner v-if="edit.changedElsewhere.value" @refresh="refreshFromOtherDevice" />
       <div class="grid gap-3 @xl:grid-cols-2">
         <FormField for="automation-name" :label="t('automation.name')" required :error="fields.error('name')">
           <Input id="automation-name" v-model="name" :placeholder="t('automation.namePlaceholder')" />
@@ -184,7 +206,7 @@ const save = useMutation({
 
       <TransactionForm
         v-if="open && storeId"
-        :key="storeId"
+        :key="`${storeId}:${templateKey}`"
         ref="form"
         :store-id="storeId"
         :transaction="template"

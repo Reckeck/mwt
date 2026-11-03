@@ -54,8 +54,11 @@ interface AccountsChange {
   before: ContactDraft
 }
 const save = useMutation({
-  mutationFn: ({ accounts }: AccountsChange) =>
-    call<Contact>('update_contact', { input: { id: props.contact.id, contact: draftOf(props.contact, { accounts }) } }),
+  // `before` is the contact as the card showed it: the base, so a sync that changed its other fields stays.
+  mutationFn: ({ accounts, before }: AccountsChange) =>
+    call<Contact>('update_contact', {
+      input: { id: props.contact.id, contact: draftOf(props.contact, { accounts }), base: before },
+    }),
   onSuccess: () => {
     void queryClient.invalidateQueries({ queryKey: ['contacts'] })
     editing.value = null

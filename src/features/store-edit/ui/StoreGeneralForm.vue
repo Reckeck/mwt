@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { ContactPicker } from '@/entities/contact'
@@ -7,12 +7,13 @@ import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
+import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 import { Textarea } from '@/shared/ui/textarea'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { cn } from '@/shared/lib/utils'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 
-import { updateInputOf, useStoreUpdate } from '../model/use-store-update'
+import { useStoreFormEdit } from '../model/use-store-form-edit'
 import StoreEmergencySwitch from './StoreEmergencySwitch.vue'
 import type { StoreFormProps } from '../store-edit.types'
 
@@ -34,36 +35,53 @@ const isRoot = computed(() => !props.store.parent_id)
 /** A loan's purpose is fixed: it is never everyday money. */
 const purposeEditable = computed(() => props.store.kind !== 'liability')
 
-
-watch(
-  () => props.store,
-  (store) => {
-    name.value = store.name
-    note.value = store.note
-    color.value = store.color
-    purpose.value = store.purpose
-    contactId.value = store.contact_id ?? ''
+interface GeneralFields {
+  name: string
+  note: string
+  color: string
+  purpose: Purpose
+  contactId: string
+}
+const fieldsOf = (store: Store): GeneralFields => ({
+  name: store.name,
+  note: store.note,
+  color: store.color,
+  purpose: store.purpose,
+  contactId: store.contact_id ?? '',
+})
+const edit = useStoreFormEdit<GeneralFields>({
+  store: () => props.store,
+  model: fieldsOf,
+  current: () => ({
+    name: name.value,
+    note: note.value,
+    color: color.value,
+    purpose: purpose.value,
+    contactId: contactId.value,
+  }),
+  load: (fields) => {
+    name.value = fields.name
+    note.value = fields.note
+    color.value = fields.color
+    purpose.value = fields.purpose
+    contactId.value = fields.contactId
   },
-  { immediate: true },
-)
-
-const save = useStoreUpdate()
+})
 
 function submit() {
-  save.mutate(
-    updateInputOf(props.store, {
-      name: name.value.trim(),
-      color: color.value,
-      note: note.value.trim(),
-      purpose: purposeEditable.value ? purpose.value : null,
-      contact_id: isRoot.value ? contactId.value || null : props.store.contact_id,
-    }),
-  )
+  edit.save({
+    name: name.value.trim(),
+    color: color.value,
+    note: note.value.trim(),
+    purpose: purposeEditable.value ? purpose.value : null,
+    contact_id: isRoot.value ? contactId.value || null : props.store.contact_id,
+  })
 }
 </script>
 
 <template>
   <form class="@container grid gap-5" @submit.prevent="form.submit(submit, $event)">
+    <SyncChangedBanner v-if="edit.changedElsewhere.value" @refresh="edit.refreshFromOtherDevice" />
     <div class="grid grid-cols-[1fr_auto] gap-4">
       <FormField for="store-name" :label="t('stores.name')" required :error="form.error('name')">
         <Input id="store-name" v-model="name" />
@@ -116,7 +134,7 @@ function submit() {
     </div>
 
     <div>
-      <Button type="submit" :disabled="save.isPending.value">{{ t('actions.save') }}</Button>
+      <Button type="submit" :disabled="edit.isPending.value">{{ t('actions.save') }}</Button>
     </div>
   </form>
 </template>

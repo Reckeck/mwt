@@ -53,14 +53,24 @@ export function useCategoryActions() {
     meta: { success: 'categories.manage.created', error: 'settings.saveFailed' },
   })
 
-  /** Rename on blur; an empty name returns to the built-in label. */
+  /**
+   * Each change saves at once, so the category as the row showed it is the `base`: a sync that
+   * changed another field of it in the meantime is kept.
+   * Rename on blur; an empty name returns to the built-in label. */
   function rename(category: Category, raw: string) {
     const name = raw.trim()
     if (name === categoryLabel(category, t)) return
-    update.mutate({ key: category.key, name: name || null, group: category.group, essential: null, passive: null })
+    update.mutate({
+      key: category.key,
+      name: name || null,
+      group: category.group,
+      essential: null,
+      passive: null,
+      base: category,
+    })
   }
   const regroup = (category: Category, group: CategoryGroup) =>
-    update.mutate({ key: category.key, name: category.name, group, essential: null, passive: null })
+    update.mutate({ key: category.key, name: category.name, group, essential: null, passive: null, base: category })
   const setFlag = (category: Category, on: boolean) =>
     flag.mutate({
       key: category.key,
@@ -68,6 +78,7 @@ export function useCategoryActions() {
       group: category.group,
       essential: category.group === 'daily' ? on : null,
       passive: category.group === 'income' ? on : null,
+      base: category,
     })
 
   return { update, flag, archive, remove, create, rename, regroup, setFlag }

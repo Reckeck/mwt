@@ -28,7 +28,9 @@ export function useEditBase<Entity, Model = Entity>(options: EditBaseOptions<Ent
 
   function check() {
     const live = options.live()
-    changedElsewhere.value = base.value !== undefined && !!live && !sameData(live, base.value)
+    // Only the form's own fields count: a change elsewhere in the record (an import, a field
+    // of another form) is kept by the core on save anyway, so it is no reason to interrupt.
+    changedElsewhere.value = base.value !== undefined && !!live && !sameData(modelOf(live), modelOf(base.value))
   }
 
   watch(
@@ -52,5 +54,14 @@ export function useEditBase<Entity, Model = Entity>(options: EditBaseOptions<Ent
     changedElsewhere.value = false
   }
 
-  return { base, changedElsewhere, refresh }
+  /**
+   * Starts a new edit from `entity` (default: the prop as it is now): for a form that stays on
+   * screen — after its own save, or when it is shown for another record.
+   */
+  function rebase(entity?: Entity | null) {
+    base.value = clone(entity ?? options.entity() ?? undefined)
+    check()
+  }
+
+  return { base, changedElsewhere, refresh, rebase }
 }
