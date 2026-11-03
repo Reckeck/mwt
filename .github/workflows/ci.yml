@@ -4,10 +4,10 @@
 #   images          the CI images in ghcr (images.yml), built only when their tag is new
 #   deps            a lane's dependency cache (sccache dir), written ONLY here and only when
 #                   the lane has no cache for its key yet; everything else just reads it
-#   check-linux     cargo xtask check --no-frontend --no-platforms in ci-linux: fmt, clippy, tests, gen-types
-#   check-frontend  cargo xtask check --frontend in ci-linux: lint, typecheck, vitest,
+#   check-linux     cargo xtask check --exclude @frontend --exclude @platforms in ci-linux: fmt, clippy, tests, gen-types
+#   check-frontend  cargo xtask check @frontend --exclude layout --exclude links in ci-linux: lint, typecheck, vitest,
 #                   static checks, e2e
-#   frontend-layout check-layout + check-links in full, a matrix of 6 shards of their units
+#   frontend-layout cargo xtask check layout links (full by default), a matrix of 6 shards of their units
 #   check-android   cargo xtask check platform:android in ci-android (NDK in the image)
 #   clippy-windows  native clippy on windows-latest        } xtask's platform:windows/macos need
 #   clippy-macos    cargo xtask check platform:macos       } cargo-xwin / a Mac: left out of check-linux
@@ -243,7 +243,7 @@ jobs:
           path: .cache/sccache
           key: ${{ steps.key.outputs.key }}
       - name: cargo xtask check
-        run: cargo xtask check --no-frontend --no-platforms
+        run: cargo xtask check --exclude @frontend --exclude @platforms
       - name: sccache stats
         if: always()
         run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
@@ -307,8 +307,8 @@ jobs:
         run: |
           pnpm config set store-dir "$GITHUB_WORKSPACE/.cache/pnpm"
           pnpm install --frozen-lockfile --prefer-offline
-      - name: cargo xtask check --frontend
-        run: cargo xtask check --frontend
+      - name: cargo xtask check @frontend --exclude layout --exclude links
+        run: cargo xtask check @frontend --exclude layout --exclude links
       - name: sccache stats
         if: always()
         run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
@@ -381,7 +381,7 @@ jobs:
           pnpm config set store-dir "$GITHUB_WORKSPACE/.cache/pnpm"
           pnpm install --frozen-lockfile --prefer-offline
       - name: cargo xtask check layout links (shard ${{ matrix.shard }}/6)
-        run: cargo xtask check layout links --full-browser --shard ${{ matrix.shard }}/6 --jobs 1
+        run: cargo xtask check layout links --shard ${{ matrix.shard }}/6 --jobs 1
       - name: sccache stats
         if: always()
         run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true

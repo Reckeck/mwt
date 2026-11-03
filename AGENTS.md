@@ -35,11 +35,11 @@ Always use `mise run …` (the `mise.toml` task file), do not hardcode versions:
 | `mise run check-forms` | on forms the save button is not disabled by field validation, fields are validated on save (rule 13); account, asset and currency are chosen with the ready-made components (rule 14) |
 | `mise run changelog` | update the commit list in `## [Unreleased]` of CHANGELOG.md (git-cliff) |
 | `mise run bump` | next version (`auto`/`patch`/`minor`/`major`/`X.Y.Z`) in all files + a CHANGELOG section |
-| `mise run check-platforms` | compilation (clippy) for linux, windows, android, macos; `SKIP` — the machine cannot check that platform (the "Building on all platforms" rule); the same tasks are part of `mise run check`; one platform — `mise run check-platforms -- windows` |
+| `mise run check-platforms` | compilation (clippy) for linux, windows, android, macos; `SKIP` — the machine cannot check that platform (the "Building on all platforms" rule); runs `cargo xtask check clippy @platforms`; the same tasks are part of `mise run check`; selected platforms — `mise run check-platforms -- windows android` |
 | `mise run check-ci` | CI scripts: `*.ps1` ASCII only, shell scripts parse (`scripts/ci/lint-ci.sh`) |
 | `mise run audit` | dependency audit of Rust (cargo-audit) and npm (`pnpm audit`); exceptions with reasons are in `audit-ignore.toml`; not part of `check`, in CI it is `audit.yml` |
 | `mise run check-layout` | the app on the mock backend in headless Chromium at 1920…720 and 390/360, dark and light theme: no overflow and no sideways scroll, hover and loading shift nothing, a dialog opens in place, listeners do not pile up, "Back" closes a layer, touch targets ≥ 40 px, neighbouring blocks of one container do not overlap (rule 17); `--quick` — 1280 and 390, `--report` — without failing, `--jobs N` — N processes (default min(4, cores/2)), `--shard K/N` — the K-th share of N, `--update-weights` — weights from a measurement; screenshots in `.cache/check-layout/` |
-| `mise run check` | `cargo xtask check`: lint + typecheck + test-frontend + static checks (vitest `checks`: onboarding/routes/forms/ui/fsd) + ci + fmt + clippy + tests + gen-types + platforms in parallel, then one at a time test-e2e, layout and links (`--quick`); fail-fast — the first error stops the rest; logs in `.cache/xtask/<task>.log`; `--list` — the graph, task names — a filter; a second run in the same working copy attaches to the running one |
+| `mise run check` | `cargo xtask check --quick`: lint + typecheck + test-frontend + static checks (vitest `checks`: onboarding/routes/forms/ui/fsd) + ci + fmt + clippy + tests + gen-types + platforms in parallel, then one at a time test-e2e, layout and links (`--quick`); fail-fast — the first error stops the rest; logs in `.cache/xtask/<task>.log`; task names and groups (`@static @browser @frontend @rust @platforms`, `checks/groups.rs`) select, `--exclude` removes, `--keep-going` does not stop on the first error, `--list` / `--dry-run` show the graph / the commands, `--output auto\|tty\|plain\|github` and `-v`/`-q` shape the output (GitHub: a group per task, `::error` at file:line, a Job Summary); plain `cargo xtask check` runs layout and links in full; a second run in the same working copy attaches to the running one |
 | `mise run build` | tests + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run build:all` | `cargo xtask build`: bundles for every platform (linux, pacman, flatpak, android, windows without MSI, macos on a Mac) in CI images via podman, frontend built once, fail-fast, `--channel prod`, into `.cache/build-all/builds/<channel>/` (`docs/ci.md`, "Locally") |
 | `mise run dev` | Tauri dev (`pnpm tauri dev`; the Tauri v2 CLI finds `crates/app/tauri.conf.json` from the workspace root by itself) |
@@ -92,7 +92,7 @@ src/                  # frontend (Vue 3 + Pinia + TanStack Query + vue-i18n + EC
 mise.toml             # tools + env + tasks
 .github/workflows/    # CI/CD (GitHub Actions): checks, images, Linux/Windows/Android builds, Flatpak/pacman, release (docs/ci.md)
 scripts/ci/           # CI job logic (bootstrap, bundle collection, Android signing, release, AUR)
-crates/xtask/         # cargo xtask: the gate (check, check-platforms) and bundles (build)
+crates/xtask/         # cargo xtask: the gate (check with task groups) and bundles (build)
 packaging/            # flatpak/ (manifest + metainfo), aur/ (PKGBUILD.in + render.sh), linux/ (postrm deb/rpm)
 docs/                 # architecture, data-model, ipc, security, roadmap, ui-design, json-editor, ci
 ```
@@ -260,8 +260,9 @@ check it with `mise x actionlint@1.7.12 -- actionlint`. GitLab is only a mirror 
   "—" breaks parsing); `mise run check-ci` (`scripts/ci/lint-ci.sh`) catches it.
 
 - **CI repeats the local gate.** A new check in `mise run check`
-  is added to `cargo xtask check` as well (the `check-linux`/`check-frontend` jobs in
-  `ci.yml` call the same thing); CI must not be softer than `mise run check`. Keep the
+  is added to `cargo xtask check` as well and into a group of `crates/xtask/src/checks/groups.rs`
+  (the `check-linux`/`check-frontend` jobs in `ci.yml` select by excluding groups, so a new task
+  runs there by default; a test fails for a task in no group); CI must not be softer than `mise run check`. Keep the
   logic in xtask or a script (`scripts/ci/*`, `.github/scripts/*`), not in a
   multi-line `run:` — then it can be run and checked locally.
 - **Tool versions — only from `mise.toml`.** CI installs node/pnpm/rust

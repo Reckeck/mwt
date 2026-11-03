@@ -3,8 +3,6 @@
 //! data. These are application identifiers: changing one loses the users' data.
 //! `crates/app/tauri.conf.json` holds the dev values (a test below checks).
 
-use anyhow::{Result, bail};
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Channel {
     Prod,
@@ -22,15 +20,6 @@ pub const ICON_FILES: [&str; 6] = [
 ];
 
 impl Channel {
-    /// `prod` or `dev`; `none` (a build that publishes nothing) has the dev names.
-    pub fn parse(name: &str) -> Result<Self> {
-        match name {
-            "prod" => Ok(Self::Prod),
-            "dev" | "none" => Ok(Self::Dev),
-            other => bail!("channel must be dev, prod or none, not `{other}`"),
-        }
-    }
-
     pub fn label(self) -> &'static str {
         match self {
             Self::Prod => "prod",
@@ -135,8 +124,12 @@ mod tests {
 
     #[test]
     fn none_has_the_dev_names() {
-        assert_eq!(Channel::parse("none").unwrap(), Channel::Dev);
-        assert!(Channel::parse("beta").is_err());
+        use crate::version::Kind;
+        assert_eq!(Kind::None.names(), Channel::Dev);
+        assert_eq!(Kind::Prod.names(), Channel::Prod);
+        let error = Kind::None.publishing("build").unwrap_err().to_string();
+        assert!(error.contains("--channel none"), "{error}");
+        assert_eq!(Kind::Dev.publishing("build").unwrap(), Channel::Dev);
     }
 
     #[test]

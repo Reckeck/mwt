@@ -1,10 +1,12 @@
 //! Task selection by name and the end-of-run output (log tail, summary table).
 
 use std::collections::{BTreeSet, HashMap};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::time::Duration;
 
 use super::{Report, Status, Task};
+use crate::logtext::{clean_log, display_line};
 use crate::sink::{Sink, fmt_secs};
 
 /// Keeps `names` and everything they depend on, in the original order.
@@ -43,19 +45,34 @@ pub fn rel(root: &Path, path: &Path) -> String {
         .to_string()
 }
 
-/// The last non-empty line of the log (progress bars split on `\r`), cut to `width` chars.
+/// How much of the end of a log `last_line` looks at: logs of long builds are megabytes.
+const LAST_LINE_WINDOW: u64 = 16 * 1024;
+
+/// The last non-empty line of the log (progress bars split on `\r`) as shown in progress lines:
+/// no escapes, a cargo progress bar as `cargo 12/34: crate`; cut to `width` chars.
 pub fn last_line(log: &Path, width: usize) -> String {
-    let text = std::fs::read_to_string(log).unwrap_or_default();
-    let line = text
-        .rsplit(['\n', '\r'])
-        .map(str::trim)
+    let text = read_end(log, LAST_LINE_WINDOW);
+    text.rsplit(['\n', '\r'])
+        .map(display_line)
         .find(|line| !line.is_empty())
-        .unwrap_or("");
-    line.chars().take(width).collect()
+        .map(|line| line.chars().take(width).collect())
+        .unwrap_or_default()
 }
 
+fn read_end(log: &Path, window: u64) -> String {
+    let Ok(mut file) = std::fs::File::open(log) else {
+        return String::new();
+    };
+    let len = file.metadata().map_or(0, |meta| meta.len());
+    let _ = file.seek(SeekFrom::Start(len.saturating_sub(window)));
+    let mut bytes = Vec::new();
+    let _ = file.read_to_end(&mut bytes);
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// The last `lines` lines of the cleaned log (see `clean_log`).
 pub fn tail(log: &Path, lines: usize) -> String {
-    let text = std::fs::read_to_string(log).unwrap_or_default();
+    let text = clean_log(&std::fs::read_to_string(log).unwrap_or_default());
     let all: Vec<&str> = text.lines().collect();
     let from = all.len().saturating_sub(lines);
     let mut out = String::from("    ---- tail of the log ----\n");
@@ -96,4 +113,28 @@ pub fn summary(reports: &[Report], total: Duration, sink: &Sink) {
         fmt_secs(total)
     ));
     sink.raw(&out);
+}
+
+/// `--list`: one line per task with what it waits for.
+pub fn list_text(tasks: &[Task]) -> String {
+    let mut out = String::new();
+    for task in tasks {
+        let deps = if task.deps.is_empty() {
+            String::new()
+        } else {
+            format!("  after: {}", task.deps.join(", "))
+        };
+        out.push_str(&format!("{:<18} {:?}{deps}\n", task.name, task.class));
+    }
+    out
+}
+
+/// `--dry-run`: in run order, each task with the command it would run.
+pub fn plan_text(tasks: &[Task]) -> String {
+    let mut out = String::new();
+    for task in tasks {
+        let what = task.description.as_deref().unwrap_or("(built-in)");
+        out.push_str(&format!("{:<18} {what}\n", task.name));
+    }
+    out
 }

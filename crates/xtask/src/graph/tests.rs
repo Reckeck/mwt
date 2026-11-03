@@ -20,7 +20,11 @@ async fn run(tasks: Vec<Task>, heavy: usize) -> (Vec<Report>, PathBuf) {
     let dir = scratch();
     let reports = run_graph(
         tasks,
-        Opts { heavy, browser: 1 },
+        Opts {
+            heavy,
+            browser: 1,
+            keep_going: false,
+        },
         CancellationToken::new(),
         Arc::new(Sink::new(None)),
         &dir,
@@ -57,6 +61,7 @@ async fn dependencies_run_in_order() {
         Opts {
             heavy: 2,
             browser: 2,
+            keep_going: false,
         },
         CancellationToken::new(),
         Arc::new(Sink::new(None)),
@@ -116,6 +121,7 @@ async fn heavy_tasks_respect_the_limit() {
         Opts {
             heavy: 2,
             browser: 2,
+            keep_going: false,
         },
         CancellationToken::new(),
         Arc::new(Sink::new(None)),
@@ -158,6 +164,7 @@ async fn after_waits_when_present_and_is_ignored_when_absent() {
         Opts {
             heavy: 2,
             browser: 1,
+            keep_going: false,
         },
         CancellationToken::new(),
         Arc::new(Sink::new(None)),
@@ -177,4 +184,71 @@ fn last_line_skips_blank_lines_and_progress_returns() {
     assert_eq!(last_line(&log, 160), "Downloading 90%");
     assert_eq!(last_line(&log, 4), "Down");
     assert_eq!(last_line(&dir.join("missing.log"), 160), "");
+}
+
+async fn run_keep_going(tasks: Vec<Task>) -> Vec<Report> {
+    let dir = scratch();
+    run_graph(
+        tasks,
+        Opts {
+            heavy: 2,
+            browser: 1,
+            keep_going: true,
+        },
+        CancellationToken::new(),
+        Arc::new(Sink::new(None)),
+        &dir,
+        &dir.join("logs"),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn keep_going_runs_the_independent_and_cancels_the_dependent() {
+    let tasks = vec![
+        shell("bad", Class::Light, &[], "exit 1"),
+        shell("independent", Class::Light, &[], "sleep 0.3"),
+        shell("dependent", Class::Light, &["bad"], "true"),
+        shell("ordered", Class::Light, &[], "true").after(&["bad"]),
+    ];
+    let reports = run_keep_going(tasks).await;
+    assert_eq!(status(&reports, "bad"), Status::Fail);
+    assert_eq!(status(&reports, "independent"), Status::Ok);
+    assert_eq!(status(&reports, "dependent"), Status::Cancelled);
+    let note = &reports
+        .iter()
+        .find(|report| report.name == "dependent")
+        .unwrap()
+        .note;
+    assert_eq!(note, "dependency bad failed");
+    // `after` only orders: a failed predecessor does not stop it.
+    assert_eq!(status(&reports, "ordered"), Status::Ok);
+}
+
+#[tokio::test]
+async fn keep_going_cancels_the_dependents_of_a_cancelled_task_too() {
+    let tasks = vec![
+        shell("bad", Class::Light, &[], "exit 1"),
+        shell("middle", Class::Light, &["bad"], "true"),
+        shell("last", Class::Light, &["middle"], "true"),
+    ];
+    let reports = run_keep_going(tasks).await;
+    assert_eq!(status(&reports, "middle"), Status::Cancelled);
+    assert_eq!(status(&reports, "last"), Status::Cancelled);
+}
+
+#[test]
+fn dry_run_prints_each_command_in_order_and_marks_built_ins() {
+    let tasks = vec![
+        shell("one", Class::Light, &[], "echo hi"),
+        Task::func("two", Class::Light, &[], |_ctx| async { Outcome::Ok }),
+    ];
+    assert_eq!(
+        plan_text(&tasks),
+        "one                sh -c echo hi\ntwo                (built-in)\n"
+    );
+    assert_eq!(
+        list_text(&[shell("a", Class::Light, &["b"], "true")]),
+        "a                  Light  after: b\n"
+    );
 }

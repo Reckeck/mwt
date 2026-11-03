@@ -17,24 +17,37 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
 
+use crate::channel::Channel;
+
 /// What an MSI version can hold in its last field.
 pub const MAX_RUN: u64 = 65535;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The release channel: the one value set of every `--channel` (`dev`, `prod`, `none`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum Kind {
     Prod,
     Dev,
+    /// A build that publishes nothing: the dev names, a `X.Y.Z-<run>` version.
     None,
 }
 
 impl Kind {
-    pub fn parse(name: &str) -> Result<Self> {
-        match name {
-            "prod" => Ok(Self::Prod),
-            "dev" => Ok(Self::Dev),
-            "none" => Ok(Self::None),
-            other => bail!("channel must be dev, prod or none, not `{other}`"),
+    /// The names a build ships under: `none` has the dev ones.
+    pub fn names(self) -> Channel {
+        match self {
+            Self::Prod => Channel::Prod,
+            Self::Dev | Self::None => Channel::Dev,
         }
+    }
+
+    /// For a command that publishes into a channel folder: `none` has none.
+    pub fn publishing(self, command: &str) -> Result<Channel> {
+        if self == Self::None {
+            bail!(
+                "`{command}` cannot take `--channel none`: a build needs a channel to ship under (dev or prod)"
+            );
+        }
+        Ok(self.names())
     }
 
     fn label(self) -> &'static str {
@@ -244,7 +257,7 @@ fn remote_tags(root: &Path) -> Result<String> {
 }
 
 pub struct Args {
-    pub channel: Option<String>,
+    pub channel: Option<Kind>,
     pub run: Option<u64>,
     pub output: Option<String>,
 }
@@ -252,11 +265,10 @@ pub struct Args {
 /// `cargo xtask version`: the app version, or with a channel the version a build ships under.
 pub fn run(root: &Path, args: &Args) -> Result<()> {
     let version = tauri_version(root)?;
-    let Some(channel) = &args.channel else {
+    let Some(kind) = args.channel else {
         println!("{version}");
         return Ok(());
     };
-    let kind = Kind::parse(channel)?;
     let cargo_toml = std::fs::read_to_string(root.join("Cargo.toml"))?;
     let cargo_version = workspace_version(&cargo_toml).unwrap_or_default();
     let changelog = if kind == Kind::Prod {

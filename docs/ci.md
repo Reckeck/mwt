@@ -157,13 +157,16 @@ a PR and is called from `release.yml` (`workflow_call`): a push to
 `development`/`main` is checked by exactly that call; there is no separate run
 of `ci.yml` on a push.
 
-- `check-linux` (`cargo xtask check --no-frontend --no-platforms`) and
-  `check-frontend` (`cargo xtask check --frontend`) are two separate jobs in the
+- `check-linux` (`cargo xtask check --exclude @frontend --exclude @platforms`) and
+  `check-frontend` (`cargo xtask check @frontend --exclude layout --exclude links`) are two separate jobs in the
   `ci-linux` image: the Rust checks and the web part (lint, typecheck, vitest,
-  static checks, e2e) run in parallel.
+  static checks, e2e) run in parallel. A new task of `check` lands in
+  `check-linux` unless it is in `@frontend` or `@platforms`; the groups are one
+  table (`crates/xtask/src/checks/groups.rs`: `@static`, `@browser`, `@frontend`,
+  `@rust`, `@platforms`) and a test fails for a task that is in none.
 - `frontend-layout` runs the full `check-layout` and `check-links` (all widths,
   both themes) as a matrix of 6 shards: `cargo xtask check layout links
-  --full-browser --shard K/6 --jobs 1`. The work is split into small units (a
+  --shard K/6 --jobs 1` (layout and links run in full unless `--quick`). The work is split into small units (a
   batch of about 5 theme x width combinations, a batch of about 10 overlays, the
   links page); shard K takes the K-th share by the weights from
   `tests/e2e/layout/weights.json` and `tests/e2e/links/weights.json` (seconds
@@ -422,7 +425,7 @@ through podman with the same volumes as `build:all`) and macos (only on a Mac or
 through `MACOS_BUILD_HOST`). It is mandatory after the last edit, before
 merging and committing (AGENTS.md, "Building on all platforms"). The logs are
 `.cache/xtask/<task>.log` (`clippy` = linux, `platform-windows.log` …); it is
-started by `cargo xtask check-platforms` (the same tasks are part of `mise run
+started by `cargo xtask check clippy @platforms` (the same tasks are part of `mise run
 check`); `SKIP` with a reason means the machine cannot check that platform,
 `FAIL` means the code does not build.
 

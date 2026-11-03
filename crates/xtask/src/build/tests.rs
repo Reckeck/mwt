@@ -4,13 +4,14 @@ use tokio_util::sync::CancellationToken;
 
 use super::macos::MacFacts;
 use super::*;
+use crate::channel::Channel;
 use crate::graph::{Opts, Status, run_graph};
 
 fn env() -> Arc<Env> {
     Arc::new(
         Env::detect(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
-            "dev",
+            Channel::Dev,
             "0.1.0",
             false,
             1,
@@ -145,6 +146,7 @@ async fn macos_without_a_mac_or_host_is_skipped() {
         Opts {
             heavy: 2,
             browser: 1,
+            keep_going: false,
         },
         CancellationToken::new(),
         Arc::new(Sink::new(None)),
@@ -176,7 +178,7 @@ fn prebuilt_frontend_drops_the_frontend_task() {
 #[test]
 fn android_overlay_carries_the_version_code() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let shared = Env::detect(root, "dev", "0.1.0-7", false, 7).unwrap();
+    let shared = Env::detect(root, Channel::Dev, "0.1.0-7", false, 7).unwrap();
     let Ok(path) = targets::overlay(&shared, "android-unit-test", true, false) else {
         panic!("overlay not written");
     };
