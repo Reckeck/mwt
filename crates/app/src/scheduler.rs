@@ -38,6 +38,8 @@ const ALERT_REFRESH_SEC: u64 = 5 * 60;
 /// Inflation and the key rate: once a day, an hour after a failure.
 const RATES_REFRESH_SEC: u64 = 24 * 60 * 60;
 const RATES_RETRY_SEC: u64 = 60 * 60;
+/// Automatic update check: the first one on the first tick (~30 s after start), then every 6 hours.
+const UPDATE_CHECK_SEC: u64 = 6 * 60 * 60;
 
 /// What the scheduler remembers between ticks.
 #[derive(Default)]
@@ -49,6 +51,8 @@ struct Memory {
     last_price_refresh: Option<Instant>,
     /// When inflation and the key rate are fetched next (`None`: now).
     next_rates: Option<Instant>,
+    /// When the next automatic update check runs (`None`: this tick).
+    next_update_check: Option<Instant>,
 }
 
 /// How often the snapshot for a locked vault is taken while it is open.
@@ -59,6 +63,8 @@ pub fn spawn(app: AppHandle) {
         let mut memory = Memory::default();
         loop {
             std::thread::sleep(Duration::from_secs(SCHEDULER_TICK_SEC));
+            // Needs no vault: the lock screen may sit open for days.
+            updates_tick(&app, &mut memory);
             if !is_unlocked(&app) {
                 locked_tick(&app);
                 continue;
@@ -85,6 +91,24 @@ pub fn spawn(app: AppHandle) {
             snapshot_tick(&app, false);
         }
     });
+}
+
+/// Look for a new version when the user allows it (Settings → About).
+/// The network part runs on the async runtime, not on this thread.
+fn updates_tick(app: &AppHandle, memory: &mut Memory) {
+    if memory
+        .next_update_check
+        .is_some_and(|at| Instant::now() < at)
+    {
+        return;
+    }
+    memory.next_update_check = Some(Instant::now() + Duration::from_secs(UPDATE_CHECK_SEC));
+    if !crate::commands::app_settings::current_settings(app).auto_update()
+        || !crate::updates::auto_check_due(app)
+    {
+        return;
+    }
+    tauri::async_runtime::spawn(crate::updates::run_check(app.clone(), false));
 }
 
 /// Refresh prices and rates every «Price refresh interval» (Settings → This

@@ -84,6 +84,8 @@ export const mockAppSettings: AppSettings = {
   declined_tours: [],
   // An install older than the field: "What's new" shows every entry, as after an update.
   installed_at: null,
+  auto_update: null,
+  last_update_check: null,
 }
 
 export const mockCurrencies: SupportedCurrencies = {

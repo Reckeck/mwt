@@ -65,6 +65,8 @@ keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "ap
 # Moving the TradeApp-era directories and autostart entry (src/legacy.rs).
 dirs = "7"
 auto-launch = "0.5"
+# Self-update of AppImage / NSIS / MSI / .app builds (src/updates.rs).
+tauri-plugin-updater = "2"
 
 [dev-dependencies]
 tempfile = "3"

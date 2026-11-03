@@ -14,6 +14,14 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'appUpdates',
+    date: '2026-11-03',
+    points: [
+      { key: 'auto', route: 'settings:app:updates' },
+      { key: 'manual', route: 'settings:app:updates' },
+    ],
+  },
+  {
     id: 'contactsSection',
     date: '2026-11-03',
     points: [
@@ -277,16 +285,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'gallery', route: 'automations' },
       { key: 'confirm', route: 'automations' },
       { key: 'nodes', route: 'automations-workflows' },
-    ],
-  },
-  {
-    id: 'dataSources',
-    date: '2026-10-22',
-    points: [
-      { key: 'pick', route: 'automations-sources' },
-      { key: 'uses', route: 'automations-sources' },
-      { key: 'guard', route: 'automations-sources' },
-      { key: 'workflows', route: 'automations' },
     ],
   },
   ...WHATS_NEW_AUTUMN,

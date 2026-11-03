@@ -10,6 +10,7 @@ import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { ConverterDialog } from '@/features/currency-convert'
 import { QuickAddDialog } from '@/widgets/quick-add'
 import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
+import { UpdateNotice, useUpdateEvents } from '@/features/app-update'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
 import { SettingsShell } from '@/widgets/settings-shell'
 import { TourOffer } from '@/widgets/tour-offer'
@@ -65,6 +66,7 @@ useNativeMenuBlock()
 useCacheEvents()
 useBackendNotices()
 useSyncEvents()
+useUpdateEvents()
 useBackButton()
 
 const { summary, isOnline } = useConnectivity()
@@ -142,7 +144,13 @@ const pageClass = computed(() => {
       </AppHeader>
 
       <div class="@container min-h-0 flex-1 scrollbar-stable" :class="pageClass">
-        <SyncBanner />
+        <!-- Floats under the header: a banner arriving must not push the page down (rule 17). -->
+        <div class="banner-stack pointer-events-none fixed inset-x-0 z-banner flex flex-col items-center gap-2 px-4">
+          <div class="grid w-full max-w-md gap-2">
+            <SyncBanner />
+            <UpdateNotice />
+          </div>
+        </div>
         <TourOffer v-if="offer" :id="offer" @close="offer = null" />
         <!-- Keyed by the page and its params, not the path: /stores/a → /stores/b gets a fresh
              page (its widgets keep local state per wallet), while a sub-tab of a section
@@ -171,3 +179,10 @@ const pageClass = computed(() => {
     <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />
   </SidebarProvider>
 </template>
+
+<style scoped>
+/* Under the header (3.5rem + the status bar); the header's height lives in AppHeader. */
+.banner-stack {
+  top: calc(var(--safe-top) + 4rem);
+}
+</style>

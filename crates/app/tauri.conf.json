@@ -46,6 +46,12 @@
       "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ0MTQ5NDczNkZFRDdENUYKUldSZmZlMXZjNVFVMUEwcDJiVU5BbzdGanV2SitYYTdYZ1grSkNyS2t1aTZYRHAzck5RVFFkOVcK",
+      "endpoints": []
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

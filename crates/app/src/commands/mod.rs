@@ -26,6 +26,7 @@ pub mod sync;
 pub mod transactions;
 pub mod transactions_bulk;
 pub mod transfer;
+pub mod updates;
 pub mod vault_backups;
 pub mod vault_link;
 pub mod vault_recents;

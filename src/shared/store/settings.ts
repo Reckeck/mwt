@@ -136,6 +136,8 @@ export const useSettingsStore = defineStore('settings', {
           dashboard_today_collapsed: patch.dashboard_today_collapsed ?? null,
           tour_offers: patch.tour_offers ?? null,
           declined_tours: patch.declined_tours ?? null,
+          auto_update: patch.auto_update ?? null,
+          last_update_check: patch.last_update_check ?? null,
         } satisfies UpdateAppSettingsInput,
       })
     },

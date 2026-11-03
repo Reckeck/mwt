@@ -12,6 +12,7 @@ import { FxRates } from '@/widgets/fx-rates'
 import { InflationSettings } from '@/widgets/inflation-settings'
 import { NotificationSettings } from '@/widgets/notification-settings'
 import { QuickAddSettings } from '@/widgets/quick-add-settings'
+import { UpdateSettings } from '@/widgets/update-settings'
 import { SyncDevices, SyncHistory, SyncSettings, SyncTransfer } from '@/widgets/sync-settings'
 import { VaultDevTools } from '@/widgets/vault-dev-tools'
 import { VaultDirection } from '@/widgets/vault-direction'
@@ -39,6 +40,7 @@ const { t } = useI18n()
     >
       <SettingsSection v-if="section.id === 'app'" :title="t('settingsShell.section.view')" :description="t('settings.viewHint')"><AppSettingsPanel /></SettingsSection>
       <DeviceSettings v-else-if="section.id === 'device-app'" />
+      <UpdateSettings v-else-if="section.id === 'updates'" />
       <QuickAddSettings v-else-if="section.id === 'quick-add'" />
       <HotkeySettings v-else-if="section.id === 'hotkeys'" />
       <TourSettings v-else-if="section.id === 'tours'" />

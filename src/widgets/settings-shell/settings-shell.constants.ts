@@ -51,6 +51,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         sections: [
           section('app', 'app'),
           section('device-app', 'deviceApp', true),
+          section('updates', 'updates'),
           section('notifications', 'notifications'),
         ],
       },
