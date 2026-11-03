@@ -34,7 +34,7 @@ What makes CI fast and what must not be broken:
 
 - **Ready-made images.** Jobs run in images from `scripts/ci/ci.Dockerfile`
   (ghcr.io, `ghcr.io/<owner>/<repository>/ci-<kind>:<tag>`): `ci-node`
-  (mise + node/pnpm, frontend), `ci-linux` (+ Tauri libraries, Rust,
+  (mise + node/pnpm, headless Chrome: the frontend jobs and `deps-node`), `ci-linux` (+ Tauri libraries, Rust,
   sccache), `ci-android` (+ JDK 17, SDK/NDK, Rust targets). A job installs
   neither apt packages nor a toolchain: `setup-linux.sh` only attaches the
   caches. The image tag is a hash of the inputs (Dockerfile,
@@ -173,14 +173,17 @@ of `ci.yml` on a push.
 - `deps-node` installs `node_modules` once per key (`xtask lane-key node`: the
   lock file, manifests, `.npmrc`, image tag, node and pnpm versions) and saves
   it on a miss only, deleting the older node_modules caches of the ref;
-  `check-frontend` and `frontend-layout` restore exactly that key with
-  `fail-on-cache-miss` and never run `pnpm install`. They run no cargo, so they
-  have no Rust lane cache and no sccache.
-- `check-linux` (`bin/xtask check --exclude @frontend --exclude @platforms`) and
-  `check-frontend` (`bin/xtask check @frontend --exclude layout --exclude links`) are two separate jobs in the
-  `ci-linux` image: the Rust checks and the web part (lint, typecheck, vitest,
-  static checks, e2e) run in parallel. A new task of `check` lands in
-  `check-linux` unless it is in `@frontend` or `@platforms`; the groups are one
+  `frontend-static`, `frontend-e2e` and `frontend-layout` restore exactly that
+  key with `fail-on-cache-miss` and never run `pnpm install`. They run no cargo,
+  so they have no Rust lane cache and no sccache.
+- The web part runs in the light `ci-node` image (node, pnpm, Chrome, no Rust;
+  `deps-node` too): xtask comes as the prebuilt binary. `check-linux`
+  (`bin/xtask check --exclude @frontend --exclude @platforms`, in `ci-linux`),
+  `frontend-static` (`bin/xtask check @static`: lint, typecheck, vitest, static
+  checks) and `frontend-e2e` (`bin/xtask check @browser --exclude layout
+  --exclude links`: e2e) run in parallel. A new task of `check` lands in
+  `check-linux` unless it is in `@frontend` or `@platforms`; a new `@static`
+  task lands in `frontend-static`, a new `@browser` one in `frontend-e2e`; the groups are one
   table (`crates/xtask/src/checks/groups.rs`: `@static`, `@browser`, `@frontend`,
   `@rust`, `@platforms`) and a test fails for a task that is in none.
 - `frontend-layout` runs the full `check-layout` and `check-links` (all widths,

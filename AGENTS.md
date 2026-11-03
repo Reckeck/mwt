@@ -261,8 +261,8 @@ check it with `mise x actionlint@1.7.12 -- actionlint`. GitLab is only a mirror 
 
 - **CI repeats the local gate.** A new check in `mise run check`
   is added to `cargo xtask check` as well and into a group of `crates/xtask/src/checks/groups.rs`
-  (the `check-linux`/`check-frontend` jobs in `ci.yml` select by excluding groups, so a new task
-  runs there by default; a test fails for a task in no group); CI must not be softer than `mise run check`. Keep the
+  (the `check-linux`/`frontend-static`/`frontend-e2e` jobs in `ci.yml` select by groups and
+  exclusions, so a new task runs in one of them by default; a test fails for a task in no group); CI must not be softer than `mise run check`. Keep the
   logic in xtask or a script (`scripts/ci/*`, `.github/scripts/*`), not in a
   multi-line `run:` — then it can be run and checked locally.
 - **Tool versions — only from `mise.toml`.** CI installs node/pnpm/rust

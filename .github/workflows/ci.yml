@@ -4,14 +4,14 @@
 #   images          the CI images in ghcr (images.yml), built only when their tag is new
 #   xtask           the xtask binary, built once (linux in ci-linux, windows natively) and handed to every
 #                   job as an artifact (bin/xtask): the jobs below never compile xtask themselves
-#   deps-node       node_modules, installed once per pnpm-lock.yaml and saved on a miss; the frontend jobs
-#                   only restore it (and fail on a miss)
+#   deps-node       node_modules, installed once per pnpm-lock.yaml and saved on a miss (in ci-node); the
+#                   frontend jobs only restore it (and fail on a miss)
 #   deps            a lane's dependency cache (sccache dir), written ONLY here and only when
 #                   the lane has no cache for its key yet; everything else just reads it
 #   check-linux     bin/xtask check --exclude @frontend --exclude @platforms in ci-linux: fmt, clippy, tests, gen-types
-#   check-frontend  bin/xtask check @frontend --exclude layout --exclude links in ci-linux: lint, typecheck, vitest,
-#                   static checks, e2e
-#   frontend-layout bin/xtask check layout links (full by default), a matrix of 6 shards of their units
+#   frontend-static bin/xtask check @static in ci-node: lint, typecheck, vitest, static checks
+#   frontend-e2e    bin/xtask check @browser --exclude layout --exclude links in ci-node: e2e
+#   frontend-layout bin/xtask check layout links (full by default) in ci-node, a matrix of 6 shards of their units
 #   check-android   bin/xtask check platform:android in ci-android (NDK in the image)
 #   clippy-windows  native clippy on windows-latest        } xtask's platform:windows/macos need
 #   clippy-macos    cargo xtask check platform:macos       } cargo-xwin / a Mac: left out of check-linux
@@ -149,7 +149,7 @@ jobs:
     outputs:
       key: ${{ steps.key.outputs.key }}
     container:
-      image: ${{ needs.images.outputs.base }}/ci-linux:${{ needs.images.outputs.tag }}
+      image: ${{ needs.images.outputs.base }}/ci-node:${{ needs.images.outputs.tag }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -169,7 +169,6 @@ jobs:
       - name: Toolchain from the image
         run: |
           echo /opt/mise/shims >>"$GITHUB_PATH"
-          echo /opt/cargo/bin >>"$GITHUB_PATH"
           mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -423,17 +422,68 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  check-frontend:
+  # The web part in ci-node (node, pnpm, Chrome, no Rust): xtask comes as a binary and runs no cargo here.
+  frontend-static:
     needs: [images, xtask, deps-node]
     if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && needs.deps-node.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     container:
-      image: ${{ needs.images.outputs.base }}/ci-linux:${{ needs.images.outputs.tag }}
+      image: ${{ needs.images.outputs.base }}/ci-node:${{ needs.images.outputs.tag }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      # Chrome (check-layout) needs more than Docker's 64 MB /dev/shm.
+    permissions:
+      contents: read
+      packages: read
+    env:
+      MISE_DATA_DIR: /opt/mise
+      MISE_YES: "1"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain from the image
+        run: |
+          echo /opt/mise/shims >>"$GITHUB_PATH"
+          mise trust "$GITHUB_WORKSPACE/mise.toml"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      # node_modules from deps-node; never installed here.
+      - name: node_modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ needs.deps-node.outputs.key }}
+          fail-on-cache-miss: true
+      - name: xtask check @static
+        run: bin/xtask check @static
+      - name: Logs and screenshots of a failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-static-logs
+          path: |
+            .cache/xtask/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  frontend-e2e:
+    needs: [images, xtask, deps-node]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && needs.deps-node.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ${{ needs.images.outputs.base }}/ci-node:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      # Chrome needs more than Docker's 64 MB /dev/shm.
       options: --shm-size=2g
     permissions:
       contents: read
@@ -449,7 +499,6 @@ jobs:
       - name: Toolchain from the image
         run: |
           echo /opt/mise/shims >>"$GITHUB_PATH"
-          echo /opt/cargo/bin >>"$GITHUB_PATH"
           mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -464,13 +513,14 @@ jobs:
           path: node_modules
           key: ${{ needs.deps-node.outputs.key }}
           fail-on-cache-miss: true
-      - name: xtask check @frontend --exclude layout --exclude links
-        run: bin/xtask check @frontend --exclude layout --exclude links
+      # @browser minus the sharded layout/links of frontend-layout: a new browser task lands here.
+      - name: xtask check @browser --exclude layout --exclude links
+        run: bin/xtask check @browser --exclude layout --exclude links
       - name: Logs and screenshots of a failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: check-frontend-logs
+          name: frontend-e2e-logs
           path: |
             .cache/xtask/
             .cache/e2e/
@@ -489,7 +539,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6]
     container:
-      image: ${{ needs.images.outputs.base }}/ci-linux:${{ needs.images.outputs.tag }}
+      image: ${{ needs.images.outputs.base }}/ci-node:${{ needs.images.outputs.tag }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -509,7 +559,6 @@ jobs:
       - name: Toolchain from the image
         run: |
           echo /opt/mise/shims >>"$GITHUB_PATH"
-          echo /opt/cargo/bin >>"$GITHUB_PATH"
           mise trust "$GITHUB_WORKSPACE/mise.toml"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -697,7 +746,7 @@ jobs:
   # The required status check of the protected branches: green only if every lane is.
   ci-ok:
     if: always()
-    needs: [images, xtask, xtask-windows, deps-node, deps, deps-native, check-linux, check-frontend, frontend-layout, check-android, clippy-windows, clippy-macos]
+    needs: [images, xtask, xtask-windows, deps-node, deps, deps-native, check-linux, frontend-static, frontend-e2e, frontend-layout, check-android, clippy-windows, clippy-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
