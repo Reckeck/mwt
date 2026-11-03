@@ -41,7 +41,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-store = "2"
-ts-rs = { version = "9", features = ["serde-compat"] }
+ts-rs = { version = "12", features = ["serde-compat"] }
 regex = "1"
 # Device-to-device vault sync: Noise channel and LAN discovery.
 snow = "0.10"
@@ -50,10 +50,10 @@ spake2 = "0.4"
 serde_bytes = "0.11"
 mdns-sd = "0.21"
 # Own data sources: elements of a web page, CSV and XLSX files.
-scraper = { version = "0.25", default-features = false }
+scraper = { version = "0.29", default-features = false }
 csv = "1"
 calamine = { version = "0.38", default-features = false }
-ego-tree = "0.10"
+ego-tree = "0.11"
 
 [profile.release]
 codegen-units = 1

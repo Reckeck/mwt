@@ -60,7 +60,10 @@ pub fn migrate_autostart(app: &AppHandle) {
         .set_app_path(&exe.display().to_string())
         .set_args(&["--hidden"]);
     #[cfg(target_os = "macos")]
-    builder.set_use_launch_agent(true);
+    builder.set_macos_launch_mode(auto_launch::MacOSLaunchMode::LaunchAgent);
+    // 0.6 defaults to the machine-wide registry key; the old entry lives under the current user.
+    #[cfg(windows)]
+    builder.set_windows_enable_mode(auto_launch::WindowsEnableMode::CurrentUser);
     let Ok(legacy) = builder.build() else {
         return;
     };
