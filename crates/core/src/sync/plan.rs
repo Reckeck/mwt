@@ -11,7 +11,7 @@ use super::fields::changed_fields;
 use super::merge::merge;
 use super::registry::Collection;
 use super::state::RecordState;
-use super::view::{label, split_key};
+use super::view::{comparable_record, label, split_key};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
@@ -152,6 +152,17 @@ fn short(coll: &Collection, field: &str, value: &Value) -> String {
     text.chars().take(80).collect()
 }
 
+/// Whether two states hold the same record, leaving out the item fields every
+/// device recomputes (`Collection.recomputed`).
+fn same_record(coll: &Collection, left: &Option<Value>, right: &Option<Value>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => {
+            comparable_record(coll, left) == comparable_record(coll, right)
+        }
+        (left, right) => left == right,
+    }
+}
+
 /// Merge each incoming record with the local one (`local` gives the local
 /// state of a key) and keep those that change.
 pub fn plan(
@@ -166,7 +177,8 @@ pub fn plan(
         };
         let before = local(key);
         let merged = merge(coll, &before, remote);
-        if merged.state.value == before.value && merged.state.same_marks(&before) {
+        let same_value = same_record(coll, &merged.state.value, &before.value);
+        if same_value && merged.state.same_marks(&before) {
             continue;
         }
         let kind = match (&before.value, &merged.state.value) {
@@ -183,7 +195,7 @@ pub fn plan(
             .unwrap_or_default();
         // Only stamps moved (the value is the same): nothing to show. A
         // cache point applies silently.
-        if merged.state.value != before.value && !coll.cache {
+        if !same_value && !coll.cache {
             let group = groups
                 .entry(coll.name)
                 .or_insert_with(|| CollectionChanges {

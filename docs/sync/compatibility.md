@@ -108,6 +108,21 @@ With an old device the whole field is still one value:
   that an old one forwarded without the array stamp: the correction is
   withdrawn when the real entry arrives, and its stamp stays as the removal
   mark.
+- The lines of a correction (`Adjustment`) split per asset: the entry key is
+  the whole asset (`lines.<symbol>|<coingecko id>|<chain>|<contract>`), so two
+  devices counting different assets of one correction both keep their value.
+  `before` (the ledger balance just before the correction) is recomputed by
+  every device from its own ledger. It stays in every stored and sent line (an
+  old device requires it), but it never counts as a change: the change tracker,
+  the merge and the sync plan compare a line without it
+  (`Collection.recomputed`). A backdated operation arriving on one device
+  therefore stamps nothing and cannot overwrite a balance the user counted on
+  another. Whatever `before` a merged line carries, the recompute after the
+  merge replaces it, so equal ledgers end with equal digests.
+  An old device does not know the split: its recompute still stamps `lines` as
+  a whole, and that stamp is a floor for every line without a stamp of its
+  own, so it can win over a newer-looking edit exactly as before. The limit
+  ends when every device is updated.
 - Manifest digests of the affected records change once after the update, so
   the devices re-exchange them once.
 

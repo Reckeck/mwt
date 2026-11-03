@@ -51,6 +51,9 @@ const ENABLED_KINDS: &[Edit] = &[
     Edit::FundEnvelope,
     Edit::MoveBetweenEnvelopes,
     Edit::DeleteEnvelope,
+    Edit::CountBalance,
+    Edit::RecountBalance,
+    Edit::BackdatedTx,
 ];
 
 const DEFAULT_SEEDS: &[u64] = &[1, 2, 3, 4, 5];
@@ -86,6 +89,9 @@ enum Edit {
     FundEnvelope,
     MoveBetweenEnvelopes,
     DeleteEnvelope,
+    CountBalance,
+    RecountBalance,
+    BackdatedTx,
 }
 
 /// splitmix64: tiny, deterministic, good enough for choosing steps.
@@ -283,6 +289,9 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
         | Edit::FundEnvelope
         | Edit::MoveBetweenEnvelopes
         | Edit::DeleteEnvelope => apply_envelope(kind, vault, rng, ledger),
+        Edit::CountBalance | Edit::RecountBalance | Edit::BackdatedTx => {
+            apply_adjustment(kind, vault, rng, ledger);
+        }
         Edit::DeleteContact => {
             let ids: Vec<String> = vault
                 .doc
@@ -556,6 +565,72 @@ fn apply_fund(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
 }
 
 /// Categories made by this harness (names `cat<N>` / `renamed<N>` keys start with `cat`).
+/// A few fixed moments, so corrections and backdated operations of different
+/// devices land in the same second now and then.
+const MOMENTS: &[&str] = &[
+    "2026-03-01T10:00:00Z",
+    "2026-03-02T10:00:00Z",
+    "2026-03-03T10:00:00Z",
+];
+
+fn adjustment_ids(vault: &UnlockedVault) -> Vec<String> {
+    vault
+        .doc
+        .transactions
+        .iter()
+        .filter(|tx| matches!(tx, Transaction::Adjustment(_)))
+        .map(|tx| tx.meta().id.clone())
+        .collect()
+}
+
+fn apply_adjustment(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+    let store_id = vault.doc.stores[0].id.clone();
+    match kind {
+        Edit::CountBalance => {
+            let mut meta = crate::model::transaction::TxMeta::new("count");
+            // The fixed moments make two corrections of one account land in
+            // one second now and then: they are ordered by creation stamp.
+            meta.timestamp = MOMENTS[rng.below(MOMENTS.len())].into();
+            let tx = Transaction::Adjustment(crate::model::transaction::AdjustmentTx {
+                meta,
+                store_id,
+                lines: vec![crate::model::transaction::AdjustmentLine {
+                    asset: usd(),
+                    before: crate::Amount::ZERO,
+                    after: amount(&format!("{}", 1 + rng.below(1000))),
+                    price: Default::default(),
+                }],
+                fee: None,
+            });
+            // Nothing to correct when the balance already matches: not an error here.
+            let _ = vault.add_transaction(tx);
+        }
+        Edit::RecountBalance => {
+            let ids = adjustment_ids(vault);
+            let Some(id) = pick(rng, &ids).cloned() else {
+                return;
+            };
+            let mut tx = vault
+                .doc
+                .transactions
+                .iter()
+                .find(|tx| tx.meta().id == id)
+                .unwrap()
+                .clone();
+            if let Transaction::Adjustment(inner) = &mut tx {
+                inner.lines[0].after = amount(&format!("{}", 1 + rng.below(1000)));
+            }
+            let _ = vault.update_transaction(&id, tx);
+            ledger.touched_after.insert(format!("transactions:{id}"));
+        }
+        _ => {
+            let mut tx = income(&store_id, &format!("{}", 1 + rng.below(1000)), "late");
+            tx.meta_mut().timestamp = MOMENTS[rng.below(MOMENTS.len())].into();
+            vault.add_transaction(tx).unwrap();
+        }
+    }
+}
+
 fn created_categories(vault: &UnlockedVault) -> Vec<String> {
     vault
         .doc

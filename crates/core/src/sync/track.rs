@@ -10,7 +10,7 @@ use serde_json::Value;
 use super::registry::Rule;
 use super::stamp::{Clock, Stamp};
 use super::state::{RecordStamps, SyncState};
-use super::view::{records, split, split_key};
+use super::view::{comparable, records, split, split_key};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Print {
@@ -35,7 +35,7 @@ fn prints(doc: &Value) -> HashMap<String, Print> {
                 fields: fields
                     .fields
                     .iter()
-                    .map(|(name, field)| (name.clone(), hash_value(field)))
+                    .map(|(name, field)| (name.clone(), hash_value(&comparable(coll, name, field))))
                     .collect(),
             };
             Some((key, print))
