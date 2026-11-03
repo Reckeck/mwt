@@ -2,19 +2,23 @@
 # calls this workflow (workflow_call) before it builds anything: the same lanes, run once.
 #
 #   images          the CI images in ghcr (images.yml), built only when their tag is new
+#   xtask           the xtask binary, built once (linux in ci-linux, windows natively) and handed to every
+#                   job as an artifact (bin/xtask): the jobs below never compile xtask themselves
+#   deps-node       node_modules, installed once per pnpm-lock.yaml and saved on a miss; the frontend jobs
+#                   only restore it (and fail on a miss)
 #   deps            a lane's dependency cache (sccache dir), written ONLY here and only when
 #                   the lane has no cache for its key yet; everything else just reads it
-#   check-linux     cargo xtask check --exclude @frontend --exclude @platforms in ci-linux: fmt, clippy, tests, gen-types
-#   check-frontend  cargo xtask check @frontend --exclude layout --exclude links in ci-linux: lint, typecheck, vitest,
+#   check-linux     bin/xtask check --exclude @frontend --exclude @platforms in ci-linux: fmt, clippy, tests, gen-types
+#   check-frontend  bin/xtask check @frontend --exclude layout --exclude links in ci-linux: lint, typecheck, vitest,
 #                   static checks, e2e
-#   frontend-layout cargo xtask check layout links (full by default), a matrix of 6 shards of their units
-#   check-android   cargo xtask check platform:android in ci-android (NDK in the image)
+#   frontend-layout bin/xtask check layout links (full by default), a matrix of 6 shards of their units
+#   check-android   bin/xtask check platform:android in ci-android (NDK in the image)
 #   clippy-windows  native clippy on windows-latest        } xtask's platform:windows/macos need
 #   clippy-macos    cargo xtask check platform:macos       } cargo-xwin / a Mac: left out of check-linux
 #   ci-ok           the one job branch protection requires
 #
-# Cache keys, who writes and who reads: see docs in .github/scripts/lane-key.sh and the
-# job comments below. A cache is visible to its own ref, the PR's base branch and the
+# Cache keys, who writes and who reads: see `xtask lane-key` (crates/xtask/src/cache/lane_key.rs)
+# and the job comments below. A cache is visible to its own ref, the PR's base branch and the
 # default branch (development) only, so feature branches are checked through PRs.
 # main runs without caches (releases build from scratch).
 name: ci
@@ -55,13 +59,156 @@ jobs:
       contents: read
       packages: write
 
+  # ------------------------------------------------------------------ xtask
+  # xtask compiled once per platform; every job below downloads it into bin/ instead of running
+  # `cargo xtask`. The Linux binary is built in ci-linux (ubuntu 22.04, as ci-node and ci-android
+  # are), so it runs in all of them. The artifacts are not called `xtask`: release.yml calls this
+  # workflow in the same run and already uploads an artifact of that name.
+  xtask:
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ${{ needs.images.outputs.base }}/ci-linux:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      MISE_DATA_DIR: /opt/mise
+      MISE_YES: "1"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain from the image
+        run: |
+          echo /opt/mise/shims >>"$GITHUB_PATH"
+          echo /opt/cargo/bin >>"$GITHUB_PATH"
+          mise trust "$GITHUB_WORKSPACE/mise.toml"
+      - name: Compiled xtask dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/xtask-target
+          key: xtask-linux-${{ hashFiles('Cargo.lock', 'crates/xtask/**', 'mise.toml', '.cargo/config.toml') }}
+      # The flag wins over target-dir of .cargo/config.toml and over CARGO_TARGET_DIR of mise.toml.
+      - name: Build xtask
+        run: cargo build -p xtask --locked --target-dir .cache/xtask-target
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: xtask-linux
+          path: .cache/xtask-target/debug/xtask
+          include-hidden-files: true
+          retention-days: 1
+          if-no-files-found: error
+
+  xtask-windows:
+    needs: images
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Rust as mise.toml pins it (no version in this file).
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        with:
+          install_args: rust
+          cache: false
+      - name: Compiled xtask dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/xtask-target
+          key: xtask-windows-${{ hashFiles('Cargo.lock', 'crates/xtask/**', 'mise.toml', '.cargo/config.toml') }}
+      - name: Build xtask
+        run: cargo build -p xtask --locked --target-dir .cache/xtask-target
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: xtask-windows
+          path: .cache/xtask-target/debug/xtask.exe
+          include-hidden-files: true
+          retention-days: 1
+          if-no-files-found: error
+
+  # ------------------------------------------------------------------ deps-node
+  # node_modules once per key (pnpm-lock.yaml, manifests, image, node/pnpm versions): a lookup, and
+  # only a miss installs, saves and deletes the older caches of this ref. The frontend jobs restore
+  # exactly this key and fail if it is missing; they never install.
+  deps-node:
+    needs: [images, xtask]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    container:
+      image: ${{ needs.images.outputs.base }}/ci-linux:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+      actions: write # delete the older caches
+    env:
+      MISE_DATA_DIR: /opt/mise
+      MISE_YES: "1"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      CI_IMAGE_TAG: ${{ needs.images.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain from the image
+        run: |
+          echo /opt/mise/shims >>"$GITHUB_PATH"
+          echo /opt/cargo/bin >>"$GITHUB_PATH"
+          mise trust "$GITHUB_WORKSPACE/mise.toml"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      - name: Cache key
+        id: key
+        run: echo "key=$(bin/xtask lane-key node)" >>"$GITHUB_OUTPUT"
+      - name: Is node_modules cached
+        id: lookup
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+      - name: pnpm install
+        if: steps.lookup.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Save node_modules
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.key.outputs.key }}
+      - name: Delete the older node_modules caches on this ref
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bin/xtask deps-prune node '${{ steps.key.outputs.key }}'
+
   # ------------------------------------------------------------------ deps
   # Lookup-only by the lane key; a hit ends the job. A miss: seed from the newest older
   # cache of the lane (prefix match: sccache is content-addressed, stale entries are
   # harmless), compile ONLY the dependencies (cargo-chef, our crates are stubs), save under
   # the new key into this ref and delete the older cache of this lane on this ref.
   deps:
-    needs: images
+    needs: [images, xtask]
     if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -94,9 +241,15 @@ jobs:
           echo /opt/mise/shims >>"$GITHUB_PATH"
           echo /opt/cargo/bin >>"$GITHUB_PATH"
           mise trust "$GITHUB_WORKSPACE/mise.toml"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
       - name: Cache key
         id: key
-        run: echo "key=$(.github/scripts/lane-key.sh '${{ matrix.lane }}')" >>"$GITHUB_OUTPUT"
+        run: echo "key=$(bin/xtask lane-key '${{ matrix.lane }}')" >>"$GITHUB_OUTPUT"
       - name: Is the lane cached
         id: lookup
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -106,7 +259,7 @@ jobs:
           lookup-only: true
       - name: Environment
         if: steps.lookup.outputs.cache-hit != 'true'
-        run: .github/scripts/ci-env.sh
+        run: bin/xtask ci-env
       - name: Seed from the lane's previous cache
         if: steps.lookup.outputs.cache-hit != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -117,8 +270,8 @@ jobs:
       - name: Compile the dependencies
         if: steps.lookup.outputs.cache-hit != 'true'
         run: |
-          .github/scripts/install-chef.sh
-          .github/scripts/deps-cook.sh '${{ matrix.lane }}'
+          bin/xtask install-chef
+          bin/xtask deps-cook '${{ matrix.lane }}'
           sccache --show-stats
       - name: Save the lane cache
         if: steps.lookup.outputs.cache-hit != 'true'
@@ -130,10 +283,11 @@ jobs:
         if: steps.lookup.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: .github/scripts/deps-prune.sh '${{ matrix.lane }}' '${{ steps.key.outputs.key }}'
+        run: bin/xtask deps-prune '${{ matrix.lane }}' '${{ steps.key.outputs.key }}'
 
+  # Windows lanes run the prebuilt xtask.exe; macOS (paused) has no binary and compiles it (`cargo xtask`).
   deps-native:
-    needs: images
+    needs: [images, xtask-windows]
     if: github.ref != 'refs/heads/main'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -141,8 +295,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { lane: clippy-windows, os: windows-latest }
-          # Paused for now, like the clippy-macos job: { lane: clippy-macos, os: macos-latest }
+          - { lane: clippy-windows, os: windows-latest, xtask: bin/xtask.exe }
+          # Paused for now, like the clippy-macos job: { lane: clippy-macos, os: macos-latest, xtask: cargo xtask }
     permissions:
       contents: read
       actions: write
@@ -163,9 +317,14 @@ jobs:
       - uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: sccache@0.19.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: matrix.os == 'windows-latest'
+        with:
+          name: xtask-windows
+          path: bin
       - name: Cache key
         id: key
-        run: echo "key=$(.github/scripts/lane-key.sh '${{ matrix.lane }}')" >>"$GITHUB_OUTPUT"
+        run: echo "key=$(${{ matrix.xtask }} lane-key '${{ matrix.lane }}')" >>"$GITHUB_OUTPUT"
       - name: Is the lane cached
         id: lookup
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -175,10 +334,10 @@ jobs:
           lookup-only: true
       - name: cargo-chef
         if: steps.lookup.outputs.cache-hit != 'true'
-        run: .github/scripts/install-chef.sh
+        run: ${{ matrix.xtask }} install-chef
       - name: Environment
         if: steps.lookup.outputs.cache-hit != 'true'
-        run: .github/scripts/ci-env.sh
+        run: ${{ matrix.xtask }} ci-env
       - name: Seed from the lane's previous cache
         if: steps.lookup.outputs.cache-hit != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -189,7 +348,7 @@ jobs:
       - name: Compile the dependencies
         if: steps.lookup.outputs.cache-hit != 'true'
         run: |
-          .github/scripts/deps-cook.sh '${{ matrix.lane }}'
+          ${{ matrix.xtask }} deps-cook '${{ matrix.lane }}'
           sccache --show-stats
       - name: Save the lane cache
         if: steps.lookup.outputs.cache-hit != 'true'
@@ -201,13 +360,13 @@ jobs:
         if: steps.lookup.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: .github/scripts/deps-prune.sh '${{ matrix.lane }}' '${{ steps.key.outputs.key }}'
+        run: ${{ matrix.xtask }} deps-prune '${{ matrix.lane }}' '${{ steps.key.outputs.key }}'
 
   # ------------------------------------------------------------------ checks
   # `deps` is skipped on main (no caches there); any other result than success/skipped stops the check.
   check-linux:
-    needs: [images, deps]
-    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    needs: [images, xtask, deps]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     container:
@@ -232,18 +391,25 @@ jobs:
           echo /opt/mise/shims >>"$GITHUB_PATH"
           echo /opt/cargo/bin >>"$GITHUB_PATH"
           mise trust "$GITHUB_WORKSPACE/mise.toml"
-          .github/scripts/ci-env.sh
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      - name: Environment
+        run: bin/xtask ci-env
       - name: Cache key
         id: key
-        run: echo "key=$(.github/scripts/lane-key.sh check-linux)" >>"$GITHUB_OUTPUT"
+        run: echo "key=$(bin/xtask lane-key check-linux)" >>"$GITHUB_OUTPUT"
       - name: Dependencies (read-only lane cache)
         if: github.ref != 'refs/heads/main'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/sccache
           key: ${{ steps.key.outputs.key }}
-      - name: cargo xtask check
-        run: cargo xtask check --exclude @frontend --exclude @platforms
+      - name: xtask check
+        run: bin/xtask check --exclude @frontend --exclude @platforms
       - name: sccache stats
         if: always()
         run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
@@ -258,8 +424,8 @@ jobs:
           if-no-files-found: ignore
 
   check-frontend:
-    needs: [images, deps]
-    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    needs: [images, xtask, deps-node]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && needs.deps-node.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     container:
@@ -276,7 +442,6 @@ jobs:
       MISE_DATA_DIR: /opt/mise
       MISE_YES: "1"
       MISE_TASK_RUN_AUTO_INSTALL: "false"
-      CI_IMAGE_TAG: ${{ needs.images.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -286,32 +451,21 @@ jobs:
           echo /opt/mise/shims >>"$GITHUB_PATH"
           echo /opt/cargo/bin >>"$GITHUB_PATH"
           mise trust "$GITHUB_WORKSPACE/mise.toml"
-          .github/scripts/ci-env.sh
-      # The Rust lane's cache: here it only has to bring xtask itself back.
-      - name: Cache key
-        id: key
-        run: echo "key=$(.github/scripts/lane-key.sh check-linux)" >>"$GITHUB_OUTPUT"
-      - name: Dependencies (read-only lane cache)
-        if: github.ref != 'refs/heads/main'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      # node_modules from deps-node; never installed here.
+      - name: node_modules
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .cache/sccache
-          key: ${{ steps.key.outputs.key }}
-      # One pnpm store for all branches: saved (by this step's post action) only when pnpm-lock.yaml is new.
-      - name: pnpm store
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .cache/pnpm
-          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - name: pnpm install
-        run: |
-          pnpm config set store-dir "$GITHUB_WORKSPACE/.cache/pnpm"
-          pnpm install --frozen-lockfile --prefer-offline
-      - name: cargo xtask check @frontend --exclude layout --exclude links
-        run: cargo xtask check @frontend --exclude layout --exclude links
-      - name: sccache stats
-        if: always()
-        run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
+          path: node_modules
+          key: ${{ needs.deps-node.outputs.key }}
+          fail-on-cache-miss: true
+      - name: xtask check @frontend --exclude layout --exclude links
+        run: bin/xtask check @frontend --exclude layout --exclude links
       - name: Logs and screenshots of a failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -325,10 +479,9 @@ jobs:
 
   # check-layout and check-links in full (every width, both themes), cut into SHARDS shares of the units by their
   # weights (tests/e2e/{layout,links}/weights.json): each matrix job runs its share, `--jobs 1` (2 vCPU runners).
-  # xtask comes from the ci-linux image and the lane cache until the prebuilt xtask artifact lands.
   frontend-layout:
-    needs: [images, deps]
-    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    needs: [images, xtask, deps-node]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && needs.deps-node.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -349,7 +502,6 @@ jobs:
       MISE_DATA_DIR: /opt/mise
       MISE_YES: "1"
       MISE_TASK_RUN_AUTO_INSTALL: "false"
-      CI_IMAGE_TAG: ${{ needs.images.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -359,32 +511,21 @@ jobs:
           echo /opt/mise/shims >>"$GITHUB_PATH"
           echo /opt/cargo/bin >>"$GITHUB_PATH"
           mise trust "$GITHUB_WORKSPACE/mise.toml"
-          .github/scripts/ci-env.sh
-      # The Rust lane's cache: here it only has to bring xtask itself back.
-      - name: Cache key
-        id: key
-        run: echo "key=$(.github/scripts/lane-key.sh check-linux)" >>"$GITHUB_OUTPUT"
-      - name: Dependencies (read-only lane cache)
-        if: github.ref != 'refs/heads/main'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      # node_modules from deps-node; never installed here.
+      - name: node_modules
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .cache/sccache
-          key: ${{ steps.key.outputs.key }}
-      # One pnpm store for all branches: saved (by this step's post action) only when pnpm-lock.yaml is new.
-      - name: pnpm store
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .cache/pnpm
-          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - name: pnpm install
-        run: |
-          pnpm config set store-dir "$GITHUB_WORKSPACE/.cache/pnpm"
-          pnpm install --frozen-lockfile --prefer-offline
-      - name: cargo xtask check layout links (shard ${{ matrix.shard }}/6)
-        run: cargo xtask check layout links --shard ${{ matrix.shard }}/6 --jobs 1
-      - name: sccache stats
-        if: always()
-        run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
+          path: node_modules
+          key: ${{ needs.deps-node.outputs.key }}
+          fail-on-cache-miss: true
+      - name: xtask check layout links (shard ${{ matrix.shard }}/6)
+        run: bin/xtask check layout links --shard ${{ matrix.shard }}/6 --jobs 1
       - name: Logs and screenshots of a failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -402,8 +543,8 @@ jobs:
   # in the ci-android image the NDK and the Rust Android targets are on the host, which
   # is the path xtask takes first (platforms.rs: android()).
   check-android:
-    needs: [images, deps]
-    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    needs: [images, xtask, deps]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     container:
@@ -428,18 +569,25 @@ jobs:
           echo /opt/mise/shims >>"$GITHUB_PATH"
           echo /opt/cargo/bin >>"$GITHUB_PATH"
           mise trust "$GITHUB_WORKSPACE/mise.toml"
-          .github/scripts/ci-env.sh
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      - name: Environment
+        run: bin/xtask ci-env
       - name: Cache key
         id: key
-        run: echo "key=$(.github/scripts/lane-key.sh clippy-android)" >>"$GITHUB_OUTPUT"
+        run: echo "key=$(bin/xtask lane-key clippy-android)" >>"$GITHUB_OUTPUT"
       - name: Dependencies (read-only lane cache)
         if: github.ref != 'refs/heads/main'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/sccache
           key: ${{ steps.key.outputs.key }}
-      - name: cargo xtask check platform:android
-        run: cargo xtask check platform:android
+      - name: xtask check platform:android
+        run: bin/xtask check platform:android
       - name: sccache stats
         if: always()
         run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
@@ -453,8 +601,8 @@ jobs:
           if-no-files-found: ignore
 
   clippy-windows:
-    needs: [images, deps-native]
-    if: ${{ !cancelled() && needs.images.result == 'success' && (needs.deps-native.result == 'success' || needs.deps-native.result == 'skipped') }}
+    needs: [images, xtask-windows, deps-native]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask-windows.result == 'success' && (needs.deps-native.result == 'success' || needs.deps-native.result == 'skipped') }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -475,11 +623,15 @@ jobs:
       - uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: sccache@0.19.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-windows
+          path: bin
       - name: Environment
-        run: .github/scripts/ci-env.sh
+        run: bin/xtask.exe ci-env
       - name: Cache key
         id: key
-        run: echo "key=$(.github/scripts/lane-key.sh clippy-windows)" >>"$GITHUB_OUTPUT"
+        run: echo "key=$(bin/xtask.exe lane-key clippy-windows)" >>"$GITHUB_OUTPUT"
       - name: Dependencies (read-only lane cache)
         if: github.ref != 'refs/heads/main'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -517,10 +669,10 @@ jobs:
         with:
           tool: sccache@0.19.0
       - name: Environment
-        run: .github/scripts/ci-env.sh
+        run: cargo xtask ci-env
       - name: Cache key
         id: key
-        run: echo "key=$(.github/scripts/lane-key.sh clippy-macos)" >>"$GITHUB_OUTPUT"
+        run: echo "key=$(cargo xtask lane-key clippy-macos)" >>"$GITHUB_OUTPUT"
       - name: Dependencies (read-only lane cache)
         if: github.ref != 'refs/heads/main'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -545,7 +697,7 @@ jobs:
   # The required status check of the protected branches: green only if every lane is.
   ci-ok:
     if: always()
-    needs: [images, deps, deps-native, check-linux, check-frontend, frontend-layout, check-android, clippy-windows, clippy-macos]
+    needs: [images, xtask, xtask-windows, deps-node, deps, deps-native, check-linux, check-frontend, frontend-layout, check-android, clippy-windows, clippy-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

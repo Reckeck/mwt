@@ -3,6 +3,7 @@
 mod annotate;
 mod audit;
 mod build;
+mod cache;
 mod changelog;
 mod channel;
 mod checks;
@@ -140,6 +141,26 @@ async fn run() -> Result<i32> {
         }
         Command::ImageTag => {
             println!("{}", images::tag(&root)?);
+            return Ok(0);
+        }
+        Command::LaneKey { lane } => {
+            println!("{}", cache::lane_key::run(&root, lane)?);
+            return Ok(0);
+        }
+        Command::DepsCook { lane } => {
+            cache::deps_cook::run(&root, lane)?;
+            return Ok(0);
+        }
+        Command::DepsPrune { prefix, keep } => {
+            cache::deps_prune::run(prefix, keep)?;
+            return Ok(0);
+        }
+        Command::CiEnv => {
+            cache::ci_env::run()?;
+            return Ok(0);
+        }
+        Command::InstallChef => {
+            cache::install_chef::run()?;
             return Ok(0);
         }
         Command::Build(args) => {

@@ -44,7 +44,7 @@ What makes CI fast and what must not be broken:
   builds the missing images itself, and a tag that is already pushed is not
   rebuilt (a manual run has `force`).
 - **sccache.** Compiled crates live in the Actions cache (`.cache/sccache`, per
-  lane: `ci.yml`, job `deps`, the key is `.github/scripts/lane-key.sh`, which
+  lane: `ci.yml`, job `deps`, the key is `xtask lane-key`, which
   includes the image tag) and come back through `RUSTC_WRAPPER=sccache`. The
   lane's cache is written only by `deps` (and only when the key has none yet);
   the other jobs read it. The cache is visible to its own ref, the PR's base
@@ -157,15 +157,34 @@ a PR and is called from `release.yml` (`workflow_call`): a push to
 `development`/`main` is checked by exactly that call; there is no separate run
 of `ci.yml` on a push.
 
-- `check-linux` (`cargo xtask check --exclude @frontend --exclude @platforms`) and
-  `check-frontend` (`cargo xtask check @frontend --exclude layout --exclude links`) are two separate jobs in the
+- `xtask` and `xtask-windows` compile xtask once per run (cache of
+  `.cache/xtask-target`) and upload it as the artifacts `xtask-linux` /
+  `xtask-windows` (not `xtask`: `release.yml` calls `ci.yml` in the same run and
+  already uploads that name). Every job below downloads the binary into `bin/`
+  and runs `bin/xtask ...` instead of `cargo xtask ...`; the cache helpers are
+  hidden xtask commands (`lane-key`, `deps-cook`, `deps-prune`, `ci-env`,
+  `install-chef`, in `crates/xtask/src/cache/`), the former `.github/scripts/*.sh`.
+  The Linux binary is built in `ci-linux` (ubuntu 22.04, like `ci-node` and
+  `ci-android`). Only the paused macOS job still uses `cargo xtask`. The
+  Windows build in `release.yml` also compiles xtask for its cache steps: the
+  `xtask` artifact of that workflow is a Linux binary. The lane keys changed
+  once with this move (the key hashes were reimplemented), so every lane built
+  its cache anew.
+- `deps-node` installs `node_modules` once per key (`xtask lane-key node`: the
+  lock file, manifests, `.npmrc`, image tag, node and pnpm versions) and saves
+  it on a miss only, deleting the older node_modules caches of the ref;
+  `check-frontend` and `frontend-layout` restore exactly that key with
+  `fail-on-cache-miss` and never run `pnpm install`. They run no cargo, so they
+  have no Rust lane cache and no sccache.
+- `check-linux` (`bin/xtask check --exclude @frontend --exclude @platforms`) and
+  `check-frontend` (`bin/xtask check @frontend --exclude layout --exclude links`) are two separate jobs in the
   `ci-linux` image: the Rust checks and the web part (lint, typecheck, vitest,
   static checks, e2e) run in parallel. A new task of `check` lands in
   `check-linux` unless it is in `@frontend` or `@platforms`; the groups are one
   table (`crates/xtask/src/checks/groups.rs`: `@static`, `@browser`, `@frontend`,
   `@rust`, `@platforms`) and a test fails for a task that is in none.
 - `frontend-layout` runs the full `check-layout` and `check-links` (all widths,
-  both themes) as a matrix of 6 shards: `cargo xtask check layout links
+  both themes) as a matrix of 6 shards: `bin/xtask check layout links
   --shard K/6 --jobs 1` (layout and links run in full unless `--quick`). The work is split into small units (a
   batch of about 5 theme x width combinations, a batch of about 10 overlays, the
   links page); shard K takes the K-th share by the weights from
@@ -181,7 +200,7 @@ of `ci.yml` on a push.
   artifact `frontend-layout-<K>-logs`.
 - macOS in CI is paused: the `clippy-macos` job is left in the file but is
   commented out in the matrix.
-- `SCCACHE_BASEDIRS` (`.github/scripts/ci-env.sh`) affects only C/C++; sccache
+- `SCCACHE_BASEDIRS` (`xtask ci-env`) affects only C/C++; sccache
   does not apply it to rustc.
 
 ### Merging Dependabot updates (`dependabot-merge.yml`)
@@ -256,7 +275,7 @@ version, images ──► frontend ──► build (linux | android | windows) �
   `windows-latest` (the MSI is built by WiX). Pre-releases go without LTO on 16
   codegen units, a release with the LTO from `[profile.release]`. The sccache
   cache of the container builds is handed back to the runner user (`chown`)
-  before saving: docker writes it as root. The cache key (`lane-key.sh`)
+  before saving: docker writes it as root. The cache key (`xtask lane-key`)
   includes the channel; on Windows `SCCACHE_IDLE_TIMEOUT=0` keeps the server
   alive through the LTO tail.
 - `package` is pacman and Flatpak from the Linux tarball (`xtask build

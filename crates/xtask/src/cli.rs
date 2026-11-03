@@ -50,6 +50,21 @@ pub enum Command {
     /// The CI image tag: a hash of the Dockerfile, the apt lists and the [tools] of mise.toml.
     #[command(hide = true)]
     ImageTag,
+    /// The cache key of a CI lane: `<lane>-<16 hex>` (check-linux, build-linux-dev, node ...).
+    #[command(hide = true)]
+    LaneKey { lane: String },
+    /// Compile only the dependencies of a lane, so sccache holds them (the `deps` job).
+    #[command(hide = true)]
+    DepsCook { lane: String },
+    /// Delete the old caches of a lane on this ref, keeping the key just saved.
+    #[command(hide = true)]
+    DepsPrune { prefix: String, keep: String },
+    /// Append the shared job environment (sccache, RUST_LOG) to $GITHUB_ENV.
+    #[command(hide = true)]
+    CiEnv,
+    /// Install the pinned cargo-chef.
+    #[command(hide = true)]
+    InstallChef,
     /// For tests of the run lock: sleeps, then exits with `--code`.
     #[command(hide = true)]
     SelftestSleep {
