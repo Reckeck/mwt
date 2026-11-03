@@ -53,7 +53,7 @@ mdns-sd = "0.21"
 # Own data sources: elements of a web page, CSV and XLSX files.
 scraper = { version = "0.25", default-features = false }
 csv = "1"
-calamine = { version = "0.37", default-features = false }
+calamine = { version = "0.38", default-features = false }
 ego-tree = "0.10"
 
 [profile.release]
