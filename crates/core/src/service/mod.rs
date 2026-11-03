@@ -147,7 +147,9 @@ pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
 pub use month_balance::{MonthBalance, MonthBalanceDay, MonthBalanceMark, MonthBalanceRow};
 pub use my_automations::{MineItem, MineKind};
 pub use notifications::{notice, notice_title};
-pub use notify_snapshot::{NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert};
+pub use notify_snapshot::{
+    AlertBase, NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert,
+};
 pub use passive::{PassiveIncome, PassiveMonth, PassiveShare};
 pub use preview::{PositionChange, PreviewWarning, TxPreview};
 pub use price_info::{PriceInfo, PriceOrigin};
@@ -5319,6 +5321,7 @@ mod persist_tests {
             dashboard_period: crate::model::vault::DashPeriod::Year,
             onboarding_checklist_hidden: true,
             crypto: Some(false),
+            schedule_timezone: Some("Asia/Bangkok".into()),
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.

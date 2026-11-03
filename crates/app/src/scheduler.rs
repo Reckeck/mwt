@@ -25,7 +25,7 @@ use trade_core::ipc_contract::AutomationRejectedEvent;
 use trade_core::model::notify::{NoticeCategory, NoticeRecord};
 use trade_core::model::planning::{AlertCondition, RejectReason};
 use trade_core::model::transaction::Transaction;
-use trade_core::service::{notice, notice_title};
+use trade_core::service::{AlertBase, UnlockedVault, notice, notice_title};
 use trade_core::workflow::RunOutcome;
 
 use crate::commands::AppState;
@@ -69,7 +69,8 @@ pub fn spawn(app: AppHandle) {
                 locked_tick(&app);
                 continue;
             }
-            // First take in what was told while locked, so nothing repeats.
+            // First take in what was told while locked, so nothing repeats
+            // (a client drops it: see `merge_findings`).
             merge_locked(&app);
             // In a sync group only the main device runs the jobs; the
             // others get their results by sync (docs/sync.md).
@@ -303,41 +304,70 @@ pub fn snapshot_tick(app: &AppHandle, force: bool) {
     }
 }
 
+/// What the locked app told and fired, taken out of the memory.
+struct LockedFindings {
+    vault_id: String,
+    shown: Vec<NoticeRecord>,
+    fired: Vec<(String, String)>,
+    bases: HashMap<String, AlertBase>,
+}
+
+/// Empty the locked memory into findings; `None` when nothing was told.
+fn take_locked(notify: &mut crate::notify_store::NotifyMemory) -> Option<LockedFindings> {
+    if notify.shown.is_empty() && notify.fired_alerts.is_empty() {
+        return None;
+    }
+    Some(LockedFindings {
+        vault_id: notify
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.vault_id.clone())
+            .unwrap_or_default(),
+        shown: std::mem::take(&mut notify.shown),
+        fired: std::mem::take(&mut notify.fired_alerts),
+        bases: std::mem::take(&mut notify.fired_bases),
+    })
+}
+
+/// Put the findings into the vault. Only a device that runs the jobs does:
+/// on a client the main device owns alerts and the log, and what a stale
+/// locked snapshot saw would only fight what came by sync. The findings are
+/// dropped there, not kept for later. Returns whether they were applied.
+fn merge_findings(vault: &mut UnlockedVault, found: LockedFindings, runs_jobs: bool) -> bool {
+    if !runs_jobs || vault.doc.id != found.vault_id {
+        return false;
+    }
+    let _ = vault.apply_locked_deliveries_seen(found.shown, &found.fired, &found.bases);
+    true
+}
+
 /// Merge what was shown while locked into the vault's log (same vault only).
 fn merge_locked(app: &AppHandle) {
     let state = app.state::<AppState>();
-    let (vault_id, shown, fired) = {
-        let Ok(mut notify) = state.notify.lock() else {
-            return;
-        };
-        if notify.shown.is_empty() && notify.fired_alerts.is_empty() {
-            return;
-        }
-        (
-            notify
-                .snapshot
-                .as_ref()
-                .map(|snapshot| snapshot.vault_id.clone())
-                .unwrap_or_default(),
-            std::mem::take(&mut notify.shown),
-            std::mem::take(&mut notify.fired_alerts),
-        )
+    let Some(found) = state
+        .notify
+        .lock()
+        .ok()
+        .and_then(|mut notify| take_locked(&mut notify))
+    else {
+        return;
     };
-    {
+    let runs_jobs = crate::sync::runs_jobs(app);
+    let applied = {
         let Ok(mut guard) = state.vault.lock() else {
             return;
         };
         let Some(vault) = guard.as_mut() else {
             return;
         };
-        if vault.doc.id == vault_id {
-            let _ = vault.apply_locked_deliveries(shown, &fired);
-        }
-    }
+        merge_findings(vault, found, runs_jobs)
+    };
     if let Ok(mut notify) = state.notify.lock() {
         crate::notify_store::save(app, &mut notify);
     }
-    let _ = app.emit("reminders-changed", serde_json::json!({}));
+    if applied {
+        let _ = app.emit("reminders-changed", serde_json::json!({}));
+    }
 }
 
 /// The vault is locked: remind from the snapshot, check alerts against fresh
@@ -410,6 +440,13 @@ fn locked_tick(app: &AppHandle) {
             notify
                 .fired_alerts
                 .push((alert_id.clone(), record.at.clone()));
+            if let Some(alert) = snapshot
+                .alerts
+                .iter()
+                .find(|alert| &alert.alert_id == alert_id)
+            {
+                notify.fired_bases.insert(alert_id.clone(), alert.base());
+            }
             notify.shown.push(record.clone());
         }
         if !hits.is_empty() {
@@ -859,5 +896,65 @@ mod tests {
     fn pick_follows_the_interface_language() {
         assert_eq!(pick(true, "Блокировка", "Lock"), "Блокировка");
         assert_eq!(pick(false, "Блокировка", "Lock"), "Lock");
+    }
+
+    use trade_core::model::planning::{AlertCondition, PriceAlert};
+    use trade_core::model::store::AssetRef;
+    use trade_core::service::UnlockedVault;
+
+    use super::{merge_findings, take_locked};
+    use crate::notify_store::NotifyMemory;
+
+    fn alert_vault() -> (tempfile::TempDir, UnlockedVault) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut vault = UnlockedVault::create(dir.path().join("a.wallet"), "pw").unwrap();
+        vault.doc.price_alerts.push(PriceAlert {
+            id: "alert".into(),
+            asset: AssetRef::default(),
+            condition: AlertCondition::Above,
+            price: trade_core::Amount::from(60000u32),
+            currency: "usd".into(),
+            active: true,
+            triggered_at: None,
+            store_id: None,
+            repeats: false,
+        });
+        (dir, vault)
+    }
+
+    fn told(vault_id: &str) -> NotifyMemory {
+        let mut notify = NotifyMemory {
+            snapshot: Some(trade_core::service::NotificationSnapshot {
+                vault_id: vault_id.into(),
+                ..Default::default()
+            }),
+            ..NotifyMemory::default()
+        };
+        notify
+            .fired_alerts
+            .push(("alert".into(), "2026-03-01T10:00:00Z".into()));
+        notify
+    }
+
+    #[test]
+    fn a_client_does_not_merge_a_locked_snapshot() {
+        let (_dir, mut vault) = alert_vault();
+        let mut notify = told(&vault.doc.id.clone());
+        let found = take_locked(&mut notify).expect("something was fired");
+        assert!(
+            notify.fired_alerts.is_empty(),
+            "the memory keeps it forever"
+        );
+        assert!(!merge_findings(&mut vault, found, false));
+        assert!(
+            vault.doc.price_alerts[0].triggered_at.is_none(),
+            "a client switched an alert off from a locked snapshot"
+        );
+
+        // A device that runs the jobs takes it in.
+        let mut notify = told(&vault.doc.id.clone());
+        let found = take_locked(&mut notify).unwrap();
+        assert!(merge_findings(&mut vault, found, true));
+        assert!(vault.doc.price_alerts[0].triggered_at.is_some());
     }
 }

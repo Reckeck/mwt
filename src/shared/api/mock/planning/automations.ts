@@ -95,7 +95,7 @@ export function planAutomations(
       txMeta(tx).id = uuid()
       txMeta(tx).timestamp = iso(now())
       txMeta(tx).origin = {
-        workflow: { workflow_id: automation.id, run_id: runId, planned_at: iso(now()), estimated },
+        workflow: { workflow_id: automation.id, run_id: runId, planned_at: iso(now()), estimated, run_key: null },
       }
       if ('topup' in tx && automation.for_month_offset != null)
         tx.topup.details.for_month = forMonthKey(iso(now()), automation.for_month_offset)

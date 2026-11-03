@@ -129,6 +129,9 @@ pub struct RunContext {
     /// "Retry" of a refused run: operations are dated now, the money
     /// checked now, while they still name the moment they were planned for.
     pub retry: bool,
+    /// The occasion this run is for ([`crate::workflow::RunKey`]), recorded
+    /// in what it posts; `None` for a run by hand or one started by an event.
+    pub run_key: Option<String>,
 }
 
 impl RunContext {
@@ -155,6 +158,7 @@ impl RunContext {
             answers: BTreeMap::new(),
             batch: Vec::new(),
             retry: false,
+            run_key: None,
         }
     }
 }

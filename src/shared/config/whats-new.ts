@@ -60,6 +60,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'versions', route: 'settings:sync:sync-devices' },
       { key: 'laterRecords', route: 'settings:sync:sync-devices' },
       { key: 'duplicates', route: 'settings:sync:sync-devices' },
+      { key: 'runOnce', route: 'settings:sync:sync-devices' },
     ],
   },
   {

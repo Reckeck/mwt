@@ -11,8 +11,10 @@ use serde_json::Value;
 use zeroize::Zeroizing;
 
 use super::UnlockedVault;
+use super::auto_reminders::source_identity;
 use crate::error::{Error, Result};
 use crate::ipc_contract::{AfterApply, StoreBalanceChange, SyncCutReason};
+use crate::model::planning::Reminder;
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::storage::VaultFile;
@@ -182,6 +184,15 @@ impl UnlockedVault {
         }
     }
 
+    /// A record as the digest sees it: what the devices share, not what
+    /// stays on one (a flow's cursor).
+    fn shared_state(mut state: RecordState, key: &str) -> RecordState {
+        if let (Some((coll, _)), Some(value)) = (split_key(key), state.value.as_mut()) {
+            *value = view::shareable(coll, value);
+        }
+        state
+    }
+
     /// One digest per record and deletion. `union_since_ms` leaves out cached
     /// prices and rates older than that (a first sync sends 90 days).
     pub fn sync_manifest(&mut self, union_since_ms: Option<u64>) -> Result<Manifest> {
@@ -201,11 +212,17 @@ impl UnlockedVault {
             {
                 continue;
             }
-            manifest.insert(key.clone(), digest(&self.state_of(&records, key)));
+            manifest.insert(
+                key.clone(),
+                digest(&Self::shared_state(self.state_of(&records, key), key)),
+            );
         }
         for key in self.doc.sync.tombstones.keys() {
             if !records.contains_key(key) {
-                manifest.insert(key.clone(), digest(&self.state_of(&records, key)));
+                manifest.insert(
+                    key.clone(),
+                    digest(&Self::shared_state(self.state_of(&records, key), key)),
+                );
             }
         }
         Ok(manifest)
@@ -241,7 +258,13 @@ impl UnlockedVault {
         Ok(keys
             .iter()
             .filter(|key| split_key(key).is_some())
-            .map(|key| (key.clone(), self.state_of(&records, key)))
+            .map(|key| {
+                let mut state = self.state_of(&records, key);
+                if let (Some((coll, _)), Some(stamps)) = (split_key(key), state.stamps.as_mut()) {
+                    crate::sync::merge::with_legacy_heads(coll, stamps);
+                }
+                (key.clone(), state)
+            })
             .collect())
     }
 
@@ -701,11 +724,17 @@ impl UnlockedVault {
                 report.skipped.push(shown);
             }
         }
+        // Nothing was restored: the batch stays undoable, the reply says why.
+        if report.restored == 0 {
+            return Ok(report);
+        }
         let mut doc: VaultDoc = serde_json::from_value(value)
             .map_err(|err| Error::InvalidInput(format!("sync undo: {err}")))?;
         doc.sync = std::mem::take(&mut self.doc.sync);
         doc.sync.batches[index].undone_at = Some(now_iso());
         self.doc = doc;
+        // An undone mark must not make a booked moment fire again.
+        self.keep_schedule_marks();
         self.recompute_holdings();
         self.persist()?;
         Ok(report)
@@ -787,12 +816,19 @@ impl UnlockedVault {
                     automation_id: maker,
                     planned_at,
                 } => Some((format!("auto:{maker}:{planned_at}"), None)),
+                // The planned moment first: an old peer's copy of the same
+                // moment has no key, and both must meet.
                 TxOrigin::Workflow {
                     workflow_id: maker,
                     run_id,
                     planned_at: Some(planned_at),
                     ..
                 } => Some((format!("auto:{maker}:{planned_at}"), Some(run_id))),
+                TxOrigin::Workflow {
+                    run_id,
+                    run_key: Some(run_key),
+                    ..
+                } => Some((format!("run:{run_key}"), Some(run_id))),
                 _ => None,
             }
         }
@@ -849,17 +885,26 @@ impl UnlockedVault {
             }
         }
 
+        // An automatic reminder is one per source (kind + entity id), however
+        // its id or its key was made. Reminders of the old build (random id,
+        // schedule-only key) group with the new ones by their source.
+        fn identity(reminder: &Reminder) -> Option<String> {
+            match &reminder.source {
+                Some(source) => Some(source_identity(source)),
+                None => (!reminder.source_key.is_empty()).then(|| reminder.source_key.clone()),
+            }
+        }
         let mut first: HashMap<String, (Stamp, String)> = HashMap::new();
         for reminder in &self.doc.reminders {
-            if reminder.source_key.is_empty() {
+            let Some(group) = identity(reminder) else {
                 continue;
-            }
+            };
             let rank = (
                 self.created_of(&format!("reminders:{}", reminder.id)),
                 reminder.id.clone(),
             );
             first
-                .entry(reminder.source_key.clone())
+                .entry(group)
                 .and_modify(|kept| {
                     if rank < *kept {
                         *kept = rank.clone();
@@ -867,9 +912,11 @@ impl UnlockedVault {
                 })
                 .or_insert(rank);
         }
+        // The loser's later-edited fields (done, muted, snoozed, edited by
+        // hand, the time) move into the kept copy, each by its own stamp.
         for reminder in &self.doc.reminders {
-            if let Some((_, kept)) = first.get(&reminder.source_key)
-                && !reminder.source_key.is_empty()
+            if let Some(group) = identity(reminder)
+                && let Some((_, kept)) = first.get(&group)
                 && *kept != reminder.id
             {
                 removals.push((
@@ -1223,7 +1270,13 @@ fn applied_of(batch: &SyncBatch) -> AppliedBatch {
 }
 
 #[cfg(test)]
+mod marks_tests;
+#[cfg(test)]
 mod preview_tests;
+#[cfg(test)]
+mod reminder_tests;
+#[cfg(test)]
+mod run_key_tests;
 #[cfg(test)]
 mod transfer_tests;
 
@@ -2146,6 +2199,7 @@ mod tests {
                 run_id: run.into(),
                 planned_at: Some("2026-11-01".into()),
                 estimated: false,
+                run_key: None,
             };
         }
         vault.add_transaction(tx).unwrap();

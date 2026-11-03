@@ -103,6 +103,15 @@ impl Executor<'_> {
         }
     }
 
+    /// The id of a wait this node makes: derived from the run key when the
+    /// run has one (every device makes the same), else a fresh one.
+    fn wait_id(&self, node: &Node) -> String {
+        match &self.ctx.run_key {
+            Some(key) => crate::workflow::run_key::wait_id(key, &node.id),
+            None => uuid::Uuid::new_v4().to_string(),
+        }
+    }
+
     fn meta(&self, comment: &str, category: Option<String>) -> TxMeta {
         self.meta_at(comment, category, None)
     }
@@ -136,6 +145,7 @@ impl Executor<'_> {
             run_id: self.ctx.run_id.clone(),
             planned_at: planned.map(crate::calendar::iso),
             estimated: false,
+            run_key: self.ctx.run_key.clone(),
         };
         meta
     }
@@ -532,7 +542,7 @@ impl Executor<'_> {
                     crate::calendar::iso(now + (hours.to_f64() * 3600.0) as i64)
                 };
                 Err(Halt::Wait(Box::new(WorkflowWait {
-                    id: uuid::Uuid::new_v4().to_string(),
+                    id: self.wait_id(node),
                     workflow_id: self.ctx.workflow_id.clone(),
                     run_id: self.ctx.run_id.clone(),
                     node_id: node.id.clone(),
@@ -595,7 +605,7 @@ impl Executor<'_> {
                     ));
                 }
                 Err(Halt::Wait(Box::new(WorkflowWait {
-                    id: uuid::Uuid::new_v4().to_string(),
+                    id: self.wait_id(node),
                     workflow_id: self.ctx.workflow_id.clone(),
                     run_id: self.ctx.run_id.clone(),
                     node_id: node.id.clone(),

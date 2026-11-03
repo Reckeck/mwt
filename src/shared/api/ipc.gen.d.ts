@@ -5013,7 +5013,13 @@ onboarding_checklist_hidden: boolean,
  * `None` = a vault from before the question; [`crate::UnlockedVault::open`]
  * answers it from the wallets it already has.
  */
-crypto: boolean | null, };
+crypto: boolean | null, 
+/**
+ * The IANA zone schedule moments are computed in, the same on every
+ * device so they agree on which moment it is. `None` until the first
+ * device that runs a schedule writes its own zone.
+ */
+schedule_timezone: string | null, };
 
 /**
  * Which way the money of a settlement went, relative to the organizer.
@@ -6472,7 +6478,13 @@ planned_at: string | null,
  * time); cleared when the user puts in the real one. Lives here, not
  * in `TxMeta`, so v1 bincode files (read by position) keep reading.
  */
-estimated: boolean, } };
+estimated: boolean, 
+/**
+ * The occasion this run was for ([`crate::workflow::RunKey`]), the
+ * same on every device: two runs of one key are one booking. `None`
+ * for an operation from before the key (it goes by `planned_at`).
+ */
+run_key: string | null, } };
 
 /**
  * One page of the operations list, newest first, and how many match in all.
@@ -7398,6 +7410,7 @@ type WorkflowState = { workflow_id: string,
 marks: { [key: string]: string }, 
 /**
  * The last operation an «operation added» trigger looked at, and where it was.
+ * Device-local since sync: never merged, see `sync::registry`.
  */
 tx_cursor: string | null, tx_index: number, };
 

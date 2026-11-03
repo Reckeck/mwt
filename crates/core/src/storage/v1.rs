@@ -248,6 +248,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 dashboard_period: Default::default(),
                 onboarding_checklist_hidden: false,
                 crypto: None,
+                schedule_timezone: None,
             },
             stores: old.stores,
             holdings: old.holdings,

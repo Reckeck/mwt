@@ -929,6 +929,7 @@ mod tests {
             run_id: "run".into(),
             planned_at: None,
             estimated: false,
+            run_key: None,
         };
         let mut second = first.clone();
         second.meta_mut().id = "t2".into();

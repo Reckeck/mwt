@@ -2445,6 +2445,7 @@ fn post_elsewhere(vault: &mut UnlockedVault, card: &str, workflow: &Workflow) {
             run_id: "other-device-run".into(),
             planned_at: Some("2026-12-01T09:00:00Z".into()),
             estimated: false,
+            run_key: None,
         };
     }
     vault.add_transaction(tx).unwrap();

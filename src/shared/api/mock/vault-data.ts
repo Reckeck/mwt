@@ -57,6 +57,7 @@ export const mockSettings: Settings = {
   categories_rev: 1,
   // The demo holds exchanges and crypto wallets; `?crypto=0` previews a vault without them.
   crypto: new URLSearchParams(globalThis.location?.search ?? '').get('crypto') !== '0',
+  schedule_timezone: null,
 }
 
 /** Mirrors what `app_settings.json` would hold. */

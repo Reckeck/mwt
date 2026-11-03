@@ -51,6 +51,28 @@ pub struct SnapshotAlert {
     pub body: String,
 }
 
+/// What an alert looked like when the locked app checked it: the threshold
+/// is the smallest reliable base (an alert has no edit stamp of its own that
+/// the app side can see). A firing seen against a threshold that has changed
+/// since says nothing about the new one.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AlertBase {
+    pub condition: AlertCondition,
+    pub price: Amount,
+    pub currency: String,
+}
+
+impl SnapshotAlert {
+    /// The threshold this alert was checked with.
+    pub fn base(&self) -> AlertBase {
+        AlertBase {
+            condition: self.condition,
+            price: self.price,
+            currency: self.currency.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NotificationSnapshot {
     pub vault_id: String,
@@ -273,12 +295,27 @@ impl UnlockedVault {
         }
     }
 
-    /// Take in what was shown while the vault was locked: logged so it never
-    /// repeats; alerts that fired are marked triggered.
+    /// [`Self::apply_locked_deliveries_seen`] with no record of what the
+    /// alerts looked like: every firing applies.
     pub fn apply_locked_deliveries(
         &mut self,
         records: Vec<NoticeRecord>,
         fired_alerts: &[(String, String)],
+    ) -> crate::Result<()> {
+        self.apply_locked_deliveries_seen(records, fired_alerts, &HashMap::new())
+    }
+
+    /// Take in what was shown while the vault was locked: logged so it never
+    /// repeats; alerts that fired are marked triggered. `seen` holds each
+    /// fired alert's threshold as the locked app saw it: an alert that was
+    /// changed since (a newer threshold came by sync) or switched off is left
+    /// alone, so the firing does not silence the new threshold. A firing with
+    /// no entry in `seen` (a record kept by an older build) applies as before.
+    pub fn apply_locked_deliveries_seen(
+        &mut self,
+        records: Vec<NoticeRecord>,
+        fired_alerts: &[(String, String)],
+        seen: &HashMap<String, AlertBase>,
     ) -> crate::Result<()> {
         for (alert_id, at) in fired_alerts {
             if let Some(alert) = self
@@ -287,7 +324,15 @@ impl UnlockedVault {
                 .iter_mut()
                 .find(|alert| &alert.id == alert_id && alert.triggered_at.is_none())
             {
-                alert.triggered_at = Some(at.clone());
+                let unchanged = seen.get(alert_id).is_none_or(|base| {
+                    alert.active
+                        && alert.condition == base.condition
+                        && alert.price == base.price
+                        && alert.currency.eq_ignore_ascii_case(&base.currency)
+                });
+                if unchanged {
+                    alert.triggered_at = Some(at.clone());
+                }
             }
         }
         self.log_notices(records)?;
@@ -384,5 +429,52 @@ mod tests {
             .unwrap();
         assert!(vault.doc.price_alerts[0].triggered_at.is_some());
         assert_eq!(vault.doc.notification_log.len(), 1);
+    }
+
+    #[test]
+    fn a_locked_firing_does_not_override_a_newer_threshold() {
+        let (_dir, mut vault) = empty_vault();
+        vault
+            .doc
+            .price_alerts
+            .push(crate::model::planning::PriceAlert {
+                id: "alert".into(),
+                asset: btc(),
+                condition: AlertCondition::Above,
+                price: amount("60000"),
+                currency: "usd".into(),
+                active: true,
+                triggered_at: None,
+                store_id: None,
+                repeats: false,
+            });
+        let snapshot =
+            vault.notification_snapshot(secs_or_now("2026-03-01T00:00:00Z"), "UTC", true);
+        let prices = HashMap::from([(btc().key(), amount("61000"))]);
+        let hits = snapshot.alert_hits(&prices, &HashSet::new(), true);
+        let fired = [(hits[0].0.clone(), now_iso())];
+        let seen = HashMap::from([(
+            snapshot.alerts[0].alert_id.clone(),
+            snapshot.alerts[0].base(),
+        )]);
+
+        // A newer threshold arrived by sync before the unlock merged the firing.
+        vault.doc.price_alerts[0].price = amount("70000");
+        vault
+            .apply_locked_deliveries_seen(vec![hits[0].1.clone()], &fired, &seen)
+            .unwrap();
+        assert!(
+            vault.doc.price_alerts[0].triggered_at.is_none(),
+            "the old firing switched the new threshold off"
+        );
+        // It is still told: the notice was shown.
+        assert_eq!(vault.doc.notification_log.len(), 1);
+
+        // Unchanged since it was seen: marked as before.
+        vault.doc.price_alerts[0].price = amount("60000");
+        vault
+            .apply_locked_deliveries_seen(vec![], &fired, &seen)
+            .unwrap();
+        assert!(vault.doc.price_alerts[0].triggered_at.is_some());
     }
 }

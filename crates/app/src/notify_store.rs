@@ -5,6 +5,7 @@
 //! Manager). Without a keyring it stays in memory: reminders still come while
 //! the app runs, just not after a restart. Never written in the clear.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -13,7 +14,7 @@ use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use tauri::{AppHandle, Manager};
 
 use trade_core::model::notify::NoticeRecord;
-use trade_core::service::NotificationSnapshot;
+use trade_core::service::{AlertBase, NotificationSnapshot};
 
 /// Where the key lived while the app was TradeApp; moved on first use.
 #[cfg(desktop)]
@@ -31,6 +32,8 @@ pub struct NotifyMemory {
     pub shown: Vec<NoticeRecord>,
     /// Alerts that fired while locked: `(alert_id, when)`.
     pub fired_alerts: Vec<(String, String)>,
+    /// What each fired alert looked like when it was checked, by alert id.
+    pub fired_bases: HashMap<String, AlertBase>,
     /// Whether the snapshot can be kept on disk (a keyring answered).
     pub persistent: bool,
     pub last_snapshot: Option<Instant>,
@@ -42,6 +45,9 @@ struct Stored {
     snapshot: Option<NotificationSnapshot>,
     shown: Vec<NoticeRecord>,
     fired_alerts: Vec<(String, String)>,
+    /// Absent in a file of an older build: those firings apply as before.
+    #[serde(default)]
+    fired_bases: HashMap<String, AlertBase>,
 }
 
 fn file(app: &AppHandle) -> Option<PathBuf> {
@@ -132,6 +138,7 @@ pub fn load(app: &AppHandle) -> NotifyMemory {
         memory.snapshot = stored.snapshot;
         memory.shown = stored.shown;
         memory.fired_alerts = stored.fired_alerts;
+        memory.fired_bases = stored.fired_bases;
     }
     memory
 }
@@ -148,6 +155,7 @@ pub fn save(app: &AppHandle, memory: &mut NotifyMemory) {
         snapshot: memory.snapshot.clone(),
         shown: memory.shown.clone(),
         fired_alerts: memory.fired_alerts.clone(),
+        fired_bases: memory.fired_bases.clone(),
     };
     let Ok(plain) = serde_json::to_vec(&stored) else {
         return;

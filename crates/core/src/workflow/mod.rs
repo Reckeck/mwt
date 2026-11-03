@@ -17,6 +17,7 @@ pub mod exec;
 pub mod graph;
 pub mod model;
 pub mod nodes;
+pub mod run_key;
 pub mod templates;
 pub mod types;
 pub mod validate;
@@ -28,5 +29,6 @@ pub use model::{
     QueuedActions, RunOutcome, TestExpect, VarScope, WaitKind, Workflow, WorkflowRun,
     WorkflowState, WorkflowTest, WorkflowVar, WorkflowWait,
 };
+pub use run_key::RunKey;
 pub use types::{PortType, WfValue};
 pub use validate::{GraphIssue, IssueLevel, validate};

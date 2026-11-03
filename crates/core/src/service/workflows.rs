@@ -16,6 +16,7 @@ use crate::model::store::AssetRef;
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::now_iso;
 use crate::pricing::history::{secs_or_now, unix_secs};
+use crate::workflow::RunKey;
 use crate::workflow::automation;
 use crate::workflow::exec::{
     self, EmittedEvent, Resume, RunContext, RunMode, RunReport, StepStatus, TraceStep,
@@ -445,6 +446,44 @@ impl UnlockedVault {
             .iter()
             .find(|state| state.workflow_id == workflow_id)
             .and_then(|state| state.marks.get(key).cloned())
+    }
+
+    /// A schedule mark never stays below a moment whose run key is booked:
+    /// whatever moved it back (an undo), the booked moments do not fire again.
+    pub(crate) fn keep_schedule_marks(&mut self) {
+        let booked: Vec<String> = self
+            .doc
+            .transactions
+            .iter()
+            .filter_map(|tx| match &tx.meta().origin {
+                TxOrigin::Workflow {
+                    run_key: Some(key), ..
+                } => Some(key.clone()),
+                _ => None,
+            })
+            .collect();
+        let mut raised: Vec<(String, String, String)> = Vec::new();
+        for state in &self.doc.workflow_state {
+            for (key, mark) in &state.marks {
+                let Some(trigger_id) = key.strip_prefix("schedule:") else {
+                    continue;
+                };
+                let prefix = format!("wf:{}:{trigger_id}:", state.workflow_id);
+                let newest = booked
+                    .iter()
+                    .filter_map(|run_key| run_key.strip_prefix(prefix.as_str()))
+                    .filter_map(|moment| unix_secs(moment).map(|secs| (secs, moment)))
+                    .max();
+                if let Some((secs, moment)) = newest
+                    && unix_secs(mark).is_none_or(|current| current < secs)
+                {
+                    raised.push((state.workflow_id.clone(), key.clone(), moment.to_string()));
+                }
+            }
+        }
+        for (workflow_id, key, moment) in raised {
+            self.wf_set_mark(&workflow_id, &key, &moment);
+        }
     }
 
     pub(crate) fn wf_set_mark(&mut self, workflow_id: &str, key: &str, value: &str) {
@@ -1051,6 +1090,19 @@ impl UnlockedVault {
                 "the workflow ran {MAX_RUNS_PER_HOUR} times this hour: answer a bit later"
             )));
         }
+        let port = if yes { "true" } else { "false" };
+        let run_key = RunKey::Wait {
+            wait_id: &wait.id,
+            port,
+        }
+        .build();
+        // The same answer was already given on another device: its result is
+        // here, so the question only goes.
+        if self.run_key_booked(&run_key) {
+            self.doc.workflow_waits.retain(|known| known.id != id);
+            self.persist()?;
+            return Err(Error::Missing(format!("question {id}: already answered")));
+        }
         self.doc.workflow_waits.retain(|known| known.id != id);
         let graph = wait_graph(&wait, &workflow)?;
         if graph.node(&wait.node_id).is_none() {
@@ -1062,9 +1114,10 @@ impl UnlockedVault {
         let mut ctx = RunContext::new(&workflow.id, &workflow.name, &wait.node_id, now, zone);
         ctx.max_amount = workflow.max_amount;
         ctx.trigger_label = format!("{} → {}", wait.trigger, if yes { "yes" } else { "no" });
+        ctx.run_key = Some(run_key);
         ctx.resume = Some(Resume {
             node_id: wait.node_id.clone(),
-            port: if yes { "true" } else { "false" }.into(),
+            port: port.into(),
             memo: wait.memo.clone(),
         });
         let mut pass = WorkflowPass::default();
@@ -1123,7 +1176,9 @@ impl UnlockedVault {
         self.doc
             .workflow_queue
             .extend(report.queued.iter().cloned());
-        if let Some(wait) = &report.wait {
+        if let Some(wait) = &report.wait
+            && self.wait_is_new(&wait.id)
+        {
             self.doc.workflow_waits.push(wait.clone());
             if wait.kind == WaitKind::Confirm && report.run.dry_run.not() {
                 let title = self
@@ -1299,6 +1354,66 @@ impl UnlockedVault {
             .contains(&(workflow_id.to_string(), moment.to_string()))
     }
 
+    /// Whether an operation already carries the run key `key`.
+    fn run_key_booked(&self, key: &str) -> bool {
+        self.doc.transactions.iter().any(|tx| {
+            matches!(&tx.meta().origin, TxOrigin::Workflow { run_key: Some(known), .. } if known == key)
+        })
+    }
+
+    /// Whether an operation from before run keys books `moment` of
+    /// `workflow_id` (it names the moment but no key).
+    fn legacy_moment_booked(&self, workflow_id: &str, moment: &str) -> bool {
+        self.doc
+            .transactions
+            .iter()
+            .any(|tx| match &tx.meta().origin {
+                TxOrigin::Workflow {
+                    workflow_id: maker,
+                    planned_at: Some(planned),
+                    run_key: None,
+                    ..
+                } => maker == workflow_id && planned == moment,
+                TxOrigin::Automation {
+                    automation_id,
+                    planned_at,
+                } => automation_id == workflow_id && planned_at == moment,
+                _ => false,
+            })
+    }
+
+    /// Whether a run of this firing's key already happened here.
+    fn already_run(&self, ctx: &RunContext) -> bool {
+        ctx.run_key
+            .as_deref()
+            .is_some_and(|key| self.run_key_booked(key))
+    }
+
+    /// A wait id this vault has neither got nor deleted: a wait that was
+    /// resumed (its removal left a tombstone) is not asked again, and one
+    /// that is already here is not doubled.
+    fn wait_is_new(&self, wait_id: &str) -> bool {
+        self.doc
+            .workflow_waits
+            .iter()
+            .all(|known| known.id != wait_id)
+            && !self
+                .doc
+                .sync
+                .tombstones
+                .contains_key(&format!("workflow_waits:{wait_id}"))
+    }
+
+    /// The zone schedule moments are computed in: the group's, shared by every
+    /// device. The first device that gets here writes its own zone.
+    fn schedule_zone(&mut self, device_zone: &str) -> String {
+        self.doc
+            .settings
+            .schedule_timezone
+            .get_or_insert_with(|| device_zone.to_string())
+            .clone()
+    }
+
     /// Dismiss a refused run: it stays in the journal as skipped.
     pub fn skip_workflow_run(&mut self, run_id: &str) -> Result<WorkflowRun> {
         let run = self
@@ -1328,6 +1443,10 @@ impl UnlockedVault {
         mut ctx: RunContext,
         pass: &mut WorkflowPass,
     ) -> Vec<EmittedEvent> {
+        // Another device (or an earlier pass) already ran this occasion.
+        if self.already_run(&ctx) {
+            return Vec::new();
+        }
         if self.runs_last_hour(&workflow.id, ctx.now) >= MAX_RUNS_PER_HOUR {
             self.keep_dropped(
                 &workflow.id,
@@ -1350,9 +1469,10 @@ impl UnlockedVault {
         &mut self,
         workflow: &Workflow,
         graph: &Graph,
-        firings: Vec<RunContext>,
+        mut firings: Vec<RunContext>,
         pass: &mut WorkflowPass,
     ) -> Vec<EmittedEvent> {
+        firings.retain(|ctx| !self.already_run(ctx));
         if firings.len() > 1 && has_queue(graph) {
             let batch: Vec<_> = firings
                 .iter()
@@ -1820,13 +1940,21 @@ impl UnlockedVault {
             let mut ctx = RunContext::new(&workflow.id, &workflow.name, &wait.node_id, now, zone);
             ctx.max_amount = workflow.max_amount;
             ctx.trigger_label = format!("{} → wait", wait.trigger);
+            // A question nobody answered in time counts as «No».
+            let port = match wait.kind {
+                WaitKind::Timer => "out",
+                WaitKind::Confirm => "false",
+            };
+            ctx.run_key = Some(
+                RunKey::Wait {
+                    wait_id: &wait.id,
+                    port,
+                }
+                .build(),
+            );
             ctx.resume = Some(Resume {
                 node_id: wait.node_id.clone(),
-                // A question nobody answered in time counts as «No».
-                port: match wait.kind {
-                    WaitKind::Timer => "out".into(),
-                    WaitKind::Confirm => "false".into(),
-                },
+                port: port.into(),
                 memo: wait.memo.clone(),
             });
             events.extend(self.fire(&workflow, &graph, ctx, &mut pass));
@@ -1858,6 +1986,8 @@ impl UnlockedVault {
             for trigger in &triggers {
                 match trigger.kind.as_str() {
                     "trigger.schedule" => {
+                        let zone = self.schedule_zone(zone);
+                        let zone = zone.as_str();
                         let key = format!("schedule:{}", trigger.id);
                         let Some(after) = self
                             .wf_mark(&workflow.id, &key)
@@ -1870,9 +2000,18 @@ impl UnlockedVault {
                             schedule_moments(&trigger.params, &Calendar::new(zone), after, now);
                         let firings: Vec<RunContext> = moments
                             .iter()
-                            .map(|moment| {
-                                let at = crate::calendar::iso(*moment);
+                            .map(|moment| crate::calendar::iso(*moment))
+                            .filter(|at| !self.legacy_moment_booked(&workflow.id, at))
+                            .map(|at| {
                                 let mut ctx = self.context(&workflow, trigger, now, zone);
+                                ctx.run_key = Some(
+                                    RunKey::Schedule {
+                                        workflow_id: &workflow.id,
+                                        trigger_id: &trigger.id,
+                                        moment: &at,
+                                    }
+                                    .build(),
+                                );
                                 ctx.trigger_label = trigger_label(&trigger.kind, &at);
                                 ctx.trigger_values =
                                     BTreeMap::from([("at".to_string(), WfValue::Date(at))]);
@@ -1902,6 +2041,14 @@ impl UnlockedVault {
                                 continue;
                             }
                             let mut ctx = self.context(&workflow, trigger, now, zone);
+                            ctx.run_key = Some(
+                                RunKey::Transaction {
+                                    workflow_id: &workflow.id,
+                                    trigger_id: &trigger.id,
+                                    tx_id: &tx.meta().id,
+                                }
+                                .build(),
+                            );
                             ctx.trigger_label = trigger_label(&trigger.kind, &tx.meta().id);
                             ctx.trigger_values = tx_trigger_values(tx);
                             firings.push(ctx);
