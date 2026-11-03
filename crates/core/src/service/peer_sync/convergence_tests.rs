@@ -57,6 +57,9 @@ const ENABLED_KINDS: &[Edit] = &[
     Edit::TerminalTimeframe,
     Edit::CarMileage,
     Edit::CarInsurance,
+    Edit::AddExchangeKey,
+    Edit::ChangeExchangeKey,
+    Edit::RemoveExchangeKey,
 ];
 
 const DEFAULT_SEEDS: &[u64] = &[1, 2, 3, 4, 5];
@@ -98,6 +101,9 @@ enum Edit {
     TerminalTimeframe,
     CarMileage,
     CarInsurance,
+    AddExchangeKey,
+    ChangeExchangeKey,
+    RemoveExchangeKey,
 }
 
 /// splitmix64: tiny, deterministic, good enough for choosing steps.
@@ -154,6 +160,8 @@ struct Ledger {
     counter: usize,
     /// The exchange and the car every device starts with (see `add_shared_stores`).
     exchange_id: String,
+    /// Exchange wallets (the first is `exchange_id`) the key edits pick from.
+    key_stores: Vec<String>,
     car_id: String,
 }
 
@@ -300,6 +308,9 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
         | Edit::DeleteEnvelope => apply_envelope(kind, vault, rng, ledger),
         Edit::CountBalance | Edit::RecountBalance | Edit::BackdatedTx => {
             apply_adjustment(kind, vault, rng, ledger);
+        }
+        Edit::AddExchangeKey | Edit::ChangeExchangeKey | Edit::RemoveExchangeKey => {
+            apply_exchange_key(kind, vault, rng, ledger);
         }
         Edit::TerminalTimeframe | Edit::CarMileage | Edit::CarInsurance => {
             apply_device_and_car(kind, vault, rng, ledger);
@@ -661,6 +672,24 @@ fn add_shared_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
         )
         .unwrap()
         .id;
+    ledger.key_stores.push(ledger.exchange_id.clone());
+    for number in 0..2 {
+        let id = devices[0]
+            .create_store_with(
+                &format!("conv key exchange {number}"),
+                StoreKind::Exchange,
+                "",
+                "",
+                None,
+                StoreExtras {
+                    provider: Some(crate::model::store::ExchangeProvider::Bybit),
+                    ..StoreExtras::default()
+                },
+            )
+            .unwrap()
+            .id;
+        ledger.key_stores.push(id);
+    }
     ledger.car_id = devices[0]
         .create_store_with(
             "conv car",
@@ -681,6 +710,58 @@ fn add_shared_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
         .id;
     for to in 1..DEVICES {
         pull(devices, 0, to);
+    }
+}
+
+/// Exchange API keys (dummy strings): add or replace, retarget, clear. The
+/// clear mirrors `clear_exchange_key` in the app crate.
+fn apply_exchange_key(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+    let store = ledger.key_stores[rng.below(ledger.key_stores.len())].clone();
+    let number = ledger.fresh();
+    match kind {
+        Edit::AddExchangeKey => {
+            vault
+                .set_exchange_key(
+                    &store,
+                    &format!("dummy-key-{number}"),
+                    &format!("dummy-secret-{number}"),
+                )
+                .unwrap();
+        }
+        Edit::ChangeExchangeKey => {
+            if !vault
+                .doc
+                .exchanges
+                .bybit
+                .iter()
+                .any(|entry| entry.store_id == store)
+            {
+                return;
+            }
+            if rng.below(2) == 0 {
+                let target = ledger.key_stores[rng.below(ledger.key_stores.len())].clone();
+                let spot = (rng.below(2) == 0).then(|| target.clone());
+                let futures = (rng.below(2) == 0).then_some(target);
+                // Targets must sit inside the wallet; a refusal is a legal no-op.
+                let _ = vault.set_exchange_targets(&store, spot, futures);
+            } else {
+                vault
+                    .set_exchange_key(
+                        &store,
+                        &format!("dummy-key-{number}"),
+                        &format!("dummy-secret-{number}"),
+                    )
+                    .unwrap();
+            }
+        }
+        _ => {
+            vault
+                .doc
+                .exchanges
+                .bybit
+                .retain(|entry| entry.store_id != store);
+            vault.persist().unwrap();
+        }
     }
 }
 
