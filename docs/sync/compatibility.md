@@ -225,6 +225,15 @@ their change; the purchases of an item are ordered the same way on every device
   its item (`entry_stamp`), so stamps written before the split still say when a
   purchase last changed; the first edit of a purchase writes its own stamp.
   A device on protocol 3 sends the legacy `items` stamp too (`with_legacy_heads`).
+- **A part that left with a payment comes back with it.** Deleting a payment in
+  the ledger takes its purchases and settlements out of their events, and each
+  stays in `SharedEvent.removed_with_payment`, merged by its own id. A newer edit
+  on another device beats the deletion, so the payment can come back: the repair
+  after the merge (and the local undo) then returns the part, unless the payment
+  is linked elsewhere or the item is gone. A part removed by hand in the event
+  leaves no record, so it never returns. The record goes once the payment is back
+  or its tombstone is gone. An older build ignores the field and only misses the
+  return.
 - **A side without a purchase and without its stamp never saw it.** Removing a
   purchase always leaves a stamp, so the item's stamp cannot stand in for one:
   a later edit of the item by a device that has not seen the purchase keeps it

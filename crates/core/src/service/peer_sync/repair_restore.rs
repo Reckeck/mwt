@@ -95,11 +95,59 @@ impl UnlockedVault {
     }
 
     pub(super) fn repair_restored_records(&mut self, report: &mut RepairReport) {
+        // First: a purchase that comes back names its buyer, looked at next.
+        self.restore_removed_with_payment();
         self.restore_participants(report);
         // Before stores, categories and contacts: a restored payment names
         // its own wallets and categories, and they must be looked at too.
         self.restore_referenced_transactions(report);
         self.restore_referenced_records(report);
+    }
+
+    // -- parts that left with a payment ------------------------------------------
+
+    /// A payment is back after its deletion (a newer edit won): what left the
+    /// event with it returns, unless the payment found another place meanwhile
+    /// or the item is gone. Every device does this from the same record, so
+    /// they arrive at the same event. Once a payment is gone for good (its
+    /// tombstone is too) the record has nothing left to wait for.
+    pub(in crate::service) fn restore_removed_with_payment(&mut self) {
+        let alive: BTreeSet<String> = self
+            .doc
+            .transactions
+            .iter()
+            .map(|tx| tx.meta().id.clone())
+            .collect();
+        let waiting: BTreeSet<String> = self.doc.sync.tombstones.keys().cloned().collect();
+        let linked: BTreeSet<String> = self
+            .doc
+            .shared_events
+            .iter()
+            .flat_map(event_links)
+            .collect();
+        for event in &mut self.doc.shared_events {
+            for record in std::mem::take(&mut event.removed_with_payment) {
+                if !alive.contains(&record.tx_id) {
+                    if waiting.contains(&format!("transactions:{}", record.tx_id)) {
+                        event.removed_with_payment.push(record);
+                    }
+                    continue;
+                }
+                if linked.contains(&record.tx_id) {
+                    continue;
+                }
+                let item = record
+                    .item_id
+                    .as_ref()
+                    .and_then(|item_id| event.items.iter_mut().find(|item| item.id == *item_id));
+                if let (Some(purchase), Some(item)) = (record.purchase, item) {
+                    item.purchases.push(purchase);
+                }
+                if let Some(settlement) = record.settlement {
+                    event.settlements.push(settlement);
+                }
+            }
+        }
     }
 
     // -- payments of shared events -----------------------------------------------
@@ -114,17 +162,7 @@ impl UnlockedVault {
             .doc
             .shared_events
             .iter()
-            .flat_map(|event| {
-                let purchases = event.items.iter().flat_map(|item| &item.purchases);
-                purchases
-                    .filter_map(|purchase| purchase.tx_id.clone())
-                    .chain(
-                        event
-                            .settlements
-                            .iter()
-                            .filter_map(|settlement| settlement.tx_id.clone()),
-                    )
-            })
+            .flat_map(event_links)
             .collect();
         let mut restored_any = false;
         for id in named {
@@ -330,4 +368,18 @@ impl UnlockedVault {
             }
         }
     }
+}
+
+/// The operations a shared event names.
+fn event_links(event: &crate::model::shared_event::SharedEvent) -> Vec<String> {
+    let purchases = event.items.iter().flat_map(|item| &item.purchases);
+    purchases
+        .filter_map(|purchase| purchase.tx_id.clone())
+        .chain(
+            event
+                .settlements
+                .iter()
+                .filter_map(|settlement| settlement.tx_id.clone()),
+        )
+        .collect()
 }

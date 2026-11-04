@@ -219,6 +219,7 @@ impl UnlockedVault {
             items: Vec::new(),
             settlements: Vec::new(),
             adjustments: Vec::new(),
+            removed_with_payment: Vec::new(),
         };
         let id = event.id.clone();
         self.doc.shared_events.push(event);

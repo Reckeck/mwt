@@ -93,6 +93,7 @@ impl UnlockedVault {
                 vault.doc.transactions.push(item.transaction);
                 vault.set_property_link(&id, item.property_id.as_deref());
             }
+            vault.restore_removed_with_payment();
             Ok(())
         })
     }
