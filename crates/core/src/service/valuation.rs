@@ -536,7 +536,7 @@ impl UnlockedVault {
         }
         let date = input.date.trim().to_string();
         let valuation = Valuation {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: super::sync_ids::valuation_id(&input.asset_key, &date),
             store_id: input.store_id,
             asset_key: input.asset_key,
             date,
@@ -612,7 +612,7 @@ impl UnlockedVault {
                     continue;
                 }
                 self.doc.valuations.push(Valuation {
-                    id: uuid::Uuid::new_v4().to_string(),
+                    id: super::sync_ids::valuation_id(&key, &today),
                     store_id: store.id.clone(),
                     asset_key: key,
                     date: today.clone(),

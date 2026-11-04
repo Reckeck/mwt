@@ -70,6 +70,7 @@ mod saving;
 mod scenarios;
 mod search;
 mod shared_events;
+mod sync_ids;
 mod sync_journal;
 mod vehicle;
 mod where_went;

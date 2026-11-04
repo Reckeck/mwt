@@ -98,9 +98,13 @@ impl UnlockedVault {
     }
 
     pub fn create_envelope(&mut self, draft: EnvelopeDraft) -> Result<Envelope> {
+        self.create_envelope_as(draft, uuid::Uuid::new_v4().to_string())
+    }
+
+    fn create_envelope_as(&mut self, draft: EnvelopeDraft, id: String) -> Result<Envelope> {
         self.check_envelope_draft(&draft)?;
         let envelope = Envelope {
-            id: uuid::Uuid::new_v4().to_string(),
+            id,
             store_id: draft.store_id,
             name: draft.name.trim().to_string(),
             asset: draft.asset,
@@ -239,13 +243,19 @@ impl UnlockedVault {
         let id = match existing {
             Some(envelope) => envelope.id.clone(),
             None => {
-                self.create_envelope(EnvelopeDraft {
-                    store_id: store_id.into(),
-                    name: goal.name.clone(),
-                    asset,
-                    target: None,
-                    goal_id: Some(goal_id.into()),
-                })?
+                // Named by goal, wallet and asset: two devices that start
+                // funding the same goal make one envelope.
+                let id = super::sync_ids::goal_envelope_id(goal_id, store_id, &asset.key());
+                self.create_envelope_as(
+                    EnvelopeDraft {
+                        store_id: store_id.into(),
+                        name: goal.name.clone(),
+                        asset,
+                        target: None,
+                        goal_id: Some(goal_id.into()),
+                    },
+                    id,
+                )?
                 .id
             }
         };

@@ -767,16 +767,9 @@ impl UnlockedVault {
             .ok_or_else(|| Error::Missing(format!("reading {id}")))?;
         let old = self.doc.meter_readings.remove(index);
         match self.insert_reading(&old.item_id, value, period, day, old.zone.as_deref()) {
-            Ok(mut reading) => {
-                // Same reading, corrected: it keeps its identity.
-                reading.id = old.id.clone();
-                if let Some(stored) = self.doc.meter_readings.iter_mut().find(|stored| {
-                    stored.item_id == reading.item_id
-                        && stored.zone == reading.zone
-                        && stored.sort_key() == reading.sort_key()
-                }) {
-                    stored.id = old.id;
-                }
+            Ok(reading) => {
+                // The id follows the day: a reading moved to another day is
+                // the record of that day (the old one is deleted).
                 self.persist()?;
                 Ok(reading)
             }
@@ -834,8 +827,8 @@ impl UnlockedVault {
         // No day given means the month's end; it is stored as that day so the
         // reading keeps its place whenever it was entered.
         let day = day.or_else(|| u8::try_from(calendar::days_in_month(month)).ok());
-        let reading = MeterReading {
-            id: uuid::Uuid::new_v4().to_string(),
+        let mut reading = MeterReading {
+            id: String::new(),
             item_id: item_id.to_string(),
             value,
             period,
@@ -843,6 +836,9 @@ impl UnlockedVault {
             day,
             zone: zone.clone(),
         };
+        // Named by meter, zone and day: the same reading made on two devices
+        // is one record.
+        reading.id = super::sync_ids::reading_id(item_id, zone.as_deref(), &reading.sort_key());
         let key = reading.sort_key();
         let readings = self.readings_in(item_id, zone.as_deref());
         if let Some(before) = readings

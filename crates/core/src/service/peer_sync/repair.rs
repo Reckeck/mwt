@@ -13,8 +13,9 @@
 //!   repair too; the user is told in a notice.
 //! - Never changes money: it moves or drops references and structure only.
 //!
-//! Rules, in the order they run: R2 (account tree), R4 (envelopes of deleted
-//! goals), R8 (emergency fund and inflation sources that name a missing record).
+//! Rules, in the order they run: duplicates by natural key, R2 (account tree), R4 (envelopes of deleted
+//! goals), R5 (links to missing asset classes), the shares of the classes
+//! (`repair_natural.rs`), R8 (emergency fund and inflation sources that name a missing record).
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -33,6 +34,12 @@ pub(crate) struct RepairReport {
     pub detached_accounts: Vec<(String, String)>,
     /// R4: names of the envelopes of goals that are gone.
     pub dropped_envelopes: Vec<(String, String)>,
+    /// Natural keys: ids of the duplicate records folded into another one.
+    pub merged_duplicates: Vec<String>,
+    /// R5: links to an asset class that is gone, dropped.
+    pub dropped_class_links: usize,
+    /// Shares that did not add up to 100 were scaled.
+    pub normalized_shares: bool,
     /// Keys of every record the pass changed (R8 included).
     pub records: Vec<String>,
 }
@@ -72,6 +79,29 @@ impl RepairReport {
                 )
             });
         }
+        if !self.merged_duplicates.is_empty() {
+            let count = self.merged_duplicates.len();
+            parts.push(if ru {
+                format!("объединены дубликаты записей: {count}")
+            } else {
+                format!("merged duplicate records: {count}")
+            });
+        }
+        if self.dropped_class_links > 0 {
+            let count = self.dropped_class_links;
+            parts.push(if ru {
+                format!("сброшены ссылки на удалённые классы активов: {count}")
+            } else {
+                format!("cleared links to deleted asset classes: {count}")
+            });
+        }
+        if self.normalized_shares {
+            parts.push(if ru {
+                "доли классов активов приведены к 100 %".to_string()
+            } else {
+                "asset class shares scaled to 100 %".to_string()
+            });
+        }
         if parts.is_empty() {
             return None;
         }
@@ -92,9 +122,12 @@ impl RepairReport {
                 .join(",")
         };
         format!(
-            "repair:accounts:{}:envelopes:{}",
+            "repair:accounts:{}:envelopes:{}:dups:{}:links:{}:shares:{}",
             ids(&self.detached_accounts),
-            ids(&self.dropped_envelopes)
+            ids(&self.dropped_envelopes),
+            self.merged_duplicates.join(","),
+            self.dropped_class_links,
+            self.normalized_shares
         )
     }
 }
@@ -109,8 +142,11 @@ impl UnlockedVault {
     ) -> Result<RepairReport> {
         let before = self.doc_value()?;
         let mut report = RepairReport::default();
+        self.repair_natural_keys(&mut report);
         self.repair_account_tree(&mut report);
         self.repair_goal_envelopes(&mut report);
+        self.repair_class_links(&mut report);
+        self.repair_shares(&mut report);
         // R8. Things another device deleted may still be named by a record
         // that arrived (an emergency account, an inflation source). Shared
         // events keep their references: a settlement or item that names a
