@@ -41,7 +41,7 @@ impl Executor<'_> {
                     .currency_input(node, "currency")?
                     .unwrap_or_else(|| "rub".into());
                 let month = calendar::month_key(today);
-                let value = self.vault.inflation_on(&currency, &month, &BTreeMap::new());
+                let value = self.vault.inflation_on(&currency, &month);
                 let last = self
                     .vault
                     .inflation_series(&currency)
@@ -124,9 +124,7 @@ impl Executor<'_> {
             other => return Err(format!("not an amount: {}", other.as_text())),
         };
         let amount = amount.max(Amount::ZERO);
-        let status = self
-            .vault
-            .emergency_fund_status(now, &self.ctx.zone, &BTreeMap::new());
+        let status = self.vault.emergency_fund_status(now, &self.ctx.zone);
         let currency = if currency.is_empty() {
             status.currency.to_lowercase()
         } else {

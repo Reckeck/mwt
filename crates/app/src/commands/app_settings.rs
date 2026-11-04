@@ -198,6 +198,12 @@ pub fn sync_base_currency(state: &AppState, app: &AppHandle) {
         // the first vault opened after the update hands them to this device.
         let adopted = settings.adopt_device_settings(&vault.doc.settings);
         let identified = settings.ensure_device_id();
+        // The flat inflation rates used to be kept per device; they are the
+        // group's now, so the first open after the update copies this device's
+        // own into the vault (once, never over a rate the group already has).
+        if let Err(err) = vault.adopt_flat_inflation(&settings.inflation) {
+            eprintln!("inflation rates were not adopted: {err}");
+        }
         drop(guard);
         if adopted || identified {
             save(&dir, &settings).ok();

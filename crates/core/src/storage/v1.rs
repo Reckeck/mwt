@@ -239,6 +239,8 @@ impl From<VaultDocV1> for VaultDocV2 {
                 onboarding_skipped: Vec::new(),
                 inflation_mode: std::collections::BTreeMap::new(),
                 inflation_source: std::collections::BTreeMap::new(),
+                inflation_manual: std::collections::BTreeMap::new(),
+                inflation_adopted: false,
                 manual_income: None,
                 manual_expenses: None,
                 categories_rev: 0,

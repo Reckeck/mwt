@@ -1,8 +1,6 @@
 //! The emergency fund (plan C1): savings accounts set aside for bad times,
 //! measured in months of mandatory spending `E_mand`.
 
-use std::collections::BTreeMap;
-
 use super::UnlockedVault;
 use super::interest::INTEREST_CATEGORY;
 use crate::calendar::{self, Calendar};
@@ -123,12 +121,7 @@ impl UnlockedVault {
 
     /// The fund's value, coverage and hints. `manual` is the hand-entered
     /// inflation table, as for the other inflation readers.
-    pub fn emergency_fund_status(
-        &self,
-        now: i64,
-        zone: &str,
-        manual: &BTreeMap<String, Amount>,
-    ) -> EmergencyStatus {
+    pub fn emergency_fund_status(&self, now: i64, zone: &str) -> EmergencyStatus {
         let fund = self.doc.emergency_fund.clone();
         let cal = Calendar::new(zone);
         let today = cal.date_of(now);
@@ -154,7 +147,7 @@ impl UnlockedVault {
                     .as_ref()
                     .and_then(|terms| terms.rate_on(&today_raw));
                 let own_currency = self.deposit_asset(store).symbol.to_lowercase();
-                let inflation = self.inflation_on(&own_currency, &month, manual);
+                let inflation = self.inflation_on(&own_currency, &month);
                 EmergencyStore {
                     store_id: store.id.clone(),
                     value: to_budget(values.get(&store.id).copied().unwrap_or_default()),
@@ -399,7 +392,7 @@ mod tests {
         assert!(!none.is_set());
         assert_eq!(none.target_months, 6);
         // an empty fund is not «every store»
-        let status = vault.emergency_fund_status(0, "UTC", &BTreeMap::new());
+        let status = vault.emergency_fund_status(0, "UTC");
         assert!(status.stores.is_empty());
         assert_eq!(status.months_covered, None);
     }
@@ -493,8 +486,7 @@ mod tests {
             .unwrap();
 
         let now = unix_secs("2026-04-05T10:00:00Z").unwrap();
-        let manual = BTreeMap::from([("usd".to_string(), amount("3"))]);
-        let status = vault.emergency_fund_status(now, "UTC", &manual);
+        let status = vault.emergency_fund_status(now, "UTC");
         assert_eq!(status.total, amount("7080"));
         assert_eq!(status.e_mand, Some(amount("1000")));
         assert_eq!(status.months_covered, Some(amount("7.1")));

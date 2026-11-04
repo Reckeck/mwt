@@ -159,7 +159,8 @@ favorite_currencies: Array<string>,
 timezone: string | null, 
 /**
  * Annual inflation, percent, by lowercase currency code (plan §6.5).
- * Used only by analytics, for «in today's money»; marked as reference.
+ * Read only by `adopt_flat_inflation`: the rates live in the vault since
+ * stage P and this column is no longer written.
  */
 inflation: { [key in string]: Amount }, 
 /**
@@ -5026,6 +5027,17 @@ inflation_mode: { [key in string]: InflationMode },
  */
 inflation_source: { [key in string]: string }, 
 /**
+ * Flat annual inflation, percent, by lowercase currency code, where the
+ * group differs from the shipped table (`default_inflation`); read through
+ * `UnlockedVault::flat_inflation`. Group data: every device sees one table.
+ */
+inflation_manual: { [key in string]: Amount }, 
+/**
+ * The device-local rates of the app config were copied into
+ * `inflation_manual` once (`UnlockedVault::adopt_flat_inflation`).
+ */
+inflation_adopted: boolean, 
+/**
  * The user's usual monthly income in the budget currency, used until
  * three months of history exist (plan B).
  */
@@ -6682,7 +6694,8 @@ base_currency_chosen: boolean | null, favorite_currencies: Array<string> | null,
  */
 timezone: string | null, 
 /**
- * Replaces the whole inflation table.
+ * Ignored since the flat rates moved into the vault
+ * (`UpdateSettingsInput.inflation_manual`); kept so old callers still parse.
  */
 inflation: { [key in string]: Amount } | null, enrichment_opt_in: boolean | null, 
 /**
@@ -6843,7 +6856,12 @@ manual_expenses: Amount | null, dashboard_period: DashPeriod | null, onboarding_
 /**
  * Show crypto wallets, exchanges and coins.
  */
-crypto: boolean | null, };
+crypto: boolean | null, 
+/**
+ * Replaces the flat inflation table of the group, percent by currency
+ * code. Currencies whose value did not change are not stamped.
+ */
+inflation_manual: { [key in string]: Amount } | null, };
 
 type UpdateSharedEventInput = { id: string, event: SharedEventDraft, };
 

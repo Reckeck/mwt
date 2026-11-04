@@ -12,7 +12,7 @@ use trade_core::service::{
     PortfolioSummary, PropertyValue, RealizedPnl, StoreMonthRow, TopupAdvice, ValuationInput,
 };
 
-use crate::commands::app_settings::{current_settings, current_zone};
+use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, err_to_string, require_vault};
 
 #[tauri::command]
@@ -203,13 +203,12 @@ pub async fn property_valuations(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<PropertyValue>, String> {
-    let inflation = current_settings(&app).inflation;
     let zone = current_zone(&app);
     let guard = require_vault(&state).map_err(err_to_string)?;
     guard
         .as_ref()
         .unwrap()
-        .property_values(&store_id, &inflation, &zone)
+        .property_values(&store_id, &zone)
         .map_err(err_to_string)
 }
 

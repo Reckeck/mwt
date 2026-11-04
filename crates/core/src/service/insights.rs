@@ -4,8 +4,6 @@
 //! sentence itself is built by the UI from its locale, so one set of facts
 //! reads in every language (and can later be handed to a model as is).
 
-use std::collections::BTreeMap;
-
 use chrono::{Datelike, Duration, NaiveDate};
 
 use crate::Amount;
@@ -428,9 +426,8 @@ impl UnlockedVault {
         filter: &ReportFilter,
         now: i64,
         zone: &str,
-        inflation: &BTreeMap<String, Amount>,
     ) -> Result<ReportOverview> {
-        let anchor = self.report_ctx(filter, now, zone, inflation)?;
+        let anchor = self.report_ctx(filter, now, zone)?;
         let month = *anchor
             .months
             .last()
@@ -443,10 +440,10 @@ impl UnlockedVault {
             ..filter.clone()
         };
 
-        let pair = self.report_ctx(&span(previous, month), now, zone, inflation)?;
+        let pair = self.report_ctx(&span(previous, month), now, zone)?;
         let cash = self.cashflow_report(&pair);
         let (before, current) = (&cash.rows[0], &cash.rows[1]);
-        let single = self.report_ctx(&span(month, month), now, zone, inflation)?;
+        let single = self.report_ctx(&span(month, month), now, zone)?;
         let categories = self.categories_report(&single);
         let spent = current.fixed + current.daily;
         let previous_spent = before.fixed + before.daily;
@@ -506,7 +503,7 @@ impl UnlockedVault {
 
         let year = month.year();
         let january = NaiveDate::from_ymd_opt(year, 1, 1).unwrap_or(month);
-        let since_january = self.report_ctx(&span(january, month), now, zone, inflation)?;
+        let since_january = self.report_ctx(&span(january, month), now, zone)?;
         let pnl = self.pnl_report(&since_january);
         let losses = self.loss_report(&since_january);
         // Spending a currency also closes «positions»; only a result counts.
@@ -532,7 +529,6 @@ impl UnlockedVault {
             ),
             now,
             zone,
-            inflation,
         )?;
         let year_report = self.year_report(&whole_year);
         let savings = OverviewYear {
@@ -593,12 +589,7 @@ mod tests {
 
     fn overview(vault: &UnlockedVault) -> ReportOverview {
         vault
-            .report_overview(
-                &ReportFilter::default(),
-                unix_secs(NOW).unwrap(),
-                "UTC",
-                &BTreeMap::new(),
-            )
+            .report_overview(&ReportFilter::default(), unix_secs(NOW).unwrap(), "UTC")
             .unwrap()
     }
 
@@ -653,7 +644,6 @@ mod tests {
                 &ReportFilter::default(),
                 unix_secs(NOW).unwrap(),
                 "UTC",
-                &BTreeMap::new(),
             )
             .unwrap();
         let Report::Cashflow(cash) = report else {

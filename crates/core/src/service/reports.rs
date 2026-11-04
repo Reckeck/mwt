@@ -515,13 +515,7 @@ type CategoryCells = (Vec<Amount>, Amount, Option<CategoryGroup>, u32);
 type Positions = HashMap<(String, String), (AssetRef, Amount)>;
 
 impl UnlockedVault {
-    pub(crate) fn report_ctx(
-        &self,
-        filter: &ReportFilter,
-        now: i64,
-        zone: &str,
-        inflation: &BTreeMap<String, Amount>,
-    ) -> Result<Ctx> {
+    pub(crate) fn report_ctx(&self, filter: &ReportFilter, now: i64, zone: &str) -> Result<Ctx> {
         let cal = Calendar::new(zone);
         let today = cal.date_of(now);
         let parse = |raw: &Option<String>| -> Result<Option<NaiveDate>> {
@@ -564,11 +558,11 @@ impl UnlockedVault {
             .filter(|code| !code.is_empty())
             .unwrap_or_else(|| self.budget_currency());
         let scope = (!filter.scope.store_ids.is_empty()).then(|| self.resolve_scope(&filter.scope));
-        let rate = self.inflation_on(&currency, &calendar::month_key(today), inflation);
+        let rate = self.inflation_on(&currency, &calendar::month_key(today));
         // The inflation report reads coefficients even in nominal terms.
         let coefficients = months
             .first()
-            .and_then(|first| self.real_coefficients(&currency, inflation, *first, today))
+            .and_then(|first| self.real_coefficients(&currency, *first, today))
             .unwrap_or_default();
         Ok(Ctx {
             cal,
@@ -591,7 +585,6 @@ impl UnlockedVault {
         filter: &ReportFilter,
         now: i64,
         zone: &str,
-        inflation: &BTreeMap<String, Amount>,
     ) -> Result<Report> {
         let mut filter = filter.clone();
         if kind == ReportKind::Year {
@@ -600,7 +593,7 @@ impl UnlockedVault {
             filter.from = Some(format!("{year:04}-01"));
             filter.to = Some(format!("{year:04}-12"));
         }
-        let ctx = self.report_ctx(&filter, now, zone, inflation)?;
+        let ctx = self.report_ctx(&filter, now, zone)?;
         let mut report = match kind {
             ReportKind::Cashflow => Report::Cashflow(self.cashflow_report(&ctx)),
             ReportKind::Year => Report::Year(Box::new(self.year_report(&ctx))),
@@ -1891,9 +1884,7 @@ mod tests {
     const NOW: &str = "2026-06-15T12:00:00Z";
 
     fn run(vault: &UnlockedVault, kind: ReportKind, filter: &ReportFilter) -> Report {
-        vault
-            .report(kind, filter, secs(NOW), "UTC", &BTreeMap::new())
-            .unwrap()
+        vault.report(kind, filter, secs(NOW), "UTC").unwrap()
     }
 
     #[test]
@@ -2167,13 +2158,18 @@ mod tests {
         vault
             .add_transaction(earn(&card, "1000", "2025-06-05T10:00:00Z"))
             .unwrap();
-        let inflation = BTreeMap::from([("usd".to_string(), amount("10"))]);
+        vault
+            .update_settings(crate::ipc_contract::UpdateSettingsInput {
+                inflation_manual: Some(BTreeMap::from([("usd".to_string(), amount("10"))])),
+                ..Default::default()
+            })
+            .unwrap();
         let filter = ReportFilter {
             real_terms: true,
             ..range("2025-06", "2026-06")
         };
         let Report::Cashflow(report) = vault
-            .report(ReportKind::Cashflow, &filter, secs(NOW), "UTC", &inflation)
+            .report(ReportKind::Cashflow, &filter, secs(NOW), "UTC")
             .unwrap()
         else {
             panic!()
@@ -2182,7 +2178,7 @@ mod tests {
         assert_eq!(report.rows[0].income, amount("1100"));
         assert_eq!(report.meta.inflation_rate, Some(amount("10")));
         let Report::Inflation(inflation_report) = vault
-            .report(ReportKind::Inflation, &filter, secs(NOW), "UTC", &inflation)
+            .report(ReportKind::Inflation, &filter, secs(NOW), "UTC")
             .unwrap()
         else {
             panic!()
@@ -2206,13 +2202,18 @@ mod tests {
             }
             vault.add_transaction(tx).unwrap();
         }
-        let inflation = BTreeMap::from([("usd".to_string(), amount("10"))]);
+        vault
+            .update_settings(crate::ipc_contract::UpdateSettingsInput {
+                inflation_manual: Some(BTreeMap::from([("usd".to_string(), amount("10"))])),
+                ..Default::default()
+            })
+            .unwrap();
         let filter = ReportFilter {
             real_terms: true,
             ..range("2025-06", "2025-06")
         };
         let Report::Pnl(report) = vault
-            .report(ReportKind::Pnl, &filter, secs(NOW), "UTC", &inflation)
+            .report(ReportKind::Pnl, &filter, secs(NOW), "UTC")
             .unwrap()
         else {
             panic!()

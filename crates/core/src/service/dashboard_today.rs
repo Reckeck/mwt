@@ -302,13 +302,7 @@ impl UnlockedVault {
     }
 
     /// Everything "Today" shows, in one request (plan H5).
-    pub fn dashboard_today(
-        &self,
-        period: DashPeriod,
-        now: i64,
-        zone: &str,
-        manual: &BTreeMap<String, Amount>,
-    ) -> DashboardToday {
+    pub fn dashboard_today(&self, period: DashPeriod, now: i64, zone: &str) -> DashboardToday {
         let trend = self.net_worth_trend(period, now, zone);
         let budget = self.daily_budget(now, zone);
         let todos = self.all_today_todos(now, zone, Some(&budget.currency));
@@ -317,7 +311,7 @@ impl UnlockedVault {
             currency: trend.currency,
             net_worth: trend.change,
             health: self
-                .capital_health(now, zone, manual)
+                .capital_health(now, zone)
                 .ok()
                 .map(|report| report.color),
             left_today: budget.left_today,
@@ -433,7 +427,7 @@ mod tests {
                 .all(|todo| todo.kind == TodayTodoKind::PointsExpire)
         );
 
-        let today = vault.dashboard_today(DashPeriod::Month, now, "UTC", &BTreeMap::new());
+        let today = vault.dashboard_today(DashPeriod::Month, now, "UTC");
         assert_eq!(today.todos.len(), TODAY_TODOS);
         assert_eq!(today.todos_total, 3);
     }

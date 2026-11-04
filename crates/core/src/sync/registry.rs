@@ -212,6 +212,7 @@ pub const DEVICE_SETTINGS: &[&str] = &[
     "dashboard_widgets",
     "dashboard_period",
     "pinned",
+    "inflation_adopted",
 ];
 
 /// What the `settings` rule skips: `DEVICE_SETTINGS` and the device parts of
@@ -224,6 +225,7 @@ const SETTINGS_SKIP: &[&str] = &[
     "dashboard_widgets",
     "dashboard_period",
     "pinned",
+    "inflation_adopted",
     "notifications.system",
     "notifications.hide_details_when_locked",
 ];
@@ -266,6 +268,12 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("onboarding_skipped", Scope::Group),
     ("inflation_mode", Scope::Group),
     ("inflation_source", Scope::Group),
+    // The flat rates by currency: the group's, so every device computes with
+    // one table.
+    ("inflation_manual", Scope::Group),
+    // This device has given its old table to the group; a peer's flag says
+    // nothing about the rates kept here.
+    ("inflation_adopted", Scope::Device),
     ("manual_income", Scope::Group),
     ("manual_expenses", Scope::Group),
     ("categories_rev", Scope::Group),
@@ -286,7 +294,12 @@ pub static COLLECTIONS: &[Collection] = &[
     // Per-currency maps merge per currency: two devices choosing the
     // inflation of different currencies both keep their choice.
     Collection {
-        flatten: &["inflation_mode", "inflation_source", "notifications"],
+        flatten: &[
+            "inflation_mode",
+            "inflation_source",
+            "inflation_manual",
+            "notifications",
+        ],
         // Each category is an entry of its own: two devices switching
         // different categories keep both.
         flatten_by: &[("notifications.categories", "category")],

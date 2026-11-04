@@ -2919,3 +2919,38 @@ fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
     };
     assert_eq!((booked(&left), booked(&right)), (1, 1));
 }
+
+/// The notice text a manual run of "inflation of `currency`" produces.
+fn inflation_notice(vault: &mut UnlockedVault, currency: &str) -> String {
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        node("i", "data.inflation", json!({ "currency": currency })),
+        node("text", "logic.text", json!({ "template": "Inflation {a}" })),
+        node("n", "action.notify", json!({})),
+    ];
+    let edges = vec![
+        wire("t", "out", "n", "in"),
+        wire("i", "value", "text", "a"),
+        wire("text", "text", "n", "text"),
+    ];
+    let workflow = save(vault, "Inflation", graph(nodes, edges));
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert_eq!(report.notices.len(), 1, "{:?}", report.run.outcome);
+    report.notices[0].body.clone()
+}
+
+#[test]
+fn the_inflation_node_reads_the_groups_flat_rates() {
+    let (_dir, mut vault) = empty_vault();
+    // THB has no built-in series: the node used to read an empty table and gave nothing.
+    assert_eq!(inflation_notice(&mut vault, "thb"), "Inflation 1");
+    vault
+        .update_settings(crate::ipc_contract::UpdateSettingsInput {
+            inflation_manual: Some([("thb".to_string(), amount("2.5"))].into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(inflation_notice(&mut vault, "thb"), "Inflation 2.5");
+}

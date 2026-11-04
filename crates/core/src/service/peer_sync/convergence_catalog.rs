@@ -63,9 +63,10 @@ pub(super) enum Item {
     /// 26: a price stamped in the base currency of one device is read as the
     /// base currency of another.
     PriceBase26,
-    // Left for the slice that adds the field they need: 27 (`WorkflowCap27`,
-    // slice 6, needs `Workflow.max_amount_currency`) and 100 (`FlatInflation100`,
-    // slice 7, needs `Settings.inflation_manual`).
+    /// 100: the flat inflation rates differ between devices that have met.
+    FlatInflation100,
+    // Left for the slice that adds the field it needs: 27 (`WorkflowCap27`,
+    // slice 6, needs `Workflow.max_amount_currency`).
 }
 
 /// The items that still reproduce today. Each fix slice removes its own.
@@ -483,6 +484,7 @@ pub(super) fn apply_catalog_edit(
             let _ = vault.sync_auto_reminders(REMINDER_NOW, "UTC", device_is_ru(vault));
         }
         Edit::TxWithBasePrice => tx_with_base_price(vault, ledger, number),
+        Edit::SetFlatInflation => set_flat_inflation(vault, rng),
         _ => {}
     }
 }
@@ -548,6 +550,38 @@ fn toggle_system_notices(vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut 
     if saved.is_ok() {
         ledger.device_flags.insert(vault.path.clone(), flags);
     }
+}
+
+/// 100: a flat rate of one currency; the form sends the whole table, so the
+/// other currencies go back as they were on this device.
+fn set_flat_inflation(vault: &mut UnlockedVault, rng: &mut Rng) {
+    let currency = ["rub", "usd", "eur", "thb", "gbp"][rng.below(5)];
+    let mut table = vault.doc.settings.inflation_manual.clone();
+    table.insert(
+        currency.to_string(),
+        amount(&format!("{}.5", 2 + rng.below(30))),
+    );
+    let _ = vault.update_settings(crate::ipc_contract::UpdateSettingsInput {
+        inflation_manual: Some(table),
+        ..Default::default()
+    });
+}
+
+/// 100: once the devices have met they compute with one table of flat rates.
+pub(super) fn check_flat_inflation_agrees(devices: &[UnlockedVault]) -> Vec<Violation> {
+    let mut out = Vec::new();
+    let first = devices[0].flat_inflation();
+    for (index, device) in devices.iter().enumerate().skip(1) {
+        let table = device.flat_inflation();
+        if table != first {
+            found(
+                &mut out,
+                Item::FlatInflation100,
+                format!("device {index} has the flat rates {table:?}, device 0 has {first:?}"),
+            );
+        }
+    }
+    out
 }
 
 /// 26: an income whose price in the base currency is written in the base of

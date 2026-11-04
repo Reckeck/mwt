@@ -1,9 +1,9 @@
 //! Inflation as the app uses it (plan I1): the fetched monthly series of a
-//! currency, or the user's flat rate from the app settings.
+//! currency, or the user's flat rate.
 //!
-//! The flat table (`AppSettings.inflation`) lives outside the vault and is
-//! passed in as `manual`; the series and each currency's mode live in the
-//! vault, so every synced device reads the same numbers.
+//! The flat table (`flat_inflation`: the shipped rates under
+//! `Settings.inflation_manual`), the series and each currency's mode all live
+//! in the vault, so every synced device reads the same numbers.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -233,14 +233,44 @@ impl UnlockedVault {
             .collect()
     }
 
+    /// The flat annual inflation of the group, percent by currency: the shipped
+    /// table with the vault's own rates over it. The only source of flat rates
+    /// (screens, reports, workflow nodes, the monthly checkup), so every device
+    /// of the group computes with one table.
+    pub fn flat_inflation(&self) -> BTreeMap<String, Amount> {
+        let mut table = crate::appconfig::default_inflation();
+        table.extend(self.doc.settings.inflation_manual.clone());
+        table
+    }
+
+    /// Copy the rates this device had in its app config into the vault, once
+    /// (`Settings.inflation_adopted`): only values that differ from the shipped
+    /// table, and never over a rate the group already has. Returns whether
+    /// anything was written. Two devices that adopt different values of one
+    /// currency settle on the later write when they sync.
+    pub fn adopt_flat_inflation(&mut self, local: &BTreeMap<String, Amount>) -> Result<bool> {
+        if self.doc.settings.inflation_adopted {
+            return Ok(false);
+        }
+        let shipped = crate::appconfig::default_inflation();
+        for (currency, rate) in crate::appconfig::normalize_inflation(local) {
+            if shipped.get(&currency) != Some(&rate) {
+                self.doc
+                    .settings
+                    .inflation_manual
+                    .entry(currency)
+                    .or_insert(rate);
+            }
+        }
+        self.doc.settings.inflation_adopted = true;
+        self.persist()?;
+        Ok(true)
+    }
+
     /// The mode the user chose, else: no built-in source → manual; a flat rate
     /// the user changed from the shipped default → manual (they meant it);
     /// otherwise automatic.
-    pub fn inflation_mode(
-        &self,
-        currency: &str,
-        manual: &BTreeMap<String, Amount>,
-    ) -> InflationMode {
+    pub fn inflation_mode(&self, currency: &str) -> InflationMode {
         let currency = code(currency);
         if let Some(mode) = self.doc.settings.inflation_mode.get(&currency) {
             return *mode;
@@ -249,7 +279,7 @@ impl UnlockedVault {
             return InflationMode::Manual;
         }
         let shipped = crate::appconfig::default_inflation();
-        match manual.get(&currency) {
+        match self.flat_inflation().get(&currency) {
             Some(rate) if shipped.get(&currency) != Some(rate) => InflationMode::Manual,
             _ => InflationMode::Auto,
         }
@@ -258,15 +288,10 @@ impl UnlockedVault {
     /// Inflation of a currency in a month (`YYYY-MM`), percent: the reading of
     /// that month or the latest one before it in auto mode, else the flat
     /// rate. A month before the first reading takes the first one.
-    pub fn inflation_on(
-        &self,
-        currency: &str,
-        month: &str,
-        manual: &BTreeMap<String, Amount>,
-    ) -> Option<Amount> {
+    pub fn inflation_on(&self, currency: &str, month: &str) -> Option<Amount> {
         let currency = code(currency);
-        let flat = manual.get(&currency).copied();
-        if self.inflation_mode(&currency, manual) == InflationMode::Manual {
+        let flat = self.flat_inflation().get(&currency).copied();
+        if self.inflation_mode(&currency) == InflationMode::Manual {
             return flat;
         }
         let series = self.inflation_series(&currency);
@@ -281,23 +306,19 @@ impl UnlockedVault {
 
     /// Latest inflation per currency as reports and the calculator use it:
     /// every currency with a flat rate or a built-in source.
-    pub fn effective_inflation(
-        &self,
-        manual: &BTreeMap<String, Amount>,
-    ) -> BTreeMap<String, Amount> {
-        self.inflation_currencies(manual)
+    pub fn effective_inflation(&self) -> BTreeMap<String, Amount> {
+        self.inflation_currencies()
             .into_iter()
             .filter_map(|currency| {
-                let rate = self.inflation_on(&currency, "9999-12", manual)?;
+                let rate = self.inflation_on(&currency, "9999-12")?;
                 Some((currency, rate))
             })
             .collect()
     }
 
-    fn inflation_currencies(&self, manual: &BTreeMap<String, Amount>) -> BTreeSet<String> {
-        manual
-            .keys()
-            .cloned()
+    fn inflation_currencies(&self) -> BTreeSet<String> {
+        self.flat_inflation()
+            .into_keys()
             .chain(self.doc.settings.inflation_source.keys().cloned())
             .chain(
                 InflationSource::ALL
@@ -316,11 +337,10 @@ impl UnlockedVault {
     pub(crate) fn real_coefficients(
         &self,
         currency: &str,
-        manual: &BTreeMap<String, Amount>,
         from: NaiveDate,
         today: NaiveDate,
     ) -> Option<BTreeMap<NaiveDate, Amount>> {
-        if self.inflation_mode(currency, manual) == InflationMode::Manual {
+        if self.inflation_mode(currency) == InflationMode::Manual {
             return None;
         }
         let series = self.inflation_series(currency);
@@ -491,13 +511,14 @@ impl UnlockedVault {
 
     /// Every currency with a flat rate or a built-in source, for the settings
     /// screen.
-    pub fn inflation_overview(&self, manual: &BTreeMap<String, Amount>) -> Vec<InflationCurrency> {
-        self.inflation_currencies(manual)
+    pub fn inflation_overview(&self) -> Vec<InflationCurrency> {
+        let flat = self.flat_inflation();
+        self.inflation_currencies()
             .into_iter()
             .map(|currency| {
                 let series = self.inflation_series(&currency);
                 let latest = series.last().cloned();
-                let mode = self.inflation_mode(&currency, manual);
+                let mode = self.inflation_mode(&currency);
                 let previous = series.iter().rev().nth(1).map(|row| row.yoy_pct);
                 let tail = series.len().saturating_sub(INFLATION_CHART_MONTHS);
                 InflationCurrency {
@@ -511,8 +532,8 @@ impl UnlockedVault {
                     source_id: self.doc.settings.inflation_source.get(&currency).cloned(),
                     latest,
                     previous,
-                    manual: manual.get(&currency).copied(),
-                    effective: self.inflation_on(&currency, "9999-12", manual),
+                    manual: flat.get(&currency).copied(),
+                    effective: self.inflation_on(&currency, "9999-12"),
                     series: series[tail..].to_vec(),
                     currency,
                 }
@@ -542,19 +563,17 @@ mod tests {
     #[test]
     fn mode_is_inferred_until_chosen() {
         let (_dir, mut vault) = empty_vault();
-        let shipped = crate::appconfig::default_inflation();
-        assert_eq!(vault.inflation_mode("RUB", &shipped), InflationMode::Auto);
+        assert_eq!(vault.inflation_mode("RUB"), InflationMode::Auto);
         // No built-in source for THB.
-        assert_eq!(vault.inflation_mode("thb", &shipped), InflationMode::Manual);
-        let mut edited = shipped.clone();
-        edited.insert("rub".into(), amount("9.5"));
-        assert_eq!(vault.inflation_mode("rub", &edited), InflationMode::Manual);
+        assert_eq!(vault.inflation_mode("thb"), InflationMode::Manual);
+        set_rates(&mut vault, &[("rub", "9.5")]);
+        assert_eq!(vault.inflation_mode("rub"), InflationMode::Manual);
         vault
             .set_inflation_mode("rub", Some(InflationMode::Auto))
             .unwrap();
-        assert_eq!(vault.inflation_mode("rub", &edited), InflationMode::Auto);
+        assert_eq!(vault.inflation_mode("rub"), InflationMode::Auto);
         vault.set_inflation_mode("rub", None).unwrap();
-        assert_eq!(vault.inflation_mode("rub", &edited), InflationMode::Manual);
+        assert_eq!(vault.inflation_mode("rub"), InflationMode::Manual);
         assert!(
             vault
                 .set_inflation_mode("thb", Some(InflationMode::Auto))
@@ -565,44 +584,25 @@ mod tests {
     #[test]
     fn auto_reads_the_series_and_falls_back_to_the_flat_rate() {
         let (_dir, mut vault) = empty_vault();
-        let manual = crate::appconfig::default_inflation();
-        assert_eq!(
-            vault.inflation_on("rub", "2026-09", &manual),
-            Some(amount("8"))
-        );
+        assert_eq!(vault.inflation_on("rub", "2026-09"), Some(amount("8")));
         vault.apply_inflation(&[
             reading("rub", "2026-07", "5.98"),
             reading("rub", "2026-09", "6.35"),
         ]);
-        assert_eq!(
-            vault.inflation_on("rub", "2026-09", &manual),
-            Some(amount("6.35"))
-        );
+        assert_eq!(vault.inflation_on("rub", "2026-09"), Some(amount("6.35")));
         // A month without a reading takes the one before it…
-        assert_eq!(
-            vault.inflation_on("rub", "2026-08", &manual),
-            Some(amount("5.98"))
-        );
+        assert_eq!(vault.inflation_on("rub", "2026-08"), Some(amount("5.98")));
         // …and a month before the series its first reading.
+        assert_eq!(vault.inflation_on("rub", "2020-01"), Some(amount("5.98")));
         assert_eq!(
-            vault.inflation_on("rub", "2020-01", &manual),
-            Some(amount("5.98"))
-        );
-        assert_eq!(
-            vault.effective_inflation(&manual).get("rub"),
+            vault.effective_inflation().get("rub"),
             Some(&amount("6.35"))
         );
         vault
             .set_inflation_mode("rub", Some(InflationMode::Manual))
             .unwrap();
-        assert_eq!(
-            vault.inflation_on("rub", "2026-09", &manual),
-            Some(amount("8"))
-        );
-        assert_eq!(
-            vault.effective_inflation(&manual).get("thb"),
-            Some(&amount("1"))
-        );
+        assert_eq!(vault.inflation_on("rub", "2026-09"), Some(amount("8")));
+        assert_eq!(vault.effective_inflation().get("thb"), Some(&amount("1")));
     }
 
     #[test]
@@ -666,14 +666,13 @@ mod tests {
     #[test]
     fn a_constant_series_matches_the_flat_rate() {
         let (_dir, mut vault) = empty_vault();
-        let manual = crate::appconfig::default_inflation();
         let today = day("2026-10-21");
         let rows: Vec<InflationReading> = (1..=12)
             .map(|month| reading("rub", &format!("2025-{month:02}"), "8"))
             .collect();
         vault.apply_inflation(&rows);
         let table = vault
-            .real_coefficients("rub", &manual, day("2024-10-01"), today)
+            .real_coefficients("rub", day("2024-10-01"), today)
             .unwrap();
         assert_eq!(table[&day("2026-10-01")], Amount::from(1));
         for (month, coefficient) in &table {
@@ -691,27 +690,108 @@ mod tests {
     #[test]
     fn coefficients_follow_the_months() {
         let (_dir, mut vault) = empty_vault();
-        let manual = crate::appconfig::default_inflation();
         vault.apply_inflation(&[
             reading("rub", "2026-08", "12"),
             reading("rub", "2026-09", "0"),
         ]);
         let table = vault
-            .real_coefficients("rub", &manual, day("2026-08-01"), day("2026-10-05"))
+            .real_coefficients("rub", day("2026-08-01"), day("2026-10-05"))
             .unwrap();
         // September at 0 % and October carrying it: September's money kept its value.
         assert_eq!(table[&day("2026-09-01")], Amount::from(1));
         assert_eq!(table[&day("2026-08-01")], Amount::from(1));
         let table = vault
-            .real_coefficients("rub", &manual, day("2026-07-01"), day("2026-09-05"))
+            .real_coefficients("rub", day("2026-07-01"), day("2026-09-05"))
             .unwrap();
         // August at 12 %: one month of it on July's money.
         let month_of_twelve = amount("1.12").root_n(12);
         assert_eq!(table[&day("2026-07-01")], month_of_twelve);
         assert!(
             vault
-                .real_coefficients("thb", &manual, day("2026-07-01"), day("2026-09-05"))
+                .real_coefficients("thb", day("2026-07-01"), day("2026-09-05"))
                 .is_none()
         );
+    }
+
+    fn table(pairs: &[(&str, &str)]) -> BTreeMap<String, Amount> {
+        pairs
+            .iter()
+            .map(|(code, rate)| ((*code).to_string(), amount(rate)))
+            .collect()
+    }
+
+    fn set_rates(vault: &mut UnlockedVault, pairs: &[(&str, &str)]) {
+        vault
+            .update_settings(crate::ipc_contract::UpdateSettingsInput {
+                inflation_manual: Some(table(pairs)),
+                ..Default::default()
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn the_flat_table_is_the_shipped_one_under_the_vaults_own_rates() {
+        let (_dir, mut vault) = empty_vault();
+        assert_eq!(
+            vault.flat_inflation(),
+            crate::appconfig::default_inflation()
+        );
+        set_rates(&mut vault, &[("rub", "9.5"), ("gbp", "4")]);
+        let flat = vault.flat_inflation();
+        assert_eq!(flat.get("rub"), Some(&amount("9.5")));
+        assert_eq!(flat.get("gbp"), Some(&amount("4")));
+        assert_eq!(flat.get("usd"), Some(&amount("3")));
+        assert_eq!(flat.get("thb"), Some(&amount("1")));
+    }
+
+    #[test]
+    fn a_saved_table_keeps_only_what_differs_or_was_already_set() {
+        let (_dir, mut vault) = empty_vault();
+        // The form sends the whole table; the shipped values in it are not data.
+        set_rates(&mut vault, &[("rub", "8"), ("usd", "3.5"), ("GBP", "4")]);
+        assert_eq!(
+            vault.doc.settings.inflation_manual,
+            table(&[("usd", "3.5"), ("gbp", "4")])
+        );
+        // A value set once stays even when it is put back to the shipped one.
+        set_rates(&mut vault, &[("usd", "3"), ("gbp", "4")]);
+        assert_eq!(
+            vault.doc.settings.inflation_manual,
+            table(&[("usd", "3"), ("gbp", "4")])
+        );
+        // A rate that is not a number of percent is dropped.
+        set_rates(&mut vault, &[("gbp", "4"), ("chf", "5000")]);
+        assert_eq!(vault.doc.settings.inflation_manual, table(&[("gbp", "4")]));
+    }
+
+    #[test]
+    fn old_device_rates_are_adopted_once_and_never_overwrite() {
+        let (_dir, mut vault) = empty_vault();
+        set_rates(&mut vault, &[("gbp", "4")]);
+        let local = table(&[("rub", "8"), ("usd", "5"), ("gbp", "9"), ("thb", "1")]);
+        assert!(vault.adopt_flat_inflation(&local).unwrap());
+        assert!(vault.doc.settings.inflation_adopted);
+        // Only the differing, not yet set values moved over.
+        assert_eq!(
+            vault.doc.settings.inflation_manual,
+            table(&[("usd", "5"), ("gbp", "4")])
+        );
+        // Once: a later change of the old table is not picked up again.
+        let again = table(&[("usd", "6"), ("eur", "7")]);
+        assert!(!vault.adopt_flat_inflation(&again).unwrap());
+        assert_eq!(
+            vault.doc.settings.inflation_manual,
+            table(&[("usd", "5"), ("gbp", "4")])
+        );
+    }
+
+    #[test]
+    fn adoption_survives_a_reopen_and_does_not_write_twice() {
+        let (_dir, mut vault) = empty_vault();
+        let local = table(&[("rub", "10")]);
+        assert!(vault.adopt_flat_inflation(&local).unwrap());
+        let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
+        assert!(reopened.doc.settings.inflation_adopted);
+        assert_eq!(reopened.flat_inflation().get("rub"), Some(&amount("10")));
     }
 }
