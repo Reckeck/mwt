@@ -125,9 +125,22 @@ impl RateBook {
     /// then the base rate of that day. A USD price with no known rate still
     /// falls through as the USD value rather than zero: a wrong magnitude is
     /// easier to notice than a silent zero.
+    ///
+    /// An explicit base price carries the base currency of the device that
+    /// wrote it. When that is not the reader's base, the USD price is
+    /// converted at the rate of the moment instead; a record without the
+    /// label (older ones) is read as written.
     pub fn leg_price_in_base(&self, leg: &Leg, base: &str, secs: i64) -> Amount {
         if let Some(price_base) = leg.price_base {
-            return price_base;
+            let foreign = leg
+                .price_base_currency
+                .as_deref()
+                .is_some_and(|label| !label.trim().eq_ignore_ascii_case(base.trim()));
+            let converted = leg
+                .price_usd
+                .filter(|_| foreign)
+                .and_then(|usd| self.fx_at(base, secs).map(|rate| usd * rate));
+            return converted.unwrap_or(price_base);
         }
         match (leg.price_usd, leg.fx_override) {
             (Some(usd), Some(fx)) => usd * fx,
@@ -315,6 +328,7 @@ impl UnlockedVault {
         common.price_usd = Some(price / rate);
         if currency == base {
             common.price_base = Some(price);
+            common.price_base_currency = Some(base);
         }
         Ok(())
     }
@@ -575,6 +589,93 @@ mod tests {
         let jul = secs_or_now("2026-07-01T00:00:00Z");
         assert_eq!(book.leg_price_in_base(&leg, "rub", feb), amount("80"));
         assert_eq!(book.leg_price_in_base(&leg, "rub", jul), amount("100"));
+    }
+
+    /// A stamp whose base price was written by a device with base `label`.
+    fn labelled_stamp(usd: &str, in_base: &str, label: Option<&str>) -> PriceStamp {
+        PriceStamp {
+            price_usd: Some(amount(usd)),
+            price_base: Some(amount(in_base)),
+            price_base_currency: label.map(str::to_string),
+            fx_override: None,
+        }
+    }
+
+    #[test]
+    fn a_base_price_of_another_currency_is_read_through_usd() {
+        let (_dir, mut vault) = empty_vault();
+        with_rub_history(&mut vault);
+        vault.apply_fx(&[fx("eur", "0.5", "2026-01-01T00:00:00Z")]);
+        let book = vault.rate_book();
+        let feb = secs_or_now("2026-02-01T00:00:00Z");
+        // Written on a device whose base is rub: 100 USD = 8000 RUB in February.
+        let stamp = labelled_stamp("100", "8000", Some("rub"));
+        let leg = Leg::in_coming("s", &usd(), amount("1"), &stamp);
+        // The reader's base is EUR (0.5 per USD): 50, not the 8000 rubles.
+        assert_eq!(book.leg_price_in_base(&leg, "eur", feb), amount("50"));
+        // The label is compared without regard to case.
+        let upper = labelled_stamp("100", "8000", Some("RUB"));
+        let same = Leg::in_coming("s", &usd(), amount("1"), &upper);
+        assert_eq!(book.leg_price_in_base(&same, "rub", feb), amount("8000"));
+    }
+
+    #[test]
+    fn a_base_price_with_the_readers_label_is_kept_as_is() {
+        let (_dir, mut vault) = empty_vault();
+        with_rub_history(&mut vault);
+        let book = vault.rate_book();
+        let feb = secs_or_now("2026-02-01T00:00:00Z");
+        let stamp = labelled_stamp("100", "7777", Some("rub"));
+        let leg = Leg::in_coming("s", &usd(), amount("1"), &stamp);
+        assert_eq!(book.leg_price_in_base(&leg, "rub", feb), amount("7777"));
+    }
+
+    #[test]
+    fn a_base_price_without_a_label_reads_as_before() {
+        let (_dir, mut vault) = empty_vault();
+        with_rub_history(&mut vault);
+        let book = vault.rate_book();
+        let feb = secs_or_now("2026-02-01T00:00:00Z");
+        let stamp = labelled_stamp("100", "7777", None);
+        let leg = Leg::in_coming("s", &usd(), amount("1"), &stamp);
+        assert_eq!(book.leg_price_in_base(&leg, "thb", feb), amount("7777"));
+    }
+
+    #[test]
+    fn a_labelled_base_price_with_no_usd_price_or_rate_is_kept() {
+        let (_dir, mut vault) = empty_vault();
+        with_rub_history(&mut vault);
+        let book = vault.rate_book();
+        let feb = secs_or_now("2026-02-01T00:00:00Z");
+        let mut stamp = labelled_stamp("100", "8000", Some("rub"));
+        stamp.price_usd = None;
+        let no_usd = Leg::in_coming("s", &usd(), amount("1"), &stamp);
+        assert_eq!(book.leg_price_in_base(&no_usd, "thb", feb), amount("8000"));
+        // No rate for the reader's base: the number is kept, as for a USD price.
+        let stamp = labelled_stamp("100", "8000", Some("rub"));
+        let leg = Leg::in_coming("s", &usd(), amount("1"), &stamp);
+        assert_eq!(book.leg_price_in_base(&leg, "xyz", feb), amount("8000"));
+    }
+
+    #[test]
+    fn a_price_typed_in_the_base_currency_is_labelled_with_it() {
+        let (_dir, mut vault) = empty_vault();
+        vault.set_base_currency("rub");
+        vault.apply_fx(&[
+            fx("rub", "80", "2026-01-01T00:00:00Z"),
+            fx("thb", "32", "2026-01-01T00:00:00Z"),
+        ]);
+        let mut input = priced_payment("8000", "rub", "2026-02-01T00:00:00Z");
+        vault.resolve_input_price(&mut input).unwrap();
+        assert_eq!(
+            input.common_mut().price_base_currency.as_deref(),
+            Some("rub")
+        );
+        // Not the base: no base price, so no label.
+        let mut other = priced_payment("3200", "thb", "2026-02-01T00:00:00Z");
+        vault.resolve_input_price(&mut other).unwrap();
+        assert_eq!(other.common_mut().price_base, None);
+        assert_eq!(other.common_mut().price_base_currency, None);
     }
 
     #[test]

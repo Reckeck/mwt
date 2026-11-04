@@ -14,7 +14,12 @@ export function asset(ident: AssetIdent): AssetRef {
   }
 }
 
-const stamp = (usd: string | null): PriceStamp => ({ price_usd: usd, price_base: null, fx_override: null })
+const stamp = (usd: string | null): PriceStamp => ({
+  price_usd: usd,
+  price_base: null,
+  price_base_currency: null,
+  fx_override: null,
+})
 const noStamp = stamp(null)
 
 function fee(input: FeeInput | null): Fee | null {

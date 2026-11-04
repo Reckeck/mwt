@@ -19,7 +19,7 @@ use crate::model::vault::now_iso;
 ///
 /// Pricing is a property of an asset at a moment, not of the kind of
 /// movement, so every priced side of a transaction carries one of these.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct PriceStamp {
     /// Price of one unit of the asset in USD.
     #[serde(default)]
@@ -27,6 +27,11 @@ pub struct PriceStamp {
     /// Price of one unit of the asset in the base currency, when already known.
     #[serde(default)]
     pub price_base: Option<Amount>,
+    /// Lowercase code of the base currency `price_base` was written in (the
+    /// base of the device that entered it). Absent on records from before the
+    /// label existed: those are read as before.
+    #[serde(default)]
+    pub price_base_currency: Option<String>,
     /// Manual USD→base rate the user entered at that moment.
     #[serde(default)]
     pub fx_override: Option<Amount>,
@@ -37,6 +42,8 @@ impl PriceStamp {
     pub fn on(&self, leg: &mut Leg) {
         leg.price_usd = self.price_usd;
         leg.price_base = self.price_base;
+        leg.price_base_currency
+            .clone_from(&self.price_base_currency);
         leg.fx_override = self.fx_override;
     }
 
@@ -215,6 +222,8 @@ pub struct Leg {
     pub to_store_id: Option<String>,
     pub price_usd: Option<Amount>,
     pub price_base: Option<Amount>,
+    /// Currency `price_base` is in; see [`PriceStamp::price_base_currency`].
+    pub price_base_currency: Option<String>,
     pub fx_override: Option<Amount>,
 }
 
@@ -234,6 +243,7 @@ impl Leg {
             to_store_id: None,
             price_usd: None,
             price_base: None,
+            price_base_currency: None,
             fx_override: None,
         };
         price.on(&mut leg);

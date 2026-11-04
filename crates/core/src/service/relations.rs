@@ -915,6 +915,7 @@ mod tests {
             updated_at: String::new(),
             react_to_workflows: false,
             max_amount: None,
+            max_amount_currency: None,
             versions: Vec::new(),
             tests: Vec::new(),
             draft: None,

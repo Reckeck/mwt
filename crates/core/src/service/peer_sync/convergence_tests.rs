@@ -1155,11 +1155,9 @@ fn convergence_quick_fixed_seed() {
 }
 
 /// Guard: the same runs with no item tolerated (the strict form of the tests
-/// above, with a per-item report). Red on purpose while `KNOWN_OPEN` lists
-/// the stage P items, so it is ignored until the last of them is fixed; run it
-/// with `cargo test -p trade-core random_edits_with_no_item -- --ignored`.
+/// above, with a per-item report). `KNOWN_OPEN` is empty, so this and the
+/// tolerant runs are the same check.
 #[test]
-#[ignore = "red on purpose until the stage P fixes (121, 33, 26) land; shows which invariants break"]
 fn random_edits_with_no_item_tolerated_stay_green() {
     let steps = env_number("MWT_CONV_STEPS").unwrap_or(DEFAULT_STEPS);
     let mut report = Vec::new();

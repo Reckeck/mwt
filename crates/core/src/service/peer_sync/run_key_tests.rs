@@ -32,6 +32,7 @@ fn save(vault: &mut UnlockedVault, name: &str, nodes: Vec<Value>, edges: Vec<Val
         graph: json!({ "version": 1, "nodes": nodes, "edges": edges }).to_string(),
         react_to_workflows: false,
         max_amount: None,
+        max_amount_currency: None,
     };
     vault
         .save_workflow(None, draft, now_secs())

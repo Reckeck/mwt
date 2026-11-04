@@ -3444,7 +3444,7 @@
   "workflow.settings.description": "Описание",
   "workflow.settings.cap": "Предел за запуск, {base}",
   "workflow.settings.noCap": "без предела",
-  "workflow.settings.capHint": "Если запуск переведёт или потратит больше, он не выполнится целиком.",
+  "workflow.settings.capHint": "Если запуск переведёт или потратит больше, он не выполнится целиком. Без цены или курса для проверки запуск тоже отклоняется.",
   "workflow.settings.react": "Реагировать на операции других схем",
   "workflow.settings.reactHint": "Обычно выключено: так схемы не запускают друг друга по кругу. На свои операции схема не реагирует никогда.",
   "workflow.settings.issues": "Проверка",

@@ -335,6 +335,10 @@ pub struct TxCommonInput {
     #[serde(default)]
     #[ts(skip)]
     pub price_base: Option<Amount>,
+    /// Set together with `price_base`: the base currency it is in.
+    #[serde(default)]
+    #[ts(skip)]
+    pub price_base_currency: Option<String>,
     /// The property the operation belongs to (plan G4); empty — none.
     #[serde(default)]
     #[ts(optional)]
@@ -360,6 +364,7 @@ impl TxCommonInput {
         PriceStamp {
             price_usd: self.price_usd,
             price_base: self.price_base,
+            price_base_currency: self.price_base_currency.clone(),
             fx_override: self.fx_override,
         }
     }

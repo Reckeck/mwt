@@ -642,6 +642,7 @@ mod tests {
             graph: graph.to_string(),
             react_to_workflows: false,
             max_amount: None,
+            max_amount_currency: None,
         };
         let now = unix_secs("2026-10-24T12:00:00Z").unwrap();
         let scheme = vault.save_workflow(None, draft, now).unwrap().workflow.id;

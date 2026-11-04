@@ -29,6 +29,7 @@ fn stamp() -> PriceStamp {
     PriceStamp {
         price_usd: Some(amount("1")),
         price_base: Some(amount("90")),
+        price_base_currency: None,
         fx_override: None,
     }
 }
@@ -294,6 +295,7 @@ pub fn full_doc() -> VaultDoc {
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 react_to_workflows: false,
                 max_amount: None,
+                max_amount_currency: None,
                 versions: Vec::new(),
                 tests: Vec::new(),
                 draft: None,

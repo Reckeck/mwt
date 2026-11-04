@@ -69,7 +69,7 @@ pub(super) enum Item {
 }
 
 /// The items that still reproduce today. Each fix slice removes its own.
-pub(super) const KNOWN_OPEN: &[Item] = &[Item::PriceBase26];
+pub(super) const KNOWN_OPEN: &[Item] = &[];
 
 #[derive(Clone, Debug)]
 pub(super) struct Violation {
@@ -563,6 +563,7 @@ fn tx_with_base_price(vault: &mut UnlockedVault, ledger: &mut Ledger, number: us
     let mut tx = income_of(&store_id, usd(), "10", &usd_price.to_string(), "based");
     if let Transaction::Topup(topup) = &mut tx {
         topup.price.price_base = Some(amount(&in_base.to_string()));
+        topup.price.price_base_currency = Some(vault.base_currency().to_string());
         topup.meta.timestamp = "2026-02-01T00:00:00Z".into();
     }
     if let Ok(saved) = vault.add_transaction(tx) {

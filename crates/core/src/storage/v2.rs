@@ -100,6 +100,7 @@ impl From<VaultDocV2> for VaultDoc {
                 updated_at: automation.created_at,
                 react_to_workflows: false,
                 max_amount: None,
+                max_amount_currency: None,
                 versions: Vec::new(),
                 tests: Vec::new(),
                 draft: None,

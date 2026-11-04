@@ -11,6 +11,7 @@ import { Button } from '@/shared/ui/button'
 /** With nothing selected: the workflow's own settings and one `Check` block (problems, then tests). */
 const props = defineProps<{
   issues: GraphIssue[]
+  /** Currency of the cap: the stored one, else the base of this device. */
   base: string
   /** Flow wires that repeat a data wire: one button removes them. */
   redundant: number

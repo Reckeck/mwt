@@ -115,8 +115,10 @@ pub struct RunContext {
     pub now: i64,
     pub zone: String,
     pub mode: RunMode,
-    /// Most one run may move, in the base currency.
+    /// Most one run may move, in `max_amount_currency`.
     pub max_amount: Option<Amount>,
+    /// Currency of the cap; `None` = the base of the device that runs it.
+    pub max_amount_currency: Option<String>,
     pub resume: Option<Resume>,
     /// How many "Call scheme" deep this run is.
     pub call_depth: u32,
@@ -135,6 +137,13 @@ pub struct RunContext {
 }
 
 impl RunContext {
+    /// Take the cap of `workflow` and the currency it is counted in.
+    pub fn set_cap(&mut self, workflow: &super::model::Workflow) {
+        self.max_amount = workflow.max_amount;
+        self.max_amount_currency
+            .clone_from(&workflow.max_amount_currency);
+    }
+
     pub fn new(
         workflow_id: &str,
         workflow_name: &str,
@@ -153,6 +162,7 @@ impl RunContext {
             zone: zone.to_string(),
             mode: RunMode::Live,
             max_amount: None,
+            max_amount_currency: None,
             resume: None,
             call_depth: 0,
             answers: BTreeMap::new(),
@@ -281,7 +291,7 @@ pub(crate) struct Executor<'run> {
     evaluating: HashSet<String>,
     steps: usize,
     pub actions: usize,
-    /// Value moved so far, in the base currency, against `max_amount`.
+    /// Value moved so far, in the currency of the cap, against `max_amount`.
     pub moved: Amount,
     pub created: Vec<Transaction>,
     pub queued: Vec<QueuedActions>,

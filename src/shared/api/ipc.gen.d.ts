@@ -4247,6 +4247,12 @@ price_usd: Amount | null,
  */
 price_base: Amount | null, 
 /**
+ * Lowercase code of the base currency `price_base` was written in (the
+ * base of the device that entered it). Absent on records from before the
+ * label existed: those are read as before.
+ */
+price_base_currency: string | null, 
+/**
  * Manual USD→base rate the user entered at that moment.
  */
 fx_override: Amount | null, };
@@ -7423,9 +7429,15 @@ graph: string, created_at: string, updated_at: string,
  */
 react_to_workflows: boolean, 
 /**
- * Most one run may move, in the base currency; `None` = no cap.
+ * Most one run may move, in `max_amount_currency`; `None` = no cap.
  */
 max_amount: Amount | null, 
+/**
+ * Lowercase currency code of `max_amount`, the base of the device that
+ * set the cap. `None` on a cap from before the label: that one is read
+ * in the base of the device that runs the workflow.
+ */
+max_amount_currency: string | null, 
 /**
  * Earlier graphs, newest last, to compare and restore.
  */
@@ -7453,7 +7465,11 @@ type WorkflowComment = { id: string, text: string, position: WorkflowPosition, w
 /**
  * What the user edits of a workflow.
  */
-type WorkflowDraft = { name: string, description: string, active: boolean, graph: string, react_to_workflows: boolean, max_amount: Amount | null, };
+type WorkflowDraft = { name: string, description: string, active: boolean, graph: string, react_to_workflows: boolean, max_amount: Amount | null, 
+/**
+ * Currency of the cap; empty = the base of the device that saves it.
+ */
+max_amount_currency: string | null, };
 
 type WorkflowEdge = { id: string, from: string, from_port: string, to: string, to_port: string, };
 

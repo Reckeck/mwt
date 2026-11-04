@@ -32,6 +32,7 @@ fn draft(name: &str, graph: String) -> WorkflowDraft {
         graph,
         react_to_workflows: false,
         max_amount: None,
+        max_amount_currency: None,
     }
 }
 
@@ -655,6 +656,183 @@ fn the_cap_stops_a_run_that_moves_too_much() {
         report.run.outcome
     );
     assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
+}
+
+fn rub_point(per_usd: &str) -> crate::model::vault::FxPoint {
+    crate::model::vault::FxPoint {
+        currency: "rub".into(),
+        per_usd: amount(per_usd),
+        ts: "2026-01-01T00:00:00Z".into(),
+        source: "test".into(),
+    }
+}
+
+/// Save a workflow with one transfer of `sum` USD and a cap, run it once.
+fn run_capped(
+    vault: &mut UnlockedVault,
+    (card, savings): (&str, &str),
+    sum: &str,
+    cap: (&str, Option<&str>),
+) -> crate::workflow::RunOutcome {
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        transfer_node("tx", card, savings, sum),
+    ];
+    let workflow = vault
+        .save_workflow(
+            None,
+            WorkflowDraft {
+                max_amount: Some(amount(cap.0)),
+                max_amount_currency: cap.1.map(str::to_string),
+                ..draft("Capped", graph(nodes, vec![wire("t", "out", "tx", "in")]))
+            },
+            now_secs(),
+        )
+        .unwrap()
+        .workflow;
+    vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap()
+        .run
+        .outcome
+}
+
+#[test]
+fn the_cap_counts_in_its_own_currency() {
+    let (_dir, mut vault, card, savings) = wallets();
+    quote_usd(&mut vault);
+    vault.apply_fx(&[rub_point("100")]);
+    // The cap is 5000 RUB (50 USD) while the base of this device is USD.
+    let over = run_capped(&mut vault, (&card, &savings), "60", ("5000", Some("rub")));
+    assert!(
+        matches!(&over, RunOutcome::Failed { message } if message.contains("cap") && message.contains("RUB")),
+        "{over:?}"
+    );
+    assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
+    let under = run_capped(&mut vault, (&card, &savings), "40", ("5000", Some("rub")));
+    assert_eq!(under, RunOutcome::Done);
+    assert_eq!(holding_of(&vault, &savings, &usd()), amount("40"));
+}
+
+#[test]
+fn a_cap_without_a_label_is_read_in_the_base_of_the_runner() {
+    let (_dir, mut vault, card, savings) = wallets();
+    quote_usd(&mut vault);
+    vault.set_base_currency("rub");
+    vault.apply_fx(&[rub_point("100")]);
+    // 60 USD = 6000 RUB over a cap of 5000 in the base (rub).
+    let over = run_capped(&mut vault, (&card, &savings), "60", ("5000", None));
+    assert!(
+        matches!(&over, RunOutcome::Failed { message } if message.contains("cap") && message.contains("RUB")),
+        "{over:?}"
+    );
+}
+
+#[test]
+fn a_cap_with_no_price_or_rate_rejects_the_run() {
+    let (_dir, mut vault, card, savings) = wallets();
+    // No rate for the currency of the cap: the value of the move is unknown.
+    quote_usd(&mut vault);
+    let no_rate = run_capped(&mut vault, (&card, &savings), "10", ("100", Some("thb")));
+    assert!(
+        matches!(&no_rate, RunOutcome::Failed { message } if message.contains("no price or rate")),
+        "{no_rate:?}"
+    );
+    assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
+}
+
+/// Money in the currency of the cap is known without any rate: a device
+/// offline with an empty rate cache must not refuse it.
+#[test]
+fn an_outflow_in_the_currency_of_the_cap_needs_no_rate() {
+    use crate::model::transaction::Transaction;
+    let (_dir, mut vault, card, savings) = wallets();
+    quote_usd(&mut vault);
+    let done = run_capped(&mut vault, (&card, &savings), "10", ("100", None));
+    assert_eq!(done, RunOutcome::Done);
+    let mut tx = vault
+        .doc
+        .transactions
+        .iter()
+        .rev()
+        .find(|tx| matches!(tx, Transaction::Transfer(_)))
+        .expect("the transfer of the run")
+        .clone();
+    let Transaction::Transfer(inner) = &mut tx else {
+        panic!("a transfer");
+    };
+    inner.asset = AssetRef::fiat("RUB", "Ruble");
+    inner.amount = amount("500");
+    assert_eq!(vault.wf_outflow_in(&tx, "rub"), Some(amount("500")));
+    assert_eq!(vault.wf_outflow_in(&tx, " RUB "), Some(amount("500")));
+    // Another currency still needs the rate this vault does not have.
+    assert_eq!(vault.wf_outflow_in(&tx, "thb"), None);
+}
+
+#[test]
+fn no_cap_means_no_price_check() {
+    let (_dir, mut vault, card, savings) = wallets();
+    let nodes = vec![
+        node("t", "trigger.manual", json!({})),
+        transfer_node("tx", &card, &savings, "10"),
+    ];
+    let workflow = save(
+        &mut vault,
+        "Free",
+        graph(nodes, vec![wire("t", "out", "tx", "in")]),
+    );
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert_eq!(report.run.outcome, RunOutcome::Done);
+}
+
+#[test]
+fn the_cap_currency_is_the_authors_base_unless_chosen() {
+    let (_dir, mut vault) = empty_vault();
+    vault.set_base_currency("rub");
+    let capped = |currency: Option<&str>, cap: Option<&str>| WorkflowDraft {
+        max_amount: cap.map(amount),
+        max_amount_currency: currency.map(str::to_string),
+        ..draft(
+            "Capped",
+            graph(vec![node("t", "trigger.manual", json!({}))], vec![]),
+        )
+    };
+    let first = vault
+        .save_workflow(None, capped(None, Some("100")), now_secs())
+        .unwrap()
+        .workflow;
+    assert_eq!(first.max_amount_currency.as_deref(), Some("rub"));
+    let chosen = vault
+        .save_workflow(
+            Some(&first.id),
+            capped(Some(" EUR "), Some("100")),
+            now_secs(),
+        )
+        .unwrap()
+        .workflow;
+    assert_eq!(chosen.max_amount_currency.as_deref(), Some("eur"));
+    let empty = vault
+        .save_workflow(Some(&first.id), capped(Some(""), Some("100")), now_secs())
+        .unwrap()
+        .workflow;
+    assert_eq!(empty.max_amount_currency.as_deref(), Some("rub"));
+    // No cap, no label.
+    let free = vault
+        .save_workflow(Some(&first.id), capped(Some("eur"), None), now_secs())
+        .unwrap()
+        .workflow;
+    assert_eq!(free.max_amount_currency, None);
+}
+
+#[test]
+fn a_draft_and_a_workflow_from_before_the_label_still_read() {
+    let draft: WorkflowDraft = serde_json::from_value(json!({
+        "name": "Old", "active": false, "graph": "", "max_amount": "100",
+    }))
+    .unwrap();
+    assert_eq!(draft.max_amount_currency, None);
 }
 
 #[test]

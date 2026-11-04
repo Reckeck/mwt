@@ -37,9 +37,13 @@ export function feeInput(form: TransactionFormState): FeeInput | null {
   return { asset: ident(asset), amount: form.feeAmount.trim() }
 }
 
-/** A stored stamp back into the form: the base-currency price when it was typed so, else USD. */
+/**
+ * A stored stamp back into the form: the base-currency price when it was typed so, else USD.
+ * The base price is in the currency of its label (the base of the device that wrote it);
+ * an old stamp without a label stays the base of this device.
+ */
 export function stampToPrice(stamp: PriceStamp): Pick<TransactionFormState, 'price' | 'priceCurrency'> {
-  if (stamp.price_base) return { price: stamp.price_base, priceCurrency: '' }
+  if (stamp.price_base) return { price: stamp.price_base, priceCurrency: stamp.price_base_currency ?? '' }
   return { price: stamp.price_usd ?? '', priceCurrency: stamp.price_usd ? 'usd' : '' }
 }
 

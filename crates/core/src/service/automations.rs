@@ -395,6 +395,7 @@ impl UnlockedVault {
             updated_at: now,
             react_to_workflows: false,
             max_amount: None,
+            max_amount_currency: None,
             versions: Vec::new(),
             tests: Vec::new(),
             draft: None,
@@ -1551,6 +1552,7 @@ mod tests {
             graph: workflow.graph.clone(),
             react_to_workflows: false,
             max_amount: None,
+            max_amount_currency: None,
         };
         let err = vault
             .save_workflow(Some(&salary.id), draft.clone(), secs(&now_iso()))
