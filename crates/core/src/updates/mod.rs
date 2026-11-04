@@ -16,7 +16,7 @@ pub fn manifest_url(channel: Channel) -> &'static str {
     match channel {
         Channel::Prod => "https://github.com/Reckeck/mwt/releases/latest/download/latest.json",
         Channel::Dev => {
-            "https://github.com/Reckeck/mwt/releases/download/updater-dev/latest-dev.json"
+            "https://github.com/Reckeck/mwt/releases/download/dev-updater/latest-dev.json"
         }
     }
 }
@@ -58,6 +58,6 @@ mod tests {
     #[test]
     fn manifest_urls() {
         assert!(manifest_url(Channel::Prod).ends_with("/latest/download/latest.json"));
-        assert!(manifest_url(Channel::Dev).ends_with("/updater-dev/latest-dev.json"));
+        assert!(manifest_url(Channel::Dev).ends_with("/dev-updater/latest-dev.json"));
     }
 }

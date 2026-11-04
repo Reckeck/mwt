@@ -420,7 +420,7 @@ jobs:
   # The only job that writes to the repository: SHA256SUMS, tag, release (`cargo xtask publish`),
   # then the old pre-releases beyond PRERELEASES_KEPT (10) go (a failure there does not fail the run).
   # The updater manifest (latest.json, latest-dev.json on the dev channel) is built from the .sig files
-  # next to the bundles (cargo xtask publish); the dev channel also refreshes the `updater-dev`
+  # next to the bundles (cargo xtask publish); the dev channel also refreshes the `dev-updater`
   # pre-release that holds latest-dev.json under a stable URL.
   publish:
     needs: [version, checks, build, build-macos, package]
