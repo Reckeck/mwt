@@ -308,8 +308,8 @@ check it with `mise x actionlint@1.7.12 -- actionlint`. GitLab is only a mirror 
   `packaging/flatpak/*.metainfo.xml`; `version:check` checks the tag. A tag and
   `jj git push` — only when the user asks.
 - **Secrets — only in GitHub secrets** (Android signing key, updater key
-  `TAURI_SIGNING_*`, AUR SSH key, release GitHub App `RELEASE_APP_ID` +
-  `RELEASE_APP_PRIVATE_KEY`). No keys or keystores in the repository.
+  `TAURI_SIGNING_*`, AUR SSH key, release GitHub App key
+  `RELEASE_APP_PRIVATE_KEY`; its Client ID is the variable `RELEASE_APP_CLIENT_ID`). No keys or keystores in the repository.
 - **Generated files are not committed:** the Gradle project `crates/app/gen/android/`,
   `release/`, `.cache/`, `.flatpak-*` (in `.gitignore`).
 
