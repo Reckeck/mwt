@@ -438,6 +438,7 @@ pub fn run() {
             commands::sync::sync_history,
             commands::sync::sync_journal,
             commands::sync::sync_undo,
+            commands::sync::allow_merging,
             commands::sync::sync_restore_backup,
             commands::sync::sync_open_firewall,
             commands::transfer::transfer_receive_start,

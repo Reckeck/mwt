@@ -179,6 +179,8 @@ fn main() {
         trade_core::ipc_contract::AdjustmentDraftInput,
         trade_core::ipc_contract::AddLinkedTransactionsInput,
         trade_core::ipc_contract::SnoozeReminderInput,
+        trade_core::ipc_contract::MergeTarget,
+        trade_core::ipc_contract::AllowMergingInput,
         trade_core::ipc_contract::SimulateAutomationsInput,
         trade_core::model::notify::NoticeRecord,
         trade_core::service::AutomationSimulation,

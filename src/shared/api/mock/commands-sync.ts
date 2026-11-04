@@ -8,6 +8,7 @@
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { emitMock } from '../mock-bus'
+import { reminders } from './planning/state'
 import { LAPTOP, TABLET, after, seedJournal, summary } from './sync-peers'
 import { mockAppSettings } from './vault-data'
 
@@ -215,6 +216,13 @@ export const syncCommands: MockCommands = {
       batch.id === id ? { ...batch, undone_at: new Date().toISOString() } : batch,
     )
     return resolve<UndoReport>({ restored: 3, skipped: ['Аренда'] })
+  },
+  // The mock never undoes a merge, so no record carries the mark; reminders are cleared for completeness.
+  allow_merging: ({ args }) => {
+    const input = args?.input as AllowMergingInput | undefined
+    const reminder = input?.target === 'reminder' ? reminders.find((entry) => entry.id === input.id) : undefined
+    if (reminder) reminder.keep = false
+    return resolve(null)
   },
   sync_restore_backup: () => resolve(null),
   sync_open_firewall: () => {

@@ -3,6 +3,25 @@ import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_AUTUMN: WhatsNewEntry[] = [
   {
+    id: 'entityNavigation',
+    date: '2026-10-22',
+    points: [
+      { key: 'palette', route: 'dashboard' },
+      { key: 'pinned', route: 'transactions' },
+      { key: 'wallet', route: 'stores' },
+      { key: 'drill', route: 'money' },
+    ],
+  },
+  {
+    id: 'workflowTemplates',
+    date: '2026-10-22',
+    points: [
+      { key: 'gallery', route: 'automations' },
+      { key: 'confirm', route: 'automations' },
+      { key: 'nodes', route: 'automations-workflows' },
+    ],
+  },
+  {
     id: 'dataSources',
     date: '2026-10-22',
     points: [

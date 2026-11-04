@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { AlarmClock, ExternalLink, Pencil, Repeat, Trash2, Wallet } from 'lucide-vue-next'
+import { AlarmClock, ExternalLink, Pencil, Pin, Repeat, Trash2, Wallet } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
+import { KeptMark } from '@/shared/ui/kept-mark'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { formatDateTime } from '@/shared/lib/format'
@@ -17,7 +18,7 @@ import { SNOOZES, type SnoozeChoice, dueOf, overdue, repeatLabel, sourceLink } f
 
 /** One reminder: tick it off, put it off (always in sight), and edit or delete on hover. */
 const props = defineProps<{ reminder: Reminder }>()
-const emit = defineEmits<{ done: []; snooze: [choice: SnoozeChoice]; finish: []; edit: []; remove: [] }>()
+const emit = defineEmits<{ done: []; snooze: [choice: SnoozeChoice]; finish: []; edit: []; remove: []; allowMerging: [] }>()
 const { t } = useI18n()
 
 /** `Pay` (Auto-2 · 10): the payment form filled with the reminder's category and wallet. */
@@ -41,7 +42,10 @@ function pay() {
     <!-- Two lines: the text keeps the whole width; when, how often and where from go under it
          (in one line the badges squeezed the text to a few letters on a phone). -->
     <span class="grid min-w-0 flex-1 gap-0.5">
-      <span class="truncate text-sm" :class="props.reminder.done && 'line-through'">{{ props.reminder.text }}</span>
+      <span class="flex min-w-0 items-center gap-1.5">
+        <span class="truncate text-sm" :class="props.reminder.done && 'line-through'">{{ props.reminder.text }}</span>
+        <KeptMark v-if="props.reminder.keep" />
+      </span>
       <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span
           class="text-xs tabular-nums"
@@ -95,6 +99,17 @@ function pay() {
     <div
       class="flex shrink-0 items-center gap-1 pointer-coarse:gap-2 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100"
     >
+      <Button
+        v-if="props.reminder.keep"
+        variant="ghost"
+        size="icon-sm"
+        class="text-muted-foreground"
+        :title="t('keep.allow')"
+        :aria-label="t('keep.allow')"
+        @click="emit('allowMerging')"
+      >
+        <Pin class="size-4" />
+      </Button>
       <Button
         variant="ghost"
         size="icon-sm"

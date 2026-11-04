@@ -567,6 +567,10 @@ pub struct Reminder {
     /// form filled with this wallet and category.
     #[serde(default)]
     pub pay: Option<ReminderPay>,
+    /// Kept by hand: see `TxMeta::keep`.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub keep: bool,
 }
 
 /// What "Pay" in a reminder fills the payment form with.
@@ -592,6 +596,7 @@ impl Reminder {
             snoozed_until: None,
             source_key: String::new(),
             pay: None,
+            keep: false,
         }
     }
 }

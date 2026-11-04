@@ -14,6 +14,14 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'syncStageM',
+    date: '2026-11-04',
+    points: [
+      { key: 'noDoubles', route: 'settings:sync:sync-devices' },
+      { key: 'keep', route: 'transactions' },
+    ],
+  },
+  {
     id: 'appUpdates',
     date: '2026-11-03',
     points: [
@@ -270,25 +278,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'period', route: 'dashboard' },
       { key: 'merged', route: 'dashboard' },
       { key: 'size', route: 'dashboard' },
-    ],
-  },
-  {
-    id: 'entityNavigation',
-    date: '2026-10-22',
-    points: [
-      { key: 'palette', route: 'dashboard' },
-      { key: 'pinned', route: 'transactions' },
-      { key: 'wallet', route: 'stores' },
-      { key: 'drill', route: 'money' },
-    ],
-  },
-  {
-    id: 'workflowTemplates',
-    date: '2026-10-22',
-    points: [
-      { key: 'gallery', route: 'automations' },
-      { key: 'confirm', route: 'automations' },
-      { key: 'nodes', route: 'automations-workflows' },
     ],
   },
   ...WHATS_NEW_AUTUMN,
