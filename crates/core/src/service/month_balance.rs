@@ -97,9 +97,8 @@ impl UnlockedVault {
         filter: &ReportFilter,
         now: i64,
         zone: &str,
-        inflation: &BTreeMap<String, Amount>,
     ) -> Result<MonthBalance> {
-        let shown = self.report_ctx(filter, now, zone, inflation)?;
+        let shown = self.report_ctx(filter, now, zone)?;
         let first = *shown
             .months
             .first()
@@ -115,7 +114,7 @@ impl UnlockedVault {
         let mut wide = filter.clone();
         wide.from = Some(calendar::month_key(start));
         wide.to = shown.months.last().map(|month| calendar::month_key(*month));
-        let ctx = self.report_ctx(&wide, now, zone, inflation)?;
+        let ctx = self.report_ctx(&wide, now, zone)?;
         let cash = self.cashflow_report(&ctx);
         let this_month = first_of_month(ctx.today);
 
@@ -291,7 +290,7 @@ mod tests {
             ..ReportFilter::default()
         };
         vault
-            .month_balance(&filter, unix_secs(NOW).unwrap(), "UTC", &BTreeMap::new())
+            .month_balance(&filter, unix_secs(NOW).unwrap(), "UTC")
             .unwrap()
     }
 

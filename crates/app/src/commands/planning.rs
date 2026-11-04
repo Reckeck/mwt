@@ -26,7 +26,7 @@ use trade_core::service::{
 };
 use trade_core::workflow::Workflow;
 
-use crate::commands::app_settings::{current_settings, current_zone};
+use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, err_to_string, require_vault};
 
 /// Run `read` against the open vault.
@@ -299,9 +299,8 @@ pub async fn emergency_fund_get(
     state: State<'_, AppState>,
 ) -> Result<EmergencyStatus, String> {
     let zone = current_zone(&app);
-    let inflation = current_settings(&app).inflation;
     with_vault(&state, |vault| {
-        Ok(vault.emergency_fund_status(now_secs(), &zone, &inflation))
+        Ok(vault.emergency_fund_status(now_secs(), &zone))
     })
 }
 

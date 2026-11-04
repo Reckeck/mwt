@@ -1,8 +1,6 @@
 //! Debt load (plan C2): every loan and credit card with its class against the
 //! key rate and inflation, and the debt-to-income ratio (DTI).
 
-use std::collections::BTreeMap;
-
 use super::UnlockedVault;
 use crate::calendar::{self, Calendar};
 use crate::model::store::{LiabilityKind, Store};
@@ -97,12 +95,7 @@ pub fn classify_loan(
 impl UnlockedVault {
     /// Every live loan and credit card with a debt or a payment, their class
     /// and DTI. `manual` is the hand-entered inflation table.
-    pub fn debt_load(
-        &self,
-        now: i64,
-        zone: &str,
-        manual: &BTreeMap<String, Amount>,
-    ) -> Result<DebtLoad> {
+    pub fn debt_load(&self, now: i64, zone: &str) -> Result<DebtLoad> {
         let cal = Calendar::new(zone);
         let today = cal.date_of(now);
         let month = calendar::month_key(today);
@@ -143,7 +136,7 @@ impl UnlockedVault {
                     return None;
                 }
                 let rate = terms.and_then(|terms| terms.rate);
-                let inflation = self.inflation_on(&own_currency, &month, manual);
+                let inflation = self.inflation_on(&own_currency, &month);
                 let benchmark = if own_currency == KEY_RATE_CURRENCY && key_rate.is_some() {
                     key_rate
                 } else {
@@ -346,9 +339,8 @@ mod tests {
                 .unwrap();
         }
 
-        let manual = BTreeMap::from([("usd".to_string(), amount("3"))]);
         let now = unix("2026-09-10T10:00:00Z");
-        let load = vault.debt_load(now, "UTC", &manual).unwrap();
+        let load = vault.debt_load(now, "UTC").unwrap();
         assert_eq!(load.loans.len(), 2);
         let find = |id: &str| load.loans.iter().find(|loan| loan.store_id == id).unwrap();
         let home = find(&mortgage);

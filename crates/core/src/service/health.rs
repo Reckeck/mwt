@@ -2,8 +2,6 @@
 //! and DTI, the savings rate and lifestyle creep, each colour with its
 //! reasons and a first step.
 
-use std::collections::BTreeMap;
-
 use chrono::{Duration, NaiveDate};
 
 use super::UnlockedVault;
@@ -290,14 +288,9 @@ impl UnlockedVault {
 
     /// The checkup. `manual` is the hand-entered inflation table, as for the
     /// other inflation readers.
-    pub fn capital_health(
-        &self,
-        now: i64,
-        zone: &str,
-        manual: &BTreeMap<String, Amount>,
-    ) -> Result<HealthReport> {
-        let emergency = self.emergency_fund_status(now, zone, manual);
-        let debts = self.debt_load(now, zone, manual)?;
+    pub fn capital_health(&self, now: i64, zone: &str) -> Result<HealthReport> {
+        let emergency = self.emergency_fund_status(now, zone);
+        let debts = self.debt_load(now, zone)?;
         let freedom_rate = self.doc.settings.freedom_rate;
         let passive = self.passive_income(now, zone, freedom_rate)?;
         let savings = self.savings_series(now, zone)?;
@@ -385,7 +378,7 @@ impl UnlockedVault {
         {
             return Ok(None);
         }
-        let report = self.capital_health(now, zone, &BTreeMap::new())?;
+        let report = self.capital_health(now, zone)?;
         let snapshot = HealthSnapshot {
             month: month.clone(),
             color: report.color,
@@ -701,9 +694,7 @@ mod tests {
         vault.set_base_currency("usd");
         let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
         let start = secs_or_now("2026-04-02T10:00:00Z");
-        let report = vault
-            .capital_health(start, "UTC", &BTreeMap::new())
-            .unwrap();
+        let report = vault.capital_health(start, "UTC").unwrap();
         assert_eq!(report.color, HealthColor::NoData);
         assert_eq!(vault.health_notice(start, "UTC", true).unwrap(), None);
         assert_eq!(
@@ -721,7 +712,7 @@ mod tests {
             ],
         );
         let may = secs_or_now("2026-05-03T10:00:00Z");
-        let report = vault.capital_health(may, "UTC", &BTreeMap::new()).unwrap();
+        let report = vault.capital_health(may, "UTC").unwrap();
         assert_eq!(report.savings.len(), 12);
         assert_eq!(report.savings_avg_pct, Some(pct("5")));
         assert_eq!(report.color, HealthColor::Yellow);

@@ -15,7 +15,7 @@ use trade_core::service::{
     SearchEntry, SpendingOverview, report_csv,
 };
 
-use crate::commands::app_settings::{current_settings, current_zone};
+use crate::commands::app_settings::current_zone;
 use crate::commands::planning::with_vault_mut;
 use crate::commands::{AppState, err_to_string, require_vault};
 
@@ -26,12 +26,11 @@ fn build_report(
     filter: &ReportFilter,
 ) -> Result<Report, String> {
     let zone = current_zone(app);
-    let inflation = current_settings(app).inflation;
     let guard = require_vault(state).map_err(err_to_string)?;
     guard
         .as_ref()
         .unwrap()
-        .report(kind, filter, now_secs(), &zone, &inflation)
+        .report(kind, filter, now_secs(), &zone)
         .map_err(err_to_string)
 }
 
@@ -54,12 +53,11 @@ pub async fn get_report_overview(
     state: State<'_, AppState>,
 ) -> Result<ReportOverview, String> {
     let zone = current_zone(&app);
-    let inflation = current_settings(&app).inflation;
     let guard = require_vault(&state).map_err(err_to_string)?;
     guard
         .as_ref()
         .unwrap()
-        .report_overview(&filter, now_secs(), &zone, &inflation)
+        .report_overview(&filter, now_secs(), &zone)
         .map_err(err_to_string)
 }
 
@@ -71,12 +69,11 @@ pub async fn capital_health(
     state: State<'_, AppState>,
 ) -> Result<HealthReport, String> {
     let zone = current_zone(&app);
-    let inflation = current_settings(&app).inflation;
     let guard = require_vault(&state).map_err(err_to_string)?;
     guard
         .as_ref()
         .unwrap()
-        .capital_health(now_secs(), &zone, &inflation)
+        .capital_health(now_secs(), &zone)
         .map_err(err_to_string)
 }
 
@@ -119,12 +116,11 @@ pub async fn get_month_balance(
     state: State<'_, AppState>,
 ) -> Result<MonthBalance, String> {
     let zone = current_zone(&app);
-    let inflation = current_settings(&app).inflation;
     let guard = require_vault(&state).map_err(err_to_string)?;
     guard
         .as_ref()
         .unwrap()
-        .month_balance(&filter, now_secs(), &zone, &inflation)
+        .month_balance(&filter, now_secs(), &zone)
         .map_err(err_to_string)
 }
 
@@ -205,11 +201,10 @@ pub async fn get_dashboard_today(
     state: State<'_, AppState>,
 ) -> Result<DashboardToday, String> {
     let zone = current_zone(&app);
-    let inflation = current_settings(&app).inflation;
     let guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_ref().unwrap();
     let period = period.unwrap_or(vault.doc.settings.dashboard_period);
-    Ok(vault.dashboard_today(period, now_secs(), &zone, &inflation))
+    Ok(vault.dashboard_today(period, now_secs(), &zone))
 }
 
 /// The "Scenario" widget (plan H4): a calculator scenario's plan to date

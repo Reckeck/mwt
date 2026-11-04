@@ -7,7 +7,6 @@ use trade_core::model::inflation::{InflationMode, InflationSource};
 use trade_core::pricing::PricingService;
 use trade_core::service::{FetchedRates, InflationCurrency};
 
-use crate::commands::app_settings::current_settings;
 use crate::commands::{AppState, err_to_string, require_vault};
 
 /// Months of inflation asked for: the chart's two years plus a spare.
@@ -46,7 +45,6 @@ pub async fn refresh_rates_now(app: &AppHandle) -> Result<Vec<InflationCurrency>
         )));
     }
     let russian = crate::scheduler::russian(app);
-    let manual = current_settings(app).inflation;
     let (fresh, overview) = {
         let mut guard = require_vault(&state).map_err(err_to_string)?;
         let vault = guard.as_mut().unwrap();
@@ -54,7 +52,7 @@ pub async fn refresh_rates_now(app: &AppHandle) -> Result<Vec<InflationCurrency>
             .apply_rates(&fetched, russian)
             .map_err(err_to_string)?;
         let fresh = vault.log_notices(notices).map_err(err_to_string)?;
-        (fresh, vault.inflation_overview(&manual))
+        (fresh, vault.inflation_overview())
     };
     crate::scheduler::deliver(app, fresh, false);
     let _ = app.emit("rates-updated", ());
@@ -70,12 +68,10 @@ pub async fn refresh_rates(app: AppHandle) -> Result<Vec<InflationCurrency>, Str
 /// Each currency's inflation: mode, source, latest month and series.
 #[tauri::command]
 pub async fn get_inflation_overview(
-    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<InflationCurrency>, String> {
-    let manual = current_settings(&app).inflation;
     let guard = require_vault(&state).map_err(err_to_string)?;
-    Ok(guard.as_ref().unwrap().inflation_overview(&manual))
+    Ok(guard.as_ref().unwrap().inflation_overview())
 }
 
 /// Pick Auto / Manual for a currency (`null` = back to the default).
@@ -86,13 +82,12 @@ pub async fn set_inflation_mode(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<InflationCurrency>, String> {
-    let manual = current_settings(&app).inflation;
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
     vault
         .set_inflation_mode(&currency, mode)
         .map_err(err_to_string)?;
-    let overview = vault.inflation_overview(&manual);
+    let overview = vault.inflation_overview();
     drop(guard);
     let _ = app.emit("rates-updated", ());
     Ok(overview)

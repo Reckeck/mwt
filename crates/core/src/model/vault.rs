@@ -112,6 +112,15 @@ pub struct Settings {
     /// The data source of each currency in `InflationMode::Source`.
     #[serde(default)]
     pub inflation_source: std::collections::BTreeMap<String, String>,
+    /// Flat annual inflation, percent, by lowercase currency code, where the
+    /// group differs from the shipped table (`default_inflation`); read through
+    /// `UnlockedVault::flat_inflation`. Group data: every device sees one table.
+    #[serde(default)]
+    pub inflation_manual: std::collections::BTreeMap<String, Amount>,
+    /// The device-local rates of the app config were copied into
+    /// `inflation_manual` once (`UnlockedVault::adopt_flat_inflation`).
+    #[serde(default)]
+    pub inflation_adopted: bool,
     /// The user's usual monthly income in the budget currency, used until
     /// three months of history exist (plan B).
     #[serde(default)]
@@ -218,6 +227,8 @@ impl Default for Settings {
             onboarding_skipped: Vec::new(),
             inflation_mode: std::collections::BTreeMap::new(),
             inflation_source: std::collections::BTreeMap::new(),
+            inflation_manual: std::collections::BTreeMap::new(),
+            inflation_adopted: false,
             manual_income: None,
             manual_expenses: None,
             categories_rev: crate::model::category::CATEGORIES_REV,

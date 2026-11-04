@@ -1511,6 +1511,8 @@ mod convergence_catalog;
 mod convergence_tests;
 #[cfg(test)]
 mod envelope_tests;
+#[cfg(test)]
+mod inflation_tests;
 mod keep;
 #[cfg(test)]
 mod keep_tests;

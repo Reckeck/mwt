@@ -1752,6 +1752,10 @@ pub struct UpdateSettingsInput {
     /// Show crypto wallets, exchanges and coins.
     #[serde(default)]
     pub crypto: Option<bool>,
+    /// Replaces the flat inflation table of the group, percent by currency
+    /// code. Currencies whose value did not change are not stamped.
+    #[serde(default)]
+    pub inflation_manual: Option<std::collections::BTreeMap<String, Amount>>,
 }
 
 // -- app settings (outside the vault) ------------------------------------------

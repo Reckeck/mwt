@@ -82,7 +82,8 @@ pub struct AppSettings {
     #[serde(default)]
     pub timezone: Option<String>,
     /// Annual inflation, percent, by lowercase currency code (plan §6.5).
-    /// Used only by analytics, for «in today's money»; marked as reference.
+    /// Read only by `adopt_flat_inflation`: the rates live in the vault since
+    /// stage P and this column is no longer written.
     #[serde(default = "default_inflation")]
     pub inflation: BTreeMap<String, Amount>,
     /// Consent to send transaction hashes to public explorers (plan §8.2);
@@ -273,9 +274,6 @@ impl AppSettings {
         if let Some(zone) = &patch.timezone {
             self.timezone = normalize_zone(zone);
         }
-        if let Some(rates) = &patch.inflation {
-            self.inflation = normalize_inflation(rates);
-        }
         if let Some(consent) = patch.enrichment_opt_in {
             self.enrichment_opt_in = Some(consent);
         }
@@ -407,7 +405,7 @@ impl AppSettings {
 }
 
 /// Lowercase codes, rates within ±1000 %; anything else is dropped.
-fn normalize_inflation(raw: &BTreeMap<String, Amount>) -> BTreeMap<String, Amount> {
+pub(crate) fn normalize_inflation(raw: &BTreeMap<String, Amount>) -> BTreeMap<String, Amount> {
     let bound = Amount::parse("1000").unwrap_or_default();
     raw.iter()
         .filter(|(code, rate)| !code.trim().is_empty() && rate.abs() <= bound)
@@ -458,7 +456,8 @@ pub struct UpdateAppSettingsInput {
     /// IANA zone; an empty string goes back to the OS zone.
     #[serde(default)]
     pub timezone: Option<String>,
-    /// Replaces the whole inflation table.
+    /// Ignored since the flat rates moved into the vault
+    /// (`UpdateSettingsInput.inflation_manual`); kept so old callers still parse.
     #[serde(default)]
     pub inflation: Option<BTreeMap<String, Amount>>,
     #[serde(default)]

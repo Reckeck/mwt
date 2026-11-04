@@ -68,8 +68,8 @@ pub(super) fn capital_nodes(out: &mut Vec<NodeDef>) {
             "The latest year-on-year inflation of a currency, %.",
         ),
         help: txt(
-            "Берёт ряд, который приложение загружает само или из вашего источника (Настройки → Инфляция). Ручное значение из настроек устройства сюда не попадает.",
-            "Takes the series the app loads itself or from your source (Settings → Inflation). A hand-entered value from the device settings does not reach here.",
+            "Берёт ряд, который приложение загружает само или из вашего источника (Настройки → Инфляция). Для валюты без ряда берётся общая ставка из тех же настроек.",
+            "Takes the series the app loads itself or from your source (Settings → Inflation). A currency without a series takes the shared flat rate from the same settings.",
         ),
         inputs,
         outputs: vec![

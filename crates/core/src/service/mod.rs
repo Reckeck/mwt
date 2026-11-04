@@ -676,6 +676,19 @@ impl UnlockedVault {
         if typed_figure && settings.budget_currency.is_empty() {
             settings.budget_currency = self.base_currency.trim().to_lowercase();
         }
+        if let Some(rates) = input.inflation_manual {
+            // The form sends the whole table. A shipped value nobody set before
+            // is not data; one already in the table stays, so putting a rate
+            // back to the shipped number is a real edit that travels.
+            let shipped = crate::appconfig::default_inflation();
+            let before = std::mem::take(&mut settings.inflation_manual);
+            settings.inflation_manual = crate::appconfig::normalize_inflation(&rates)
+                .into_iter()
+                .filter(|(currency, rate)| {
+                    before.contains_key(currency) || shipped.get(currency) != Some(rate)
+                })
+                .collect();
+        }
         if let Some(mut notifications) = input.notifications {
             for cfg in &mut notifications.categories {
                 cfg.lead_days = cfg.lead_days.min(90);
@@ -5350,6 +5363,8 @@ mod persist_tests {
                 crate::model::inflation::InflationMode::Manual,
             )]
             .into(),
+            inflation_manual: [("rub".to_string(), Amount::parse("9.5").unwrap())].into(),
+            inflation_adopted: true,
             manual_income: Some(Amount::parse("1500").unwrap()),
             manual_expenses: Some(Amount::parse("1100").unwrap()),
             categories_rev: 7,

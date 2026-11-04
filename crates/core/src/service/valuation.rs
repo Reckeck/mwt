@@ -7,7 +7,7 @@
 //! a valuation or a rule, that old price becomes the point at the purchase
 //! date, so the history before the first valuation does not change.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
@@ -400,12 +400,7 @@ impl UnlockedVault {
     }
 
     /// The value story of each asset a property holds.
-    pub fn property_values(
-        &self,
-        store_id: &str,
-        manual_inflation: &BTreeMap<String, Amount>,
-        zone: &str,
-    ) -> Result<Vec<PropertyValue>> {
+    pub fn property_values(&self, store_id: &str, zone: &str) -> Result<Vec<PropertyValue>> {
         let store = self.property_store(store_id)?;
         let now = secs_or_now("");
         let mut out = Vec::new();
@@ -453,8 +448,7 @@ impl UnlockedVault {
                     .zip(unit_price)
                     .zip(paid)
                     .and_then(|((row, now), paid)| {
-                        let grown = paid
-                            * self.inflation_since(&currency, &row.date, manual_inflation, zone)?;
+                        let grown = paid * self.inflation_since(&currency, &row.date, zone)?;
                         (!grown.is_zero()).then(|| (now / grown - Amount::from(1)) * hundred())
                     });
             let own_base = base.filter(|(at, ..)| {
@@ -492,22 +486,16 @@ impl UnlockedVault {
 
     /// What one unit of money of `date` is worth today: the monthly series
     /// when the currency follows it, else the flat rate compounded monthly.
-    fn inflation_since(
-        &self,
-        currency: &str,
-        date: &str,
-        manual: &BTreeMap<String, Amount>,
-        zone: &str,
-    ) -> Option<Amount> {
+    fn inflation_since(&self, currency: &str, date: &str, zone: &str) -> Option<Amount> {
         let from = NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d").ok()?;
         let today = calendar::Calendar::new(zone).date_of(secs_or_now(""));
         if from > today {
             return None;
         }
-        if let Some(coefficients) = self.real_coefficients(currency, manual, from, today) {
+        if let Some(coefficients) = self.real_coefficients(currency, from, today) {
             return coefficients.get(&calendar::first_of_month(from)).copied();
         }
-        let rate = self.inflation_on(currency, "9999-12", manual)?;
+        let rate = self.inflation_on(currency, "9999-12")?;
         let months = (today.year() - from.year()) * 12 + today.month() as i32 - from.month() as i32;
         let monthly = (Amount::from(1) + rate / hundred()).root_n(12);
         Some(monthly.pow_int(u32::try_from(months.max(0)).unwrap_or(0)))
@@ -838,9 +826,7 @@ mod tests {
         let purchase = secs_or_now("2020-01-10T00:00:00Z");
         assert_eq!(book.history_price(&key, purchase), Some(amount("150000")));
         assert_eq!(vault.net_worth().non_financial, amount("200000"));
-        let values = vault
-            .property_values(&flat, &BTreeMap::new(), "UTC")
-            .unwrap();
+        let values = vault.property_values(&flat, "UTC").unwrap();
         assert_eq!(values[0].base, Some(ValuationBaseKind::Manual));
         assert_eq!(values[0].change, Some(amount("100000")));
         assert_eq!(values[0].change_pct, Some(amount("100")));

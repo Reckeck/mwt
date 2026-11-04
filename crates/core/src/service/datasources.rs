@@ -703,17 +703,11 @@ mod tests {
         assert_eq!(series.len(), 2);
         assert_eq!(series[1].month, "2026-09");
         assert_eq!(series[1].yoy_pct, amount("1.25"));
-        assert_eq!(
-            vault.inflation_mode("thb", &Default::default()),
-            InflationMode::Source
-        );
+        assert_eq!(vault.inflation_mode("thb"), InflationMode::Source);
         // Deleting the source returns the currency to its default mode.
         vault.delete_data_source(&id).unwrap();
         assert!(vault.doc.settings.inflation_source.is_empty());
-        assert_ne!(
-            vault.inflation_mode("thb", &Default::default()),
-            InflationMode::Source
-        );
+        assert_ne!(vault.inflation_mode("thb"), InflationMode::Source);
     }
 
     #[test]

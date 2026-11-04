@@ -82,6 +82,7 @@ const ENABLED_KINDS: &[Edit] = &[
     Edit::ToggleSystemNotices,
     Edit::OpenReminderList,
     Edit::TxWithBasePrice,
+    Edit::SetFlatInflation,
 ];
 
 const DEFAULT_SEEDS: &[u64] = &[1, 2, 3, 4, 5];
@@ -149,6 +150,7 @@ pub(super) enum Edit {
     ToggleSystemNotices,
     OpenReminderList,
     TxWithBasePrice,
+    SetFlatInflation,
 }
 
 /// splitmix64: tiny, deterministic, good enough for choosing steps.
@@ -419,7 +421,8 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
         | Edit::SetNoticeCategory
         | Edit::ToggleSystemNotices
         | Edit::OpenReminderList
-        | Edit::TxWithBasePrice => catalog::apply_catalog_edit(kind, vault, rng, ledger),
+        | Edit::TxWithBasePrice
+        | Edit::SetFlatInflation => catalog::apply_catalog_edit(kind, vault, rng, ledger),
         Edit::DeleteContact => {
             // The anchors stay: debt terms of the catalog edits pile onto them.
             let ids: Vec<String> = vault
@@ -1104,6 +1107,7 @@ fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
         }
     }
     violations.extend(catalog::reminder_text_ping_pong(&mut devices));
+    violations.extend(catalog::check_flat_inflation_agrees(&devices));
     violations
 }
 
