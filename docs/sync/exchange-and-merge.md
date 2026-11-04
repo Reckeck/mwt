@@ -112,7 +112,7 @@ flowchart TD
     TAG -- yes --> F["For every field name in L or R"]
     F --> SW{"Stamps differ?"}
     SW -- "L larger" --> KL["Keep L value and stamp"]
-    SW -- "R larger" --> KR["Take R value and stamp; if L edited it too, report Overwritten"]
+    SW -- "R larger" --> KR["Take R value and stamp; if L edited it too and R had not seen that edit, report Overwritten"]
     SW -- equal --> EQ["Compare values: the larger canonical JSON wins, the same on both sides"]
     KL --> OUT["Rebuild the record, keep device-only fields from L"]
     KR --> OUT
@@ -125,10 +125,23 @@ Properties:
   the same record; equal stamps (data both copies had before sync) fall back to
   comparing canonical values.
 - Edits to different fields of one record are both kept. If one field was
-  changed on two devices, the later stamp wins and the summary lists it as
-  "Overwritten: was -> became".
+  changed on two devices, the later stamp wins. The summary lists it as
+  "Overwritten: was -> became" only when this device edited the field and the
+  other device had not yet seen that edit (`SyncState.seen_by`: the newest stamp
+  of this device's clock the peer is known to hold). An edit the peer already
+  had, or a stamp that another device made, is never listed; a doubt errs
+  towards showing. A change of the record's variant that loses is listed as the
+  field `kind`.
+- An external copy has one more case: when neither side has a stamp for a field
+  and the values differ, the pick is the same deterministic one (the larger
+  canonical value), but the losing local value is listed as "Overwritten" and
+  the summary counts the record in `unstamped_conflicts`
+  ([the external copy](external-copy.md#copies-with-no-shared-history)). Device
+  sync is not affected: it never counts or lists unstamped values.
 - A deletion beats every edit made before it. An edit after the deletion brings
-  the record back.
+  the record back. One more rule sits on top (repair rule R3): a payment named
+  by a shared purchase or settlement that is gone with a tombstone is restored,
+  because deletion loses to a live money reference.
 - A different variant of a tagged record (a transaction that is now a transfer
   instead of an income) goes by the latest stamp as a whole.
 - A batch is applied as one operation: the records are written into the JSON
@@ -244,3 +257,22 @@ exchange a second one carries zero cache records. Cache points never produce a
 question.
 
 Next: [The change question, history and undo](plan-question-and-undo.md).
+
+## Restoring a backup and the JSON editor with paired devices
+
+Both write a whole document, so with live trusted devices they must not read as
+"delete everything that is not in the file":
+
+- **Restore a backup** (`restore_vault_backup`). With live trusted devices the
+  records of the copy are written over the current ones by value and nothing is
+  deleted: a record created after the copy stays, a record deleted since comes
+  back on every device. Without paired devices the document is replaced as a
+  whole, as before. The emergency "Restore from before the sync"
+  (`sync_restore_backup`) is unchanged: it rolls the whole vault back, and the
+  confirmation says that the other devices roll back with it.
+- **The JSON editor** (`dev_apply_vault_json` with `base`). The save is
+  three-way: the editor sends the JSON it loaded or saved last as `base`, and
+  only the differences between `base` and the edited text are written. A record
+  that another device sent while the editor was open stays, and a record the
+  user deleted in the editor gets a tombstone of its own. Without `base` the
+  document is replaced as a whole.

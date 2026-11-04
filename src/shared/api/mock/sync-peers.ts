@@ -63,6 +63,7 @@ export const summary: SyncSummary = {
     },
   ],
   overwritten: [{ collection: 'stores', label: 'Наличные', field: 'name', before: 'Кошелёк', after: 'Наличные' }],
+  unstamped_conflicts: 0,
 }
 
 /** What the backend already journaled before this session: applied, declined, sent. */

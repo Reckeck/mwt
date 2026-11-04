@@ -232,6 +232,34 @@ their change; the purchases of an item are ordered the same way on every device
 - **Rule R6** (one link per operation) compares the stamp of the purchase, with
   the item's stamp as the fallback.
 
+## Sync repair stage S
+
+No protocol bump and no vault format change (`PROTOCOL_VERSION` stays 3,
+`VAULT_FORMAT_VERSION` 3). Two pairs of protocol 3 builds, one before this stage
+and one after it, still sync. What an older protocol 3 build sees:
+
+| Change | On the wire | Older build |
+|---|---|---|
+| `PriceAlert.triggered_for` (an edited alert is armed again) | an unknown field is ignored | drops the field when it resaves the alert and treats it as triggered as before; the fix holds only while a new build owns the record |
+| `SyncState.seen_by` (what a peer has seen, for "Overwritten") | not sent | none, it is local |
+| "Overwritten" after a change of the record's kind | the summary is local | none |
+| The editor's three-way save | ordinary stamped edits | takes them as the user's edits |
+| Restore with live peers | ordinary stamped edits | takes them as the user's edits |
+| `wf-off-<id>` run record (one per incomplete workflow, not one per device) | ordinary records | writes a `uuid` record; the extra ones are hidden by the `MAX_WORKFLOW_RUNS` trim |
+| Rule R9 (a staged import already booked or discarded leaves the queue; `repair_imports.rs`) | ordinary deletions | takes them as the user's edits |
+| `unstamped_conflicts` (external copies with no shared history) | the summary is local | none |
+
+The vault gains only `PriceAlert.triggered_for` and `SyncState.seen_by`, both
+`#[serde(default)]`; an old vault opens and keeps its data (`triggered_for`
+absent means "triggered as before", an empty `seen_by` means no hiding).
+
+Deletion loses to a live money reference: a payment that a shared purchase or
+settlement names comes back (rule R3) even if another device deleted it. Pinned
+in `repair_restore_payment_tests.rs`; the tests of this stage are
+`seen_tests.rs`, `stale_base_tests.rs` (R9, the editor, restore) and
+`unstamped_tests.rs` in `crates/core/src/service/peer_sync/`, and
+`service/agenda/alert_tests.rs` (`triggered_for`).
+
 ## What an old peer still gets wrong
 
 - It may drop an edited duplicate (the creation-stamp dedupe) and show secrets

@@ -68,6 +68,33 @@ flowchart TD
 - After a merge or a pull, the copy's bytes are part of this vault: the next push
   compares against them, and the result is written back to the copy.
 
+## Copies with no shared history
+
+Merge is by stamp, and a stamp says who changed a field and when. Two copies of
+a vault that drifted apart before stamps existed (or whose stamps were lost) have
+no such history, and the app has no common base to compare them with: the sealed
+file of the last sync is not kept, only its hash. That is a limit of the model,
+not something a rule can fix.
+
+What happens, and what is shown:
+
+- For a field that differs with no stamp on either side, the merge picks the
+  larger canonical value, the same on every run and from either side. The pick
+  can be the wrong one in meaning.
+- When that pick replaces the local value, it is listed in the batch as
+  "Overwritten" like any lost edit, and the summary carries
+  `unstamped_conflicts`, the number of records with such a field. The sync
+  summary then adds a line: the copies have no shared history, the app could not
+  tell which side changed what, and records deleted in one copy can come back.
+- A record deleted in one copy and alive in the other comes back: the copy that
+  deleted it has no tombstone, and the live side wins.
+- Only this path reports it. Device sync over the network never counts or lists
+  unstamped values.
+
+Keeping a base for a three-way merge of external copies would mean storing an
+encrypted copy of the whole vault on disk; it was considered and left out (a
+separate decision about privacy and size).
+
 ## Conflicts that need the user
 
 If the copy does not open with the password, or is another vault, the merge is

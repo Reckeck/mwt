@@ -6010,7 +6010,13 @@ background_lock_min: number,
  */
 network: SyncNetworkView, };
 
-type SyncSummary = { total: number, collections: Array<CollectionChanges>, overwritten: Array<OverwrittenField>, };
+type SyncSummary = { total: number, collections: Array<CollectionChanges>, overwritten: Array<OverwrittenField>, 
+/**
+ * Records of an external copy where both sides lacked field stamps and
+ * the values differed: there is no shared history to say who changed
+ * what, so the pick is arbitrary (but the same on every run).
+ */
+unstamped_conflicts: number, };
 
 type TableRow = "first" | "last" | "by_date";
 

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::fields::changed_fields;
-use super::merge::merge_seen;
+use super::merge::{Merged, merge_external, merge_seen};
 use super::registry::Collection;
 use super::stamp::Stamp;
 use super::state::RecordState;
@@ -75,6 +75,11 @@ pub struct SyncSummary {
     pub total: u32,
     pub collections: Vec<CollectionChanges>,
     pub overwritten: Vec<OverwrittenField>,
+    /// Records of an external copy where both sides lacked field stamps and
+    /// the values differed: there is no shared history to say who changed
+    /// what, so the pick is arbitrary (but the same on every run).
+    #[serde(default)]
+    pub unstamped_conflicts: u32,
 }
 
 impl SyncSummary {
@@ -180,6 +185,25 @@ pub fn plan_seen(
     local: impl Fn(&str) -> RecordState,
     seen: Option<&Stamp>,
 ) -> SyncPlan {
+    plan_with(incoming, local, |coll, before, remote| {
+        merge_seen(coll, before, remote, seen)
+    })
+}
+
+/// [`plan`] for the records of an external copy: fields without a stamp on
+/// either side are counted in `unstamped_conflicts` and listed as overwritten.
+pub fn plan_external(
+    incoming: &BTreeMap<String, RecordState>,
+    local: impl Fn(&str) -> RecordState,
+) -> SyncPlan {
+    plan_with(incoming, local, merge_external)
+}
+
+fn plan_with(
+    incoming: &BTreeMap<String, RecordState>,
+    local: impl Fn(&str) -> RecordState,
+    merge: impl Fn(&Collection, &RecordState, &RecordState) -> Merged,
+) -> SyncPlan {
     let mut out = SyncPlan::default();
     let mut groups: BTreeMap<&'static str, CollectionChanges> = BTreeMap::new();
     for (key, remote) in incoming {
@@ -187,7 +211,7 @@ pub fn plan_seen(
             continue;
         };
         let before = local(key);
-        let merged = merge_seen(coll, &before, remote, seen);
+        let merged = merge(coll, &before, remote);
         let same_value = same_record(coll, &merged.state.value, &before.value);
         if same_value && merged.state.same_marks(&before) {
             continue;
@@ -231,6 +255,9 @@ pub fn plan_seen(
                 });
             }
             out.summary.total += 1;
+        }
+        if merged.unstamped {
+            out.summary.unstamped_conflicts += 1;
         }
         for overwrite in merged.overwrote {
             out.summary.overwritten.push(OverwrittenField {
@@ -440,6 +467,7 @@ mod tests {
                     after: "Theirs".into(),
                 },
             ],
+            ..Default::default()
         };
         assert!(summary.scrub_secrets());
         assert_eq!(summary.overwritten[0].before, "•••");

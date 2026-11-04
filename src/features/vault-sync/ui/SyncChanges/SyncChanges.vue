@@ -52,5 +52,9 @@ const groups = computed(() => sortedChanges(props.summary))
         </li>
       </ul>
     </div>
+
+    <p v-if="props.summary.unstamped_conflicts" class="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+      {{ t('sync.plan.unstampedHint', { count: props.summary.unstamped_conflicts }) }}
+    </p>
   </div>
 </template>

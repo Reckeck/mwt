@@ -19,6 +19,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     points: [
       { key: 'restore', route: 'settings:vault' },
       { key: 'editor', route: 'settings:sync:sync-devices' },
+      { key: 'external', route: 'settings:sync:sync-devices' },
     ],
   },
   {
