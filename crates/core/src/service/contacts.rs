@@ -104,7 +104,16 @@ impl UnlockedVault {
                 .stores
                 .iter()
                 .any(|store| store.contact_id.as_deref() == Some(contact_id));
-        named_by_tx || named_by_store
+        // A guest of a shared event who is linked to the contact (not to one
+        // of its accounts) counts as a use too.
+        let named_by_event = account_id.is_none()
+            && self.doc.shared_events.iter().any(|event| {
+                event
+                    .participants
+                    .iter()
+                    .any(|person| person.contact_id.as_deref() == Some(contact_id))
+            });
+        named_by_tx || named_by_store || named_by_event
     }
 
     pub(super) fn clean_accounts(accounts: Vec<ContactAccount>) -> Result<Vec<ContactAccount>> {
@@ -200,7 +209,7 @@ impl UnlockedVault {
     pub fn delete_contact(&mut self, id: &str) -> Result<()> {
         if self.contact_in_use(id, None) {
             return Err(Error::InvalidInput(
-                "the contact is used by transactions or wallets; archive it instead".into(),
+                "the contact is used by transactions, wallets or shared events; archive it, or unlink it from the event first".into(),
             ));
         }
         let before = self.doc.contacts.len();

@@ -6682,7 +6682,7 @@
   "contacts.sheet.noHistoryHint": "Запишите первый перевод или долг, и он появится здесь.",
   "contacts.sheet.noEventsHint": "Общие события - посиделки, поездки, покупки вскладчину - появятся здесь.",
   "contacts.sheet.toSharedMoney": "К общим деньгам",
-  "contacts.sheet.deleteHint": "Контакт «{name}» будет удалён. Если с ним есть операции, удалить не получится - отправьте его в архив.",
+  "contacts.sheet.deleteHint": "Контакт «{name}» будет удалён. Если с ним есть операции или общие события, удалить не получится - отправьте его в архив или отвяжите от события.",
   "contacts.table.contactCount.one": "{count} контакт",
   "contacts.table.contactCount.few": "{count} контакта",
   "contacts.table.contactCount.many": "{count} контактов",
