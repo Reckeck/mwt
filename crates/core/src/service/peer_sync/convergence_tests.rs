@@ -1204,7 +1204,6 @@ fn a_later_item_edit_keeps_a_purchase_it_never_saw() {
 /// and the payment lives, so it should stay in its event. Today only the
 /// payment comes back; removing the link is a separate write that stands.
 #[test]
-#[ignore = "open: a payment revived by a later edit loses its event link"]
 fn a_payment_revived_by_a_later_edit_stays_in_its_event() {
     assert_eq!(catalog::payment_revived_after_its_deletion(), (true, 1));
 }

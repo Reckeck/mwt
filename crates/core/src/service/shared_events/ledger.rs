@@ -5,7 +5,9 @@
 
 use crate::Amount;
 use crate::error::{Error, Result};
-use crate::model::shared_event::{SettleDirection, SettlementKind, SharedEvent};
+use crate::model::shared_event::{
+    Purchase, RemovedWithPayment, SettleDirection, Settlement, SettlementKind, SharedEvent,
+};
 use crate::model::transaction::Transaction;
 
 use super::super::UnlockedVault;
@@ -15,23 +17,45 @@ const CHANGE_IN_EVENT: &str = "this operation belongs to a shared event: change 
 
 impl UnlockedVault {
     /// Drop the purchases and settlements of every event that point at an
-    /// operation about to be deleted. Reopens an archived event.
+    /// operation about to be deleted. Reopens an archived event. What went is
+    /// kept in the event: see [`SharedEvent::removed_with_payment`].
     pub(crate) fn cascade_shared_delete(&mut self, tx_id: &str) {
+        let is_gone = |id: &Option<String>| id.as_deref() == Some(tx_id);
         for event in &mut self.doc.shared_events {
-            let mut touched = false;
+            let mut removed = Vec::new();
             for item in &mut event.items {
-                let before = item.purchases.len();
-                item.purchases
-                    .retain(|purchase| purchase.tx_id.as_deref() != Some(tx_id));
-                touched |= item.purchases.len() != before;
+                let (gone, kept) = std::mem::take(&mut item.purchases)
+                    .into_iter()
+                    .partition(|purchase| is_gone(&purchase.tx_id));
+                item.purchases = kept;
+                removed.extend(
+                    gone.into_iter()
+                        .map(|purchase: Purchase| RemovedWithPayment {
+                            id: purchase.id.clone(),
+                            tx_id: tx_id.to_string(),
+                            item_id: Some(item.id.clone()),
+                            purchase: Some(purchase),
+                            settlement: None,
+                        }),
+                );
             }
-            let before = event.settlements.len();
-            event
-                .settlements
-                .retain(|settlement| settlement.tx_id.as_deref() != Some(tx_id));
-            touched |= event.settlements.len() != before;
-            if touched {
+            let (gone, kept) = std::mem::take(&mut event.settlements)
+                .into_iter()
+                .partition(|settlement| is_gone(&settlement.tx_id));
+            event.settlements = kept;
+            removed.extend(
+                gone.into_iter()
+                    .map(|settlement: Settlement| RemovedWithPayment {
+                        id: settlement.id.clone(),
+                        tx_id: tx_id.to_string(),
+                        item_id: None,
+                        purchase: None,
+                        settlement: Some(settlement),
+                    }),
+            );
+            if !removed.is_empty() {
                 event.archived = false;
+                event.removed_with_payment.extend(removed);
             }
         }
     }
@@ -207,6 +231,99 @@ mod tests {
         assert_eq!(petya_debt(&scenario, i64::MAX), amount("1735"));
         let view = scenario.vault.shared_event_view(&scenario.event).unwrap();
         assert!(view.event.settlements.is_empty());
+    }
+
+    /// The payment and the purchase of one link.
+    fn linked_purchase(scenario: &Scenario) -> (String, String) {
+        let link = scenario
+            .vault
+            .shared_tx_links()
+            .into_iter()
+            .find(|link| link.link.purchase_id.is_some())
+            .unwrap();
+        (link.tx_id, link.link.purchase_id.unwrap())
+    }
+
+    #[test]
+    fn undoing_the_deletion_of_a_payment_brings_its_purchase_back() {
+        let mut scenario = skewers_scenario();
+        let (tx_id, _) = linked_purchase(&scenario);
+        let spent = scenario
+            .vault
+            .shared_event_view(&scenario.event)
+            .unwrap()
+            .totals
+            .spent;
+        let deleted = scenario
+            .vault
+            .delete_transactions(std::slice::from_ref(&tx_id))
+            .unwrap();
+        scenario.vault.restore_transactions(deleted).unwrap();
+        let view = scenario.vault.shared_event_view(&scenario.event).unwrap();
+        assert_eq!(view.totals.spent, spent);
+        assert!(view.event.removed_with_payment.is_empty());
+    }
+
+    #[test]
+    fn undoing_the_deletion_of_a_settlement_operation_settles_again() {
+        let mut scenario = skewers_scenario();
+        let tx = settle_petya(&mut scenario, "1735", None);
+        let deleted = scenario
+            .vault
+            .delete_transactions(std::slice::from_ref(&tx))
+            .unwrap();
+        scenario.vault.restore_transactions(deleted).unwrap();
+        assert_eq!(petya_debt(&scenario, i64::MAX), amount("0"));
+    }
+
+    #[test]
+    fn a_purchase_taken_out_by_hand_leaves_nothing_to_bring_back() {
+        let mut scenario = skewers_scenario();
+        let (_, purchase_id) = linked_purchase(&scenario);
+        let event = scenario.event.clone();
+        scenario
+            .vault
+            .delete_shared_purchase(&event, &purchase_id)
+            .unwrap();
+        let view = scenario.vault.shared_event_view(&scenario.event).unwrap();
+        assert!(view.event.removed_with_payment.is_empty());
+    }
+
+    #[test]
+    fn a_payment_that_found_another_place_is_not_linked_twice() {
+        let mut scenario = skewers_scenario();
+        let (tx_id, _) = linked_purchase(&scenario);
+        let position = |vault: &UnlockedVault| {
+            vault
+                .doc
+                .shared_events
+                .iter()
+                .position(|event| event.id == scenario.event)
+                .unwrap()
+        };
+        let index = position(&scenario.vault);
+        let event = &mut scenario.vault.doc.shared_events[index];
+        event.removed_with_payment.push(RemovedWithPayment {
+            id: "stale".into(),
+            tx_id: tx_id.clone(),
+            item_id: Some(event.items[0].id.clone()),
+            purchase: Some(Purchase {
+                id: "stale".into(),
+                tx_id: Some(tx_id.clone()),
+                ..Purchase::default()
+            }),
+            settlement: None,
+        });
+        scenario.vault.restore_removed_with_payment();
+        let event = &scenario.vault.doc.shared_events[index];
+        assert!(event.removed_with_payment.is_empty());
+        let copies = event
+            .items
+            .iter()
+            .flat_map(|item| &item.purchases)
+            .filter(|purchase| purchase.tx_id.as_deref() == Some(tx_id.as_str()))
+            .count();
+        assert_eq!(copies, 1);
     }
 
     fn edited(

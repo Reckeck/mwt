@@ -309,7 +309,8 @@ to the start collapses to one day). `organizer`, `Purchase.buyer`, `Settlement.p
 
 The schema is additive (`serde(default)`), `VAULT_FORMAT_VERSION` did not change; an old vault without
 `shared_events` is read in JSON and MessagePack (the test `an_old_vault_without_shared_events…`).
-Sync: the collection `records("shared_events", ID)`.
+Sync: the collection `records("shared_events", ID)`. `removed_with_payment` (backend only) keeps what left an event
+with a deleted payment, until the payment is back or gone for good (`docs/sync/compatibility.md`).
 
 **Transactions are not marked.** The "payment/transfer → event" link lives only in the event
 (`Purchase.tx_id`, `Settlement.tx_id`), not in `TxMeta`: v1 bincode files are read by field

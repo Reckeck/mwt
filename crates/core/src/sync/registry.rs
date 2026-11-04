@@ -394,6 +394,7 @@ pub static COLLECTIONS: &[Collection] = &[
             ("items", "id"),
             ("settlements", "id"),
             ("adjustments", "participant_id"),
+            ("removed_with_payment", "id"),
         ],
         flatten_inner: &[("items", "purchases", "id")],
         ..records("shared_events", ID)

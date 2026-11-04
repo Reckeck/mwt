@@ -260,6 +260,29 @@ pub struct SharedEvent {
     pub settlements: Vec<Settlement>,
     #[serde(default)]
     pub adjustments: Vec<ShareOverride>,
+    /// What left the event together with a deleted payment. A newer edit on
+    /// another device can bring the payment back, and then this goes back
+    /// with it; a part the user took out of the event by hand is never here.
+    /// Backend only: the frontend does not see it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(skip)]
+    pub removed_with_payment: Vec<RemovedWithPayment>,
+}
+
+/// A purchase or a settlement kept until its payment is either back or gone
+/// for good.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct RemovedWithPayment {
+    /// Of the purchase or the settlement.
+    pub id: String,
+    pub tx_id: String,
+    /// The item a purchase belonged to.
+    #[serde(default)]
+    pub item_id: Option<String>,
+    #[serde(default)]
+    pub purchase: Option<Purchase>,
+    #[serde(default)]
+    pub settlement: Option<Settlement>,
 }
 
 /// The link from a vault payment or debt transfer back to the event that made
