@@ -1071,7 +1071,17 @@ impl UnlockedVault {
         let mut sync = self.doc.sync.clone();
         let mut touched: BTreeMap<String, RecordState> = BTreeMap::new();
         let mut after: BTreeMap<String, RecordState> = BTreeMap::new();
+        // (operation that goes, operation that stays) for `repoint_tx`.
+        let mut repoints: Vec<(String, String)> = Vec::new();
         for (loser, into) in removals {
+            if let Some(winner) = &into
+                && let (Some(old), Some(new)) = (
+                    loser.strip_prefix("transactions:"),
+                    winner.strip_prefix("transactions:"),
+                )
+            {
+                repoints.push((old.to_string(), new.to_string()));
+            }
             touched
                 .entry(loser.clone())
                 .or_insert_with(|| self.state_of(&records, &loser));
@@ -1155,7 +1165,9 @@ impl UnlockedVault {
         if let Some(tracker) = self.tracker.as_mut() {
             tracker.rebase(&settled);
         }
-        Ok(())
+        // After the rebase: the moved references are an edit of this device,
+        // stamped and sent on, not part of the merge.
+        self.repoint_removed_copies(&repoints, batch_id)
     }
 
     // -- trusted devices ------------------------------------------------------
@@ -1424,6 +1436,8 @@ fn applied_of(batch: &SyncBatch) -> AppliedBatch {
 #[cfg(test)]
 mod adjustment_tests;
 #[cfg(test)]
+mod attachment_cleanup_tests;
+#[cfg(test)]
 mod clock_tests;
 #[cfg(test)]
 mod convergence_catalog;
@@ -1451,6 +1465,9 @@ mod repair_report;
 mod repair_restore;
 #[cfg(test)]
 mod repair_restore_tests;
+mod repoint;
+#[cfg(test)]
+mod repoint_tests;
 #[cfg(test)]
 mod run_key_tests;
 #[cfg(test)]

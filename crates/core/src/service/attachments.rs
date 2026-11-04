@@ -201,34 +201,6 @@ impl UnlockedVault {
         Ok(out)
     }
 
-    /// Drop what was removed and what lost its owner (a deleted operation or
-    /// goal), files included. Runs when the vault is opened: no "Undo" of
-    /// the last session can be waiting any more. Returns whether anything went.
-    pub(super) fn prune_attachments(&mut self) -> bool {
-        let gone: Vec<String> = self
-            .doc
-            .attachments
-            .iter()
-            .filter(|item| item.removed_at.is_some() || !self.owner_exists(&item.owner))
-            .map(|item| item.id.clone())
-            .collect();
-        if gone.is_empty() {
-            return false;
-        }
-        if !self.sandbox {
-            let dir = self.attachments_dir();
-            for id in &gone {
-                // A file synced from another device may never have been here.
-                let _ = std::fs::remove_file(dir.join(id));
-            }
-        }
-        self.doc.attachments.retain(|item| !gone.contains(&item.id));
-        self.doc
-            .attachment_keys
-            .retain(|key| !gone.contains(&key.id));
-        true
-    }
-
     fn check_owner(&self, owner: &EntityRef) -> Result<()> {
         if !matches!(owner.kind, EntityKind::Tx | EntityKind::Goal) {
             return Err(Error::InvalidInput(
@@ -241,7 +213,7 @@ impl UnlockedVault {
         Ok(())
     }
 
-    fn owner_exists(&self, owner: &EntityRef) -> bool {
+    pub(super) fn owner_exists(&self, owner: &EntityRef) -> bool {
         match owner.kind {
             EntityKind::Tx => self
                 .doc

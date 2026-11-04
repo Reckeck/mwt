@@ -31,6 +31,7 @@ mod agenda;
 mod allocation;
 mod asset_holdings;
 mod attachments;
+mod attachments_cleanup;
 mod auto_reminders;
 mod automation_card;
 mod automations;
@@ -423,6 +424,8 @@ impl UnlockedVault {
         let incomplete = vault.disable_incomplete_workflows(crate::calendar::now_secs());
         // Files removed last session (their "Undo" is long gone) go now.
         let attachments_pruned = vault.prune_attachments();
+        // Files no record names (local disk cleanup only).
+        vault.sweep_orphan_attachment_files();
         // Sync history written before secrets were hidden.
         let secrets_scrubbed = vault.scrub_sync_secrets();
         if migrated
