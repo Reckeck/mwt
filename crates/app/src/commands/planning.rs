@@ -335,7 +335,7 @@ pub async fn list_reminders(
     let ru = crate::scheduler::russian(&app);
     with_vault_mut(&state, |vault| {
         vault.sync_auto_reminders(now_secs(), &zone, ru)?;
-        Ok(vault.reminders())
+        Ok(vault.reminders_in(now_secs(), &zone, ru))
     })
 }
 

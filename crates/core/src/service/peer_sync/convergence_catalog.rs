@@ -69,11 +69,7 @@ pub(super) enum Item {
 }
 
 /// The items that still reproduce today. Each fix slice removes its own.
-pub(super) const KNOWN_OPEN: &[Item] = &[
-    Item::NoticeSettings121,
-    Item::ReminderText33,
-    Item::PriceBase26,
-];
+pub(super) const KNOWN_OPEN: &[Item] = &[Item::PriceBase26];
 
 #[derive(Clone, Debug)]
 pub(super) struct Violation {
