@@ -177,8 +177,8 @@ These registry flags shape how a record splits into mergeable fields.
 
 | Flag | Meaning | Examples |
 |---|---|---|
-| `flatten` | one object field is split a level further, so two devices editing different entries both win | `transactions.meta` (comment on one device, categories on another); `workflow_state.marks` (one entry per trigger); `stores.exchange`, `stores.property` and `stores.property.car` (a dotted name splits one level further: mileage and insurance of a car are separate fields) |
-| `skip` | fields that belong to the device and never travel; a merge keeps the local value, and the digest ignores them | `workflow_state.tx_cursor`, `workflow_state.tx_index` (the device-local transaction cursor of a trigger); `settings.display_decimals`, `fx_refresh_interval_sec`, `minimize_to_tray`; `stores` `exchange.terminal` (a dotted name skips a sub-field of a record: it is left out of the digest, the value sent and the stamps, and a write keeps the local one) |
+| `flatten` | one object field is split a level further, so two devices editing different entries both win | `transactions.meta` (comment on one device, categories on another); `workflow_state.marks` (one entry per trigger); `stores.exchange`, `stores.property` and `stores.property.car` (a dotted name splits one level further: mileage and insurance of a car are separate fields); `settings.inflation_mode`, `inflation_source`, `inflation_manual` (one entry per currency) and `settings.notifications` (one entry per category, `flatten_by` `category`) |
+| `skip` | fields that belong to the device and never travel; a merge keeps the local value, and the digest ignores them | `workflow_state.tx_cursor`, `workflow_state.tx_index` (the device-local transaction cursor of a trigger); `settings.display_decimals`, `fx_refresh_interval_sec`, `minimize_to_tray`, `dashboard_widgets`, `dashboard_period`, `pinned`, `inflation_adopted`, `notifications.system`, `notifications.hide_details_when_locked` (a dotted name inside a single-object setting is kept on write too); `stores` `exchange.terminal` (a dotted name skips a sub-field of a record: it is left out of the digest, the value sent and the stamps, and a write keeps the local one) |
 | `whole` | the record is one value with one stamp (its fields only make sense together, or it may be null); the later write wins entirely | `health_last` |
 | `secret` | a credentials collection: no label or value is shown in the question, batches or journal | exchanges, attachment_keys |
 | `secret_fields` | individual credential fields are shown as a mask | `data_sources.url`, `workflow_vars.value` |
@@ -196,8 +196,13 @@ after an update on a device with no local cursor starts from the synced value
 once; firing is idempotent through run keys, so a cursor that differs between
 devices cannot double-post.
 
-**Device-only settings.** The three `DEVICE_SETTINGS` live in
-`app_settings.json` now; the vault's old copies stay but never travel.
+**Device-only settings.** The first three `DEVICE_SETTINGS`
+(`display_decimals`, `fx_refresh_interval_sec`, `minimize_to_tray`) live in
+`app_settings.json` now; the vault's old copies stay but never travel. The
+dashboard layout, period, pins and `inflation_adopted` stay in the vault and are
+skipped as well, as are the two device switches inside `notifications`. The full
+table is `SETTINGS_SCOPE` in `sync/registry.rs`
+([Compatibility](compatibility.md), stage P).
 
 ### Secrets
 

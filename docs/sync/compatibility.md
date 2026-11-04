@@ -260,6 +260,76 @@ in `repair_restore_payment_tests.rs`; the tests of this stage are
 `unstamped_tests.rs` in `crates/core/src/service/peer_sync/`, and
 `service/agenda/alert_tests.rs` (`triggered_for`).
 
+## Sync repair stage P
+
+No protocol bump and no vault format change (`PROTOCOL_VERSION` stays 3,
+`VAULT_FORMAT_VERSION` 3). Builds before and after this stage still sync. What
+an older protocol 3 build sees:
+
+| Change | On the wire | Older build |
+|---|---|---|
+| `Settings.notifications` split into entries (`notifications.default_time`, `notifications.categories.<category>`) | new entries per category; the whole-object head is added for older receivers (`with_legacy_heads`, as for `marks`) | keeps the object as one value; the head stamp is the newest entry stamp and is a floor for entries without a stamp of their own; two older devices still lose one of two parallel switches |
+| `notifications.system`, `notifications.hide_details_when_locked` under `skip` | never sent, never taken | keeps sending its own with the object; a new device ignores them and keeps its own |
+| `dashboard_widgets`, `dashboard_period`, `pinned` under `skip` | never sent, never taken | keeps sending its own; a new device ignores them. It stops receiving the new device's layout |
+| `Settings.inflation_manual` (flat rates by currency, split per currency) | additive entries `inflation_manual.<currency>` | does not know it; keeps its rates in its app config and computes with them; the group's rates do not reach it until it is updated |
+| `Settings.inflation_adopted` under `skip` | never sent | none; a peer's flag does not cancel this device's adoption |
+| `PriceStamp.price_base_currency` | field inside `price`, an unknown field is ignored | drops the label when it re-saves a transaction through its typed document; the number is then read as before (without a label) |
+| `Workflow.max_amount_currency` | additive field of `workflows` | ignores it; the cap stays "in the base of the runner" |
+| Text of an automatic reminder | the field `text` is the same | keeps rewriting the text in its own language; a new device does not rewrite in reply (a text equal to one of the two renderings is left alone, nothing is stamped) |
+| Removing the password | local, the wire is untouched | none |
+
+Scope of every setting. `sync::registry::SETTINGS_SCOPE` decides Group or
+Device for every field of `Settings` (and for the parts of `notifications`);
+`every_setting_has_a_scope` and `every_part_of_a_split_setting_has_a_scope` fail
+for a new field without a line, `device_fields_are_skipped` requires every
+Device name to be in the `skip` of the `settings` rule and no Group name there.
+
+- Device: `display_decimals`, `fx_refresh_interval_sec`, `minimize_to_tray`
+  (also in the app config), `dashboard_widgets`, `dashboard_period`, `pinned`,
+  `inflation_adopted`, `notifications.system`,
+  `notifications.hide_details_when_locked`.
+- Group: everything else, among it `notifications.default_time`,
+  `notifications.categories`, `inflation_mode`, `inflation_source`,
+  `inflation_manual`.
+
+The dashboard layout, its period and the pins stay in the encrypted vault, not
+in `app_settings.json`: that file is plain JSON and a pinned filter holds text
+the user typed. The cost: a full replacement of the vault by another copy
+brings that copy's layout and pins.
+
+Money labelled with a currency:
+
+- **Price base (26).** `price_base_currency` is written wherever `price_base`
+  is (the base of the device that entered it). `leg_price_in_base` keeps
+  `price_base` when the label is missing or equals the reader's base; when it
+  differs the price is read through `price_usd` and the reader's rate, and
+  `price_base` is kept as is when `price_usd` or the rate is missing. A
+  purchase of a property is signed with the currency of the label, the edit
+  form takes its price currency from it. A record without a label (every
+  record from before this stage, and one re-saved by an older build) reads as
+  before. `budget_currency` is fixed when a manual income or expense is saved,
+  because the figure is a number in the budget currency.
+- **Cap (27).** `max_amount_currency` is filled from the saving device's base
+  unless the form chose one. The run is checked in that currency: money already
+  in the cap's currency needs no rate. A cap with no price or rate rejects the
+  run, an old cap without a label included; an old cap is read in the base of
+  the runner and gets the saving device's base as its label on the next save.
+- **Inflation (100).** `flat_inflation()` is the shipped table with
+  `inflation_manual` on top; every reader (goals, real returns, debts,
+  property, the workflow node `data.inflation`, the health snapshot) uses it.
+  On open the app layer calls `adopt_flat_inflation` once: rates of the app
+  config that differ from the shipped ones and are not yet in the vault are
+  copied into it. Two devices that adopted different values for one currency
+  settle on the later write. `AppSettings.inflation` stays readable and is not
+  written; `update_app_settings` ignores its `inflation`.
+
+Tests: `peer_sync/notice_settings_tests.rs`, `peer_sync/inflation_tests.rs`,
+`sync/registry.rs` (scope and path tests), the labelled-price tests in
+`service/rates.rs` and `service/valuation.rs`, the cap tests in
+`service/workflows/tests.rs`, `service/auto_reminders.rs`, and the convergence
+test (`convergence_catalog.rs`: `NoticeSettings121`, `ReminderText33`,
+`PriceBase26`, `FlatInflation100`; `KNOWN_OPEN` is empty).
+
 ## What an old peer still gets wrong
 
 - It may drop an edited duplicate (the creation-stamp dedupe) and show secrets
