@@ -410,7 +410,10 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
             let Some(id) = pick(rng, &ids).cloned() else {
                 return;
             };
-            vault.delete_contact(&id).unwrap();
+            // A guest linked to an event refuses the deletion: nothing happened.
+            if vault.delete_contact(&id).is_err() {
+                return;
+            }
             ledger.deleted.insert(format!("contacts:{id}"));
         }
     }
@@ -1248,5 +1251,119 @@ fn currency_change_beside_a_purchase_keeps_the_rates_valid() {
             violations_of(&[Item::EventCurrency116], device),
             Vec::<String>::new()
         );
+    }
+}
+
+/// A guest made a contact, the contact deleted on the same device: the event
+/// must not be left naming a contact that nobody can restore.
+#[test]
+fn deleting_a_guest_contact_leaves_no_dangling_participant() {
+    use super::tests::settle;
+    let (_dir, mut left, mut right) = two_devices();
+    let event = left
+        .create_shared_event(SharedEventDraft {
+            title: "trip".into(),
+            currency: "usd".into(),
+            participants: vec![guest("ann".into())],
+            ..Default::default()
+        })
+        .unwrap()
+        .event;
+    let person = event.participants[0].id.clone();
+    let contact = left
+        .make_shared_participant_contact(&event.id, &person)
+        .unwrap();
+    // Either answer is fine for the guard: a refusal, or the link goes too.
+    let _ = left.delete_contact(&contact.id);
+    settle(&mut left, &mut right);
+    for device in [&left, &right] {
+        assert_eq!(
+            violations_of(&[Item::DeletedReferenced28], device),
+            Vec::<String>::new()
+        );
+    }
+}
+
+/// The peer restores a deleted guest contact while a participant names it: once
+/// the participant is gone, a deletion that succeeded must still hold.
+#[test]
+fn deleted_guest_contact_stays_deleted_once_its_participant_goes() {
+    use super::tests::settle;
+    let (_dir, mut left, mut right) = two_devices();
+    let event = left
+        .create_shared_event(SharedEventDraft {
+            title: "trip".into(),
+            currency: "usd".into(),
+            participants: vec![guest("ann".into()), guest("bob".into())],
+            ..Default::default()
+        })
+        .unwrap()
+        .event;
+    let person = event.participants[0].id.clone();
+    let contact = left
+        .make_shared_participant_contact(&event.id, &person)
+        .unwrap();
+    settle(&mut left, &mut right);
+    let deleted = left.delete_contact(&contact.id).is_ok();
+    settle(&mut left, &mut right);
+    left.remove_shared_participant(&event.id, &person).unwrap();
+    settle(&mut left, &mut right);
+    for device in [&left, &right] {
+        let alive = device.doc.contacts.iter().any(|row| row.id == contact.id);
+        assert!(
+            !(deleted && alive),
+            "deleted contact {} is back",
+            contact.id
+        );
+    }
+}
+
+/// One device deletes a payment while another attaches it to an event: the
+/// purchase must not outlive the payment it stands for, nor the other way round.
+#[test]
+fn attaching_a_payment_beside_its_deletion_leaves_no_phantom_purchase() {
+    use super::tests::settle;
+    let (_dir, mut left, mut right) = two_devices();
+    let store_id = left.doc.stores[0].id.clone();
+    left.add_transaction(income(&store_id, "100", "start"))
+        .unwrap();
+    let paid = left
+        .add_transaction(crate::service::test_support::payment(
+            &store_id, "3", "taxi",
+        ))
+        .unwrap();
+    let event = left
+        .create_shared_event(SharedEventDraft {
+            title: "trip".into(),
+            currency: "usd".into(),
+            participants: vec![guest("ann".into())],
+            ..Default::default()
+        })
+        .unwrap()
+        .event;
+    settle(&mut left, &mut right);
+    let tx_id = paid.meta().id.clone();
+    left.delete_transaction(&tx_id).unwrap();
+    right
+        .attach_payment_to_shared_event(crate::ipc_contract::AttachPaymentInput {
+            event_id: event.id.clone(),
+            tx_id: tx_id.clone(),
+            new_item_title: Some("attached".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    settle(&mut left, &mut right);
+    for device in [&left, &right] {
+        let payment_alive = device
+            .doc
+            .transactions
+            .iter()
+            .any(|tx| tx.meta().id == tx_id);
+        let linked = device.doc.shared_events[0]
+            .items
+            .iter()
+            .flat_map(|item| &item.purchases)
+            .any(|purchase| purchase.tx_id.as_ref() == Some(&tx_id));
+        assert_eq!(linked, payment_alive, "purchase and payment disagree");
     }
 }
