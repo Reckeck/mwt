@@ -248,8 +248,16 @@ impl UnlockedVault {
             .iter()
             .map(|pending| pending.exec_id.clone())
             .collect();
-        known.extend(self.doc.discarded_imports.iter().cloned());
-        known.extend(
+        known.extend(self.decided_import_ids());
+        known
+    }
+
+    /// Ids an import has already settled: booked into an operation or
+    /// discarded. The staged queue is not part of it, so a queue entry can be
+    /// checked against it.
+    pub(crate) fn decided_import_ids(&self) -> HashSet<String> {
+        let mut decided: HashSet<String> = self.doc.discarded_imports.iter().cloned().collect();
+        decided.extend(
             self.doc
                 .transactions
                 .iter()
@@ -258,7 +266,7 @@ impl UnlockedVault {
                     _ => None,
                 }),
         );
-        known
+        decided
     }
 
     /// One sync of an exchange wallet: leave out what the settings do not

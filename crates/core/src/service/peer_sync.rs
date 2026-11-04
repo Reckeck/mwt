@@ -1516,6 +1516,7 @@ mod repair_classes;
 mod repair_events;
 #[cfg(test)]
 mod repair_events_tests;
+mod repair_imports;
 mod repair_natural;
 mod repair_report;
 mod repair_restore;
@@ -1530,6 +1531,8 @@ mod repoint_tests;
 mod run_key_tests;
 #[cfg(test)]
 mod seen_tests;
+#[cfg(test)]
+mod stale_base_tests;
 #[cfg(test)]
 mod terminal_tests;
 #[cfg(test)]
