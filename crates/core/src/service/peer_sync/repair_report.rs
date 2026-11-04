@@ -35,6 +35,9 @@ pub(crate) struct RepairReport {
     /// participant but carries no `organizer` field (an older build wrote it).
     /// A computed flag, not a change.
     pub organizer_flags: Vec<String>,
+    /// R9: exec ids dropped from the staged queue because the import is
+    /// already booked or discarded. Silent: the decision was already made.
+    pub dropped_imports: Vec<String>,
     /// Keys of every record the pass changed (R8 included).
     pub records: Vec<String>,
 }

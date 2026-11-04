@@ -77,6 +77,7 @@ const ENABLED_KINDS: &[Edit] = &[
     Edit::SharedPurchaseToItem,
     Edit::FireAlert,
     Edit::ChangeAlertPrice,
+    Edit::ConfirmImport,
 ];
 
 const DEFAULT_SEEDS: &[u64] = &[1, 2, 3, 4, 5];
@@ -138,6 +139,7 @@ pub(super) enum Edit {
     SharedPurchaseToItem,
     FireAlert,
     ChangeAlertPrice,
+    ConfirmImport,
 }
 
 /// splitmix64: tiny, deterministic, good enough for choosing steps.
@@ -218,7 +220,7 @@ pub(super) struct Ledger {
     pub(super) touched_after: BTreeSet<String>,
     counter: usize,
     /// The exchange and the car every device starts with (see `add_shared_stores`).
-    exchange_id: String,
+    pub(super) exchange_id: String,
     /// Exchange wallets (the first is `exchange_id`) the key edits pick from.
     key_stores: Vec<String>,
     car_id: String,
@@ -397,7 +399,8 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
         | Edit::UndoLastBatch
         | Edit::SharedPurchaseToItem
         | Edit::FireAlert
-        | Edit::ChangeAlertPrice => catalog::apply_catalog_edit(kind, vault, rng, ledger),
+        | Edit::ChangeAlertPrice
+        | Edit::ConfirmImport => catalog::apply_catalog_edit(kind, vault, rng, ledger),
         Edit::DeleteContact => {
             // The anchors stay: debt terms of the catalog edits pile onto them.
             let ids: Vec<String> = vault

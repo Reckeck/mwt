@@ -11,7 +11,8 @@
 //! - Never changes money: it moves or drops references and structure only.
 //!
 //! Rules, in the order they run: R3 (deleted records that money points to are
-//! restored, `repair_restore.rs`), duplicates by natural key, R1 (one root Cash
+//! restored, `repair_restore.rs`), R9 (staged imports that are already booked
+//! or discarded, `repair_imports.rs`), duplicates by natural key, R1 (one root Cash
 //! wallet, `repair_cash.rs`), R2 (account tree), R4 (envelopes of deleted
 //! goals), R5 (links to missing asset classes), the shares of the classes
 //! (`repair_natural.rs`), the links and money of shared events (R6, R7,
@@ -40,6 +41,7 @@ impl UnlockedVault {
         let before = self.doc_value()?;
         let mut report = RepairReport::default();
         self.repair_restored_records(&mut report);
+        self.repair_pending_imports(&mut report);
         // Before the natural keys: a folded guest contact may leave two debt
         // terms of one contact and asset behind.
         self.repair_guest_contacts(&mut report);

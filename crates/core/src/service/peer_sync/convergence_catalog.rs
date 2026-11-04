@@ -49,6 +49,8 @@ pub(super) enum Item {
     GoalEnvelopes122,
     /// 123: two contacts for one guest, a payment linked to two events.
     GuestsAndLinks123,
+    /// 29: a staged import names an exec id that is booked or discarded.
+    StagedImports29,
     /// A purchase added to an item next to another device's one is lost
     /// (fixed by protocol 3: every purchase has its own stamp).
     ParallelPurchases,
@@ -433,6 +435,7 @@ pub(super) fn apply_catalog_edit(
         }
         Edit::FireAlert => fire_alert(vault, number),
         Edit::ChangeAlertPrice => edit_alert(vault, rng),
+        Edit::ConfirmImport => confirm_import(vault, rng, ledger),
         Edit::SetAssetClasses => set_asset_classes(vault, rng),
         Edit::UndoLastBatch => undo_last_batch(vault, ledger),
         Edit::SharedPurchaseToItem => {
@@ -512,6 +515,39 @@ fn fire_alert(vault: &mut UnlockedVault, number: usize) {
         change_24h_pct: None,
     }]);
     vault.check_alerts(base + 3600 * HOURS as i64 + 60).unwrap();
+}
+
+/// Queues a fill from a small pool of exec ids on the exchange wallet and
+/// then, more often than not, books or discards it. Two devices reach for the
+/// same id, so one decides while the other has not seen it (29).
+fn confirm_import(vault: &mut UnlockedVault, rng: &mut Rng, ledger: &Ledger) {
+    let exec_id = format!("imp-{}", rng.below(4));
+    let fill = crate::exchange::Execution {
+        exec_id: exec_id.clone(),
+        symbol: "BTCUSDT".into(),
+        side: "buy".into(),
+        order_type: "Market".into(),
+        exec_price: "65000".into(),
+        exec_qty: "0.5".into(),
+        exec_value: "32500".into(),
+        exec_fee: "0.5".into(),
+        exec_time: "1700000000000".into(),
+        is_maker: false,
+        closed_size: None,
+        category: String::new(),
+    };
+    let Some(pending) =
+        crate::model::vault::PendingImport::from_execution(&ledger.exchange_id, "spot", &fill)
+    else {
+        return;
+    };
+    let _ = vault.stage_imports(vec![pending]);
+    let ids = [exec_id];
+    let _ = match rng.below(6) {
+        0..=2 => vault.confirm_pending_imports(&ids),
+        3 => vault.discard_pending_imports(&ids),
+        _ => Ok(0),
+    };
 }
 
 /// Creates the one alert the harness plays with, then moves its threshold.
@@ -671,7 +707,25 @@ pub(super) fn invariants(vault: &UnlockedVault, ledger: &Ledger) -> Vec<Violatio
     check_references(vault, &mut out);
     check_natural_keys(vault, &mut out);
     check_shared_events(vault, ledger, &mut out);
+    check_staged_imports(vault, &mut out);
     out
+}
+
+/// 29: nothing in the queue names a fill that is already booked or discarded.
+fn check_staged_imports(vault: &UnlockedVault, out: &mut Vec<Violation>) {
+    let decided = vault.decided_import_ids();
+    for pending in &vault.doc.pending_imports {
+        if decided.contains(&pending.exec_id) {
+            found(
+                out,
+                Item::StagedImports29,
+                format!(
+                    "pending import {} is already booked or discarded",
+                    pending.exec_id
+                ),
+            );
+        }
+    }
 }
 
 fn check_cash_and_tree(vault: &UnlockedVault, out: &mut Vec<Violation>) {
