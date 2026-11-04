@@ -10,7 +10,8 @@
 //!   undoes the repair; the user is told in a notice.
 //! - Never changes money: it moves or drops references and structure only.
 //!
-//! Rules, in the order they run: duplicates by natural key, R1 (one root Cash
+//! Rules, in the order they run: R3 (deleted records that money points to are
+//! restored, `repair_restore.rs`), duplicates by natural key, R1 (one root Cash
 //! wallet, `repair_cash.rs`), R2 (account tree), R4 (envelopes of deleted
 //! goals), R5 (links to missing asset classes), the shares of the classes
 //! (`repair_natural.rs`), R8 (emergency fund and inflation sources that name a
@@ -37,6 +38,7 @@ impl UnlockedVault {
     ) -> Result<RepairReport> {
         let before = self.doc_value()?;
         let mut report = RepairReport::default();
+        self.repair_restored_records(&mut report);
         self.repair_natural_keys(&mut report);
         self.repair_cash_wallets(&mut report);
         self.repair_account_tree(&mut report);

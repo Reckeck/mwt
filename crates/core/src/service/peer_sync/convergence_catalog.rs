@@ -55,8 +55,6 @@ pub(super) enum Item {
 
 /// The items that still reproduce today. Each fix slice removes its own.
 pub(super) const KNOWN_OPEN: &[Item] = &[
-    Item::DeletedReferenced28,
-    Item::DeletedParticipant115,
     Item::EventCurrency116,
     Item::GuestsAndLinks123,
     Item::ParallelPurchases,

@@ -964,6 +964,10 @@ fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
 
     for key in ledger.deleted.difference(&ledger.touched_after) {
         for (index, view) in views.iter().enumerate() {
+            // Rule R3: a record that live money names is put back on purpose.
+            if devices[index].money_names_record(key) {
+                continue;
+            }
             assert!(
                 !view.contains_key(key),
                 "{context}: deleted record {key} came back on device {index}"
@@ -980,6 +984,12 @@ fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
                 else {
                     continue;
                 };
+                if rest
+                    .split_once('/')
+                    .is_some_and(|(_, id)| device.event_names_participant(event, id))
+                {
+                    continue;
+                }
                 let present = match rest.split_once('/') {
                     Some(("item", id)) => found.items.iter().any(|item| item.id == id),
                     Some((_, id)) => found.participants.iter().any(|person| person.id == id),
