@@ -3,10 +3,11 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, RefreshCw } from 'lucide-vue-next'
 
-import { CurrencyPicker, useInflationOverview } from '@/entities/currency'
+import { CurrencyPicker, SHIPPED_INFLATION_CODES, useInflationOverview } from '@/entities/currency'
 import { useInflationActions } from '@/features/inflation-mode'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { ScopeTag } from '@/shared/ui/scope-tag'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { useVaultStore } from '@/shared/store/vault'
 
@@ -45,12 +46,13 @@ function submitAdd() {
 </script>
 
 <template>
-  <Card>
+  <Card data-tour="inflation-settings">
     <template #header>
       <div class="flex items-start gap-2">
         <div class="grid gap-1">
           <h3 class="heading-card">{{ t('inflation.title') }}</h3>
           <p class="text-sm text-muted-foreground">{{ t('inflation.hint') }}</p>
+          <ScopeTag kind="group">{{ t('inflation.shared') }}</ScopeTag>
         </div>
         <Button
           v-if="!vault.locked"
@@ -72,7 +74,7 @@ function submitAdd() {
           :key="code"
           :code="code"
           :entry="entryOf(code)"
-          :removable="!entryOf(code)?.source && table[code] !== undefined"
+          :removable="!entryOf(code)?.source && table[code] !== undefined && !SHIPPED_INFLATION_CODES.includes(code)"
           :model-value="table[code] ?? ''"
           @update:model-value="(value) => setManual(code, value)"
           @change="persist()"
