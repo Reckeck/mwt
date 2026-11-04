@@ -45,6 +45,7 @@ export function useItemRows(view: MaybeRefOrGetter<SharedEventView | undefined>)
                 ? t('sharedEvents.items.splitUnits', { parts: formatList(caption.parts) })
                 : t('sharedEvents.items.splitSome', { names: formatList(caption.parts) }),
           summary,
+          needsRate: current.purchases.some((purchase) => purchase.item_id === item.id && purchase.needs_rate),
           boughtBy: buyers.length ? t('sharedEvents.items.boughtBy', { names: formatList(buyers) }) : '',
         },
       ]

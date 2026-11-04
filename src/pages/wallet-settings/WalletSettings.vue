@@ -120,7 +120,7 @@ const crumbs = computed<PageCrumb[]>(() =>
               <StorePropertyForm :store="store" />
             </SettingsSection>
             <SettingsSection v-if="store.kind === 'loyalty'" :id="sectionId('loyalty')" :title="t('walletSettings.loyalty')">
-              <LoyaltyForm :store="store" />
+              <LoyaltyForm :store="store" :symbol-clash="overview.data.value?.symbol_clash" />
             </SettingsSection>
             <SettingsSection
               v-if="store.sub_type === 'savings' || store.sub_type === 'deposit' || store.sub_type === 'pds'"

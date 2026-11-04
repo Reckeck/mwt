@@ -15,4 +15,6 @@ export interface ItemRow {
   boughtBy: string
   /** `8 of 6 pcs · +600 ₽` as plain text: the accessible name of the status cell. */
   summary: string
+  /** A purchase of the item has the automatic rate 1 in another currency than the event's. */
+  needsRate: boolean
 }

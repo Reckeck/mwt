@@ -385,3 +385,38 @@ fn a_second_pass_changes_and_stamps_nothing() {
     assert_eq!(left.doc.sync.stamps, stamps);
     assert_eq!(left.doc.notification_log.len(), log);
 }
+
+#[test]
+fn needs_rate_is_computed_for_the_purchase_view_by_the_repair_rule() {
+    let (_dir, mut vault) = empty_vault();
+    let (event_id, _) = event_with_guest(&mut vault, "trip", "usd");
+    let mut typed = purchase_in("eur", "p-typed");
+    typed.rate_manual = true;
+    typed.rate_to_event = amount("1.1");
+    let event = vault
+        .doc
+        .shared_events
+        .iter_mut()
+        .find(|event| event.id == event_id)
+        .unwrap();
+    event.items.push(crate::model::shared_event::EventItem {
+        id: "item".into(),
+        title: "things".into(),
+        purchases: vec![
+            purchase_in("eur", "p-eur"),
+            purchase_in("usd", "p-usd"),
+            typed,
+        ],
+        ..Default::default()
+    });
+    let view = vault.shared_event_view(&event_id).unwrap();
+    let flag = |id: &str| {
+        view.purchases
+            .iter()
+            .find(|line| line.purchase_id == id)
+            .map(|line| line.needs_rate)
+    };
+    assert_eq!(flag("p-eur"), Some(true));
+    assert_eq!(flag("p-usd"), Some(false), "the event's own currency");
+    assert_eq!(flag("p-typed"), Some(false), "a typed rate");
+}

@@ -8,6 +8,7 @@ import { cn } from '@/shared/lib/utils'
 import { ActionMenu } from '@/shared/ui/action-menu'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { TapHint } from '@/shared/ui/tap-hint'
 import type { UiAction } from '@/shared/ui/context-menu'
 import { Card } from '@/shared/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
@@ -58,6 +59,11 @@ const TONE_CLASS = { over: 'text-destructive font-semibold', under: 'text-succes
             <div class="grid min-w-0 gap-0.5">
               <span :class="cn('truncate font-medium', row.fact.state === 'cancelled' && 'line-through')">{{ row.item.title }}</span>
               <span v-if="row.caption" class="truncate text-xs text-primary">{{ row.caption }}</span>
+              <span v-if="row.needsRate" class="flex pt-0.5" data-rate-needed>
+                <TapHint :hint="t('sharedEvents.items.rateNeededHint')" :aria-label="t('sharedEvents.items.rateNeeded')">
+                  <Badge variant="warning">{{ t('sharedEvents.items.rateNeeded') }}</Badge>
+                </TapHint>
+              </span>
               <span class="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5 text-xs text-muted-foreground md:hidden">
                 <Badge :variant="STATE_BADGE[row.fact.state].variant" :class="STATE_BADGE[row.fact.state].class">{{ t(`sharedEvents.items.state.${row.fact.state}`) }}</Badge>
                 <span>{{ phoneLine(row) }}</span>

@@ -12,6 +12,14 @@ const MOCK_MAX_DEPTH = 1
 export const mockStore = (id: string) => mockStores.find((candidate) => candidate.id === id)
 const mockChildren = (id: string) => mockStores.filter((candidate) => candidate.parent_id === id)
 
+/** Another programme uses the same points symbol (`loyalty_symbol_clash` in Rust). */
+const mockSymbolClash = (store: Store) =>
+  mockStores.some(
+    (other) =>
+      other.id !== store.id &&
+      other.loyalty?.points_symbol.trim().toUpperCase() === store.loyalty?.points_symbol.trim().toUpperCase(),
+  )
+
 /** Parent chain from the root down to `id`'s parent. */
 export function mockAncestors(id: string): Store[] {
   const chain: Store[] = []
@@ -258,5 +266,6 @@ export function mockOverview(storeId: string, includeChildren: boolean): StoreOv
     unrealized_base: String(own.reduce((sum, row) => sum + Number(row.unrealized_base), 0)),
     subtree_unrealized_base: String(subtreePositions.reduce((sum, row) => sum + Number(row.unrealized_base), 0)),
     prices_as_of: own.length ? mockPricesAsOf : null,
+    symbol_clash: store.loyalty ? mockSymbolClash(store) : false,
   }
 }

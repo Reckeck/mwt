@@ -20,7 +20,6 @@ use serde_json::Value;
 
 use super::UnlockedVault;
 use super::repair::RepairReport;
-use crate::Amount;
 use crate::model::contact::Contact;
 use crate::model::shared_event::ME;
 use crate::model::transaction::AccountRef;
@@ -252,13 +251,12 @@ impl UnlockedVault {
     // -- R7: currency and organizer ---------------------------------------------
 
     pub(super) fn repair_event_money(&mut self, report: &mut RepairReport) {
-        let one = Amount::from(1);
         for event in &mut self.doc.shared_events {
             let auto: Vec<(&str, &str)> = event
                 .items
                 .iter()
                 .flat_map(|item| &item.purchases)
-                .filter(|purchase| !purchase.rate_manual && purchase.rate_to_event == one)
+                .filter(|purchase| purchase.has_auto_rate_one())
                 .map(|purchase| (purchase.id.as_str(), purchase.currency.as_str()))
                 .collect();
             let currencies: BTreeSet<&str> = auto.iter().map(|(_, currency)| *currency).collect();
@@ -277,9 +275,12 @@ impl UnlockedVault {
                 }
             } else if currencies.len() > 1 {
                 report.needs_rate.extend(
-                    auto.iter()
-                        .filter(|(_, currency)| *currency != event.currency)
-                        .map(|(id, _)| id.to_string()),
+                    event
+                        .items
+                        .iter()
+                        .flat_map(|item| &item.purchases)
+                        .filter(|purchase| purchase.needs_rate(&event.currency))
+                        .map(|purchase| purchase.id.clone()),
                 );
             }
             let organizers: BTreeSet<&str> = event
