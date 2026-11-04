@@ -1072,6 +1072,14 @@ async fn a_different_protocol_is_refused_on_both_sides() {
     assert_refused_on_both_sides((current + 1, trade_core::VAULT_FORMAT_VERSION)).await;
 }
 
+/// Protocol 3 (a purchase is an entry of its own) does not sync with the
+/// protocol 2 builds, whose item holds its purchases whole.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_protocol_two_peer_is_refused_on_both_sides() {
+    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 3);
+    assert_refused_on_both_sides((2, trade_core::VAULT_FORMAT_VERSION)).await;
+}
+
 /// The `sync-error` payloads of a device, in order.
 fn error_payloads(mut events: Events) -> Arc<Mutex<Vec<Value>>> {
     let seen = Arc::new(Mutex::new(Vec::new()));

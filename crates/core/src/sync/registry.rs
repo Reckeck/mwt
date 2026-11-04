@@ -21,6 +21,20 @@ pub enum Rule {
     Single,
 }
 
+/// An entry of an array inside the item of a split array, see
+/// [`Collection::inner_entry`].
+#[derive(Debug, Clone, Copy)]
+pub struct InnerEntry<'name> {
+    pub head: &'static str,
+    pub field: &'static str,
+    /// Key path of the inner items.
+    pub path: &'static str,
+    /// Name of the item entry (`items.<id>`).
+    pub parent: &'name str,
+    /// Key of the inner item.
+    pub key: &'name str,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Collection {
     /// Field of `VaultDoc`.
@@ -40,6 +54,13 @@ pub struct Collection {
     /// devices adding or editing different items both keep their change, and a
     /// removed item travels as the stamp of its entry.
     pub flatten_by: &'static [(&'static str, &'static str)],
+    /// Arrays inside the items of a split array, as `(array, field, key
+    /// path)`: the `purchases` of an `items` entry. Each one becomes an entry
+    /// of its own, `items.<item key>.purchases.<key>`, with its own stamp; the
+    /// item entry keeps the other fields. An entry without a stamp takes the
+    /// stamp of the item it sits in, so stamps written before the split still
+    /// say when a purchase last changed.
+    pub flatten_inner: &'static [(&'static str, &'static str, &'static str)],
     /// Fields computed from a split array, as `(field, array)`: `allocated`
     /// is the sum of `moves`. Between devices that know the array the field is
     /// never a change of its own: it is re-derived after a merge and sent with
@@ -85,6 +106,23 @@ impl Collection {
             .map(|(_, path)| *path)
     }
 
+    /// The inner array of an entry `head.<key>.<field>.<inner key>`, when
+    /// `name` is one: `(head, key, field, inner key path, inner key)`.
+    pub fn inner_entry<'name>(&self, name: &'name str) -> Option<InnerEntry<'name>> {
+        self.flatten_inner.iter().find_map(|(head, field, path)| {
+            let rest = name.strip_prefix(head)?.strip_prefix('.')?;
+            let marker = format!(".{field}.");
+            let at = rest.find(&marker)?;
+            Some(InnerEntry {
+                head,
+                field,
+                path,
+                parent: &name[..head.len() + 1 + at],
+                key: &rest[at + marker.len()..],
+            })
+        })
+    }
+
     /// Fields that sync as separate entries (`field.<entry>`).
     pub fn heads(&self) -> impl Iterator<Item = &'static str> {
         self.flatten
@@ -101,6 +139,7 @@ const fn records(name: &'static str, key: &'static [&'static str]) -> Collection
         key,
         flatten: &[],
         flatten_by: &[],
+        flatten_inner: &[],
         derived: &[],
         recomputed: &[],
         skip: &[],
@@ -124,6 +163,7 @@ const fn log(
         key,
         flatten: &[],
         flatten_by: &[],
+        flatten_inner: &[],
         derived: &[],
         recomputed: &[],
         skip: &[],
@@ -142,6 +182,7 @@ const fn single(name: &'static str, skip: &'static [&'static str]) -> Collection
         key: &[],
         flatten: &[],
         flatten_by: &[],
+        flatten_inner: &[],
         derived: &[],
         recomputed: &[],
         skip,
@@ -203,6 +244,7 @@ pub static COLLECTIONS: &[Collection] = &[
         key: &["asset_key", "ts"],
         flatten: &[],
         flatten_by: &[],
+        flatten_inner: &[],
         derived: &[],
         recomputed: &[],
         skip: &[],
@@ -218,6 +260,7 @@ pub static COLLECTIONS: &[Collection] = &[
         key: &["currency", "ts"],
         flatten: &[],
         flatten_by: &[],
+        flatten_inner: &[],
         derived: &[],
         recomputed: &[],
         skip: &[],
@@ -269,6 +312,7 @@ pub static COLLECTIONS: &[Collection] = &[
             ("settlements", "id"),
             ("adjustments", "participant_id"),
         ],
+        flatten_inner: &[("items", "purchases", "id")],
         ..records("shared_events", ID)
     },
     records("key_rates", &["date"]),
@@ -297,6 +341,7 @@ pub static COLLECTIONS: &[Collection] = &[
     Collection {
         flatten: &["marks"],
         flatten_by: &[],
+        flatten_inner: &[],
         derived: &[],
         recomputed: &[],
         skip: &["tx_cursor", "tx_index"],
@@ -337,6 +382,7 @@ pub static COLLECTIONS: &[Collection] = &[
         key: &[],
         flatten: &[],
         flatten_by: &[],
+        flatten_inner: &[],
         derived: &[],
         recomputed: &[],
         skip: &[],

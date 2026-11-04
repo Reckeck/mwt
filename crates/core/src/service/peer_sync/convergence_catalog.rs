@@ -4,8 +4,8 @@
 //! open is tolerated only while it is listed in [`KNOWN_OPEN`]. A fix slice
 //! removes its item from the list, so the same test then guards the fix.
 //!
-//! `random_edits_without_known_open_flags_are_red_today` runs the harness
-//! with the list empty: it shows which invariants the current code breaks.
+//! `random_edits_with_no_item_tolerated_stay_green` runs the harness with
+//! nothing tolerated and reports the broken invariants per item.
 
 use super::convergence_tests::{Edit, Ledger, Rng, event_ids, guest, pick};
 use super::*;
@@ -49,12 +49,12 @@ pub(super) enum Item {
     /// 123: two contacts for one guest, a payment linked to two events.
     GuestsAndLinks123,
     /// A purchase added to an item next to another device's one is lost
-    /// (purchases live inside the item; decision 4 of the stage).
+    /// (fixed by protocol 3: every purchase has its own stamp).
     ParallelPurchases,
 }
 
 /// The items that still reproduce today. Each fix slice removes its own.
-pub(super) const KNOWN_OPEN: &[Item] = &[Item::ParallelPurchases];
+pub(super) const KNOWN_OPEN: &[Item] = &[];
 
 #[derive(Clone, Debug)]
 pub(super) struct Violation {

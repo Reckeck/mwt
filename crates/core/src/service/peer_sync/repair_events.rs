@@ -182,10 +182,12 @@ impl UnlockedVault {
                         continue;
                     };
                     let stamp = match (collection, stamps) {
-                        (Some(collection), Some(stamps)) => {
-                            flatten::entry_stamp(collection, stamps, &format!("items.{}", item.id))
-                                .clone()
-                        }
+                        (Some(collection), Some(stamps)) => flatten::entry_stamp(
+                            collection,
+                            stamps,
+                            &format!("items.{}.purchases.{}", item.id, purchase.id),
+                        )
+                        .clone(),
                         _ => Stamp::default(),
                     };
                     links.push(Link {

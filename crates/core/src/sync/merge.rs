@@ -8,7 +8,9 @@
 use serde_json::Value;
 
 use super::derived;
-use super::flatten::{Order, cannot_express, edited_here, entry_stamp, is_entry, settle_heads};
+use super::flatten::{
+    Order, cannot_express, edited_here, entry_stamp, is_entry, settle_heads, settle_orphans,
+};
 use super::registry::{Collection, Rule};
 use super::state::{RecordStamps, RecordState};
 use super::view::{Fields, comparable, is_device_field, join_with, split};
@@ -244,6 +246,12 @@ fn merge_fields(
             &mut stamps,
         );
     }
+    settle_orphans(
+        coll,
+        &mut merged.fields,
+        &mut stamps,
+        &[&local_fields.fields, &remote_fields.fields],
+    );
     settle_heads(coll, &mut merged.fields, &stamps);
     let order = Order::new(coll, &[mine, theirs], &stamps);
     let mut value = join_with(coll, &merged, &order);

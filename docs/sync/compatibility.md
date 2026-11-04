@@ -198,6 +198,39 @@ an old random guest contact into the deterministic one (the participant link and
 the references to the contact move over), and rule R6 keeps one link per
 operation (the earliest one) however the ids look.
 
+## Protocol 3: shared-event purchases
+
+`PROTOCOL_VERSION` goes from 2 to 3. Before, the purchases of a shared event
+lived inside the entry `items.<id>`, which has one stamp, so the later write of
+the whole item won and a purchase added on another device at the same time was
+lost. Now every purchase is an entry of its own, `items.<item id>.purchases.<purchase id>`,
+with its own stamp (`Collection.flatten_inner` in `sync/registry.rs`). Two
+devices adding, editing or removing different purchases of one item all keep
+their change; the purchases of an item are ordered the same way on every device
+(the sequence both share, then the older change first, then by id).
+
+- **2 and 3 do not sync.** A protocol 2 build would overwrite a whole item and
+  lose or revive purchases, so the handshake refuses the pair. Nothing is
+  exchanged and nothing changes in either vault; trust is kept and the pair joins
+  by itself once both are updated.
+- **What each side shows.** The protocol 3 side shows the usual message
+  (`SYNC_VERSION_MISMATCH`): "The app versions do not match: <name> runs an old
+  version, this device <own>. Update the app on both devices." (or, when the peer
+  sent a version, with it). A protocol 2 build compares the hello the same way
+  and shows its own existing text with the 3 side's version, "Update the app on
+  both devices"; an old build cannot be changed.
+- **Old vaults keep working.** No vault format change and no migration: stamps
+  are additive keys. A purchase that has no stamp of its own takes the stamp of
+  its item (`entry_stamp`), so stamps written before the split still say when a
+  purchase last changed; the first edit of a purchase writes its own stamp.
+  A device on protocol 3 sends the legacy `items` stamp too (`with_legacy_heads`).
+- **Item removed beside a new purchase.** The later write wins, like for any
+  field: a purchase stamped after the removal brings its item back (the item
+  without the older purchases that were removed with it); a purchase stamped
+  before the removal goes with the item. Both devices end equal.
+- **Rule R6** (one link per operation) compares the stamp of the purchase, with
+  the item's stamp as the fallback.
+
 ## What an old peer still gets wrong
 
 - It may drop an edited duplicate (the creation-stamp dedupe) and show secrets
