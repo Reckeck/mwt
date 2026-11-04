@@ -200,6 +200,14 @@ pub struct SyncState {
     /// never taken from a received copy. Missing means 0: keep the deletions.
     #[serde(default)]
     pub tombstone_acks: BTreeMap<String, u64>,
+    /// `device id` -> the newest stamp of this device's own clock that was
+    /// already in the last applied exchange with that device (taken with the
+    /// manifest it started from), so an edit up to it was seen there. Local
+    /// like `tombstone_acks`: never sent, never taken from a received copy.
+    /// Missing means nothing is known: every edit counts as unseen. Never
+    /// goes down.
+    #[serde(default)]
+    pub seen_by: BTreeMap<String, Stamp>,
     #[serde(default)]
     pub peers: Vec<TrustedPeer>,
     /// Newest last.

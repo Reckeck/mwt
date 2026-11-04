@@ -833,7 +833,7 @@ async fn exchange<H: Host>(
     let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
     wire.send(&Message::Peers { peers }).await?;
     let since = now_ms().saturating_sub(UNION_DAYS * 24 * 3600 * 1000);
-    let mine = app.with_vault(|vault| vault.sync_manifest(Some(since)))?;
+    let (mine, mark) = app.with_vault(|vault| vault.sync_manifest_marked(Some(since)))?;
     let entries: Vec<(String, u64)> = mine
         .iter()
         .map(|(key, digest)| (key.clone(), *digest))
@@ -913,7 +913,7 @@ async fn exchange<H: Host>(
     set_progress(app, &peer.session_id, None);
     apply(app, wire, orders, peer, watch, incoming, reason, pending).await?;
     app.with_vault(|vault| {
-        vault.sync_mark_synced(&peer.device_id)?;
+        vault.sync_mark_synced(&peer.device_id, Some(&mark))?;
         // Only an applied exchange vouches for our deletions: its manifest
         // says which of them the peer holds.
         vault.sync_ack_tombstones(&peer.device_id, &theirs)?;
@@ -1011,7 +1011,8 @@ async fn apply_shown<H: Host>(
         None
     });
     if let Some(reason) = reason {
-        let summary = app.with_vault(|vault| vault.sync_preview(&incoming))?;
+        let summary =
+            app.with_vault(|vault| vault.sync_preview_from(&incoming, &peer.device_id))?;
         if summary.is_empty() && !first {
             return Ok(());
         }
@@ -1132,7 +1133,9 @@ async fn apply_shown<H: Host>(
         // The question can be open for minutes: a device forgotten meanwhile
         // (here, or through another link) gets nothing.
         if vault.sync_state().trusted(&peer.remote_key).is_none() {
-            let summary = vault.sync_preview(&incoming).unwrap_or_default();
+            let summary = vault
+                .sync_preview_from(&incoming, &peer.device_id)
+                .unwrap_or_default();
             vault.sync_journal_record(&peer.name, &summary, SyncJournalOutcome::Declined)?;
             dropped = true;
             return Ok(Some(None));
@@ -1152,7 +1155,7 @@ async fn apply_shown<H: Host>(
         Err(err) => {
             // The journal tells that a batch came and failed; nothing of its content.
             let summary = app
-                .with_vault(|vault| vault.sync_preview(&incoming))
+                .with_vault(|vault| vault.sync_preview_from(&incoming, &peer.device_id))
                 .unwrap_or_default();
             let _ = app.with_vault(|vault| {
                 vault.sync_journal_record(&peer.name, &summary, SyncJournalOutcome::Failed)

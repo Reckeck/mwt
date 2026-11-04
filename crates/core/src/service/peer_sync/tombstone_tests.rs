@@ -88,7 +88,7 @@ fn a_declined_session_does_not_ack_tombstones() {
     let theirs = right.sync_manifest(None).unwrap();
     let mine = left.sync_manifest(None).unwrap();
     let _ = left.sync_diff(&mine, &theirs);
-    left.sync_mark_synced("right-id").unwrap();
+    left.sync_mark_synced("right-id", None).unwrap();
     left.compact_tombstones();
     assert!(left.doc.sync.tombstones.contains_key(&key));
     assert!(left.sync_state().tombstone_acks.is_empty());
@@ -108,8 +108,8 @@ fn a_tombstone_is_compacted_only_after_every_peer_has_it() {
     let has_it = left.sync_manifest(None).unwrap();
     let lacks_it = Manifest::new();
     // Both exchanged with us (the old rule would drop the deletion now).
-    left.sync_mark_synced("dev-b").unwrap();
-    left.sync_mark_synced("dev-c").unwrap();
+    left.sync_mark_synced("dev-b", None).unwrap();
+    left.sync_mark_synced("dev-c", None).unwrap();
     left.sync_ack_tombstones("dev-b", &has_it).unwrap();
     left.sync_ack_tombstones("dev-c", &lacks_it).unwrap();
     left.compact_tombstones();
@@ -149,7 +149,7 @@ fn a_forgotten_device_repaired_within_a_year_does_not_bring_deletions_back() {
     // A third device has the deletion and told us so.
     left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
     let has_it = left.sync_manifest(None).unwrap();
-    left.sync_mark_synced("dev-c").unwrap();
+    left.sync_mark_synced("dev-c", None).unwrap();
     left.sync_ack_tombstones("dev-c", &has_it).unwrap();
     // The right device is forgotten 100 days ago and never saw the deletion.
     left.sync_trust_peer("right-id", "Right", "rr").unwrap();
@@ -234,7 +234,7 @@ fn an_old_peer_without_acks_does_not_resurrect_a_deletion() {
     // as ever; it never vouches for the deletion.
     let theirs = right.sync_manifest(None).unwrap();
     left.sync_ack_tombstones("right-id", &theirs).unwrap();
-    left.sync_mark_synced("right-id").unwrap();
+    left.sync_mark_synced("right-id", None).unwrap();
     left.compact_tombstones();
     assert!(left.doc.sync.tombstones.contains_key(&key));
     exchange(&mut left, &mut right);

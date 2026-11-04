@@ -82,6 +82,12 @@ impl Clock {
         &self.device
     }
 
+    /// The newest stamp this clock has issued (or followed), without issuing
+    /// a new one.
+    pub fn last(&self) -> Stamp {
+        Stamp::new(self.wall, self.count, &self.device)
+    }
+
     /// A stamp for a change made now.
     pub fn tick(&mut self) -> Stamp {
         self.tick_at(now_ms())

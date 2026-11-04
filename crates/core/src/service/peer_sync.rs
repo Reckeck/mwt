@@ -268,6 +268,17 @@ impl UnlockedVault {
         Ok(manifest)
     }
 
+    /// [`Self::sync_manifest`] and the newest stamp of this device's clock at
+    /// that moment: what the peer will have seen once this exchange is applied
+    /// (see [`Self::sync_mark_synced`]).
+    pub fn sync_manifest_marked(
+        &mut self,
+        union_since_ms: Option<u64>,
+    ) -> Result<(Manifest, Stamp)> {
+        let manifest = self.sync_manifest(union_since_ms)?;
+        Ok((manifest, self.clock.last()))
+    }
+
     /// Whether a cache point is worth syncing here: rates of a currency that
     /// is not in use are thinned to one point right after a merge (the rule
     /// of `thin_rate_caches`), so asking for or offering them only repeats
@@ -333,11 +344,27 @@ impl UnlockedVault {
         &mut self,
         incoming: &BTreeMap<String, RecordState>,
     ) -> Result<SyncSummary> {
+        self.sync_preview_from(incoming, "")
+    }
+
+    /// [`Self::sync_preview`] for a batch from the device `device_id`: what
+    /// that device has already seen of this one is not listed as overwritten.
+    pub fn sync_preview_from(
+        &mut self,
+        incoming: &BTreeMap<String, RecordState>,
+        device_id: &str,
+    ) -> Result<SyncSummary> {
         Self::check_incoming(incoming)?;
         self.track_changes()?;
         let value = self.doc_value()?;
         let records = view::records(&value);
-        Ok(crate::sync::plan::plan(incoming, |key| self.state_of(&records, key)).summary)
+        let seen = self.doc.sync.seen_by.get(device_id).cloned();
+        Ok(crate::sync::plan::plan_seen(
+            incoming,
+            |key| self.state_of(&records, key),
+            seen.as_ref(),
+        )
+        .summary)
     }
 
     /// Capital and the balances of the stores the batch moves, as they would
@@ -433,7 +460,12 @@ impl UnlockedVault {
         // nothing about, is not news: the senders had it acked everywhere
         // else. Storing it would only restart its age.
         let incoming = &self.without_compacted(incoming, &records);
-        let mut plan = crate::sync::plan::plan(incoming, |key| self.state_of(&records, key));
+        let seen = self.doc.sync.seen_by.get(&peer.device_id).cloned();
+        let mut plan = crate::sync::plan::plan_seen(
+            incoming,
+            |key| self.state_of(&records, key),
+            seen.as_ref(),
+        );
         if plan.changes.is_empty() {
             return Ok(None);
         }
@@ -457,7 +489,11 @@ impl UnlockedVault {
                 .filter(|(key, _)| !cut.contains(key))
                 .map(|(key, state)| (key.clone(), state.clone()))
                 .collect();
-            plan = crate::sync::plan::plan(&rest, |key| self.state_of(&records, key));
+            plan = crate::sync::plan::plan_seen(
+                &rest,
+                |key| self.state_of(&records, key),
+                seen.as_ref(),
+            );
             if plan.changes.is_empty() {
                 return Ok(None);
             }
@@ -1194,6 +1230,7 @@ impl UnlockedVault {
         self.doc.sync.cut_by.remove(device_id);
         self.doc.sync.paused.remove(device_id);
         self.doc.sync.tombstone_acks.remove(device_id);
+        self.doc.sync.seen_by.remove(device_id);
         self.persist()
     }
 
@@ -1341,8 +1378,22 @@ impl UnlockedVault {
         Ok(())
     }
 
-    /// Note a finished exchange with a device (not synced as a change).
-    pub fn sync_mark_synced(&mut self, device_id: &str) -> Result<()> {
+    /// Note a finished exchange with a device (not synced as a change). `mark`
+    /// is the clock stamp taken with the manifest of that exchange
+    /// ([`Self::sync_manifest_marked`]): the device has seen our edits up to it.
+    /// Only an applied exchange may pass it. Never goes down.
+    pub fn sync_mark_synced(&mut self, device_id: &str, mark: Option<&Stamp>) -> Result<()> {
+        if let Some(mark) = mark {
+            let seen = self
+                .doc
+                .sync
+                .seen_by
+                .entry(device_id.to_string())
+                .or_default();
+            if mark > seen {
+                *seen = mark.clone();
+            }
+        }
         if let Some(peer) = self
             .doc
             .sync
@@ -1473,6 +1524,8 @@ mod repoint;
 mod repoint_tests;
 #[cfg(test)]
 mod run_key_tests;
+#[cfg(test)]
+mod seen_tests;
 #[cfg(test)]
 mod terminal_tests;
 #[cfg(test)]
