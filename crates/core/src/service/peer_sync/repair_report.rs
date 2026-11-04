@@ -15,6 +15,11 @@ pub(crate) struct RepairReport {
     pub dropped_class_links: usize,
     /// Shares that did not add up to 100 were scaled.
     pub normalized_shares: bool,
+    /// R3: (id, name) of the records put back because live money names them.
+    pub restored: Vec<(String, String)>,
+    /// R3: ids that money names but no previous value is known here; the
+    /// device that has it restores it. Not a change, so not in `is_empty`.
+    pub unrestored: Vec<String>,
     /// Keys of every record the pass changed (R8 included).
     pub records: Vec<String>,
 }
@@ -34,6 +39,14 @@ impl RepairReport {
                 .join(", ")
         };
         let mut parts = Vec::new();
+        if !self.restored.is_empty() {
+            let list = names(&self.restored);
+            parts.push(if ru {
+                format!("восстановлено: {list} — на них ссылаются операции")
+            } else {
+                format!("restored: {list} — operations still use them")
+            });
+        }
         if !self.detached_accounts.is_empty() {
             let list = names(&self.detached_accounts);
             parts.push(if ru {
@@ -107,7 +120,8 @@ impl RepairReport {
                 .join(",")
         };
         format!(
-            "repair:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}",
+            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}",
+            ids(&self.restored),
             ids(&self.detached_accounts),
             ids(&self.dropped_envelopes),
             self.merged_duplicates.join(","),

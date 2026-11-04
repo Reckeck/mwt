@@ -1448,6 +1448,9 @@ mod repair_cash;
 mod repair_classes;
 mod repair_natural;
 mod repair_report;
+mod repair_restore;
+#[cfg(test)]
+mod repair_restore_tests;
 #[cfg(test)]
 mod run_key_tests;
 #[cfg(test)]
