@@ -12,7 +12,7 @@ the two sides differ. The policy is binding for every sync change.
 Every session starts with a `Hello` from each side (the dialer and the listener
 alike). It carries:
 
-- `protocol`: `PROTOCOL_VERSION`, now 2 (2 added the `security` notice category);
+- `protocol`: `PROTOCOL_VERSION`, now 3 (2 added the `security` notice category, 3 made purchases entries of their own);
 - `format`: `VAULT_FORMAT_VERSION`, now 3;
 - `app_version`: the sender's app version, informational only.
 
@@ -48,7 +48,7 @@ lacks:
 | Peers during the question | merges them, re-checks trust before applying | drops `Peers` there |
 | Log ties | breaks ties by key, same records everywhere | keeps insertion order, may keep other records at the cap |
 | Reminder ids | `auto-<kind>-<entity>` | random ids; dedupe bridges both by source |
-| Keep mark (`keep` on `TxMeta` and `Reminder`) | undoing a merge marks the copy it brings back; dedupe skips a pair holding a marked record, on every device with this build; «Allow merging» clears it | does not know the field: its dedupe may remove the copy again, and re-saving a record drops the mark; the mark is honoured once every device is on this build |
+| Keep mark (`keep` on `TxMeta` and `Reminder`) | undoing a merge marks the copy it brings back; dedupe skips a pair holding a marked record, on every device with this build; «Allow merging» clears it | does not reach this build: the mark ships with protocol 3, so a protocol 2 device is refused at the handshake and cannot remove the copy or drop the mark. A vault that held an older build reads as `keep = false` |
 
 The new side keeps tombstones longer, so a record deleted on the new side does
 not come back from an old peer that kept it. Nothing new goes on the wire:
