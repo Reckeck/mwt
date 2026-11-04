@@ -92,28 +92,45 @@ pub async fn dev_export_vault(
 /// The previous file is copied to `<vault>.bak` first — this command
 /// overwrites the whole encrypted document.
 ///
-/// Rejects (without touching the vault) on invalid JSON, an unknown schema,
+/// `base` is the JSON the editor loaded or saved last. With it only what
+/// differs from `base` is written (`UnlockedVault::apply_document_edit`), so a
+/// record another device sent meanwhile stays; without it the document is
+/// replaced as a whole.
+///
+/// Rejects (without touching the vault) on invalid JSON (`json` or `base`), an unknown schema,
 /// or a wrong payload version: an unparsable document is the whole point of
 /// the editor's draft handling, and a half-written vault is worse than a
 /// rejected edit.
 #[tauri::command]
 pub async fn dev_apply_vault_json(
     json: String,
+    base: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     // An edit that does not fit the schema is a typo in the editor, not an old
     // file: report it as a parse error, not as an incompatible vault.
-    let decoded = trade_core::storage::decode(json.as_bytes(), SnapshotFormat::Json)
-        .map_err(|err| match err {
-            trade_core::Error::IncompatibleVault(detail) => trade_core::Error::Deserialize(detail),
-            other => other,
-        })
-        .map_err(|err| format!("{}: {}", err.code(), err))?;
+    let decode = |text: &str| {
+        trade_core::storage::decode(text.as_bytes(), SnapshotFormat::Json)
+            .map_err(|err| match err {
+                trade_core::Error::IncompatibleVault(detail) => {
+                    trade_core::Error::Deserialize(detail)
+                }
+                other => other,
+            })
+            .map_err(|err| format!("{}: {}", err.code(), err))
+    };
+    let decoded = decode(&json)?;
+    // Both texts are checked before anything is written.
+    let base = base.as_deref().map(decode).transpose()?;
 
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().unwrap();
     VaultFile::backup(&vault.path).map_err(err_to_string)?;
-    vault.replace_doc(decoded).map_err(err_to_string)?;
+    match base {
+        Some(base) => vault.apply_document_edit(&base, decoded),
+        None => vault.replace_doc(decoded),
+    }
+    .map_err(err_to_string)?;
 
     VaultFile::export_json(&vault.doc).map_err(|err| format!("{}: {}", err.code(), err))
 }

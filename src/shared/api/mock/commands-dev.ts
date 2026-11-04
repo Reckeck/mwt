@@ -38,6 +38,14 @@ export const devReportCommands: MockCommands = {
     } catch (err) {
       throw { code: 'DESERIALIZE', message: String(err) }
     }
+    // A malformed base is refused before anything is written.
+    if (typeof args?.base === 'string') {
+      try {
+        JSON.parse(args.base)
+      } catch (err) {
+        throw { code: 'DESERIALIZE', message: String(err) }
+      }
+    }
     return resolve(JSON.stringify(JSON.parse(text), null, 2))
   },
   dev_open_vault_json_in_editor: (_call) => {

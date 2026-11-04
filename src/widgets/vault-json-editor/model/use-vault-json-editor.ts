@@ -31,6 +31,8 @@ export function useVaultJsonEditor(mountEl: Ref<HTMLDivElement | null>) {
 
   let view: EditorView | null = null
   const appliedRaw = ref('')
+  /** The text the buffer was last loaded with or saved from: the base the backend applies the edit against. */
+  const baseText = ref<string | null>(null)
   /** `normalizeJson(appliedRaw)` — the "nothing to save" baseline. */
   const appliedNormalized = ref<string | null>(null)
   const syntaxError = ref<string | null>(null)
@@ -94,7 +96,10 @@ export function useVaultJsonEditor(mountEl: Ref<HTMLDivElement | null>) {
     const hadFocus = editor.hasFocus
     const head = editor.state.selection.main.head
     try {
-      const stored = await call<string>('dev_apply_vault_json', { json: text })
+      const stored = await call<string>('dev_apply_vault_json', { json: text, base: baseText.value })
+      // The next save is compared with what was sent now, not with `stored`: the backend text may hold
+      // records from other devices that this buffer never showed, and they must not read as deleted.
+      baseText.value = text
       appliedRaw.value = stored
       // The backend re-serializes canonically, so the baseline is its output, not the text sent.
       appliedNormalized.value = normalizeJson(stored)
@@ -181,6 +186,7 @@ export function useVaultJsonEditor(mountEl: Ref<HTMLDivElement | null>) {
     try {
       const result = await call<DevDumpVaultOutput>('dev_dump_vault')
       appliedRaw.value = result.json
+      baseText.value = result.json
       appliedNormalized.value = normalizeJson(result.json)
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: result.json } })
     } catch (err) {

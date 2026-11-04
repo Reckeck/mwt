@@ -12,6 +12,7 @@ import { settingsQuery } from '@/shared/lib/settings-link'
 import RestoreBackupDialog from './RestoreBackupDialog.vue'
 import { useVaultBackups } from '../model/useVaultBackups'
 
+defineProps<{ grouped: boolean }>()
 const { t } = useI18n()
 const router = useRouter()
 const { backups, create, restore } = useVaultBackups()
@@ -50,6 +51,7 @@ function openJson() {
     v-model:open="restoreOpen"
     :backups="backups.data.value ?? []"
     :pending="restore.isPending.value"
+    :grouped="grouped"
     @restore="(name) => restore.mutate(name, { onSuccess: () => (restoreOpen = false) })"
   />
 </template>

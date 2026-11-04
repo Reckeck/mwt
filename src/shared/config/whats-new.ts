@@ -14,6 +14,14 @@ export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: 'syncStageS',
+    date: '2026-11-04',
+    points: [
+      { key: 'restore', route: 'settings:vault' },
+      { key: 'editor', route: 'settings:sync:sync-devices' },
+    ],
+  },
+  {
     id: 'syncStageM',
     date: '2026-11-04',
     points: [

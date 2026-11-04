@@ -6,6 +6,7 @@ import { KeyRound, ShieldOff } from 'lucide-vue-next'
 import { VaultBackupsSection } from '@/features/vault-backups'
 import { VaultLinkSection, useVaultLink } from '@/features/vault-external-link'
 import { ChangePasswordDialog, RemovePasswordDialog, SetPasswordDialog } from '@/features/vault-password'
+import { useSyncPeers } from '@/features/vault-sync'
 import { useVaultStore } from '@/shared/store/vault'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -18,6 +19,7 @@ import VaultPlace from './VaultPlace.vue'
 const { t } = useI18n()
 const vault = useVaultStore()
 const { status: link } = useVaultLink()
+const { list: peers } = useSyncPeers()
 
 const changeOpen = ref(false)
 const removeOpen = ref(false)
@@ -56,7 +58,7 @@ const externalCopy = computed(() => (link.data.value?.linked ? (link.data.value.
       </Button>
     </SettingsSection>
     <SettingsSection :title="t('vaultLink.title')" :description="t('vaultLink.hint')"><VaultLinkSection /></SettingsSection>
-    <SettingsSection :title="t('vaultBackups.title')"><VaultBackupsSection /></SettingsSection>
+    <SettingsSection :title="t('vaultBackups.title')"><VaultBackupsSection :grouped="peers.length > 0" /></SettingsSection>
     <ChangePasswordDialog v-model:open="changeOpen" />
     <RemovePasswordDialog v-model:open="removeOpen" :external-copy="externalCopy" />
     <SetPasswordDialog v-model:open="setOpen" :external-copy="externalCopy !== null" />
