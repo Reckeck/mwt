@@ -4,6 +4,7 @@
 //!
 //! Replay a failure with `MWT_CONV_SEED=<seed> MWT_CONV_STEPS=<steps>`.
 
+use super::convergence_catalog::{self as catalog, Item, KNOWN_OPEN, Violation};
 use super::tests::two_devices;
 use super::*;
 use crate::ipc_contract::{
@@ -60,6 +61,20 @@ const ENABLED_KINDS: &[Edit] = &[
     Edit::AddExchangeKey,
     Edit::ChangeExchangeKey,
     Edit::RemoveExchangeKey,
+    Edit::SetDebtTerms,
+    Edit::AddMeterReading,
+    Edit::AddValuation,
+    Edit::MoveAccount,
+    Edit::CreateGoal,
+    Edit::DeleteGoal,
+    Edit::FundGoal,
+    Edit::CreatePayment,
+    Edit::MakeGuestContact,
+    Edit::AttachPayment,
+    Edit::ChangeEventCurrency,
+    Edit::SetAssetClasses,
+    Edit::UndoLastBatch,
+    Edit::SharedPurchaseToItem,
 ];
 
 const DEFAULT_SEEDS: &[u64] = &[1, 2, 3, 4, 5];
@@ -68,7 +83,7 @@ const DEVICES: usize = 3;
 const MAX_SETTLE_ROUNDS: usize = 10;
 
 #[derive(Clone, Copy, Debug)]
-enum Edit {
+pub(super) enum Edit {
     CreateTx,
     ChangeTxAmount,
     ChangeTxNote,
@@ -104,13 +119,28 @@ enum Edit {
     AddExchangeKey,
     ChangeExchangeKey,
     RemoveExchangeKey,
+    // Stage M: keys and links after a merge (`convergence_catalog.rs`).
+    SetDebtTerms,
+    AddMeterReading,
+    AddValuation,
+    MoveAccount,
+    CreateGoal,
+    DeleteGoal,
+    FundGoal,
+    CreatePayment,
+    MakeGuestContact,
+    AttachPayment,
+    ChangeEventCurrency,
+    SetAssetClasses,
+    UndoLastBatch,
+    SharedPurchaseToItem,
 }
 
 /// splitmix64: tiny, deterministic, good enough for choosing steps.
-struct Rng(u64);
+pub(super) struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    pub(super) fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut mixed = self.0;
         mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -118,7 +148,7 @@ impl Rng {
         mixed ^ (mixed >> 31)
     }
 
-    fn below(&mut self, bound: usize) -> usize {
+    pub(super) fn below(&mut self, bound: usize) -> usize {
         (self.next() % bound as u64) as usize
     }
 }
@@ -130,17 +160,42 @@ fn peer_of(index: usize) -> PeerRef {
     }
 }
 
-fn three_devices() -> (tempfile::TempDir, Vec<UnlockedVault>) {
-    let (dir, left, right) = two_devices();
-    let copy = dir.path().join("third.wallet");
-    std::fs::copy(&left.path, &copy).unwrap();
-    let mut third = UnlockedVault::open(copy, "pw").unwrap();
-    third.set_device("cccccccc-third");
-    (dir, vec![left, right, third])
+/// How the devices begin.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Start {
+    /// One vault copied to every device: they share the Cash wallet.
+    Copied,
+    /// Every device made its own vault, so each has a Cash wallet of its own.
+    Separate,
+}
+
+fn three_devices(start: Start) -> (Vec<tempfile::TempDir>, Vec<UnlockedVault>) {
+    match start {
+        Start::Copied => {
+            let (dir, left, right) = two_devices();
+            let copy = dir.path().join("third.wallet");
+            std::fs::copy(&left.path, &copy).unwrap();
+            let mut third = UnlockedVault::open(copy, "pw").unwrap();
+            third.set_device("cccccccc-third");
+            (vec![dir], vec![left, right, third])
+        }
+        Start::Separate => {
+            let mut dirs = Vec::new();
+            let mut devices = Vec::new();
+            for name in ["aaaaaaaa-left", "bbbbbbbb-right", "cccccccc-third"] {
+                let (dir, mut vault) = crate::service::test_support::empty_vault();
+                vault.set_device(name);
+                vault.persist().unwrap();
+                dirs.push(dir);
+                devices.push(vault);
+            }
+            (dirs, devices)
+        }
+    }
 }
 
 /// `from` sends what `to` lacks; only `to` changes. Whether `to` applied.
-fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) -> bool {
+pub(super) fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) -> bool {
     let from_manifest = devices[from].sync_manifest(None).unwrap();
     let to_manifest = devices[to].sync_manifest(None).unwrap();
     let (wants, _) = devices[to].sync_diff(&to_manifest, &from_manifest);
@@ -152,21 +207,29 @@ fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) -> bool {
 }
 
 #[derive(Default)]
-struct Ledger {
+pub(super) struct Ledger {
     /// Full keys deleted on some device.
-    deleted: BTreeSet<String>,
+    pub(super) deleted: BTreeSet<String>,
     /// Full keys created or edited after being deleted (exempt from the check).
-    touched_after: BTreeSet<String>,
+    pub(super) touched_after: BTreeSet<String>,
     counter: usize,
     /// The exchange and the car every device starts with (see `add_shared_stores`).
     exchange_id: String,
     /// Exchange wallets (the first is `exchange_id`) the key edits pick from.
     key_stores: Vec<String>,
     car_id: String,
+    /// Property, its flat asset key and a metered utility (`add_catalog_stores`).
+    pub(super) property_id: String,
+    pub(super) thing_key: String,
+    pub(super) utility_id: String,
+    /// Purchases added to shared items: (event, item, purchase).
+    pub(super) purchases: Vec<(String, String, String)>,
+    /// Two contacts that debt terms pile onto (`add_catalog_stores`).
+    pub(super) anchors: Vec<String>,
 }
 
 impl Ledger {
-    fn fresh(&mut self) -> usize {
+    pub(super) fn fresh(&mut self) -> usize {
         self.counter += 1;
         self.counter
     }
@@ -182,7 +245,7 @@ fn contact_draft(name: String) -> ContactDraft {
     }
 }
 
-fn pick<'items, Item>(rng: &mut Rng, items: &'items [Item]) -> Option<&'items Item> {
+pub(super) fn pick<'items, Item>(rng: &mut Rng, items: &'items [Item]) -> Option<&'items Item> {
     if items.is_empty() {
         None
     } else {
@@ -315,11 +378,27 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
         Edit::TerminalTimeframe | Edit::CarMileage | Edit::CarInsurance => {
             apply_device_and_car(kind, vault, rng, ledger);
         }
+        Edit::SetDebtTerms
+        | Edit::AddMeterReading
+        | Edit::AddValuation
+        | Edit::MoveAccount
+        | Edit::CreateGoal
+        | Edit::DeleteGoal
+        | Edit::FundGoal
+        | Edit::CreatePayment
+        | Edit::MakeGuestContact
+        | Edit::AttachPayment
+        | Edit::ChangeEventCurrency
+        | Edit::SetAssetClasses
+        | Edit::UndoLastBatch
+        | Edit::SharedPurchaseToItem => catalog::apply_catalog_edit(kind, vault, rng, ledger),
         Edit::DeleteContact => {
+            // The anchors stay: debt terms of the catalog edits pile onto them.
             let ids: Vec<String> = vault
                 .doc
                 .contacts
                 .iter()
+                .filter(|contact| !ledger.anchors.contains(&contact.id))
                 .map(|contact| contact.id.clone())
                 .collect();
             let Some(id) = pick(rng, &ids).cloned() else {
@@ -331,7 +410,7 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
     }
 }
 
-fn event_ids(vault: &UnlockedVault) -> Vec<String> {
+pub(super) fn event_ids(vault: &UnlockedVault) -> Vec<String> {
     vault
         .doc
         .shared_events
@@ -340,7 +419,7 @@ fn event_ids(vault: &UnlockedVault) -> Vec<String> {
         .collect()
 }
 
-fn guest(name: String) -> SharedParticipantDraft {
+pub(super) fn guest(name: String) -> SharedParticipantDraft {
     SharedParticipantDraft {
         name,
         ..Default::default()
@@ -815,14 +894,18 @@ fn view_of(vault: &mut UnlockedVault) -> BTreeMap<String, Value> {
     view::records(&value)
 }
 
-fn run(seed: u64, steps: usize) {
-    let context =
-        format!("seed={seed} steps={steps} (MWT_CONV_SEED={seed} MWT_CONV_STEPS={steps})");
-    let (_dir, mut devices) = three_devices();
+/// Runs one seed. Convergence and the old checks are asserted at once; the
+/// catalog invariants are returned, so a caller decides which are tolerated.
+fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
+    let context = format!(
+        "seed={seed} steps={steps} start={start:?} (MWT_CONV_SEED={seed} MWT_CONV_STEPS={steps})"
+    );
+    let (_dirs, mut devices) = three_devices(start);
     let mut rng = Rng(seed);
     let mut ledger = Ledger::default();
     let trace = std::env::var("MWT_CONV_TRACE").is_ok();
     add_shared_stores(&mut devices, &mut ledger);
+    catalog::add_catalog_stores(&mut devices, &mut ledger);
 
     for _ in 0..steps {
         if rng.below(10) < 6 {
@@ -934,25 +1017,224 @@ fn run(seed: u64, steps: usize) {
             );
         }
     }
+    if std::env::var("MWT_CONV_STATS").is_ok() {
+        let doc = &devices[0].doc;
+        eprintln!(
+            "stats seed={seed} {start:?}: debt_terms={} readings={} valuations={} goals={} goal_envelopes={} envelopes={} cash={} sv={} bank={} events={} contacts={} classes={} links={} purchases={}",
+            doc.debt_terms.len(),
+            doc.meter_readings.len(),
+            doc.valuations.len(),
+            doc.goals.len(),
+            doc.envelopes
+                .iter()
+                .filter(|envelope| envelope.goal_id.is_some())
+                .count(),
+            doc.envelopes.len(),
+            doc.stores
+                .iter()
+                .filter(|node| node.kind == StoreKind::Cash)
+                .count(),
+            doc.stores
+                .iter()
+                .filter(|node| node.name.starts_with("sv"))
+                .count(),
+            doc.stores
+                .iter()
+                .filter(|node| node.name.starts_with("bank"))
+                .count(),
+            doc.shared_events.len(),
+            doc.contacts.len(),
+            doc.asset_classes.len(),
+            devices[0].shared_tx_links().len(),
+            ledger.purchases.len(),
+        );
+    }
+    let mut violations = Vec::new();
+    for (index, device) in devices.iter().enumerate() {
+        for mut violation in catalog::invariants(device, &ledger) {
+            violation.text = format!("device {index}: {}", violation.text);
+            violations.push(violation);
+        }
+    }
+    violations
+}
+
+/// `run`, failing on every violation of an item that is not in `open`.
+fn run_tolerating(seed: u64, steps: usize, start: Start, open: &[Item]) {
+    let violations = run(seed, steps, start);
+    let fresh: Vec<String> = violations
+        .iter()
+        .filter(|violation| !open.contains(&violation.item))
+        .map(|violation| format!("{:?}: {}", violation.item, violation.text))
+        .collect();
+    assert!(
+        fresh.is_empty(),
+        "seed={seed} steps={steps} start={start:?}: invariants broken:\n  {}",
+        fresh.join("\n  ")
+    );
 }
 
 fn env_number<Number: std::str::FromStr>(name: &str) -> Option<Number> {
     std::env::var(name).ok().and_then(|raw| raw.parse().ok())
 }
 
+fn seeds_from_env() -> Vec<u64> {
+    match env_number("MWT_CONV_SEED") {
+        Some(seed) => vec![seed],
+        None => DEFAULT_SEEDS.to_vec(),
+    }
+}
+
 #[test]
 fn random_edits_and_cut_sessions_converge() {
     let steps = env_number("MWT_CONV_STEPS").unwrap_or(DEFAULT_STEPS);
-    let seeds: Vec<u64> = match env_number("MWT_CONV_SEED") {
-        Some(seed) => vec![seed],
-        None => DEFAULT_SEEDS.to_vec(),
-    };
-    for seed in seeds {
-        run(seed, steps);
+    for seed in seeds_from_env() {
+        run_tolerating(seed, steps, Start::Copied, KNOWN_OPEN);
+    }
+}
+
+#[test]
+fn separately_created_devices_converge() {
+    let steps = env_number("MWT_CONV_STEPS").unwrap_or(DEFAULT_STEPS);
+    for seed in seeds_from_env() {
+        run_tolerating(seed, steps, Start::Separate, KNOWN_OPEN);
     }
 }
 
 #[test]
 fn convergence_quick_fixed_seed() {
-    run(42, 50);
+    run_tolerating(42, 50, Start::Copied, KNOWN_OPEN);
+}
+
+/// The proof the bugs of stage M reproduce: the same runs with no item
+/// tolerated. Red until every slice has removed its item from `KNOWN_OPEN`;
+/// run it with `cargo test -p trade-core without_known_open -- --ignored`.
+#[test]
+#[ignore = "red on purpose until the stage M fixes land; shows which invariants break"]
+fn random_edits_without_known_open_flags_are_red_today() {
+    let steps = env_number("MWT_CONV_STEPS").unwrap_or(DEFAULT_STEPS);
+    let mut report = Vec::new();
+    for start in [Start::Copied, Start::Separate] {
+        for seed in seeds_from_env() {
+            let mut by_item: BTreeMap<Item, usize> = BTreeMap::new();
+            for violation in run(seed, steps, start) {
+                eprintln!(
+                    "seed={seed} {start:?} {:?}: {}",
+                    violation.item, violation.text
+                );
+                *by_item.entry(violation.item).or_default() += 1;
+            }
+            if !by_item.is_empty() {
+                report.push(format!("seed={seed} start={start:?}: {by_item:?}"));
+            }
+        }
+    }
+    assert!(
+        report.is_empty(),
+        "invariants broken:\n  {}",
+        report.join("\n  ")
+    );
+}
+
+/// Two devices each add a purchase to the same item before they meet.
+#[test]
+#[ignore = "known bug: purchases live inside the item, the later write wins and one is lost"]
+fn parallel_purchases_to_one_item_both_survive() {
+    assert_eq!(catalog::two_purchases_to_one_item(), 2);
+}
+
+fn violations_of(items: &[Item], vault: &UnlockedVault) -> Vec<String> {
+    catalog::invariants(vault, &Ledger::default())
+        .into_iter()
+        .filter(|violation| items.contains(&violation.item))
+        .map(|violation| violation.text)
+        .collect()
+}
+
+/// One device moves an account under a wallet, the other deletes that
+/// (empty) wallet: the account is left under a missing parent.
+#[test]
+#[ignore = "known bug 25: a merge can leave an account under a missing parent"]
+fn move_beside_delete_keeps_the_account_tree_valid() {
+    use super::tests::settle;
+    let (_dir, mut left, mut right) = two_devices();
+    let first = store(&mut left, "bank 1", StoreKind::Bank, None);
+    let second = store(&mut left, "bank 2", StoreKind::Bank, None);
+    let savings = left
+        .create_store_with(
+            "sv1",
+            StoreKind::Bank,
+            "#000",
+            "",
+            Some(first),
+            StoreExtras {
+                sub_type: Some(SubType::Savings),
+                binding: Some(Binding::Asset(usd())),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id;
+    settle(&mut left, &mut right);
+    left.move_store(&savings, Some(&second)).unwrap();
+    right.delete_store(&second).unwrap();
+    settle(&mut left, &mut right);
+    for device in [&left, &right] {
+        assert_eq!(
+            violations_of(&[Item::AccountTree25], device),
+            Vec::<String>::new()
+        );
+    }
+}
+
+/// One device changes the currency of a bare event, the other buys in it.
+#[test]
+#[ignore = "known bug 116: a merge can leave a purchase at rate 1 in another currency"]
+fn currency_change_beside_a_purchase_keeps_the_rates_valid() {
+    use super::tests::settle;
+    let (_dir, mut left, mut right) = two_devices();
+    let event = left
+        .create_shared_event(SharedEventDraft {
+            title: "trip".into(),
+            currency: "usd".into(),
+            participants: vec![guest("ann".into())],
+            ..Default::default()
+        })
+        .unwrap()
+        .event;
+    settle(&mut left, &mut right);
+    left.update_shared_event(
+        &event.id,
+        SharedEventDraft {
+            title: event.title.clone(),
+            currency: "eur".into(),
+            rounding_step: Some(event.rounding_step),
+            organizer: event.organizer.clone(),
+            i_participate: event.i_participate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let buyer = right.doc.shared_events[0].participants[0].id.clone();
+    right
+        .add_shared_purchase(
+            &event.id,
+            SharedPurchaseDraft {
+                new_item_title: Some("taxi".into()),
+                buyer,
+                qty: amount("1"),
+                amount: amount("10"),
+                currency: "usd".into(),
+                price_mode: PriceMode::Total,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    settle(&mut left, &mut right);
+    for device in [&left, &right] {
+        assert_eq!(
+            violations_of(&[Item::EventCurrency116], device),
+            Vec::<String>::new()
+        );
+    }
 }
