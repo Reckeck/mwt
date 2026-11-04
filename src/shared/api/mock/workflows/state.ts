@@ -49,6 +49,7 @@ export function save(id: string | null, draft: WorkflowDraft): SavedWorkflow {
       updated_at: stamp,
       react_to_workflows: draft.react_to_workflows,
       max_amount: draft.max_amount,
+      max_amount_currency: capCurrency(draft),
       versions: [],
       tests: [],
     }
@@ -59,8 +60,17 @@ export function save(id: string | null, draft: WorkflowDraft): SavedWorkflow {
   if (workflow.graph !== draft.graph) {
     workflow.versions = [...workflow.versions, { saved_at: workflow.updated_at, graph: workflow.graph }].slice(-20)
   }
-  Object.assign(workflow, { ...draft, name: draft.name.trim(), updated_at: stamp, draft: undefined })
+  Object.assign(workflow, {
+    ...draft,
+    name: draft.name.trim(),
+    max_amount_currency: capCurrency(draft),
+    updated_at: stamp,
+    draft: undefined,
+  })
   return { workflow, issues }
 }
+
+/** The backend labels a cap with the base of whoever saves it; the mock device is in USD. */
+const capCurrency = (draft: WorkflowDraft) => (draft.max_amount ? draft.max_amount_currency || 'usd' : null)
 
 export const sameScope = (left: VarScope, right: VarScope) => JSON.stringify(left) === JSON.stringify(right)

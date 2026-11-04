@@ -350,7 +350,8 @@ impl UnlockedVault {
     }
 
     /// The purchase of an asset: the first "Acquire" into the property
-    /// (its unit price is in the base currency of that moment), else the old
+    /// (its unit price is in the currency its label names, else the base of
+    /// the reader), else the old
     /// purchase fields of the form.
     pub(crate) fn purchase_of(&self, store: &Store, asset_key: &str) -> Option<PropertyPurchase> {
         let first = self
@@ -361,18 +362,25 @@ impl UnlockedVault {
                 Transaction::Topup(inner)
                     if inner.store_id == store.id && inner.asset.key() == asset_key =>
                 {
-                    let price = inner.price.price_base.or(inner.details.unit_price)?;
-                    Some((inner.meta.timestamp.as_str(), price))
+                    // A base price is in the currency its author labelled it with.
+                    let (price, label) = match inner.price.price_base {
+                        Some(price) => (price, inner.price.price_base_currency.as_deref()),
+                        None => (inner.details.unit_price?, None),
+                    };
+                    Some((inner.meta.timestamp.as_str(), price, label))
                 }
                 _ => None,
             })
             .min_by(|left, right| left.0.cmp(right.0));
-        if let Some((timestamp, unit_price)) = first {
+        if let Some((timestamp, unit_price, label)) = first {
             let date = calendar::Calendar::new("UTC").date_of(secs_or_now(timestamp));
             return Some(PropertyPurchase {
                 date: date.format("%Y-%m-%d").to_string(),
                 unit_price,
-                currency: self.base_and_fx().0,
+                currency: label
+                    .map(|code| code.trim().to_lowercase())
+                    .filter(|code| !code.is_empty())
+                    .unwrap_or_else(|| self.base_and_fx().0),
                 from_operation: true,
             });
         }
@@ -894,5 +902,57 @@ mod tests {
         });
         assert_eq!(vault.manual_price_usd("asset:POINTS"), Some(amount("0.5")));
         assert!(vault.valuation_curve("asset:POINTS").is_none());
+    }
+
+    /// A purchase priced by another device is signed with the currency that
+    /// device wrote, not with the base of the reader (26-c).
+    #[test]
+    fn a_purchase_is_signed_with_the_currency_of_its_label() {
+        let (_dir, mut vault) = empty_vault();
+        vault.set_base_currency("usd");
+        let flat = property(&mut vault, PropertyCategory::Flat);
+        let mut tx = Transaction::Topup(TopupTx {
+            meta: meta("bought", &["income_other"]),
+            store_id: flat.clone(),
+            asset: thing(),
+            amount: amount("1"),
+            fee: None,
+            from: None,
+            details: KindDetails {
+                unit_price: Some(amount("9000000")),
+                ..KindDetails::default()
+            },
+            price: PriceStamp {
+                price_usd: Some(amount("100000")),
+                price_base: Some(amount("9000000")),
+                price_base_currency: Some("rub".into()),
+                fx_override: None,
+            },
+        });
+        at(&mut tx, "2020-01-10T00:00:00Z");
+        vault.add_transaction(tx).unwrap();
+        let store = vault.find_store(&flat).unwrap().clone();
+        let purchase = vault.purchase_of(&store, &thing().key()).unwrap();
+        assert_eq!(purchase.unit_price, amount("9000000"));
+        assert_eq!(purchase.currency, "rub");
+        assert!(purchase.from_operation);
+    }
+
+    /// An old operation (no label) and the form field keep the reader's base.
+    #[test]
+    fn a_purchase_without_a_label_is_signed_with_the_readers_base() {
+        let (_dir, mut vault) = empty_vault();
+        vault.set_base_currency("eur");
+        let flat = property(&mut vault, PropertyCategory::Flat);
+        buy(&mut vault, &flat, "100000", "2020-01-10T00:00:00Z");
+        let store = vault.find_store(&flat).unwrap().clone();
+        let purchase = vault.purchase_of(&store, &thing().key()).unwrap();
+        assert_eq!(purchase.currency, "eur");
+        // Completing the operation labels the base price with the author's base.
+        let stamp = match &vault.doc.transactions[0] {
+            Transaction::Topup(inner) => inner.price.clone(),
+            other => panic!("unexpected {other:?}"),
+        };
+        assert_eq!(stamp.price_base_currency.as_deref(), Some("eur"));
     }
 }

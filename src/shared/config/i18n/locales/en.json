@@ -3444,7 +3444,7 @@
   "workflow.settings.description": "Description",
   "workflow.settings.cap": "Cap per run, {base}",
   "workflow.settings.noCap": "no cap",
-  "workflow.settings.capHint": "A run that would move or spend more does not run at all.",
+  "workflow.settings.capHint": "A run that would move or spend more does not run at all. A run with no price or rate to check it against is refused too.",
   "workflow.settings.react": "React to other workflows' operations",
   "workflow.settings.reactHint": "Usually off, so workflows never fire each other in circles. A workflow never reacts to its own operations.",
   "workflow.settings.issues": "Check",

@@ -35,7 +35,7 @@ const emit = defineEmits<{ lesson: [id: string] }>()
 const help = defineModel<boolean>('help', { required: true })
 
 const { selectedNode, selectedDef, wiredFrom, flowLinks, dataAfter, runsWhen, setParam, setLabel, unwire } = useSelection(props.editor)
-const { lesson, workflow, description, maxAmount, react, dirty } = props.doc
+const { lesson, workflow, description, maxAmount, capCurrency, react, dirty } = props.doc
 const { report } = props.run
 
 /** An empty flow port in the inspector: the node search, joined to that port. */
@@ -81,7 +81,7 @@ function addFlow(port: string, side: 'in' | 'out', event: MouseEvent) {
         v-model:react="react"
         :issues="props.issues"
         :redundant="props.redundant.count.value"
-        :base="props.base"
+        :base="capCurrency || props.base"
         @focus="props.editor.focusNode"
         @drop-redundant="props.redundant.removeAll"
       >

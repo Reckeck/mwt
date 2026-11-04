@@ -1274,4 +1274,47 @@ mod tests {
         assert_eq!(status[0].spent, amount("1000"));
         assert_eq!(status[0].remaining, amount("4000"));
     }
+
+    /// 26-b: a typed monthly figure fixes the currency it was typed in, so a
+    /// device with another base does not read the number as its own money.
+    #[test]
+    fn saving_a_manual_figure_fixes_the_budget_currency() {
+        use crate::ipc_contract::UpdateSettingsInput;
+        let (_dir, mut vault, _card) = budget_vault();
+        vault.set_base_currency("rub");
+        assert!(vault.doc.settings.budget_currency.is_empty());
+        vault
+            .update_settings(UpdateSettingsInput {
+                manual_income: Some(amount("3000")),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(vault.doc.settings.budget_currency, "rub");
+        // The base moves on another device; the figure stays in rubles.
+        vault.set_base_currency("usd");
+        assert_eq!(vault.budget_currency(), "rub");
+    }
+
+    #[test]
+    fn the_budget_currency_is_not_touched_without_a_manual_figure() {
+        use crate::ipc_contract::UpdateSettingsInput;
+        let (_dir, mut vault, _card) = budget_vault();
+        vault
+            .update_settings(UpdateSettingsInput {
+                savings_rate: Some(amount("0.2")),
+                manual_income: Some(Amount::ZERO),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(vault.doc.settings.budget_currency.is_empty());
+        // An explicit choice is kept.
+        vault.doc.settings.budget_currency = "thb".into();
+        vault
+            .update_settings(UpdateSettingsInput {
+                manual_expenses: Some(amount("100")),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(vault.doc.settings.budget_currency, "thb");
+    }
 }

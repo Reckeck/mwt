@@ -178,19 +178,39 @@ impl Executor<'_> {
         if self.actions > MAX_ACTIONS {
             return Err(Halt::Fail(format!("more than {MAX_ACTIONS} actions in one run")).into());
         }
-        let value = txs
-            .iter()
-            .fold(Amount::ZERO, |sum, tx| sum + self.vault.wf_outflow_base(tx));
-        if let Some(cap) = self.ctx.max_amount
-            && self.moved + value > cap
-        {
-            let base = self.vault.base_currency().to_uppercase();
-            return Err(Halt::Fail(format!(
-                "the run would move {} {base}, over its cap of {cap} {base}",
-                (self.moved + value).round(2)
-            ))
-            .into());
-        }
+        let value = match self.ctx.max_amount {
+            // With a cap, a move whose value is unknown is refused, never counted as nothing.
+            Some(cap) => {
+                let currency = self
+                    .ctx
+                    .max_amount_currency
+                    .clone()
+                    .unwrap_or_else(|| self.vault.base_currency().to_string());
+                let mut sum = Amount::ZERO;
+                for tx in &txs {
+                    let Some(part) = self.vault.wf_outflow_in(tx, &currency) else {
+                        return Err(Halt::Fail(format!(
+                            "no price or rate to check the cap of {cap} {}",
+                            currency.to_uppercase()
+                        ))
+                        .into());
+                    };
+                    sum += part;
+                }
+                if self.moved + sum > cap {
+                    return Err(Halt::Fail(format!(
+                        "the run would move {} {code}, over its cap of {cap} {code}",
+                        (self.moved + sum).round(2),
+                        code = currency.to_uppercase()
+                    ))
+                    .into());
+                }
+                sum
+            }
+            None => txs
+                .iter()
+                .fold(Amount::ZERO, |sum, tx| sum + self.vault.wf_outflow_base(tx)),
+        };
         let saved = self.vault.wf_insert(txs, self.now())?;
         self.moved += value;
         self.created.extend(saved.iter().cloned());
@@ -657,6 +677,8 @@ impl Executor<'_> {
         ctx.run_id.clone_from(&self.ctx.run_id);
         ctx.mode = self.ctx.mode;
         ctx.max_amount = self.ctx.max_amount;
+        ctx.max_amount_currency
+            .clone_from(&self.ctx.max_amount_currency);
         ctx.call_depth = self.ctx.call_depth + 1;
         ctx.trigger_label = format!("call from {}", self.ctx.workflow_name);
         ctx.trigger_values = std::collections::BTreeMap::from([("payload".to_string(), payload)]);

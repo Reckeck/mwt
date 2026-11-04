@@ -73,5 +73,6 @@ export function importWorkflow(input: Record<string, unknown> | undefined) {
     graph: JSON.stringify(swap(file.graph ?? emptyGraph(), map)),
     react_to_workflows: false,
     max_amount: null,
+    max_amount_currency: null,
   })
 }

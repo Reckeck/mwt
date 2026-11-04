@@ -67,5 +67,6 @@ export function fromTemplate(input: WorkflowFromTemplateInput): SavedWorkflow {
     graph: JSON.stringify(graph),
     react_to_workflows: false,
     max_amount: null,
+    max_amount_currency: null,
   })
 }

@@ -76,6 +76,7 @@ export function seedShare(from: string, to: string, deposits: Transaction[]) {
     updated_at: created,
     react_to_workflows: false,
     max_amount: null,
+    max_amount_currency: null,
     versions: [],
     tests: [],
   }

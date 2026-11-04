@@ -57,6 +57,9 @@ pub struct WorkflowDraft {
     pub react_to_workflows: bool,
     #[serde(default)]
     pub max_amount: Option<Amount>,
+    /// Currency of the cap; empty = the base of the device that saves it.
+    #[serde(default)]
+    pub max_amount_currency: Option<String>,
 }
 
 /// A saved workflow with what is wrong with its graph.
@@ -374,17 +377,27 @@ impl UnlockedVault {
             .collect()
     }
 
-    /// What an operation takes out of an account, in the base currency.
+    /// What an operation takes out of an account, in the base currency; zero
+    /// when there is no price or rate (the caller has no cap to enforce).
     pub(crate) fn wf_outflow_base(&self, tx: &Transaction) -> Amount {
+        let base = self.base_and_fx().0;
+        self.wf_outflow_in(tx, &base).unwrap_or(Amount::ZERO)
+    }
+
+    /// What an operation takes out of an account, in `currency`. `None` when
+    /// the asset has no price or the currency no rate: the value is unknown,
+    /// which is not the same as nothing.
+    pub(crate) fn wf_outflow_in(&self, tx: &Transaction, currency: &str) -> Option<Amount> {
         let Some(out) = outflow(tx) else {
-            return Amount::ZERO;
+            return Some(Amount::ZERO);
         };
+        if out.asset.is_fiat() && out.asset.symbol.eq_ignore_ascii_case(currency.trim()) {
+            return Some(out.amount);
+        }
         let book = self.rate_book();
         let secs = secs_or_now(&tx.meta().timestamp);
-        let (base, _) = self.base_and_fx();
         book.price_at(&out.asset.key(), secs)
-            .and_then(|usd| book.convert(out.amount * usd, "usd", &base, secs))
-            .unwrap_or(Amount::ZERO)
+            .and_then(|usd| book.convert(out.amount * usd, "usd", currency, secs))
     }
 
     /// Check money and rules, then add the operations; all of them or none.
@@ -655,6 +668,18 @@ impl UnlockedVault {
         Ok((graph, issues))
     }
 
+    /// The currency a saved cap is in: the one chosen, else the base of the
+    /// device that saves it. No cap, no currency.
+    fn cap_currency(&self, draft: &WorkflowDraft) -> Option<String> {
+        draft.max_amount?;
+        let chosen = draft
+            .max_amount_currency
+            .as_deref()
+            .map(|code| code.trim().to_lowercase())
+            .filter(|code| !code.is_empty());
+        Some(chosen.unwrap_or_else(|| self.base_currency().trim().to_lowercase()))
+    }
+
     /// Create (`id` = `None`) or update a workflow. A changed graph keeps the
     /// one before it among the versions; one switched on starts watching from now.
     pub fn save_workflow(
@@ -666,6 +691,7 @@ impl UnlockedVault {
         let (graph, issues) = Self::check_draft(&draft)?;
         let graph_json = graph.to_json();
         let stamp = crate::calendar::iso(now);
+        let cap_currency = self.cap_currency(&draft);
         let (workflow, arm) = match id {
             None => {
                 let workflow = Workflow {
@@ -678,6 +704,7 @@ impl UnlockedVault {
                     updated_at: stamp,
                     react_to_workflows: draft.react_to_workflows,
                     max_amount: draft.max_amount,
+                    max_amount_currency: cap_currency,
                     versions: Vec::new(),
                     tests: Vec::new(),
                     draft: None,
@@ -713,6 +740,7 @@ impl UnlockedVault {
                 workflow.updated_at = stamp;
                 workflow.react_to_workflows = draft.react_to_workflows;
                 workflow.max_amount = draft.max_amount;
+                workflow.max_amount_currency = cap_currency;
                 (workflow.clone(), arm)
             }
         };
@@ -860,6 +888,7 @@ impl UnlockedVault {
             graph: version.graph.clone(),
             react_to_workflows: workflow.react_to_workflows,
             max_amount: workflow.max_amount,
+            max_amount_currency: workflow.max_amount_currency.clone(),
         };
         self.save_workflow(Some(id), draft, now)
     }
@@ -939,6 +968,7 @@ impl UnlockedVault {
             graph: exported.graph.to_string(),
             react_to_workflows: false,
             max_amount: None,
+            max_amount_currency: None,
         };
         self.save_workflow(None, draft, now)
     }
@@ -1133,7 +1163,7 @@ impl UnlockedVault {
             ));
         }
         let mut ctx = RunContext::new(&workflow.id, &workflow.name, &wait.node_id, now, zone);
-        ctx.max_amount = workflow.max_amount;
+        ctx.set_cap(&workflow);
         ctx.trigger_label = format!("{} → {}", wait.trigger, if yes { "yes" } else { "no" });
         ctx.run_key = Some(run_key);
         ctx.resume = Some(Resume {
@@ -1181,7 +1211,7 @@ impl UnlockedVault {
 
     fn context(&self, workflow: &Workflow, trigger: &Node, now: i64, zone: &str) -> RunContext {
         let mut ctx = RunContext::new(&workflow.id, &workflow.name, &trigger.id, now, zone);
-        ctx.max_amount = workflow.max_amount;
+        ctx.set_cap(workflow);
         ctx
     }
 
@@ -1594,12 +1624,15 @@ impl UnlockedVault {
         let graph = Graph::parse(graph_json)?;
         let trigger = pick_trigger(&graph, trigger_node)?;
         let mut sandbox = self.sandbox();
-        let (id, name, max_amount) = match workflow_id.and_then(|id| self.workflow(id).ok()) {
-            Some(workflow) => (workflow.id, workflow.name, workflow.max_amount),
-            None => ("draft".to_string(), "Черновик".to_string(), None),
+        let known = workflow_id.and_then(|id| self.workflow(id).ok());
+        let (id, name) = match &known {
+            Some(workflow) => (workflow.id.clone(), workflow.name.clone()),
+            None => ("draft".to_string(), "Черновик".to_string()),
         };
         let mut ctx = RunContext::new(&id, &name, &trigger.id, now, zone);
-        ctx.max_amount = max_amount;
+        if let Some(workflow) = &known {
+            ctx.set_cap(workflow);
+        }
         ctx.mode = RunMode::DryRun;
         ctx.trigger_label = trigger_label(&trigger.kind, "(emulation)");
         ctx.trigger_values = self.sample_trigger_values(&trigger, now, zone);
@@ -1959,7 +1992,7 @@ impl UnlockedVault {
                 continue;
             }
             let mut ctx = RunContext::new(&workflow.id, &workflow.name, &wait.node_id, now, zone);
-            ctx.max_amount = workflow.max_amount;
+            ctx.set_cap(&workflow);
             ctx.trigger_label = format!("{} → wait", wait.trigger);
             // A question nobody answered in time counts as «No».
             let port = match wait.kind {

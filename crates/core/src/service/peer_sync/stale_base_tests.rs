@@ -72,6 +72,7 @@ fn devices_with_incomplete_workflow() -> (tempfile::TempDir, UnlockedVault, Unlo
                 graph: incomplete_graph(),
                 react_to_workflows: false,
                 max_amount: None,
+                max_amount_currency: None,
             },
             crate::calendar::now_secs(),
         )

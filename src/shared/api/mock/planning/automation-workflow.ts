@@ -110,6 +110,7 @@ export function syncWorkflow(automation: Automation) {
     updated_at: iso(now()),
     react_to_workflows: false,
     max_amount: null,
+    max_amount_currency: null,
     versions: [],
     tests: [],
     automation: spec,

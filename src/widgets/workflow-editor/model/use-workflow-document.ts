@@ -40,6 +40,8 @@ export function useWorkflowDocument(
   const active = ref(false)
   const react = ref(false)
   const maxAmount = ref('')
+  /** Currency the stored cap is in; empty for a new or an old cap, which the backend labels on save. */
+  const capCurrency = ref('')
   const loaded = ref(false)
   const savedSnapshot = ref('')
   /** What `Undo the edits` goes back to: the saved workflow, or the start of a new one. */
@@ -91,6 +93,7 @@ export function useWorkflowDocument(
         active.value = stored.active
         react.value = stored.react_to_workflows
         maxAmount.value = stored.max_amount ?? ''
+        capCurrency.value = stored.max_amount_currency ?? ''
         loadGraph(parseGraph(stored.graph))
       } else if (lesson.value) {
         name.value = t('workflow.lesson.workflowName', { title: t(`workflow.lesson.${lesson.value.id}.title`) })
@@ -124,6 +127,7 @@ export function useWorkflowDocument(
     graph: graphJson.value,
     react_to_workflows: react.value,
     max_amount: maxAmount.value.trim() ? maxAmount.value.trim().replace(',', '.') : null,
+    max_amount_currency: capCurrency.value || null,
   }))
 
   function save(onSaved: (id: string) => void) {
@@ -233,6 +237,7 @@ export function useWorkflowDocument(
     active,
     react,
     maxAmount,
+    capCurrency,
     loaded,
     dirty,
     history,

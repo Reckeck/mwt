@@ -28,9 +28,14 @@ pub struct Workflow {
     /// firing each other).
     #[serde(default)]
     pub react_to_workflows: bool,
-    /// Most one run may move, in the base currency; `None` = no cap.
+    /// Most one run may move, in `max_amount_currency`; `None` = no cap.
     #[serde(default)]
     pub max_amount: Option<crate::Amount>,
+    /// Lowercase currency code of `max_amount`, the base of the device that
+    /// set the cap. `None` on a cap from before the label: that one is read
+    /// in the base of the device that runs the workflow.
+    #[serde(default)]
+    pub max_amount_currency: Option<String>,
     /// Earlier graphs, newest last, to compare and restore.
     #[serde(default)]
     pub versions: Vec<GraphVersion>,

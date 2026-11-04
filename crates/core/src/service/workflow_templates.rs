@@ -74,6 +74,7 @@ impl UnlockedVault {
             graph: built.graph,
             react_to_workflows: false,
             max_amount: None,
+            max_amount_currency: None,
         };
         self.save_workflow(None, draft, now)
     }

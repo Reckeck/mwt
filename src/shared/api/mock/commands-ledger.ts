@@ -180,7 +180,7 @@ export const transactionsCommands: MockCommands = {
         asset: entry.asset,
         before: String(entry.total),
         after: String(entry.total),
-        price: { price_usd: null, price_base: null, fx_override: null },
+        price: { price_usd: null, price_base: null, price_base_currency: null, fx_override: null },
       }))
     return resolve({
       store_id: input.store_id,

@@ -666,6 +666,16 @@ impl UnlockedVault {
         if let Some(currency) = input.budget_currency {
             settings.budget_currency = currency.trim().to_lowercase();
         }
+        // The usual monthly figures are numbers "in the budget currency": fix
+        // the currency of whoever types them, so a device with another base
+        // does not read them as its own money. Saved figures stay as they are.
+        let typed_figure = [input.manual_income, input.manual_expenses]
+            .iter()
+            .flatten()
+            .any(|value| value.is_positive());
+        if typed_figure && settings.budget_currency.is_empty() {
+            settings.budget_currency = self.base_currency.trim().to_lowercase();
+        }
         if let Some(mut notifications) = input.notifications {
             for cfg in &mut notifications.categories {
                 cfg.lead_days = cfg.lead_days.min(90);
@@ -1325,6 +1335,7 @@ impl UnlockedVault {
         {
             let (base, _) = self.base_and_fx();
             inner.price.price_base = Some(unit_price);
+            inner.price.price_base_currency = Some(base.clone());
             inner.price.price_usd = self
                 .fx_at(&base, &inner.meta.timestamp)
                 .filter(|rate| !rate.is_zero())
