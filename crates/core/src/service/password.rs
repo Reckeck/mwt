@@ -47,8 +47,10 @@ impl UnlockedVault {
 
     /// Take the password off. The current password is checked against the
     /// file on disk first (a wrong one is `SECRET` and nothing changes); the
-    /// file is then rewritten without encryption. Older copies of the vault
-    /// stay encrypted under the password they were made with.
+    /// file is then rewritten without encryption. The pre-sync copies are
+    /// deleted (they are sealed under the password just removed and nothing
+    /// could open them any more); other backups stay as they are, encrypted
+    /// under the password they were made with.
     pub fn remove_password(&mut self, current_password: &str) -> Result<()> {
         if self.sandbox {
             return Err(Error::Unsupported);
@@ -57,7 +59,11 @@ impl UnlockedVault {
             return Err(Error::InvalidInput("the vault has no password".into()));
         }
         VaultFile::open(&self.path, current_password)?;
-        self.rekey(SealKey::plain(), "")
+        self.rekey(SealKey::plain(), "")?;
+        // The pre-sync copies are sealed under the password just removed: the
+        // restore button would offer a copy nothing can open.
+        self.remove_sync_backups();
+        Ok(())
     }
 
     /// Switch to `key` and write the file under it now; on a failed write the
@@ -150,6 +156,65 @@ mod tests {
         ));
         assert!(UnlockedVault::open(path, "three").unwrap().is_encrypted());
         drop(dir);
+    }
+
+    #[test]
+    fn removing_the_password_deletes_the_copies_sealed_under_it() {
+        let (dir, mut vault) = empty_vault();
+        vault
+            .add_transaction(crate::service::test_support::income_of(
+                &vault.doc.stores[0].id.clone(),
+                crate::service::test_support::usd(),
+                "5",
+                "1",
+                "before the sync",
+            ))
+            .unwrap();
+        vault.sync_backup().unwrap();
+        vault.sync_backup().unwrap();
+        assert!(vault.has_sync_backup());
+        vault.remove_password("pw").unwrap();
+        // The button hides, the copies are gone and a restore says so instead
+        // of failing on the empty password.
+        assert!(!vault.has_sync_backup());
+        let left: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".presync"))
+            .collect();
+        assert!(left.is_empty(), "left behind: {left:?}");
+        assert!(matches!(
+            vault.sync_restore_backup(),
+            Err(Error::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn a_copy_that_the_current_state_cannot_open_is_not_offered() {
+        let (_dir, mut vault) = plain_vault();
+        // An encrypted copy next to a vault without a password: nothing to restore from.
+        let (other_dir, other) = empty_vault();
+        let sealed = std::fs::read(&other.path).unwrap();
+        drop(other);
+        drop(other_dir);
+        let copy = vault.path.with_file_name("v.wallet.presync.bak");
+        std::fs::write(&copy, sealed).unwrap();
+        assert!(copy.exists());
+        assert!(!vault.has_sync_backup());
+        assert!(matches!(
+            vault.sync_restore_backup(),
+            Err(Error::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn setting_a_password_keeps_the_copy_from_before_a_sync_readable() {
+        let (_dir, mut vault) = plain_vault();
+        vault.sync_backup().unwrap();
+        vault.set_password("pw", false).unwrap();
+        assert!(vault.has_sync_backup());
+        vault.sync_restore_backup().unwrap();
+        assert!(vault.is_encrypted());
     }
 
     #[test]
