@@ -1432,6 +1432,8 @@ mod adjustment_tests;
 #[cfg(test)]
 mod clock_tests;
 #[cfg(test)]
+mod convergence_catalog;
+#[cfg(test)]
 mod convergence_tests;
 #[cfg(test)]
 mod envelope_tests;
