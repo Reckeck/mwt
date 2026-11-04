@@ -1482,6 +1482,8 @@ fn applied_of(batch: &SyncBatch) -> AppliedBatch {
 #[cfg(test)]
 mod adjustment_tests;
 #[cfg(test)]
+mod alert_tests;
+#[cfg(test)]
 mod attachment_cleanup_tests;
 #[cfg(test)]
 mod clock_tests;

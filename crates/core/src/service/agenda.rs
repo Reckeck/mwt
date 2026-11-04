@@ -291,8 +291,21 @@ impl UnlockedVault {
 
     // -- price alerts ---------------------------------------------------------
 
+    /// The alerts as the list shows them: a firing recorded for another
+    /// threshold is hidden (`triggered_at` cleared) in the answer only; the
+    /// stored record keeps it.
     pub fn price_alerts(&self) -> Vec<PriceAlert> {
-        self.doc.price_alerts.clone()
+        self.doc
+            .price_alerts
+            .iter()
+            .map(|alert| {
+                let mut shown = alert.clone();
+                if !alert.is_triggered() {
+                    shown.triggered_at = None;
+                }
+                shown
+            })
+            .collect()
     }
 
     fn check_alert(&self, draft: &PriceAlertDraft) -> Result<()> {
@@ -328,6 +341,7 @@ impl UnlockedVault {
             currency: draft.currency.trim().to_lowercase(),
             active: draft.active,
             triggered_at: None,
+            triggered_for: None,
             store_id: draft.store_id,
             repeats: draft.repeats,
         };
@@ -351,6 +365,7 @@ impl UnlockedVault {
         alert.currency = draft.currency.trim().to_lowercase();
         alert.active = draft.active;
         alert.triggered_at = None;
+        alert.triggered_for = None;
         alert.store_id = draft.store_id;
         alert.repeats = draft.repeats;
         let out = alert.clone();
@@ -373,7 +388,7 @@ impl UnlockedVault {
         self.doc
             .price_alerts
             .iter()
-            .filter(|alert| alert.active && (alert.triggered_at.is_none() || alert.repeats))
+            .filter(|alert| alert.active && (!alert.is_triggered() || alert.repeats))
             .map(|alert| alert.asset.clone())
             .filter(|asset| seen.insert(asset.key()))
             .collect()
@@ -390,7 +405,7 @@ impl UnlockedVault {
             .doc
             .price_alerts
             .iter_mut()
-            .filter(|alert| alert.active && (alert.triggered_at.is_none() || alert.repeats))
+            .filter(|alert| alert.active && (!alert.is_triggered() || alert.repeats))
         {
             let Some(usd) = book.price_at(&alert.asset.key(), now) else {
                 continue;
@@ -402,13 +417,15 @@ impl UnlockedVault {
                 AlertCondition::Above => price >= alert.price,
                 AlertCondition::Below => price <= alert.price,
             };
-            if alert.triggered_at.is_some() {
+            if alert.is_triggered() {
                 if !hit {
                     alert.triggered_at = None;
+                    alert.triggered_for = None;
                     rearmed = true;
                 }
             } else if hit {
                 alert.triggered_at = Some(now_iso());
+                alert.triggered_for = Some(alert.fingerprint());
                 fired.push(alert.clone());
             }
         }
@@ -723,6 +740,8 @@ impl UnlockedVault {
     }
 }
 
+#[cfg(test)]
+mod alert_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
