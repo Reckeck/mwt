@@ -78,6 +78,10 @@ const ENABLED_KINDS: &[Edit] = &[
     Edit::FireAlert,
     Edit::ChangeAlertPrice,
     Edit::ConfirmImport,
+    Edit::SetNoticeCategory,
+    Edit::ToggleSystemNotices,
+    Edit::OpenReminderList,
+    Edit::TxWithBasePrice,
 ];
 
 const DEFAULT_SEEDS: &[u64] = &[1, 2, 3, 4, 5];
@@ -140,6 +144,11 @@ pub(super) enum Edit {
     FireAlert,
     ChangeAlertPrice,
     ConfirmImport,
+    // Stage P: where a setting lives.
+    SetNoticeCategory,
+    ToggleSystemNotices,
+    OpenReminderList,
+    TxWithBasePrice,
 }
 
 /// splitmix64: tiny, deterministic, good enough for choosing steps.
@@ -232,6 +241,12 @@ pub(super) struct Ledger {
     pub(super) purchases: Vec<(String, String, String)>,
     /// Two contacts that debt terms pile onto (`add_catalog_stores`).
     pub(super) anchors: Vec<String>,
+    /// Category lead times written through the whole-object form (stage P, 121).
+    pub(super) notice_writes: Vec<(crate::model::notify::NoticeCategory, u16)>,
+    /// The per-device notification switches each device set last, by vault path.
+    pub(super) device_flags: BTreeMap<std::path::PathBuf, (bool, bool)>,
+    /// Incomes with a price in the author's base: (tx id, price in USD).
+    pub(super) base_priced: Vec<(String, crate::Amount)>,
 }
 
 impl Ledger {
@@ -400,7 +415,11 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
         | Edit::SharedPurchaseToItem
         | Edit::FireAlert
         | Edit::ChangeAlertPrice
-        | Edit::ConfirmImport => catalog::apply_catalog_edit(kind, vault, rng, ledger),
+        | Edit::ConfirmImport
+        | Edit::SetNoticeCategory
+        | Edit::ToggleSystemNotices
+        | Edit::OpenReminderList
+        | Edit::TxWithBasePrice => catalog::apply_catalog_edit(kind, vault, rng, ledger),
         Edit::DeleteContact => {
             // The anchors stay: debt terms of the catalog edits pile onto them.
             let ids: Vec<String> = vault
@@ -915,6 +934,11 @@ fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
     let (_dirs, mut devices) = three_devices(start);
     let mut rng = Rng(seed);
     let mut ledger = Ledger::default();
+    // Device 1 is the Russian one with the ruble base, the others use dollars.
+    devices[1].set_base_currency("rub");
+    for device in &mut devices {
+        catalog::seed_rub_rate(device);
+    }
     let trace = std::env::var("MWT_CONV_TRACE").is_ok();
     add_shared_stores(&mut devices, &mut ledger);
     catalog::add_catalog_stores(&mut devices, &mut ledger);
@@ -1079,6 +1103,7 @@ fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
             violations.push(violation);
         }
     }
+    violations.extend(catalog::reminder_text_ping_pong(&mut devices));
     violations
 }
 
@@ -1129,9 +1154,12 @@ fn convergence_quick_fixed_seed() {
     run_tolerating(42, 50, Start::Copied, KNOWN_OPEN);
 }
 
-/// Guard: the same runs with no item tolerated (`KNOWN_OPEN` is empty now, so
-/// this is the strict form of the tests above, with a per-item report).
+/// Guard: the same runs with no item tolerated (the strict form of the tests
+/// above, with a per-item report). Red on purpose while `KNOWN_OPEN` lists
+/// the stage P items, so it is ignored until the last of them is fixed; run it
+/// with `cargo test -p trade-core random_edits_with_no_item -- --ignored`.
 #[test]
+#[ignore = "red on purpose until the stage P fixes (121, 33, 26) land; shows which invariants break"]
 fn random_edits_with_no_item_tolerated_stay_green() {
     let steps = env_number("MWT_CONV_STEPS").unwrap_or(DEFAULT_STEPS);
     let mut report = Vec::new();

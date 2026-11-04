@@ -54,10 +54,26 @@ pub(super) enum Item {
     /// A purchase added to an item next to another device's one is lost
     /// (fixed by protocol 3: every purchase has its own stamp).
     ParallelPurchases,
+    /// 121: one category switch is lost when another device saves the whole
+    /// notification object, and the per-device switches travel.
+    NoticeSettings121,
+    /// 33: an automatic reminder text is rewritten back and forth between
+    /// devices that use different languages.
+    ReminderText33,
+    /// 26: a price stamped in the base currency of one device is read as the
+    /// base currency of another.
+    PriceBase26,
+    // Left for the slice that adds the field they need: 27 (`WorkflowCap27`,
+    // slice 6, needs `Workflow.max_amount_currency`) and 100 (`FlatInflation100`,
+    // slice 7, needs `Settings.inflation_manual`).
 }
 
 /// The items that still reproduce today. Each fix slice removes its own.
-pub(super) const KNOWN_OPEN: &[Item] = &[];
+pub(super) const KNOWN_OPEN: &[Item] = &[
+    Item::NoticeSettings121,
+    Item::ReminderText33,
+    Item::PriceBase26,
+];
 
 #[derive(Clone, Debug)]
 pub(super) struct Violation {
@@ -465,8 +481,131 @@ pub(super) fn apply_catalog_edit(
                 remember_purchases(vault, &event.id, &before, ledger);
             }
         }
+        Edit::SetNoticeCategory => set_notice_category(vault, ledger, number),
+        Edit::ToggleSystemNotices => toggle_system_notices(vault, rng, ledger),
+        Edit::OpenReminderList => {
+            let _ = vault.sync_auto_reminders(REMINDER_NOW, "UTC", device_is_ru(vault));
+        }
+        Edit::TxWithBasePrice => tx_with_base_price(vault, ledger, number),
         _ => {}
     }
+}
+
+/// A fixed "now" so the automatic reminders of every run are the same.
+const REMINDER_NOW: i64 = 1_772_323_200; // 2026-03-01T00:00:00Z
+
+/// Rubles per dollar on every device (`seed_rub_rate`).
+const RUB_PER_USD: i64 = 100;
+
+/// The language of a device follows its base currency: the device with the
+/// ruble base is the Russian one (`run` gives device 1 that base).
+fn device_is_ru(vault: &UnlockedVault) -> bool {
+    vault.base_currency() == "rub"
+}
+
+/// A rate for the second base currency, so a price can be read in either.
+pub(super) fn seed_rub_rate(vault: &mut UnlockedVault) {
+    vault.apply_fx(&[crate::model::vault::FxPoint {
+        currency: "rub".into(),
+        per_usd: amount(&RUB_PER_USD.to_string()),
+        ts: "2020-01-01T00:00:00Z".into(),
+        source: "conv".into(),
+    }]);
+    vault.persist().unwrap();
+}
+
+/// 121: the form sends the whole object; only one category changes in it.
+fn set_notice_category(vault: &mut UnlockedVault, ledger: &mut Ledger, number: usize) {
+    use crate::model::notify::NoticeCategory::{Debt, Goal, Loan, Reminder, Rent, Utilities};
+    let category = [Reminder, Loan, Rent, Utilities, Debt, Goal][number % 6];
+    let mut config = vault.doc.settings.notifications.clone();
+    let mut entry = config.category(category);
+    // Far from every default, and different for every edit.
+    entry.lead_days = u16::try_from(31 + number % 50).unwrap_or(31);
+    match config
+        .categories
+        .iter_mut()
+        .find(|cfg| cfg.category == category)
+    {
+        Some(slot) => *slot = entry.clone(),
+        None => config.categories.push(entry.clone()),
+    }
+    let saved = vault.update_settings(crate::ipc_contract::UpdateSettingsInput {
+        notifications: Some(config),
+        ..Default::default()
+    });
+    if saved.is_ok() {
+        ledger.notice_writes.push((category, entry.lead_days));
+    }
+}
+
+/// 121: the two switches belong to the device that sets them.
+fn toggle_system_notices(vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+    let mut config = vault.doc.settings.notifications.clone();
+    config.system = rng.below(2) == 0;
+    config.hide_details_when_locked = rng.below(2) == 0;
+    let flags = (config.system, config.hide_details_when_locked);
+    let saved = vault.update_settings(crate::ipc_contract::UpdateSettingsInput {
+        notifications: Some(config),
+        ..Default::default()
+    });
+    if saved.is_ok() {
+        ledger.device_flags.insert(vault.path.clone(), flags);
+    }
+}
+
+/// 26: an income whose price in the base currency is written in the base of
+/// the device that entered it.
+fn tx_with_base_price(vault: &mut UnlockedVault, ledger: &mut Ledger, number: usize) {
+    let store_id = vault.doc.stores[0].id.clone();
+    let usd_price = 2 + number % 5;
+    let in_base = if vault.base_currency() == "rub" {
+        usd_price as i64 * RUB_PER_USD
+    } else {
+        usd_price as i64
+    };
+    let mut tx = income_of(&store_id, usd(), "10", &usd_price.to_string(), "based");
+    if let Transaction::Topup(topup) = &mut tx {
+        topup.price.price_base = Some(amount(&in_base.to_string()));
+        topup.meta.timestamp = "2026-02-01T00:00:00Z".into();
+    }
+    if let Ok(saved) = vault.add_transaction(tx) {
+        ledger
+            .base_priced
+            .push((saved.meta().id.clone(), amount(&usd_price.to_string())));
+    }
+}
+
+/// 33: every device opens the reminder list in its own language, twice, with
+/// an exchange after each opening. The second opening must find nothing to
+/// rewrite and the second exchange nothing to send.
+pub(super) fn reminder_text_ping_pong(devices: &mut [UnlockedVault]) -> Vec<Violation> {
+    let mut out = Vec::new();
+    for cycle in 0..2 {
+        let mut rewrote = false;
+        for device in devices.iter_mut() {
+            let ru = device_is_ru(device);
+            rewrote |= device.sync_auto_reminders(REMINDER_NOW, "UTC", ru).unwrap();
+        }
+        let mut sent = false;
+        for _ in 0..3 {
+            for from in 0..devices.len() {
+                for to in 0..devices.len() {
+                    if from != to {
+                        sent |= super::convergence_tests::pull(devices, from, to);
+                    }
+                }
+            }
+        }
+        if cycle == 1 && (rewrote || sent) {
+            found(
+                &mut out,
+                Item::ReminderText33,
+                format!("the second opening of the reminder list rewrote={rewrote} sent={sent}"),
+            );
+        }
+    }
+    out
 }
 
 fn remember_purchases(
@@ -708,7 +847,81 @@ pub(super) fn invariants(vault: &UnlockedVault, ledger: &Ledger) -> Vec<Violatio
     check_natural_keys(vault, &mut out);
     check_shared_events(vault, ledger, &mut out);
     check_staged_imports(vault, &mut out);
+    check_notice_settings(vault, ledger, &mut out);
+    check_base_prices(vault, ledger, &mut out);
     out
+}
+
+/// 121: a switch written on one device is still there once the devices met,
+/// whatever other devices saved around it; the two per-device switches are the
+/// ones that device set.
+fn check_notice_settings(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Violation>) {
+    let config = &vault.doc.settings.notifications;
+    let categories: BTreeSet<String> = ledger
+        .notice_writes
+        .iter()
+        .map(|(category, _)| format!("{category:?}"))
+        .collect();
+    for name in categories {
+        let written: Vec<u16> = ledger
+            .notice_writes
+            .iter()
+            .filter(|(category, _)| format!("{category:?}") == name)
+            .map(|(_, lead)| *lead)
+            .collect();
+        let now = ledger
+            .notice_writes
+            .iter()
+            .find(|(category, _)| format!("{category:?}") == name)
+            .map(|(category, _)| config.category(*category).lead_days);
+        if let Some(now) = now
+            && !written.contains(&now)
+        {
+            found(
+                out,
+                Item::NoticeSettings121,
+                format!("{name}: lead {now} is none of the written {written:?}"),
+            );
+        }
+    }
+    if let Some((system, hide)) = ledger.device_flags.get(&vault.path)
+        && (*system, *hide) != (config.system, config.hide_details_when_locked)
+    {
+        found(
+            out,
+            Item::NoticeSettings121,
+            format!(
+                "this device set system={system} hide={hide}, it has system={} hide={}",
+                config.system, config.hide_details_when_locked
+            ),
+        );
+    }
+}
+
+/// 26: the price of a unit in the reader's base currency is the USD price
+/// converted, not the number another device wrote in its own base.
+fn check_base_prices(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Violation>) {
+    let book = vault.rate_book();
+    let base = vault.base_currency().to_string();
+    let rate = if base == "rub" { RUB_PER_USD } else { 1 };
+    for (id, usd_price) in &ledger.base_priced {
+        let Some(tx) = vault.doc.transactions.iter().find(|tx| &tx.meta().id == id) else {
+            continue;
+        };
+        let secs = crate::pricing::history::secs_or_now(&tx.meta().timestamp);
+        let Some(leg) = tx.legs().into_iter().next() else {
+            continue;
+        };
+        let wanted = *usd_price * amount(&rate.to_string());
+        let got = book.leg_price_in_base(&leg, &base, secs);
+        if got != wanted {
+            found(
+                out,
+                Item::PriceBase26,
+                format!("tx {id}: price in {base} is {got:?}, converted from USD it is {wanted:?}"),
+            );
+        }
+    }
 }
 
 /// 29: nothing in the queue names a fill that is already booked or discarded.
