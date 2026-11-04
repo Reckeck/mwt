@@ -186,7 +186,7 @@ impl UnlockedVault {
                 MineKind::Alert,
                 &alert.id,
                 &name,
-                alert.active && (alert.repeats || alert.triggered_at.is_none()),
+                alert.active && (alert.repeats || !alert.is_triggered()),
             );
             item.amount = Some(alert.price);
             item.asset = Some(alert.asset.clone());
@@ -236,6 +236,7 @@ impl UnlockedVault {
                 alert.active = active;
                 if active {
                     alert.triggered_at = None;
+                    alert.triggered_for = None;
                 }
             }
         }

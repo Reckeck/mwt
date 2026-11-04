@@ -4165,6 +4165,11 @@ type PreviewWarning = { "kind": "negative_balance", store_id: string, asset: Ass
 
 type PriceAlert = { id: string, asset: AssetRef, condition: AlertCondition, price: Amount, currency: string, active: boolean, triggered_at: string | null, 
 /**
+ * The threshold `triggered_at` belongs to ([`PriceAlert::fingerprint`] when it
+ * fired). `None` on a record from an older build: it counts as fired.
+ */
+triggered_for?: string, 
+/**
  * The exchange whose terminal set the alert; `None` for a vault-wide one.
  */
 store_id?: string, 

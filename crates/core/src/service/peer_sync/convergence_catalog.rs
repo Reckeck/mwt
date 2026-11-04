@@ -16,6 +16,7 @@ use crate::model::planning::AssetClass;
 use crate::model::shared_event::{ItemSplit, ME, PriceMode};
 use crate::model::store::{AssetRef, MAX_STORE_DEPTH, StoreKind, StoreScope};
 use crate::model::transaction::Transaction;
+use crate::pricing::history::unix_secs;
 use crate::service::StoreExtras;
 use crate::service::allocation::AssetClassTarget;
 use crate::service::contacts::DebtTermsDraft;
@@ -416,6 +417,8 @@ pub(super) fn apply_catalog_edit(
                 },
             );
         }
+        Edit::FireAlert => fire_alert(vault, number),
+        Edit::ChangeAlertPrice => edit_alert(vault, rng),
         Edit::SetAssetClasses => set_asset_classes(vault, rng),
         Edit::UndoLastBatch => undo_last_batch(vault, ledger),
         Edit::SharedPurchaseToItem => {
@@ -464,6 +467,78 @@ fn remember_purchases(
 
 /// Baskets drawn from three fixed ids, so two devices editing at once edit the
 /// same records; shares add up to 100 on the device that saves them.
+fn alert_draft(price: usize) -> crate::service::PriceAlertDraft {
+    crate::service::PriceAlertDraft {
+        asset: crate::service::test_support::btc(),
+        condition: crate::model::planning::AlertCondition::Above,
+        price: amount(&price.to_string()),
+        currency: "usd".into(),
+        active: true,
+        store_id: None,
+        repeats: false,
+    }
+}
+
+/// A new price lands in this device's cache and the armed alerts are checked.
+/// Prices sit on a small pool of hours, so the cache stays far below its caps
+/// (thinning a bigger one is a different test's business). A price depends
+/// only on its hour: two devices never write one cache record differently.
+fn fire_alert(vault: &mut UnlockedVault, number: usize) {
+    const HOURS: usize = 20;
+    let base = unix_secs("2026-03-01T00:00:00Z").unwrap();
+    let hour = i64::try_from(number % HOURS).unwrap_or(0);
+    let stamp = chrono::DateTime::from_timestamp(base + hour * 3600, 0)
+        .unwrap()
+        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    vault.apply_prices(&[crate::model::vault::PricePoint {
+        asset_key: crate::service::test_support::btc().key(),
+        value_usd: amount(&(90_000 + hour * 2_000).to_string()),
+        ts: stamp,
+        source: "conv".into(),
+        change_24h_pct: None,
+    }]);
+    vault.check_alerts(base + 3600 * HOURS as i64 + 60).unwrap();
+}
+
+/// Creates the one alert the harness plays with, then moves its threshold.
+fn edit_alert(vault: &mut UnlockedVault, rng: &mut Rng) {
+    let price = 90_000 + rng.below(40_000);
+    let id = vault
+        .doc
+        .price_alerts
+        .iter()
+        .map(|alert| alert.id.clone())
+        .min();
+    match id {
+        Some(id) => {
+            vault.update_price_alert(&id, alert_draft(price)).unwrap();
+        }
+        None => {
+            vault.create_price_alert(alert_draft(price)).unwrap();
+        }
+    }
+}
+
+/// An alert counts as fired on every device or on none. (A firing recorded
+/// for an older threshold stays in `triggered_at`: that is the normal merged
+/// state, `is_triggered` is what must agree.)
+pub(super) fn check_alerts_agree(devices: &[UnlockedVault], context: &str) {
+    for other in &devices[1..] {
+        for alert in &devices[0].doc.price_alerts {
+            let twin = other
+                .doc
+                .price_alerts
+                .iter()
+                .find(|found| found.id == alert.id);
+            assert!(
+                twin.is_some_and(|twin| twin.is_triggered() == alert.is_triggered()),
+                "{context}: alert {} counts as fired on one device only",
+                alert.id
+            );
+        }
+    }
+}
+
 fn set_asset_classes(vault: &mut UnlockedVault, rng: &mut Rng) {
     let ids = ["cls-a", "cls-b", "cls-c"];
     let count = 1 + rng.below(ids.len());
@@ -915,6 +990,7 @@ fn check_shared_events(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Vio
             .purchases
             .iter()
             .any(|purchase| &purchase.id == purchase_id)
+            && !link_moved_or_gone(doc, purchase_id)
         {
             found(
                 out,
@@ -923,6 +999,28 @@ fn check_shared_events(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Vio
             );
         }
     }
+}
+
+/// A payment's `link-` purchase legitimately leaves its place when the payment
+/// is deleted or attached again (it moves to the new item): neither is a loss.
+fn link_moved_or_gone(doc: &crate::model::vault::VaultDoc, purchase_id: &str) -> bool {
+    if !purchase_id.starts_with("link-") {
+        return false;
+    }
+    let payment_exists = doc
+        .transactions
+        .iter()
+        .any(|tx| crate::service::sync_ids::payment_link_id(&tx.meta().id) == purchase_id);
+    let placed_elsewhere = doc
+        .shared_events
+        .iter()
+        .flat_map(|event| &event.items)
+        .any(|item| {
+            item.purchases
+                .iter()
+                .any(|purchase| purchase.id == purchase_id)
+        });
+    !payment_exists || placed_elsewhere
 }
 
 /// The deterministic form of the purchase loss: two devices add one purchase

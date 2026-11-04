@@ -252,7 +252,7 @@ impl UnlockedVault {
             self.doc
                 .price_alerts
                 .iter()
-                .filter(|alert| alert.active && alert.triggered_at.is_none())
+                .filter(|alert| alert.active && !alert.is_triggered())
                 .map(|alert| {
                     let word = match (alert.condition, ru) {
                         (AlertCondition::Above, true) => "выше",
@@ -334,7 +334,7 @@ impl UnlockedVault {
                 .doc
                 .price_alerts
                 .iter_mut()
-                .find(|alert| &alert.id == alert_id && alert.triggered_at.is_none())
+                .find(|alert| &alert.id == alert_id && !alert.is_triggered())
             {
                 let unchanged = seen.get(alert_id).is_none_or(|base| {
                     alert.active
@@ -344,6 +344,7 @@ impl UnlockedVault {
                 });
                 if unchanged {
                     alert.triggered_at = Some(at.clone());
+                    alert.triggered_for = Some(alert.fingerprint());
                 }
             }
         }
@@ -411,6 +412,7 @@ mod tests {
                 currency: "usd".into(),
                 active: true,
                 triggered_at: None,
+                triggered_for: None,
                 store_id: None,
                 repeats: false,
             });
@@ -472,6 +474,7 @@ mod tests {
                 currency: "rub".into(),
                 active: true,
                 triggered_at: None,
+                triggered_for: None,
                 store_id: None,
                 repeats: false,
             });
@@ -511,6 +514,7 @@ mod tests {
                 currency: "usd".into(),
                 active: true,
                 triggered_at: None,
+                triggered_for: None,
                 store_id: None,
                 repeats: false,
             });

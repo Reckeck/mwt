@@ -950,6 +950,7 @@ mod tests {
             currency: "usd".into(),
             active: true,
             triggered_at: None,
+            triggered_for: None,
             store_id: None,
             repeats: false,
         });

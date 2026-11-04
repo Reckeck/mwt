@@ -415,6 +415,7 @@ pub fn full_doc() -> VaultDoc {
         currency: "eur".into(),
         active: true,
         triggered_at: None,
+        triggered_for: None,
         store_id: None,
         repeats: false,
     }];

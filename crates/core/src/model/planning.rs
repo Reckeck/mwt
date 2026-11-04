@@ -617,6 +617,11 @@ pub struct PriceAlert {
     pub currency: String,
     pub active: bool,
     pub triggered_at: Option<String>,
+    /// The threshold `triggered_at` belongs to ([`PriceAlert::fingerprint`] when it
+    /// fired). `None` on a record from an older build: it counts as fired.
+    #[serde(default)]
+    #[ts(optional)]
+    pub triggered_for: Option<String>,
     /// The exchange whose terminal set the alert; `None` for a vault-wide one.
     #[serde(default)]
     #[ts(optional)]
@@ -625,6 +630,33 @@ pub struct PriceAlert {
     /// condition stops holding. Off — fires once and stays triggered.
     #[serde(default)]
     pub repeats: bool,
+}
+
+impl PriceAlert {
+    /// What the alert watches for: asset, condition, price and currency. The
+    /// price is normalized, so 100 and 100.0 are the same threshold.
+    pub fn fingerprint(&self) -> String {
+        let condition = match self.condition {
+            AlertCondition::Above => "above",
+            AlertCondition::Below => "below",
+        };
+        format!(
+            "{}|{condition}|{}|{}",
+            self.asset.key(),
+            self.price.0.normalize(),
+            self.currency.to_lowercase()
+        )
+    }
+
+    /// Fired on the threshold it has now. A firing recorded for another
+    /// threshold (an edit and a firing met on two devices) no longer counts.
+    pub fn is_triggered(&self) -> bool {
+        self.triggered_at.is_some()
+            && self
+                .triggered_for
+                .as_deref()
+                .is_none_or(|stamped| stamped == self.fingerprint())
+    }
 }
 
 /// «If the comment or the contact name contains `pattern`, use `category`.»
