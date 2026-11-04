@@ -20,6 +20,21 @@ pub(crate) struct RepairReport {
     /// R3: ids that money names but no previous value is known here; the
     /// device that has it restores it. Not a change, so not in `is_empty`.
     pub unrestored: Vec<String>,
+    /// 123: tx ids that were linked to several events; only the earliest link stays.
+    pub unlinked_extra: Vec<String>,
+    /// 123: tx ids linked twice in one event, merged into one link.
+    pub merged_links: Vec<String>,
+    /// R7a: (event id, title) of events whose currency went back.
+    pub restored_currency: Vec<(String, String)>,
+    /// R7b: (event id, title) of events whose organizer went back.
+    pub restored_organizer: Vec<(String, String)>,
+    /// R7a: purchases at rate 1 in a currency other than the event's, with no
+    /// single currency to go back to. A computed flag, not a change.
+    pub needs_rate: Vec<String>,
+    /// R7b: events with a settlement that names the organizer as its
+    /// participant but carries no `organizer` field (an older build wrote it).
+    /// A computed flag, not a change.
+    pub organizer_flags: Vec<String>,
     /// Keys of every record the pass changed (R8 included).
     pub records: Vec<String>,
 }
@@ -100,6 +115,44 @@ impl RepairReport {
                 "asset class shares scaled to 100 %".to_string()
             });
         }
+        if !self.unlinked_extra.is_empty() {
+            parts.push(
+                (if ru {
+                    "операция была привязана к двум событиям, лишняя привязка снята"
+                } else {
+                    "an operation was linked to two events, the extra link was removed"
+                })
+                .into(),
+            );
+        }
+        if !self.merged_links.is_empty() {
+            parts.push(
+                (if ru {
+                    "операция была привязана к событию дважды, привязки объединены"
+                } else {
+                    "an operation was linked to one event twice, the links were merged"
+                })
+                .into(),
+            );
+        }
+        if !self.restored_currency.is_empty() {
+            let list = names(&self.restored_currency);
+            parts.push(if ru {
+                format!("валюта события возвращена к той, в которой записаны покупки: {list}")
+            } else {
+                format!("event currency set back to the one its purchases were made in: {list}")
+            });
+        }
+        if !self.restored_organizer.is_empty() {
+            let list = names(&self.restored_organizer);
+            parts.push(if ru {
+                format!("организатор события возвращён к тому, с кем уже велись расчёты: {list}")
+            } else {
+                format!(
+                    "event organizer set back to the one the settlements were made with: {list}"
+                )
+            });
+        }
         if parts.is_empty() {
             return None;
         }
@@ -120,14 +173,18 @@ impl RepairReport {
                 .join(",")
         };
         format!(
-            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}",
+            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}:linked:{}:{}:currency:{}:organizer:{}",
             ids(&self.restored),
             ids(&self.detached_accounts),
             ids(&self.dropped_envelopes),
             self.merged_duplicates.join(","),
             self.merged_cash.join(","),
             self.dropped_class_links,
-            self.normalized_shares
+            self.normalized_shares,
+            self.unlinked_extra.join(","),
+            self.merged_links.join(","),
+            ids(&self.restored_currency),
+            ids(&self.restored_organizer)
         )
     }
 }

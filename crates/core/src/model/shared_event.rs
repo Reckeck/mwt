@@ -208,6 +208,11 @@ pub struct Settlement {
     /// `Reassign`: who took the amount.
     #[serde(default)]
     pub to: Vec<String>,
+    /// The event organizer when this was recorded ([`ME`] or a participant
+    /// id). Settlements of older builds have none.
+    #[serde(default)]
+    #[ts(optional)]
+    pub organizer: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

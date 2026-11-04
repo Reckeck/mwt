@@ -183,6 +183,21 @@ The locked-screen notification snapshot gained a `role_client` field. It lives
 in the notify store outside the vault and is additive (`#[serde(default)]`): an
 old snapshot reads as not a client and still fires.
 
+## Shared events (stage M, catalog 116 and 123)
+
+`Settlement.organizer` is a new optional field (`#[serde(default)]`, no format
+bump). An old device ignores it on read and drops it when it resaves the
+settlement through its typed document, so the organizer of a settlement is
+lost. Rule R7b (the event organizer goes back to the one the settlements name)
+then only flags the event: a settlement without the field is detected, not
+acted on.
+
+Guest contacts (`guest-…`) and payment links (`link-…`) now get deterministic
+ids. An old device keeps writing random uuids for both. The duplicate pass folds
+an old random guest contact into the deterministic one (the participant link and
+the references to the contact move over), and rule R6 keeps one link per
+operation (the earliest one) however the ids look.
+
 ## What an old peer still gets wrong
 
 - It may drop an edited duplicate (the creation-stamp dedupe) and show secrets

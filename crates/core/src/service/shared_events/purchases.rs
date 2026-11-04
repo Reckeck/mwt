@@ -422,7 +422,8 @@ impl UnlockedVault {
             None,
         )?;
         let purchase = Purchase {
-            id: uuid::Uuid::new_v4().to_string(),
+            // One id per payment: two devices that link it make one record.
+            id: crate::service::sync_ids::payment_link_id(&input.tx_id),
             buyer: ME.to_string(),
             qty,
             amount: total,

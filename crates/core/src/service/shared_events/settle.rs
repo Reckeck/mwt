@@ -139,6 +139,7 @@ impl UnlockedVault {
             at: moment(input.at.as_deref())?,
             tx_id: None,
             to: Vec::new(),
+            organizer: Some(event.organizer.clone()),
         };
         if let Some(store_id) = input
             .store_id
@@ -202,6 +203,7 @@ impl UnlockedVault {
                 at: now_iso(),
                 tx_id: None,
                 to: Vec::new(),
+                organizer: Some(ME.to_string()),
             });
         self.persist_event(&input.event_id)?;
         self.shared_event_view(&input.event_id)
@@ -212,6 +214,7 @@ impl UnlockedVault {
     pub fn reassign_shared(&mut self, input: SharedRemainderInput) -> Result<SharedEventView> {
         let event = self.find_shared_event(&input.event_id)?;
         let amount = Self::open_rest(event, &input.participant_id, input.amount)?;
+        let organizer = event.organizer.clone();
         let people = split::sharer_pool(event);
         let targets: Vec<String> = if input.to.is_empty() {
             people
@@ -243,6 +246,7 @@ impl UnlockedVault {
                 at: now_iso(),
                 tx_id: None,
                 to: targets,
+                organizer: Some(organizer),
             });
         self.persist_event(&input.event_id)?;
         self.shared_event_view(&input.event_id)

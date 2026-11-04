@@ -1460,6 +1460,9 @@ mod reminder_tests;
 mod repair;
 mod repair_cash;
 mod repair_classes;
+mod repair_events;
+#[cfg(test)]
+mod repair_events_tests;
 mod repair_natural;
 mod repair_report;
 mod repair_restore;

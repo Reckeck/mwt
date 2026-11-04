@@ -844,6 +844,17 @@ impl Transaction {
         }
     }
 
+    /// [`Self::accounts`], to change a reference in place.
+    pub fn accounts_mut(&mut self) -> Vec<&mut AccountRef> {
+        match self {
+            Self::Topup(tx) => tx.from.iter_mut().collect(),
+            Self::Payment(tx) => tx.to.iter_mut().collect(),
+            Self::Transfer(tx) => vec![&mut tx.from, &mut tx.to],
+            Self::Convert(tx) => vec![&mut tx.from.account, &mut tx.to.account],
+            _ => Vec::new(),
+        }
+    }
+
     /// Every store the transaction books on or names.
     pub fn store_ids(&self) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();

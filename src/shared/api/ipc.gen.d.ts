@@ -5084,7 +5084,12 @@ tx_id: string | null,
 /**
  * `Reassign`: who took the amount.
  */
-to: Array<string>, };
+to: Array<string>, 
+/**
+ * The event organizer when this was recorded ([`ME`] or a participant
+ * id). Settlements of older builds have none.
+ */
+organizer?: string, };
 
 type SettlementKind = "transfer" | "offset" | "write_off" | "reassign";
 

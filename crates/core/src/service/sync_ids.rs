@@ -80,6 +80,16 @@ pub(crate) fn goal_envelope_id(goal_id: &str, store_id: &str, asset_key: &str) -
     format!("goal-{}", sync_safe_id(&[goal_id, store_id, asset_key]))
 }
 
+/// The contact a shared-event guest became (one per event and participant).
+pub(crate) fn guest_contact_id(event_id: &str, participant_id: &str) -> String {
+    format!("guest-{}", sync_safe_id(&[event_id, participant_id]))
+}
+
+/// The purchase that links one vault payment into an event.
+pub(crate) fn payment_link_id(tx_id: &str) -> String {
+    format!("link-{}", sync_safe_id(&[tx_id]))
+}
+
 /// A user asset class named `name` (case-insensitive, trimmed).
 pub(crate) fn asset_class_id(name: &str) -> String {
     format!("cls-{}", sync_safe_id(&[&name.trim().to_lowercase()]))
@@ -135,5 +145,7 @@ mod tests {
         );
         assert!(goal_envelope_id("g", "s", "USD").starts_with("goal-"));
         assert_eq!(asset_class_id("  Bonds "), asset_class_id("bonds"));
+        assert_eq!(guest_contact_id("e1", "p1"), "guest-e1_p1");
+        assert_eq!(payment_link_id("t1"), "link-t1");
     }
 }

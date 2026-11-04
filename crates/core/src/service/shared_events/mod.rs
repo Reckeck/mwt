@@ -18,7 +18,6 @@ use crate::model::shared_event::{
 use crate::model::vault::now_iso;
 
 use super::UnlockedVault;
-use super::contacts::ContactDraft;
 
 mod analytics;
 mod ledger;
@@ -494,9 +493,14 @@ impl UnlockedVault {
             ));
         }
         let details = guest.details.clone().unwrap_or_default();
+        // One contact per guest, whichever device makes it: the id and the
+        // ids of its accounts come from the guest, not from a random source.
+        let contact_id = crate::service::sync_ids::guest_contact_id(event_id, participant_id);
         let mut accounts: Vec<ContactAccount> = Vec::new();
         if !details.phone.is_empty() {
             accounts.push(ContactAccount {
+                id: format!("{contact_id}-phone"),
+                active: true,
                 label: "Телефон".into(),
                 kind: DetailKind::Phone,
                 value: details.phone.clone(),
@@ -505,6 +509,8 @@ impl UnlockedVault {
         }
         if !details.messenger.is_empty() {
             accounts.push(ContactAccount {
+                id: format!("{contact_id}-messenger"),
+                active: true,
                 label: "Мессенджер".into(),
                 kind: DetailKind::Other,
                 value: details.messenger.clone(),
@@ -516,19 +522,36 @@ impl UnlockedVault {
                 .requisites
                 .iter()
                 .cloned()
-                .map(|account| ContactAccount {
-                    // Fresh ids: the contact owns its accounts.
-                    id: String::new(),
+                .enumerate()
+                .map(|(index, account)| ContactAccount {
+                    id: format!("{contact_id}-req{index}"),
+                    active: true,
                     ..account
                 }),
         );
-        let contact = self.create_contact(ContactDraft {
-            name: guest.name.clone(),
-            kind: ContactKind::Person,
-            note: details.note.clone(),
-            accounts,
-            group: String::new(),
-        })?;
+        let contact = match self
+            .doc
+            .contacts
+            .iter()
+            .find(|known| known.id == contact_id)
+        {
+            // Another device made it and the link has not arrived yet.
+            Some(known) => known.clone(),
+            None => {
+                let contact = Contact {
+                    id: contact_id,
+                    name: guest.name.trim().to_string(),
+                    kind: ContactKind::Person,
+                    accounts: Self::clean_accounts(accounts)?,
+                    note: details.note.trim().to_string(),
+                    archived: false,
+                    created_at: now_iso(),
+                    group: String::new(),
+                };
+                self.doc.contacts.push(contact.clone());
+                contact
+            }
+        };
         if let Some(person) = self
             .find_shared_event_mut(event_id)?
             .participants
@@ -733,6 +756,7 @@ impl UnlockedVault {
 mod tests {
     use super::*;
     use crate::model::vault::VaultDoc;
+    use crate::service::contacts::ContactDraft;
     use crate::service::test_support::*;
     use crate::storage::{SnapshotFormat, VaultFile, decode, encode};
 
