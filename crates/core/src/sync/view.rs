@@ -669,6 +669,9 @@ pub fn trim(doc: &mut Value) {
                     .cmp(&time(right))
                     .then_with(|| record_key(coll, left).cmp(&record_key(coll, right)))
             });
+        } else {
+            // Array order differs per device: the key decides which survive.
+            items.sort_by_cached_key(|item| record_key(coll, item));
         }
         if items.len() > cap {
             let extra = items.len() - cap;
@@ -908,5 +911,23 @@ mod tests {
         let log = doc["notification_log"].as_array().expect("log");
         assert_eq!(log.len(), cap);
         assert_eq!(log[0]["delivered_at"], json!("00003"));
+    }
+
+    #[test]
+    fn a_capped_union_keeps_the_same_set_in_any_array_order() {
+        let cap = crate::model::vault::MAX_DISCARDED_IMPORTS;
+        let items: Vec<Value> = (0..cap + 5)
+            .map(|index| json!(format!("k{index:05}")))
+            .collect();
+        let mut forward = json!({ "discarded_imports": items.clone() });
+        let mut reversed =
+            json!({ "discarded_imports": items.into_iter().rev().collect::<Vec<_>>() });
+        trim(&mut forward);
+        trim(&mut reversed);
+        assert_eq!(
+            forward["discarded_imports"].as_array().expect("list").len(),
+            cap
+        );
+        assert_eq!(forward, reversed);
     }
 }

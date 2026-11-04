@@ -241,3 +241,30 @@ fn an_old_peer_without_acks_does_not_resurrect_a_deletion() {
     assert!(left.doc.contacts.is_empty());
     assert!(right.doc.contacts.is_empty());
 }
+
+#[test]
+fn a_revocation_of_this_device_stays_in_the_list_it_passes_on() {
+    let (_dir, mut left, mut right) = two_devices();
+    right
+        .sync_trust_peer("aaaaaaaa-left", "Left", "aa")
+        .unwrap();
+    right.sync_forget_peer("aaaaaaaa-left").unwrap();
+    left.sync_merge_peers(&right.sync_state().peers.clone())
+        .unwrap();
+    assert!(left.sync_state().is_revoked("aa"));
+}
+
+#[test]
+fn an_own_entry_already_in_the_peer_list_does_not_hold_compaction() {
+    let (_dir, mut left, mut right) = two_devices();
+    let key = deleted_long_ago(&mut left, &mut right, 200);
+    left.sync_trust_peer("bbbbbbbb-right", "Right", "bb")
+        .unwrap();
+    // A vault written before the fix: this device sits in its own list.
+    left.sync_trust_peer("aaaaaaaa-left", "Left", "aa").unwrap();
+    let has_it = left.sync_manifest(None).unwrap();
+    left.sync_mark_synced("bbbbbbbb-right", None).unwrap();
+    left.sync_ack_tombstones("bbbbbbbb-right", &has_it).unwrap();
+    left.compact_tombstones();
+    assert!(!left.doc.sync.tombstones.contains_key(&key));
+}
