@@ -470,7 +470,7 @@ impl UnlockedVault {
             None
         } else {
             let terms = crate::model::contact::DebtTerms {
-                id: uuid::Uuid::new_v4().to_string(),
+                id: super::sync_ids::debt_terms_id(&draft.contact_id, &asset),
                 contact_id: draft.contact_id,
                 asset,
                 due_at,

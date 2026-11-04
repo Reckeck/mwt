@@ -122,7 +122,7 @@ impl UnlockedVault {
         for mut class in classes {
             class.name = class.name.trim().to_string();
             if class.id.trim().is_empty() {
-                class.id = uuid::Uuid::new_v4().to_string();
+                class.id = super::sync_ids::asset_class_id(&class.name);
             }
             if class.target_pct.is_negative() || class.target_pct > Amount::from(100) {
                 return Err(Error::InvalidInput(format!(
