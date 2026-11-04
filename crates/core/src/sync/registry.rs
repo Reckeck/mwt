@@ -201,12 +201,59 @@ const ID: &[&str] = &["id"];
 /// and the sync bookkeeping itself.
 pub const LOCAL: &[&str] = &["version", "id", "created_at", "holdings", "sync"];
 
-/// Settings that describe the device, kept in the app config since sync;
-/// the vault's old copies stay but must not travel.
+/// Settings that describe the device and must not travel. The first three
+/// live in the app config since sync, the vault's old copies stay. The dashboard
+/// layout, its period and the pins stay in the vault on purpose: they hold ids
+/// of that vault and the text of saved filters, and the app config is plain JSON.
 pub const DEVICE_SETTINGS: &[&str] = &[
     "display_decimals",
     "fx_refresh_interval_sec",
     "minimize_to_tray",
+    "dashboard_widgets",
+    "dashboard_period",
+    "pinned",
+];
+
+/// Where a setting lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// In the vault and synced: every device of the group sees the same value.
+    Group,
+    /// Belongs to the device: never synced (listed in the `skip` of the
+    /// `settings` record).
+    Device,
+}
+
+/// The decision for every field of `Settings`, so a new field cannot travel
+/// by accident: `every_setting_has_a_scope` is red until it has a line here.
+/// A `Device` name must also be in the `skip` of the `settings` rule
+/// (`device_fields_are_skipped`).
+pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
+    // Moved to the app config; the vault's old copies stay and do not travel.
+    ("display_decimals", Scope::Device),
+    ("fx_refresh_interval_sec", Scope::Device),
+    ("minimize_to_tray", Scope::Device),
+    // Each device's own, kept in its encrypted vault file.
+    ("dashboard_widgets", Scope::Device),
+    ("dashboard_period", Scope::Device),
+    ("pinned", Scope::Device),
+    // Plan parameters, notification rules, inflation and onboarding progress are the group's.
+    ("savings_rate", Scope::Group),
+    ("daily_budget_mode", Scope::Group),
+    ("budget_currency", Scope::Group),
+    ("notifications", Scope::Group),
+    ("budget_configured", Scope::Group),
+    ("onboarding_skipped", Scope::Group),
+    ("inflation_mode", Scope::Group),
+    ("inflation_source", Scope::Group),
+    ("manual_income", Scope::Group),
+    ("manual_expenses", Scope::Group),
+    ("categories_rev", Scope::Group),
+    ("freedom_rate", Scope::Group),
+    ("carry_since", Scope::Group),
+    ("onboarding_checklist_hidden", Scope::Group),
+    ("crypto", Scope::Group),
+    ("schedule_timezone", Scope::Group),
 ];
 
 /// Most days of cached prices and rates the first sync sends.
@@ -429,6 +476,224 @@ mod tests {
                 "{} is not a field",
                 coll.name
             );
+        }
+    }
+
+    fn settings_keys() -> Vec<String> {
+        let settings =
+            serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
+        settings
+            .as_object()
+            .expect("object")
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn every_setting_has_a_scope() {
+        let keys = settings_keys();
+        for name in &keys {
+            assert!(
+                SETTINGS_SCOPE.iter().any(|(field, _)| field == name),
+                "Settings.{name} has no scope: decide Group or Device in sync::registry::SETTINGS_SCOPE"
+            );
+        }
+        for (name, _) in SETTINGS_SCOPE {
+            assert!(
+                keys.contains(&name.to_string()),
+                "SETTINGS_SCOPE names {name}, which is not a field of Settings"
+            );
+        }
+    }
+
+    #[test]
+    fn device_fields_are_skipped() {
+        let skip = find("settings").expect("settings rule").skip;
+        for (name, scope) in SETTINGS_SCOPE {
+            match scope {
+                Scope::Device => assert!(
+                    skip.contains(name),
+                    "Settings.{name} is a device setting but is not in the skip of the settings rule"
+                ),
+                Scope::Group => assert!(
+                    !skip.contains(name),
+                    "Settings.{name} is a group setting but the settings rule skips it"
+                ),
+            }
+        }
+        for name in skip {
+            assert!(
+                SETTINGS_SCOPE
+                    .iter()
+                    .any(|(field, scope)| field == name && *scope == Scope::Device),
+                "the settings rule skips {name}, which SETTINGS_SCOPE does not mark Device"
+            );
+        }
+    }
+
+    type Schema = serde_json::Value;
+
+    /// The schemas a node stands for: `$ref`s followed, `anyOf`/`oneOf`/`allOf`
+    /// flattened (an `Option<T>` is `anyOf [T, null]`).
+    fn variants<'doc>(root: &'doc Schema, node: &'doc Schema) -> Vec<&'doc Schema> {
+        if let Some(target) = node.get("$ref").and_then(|text| text.as_str()) {
+            let found = target
+                .strip_prefix("#/")
+                .and_then(|path| path.split('/').try_fold(root, |at, step| at.get(step)));
+            return found.map_or_else(Vec::new, |inner| variants(root, inner));
+        }
+        let mut out = vec![node];
+        for key in ["anyOf", "oneOf", "allOf"] {
+            if let Some(list) = node.get(key).and_then(|list| list.as_array()) {
+                for inner in list {
+                    out.extend(variants(root, inner));
+                }
+            }
+        }
+        out
+    }
+
+    /// The nodes one step below `nodes`; `*` is any property (a variant of a
+    /// tagged enum).
+    fn step<'doc>(root: &'doc Schema, nodes: &[&'doc Schema], name: &str) -> Vec<&'doc Schema> {
+        nodes
+            .iter()
+            .flat_map(|node| variants(root, node))
+            .filter_map(|variant| variant.get("properties")?.as_object())
+            .flat_map(|props| {
+                props
+                    .iter()
+                    .filter(|(field, _)| name == "*" || field.as_str() == name)
+                    .map(|(_, child)| child)
+            })
+            .collect()
+    }
+
+    fn walk<'doc>(root: &'doc Schema, nodes: &[&'doc Schema], path: &str) -> Vec<&'doc Schema> {
+        path.split('.')
+            .fold(nodes.to_vec(), |at, name| step(root, &at, name))
+    }
+
+    /// The schemas of the items of the arrays `nodes` stand for.
+    fn items<'doc>(root: &'doc Schema, nodes: &[&'doc Schema]) -> Vec<&'doc Schema> {
+        nodes
+            .iter()
+            .flat_map(|node| variants(root, node))
+            .filter_map(|variant| variant.get("items"))
+            .flat_map(|item| variants(root, item))
+            .collect()
+    }
+
+    /// What the model declares for a rule's paths. Records come from the
+    /// schema of the document (every field, whatever the fixture holds); the
+    /// `full_doc` fixture is only used to see that a record has its key.
+    #[test]
+    fn registry_paths_exist_in_the_model() {
+        use super::super::view::record_key;
+        let schema = crate::model::vault::json_schema();
+        let doc = serde_json::to_value(crate::model::fixtures::full_doc()).expect("doc");
+        for coll in COLLECTIONS {
+            let name = coll.name;
+            let top = schema["properties"]
+                .get(name)
+                .unwrap_or_else(|| panic!("{name} is not in the schema"));
+            let top = variants(&schema, top);
+            let records = if matches!(coll.rule, Rule::Single) {
+                top
+            } else {
+                items(&schema, &top)
+            };
+            let records_before_tag = records.clone();
+            // A tagged enum keeps its body one level down (`{"topup": {...}}`).
+            let tagged = coll.key.first().is_some_and(|path| path.starts_with("*."));
+            let bodies = if tagged {
+                step(&schema, &records, "*")
+            } else {
+                records
+            };
+            assert!(
+                !bodies.is_empty(),
+                "{name}: the schema has no record for it"
+            );
+
+            let present = |path: &str| !walk(&schema, &bodies, path).is_empty();
+            let item_has = |item: &Schema, key: &str| {
+                key.split('+')
+                    .filter(|part| !part.is_empty())
+                    .all(|part| !walk(&schema, &[item], part).is_empty())
+            };
+            for path in coll.flatten {
+                assert!(present(path), "{name}: flatten {path} is not in the model");
+            }
+            for path in coll.skip {
+                assert!(present(path), "{name}: skip {path} is not in the model");
+            }
+            for (field, key) in coll.flatten_by {
+                let entries = items(&schema, &walk(&schema, &bodies, field));
+                assert!(
+                    !entries.is_empty(),
+                    "{name}: flatten_by {field} is not an array in the model"
+                );
+                for item in entries {
+                    assert!(
+                        item_has(item, key),
+                        "{name}: flatten_by {field} key {key:?} is not in an item"
+                    );
+                }
+            }
+            for (head, field, key) in coll.flatten_inner {
+                let outer = items(&schema, &walk(&schema, &bodies, head));
+                let inner = items(&schema, &walk(&schema, &outer, field));
+                assert!(
+                    !inner.is_empty(),
+                    "{name}: flatten_inner {head}.{field} is not an array in the model"
+                );
+                for item in inner {
+                    assert!(
+                        item_has(item, key),
+                        "{name}: flatten_inner {head}.{field} key {key:?} is not in an entry"
+                    );
+                }
+            }
+            for (field, array) in coll.derived {
+                assert!(
+                    present(field),
+                    "{name}: derived {field} is not in the model"
+                );
+                assert!(
+                    present(array),
+                    "{name}: derived from {array}, which is not in the model"
+                );
+            }
+            for (array, field) in coll.recomputed {
+                let entries = items(&schema, &walk(&schema, &bodies, array));
+                assert!(
+                    !entries.is_empty(),
+                    "{name}: recomputed {array} is not an array in the model"
+                );
+                assert!(
+                    entries.iter().any(|item| item_has(item, field)),
+                    "{name}: recomputed {array}.{field} is not in the model"
+                );
+            }
+
+            // The key paths are fields of the record (`*` steps into a variant).
+            for path in coll.key {
+                assert!(
+                    !walk(&schema, &records_before_tag, path).is_empty(),
+                    "{name}: key {path} is not in the model"
+                );
+            }
+            // A record of the fixture resolves its key (the fixture does not
+            // fill every collection; the schema check above covers the rest).
+            for record in doc[name].as_array().map_or(&[][..], Vec::as_slice) {
+                assert!(
+                    record_key(coll, record).is_some(),
+                    "{name}: a record has no value at the key {:?}: {record}",
+                    coll.key
+                );
+            }
         }
     }
 
