@@ -261,6 +261,8 @@ fn merge_fields(
         let unknown_array = |fields: &std::collections::BTreeMap<String, Value>| {
             derived::source_of(coll, name).is_some_and(|head| !derived::knows_array(fields, head))
         };
+        let local_silent = local_value.is_none()
+            && cannot_express(coll, &local_fields.fields, &local_stamps, name);
         let take_remote = if remote_value.is_none() && unknown_array(&remote_fields.fields) {
             false
         } else if local_value.is_none() && unknown_array(&local_fields.fields) {
@@ -269,9 +271,7 @@ fn merge_fields(
             && cannot_express(coll, &remote_fields.fields, &remote_stamps, name)
         {
             false
-        } else if local_value.is_none()
-            && cannot_express(coll, &local_fields.fields, &local_stamps, name)
-        {
+        } else if local_silent {
             true
         } else {
             remote_wins(local_stamp, remote_stamp, local_value, remote_value)
@@ -295,7 +295,9 @@ fn merge_fields(
         if take_remote
             && differs
             && (guessed
-                || (edited_here(coll, &local_stamps, name) && unseen_edit(local_stamp, seen)))
+                || (!local_silent
+                    && edited_here(coll, &local_stamps, name)
+                    && unseen_edit(local_stamp, seen)))
         {
             overwrote.push(Overwrite {
                 field: name.clone(),
