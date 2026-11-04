@@ -208,7 +208,8 @@ impl UnlockedVault {
     /// Add the built-in categories of every batch the vault has not had yet
     /// ([`CATEGORY_ADDITIONS`]), skipping keys it already has: archived and
     /// renamed ones stay as they are, and a category deleted after its batch
-    /// arrived does not come back. Returns whether the doc changed.
+    /// arrived (here or on another device, by its tombstone) does not come
+    /// back. Returns whether the doc changed.
     pub(crate) fn ensure_default_categories(&mut self) -> bool {
         let seen = self.doc.settings.categories_rev;
         if seen >= CATEGORIES_REV {
@@ -228,6 +229,15 @@ impl UnlockedVault {
                     .categories
                     .iter()
                     .any(|category| category.key == builtin.key)
+            })
+            // Deleted on a device whose edit reached this one: a late update
+            // must not bring it back with a stamp newer than the tombstone.
+            .filter(|builtin| {
+                !self
+                    .doc
+                    .sync
+                    .tombstones
+                    .contains_key(&format!("categories:{}", builtin.key))
             })
             .collect();
         self.doc.categories.extend(missing);
@@ -323,7 +333,12 @@ mod tests {
                 .any(|category| category.key == "coupons")
         );
         // Only the batch's keys come back, not other deleted built-ins.
+        // Both as a vault from before the batch has them: missing, with no
+        // tombstone, so `taxi` is held back by the batch and not by the
+        // tombstone check (that case is in `stale_base_tests`).
         vault.delete_category("taxi").unwrap();
+        vault.doc.sync.tombstones.remove("categories:coupons");
+        vault.doc.sync.tombstones.remove("categories:taxi");
         vault.doc.settings.categories_rev = 0;
         assert!(vault.ensure_default_categories());
         assert!(
