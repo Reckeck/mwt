@@ -2,25 +2,29 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 
-import { INFLATION_OVERVIEW_KEY } from '@/entities/currency'
+import { INFLATION_OVERVIEW_KEY, useInflationOverview } from '@/entities/currency'
 import { notify } from '@/shared/lib/notify'
 import { useSettingsStore } from '@/shared/store/settings'
 
 /**
- * The user's flat rates (`AppSettings.inflation`): an editable copy of
- * `code → percent`, written on every change. They stay outside the vault, so
- * they work locked too, and back up Auto before the first reading.
+ * The group's flat rates (`Settings.inflation_manual` over the shipped table,
+ * read through the overview): an editable copy of `code → percent`, written on
+ * every change. They live in the vault and sync, so every device of the group
+ * computes with the same table; they back up Auto before the first reading.
  */
 export function useManualInflation() {
   const { t } = useI18n()
   const settings = useSettingsStore()
   const queryClient = useQueryClient()
+  const { query } = useInflationOverview()
 
   const table = ref<Record<string, string>>({})
   watch(
-    () => settings.app?.inflation,
-    (saved) => {
-      table.value = Object.fromEntries(Object.entries(saved ?? {}).map(([code, rate]) => [code, String(rate)]))
+    () => query.data.value,
+    (rows) => {
+      table.value = Object.fromEntries(
+        (rows ?? []).filter((row) => row.manual != null).map((row) => [row.currency, String(row.manual)]),
+      )
     },
     { immediate: true, deep: true },
   )
@@ -33,7 +37,7 @@ export function useManualInflation() {
       if (code && Number.isFinite(value)) clean[code] = String(value)
     }
     try {
-      await settings.updateApp({ inflation: clean })
+      await settings.updateVault({ inflation_manual: clean })
       if (!quiet) notify.saved()
       for (const queryKey of [['report'], INFLATION_OVERVIEW_KEY]) void queryClient.invalidateQueries({ queryKey })
     } catch (err) {

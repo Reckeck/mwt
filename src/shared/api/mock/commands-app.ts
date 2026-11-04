@@ -7,7 +7,15 @@ import type { MockCommands } from './core'
 import { mockAutostart, mockNotices, mockTransactions } from './demo'
 import { mockConflict, mockRecents } from './commands-vault-files'
 import { leaveSandbox } from './sandbox-state'
-import { mockAppSettings, mockCurrencies, mockInfo, mockPassword, mockSettings, mockStatus } from './vault-data'
+import {
+  SHIPPED_INFLATION,
+  mockAppSettings,
+  mockCurrencies,
+  mockInfo,
+  mockPassword,
+  mockSettings,
+  mockStatus,
+} from './vault-data'
 
 /** Commands: vault. */
 export const vaultCommands: MockCommands = {
@@ -112,6 +120,7 @@ export const notificationsCommands: MockCommands = {
   update_settings: ({ body }) => {
     const input = body as UpdateSettingsInput
     const settings = mockSettings
+    const before = settings.inflation_manual
     // Like the backend: every field that is present is written, the rest is kept.
     for (const [key, value] of Object.entries(input)) {
       if (value !== null && value !== undefined) Object.assign(settings, { [key]: value })
@@ -120,10 +129,22 @@ export const notificationsCommands: MockCommands = {
     for (const key of ['manual_income', 'manual_expenses'] as const) {
       if (input[key] !== null && Number(input[key]) <= 0) settings[key] = null
     }
+    if (input.inflation_manual) settings.inflation_manual = keptRates(input.inflation_manual, before)
     if (input.savings_rate || input.daily_budget_mode || input.budget_currency !== null)
       settings.budget_configured = true
     return resolve(settings)
   },
+}
+
+/** Like the core: a shipped rate nobody set before is not data; anything else the form sent stays. */
+function keptRates(sent: Record<string, string>, before: Record<string, string>): Record<string, string> {
+  const kept: Record<string, string> = {}
+  for (const [code, rate] of Object.entries(sent)) {
+    const lower = code.trim().toLowerCase()
+    if (lower in before || SHIPPED_INFLATION[lower] === undefined || Number(SHIPPED_INFLATION[lower]) !== Number(rate))
+      kept[lower] = rate
+  }
+  return kept
 }
 
 /** Same rule as the core's `normalize_codes`: tickers of 2–10 letters or digits, uppercase, in order. */
@@ -151,7 +172,6 @@ export const appSettingsOutsideCommands: MockCommands = {
       mockAppSettings.base_currency_chosen = input.base_currency_chosen
     if (input.favorite_currencies) mockAppSettings.favorite_currencies = normalizeCodes(input.favorite_currencies)
     if (input.timezone !== null && input.timezone !== undefined) mockAppSettings.timezone = input.timezone || null
-    if (input.inflation) mockAppSettings.inflation = input.inflation
     if (input.enrichment_opt_in !== null && input.enrichment_opt_in !== undefined)
       mockAppSettings.enrichment_opt_in = input.enrichment_opt_in
     if (input.completed_tours) mockAppSettings.completed_tours = [...new Set(input.completed_tours)]

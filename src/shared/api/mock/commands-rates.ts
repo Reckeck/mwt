@@ -3,7 +3,7 @@
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockInflationSources } from './commands-sources'
-import { mockAppSettings } from './vault-data'
+import { mockFlatInflation } from './vault-data'
 
 const SOURCES: Record<string, InflationSource> = { rub: 'cbr', usd: 'bls', eur: 'eurostat' }
 /** Last month's rate and how it drifts back in time, per currency. */
@@ -19,7 +19,7 @@ function monthsBack(count: number): string[] {
 }
 
 function overview(): InflationCurrency[] {
-  const manualTable = mockAppSettings.inflation ?? {}
+  const manualTable = mockFlatInflation()
   const codes = [...Object.keys(SOURCES), ...Object.keys(manualTable).filter((code) => !(code in SOURCES))]
   return codes.map((currency) => {
     const source = SOURCES[currency] ?? null

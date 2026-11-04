@@ -9,81 +9,12 @@ import type { WhatsNewEntry } from './whats-new.types'
 // The extension lets tests/checks/onboarding.check.ts load this file.
 import { WHATS_NEW_ARCHIVE } from './whats-new.archive.ts'
 import { WHATS_NEW_AUTUMN } from './whats-new.autumn.ts'
+import { WHATS_NEW_NOVEMBER } from './whats-new.november.ts'
 
 export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
-  {
-    id: 'syncStageS',
-    date: '2026-11-04',
-    points: [
-      { key: 'restore', route: 'settings:vault' },
-      { key: 'editor', route: 'settings:sync:sync-devices' },
-      { key: 'external', route: 'settings:sync:sync-devices' },
-    ],
-  },
-  {
-    id: 'syncStageM',
-    date: '2026-11-04',
-    points: [
-      { key: 'noDoubles', route: 'settings:sync:sync-devices' },
-      { key: 'keep', route: 'transactions' },
-      { key: 'protocol', route: 'settings:sync:sync-devices' },
-    ],
-  },
-  {
-    id: 'appUpdates',
-    date: '2026-11-03',
-    points: [
-      { key: 'auto', route: 'settings:app:updates' },
-      { key: 'manual', route: 'settings:app:updates' },
-    ],
-  },
-  {
-    id: 'contactsSection',
-    date: '2026-11-03',
-    points: [
-      { key: 'section', route: 'contacts' },
-      { key: 'table', route: 'contacts' },
-      { key: 'sheet', route: 'contacts' },
-      { key: 'requisite', route: 'contacts' },
-    ],
-  },
-  {
-    id: 'phoneRequisites',
-    date: '2026-11-03',
-    points: [
-      { key: 'recognize', route: 'contacts' },
-      { key: 'kind', route: 'contacts' },
-    ],
-  },
-  {
-    id: 'syncTransfer',
-    date: '2026-11-03',
-    points: [
-      { key: 'unlock', route: 'unlock' },
-      { key: 'transfer', route: 'settings:sync:sync-transfer' },
-      { key: 'confirm', route: 'settings:sync:sync-devices' },
-      { key: 'forgotten', route: 'settings:sync:sync-devices' },
-    ],
-  },
-  {
-    id: 'syncRepair',
-    date: '2026-11-01',
-    points: [
-      { key: 'forgotten', route: 'settings:sync:sync-devices' },
-      { key: 'paused', route: 'settings:sync:sync-devices' },
-      { key: 'cutOff', route: 'settings:sync:sync-devices' },
-      { key: 'externalCopy', route: 'settings:sync:sync-devices' },
-      { key: 'versions', route: 'settings:sync:sync-devices' },
-      { key: 'laterRecords', route: 'settings:sync:sync-devices' },
-      { key: 'duplicates', route: 'settings:sync:sync-devices' },
-      { key: 'runOnce', route: 'settings:sync:sync-devices' },
-      { key: 'deletionsStay', route: 'settings:sync:sync-devices' },
-      { key: 'rolesSteady', route: 'settings:sync:sync-devices' },
-      { key: 'editBanner', route: 'settings:sync:sync-devices' },
-    ],
-  },
+  ...WHATS_NEW_NOVEMBER,
   {
     id: 'togetherEvents',
     date: '2026-10-29',

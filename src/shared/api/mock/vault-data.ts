@@ -41,6 +41,8 @@ export const mockSettings: Settings = {
   onboarding_checklist_hidden: false,
   inflation_mode: {},
   inflation_source: {},
+  inflation_manual: {},
+  inflation_adopted: false,
   fx_refresh_interval_sec: 300,
   minimize_to_tray: true,
   savings_rate: '0.10',
@@ -59,6 +61,15 @@ export const mockSettings: Settings = {
   crypto: new URLSearchParams(globalThis.location?.search ?? '').get('crypto') !== '0',
   schedule_timezone: null,
 }
+
+/** The shipped flat rates, percent per year (`default_inflation` in the core). */
+export const SHIPPED_INFLATION: Record<string, string> = { rub: '8', usd: '3', eur: '2.5', thb: '1' }
+
+/** The group's flat rates: the shipped table under the vault's own (`flat_inflation`). */
+export const mockFlatInflation = (): Record<string, string> => ({
+  ...SHIPPED_INFLATION,
+  ...mockSettings.inflation_manual,
+})
 
 /** Mirrors what `app_settings.json` would hold. */
 export const mockAppSettings: AppSettings = {

@@ -124,7 +124,7 @@ export const useSettingsStore = defineStore('settings', {
           base_currency_chosen: patch.base_currency_chosen ?? null,
           favorite_currencies: patch.favorite_currencies ?? null,
           timezone: patch.timezone ?? null,
-          inflation: patch.inflation ?? null,
+          inflation: null,
           enrichment_opt_in: patch.enrichment_opt_in ?? null,
           completed_tours: patch.completed_tours ?? null,
           seen_whats_new: patch.seen_whats_new ?? null,
@@ -169,5 +169,6 @@ function vaultPatchToInput(patch: Partial<Settings>): UpdateSettingsInput {
     manual_income: patch.manual_income ?? null,
     manual_expenses: patch.manual_expenses ?? null,
     crypto: patch.crypto ?? null,
+    inflation_manual: patch.inflation_manual ?? null,
   }
 }

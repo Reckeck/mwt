@@ -120,6 +120,8 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'sync-pending', key: 'settings.pending', side: 'bottom' },
     { target: 'sync-history', key: 'settings.history', side: 'top' },
     { target: 'sync-transfer', key: 'settings.transfer', side: 'top' },
+    { target: 'notification-settings', key: 'settings.noticeScope', side: 'top' },
+    { target: 'inflation-settings', key: 'settings.inflationShared', side: 'top' },
     { target: 'learning-center', key: 'settings.learning', side: 'top' },
   ],
   // Before a vault is open: the card, the recent vaults, the sandbox.

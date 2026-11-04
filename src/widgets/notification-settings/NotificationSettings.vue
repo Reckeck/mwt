@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { ChevronDown } from 'lucide-vue-next'
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
+import { ScopeTag } from '@/shared/ui/scope-tag'
 import { SwitchRow } from '@/shared/ui/switch-row'
 
 import NotificationDetails from './NotificationDetails.vue'
@@ -33,6 +34,7 @@ const BASIC: { id: string; label: string; category: NoticeCategory }[] = [
       :model-value="category(item.category).enabled"
       @update:model-value="(value: boolean) => patchCategory(item.category, { enabled: value })"
     />
+    <ScopeTag kind="group" />
     <Collapsible class="grid gap-3">
       <CollapsibleTrigger class="group flex min-h-10 w-fit items-center gap-1 text-sm text-primary hover:underline">
         {{ t('notices.moreTitle') }}

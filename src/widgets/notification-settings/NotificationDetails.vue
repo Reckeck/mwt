@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { TimeInput } from '@/shared/ui/time-input'
 import { Label } from '@/shared/ui/label'
+import { ScopeTag } from '@/shared/ui/scope-tag'
 import { Switch } from '@/shared/ui/switch'
 import { call } from '@/shared/api/ipc'
 
@@ -65,6 +66,7 @@ const test = useMutation({
         <div class="grid gap-0.5">
           <Label for="notice-system">{{ t('notices.system') }}</Label>
           <p class="text-xs text-muted-foreground">{{ t('notices.systemHint') }}</p>
+          <ScopeTag kind="device" />
         </div>
         <Switch id="notice-system" :model-value="current.system" @update:model-value="(value) => save({ system: Boolean(value) })" />
       </div>
@@ -72,6 +74,7 @@ const test = useMutation({
         <div class="grid gap-0.5">
           <Label for="notice-hide">{{ t('notices.hideDetails') }}</Label>
           <p class="text-xs text-muted-foreground">{{ t('notices.hideDetailsHint') }}</p>
+          <ScopeTag kind="device" />
         </div>
         <Switch
           id="notice-hide"
@@ -83,6 +86,7 @@ const test = useMutation({
         <div class="grid gap-0.5">
           <Label for="notice-time">{{ t('notices.defaultTime') }}</Label>
           <p class="text-xs text-muted-foreground">{{ t('notices.defaultTimeHint') }}</p>
+          <ScopeTag kind="group" />
         </div>
         <TimeInput
           id="notice-time"
@@ -125,6 +129,8 @@ const test = useMutation({
         {{ t('notices.autostartMoved') }}
       </RouterLink>
     </div>
+
+    <ScopeTag kind="group" />
 
     <!-- A table from 36rem; narrower, each category is a card-less block: name and switch,
          then its own labelled lines (the fixed columns left ~60px for the name on a phone). -->
