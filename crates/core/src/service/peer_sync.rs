@@ -1461,9 +1461,11 @@ impl UnlockedVault {
         }
     }
 
-    /// Whether a pre-sync backup exists.
+    /// Whether a pre-sync backup exists that can be restored: a copy sealed
+    /// under a password cannot be opened by a vault that has none now.
     pub fn has_sync_backup(&self) -> bool {
-        self.presync_path(0).exists()
+        let path = self.presync_path(0);
+        path.exists() && (self.is_encrypted() || !crate::crypto::file_is_encrypted(&path))
     }
 
     /// The emergency exit: the whole vault as it was before the last
@@ -1471,7 +1473,7 @@ impl UnlockedVault {
     /// other devices like any edit.
     pub fn sync_restore_backup(&mut self) -> Result<()> {
         let path = self.presync_path(0);
-        if !path.exists() {
+        if !self.has_sync_backup() {
             return Err(Error::NotFound("no backup from before a sync".into()));
         }
         let (doc, _) = VaultFile::open(&path, &self.password)?;
