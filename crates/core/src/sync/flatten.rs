@@ -93,12 +93,18 @@ pub fn edited_here(coll: &Collection, stamps: &RecordStamps, name: &str) -> bool
 /// A side whose whole field was stamped but that lists no value for the
 /// entry (or no entries at all) cannot say the entry was removed: an older
 /// device has no way to express it, so the other side's entry stays.
+///
+/// The same for a purchase with no stamp of its own: removing one leaves a
+/// stamp, so a side without either has never seen it, however new its item is.
 pub fn cannot_express(
     coll: &Collection,
     fields: &BTreeMap<String, Value>,
     stamps: &RecordStamps,
     name: &str,
 ) -> bool {
+    if coll.inner_entry(name).is_some() && !stamps.fields.contains_key(name) {
+        return true;
+    }
     let Some(head) = head_of(coll, name) else {
         return false;
     };

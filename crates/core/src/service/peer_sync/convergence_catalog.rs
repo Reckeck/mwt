@@ -1360,10 +1360,29 @@ fn check_shared_events(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Vio
             found(
                 out,
                 Item::ParallelPurchases,
-                format!("purchase {purchase_id} of item {item_id} is gone"),
+                format!(
+                    "purchase {purchase_id} of item {item_id} is gone (payment {})",
+                    link_state(doc, purchase_id)
+                ),
             );
         }
     }
+}
+
+/// What a failure report says about the payment behind a `link-` purchase.
+fn link_state(doc: &crate::model::vault::VaultDoc, purchase_id: &str) -> String {
+    let payment_of = |id: &str| crate::service::sync_ids::payment_link_id(id) == purchase_id;
+    let live = doc.transactions.iter().find(|tx| payment_of(&tx.meta().id));
+    let dead = doc
+        .sync
+        .tombstones
+        .iter()
+        .find(|(key, _)| key.strip_prefix("transactions:").is_some_and(payment_of));
+    format!(
+        "live={:?} tombstone={:?}",
+        live.map(|tx| tx.meta().id.clone()),
+        dead.map(|(key, _)| key.clone())
+    )
 }
 
 /// A payment's `link-` purchase legitimately leaves its place when the payment
@@ -1392,6 +1411,137 @@ fn link_moved_or_gone(doc: &crate::model::vault::VaultDoc, purchase_id: &str) ->
                 .any(|purchase| purchase.id == purchase_id)
         });
     (!payment_exists && payment_deleted) || placed_elsewhere
+}
+
+/// One device adds a purchase to an item the other renames before it sees the
+/// purchase. Returns how many purchases each device holds after they meet.
+#[cfg(test)]
+pub(super) fn purchase_beside_a_later_item_edit() -> (usize, usize) {
+    let (_dir, mut left, mut right) = super::tests::two_devices();
+    let event = left
+        .create_shared_event(SharedEventDraft {
+            title: "trip".into(),
+            currency: "usd".into(),
+            participants: vec![guest("guest".into())],
+            ..Default::default()
+        })
+        .unwrap();
+    let event_id = event.event.id.clone();
+    left.add_shared_item(
+        &event_id,
+        SharedItemDraft {
+            title: "taxi".into(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    super::tests::settle(&mut left, &mut right);
+    let current = left.doc.shared_events[0].clone();
+    let item = current.items[0].clone();
+    // A first edit that syncs: a merged record no longer carries the stamp of
+    // the whole `items` field, which would otherwise hide the loss below.
+    left.update_shared_item(
+        &event_id,
+        &item.id,
+        SharedItemDraft {
+            title: "cab".into(),
+            unit: item.unit.clone(),
+            category_id: item.category_id.clone(),
+            plan: item.plan.clone(),
+            cancelled: item.cancelled,
+        },
+    )
+    .unwrap();
+    super::tests::settle(&mut left, &mut right);
+    left.add_shared_purchase(
+        &event_id,
+        SharedPurchaseDraft {
+            item_id: Some(item.id.clone()),
+            buyer: current.participants[0].id.clone(),
+            qty: amount("1"),
+            amount: amount("10"),
+            currency: "usd".into(),
+            price_mode: PriceMode::Total,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    // Later than the purchase, by a device that has not seen it.
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    right
+        .update_shared_item(
+            &event_id,
+            &item.id,
+            SharedItemDraft {
+                title: "taxi home".into(),
+                unit: item.unit.clone(),
+                category_id: item.category_id.clone(),
+                plan: item.plan.clone(),
+                cancelled: item.cancelled,
+            },
+        )
+        .unwrap();
+    super::tests::settle(&mut left, &mut right);
+    assert_eq!(left.doc.shared_events[0].items[0].title, "taxi home");
+    assert_eq!(right.doc.shared_events[0].items[0].title, "taxi home");
+    (
+        left.doc.shared_events[0].items[0].purchases.len(),
+        right.doc.shared_events[0].items[0].purchases.len(),
+    )
+}
+
+/// One device deletes a payment linked into an event, the other edits it
+/// later. Returns whether the payment lives after they meet and how many
+/// purchases its event then holds.
+#[cfg(test)]
+pub(super) fn payment_revived_after_its_deletion() -> (bool, usize) {
+    let (_dir, mut left, mut right) = super::tests::two_devices();
+    let store_id = left.doc.stores[0].id.clone();
+    left.add_transaction(crate::service::test_support::income(
+        &store_id, "100", "start",
+    ))
+    .unwrap();
+    let paid = left
+        .add_transaction(payment(&store_id, "10", "dinner"))
+        .unwrap();
+    let tx_id = paid.meta().id.clone();
+    let event = left
+        .create_shared_event(SharedEventDraft {
+            title: "trip".into(),
+            currency: "usd".into(),
+            participants: vec![guest("guest".into())],
+            ..Default::default()
+        })
+        .unwrap();
+    let event_id = event.event.id.clone();
+    left.attach_payment_to_shared_event(AttachPaymentInput {
+        event_id: event_id.clone(),
+        tx_id: tx_id.clone(),
+        new_item_title: Some("dinner".into()),
+        ..Default::default()
+    })
+    .unwrap();
+    super::tests::settle(&mut left, &mut right);
+    left.delete_transaction(&tx_id).unwrap();
+    // Later than the deletion, by a device that has not seen it.
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let mut edited = right
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == tx_id)
+        .unwrap()
+        .clone();
+    edited.meta_mut().comment = "dinner with friends".into();
+    right.update_transaction(&tx_id, edited).unwrap();
+    super::tests::settle(&mut left, &mut right);
+    let lives = left.doc.transactions.iter().any(|tx| tx.meta().id == tx_id);
+    let purchases = left.doc.shared_events[0]
+        .items
+        .iter()
+        .map(|item| item.purchases.len())
+        .sum();
+    (lives, purchases)
 }
 
 /// The deterministic form of the purchase loss: two devices add one purchase
