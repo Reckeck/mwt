@@ -214,6 +214,20 @@ pub const DEVICE_SETTINGS: &[&str] = &[
     "pinned",
 ];
 
+/// What the `settings` rule skips: `DEVICE_SETTINGS` and the device parts of
+/// an object setting (the system notice switch and the locked-screen privacy
+/// switch, which the lock-screen snapshot reads on this device only).
+const SETTINGS_SKIP: &[&str] = &[
+    "display_decimals",
+    "fx_refresh_interval_sec",
+    "minimize_to_tray",
+    "dashboard_widgets",
+    "dashboard_period",
+    "pinned",
+    "notifications.system",
+    "notifications.hide_details_when_locked",
+];
+
 /// Where a setting lives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
@@ -241,7 +255,13 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("savings_rate", Scope::Group),
     ("daily_budget_mode", Scope::Group),
     ("budget_currency", Scope::Group),
+    // The object is split: the two switches below are the device's, the rest
+    // (`default_time`, `categories`) is the group's.
     ("notifications", Scope::Group),
+    ("notifications.system", Scope::Device),
+    ("notifications.hide_details_when_locked", Scope::Device),
+    ("notifications.default_time", Scope::Group),
+    ("notifications.categories", Scope::Group),
     ("budget_configured", Scope::Group),
     ("onboarding_skipped", Scope::Group),
     ("inflation_mode", Scope::Group),
@@ -266,8 +286,11 @@ pub static COLLECTIONS: &[Collection] = &[
     // Per-currency maps merge per currency: two devices choosing the
     // inflation of different currencies both keep their choice.
     Collection {
-        flatten: &["inflation_mode", "inflation_source"],
-        ..single("settings", DEVICE_SETTINGS)
+        flatten: &["inflation_mode", "inflation_source", "notifications"],
+        // Each category is an entry of its own: two devices switching
+        // different categories keep both.
+        flatten_by: &[("notifications.categories", "category")],
+        ..single("settings", SETTINGS_SKIP)
     },
     // Exchange and property details merge per field; a car's papers and
     // mileage one level further. The terminal of an exchange (watchlist,
@@ -499,11 +522,34 @@ mod tests {
                 "Settings.{name} has no scope: decide Group or Device in sync::registry::SETTINGS_SCOPE"
             );
         }
+        let settings =
+            serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
         for (name, _) in SETTINGS_SCOPE {
             assert!(
-                keys.contains(&name.to_string()),
+                crate::sync::view::lookup(&settings, name).is_some(),
                 "SETTINGS_SCOPE names {name}, which is not a field of Settings"
             );
+        }
+    }
+
+    /// An object setting that is split (`flatten`) decides each of its parts.
+    #[test]
+    fn every_part_of_a_split_setting_has_a_scope() {
+        let settings =
+            serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
+        let rule = find("settings").expect("settings rule");
+        for head in rule.flatten {
+            let Some(inner) = settings.get(head).and_then(|part| part.as_object()) else {
+                continue;
+            };
+            // The per-currency maps start empty; only `notifications` has parts.
+            for part in inner.keys() {
+                let path = format!("{head}.{part}");
+                assert!(
+                    SETTINGS_SCOPE.iter().any(|(field, _)| *field == path),
+                    "Settings.{path} has no scope: decide Group or Device in sync::registry::SETTINGS_SCOPE"
+                );
+            }
         }
     }
 
