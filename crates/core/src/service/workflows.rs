@@ -565,8 +565,11 @@ impl UnlockedVault {
             };
             let (id, name) = (workflow.id.clone(), workflow.name.clone());
             self.doc.workflows[index].active = false;
-            self.doc.workflow_runs.push(WorkflowRun {
-                id: uuid::Uuid::new_v4().to_string(),
+            // One record per workflow, whatever the device: every device that
+            // opens the vault writes the same id, so the copies merge into one
+            // and a repeated open replaces it instead of adding another.
+            let run = WorkflowRun {
+                id: format!("wf-off-{id}"),
                 workflow_id: id.clone(),
                 trigger: String::new(),
                 started_at: crate::calendar::iso(now),
@@ -584,7 +587,16 @@ impl UnlockedVault {
                     values: Default::default(),
                 }],
                 dry_run: false,
-            });
+            };
+            match self
+                .doc
+                .workflow_runs
+                .iter_mut()
+                .find(|known| known.id == run.id)
+            {
+                Some(known) => *known = run,
+                None => self.doc.workflow_runs.push(run),
+            }
             notices.push(crate::service::notice(
                 crate::model::notify::NoticeCategory::Automation,
                 format!("wf-off:{id}"),
