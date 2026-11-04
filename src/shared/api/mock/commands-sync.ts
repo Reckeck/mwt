@@ -168,6 +168,7 @@ export const syncCommands: MockCommands = {
       state.history = [
         {
           id: batchId,
+          skipped: [],
           peer_name: PHONE.name,
           applied_at: now,
           summary,

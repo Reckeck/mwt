@@ -242,7 +242,11 @@ type AppliedBatch = { id: string, peer_name: string, applied_at: string, summary
 /**
  * Not a batch: the vault was handed to this device from here.
  */
-transferred_to: string | null, };
+transferred_to: string | null, 
+/**
+ * Keys of records left out because they do not fit this build's schema.
+ */
+skipped: Array<string>, };
 
 type ArchiveSharedEventInput = { id: string, archived: boolean, };
 

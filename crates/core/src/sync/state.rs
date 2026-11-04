@@ -373,6 +373,13 @@ impl SyncState {
     }
 }
 
+/// Whether `device_id` is this device (`own` is its id or the tag of it; an
+/// empty `own` matches nothing).
+pub fn is_own_device(own: &str, device_id: &str) -> bool {
+    let tag = super::stamp::device_tag(own);
+    !tag.is_empty() && tag == super::stamp::device_tag(device_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

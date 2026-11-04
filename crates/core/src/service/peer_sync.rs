@@ -52,6 +52,9 @@ pub struct AppliedBatch {
     /// Not a batch: the vault was handed to this device from here.
     #[serde(default)]
     pub transferred_to: Option<String>,
+    /// Keys of records left out because they do not fit this build's schema.
+    #[serde(default)]
+    pub skipped: Vec<String>,
 }
 
 /// What an undo did.
@@ -519,11 +522,31 @@ impl UnlockedVault {
             }
             view::trim(&mut applied_value);
         }
-        value = applied_value;
+        let base = std::mem::replace(&mut value, applied_value);
         // Rebuilding the typed document is the schema check: a record that
-        // does not fit fails here and nothing is applied.
-        let mut doc: VaultDoc = serde_json::from_value(value.clone())
-            .map_err(|err| Error::InvalidInput(format!("sync: {err}")))?;
+        // does not fit is left out on its own, the rest still applies.
+        let mut doc: VaultDoc = match serde_json::from_value(value.clone()) {
+            Ok(doc) => doc,
+            Err(err) => {
+                let bad = Self::unparsable_keys(&base, &plan);
+                if bad.is_empty() {
+                    return Err(Error::InvalidInput(format!("sync: {err}")));
+                }
+                let (left_out, rest): (BTreeMap<_, _>, BTreeMap<_, _>) = incoming
+                    .iter()
+                    .map(|(key, state)| (key.clone(), state.clone()))
+                    .partition(|(key, _)| bad.contains(key));
+                let summary = plan_of(&left_out).summary;
+                let journaled = self.journal_skipped(&peer.name, &summary);
+                let mut outcome = self.apply_batch_from(&rest, peer, carry, external)?;
+                match outcome.as_mut() {
+                    Some(applied) => applied.skipped = bad,
+                    None if journaled => self.persist()?,
+                    None => {}
+                }
+                return Ok(outcome);
+            }
+        };
         doc.sync = std::mem::take(&mut self.doc.sync);
         for (key, change) in &plan.changes {
             match &change.after.stamps {
@@ -752,12 +775,20 @@ impl UnlockedVault {
             .unwrap_or_default()
     }
 
-    /// Notices a kept batch added (to show them on this device).
+    /// Notices a kept batch added (to show them on this device). A notice the
+    /// batch only updated (read on the other device) was shown before.
     pub fn sync_batch_notices(&self, batch_id: &str) -> Vec<crate::model::notify::NoticeRecord> {
         let keys: std::collections::HashSet<String> = self
-            .sync_batch_keys(batch_id)
+            .doc
+            .sync
+            .batches
+            .iter()
+            .find(|batch| batch.id == batch_id)
             .into_iter()
-            .filter_map(|key| key.strip_prefix("notification_log:").map(str::to_string))
+            .flat_map(|batch| batch.entries.iter())
+            .filter(|entry| entry.before.value.is_none())
+            .filter_map(|entry| entry.key.strip_prefix("notification_log:"))
+            .map(str::to_string)
             .collect();
         self.doc
             .notification_log
@@ -777,6 +808,7 @@ impl UnlockedVault {
             summary: SyncSummary::default(),
             undone_at: None,
             transferred_to: Some(transfer.device_name.clone()),
+            skipped: Vec::new(),
         }));
         history.sort_by_key(|item| {
             std::cmp::Reverse(crate::model::vault::iso_to_millis(&item.applied_at))
@@ -937,10 +969,13 @@ impl UnlockedVault {
         let now = crate::sync::stamp::now_ms();
         let cutoff = now.saturating_sub(day_ms(TOMBSTONE_DAYS));
         let revoked_cutoff = now.saturating_sub(day_ms(REVOKED_GATE_DAYS));
+        let own = self.clock.device();
         let sync = &mut self.doc.sync;
         let acks: Vec<u64> = sync
             .peers
             .iter()
+            // This device never acks to itself (old vaults hold such an entry).
+            .filter(|peer| !crate::sync::state::is_own_device(own, &peer.device_id))
             .filter(|peer| {
                 peer.revoked
                     .as_ref()
@@ -1494,6 +1529,7 @@ fn applied_of(batch: &SyncBatch) -> AppliedBatch {
         summary: batch.summary.clone(),
         undone_at: batch.undone_at.clone(),
         transferred_to: None,
+        skipped: Vec::new(),
     }
 }
 
@@ -1503,6 +1539,9 @@ mod adjustment_tests;
 mod alert_tests;
 #[cfg(test)]
 mod attachment_cleanup_tests;
+mod bad_record;
+#[cfg(test)]
+mod bad_record_tests;
 #[cfg(test)]
 mod clock_tests;
 #[cfg(test)]
@@ -1524,6 +1563,8 @@ mod marks_tests;
 mod nested_tests;
 #[cfg(test)]
 mod notice_settings_tests;
+#[cfg(test)]
+mod notice_tests;
 #[cfg(test)]
 mod preview_tests;
 #[cfg(test)]
@@ -2711,8 +2752,12 @@ mod tests {
             },
         )]
         .into();
-        assert!(left.sync_apply(&broken, &peer("right")).is_err());
-        assert_eq!(left.doc, before);
+        // The record is skipped (told in the journal), not an error that ends
+        // the session; the data stays as it was.
+        assert!(left.sync_apply(&broken, &peer("right")).unwrap().is_none());
+        let mut after = left.doc.clone();
+        after.sync = before.sync.clone();
+        assert_eq!(after, before);
     }
 
     #[test]
