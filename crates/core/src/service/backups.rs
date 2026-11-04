@@ -21,7 +21,9 @@ impl UnlockedVault {
         backups::create(&self.path, &backups::stamp(time::OffsetDateTime::now_utc()))
     }
 
-    /// Replace the content of the vault with the backup called `name`.
+    /// Replace the content of the vault with the backup called `name`; with
+    /// live peers, write the copy's records over the current ones and delete
+    /// nothing.
     ///
     /// The backup is read with this session's password first (a copy made under
     /// another password is refused with `SECRET` and nothing changes), then the
@@ -34,7 +36,14 @@ impl UnlockedVault {
         let source = backups::resolve(&self.path, name)?;
         let (doc, _) = VaultFile::open(&source, &self.password)?;
         let safety = self.create_backup()?;
-        self.replace_doc(doc)?;
+        if self.has_live_peers() {
+            // Other devices keep what they hold: the copy's records come back
+            // by value and nothing is deleted, so a record made after the
+            // copy (here or on a peer) stays.
+            self.apply_records_of(&doc)?;
+        } else {
+            self.replace_doc(doc)?;
+        }
         Ok(safety)
     }
 }

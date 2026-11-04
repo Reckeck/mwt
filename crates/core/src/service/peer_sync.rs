@@ -84,7 +84,7 @@ fn ser_err(err: serde_json::Error) -> Error {
 
 impl UnlockedVault {
     /// The document without the sync bookkeeping, serialized.
-    fn doc_value(&mut self) -> Result<Value> {
+    pub(super) fn doc_value(&mut self) -> Result<Value> {
         let sync = std::mem::take(&mut self.doc.sync);
         let value = serde_json::to_value(&self.doc);
         self.doc.sync = sync;

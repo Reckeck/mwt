@@ -9,7 +9,8 @@ import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 import { formatDateTime } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 
-const props = defineProps<{ backups: VaultBackup[]; pending: boolean }>()
+/** `grouped`: other devices share the vault, so a restore adds the copy's records and deletes nothing. */
+const props = defineProps<{ backups: VaultBackup[]; pending: boolean; grouped: boolean }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ restore: [name: string] }>()
 const { t } = useI18n()
@@ -46,7 +47,7 @@ watch(open, () => {
       </RadioGroup>
       <p class="flex items-start gap-2 text-xs text-muted-foreground">
         <TriangleAlert class="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
-        {{ t('vaultBackups.restoreWarn') }}
+        {{ t(grouped ? 'vaultBackups.restoreWarnGroup' : 'vaultBackups.restoreWarn') }}
       </p>
     </div>
     <template #footer>

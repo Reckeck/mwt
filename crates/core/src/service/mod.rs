@@ -45,6 +45,7 @@ mod dashboard_tiles;
 mod dashboard_today;
 mod datasources;
 mod debts;
+mod document_edit;
 mod emergency;
 mod enrichment;
 mod envelopes;

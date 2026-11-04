@@ -334,6 +334,85 @@ fn strip_device_fields<'doc>(coll: &Collection, value: &'doc Value) -> Cow<'doc,
     Cow::Owned(copy)
 }
 
+/// The device-only parts of an edited document that differ from its base,
+/// written into `current` (a serialized document). `records` does not carry
+/// them (they never travel), so a three-way apply of records alone would
+/// drop an edit to them: the device settings of `settings`, and the dotted
+/// device-only fields of a record (`exchange.terminal`). A part the editor
+/// removed is removed; a record `current` no longer has gets nothing.
+pub fn apply_device_edits(base: &Value, edited: &Value, current: &mut Value) {
+    for coll in COLLECTIONS {
+        if coll.skip.is_empty() {
+            continue;
+        }
+        if coll.rule == Rule::Single {
+            let field = |doc: &Value, name: &str| {
+                doc.get(coll.name).and_then(|part| part.get(name)).cloned()
+            };
+            for name in coll.skip {
+                let (before, after) = (field(base, name), field(edited, name));
+                if before == after {
+                    continue;
+                }
+                let Some(Value::Object(part)) = current.get_mut(coll.name) else {
+                    continue;
+                };
+                match after {
+                    Some(value) => part.insert((*name).to_string(), value),
+                    None => part.remove(*name),
+                };
+            }
+            continue;
+        }
+        if nested_skips(coll).next().is_none() {
+            continue;
+        }
+        let items = |doc: &Value| {
+            doc.get(coll.name)
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+        };
+        let (base_items, edited_items) = (items(base), items(edited));
+        let Some(Value::Array(current_items)) = current.get_mut(coll.name) else {
+            continue;
+        };
+        for item in &edited_items {
+            let Some(key) = record_key(coll, item) else {
+                continue;
+            };
+            let find = |list: &[Value]| {
+                list.iter()
+                    .position(|other| record_key(coll, other).as_deref() == Some(key.as_str()))
+            };
+            let Some(target) = find(current_items).map(|index| &mut current_items[index]) else {
+                continue;
+            };
+            let old = find(&base_items).map(|index| base_items[index].clone());
+            for path in nested_skips(coll) {
+                let mut after = item.clone();
+                let after = body_mut(coll, &mut after).and_then(|body| take_path(body, path));
+                let before = old.clone().and_then(|mut old| {
+                    body_mut(coll, &mut old).and_then(|body| take_path(body, path))
+                });
+                if before == after {
+                    continue;
+                }
+                let Some(body) = body_mut(coll, target) else {
+                    continue;
+                };
+                match (after, body.as_object_mut()) {
+                    (Some(value), Some(object)) => insert_path(object, path, value),
+                    (None, _) => {
+                        take_path(body, path);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
 /// Put the dotted device-only fields `local` has into `target`.
 pub(super) fn keep_nested_device_fields(coll: &Collection, target: &mut Value, local: &Value) {
     let mut kept = Vec::new();
