@@ -209,7 +209,12 @@ impl UnlockedVault {
     }
 
     /// A name free among the wallets (or among the children of `parent`).
-    fn free_name(&self, node: &str, parent: Option<&str>, wanted: &str) -> String {
+    pub(in crate::service) fn free_name(
+        &self,
+        node: &str,
+        parent: Option<&str>,
+        wanted: &str,
+    ) -> String {
         if self.ensure_unique_name(Some(node), parent, wanted).is_ok() {
             return wanted.to_string();
         }
