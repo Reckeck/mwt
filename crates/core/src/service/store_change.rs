@@ -121,7 +121,7 @@ fn item(store: &Store, sub_type_before: Option<SubType>) -> StoreChangeItem {
 
 /// Replace every string equal to `from` with `to`, anywhere in the document.
 /// Ids are UUIDs, so a value equal to one is that id.
-fn replace_id(value: &mut serde_json::Value, from: &str, to: &str) {
+pub(in crate::service) fn replace_id(value: &mut serde_json::Value, from: &str, to: &str) {
     match value {
         serde_json::Value::String(text) if text == from => *text = to.to_string(),
         serde_json::Value::Array(items) => {
