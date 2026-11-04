@@ -23,6 +23,19 @@ function zoneMonths(own: MeterReading[]) {
 const sameZone = (left: string | null, right: string | null) =>
   (left ?? '').trim().toLowerCase() === (right ?? '').trim().toLowerCase()
 
+/** Ids of readings lower than the previous one of the same zone (`out_of_order_ids` in Rust). */
+function outOfOrderIds(own: MeterReading[]): string[] {
+  const last = new Map<string, number>()
+  const out: string[] = []
+  for (const entry of own) {
+    const zone = (entry.zone ?? '').trim().toLowerCase()
+    const before = last.get(zone)
+    if (before !== undefined && Number(entry.value) < before) out.push(entry.id)
+    last.set(zone, Number(entry.value))
+  }
+  return out
+}
+
 /** Bills by month: a meter by its formula or consumption × tariff, per zone when it has them. */
 export function utilityTrend(item: UtilityItem): UtilityTrend {
   const sortKey = (entry: MeterReading) => `${entry.period}-${String(entry.day ?? 99).padStart(2, '0')}`
@@ -53,6 +66,9 @@ export function utilityTrend(item: UtilityItem): UtilityTrend {
         reading_id: parts[0].month?.last.id ?? null,
         payments: paid.get(period) ?? [],
         readings: own.filter((entry) => entry.period === period),
+        out_of_order: outOfOrderIds(own).filter((id) =>
+          own.some((entry) => entry.id === id && entry.period === period),
+        ),
         zones: parts.flatMap((part) =>
           part.zone === null
             ? []
@@ -83,6 +99,7 @@ export function utilityTrend(item: UtilityItem): UtilityTrend {
             payments,
             readings: [],
             zones: [],
+            out_of_order: [],
           }))
   const billed = months.map((month) => Number(month.amount)).filter((value) => value > 0)
   const average = billed.length ? billed.reduce((sum, value) => sum + value, 0) / billed.length : null

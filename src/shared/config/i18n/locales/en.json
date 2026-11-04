@@ -6732,5 +6732,11 @@
   "tour.settings.updates.body": "The version, the result of the last check and what to do about a new one. Check now looks right away; the switch turns the automatic check off.",
   "whatsNew.appUpdates.title": "The app updates itself",
   "whatsNew.appUpdates.auto": "Windows and AppImage download a new version in the background and install it when you quit. A notice offers Restart now.",
-  "whatsNew.appUpdates.manual": "Other installs show a notice with a link or a hint to update through the package manager. Settings, App, Updates has Check now and a switch for the automatic check."
+  "whatsNew.appUpdates.manual": "Other installs show a notice with a link or a hint to update through the package manager. Settings, App, Updates has Check now and a switch for the automatic check.",
+  "record.deleted": "Deleted record",
+  "utilities.outOfOrder": "Out of order",
+  "utilities.outOfOrderHint": "After sync this reading is lower than the previous one. Check its date or value.",
+  "loyalty.symbolClash": "Another program already uses this symbol. Rename it so prices do not mix.",
+  "sharedEvents.items.rateNeeded": "Rate needed",
+  "sharedEvents.items.rateNeededHint": "The purchase currency differs from the event's. Enter a rate."
 }

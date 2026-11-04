@@ -7,7 +7,9 @@ import { Check, Pencil, Trash2, X } from 'lucide-vue-next'
 import { TransactionEditDialog } from '@/features/transaction-edit'
 import { Money } from '@/entities/currency'
 import { AmountInput } from '@/shared/ui/amount-input'
+import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { TapHint } from '@/shared/ui/tap-hint'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { call } from '@/shared/api/ipc'
 import { LEDGER_KEYS, readingDate, readingDateParts } from '@/shared/lib/planning'
@@ -128,6 +130,9 @@ const txOpen = computed({
               {{ reading.day ? t('utilities.readingOnDay', { day: reading.day }) : t('utilities.readingAtEnd') }}:
               {{ reading.value }} {{ unit }}<template v-if="reading.zone"> · {{ reading.zone }}</template>
             </span>
+            <TapHint v-if="month.out_of_order.includes(reading.id)" :hint="t('utilities.outOfOrderHint')" :aria-label="t('utilities.outOfOrder')">
+              <Badge variant="warning">{{ t('utilities.outOfOrder') }}</Badge>
+            </TapHint>
             <Button
               variant="ghost"
               size="icon-xs"

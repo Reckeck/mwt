@@ -78,6 +78,10 @@ pub struct PurchaseView {
     pub my_part: Amount,
     /// The linked payment is gone from the vault.
     pub payment_missing: bool,
+    /// Paid in another currency than the event's with the automatic rate 1
+    /// (computed, never stored): the event total needs a typed rate.
+    #[serde(default)]
+    pub needs_rate: bool,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
@@ -293,18 +297,24 @@ impl UnlockedVault {
                 .find(|purchase| purchase.id == purchase_id)
                 .and_then(|purchase| purchase.tx_id.clone())
         };
-        let purchases = computed
-            .purchases
-            .iter()
-            .map(|line| PurchaseView {
-                item_id: line.item_id.clone(),
-                purchase_id: line.purchase_id.clone(),
-                event_amount: line.event_amount,
-                my_part: line.my_part,
-                payment_missing: purchase_tx(&line.purchase_id)
-                    .is_some_and(|tx_id| !self.tx_exists(&tx_id)),
-            })
-            .collect();
+        let purchases =
+            computed
+                .purchases
+                .iter()
+                .map(|line| PurchaseView {
+                    item_id: line.item_id.clone(),
+                    purchase_id: line.purchase_id.clone(),
+                    event_amount: line.event_amount,
+                    my_part: line.my_part,
+                    payment_missing: purchase_tx(&line.purchase_id)
+                        .is_some_and(|tx_id| !self.tx_exists(&tx_id)),
+                    needs_rate: event.items.iter().flat_map(|item| &item.purchases).any(
+                        |purchase| {
+                            purchase.id == line.purchase_id && purchase.needs_rate(&event.currency)
+                        },
+                    ),
+                })
+                .collect();
         let settlements = event
             .settlements
             .iter()

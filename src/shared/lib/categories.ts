@@ -15,6 +15,18 @@ export function categoryKeyLabel(key: string, categories: Category[] | undefined
   return categoryLabel(found ?? { key, name: null }, t)
 }
 
+/**
+ * `categoryKeyLabel` for a key a record points at: once the list is loaded, a key that is
+ * neither in it nor a built-in is a deleted category (after a sync), shown as a placeholder.
+ */
+export function categoryKeyLabelOrDeleted(key: string, categories: Category[] | undefined, t: Translate): string {
+  if (categories && !categories.some((category) => category.key === key)) {
+    const builtIn = `categories.default.${key}`
+    if (t(builtIn) === builtIn) return t('record.deleted')
+  }
+  return categoryKeyLabel(key, categories, t)
+}
+
 export const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings', 'service']
 
 /** Everyday categories that count as a must until the user says otherwise; mirrors `DEFAULT_ESSENTIAL` in core. */

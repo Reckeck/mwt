@@ -134,6 +134,18 @@ impl Purchase {
             PriceMode::Total => self.amount,
         }
     }
+
+    /// The rate is the automatic 1: never typed in, never taken from a quote.
+    pub fn has_auto_rate_one(&self) -> bool {
+        !self.rate_manual && self.rate_to_event == Amount::from(1)
+    }
+
+    /// Paid in another currency than the event's with the automatic rate 1,
+    /// so the event total is wrong until a rate is entered. One rule for the
+    /// repair report and the purchase view.
+    pub fn needs_rate(&self, event_currency: &str) -> bool {
+        self.has_auto_rate_one() && self.currency != event_currency
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

@@ -4392,7 +4392,12 @@ my_part: Amount,
 /**
  * The linked payment is gone from the vault.
  */
-payment_missing: boolean, };
+payment_missing: boolean, 
+/**
+ * Paid in another currency than the event's with the automatic rate 1
+ * (computed, never stored): the event total needs a typed rate.
+ */
+needs_rate: boolean, };
 
 /**
  * What the money in a wallet is for. Replaces the old «count in budget»
@@ -5629,7 +5634,12 @@ unrealized_base: Amount, subtree_unrealized_base: Amount,
  * The oldest provider quote the positions are valued at; `None` when no
  * position has one.
  */
-prices_as_of: string | null, };
+prices_as_of: string | null, 
+/**
+ * A bonus programme whose points symbol another programme also uses.
+ * Computed, never stored.
+ */
+symbol_clash: boolean, };
 
 /**
  * A single open position inside one store.
@@ -7014,7 +7024,12 @@ readings: Array<MeterReading>,
 /**
  * A multi-rate meter: each zone's reading and consumption.
  */
-zones: Array<ZoneMonth>, };
+zones: Array<ZoneMonth>, 
+/**
+ * Ids of this month's readings lower than the previous reading of the
+ * same zone by date (after a sync). Computed, never stored.
+ */
+out_of_order: Array<string>, };
 
 /**
  * A payment the form opens with, for one month of one item.

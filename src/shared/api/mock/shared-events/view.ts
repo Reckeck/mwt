@@ -10,6 +10,17 @@ import { mockSharedEvents } from './state'
 const nameOf = (event: SharedEvent, id: string) =>
   id === ME ? '' : (event.participants.find((person) => person.id === id)?.name ?? '')
 
+/** `Purchase::needs_rate`: automatic rate 1 in a currency other than the event's. */
+function purchaseNeedsRate(event: SharedEvent, purchaseId: string): boolean {
+  const purchase = event.items.flatMap((item) => item.purchases).find((entry) => entry.id === purchaseId)
+  return (
+    Boolean(purchase) &&
+    !purchase?.rate_manual &&
+    Number(purchase?.rate_to_event) === 1 &&
+    purchase?.currency !== event.currency
+  )
+}
+
 function termOf(event: SharedEvent, person: Participant | undefined): string | null {
   if (!person?.contact_id) return null
   const asset = event.currency.toUpperCase()
@@ -122,6 +133,7 @@ export function eventView(event: SharedEvent, txExists: (id: string) => boolean)
         event_amount: fmt(line.amount),
         my_part: fmt(line.my_part),
         payment_missing: Boolean(tx) && !txExists(tx as string),
+        needs_rate: purchaseNeedsRate(event, line.purchase_id),
       }
     }),
     settlements: event.settlements.map((settlement) => ({

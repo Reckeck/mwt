@@ -1,6 +1,7 @@
 import { type InjectionKey, computed, inject, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { categoryKeyLabel } from '@/shared/lib/categories'
+import { categoryKeyLabelOrDeleted } from '@/shared/lib/categories'
+import { nameOrDeleted } from '@/shared/lib/deleted-record'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useAllAttachments, useCategories, useContacts, useStoreTree } from '@/shared/api/queries'
 
@@ -37,7 +38,8 @@ function buildTxContext() {
 
   const nodes = computed(() => new Map(flattenStoreTree(tree.data.value ?? []).map((node) => [node.store.id, node])))
 
-  const storeName = (id: string) => nodes.value.get(id)?.path.join(' › ') ?? id
+  const storeName = (id: string) =>
+    nameOrDeleted(nodes.value.get(id)?.path.join(' › '), Boolean(tree.data.value), id, t)
 
   /** Store id → its top-level wallet's id, built once per tree. */
   const roots = computed(() => {
@@ -53,7 +55,8 @@ function buildTxContext() {
   /** Top-level wallet of a store, by id. */
   const rootOf = (id: string) => roots.value.get(id) ?? id
 
-  const contactName = (id: string) => contacts.data.value?.find((contact) => contact.id === id)?.name ?? id
+  const contactName = (id: string) =>
+    nameOrDeleted(contacts.data.value?.find((contact) => contact.id === id)?.name, Boolean(contacts.data.value), id, t)
 
   /** «Bybit › Spot», «Ann › IBAN», or the free text. */
   const sideLabel = (side: AccountRef | null): string => {
@@ -62,11 +65,11 @@ function buildTxContext() {
     if ('raw' in side) return side.raw
     const contact = contacts.data.value?.find((entry) => entry.id === side.contact.contact_id)
     const account = contact?.accounts.find((entry) => entry.id === side.contact.account_id)
-    const name = contact?.name ?? side.contact.contact_id
+    const name = nameOrDeleted(contact?.name, Boolean(contacts.data.value), side.contact.contact_id, t)
     return account ? `${name} › ${account.label || account.value}` : name
   }
 
-  const categoryName = (key: string) => categoryKeyLabel(key, categories.data.value, t)
+  const categoryName = (key: string) => categoryKeyLabelOrDeleted(key, categories.data.value, t)
 
   /** Files and links of each owner, counted once per list. */
   const attachmentCounts = computed(() => {

@@ -48,6 +48,10 @@ pub struct CashbackReport {
     pub programmes: Vec<LoyaltyBalance>,
 }
 
+fn normalized_symbol(raw: &str) -> String {
+    raw.trim().to_uppercase()
+}
+
 impl UnlockedVault {
     /// Set a programme's points and price of a point. The price becomes the
     /// points' hand-set price, so the wallet counts in net worth.
@@ -103,6 +107,27 @@ impl UnlockedVault {
         self.set_loyalty_info(&store.id, info)
     }
 
+    /// Another programme already uses `symbol` (already normalized).
+    fn symbol_taken_by_other(&self, store_id: Option<&str>, symbol: &str) -> bool {
+        self.doc.stores.iter().any(|other| {
+            Some(other.id.as_str()) != store_id
+                && other
+                    .loyalty
+                    .as_ref()
+                    .is_some_and(|known| normalized_symbol(&known.points_symbol) == symbol)
+        })
+    }
+
+    /// The programme shares its symbol with another one. Computed for the
+    /// view, never stored; the form asks to rename.
+    pub fn loyalty_symbol_clash(&self, store_id: &str) -> bool {
+        self.find_store(store_id)
+            .and_then(|store| store.loyalty.as_ref())
+            .is_some_and(|info| {
+                self.symbol_taken_by_other(Some(store_id), &normalized_symbol(&info.points_symbol))
+            })
+    }
+
     /// Normalize and check a programme's settings; `store_id` is the programme
     /// itself, `None` while it is being created.
     fn checked_loyalty_info(
@@ -122,13 +147,13 @@ impl UnlockedVault {
                 "a point cannot be worth less than nothing".into(),
             ));
         }
-        let taken = self.doc.stores.iter().any(|other| {
-            Some(other.id.as_str()) != store_id
-                && other
-                    .loyalty
-                    .as_ref()
-                    .is_some_and(|known| known.points_symbol == info.points_symbol)
-        });
+        // Only a NEW clash is refused: a programme that already shares its
+        // symbol (two devices chose it before a sync) stays editable.
+        let unchanged = store_id
+            .and_then(|id| self.find_store(id))
+            .and_then(|store| store.loyalty.as_ref())
+            .is_some_and(|known| normalized_symbol(&known.points_symbol) == info.points_symbol);
+        let taken = !unchanged && self.symbol_taken_by_other(store_id, &info.points_symbol);
         if taken {
             return Err(Error::InvalidInput(format!(
                 "{} already names another programme's points",
@@ -444,5 +469,58 @@ mod tests {
         let old: LoyaltyInfo = serde_json::from_str(raw).unwrap();
         assert_eq!(old.login, None);
         assert!(old.source_store_ids.is_empty());
+    }
+
+    /// Two devices chose one symbol before a sync: both programmes exist.
+    fn clashing_pair(vault: &mut UnlockedVault) -> (String, String) {
+        let first = store(vault, "A", StoreKind::Loyalty, None);
+        let second = store(vault, "B", StoreKind::Loyalty, None);
+        vault.set_loyalty_info(&first, info("PTS")).unwrap();
+        vault.set_loyalty_info(&second, info("OTHER")).unwrap();
+        vault
+            .doc
+            .stores
+            .iter_mut()
+            .find(|candidate| candidate.id == second)
+            .and_then(|found| found.loyalty.as_mut())
+            .unwrap()
+            .points_symbol = "PTS".into();
+        (first, second)
+    }
+
+    #[test]
+    fn a_programme_that_already_clashes_can_still_be_saved() {
+        let (_dir, mut vault) = empty_vault();
+        let (_first, second) = clashing_pair(&mut vault);
+        let mut edit = info("pts");
+        edit.point_value = amount("2");
+        let saved = vault.set_loyalty_info(&second, edit).unwrap();
+        assert_eq!(saved.loyalty.unwrap().point_value, amount("2"));
+    }
+
+    #[test]
+    fn a_new_clash_is_still_refused() {
+        let (_dir, mut vault) = empty_vault();
+        let (first, second) = clashing_pair(&mut vault);
+        let third = store(&mut vault, "C", StoreKind::Loyalty, None);
+        vault.set_loyalty_info(&third, info("FREE")).unwrap();
+        assert!(vault.set_loyalty_info(&third, info("PTS")).is_err());
+        assert!(
+            vault.set_loyalty_info(&first, info("FREE")).is_err(),
+            "moving onto another programme's symbol is new"
+        );
+        assert!(vault.set_loyalty_info(&second, info("PTS")).is_ok());
+    }
+
+    #[test]
+    fn the_clash_is_computed_for_the_view() {
+        let (_dir, mut vault) = empty_vault();
+        let (first, second) = clashing_pair(&mut vault);
+        assert!(vault.loyalty_symbol_clash(&first));
+        assert!(vault.loyalty_symbol_clash(&second));
+        assert!(vault.store_overview(&second, false).unwrap().symbol_clash);
+        vault.set_loyalty_info(&second, info("MINE")).unwrap();
+        assert!(!vault.loyalty_symbol_clash(&first));
+        assert!(!vault.store_overview(&second, false).unwrap().symbol_clash);
     }
 }

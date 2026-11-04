@@ -2055,6 +2055,7 @@ impl UnlockedVault {
             tx_count: txs.len() as u32,
             first_tx_at,
             last_tx_at,
+            symbol_clash: self.loyalty_symbol_clash(store_id),
         })
     }
 
@@ -3212,6 +3213,10 @@ pub struct StoreOverview {
     /// position has one.
     #[serde(default)]
     pub prices_as_of: Option<String>,
+    /// A bonus programme whose points symbol another programme also uses.
+    /// Computed, never stored.
+    #[serde(default)]
+    pub symbol_clash: bool,
 }
 
 /// One node of the wallet tree (sidebar, wallets page, pickers).

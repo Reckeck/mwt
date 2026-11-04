@@ -67,6 +67,10 @@ pub struct UtilityMonth {
     /// A multi-rate meter: each zone's reading and consumption.
     #[serde(default)]
     pub zones: Vec<ZoneMonth>,
+    /// Ids of this month's readings lower than the previous reading of the
+    /// same zone by date (after a sync). Computed, never stored.
+    #[serde(default)]
+    pub out_of_order: Vec<String>,
 }
 
 /// One tariff zone of a month ("day": 800, used 200).
@@ -311,6 +315,25 @@ fn zones_of(item: &UtilityItem) -> Vec<String> {
             .collect(),
         _ => Vec::new(),
     }
+}
+
+/// Ids of readings lower than the previous reading of the same zone, by date.
+/// `readings` is oldest first (`readings_of`); a merge of two devices can
+/// leave a meter going backwards, the values are never rewritten.
+pub(crate) fn out_of_order_ids(readings: &[MeterReading]) -> Vec<String> {
+    let mut last: BTreeMap<Option<&str>, Amount> = BTreeMap::new();
+    let mut out = Vec::new();
+    for reading in readings {
+        let zone = reading.zone.as_deref();
+        if last
+            .get(&zone)
+            .is_some_and(|before| reading.value < *before)
+        {
+            out.push(reading.id.clone());
+        }
+        last.insert(zone, reading.value);
+    }
+    out
 }
 
 fn hundred() -> Amount {
@@ -1093,6 +1116,14 @@ impl UnlockedVault {
                                 })
                                 .collect(),
                             payments: Vec::new(),
+                            out_of_order: out_of_order_ids(&readings)
+                                .into_iter()
+                                .filter(|id| {
+                                    readings.iter().any(|reading| {
+                                        &reading.id == id && reading.period == period
+                                    })
+                                })
+                                .collect(),
                             readings: readings
                                 .iter()
                                 .filter(|reading| reading.period == period)
@@ -2310,5 +2341,76 @@ mod tests {
         assert_eq!(old.zone, None);
         let packed = rmp_serde::to_vec_named(&reading).unwrap();
         assert_eq!(rmp_serde::from_slice::<MeterReading>(&packed).unwrap(), old);
+    }
+
+    #[test]
+    fn a_reading_below_the_previous_one_is_flagged_not_rewritten() {
+        let (_dir, mut vault) = empty_vault();
+        let item = metered(&mut vault);
+        vault
+            .add_meter_reading(&item.id, amount("100"), "2026-09", Some(10), None)
+            .unwrap();
+        vault
+            .add_meter_reading(&item.id, amount("120"), "2026-10", Some(10), None)
+            .unwrap();
+        let clean = vault.meter_trend(&item.id, "UTC").unwrap();
+        assert!(
+            clean
+                .months
+                .iter()
+                .all(|month| month.out_of_order.is_empty())
+        );
+
+        // What a merge of two devices can leave: a lower reading on a later day.
+        vault.doc.meter_readings.push(MeterReading {
+            id: "late".into(),
+            item_id: item.id.clone(),
+            value: amount("90"),
+            period: "2026-10".into(),
+            recorded_at: "2026-10-20T00:00:00Z".into(),
+            day: Some(20),
+            zone: None,
+        });
+        let trend = vault.meter_trend(&item.id, "UTC").unwrap();
+        let october = trend
+            .months
+            .iter()
+            .find(|month| month.period == "2026-10")
+            .unwrap();
+        assert_eq!(october.out_of_order, vec!["late".to_string()]);
+        let september = trend
+            .months
+            .iter()
+            .find(|month| month.period == "2026-09")
+            .unwrap();
+        assert!(september.out_of_order.is_empty());
+        assert!(
+            vault
+                .doc
+                .meter_readings
+                .iter()
+                .any(|reading| reading.value == amount("90")),
+            "values are not rewritten"
+        );
+    }
+
+    #[test]
+    fn zones_are_compared_apart() {
+        let reading = |id: &str, zone: &str, value: &str, day: u8| MeterReading {
+            id: id.into(),
+            item_id: "item".into(),
+            value: amount(value),
+            period: "2026-10".into(),
+            recorded_at: String::new(),
+            day: Some(day),
+            zone: Some(zone.into()),
+        };
+        let readings = vec![
+            reading("day-1", "day", "500", 1),
+            reading("night-1", "night", "100", 2),
+            reading("day-2", "day", "510", 3),
+            reading("night-2", "night", "90", 4),
+        ];
+        assert_eq!(out_of_order_ids(&readings), vec!["night-2".to_string()]);
     }
 }
