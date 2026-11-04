@@ -14,7 +14,8 @@
 //! restored, `repair_restore.rs`), duplicates by natural key, R1 (one root Cash
 //! wallet, `repair_cash.rs`), R2 (account tree), R4 (envelopes of deleted
 //! goals), R5 (links to missing asset classes), the shares of the classes
-//! (`repair_natural.rs`), R8 (emergency fund and inflation sources that name a
+//! (`repair_natural.rs`), the links and money of shared events (R6, R7,
+//! `repair_events.rs`), R8 (emergency fund and inflation sources that name a
 //! missing record).
 
 use std::collections::{BTreeMap, HashSet};
@@ -39,12 +40,17 @@ impl UnlockedVault {
         let before = self.doc_value()?;
         let mut report = RepairReport::default();
         self.repair_restored_records(&mut report);
+        // Before the natural keys: a folded guest contact may leave two debt
+        // terms of one contact and asset behind.
+        self.repair_guest_contacts(&mut report);
         self.repair_natural_keys(&mut report);
         self.repair_cash_wallets(&mut report);
         self.repair_account_tree(&mut report);
         self.repair_goal_envelopes(&mut report);
         self.repair_class_links(&mut report);
         self.repair_shares(&mut report);
+        self.repair_event_links(&mut report);
+        self.repair_event_money(&mut report);
         // R8. Things another device deleted may still be named by a record
         // that arrived (an emergency account, an inflation source). Shared
         // events keep their references: a settlement or item that names a

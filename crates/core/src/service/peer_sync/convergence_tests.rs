@@ -1198,7 +1198,6 @@ fn move_beside_delete_keeps_the_account_tree_valid() {
 
 /// One device changes the currency of a bare event, the other buys in it.
 #[test]
-#[ignore = "known bug 116: a merge can leave a purchase at rate 1 in another currency"]
 fn currency_change_beside_a_purchase_keeps_the_rates_valid() {
     use super::tests::settle;
     let (_dir, mut left, mut right) = two_devices();
