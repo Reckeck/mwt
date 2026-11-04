@@ -129,6 +129,7 @@ The design — `docs/sync.md`. Works while the vault is unlocked and sync is on.
 | `sync_history` | — | `Vec<AppliedBatch { id, peer_name, applied_at, summary, undone_at }>`, newest first (up to 20 batches, 7 days) |
 | `sync_journal` | — | `Vec<SyncJournalEntry { id, at, peer_name, counts[{collection,count}], label, batch_id, outcome: applied/declined/failed/sent }>`, newest first (a ring of 200 rows; without record values) |
 | `sync_undo` | `batchId` | `UndoReport { restored, skipped }`; the rollback is a new edit, it goes to the other devices too |
+| `allow_merging` | `AllowMergingInput { target: transaction/reminder, id }` | `()`; "Allow merging": clears the `keep` mark that undoing a sync put on a copy, so the next sync may fold it into its twin again (a local edit, it goes to the other devices) |
 | `sync_restore_backup` | — | `()`; the vault as before the first batch of the last session (`<vault>.presync.bak`) |
 
 ### updates (`crates/app/src/commands/updates.rs`, logic `crates/app/src/updates.rs`, core `crates/core/src/updates`)

@@ -1474,6 +1474,21 @@ pub struct SimulateAutomationsInput {
     pub days: u32,
 }
 
+/// Which kind of record carries the «keep» mark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum MergeTarget {
+    Transaction,
+    Reminder,
+}
+
+/// «Allow merging»: clear the «keep» mark of one record.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+pub struct AllowMergingInput {
+    pub target: MergeTarget,
+    pub id: String,
+}
+
 /// Put a reminder off until a moment (RFC3339).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SnoozeReminderInput {

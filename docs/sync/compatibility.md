@@ -48,6 +48,7 @@ lacks:
 | Peers during the question | merges them, re-checks trust before applying | drops `Peers` there |
 | Log ties | breaks ties by key, same records everywhere | keeps insertion order, may keep other records at the cap |
 | Reminder ids | `auto-<kind>-<entity>` | random ids; dedupe bridges both by source |
+| Keep mark (`keep` on `TxMeta` and `Reminder`) | undoing a merge marks the copy it brings back; dedupe skips a pair holding a marked record, on every device with this build; «Allow merging» clears it | does not know the field: its dedupe may remove the copy again, and re-saving a record drops the mark; the mark is honoured once every device is on this build |
 
 The new side keeps tombstones longer, so a record deleted on the new side does
 not come back from an old peer that kept it. Nothing new goes on the wire:

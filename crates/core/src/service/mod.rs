@@ -1468,6 +1468,7 @@ impl UnlockedVault {
             .position(|known| known.meta().id == id)
             .ok_or_else(|| Error::Missing("transaction".into()))?;
         let mut origin = self.doc.transactions[index].meta().origin.clone();
+        let keep = self.doc.transactions[index].meta().keep;
         // A new amount for an operation booked approximately is the real one.
         if let TxOrigin::Workflow { estimated, .. } = &mut origin
             && *estimated
@@ -1478,6 +1479,8 @@ impl UnlockedVault {
         }
         tx.meta_mut().id = id.to_string();
         tx.meta_mut().origin = origin;
+        // The «keep» mark is not the form's to change.
+        tx.meta_mut().keep = keep;
         self.prepare_transaction(&mut tx)?;
         let event_edit = if follow_events {
             self.plan_shared_tx_edit(id, &tx)?

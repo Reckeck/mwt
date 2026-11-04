@@ -2,10 +2,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Money } from '@/entities/currency'
-
 import { Check, ExternalLink, Paperclip } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
+import { KeptMark } from '@/shared/ui/kept-mark'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { Button } from '@/shared/ui/button'
 import { call } from '@/shared/api/ipc'
@@ -34,7 +34,6 @@ import { dayLabel } from '../../lib/day-label'
 import { TX_KIND_ICON } from '../../lib/kind-icon'
 import { routeRepeats, sideRoute, sideRouteText } from '../../lib/side-route'
 import { useTxTitle } from '../../lib/tx-title'
-
 import type { TransactionRowProps } from './transaction-row.types'
 
 const props = withDefaults(defineProps<TransactionRowProps>(), { storeId: null, loss: null, openable: false, dated: true, selected: null })
@@ -157,6 +156,7 @@ const phoneLine = computed(() => {
         >
           <Paperclip class="size-3" aria-hidden="true" />{{ attached }}
         </span>
+        <KeptMark v-if="meta.keep" />
         <!-- Links sit above the see-through button; the row's own menu lists them (no menu of their own). -->
         <Badge v-for="key in badges" :key="key" variant="outline" class="pointer-events-auto relative min-w-0">
           <EntityLink :target="{ kind: 'category', id: key }" :label="context.categoryName(key)" plain :menu="false" />

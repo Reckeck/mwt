@@ -4,7 +4,9 @@
 
 use tauri::{AppHandle, State};
 use trade_core::appconfig::{UpdateAppSettingsInput, load_settings};
-use trade_core::ipc_contract::{SyncDecisionInput, SyncPeerView, SyncSettingsInput, SyncStatus};
+use trade_core::ipc_contract::{
+    AllowMergingInput, SyncDecisionInput, SyncPeerView, SyncSettingsInput, SyncStatus,
+};
 use trade_core::service::{AppliedBatch, UndoReport};
 use trade_core::sync::journal::SyncJournalEntry;
 
@@ -215,6 +217,21 @@ pub async fn sync_undo(batch_id: String, state: State<'_, AppState>) -> Result<U
         .as_mut()
         .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
     vault.sync_undo(&batch_id).map_err(err_to_string)
+}
+
+/// «Allow merging»: clear the «keep» mark of a transaction or a reminder.
+#[tauri::command]
+pub async fn allow_merging(
+    input: AllowMergingInput,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| err_to_string(trade_core::Error::RequiresUnlock))?;
+    vault
+        .allow_merging(input.target, &input.id)
+        .map_err(err_to_string)
 }
 
 /// The emergency exit: everything as before the last session's first batch.

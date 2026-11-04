@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Plus } from 'lucide-vue-next'
 
+import { useAllowMerging } from '@/features/allow-merging'
 import { ReminderDialog } from '@/features/reminder-edit'
 import { Button } from '@/shared/ui/button'
 import { ListHeader } from '@/shared/ui/list-header'
@@ -79,6 +80,8 @@ const remove = useMutation({
   meta: { error: 'reminder.deleteFailed', success: 'reminder.deleted' },
 })
 
+const allowMerging = useAllowMerging()
+
 const dialogOpen = ref(false)
 const editing = ref<Reminder | null>(null)
 function openNew() {
@@ -136,6 +139,7 @@ function openEdit(reminder: Reminder) {
           @finish="finish.mutate(reminder)"
           @edit="openEdit(reminder)"
           @remove="remove.mutate(reminder.id)"
+          @allow-merging="allowMerging.mutate({ target: 'reminder', id: reminder.id })"
         />
       </ul>
     </section>

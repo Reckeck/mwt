@@ -117,6 +117,11 @@ stores: Array<StoreBalanceChange>, };
 type AlertCondition = "above" | "below";
 
 /**
+ * «Allow merging»: clear the «keep» mark of one record.
+ */
+type AllowMergingInput = { target: MergeTarget, id: string, };
+
+/**
  * Whether an automation books the same amount each time.
  */
 type AmountMode = "fixed" | "varies";
@@ -3235,6 +3240,11 @@ currency: string, updated_at: string, };
 
 type MarketKind = "spot" | "futures" | "earn" | "funding" | "unified";
 
+/**
+ * Which kind of record carries the «keep» mark.
+ */
+type MergeTarget = "transaction" | "reminder";
+
 type MeterReading = { id: string, item_id: string, value: Amount, 
 /**
  * YYYY-MM.
@@ -4544,7 +4554,11 @@ source_key: string,
  * "Button in the reminder" (Auto-2 · 10): "Pay" opens the payment
  * form filled with this wallet and category.
  */
-pay: ReminderPay | null, };
+pay: ReminderPay | null, 
+/**
+ * Kept by hand: see `TxMeta::keep`.
+ */
+keep?: boolean, };
 
 type ReminderInput = { text: string, 
 /**
@@ -6501,7 +6515,13 @@ contact_id: string | null, origin: TxOrigin,
  * The utility bill (`UtilityItem.id`) this payment settles; older
  * payments are matched by comment and category instead.
  */
-utility_item_id?: string, };
+utility_item_id?: string, 
+/**
+ * Kept by hand: the user got this copy back by undoing a sync that had
+ * merged it away, so the dedupe never removes it again. Synced like any
+ * other field; only «Allow merging» (or deleting the record) clears it.
+ */
+keep?: boolean, };
 
 /**
  * How a transaction came to exist.

@@ -2,7 +2,7 @@
 //! save, describing the records to another device, applying and undoing what
 //! comes back (docs/sync.md). The pure parts live in [`crate::sync`].
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -11,10 +11,9 @@ use serde_json::Value;
 use zeroize::Zeroizing;
 
 use super::UnlockedVault;
-use super::auto_reminders::source_identity;
 use crate::error::{Error, Result};
 use crate::ipc_contract::{AfterApply, StoreBalanceChange, SyncCutReason};
-use crate::model::planning::Reminder;
+#[cfg(test)]
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::storage::VaultFile;
@@ -27,6 +26,7 @@ use crate::sync::state::{
 use crate::sync::track::Tracker;
 use crate::sync::view::{self, record_key, split_key};
 use crate::sync::{BatchEntry, RecordState, Stamp, SyncBatch, SyncSummary, TrustedPeer};
+use keep::{generated_key, reminder_identity};
 
 /// Told the keys of every local save, so a live session can send them on.
 pub trait SyncTap: Send + Sync {
@@ -817,6 +817,9 @@ impl UnlockedVault {
         // Log records the batch added: removed with a tombstone, or the peer
         // would send them back.
         let mut forgotten = Vec::new();
+        // Records the dedupe of this batch had removed and the undo brings
+        // back: they get the «keep» mark.
+        let mut brought_back = Vec::new();
         for entry in &entries {
             let current = self.state_of(&records, &entry.key);
             let union = split_key(&entry.key)
@@ -828,6 +831,9 @@ impl UnlockedVault {
                         .is_some_and(|(coll, _)| matches!(coll.rule, Rule::Log { .. }));
                 if added_log {
                     forgotten.push(entry.key.clone());
+                }
+                if entry.before.value.is_some() && entry.after.tombstone.is_some() {
+                    brought_back.push(entry.key.clone());
                 }
                 report.restored += 1;
             } else if let Some((coll, inner)) = split_key(&entry.key) {
@@ -848,6 +854,7 @@ impl UnlockedVault {
         doc.sync = std::mem::take(&mut self.doc.sync);
         doc.sync.batches[index].undone_at = Some(now_iso());
         self.doc = doc;
+        self.mark_kept(&brought_back);
         for key in &forgotten {
             self.sync_forget_log_record(key)?;
         }
@@ -931,39 +938,23 @@ impl UnlockedVault {
             rank: (Stamp, String),
             run_id: Option<String>,
         }
-        fn natural_key(origin: &TxOrigin) -> Option<(String, Option<&str>)> {
-            match origin {
-                TxOrigin::Import { exec_id } => Some((format!("import:{exec_id}"), None)),
-                // An automation is a workflow now and kept its id: both
-                // kinds of origin name the same planned moment alike.
-                TxOrigin::Automation {
-                    automation_id: maker,
-                    planned_at,
-                } => Some((format!("auto:{maker}:{planned_at}"), None)),
-                // The planned moment first: an old peer's copy of the same
-                // moment has no key, and both must meet.
-                TxOrigin::Workflow {
-                    workflow_id: maker,
-                    run_id,
-                    planned_at: Some(planned_at),
-                    ..
-                } => Some((format!("auto:{maker}:{planned_at}"), Some(run_id))),
-                TxOrigin::Workflow {
-                    run_id,
-                    run_key: Some(run_key),
-                    ..
-                } => Some((format!("run:{run_key}"), Some(run_id))),
-                _ => None,
-            }
-        }
 
         // (key of the record that goes, key of the record it passes edits to)
         let mut removals: Vec<(String, Option<String>)> = Vec::new();
 
+        // Kept by hand (the user undid a merge): never removed, never a
+        // reason to remove its twin.
+        let kept_tx: HashSet<&str> = self
+            .doc
+            .transactions
+            .iter()
+            .filter(|tx| tx.meta().keep)
+            .map(|tx| tx.meta().id.as_str())
+            .collect();
         let mut best: HashMap<String, Winner> = HashMap::new();
         for tx in &self.doc.transactions {
             let meta = tx.meta();
-            let Some((natural, run)) = natural_key(&meta.origin) else {
+            let Some((natural, run)) = generated_key(&meta.origin) else {
                 continue;
             };
             let rank = (
@@ -984,13 +975,16 @@ impl UnlockedVault {
         }
         for tx in &self.doc.transactions {
             let meta = tx.meta();
-            let Some((natural, run)) = natural_key(&meta.origin) else {
+            let Some((natural, run)) = generated_key(&meta.origin) else {
                 continue;
             };
             let Some(winner) = best.get(&natural) else {
                 continue;
             };
-            if winner.rank.1 == meta.id {
+            if winner.rank.1 == meta.id
+                || kept_tx.contains(meta.id.as_str())
+                || kept_tx.contains(winner.rank.1.as_str())
+            {
                 continue;
             }
             let stamp = self.created_of(&format!("transactions:{}", meta.id));
@@ -1009,18 +1003,10 @@ impl UnlockedVault {
             }
         }
 
-        // An automatic reminder is one per source (kind + entity id), however
-        // its id or its key was made. Reminders of the old build (random id,
-        // schedule-only key) group with the new ones by their source.
-        fn identity(reminder: &Reminder) -> Option<String> {
-            match &reminder.source {
-                Some(source) => Some(source_identity(source)),
-                None => (!reminder.source_key.is_empty()).then(|| reminder.source_key.clone()),
-            }
-        }
+        // An automatic reminder is one per source: `reminder_identity`.
         let mut first: HashMap<String, (Stamp, String)> = HashMap::new();
         for reminder in &self.doc.reminders {
-            let Some(group) = identity(reminder) else {
+            let Some(group) = reminder_identity(reminder) else {
                 continue;
             };
             let rank = (
@@ -1038,10 +1024,19 @@ impl UnlockedVault {
         }
         // The loser's later-edited fields (done, muted, snoozed, edited by
         // hand, the time) move into the kept copy, each by its own stamp.
+        let kept_reminders: HashSet<&str> = self
+            .doc
+            .reminders
+            .iter()
+            .filter(|reminder| reminder.keep)
+            .map(|reminder| reminder.id.as_str())
+            .collect();
         for reminder in &self.doc.reminders {
-            if let Some(group) = identity(reminder)
+            if let Some(group) = reminder_identity(reminder)
                 && let Some((_, kept)) = first.get(&group)
                 && *kept != reminder.id
+                && !kept_reminders.contains(reminder.id.as_str())
+                && !kept_reminders.contains(kept.as_str())
             {
                 removals.push((
                     format!("reminders:{}", reminder.id),
@@ -1445,6 +1440,9 @@ mod convergence_catalog;
 mod convergence_tests;
 #[cfg(test)]
 mod envelope_tests;
+mod keep;
+#[cfg(test)]
+mod keep_tests;
 #[cfg(test)]
 mod log_tests;
 #[cfg(test)]
@@ -2371,15 +2369,13 @@ mod tests {
         let report = left.sync_undo(&batch.id).unwrap();
         assert!(report.skipped.is_empty(), "{:?}", report.skipped);
         assert_eq!(comments(&left), vec!["first", "second, edited"]);
-        // Dedupe runs again with the next batch: the restored copy is a new
-        // local change, later than the kept one, so it goes again. Undo
-        // gives the copies back for a look; it does not outlaw the rule.
+        // Dedupe runs again with the next batch, but the undone copy carries
+        // the «keep» mark (stage M): it stays, on both devices. Taking the
+        // copy off again is «Allow merging» (`keep_tests.rs`).
         right.doc.stores[0].name = "Renamed".into();
         right.persist().unwrap();
         settle(&mut left, &mut right);
-        // The restored copy carries no field stamps (a restored record is
-        // stamped new), so its edit is not carried a second time.
-        assert_eq!(comments(&left), vec!["first"]);
+        assert_eq!(comments(&left), vec!["first", "second, edited"]);
         assert_eq!(comments(&right), comments(&left));
 
         // The other copy came in the batch itself: undo leaves the local one.

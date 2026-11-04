@@ -121,6 +121,12 @@ pub struct TxMeta {
     #[serde(default)]
     #[ts(optional)]
     pub utility_item_id: Option<String>,
+    /// Kept by hand: the user got this copy back by undoing a sync that had
+    /// merged it away, so the dedupe never removes it again. Synced like any
+    /// other field; only «Allow merging» (or deleting the record) clears it.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub keep: bool,
 }
 
 impl TxMeta {
@@ -134,6 +140,7 @@ impl TxMeta {
             contact_id: None,
             origin: TxOrigin::Manual,
             utility_item_id: None,
+            keep: false,
         }
     }
 }

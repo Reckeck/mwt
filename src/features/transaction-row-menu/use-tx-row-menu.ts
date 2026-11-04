@@ -1,8 +1,9 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { Eye, Pencil, Repeat2, Search, Tag, Trash2, User, Wallet } from 'lucide-vue-next'
+import { Eye, Pencil, Pin, Repeat2, Search, Tag, Trash2, User, Wallet } from 'lucide-vue-next'
 
+import { useAllowMerging } from '@/features/allow-merging'
 import type { UiAction } from '@/shared/ui/context-menu'
 import { openEntity } from '@/shared/lib/entity-link'
 import { accountContactId, similarFilter, similarLocation, txMeta, txSides, txStoreId } from '@/shared/lib/transactions'
@@ -22,6 +23,7 @@ export function useTxRowMenu(options: TxRowMenuOptions = {}): TxRowMenu {
   const { t } = useI18n()
   const router = useRouter()
   const context = useTxContext()
+  const allowMerging = useAllowMerging()
   const editing = ref<Transaction | null>(null)
   const duplicating = ref<Transaction | null>(null)
   const deleting = ref<Transaction | null>(null)
@@ -55,6 +57,14 @@ export function useTxRowMenu(options: TxRowMenuOptions = {}): TxRowMenu {
         run: () => (duplicating.value = tx),
       })
     }
+    // Only on a record the user got back by undoing a merge (the "kept" mark).
+    list.push({
+      id: 'allow-merging',
+      label: t('keep.allow'),
+      icon: Pin,
+      hidden: !txMeta(tx).keep,
+      run: () => allowMerging.mutate({ target: 'transaction', id: txMeta(tx).id }),
+    })
     const related: UiAction[] = [
       {
         id: 'similar',
