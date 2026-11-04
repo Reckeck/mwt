@@ -513,9 +513,27 @@ pub(super) fn seed_rub_rate(vault: &mut UnlockedVault) {
 }
 
 /// 121: the form sends the whole object; only one category changes in it.
-fn set_notice_category(vault: &mut UnlockedVault, ledger: &mut Ledger, number: usize) {
+const NOTICE_CATEGORIES: [crate::model::notify::NoticeCategory; 6] = {
     use crate::model::notify::NoticeCategory::{Debt, Goal, Loan, Reminder, Rent, Utilities};
-    let category = [Reminder, Loan, Rent, Utilities, Debt, Goal][number % 6];
+    [Reminder, Loan, Rent, Utilities, Debt, Goal]
+};
+
+fn notice_leads(vault: &UnlockedVault) -> Vec<u16> {
+    NOTICE_CATEGORIES
+        .iter()
+        .map(|category| {
+            vault
+                .doc
+                .settings
+                .notifications
+                .category(*category)
+                .lead_days
+        })
+        .collect()
+}
+
+fn set_notice_category(vault: &mut UnlockedVault, ledger: &mut Ledger, number: usize) {
+    let category = NOTICE_CATEGORIES[number % NOTICE_CATEGORIES.len()];
     let mut config = vault.doc.settings.notifications.clone();
     let mut entry = config.category(category);
     // Far from every default, and different for every edit.
@@ -844,9 +862,16 @@ fn undo_last_batch(vault: &mut UnlockedVault, ledger: &mut Ledger) {
         .iter()
         .map(|(event, item, purchase)| purchase_present(&vault.doc, event, item, purchase))
         .collect();
+    let leads_before = notice_leads(vault);
     let undone = vault
         .sync_undo(&batch.id)
         .is_ok_and(|report| report.restored > 0);
+    // The same for a notice lead: the value the undo put back counts as written.
+    for (index, lead) in notice_leads(vault).into_iter().enumerate() {
+        if leads_before.get(index) != Some(&lead) {
+            ledger.notice_writes.push((NOTICE_CATEGORIES[index], lead));
+        }
+    }
     // An explicit undo may remove a purchase the batch had added: that is the
     // user's own decision, so only what was there before and is gone after.
     let mut index = 0;
