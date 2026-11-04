@@ -16,7 +16,8 @@
 //! the report, and the device that received the deletion in a batch restores
 //! the latest value; the restore reaches this one by sync.
 //!
-//! Money references looked at: operations (stores, categories, contacts),
+//! Money references looked at: payments named by a shared purchase or
+//! settlement (`tx_id`), operations (stores, categories, contacts),
 //! envelopes and valuations (store), debt terms and event guests (contact), and
 //! in a shared event the organizer, buyers, settlements, hand-set totals and
 //! splits (participant). Participants are not records of their own: they come
@@ -95,7 +96,64 @@ impl UnlockedVault {
 
     pub(super) fn repair_restored_records(&mut self, report: &mut RepairReport) {
         self.restore_participants(report);
+        // Before stores, categories and contacts: a restored payment names
+        // its own wallets and categories, and they must be looked at too.
+        self.restore_referenced_transactions(report);
         self.restore_referenced_records(report);
+    }
+
+    // -- payments of shared events -----------------------------------------------
+
+    /// Payments (and debt transfers) that a shared purchase or settlement
+    /// names, which are gone with a tombstone. Deletion loses to a live money
+    /// reference: the payment comes back as it was. A payment that was never
+    /// here (no tombstone) is not touched; one with no value to restore goes
+    /// to `unrestored` and the purchase stays as it is.
+    fn restore_referenced_transactions(&mut self, report: &mut RepairReport) {
+        let named: BTreeSet<String> = self
+            .doc
+            .shared_events
+            .iter()
+            .flat_map(|event| {
+                let purchases = event.items.iter().flat_map(|item| &item.purchases);
+                purchases
+                    .filter_map(|purchase| purchase.tx_id.clone())
+                    .chain(
+                        event
+                            .settlements
+                            .iter()
+                            .filter_map(|settlement| settlement.tx_id.clone()),
+                    )
+            })
+            .collect();
+        let mut restored_any = false;
+        for id in named {
+            if self.doc.transactions.iter().any(|tx| tx.meta().id == id) {
+                continue;
+            }
+            let key = format!("transactions:{id}");
+            if !self.doc.sync.tombstones.contains_key(&key) {
+                continue;
+            }
+            match self.deleted_value::<crate::model::transaction::Transaction>(&key) {
+                Some(tx) => {
+                    let label = if tx.meta().comment.trim().is_empty() {
+                        tx.meta().timestamp.clone()
+                    } else {
+                        tx.meta().comment.clone()
+                    };
+                    report.restored.push((id, label));
+                    self.doc.transactions.push(tx);
+                    restored_any = true;
+                }
+                None => report.unrestored.push(id),
+            }
+        }
+        // Balances follow the operations; the tracker stamps the payment fresh
+        // and drops its tombstone when the repair settles.
+        if restored_any {
+            self.recompute_holdings();
+        }
     }
 
     // -- participants of shared events ----------------------------------------

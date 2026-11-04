@@ -1520,6 +1520,8 @@ mod repair_natural;
 mod repair_report;
 mod repair_restore;
 #[cfg(test)]
+mod repair_restore_payment_tests;
+#[cfg(test)]
 mod repair_restore_tests;
 mod repoint;
 #[cfg(test)]
