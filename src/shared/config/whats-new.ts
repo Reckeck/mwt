@@ -19,6 +19,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     points: [
       { key: 'noDoubles', route: 'settings:sync:sync-devices' },
       { key: 'keep', route: 'transactions' },
+      { key: 'protocol', route: 'settings:sync:sync-devices' },
     ],
   },
   {
