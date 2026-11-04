@@ -42,7 +42,7 @@ a month carrying over the remainder, the default; `until_income` — until the n
 income), `budget_currency` (empty = the base currency), `notifications` (v2:
 system notifications on/off, hide details while the vault is locked,
 the time of auto-reminders, per category — on/off, how many days ahead, whether to create
-auto-reminders), `crypto` (direction: whether the vault accounts for cryptocurrencies;
+auto-reminders), `inflation_manual` (flat annual inflation by lowercase currency, only where the group differs from the shipped table; group data), `inflation_adopted` (device flag: this device copied its old app-config rates into `inflation_manual`), `crypto` (direction: whether the vault accounts for cryptocurrencies;
 `false` hides `crypto`/`exchange` wallets, exchange widgets, and
 coins in the currency and asset pickers in the interface and stops background exchange polling; data and
 balances remain in the totals; the field is absent in an old or imported vault, then
@@ -218,7 +218,7 @@ enum Transaction {
 | Structure | Fields |
 |---|---|
 | `TxMeta` | `id`, `timestamp` (RFC3339 UTC), `comment`, `categories` (keys), `flow_id?` (chain), `contact_id?` ("with whom / through whom"), `origin` (`manual` \| `import { exec_id }` \| `automation { automation_id, planned_at }`) |
-| `PriceStamp` | `price_usd?`, `price_base?`, `fx_override?` — on each valued side |
+| `PriceStamp` | `price_usd?`, `price_base?`, `price_base_currency?` (lowercase code `price_base` is in; absent on old records, then read as before), `fx_override?` — on each valued side |
 | `Fee` | `{ asset, amount, price }` — instead of the `fee` + `fee_asset` pair |
 | `AccountRef` | `store(id)` \| `contact { contact_id, account_id? }` \| `raw(text)` — one side of a movement |
 | `TopupTx` / `PaymentTx` | `store_id`, `asset`, `amount`, `fee?`, `from?` / `to?` (not `store`), `details: KindDetails`, `price` |
