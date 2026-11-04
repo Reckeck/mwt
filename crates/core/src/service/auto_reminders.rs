@@ -44,6 +44,29 @@ struct Spec {
     when: When,
 }
 
+/// The text of the automatic reminders in the reader's language and in the
+/// other one, by source. The stored text is in the language of the device that
+/// wrote it, so a text equal to either rendering is still the generated one.
+struct Renderings {
+    mine: HashMap<ReminderSource, String>,
+    other: HashMap<ReminderSource, String>,
+}
+
+impl Renderings {
+    /// The reader's rendering, when the stored text is one of the two.
+    fn shown(&self, reminder: &Reminder) -> Option<&str> {
+        let source = reminder.source.as_ref()?;
+        let mine = self.mine.get(source)?;
+        let generated = *mine == reminder.text || self.other.get(source) == Some(&reminder.text);
+        generated.then_some(mine.as_str())
+    }
+
+    /// Whether the stored text is the other language's rendering of the same data.
+    fn is_other(&self, source: &ReminderSource, text: &str) -> bool {
+        self.other.get(source).is_some_and(|other| other == text)
+    }
+}
+
 /// The category a source's switches live under.
 pub fn category_of(kind: ReminderSourceKind) -> NoticeCategory {
     use ReminderSourceKind::*;
@@ -438,6 +461,36 @@ impl UnlockedVault {
         out
     }
 
+    /// The reminders as a reader in `ru` or English sees them. The stored
+    /// text of an automatic reminder is in the language of whichever device
+    /// wrote it; when it is one of the two renderings of its source it is
+    /// shown in the reader's language, otherwise (the user typed it, or the
+    /// data moved on) as it is. Nothing is written.
+    pub fn reminders_in(&self, now: i64, zone: &str, ru: bool) -> Vec<Reminder> {
+        let renderings = self.auto_renderings(Calendar::new(zone).date_of(now), ru);
+        let mut out = self.reminders();
+        for reminder in &mut out {
+            if let Some(text) = renderings.shown(reminder) {
+                reminder.text = text.to_string();
+            }
+        }
+        out
+    }
+
+    /// Both renderings of every automatic reminder's text, by source.
+    fn auto_renderings(&self, today: NaiveDate, ru: bool) -> Renderings {
+        let by_source = |ru: bool| -> HashMap<ReminderSource, String> {
+            self.auto_specs(today, ru)
+                .into_iter()
+                .map(|spec| (spec.source, spec.text))
+                .collect()
+        };
+        Renderings {
+            mine: by_source(ru),
+            other: by_source(!ru),
+        }
+    }
+
     /// Create, move and remove the automatic reminders so they match the data.
     /// Returns whether anything changed (and was written).
     pub fn sync_auto_reminders(&mut self, now: i64, zone: &str, ru: bool) -> crate::Result<bool> {
@@ -453,6 +506,7 @@ impl UnlockedVault {
             .filter(|(hour, minute)| *hour < 24 && *minute < 60)
             .unwrap_or((10, 0));
 
+        let renderings = self.auto_renderings(today, ru);
         let specs: Vec<Spec> = self
             .auto_specs(today, ru)
             .into_iter()
@@ -534,7 +588,11 @@ impl UnlockedVault {
                     if reminder.muted {
                         continue;
                     }
-                    if reminder.text != spec.text {
+                    // The other language's text of the same data is not stale:
+                    // rewriting it would make two devices trade it forever.
+                    if reminder.text != spec.text
+                        && !renderings.is_other(&spec.source, &reminder.text)
+                    {
                         reminder.text = spec.text.clone();
                         changed = true;
                     }
@@ -1107,5 +1165,127 @@ mod tests {
             "the mileage moved it earlier: {}",
             service[0].due_at
         );
+    }
+
+    // -- the language of the stored text (33) --------------------------------
+
+    const MARCH: &str = "2026-03-10T08:00:00Z";
+
+    fn loan_text(vault: &UnlockedVault) -> String {
+        auto(vault, ReminderSourceKind::LoanPayment)[0].text.clone()
+    }
+
+    #[test]
+    fn opening_the_list_in_another_language_leaves_the_stored_text_alone() {
+        let (_dir, mut vault) = empty_vault();
+        loan(&mut vault, 25);
+        let now = secs_or_now(MARCH);
+        vault.sync_auto_reminders(now, "UTC", true).unwrap();
+        let stored = loan_text(&vault);
+        assert!(stored.contains("Ипотека"));
+        // A device in English opens the list: nothing is rewritten.
+        assert!(!vault.sync_auto_reminders(now, "UTC", false).unwrap());
+        assert_eq!(loan_text(&vault), stored);
+        // And back.
+        assert!(!vault.sync_auto_reminders(now, "UTC", true).unwrap());
+        assert_eq!(loan_text(&vault), stored);
+    }
+
+    #[test]
+    fn changed_data_rewrites_the_text_in_the_callers_language() {
+        let (_dir, mut vault) = empty_vault();
+        let id = loan(&mut vault, 25);
+        let now = secs_or_now(MARCH);
+        vault.sync_auto_reminders(now, "UTC", true).unwrap();
+        vault
+            .doc
+            .stores
+            .iter_mut()
+            .find(|store| store.id == id)
+            .unwrap()
+            .name = "Mortgage".into();
+        assert!(vault.sync_auto_reminders(now, "UTC", false).unwrap());
+        let text = loan_text(&vault);
+        assert!(
+            text.contains("Mortgage") && !text.contains("Ипотека"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_reminder_is_read_in_the_language_of_the_reader() {
+        let (_dir, mut vault) = empty_vault();
+        loan(&mut vault, 25);
+        let now = secs_or_now(MARCH);
+        vault.sync_auto_reminders(now, "UTC", true).unwrap();
+        let own = vault
+            .create_reminder("Позвонить", "2026-03-12T09:00:00Z", None)
+            .unwrap();
+        let stored = loan_text(&vault);
+        let english = vault.reminders_in(now, "UTC", false);
+        let loan_reminder = english
+            .iter()
+            .find(|reminder| reminder.source.is_some())
+            .unwrap();
+        assert!(
+            loan_reminder.text.contains("Ипотека"),
+            "the name is the user's"
+        );
+        assert_ne!(loan_reminder.text, stored, "{}", loan_reminder.text);
+        // The reader's own language gives the stored text; a typed text and a
+        // text that matches no rendering are shown as they are.
+        let russian = vault.reminders_in(now, "UTC", true);
+        assert_eq!(
+            russian
+                .iter()
+                .find(|reminder| reminder.source.is_some())
+                .unwrap()
+                .text,
+            stored
+        );
+        assert_eq!(
+            english
+                .iter()
+                .find(|reminder| reminder.id == own.id)
+                .unwrap()
+                .text,
+            "Позвонить"
+        );
+        vault
+            .doc
+            .reminders
+            .iter_mut()
+            .find(|reminder| reminder.source.is_some())
+            .unwrap()
+            .text = "My own words".into();
+        let edited = vault.reminders_in(now, "UTC", false);
+        assert!(
+            edited
+                .iter()
+                .any(|reminder| reminder.text == "My own words")
+        );
+        // Nothing was written.
+        assert!(
+            vault
+                .doc
+                .reminders
+                .iter()
+                .any(|reminder| reminder.text == "My own words")
+        );
+    }
+
+    #[test]
+    fn a_notice_of_an_automatic_reminder_uses_the_language_of_the_device() {
+        let (_dir, mut vault) = empty_vault();
+        loan(&mut vault, 25);
+        vault
+            .sync_auto_reminders(secs_or_now(MARCH), "UTC", true)
+            .unwrap();
+        let notices = vault
+            .due_notices(secs_or_now("2026-03-24T10:00:30Z"), "UTC", false)
+            .unwrap();
+        let body = &notices[0].body;
+        assert_ne!(body, &loan_text(&vault));
+        assert!(body.contains("Ипотека"), "{body}");
     }
 }

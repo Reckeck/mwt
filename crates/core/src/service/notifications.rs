@@ -12,7 +12,7 @@ use crate::model::notify::{MAX_NOTICE_LOG, NoticeCategory, NoticeRecord};
 use crate::model::vault::now_iso;
 
 use super::UnlockedVault;
-use super::agenda::reminder_secs;
+use super::agenda::{reminder_is_due, reminder_secs};
 use super::auto_reminders::category_of;
 
 /// A reminder older than this is not announced any more: after a long time
@@ -178,7 +178,11 @@ impl UnlockedVault {
     pub fn due_notices(&mut self, now: i64, zone: &str, ru: bool) -> Result<Vec<NoticeRecord>> {
         let mut out = Vec::new();
 
-        for reminder in self.due_reminders(now) {
+        for reminder in self
+            .reminders_in(now, zone, ru)
+            .into_iter()
+            .filter(|reminder| reminder_is_due(reminder, now))
+        {
             let secs = reminder_secs(&reminder);
             if now - secs > REMINDER_STALE_SECS {
                 continue;

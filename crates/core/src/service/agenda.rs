@@ -34,6 +34,11 @@ pub(crate) fn reminder_secs(reminder: &Reminder) -> i64 {
         .map_or(due, |until| due.max(secs_or_now(until)))
 }
 
+/// Whether a reminder is waiting for the user at `now`.
+pub(crate) fn reminder_is_due(reminder: &Reminder, now: i64) -> bool {
+    !reminder.done && !reminder.muted && reminder_secs(reminder) <= now
+}
+
 /// The first date of a repeat after both `due_at` and `now`, RFC3339.
 pub(crate) fn next_occurrence(repeat: ReminderRepeat, due_at: &str, now: i64) -> Option<String> {
     let anchor = chrono::DateTime::parse_from_rfc3339(due_at)
@@ -285,7 +290,7 @@ impl UnlockedVault {
     pub fn due_reminders(&self, now: i64) -> Vec<Reminder> {
         self.reminders()
             .into_iter()
-            .filter(|reminder| !reminder.done && !reminder.muted && reminder_secs(reminder) <= now)
+            .filter(|reminder| reminder_is_due(reminder, now))
             .collect()
     }
 
