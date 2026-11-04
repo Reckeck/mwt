@@ -346,8 +346,11 @@ pub fn apply_device_edits(base: &Value, edited: &Value, current: &mut Value) {
             continue;
         }
         if coll.rule == Rule::Single {
+            // A dotted name is a part of an object field (`notifications.system`).
             let field = |doc: &Value, name: &str| {
-                doc.get(coll.name).and_then(|part| part.get(name)).cloned()
+                doc.get(coll.name)
+                    .and_then(|part| lookup(part, name))
+                    .cloned()
             };
             for name in coll.skip {
                 let (before, after) = (field(base, name), field(edited, name));
@@ -358,8 +361,14 @@ pub fn apply_device_edits(base: &Value, edited: &Value, current: &mut Value) {
                     continue;
                 };
                 match after {
-                    Some(value) => part.insert((*name).to_string(), value),
-                    None => part.remove(*name),
+                    Some(value) => insert_path(part, name, value),
+                    None => {
+                        let mut body = Value::Object(std::mem::take(part));
+                        take_path(&mut body, name);
+                        if let Value::Object(rest) = body {
+                            *part = rest;
+                        }
+                    }
                 };
             }
             continue;
@@ -592,11 +601,19 @@ pub fn write(doc: &mut Value, full: &str, value: Option<&Value>) {
             .entry(coll.name.to_string())
             .or_insert_with(|| Value::Object(Map::new()));
         if let Value::Object(current) = slot {
+            // The dotted device-only parts of the old object (`notifications.system`)
+            // are put back after the fields are replaced.
+            let before = Value::Object(current.clone());
             current.retain(|name, _| coll.skip.contains(&name.as_str()));
             for (name, field) in incoming {
                 if !coll.skip.contains(&name.as_str()) {
                     current.insert(name.clone(), field.clone());
                 }
+            }
+            let mut after = Value::Object(std::mem::take(current));
+            keep_nested_device_fields(coll, &mut after, &before);
+            if let Value::Object(rest) = after {
+                *current = rest;
             }
         }
         return;
@@ -828,6 +845,41 @@ mod tests {
         assert_eq!(
             doc["settings"],
             json!({"minimize_to_tray": false, "savings_rate": "20"})
+        );
+    }
+
+    #[test]
+    fn a_dotted_device_part_of_settings_stays_on_write_and_follows_an_editor() {
+        let mut doc = json!({"settings": {"notifications": {
+            "system": false, "hide_details_when_locked": true,
+            "default_time": "10:00", "categories": []
+        }}});
+        let shared = read(&doc, "settings:").expect("settings");
+        assert_eq!(
+            shared,
+            json!({"notifications": {"default_time": "10:00", "categories": []}})
+        );
+        write(
+            &mut doc,
+            "settings:",
+            Some(&json!({"notifications": {"default_time": "08:00", "categories": []}})),
+        );
+        assert_eq!(
+            doc["settings"]["notifications"],
+            json!({
+                "system": false, "hide_details_when_locked": true,
+                "default_time": "08:00", "categories": []
+            })
+        );
+        // An edit of the part in the JSON editor lands in the document.
+        let base = doc.clone();
+        let mut edited = doc.clone();
+        edited["settings"]["notifications"]["system"] = json!(true);
+        apply_device_edits(&base, &edited, &mut doc);
+        assert_eq!(doc["settings"]["notifications"]["system"], json!(true));
+        assert_eq!(
+            doc["settings"]["notifications"]["default_time"],
+            json!("08:00")
         );
     }
 

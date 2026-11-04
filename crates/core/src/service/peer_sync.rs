@@ -1521,6 +1521,8 @@ mod marks_tests;
 #[cfg(test)]
 mod nested_tests;
 #[cfg(test)]
+mod notice_settings_tests;
+#[cfg(test)]
 mod preview_tests;
 #[cfg(test)]
 mod purchase_tests;
