@@ -326,7 +326,21 @@ pub(super) fn apply_catalog_edit(
                 return;
             };
             let store_id = vault.doc.stores[0].id.clone();
-            let _ = vault.fund_goal(&id, &store_id, amount(&format!("{}", 1 + rng.below(20))));
+            if vault
+                .fund_goal(&id, &store_id, amount(&format!("{}", 1 + rng.below(20))))
+                .is_ok()
+            {
+                // Funding a goal whose envelope was deleted elsewhere is a new
+                // funding, not a resurrection: mark the envelopes it filled.
+                for envelope in vault.doc.envelopes.iter().filter(|envelope| {
+                    envelope.goal_id.as_deref() == Some(id.as_str())
+                        && envelope.store_id == store_id
+                }) {
+                    ledger
+                        .touched_after
+                        .insert(format!("envelopes:{}", envelope.id));
+                }
+            }
         }
         Edit::CreatePayment => {
             let store_id = vault.doc.stores[0].id.clone();
@@ -588,6 +602,23 @@ fn set_asset_classes(vault: &mut UnlockedVault, rng: &mut Rng) {
     }
 }
 
+fn purchase_present(
+    doc: &crate::model::vault::VaultDoc,
+    event_id: &str,
+    item_id: &str,
+    purchase_id: &str,
+) -> bool {
+    doc.shared_events
+        .iter()
+        .find(|event| event.id == event_id)
+        .and_then(|event| event.items.iter().find(|item| item.id == item_id))
+        .is_some_and(|item| {
+            item.purchases
+                .iter()
+                .any(|purchase| purchase.id == purchase_id)
+        })
+}
+
 /// Undo the newest batch this device applied. Undo brings records back, so
 /// everything the batch touched is exempt from the "deleted stays deleted" check.
 fn undo_last_batch(vault: &mut UnlockedVault, ledger: &mut Ledger) {
@@ -602,10 +633,23 @@ fn undo_last_batch(vault: &mut UnlockedVault, ledger: &mut Ledger) {
     else {
         return;
     };
-    if vault
+    let before: Vec<bool> = ledger
+        .purchases
+        .iter()
+        .map(|(event, item, purchase)| purchase_present(&vault.doc, event, item, purchase))
+        .collect();
+    let undone = vault
         .sync_undo(&batch.id)
-        .is_ok_and(|report| report.restored > 0)
-    {
+        .is_ok_and(|report| report.restored > 0);
+    // An explicit undo may remove a purchase the batch had added: that is the
+    // user's own decision, so only what was there before and is gone after.
+    let mut index = 0;
+    ledger.purchases.retain(|(event, item, purchase)| {
+        let was_present = before.get(index).copied().unwrap_or(false);
+        index += 1;
+        !(was_present && !purchase_present(&vault.doc, event, item, purchase))
+    });
+    if undone {
         let keys: Vec<String> = ledger.deleted.iter().cloned().collect();
         for key in keys {
             let owner = key.split('/').next().unwrap_or(&key).to_string();
@@ -886,6 +930,29 @@ fn check_shared_events(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Vio
         .iter()
         .map(|contact| contact.id.as_str())
         .collect();
+    // Money references: a purchase or a settlement names a payment that exists.
+    // No exception: a device that lost the value reports it, but after the full
+    // exchange the device holding the value has restored the payment for all.
+    for event in &doc.shared_events {
+        let purchases = event.items.iter().flat_map(|item| &item.purchases);
+        let named = purchases
+            .filter_map(|purchase| purchase.tx_id.as_deref())
+            .chain(
+                event
+                    .settlements
+                    .iter()
+                    .filter_map(|settlement| settlement.tx_id.as_deref()),
+            );
+        for tx_id in named {
+            if !doc.transactions.iter().any(|tx| tx.meta().id == tx_id) {
+                found(
+                    out,
+                    Item::DeletedReferenced28,
+                    format!("event {} names the missing operation {tx_id}", event.id),
+                );
+            }
+        }
+    }
     let mut guest_names: BTreeMap<&str, usize> = BTreeMap::new();
     for contact in &doc.contacts {
         if contact.name.starts_with("guest ") {
@@ -1011,6 +1078,12 @@ fn link_moved_or_gone(doc: &crate::model::vault::VaultDoc, purchase_id: &str) ->
         .transactions
         .iter()
         .any(|tx| crate::service::sync_ids::payment_link_id(&tx.meta().id) == purchase_id);
+    // Gone for good only when the payment carries a tombstone: a payment that
+    // is merely absent (no tombstone) is a loss the check must still see.
+    let payment_deleted = doc.sync.tombstones.keys().any(|key| {
+        key.strip_prefix("transactions:")
+            .is_some_and(|id| crate::service::sync_ids::payment_link_id(id) == purchase_id)
+    });
     let placed_elsewhere = doc
         .shared_events
         .iter()
@@ -1020,7 +1093,7 @@ fn link_moved_or_gone(doc: &crate::model::vault::VaultDoc, purchase_id: &str) ->
                 .iter()
                 .any(|purchase| purchase.id == purchase_id)
         });
-    !payment_exists || placed_elsewhere
+    (!payment_exists && payment_deleted) || placed_elsewhere
 }
 
 /// The deterministic form of the purchase loss: two devices add one purchase
