@@ -258,6 +258,9 @@ pub struct TerminalPatch {
 /// be able to grow the encrypted file without limit.
 pub const MAX_PENDING_IMPORTS: usize = 10_000;
 
+/// The id of the cash wallet the vault creates for itself (R1 of the sync repair).
+pub(crate) const CASH_WALLET_ID: &str = "cash";
+
 /// An unlocked vault held in memory for the duration of a session.
 /// The master password lives only here (zeroized on drop) — it is never
 /// written to disk and is required again on the next unlock.
@@ -928,6 +931,9 @@ impl UnlockedVault {
         }
         let name = if name.trim().is_empty() { "Cash" } else { name };
         let mut store = Store::new(name, StoreKind::Cash, "#16a34a");
+        // A fixed id: two vaults made apart meet in one record, and an old
+        // random-id wallet is folded into this one by the repair pass (R1).
+        store.id = CASH_WALLET_ID.to_string();
         if self.ensure_unique_name(None, None, &store.name).is_err() {
             store.name = format!("{} 2", store.name);
         }

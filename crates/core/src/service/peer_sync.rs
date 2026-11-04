@@ -1444,8 +1444,10 @@ mod recreate_tests;
 #[cfg(test)]
 mod reminder_tests;
 mod repair;
+mod repair_cash;
 mod repair_classes;
 mod repair_natural;
+mod repair_report;
 #[cfg(test)]
 mod run_key_tests;
 #[cfg(test)]
