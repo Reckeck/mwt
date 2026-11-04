@@ -338,9 +338,9 @@ release folder (Tauri static JSON: `version`, `notes`, `pub_date`, `platforms` `
 AppImage, `windows-x86_64` and `windows-x86_64-nsis` -> setup.exe, `windows-x86_64-msi` -> the first
 signed MSI, each `{signature, url}`; plus our `release_url` and `apk_url` for notice-only installs)
 and attaches it to the release. A platform without a `.sig` is left out with a warning. On the dev
-channel the same `latest-dev.json` is also put on the pre-release `updater-dev` (created if missing,
+channel the same `latest-dev.json` is also put on the pre-release `dev-updater` (created if missing,
 file replaced with `--clobber`), which has a stable URL; `prune-prereleases` only deletes `vX.Y.Z-N`
-tags, so `updater-dev` stays. The public key is `plugins.updater.pubkey` in `tauri.conf.json`; the
+tags, so `dev-updater` stays. The repository must not have immutable releases on (Settings -> General -> Releases): the manifest is replaced in place on every pre-release, and the tag of an immutable release can never be reused (the former `updater-dev` was lost that way on 2026-11-03). The public key is `plugins.updater.pubkey` in `tauri.conf.json`; the
 endpoint is set by the app at run time (`endpoints` is empty). `createUpdaterArtifacts` is not in
 `tauri.conf.json`: tauri fails a build that has it on but no `TAURI_SIGNING_PRIVATE_KEY`, so
 `xtask bundle linux` and `xtask build windows` add it through an extra `--config` only when the key is

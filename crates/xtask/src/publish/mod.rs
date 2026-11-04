@@ -369,7 +369,7 @@ fn write_manifest(
     Ok(path)
 }
 
-/// The dev channel reads its manifest from the `updater-dev` pre-release: create it or replace the file.
+/// The dev channel reads its manifest from the `dev-updater` pre-release: create it or replace the file.
 fn publish_dev_manifest(repo: &str, sha: &str, file: &Path, dry: bool) -> Result<()> {
     let file = file.display().to_string();
     let view = ["release", "view", manifest::DEV_RELEASE_TAG, "--repo", repo].map(String::from);

@@ -328,7 +328,7 @@ fn manifest_file_names_and_dev_release() {
     let create = super::manifest::dev_release_args("o/r", "cafe", "d/latest-dev.json", false);
     assert_eq!(
         &create[..3],
-        &strings(&["release", "create", "updater-dev"])[..]
+        &strings(&["release", "create", "dev-updater"])[..]
     );
     assert!(create.contains(&"--prerelease".to_string()));
     let upload = super::manifest::dev_release_args("o/r", "cafe", "d/latest-dev.json", true);
@@ -338,9 +338,9 @@ fn manifest_file_names_and_dev_release() {
 
 #[test]
 fn prune_never_picks_the_updater_release() {
-    let tags = strings(&["v1.0.0-3", "updater-dev", "v1.0.0", "v1.0.0-2", "v1.0.0-1"]);
+    let tags = strings(&["v1.0.0-3", "dev-updater", "v1.0.0", "v1.0.0-2", "v1.0.0-1"]);
     assert_eq!(select(&tags, 1), strings(&["v1.0.0-2", "v1.0.0-1"]));
-    assert_eq!(select(&strings(&["updater-dev"]), 0), Vec::<String>::new());
+    assert_eq!(select(&strings(&["dev-updater"]), 0), Vec::<String>::new());
 }
 
 #[test]

@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 /// The pre-release that holds the dev manifest under a stable URL. Never pruned.
-pub const DEV_RELEASE_TAG: &str = "updater-dev";
+pub const DEV_RELEASE_TAG: &str = "dev-updater";
 
 const PREFIX: &str = "multi-wallet-tracker";
 
@@ -105,7 +105,7 @@ pub fn build(input: &Input) -> (Value, Vec<String>) {
     (manifest, warnings)
 }
 
-/// `gh` arguments that put the dev manifest on `updater-dev`: upload over the old one when the
+/// `gh` arguments that put the dev manifest on `dev-updater`: upload over the old one when the
 /// release exists, create it (a pre-release) otherwise.
 pub fn dev_release_args(repo: &str, sha: &str, file: &str, exists: bool) -> Vec<String> {
     let mut args: Vec<String> = if exists {
