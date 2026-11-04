@@ -311,7 +311,7 @@ version, images ──► frontend ──► build (linux | android | windows) �
 - `aur` (prod) is `publish-aur` in an archlinux container; without the secret
   `AUR_SSH_PRIVATE_KEY` the step is skipped with a warning.
 - `backmerge` (prod) is `xtask backmerge --merge`: the token is the GitHub App's
-  (`actions/create-github-app-token`, secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY`), so the
+  (`actions/create-github-app-token`, variable `RELEASE_APP_CLIENT_ID` and secret `RELEASE_APP_PRIVATE_KEY`), so the
   PR into `development` gets its checks; the checkout has the full history. A conflict (or
   a `main` whose tree is not the release tip's) fails the job after the release is already published,
   with the reason in the Job Summary and the plain PR `main` → `development` left open.
@@ -397,7 +397,7 @@ The secrets that the workflows read (besides the automatic `GITHUB_TOKEN`):
 | `ANDROID_KEY_ALIAS` | the same | |
 | `AUR_SSH_PRIVATE_KEY` | `aur` (`publish-aur`) | a key added to the AUR account |
 | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | updater signatures (`release.yml`, Linux and Windows builds) | the content of `updater.key` and its password; no signatures without them |
-| `RELEASE_APP_ID`, `RELEASE_APP_PRIVATE_KEY` | the token of the release GitHub App (`release-start.yml`, the `backmerge` job of `release.yml`) | the App id and the content of its private key (.pem); the App needs contents, pull requests and workflows write. Without them the release cannot start (a PR or a push from `GITHUB_TOKEN` does not start the checks) |
+| `RELEASE_APP_PRIVATE_KEY` + variable `RELEASE_APP_CLIENT_ID` | the token of the release GitHub App (`release-start.yml`, the `backmerge` job of `release.yml`) | the content of its private key (.pem); the variable (not a secret, Settings → Secrets and variables → Actions → Variables) is the App Client ID (`Iv23…`, `client-id` of `create-github-app-token`; `app-id` is deprecated). Content of its private key (.pem); the App needs contents, pull requests and workflows write. Without them the release cannot start (a PR or a push from `GITHUB_TOKEN` does not start the checks) |
 
 The key files (`updater.key`, `updater.key.pub`, the Android keystore and passwords) live outside the
 repository on the maintainer machine (`~/.mwt-keys/`). The Android keystore was regenerated on

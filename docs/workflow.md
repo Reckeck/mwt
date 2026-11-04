@@ -165,7 +165,7 @@ The workflow files themselves are checked with `mise x actionlint@1.7.12 -- acti
    branches"): `cache-cleanup.yml` then cleans the caches of merged branches.
 4. **Secrets and permissions** (Settings → Secrets and variables → Actions):
    the Android signing keys, the updater key `TAURI_SIGNING_*`, `AUR_SSH_PRIVATE_KEY` — see [ci.md](ci.md#secrets-settings--secrets-and-variables--actions);
-   `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` (the GitHub App of the release: contents, pull
+   the variable `RELEASE_APP_CLIENT_ID` and the secret `RELEASE_APP_PRIVATE_KEY` (the GitHub App of the release: contents, pull
    requests and workflows write; installed on the repository). It replaces `GITHUB_TOKEN` where a
    push or a PR has to start the checks.
 5. **Merging** (Settings → General → Pull Requests): "Allow auto-merge", "Allow merge commits" and
