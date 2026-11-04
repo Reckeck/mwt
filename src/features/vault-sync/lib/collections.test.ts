@@ -43,6 +43,7 @@ describe('sortedChanges', () => {
       total: 3,
       collections: [group('settings'), group('stores'), group('transactions')],
       overwritten: [],
+      unstamped_conflicts: 0,
     }
     expect(sortedChanges(summary).map((entry) => entry.collection)).toEqual(['transactions', 'stores', 'settings'])
   })

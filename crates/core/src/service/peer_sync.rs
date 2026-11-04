@@ -447,6 +447,19 @@ impl UnlockedVault {
         peer: &PeerRef,
         carry: bool,
     ) -> Result<Option<AppliedBatch>> {
+        self.apply_batch_from(incoming, peer, carry, false)
+    }
+
+    /// [`Self::apply_batch`]; `external` is the records of an external copy
+    /// (`merge_from`): fields without a stamp on either side are reported.
+    /// Which value is picked does not depend on it.
+    fn apply_batch_from(
+        &mut self,
+        incoming: &BTreeMap<String, RecordState>,
+        peer: &PeerRef,
+        carry: bool,
+        external: bool,
+    ) -> Result<Option<AppliedBatch>> {
         Self::check_incoming(incoming)?;
         self.track_changes()?;
         for state in incoming.values() {
@@ -461,11 +474,18 @@ impl UnlockedVault {
         // else. Storing it would only restart its age.
         let incoming = &self.without_compacted(incoming, &records);
         let seen = self.doc.sync.seen_by.get(&peer.device_id).cloned();
-        let mut plan = crate::sync::plan::plan_seen(
-            incoming,
-            |key| self.state_of(&records, key),
-            seen.as_ref(),
-        );
+        let plan_of = |batch: &BTreeMap<String, RecordState>| {
+            if external {
+                crate::sync::plan::plan_external(batch, |key| self.state_of(&records, key))
+            } else {
+                crate::sync::plan::plan_seen(
+                    batch,
+                    |key| self.state_of(&records, key),
+                    seen.as_ref(),
+                )
+            }
+        };
+        let mut plan = plan_of(incoming);
         if plan.changes.is_empty() {
             return Ok(None);
         }
@@ -489,11 +509,7 @@ impl UnlockedVault {
                 .filter(|(key, _)| !cut.contains(key))
                 .map(|(key, state)| (key.clone(), state.clone()))
                 .collect();
-            plan = crate::sync::plan::plan_seen(
-                &rest,
-                |key| self.state_of(&records, key),
-                seen.as_ref(),
-            );
+            plan = plan_of(&rest);
             if plan.changes.is_empty() {
                 return Ok(None);
             }
@@ -665,7 +681,7 @@ impl UnlockedVault {
             device_id: EXTERNAL_COPY_DEVICE.into(),
             name: name.into(),
         };
-        self.sync_apply(&incoming, &peer)
+        self.apply_batch_from(&incoming, &peer, true, true)
     }
 
     /// Merge an external copy (sealed bytes, same password) in; the result is
@@ -1539,6 +1555,8 @@ mod terminal_tests;
 mod tombstone_tests;
 #[cfg(test)]
 mod transfer_tests;
+#[cfg(test)]
+mod unstamped_tests;
 
 #[cfg(test)]
 mod tests {

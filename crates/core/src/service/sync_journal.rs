@@ -74,6 +74,7 @@ mod tests {
                 ..CollectionChanges::default()
             }],
             overwritten: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -161,6 +162,7 @@ mod scrub_tests {
                 before: "OLDSECRET".into(),
                 after: "NEWSECRET".into(),
             }],
+            ..Default::default()
         }
     }
 

@@ -30,6 +30,9 @@ pub struct Overwrite {
 pub struct Merged {
     pub state: RecordState,
     pub overwrote: Vec<Overwrite>,
+    /// An external copy only (`merge_external`): some field differs and
+    /// neither side has a stamp for it, so the pick is arbitrary.
+    pub unstamped: bool,
 }
 
 /// The name an overwritten change of the kind of a record is listed under.
@@ -85,15 +88,36 @@ pub fn merge_seen(
     remote: &RecordState,
     seen: Option<&super::stamp::Stamp>,
 ) -> Merged {
+    merge_core(coll, local, remote, seen, false)
+}
+
+/// [`merge`] for a record of an external copy of the vault. The value picked
+/// is the same; what differs is the report: a field that differs with no
+/// stamp on either side (two copies with no shared history) is listed as
+/// overwritten when the other copy's value wins, and flagged in `unstamped`.
+pub fn merge_external(coll: &Collection, local: &RecordState, remote: &RecordState) -> Merged {
+    merge_core(coll, local, remote, None, true)
+}
+
+fn merge_core(
+    coll: &Collection,
+    local: &RecordState,
+    remote: &RecordState,
+    seen: Option<&super::stamp::Stamp>,
+    external: bool,
+) -> Merged {
     let unchanged = |state: &RecordState| Merged {
         state: state.clone(),
         overwrote: Vec::new(),
+        unstamped: false,
     };
     if let Rule::Union { .. } = coll.rule {
         return unchanged(if local.value.is_some() { local } else { remote });
     }
     match (&local.value, &remote.value) {
-        (Some(mine), Some(theirs)) => merge_fields(coll, local, remote, [mine, theirs], seen),
+        (Some(mine), Some(theirs)) => {
+            merge_fields(coll, local, remote, [mine, theirs], seen, external)
+        }
         (Some(_), None) => unchanged(&resolve_deletion(local, remote)),
         (None, Some(_)) => unchanged(&resolve_deletion(remote, local)),
         (None, None) => {
@@ -134,6 +158,7 @@ fn merge_fields(
     remote: &RecordState,
     [mine, theirs]: [&Value; 2],
     seen: Option<&super::stamp::Stamp>,
+    external: bool,
 ) -> Merged {
     let local_stamps = local.stamps.clone().unwrap_or_default();
     let remote_stamps = remote.stamps.clone().unwrap_or_default();
@@ -171,6 +196,7 @@ fn merge_fields(
                 tombstone: None,
             },
             overwrote,
+            unstamped: false,
         };
     }
 
@@ -184,6 +210,7 @@ fn merge_fields(
         fields: Default::default(),
     };
     let mut overwrote = Vec::new();
+    let mut unstamped_conflict = false;
     // Entries that vanished keep their stamp: it is what removes them on a
     // device that still has them.
     let stamped_entries = |stamps: &'_ RecordStamps| {
@@ -254,11 +281,21 @@ fn merge_fields(
         } else {
             (local_value, local_stamp)
         };
+        let differs = !same_edit(coll, name, local_value, remote_value)
+            && !(derives && derived::is_derived(coll, name));
+        // No shared history: nobody can say which side changed the field.
+        // A whole record is ordered by its newest stamp, so only a tie there
+        // is a guess.
+        let guessed = external
+            && differs
+            && unstamped
+            && !is_device_field(coll, name)
+            && (!coll.whole || local_stamp == remote_stamp);
+        unstamped_conflict |= guessed;
         if take_remote
-            && !same_edit(coll, name, local_value, remote_value)
-            && !(derives && derived::is_derived(coll, name))
-            && edited_here(coll, &local_stamps, name)
-            && unseen_edit(local_stamp, seen)
+            && differs
+            && (guessed
+                || (edited_here(coll, &local_stamps, name) && unseen_edit(local_stamp, seen)))
         {
             overwrote.push(Overwrite {
                 field: name.clone(),
@@ -307,6 +344,7 @@ fn merge_fields(
             tombstone: None,
         },
         overwrote,
+        unstamped: unstamped_conflict,
     }
 }
 
