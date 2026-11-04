@@ -6682,7 +6682,7 @@
   "contacts.sheet.noHistoryHint": "Record the first transfer or debt and it shows up here.",
   "contacts.sheet.noEventsHint": "Shared events - dinners, trips, split purchases - will show up here.",
   "contacts.sheet.toSharedMoney": "Go to shared money",
-  "contacts.sheet.deleteHint": "The contact «{name}» will be deleted. If there are operations with them it cannot be deleted - archive it instead.",
+  "contacts.sheet.deleteHint": "The contact «{name}» will be deleted. If there are operations or shared events with them it cannot be deleted - archive it instead or unlink it from the event.",
   "contacts.table.contactCount.one": "{count} contact",
   "contacts.table.contactCount.few": "{count} contacts",
   "contacts.table.contactCount.many": "{count} contacts",

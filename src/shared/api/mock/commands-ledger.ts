@@ -7,6 +7,7 @@ import { mockContactSummaries, mockContacts, mockKindsFor, mockTransactionFrom, 
 import { mockDebtTerms } from './catalog'
 import { contactBalancesWithEvents } from './shared-events/view'
 import { applySharedEdit, cascadeSharedDelete, planSharedTxEdit } from './shared-events/ledger-sync'
+import { mockSharedEvents } from './shared-events/state'
 import { emitMock } from '../mock-bus'
 import { resolve } from './core'
 import type { MockCommands } from './core'
@@ -75,8 +76,13 @@ export const contactsCommands: MockCommands = {
   },
   delete_contact: ({ args }) => {
     const id = String(args?.id)
-    if (mockTransactions.some((tx) => txContactIds(tx).includes(id)))
-      throw { code: 'INVALID_INPUT', message: 'the contact is used by transactions; archive it instead' }
+    const inEvent = mockSharedEvents.some((event) => event.participants.some((person) => person.contact_id === id))
+    if (inEvent || mockTransactions.some((tx) => txContactIds(tx).includes(id)))
+      throw {
+        code: 'INVALID_INPUT',
+        message:
+          'the contact is used by transactions, wallets or shared events; archive it, or unlink it from the event first',
+      }
     mockContacts.splice(
       mockContacts.findIndex((entry) => entry.id === id),
       1,
