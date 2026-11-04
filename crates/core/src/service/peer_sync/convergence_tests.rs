@@ -1154,7 +1154,6 @@ fn violations_of(items: &[Item], vault: &UnlockedVault) -> Vec<String> {
 /// One device moves an account under a wallet, the other deletes that
 /// (empty) wallet: the account is left under a missing parent.
 #[test]
-#[ignore = "known bug 25: a merge can leave an account under a missing parent"]
 fn move_beside_delete_keeps_the_account_tree_valid() {
     use super::tests::settle;
     let (_dir, mut left, mut right) = two_devices();

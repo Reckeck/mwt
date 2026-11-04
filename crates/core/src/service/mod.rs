@@ -406,6 +406,10 @@ impl UnlockedVault {
         // same on every device) are never stamped as an edit.
         let envelopes_settled = vault.settle_envelopes();
         vault.start_tracking()?;
+        // A merge left the tree or a reference broken in a copy that was
+        // saved before the invariant pass existed: fixed once, stamped as an
+        // edit of this device.
+        let repaired = !vault.repair_invariants(None)?.is_empty();
         // A vault from before the single cash wallet gets one on first open.
         vault.ensure_cash_wallet("Cash")?;
         // Built-in categories added in later versions reach old vaults too.
@@ -423,6 +427,7 @@ impl UnlockedVault {
             || graphs_migrated
             || incomplete
             || attachments_pruned
+            || repaired
             || secrets_scrubbed
             || fmt != vault.fmt
         {
