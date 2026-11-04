@@ -2598,6 +2598,84 @@ mod tests {
         );
     }
 
+    fn pin(name: &str) -> crate::model::entity_ref::Pinned {
+        crate::model::entity_ref::Pinned::Filter {
+            id: format!("pin-{name}"),
+            name: name.into(),
+            query: String::new(),
+        }
+    }
+
+    /// The dashboard layout, its period and the pins belong to the device:
+    /// neither side takes the other's, in either direction.
+    #[test]
+    fn dashboard_layout_period_and_pins_never_travel() {
+        use crate::model::vault::DashPeriod;
+        let (_dir, mut left, mut right) = two_devices();
+        left.doc.settings.dashboard_period = DashPeriod::Year;
+        left.doc.settings.pinned = vec![pin("left")];
+        left.doc.settings.dashboard_widgets = vec![crate::model::vault::DashboardWidgetCfg {
+            id: "w-left".into(),
+            col: 0,
+            row: 0,
+            width: 6,
+            height: 4,
+            pinned: false,
+            store_id: None,
+            period: None,
+            scenario_id: None,
+        }];
+        left.doc.settings.savings_rate = crate::Amount::parse("15").unwrap();
+        left.persist().unwrap();
+        right.doc.settings.pinned = vec![pin("right")];
+        right.doc.settings.dashboard_period = DashPeriod::Quarter;
+        right.persist().unwrap();
+        settle(&mut left, &mut right);
+        assert_eq!(
+            right.doc.settings.savings_rate,
+            left.doc.settings.savings_rate
+        );
+        assert_eq!(left.doc.settings.dashboard_period, DashPeriod::Year);
+        assert_eq!(right.doc.settings.dashboard_period, DashPeriod::Quarter);
+        assert_eq!(left.doc.settings.pinned, vec![pin("left")]);
+        assert_eq!(right.doc.settings.pinned, vec![pin("right")]);
+        assert_eq!(left.doc.settings.dashboard_widgets.len(), 1);
+        assert!(right.doc.settings.dashboard_widgets.is_empty());
+    }
+
+    /// A device from before the change still sends these fields, with a newer
+    /// stamp: they change nothing here.
+    #[test]
+    fn a_settings_record_from_an_older_build_leaves_layout_and_pins_alone() {
+        use crate::model::vault::DashPeriod;
+        let (_dir, mut left, mut right) = two_devices();
+        right.doc.settings.pinned = vec![pin("mine")];
+        right.persist().unwrap();
+        let mut records = left.sync_records(&["settings:".to_string()]).unwrap();
+        let state = records.get_mut("settings:").unwrap();
+        let value = state.value.as_mut().unwrap().as_object_mut().unwrap();
+        value.insert("dashboard_period".into(), serde_json::json!("year"));
+        value.insert(
+            "pinned".into(),
+            serde_json::json!([{
+                "type": "filter", "id": "theirs", "name": "theirs", "query": ""
+            }]),
+        );
+        value.insert("savings_rate".into(), serde_json::json!("0.33"));
+        let later = Stamp::new(u64::MAX / 4, 0, "aaaaaaaa");
+        let stamps = state.stamps.as_mut().unwrap();
+        for field in ["dashboard_period", "pinned", "savings_rate"] {
+            stamps.fields.insert(field.into(), later.clone());
+        }
+        right.sync_apply(&records, &peer("left")).unwrap();
+        assert_eq!(
+            right.doc.settings.savings_rate,
+            crate::Amount::parse("0.33").unwrap()
+        );
+        assert_eq!(right.doc.settings.dashboard_period, DashPeriod::default());
+        assert_eq!(right.doc.settings.pinned, vec![pin("mine")]);
+    }
+
     #[test]
     fn a_record_under_a_foreign_key_is_refused() {
         let (_dir, mut left, mut right) = two_devices();

@@ -86,6 +86,12 @@ A schema error on "Apply" is shown by the editor as a parse error
 (`DESERIALIZE`), not as `INCOMPATIBLE_VAULT`: it is a typo in the draft, not an
 old file.
 
+## Fields of one device
+
+`settings.dashboard_widgets`, `settings.dashboard_period` and `settings.pinned` are
+not synced: each device keeps its own in its vault file. An edit here changes this
+device only and is not offered to the others.
+
 ## What is dangerous here
 
 The file contains **all** transactions and Bybit keys in plain text. Do not commit
