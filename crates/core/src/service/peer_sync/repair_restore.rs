@@ -41,7 +41,10 @@ impl UnlockedVault {
     /// made on this device leaves no such entry, and an older entry would hold
     /// a value from before later edits (restoring it with a fresh stamp would
     /// beat the right value everywhere), so then there is nothing to restore.
-    fn deleted_value<Record: DeserializeOwned>(&self, key: &str) -> Option<Record> {
+    pub(in crate::service) fn deleted_value<Record: DeserializeOwned>(
+        &self,
+        key: &str,
+    ) -> Option<Record> {
         let tombstone = self.doc.sync.tombstones.get(key)?;
         self.doc
             .sync
