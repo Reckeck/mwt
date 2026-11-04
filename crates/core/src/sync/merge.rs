@@ -32,6 +32,13 @@ pub struct Merged {
     pub overwrote: Vec<Overwrite>,
 }
 
+/// The name an overwritten change of the kind of a record is listed under.
+pub const KIND_FIELD: &str = "kind";
+
+fn tag_value(fields: &Fields) -> Value {
+    fields.tag.clone().map_or(Value::Null, Value::String)
+}
+
 /// `true` when the remote side wins a tie-free comparison or, on a tie, has
 /// the larger value. Symmetric: swapping the sides flips the answer.
 fn remote_wins(
@@ -56,7 +63,28 @@ fn same_edit(coll: &Collection, name: &str, left: Option<&Value>, right: Option<
     }
 }
 
+/// [`merge_seen`] without knowledge of what the other device has seen: every
+/// edit of this device counts.
 pub fn merge(coll: &Collection, local: &RecordState, remote: &RecordState) -> Merged {
+    merge_seen(coll, local, remote, None)
+}
+
+/// Whether an edit of this device made with `stamp` is news to the device the
+/// record comes from. `seen` is the newest stamp of this device's clock that
+/// device already has (`SyncState.seen_by`); without it every edit is news.
+/// A stamp another device made is not an edit of this one.
+fn unseen_edit(stamp: &super::stamp::Stamp, seen: Option<&super::stamp::Stamp>) -> bool {
+    seen.is_none_or(|seen| stamp.device == seen.device && stamp > seen)
+}
+
+/// Merge `remote` into `local`; `seen` limits "overwritten" to what the
+/// device `remote` comes from had not seen.
+pub fn merge_seen(
+    coll: &Collection,
+    local: &RecordState,
+    remote: &RecordState,
+    seen: Option<&super::stamp::Stamp>,
+) -> Merged {
     let unchanged = |state: &RecordState| Merged {
         state: state.clone(),
         overwrote: Vec::new(),
@@ -65,7 +93,7 @@ pub fn merge(coll: &Collection, local: &RecordState, remote: &RecordState) -> Me
         return unchanged(if local.value.is_some() { local } else { remote });
     }
     match (&local.value, &remote.value) {
-        (Some(mine), Some(theirs)) => merge_fields(coll, local, remote, mine, theirs),
+        (Some(mine), Some(theirs)) => merge_fields(coll, local, remote, [mine, theirs], seen),
         (Some(_), None) => unchanged(&resolve_deletion(local, remote)),
         (None, Some(_)) => unchanged(&resolve_deletion(remote, local)),
         (None, None) => {
@@ -104,8 +132,8 @@ fn merge_fields(
     coll: &Collection,
     local: &RecordState,
     remote: &RecordState,
-    mine: &Value,
-    theirs: &Value,
+    [mine, theirs]: [&Value; 2],
+    seen: Option<&super::stamp::Stamp>,
 ) -> Merged {
     let local_stamps = local.stamps.clone().unwrap_or_default();
     let remote_stamps = remote.stamps.clone().unwrap_or_default();
@@ -121,13 +149,28 @@ fn merge_fields(
             Some(theirs),
         );
         let winner = if take_remote { remote } else { local };
+        // The kind this device had is gone: that is an overwrite when this
+        // device itself changed the record (edited a field, or made the new
+        // kind: a kind change is a fresh record with a later `created`).
+        let edited_here = (local_stamps.latest() > &local_stamps.created
+            || local_stamps.created > remote_stamps.created)
+            && unseen_edit(local_stamps.latest(), seen);
+        let overwrote = if take_remote && edited_here {
+            vec![Overwrite {
+                field: KIND_FIELD.to_string(),
+                before: tag_value(&local_fields),
+                after: tag_value(&remote_fields),
+            }]
+        } else {
+            Vec::new()
+        };
         return Merged {
             state: RecordState {
                 value: winner.value.clone(),
                 stamps: winner.stamps.clone(),
                 tombstone: None,
             },
-            overwrote: Vec::new(),
+            overwrote,
         };
     }
 
@@ -215,6 +258,7 @@ fn merge_fields(
             && !same_edit(coll, name, local_value, remote_value)
             && !(derives && derived::is_derived(coll, name))
             && edited_here(coll, &local_stamps, name)
+            && unseen_edit(local_stamp, seen)
         {
             overwrote.push(Overwrite {
                 field: name.clone(),
@@ -414,6 +458,131 @@ mod tests {
         );
         let merged = both_ways(coll, &left, &right);
         assert_eq!(merged.value, right.value);
+    }
+
+    #[test]
+    fn a_lost_kind_change_is_reported_as_overwritten() {
+        let coll = find("transactions").expect("rule");
+        // This device turned a top-up into a payment (a new record: fresh
+        // `created`); the other one edited the top-up later.
+        let mine = state(
+            json!({"payment": {"meta": {"id": "t"}, "amount": "1"}}),
+            at(3, "a"),
+            &[],
+        );
+        let theirs = state(
+            json!({"topup": {"meta": {"id": "t"}, "amount": "2"}}),
+            at(1, "a"),
+            &[("topup.amount", at(5, "b"))],
+        );
+        let merged = merge(coll, &mine, &theirs);
+        assert_eq!(merged.state.value, theirs.value);
+        assert_eq!(merged.overwrote.len(), 1, "{:?}", merged.overwrote);
+        assert_eq!(merged.overwrote[0].before, json!("payment"));
+        assert_eq!(merged.overwrote[0].after, json!("topup"));
+        // The side that won loses nothing.
+        assert!(merge(coll, &theirs, &mine).overwrote.is_empty());
+    }
+
+    #[test]
+    fn a_lost_field_edit_against_a_kind_change_is_reported_as_overwritten() {
+        let coll = find("transactions").expect("rule");
+        let mine = state(
+            json!({"topup": {"meta": {"id": "t"}, "amount": "2"}}),
+            at(1, "a"),
+            &[("topup.amount", at(4, "a"))],
+        );
+        let theirs = state(
+            json!({"payment": {"meta": {"id": "t"}, "amount": "1"}}),
+            at(6, "b"),
+            &[],
+        );
+        let merged = merge(coll, &mine, &theirs);
+        assert_eq!(merged.overwrote.len(), 1, "{:?}", merged.overwrote);
+        assert_eq!(merged.overwrote[0].before, json!("topup"));
+    }
+
+    #[test]
+    fn an_untouched_record_that_changes_kind_elsewhere_is_no_overwrite() {
+        let coll = find("transactions").expect("rule");
+        let mine = state(
+            json!({"topup": {"meta": {"id": "t"}, "amount": "1"}}),
+            at(1, "a"),
+            &[],
+        );
+        let theirs = state(
+            json!({"payment": {"meta": {"id": "t"}, "amount": "1"}}),
+            at(6, "b"),
+            &[],
+        );
+        assert!(merge(coll, &mine, &theirs).overwrote.is_empty());
+    }
+
+    #[test]
+    fn an_edit_up_to_the_seen_stamp_is_no_overwrite_a_later_one_is() {
+        let coll = find("stores").expect("rule");
+        let mine = state(
+            json!({"id": "s", "name": "Mine"}),
+            at(1, "a"),
+            &[("name", at(5, "a"))],
+        );
+        let theirs = state(
+            json!({"id": "s", "name": "Theirs"}),
+            at(1, "a"),
+            &[("name", at(7, "b"))],
+        );
+        let overwrites =
+            |seen: Option<Stamp>| merge_seen(coll, &mine, &theirs, seen.as_ref()).overwrote;
+        assert_eq!(overwrites(None).len(), 1);
+        assert!(overwrites(Some(at(5, "a"))).is_empty());
+        assert!(overwrites(Some(at(6, "a"))).is_empty());
+        assert_eq!(overwrites(Some(at(4, "a"))).len(), 1);
+    }
+
+    #[test]
+    fn a_stamp_of_another_device_is_not_an_edit_of_this_one() {
+        let coll = find("stores").expect("rule");
+        let mine = state(
+            json!({"id": "s", "name": "Mine"}),
+            at(1, "a"),
+            &[("name", at(5, "c"))],
+        );
+        let theirs = state(
+            json!({"id": "s", "name": "Theirs"}),
+            at(1, "a"),
+            &[("name", at(7, "b"))],
+        );
+        assert!(
+            merge_seen(coll, &mine, &theirs, Some(&at(2, "a")))
+                .overwrote
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_kind_change_the_peer_saw_is_no_overwrite() {
+        let coll = find("transactions").expect("rule");
+        let mine = state(
+            json!({"payment": {"meta": {"id": "t"}, "amount": "1"}}),
+            at(3, "a"),
+            &[],
+        );
+        let theirs = state(
+            json!({"topup": {"meta": {"id": "t"}, "amount": "2"}}),
+            at(1, "a"),
+            &[("topup.amount", at(5, "b"))],
+        );
+        assert!(
+            merge_seen(coll, &mine, &theirs, Some(&at(3, "a")))
+                .overwrote
+                .is_empty()
+        );
+        assert_eq!(
+            merge_seen(coll, &mine, &theirs, Some(&at(2, "a")))
+                .overwrote
+                .len(),
+            1
+        );
     }
 
     #[test]

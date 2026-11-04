@@ -8,8 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::fields::changed_fields;
-use super::merge::merge;
+use super::merge::merge_seen;
 use super::registry::Collection;
+use super::stamp::Stamp;
 use super::state::RecordState;
 use super::view::{comparable_record, label, split_key};
 
@@ -169,6 +170,16 @@ pub fn plan(
     incoming: &BTreeMap<String, RecordState>,
     local: impl Fn(&str) -> RecordState,
 ) -> SyncPlan {
+    plan_seen(incoming, local, None)
+}
+
+/// [`plan`] for a batch from a device that has seen this one's edits up to
+/// `seen` (`SyncState.seen_by`): those are not listed as overwritten.
+pub fn plan_seen(
+    incoming: &BTreeMap<String, RecordState>,
+    local: impl Fn(&str) -> RecordState,
+    seen: Option<&Stamp>,
+) -> SyncPlan {
     let mut out = SyncPlan::default();
     let mut groups: BTreeMap<&'static str, CollectionChanges> = BTreeMap::new();
     for (key, remote) in incoming {
@@ -176,7 +187,7 @@ pub fn plan(
             continue;
         };
         let before = local(key);
-        let merged = merge(coll, &before, remote);
+        let merged = merge_seen(coll, &before, remote, seen);
         let same_value = same_record(coll, &merged.state.value, &before.value);
         if same_value && merged.state.same_marks(&before) {
             continue;
