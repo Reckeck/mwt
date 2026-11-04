@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
-use super::flatten::{Order, join_arrays, split_array};
+use super::flatten::{InnerEntries, Order, join_arrays, split_array, split_inner};
 use super::registry::{COLLECTIONS, Collection, Rule, find};
 use super::state::RecordStamps;
 
@@ -172,7 +172,9 @@ fn split_field(coll: &Collection, name: &str, field: &Value, fields: &mut BTreeM
                 if entries.is_empty() {
                     fields.insert(name.to_string(), field.clone());
                 }
-                fields.extend(entries);
+                for (entry, item) in entries {
+                    split_inner(coll, name, &entry, item, fields);
+                }
             }
             None => {
                 fields.insert(name.to_string(), field.clone());
@@ -235,6 +237,9 @@ fn split_nested_arrays(coll: &Collection, fields: &mut BTreeMap<String, Value>) 
 
 /// `(head, key)` when `name` is the entry `head.<key>` of a split array.
 fn array_entry<'name>(coll: &Collection, name: &'name str) -> Option<(&'static str, &'name str)> {
+    if coll.inner_entry(name).is_some() {
+        return None;
+    }
     coll.flatten_by.iter().find_map(|(head, _)| {
         name.strip_prefix(head)
             .and_then(|rest| rest.strip_prefix('.'))
@@ -387,7 +392,15 @@ pub fn join_with(coll: &Collection, fields: &Fields, order: &Order) -> Value {
     }
     let mut body = Map::new();
     let mut arrays: BTreeMap<&str, BTreeMap<String, Value>> = BTreeMap::new();
+    let mut inner: InnerEntries = BTreeMap::new();
     for (name, value) in &fields.fields {
+        if let Some(entry) = coll.inner_entry(name) {
+            inner
+                .entry((entry.head, entry.parent.to_string(), entry.field))
+                .or_default()
+                .insert(entry.key.to_string(), value.clone());
+            continue;
+        }
         if let Some((head, key)) = array_entry(coll, name) {
             arrays
                 .entry(head)
@@ -406,7 +419,7 @@ pub fn join_with(coll: &Collection, fields: &Fields, order: &Order) -> Value {
             }
         }
     }
-    join_arrays(coll, arrays, order, &mut body);
+    join_arrays(coll, arrays, &inner, order, &mut body);
     // A nested array with no entry and no marker still has to exist when its
     // parent does: the typed document may require it.
     for (head, _) in coll

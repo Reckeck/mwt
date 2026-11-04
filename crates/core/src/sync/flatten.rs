@@ -61,6 +61,11 @@ pub fn entry_stamp<'stamps>(
     if let Some(own) = stamps.fields.get(name) {
         return own;
     }
+    // A purchase without a stamp of its own was last changed with its item
+    // (stamps written before the purchases were split say so).
+    if let Some(inner) = coll.inner_entry(name) {
+        return entry_stamp(coll, stamps, inner.parent);
+    }
     // Every head above the entry may carry the stamp of an older device.
     let floor = coll
         .heads()
@@ -77,6 +82,9 @@ pub fn entry_stamp<'stamps>(
 /// field above it (an older device writes the field as one).
 pub fn edited_here(coll: &Collection, stamps: &RecordStamps, name: &str) -> bool {
     stamps.fields.contains_key(name)
+        || coll
+            .inner_entry(name)
+            .is_some_and(|inner| edited_here(coll, stamps, inner.parent))
         || coll
             .heads()
             .any(|head| under(head, name) && whole_stamp(stamps, head).is_some())
@@ -162,6 +170,35 @@ pub fn split_array(head: &str, key_path: &str, items: &[Value]) -> Option<Vec<(S
     Some(entries)
 }
 
+/// The entry `entry` of the array `head`, with the arrays inside the item
+/// (`Collection.flatten_inner`) taken out into entries of their own. An inner
+/// array that cannot be keyed stays in the item.
+pub fn split_inner(
+    coll: &Collection,
+    head: &str,
+    entry: &str,
+    mut item: Value,
+    fields: &mut BTreeMap<String, Value>,
+) {
+    let mut inner_entries = Vec::new();
+    for (inner_head, field, path) in coll.flatten_inner {
+        if *inner_head != head {
+            continue;
+        }
+        let Some(Value::Array(inner)) = item.get(*field) else {
+            continue;
+        };
+        if let Some(found) = split_array(&format!("{entry}.{field}"), path, inner) {
+            inner_entries.extend(found);
+            if let Value::Object(map) = &mut item {
+                map.remove(*field);
+            }
+        }
+    }
+    fields.insert(entry.to_string(), item);
+    fields.extend(inner_entries);
+}
+
 /// The order items were in on the devices a merge came from.
 #[derive(Default)]
 pub struct Order<'doc> {
@@ -180,6 +217,36 @@ impl<'doc> Order<'doc> {
         }
     }
 
+    /// The keys of the array `field` inside the item `parent_key` of `head`,
+    /// per device.
+    fn inner_keys(
+        &self,
+        head: &str,
+        parent_path: &str,
+        parent_key: &str,
+        field: &str,
+        inner_path: &str,
+    ) -> Vec<Vec<String>> {
+        self.bodies
+            .iter()
+            .map(|body| {
+                let mut seen = HashSet::new();
+                lookup(body, head)
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .find(|item| item_key(item, parent_path).as_deref() == Some(parent_key))
+                    .and_then(|item| item.get(field))
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|item| item_key(item, inner_path))
+                    .filter(|key| seen.insert(key.clone()))
+                    .collect()
+            })
+            .collect()
+    }
+
     fn keys(&self, head: &str, key_path: &str) -> Vec<Vec<String>> {
         self.bodies
             .iter()
@@ -196,6 +263,10 @@ impl<'doc> Order<'doc> {
             .collect()
     }
 }
+
+/// Entries of the arrays inside items, by `(array, item entry name, field)`
+/// and then by the key of the inner item.
+pub type InnerEntries = BTreeMap<(&'static str, String, &'static str), BTreeMap<String, Value>>;
 
 /// Join the entries of one array in a deterministic order: the sequence both
 /// devices share, where they differ the entries only one side has first (the
@@ -216,13 +287,54 @@ pub fn join_array(
             .map(|stamps| entry_stamp(coll, stamps, &format!("{head}.{key}")).clone())
             .unwrap_or_default()
     };
+    join_keys(order.keys(head, key_path), entries, &rank)
+}
+
+/// The purchases of one item, in the same deterministic order.
+fn join_inner(
+    coll: &Collection,
+    (head, parent, field): (&str, &str, &str),
+    entries: &BTreeMap<String, Value>,
+    order: &Order,
+) -> Vec<Value> {
+    let (Some(parent_path), Some(inner_path)) = (
+        coll.item_key(head),
+        coll.flatten_inner
+            .iter()
+            .find(|(inner_head, inner_field, _)| *inner_head == head && *inner_field == field)
+            .map(|(_, _, path)| *path),
+    ) else {
+        return Vec::new();
+    };
+    let rank = |key: &str| {
+        order
+            .stamps
+            .map(|stamps| entry_stamp(coll, stamps, &format!("{parent}.{field}.{key}")).clone())
+            .unwrap_or_default()
+    };
+    let parent_key = parent
+        .strip_prefix(head)
+        .and_then(|rest| rest.strip_prefix('.'))
+        .unwrap_or_default();
+    join_keys(
+        order.inner_keys(head, parent_path, parent_key, field, inner_path),
+        entries,
+        &rank,
+    )
+}
+
+fn join_keys(
+    sequences: Vec<Vec<String>>,
+    entries: &BTreeMap<String, Value>,
+    rank: &dyn Fn(&str) -> Stamp,
+) -> Vec<Value> {
     let mut sequence: Vec<String> = Vec::new();
-    for keys in order.keys(head, key_path) {
+    for keys in sequences {
         let keys: Vec<String> = keys
             .into_iter()
             .filter(|key| entries.contains_key(key))
             .collect();
-        sequence = merge_sequences(&sequence, &keys, &rank);
+        sequence = merge_sequences(&sequence, &keys, rank);
     }
     let placed: HashSet<&String> = sequence.iter().collect();
     let mut rest: Vec<&String> = entries.keys().filter(|key| !placed.contains(key)).collect();
@@ -298,18 +410,94 @@ pub fn with_legacy_heads(coll: &Collection, stamps: &mut RecordStamps) {
     }
 }
 
-/// Build the body entries of the split arrays into `body`.
+/// Build the body entries of the split arrays into `body`. The arrays inside
+/// the items come from `inner`; the inner entries of an item that is not
+/// there are dropped.
 pub fn join_arrays(
     coll: &Collection,
-    arrays: BTreeMap<&str, BTreeMap<String, Value>>,
+    mut arrays: BTreeMap<&str, BTreeMap<String, Value>>,
+    inner: &InnerEntries,
     order: &Order,
     body: &mut Map<String, Value>,
 ) {
+    for (head, entries) in &mut arrays {
+        for (key, item) in entries.iter_mut() {
+            let parent = format!("{head}.{key}");
+            for (inner_head, field, _) in coll.flatten_inner {
+                if inner_head != head {
+                    continue;
+                }
+                let group = inner.get(&(*inner_head, parent.clone(), *field));
+                let rows = group
+                    .map(|group| join_inner(coll, (head, &parent, field), group, order))
+                    .unwrap_or_default();
+                if let Value::Object(map) = item {
+                    map.insert((*field).to_string(), Value::Array(rows));
+                }
+            }
+        }
+    }
     for (head, entries) in arrays {
         insert_path(
             body,
             head,
             Value::Array(join_array(coll, head, &entries, order)),
         );
+    }
+}
+
+/// After the entries of a merge are decided: a purchase whose item is gone.
+/// The later of the two wins, as for any other field: a purchase newer than
+/// the removal of its item brings the item back (from the side that still has
+/// it, stamped as that purchase); every other one goes with the item. The
+/// stamp of a dropped entry stays, so the device that still holds it removes
+/// it too.
+pub fn settle_orphans(
+    coll: &Collection,
+    fields: &mut BTreeMap<String, Value>,
+    stamps: &mut RecordStamps,
+    sources: &[&BTreeMap<String, Value>],
+) {
+    let mut orphans: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for name in fields.keys() {
+        if let Some(inner) = coll.inner_entry(name)
+            && !fields.contains_key(inner.parent)
+        {
+            orphans
+                .entry(inner.parent.to_string())
+                .or_default()
+                .push(name.clone());
+        }
+    }
+    for (parent, names) in orphans {
+        let removed = entry_stamp(coll, stamps, &parent).clone();
+        let newest = names
+            .iter()
+            .map(|name| entry_stamp(coll, stamps, name).clone())
+            .max();
+        let revived = newest
+            .filter(|newest| *newest > removed)
+            .and_then(|newest| {
+                sources
+                    .iter()
+                    .find_map(|side| side.get(&parent))
+                    .map(|item| (item.clone(), newest))
+            });
+        match revived {
+            Some((item, newest)) => {
+                fields.insert(parent.clone(), item);
+                stamps.fields.insert(parent, newest);
+            }
+            None => {
+                for name in names {
+                    // Keep a stamp that says "removed" for the entry.
+                    let stamp = entry_stamp(coll, stamps, &name)
+                        .clone()
+                        .max(removed.clone());
+                    stamps.fields.insert(name.clone(), stamp);
+                    fields.remove(&name);
+                }
+            }
+        }
     }
 }

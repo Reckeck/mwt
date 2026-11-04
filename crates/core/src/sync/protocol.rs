@@ -9,7 +9,10 @@ use crate::error::{Error, Result};
 /// Bumped on an incompatible change; devices on different versions refuse
 /// to sync and ask to update instead.
 /// 2: notices may carry the `security` category (vault transfer).
-pub const PROTOCOL_VERSION: u32 = 2;
+/// 3: every purchase of a shared event is an entry of its own
+/// (`items.<id>.purchases.<id>`); a device on 2 would overwrite a whole item
+/// and lose a parallel purchase (`docs/sync/compatibility.md`).
+pub const PROTOCOL_VERSION: u32 = 3;
 
 /// Largest message after reassembly: a manifest or records batch is split
 /// well below it, so anything larger is a broken or hostile peer.

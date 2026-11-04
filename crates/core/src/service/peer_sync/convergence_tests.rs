@@ -1116,12 +1116,10 @@ fn convergence_quick_fixed_seed() {
     run_tolerating(42, 50, Start::Copied, KNOWN_OPEN);
 }
 
-/// The proof the bugs of stage M reproduce: the same runs with no item
-/// tolerated. Red until every slice has removed its item from `KNOWN_OPEN`;
-/// run it with `cargo test -p trade-core without_known_open -- --ignored`.
+/// Guard: the same runs with no item tolerated (`KNOWN_OPEN` is empty now, so
+/// this is the strict form of the tests above, with a per-item report).
 #[test]
-#[ignore = "red on purpose until the stage M fixes land; shows which invariants break"]
-fn random_edits_without_known_open_flags_are_red_today() {
+fn random_edits_with_no_item_tolerated_stay_green() {
     let steps = env_number("MWT_CONV_STEPS").unwrap_or(DEFAULT_STEPS);
     let mut report = Vec::new();
     for start in [Start::Copied, Start::Separate] {
@@ -1148,7 +1146,6 @@ fn random_edits_without_known_open_flags_are_red_today() {
 
 /// Two devices each add a purchase to the same item before they meet.
 #[test]
-#[ignore = "known bug: purchases live inside the item, the later write wins and one is lost"]
 fn parallel_purchases_to_one_item_both_survive() {
     assert_eq!(catalog::two_purchases_to_one_item(), 2);
 }
