@@ -206,13 +206,20 @@ fn vault_id(app: &AppHandle) -> Option<String> {
 
 /// Stop, then start again if sync is on and a vault is open.
 pub fn restart(app: &AppHandle) {
-    stop(app);
+    // The background service stays up across a restart (a daily tag change
+    // would otherwise stop it and start it again from the background, which
+    // Android 12+ refuses); the `arm(true)` below only refreshes its text.
+    stop_run(app, true);
     clear_errors(&mut Host::hub(app));
     if !sync_enabled(app) {
+        #[cfg(target_os = "android")]
+        background::arm(app, false);
         emit_status(app);
         return;
     }
     let Some(vault_id) = vault_id(app) else {
+        #[cfg(target_os = "android")]
+        background::arm(app, false);
         emit_status(app);
         return;
     };
@@ -243,11 +250,22 @@ pub fn restart(app: &AppHandle) {
 }
 
 pub fn stop(app: &AppHandle) {
+    stop_run(app, false);
+}
+
+/// [`stop`]; `keep_background` leaves the Android background service armed
+/// (a restart that starts right away).
+fn stop_run(app: &AppHandle, keep_background: bool) {
     // Given back even when no run was created (a failed start).
     multicast_lock::hold_for_sync(app, false);
-    if let Some(run) = teardown(app) {
-        #[cfg(target_os = "android")]
+    // Also without a run: a failed start must not leave the service armed.
+    #[cfg(target_os = "android")]
+    if !keep_background {
         background::arm(app, false);
+    }
+    #[cfg(not(target_os = "android"))]
+    let _ = keep_background;
+    if let Some(run) = teardown(app) {
         let _ = run.stop.send(true);
         if let Some(announce) = run.announce {
             announce.shutdown();

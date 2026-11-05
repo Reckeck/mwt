@@ -4308,7 +4308,7 @@
   "sync.firewall.copied": "Command copied",
   "sync.firewall.copyFailed": "Could not copy the command",
   "sync.backgroundLock.label": "Lock in the background",
-  "sync.backgroundLock.hint": "A minimized app keeps syncing (a notification shows it). If no sync happens for this long, the vault locks.",
+  "sync.backgroundLock.hint": "A minimized app keeps syncing while devices are linked (a notification shows it). If no sync happens for this long, the vault locks.",
   "sync.backgroundLock.minutes": "after {count} min",
   "sync.backgroundLock.never": "never",
   "errors.SYNC_CHANNEL": "The connection broke or the data was damaged",

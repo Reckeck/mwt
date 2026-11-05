@@ -35,6 +35,7 @@ class MulticastArgs {
 @InvokeArg
 class BackgroundArgs {
   var armed: Boolean = false
+  var wake: Boolean = false
   var channel: String = "Sync"
   var title: String = "Sync"
   var text: String = ""
@@ -76,8 +77,8 @@ class NetPlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
+  /** Idempotent: the service ignores a stop it was never asked to run. */
   private fun stopService() {
-    if (!serviceOn) return
     SyncService.stop(activity.applicationContext)
     serviceOn = false
   }
@@ -86,16 +87,14 @@ class NetPlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun background(invoke: Invoke) {
     val args = invoke.parseArgs(BackgroundArgs::class.java)
-    val changed = SyncService.texts.text != args.text
     SyncService.texts = SyncService.Texts(args.channel, args.title, args.text, args.lock, args.stop)
+    SyncService.wake = args.wake
     armed = args.armed
     activity.runOnUiThread {
       if (!armed) {
         stopService()
-      } else if (inBackground && (!serviceOn || changed)) {
-        // A running service redraws its notification on a new start.
-        serviceOn = false
-        startService()
+      } else if (inBackground) {
+        if (serviceOn) SyncService.refresh() else startService()
       }
     }
     invoke.resolve(JSObject())
