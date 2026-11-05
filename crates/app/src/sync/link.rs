@@ -537,6 +537,7 @@ async fn session<H: Host>(
                 hub.inbound_blocked = true;
             } else if !dialer {
                 hub.inbound_blocked = false;
+                hub.network_public = false;
             }
         }
         if dialer {

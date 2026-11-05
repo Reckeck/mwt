@@ -144,6 +144,10 @@ fn tick(app: &AppHandle) -> bool {
                 .count()
         };
         show(app, linked);
+        // Here and not in `status`: see `platform_net::refresh_notifications`.
+        if platform_net::refresh_notifications(app) {
+            super::emit_status(app);
+        }
     }
     // After "Stop" (`paused`) sync is off but the vault still locks.
     if (armed || paused)

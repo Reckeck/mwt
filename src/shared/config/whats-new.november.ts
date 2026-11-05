@@ -3,6 +3,11 @@ import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_NOVEMBER: WhatsNewEntry[] = [
   {
+    id: 'syncStageE',
+    date: '2026-11-05',
+    points: [{ key: 'platform', route: 'settings:sync:sync-devices' }],
+  },
+  {
     id: 'syncStageP',
     date: '2026-11-05',
     points: [

@@ -108,9 +108,10 @@ The design — `docs/sync.md`. Works while the vault is unlocked and sync is on.
 
 | Command | Input | Output |
 |---|---|---|
-| `sync_status` | — | `SyncStatus { enabled, role, device_id, device_name, confirm_first, prefer_main, key_storage, sessions, has_backup, background_supported, background_lock_min, network }`; `network` — diagnostics: port, address, how many devices are visible, `inbound_blocked`, `firewall_fix` (`none`/`auto`/`manual`), commands, the code of the last error; in `sessions[]` during pairing `pairing_code` and `pairing_expires_ms` (Unix ms, until when the code is valid) |
+| `sync_status` | — | `SyncStatus { enabled, role, device_id, device_name, confirm_first, prefer_main, key_storage, sessions, has_backup, background_supported, background_lock_min, network, notifications_blocked }`; `notifications_blocked` — Android: the background notification is not allowed (false elsewhere); `network` — diagnostics: port, address, how many devices are visible, `inbound_blocked`, `network_public` (Windows: the rule was added but the network is Public; set by `sync_open_firewall`), `firewall_fix` (`none`/`auto`/`manual`), commands, the code of the last error; in `sessions[]` during pairing `pairing_code` and `pairing_expires_ms` (Unix ms, until when the code is valid) |
 | `sync_set_settings` | `SyncSettingsInput { enabled?, confirm_first?, prefer_main?, device_name?, background_lock_min? }` | `SyncStatus`; turning on and off take effect at once; on Android turning on asks for the notification permission |
-| `sync_open_firewall` | — | `SyncStatus`; a rule for ports 53318–53319/tcp from the local subnet (pkexec or UAC); `SYNC_FIREWALL` — canceled or no firewall found |
+| `sync_open_firewall` | — | `SyncStatus`; a rule for ports 53318–53327/tcp from the local subnet (pkexec or UAC); on Windows afterwards the network category is read and `network_public` set; `SYNC_FIREWALL` — canceled or no firewall found |
+| `sync_open_notification_settings` | — | `()`; Android: opens the system page of this app's notifications; `UNSUPPORTED` elsewhere |
 | `transfer_receive_start` | — | `TransferReceiveView`; the device is visible nearby by name for 5 minutes, without an open vault |
 | `transfer_receive_stop` | — | `()` |
 | `transfer_receive_decide` | `accept` | `()`; "Accept" / "Decline" the request on the screen |

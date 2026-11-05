@@ -120,6 +120,12 @@ export function useSyncActions() {
     meta: { success: 'sync.firewall.opened', error: 'sync.firewall.openFailed' },
   })
 
+  // Android: the system page where the background notification is allowed.
+  const openNotificationSettings = useMutation({
+    mutationFn: () => call('sync_open_notification_settings'),
+    meta: { error: 'sync.notifications.openFailed', silent: 'the system settings page opening is the outcome' },
+  })
+
   // A Flatpak cannot reach the host firewall: the user runs the command.
   const copyCommand = useMutation({
     mutationFn: (command: string) => navigator.clipboard.writeText(command),
@@ -138,6 +144,7 @@ export function useSyncActions() {
     undo,
     restore,
     openFirewall,
+    openNotificationSettings,
     copyCommand,
   }
 }

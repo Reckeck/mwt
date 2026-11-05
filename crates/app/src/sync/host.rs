@@ -20,6 +20,10 @@ pub(crate) trait Host: Clone + Send + Sync + 'static {
     fn settings(&self) -> AppSettings;
     fn device_key(&self) -> Result<DeviceKey>;
     fn key_storage(&self) -> &'static str;
+    /// Android: the background notification is not allowed (a test host: never).
+    fn notifications_blocked(&self) -> bool {
+        false
+    }
     fn emit<S: Serialize + Clone>(&self, event: &str, payload: S);
     /// Show notices that arrived by sync (the system notice follows focus).
     fn deliver(&self, notices: Vec<NoticeRecord>);
@@ -73,6 +77,17 @@ impl Host for AppHandle {
 
     fn key_storage(&self) -> &'static str {
         super::keystore::storage(self)
+    }
+
+    fn notifications_blocked(&self) -> bool {
+        #[cfg(target_os = "android")]
+        {
+            crate::platform_net::notifications_blocked()
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            false
+        }
     }
 
     fn emit<S: Serialize + Clone>(&self, event: &str, payload: S) {

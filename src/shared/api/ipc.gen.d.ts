@@ -5891,7 +5891,12 @@ since_ms: number | null,
 /**
  * Another device could not connect here: a firewall drops incoming connections.
  */
-inbound_blocked: boolean, firewall_fix: SyncFirewallFix, 
+inbound_blocked: boolean, 
+/**
+ * Windows: the rule was added but the network is Public, so the
+ * Private-only rule does not apply (set by `sync_open_firewall`).
+ */
+network_public: boolean, firewall_fix: SyncFirewallFix, 
 /**
  * The commands that open the port by hand.
  */
@@ -6030,7 +6035,12 @@ background_lock_min: number,
 /**
  * What the network looks like from here (the diagnostics line).
  */
-network: SyncNetworkView, };
+network: SyncNetworkView, 
+/**
+ * Android 13+: the notification background sync needs is not allowed, so
+ * sync pauses in the background. Always false elsewhere.
+ */
+notifications_blocked: boolean, };
 
 type SyncSummary = { total: number, collections: Array<CollectionChanges>, overwritten: Array<OverwrittenField>, 
 /**

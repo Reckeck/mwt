@@ -2425,6 +2425,9 @@ pub struct SyncStatus {
     pub background_lock_min: u32,
     /// What the network looks like from here (the diagnostics line).
     pub network: SyncNetworkView,
+    /// Android 13+: the notification background sync needs is not allowed, so
+    /// sync pauses in the background. Always false elsewhere.
+    pub notifications_blocked: bool,
 }
 
 /// How a firewall that drops incoming sync connections can be opened here.
@@ -2455,6 +2458,9 @@ pub struct SyncNetworkView {
     pub since_ms: Option<i64>,
     /// Another device could not connect here: a firewall drops incoming connections.
     pub inbound_blocked: bool,
+    /// Windows: the rule was added but the network is Public, so the
+    /// Private-only rule does not apply (set by `sync_open_firewall`).
+    pub network_public: bool,
     pub firewall_fix: SyncFirewallFix,
     /// The commands that open the port by hand.
     pub firewall_commands: Vec<String>,
