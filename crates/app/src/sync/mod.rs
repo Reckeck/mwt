@@ -260,6 +260,8 @@ pub(crate) fn teardown<H: Host>(app: &H) -> Option<Run> {
     let (run, links) = {
         let mut hub = Host::hub(app);
         hub.inbound_blocked = false;
+        // A start still in flight compares its generation before it inserts a Run.
+        hub.generation += 1;
         let links: Vec<_> = std::mem::take(&mut hub.links).into_values().collect();
         (hub.run.take(), links)
     };
