@@ -7,9 +7,10 @@ import { Copy, ShieldAlert, ShieldCheck, WifiOff } from 'lucide-vue-next'
 import { useSyncActions, useSyncStatus } from '@/features/vault-sync'
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert'
 import { Button } from '@/shared/ui/button'
+import { errorCodeText } from '@/shared/lib/error-code-text'
 
 /** Why devices do not see each other: the port, the address, who is in sight, the firewall. */
-const { t } = useI18n()
+const { t, te } = useI18n()
 const { status } = useSyncStatus()
 const { openFirewall, copyCommand } = useSyncActions()
 
@@ -40,7 +41,7 @@ const fix = computed(() => network.value?.firewall_fix ?? 'none')
 const showFirewall = computed(() => fix.value !== 'none' && (network.value?.inbound_blocked || lonely.value))
 const lastError = computed(() => {
   const code = network.value?.last_error
-  return code ? t(`errors.${code}`) : ''
+  return code ? errorCodeText(code, t, te) : ''
 })
 </script>
 

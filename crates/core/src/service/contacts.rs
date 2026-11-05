@@ -208,9 +208,7 @@ impl UnlockedVault {
     /// Only a contact nothing refers to can be deleted; otherwise archive it.
     pub fn delete_contact(&mut self, id: &str) -> Result<()> {
         if self.contact_in_use(id, None) {
-            return Err(Error::InvalidInput(
-                "the contact is used by transactions, wallets or shared events; archive it, or unlink it from the event first".into(),
-            ));
+            return Err(Error::ContactInUse);
         }
         let before = self.doc.contacts.len();
         self.doc.contacts.retain(|contact| contact.id != id);
@@ -740,7 +738,8 @@ mod tests {
                 "1",
             ))
             .unwrap();
-        assert!(vault.delete_contact(&contact.id).is_err());
+        let refused = vault.delete_contact(&contact.id).unwrap_err();
+        assert_eq!(refused.code(), "CONTACT_IN_USE");
         let updated = vault
             .update_contact(
                 &contact.id,

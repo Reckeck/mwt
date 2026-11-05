@@ -48,6 +48,13 @@ pub enum Error {
     #[error("store is archived: {0}")]
     Archived(String),
 
+    /// A contact that operations, wallets or shared events still refer to
+    /// cannot be deleted (archive it, or unlink it first).
+    #[error(
+        "the contact is used by operations, wallets or shared events; archive it, or unlink it first"
+    )]
+    ContactInUse,
+
     #[error("vault is locked")]
     RequiresUnlock,
 
@@ -232,6 +239,7 @@ impl Error {
             Error::Pricing(_) => "PRICING",
             Error::Missing(_) => "MISSING",
             Error::Archived(_) => "ARCHIVED",
+            Error::ContactInUse => "CONTACT_IN_USE",
             Error::RequiresUnlock => "REQUIRES_UNLOCK",
             Error::StoreTree(violation) => violation.code(),
             Error::WalletRule(rule) => rule.code(),
