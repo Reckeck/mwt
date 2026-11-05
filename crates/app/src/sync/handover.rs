@@ -161,7 +161,7 @@ async fn listen() -> Result<TcpListener> {
     if let Ok(listener) = TcpListener::bind(("0.0.0.0", RECEIVE_PORT)).await {
         return Ok(listener);
     }
-    Ok(TcpListener::bind(("0.0.0.0", 0)).await?)
+    Ok(super::ports::listen_in_range(RECEIVE_PORT)?)
 }
 
 /// "Receive a vault": be visible nearby for five minutes.

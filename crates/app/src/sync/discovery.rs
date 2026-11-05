@@ -105,7 +105,8 @@ pub(crate) fn local_address() -> Option<std::net::IpAddr> {
     (!ip.is_unspecified() && !ip.is_loopback()).then_some(ip)
 }
 
-/// [`SYNC_PORT`], waiting a moment for a previous run to let go of it.
+/// [`SYNC_PORT`], waiting a moment for a previous run to let go of it; then
+/// the spare ports of the firewall rule range, and a free port last.
 async fn listen() -> Result<TcpListener> {
     for _ in 0..10 {
         if let Ok(listener) = TcpListener::bind(("0.0.0.0", SYNC_PORT)).await {
@@ -113,7 +114,7 @@ async fn listen() -> Result<TcpListener> {
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    Ok(TcpListener::bind(("0.0.0.0", 0)).await?)
+    Ok(super::ports::listen_in_range(SYNC_PORT)?)
 }
 
 /// The mDNS announcement of this device.

@@ -15,10 +15,12 @@ pub mod firewall;
 pub mod handover;
 mod host;
 pub mod keystore;
+mod lan;
 mod link;
 mod lock_policy;
 mod multicast_lock;
 mod pending;
+mod ports;
 #[cfg(test)]
 mod tests;
 mod transfer;

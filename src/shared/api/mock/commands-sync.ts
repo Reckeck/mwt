@@ -96,7 +96,7 @@ function status(): SyncStatus {
       inbound_blocked: prefs.enabled && !state.firewallOpen,
       firewall_fix: 'auto',
       firewall_commands: [
-        "sudo ufw allow from 192.168.1.0/24 to any port 53318 proto tcp comment 'Multi Wallet Tracker sync'",
+        "sudo ufw allow from 192.168.1.0/24 to any port 53318:53327 proto tcp comment 'Multi Wallet Tracker sync'",
       ],
       last_error: state.lastError,
     },

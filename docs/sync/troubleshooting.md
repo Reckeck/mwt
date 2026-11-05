@@ -14,7 +14,7 @@ Sync, Devices unless said otherwise.
 | The vault is locked | Sync runs only while the vault is open on both. On Android keep the app in the background, not closed |
 | Different vault | A different vault is refused (`SYNC_OTHER_VAULT`). Use "Receive from another device" to copy the vault first |
 | Guest or office Wi-Fi with client isolation, or multicast blocked | Use a normal home network or a phone hotspot |
-| A firewall drops incoming connections | The main device shows "A firewall blocks incoming connections". Press "Open the port" (Linux, Windows) or allow the app when the system asks. On Flatpak, run the shown commands in a terminal |
+| A firewall drops incoming connections | The main device shows "A firewall blocks incoming connections". Press "Open the port" (Linux, Windows; the rule covers TCP 53318-53327, press it again after an update to widen an old 53318-53319 rule) or allow the app when the system asks. On Windows the banner stays until a device connects, and the rule is for Private networks only: if the network is Public, switch it to Private in Windows settings. On Flatpak, run the shown commands in a terminal |
 | Different networks (Wi-Fi vs mobile data) | Put both on the same Wi-Fi |
 
 After 30 seconds without neighbors, Settings, Sync shows a hint, the port and the
