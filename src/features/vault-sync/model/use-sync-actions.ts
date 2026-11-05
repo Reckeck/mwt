@@ -60,8 +60,8 @@ export function useSyncActions() {
   const confirmPairing = useMutation({
     mutationFn: (input: SyncDecisionInput) => call('sync_confirm_pairing', { input }),
     meta: {
-      success: (_data, input) =>
-        (input as SyncDecisionInput).accept ? t('sync.pairing.waiting') : t('sync.pairing.declined'),
+      // An accept is answered by the dialog's waiting state; only a decline gets a toast.
+      success: (_data, input) => ((input as SyncDecisionInput).accept ? '' : t('sync.pairing.declined')),
       error: 'sync.pairFailed',
     },
   })

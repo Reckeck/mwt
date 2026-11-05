@@ -36,11 +36,16 @@ watch(session, (next) => {
   if (!next) answered.value = null
 })
 
+function reopen(sessionId: string) {
+  if (answered.value === sessionId) answered.value = null
+}
+
 function decide(accept: boolean) {
   const current = session.value
   if (!current) return
   answered.value = current.session_id
-  decidePlan.mutate({ session_id: current.session_id, accept })
+  // Pending keeps the dialog hidden (no flicker); a refusal brings it back to try again.
+  decidePlan.mutate({ session_id: current.session_id, accept }, { onError: () => reopen(current.session_id) })
 }
 </script>
 
