@@ -65,7 +65,13 @@ pub async fn sync_set_settings(
 #[tauri::command]
 pub async fn sync_open_firewall(app: AppHandle) -> Result<SyncStatus, String> {
     sync::firewall::open().await.map_err(err_to_string)?;
-    sync::hub(&app).inbound_blocked = false;
+    // On Windows the rule is for the Private profile only: on a Public network
+    // it does not apply, so the banner stays until an incoming link clears it
+    // (`link.rs`). Elsewhere the rule is for any network.
+    #[cfg(not(windows))]
+    {
+        sync::hub(&app).inbound_blocked = false;
+    }
     sync::emit_status(&app);
     Ok(sync::status(&app))
 }

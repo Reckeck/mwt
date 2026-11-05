@@ -78,8 +78,10 @@ Facts:
   " (2)" and so on when the name is taken, and is added to the recent list.
 - Timeouts: handshake 10 s, each step 60 s, waiting for the person 5 minutes.
   The receive window lasts 5 minutes and can be extended ("Wait 5 more minutes").
-- Port 53319 is included in the "Open the port" firewall rule together with
-  53318.
+- The receive window listens on 53319; when it is busy, on the next free port of
+  53320-53327, and on a random port only when all are busy. The "Open the port"
+  firewall rule covers TCP 53318-53327, so the spare ports are inside it (a
+  random port is not).
 - The transfer protocol has its own version (`TRANSFER_PROTOCOL = 1`).
 
 ## Trust after a transfer

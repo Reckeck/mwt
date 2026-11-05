@@ -75,8 +75,8 @@ stateDiagram-v2
   client answers with its `Peers` list (sent when the client reaches live mode),
   because a client in the middle of a question only queues the hand-over. A
   `TakeMain` heard or ordered before `live` starts is queued, not dropped.
-- **Port and the return call.** Sync listens on TCP 53318 (a random port if
-  that one is busy). A client that cannot connect to the main device does not
+- **Port and the return call.** Sync listens on TCP 53318 (if that one is busy,
+  the next free port of 53320-53327; a random port only when all of them are busy). A client that cannot connect to the main device does not
   make itself main; it waits. After 6 seconds the main device calls back every
   device of the group that it sees in mDNS but has no link with. After three
   failed attempts in a row the main device is considered gone. If connections
@@ -85,7 +85,13 @@ stateDiagram-v2
   hello, and the main device shows "A firewall blocks incoming connections".
   The "Open the port" button adds a rule for the local subnet only: Linux
   through `pkexec` with ufw or firewalld, Windows through `netsh` and UAC
-  (Private profile). Flatpak may not touch the host firewall and shows commands
+  (Private profile; the rule is replaced, not duplicated, on a second press, and
+  the banner is not cleared by the button on Windows: the next incoming link
+  clears it, since a Public network ignores the rule). The rule covers TCP
+  53318-53327 (the sync and receive ports and the spare ports); an older rule
+  for 53318-53319 keeps working for the default ports, press the button again
+  to widen it. The subnet comes from the LAN interface (not a VPN tunnel); when
+  none is found the commands are shown for 10/8, 172.16/12 and 192.168/16. Flatpak may not touch the host firewall and shows commands
   for a terminal. macOS asks by itself; Android has no firewall.
 - **Diagnostics.** Settings, Sync shows the port, the address, how many devices
   with this vault are visible and the last error. After 30 seconds without
