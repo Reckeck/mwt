@@ -286,6 +286,17 @@ pub async fn delete_vault_file(
     })
 }
 
+/// Write the open vault's batched changes when `source` is that vault.
+fn flush_if_open(
+    open: Option<&mut trade_core::service::UnlockedVault>,
+    source: &Path,
+) -> trade_core::error::Result<()> {
+    match open {
+        Some(vault) if vault.path == source => vault.flush_pending(),
+        _ => Ok(()),
+    }
+}
+
 /// "Save a copy…": the vault file, byte for byte, to the place the system save
 /// dialog picks (the frontend never names the path). Returns what to show as
 /// "saved to"; `None` when the dialog was closed. The source itself and the
@@ -297,6 +308,15 @@ pub async fn export_vault_copy(
     input: ExportVaultCopyInput,
 ) -> Result<Option<String>, String> {
     let source = Path::new(&input.path);
+    // The copy is what is on disk: batched edits of the open vault go first.
+    // The guard is dropped before the file is read and before the dialog.
+    {
+        let mut guard = state
+            .vault
+            .lock()
+            .map_err(|_| "lock poisoned".to_string())?;
+        flush_if_open(guard.as_mut(), source).map_err(err_to_string)?;
+    }
     let bytes = read_vault_bytes(source).map_err(err_to_string)?;
     let open_path = state
         .vault_path
@@ -316,6 +336,42 @@ pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<Picked
 #[cfg(test)]
 mod tests {
     use super::*;
+    use trade_core::service::{SaveHook, UnlockedVault};
+
+    struct NoWake;
+
+    impl SaveHook for NoWake {
+        fn dirty(&self) {}
+    }
+
+    fn decimals_on_disk(path: &Path) -> u32 {
+        trade_core::storage::VaultFile::open(path, "pw")
+            .unwrap()
+            .0
+            .settings
+            .display_decimals
+    }
+
+    #[test]
+    fn a_copy_of_the_open_vault_holds_its_batched_edits() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("home.wallet");
+        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        vault.set_write_behind(Some(std::sync::Arc::new(NoWake)));
+        let before = decimals_on_disk(&path);
+        let changed = before + 1;
+        vault.doc.settings.display_decimals = changed;
+        vault.persist().unwrap();
+        assert_eq!(decimals_on_disk(&path), before, "batched, not written yet");
+
+        let other = dir.path().join("other.wallet");
+        flush_if_open(Some(&mut vault), &other).unwrap();
+        assert_eq!(decimals_on_disk(&path), before, "another file: untouched");
+
+        flush_if_open(Some(&mut vault), &path).unwrap();
+        assert_eq!(decimals_on_disk(&path), changed);
+        flush_if_open(None, &path).unwrap();
+    }
 
     fn rv(path: &str) -> RecentVault {
         RecentVault {
