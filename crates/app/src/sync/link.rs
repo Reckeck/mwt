@@ -1208,8 +1208,9 @@ async fn apply_shown<H: Host>(
             return Ok(Some(None));
         };
         let keys = vault.sync_batch_keys(&batch.id);
+        let collections = vault.sync_batch_collections(&batch.id);
         let notices = vault.sync_batch_notices(&batch.id);
-        Ok(Some(Some((batch, keys, notices))))
+        Ok(Some(Some((batch, keys, collections, notices))))
     });
     if backed_up && let Some(run) = app.hub().run.as_mut() {
         run.backup_done = true;
@@ -1235,13 +1236,14 @@ async fn apply_shown<H: Host>(
         return Err(Stop::Quiet);
     };
     update_link(app, &peer.session_id, |link| link.applied_once = true);
-    if let Some((batch, keys, notices)) = applied {
+    if let Some((batch, keys, collections, notices)) = applied {
         app.hub().last_activity = Some(std::time::Instant::now());
         app.emit(
             SYNCED_EVENT,
             VaultSyncedEvent {
                 session_id: peer.session_id.clone(),
                 batch,
+                collections,
             },
         );
         let fresh_after = i64::try_from(now_ms()).unwrap_or(i64::MAX) - FRESH_NOTICE_MS;

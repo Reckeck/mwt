@@ -7323,7 +7323,13 @@ type VaultStorage = "files" | "app";
 /**
  * `vault-synced`: a batch was applied here.
  */
-type VaultSyncedEvent = { session_id: string, batch: AppliedBatch, };
+type VaultSyncedEvent = { session_id: string, batch: AppliedBatch, 
+/**
+ * Sorted distinct collections the batch touched, the dedupe and repair
+ * deletions included (`batch.summary` does not count those and keeps its
+ * `total`). The screens of all of them re-read.
+ */
+collections: Array<string>, };
 
 /**
  * The odometer of a car, read today.
