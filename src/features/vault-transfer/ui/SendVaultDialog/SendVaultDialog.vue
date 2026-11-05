@@ -13,6 +13,7 @@ import { useSendVault } from '../../model/use-send-vault'
 import { TransferProgress } from '../TransferProgress'
 import SendVaultCode from './SendVaultCode.vue'
 import SendVaultPick from './SendVaultPick.vue'
+import { errorCodeText } from '@/shared/lib/error-code-text'
 
 /**
  * `Send to a new device`: pick the device waiting nearby, type the
@@ -20,7 +21,7 @@ import SendVaultPick from './SendVaultPick.vue'
  * recorded and announced on all linked devices.
  */
 const open = defineModel<boolean>('open', { required: true })
-const { t } = useI18n()
+const { t, te } = useI18n()
 const vault = useVaultStore()
 // A vault without a password: nothing to type again (the status says, not the form).
 const encrypted = computed(() => vault.status?.encrypted ?? true)
@@ -38,7 +39,7 @@ watch(
   { immediate: true },
 )
 
-const error = computed(() => (view.value?.error ? t(`errors.${view.value.error}`) : ''))
+const error = computed(() => (view.value?.error ? errorCodeText(view.value.error, t, te) : ''))
 
 function retry() {
   close()

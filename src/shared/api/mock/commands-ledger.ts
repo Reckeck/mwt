@@ -79,9 +79,8 @@ export const contactsCommands: MockCommands = {
     const inEvent = mockSharedEvents.some((event) => event.participants.some((person) => person.contact_id === id))
     if (inEvent || mockTransactions.some((tx) => txContactIds(tx).includes(id)))
       throw {
-        code: 'INVALID_INPUT',
-        message:
-          'the contact is used by transactions, wallets or shared events; archive it, or unlink it from the event first',
+        code: 'CONTACT_IN_USE',
+        message: 'the contact is used by operations, wallets or shared events; archive it, or unlink it first',
       }
     mockContacts.splice(
       mockContacts.findIndex((entry) => entry.id === id),

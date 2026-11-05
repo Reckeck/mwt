@@ -11,6 +11,7 @@ import { Spinner } from '@/shared/ui/spinner'
 
 import { useReceiveVault } from '../../model/use-receive-vault'
 import { TransferProgress } from '../TransferProgress'
+import { errorCodeText } from '@/shared/lib/error-code-text'
 
 /**
  * `Receive a vault`: this device is visible nearby by its name for five
@@ -19,7 +20,7 @@ import { TransferProgress } from '../TransferProgress'
  */
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ received: [path: string] }>()
-const { t } = useI18n()
+const { t, te } = useI18n()
 const { view, phase, start, decide, stop } = useReceiveVault()
 
 watch(
@@ -45,7 +46,7 @@ const code = computed(() => {
   const raw = view.value?.code ?? ''
   return `${raw.slice(0, 3)} ${raw.slice(3)}`
 })
-const error = computed(() => (view.value?.error ? t(`errors.${view.value.error}`) : ''))
+const error = computed(() => (view.value?.error ? errorCodeText(view.value.error, t, te) : ''))
 
 function openVault() {
   const path = view.value?.saved_path
