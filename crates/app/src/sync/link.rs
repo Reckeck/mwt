@@ -1237,7 +1237,7 @@ async fn apply_shown<H: Host>(
     };
     update_link(app, &peer.session_id, |link| link.applied_once = true);
     if let Some((batch, keys, collections, notices)) = applied {
-        app.hub().last_activity = Some(std::time::Instant::now());
+        app.hub().last_activity = Some(super::lock_policy::Since::now());
         app.emit(
             SYNCED_EVENT,
             VaultSyncedEvent {
