@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { anyErrorMessage } from '@/shared/lib/vault-error'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 
 /** Step two: the six digits shown on the receiving device. */
-const props = defineProps<{ view: TransferSendView }>()
-const emit = defineEmits<{ submit: [code: string] }>()
+const props = defineProps<{ view: TransferSendView; failure?: unknown }>()
+const emit = defineEmits<{ submit: [code: string]; edit: [] }>()
 const { t } = useI18n()
 
 const code = ref('')
@@ -28,7 +29,10 @@ watch(
 // Typing a new code clears the note; the field emptied by a wrong code does not.
 watch(code, (value) => {
   if (value) wrong.value = false
+  emit('edit')
 })
+// A refusal of the code itself (no session, bad code) comes from the command, not the other device.
+const failureText = computed(() => (props.failure ? anyErrorMessage(props.failure, t) : undefined))
 
 const form = useFormValidation(() => ({
   code:
@@ -44,7 +48,7 @@ function submit(event: Event) {
 <template>
   <form id="transfer-code-form" class="grid gap-3" @submit.prevent="submit">
     <p class="text-sm text-muted-foreground">{{ t('transfer.send.codeHint', { name: view.device_name }) }}</p>
-    <FormField for="transfer-code" :label="t('transfer.send.code')" required :error="form.error('code') ?? (wrong ? t('transfer.send.codeWrong', { count: view.attempts_left }) : undefined)">
+    <FormField for="transfer-code" :label="t('transfer.send.code')" required :error="form.error('code') ?? failureText ?? (wrong ? t('transfer.send.codeWrong', { count: view.attempts_left }) : undefined)">
       <Input
         id="transfer-code"
         v-model="code"
