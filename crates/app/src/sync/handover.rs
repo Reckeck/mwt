@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -101,11 +101,31 @@ fn kind() -> &'static str {
     }
 }
 
+/// Whether `generation` is still the receive session on screen. A session the
+/// user closed (or replaced) must not save a file that finishes afterwards.
+fn is_current(state: &State, generation: u64) -> bool {
+    state
+        .receiving
+        .as_ref()
+        .is_some_and(|receiving| receiving.generation == generation)
+}
+
+/// The receive window (`expires_ms`, wall clock) is over at `now_ms`.
+fn window_expired(expires_ms: i64, now: i64) -> bool {
+    now >= expires_ms
+}
+
 fn multicast(app: &AppHandle, on: bool) {
-    #[cfg(target_os = "android")]
-    crate::platform_net::multicast(app, on);
-    #[cfg(not(target_os = "android"))]
-    let _ = (app, on);
+    super::multicast_lock::hold(app, on);
+}
+
+/// Whoever holds a daemon holds one share of the multicast lock: it goes with
+/// the daemon, once.
+fn give_back(app: &AppHandle, daemon: Option<ServiceDaemon>) {
+    if let Some(daemon) = daemon {
+        let _ = daemon.shutdown();
+        multicast(app, false);
+    }
 }
 
 // -- receiving -----------------------------------------------------------------
@@ -178,11 +198,11 @@ pub async fn receive_start(app: &AppHandle) -> Result<TransferReceiveView> {
     let expires_ms = i64::try_from(now_ms()).unwrap_or(i64::MAX)
         + i64::try_from(RECEIVE_WINDOW_SECS * 1000).unwrap_or(0);
     let (stop, mut stopped) = tokio::sync::watch::channel(false);
-    let generation = {
+    let (generation, replaced) = {
         let mut state = state(app);
         state.generation += 1;
         let generation = state.generation;
-        state.receiving = Some(Receiving {
+        let replaced = state.receiving.replace(Receiving {
             generation,
             view: TransferReceiveView {
                 phase: TransferPhase::Waiting,
@@ -195,8 +215,10 @@ pub async fn receive_start(app: &AppHandle) -> Result<TransferReceiveView> {
             stop,
             daemon: Some(daemon),
         });
-        generation
+        (generation, replaced.and_then(|old| old.daemon))
     };
+    // Two starts at once: the one that lost gives its share of the lock back.
+    give_back(app, replaced);
 
     // Requests, one at a time.
     let accept_app = app.clone();
@@ -281,10 +303,7 @@ fn close_receive(app: &AppHandle, generation: u64) {
         receiving.decide = None;
         receiving.daemon.take()
     };
-    if let Some(daemon) = daemon {
-        let _ = daemon.shutdown();
-    }
-    multicast(app, false);
+    give_back(app, daemon);
 }
 
 /// The receiving screen closed.
@@ -349,6 +368,10 @@ async fn serve(
         });
     })
     .await;
+    // The screen was closed while the file was on its way: nothing is saved.
+    if result.is_ok() && !is_current(&state(app), generation) {
+        return;
+    }
     match result.and_then(|received| save(app, received)) {
         Ok(path) => {
             close_receive(app, generation);
@@ -363,6 +386,7 @@ async fn serve(
             }
             // Declined, a wrong code three times, a broken connection: the
             // request is gone, this device stays visible until the window ends.
+            let mut expired = false;
             if let Some(receiving) = state(app)
                 .receiving
                 .as_mut()
@@ -370,16 +394,34 @@ async fn serve(
             {
                 receiving.busy = false;
                 receiving.decide = None;
+                expired = receiving.view.expires_ms.is_some_and(|end| {
+                    window_expired(end, i64::try_from(now_ms()).unwrap_or(i64::MAX))
+                });
+            }
+            // The window ended while the file was on its way (the timer skips
+            // those): close it now instead of waiting for a window that is gone.
+            if expired {
+                close_receive(app, generation);
             }
             update_receive(app, generation, |view| {
-                if view.phase != TransferPhase::Failed {
+                if expired {
+                    view.phase = TransferPhase::Failed;
+                } else if view.phase != TransferPhase::Failed {
                     view.phase = TransferPhase::Waiting;
                 }
                 view.sender_name = None;
                 view.code = None;
                 view.done_bytes = 0;
                 view.total_bytes = 0;
-                view.error = Some(err.code().into());
+                view.error = Some(
+                    if expired {
+                        Error::PeerSync(PeerSyncFailure::TransferExpired)
+                    } else {
+                        err
+                    }
+                    .code()
+                    .into(),
+                );
             });
         }
     }
@@ -469,11 +511,12 @@ pub fn browse_start(app: &AppHandle) -> Result<Vec<TransferNearby>> {
     let daemon = ServiceDaemon::new().map_err(network)?;
     let events = daemon.browse(RECEIVE_SERVICE).map_err(network)?;
     multicast(app, true);
-    {
+    let replaced = {
         let mut state = state(app);
         state.nearby.clear();
-        state.browsing = Some(daemon);
-    }
+        state.browsing.replace(daemon)
+    };
+    give_back(app, replaced);
     let app = app.clone();
     std::thread::spawn(move || {
         while let Ok(event) = events.recv() {
@@ -520,10 +563,7 @@ pub fn browse_stop(app: &AppHandle) {
         state.nearby.clear();
         state.browsing.take()
     };
-    if let Some(daemon) = daemon {
-        let _ = daemon.shutdown();
-        multicast(app, false);
-    }
+    give_back(app, daemon);
 }
 
 pub fn send_view(app: &AppHandle) -> TransferSendView {
@@ -551,7 +591,7 @@ fn update_send(app: &AppHandle, generation: u64, edit: impl FnOnce(&mut Transfer
 
 /// "Send": the password is checked here, before anything leaves.
 pub fn send_start(app: &AppHandle, input: &TransferSendInput) -> Result<TransferSendView> {
-    let (vault, file_name) = {
+    let (vault, file_name, sent_path) = {
         let app_state = app.state::<AppState>();
         let mut guard = app_state
             .vault
@@ -567,7 +607,7 @@ pub fn send_start(app: &AppHandle, input: &TransferSendInput) -> Result<Transfer
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "vault.wallet".into());
-        (bytes, name)
+        (bytes, name, vault.path.clone())
     };
     let (target, addrs, fingerprint) = {
         let state = state(app);
@@ -653,7 +693,7 @@ pub fn send_start(app: &AppHandle, input: &TransferSendInput) -> Result<Transfer
             .await
         }
         .await;
-        match result.and_then(|delivered| record(&app, &delivered)) {
+        match result.and_then(|delivered| record(&app, &delivered, &sent_path)) {
             Ok(()) => update_send(&app, generation, |view| view.phase = TransferPhase::Done),
             Err(err) => update_send(&app, generation, |view| {
                 view.phase = TransferPhase::Failed;
@@ -668,7 +708,9 @@ pub fn send_start(app: &AppHandle, input: &TransferSendInput) -> Result<Transfer
 }
 
 /// The vault went: history, trust and a notice every linked device shows.
-fn record(app: &AppHandle, delivered: &super::transfer::Delivered) -> Result<()> {
+/// The file is delivered either way: when the vault was locked or another one
+/// is open now, nothing is recorded and that is not a failure.
+fn record(app: &AppHandle, delivered: &super::transfer::Delivered, sent_path: &Path) -> Result<()> {
     let ru = crate::scheduler::russian(app);
     let notice = {
         let app_state = app.state::<AppState>();
@@ -676,8 +718,12 @@ fn record(app: &AppHandle, delivered: &super::transfer::Delivered) -> Result<()>
             .vault
             .lock()
             .map_err(|_| Error::Crypto("lock poisoned".into()))?;
-        let vault = guard.as_mut().ok_or(Error::RequiresUnlock)?;
-        super::pending::record_delivery(vault, delivered, ru)?
+        match guard.as_mut() {
+            Some(vault) if super::pending::is_sent_vault(&vault.path, sent_path) => {
+                super::pending::record_delivery(vault, delivered, ru)?
+            }
+            _ => return Ok(()),
+        }
     };
     crate::scheduler::deliver(app, vec![notice], true);
     Ok(())
@@ -714,4 +760,38 @@ pub fn send_cancel(app: &AppHandle) {
         task.abort();
     }
     let _ = app.emit(SEND_EVENT, TransferSendView::default());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn receiving(generation: u64) -> Receiving {
+        Receiving {
+            generation,
+            view: TransferReceiveView::default(),
+            decide: None,
+            busy: false,
+            stop: tokio::sync::watch::channel(false).0,
+            daemon: None,
+        }
+    }
+
+    #[test]
+    fn only_the_session_on_screen_is_current() {
+        let mut state = State::default();
+        assert!(!is_current(&state, 1));
+        state.receiving = Some(receiving(3));
+        assert!(is_current(&state, 3));
+        assert!(!is_current(&state, 2));
+        state.receiving = None;
+        assert!(!is_current(&state, 3));
+    }
+
+    #[test]
+    fn the_window_ends_at_its_deadline() {
+        assert!(!window_expired(1_000, 999));
+        assert!(window_expired(1_000, 1_000));
+        assert!(window_expired(1_000, 5_000));
+    }
 }
