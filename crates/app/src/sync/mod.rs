@@ -16,6 +16,7 @@ pub mod handover;
 mod host;
 pub mod keystore;
 mod link;
+mod lock_policy;
 mod multicast_lock;
 mod pending;
 #[cfg(test)]
@@ -142,7 +143,7 @@ pub(crate) struct Hub {
     /// repeating is shown once, another peer's is still shown.
     pub announced: std::collections::BTreeSet<(String, Option<String>)>,
     /// The last batch applied or change sent (the background lock counts from it).
-    pub last_activity: Option<Instant>,
+    pub last_activity: Option<lock_policy::Since>,
     failures: HashMap<IpAddr, Vec<Instant>>,
     generation: u64,
 }
@@ -368,7 +369,7 @@ pub(crate) fn broadcast<H: Host>(app: &H, keys: &[String], origin: Option<&str>)
     // Only a local edit with a link to send it on postpones the background
     // lock; a batch taken from a peer counts when it is applied.
     if sent && live && origin.is_none() {
-        hub.last_activity = Some(Instant::now());
+        hub.last_activity = Some(lock_policy::Since::now());
     }
 }
 

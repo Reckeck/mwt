@@ -5,12 +5,13 @@
 //! `SyncPrefs::background_lock_min` minutes in the background without a sync.
 
 use std::sync::{LazyLock, Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tauri::AppHandle;
 use tauri_plugin_net::Background;
 use trade_core::ipc_contract::SyncPhase;
 
+use super::lock_policy::{self, Since};
 use crate::platform_net;
 
 const POLL_EVERY: Duration = Duration::from_secs(2);
@@ -23,7 +24,7 @@ struct State {
     paused: bool,
     polling: bool,
     /// In the background since.
-    since: Option<Instant>,
+    since: Option<Since>,
     shown: Background,
 }
 
@@ -116,42 +117,42 @@ fn tick(app: &AppHandle) -> bool {
         }
         _ => {}
     }
-    let now = Instant::now();
-    let (armed, resume, since) = {
+    let (armed, paused, resume, since) = {
         let mut state = state();
         if poll.background {
-            let since = *state.since.get_or_insert(now);
-            (state.armed, false, Some(since))
+            let since = *state.since.get_or_insert_with(Since::now);
+            (state.armed, state.paused, false, Some(since))
         } else {
             state.since = None;
             let resume = std::mem::take(&mut state.paused);
-            (state.armed, resume, None)
+            (state.armed, false, resume, None)
         }
     };
     if resume {
         super::restart(app);
     }
+    let mut last_activity = None;
     if armed {
-        let (linked, last_activity) = {
+        let linked = {
             let hub = super::hub(app);
-            let linked = hub
-                .links
+            last_activity = hub.last_activity;
+            hub.links
                 .values()
                 .filter(|link| link.view.phase == SyncPhase::Live)
-                .count();
-            (linked, hub.last_activity)
+                .count()
         };
         show(app, linked);
+    }
+    // After "Stop" (`paused`) sync is off but the vault still locks.
+    if (armed || paused)
+        && let Some(since) = since
+    {
         let minutes = crate::commands::app_settings::current_settings(app)
             .sync
             .background_lock_min();
-        if let Some(since) = since
-            && minutes > 0
-        {
-            let idle_from = last_activity.map_or(since, |at| at.max(since));
-            if now.duration_since(idle_from) >= Duration::from_secs(u64::from(minutes) * 60) {
-                crate::commands::auth::lock_now(app);
-            }
+        let idle_for = last_activity.map(|at| at.elapsed());
+        if lock_policy::lock_due(since.elapsed(), idle_for, minutes) {
+            crate::commands::auth::lock_now(app);
         }
     }
     let mut state = state();
