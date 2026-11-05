@@ -128,11 +128,7 @@ impl UnlockedVault {
         {
             return;
         }
-        let title = if self.notice_ru {
-            "Исправлено после синхронизации"
-        } else {
-            "Fixed after sync"
-        };
+        let title = report.notice_title(self.notice_ru);
         let record = super::super::notifications::notice(
             NoticeCategory::Security,
             key,

@@ -156,15 +156,42 @@ impl RepairReport {
                 )
             });
         }
+        if !self.unrestored.is_empty() {
+            parts.push(
+                (if ru {
+                    "некоторых удалённых записей, которые ещё используются, нет на этом устройстве; их вернёт устройство, на котором они есть"
+                } else {
+                    "some deleted records that are still in use are not on this device; the device that has them will bring them back"
+                })
+                .into(),
+            );
+        }
         if parts.is_empty() {
             return None;
         }
-        let head = if ru {
-            "Исправлено после синхронизации"
-        } else {
-            "Fixed after sync"
+        Some(format!("{}: {}.", self.notice_title(ru), parts.join("; ")))
+    }
+
+    /// The title of the notice: "Fixed after sync", or, when nothing was
+    /// changed here and only records are awaited from another device
+    /// (`unrestored`), a neutral one.
+    pub(super) fn notice_title(&self, ru: bool) -> &'static str {
+        // Fields that never reach the notice text (silent rules, computed flags)
+        // are cleared too; any other list, a new one included, keeps "Fixed".
+        let rest = RepairReport {
+            unrestored: Vec::new(),
+            records: Vec::new(),
+            needs_rate: Vec::new(),
+            organizer_flags: Vec::new(),
+            dropped_imports: Vec::new(),
+            ..self.clone()
         };
-        Some(format!("{head}: {}.", parts.join("; ")))
+        match (rest == RepairReport::default(), ru) {
+            (true, true) => "Ждём другое устройство",
+            (true, false) => "Waiting for another device",
+            (false, true) => "Исправлено после синхронизации",
+            (false, false) => "Fixed after sync",
+        }
     }
 
     /// Same repair, same key: two devices that made it share one notice.
@@ -176,7 +203,7 @@ impl RepairReport {
                 .join(",")
         };
         format!(
-            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}:linked:{}:{}:currency:{}:organizer:{}",
+            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}:linked:{}:{}:currency:{}:organizer:{}:unrestored:{}",
             ids(&self.restored),
             ids(&self.detached_accounts),
             ids(&self.dropped_envelopes),
@@ -187,7 +214,8 @@ impl RepairReport {
             self.unlinked_extra.join(","),
             self.merged_links.join(","),
             ids(&self.restored_currency),
-            ids(&self.restored_organizer)
+            ids(&self.restored_organizer),
+            self.unrestored.join(",")
         )
     }
 }
