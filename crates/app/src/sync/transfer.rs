@@ -253,8 +253,9 @@ pub(crate) async fn send(
         return Err(failure(PeerSyncFailure::Channel));
     }
     pipe.send(&TransferMessage::Offer(offer)).await?;
-    // A person decides there: no step timeout, the window closes it.
-    let (device_id, device_name) = match pipe.next().await? {
+    // A person decides there, but not for ever: the receive window closes it,
+    // so a peer that goes silent ends the send too.
+    let (device_id, device_name) = match pipe.next_within(PERSON_TIMEOUT + STEP_TIMEOUT).await? {
         TransferMessage::Accepted {
             device_id,
             device_name,

@@ -169,3 +169,53 @@ async fn a_device_with_another_key_gets_nothing() {
     assert!(is(&run.delivered, PeerSyncFailure::Channel));
     assert!(run.received.is_err());
 }
+
+/// A peer that completes the handshake and then never answers.
+#[tokio::test(start_paused = true)]
+async fn a_silent_peer_after_the_offer_ends_the_send_with_channel() {
+    use super::link::{read_frame, write_frame};
+    use trade_core::sync::session::Handshake;
+
+    let (_dir, bytes) = vault_file();
+    let peer_key = DeviceKey::generate().unwrap();
+    let sender_key = DeviceKey::generate().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let peer = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let (mut reader, mut writer) = stream.into_split();
+        let mut handshake = Handshake::responder(&peer_key).unwrap();
+        while !handshake.is_finished() {
+            if handshake.my_turn() {
+                write_frame(&mut writer, &handshake.write().unwrap())
+                    .await
+                    .unwrap();
+            } else {
+                handshake
+                    .read(&read_frame(&mut reader).await.unwrap())
+                    .unwrap();
+            }
+        }
+        // Keep the connection open and say nothing.
+        std::future::pending::<()>().await;
+    });
+    let stream = TcpStream::connect(addr).await.unwrap();
+    let (_typed, mut codes_in) = mpsc::unbounded_channel::<String>();
+    // The outer bound makes a missing timeout fail the test instead of hanging it.
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(3600),
+        send(
+            stream,
+            &sender_key,
+            offer(&bytes),
+            &bytes,
+            "",
+            &mut codes_in,
+            |_| {},
+        ),
+    )
+    .await
+    .expect("send must give up by itself");
+    peer.abort();
+    assert!(is(&result, PeerSyncFailure::Channel), "{result:?}");
+}
