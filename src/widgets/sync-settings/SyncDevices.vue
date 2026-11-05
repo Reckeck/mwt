@@ -26,7 +26,7 @@ const isPhone = useIsPhone()
 const vault = useVaultStore()
 
 const enabled = computed(() => Boolean(status.data.value?.enabled))
-const isMain = computed(() => Boolean(status.data.value?.prefer_main) || status.data.value?.role === 'main')
+const isMain = computed(() => status.data.value?.role === 'main')
 const adding = ref(false)
 const showNearby = computed(() => adding.value || (enabled.value && offers.value.length > 1))
 
@@ -54,7 +54,6 @@ function lastLine(peer: SyncPeerView) {
           </span>
           <div class="grid min-w-0 flex-1 gap-0.5">
             <span class="truncate text-sm font-medium">{{ status.data.value?.device_name }} · {{ t('sync.devices.thisDevice') }}</span>
-            <span v-if="isMain" class="text-xs text-muted-foreground">{{ t('sync.devices.main') }}</span>
           </div>
           <Badge v-if="isMain" variant="secondary">{{ t('sync.devices.main') }}</Badge>
         </li>
