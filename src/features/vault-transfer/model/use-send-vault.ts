@@ -14,15 +14,24 @@ export function useSendVault() {
   useBackendEvent<TransferNearby[]>('transfer-nearby', (next) => {
     nearby.value = next
   })
+  // Bumped by close(): a send that was still checking the password when the dialog
+  // closed finishes later and must not bring the view back.
+  let epoch = 0
+  // Events of a send are ignored while the dialog is closed (browse() opens, close() closes).
+  let active = false
   useBackendEvent<TransferSendView>('transfer-send', (next) => {
+    if (!active) return
     view.value = next.phase === 'idle' ? null : next
   })
 
   async function browse() {
+    active = true
     nearby.value = await call<TransferNearby[]>('transfer_browse_start').catch(() => [])
   }
 
   function close() {
+    epoch += 1
+    active = false
     void call('transfer_send_cancel').catch(() => {})
     void call('transfer_browse_stop').catch(() => {})
     view.value = null
@@ -31,7 +40,13 @@ export function useSendVault() {
 
   const send = useMutation({
     mutationFn: (input: TransferSendInput) => call<TransferSendView>('transfer_send', { input }),
-    onSuccess: (next) => {
+    onMutate: () => ({ startedAt: epoch }),
+    onSuccess: (next, _input, context) => {
+      if (context?.startedAt !== epoch) {
+        // The dialog was closed while the password was checked: stop the session the backend just started.
+        void call('transfer_send_cancel').catch(() => {})
+        return
+      }
       view.value = next
     },
     // A wrong password is shown under the field by the form.

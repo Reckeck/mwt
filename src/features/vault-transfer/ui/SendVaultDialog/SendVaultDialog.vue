@@ -64,7 +64,13 @@ function retry() {
         {{ t('transfer.send.waiting', { name: view?.device_name ?? '' }) }}
       </div>
 
-      <SendVaultCode v-else-if="phase === 'code' && view" :view="view" @submit="sendCode.mutate" />
+      <SendVaultCode
+        v-else-if="phase === 'code' && view"
+        :view="view"
+        :failure="sendCode.error.value"
+        @submit="sendCode.mutate"
+        @edit="sendCode.reset()"
+      />
 
       <div v-else-if="phase === 'transferring'" class="grid gap-3">
         <p class="text-sm">{{ t('transfer.send.sending', { name: view?.device_name ?? '' }) }}</p>
