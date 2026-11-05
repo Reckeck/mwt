@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { History } from 'lucide-vue-next'
+import { BellOff, History } from 'lucide-vue-next'
 
 import { useSyncActions, useSyncStatus } from '@/features/vault-sync'
+import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert'
+import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { FormField } from '@/shared/ui/form-field'
 import { useVaultStore } from '@/shared/store/vault'
@@ -21,7 +23,7 @@ import { SwitchRow } from '@/shared/ui/switch-row'
 const { t } = useI18n()
 const vault = useVaultStore()
 const { status } = useSyncStatus()
-const { settings, restore } = useSyncActions()
+const { settings, restore, openNotificationSettings } = useSyncActions()
 
 const current = computed(() => status.data.value)
 const name = ref('')
@@ -107,6 +109,23 @@ const keyHint = computed(() => {
             </SelectItem>
           </Select>
         </div>
+
+        <!-- Android: without the notification the service cannot run, so sync pauses in the background. -->
+        <Alert v-if="current?.enabled && current.notifications_blocked" data-sync-notifications>
+          <BellOff />
+          <AlertTitle>{{ t('sync.notifications.blockedTitle') }}</AlertTitle>
+          <AlertDescription class="grid gap-2">
+            <span>{{ t('sync.notifications.blockedHint') }}</span>
+            <Button
+              size="sm"
+              class="justify-self-start"
+              :disabled="openNotificationSettings.isPending.value"
+              @click="openNotificationSettings.mutate()"
+            >
+              {{ t('sync.notifications.openSettings') }}
+            </Button>
+          </AlertDescription>
+        </Alert>
 
         <SyncNetwork v-if="current?.enabled" />
 

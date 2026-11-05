@@ -85,6 +85,42 @@ fn open_script() -> String {
     )
 }
 
+/// Whether any line of `(Get-NetConnectionProfile).NetworkCategory` is
+/// `Public`: the Private-only rule does not apply on such a network.
+#[cfg(any(windows, test))]
+fn public_network_in(output: &str) -> bool {
+    output
+        .lines()
+        .any(|line| line.trim().eq_ignore_ascii_case("Public"))
+}
+
+/// Whether Windows treats a connected network as Public. Asked only after the
+/// rule was added (never from the status path); a failure counts as no.
+#[cfg(windows)]
+pub fn on_public_network() -> bool {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "(Get-NetConnectionProfile).NetworkCategory",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|out| public_network_in(&String::from_utf8_lossy(&out.stdout)))
+        .unwrap_or(false)
+}
+
+/// Only Windows has network categories.
+#[cfg(not(windows))]
+pub fn on_public_network() -> bool {
+    false
+}
+
 fn refused() -> Error {
     Error::PeerSync(PeerSyncFailure::Firewall)
 }
@@ -265,5 +301,16 @@ mod tests {
             assert!(commands.iter().any(|command| command.contains(range)));
         }
         assert!(commands.iter().all(|command| command.contains("53318")));
+    }
+
+    #[test]
+    fn public_network_is_found_in_the_profile_list() {
+        assert!(!public_network_in("Private\r\n"));
+        assert!(public_network_in("Public\r\n"));
+        assert!(public_network_in(
+            "Private\r\n  public \r\nDomainAuthenticated"
+        ));
+        assert!(!public_network_in(""));
+        assert!(!public_network_in("Publicly\nPrivate"));
     }
 }

@@ -30,10 +30,14 @@ const state = {
   firewallOpen: false,
   lastError: null as string | null,
   backgroundSupported: false,
+  notificationsBlocked: false,
+  networkPublic: false,
 }
 
 /** Lets a test (or a console) show the screens states the scripted phone never reaches. */
-export function setMockSyncState(patch: Partial<Pick<typeof state, 'lastError' | 'backgroundSupported'>>) {
+export function setMockSyncState(
+  patch: Partial<Pick<typeof state, 'lastError' | 'backgroundSupported' | 'notificationsBlocked' | 'networkPublic'>>,
+) {
   Object.assign(state, patch)
 }
 
@@ -87,6 +91,7 @@ function status(): SyncStatus {
     has_backup: state.history.length > 0,
     background_supported: state.backgroundSupported,
     background_lock_min: prefs.background_lock_min ?? 30,
+    notifications_blocked: prefs.enabled && state.notificationsBlocked,
     network: {
       port: prefs.enabled ? 53318 : null,
       address: prefs.enabled ? '192.168.1.174' : null,
@@ -94,6 +99,7 @@ function status(): SyncStatus {
       since_ms: prefs.enabled ? state.since : null,
       // Shown until "Open port", as if the phone could not get in.
       inbound_blocked: prefs.enabled && !state.firewallOpen,
+      network_public: state.networkPublic,
       firewall_fix: 'auto',
       firewall_commands: [
         "sudo ufw allow from 192.168.1.0/24 to any port 53318:53327 proto tcp comment 'Multi Wallet Tracker sync'",
@@ -241,6 +247,12 @@ export const syncCommands: MockCommands = {
     return resolve(null)
   },
   sync_restore_backup: () => resolve(null),
+  sync_open_notification_settings: () => {
+    // The user allows them on the system page.
+    state.notificationsBlocked = false
+    push()
+    return resolve(null)
+  },
   sync_open_firewall: () => {
     state.firewallOpen = true
     return resolve(status())

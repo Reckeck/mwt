@@ -14,7 +14,7 @@ Sync, Devices unless said otherwise.
 | The vault is locked | Sync runs only while the vault is open on both. On Android keep the app in the background, not closed |
 | Different vault | A different vault is refused (`SYNC_OTHER_VAULT`). Use "Receive from another device" to copy the vault first |
 | Guest or office Wi-Fi with client isolation, or multicast blocked | Use a normal home network or a phone hotspot |
-| A firewall drops incoming connections | The main device shows "A firewall blocks incoming connections". Press "Open the port" (Linux, Windows; the rule covers TCP 53318-53327, press it again after an update to widen an old 53318-53319 rule) or allow the app when the system asks. On Windows the banner stays until a device connects, and the rule is for Private networks only: if the network is Public, switch it to Private in Windows settings. On Flatpak, run the shown commands in a terminal |
+| A firewall drops incoming connections | The main device shows "A firewall blocks incoming connections". Press "Open the port" (Linux, Windows; the rule covers TCP 53318-53327, press it again after an update to widen an old 53318-53319 rule) or allow the app when the system asks. On Windows the banner stays until a device connects, and the rule is for Private networks only: after the press the app asks Windows for the network category, and if it is Public the banner adds "Windows treats this network as Public, so the rule does not apply" (switch the network to Private in the Windows network settings; the check runs only on that press) On Flatpak, run the shown commands in a terminal |
 | Different networks (Wi-Fi vs mobile data) | Put both on the same Wi-Fi |
 
 After 30 seconds without neighbors, Settings, Sync shows a hint, the port and the
@@ -145,6 +145,10 @@ it was before the first batch of the run.
 - If the app is killed in the background, sync resumes when you open it.
 - A foreground notification shows the number of devices; "Stop" stops sync until
   you return to the app.
+- Without the notification permission (Android 13+) or with the app's
+  notifications switched off, the service cannot run and sync pauses in the
+  background. Settings -> Sync then shows a hint with "Open settings"; the app also
+  asks for the permission at start when sync is already on.
 - While at least one device is linked and live, the service holds a CPU wake lock,
   so a minimized app, also with the screen off, keeps syncing. With no live link
   (only searching) no lock is held and the phone may sleep: sync can pause until

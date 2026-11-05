@@ -46,6 +46,11 @@ pub struct Background {
 }
 
 #[derive(Deserialize)]
+struct Allowed {
+    allowed: bool,
+}
+
+#[derive(Deserialize)]
 struct Language {
     language: String,
 }
@@ -110,6 +115,19 @@ impl<R: Runtime> Net<R> {
     /// Ask for the notification permission (Android 13+), without waiting.
     pub fn ask_notifications(&self) -> Result<()> {
         self.run::<serde::de::IgnoredAny, _>("askNotifications", ())
+            .map(|_| ())
+    }
+
+    /// Whether the background notification can show (the permission on
+    /// Android 13+ and the app's notification switch).
+    pub fn notifications_allowed(&self) -> Result<bool> {
+        let out: Allowed = self.run("notificationsAllowed", ())?;
+        Ok(out.allowed)
+    }
+
+    /// Open the system page of this app's notification settings.
+    pub fn open_notification_settings(&self) -> Result<()> {
+        self.run::<serde::de::IgnoredAny, _>("openNotificationSettings", ())
             .map(|_| ())
     }
 

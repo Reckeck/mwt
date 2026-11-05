@@ -140,6 +140,8 @@ pub(crate) struct Hub {
     pub focused: bool,
     /// Another device could not connect here (see `Hello::unreached`).
     pub inbound_blocked: bool,
+    /// Windows: the rule was added, but the network is Public, so it does not apply.
+    pub network_public: bool,
     pub last_error: Option<String>,
     /// Errors already announced, per (code, peer device id): the same failure
     /// repeating is shown once, another peer's is still shown.
@@ -184,6 +186,14 @@ pub fn on_unlock(app: &AppHandle) {
         }
     }
     handover::trust_sender(app);
+    // Sync switched on before the permission existed: ask once per run.
+    #[cfg(target_os = "android")]
+    {
+        static ASKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if sync_enabled(app) && !ASKED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            crate::platform_net::ask_notifications(app);
+        }
+    }
     restart(app);
 }
 
@@ -279,6 +289,7 @@ pub(crate) fn teardown<H: Host>(app: &H) -> Option<Run> {
     let (run, links) = {
         let mut hub = Host::hub(app);
         hub.inbound_blocked = false;
+        hub.network_public = false;
         // A start still in flight compares its generation before it inserts a Run.
         hub.generation += 1;
         let links: Vec<_> = std::mem::take(&mut hub.links).into_values().collect();
@@ -547,6 +558,7 @@ pub(crate) fn status<H: Host>(app: &H) -> SyncStatus {
         background_supported: cfg!(target_os = "android"),
         background_lock_min: settings.sync.background_lock_min(),
         network,
+        notifications_blocked: settings.sync.enabled && app.notifications_blocked(),
     }
 }
 
@@ -565,6 +577,7 @@ fn network_view(hub: &Hub) -> SyncNetworkView {
         }),
         since_ms: run.map(|run| run.started_ms),
         inbound_blocked: hub.inbound_blocked,
+        network_public: hub.network_public,
         firewall_fix,
         firewall_commands,
         last_error: hub.last_error.clone(),

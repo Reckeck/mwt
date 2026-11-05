@@ -441,6 +441,7 @@ pub fn run() {
             commands::sync::allow_merging,
             commands::sync::sync_restore_backup,
             commands::sync::sync_open_firewall,
+            commands::sync::sync_open_notification_settings,
             commands::transfer::transfer_receive_start,
             commands::transfer::transfer_receive_stop,
             commands::transfer::transfer_receive_decide,

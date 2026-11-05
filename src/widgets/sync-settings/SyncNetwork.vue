@@ -89,6 +89,10 @@ const lastError = computed(() => {
             <Copy class="size-3.5" />
           </Button>
         </div>
+        <!-- Windows: the rule was added but the network is Public, so it does not apply. -->
+        <span v-if="network?.inbound_blocked && network.network_public" class="text-xs text-destructive" data-sync-public-network>
+          {{ t('sync.firewall.publicNetwork') }}
+        </span>
       </AlertDescription>
     </Alert>
   </div>

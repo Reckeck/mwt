@@ -1,6 +1,8 @@
 //! Android side of LAN sync: the multicast lock and the device key wrapped by
 //! the Android Keystore (`crates/plugin-net`).
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use tauri::AppHandle;
 use tauri_plugin_net::NetExt;
 
@@ -33,6 +35,31 @@ pub fn poll(app: &AppHandle) -> Option<tauri_plugin_net::Poll> {
 /// Android 13+: ask for the permission the background notification needs.
 pub fn ask_notifications(app: &AppHandle) {
     let _ = app.net().ask_notifications();
+}
+
+/// Last known answer of [`refresh_notifications`]: the status path reads this
+/// and never calls the plugin, because a plugin call waits for the Android main
+/// thread and status is built with the hub locked.
+static NOTIFICATIONS_BLOCKED: AtomicBool = AtomicBool::new(false);
+
+/// Whether the background notification is blocked (denied permission or the
+/// app's notifications switched off), as of the last refresh.
+pub fn notifications_blocked() -> bool {
+    NOTIFICATIONS_BLOCKED.load(Ordering::Relaxed)
+}
+
+/// Ask the system again; `true` when the answer changed. Off the main thread
+/// only. A failed question keeps the last answer.
+pub fn refresh_notifications(app: &AppHandle) -> bool {
+    let Ok(allowed) = app.net().notifications_allowed() else {
+        return false;
+    };
+    NOTIFICATIONS_BLOCKED.swap(!allowed, Ordering::Relaxed) == allowed
+}
+
+/// Open the system page where the user allows this app's notifications.
+pub fn open_notification_settings(app: &AppHandle) -> bool {
+    app.net().open_notification_settings().is_ok()
 }
 
 /// The system's language (`ru`, `en`, …), asked once.

@@ -66,14 +66,34 @@ pub async fn sync_set_settings(
 pub async fn sync_open_firewall(app: AppHandle) -> Result<SyncStatus, String> {
     sync::firewall::open().await.map_err(err_to_string)?;
     // On Windows the rule is for the Private profile only: on a Public network
-    // it does not apply, so the banner stays until an incoming link clears it
-    // (`link.rs`). Elsewhere the rule is for any network.
-    #[cfg(not(windows))]
+    // it does not apply, so the banner stays (until an incoming link clears
+    // it, `link.rs`) and says so. The check runs off the async runtime and
+    // only here, never in the status path; it is always false off Windows,
+    // where the rule is for any network and the banner clears.
+    let public = tauri::async_runtime::spawn_blocking(sync::firewall::on_public_network)
+        .await
+        .unwrap_or(false);
     {
-        sync::hub(&app).inbound_blocked = false;
+        let mut hub = sync::hub(&app);
+        hub.network_public = public;
+        if !cfg!(windows) {
+            hub.inbound_blocked = false;
+        }
     }
     sync::emit_status(&app);
     Ok(sync::status(&app))
+}
+
+/// "Open settings" on the notification hint: the system page where the user
+/// allows this app's notifications (Android; elsewhere there is nothing to open).
+#[tauri::command]
+pub async fn sync_open_notification_settings(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    if crate::platform_net::open_notification_settings(&app) {
+        return Ok(());
+    }
+    let _ = &app;
+    Err(err_to_string(trade_core::Error::Unsupported))
 }
 
 /// "Pair" on the banner: both screens show the code. With a `device_id`

@@ -2,10 +2,13 @@ package dev.mwt.net
 
 import android.Manifest
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import app.tauri.Logger
@@ -123,6 +126,29 @@ class NetPlugin(private val activity: Activity) : Plugin(activity) {
       activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7318)
     }
     invoke.resolve(JSObject())
+  }
+
+  /** Whether the background notification can show: the permission (13+) and the app's own switch. */
+  @Command
+  fun notificationsAllowed(invoke: Invoke) {
+    val granted = Build.VERSION.SDK_INT < 33 ||
+      activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    val manager = activity.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    invoke.resolve(JSObject().put("allowed", granted && manager.areNotificationsEnabled()))
+  }
+
+  /** The system page of this app's notification settings. */
+  @Command
+  fun openNotificationSettings(invoke: Invoke) {
+    try {
+      val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      activity.startActivity(intent)
+      invoke.resolve(JSObject())
+    } catch (ex: Exception) {
+      invoke.reject("cannot open the notification settings: ${ex.message}")
+    }
   }
 
   @Command
