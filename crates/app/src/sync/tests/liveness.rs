@@ -188,59 +188,39 @@ async fn closing_a_live_link_flushes_the_edits_still_waiting() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_failed_backup_does_not_count_as_the_runs_backup() {
     let dir = tempfile::tempdir().unwrap();
-    let (left, _right) = same_vault(dir.path());
-    let left_dir = dir.path().join("left");
-    let right_dir = dir.path().join("right");
-    std::fs::create_dir_all(&left_dir).unwrap();
-    std::fs::create_dir_all(&right_dir).unwrap();
-    std::fs::rename(dir.path().join("left.wallet"), left_dir.join("left.wallet")).unwrap();
-    std::fs::copy(
-        dir.path().join("right.wallet"),
-        right_dir.join("right.wallet"),
-    )
-    .unwrap();
-    drop(left);
-    let left = UnlockedVault::open(left_dir.join("left.wallet"), "pw").unwrap();
-    let right = UnlockedVault::open(right_dir.join("right.wallet"), "pw").unwrap();
+    let (left, right) = same_vault(dir.path());
     let (main, main_events) = device("Laptop", left, SyncRole::Main);
     let (client, client_events) = device("Phone", right, SyncRole::Client);
     let _main_seen = answer(main.clone(), main_events, true);
     let client_seen = answer(client.clone(), client_events, true);
-    // Pair first, with nothing to apply.
-    connect(&main, &client).await;
-    until("both live", || live(&main) && live(&client)).await;
-    for host in [&main, &client] {
-        let sessions: Vec<String> = host.hub().links.keys().cloned().collect();
-        for session in sessions {
-            crate::sync::send(host, &session, Order::Close);
-        }
-    }
-    until("links closed", || {
-        main.hub().links.is_empty() && client.hub().links.is_empty()
-    })
-    .await;
     seed(&main, "first");
 
-    // The phone cannot copy its file aside: the batch is not applied.
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&right_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // The phone cannot copy its file aside: the batch is not applied. Rotating
+    // onto a non-empty directory fails for every user; file modes do not stop
+    // root, which is who runs CI.
+    let rotated = dir.path().join("right.wallet.presync.1.bak");
+    let oldest = dir.path().join("right.wallet.presync.2.bak");
+    std::fs::create_dir(&rotated).unwrap();
+    std::fs::create_dir(&oldest).unwrap();
+    std::fs::write(oldest.join("in the way"), b"").unwrap();
     connect(&main, &client).await;
-    until("the failed session is over", || {
-        client.hub().links.is_empty() && main.hub().links.is_empty()
-    })
-    .await;
     until("a failure is reported", || {
         !client_seen.lock().unwrap().is_empty()
     })
     .await;
+    until("the failed session is over", || {
+        client.hub().links.is_empty() && main.hub().links.is_empty()
+    })
+    .await;
     assert!(comments(&client).is_empty());
-    std::fs::set_permissions(&right_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::remove_dir_all(&rotated).unwrap();
+    std::fs::remove_dir_all(&oldest).unwrap();
 
     // The next session in the same run still owes the backup.
     connect(&main, &client).await;
     until("applied", || comments(&client) == ["first"]).await;
     assert!(
-        right_dir.join("right.wallet.presync.bak").exists(),
+        dir.path().join("right.wallet.presync.bak").exists(),
         "no backup was made before the batch"
     );
 }
