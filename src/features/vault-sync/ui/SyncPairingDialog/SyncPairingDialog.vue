@@ -21,15 +21,18 @@ const { t } = useI18n()
 const { pairing } = useSyncStatus()
 const { confirmPairing } = useSyncActions()
 const isPhone = useIsPhone()
-const answered = ref<string | null>(null)
+/** What was answered for a session: a decline hides the dialog, an accept keeps it as the waiting state. */
+const answered = ref<{ id: string; accept: boolean } | null>(null)
 
 const session = computed(() => pairing.value)
 const open = computed({
-  get: () => Boolean(session.value) && answered.value !== session.value?.session_id,
+  get: () => Boolean(session.value) && !(answered.value && !answered.value.accept && answered.value.id === session.value?.session_id),
   set: (value: boolean) => {
     if (!value && session.value) decide(false)
   },
 })
+/** Confirmed here, the other device has not yet. */
+const waiting = computed(() => Boolean(answered.value?.accept) && answered.value?.id === session.value?.session_id)
 const code = computed(() => {
   const raw = session.value?.pairing_code ?? ''
   return `${raw.slice(0, 3)} ${raw.slice(3)}`
@@ -40,11 +43,16 @@ watch(session, (next) => {
   if (!next) answered.value = null
 })
 
+function reopen(sessionId: string) {
+  if (answered.value?.id === sessionId) answered.value = null
+}
+
 function decide(accept: boolean) {
   const current = session.value
   if (!current) return
-  answered.value = current.session_id
-  confirmPairing.mutate({ session_id: current.session_id, accept })
+  answered.value = { id: current.session_id, accept }
+  // Pending keeps the dialog hidden (no flicker); a refusal brings it back to try again.
+  confirmPairing.mutate({ session_id: current.session_id, accept }, { onError: () => reopen(current.session_id) })
 }
 </script>
 
@@ -52,7 +60,7 @@ function decide(accept: boolean) {
   <Dialog overlay="sync-pairing" v-model:open="open" size="sm" :title="t('sync.pairing.title')">
     <div class="flex flex-col items-center gap-2 py-3">
       <Smartphone class="size-8" aria-hidden="true" />
-      <p class="text-center text-sm text-muted-foreground">{{ t('sync.pairing.instruction') }}</p>
+      <p class="text-center text-sm text-muted-foreground">{{ waiting ? t('sync.pairing.waiting') : t('sync.pairing.instruction') }}</p>
       <p class="text-4xl font-semibold tracking-[0.2em] tabular-nums" aria-live="polite">{{ code }}</p>
       <p v-if="left" class="text-xs text-muted-foreground">{{ t('sync.pairing.left', { time: left }) }}</p>
     </div>
@@ -62,7 +70,7 @@ function decide(accept: boolean) {
     </div>
     <template #footer>
       <Button v-if="!isPhone" variant="outline" @click="decide(false)">{{ t('actions.cancel') }}</Button>
-      <Button :class="isPhone ? 'h-12 flex-1' : ''" :disabled="confirmPairing.isPending.value" :loading="confirmPairing.isPending.value" @click="decide(true)">
+      <Button :class="isPhone ? 'h-12 flex-1' : ''" :disabled="confirmPairing.isPending.value || waiting" :loading="confirmPairing.isPending.value" @click="decide(true)">
         {{ t('ui.done') }}
       </Button>
     </template>

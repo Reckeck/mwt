@@ -83,6 +83,7 @@ export const WHATS_NEW_NOVEMBER: WhatsNewEntry[] = [
       { key: 'deletionsStay', route: 'settings:sync:sync-devices' },
       { key: 'rolesSteady', route: 'settings:sync:sync-devices' },
       { key: 'editBanner', route: 'settings:sync:sync-devices' },
+      { key: 'pairingWait', route: 'settings:sync:sync-devices' },
     ],
   },
 ]
