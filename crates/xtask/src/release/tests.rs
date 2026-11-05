@@ -224,3 +224,114 @@ fn the_boundary_follows_the_release_base_through_the_squash_and_the_back_merge()
     assert_eq!(boundary(&dir).as_deref(), Some("v0.2.0"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `git` with a fixed, explicit commit date, so the order of dates does not depend on the clock.
+fn git_on(dir: &Path, day: u32, args: &[&str]) -> String {
+    let date = format!("2026-01-{day:02}T12:00:00Z");
+    let output = Command::new("git")
+        .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+        .args([
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "tag.sort=-version:refname",
+        ])
+        .args(args)
+        .env("GIT_AUTHOR_DATE", &date)
+        .env("GIT_COMMITTER_DATE", &date)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+fn commit_on(dir: &Path, day: u32, message: &str) {
+    git_on(dir, day, &["commit", "-q", "--allow-empty", "-m", message]);
+}
+
+/// The history of a real release: several commits on development, the release tip tagged, then
+/// (later) the squash on main tagged and merged back. The squash is newer than the release tip, and
+/// git's `describe` picks it although it is 9 commits away against 3.
+fn dated_release_history(name: &str) -> std::path::PathBuf {
+    let dir = temp_repo(name);
+    commit_on(&dir, 1, "feat: one");
+    let first = git_on(&dir, 1, &["rev-parse", "HEAD"]);
+    for day in 2..=6 {
+        commit_on(&dir, day, "feat: more");
+    }
+    commit_on(&dir, 7, "chore(release): v0.2.0");
+    git_on(&dir, 7, &["tag", "release-base/v0.2.0"]);
+    git_on(&dir, 8, &["switch", "-q", "-c", "main", &first]);
+    commit_on(&dir, 8, "chore(release): v0.2.0 (squash)");
+    git_on(&dir, 8, &["tag", "v0.2.0"]);
+    git_on(
+        &dir,
+        9,
+        &["switch", "-q", "-C", "development", "release-base/v0.2.0"],
+    );
+    git_on(
+        &dir,
+        9,
+        &["merge", "-q", "-s", "ours", "-m", "back", "main"],
+    );
+    for day in 10..=11 {
+        commit_on(&dir, day, "feat: next");
+    }
+    dir
+}
+
+#[test]
+fn the_release_base_wins_although_the_squash_tag_is_newer() {
+    let dir = dated_release_history("boundary-dated");
+    assert_eq!(boundary(&dir).as_deref(), Some("release-base/v0.2.0"));
+    let count = git_on(
+        &dir,
+        12,
+        &["rev-list", "--count", "release-base/v0.2.0..HEAD"],
+    );
+    assert_eq!(count, "4", "the squash, the back-merge and two commits");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_pre_release_tag_is_not_a_boundary_but_a_release_base_of_one_is_kept() {
+    let dir = temp_repo("boundary-pre");
+    commit_on(&dir, 1, "feat: one");
+    git_on(&dir, 1, &["tag", "v0.2.0-1"]);
+    assert_eq!(boundary(&dir), None);
+    git_on(&dir, 1, &["tag", "v0.1.0"]);
+    commit_on(&dir, 2, "feat: two");
+    assert_eq!(boundary(&dir).as_deref(), Some("v0.1.0"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn nearest_tag_ties_go_to_the_release_base_whatever_the_dates() {
+    for (base_day, tag_day) in [(1, 2), (2, 1)] {
+        let dir = temp_repo("nearest-tie");
+        commit_on(&dir, 1, "feat: one");
+        git_on(&dir, base_day, &["tag", "release-base/v0.2.0"]);
+        git_on(&dir, tag_day, &["tag", "-a", "-m", "release", "v0.2.0"]);
+        commit_on(&dir, 3, "feat: two");
+        let patterns = ["v[0-9]*", "release-base/v[0-9]*"];
+        assert_eq!(
+            flow::nearest_tag(&dir, "HEAD", &patterns, |_| false).as_deref(),
+            Some("release-base/v0.2.0")
+        );
+        // a tie between two plain tags goes by name
+        git_on(&dir, 1, &["tag", "v0.1.0"]);
+        assert_eq!(
+            flow::nearest_tag(&dir, "HEAD", &patterns, |tag| tag
+                .starts_with("release-base/"))
+            .as_deref(),
+            Some("v0.1.0")
+        );
+        assert_eq!(flow::nearest_tag(&dir, "HEAD", &patterns, |_| true), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

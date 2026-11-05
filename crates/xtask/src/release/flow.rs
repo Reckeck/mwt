@@ -141,3 +141,38 @@ pub fn succeeds(root: &Path, args: &[&str]) -> bool {
 pub fn remote_has(root: &Path, remote: &str, reference: &str) -> Result<bool> {
     Ok(!query(root, "git", &["ls-remote", remote, reference])?.is_empty())
 }
+
+/// The published tag closest to `rev`: among the tags matching `patterns` that are ancestors of
+/// `rev` (and are not `skip`ped), the one with the fewest commits in `tag..rev`, because that is
+/// the list a release note would have to show. `git describe` cannot be used for this: it ranks
+/// candidates by commit date, so a squash tag created after the release tip (always the case for
+/// `vX.Y.Z` against `release-base/vX.Y.Z`) can win although it is farther away. A tie goes to a
+/// `release-base/` tag, then to the smaller name, so the result depends on neither dates nor the
+/// user's `tag.sort`. Costs one `git tag` plus one `git rev-list --count` per candidate tag.
+pub fn nearest_tag(
+    root: &Path,
+    rev: &str,
+    patterns: &[&str],
+    skip: impl Fn(&str) -> bool,
+) -> Option<String> {
+    let listing = query(
+        root,
+        "git",
+        &[&["tag", "--merged", rev, "--list"], patterns].concat(),
+    )
+    .ok()?;
+    listing
+        .lines()
+        .map(str::trim)
+        .filter(|tag| !tag.is_empty() && !skip(tag))
+        .filter_map(|tag| {
+            let range = format!("{tag}..{rev}");
+            let count: u64 = query(root, "git", &["rev-list", "--count", &range])
+                .ok()?
+                .parse()
+                .ok()?;
+            Some((count, !tag.starts_with("release-base/"), tag))
+        })
+        .min()
+        .map(|(_, _, tag)| tag.to_string())
+}

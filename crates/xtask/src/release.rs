@@ -207,28 +207,19 @@ fn cliff(root: &Path, args: &[&str]) -> Result<String> {
 }
 
 /// The nearest release boundary in the history of HEAD: a `release-base/vX.Y.Z` or a release tag
-/// `vX.Y.Z` (never a pre-release `vX.Y.Z-N`). `None` before the first release.
+/// `vX.Y.Z` (never a pre-release `vX.Y.Z-N`), whichever has the fewest commits since it. `None`
+/// before the first release.
 fn boundary(root: &Path) -> Option<String> {
-    let output = Command::new("git")
-        .args([
-            "describe",
-            "--tags",
-            "--abbrev=0",
-            "--match",
+    // the patterns also match `vX.Y.Z-N` (`*` spans anything), so pre-releases are dropped here
+    flow::nearest_tag(
+        root,
+        "HEAD",
+        &[
             "release-base/v[0-9]*.[0-9]*.[0-9]*",
-            "--match",
             "v[0-9]*.[0-9]*.[0-9]*",
-            "--exclude",
-            "v*-*",
-            "HEAD",
-        ])
-        .current_dir(root)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    let tag = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    (output.status.success() && !tag.is_empty()).then_some(tag)
+        ],
+        |tag| tag.starts_with('v') && tag.contains('-'),
+    )
 }
 
 /// The git-cliff arguments for the commits since `boundary`.
