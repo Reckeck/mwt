@@ -343,6 +343,25 @@ Tests: `peer_sync/notice_settings_tests.rs`, `peer_sync/inflation_tests.rs`,
 test (`convergence_catalog.rs`: `NoticeSettings121`, `ReminderText33`,
 `PriceBase26`, `FlatInflation100`; `KNOWN_OPEN` is empty).
 
+## Sync repair stage C
+
+No bump of the protocol or of the vault format. Only the connection and the
+merge core changed.
+
+| Change | On the wire | Older build |
+|---|---|---|
+| Silent peer in the exchange | `Bye "timeout"`, then a closed connection | treats any `Bye` as a quiet close and dials again |
+| Limit of incoming connections (`MAX_INCOMING`) | the connection closes at once | sees a failed dial and backs off |
+| Close of a live link | one more `Changed` before `Bye "closed"` | applies it normally |
+| Order of a capped union (`discarded_imports`) | the same records | keeps other records at the cap and re-sends them; the new side trims again, extra traffic only |
+| A record this build cannot read | left out and journaled once, the session goes on | fails the batch and ends every session with this device |
+| Own entry in the peer list | still sent, it carries a revocation on | counts it as a device that never acks, so its tombstones stay |
+
+Known limit (catalog 85). An older build drops a new optional field when it
+rebuilds a record, so its digest never equals the newer build's. Each session
+there gives a plan, a journal line and a toast until it is updated. A newer
+build cannot fix this from its side.
+
 ## What an old peer still gets wrong
 
 - It may drop an edited duplicate (the creation-stamp dedupe) and show secrets
