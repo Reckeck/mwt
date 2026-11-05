@@ -30,9 +30,10 @@ Add a field to `VaultDoc` and it shows up in the suggestions by itself.
   successful save.
 
 The backend also rejects a document before writing: invalid JSON, an unknown schema
-or a wrong payload version → `Error`, and the `.bak` copy is untouched. The only
-place a backup is created is `dev_apply_vault_json`, and only after a successful
-`decode`.
+or a wrong payload version → `Error`, and the `.bak` copy is untouched. The editor
+(`dev_apply_vault_json`) writes its `.bak` only after a successful `decode`. It is not the
+only flow that makes backups: a store change, linking or replacing a vault file
+(`VaultFile::backup`), a schema migration (`<vault>.vN.bak`) and sync (`.presync` copies) do too.
 
 ## Status badge
 
