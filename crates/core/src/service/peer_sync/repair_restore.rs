@@ -309,7 +309,8 @@ impl UnlockedVault {
     }
 
     /// Whether money still names the record under this sync key
-    /// (`stores:<id>`, `categories:<key>`, `contacts:<id>`).
+    /// (`stores:<id>`, `categories:<key>`, `contacts:<id>`, and
+    /// `transactions:<id>` for a payment a shared event names).
     #[cfg(test)]
     pub(super) fn money_names_record(&self, key: &str) -> bool {
         let (stores, categories, contacts) = self.money_names();
@@ -317,6 +318,12 @@ impl UnlockedVault {
             Some(("stores", id)) => stores.contains(id),
             Some(("categories", id)) => categories.contains(id),
             Some(("contacts", id)) => contacts.contains(id),
+            Some(("transactions", id)) => self
+                .doc
+                .shared_events
+                .iter()
+                .flat_map(event_links)
+                .any(|linked| linked == id),
             _ => false,
         }
     }
