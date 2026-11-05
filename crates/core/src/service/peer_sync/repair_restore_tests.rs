@@ -247,7 +247,8 @@ fn the_restore_is_told_to_the_user() {
         .doc
         .notification_log
         .iter()
-        .find(|record| record.key.starts_with("repair:restored:"))
+        // A pass that could not restore yet may have told that first (`unrestored`).
+        .find(|record| record.key.starts_with("repair:restored:") && record.body.contains("Hobby"))
         .expect("a notice");
     assert!(notice.body.contains("Hobby"), "{}", notice.body);
     assert!(notice.body.contains("operations still use them") || notice.body.contains("ссылаются"));
@@ -337,4 +338,34 @@ fn undoing_the_batch_removes_the_restore_again() {
         categories_of(&left, &key).is_empty(),
         "the restore is undone"
     );
+}
+
+#[test]
+fn a_report_with_only_unrestored_ids_tells_the_user_and_has_its_own_key() {
+    let report = super::repair_report::RepairReport {
+        unrestored: vec!["transactions:one".into()],
+        ..Default::default()
+    };
+    let english = report.notice_body(false).expect("a notice for unrestored");
+    assert!(english.contains("are not on this device"), "{english}");
+    assert_eq!(report.notice_title(false), "Waiting for another device");
+    assert_eq!(report.notice_title(true), "Ждём другое устройство");
+    assert!(
+        english.starts_with("Waiting for another device: "),
+        "{english}"
+    );
+    let russian = report.notice_body(true).expect("a notice for unrestored");
+    assert!(russian.contains("нет на этом устройстве"), "{russian}");
+    let other = super::repair_report::RepairReport {
+        unrestored: vec!["transactions:two".into()],
+        ..Default::default()
+    };
+    assert_ne!(report.notice_key(), other.notice_key());
+    let mixed = super::repair_report::RepairReport {
+        restored: vec![("categories:a".into(), "Hobby".into())],
+        unrestored: vec!["transactions:one".into()],
+        ..Default::default()
+    };
+    assert_eq!(mixed.notice_title(false), "Fixed after sync");
+    assert_eq!(mixed.notice_title(true), "Исправлено после синхронизации");
 }
