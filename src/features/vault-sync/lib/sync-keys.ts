@@ -89,9 +89,11 @@ const SETTINGS_KEYS: Keys = [
  * ledger (or something unknown): then every screen re-reads, as before.
  * A batch of settings or reminders no longer reloads the whole app.
  */
-export function keysOfBatch(summary: SyncSummary): Keys | 'all' {
+export function keysOfBatch(summary: SyncSummary, extra: readonly string[] = []): Keys | 'all' {
   const keys: Array<readonly unknown[]> = []
-  for (const { collection } of summary.collections) {
+  // `extra`: collections the batch touched beyond its summary (dedupe and repair deletions).
+  const names = [...summary.collections.map(({ collection }) => collection), ...extra]
+  for (const collection of names) {
     if (ALL_COLLECTIONS.has(collection)) return 'all'
     if (collection === 'settings') {
       keys.push(...SETTINGS_KEYS)
@@ -105,5 +107,5 @@ export function keysOfBatch(summary: SyncSummary): Keys | 'all' {
 }
 
 /** Whether the batch changed the vault's settings (kept in the settings store, not in a query). */
-export const touchesSettings = (summary: SyncSummary) =>
-  summary.collections.some(({ collection }) => collection === 'settings')
+export const touchesSettings = (summary: SyncSummary, extra: readonly string[] = []) =>
+  summary.collections.some(({ collection }) => collection === 'settings') || extra.includes('settings')

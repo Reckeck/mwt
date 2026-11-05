@@ -2642,6 +2642,11 @@ pub struct SyncPlanEvent {
 pub struct VaultSyncedEvent {
     pub session_id: String,
     pub batch: crate::service::AppliedBatch,
+    /// Sorted distinct collections the batch touched, the dedupe and repair
+    /// deletions included (`batch.summary` does not count those and keeps its
+    /// `total`). The screens of all of them re-read.
+    #[serde(default)]
+    pub collections: Vec<String>,
 }
 
 /// `sync-error`: a session ended or refused to start; `code` is a `SYNC_*` code.

@@ -775,6 +775,19 @@ impl UnlockedVault {
             .unwrap_or_default()
     }
 
+    /// Sorted distinct collections a kept batch touched, the dedupe and the
+    /// repair deletions included (they are batch entries too); the summary of
+    /// the batch does not count those, so the `vault-synced` event names them.
+    pub fn sync_batch_collections(&self, batch_id: &str) -> Vec<String> {
+        self.sync_batch_keys(batch_id)
+            .iter()
+            .filter_map(|key| key.split_once(':').map(|(collection, _)| collection))
+            .map(str::to_string)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
     /// Notices a kept batch added (to show them on this device). A notice the
     /// batch only updated (read on the other device) was shown before.
     pub fn sync_batch_notices(&self, batch_id: &str) -> Vec<crate::model::notify::NoticeRecord> {
@@ -2513,6 +2526,41 @@ mod tests {
         assert_eq!(left.doc.transactions.len(), 1);
         left.sync_undo(&batch.id).unwrap();
         assert_eq!(left.doc.transactions.len(), 1, "undo left neither copy");
+    }
+
+    #[test]
+    fn a_dedupe_deletion_is_in_the_batch_collections_but_not_in_the_summary() {
+        let (_dir, mut left, mut right) = two_devices();
+        rent(&mut left, "first");
+        pause();
+        rent(&mut left, "second");
+        right.doc.stores[0].color = "#123456".into();
+        right.persist().unwrap();
+        let (applied_left, _) = exchange(&mut left, &mut right);
+        let batch = applied_left.expect("left applied the store change");
+        assert_eq!(left.doc.transactions.len(), 1, "dedupe removed a copy");
+        assert!(
+            batch
+                .summary
+                .collections
+                .iter()
+                .all(|entry| entry.collection != "transactions"),
+            "the summary is taken before the dedupe"
+        );
+        assert_eq!(batch.summary.total, 1, "only the store change is counted");
+        let collections = left.sync_batch_collections(&batch.id);
+        assert!(
+            collections.contains(&"transactions".to_string()),
+            "{collections:?}"
+        );
+        assert!(
+            collections.contains(&"stores".to_string()),
+            "{collections:?}"
+        );
+        let mut sorted = collections.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(collections, sorted);
     }
 
     /// A workflow transaction of `run`, planned for `moment`.

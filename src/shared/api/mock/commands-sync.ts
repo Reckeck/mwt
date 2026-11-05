@@ -28,6 +28,13 @@ const state = {
   journal: seedJournal(),
   since: Date.now(),
   firewallOpen: false,
+  lastError: null as string | null,
+  backgroundSupported: false,
+}
+
+/** Lets a test (or a console) show the screens states the scripted phone never reaches. */
+export function setMockSyncState(patch: Partial<Pick<typeof state, 'lastError' | 'backgroundSupported'>>) {
+  Object.assign(state, patch)
 }
 
 /** One line of the journal for `summary`, as the backend writes it. */
@@ -70,7 +77,7 @@ function status(): SyncStatus {
   const prefs = mockAppSettings.sync
   return {
     enabled: prefs.enabled,
-    role: prefs.enabled ? 'main' : 'off',
+    role: prefs.enabled ? (prefs.prefer_main ? 'main' : 'client') : 'off',
     device_id: mockAppSettings.device_id,
     device_name: mockAppSettings.device_name ?? 'Browser',
     confirm_first: prefs.confirm_first,
@@ -78,7 +85,7 @@ function status(): SyncStatus {
     key_storage: prefs.enabled ? 'system' : '',
     sessions: session(),
     has_backup: state.history.length > 0,
-    background_supported: false,
+    background_supported: state.backgroundSupported,
     background_lock_min: prefs.background_lock_min ?? 30,
     network: {
       port: prefs.enabled ? 53318 : null,
@@ -91,7 +98,7 @@ function status(): SyncStatus {
       firewall_commands: [
         "sudo ufw allow from 192.168.1.0/24 to any port 53318 proto tcp comment 'Multi Wallet Tracker sync'",
       ],
-      last_error: null,
+      last_error: state.lastError,
     },
   }
 }
@@ -165,18 +172,26 @@ export const syncCommands: MockCommands = {
     state.journal = [journalLine(accept ? 'applied' : 'declined', accept ? batchId : null), ...state.journal]
     if (accept) {
       const now = new Date().toISOString()
-      state.history = [
-        {
-          id: batchId,
-          skipped: [],
-          peer_name: PHONE.name,
-          applied_at: now,
-          summary,
-          undone_at: null,
-          transferred_to: null,
-        },
-        ...state.history,
-      ]
+      const batch: AppliedBatch = {
+        id: batchId,
+        skipped: [],
+        peer_name: PHONE.name,
+        applied_at: now,
+        summary,
+        undone_at: null,
+        transferred_to: null,
+      }
+      state.history = [batch, ...state.history]
+      // The real backend reports an applied batch this way (the toast with `Undo`).
+      setTimeout(
+        () =>
+          emitMock('vault-synced', {
+            session_id: SESSION,
+            batch,
+            collections: [...new Set(summary.collections.map((changes) => changes.collection))].sort(),
+          }),
+        0,
+      )
       state.peers = state.peers.map((peer) => ({ ...peer, last_synced_at: now }))
     }
     push()
