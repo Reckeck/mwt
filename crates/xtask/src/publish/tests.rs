@@ -412,3 +412,63 @@ fn the_first_pre_release_after_a_release_starts_at_the_release_base() {
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_dir_all(&bare);
 }
+
+fn git_on(dir: &Path, day: u32, args: &[&str]) -> String {
+    let date = format!("2026-01-{day:02}T12:00:00Z");
+    let output = std::process::Command::new("git")
+        .args(["-c", "user.name=test", "-c", "user.email=t@example.com"])
+        .args([
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "tag.sort=-version:refname",
+        ])
+        .args(args)
+        .env("GIT_AUTHOR_DATE", &date)
+        .env("GIT_COMMITTER_DATE", &date)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "git {args:?}");
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+/// The squash tag of main is newer than the release tip, and `git describe` prefers it although
+/// it is farther away (9 commits against 3).
+#[test]
+fn the_release_base_wins_over_a_newer_squash_tag() {
+    let dir = std::env::temp_dir().join(format!("xtask-since-dated-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let commit = |day: u32, message: &str| {
+        git_on(&dir, day, &["commit", "-q", "--allow-empty", "-m", message]);
+    };
+    git_on(&dir, 1, &["init", "-q", "-b", "development"]);
+    commit(1, "feat: one");
+    let first = git_on(&dir, 1, &["rev-parse", "HEAD"]);
+    for day in 2..=6 {
+        commit(day, "feat: more");
+    }
+    commit(7, "chore(release): v0.2.0");
+    git_on(&dir, 7, &["tag", "release-base/v0.2.0"]);
+    git_on(&dir, 8, &["switch", "-q", "-c", "main", &first]);
+    commit(8, "chore(release): v0.2.0 (squash)");
+    git_on(&dir, 8, &["tag", "v0.2.0"]);
+    git_on(
+        &dir,
+        9,
+        &["switch", "-q", "-C", "development", "release-base/v0.2.0"],
+    );
+    git_on(
+        &dir,
+        9,
+        &["merge", "-q", "-s", "ours", "-m", "back", "main"],
+    );
+    commit(10, "feat: next");
+    let sha = git_on(&dir, 10, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        describe_since(&dir, "v0.2.1-1", &sha).as_deref(),
+        Some("release-base/v0.2.0")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

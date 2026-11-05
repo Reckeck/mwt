@@ -207,25 +207,13 @@ const LOG_LIMIT: usize = 80;
 
 /// The closest published tag in the history of `sha`: a pre-release or release tag, or the
 /// `release-base/vX.Y.Z` of the last release. A release is squashed into main, so its tag `vX.Y.Z`
-/// is no ancestor of development's commits; `release-base` is, and it is closer than `vX.Y.Z`,
+/// is no ancestor of development's commits; `release-base` is, and it has fewer commits since it,
 /// so the first pre-release after a release does not list the whole release again. `tag` (the one
 /// being published) is skipped when a rerun finds it on this commit.
 fn describe_since(root: &Path, tag: &str, sha: &str) -> Option<String> {
-    git(
-        root,
-        &[
-            "describe",
-            "--tags",
-            "--abbrev=0",
-            "--match",
-            "v[0-9]*",
-            "--match",
-            "release-base/v[0-9]*",
-            "--exclude",
-            tag,
-            sha,
-        ],
-    )
+    crate::release::flow::nearest_tag(root, sha, &["v[0-9]*", "release-base/v[0-9]*"], |other| {
+        other == tag
+    })
 }
 
 /// `PRE=true` (the release.yml output `pre`) means `--pre`; unset, empty or `false` does not.
