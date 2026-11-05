@@ -217,3 +217,22 @@ fn a_settlement_never_names_a_transfer_that_is_gone() {
     };
     assert_eq!(by_id(&left), by_id(&right));
 }
+
+/// The convergence oracle skips a deleted key that live money names
+/// (`money_names_record`). A payment restored by R3 is named by the purchase
+/// that was attached beside its deletion, so the oracle must know it.
+#[test]
+fn the_oracle_knows_a_restored_payment_is_named_by_money() {
+    let (_dir, mut left, mut right, _store, event_id, tx_id) = setup();
+    left.delete_transaction(&tx_id).unwrap();
+    attach(&mut right, &event_id, &tx_id);
+    settle(&mut left, &mut right);
+    let key = format!("transactions:{tx_id}");
+    for device in [&left, &right] {
+        assert!(has_tx(device, &tx_id) && linked(device, &tx_id));
+        assert!(
+            device.money_names_record(&key),
+            "the purchase names {key}, the oracle says nothing does"
+        );
+    }
+}

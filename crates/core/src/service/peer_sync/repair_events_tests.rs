@@ -1,6 +1,7 @@
 //! Catalog 123 and 116: guests that became contacts, payments linked to events,
 //! the currency and the organizer of an event after a merge.
 
+use super::convergence_catalog;
 use super::tests::{exchange, settle, two_devices};
 use super::*;
 use crate::ipc_contract::SettleSharedInput;
@@ -419,4 +420,93 @@ fn needs_rate_is_computed_for_the_purchase_view_by_the_repair_rule() {
     assert_eq!(flag("p-eur"), Some(true));
     assert_eq!(flag("p-usd"), Some(false), "the event's own currency");
     assert_eq!(flag("p-typed"), Some(false), "a typed rate");
+}
+
+/// Fuzz seed 4: two devices book purchases while the event has two currencies
+/// (one changed it before anything was bought, the other did not see that).
+/// After the merge both purchases carry the automatic rate 1 and only one of
+/// them is in the event currency. Repair cannot pick a rate, so it must at
+/// least name the purchase (`needs_rate`) and keep the purchase view flagged.
+#[test]
+fn a_purchase_beside_a_currency_change_is_flagged_for_a_rate_on_every_device() {
+    let (_dir, mut left, mut right) = two_devices();
+    let (event_id, ann) = event_with_guest(&mut left, "trip", "usd");
+    settle(&mut left, &mut right);
+    let event = left.doc.shared_events[0].clone();
+    left.update_shared_event(
+        &event_id,
+        SharedEventDraft {
+            title: event.title.clone(),
+            currency: "eur".into(),
+            rounding_step: Some(event.rounding_step),
+            organizer: event.organizer.clone(),
+            i_participate: event.i_participate,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let buy = |vault: &mut UnlockedVault, currency: &str| {
+        vault
+            .add_shared_purchase(
+                &event_id,
+                SharedPurchaseDraft {
+                    new_item_title: Some(format!("bought in {currency}")),
+                    buyer: ann.clone(),
+                    qty: amount("1"),
+                    amount: amount("10"),
+                    currency: currency.into(),
+                    price_mode: PriceMode::Total,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    };
+    buy(&mut left, "eur");
+    buy(&mut right, "usd");
+    settle(&mut left, &mut right);
+    for device in [&mut left, &mut right] {
+        let event = device.doc.shared_events[0].clone();
+        let wrong: Vec<Purchase> = event
+            .items
+            .iter()
+            .flat_map(|item| &item.purchases)
+            .filter(|purchase| purchase.needs_rate(&event.currency))
+            .cloned()
+            .collect();
+        let report = device.repair_invariants(None).unwrap();
+        assert!(
+            !wrong.is_empty() && report.needs_rate.contains(&wrong[0].id),
+            "repair names the purchase for a rate: {:?}",
+            report.needs_rate
+        );
+        assert!(
+            convergence_catalog::unrepaired_rate_one(&event).is_empty(),
+            "the rate is left for the user, the oracle must accept it"
+        );
+    }
+}
+
+/// The oracle forgives only what repair cannot settle: one foreign currency
+/// with the automatic rate 1 is R7's job and stays a violation.
+#[test]
+fn one_foreign_currency_with_rate_one_stays_a_violation() {
+    let (_dir, mut vault) = empty_vault();
+    let (event_id, _) = event_with_guest(&mut vault, "trip", "usd");
+    let event = vault
+        .doc
+        .shared_events
+        .iter_mut()
+        .find(|event| event.id == event_id)
+        .unwrap();
+    event.items.push(crate::model::shared_event::EventItem {
+        id: "item".into(),
+        title: "things".into(),
+        purchases: vec![purchase_in("eur", "p-eur")],
+        ..Default::default()
+    });
+    let named: Vec<&str> = convergence_catalog::unrepaired_rate_one(event)
+        .iter()
+        .map(|purchase| purchase.id.as_str())
+        .collect();
+    assert_eq!(named, vec!["p-eur"]);
 }

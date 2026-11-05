@@ -896,6 +896,26 @@ fn undo_last_batch(vault: &mut UnlockedVault, ledger: &mut Ledger) {
 }
 
 /// Every invariant of the stage on one converged device.
+/// 116: purchases with the automatic rate 1 in another currency that repair
+/// R7 had to settle. With one such currency it moves the event to it. With two
+/// or more no rate can be invented: the purchases stay, named in
+/// `needs_rate` and marked in the view, so they are not a violation here.
+pub(super) fn unrepaired_rate_one(
+    event: &crate::model::shared_event::SharedEvent,
+) -> Vec<&crate::model::shared_event::Purchase> {
+    let purchases = || event.items.iter().flat_map(|item| &item.purchases);
+    let auto: BTreeSet<&str> = purchases()
+        .filter(|purchase| purchase.has_auto_rate_one())
+        .map(|purchase| purchase.currency.as_str())
+        .collect();
+    if auto.len() > 1 {
+        return Vec::new();
+    }
+    purchases()
+        .filter(|purchase| purchase.needs_rate(&event.currency))
+        .collect()
+}
+
 pub(super) fn invariants(vault: &UnlockedVault, ledger: &Ledger) -> Vec<Violation> {
     let mut out = Vec::new();
     check_cash_and_tree(vault, &mut out);
@@ -1351,20 +1371,15 @@ fn check_shared_events(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Vio
                 );
             }
         }
-        for purchase in event.items.iter().flat_map(|item| &item.purchases) {
-            if !purchase.rate_manual
-                && purchase.rate_to_event == crate::Amount::from(1)
-                && purchase.currency != event.currency
-            {
-                found(
-                    out,
-                    Item::EventCurrency116,
-                    format!(
-                        "event {}: purchase {} in {} has rate 1 to {}",
-                        event.id, purchase.id, purchase.currency, event.currency
-                    ),
-                );
-            }
+        for purchase in unrepaired_rate_one(event) {
+            found(
+                out,
+                Item::EventCurrency116,
+                format!(
+                    "event {}: purchase {} in {} has rate 1 to {}",
+                    event.id, purchase.id, purchase.currency, event.currency
+                ),
+            );
         }
     }
     for (event_id, item_id, purchase_id) in &ledger.purchases {
