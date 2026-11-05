@@ -72,7 +72,7 @@ The steps, as `link.rs` runs them:
 3. **Manifest.** `sync_manifest(Some(since))` returns one 64-bit digest per
    record and per deletion. The digest covers the shared part of a record
    (`shareable`: device-local fields are left out). Cached prices and rates older
-   than 90 days (`UNION_DAYS`) are left out of the first manifest.
+   than 90 days (`UNION_DAYS`) are left out of every manifest.
 4. **Diff and request.** `sync_diff` compares the two manifests and returns the
    keys to ask for, leaving out cache points this device would thin away at
    once (otherwise the same list would repeat every session).
@@ -164,7 +164,7 @@ fails the test `every_vault_field_has_a_sync_rule`.
 | `Records` | records by key, merge per field, deletion is a tombstone | stores (accounts), transactions, categories, contacts, budgets, goals, reminders, price_alerts, categorization_rules, utility_items, meter_readings, enrichments, manual_prices, envelopes, debt_terms, shared_events, key_rates, pending_imports, workflows, workflow_vars, workflow_queue, workflow_state, workflow_waits, calc_scenarios, inflation_points, asset_classes, asset_class_of, valuations, tx_properties, data_sources, asset_price_sources, deposit_rate_sources, attachments, attachment_keys |
 | `Single` | one object whose fields merge like a record's | settings, exchanges, emergency_fund, health_last |
 | `Log { cap, order }` | merged like `Records`, then ordered by a time field (ties broken by key, so every device keeps the same records) and cut to a cap; trimming is not a deletion. A record the cap cuts at once is not counted as added and makes no batch entry, but it is still requested each session | notification_log (500, `delivered_at`), workflow_runs (1000, `started_at`), import_runs (500, `at`) |
-| `Union { cap }` | union of immutable points, no stamps | price_cache, fx_cache (first session sends 90 days), discarded_imports (cap 20 000) |
+| `Union { cap }` | union of immutable points, no stamps | price_cache, fx_cache (each session sends 90 days), discarded_imports (cap 20 000) |
 | not synced (`LOCAL`) | identity, schema and derived data | `version`, `id`, `created_at`, `holdings` (recomputed), `sync` |
 
 The older text listed an `automation_runs` log and "schemes". Neither exists in
@@ -253,7 +253,7 @@ from a device that still has it.
 
 ## Caches (price_cache, fx_cache)
 
-Cached prices and rates union in. The first session sends only the last 90
+Cached prices and rates union in. Each session sends only the last 90
 days. After each apply that touched them, both devices thin the result with the
 same algorithm a refresh uses (rates of currencies not in use are thinned to one
 point). Thinning is not a deletion and leaves no tombstone. The manifest and the
