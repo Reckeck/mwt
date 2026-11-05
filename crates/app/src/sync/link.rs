@@ -201,9 +201,7 @@ pub(crate) async fn run<H: Host>(
     if let Err(Stop::Failed(err)) = &result {
         if matches!(
             err,
-            Error::PeerSync(
-                PeerSyncFailure::OtherVault | PeerSyncFailure::Rejected | PeerSyncFailure::Channel
-            )
+            Error::PeerSync(PeerSyncFailure::OtherVault | PeerSyncFailure::Channel)
         ) {
             super::note_failure(&app, addr.ip());
         }
@@ -261,6 +259,22 @@ pub(super) struct Peer {
     pub(super) take_main_ordered: AtomicBool,
     /// Consecutive `Time` reports within the warn bound since the last drift.
     pub(super) stable_reports: AtomicU32,
+}
+
+/// Runs `work` on the open vault only while it is still the vault this
+/// session was opened for; a vault switched under the session ends it quietly.
+fn with_peer_vault<H: Host, T>(
+    app: &H,
+    peer: &Peer,
+    work: impl FnOnce(&mut trade_core::service::UnlockedVault) -> Result<T>,
+) -> Flow<T> {
+    let outcome = app.with_vault(|vault| {
+        if vault.doc.id != peer.vault_id {
+            return Ok(None);
+        }
+        work(vault).map(Some)
+    })?;
+    outcome.ok_or(Stop::Quiet)
 }
 
 /// Merge the other side's trusted devices and tell the other links; whether
@@ -571,7 +585,16 @@ async fn session<H: Host>(
 
     let mut reason = None;
     if !trusted || theirs.needs_pairing {
-        pair(app, &mut wire, &mut orders, &peer, intent, asked_to_pair).await?;
+        pair(
+            app,
+            &mut wire,
+            &mut orders,
+            &peer,
+            addr,
+            intent,
+            asked_to_pair,
+        )
+        .await?;
         reason = Some(SyncConfirmReason::Paired);
     }
     let _ = addr;
@@ -596,6 +619,7 @@ async fn pair<H: Host>(
     wire: &mut Wire,
     orders: &mut mpsc::UnboundedReceiver<Order>,
     peer: &Peer,
+    addr: SocketAddr,
     ask_now: bool,
     asked: bool,
 ) -> Flow<()> {
@@ -663,7 +687,10 @@ async fn pair<H: Host>(
                     wire.send(&Message::Pairing { accept }).await?;
                     if !accept {
                         decline(app, peer);
-                        return Err(failure(PeerSyncFailure::Rejected));
+                        // Our own decision is no error to show, but repeated asks
+                        // from this address stay throttled.
+                        super::note_failure(app, addr.ip());
+                        return Err(Stop::Quiet);
                     }
                     mine = true;
                 }
@@ -699,7 +726,7 @@ async fn pair<H: Host>(
                 link.view.pairing_code = None;
                 link.view.pairing_expires_ms = None;
             });
-            app.with_vault(|vault| {
+            with_peer_vault(app, peer, |vault| {
                 vault.sync_trust_peer(&peer.device_id, &peer.name, &peer.remote_key)
             })?;
             if let Some(peers) = held_peers.take()
@@ -720,8 +747,7 @@ fn heard_bye<H: Host>(app: &H, peer: &Peer, reason: &str) -> Stop {
     let Some(cut) = SyncCutReason::from_wire(reason) else {
         return Stop::Quiet;
     };
-    let news = app
-        .with_vault(|vault| vault.sync_cut_by(&peer.device_id, cut))
+    let news = with_peer_vault(app, peer, |vault| vault.sync_cut_by(&peer.device_id, cut))
         .unwrap_or(false);
     if news {
         let failure = match cut {
@@ -827,7 +853,7 @@ fn mark_unreliable<H: Host>(app: &H, peer: &Peer, watch: &ClockWatch) {
     );
 }
 
-async fn send_records<H: Host>(app: &H, wire: &mut Wire, keys: &[String]) -> Flow<()> {
+async fn send_records<H: Host>(app: &H, peer: &Peer, wire: &mut Wire, keys: &[String]) -> Flow<()> {
     if keys.is_empty() {
         wire.send(&Message::Records {
             records: Vec::new(),
@@ -839,7 +865,7 @@ async fn send_records<H: Host>(app: &H, wire: &mut Wire, keys: &[String]) -> Flo
     let chunks: Vec<&[String]> = keys.chunks(RECORDS_PER_MESSAGE).collect();
     let count = chunks.len();
     for (index, chunk) in chunks.into_iter().enumerate() {
-        let records = app.with_vault(|vault| vault.sync_records(chunk))?;
+        let records = with_peer_vault(app, peer, |vault| vault.sync_records(chunk))?;
         wire.send(&Message::Records {
             records: records.into_iter().collect(),
             last: index + 1 == count,
@@ -860,10 +886,10 @@ async fn exchange<H: Host>(
     pending: &mut BTreeSet<String>,
 ) -> Flow<()> {
     set_phase(app, &peer.session_id, SyncPhase::Exchanging);
-    let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
+    let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
     wire.send(&Message::Peers { peers }).await?;
     let since = now_ms().saturating_sub(UNION_DAYS * 24 * 3600 * 1000);
-    let (mine, mark) = app.with_vault(|vault| vault.sync_manifest_marked(Some(since)))?;
+    let (mine, mark) = with_peer_vault(app, peer, |vault| vault.sync_manifest_marked(Some(since)))?;
     let entries: Vec<(String, u64)> = mine
         .iter()
         .map(|(key, digest)| (key.clone(), *digest))
@@ -923,7 +949,7 @@ async fn exchange<H: Host>(
                     }
                 }
                 Some(Message::Request { keys }) => {
-                    send_records(app, wire, &keys).await?;
+                    send_records(app, peer, wire, &keys).await?;
                     answered = true;
                 }
                 Some(Message::Records { records, last }) => {
@@ -949,7 +975,7 @@ async fn exchange<H: Host>(
     }
     set_progress(app, &peer.session_id, None);
     apply(app, wire, orders, peer, watch, incoming, reason, pending).await?;
-    app.with_vault(|vault| {
+    with_peer_vault(app, peer, |vault| {
         vault.sync_mark_synced(&peer.device_id, Some(&mark))?;
         // Only an applied exchange vouches for our deletions: its manifest
         // says which of them the peer holds.
@@ -1093,7 +1119,7 @@ async fn apply_shown<H: Host>(
                         Some(Order::Presence(focused)) => wire.send(&Message::Presence { focused }).await?,
                         Some(Order::TakeMain) => peer.take_main_ordered.store(true, Ordering::SeqCst),
                         Some(Order::SendPeers) => {
-                            let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
+                            let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
                             wire.send(&Message::Peers { peers }).await?;
                         }
                         Some(Order::Close) | None => return Err(Stop::Quiet),
@@ -1129,7 +1155,7 @@ async fn apply_shown<H: Host>(
                 if declined {
                     // "Decline" pauses exchange with this device until the
                     // user resumes it; a timeout only closes this session.
-                    let _ = app.with_vault(|vault| {
+                    let _ = with_peer_vault(app, peer, |vault| {
                         vault.sync_journal_record(
                             &peer.name,
                             &summary,
@@ -1259,7 +1285,7 @@ async fn live<H: Host>(
     // SendPeers orders are dropped while exchanging: say where we stand now.
     // The client sends this right after taking the main role, so it is also
     // the (wire-compatible) confirmation the main device waits for.
-    let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
+    let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
     wire.send(&Message::Peers { peers }).await?;
 
     let mut flush_at = (!pending.is_empty()).then(|| Instant::now() + DEBOUNCE);
@@ -1277,7 +1303,7 @@ async fn live<H: Host>(
                 flush_at = None;
                 let keys: Vec<String> = std::mem::take(&mut pending).into_iter().collect();
                 for chunk in keys.chunks(RECORDS_PER_MESSAGE) {
-                    let records = app.with_vault(|vault| vault.sync_records(chunk))?;
+                    let records = with_peer_vault(app, peer, |vault| vault.sync_records(chunk))?;
                     wire.send(&Message::Changed { records: records.into_iter().collect() }).await?;
                 }
             }
@@ -1295,7 +1321,7 @@ async fn live<H: Host>(
                 Some(Order::Presence(focused)) => wire.send(&Message::Presence { focused }).await?,
                 Some(Order::TakeMain) => wire.send(&Message::TakeMain).await?,
                 Some(Order::SendPeers) => {
-                    let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
+                    let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
                     wire.send(&Message::Peers { peers }).await?;
                 }
                 Some(Order::Close) | None => {
@@ -1303,7 +1329,7 @@ async fn live<H: Host>(
                     // vault may already be closed: then there is nothing to send.
                     let keys: Vec<String> = std::mem::take(&mut pending).into_iter().collect();
                     for chunk in keys.chunks(RECORDS_PER_MESSAGE) {
-                        let Ok(records) = app.with_vault(|vault| vault.sync_records(chunk)) else {
+                        let Ok(records) = with_peer_vault(app, peer, |vault| vault.sync_records(chunk)) else {
                             break;
                         };
                         if wire.send(&Message::Changed { records: records.into_iter().collect() }).await.is_err() {
@@ -1346,7 +1372,7 @@ async fn live<H: Host>(
                     Some(Message::TakeMain) => {
                         app.become_main();
                         // The answer the main device waits for before it steps down.
-                        let peers = app.with_vault(|vault| vault.sync_peers_to_send())?;
+                        let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
                         wire.send(&Message::Peers { peers }).await?;
                     }
                     Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),

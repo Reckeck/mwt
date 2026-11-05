@@ -143,6 +143,13 @@ pub async fn unlock_vault(
     crate::commands::sandbox::leave(&app, &state);
     let path =
         crate::platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
+    let open_path = state
+        .vault
+        .lock()
+        .ok()
+        .and_then(|guard| guard.as_ref().map(|vault| vault.path.clone()));
+    close_if_open_at(open_path.as_deref(), &path, &mut AppLockSteps { app: &app })
+        .map_err(err_to_string)?;
     // A linked vault first takes in what changed in its external copy.
     let open_sync =
         crate::platform_fs::links::sync_before_open(&app, &path).map_err(err_to_string)?;
@@ -215,6 +222,22 @@ fn close_in_order(steps: &mut impl LockSteps) -> trade_core::Result<()> {
     Ok(())
 }
 
+/// Opening a vault that is already open here: close the open one first (flush,
+/// stop sync, drop). Otherwise its lock file (ours, so the new vault would not
+/// own it) is deleted when it drops, and its deferred writer could write over
+/// the new vault. Whether it was open at `path`.
+fn close_if_open_at(
+    open: Option<&std::path::Path>,
+    path: &std::path::Path,
+    steps: &mut impl LockSteps,
+) -> trade_core::Result<bool> {
+    if open != Some(path) {
+        return Ok(false);
+    }
+    close_in_order(steps)?;
+    Ok(true)
+}
+
 struct AppLockSteps<'a> {
     app: &'a AppHandle,
 }
@@ -282,6 +305,36 @@ mod lock_order_tests {
         };
         close_in_order(&mut steps).unwrap();
         assert_eq!(steps.calls, ["flush", "snapshot", "stop_sync", "close"]);
+    }
+
+    #[test]
+    fn unlocking_the_vault_that_is_open_closes_it_first() {
+        let path = std::path::Path::new("/tmp/a.wallet");
+        let mut steps = Recorder {
+            calls: vec![],
+            flush_fails: false,
+        };
+        assert!(close_if_open_at(Some(path), path, &mut steps).unwrap());
+        assert_eq!(steps.calls, ["flush", "snapshot", "stop_sync", "close"]);
+    }
+
+    #[test]
+    fn unlocking_another_vault_or_none_closes_nothing() {
+        let mut steps = Recorder {
+            calls: vec![],
+            flush_fails: false,
+        };
+        let other = std::path::Path::new("/tmp/b.wallet");
+        assert!(!close_if_open_at(None, other, &mut steps).unwrap());
+        assert!(
+            !close_if_open_at(
+                Some(std::path::Path::new("/tmp/a.wallet")),
+                other,
+                &mut steps
+            )
+            .unwrap()
+        );
+        assert!(steps.calls.is_empty());
     }
 
     #[test]

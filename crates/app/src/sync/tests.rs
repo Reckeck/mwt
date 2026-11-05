@@ -20,6 +20,7 @@ use trade_core::service::{SyncTap, UnlockedVault};
 use trade_core::sync::session::DeviceKey;
 
 mod dialing;
+mod identity;
 mod liveness;
 
 use super::host::{Host, lock_hub};
@@ -371,10 +372,16 @@ async fn a_declined_pairing_trusts_nobody() {
     let (main, main_events) = device("Laptop", left, SyncRole::Main);
     let (client, client_events) = device("Phone", right, SyncRole::Client);
     seed(&client, "stays here");
-    let _main = answer(main.clone(), main_events, false);
+    let main_errors = answer(main.clone(), main_events, false);
     let client_errors = answer(client.clone(), client_events, true);
     connect(&main, &client).await;
     until("the refusal", || has(&client_errors, "SYNC_REJECTED")).await;
+    until("the decliner's link ends", || main.hub().links.is_empty()).await;
+    // The decliner chose it itself: no error shown, but repeated asks count.
+    assert!(!has(&main_errors, "SYNC_REJECTED"));
+    assert_eq!(main.hub().failures.values().map(Vec::len).sum::<usize>(), 1);
+    // The asker heard a refusal: the error stays, the address takes no penalty.
+    assert!(client.hub().failures.is_empty());
     assert!(comments(&main).is_empty());
     let peers = main
         .with_vault(|vault| Ok(vault.sync_state().peers.len()))
