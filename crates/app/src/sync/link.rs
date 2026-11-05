@@ -73,8 +73,21 @@ const DEBOUNCE: Duration = Duration::from_secs(1);
 #[cfg(test)]
 const DEBOUNCE: Duration = Duration::from_millis(50);
 pub(super) const STABLE_TIME_REPORTS: u32 = 3;
+#[cfg(not(test))]
 const TIME_EVERY: Duration = Duration::from_secs(30);
+#[cfg(test)]
+const TIME_EVERY: Duration = Duration::from_millis(150);
+#[cfg(not(test))]
 const SILENCE_LIMIT: Duration = Duration::from_secs(95);
+#[cfg(test)]
+const SILENCE_LIMIT: Duration = Duration::from_millis(1000);
+/// A peer that sends nothing while the lists are exchanged ends the session
+/// (it would otherwise hold its twin out of `hub.links`). A user's question
+/// comes after this phase and has its own limit, [`DECISION_TIMEOUT`].
+#[cfg(not(test))]
+const EXCHANGE_IDLE: Duration = Duration::from_secs(95);
+#[cfg(test)]
+const EXCHANGE_IDLE: Duration = Duration::from_millis(600);
 /// Notices older than this that arrive by sync are logged, not shown.
 const FRESH_NOTICE_MS: i64 = 3600 * 1000;
 
@@ -128,6 +141,8 @@ struct Wire {
     channel: Channel,
     out: mpsc::UnboundedSender<Vec<u8>>,
     frames: mpsc::Receiver<Vec<u8>>,
+    /// When the last frame came (or the session last showed it was alive).
+    heard: Instant,
 }
 
 impl Wire {
@@ -147,6 +162,7 @@ impl Wire {
             let Some(frame) = self.frames.recv().await else {
                 return Ok(None);
             };
+            self.heard = Instant::now();
             if let Some(bytes) = self.channel.open(&frame)? {
                 return Ok(Some(decode(&bytes)?));
             }
@@ -158,16 +174,18 @@ impl Wire {
 
 /// `dialer`: this device opened the connection. Which side is the main
 /// device comes from the hellos: a client dials the main device, or the main
-/// device calls back a client that cannot reach it.
+/// device calls back a client that cannot reach it. True when a verified
+/// link came up (the hellos passed and the link was entered in the hub).
 pub(crate) async fn run<H: Host>(
     app: H,
     stream: TcpStream,
     addr: SocketAddr,
     generation: u64,
     dialer: bool,
-) {
+) -> bool {
     let session_id = uuid::Uuid::new_v4().to_string();
     let mut to_main = false;
+    let mut up = false;
     let result = session(
         &app,
         stream,
@@ -176,6 +194,7 @@ pub(crate) async fn run<H: Host>(
         dialer,
         &session_id,
         &mut to_main,
+        &mut up,
     )
     .await;
     let peer = forget_link(&app, &session_id);
@@ -212,6 +231,7 @@ pub(crate) async fn run<H: Host>(
         app.main_lost(generation);
     }
     super::emit_status(&app);
+    up
 }
 
 /// Drop the link from the hub; the device id and name it showed.
@@ -270,6 +290,7 @@ fn take_peers<H: Host>(
     Ok(revoked)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn session<H: Host>(
     app: &H,
     stream: TcpStream,
@@ -278,6 +299,7 @@ async fn session<H: Host>(
     dialer: bool,
     session_id: &str,
     to_main_out: &mut bool,
+    up: &mut bool,
 ) -> Flow<()> {
     let key = app.device_key()?;
     stream.set_nodelay(true).ok();
@@ -321,6 +343,7 @@ async fn session<H: Host>(
         channel,
         out,
         frames,
+        heard: Instant::now(),
     };
     let remote_key = wire.channel.remote_hex();
 
@@ -340,7 +363,8 @@ async fn session<H: Host>(
             Some(run) if run.role == SyncRole::Main => {
                 (true, client_rank(&hub), run.instance.clone(), false)
             }
-            Some(run) => (false, 0, run.instance.clone(), run.unreached),
+            // A dial that got through has not failed to reach anyone.
+            Some(run) => (false, 0, run.instance.clone(), run.unreached && !dialer),
             None => return Err(Stop::Quiet),
         }
     };
@@ -501,6 +525,11 @@ async fn session<H: Host>(
                 hub.inbound_blocked = false;
             }
         }
+        if dialer {
+            // The other device answered: the dial worked.
+            run.unreached = false;
+            run.dial_failures = 0;
+        }
         hub.links.insert(
             session_id.to_string(),
             Link {
@@ -527,6 +556,7 @@ async fn session<H: Host>(
             },
         );
     }
+    *up = true;
     super::emit_status(app);
     let peer = Peer {
         session_id: session_id.to_string(),
@@ -856,8 +886,15 @@ async fn exchange<H: Host>(
     let mut incoming: BTreeMap<String, RecordState> = BTreeMap::new();
     let (mut asked, mut answered, mut received) = (false, false, false);
     let mut total = 0u32;
+    // Only the wait for the peer is limited; the user's question comes after
+    // this loop (in `apply`) with its own limit.
+    let mut idle_at = Instant::now() + EXCHANGE_IDLE;
     while !(asked && answered && received) {
         tokio::select! {
+            () = tokio::time::sleep_until(idle_at) => {
+                let _ = wire.send(&Message::Bye { reason: "timeout".into() }).await;
+                return Err(Stop::Quiet);
+            }
             order = orders.recv() => match order {
                 Some(Order::Changed(keys)) => pending.extend(keys),
                 Some(Order::Presence(focused)) => wire.send(&Message::Presence { focused }).await?,
@@ -866,7 +903,7 @@ async fn exchange<H: Host>(
                 // `live` starts with a fresh list.
                 Some(_) => {}
             },
-            message = wire.next() => match message? {
+            message = wire.next() => { idle_at = Instant::now() + EXCHANGE_IDLE; match message? {
                 Some(Message::Peers { peers }) => {
                     if take_peers(app, peer, &peers)? {
                         return Err(failure(PeerSyncFailure::Revoked));
@@ -907,7 +944,7 @@ async fn exchange<H: Host>(
                 Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),
                 None => return Err(Stop::Quiet),
                 Some(_) => {}
-            },
+            } },
         }
     }
     set_progress(app, &peer.session_id, None);
@@ -1113,17 +1150,14 @@ async fn apply_shown<H: Host>(
         }
     }
 
-    let backup = {
-        let mut hub = app.hub();
-        hub.run
-            .as_mut()
-            .is_some_and(|run| !std::mem::replace(&mut run.backup_done, true))
-    };
+    // One backup per run, counted once it succeeded.
+    let backup = app.hub().run.as_ref().is_some_and(|run| !run.backup_done);
     let peer_ref = PeerRef {
         device_id: peer.device_id.clone(),
         name: peer.name.clone(),
     };
     let mut dropped = false;
+    let mut backed_up = false;
     let applied = app.with_vault(|vault| {
         // Checked in the same step as the write: a vault switched under the
         // session gets nothing.
@@ -1142,6 +1176,7 @@ async fn apply_shown<H: Host>(
         }
         if backup {
             vault.sync_backup()?;
+            backed_up = true;
         }
         let Some(batch) = vault.sync_apply(&incoming, &peer_ref)? else {
             return Ok(Some(None));
@@ -1150,6 +1185,9 @@ async fn apply_shown<H: Host>(
         let notices = vault.sync_batch_notices(&batch.id);
         Ok(Some(Some((batch, keys, notices))))
     });
+    if backed_up && let Some(run) = app.hub().run.as_mut() {
+        run.backup_done = true;
+    }
     let applied = match applied {
         Ok(applied) => applied,
         Err(err) => {
@@ -1170,9 +1208,9 @@ async fn apply_shown<H: Host>(
     let Some(applied) = applied else {
         return Err(Stop::Quiet);
     };
-    app.hub().last_activity = Some(std::time::Instant::now());
     update_link(app, &peer.session_id, |link| link.applied_once = true);
     if let Some((batch, keys, notices)) = applied {
+        app.hub().last_activity = Some(std::time::Instant::now());
         app.emit(
             SYNCED_EVENT,
             VaultSyncedEvent {
@@ -1226,7 +1264,7 @@ async fn live<H: Host>(
 
     let mut flush_at = (!pending.is_empty()).then(|| Instant::now() + DEBOUNCE);
     let mut ticker = tokio::time::interval(TIME_EVERY);
-    let mut last_heard = Instant::now();
+    wire.heard = Instant::now();
     loop {
         let flush = async {
             match flush_at {
@@ -1244,7 +1282,7 @@ async fn live<H: Host>(
                 }
             }
             _ = ticker.tick() => {
-                if last_heard.elapsed() > SILENCE_LIMIT {
+                if wire.heard.elapsed() > SILENCE_LIMIT {
                     return Err(Stop::Quiet);
                 }
                 wire.send(&Message::Time { now_ms: now_ms() }).await?;
@@ -1261,18 +1299,31 @@ async fn live<H: Host>(
                     wire.send(&Message::Peers { peers }).await?;
                 }
                 Some(Order::Close) | None => {
+                    // Edits still waiting for the debounce go out first. The
+                    // vault may already be closed: then there is nothing to send.
+                    let keys: Vec<String> = std::mem::take(&mut pending).into_iter().collect();
+                    for chunk in keys.chunks(RECORDS_PER_MESSAGE) {
+                        let Ok(records) = app.with_vault(|vault| vault.sync_records(chunk)) else {
+                            break;
+                        };
+                        if wire.send(&Message::Changed { records: records.into_iter().collect() }).await.is_err() {
+                            break;
+                        }
+                    }
                     let _ = wire.send(&Message::Bye { reason: "closed".into() }).await;
                     return Err(Stop::Quiet);
                 }
                 Some(_) => {}
             },
             message = wire.next() => {
-                last_heard = Instant::now();
                 match message? {
                     Some(Message::Changed { records }) => {
                         check_stamps(app, peer, watch, &records);
                         let incoming: BTreeMap<String, RecordState> = records.into_iter().collect();
                         apply(app, wire, orders, peer, watch, incoming, None, &mut pending).await?;
+                        // The question can take minutes: that is not silence.
+                        wire.heard = Instant::now();
+                        set_phase(app, &peer.session_id, SyncPhase::Live);
                         if !pending.is_empty() {
                             flush_at.get_or_insert_with(|| Instant::now() + DEBOUNCE);
                         }

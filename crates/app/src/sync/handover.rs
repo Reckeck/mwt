@@ -205,7 +205,11 @@ pub async fn receive_start(app: &AppHandle) -> Result<TransferReceiveView> {
             tokio::select! {
                 _ = stopped.changed() => break,
                 accepted = listener.accept() => {
-                    let Ok((stream, addr)) = accepted else { continue };
+                    let Ok((stream, addr)) = accepted else {
+                        // Out of descriptors, say: do not spin.
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        continue;
+                    };
                     if super::blocked(&accept_app, addr.ip()) {
                         continue;
                     }
