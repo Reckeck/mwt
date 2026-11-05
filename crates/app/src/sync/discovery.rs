@@ -217,24 +217,8 @@ pub(crate) async fn start(app: &AppHandle, generation: u64, vault_id: &str) -> R
     // Incoming connections.
     {
         let app = app.clone();
-        let mut stopped = stopped.clone();
-        tauri::async_runtime::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = stopped.changed() => break,
-                    accepted = listener.accept() => {
-                        let Ok((stream, addr)) = accepted else { continue };
-                        if super::blocked(&app, addr.ip()) {
-                            continue;
-                        }
-                        let app = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            super::link::run(app, stream, addr, generation, false).await;
-                        });
-                    }
-                }
-            }
-        });
+        let stopped = stopped.clone();
+        tauri::async_runtime::spawn(accept_loop(app, listener, generation, stopped));
     }
 
     // Discovery events come on a blocking channel: a thread forwards them.
@@ -439,13 +423,13 @@ pub(crate) async fn connect<H: Host>(
         if let Ok(Ok(stream)) =
             tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await
         {
-            if let Some(run) = hub(app).run.as_mut() {
-                run.unreached = false;
-                run.dial_failures = 0;
+            // A verified link resets the dial counters (in `link::run`); a
+            // port that is open but not ours falls through to the next address.
+            let reached = super::link::run(app.clone(), stream, addr, generation, true).await;
+            if reached {
+                release_unlinked_client(app, generation, attempt);
+                return;
             }
-            super::link::run(app.clone(), stream, addr, generation, true).await;
-            release_unlinked_client(app, generation, attempt);
-            return;
         }
     }
     // Unreachable: most likely a firewall there, so wait for the main device
@@ -518,6 +502,45 @@ pub(crate) fn reconnect(app: &AppHandle) {
     });
 }
 
+/// Sessions a device serves at once; further connections are dropped.
+pub(super) const MAX_INCOMING: usize = 16;
+/// Pause after a failed `accept` (out of descriptors, say): without it the
+/// loop would spin.
+const ACCEPT_RETRY: Duration = Duration::from_millis(100);
+
+/// Serve incoming connections until `stopped` changes.
+pub(super) async fn accept_loop<H: Host>(
+    app: H,
+    listener: TcpListener,
+    generation: u64,
+    mut stopped: tokio::sync::watch::Receiver<bool>,
+) {
+    let slots = std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_INCOMING));
+    loop {
+        tokio::select! {
+            _ = stopped.changed() => break,
+            accepted = listener.accept() => {
+                let Ok((stream, addr)) = accepted else {
+                    tokio::time::sleep(ACCEPT_RETRY).await;
+                    continue;
+                };
+                if super::blocked(&app, addr.ip()) {
+                    continue;
+                }
+                // Full: the connection is dropped, the caller tries again later.
+                let Ok(permit) = slots.clone().try_acquire_owned() else {
+                    continue;
+                };
+                let app = app.clone();
+                tokio::spawn(async move {
+                    super::link::run(app, stream, addr, generation, false).await;
+                    drop(permit);
+                });
+            }
+        }
+    }
+}
+
 /// On the main device: the devices seen for a while with no link to them.
 pub(crate) fn due_callbacks<H: Host>(app: &H, generation: u64) -> Vec<Vec<SocketAddr>> {
     let skipped = skipped_instances(app, true);
@@ -556,8 +579,8 @@ pub(crate) async fn callback<H: Host>(app: &H, generation: u64, addrs: Vec<Socke
     for addr in addrs {
         if let Ok(Ok(stream)) =
             tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await
+            && super::link::run(app.clone(), stream, addr, generation, true).await
         {
-            super::link::run(app.clone(), stream, addr, generation, true).await;
             return;
         }
     }

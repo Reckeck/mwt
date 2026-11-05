@@ -356,14 +356,18 @@ pub(crate) fn broadcast<H: Host>(app: &H, keys: &[String], origin: Option<&str>)
     }
     let mut hub = Host::hub(app);
     let mut sent = false;
+    let mut live = false;
     for (id, link) in &hub.links {
         // Every phase: a link still exchanging or awaiting the user's answer
         // keeps the keys and sends them once it is live.
         if Some(id.as_str()) != origin {
             sent |= link.orders.send(Order::Changed(keys.to_vec())).is_ok();
+            live |= link.view.phase == SyncPhase::Live;
         }
     }
-    if sent {
+    // Only a local edit with a link to send it on postpones the background
+    // lock; a batch taken from a peer counts when it is applied.
+    if sent && live && origin.is_none() {
         hub.last_activity = Some(Instant::now());
     }
 }

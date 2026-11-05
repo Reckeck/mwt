@@ -19,6 +19,9 @@ use trade_core::model::transaction::{KindDetails, PriceStamp, TopupTx, Transacti
 use trade_core::service::{SyncTap, UnlockedVault};
 use trade_core::sync::session::DeviceKey;
 
+mod dialing;
+mod liveness;
+
 use super::host::{Host, lock_hub};
 use super::{Hub, Order, Run, SyncHub};
 
