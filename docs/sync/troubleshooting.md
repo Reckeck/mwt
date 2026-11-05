@@ -145,5 +145,12 @@ it was before the first batch of the run.
 - If the app is killed in the background, sync resumes when you open it.
 - A foreground notification shows the number of devices; "Stop" stops sync until
   you return to the app.
+- While at least one device is linked and live, the service holds a CPU wake lock,
+  so a minimized app, also with the screen off, keeps syncing. With no live link
+  (only searching) no lock is held and the phone may sleep: sync can pause until
+  you return to the app or a device finds you. Battery saving, "restricted"
+  background mode and some vendors' task killers can still pause or stop the
+  service; allow unrestricted battery use for the app if sync stops with the
+  screen off.
 - After the chosen time in the background the vault locks itself; unlock to sync
   again.

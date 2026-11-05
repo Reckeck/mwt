@@ -80,6 +80,8 @@ fn texts(app: &AppHandle, armed: bool, linked: usize) -> Background {
     };
     Background {
         armed,
+        // Keeps the CPU awake only while a link is Live.
+        wake: armed && linked > 0,
         channel: pick("Синхронизация", "Sync"),
         title: pick("Синхронизация vault в фоне", "Vault sync in the background"),
         text,
@@ -153,6 +155,8 @@ fn tick(app: &AppHandle) -> bool {
         let idle_for = last_activity.map(|at| at.elapsed());
         if lock_policy::lock_due(since.elapsed(), idle_for, minutes) {
             crate::commands::auth::lock_now(app);
+            // Nothing left to resume: unlocking starts sync, and polling ends.
+            state().paused = false;
         }
     }
     let mut state = state();

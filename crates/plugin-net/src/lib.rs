@@ -36,6 +36,8 @@ struct Multicast {
 pub struct Background {
     /// Sync runs: going to the background starts the foreground service.
     pub armed: bool,
+    /// At least one link is live: the service holds a partial wake lock.
+    pub wake: bool,
     pub channel: String,
     pub title: String,
     pub text: String,
