@@ -63,6 +63,12 @@ pub(super) fn apply(vault: &mut UnlockedVault, pending: &PendingTrustPref) -> Re
     Ok(())
 }
 
+/// Whether the vault open now is the file that was sent: only then is the
+/// delivery written into it (a locked or another vault gets nothing).
+pub(super) fn is_sent_vault(open: &Path, sent: &Path) -> bool {
+    open == sent
+}
+
 /// The vault went to `delivered`: record it, trust the device and lift
 /// whatever kept it out (a pause, a cut) so the new copy links at once.
 pub(super) fn record_delivery(
@@ -79,4 +85,16 @@ pub(super) fn record_delivery(
     vault.sync_resume_peer(&delivered.device_id)?;
     vault.sync_clear_cut(&delivered.device_id)?;
     Ok(notice)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_delivery_is_recorded_only_in_the_vault_that_was_sent() {
+        let sent = Path::new("/vaults/home.wallet");
+        assert!(is_sent_vault(Path::new("/vaults/home.wallet"), sent));
+        assert!(!is_sent_vault(Path::new("/vaults/work.wallet"), sent));
+    }
 }

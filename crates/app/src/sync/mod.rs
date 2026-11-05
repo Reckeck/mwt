@@ -16,6 +16,7 @@ pub mod handover;
 mod host;
 pub mod keystore;
 mod link;
+mod multicast_lock;
 mod pending;
 #[cfg(test)]
 mod tests;
@@ -225,11 +226,9 @@ pub fn restart(app: &AppHandle) {
         hub.generation += 1;
         hub.generation
     };
+    multicast_lock::hold_for_sync(app, true);
     #[cfg(target_os = "android")]
-    {
-        crate::platform_net::multicast(app, true);
-        background::arm(app, true);
-    }
+    background::arm(app, true);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(err) = discovery::start(&app, generation, &vault_id).await {
@@ -241,12 +240,11 @@ pub fn restart(app: &AppHandle) {
 }
 
 pub fn stop(app: &AppHandle) {
+    // Given back even when no run was created (a failed start).
+    multicast_lock::hold_for_sync(app, false);
     if let Some(run) = teardown(app) {
         #[cfg(target_os = "android")]
-        {
-            crate::platform_net::multicast(app, false);
-            background::arm(app, false);
-        }
+        background::arm(app, false);
         let _ = run.stop.send(true);
         if let Some(announce) = run.announce {
             announce.shutdown();
