@@ -152,6 +152,14 @@ PIN; 1 = level 1, plain; 2 = level 3, crypto). Code:
   file is guessed offline at the KDF's cost, which is what level 3 is for.
 - **Heavy vault.** A vault whose KDF needs more memory than the device can give
   is refused at unlock with `VAULT_TOO_HEAVY` instead of crashing.
+- **Quick unlock (level 3).** The vault password is bound to the device by the OS
+  and released only after its gesture: Touch ID on macOS (Keychain,
+  `BiometryCurrentSet`: a changed fingerprint set invalidates it) and Windows
+  Hello (a TPM-backed key signs a fixed challenge, and the signature wraps the
+  password). On Windows adding a fingerprint does not reset the binding, and the
+  Hello PIN opens it too; resets are a Hello or PIN reset, a password change and the
+  7-day password rule. Where the OS offers no such binding (Linux, Android for
+  now) the feature is `unavailable`.
 
 ## Window Content Security Policy
 

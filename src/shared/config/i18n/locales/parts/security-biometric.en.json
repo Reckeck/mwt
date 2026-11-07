@@ -1,1 +1,26 @@
-{}
+{
+  "biometric.title": "Biometric sign-in",
+  "biometric.toggle": "Quick sign-in",
+  "biometric.toggleWindows": "Windows Hello (face, fingerprint or Windows PIN)",
+  "biometric.toggleHint": "The password is still needed once every 7 days",
+  "biometric.off": "Off. It resets when the password or the fingerprints change.",
+  "biometric.on": "On. It resets when the password or the fingerprints change.",
+  "biometric.expired": "Password needed: 7 days have passed. Sign in with the password the next time you open the vault.",
+  "biometric.unavailable": "This system has no protected storage for the key, sign-in is by password only.",
+  "biometric.enableTitle": "Turn on biometrics",
+  "biometric.enableHint": "Enter the password to bind the key to this device's biometrics.",
+  "biometric.password": "Password",
+  "biometric.passwordHint": "At least 16 characters",
+  "biometric.enable": "Turn on",
+  "biometric.enabled": "Quick sign-in is on",
+  "biometric.enableFailed": "Could not turn on quick sign-in",
+  "biometric.disabled": "Quick sign-in is off",
+  "biometric.disableFailed": "Could not turn off quick sign-in",
+  "biometric.signIn": "Sign in with biometrics",
+  "biometric.failedTitle": "Biometrics did not work",
+  "biometric.failedText": "The request was cancelled or not recognised. Try again or enter the password.",
+  "biometric.resetTitle": "Biometrics turned off",
+  "biometric.resetText": "The password or a fingerprint changed. Sign in with the password and turn it on again in the settings.",
+  "biometric.passwordTitle": "Password needed",
+  "biometric.passwordText": "7 days have passed since the last entry. After you sign in, biometrics work again."
+}

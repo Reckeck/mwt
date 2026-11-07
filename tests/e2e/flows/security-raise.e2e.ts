@@ -14,11 +14,15 @@ for (const [width, theme] of [
     await app.unlock()
     // The mock is at level 2 with a stored key that cannot be used below level 3.
     const storeId = await app.page.eval<string>(
-      `const { call } = await import('/src/shared/api/ipc.ts')
-       const keys = await import('/src/shared/api/mock/commands-security-keys.ts')
-       const level = await import('/src/shared/api/mock/commands-security-state.ts')
-       const data = await import('/src/shared/api/mock/vault-data.ts')
-       const { queryClient } = await import('/src/app/providers/query/index.ts')
+      `// The module instances the app loaded (Vite may have added a ?t= stamp to their URLs).
+       const urlOf = (name) => performance.getEntriesByType('resource').map((entry) => entry.name).reverse().find((url) => url.includes(name)) ?? '/src/' + name
+       const { call } = await import(urlOf('shared/api/ipc.ts'))
+       const keys = await import(urlOf('shared/api/mock/commands-security-keys.ts'))
+       const level = await import(urlOf('shared/api/mock/commands-security-state.ts'))
+       const data = await import(urlOf('shared/api/mock/vault-data.ts'))
+       const biometric = await import(urlOf('shared/api/mock/commands-security-biometric.ts'))
+       biometric.mockBiometric.set('unavailable')
+       const { queryClient } = await import(urlOf('app/providers/query/index.ts'))
        // Back to the start of the mock vault (a run before this one raised it) and forget cached answers.
        keys.mockKeyLevelRequired.value = true
        level.mockSecurityLevel.value = null
