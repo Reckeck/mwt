@@ -49,6 +49,7 @@ mod document_edit;
 mod emergency;
 mod enrichment;
 mod envelopes;
+mod exchange_keys;
 mod exchange_sync;
 mod investments;
 mod passive;
@@ -301,6 +302,8 @@ pub struct UnlockedVault {
     key: Option<std::sync::Arc<SealKey>>,
     /// Unsaved changes and the batched writer (see `saving`).
     save: saving::SaveState,
+    /// What the session knows of the device secrets file (see `exchange_keys`).
+    device_keys: exchange_keys::DeviceKeys,
 }
 
 impl UnlockedVault {
@@ -322,7 +325,27 @@ impl UnlockedVault {
         } else {
             SealKey::fresh(password.as_bytes())?
         };
+        Self::create_keyed(path, password, key)
+    }
+
+    /// A new vault whose key is derived at `kdf` (level 3 is the hardened
+    /// profile). An empty password is refused.
+    pub fn create_with_kdf(
+        path: PathBuf,
+        password: &str,
+        kdf: crate::crypto::kdf_profile::KdfParams,
+    ) -> Result<Self> {
+        if password.is_empty() {
+            return Err(Error::InvalidInput("the password must not be empty".into()));
+        }
+        let key = SealKey::fresh_with(password.as_bytes(), kdf)?;
+        Self::create_keyed(path, password, key)
+    }
+
+    fn create_keyed(path: PathBuf, password: &str, key: SealKey) -> Result<Self> {
         VaultFile::create_keyed(&path, &key)?;
+        // A secrets file left by a vault that once had this name is not ours.
+        crate::crypto::device_secrets::remove(&path)?;
         let lock = crate::storage::VaultLock::acquire(&path)?;
         let doc = VaultDoc::default();
         let fmt = SnapshotFormat::for_profile();
@@ -342,6 +365,7 @@ impl UnlockedVault {
             announce: std::collections::BTreeSet::new(),
             key: Some(std::sync::Arc::new(key)),
             save: saving::SaveState::default(),
+            device_keys: exchange_keys::DeviceKeys::default(),
         };
         vault.start_tracking()?;
         vault.ensure_cash_wallet("Cash")?;
@@ -406,6 +430,7 @@ impl UnlockedVault {
             announce: std::collections::BTreeSet::new(),
             key: Some(std::sync::Arc::new(key)),
             save: saving::SaveState::default(),
+            device_keys: exchange_keys::DeviceKeys::default(),
         };
         if let Some(device_id) = device_id {
             vault.set_device(device_id);
@@ -432,7 +457,10 @@ impl UnlockedVault {
         vault.sweep_orphan_attachment_files();
         // Sync history written before secrets were hidden.
         let secrets_scrubbed = vault.scrub_sync_secrets();
+        // Level 3: exchange keys of an old document move to the device file.
+        let keys_moved = vault.adopt_device_secrets()?;
         if migrated
+            || keys_moved
             || envelopes_settled
             || categories_added
             || graphs_migrated
@@ -512,6 +540,7 @@ impl UnlockedVault {
             announce: std::collections::BTreeSet::new(),
             key: None,
             save: saving::SaveState::default(),
+            device_keys: exchange_keys::DeviceKeys::default(),
         }
     }
 
@@ -543,6 +572,9 @@ impl UnlockedVault {
         // Sync bookkeeping is the vault's own: an edited copy is ignored, and
         // the edits themselves get stamped on save like any other change.
         doc.sync = std::mem::take(&mut self.doc.sync);
+        // Exchange keys are the device's: an edited or restored copy never
+        // brings keys in nor drops the ones this device holds.
+        doc.exchanges = std::mem::take(&mut self.doc.exchanges);
         self.doc = doc;
         self.recompute_holdings();
         self.persist()
@@ -2413,64 +2445,24 @@ impl UnlockedVault {
             .find(|entry| entry.store_id == store_id)
             .map(|entry| crate::ipc_contract::ExchangeKeyStatus {
                 configured: true,
-                hint: Some(entry.hint()),
+                hint: Some(self.exchange_key_hint(entry)),
                 spot_store_id: entry.spot_store_id.clone(),
                 futures_store_id: entry.futures_store_id.clone(),
             })
             .unwrap_or_default()
     }
 
-    /// Store (or replace) a read-only Bybit key for an exchange store.
-    /// Sub-account targets of a replaced key are kept.
+    /// Store (or replace) a Bybit key for an exchange store in the device
+    /// secrets file, unverified (the app runs the read-only check first and
+    /// calls [`Self::store_device_key`]). Level 3 only. Sub-account targets of
+    /// a replaced key are kept.
     pub fn set_exchange_key(
         &mut self,
         store_id: &str,
         api_key: &str,
         api_secret: &str,
     ) -> Result<crate::ipc_contract::ExchangeKeyStatus> {
-        let (api_key, api_secret) = (api_key.trim(), api_secret.trim());
-        if api_key.is_empty() || api_secret.is_empty() {
-            return Err(Error::InvalidInput(
-                "api key and secret are required".into(),
-            ));
-        }
-        let store = self
-            .find_store(store_id)
-            .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
-        if store.kind != StoreKind::Exchange {
-            return Err(Error::InvalidInput("store is not an exchange".into()));
-        }
-        // Keys only make sense once the user said which exchange this is.
-        if !store
-            .exchange
-            .as_ref()
-            .is_some_and(|profile| profile.provider.supported())
-        {
-            return Err(Error::WalletRule(WalletRule::ProviderRequired));
-        }
-        let previous = self
-            .doc
-            .exchanges
-            .bybit
-            .iter()
-            .find(|entry| entry.store_id == store_id)
-            .map(|entry| (entry.spot_store_id.clone(), entry.futures_store_id.clone()))
-            .unwrap_or_default();
-        self.doc
-            .exchanges
-            .bybit
-            .retain(|entry| entry.store_id != store_id);
-        self.doc
-            .exchanges
-            .bybit
-            .push(crate::model::vault::ExchangeKeys {
-                store_id: store_id.to_string(),
-                api_key: api_key.to_string(),
-                api_secret: api_secret.to_string(),
-                spot_store_id: previous.0,
-                futures_store_id: previous.1,
-            });
-        self.persist()?;
+        self.store_device_key(store_id, api_key, api_secret, false)?;
         Ok(self.exchange_key_status(store_id))
     }
 
@@ -2779,25 +2771,24 @@ impl UnlockedVault {
         self.persist()
     }
 
-    /// Exchanges with a key whose background import is on:
-    /// `(store_id, interval_sec, api_key, api_secret)`.
-    pub fn import_schedule(&self) -> Vec<(String, u32, String, String)> {
-        self.doc
-            .exchanges
+    /// Exchanges with a key on this device whose background import is on,
+    /// with their interval. Empty below level 3 (a stored key is not used
+    /// there) and when the device file does not open. The keys zeroize on drop.
+    pub fn import_schedule(&self) -> Vec<(u32, crate::crypto::device_secrets::DeviceKey)> {
+        if !self.keys_on_device() || self.doc.exchanges.bybit.is_empty() {
+            return Vec::new();
+        }
+        let Ok(secrets) = self.device_secrets_for_request() else {
+            return Vec::new();
+        };
+        secrets
             .bybit
-            .iter()
-            .filter(|entry| !entry.api_key.is_empty() && !entry.api_secret.is_empty())
+            .into_iter()
+            .filter(|entry| !entry.keys.api_key.is_empty() && !entry.keys.api_secret.is_empty())
             .filter_map(|entry| {
-                let store = self.find_store(&entry.store_id)?;
+                let store = self.find_store(&entry.keys.store_id)?;
                 let interval = store.exchange.as_ref()?.import_interval_sec;
-                (!store.archived && interval > 0).then(|| {
-                    (
-                        entry.store_id.clone(),
-                        interval,
-                        entry.api_key.clone(),
-                        entry.api_secret.clone(),
-                    )
-                })
+                (!store.archived && interval > 0).then_some((interval, entry))
             })
             .collect()
     }
@@ -4324,6 +4315,7 @@ mod tests {
             WalletRule::ProviderRequired
         );
         let bare = store(&mut vault, "Bare", StoreKind::Exchange, None);
+        vault.raise_to_level3_for_tests();
         assert_eq!(
             rule(vault.set_exchange_key(&bare, "key", "secret")),
             WalletRule::ProviderRequired
@@ -5245,6 +5237,7 @@ mod import_tests {
             )
             .unwrap()
             .id;
+        vault.raise_to_level3_for_tests();
         vault.set_exchange_key(&bybit, "key", "secret").unwrap();
         vault
             .set_exchange_targets(&bybit, None, Some(futures.clone()))

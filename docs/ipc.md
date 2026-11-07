@@ -555,13 +555,13 @@ Not implemented yet: every command answers `UNSUPPORTED`, in the browser mock to
 | `biometric_enable` | `BiometricEnableInput { password }` | `BiometricState` (`unavailable`, `available`, `enabled`, `password_required`) |
 | `biometric_disable` | — | `BiometricState` |
 | `biometric_unlock` | `BiometricUnlockInput { path }` | `VaultInfo` |
-| `read_exchange_key_state` | `ExchangeKeyStatusInput { store_id }` | `ExchangeKeyState` (`missing`, `not_verified`, `read_only`, `level_required`) |
+| `read_exchange_key_state` | `ExchangeKeyStatusInput { store_id }` | `ExchangeKeyState`: `missing` (no key on this device; a key stored on another device does not travel), `not_verified` (stored while Bybit was unreachable, rechecked at the next import), `read_only`, `level_required` (the vault is below level 3: keys are not stored or used). Implemented (H2); the browser mock answers it too |
 
 ### exchange (read-only)
 | `inspect_tx` | `InspectTxInput { tx_hash, network? }` | `InspectTxResult { fetched, info?, hints[], notice? }` |
 | `bybit_executions` | `BybitExecutionsInput { category, symbol?, limit?, store_id? }` | `BybitExecutionsResult { executions[], notice? }` |
 | `exchange_key_status` | `ExchangeKeyStatusInput { store_id }` | `ExchangeKeyStatus { configured, hint?, spot_store_id?, futures_store_id? }` |
-| `set_exchange_key` | `SetExchangeKeyInput { store_id, api_key, api_secret }` | `ExchangeKeyStatus` (the previous key's sub-accounts are kept) |
+| `set_exchange_key` | `SetExchangeKeyInput { store_id, api_key, api_secret }` | `ExchangeKeyStatus` (the previous key's sub-accounts are kept). Level 3 only, else `SECURITY_LEVEL_REQUIRED`. Bybit is asked for the key's rights outside the vault lock: a key that can trade or withdraw gives `EXCHANGE_KEY_NOT_READ_ONLY`, a key Bybit rejects (retCode 10003/10004/10005/10010: bad key or secret, no permission, IP not whitelisted) gives `EXCHANGE_KEY_REJECTED` and is not stored (the import recheck of a not-verified key stops on it too); no network stores it as `not_verified`. The key goes to the device secrets file `<vault>.secrets` (never the vault, sync, transfer or backups) |
 | `set_import_interval` | `SetImportIntervalInput { store_id, interval_sec }` | — the background import interval of a specific exchange (`0` — off, otherwise 60..86400) |
 | `get_terminal_state` | `storeId` | `TerminalState { watchlist, active_symbol?, timeframe, indicators, drawings{symbol→json}, layout }` — the terminal is stored in the exchange itself; with no exchange chosen `PROVIDER_REQUIRED` |
 | `update_terminal_state` | `UpdateTerminalStateInput { store_id, patch: TerminalPatch }` | `TerminalState` — only the passed fields change |

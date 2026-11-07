@@ -493,7 +493,7 @@ fn show_locked(app: &AppHandle, records: Vec<NoticeRecord>, system: bool) {
 /// `0` disables it) and stage any new fills for the user to confirm. A vault
 /// that keeps no crypto hides its exchanges, so they are not polled either.
 fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
-    let due: Vec<(String, String, String)> = {
+    let due: Vec<trade_core::crypto::device_secrets::DeviceKey> = {
         let state = app.state::<AppState>();
         let Ok(guard) = state.vault.lock() else {
             return;
@@ -504,21 +504,23 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
         vault
             .import_schedule()
             .into_iter()
-            .filter(|(store_id, interval, _, _)| {
+            .filter(|(interval, key)| {
                 let interval = Duration::from_secs(u64::from(*interval));
                 memory
                     .last_bybit
-                    .get(store_id)
+                    .get(&key.keys.store_id)
                     .is_none_or(|previous| previous.elapsed() >= interval)
             })
-            .map(|(store_id, _, key, secret)| (store_id, key, secret))
+            .map(|(_, key)| key)
             .collect()
     };
     if due.is_empty() {
         return;
     }
-    for (store_id, _, _) in &due {
-        memory.last_bybit.insert(store_id.clone(), Instant::now());
+    for key in &due {
+        memory
+            .last_bybit
+            .insert(key.keys.store_id.clone(), Instant::now());
     }
     let Ok((staged, confirmed)) = tauri::async_runtime::block_on(poll_bybit_once(app, due)) else {
         return;
@@ -550,27 +552,37 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
     }
 }
 
-/// One polling pass over the given `(store_id, api_key, api_secret)` keys.
+/// One polling pass over the given keys (decrypted for this pass only).
 /// Returns how many operations were newly staged and how many were booked
 /// at once. Each sync, failed ones included, lands in the wallet's history.
 async fn poll_bybit_once(
     app: &AppHandle,
-    keys: Vec<(String, String, String)>,
+    keys: Vec<trade_core::crypto::device_secrets::DeviceKey>,
 ) -> Result<(u32, u32), String> {
     let state = app.state::<AppState>();
     let mut staged_total = 0u32;
     let mut confirmed_total = 0u32;
-    for (store_id, api_key, api_secret) in keys {
-        // Network calls happen with no guard held.
-        let run = crate::commands::exchange::sync_bybit(
+    for key in keys {
+        // Network calls happen with no guard held. A key refused by its
+        // read-only check skips this pass and stays not verified; a manual
+        // import shows the refusal.
+        let run = match crate::commands::exchange::sync_bybit(
             &state,
-            &store_id,
-            &api_key,
-            &api_secret,
+            key,
             500,
             trade_core::model::vault::ImportSource::Auto,
         )
-        .await?;
+        .await
+        {
+            Ok(run) => run,
+            Err(err)
+                if err.starts_with("EXCHANGE_KEY_NOT_READ_ONLY")
+                    || err.starts_with("EXCHANGE_KEY_REJECTED") =>
+            {
+                continue;
+            }
+            Err(err) => return Err(err),
+        };
         staged_total += run.staged.saturating_sub(run.confirmed);
         confirmed_total += run.confirmed;
     }

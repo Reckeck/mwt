@@ -206,27 +206,48 @@ fn exchange_store(vault: &mut UnlockedVault, name: &str) -> String {
 }
 
 #[test]
-fn two_exchange_keys_added_concurrently_both_kept() {
+fn an_exchange_key_stays_on_its_device_but_imports_travel() {
     let (_dir, mut left, mut right) = two_devices();
+    left.raise_to_level3_for_tests();
+    right.raise_to_level3_for_tests();
     let first = exchange_store(&mut left, "Bybit A");
-    let second = exchange_store(&mut left, "Bybit B");
     settle(&mut left, &mut right);
-    left.set_exchange_key(&first, "keyA", "secretA").unwrap();
-    right.set_exchange_key(&second, "keyB", "secretB").unwrap();
+    left.set_exchange_key(&first, "keyA-1234567", "secretA-7654321")
+        .unwrap();
+    left.stage_imports(vec![crate::model::vault::PendingImport {
+        exec_id: "exec-1".into(),
+        store_id: first.clone(),
+        ..Default::default()
+    }])
+    .unwrap();
+    let manifest = left.sync_manifest(None).unwrap();
+    let keys: Vec<String> = manifest.keys().cloned().collect();
+    let records = serde_json::to_string(&left.sync_records(&keys).unwrap()).unwrap();
+    assert!(!records.contains("secretA-7654321"));
+    assert!(!records.contains("keyA-1234567"));
     settle(&mut left, &mut right);
-    for vault in [&left, &right] {
-        let mut stores: Vec<&str> = vault
-            .doc
-            .exchanges
-            .bybit
+
+    // The other device has no key of its own and is told so.
+    assert!(right.doc.exchanges.bybit.is_empty());
+    assert!(right.device_key(&first).unwrap().is_none());
+    assert_eq!(
+        right.exchange_key_state(&first),
+        crate::ipc_contract::security::ExchangeKeyState::Missing
+    );
+    assert!(!right.has_device_keys());
+    let doc = serde_json::to_string(&right.doc).unwrap();
+    assert!(!doc.contains("secretA-7654321"));
+    // What the key imported still reaches it.
+    assert!(
+        right
+            .pending_imports()
             .iter()
-            .map(|keys| keys.store_id.as_str())
-            .collect();
-        stores.sort();
-        let mut want = vec![first.as_str(), second.as_str()];
-        want.sort();
-        assert_eq!(stores, want);
-    }
+            .any(|import| import.exec_id == "exec-1")
+    );
+    assert_eq!(
+        left.exchange_key_state(&first),
+        crate::ipc_contract::security::ExchangeKeyState::NotVerified
+    );
 }
 
 #[test]

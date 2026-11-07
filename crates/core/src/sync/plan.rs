@@ -329,30 +329,30 @@ mod tests {
         }
     }
 
+    /// Keys are device-local: a record from an older peer is not planned,
+    /// added or over an old one, and its secret shows nowhere.
     #[test]
-    fn an_exchange_change_shows_no_api_secret() {
+    fn a_legacy_exchange_record_is_ignored_and_shows_no_api_secret() {
         let old =
             json!({"bybit": [{"store_id": "s", "api_key": "OLDKEY", "api_secret": "OLDSECRET"}]});
         let new =
             json!({"bybit": [{"store_id": "s", "api_key": "NEWKEY", "api_secret": "NEWSECRET"}]});
         let secrets = ["OLDKEY", "OLDSECRET", "NEWKEY", "NEWSECRET"];
-        // Added.
         let added = plan_of(
             "exchanges:",
             RecordState::default(),
             live(new.clone(), None),
         );
-        assert_eq!(added.summary.total, 1);
+        assert_eq!(added.summary.total, 0);
+        assert!(added.changes.is_empty(), "nothing is applied");
         assert_no_secret(&added.summary, &secrets);
-        // Updated over an edit made here: the overwritten preview.
         let updated = plan_of(
             "exchanges:",
             live(old, Some(("bybit", 5))),
             live(new, Some(("bybit", 9))),
         );
-        assert_eq!(updated.summary.overwritten.len(), 1);
-        assert_eq!(updated.summary.overwritten[0].before, "•••");
-        assert_eq!(updated.summary.overwritten[0].after, "•••");
+        assert_eq!(updated.summary.total, 0);
+        assert!(updated.summary.overwritten.is_empty());
         assert_no_secret(&updated.summary, &secrets);
     }
 

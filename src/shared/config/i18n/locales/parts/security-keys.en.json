@@ -1,1 +1,19 @@
-{}
+{
+  "securityKeys.fieldHint": "Read-only. The key is kept on this device only",
+  "securityKeys.keyPlaceholder": "Paste the key from Bybit",
+  "securityKeys.secretPlaceholder": "Paste the secret",
+  "securityKeys.connect": "Connect",
+  "securityKeys.masked": "API key {hint}",
+  "securityKeys.notVerified": "not verified",
+  "securityKeys.notVerifiedText": "Bybit could not be reached, so the key's rights are not checked yet. The next import will check them.",
+  "securityKeys.raise": "Go to level 3",
+  "securityKeys.notice.level.title": "Level 3 required",
+  "securityKeys.notice.level.text": "API keys work only at level 3. The vault is below level 3 now.",
+  "securityKeys.notice.stopped.title": "Import stopped",
+  "securityKeys.notice.stopped.text": "The old connection does not work below level 3. The stored key is not used. Go to level 3.",
+  "securityKeys.notice.elsewhere.title": "No key on this device",
+  "securityKeys.notice.elsewhere.text": "Keys do not travel between devices. Create a separate read-only key for this device.",
+  "errors.SECURITY_LEVEL_REQUIRED": "API keys work only at security level 3. Go to level 3.",
+  "errors.EXCHANGE_KEY_NOT_READ_ONLY": "The key can trade or withdraw. Create a read-only key",
+  "errors.EXCHANGE_KEY_REJECTED": "Bybit rejected the key: check the key, the secret and the IP restriction"
+}

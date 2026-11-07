@@ -108,8 +108,10 @@ mod secret_tests {
     use crate::sync::state::RecordStamps;
     use crate::sync::{RecordState, stamp::Stamp};
 
+    /// An older peer still sends its exchange keys as a record; keys are
+    /// device-local now, so the record is not planned and leaves nothing.
     #[test]
-    fn a_single_secret_change_leaves_no_secret_in_the_journal() {
+    fn a_legacy_exchange_key_record_leaves_no_secret_in_the_journal() {
         let remote = RecordState {
             value: Some(json!({"bybit": [{"api_key": "JKEY", "api_secret": "JSECRET"}]})),
             stamps: Some(RecordStamps::created(Stamp::new(1, 0, "a"))),
@@ -117,7 +119,7 @@ mod secret_tests {
         };
         let incoming = std::collections::BTreeMap::from([("exchanges:".to_string(), remote)]);
         let summary = plan(&incoming, |_| RecordState::default()).summary;
-        assert_eq!(summary.total, 1);
+        assert_eq!(summary.total, 0);
         let entry = SyncJournalEntry::of("Phone", &summary, SyncJournalOutcome::Applied);
         let text = serde_json::to_string(&entry).expect("entry");
         assert!(

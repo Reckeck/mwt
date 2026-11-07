@@ -43,6 +43,7 @@ use crate::crypto::kdf_profile::KdfParams;
 use crate::error::{Error, Result};
 use crate::storage::SnapshotFormat;
 
+pub mod device_secrets;
 pub mod header;
 pub mod kdf_profile;
 

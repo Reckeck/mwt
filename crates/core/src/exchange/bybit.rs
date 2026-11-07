@@ -625,6 +625,20 @@ impl BybitClient {
         path: &str,
         query: &str,
     ) -> Result<T> {
+        envelope_result(
+            self.signed_envelope(api_key, api_secret, path, query)
+                .await?,
+        )
+    }
+
+    /// A signed GET returning the raw envelope, `retCode` unchecked.
+    async fn signed_envelope<T: DeserializeOwned>(
+        &self,
+        api_key: &str,
+        api_secret: &str,
+        path: &str,
+        query: &str,
+    ) -> Result<ApiEnvelope<T>> {
         let headers = Self::signed_headers(
             api_key,
             api_secret,
@@ -643,15 +657,7 @@ impl BybitClient {
             .json()
             .await
             .map_err(|err| Error::Network(err.to_string()))?;
-        if envelope.retcode != 0 {
-            return Err(Error::Network(format!(
-                "bybit error {}: {}",
-                envelope.retcode, envelope.retmsg
-            )));
-        }
-        envelope
-            .result
-            .ok_or_else(|| Error::Network("bybit: empty result".into()))
+        Ok(envelope)
     }
 
     /// Successful transfers between the user's own accounts, newest first,
@@ -772,6 +778,82 @@ impl BybitClient {
     }
 }
 
+/// `result` of an envelope; a non-zero `retCode` is a network-class error.
+fn envelope_result<T>(envelope: ApiEnvelope<T>) -> Result<T> {
+    if envelope.retcode != 0 {
+        return Err(Error::Network(format!(
+            "bybit error {}: {}",
+            envelope.retcode, envelope.retmsg
+        )));
+    }
+    envelope
+        .result
+        .ok_or_else(|| Error::Network("bybit: empty result".into()))
+}
+
+/// Bybit refusing the key itself: 10003 invalid API key, 10004 signature
+/// error (wrong secret), 10005 permission denied, 10010 IP not whitelisted.
+/// Retrying will not help, so this is not a network failure.
+fn key_rejection(retcode: i64, retmsg: &str) -> Option<Error> {
+    matches!(retcode, 10003 | 10004 | 10005 | 10010)
+        .then(|| Error::ExchangeKeyRejected(format!("bybit retCode {retcode}: {retmsg}")))
+}
+
+/// The `check_key` reading of an envelope: a key refusal first, then the
+/// usual `retCode` handling.
+fn key_check_result<T>(envelope: ApiEnvelope<T>) -> Result<T> {
+    if let Some(err) = key_rejection(envelope.retcode, &envelope.retmsg) {
+        return Err(err);
+    }
+    envelope_result(envelope)
+}
+
+/// What Bybit says about a key (`GET /v5/user/query-api`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyCheck {
+    /// Read-only, and it cannot withdraw.
+    ReadOnly,
+    /// It can trade or withdraw: the app refuses such a key.
+    NotReadOnly,
+}
+
+/// Whether the `result` of `/v5/user/query-api` describes a key that can
+/// neither trade nor withdraw. `readOnly` is 1 for a read-only key; a
+/// withdrawal right is listed under `permissions.Wallet`. Anything missing
+/// or unexpected counts as not read-only.
+pub fn key_is_read_only(info: &serde_json::Value) -> bool {
+    let read_only = info.get("readOnly").and_then(serde_json::Value::as_i64) == Some(1);
+    let withdraws = info
+        .get("permissions")
+        .and_then(|perms| perms.get("Wallet"))
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|rights| {
+            rights
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .any(|right| right.eq_ignore_ascii_case("withdraw"))
+        });
+    read_only && !withdraws
+}
+
+impl BybitClient {
+    /// Checks the rights of a key. Bybit refusing the key (invalid key, wrong
+    /// secret, no permission, IP not whitelisted) is
+    /// `Error::ExchangeKeyRejected`; any other failure is an `Err` the caller
+    /// treats as "not verified yet".
+    pub async fn check_key(&self, api_key: &str, api_secret: &str) -> Result<KeyCheck> {
+        let info: serde_json::Value = key_check_result(
+            self.signed_envelope(api_key, api_secret, "/v5/user/query-api", "")
+                .await?,
+        )?;
+        Ok(if key_is_read_only(&info) {
+            KeyCheck::ReadOnly
+        } else {
+            KeyCheck::NotReadOnly
+        })
+    }
+}
+
 fn header(value: &str) -> Result<HeaderValue> {
     HeaderValue::from_str(value).map_err(|_| Error::InvalidInput("invalid header value".into()))
 }
@@ -798,6 +880,48 @@ fn hex_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_read_only_key_without_withdrawal_passes() {
+        use serde_json::json;
+        let read =
+            json!({"readOnly": 1, "permissions": {"Wallet": ["AccountTransfer"], "Spot": []}});
+        assert!(key_is_read_only(&read));
+        let trades = json!({"readOnly": 0, "permissions": {"Spot": ["SpotTrade"]}});
+        assert!(!key_is_read_only(&trades));
+        let withdraws =
+            json!({"readOnly": 1, "permissions": {"Wallet": ["AccountTransfer", "Withdraw"]}});
+        assert!(!key_is_read_only(&withdraws));
+        assert!(!key_is_read_only(&json!({})));
+        assert!(!key_is_read_only(&json!({"readOnly": "1"})));
+    }
+
+    #[test]
+    fn key_refusals_are_told_apart_from_other_failures() {
+        let parse =
+            |text: &str| -> ApiEnvelope<serde_json::Value> { serde_json::from_str(text).unwrap() };
+        for code in [10003, 10004, 10005, 10010] {
+            let envelope = parse(&format!(
+                r#"{{"retCode": {code}, "retMsg": "nope", "result": {{}}}}"#
+            ));
+            let err = key_check_result(envelope).unwrap_err();
+            assert_eq!(err.code(), "EXCHANGE_KEY_REJECTED");
+            assert!(err.to_string().contains(&code.to_string()));
+        }
+        // Rate limit and server errors stay network-class.
+        for code in [10006, 10016] {
+            let envelope = parse(&format!(r#"{{"retCode": {code}, "retMsg": "busy"}}"#));
+            assert_eq!(
+                key_check_result(envelope).unwrap_err().code(),
+                Error::Network(String::new()).code()
+            );
+        }
+        // Other callers keep Network even for a key refusal.
+        let envelope = parse(r#"{"retCode": 10003, "retMsg": "invalid key"}"#);
+        assert!(matches!(envelope_result(envelope), Err(Error::Network(_))));
+        let envelope = parse(r#"{"retCode": 0, "retMsg": "OK", "result": {"readOnly": 1}}"#);
+        assert_eq!(key_check_result(envelope).unwrap()["readOnly"], 1);
+    }
 
     fn fill() -> Execution {
         Execution {
