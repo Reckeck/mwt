@@ -2,6 +2,7 @@
 //! data lives in `trade-core`; this crate only wires IPC + windows.
 
 mod app_id;
+mod autolock;
 #[cfg(desktop)]
 mod autostart;
 mod commands;
@@ -461,6 +462,7 @@ pub fn run() {
             security::state::security_state,
             security::autolock::set_autolock,
             security::autolock::autolock_activity,
+            security::autolock::autolock_hold_for_picker,
             security::raise::raise_to_crypto_level,
             security::raise::validate_password_strength,
             security::biometric::biometric_enable,
@@ -486,6 +488,8 @@ pub fn run() {
             vault_writer::spawn(app.handle().clone());
             // Background jobs: Bybit import, automations, alerts, reminders (plan §7.7)
             scheduler::spawn(app.handle().clone());
+            // Idle, sleep and screen-lock locking (H4).
+            autolock::spawn(app.handle().clone());
 
             // The "+ Transaction" key, if the user chose one. A clash only costs
             // the shortcut; the settings screen shows it as not registered.

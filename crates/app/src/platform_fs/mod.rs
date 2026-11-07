@@ -91,6 +91,8 @@ pub fn resolve_vault_to_open(app: &AppHandle, raw: &str) -> Result<PathBuf> {
 
 /// System dialog for a vault to open (`save = false`) or create.
 pub fn pick_vault(app: &AppHandle, save: bool) -> Result<Option<PickedVault>> {
+    // The dialog takes the app to the background without the user leaving it.
+    let _own_window = crate::autolock::OwnWindow::open();
     platform::pick_vault(app, save)
 }
 
@@ -102,6 +104,7 @@ pub fn save_bytes_dialog(
     extensions: &[&str],
     bytes: &[u8],
 ) -> Result<Option<String>> {
+    let _own_window = crate::autolock::OwnWindow::open();
     let Some(picked) = app
         .dialog()
         .file()
@@ -124,6 +127,7 @@ pub fn save_vault_copy_dialog(
     bytes: &[u8],
     keep: &[&Path],
 ) -> Result<Option<String>> {
+    let _own_window = crate::autolock::OwnWindow::open();
     let Some(picked) = app
         .dialog()
         .file()
@@ -186,6 +190,7 @@ pub fn pick_link_target(
     existing: bool,
     name: &str,
 ) -> Result<Option<VaultLocation>> {
+    let _own_window = crate::autolock::OwnWindow::open();
     platform::pick_link_target(app, existing, name)
 }
 

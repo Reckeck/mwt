@@ -1,1 +1,14 @@
-{}
+{
+  "autolock.title": "Autolock",
+  "autolock.enabled": "Lock when idle",
+  "autolock.noKeysHint": "Without API keys the autolock can be turned off",
+  "autolock.keysHint": "Cannot be turned off while the device holds API keys",
+  "autolock.minutes": "After how many minutes",
+  "autolock.unit": "min",
+  "autolock.range": "From {min} to {max} minutes",
+  "autolock.rangeError": "Enter a value from {min} to {max} minutes",
+  "autolock.always": "Sleep and the screen lock always close the vault.",
+  "autolock.save": "Save",
+  "autolock.saved": "Autolock saved",
+  "autolock.saveFailed": "Could not save the autolock"
+}

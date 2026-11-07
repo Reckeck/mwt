@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty'
 import { FormField } from '@/shared/ui/form-field'
+import { openSystemPicker } from '@/shared/api'
 import { useStoreTree } from '@/shared/api/queries'
 import { pluralForm } from '@/shared/lib/format'
 import { withoutLoyalty } from '@/shared/lib/store-tree'
@@ -60,7 +61,7 @@ useEventListener(zone, 'drop', (event: DragEvent) => {
               <EmptyMedia variant="icon"><FileJson /></EmptyMedia>
               <EmptyTitle class="text-base">
                 {{ t('workflow.import.drop') }}
-                <Button type="button" variant="link" class="h-auto p-0 max-md:h-11" @click="input?.click()">{{ t('workflow.import.choose') }}</Button>
+                <Button type="button" variant="link" class="h-auto p-0 max-md:h-11" @click="input && openSystemPicker(input)">{{ t('workflow.import.choose') }}</Button>
               </EmptyTitle>
               <EmptyDescription>{{ t('workflow.import.format') }}</EmptyDescription>
             </EmptyHeader>
