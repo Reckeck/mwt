@@ -17,6 +17,7 @@ import { SyncDevices, SyncHistory, SyncSettings, SyncTransfer } from '@/widgets/
 import { VaultDevTools } from '@/widgets/vault-dev-tools'
 import { VaultDirection } from '@/widgets/vault-direction'
 import { VaultJsonEditor } from '@/widgets/vault-json-editor'
+import { SecurityLevel } from '@/widgets/security-level'
 import { VaultSettings } from '@/widgets/vault-settings'
 import { VaultAutolock } from '@/features/vault-autolock'
 import { SettingsSection } from '@/shared/ui/settings-section'
@@ -47,7 +48,7 @@ const { t } = useI18n()
       <TourSettings v-else-if="section.id === 'tours'" />
       <HelpWhatsNew v-else-if="section.id === 'whats-new'" />
       <SettingsSection v-else-if="section.id === 'notifications'" :title="t('settingsShell.section.notifications')"><NotificationSettings /></SettingsSection>
-      <template v-else-if="section.id === 'vault'"><VaultSettings /><VaultAutolock /></template>
+      <template v-else-if="section.id === 'vault'"><VaultSettings /><SecurityLevel /><VaultAutolock /></template>
       <VaultDirection v-else-if="section.id === 'direction'" />
       <CurrencySettings v-else-if="section.id === 'currencies'" />
       <FxRates v-else-if="section.id === 'rates'" />

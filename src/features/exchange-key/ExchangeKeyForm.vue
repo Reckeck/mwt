@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 
 import { StoreNodeSelect } from '@/entities/store'
+import { RaiseWizard } from '@/features/security-raise/@x/exchange-key'
+import { openRaiseWizard } from '@/shared/lib/raise-wizard-state'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
@@ -41,6 +43,12 @@ function refresh() {
   for (const queryKey of [STORE_TREE_QUERY_KEY, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
   void status.refetch()
   void keyState.refetch()
+}
+
+/** The backend refused the key below level 3: the wizard is the way forward. */
+function onRefused() {
+  refresh()
+  openRaiseWizard()
 }
 
 const tree = useStoreTree()
@@ -120,6 +128,8 @@ async function remove() {
 
 <template>
   <div class="flex flex-col gap-4">
+    <!-- Outside the section state: the wizard outlives the notice that opened it when the level changes. -->
+    <RaiseWizard @raised="refresh" />
     <p class="text-sm text-muted-foreground">{{ t('wallet.bybit.hint') }}</p>
 
     <!-- Imports land where Bybit keeps the money: one sub-account per Bybit account. -->
@@ -191,7 +201,7 @@ async function remove() {
           </div>
         </div>
       </div>
-      <ExchangeKeyEntry v-else-if="!levelRequired" :store-id="props.storeId" @saved="refresh" @refused="refresh" />
+      <ExchangeKeyEntry v-else-if="!levelRequired" :store-id="props.storeId" @saved="refresh" @refused="onRefused" />
     </SectionState>
   </div>
 </template>
