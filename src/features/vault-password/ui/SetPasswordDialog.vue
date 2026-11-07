@@ -5,9 +5,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Lock } from 'lucide-vue-next'
 
 import { call } from '@/shared/api/ipc'
-import { firstError, minLength, required, useFormValidation } from '@/shared/lib/form'
+import { firstError, required, useFormValidation } from '@/shared/lib/form'
 import { pluralForm } from '@/shared/lib/format'
-import { MIN_VAULT_PASSWORD } from '@/shared/lib/vault-password'
+import { pinOk } from '@/shared/lib/vault-password'
 import { useVaultStore } from '@/shared/store/vault'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
@@ -45,7 +45,7 @@ watch(open, () => {
 
 const form = useFormValidation(
   () => ({
-    password: firstError(required(password.value), minLength(password.value, MIN_VAULT_PASSWORD)),
+    password: firstError(required(password.value), pinOk(password.value) ? null : t('errors.PIN_FORMAT')),
     repeat: required(repeat.value) ?? (password.value === repeat.value ? null : t('auth.passwordMismatch')),
   }),
   { resetOn: open },

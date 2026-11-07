@@ -8,12 +8,20 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { NewPasswordFields } from '@/shared/ui/new-password-fields'
-import { firstError, minLength, required, useFormValidation } from '@/shared/lib/form'
-import { MIN_VAULT_PASSWORD } from '@/shared/lib/vault-password'
+import { firstError, required, useFormValidation } from '@/shared/lib/form'
+import { cryptoPasswordOk, pinOk } from '@/shared/lib/vault-password'
+import { useSecurityState } from '@/shared/api/security-state'
 import { call } from '@/shared/api/ipc'
 
 const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
+
+const security = useSecurityState()
+/** A level-3 password is 16+ characters and not weak; a level-2 PIN is 6+ digits. The current one is not checked: an old short password still opens. */
+const nextError = (value: string): string | null => {
+  if (security.data.value?.level === 'crypto') return cryptoPasswordOk(value) ? null : t('errors.PASSWORD_TOO_WEAK')
+  return pinOk(value) ? null : t('errors.PIN_FORMAT')
+}
 
 const current = ref('')
 const next = ref('')
@@ -29,7 +37,7 @@ watch(open, () => {
 const form = useFormValidation(
   () => ({
     current: required(current.value),
-    next: firstError(required(next.value), minLength(next.value, MIN_VAULT_PASSWORD)),
+    next: firstError(required(next.value), nextError(next.value)),
     repeat: required(repeat.value) ?? (next.value === repeat.value ? null : t('vault.password.mismatch')),
   }),
   { resetOn: open },

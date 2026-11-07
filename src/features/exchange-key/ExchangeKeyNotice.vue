@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ShieldAlert } from 'lucide-vue-next'
 
+import { openRaiseWizard, useRaiseWizardState } from '@/shared/lib/raise-wizard-state'
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert'
 import { Button } from '@/shared/ui/button'
-
-import { openRaiseWizard } from './open-raise-wizard'
 
 /**
  * Why the key cannot be used here: the vault is below level 3 (with or without an old connection),
@@ -22,10 +20,14 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const router = useRouter()
+/** A move that was started and stopped: the page says so and the button continues it. */
+const wizard = useRaiseWizardState()
 
 const kind = computed(() => {
-  if (props.state === 'level_required') return props.connected ? 'stopped' : 'level'
+  if (props.state === 'level_required') {
+    if (wizard.interrupted) return 'interrupted'
+    return props.connected ? 'stopped' : 'level'
+  }
   if (props.state === 'missing' && props.elsewhere) return 'elsewhere'
   return null
 })
@@ -35,16 +37,18 @@ const kind = computed(() => {
   <div v-if="kind" class="grid gap-3">
     <Alert>
       <ShieldAlert />
-      <AlertTitle>{{ t(`securityKeys.notice.${kind}.title`) }}</AlertTitle>
-      <AlertDescription>{{ t(`securityKeys.notice.${kind}.text`) }}</AlertDescription>
+      <AlertTitle>{{ kind === 'interrupted' ? t('securityRaise.interrupted.title') : t(`securityKeys.notice.${kind}.title`) }}</AlertTitle>
+      <AlertDescription>
+        {{ kind === 'interrupted' ? t('securityRaise.interrupted.text') : t(`securityKeys.notice.${kind}.text`) }}
+      </AlertDescription>
     </Alert>
     <Button
       v-if="kind !== 'elsewhere'"
       class="w-fit"
       data-tour="security-raise-start"
-      @click="openRaiseWizard(router)"
+      @click="openRaiseWizard()"
     >
-      {{ t('securityKeys.raise') }}
+      {{ kind === 'interrupted' ? t('securityRaise.resume') : t('securityKeys.raise') }}
     </Button>
   </div>
 </template>
