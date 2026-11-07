@@ -172,10 +172,21 @@ pub fn resumed() {
     watch().resumed(&SystemClock);
 }
 
-/// Whether this device holds exchange keys (they only live on the device).
-/// Stub until H2 keeps them: no keys, so the autolock can be turned off.
-pub fn has_device_keys(_app: &AppHandle) -> bool {
-    false
+/// Whether this device holds exchange keys (they only live on the device,
+/// in `<vault>.secrets`). Open vault: its index of keys; locked: whether the
+/// file is there (it is removed once the last key goes), which is also the
+/// answer while another call holds the vault: this never waits for it.
+pub fn has_device_keys(app: &AppHandle) -> bool {
+    let state = app.state::<AppState>();
+    if let Ok(guard) = state.vault.try_lock()
+        && let Some(vault) = guard.as_ref()
+    {
+        return vault.has_device_keys();
+    }
+    let Ok(path) = state.vault_path.lock() else {
+        return false;
+    };
+    trade_core::crypto::device_secrets::secrets_path(&path).exists()
 }
 
 /// Windows the app opened itself (the file picker, the biometric prompt) take

@@ -1,1 +1,19 @@
-{}
+{
+  "securityKeys.fieldHint": "Только чтение. Ключ хранится только на этом устройстве",
+  "securityKeys.keyPlaceholder": "Вставьте ключ из Bybit",
+  "securityKeys.secretPlaceholder": "Вставьте секрет",
+  "securityKeys.connect": "Подключить",
+  "securityKeys.masked": "API-ключ {hint}",
+  "securityKeys.notVerified": "не проверен",
+  "securityKeys.notVerifiedText": "Нет связи с Bybit, права ключа не проверены. Импорт проверит их при следующей попытке.",
+  "securityKeys.raise": "Перейти на уровень 3",
+  "securityKeys.notice.level.title": "Нужен уровень 3",
+  "securityKeys.notice.level.text": "API-ключи работают только на уровне 3. Хранилище сейчас ниже уровня 3.",
+  "securityKeys.notice.stopped.title": "Импорт остановлен",
+  "securityKeys.notice.stopped.text": "Старое подключение не работает ниже уровня 3. Сохранённый ключ не используется. Перейдите на уровень 3.",
+  "securityKeys.notice.elsewhere.title": "На этом устройстве ключа нет",
+  "securityKeys.notice.elsewhere.text": "Ключ не передаётся между устройствами. Создайте для этого устройства свой ключ только для чтения.",
+  "errors.SECURITY_LEVEL_REQUIRED": "API-ключи работают только на уровне защиты 3. Перейдите на уровень 3.",
+  "errors.EXCHANGE_KEY_NOT_READ_ONLY": "У ключа есть права на торговлю или вывод. Создайте ключ только для чтения",
+  "errors.EXCHANGE_KEY_REJECTED": "Bybit отклонил ключ: проверьте ключ, секрет и ограничение по IP"
+}

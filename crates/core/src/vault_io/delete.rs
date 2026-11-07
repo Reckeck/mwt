@@ -104,6 +104,8 @@ pub fn delete_in_app_folder(
         std::fs::remove_file(&found).map_err(|err| Error::Io(err.to_string()))?;
         removed.push(name);
     }
+    // The device secrets (exchange keys) belong to this vault only.
+    crate::crypto::device_secrets::remove(&real)?;
     // A raise to the crypto level that crashed midway leaves a sealed copy.
     crate::vault_io::local::sweep_reencrypt_leftovers(&real);
     Ok(DeletedVault {
@@ -181,6 +183,9 @@ mod tests {
         std::fs::write(dir.join("a.wallet.bak"), b"x").unwrap();
         std::fs::write(dir.join("a.wallet.20261022-094000.bak"), b"x").unwrap();
         std::fs::write(dir.join("b.wallet.bak"), b"x").unwrap();
+        std::fs::write(dir.join("a.wallet.secrets"), b"x").unwrap();
+        std::fs::write(dir.join("a.wallet.secrets.next"), b"x").unwrap();
+        std::fs::write(dir.join("b.wallet.secrets"), b"x").unwrap();
         let done = delete_in_app_folder(&dir, &vault, Protected::default()).unwrap();
         assert_eq!(done.file_name, "a.wallet");
         assert_eq!(done.backups.len(), 2);
@@ -188,6 +193,9 @@ mod tests {
         assert!(!dir.join("a.wallet.bak").exists());
         assert!(other.exists());
         assert!(dir.join("b.wallet.bak").exists());
+        assert!(!dir.join("a.wallet.secrets").exists());
+        assert!(!dir.join("a.wallet.secrets.next").exists());
+        assert!(dir.join("b.wallet.secrets").exists());
     }
 
     fn refused(dir: &Path, path: &Path, protected: Protected<'_>) {

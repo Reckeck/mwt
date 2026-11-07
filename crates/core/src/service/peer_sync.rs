@@ -679,6 +679,7 @@ impl UnlockedVault {
             announce: std::collections::BTreeSet::new(),
             key: None,
             save: super::saving::SaveState::default(),
+            device_keys: super::exchange_keys::DeviceKeys::default(),
         })
     }
 

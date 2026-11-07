@@ -8,6 +8,9 @@
 use tauri::State;
 
 use trade_core::calendar::now_secs;
+use trade_core::crypto::device_secrets::DeviceKey;
+use trade_core::error::Error;
+use trade_core::exchange::bybit::KeyCheck;
 use trade_core::exchange::{BybitClient, Category};
 use trade_core::ipc_contract::{
     BybitExecution, BybitExecutionsInput, BybitExecutionsResult, ClearExchangeKeyInput,
@@ -20,7 +23,7 @@ use trade_core::ipc_contract::{
     UpdateTerminalStateInput,
 };
 use trade_core::model::store::{ImportSettings, TerminalState};
-use trade_core::model::vault::{ExchangeKeys, ImportRun, ImportSource, PendingImport};
+use trade_core::model::vault::{ImportRun, ImportSource, PendingImport};
 use trade_core::service::ImportedTransactions;
 use trade_core::txinfo::{TxInfo, TxInfoService};
 
@@ -101,13 +104,48 @@ fn hints_from(info: &TxInfo) -> Vec<TxFieldHint> {
     hints
 }
 
-/// The Bybit key serving a store (its own or its wallet's), copied out of
-/// the vault so the guard can be dropped before any network call.
-fn bybit_key_for(
-    vault: &trade_core::service::UnlockedVault,
-    store_id: &str,
-) -> Option<ExchangeKeys> {
-    vault.bybit_key_for(store_id).cloned()
+/// The Bybit key serving a store (its own or its wallet's; `None` = any),
+/// decrypted from the device file for this request and copied out so the
+/// guard can be dropped before any network call. It zeroizes on drop.
+/// Below level 3 a key still in the vault gives `SECURITY_LEVEL_REQUIRED`.
+fn request_key(state: &AppState, store_id: Option<&str>) -> Result<Option<DeviceKey>, Error> {
+    let guard = require_vault(state)?;
+    guard.as_ref().unwrap().request_key(store_id)
+}
+
+/// A key saved while Bybit could not be asked is checked before its first
+/// use: one that can trade or withdraw is refused, a failed check leaves it
+/// unverified for the next time (the request then fails on its own).
+async fn ensure_read_only(state: &AppState, key: &mut DeviceKey) -> Result<(), Error> {
+    if key.verified {
+        return Ok(());
+    }
+    match BybitClient::default()
+        .check_key(&key.keys.api_key, &key.keys.api_secret)
+        .await
+    {
+        Ok(KeyCheck::ReadOnly) => {
+            let mut guard = require_vault(state)?;
+            guard
+                .as_mut()
+                .unwrap()
+                .mark_device_key_verified(&key.keys.store_id)?;
+            key.verified = true;
+            Ok(())
+        }
+        Ok(KeyCheck::NotReadOnly) => Err(Error::ExchangeKeyNotReadOnly),
+        Err(err @ Error::ExchangeKeyRejected(_)) => Err(err),
+        Err(_) => Ok(()),
+    }
+}
+
+/// [`request_key`] then [`ensure_read_only`]: the key a request may use.
+async fn usable_key(state: &AppState, store_id: Option<&str>) -> Result<Option<DeviceKey>, Error> {
+    let Some(mut key) = request_key(state, store_id)? else {
+        return Ok(None);
+    };
+    ensure_read_only(state, &mut key).await?;
+    Ok(Some(key))
 }
 
 /// Recent Bybit fills for the prefill dropdown.
@@ -118,22 +156,17 @@ pub async fn bybit_executions(
     input: BybitExecutionsInput,
     state: State<'_, AppState>,
 ) -> Result<BybitExecutionsResult, String> {
-    let (api_key, api_secret) = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
-        let vault = guard.as_ref().unwrap();
-        // No wallet in context (the global form): any key will do.
-        let key = match input.store_id.as_deref().filter(|id| !id.is_empty()) {
-            Some(id) => bybit_key_for(vault, id),
-            None => vault.doc.exchanges.bybit.first().cloned(),
-        };
-        match key {
-            Some(entry) => (entry.api_key.clone(), entry.api_secret.clone()),
-            None => {
-                return Ok(BybitExecutionsResult {
-                    executions: Vec::new(),
-                    notice: Some("no_key".into()),
-                });
-            }
+    // No wallet in context (the global form): any key will do. The form
+    // stays usable: a key it may not use (below level 3, refused, unreadable)
+    // reads as no key here; the wallet's exchange tab says why.
+    let store_id = input.store_id.as_deref().filter(|id| !id.is_empty());
+    let key = match usable_key(&state, store_id).await {
+        Ok(Some(key)) => key,
+        Ok(None) | Err(_) => {
+            return Ok(BybitExecutionsResult {
+                executions: Vec::new(),
+                notice: Some("no_key".into()),
+            });
         }
     };
 
@@ -141,8 +174,8 @@ pub async fn bybit_executions(
     let client = BybitClient::default();
     let list = client
         .executions(
-            &api_key,
-            &api_secret,
+            &key.keys.api_key,
+            &key.keys.api_secret,
             category,
             input.symbol.as_deref(),
             input.limit.unwrap_or(20),
@@ -180,27 +213,53 @@ pub async fn exchange_key_status(
 ) -> Result<ExchangeKeyStatus, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_ref().unwrap();
-    match bybit_key_for(vault, &input.store_id) {
+    match vault.bybit_key_for(&input.store_id) {
         Some(entry) => Ok(vault.exchange_key_status(&entry.store_id)),
         None => Ok(ExchangeKeyStatus::default()),
     }
 }
 
-/// Store a read-only Bybit key in the encrypted vault for a specific store.
+/// Store a read-only Bybit key for a store in this device's secrets file
+/// (level 3 only: `SECURITY_LEVEL_REQUIRED` below it).
 ///
-/// Only write/read endpoints exist in the client, so this cannot trade.
+/// Bybit is asked about the key's rights first, with no lock held: a key
+/// that can trade or withdraw is refused (`EXCHANGE_KEY_NOT_READ_ONLY`), a
+/// key Bybit rejects (bad key or secret, no permission, IP not whitelisted)
+/// is refused too (`EXCHANGE_KEY_REJECTED`); when
+/// Bybit cannot be reached the key is kept as not verified and checked again
+/// at the next import.
 #[tauri::command]
 pub async fn set_exchange_key(
     input: SetExchangeKeyInput,
     state: State<'_, AppState>,
 ) -> Result<ExchangeKeyStatus, String> {
     crate::commands::sandbox::refuse(&state, "an exchange key")?;
+    let api_key = zeroize::Zeroizing::new(input.api_key.trim().to_string());
+    let api_secret = zeroize::Zeroizing::new(input.api_secret.trim().to_string());
+    {
+        let guard = require_vault(&state).map_err(err_to_string)?;
+        guard
+            .as_ref()
+            .unwrap()
+            .check_exchange_key_input(&input.store_id, &api_key, &api_secret)
+            .map_err(err_to_string)?;
+    }
+    let verified = match BybitClient::default()
+        .check_key(&api_key, &api_secret)
+        .await
+    {
+        Ok(KeyCheck::ReadOnly) => true,
+        Ok(KeyCheck::NotReadOnly) => return Err(err_to_string(Error::ExchangeKeyNotReadOnly)),
+        Err(err @ Error::ExchangeKeyRejected(_)) => return Err(err_to_string(err)),
+        Err(_) => false,
+    };
     let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .set_exchange_key(&input.store_id, &input.api_key, &input.api_secret)
-        .map_err(err_to_string)
+    let vault = guard.as_mut().unwrap();
+    vault
+        .store_device_key(&input.store_id, &api_key, &api_secret, verified)
+        .map_err(err_to_string)?;
+    vault.persist().map_err(err_to_string)?;
+    Ok(vault.exchange_key_status(&input.store_id))
 }
 
 /// Choose the sub-accounts imported spot and futures fills land on.
@@ -280,13 +339,11 @@ pub async fn clear_exchange_key(
     state: State<'_, AppState>,
 ) -> Result<ExchangeKeyStatus, String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
-    let vault = guard.as_mut().unwrap();
-    vault
-        .doc
-        .exchanges
-        .bybit
-        .retain(|entry| entry.store_id != input.store_id);
-    vault.persist().map_err(err_to_string)?;
+    guard
+        .as_mut()
+        .unwrap()
+        .clear_device_key(&input.store_id)
+        .map_err(err_to_string)?;
     Ok(ExchangeKeyStatus::default())
 }
 
@@ -317,13 +374,11 @@ pub async fn create_bybit_accounts(
 ) -> Result<Vec<String>, String> {
     let mut wanted = [true; 3];
     if input.detect {
-        let key = {
-            let guard = require_vault(&state).map_err(err_to_string)?;
-            bybit_key_for(guard.as_ref().unwrap(), &input.store_id)
-                .map(|entry| (entry.api_key.clone(), entry.api_secret.clone()))
-        };
-        if let Some((api_key, api_secret)) = key
-            && let Ok(balances) = BybitClient::default().balances(&api_key, &api_secret).await
+        // Detection is a convenience: without a usable key all are created.
+        if let Ok(Some(key)) = usable_key(&state, Some(&input.store_id)).await
+            && let Ok(balances) = BybitClient::default()
+                .balances(&key.keys.api_key, &key.keys.api_secret)
+                .await
         {
             wanted = trade_core::exchange::bybit::accounts_in_use(&balances);
         }
@@ -350,20 +405,15 @@ pub async fn bybit_balances(
     store_id: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<ExchangeAccountBalance>, String> {
-    let (root_id, api_key, api_secret) = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
-        let vault = guard.as_ref().unwrap();
-        match bybit_key_for(vault, &store_id) {
-            Some(entry) => (
-                entry.store_id.clone(),
-                entry.api_key.clone(),
-                entry.api_secret.clone(),
-            ),
-            None => return Ok(Vec::new()),
-        }
+    let Some(key) = usable_key(&state, Some(&store_id))
+        .await
+        .map_err(err_to_string)?
+    else {
+        return Ok(Vec::new());
     };
+    let root_id = key.keys.store_id.clone();
     let balances = BybitClient::default()
-        .balances(&api_key, &api_secret)
+        .balances(&key.keys.api_key, &key.keys.api_secret)
         .await
         .map_err(err_to_string)?;
     let mut guard = require_vault(&state).map_err(err_to_string)?;
@@ -381,12 +431,15 @@ pub async fn bybit_balances(
 /// by the background poll and "Sync now".
 pub(crate) async fn sync_bybit(
     state: &AppState,
-    root_id: &str,
-    api_key: &str,
-    api_secret: &str,
+    mut key: DeviceKey,
     limit: u32,
     source: ImportSource,
 ) -> Result<ImportRun, String> {
+    ensure_read_only(state, &mut key)
+        .await
+        .map_err(err_to_string)?;
+    let root_id = key.keys.store_id.as_str();
+    let (api_key, api_secret) = (key.keys.api_key.as_str(), key.keys.api_secret.as_str());
     let client = BybitClient::default();
     let imports = match fetch_bybit(&client, root_id, api_key, api_secret, limit).await {
         Ok(imports) => imports,
@@ -458,28 +511,20 @@ pub async fn preview_bybit_import(
     input: SetImportSettingsInput,
     state: State<'_, AppState>,
 ) -> Result<ImportPreviewOutput, String> {
-    let (root_id, api_key, api_secret) = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
-        let vault = guard.as_ref().unwrap();
-        match bybit_key_for(vault, &input.store_id) {
-            Some(entry) => (
-                entry.store_id.clone(),
-                entry.api_key.clone(),
-                entry.api_secret.clone(),
-            ),
-            None => {
-                return Ok(ImportPreviewOutput {
-                    preview: None,
-                    notice: Some("no_key".into()),
-                });
-            }
-        }
+    let Some(key) = usable_key(&state, Some(&input.store_id))
+        .await
+        .map_err(err_to_string)?
+    else {
+        return Ok(ImportPreviewOutput {
+            preview: None,
+            notice: Some("no_key".into()),
+        });
     };
     match fetch_bybit(
         &BybitClient::default(),
-        &root_id,
-        &api_key,
-        &api_secret,
+        &key.keys.store_id,
+        &key.keys.api_key,
+        &key.keys.api_secret,
         500,
     )
     .await
@@ -509,34 +554,15 @@ pub async fn import_bybit_history(
     input: ImportBybitHistoryInput,
     state: State<'_, AppState>,
 ) -> Result<ImportBybitHistoryOutput, String> {
-    let (root_id, api_key, api_secret) = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
-        let vault = guard.as_ref().unwrap();
-        match bybit_key_for(vault, &input.store_id) {
-            Some(entry) => (
-                entry.store_id.clone(),
-                entry.api_key.clone(),
-                entry.api_secret.clone(),
-            ),
-            None => {
-                return Ok(ImportBybitHistoryOutput {
-                    staged: 0,
-                    notice: Some("no_key".into()),
-                    run: None,
-                });
-            }
-        }
+    let Some(key) = request_key(&state, Some(&input.store_id)).map_err(err_to_string)? else {
+        return Ok(ImportBybitHistoryOutput {
+            staged: 0,
+            notice: Some("no_key".into()),
+            run: None,
+        });
     };
     let limit = input.limit.unwrap_or(1000).clamp(1, 10_000);
-    let run = sync_bybit(
-        &state,
-        &root_id,
-        &api_key,
-        &api_secret,
-        limit,
-        ImportSource::Manual,
-    )
-    .await?;
+    let run = sync_bybit(&state, key, limit, ImportSource::Manual).await?;
     Ok(ImportBybitHistoryOutput {
         staged: run.staged,
         notice: run.error.clone(),

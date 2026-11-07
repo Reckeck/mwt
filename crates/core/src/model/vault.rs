@@ -269,7 +269,10 @@ pub struct FxPoint {
 
 /// Read-only exchange API credentials.
 ///
-/// This is the only secret stored in the vault, so it gets extra care:
+/// Since H2, at security level 3, they are stored only in this device's
+/// secrets file, never in the vault, its sync records, backups or JSON export
+/// (see `VaultDoc::exchanges`).
+/// They get extra care:
 /// - `Debug` is hand-written to redact the secret and mask the key, so it can
 ///   never leak through a `{:?}` in a log or an error message.
 /// - both fields are zeroized when the value is dropped.
@@ -615,7 +618,13 @@ pub struct VaultDoc {
     pub categories: Vec<Category>,
     pub price_cache: Vec<PricePoint>,
     pub fx_cache: Vec<FxPoint>,
-    /// Exchange credentials, added in payload v1.
+    /// Exchange credentials, added in payload v1. Since H2 the keys live in
+    /// the device file `<vault>.secrets` (`crypto::device_secrets`): at level
+    /// 3 this is an in-memory index of which stores have a key and where
+    /// their fills land, with empty `api_key`/`api_secret`, and it is left
+    /// out of every save, so the stored field stays empty. Keys found here
+    /// in an older file move to the device file at the first level-3 open;
+    /// below level 3 they are kept as they were and not used.
     #[serde(default)]
     #[ts(skip)]
     pub exchanges: Exchanges,

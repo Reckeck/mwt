@@ -106,8 +106,10 @@ pub enum ExchangeKeyState {
     Missing,
     /// Stored, but the read-only check has not gone through yet: rechecked at the next import.
     NotVerified,
+    /// Stored, and Bybit confirmed it can neither trade nor withdraw.
     ReadOnly,
-    /// A key is kept, but below the crypto level it is not used.
+    /// Below the crypto level (3): no key can be added, and one still kept in
+    /// the vault from before is not used.
     LevelRequired,
 }
 

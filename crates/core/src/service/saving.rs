@@ -160,7 +160,18 @@ impl UnlockedVault {
         {
             tap.changed(&changed);
         }
-        let plaintext = Zeroizing::new(encode(&self.doc, self.fmt)?);
+        // Level 3: exchange keys go to the device file, and the document is
+        // written without them (the in-memory index stays).
+        self.flush_device_keys()?;
+        let encoded = if self.keys_on_device() {
+            let index = std::mem::take(&mut self.doc.exchanges);
+            let encoded = encode(&self.doc, self.fmt);
+            self.doc.exchanges = index;
+            encoded
+        } else {
+            encode(&self.doc, self.fmt)
+        };
+        let plaintext = Zeroizing::new(encoded?);
         Ok(Some(FlushJob {
             path: self.path.clone(),
             fmt: self.fmt,

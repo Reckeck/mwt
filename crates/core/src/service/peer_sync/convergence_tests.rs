@@ -827,8 +827,14 @@ fn add_shared_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
 }
 
 /// Exchange API keys (dummy strings): add or replace, retarget, clear. The
-/// clear mirrors `clear_exchange_key` in the app crate.
+/// clear mirrors `clear_exchange_key` in the app crate. Keys are local to a
+/// device, so these edits must leave the synced state untouched.
 fn apply_exchange_key(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+    // Keys live on the device (level 3 only) and never travel: each device
+    // is raised once, the first time it edits a key.
+    if vault.security_level() != crate::ipc_contract::security::SecurityLevel::Crypto {
+        vault.raise_to_level3_for_tests();
+    }
     let store = ledger.key_stores[rng.below(ledger.key_stores.len())].clone();
     let number = ledger.fresh();
     match kind {
@@ -868,12 +874,7 @@ fn apply_exchange_key(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledg
             }
         }
         _ => {
-            vault
-                .doc
-                .exchanges
-                .bybit
-                .retain(|entry| entry.store_id != store);
-            vault.persist().unwrap();
+            vault.clear_device_key(&store).unwrap();
         }
     }
 }

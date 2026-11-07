@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
-import { ExchangeKeyForm, useExchangeKeyStatus } from '@/features/exchange-key'
+import { ExchangeKeyForm, useExchangeKeyState, useExchangeKeyStatus } from '@/features/exchange-key'
 import { useWalletCatalog } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
@@ -37,6 +37,11 @@ const save = useStoreUpdate()
 
 // Once the key is in, the next step is choosing what it brings in and where.
 const { hasKey } = useExchangeKeyStatus(
+  computed(() => props.store.id),
+  computed(() => provider.value !== null),
+)
+// Below level 3 a stored key is not used: the next step is the raise, not the import setup.
+const { levelRequired } = useExchangeKeyState(
   computed(() => props.store.id),
   computed(() => provider.value !== null),
 )
@@ -92,7 +97,7 @@ function intervalLabel(seconds: number): string {
     <template v-if="provider">
       <ExchangeKeyForm :store-id="props.store.id" />
       <div
-        v-if="hasKey"
+        v-if="hasKey && !levelRequired"
         class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3"
         data-tour="exchange-configure-import"
       >

@@ -4,18 +4,18 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 
 import { StoreNodeSelect } from '@/entities/store'
-import { FormField } from '@/shared/ui/form-field'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { required, useFormValidation } from '@/shared/lib/form'
+import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { notify } from '@/shared/lib/notify'
 
-import { connectBybit } from './connect-bybit'
+import ExchangeKeyEntry from './ExchangeKeyEntry.vue'
+import ExchangeKeyNotice from './ExchangeKeyNotice.vue'
+import { useExchangeKeyState } from './use-exchange-key-state'
 import type { ExchangeKeyFormProps } from './exchange-key.types'
 import { useExchangeKeyStatus } from './useExchangeKeyStatus'
 import { useStoreTree } from '@/shared/api/queries'
@@ -30,31 +30,17 @@ const { status, hasKey, hint } = useExchangeKeyStatus(
   computed(() => true),
 )
 
-const apiKey = ref('')
-const apiSecret = ref('')
+const { state: keyState, notVerified, levelRequired } = useExchangeKeyState(
+  computed(() => props.storeId),
+  computed(() => true),
+)
 const busy = ref(false)
 
-const form = useFormValidation(() => ({ apiKey: required(apiKey.value), apiSecret: required(apiSecret.value) }))
-
-async function save() {
-  busy.value = true
-  try {
-    const count = await connectBybit(props.storeId, apiKey.value, apiSecret.value, {
-      funding: t('subType.funding'),
-      unified: t('subType.unified'),
-      earn: t('subType.earn'),
-    })
-    apiKey.value = ''
-    apiSecret.value = ''
-    form.reset()
-    notify.success('wallet.bybit.keySaved', { description: t('wallet.bybit.accountsReady', { count }) })
-    for (const queryKey of [STORE_TREE_QUERY_KEY, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
-    await status.refetch()
-  } catch (err) {
-    notify.error(err, 'wallet.bybit.keySaveFailed')
-  } finally {
-    busy.value = false
-  }
+/** After a key is stored or refused: the tree (new sub-accounts), the status and the state. */
+function refresh() {
+  for (const queryKey of [STORE_TREE_QUERY_KEY, ...LEDGER_KEYS]) void queryClient.invalidateQueries({ queryKey })
+  void status.refetch()
+  void keyState.refetch()
 }
 
 const tree = useStoreTree()
@@ -123,7 +109,7 @@ async function remove() {
   try {
     await call('clear_exchange_key', { input: { store_id: props.storeId } })
     notify.success('wallet.bybit.keyRemoved')
-    await status.refetch()
+    await Promise.all([status.refetch(), keyState.refetch()])
   } catch (err) {
     notify.error(err, 'wallet.bybit.keyRemoveFailed')
   } finally {
@@ -160,49 +146,52 @@ async function remove() {
       </Button>
     </div>
 
-    <template v-if="hasKey">
-      <div class="flex items-center gap-2">
-        <Badge variant="secondary">{{ hint }}</Badge>
-        <Button variant="ghost" :disabled="busy" @click="remove">
-          {{ t('wallet.bybit.remove') }}
-        </Button>
-      </div>
-      <!-- Where confirmed fills are booked: the wallet itself or one of its exchange sub-accounts. -->
-      <div v-if="targets.length" class="grid gap-3 sm:grid-cols-2">
-        <div class="grid gap-1.5">
-          <Label for="bybit-spot-target">{{ t('wallet.bybit.spotTarget') }}</Label>
-          <StoreNodeSelect
-            id="bybit-spot-target"
-            :model-value="status.data.value?.spot_store_id ?? ''"
-            :nodes="targets"
-            :empty-label="t('wallet.bybit.thisWallet')"
-            @update:model-value="(id) => setTargets.mutate({ spot_store_id: id || null })"
-          />
+    <SectionState
+      :loading="keyState.isPending.value"
+      :error="keyState.error.value"
+      :rows="2"
+      compact
+      @retry="keyState.refetch()"
+    >
+      <ExchangeKeyNotice
+        :state="keyState.data.value ?? 'missing'"
+        :connected="hasKey"
+        :elsewhere="!hasKey && missingAccounts < accounts.length"
+      />
+      <div v-if="hasKey && !levelRequired" class="grid gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">{{ t('securityKeys.masked', { hint }) }}</Badge>
+          <Badge v-if="notVerified" variant="warning">{{ t('securityKeys.notVerified') }}</Badge>
+          <Button variant="ghost" :disabled="busy" @click="remove">
+            {{ t('wallet.bybit.remove') }}
+          </Button>
         </div>
-        <div class="grid gap-1.5">
-          <Label for="bybit-futures-target">{{ t('wallet.bybit.futuresTarget') }}</Label>
-          <StoreNodeSelect
-            id="bybit-futures-target"
-            :model-value="status.data.value?.futures_store_id ?? ''"
-            :nodes="targets"
-            :empty-label="t('wallet.bybit.thisWallet')"
-            @update:model-value="(id) => setTargets.mutate({ futures_store_id: id || null })"
-          />
+        <p v-if="notVerified" class="text-sm text-muted-foreground">{{ t('securityKeys.notVerifiedText') }}</p>
+        <!-- Where confirmed fills are booked: the wallet itself or one of its exchange sub-accounts. -->
+        <div v-if="targets.length" class="grid gap-3 sm:grid-cols-2">
+          <div class="grid gap-1.5">
+            <Label for="bybit-spot-target">{{ t('wallet.bybit.spotTarget') }}</Label>
+            <StoreNodeSelect
+              id="bybit-spot-target"
+              :model-value="status.data.value?.spot_store_id ?? ''"
+              :nodes="targets"
+              :empty-label="t('wallet.bybit.thisWallet')"
+              @update:model-value="(id) => setTargets.mutate({ spot_store_id: id || null })"
+            />
+          </div>
+          <div class="grid gap-1.5">
+            <Label for="bybit-futures-target">{{ t('wallet.bybit.futuresTarget') }}</Label>
+            <StoreNodeSelect
+              id="bybit-futures-target"
+              :model-value="status.data.value?.futures_store_id ?? ''"
+              :nodes="targets"
+              :empty-label="t('wallet.bybit.thisWallet')"
+              @update:model-value="(id) => setTargets.mutate({ futures_store_id: id || null })"
+            />
+          </div>
         </div>
       </div>
-    </template>
-
-    <!-- Key, secret and the button on one row: it is a two-field form. -->
-    <form v-else class="grid items-start gap-3 sm:grid-cols-[1fr_1fr_auto]" @submit.prevent="form.submit(save, $event)">
-      <FormField for="bk" :label="t('wallet.bybit.apiKey')" required :error="form.error('apiKey')">
-        <Input id="bk" v-model="apiKey" autocomplete="off" spellcheck="false" />
-      </FormField>
-      <FormField for="bs" :label="t('wallet.bybit.apiSecret')" required :error="form.error('apiSecret')">
-        <Input id="bs" v-model="apiSecret" type="password" autocomplete="new-password" spellcheck="false" />
-      </FormField>
-      <Button type="submit" class="sm:mt-[1.375rem]" :disabled="busy">
-        {{ t('wallet.bybit.save') }}
-      </Button>
-    </form>
+      <ExchangeKeyEntry v-else-if="!levelRequired" :store-id="props.storeId" @saved="refresh" @refused="refresh" />
+    </SectionState>
   </div>
 </template>

@@ -198,8 +198,21 @@ const ID: &[&str] = &["id"];
 
 /// Fields of `VaultDoc` that never sync: identity and schema (checked
 /// instead), holdings (derived from transactions, re-derived after a merge)
-/// and the sync bookkeeping itself.
-pub const LOCAL: &[&str] = &["version", "id", "created_at", "holdings", "sync"];
+/// the sync bookkeeping itself, and exchange API keys: they live in the
+/// device secrets file (`crypto::device_secrets`) and never leave the device;
+/// the field is only an in-memory index of them, never written.
+pub const LOCAL: &[&str] = &[
+    "version",
+    "id",
+    "created_at",
+    "holdings",
+    "sync",
+    "exchanges",
+];
+
+/// Collections that synced credentials before they became local: entries of
+/// them in an old sync history are still masked.
+const LEGACY_SECRET: &[&str] = &["exchanges"];
 
 /// Settings that describe the device and must not travel. The first three
 /// live in the app config since sync, the vault's old copies stay. The dashboard
@@ -353,11 +366,6 @@ pub static COLLECTIONS: &[Collection] = &[
         whole: false,
         cache: true,
     },
-    Collection {
-        secret: true,
-        flatten_by: &[("bybit", "store_id")],
-        ..single("exchanges", &[])
-    },
     // The accounts of the fund are a set: `scope` splits one level, and its
     // `store_ids` splits into one entry per id (the item is its own key).
     Collection {
@@ -480,13 +488,14 @@ pub static COLLECTIONS: &[Collection] = &[
 
 /// Whether the collection holds credentials (see [`Collection::secret`]).
 pub fn is_secret(name: &str) -> bool {
-    find(name).is_some_and(|coll| coll.secret)
+    LEGACY_SECRET.contains(&name) || find(name).is_some_and(|coll| coll.secret)
 }
 
 /// Whether `field` of the collection holds a credential (see
 /// [`Collection::secret_fields`]); a secret collection hides all of them.
 pub fn is_secret_field(name: &str, field: &str) -> bool {
-    find(name).is_some_and(|coll| coll.secret || coll.secret_fields.contains(&field))
+    LEGACY_SECRET.contains(&name)
+        || find(name).is_some_and(|coll| coll.secret || coll.secret_fields.contains(&field))
 }
 
 pub fn find(name: &str) -> Option<&'static Collection> {

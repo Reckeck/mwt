@@ -408,8 +408,15 @@ impl VaultFile {
     }
 
     /// Export the decrypted snapshot as readable JSON (for debugging/backup).
+    /// Exchange keys (or their index) never appear in it: they are the
+    /// device's, not the document's.
     pub fn export_json(doc: &VaultDoc) -> Result<String> {
-        serde_json::to_string_pretty(doc).map_err(|err| Error::Serialize(err.to_string()))
+        let mut value =
+            serde_json::to_value(doc).map_err(|err| Error::Serialize(err.to_string()))?;
+        if let Some(fields) = value.as_object_mut() {
+            fields.remove("exchanges");
+        }
+        serde_json::to_string_pretty(&value).map_err(|err| Error::Serialize(err.to_string()))
     }
 
     /// Copy the vault file on disk to its backup slot, replacing an older one.

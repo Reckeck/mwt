@@ -105,6 +105,19 @@ pub enum Error {
     /// vault opens on a device with more memory.
     #[error("this device does not have enough memory to open the vault: {0}")]
     VaultTooHeavy(String),
+
+    /// The action needs security level 3 (exchange API keys live only there).
+    #[error("this needs security level 3")]
+    SecurityLevelRequired,
+
+    /// The exchange key may trade or withdraw; only a read-only key is kept.
+    #[error("the exchange key has trade or withdraw permissions")]
+    ExchangeKeyNotReadOnly,
+
+    /// The exchange refused the key itself (invalid key, wrong secret, no
+    /// permission, IP not whitelisted); the message keeps the exchange code.
+    #[error("the exchange rejected the key: {0}")]
+    ExchangeKeyRejected(String),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -258,6 +271,9 @@ impl Error {
             Error::PeerSync(failure) => failure.code(),
             Error::Sandbox(_) => "SANDBOX",
             Error::VaultTooHeavy(_) => "VAULT_TOO_HEAVY",
+            Error::SecurityLevelRequired => "SECURITY_LEVEL_REQUIRED",
+            Error::ExchangeKeyNotReadOnly => "EXCHANGE_KEY_NOT_READ_ONLY",
+            Error::ExchangeKeyRejected(_) => "EXCHANGE_KEY_REJECTED",
         }
     }
 }
