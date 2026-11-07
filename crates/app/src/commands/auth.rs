@@ -389,7 +389,7 @@ pub async fn change_password(
 }
 
 /// Give the open vault that has no password one. The file is rewritten
-/// encrypted (a linked external copy follows with the next write); with
+/// encrypted, and a linked external copy gets the same bytes in that write; with
 /// `delete_plain_copies` the vault's unencrypted `.bak` copies are deleted.
 #[tauri::command]
 pub async fn set_vault_password(
