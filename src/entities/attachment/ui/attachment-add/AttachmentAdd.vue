@@ -8,6 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { MENU_CONTENT_CLASS, MENU_ITEM_CLASS, MENU_ITEM_ICON_CLASS } from '@/shared/ui/context-menu'
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/shared/ui/drawer'
 import { Popover, PopoverAnchor, PopoverContent } from '@/shared/ui/popover'
+import { openSystemPicker } from '@/shared/api'
 import { useIsPhone } from '@/shared/lib/phone'
 
 import type { LinkDraft } from '../../attachment.types'
@@ -44,7 +45,10 @@ function choose(which: 'camera' | 'file' | 'link') {
   sheetOpen.value = false
   // after the menu has closed and given focus back, or the popover takes it for a click outside
   if (which === 'link') setTimeout(() => (linkOpen.value = true))
-  else (which === 'camera' ? cameraInput : fileInput).value?.click()
+  else {
+    const input = (which === 'camera' ? cameraInput : fileInput).value
+    if (input) openSystemPicker(input)
+  }
 }
 
 const PHONE_ROWS = [

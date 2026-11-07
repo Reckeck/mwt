@@ -1,1 +1,14 @@
-{}
+{
+  "autolock.title": "Автоблокировка",
+  "autolock.enabled": "Блокировать при простое",
+  "autolock.noKeysHint": "Без API-ключей автоблокировку можно выключить",
+  "autolock.keysHint": "Нельзя выключить, пока на устройстве есть API-ключи",
+  "autolock.minutes": "Через сколько минут",
+  "autolock.unit": "мин",
+  "autolock.range": "От {min} до {max} минут",
+  "autolock.rangeError": "Введите значение от {min} до {max} минут",
+  "autolock.always": "Сон и блокировка экрана закрывают хранилище всегда.",
+  "autolock.save": "Сохранить",
+  "autolock.saved": "Автоблокировка сохранена",
+  "autolock.saveFailed": "Не удалось сохранить автоблокировку"
+}

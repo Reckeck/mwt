@@ -233,7 +233,12 @@ tour_offers: boolean,
 /**
  * Screens whose tour offer was waved off with "Not now": not offered again.
  */
-declined_tours: Array<string>, };
+declined_tours: Array<string>, 
+/**
+ * Autolock of this device (vault protection, `crate::ipc_contract::security`);
+ * `None` = the defaults ([`Self::autolock`]).
+ */
+autolock?: AutolockSettings, };
 
 /**
  * A batch just applied, as the UI shows it.

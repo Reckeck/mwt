@@ -549,6 +549,7 @@ Not implemented yet: every command answers `UNSUPPORTED`, in the browser mock to
 | `security_state` | — | `SecurityState { level, min_allowed_level, has_device_keys, autolock, biometric, pin_retry_after_secs? }`; the level is not stored, it comes from the vault container |
 | `set_autolock` | `AutolockSettings { enabled, minutes }` | `AutolockSettings`; sleep and the lock screen always close the vault, there is no field for that |
 | `autolock_activity` | — | `()` — the user is active, the idle timer starts over |
+| `autolock_hold_for_picker` | — | `()` — a webview file input or camera is about to open: for at most 5 minutes (or until the app is back in the foreground) the Android background lock does not count the app as left |
 | `raise_to_crypto_level` | `RaiseToCryptoInput { current_password, new_password, backup_path }` | `RaiseToCryptoReport { level, backup_path }`; progress goes to the `security-raise-progress` event |
 | `validate_password_strength` | `ValidatePasswordStrengthInput { password }` | `PasswordStrengthReport { strength: weak \| medium \| strong, long_enough }` |
 | `biometric_enable` | `BiometricEnableInput { password }` | `BiometricState` (`unavailable`, `available`, `enabled`, `password_required`) |

@@ -6,6 +6,7 @@ import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPor
 
 import { Button } from '@/shared/ui/button'
 import { useVaultStore } from '@/shared/store/vault'
+import { useAutolockActivity } from '@/features/vault-autolock'
 import { Tabs } from '@/shared/ui/tabs'
 import { usePlatform } from '@/shared/lib/platform'
 import { useCoarsePointer } from '@/shared/lib/phone'
@@ -37,6 +38,8 @@ const groups = computed(() =>
 )
 
 const vault = useVaultStore()
+// The shell is mounted for the whole unlocked session: it reports the user's activity to the autolock.
+useAutolockActivity()
 /** Last path segment of the open vault; an Android content:// URI is percent-encoded. */
 const vaultFile = computed(() => {
   const last = (vault.info?.path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? ''

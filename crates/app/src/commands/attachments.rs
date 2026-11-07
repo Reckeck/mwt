@@ -86,11 +86,7 @@ pub async fn open_attachment(
         return tauri_plugin_opener::open_url(url, None::<&str>)
             .map_err(|_| format!("failed to open {url}"));
     }
-    let cache = app
-        .path()
-        .app_cache_dir()
-        .map_err(|err| err.to_string())?
-        .join("opened");
+    let cache = opened_dir(&app).ok_or("no cache directory")?;
     let _ = std::fs::remove_dir_all(&cache);
     let dir = cache.join(&item.id);
     std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
@@ -98,6 +94,19 @@ pub async fn open_attachment(
     std::fs::write(&path, bytes).map_err(|err| err.to_string())?;
     tauri_plugin_opener::open_path(&path, None::<&str>)
         .map_err(|_| format!("failed to open {}", item.title))
+}
+
+/// Where decrypted attachments are put to be opened by another program.
+fn opened_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
+    Some(app.path().app_cache_dir().ok()?.join("opened"))
+}
+
+/// Delete every decrypted attachment left on disk. Called when the vault
+/// locks, so a file that was opened never outlives the unlocked session.
+pub fn wipe_opened(app: &AppHandle) {
+    if let Some(dir) = opened_dir(app) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
 
 #[tauri::command]

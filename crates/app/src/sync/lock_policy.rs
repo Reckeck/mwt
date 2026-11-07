@@ -42,6 +42,72 @@ pub fn lock_due(background_for: Duration, idle_for: Option<Duration>, minutes: u
     idle >= Duration::from_secs(u64::from(minutes) * 60)
 }
 
+/// What the vault does when the app is in the background.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackgroundLimit {
+    /// Stays open.
+    Never,
+    /// Locks at once.
+    Now,
+    /// Locks after this many minutes (`lock_due`).
+    After(u32),
+}
+
+/// Everything the background decision reads.
+#[derive(Debug, Clone, Copy)]
+pub struct BackgroundInput {
+    /// Background sync runs.
+    pub sync_armed: bool,
+    /// "Stop" was pressed on the sync notification.
+    pub sync_paused: bool,
+    /// `SyncPrefs::background_lock_min`; `0` = never.
+    pub sync_minutes: u32,
+    /// The autolock minutes while the autolock is on, `None` while it is off.
+    pub autolock_minutes: Option<u32>,
+    /// The device holds exchange keys (the autolock cannot be off then).
+    pub has_device_keys: bool,
+}
+
+/// The decision for the time in the background. With the autolock off it is
+/// the old sync rule, untouched. With it on: no running sync means nothing to
+/// protect by staying open, so lock at once; a running sync decides by its own
+/// limit so it is not cut off, but with keys on the device never later than
+/// the autolock minutes.
+pub fn background_limit(input: BackgroundInput) -> BackgroundLimit {
+    let sync_limit = match input.sync_minutes {
+        0 => BackgroundLimit::Never,
+        minutes => BackgroundLimit::After(minutes),
+    };
+    let Some(autolock) = input.autolock_minutes else {
+        return if input.sync_armed || input.sync_paused {
+            sync_limit
+        } else {
+            BackgroundLimit::Never
+        };
+    };
+    if !input.sync_armed {
+        return BackgroundLimit::Now;
+    }
+    match (sync_limit, input.has_device_keys) {
+        (limit, false) => limit,
+        (BackgroundLimit::After(minutes), true) => BackgroundLimit::After(minutes.min(autolock)),
+        (_, true) => BackgroundLimit::After(autolock),
+    }
+}
+
+/// Lock now? `idle_for` as in [`lock_due`].
+pub fn background_lock_due(
+    limit: BackgroundLimit,
+    background_for: Duration,
+    idle_for: Option<Duration>,
+) -> bool {
+    match limit {
+        BackgroundLimit::Never => false,
+        BackgroundLimit::Now => true,
+        BackgroundLimit::After(minutes) => lock_due(background_for, idle_for, minutes),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,5 +171,96 @@ mod tests {
         };
         assert!(since.elapsed() < MINUTE);
         assert!(!lock_due(since.elapsed(), None, 5));
+    }
+
+    fn input(armed: bool, paused: bool, autolock: Option<u32>, keys: bool) -> BackgroundInput {
+        BackgroundInput {
+            sync_armed: armed,
+            sync_paused: paused,
+            sync_minutes: 30,
+            autolock_minutes: autolock,
+            has_device_keys: keys,
+        }
+    }
+
+    #[test]
+    fn background_without_sync_locks_at_once() {
+        assert_eq!(
+            background_limit(input(false, false, Some(15), false)),
+            BackgroundLimit::Now
+        );
+        // The sync was stopped from the notification: nothing to keep open for.
+        assert_eq!(
+            background_limit(input(false, true, Some(15), true)),
+            BackgroundLimit::Now
+        );
+        assert!(background_lock_due(
+            BackgroundLimit::Now,
+            Duration::ZERO,
+            None
+        ));
+    }
+
+    #[test]
+    fn running_sync_decides_by_the_sync_limit() {
+        assert_eq!(
+            background_limit(input(true, false, Some(15), false)),
+            BackgroundLimit::After(30)
+        );
+        let mut never = input(true, false, Some(15), false);
+        never.sync_minutes = 0;
+        assert_eq!(background_limit(never), BackgroundLimit::Never);
+    }
+
+    #[test]
+    fn keys_cap_the_sync_limit_by_the_autolock_minutes() {
+        assert_eq!(
+            background_limit(input(true, false, Some(15), true)),
+            BackgroundLimit::After(15)
+        );
+        // A shorter sync limit stays.
+        assert_eq!(
+            background_limit(input(true, false, Some(45), true)),
+            BackgroundLimit::After(30)
+        );
+        // "Never" cannot outlive the cap.
+        let mut never = input(true, false, Some(20), true);
+        never.sync_minutes = 0;
+        assert_eq!(background_limit(never), BackgroundLimit::After(20));
+    }
+
+    #[test]
+    fn autolock_off_keeps_the_old_sync_rule() {
+        assert_eq!(
+            background_limit(input(true, false, None, false)),
+            BackgroundLimit::After(30)
+        );
+        assert_eq!(
+            background_limit(input(false, true, None, false)),
+            BackgroundLimit::After(30)
+        );
+        assert_eq!(
+            background_limit(input(false, false, None, false)),
+            BackgroundLimit::Never
+        );
+    }
+
+    #[test]
+    fn limits_compare_against_the_time_in_the_background() {
+        assert!(!background_lock_due(
+            BackgroundLimit::After(15),
+            MINUTE * 14,
+            None
+        ));
+        assert!(background_lock_due(
+            BackgroundLimit::After(15),
+            MINUTE * 15,
+            None
+        ));
+        assert!(!background_lock_due(
+            BackgroundLimit::Never,
+            MINUTE * 1000,
+            None
+        ));
     }
 }

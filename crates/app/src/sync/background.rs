@@ -1,8 +1,10 @@
 //! Android: sync goes on while the app is in the background. `plugin-net`
 //! starts a foreground service (notification, Wi-Fi lock) when the app
 //! leaves the screen while sync runs; this side polls it for the
-//! notification's buttons and locks the vault after
-//! `SyncPrefs::background_lock_min` minutes in the background without a sync.
+//! notification's buttons and decides when the vault locks in the background:
+//! `lock_policy::background_limit` combines `SyncPrefs::background_lock_min`
+//! with the autolock (`crate::autolock`). The poll also runs without a sync
+//! while the autolock is on, because it is what sees the app leave the screen.
 
 use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::Duration;
@@ -15,6 +17,10 @@ use super::lock_policy::{self, Since};
 use crate::platform_net;
 
 const POLL_EVERY: Duration = Duration::from_secs(2);
+
+/// "Lock at once" waits for the background state to hold this long: a window
+/// of our own closing gives the foreground back a moment after its guard drops.
+const SETTLE: Duration = Duration::from_secs(2);
 
 #[derive(Default)]
 struct State {
@@ -51,16 +57,30 @@ pub fn arm(app: &AppHandle, on: bool) {
     };
     show(app, 0);
     if start_polling {
-        let app = app.clone();
-        tauri::async_runtime::spawn(async move {
-            loop {
-                tokio::time::sleep(POLL_EVERY).await;
-                if !tick(&app) {
-                    break;
-                }
-            }
-        });
+        spawn_poller(app.clone());
     }
+}
+
+/// Poll even with no sync running (the autolock needs the background state).
+pub fn ensure_polling(app: &AppHandle) {
+    let start = {
+        let mut state = state();
+        !std::mem::replace(&mut state.polling, true)
+    };
+    if start {
+        spawn_poller(app.clone());
+    }
+}
+
+fn spawn_poller(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(POLL_EVERY).await;
+            if !tick(&app) {
+                break;
+            }
+        }
+    });
 }
 
 /// The notification's texts, in the app's language.
@@ -111,7 +131,7 @@ fn tick(app: &AppHandle) -> bool {
     };
     match poll.action.as_deref() {
         Some("lock") => {
-            crate::commands::auth::lock_now(app);
+            crate::autolock::lock(app, crate::autolock::LockReason::Background);
         }
         Some("stop") => {
             state().paused = true;
@@ -119,11 +139,22 @@ fn tick(app: &AppHandle) -> bool {
         }
         _ => {}
     }
+    // A window the app opened itself (a file picker, the biometric prompt)
+    // takes it to the background without the user leaving: not a reason to lock.
+    // Back in the foreground after a picker the webview opened: its hold ends.
+    crate::autolock::note_picker_poll(poll.background);
+    let leaves = crate::autolock::counts_as_background(poll.background);
+    crate::autolock::set_in_background(leaves);
     let (armed, paused, resume, since) = {
         let mut state = state();
         if poll.background {
-            let since = *state.since.get_or_insert_with(Since::now);
-            (state.armed, state.paused, false, Some(since))
+            let since = if leaves {
+                Some(*state.since.get_or_insert_with(Since::now))
+            } else {
+                state.since = None;
+                None
+            };
+            (state.armed, state.paused, false, since)
         } else {
             state.since = None;
             let resume = std::mem::take(&mut state.paused);
@@ -150,21 +181,30 @@ fn tick(app: &AppHandle) -> bool {
         }
     }
     // After "Stop" (`paused`) sync is off but the vault still locks.
-    if (armed || paused)
-        && let Some(since) = since
-    {
-        let minutes = crate::commands::app_settings::current_settings(app)
-            .sync
-            .background_lock_min();
+    let settings = crate::commands::app_settings::current_settings(app);
+    let autolock = settings.autolock();
+    if let Some(since) = since {
+        let limit = lock_policy::background_limit(lock_policy::BackgroundInput {
+            sync_armed: armed,
+            sync_paused: paused,
+            sync_minutes: settings.sync.background_lock_min(),
+            autolock_minutes: autolock.enabled.then_some(autolock.minutes),
+            has_device_keys: crate::autolock::has_device_keys(app),
+        });
         let idle_for = last_activity.map(|at| at.elapsed());
-        if lock_policy::lock_due(since.elapsed(), idle_for, minutes) {
-            crate::commands::auth::lock_now(app);
+        let background_for = since.elapsed();
+        if background_for >= SETTLE
+            && lock_policy::background_lock_due(limit, background_for, idle_for)
+            && crate::autolock::vault_open(app)
+        {
+            crate::autolock::lock(app, crate::autolock::LockReason::Background);
             // Nothing left to resume: unlocking starts sync, and polling ends.
             state().paused = false;
         }
     }
     let mut state = state();
-    let more = state.armed || state.paused;
+    // Without a sync the poll goes on only for the autolock.
+    let more = state.armed || state.paused || autolock.enabled;
     state.polling = more;
     more
 }

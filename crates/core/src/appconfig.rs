@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::Amount;
 
 use crate::error::{Error, Result};
+use crate::ipc_contract::security::AutolockSettings;
 
 /// Settings file name inside the app config directory.
 pub const SETTINGS_FILE: &str = "app_settings.json";
@@ -147,6 +148,44 @@ pub struct AppSettings {
     #[serde(default)]
     #[ts(skip)]
     pub pending_trusts: Vec<PendingTrustPref>,
+    /// Autolock of this device (vault protection, `crate::ipc_contract::security`);
+    /// `None` = the defaults ([`Self::autolock`]).
+    #[serde(default)]
+    #[ts(optional)]
+    pub autolock: Option<AutolockSettings>,
+}
+
+/// Autolock range and default, minutes of idle time.
+pub const AUTOLOCK_MIN_MINUTES: u32 = 5;
+pub const AUTOLOCK_MAX_MINUTES: u32 = 60;
+pub const AUTOLOCK_DEFAULT_MINUTES: u32 = 15;
+
+/// What a device that never chose gets: on, after 15 minutes.
+pub fn default_autolock() -> AutolockSettings {
+    AutolockSettings {
+        enabled: true,
+        minutes: AUTOLOCK_DEFAULT_MINUTES,
+    }
+}
+
+/// Check what the user asked for. The minutes stay inside 5-60 even when the
+/// lock is off (the field keeps its place); turning it off is allowed only
+/// while the device holds no exchange keys.
+pub fn validate_autolock(
+    input: &AutolockSettings,
+    has_device_keys: bool,
+) -> Result<AutolockSettings> {
+    if !(AUTOLOCK_MIN_MINUTES..=AUTOLOCK_MAX_MINUTES).contains(&input.minutes) {
+        return Err(Error::InvalidInput(format!(
+            "autolock minutes must be {AUTOLOCK_MIN_MINUTES}-{AUTOLOCK_MAX_MINUTES}"
+        )));
+    }
+    if !input.enabled && has_device_keys {
+        return Err(Error::InvalidInput(
+            "autolock cannot be turned off while the device holds exchange keys".into(),
+        ));
+    }
+    Ok(input.clone())
 }
 
 /// The device a just-received vault copy came from, to be trusted at its first
@@ -238,11 +277,17 @@ impl Default for AppSettings {
             tour_offers: true,
             declined_tours: Vec::new(),
             pending_trusts: Vec::new(),
+            autolock: None,
         }
     }
 }
 
 impl AppSettings {
+    /// The autolock in force: the stored one, else the defaults.
+    pub fn autolock(&self) -> AutolockSettings {
+        self.autolock.clone().unwrap_or_else(default_autolock)
+    }
+
     /// Base currency, lowercased and never empty.
     ///
     /// `normalize`/`apply` are the only ways to change the field and both keep
@@ -941,10 +986,51 @@ mod tests {
             tour_offers: false,
             declined_tours: vec!["wallet".into()],
             pending_trusts: Vec::new(),
+            autolock: Some(AutolockSettings {
+                enabled: false,
+                minutes: 30,
+            }),
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn autolock_of(enabled: bool, minutes: u32) -> AutolockSettings {
+        AutolockSettings { enabled, minutes }
+    }
+
+    #[test]
+    fn autolock_defaults_to_on_after_fifteen_minutes() {
+        let settings = AppSettings::default();
+        assert_eq!(settings.autolock(), autolock_of(true, 15));
+        // A file from before the field reads as the default too.
+        let mut raw = serde_json::to_value(&settings).expect("to json");
+        raw.as_object_mut().expect("object").remove("autolock");
+        let old: AppSettings = serde_json::from_value(raw).expect("old file");
+        assert_eq!(old.autolock(), autolock_of(true, 15));
+    }
+
+    #[test]
+    fn autolock_range_is_five_to_sixty_minutes() {
+        for minutes in [0, 4, 61, 90] {
+            assert!(validate_autolock(&autolock_of(true, minutes), false).is_err());
+        }
+        for minutes in [5, 15, 60] {
+            assert_eq!(
+                validate_autolock(&autolock_of(true, minutes), false).expect("in range"),
+                autolock_of(true, minutes)
+            );
+        }
+    }
+
+    #[test]
+    fn autolock_off_needs_a_device_without_keys() {
+        assert!(validate_autolock(&autolock_of(false, 15), true).is_err());
+        assert!(validate_autolock(&autolock_of(false, 15), false).is_ok());
+        // The minutes are checked when the lock is off, too.
+        assert!(validate_autolock(&autolock_of(false, 3), false).is_err());
+        assert!(validate_autolock(&autolock_of(true, 15), true).is_ok());
     }
 
     #[test]
