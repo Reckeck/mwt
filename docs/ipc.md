@@ -543,7 +543,7 @@ The graph is stored in the vault as JSON (`WorkflowGraph { version, nodes, edges
 ### security (`crates/app/src/commands/security/`, DTOs in `crates/core/src/ipc_contract/security.rs`)
 
 `security_state`, `raise_to_crypto_level` and `validate_password_strength` are implemented
-(H5A; the browser mock answers them too); biometric is H5C. Levels and their rules: `docs/security.md`,
+(H5A; the browser mock answers them too); biometrics are H7A. Levels and their rules: `docs/security.md`,
 "Security levels". Error codes: `PIN_FORMAT` (a new level-2 PIN is not 6+ digits), `PASSWORD_TOO_WEAK`
 (a level-3 password is shorter than 16 or weak), `PIN_RETRY_LATER` (too many wrong PINs, the message
 carries the wait in seconds; `unlock_vault`), `SECURITY_DOWNGRADE_REFUSED` (the change would leave a vault
@@ -552,15 +552,16 @@ with crypto data below level 3, or the external copy is protected more cheaply),
 
 | Command | Input | Output |
 |---|---|---|
-| `security_state` | — | `SecurityState { level, min_allowed_level, has_device_keys, autolock, biometric, pin_retry_after_secs? }`; the level is not stored, it comes from the vault container (a locked vault: the selected file's header, `min_allowed_level` = `level`); `pin_retry_after_secs` only at level 2 while a wait is due; `biometric` is `unavailable` until H5C |
+| `security_state` | — | `SecurityState { level, min_allowed_level, has_device_keys, autolock, biometric, pin_retry_after_secs? }`; the level is not stored, it comes from the vault container (a locked vault: the selected file's header, `min_allowed_level` = `level`); `pin_retry_after_secs` only at level 2 while a wait is due; `biometric` is `unavailable` below level 3 and where the OS has no hardware-bound store (Linux, Android, Windows for now) |
 | `set_autolock` | `AutolockSettings { enabled, minutes }` | `AutolockSettings`; sleep and the lock screen always close the vault, there is no field for that |
 | `autolock_activity` | — | `()` — the user is active, the idle timer starts over |
 | `autolock_hold_for_picker` | — | `()` — a webview file input or camera is about to open: for at most 5 minutes (or until the app is back in the foreground) the Android background lock does not count the app as left |
 | `raise_to_crypto_level` | `RaiseToCryptoInput { current_password, new_password, backup_path }` | `RaiseToCryptoReport { level, backup_path }`; progress goes to the `security-raise-progress` event. `backup_path` must be empty (the backup is made next to the vault and re-sealed under the new key at the end); a wrong PIN is `SECRET` (a vault without a password goes straight to level 3, `current_password` is ignored and its plain copies are re-sealed or deleted), a weak password `PASSWORD_TOO_WEAK`, a vault already at level 3 `INVALID_INPUT`, the sandbox `SANDBOX` |
 | `validate_password_strength` | `ValidatePasswordStrengthInput { password }` | `PasswordStrengthReport { strength: weak \| medium \| strong, long_enough }`; the password is only graded, never kept |
-| `biometric_enable` | `BiometricEnableInput { password }` | `BiometricState` (`unavailable`, `available`, `enabled`, `password_required`) |
+| `biometric_state` | `BiometricUnlockInput { path }` | `BiometricState` of that vault file (for the lock screen, which has no open vault); `unavailable` below level 3 |
+| `biometric_enable` | `BiometricEnableInput { password }` | `BiometricState` (`unavailable`, `available`, `enabled`, `password_required`); checks the password of the open level-3 vault first, then binds it to the device (Touch ID on macOS); errors are `BIOMETRIC_*: …` |
 | `biometric_disable` | — | `BiometricState` |
-| `biometric_unlock` | `BiometricUnlockInput { path }` | `VaultInfo` |
+| `biometric_unlock` | `BiometricUnlockInput { path }` | `VaultInfo`; the OS releases the password after the gesture, the vault opens with it. Errors `BIOMETRIC_UNAVAILABLE`, `BIOMETRIC_NOT_ENABLED`, `BIOMETRIC_PASSWORD_REQUIRED` (7 days since the last typed password), `BIOMETRIC_INVALIDATED` (binding gone, reset), `BIOMETRIC_CANCELLED`, `BIOMETRIC_FAILED` |
 | `read_exchange_key_state` | `ExchangeKeyStatusInput { store_id }` | `ExchangeKeyState`: `missing` (no key on this device; a key stored on another device does not travel), `not_verified` (stored while Bybit was unreachable, rechecked at the next import), `read_only`, `level_required` (the vault is below level 3: keys are not stored or used). Implemented (H2); the browser mock answers it too |
 
 ### exchange (read-only)

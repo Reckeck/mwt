@@ -5,6 +5,7 @@ mod app_id;
 mod autolock;
 #[cfg(desktop)]
 mod autostart;
+mod biometric;
 mod commands;
 #[cfg(desktop)]
 mod legacy;
@@ -465,6 +466,7 @@ pub fn run() {
             security::autolock::autolock_hold_for_picker,
             security::raise::raise_to_crypto_level,
             security::raise::validate_password_strength,
+            security::biometric::biometric_state,
             security::biometric::biometric_enable,
             security::biometric::biometric_disable,
             security::biometric::biometric_unlock,

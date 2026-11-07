@@ -79,3 +79,12 @@ dbus = "0.9"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_LibraryLoader", "Win32_System_RemoteDesktop", "Win32_UI_WindowsAndMessaging"] }
+# Quick unlock with Windows Hello (src/biometric/windows.rs): KeyCredentialManager and the TPM check.
+windows = { version = "0.62", features = ["Foundation", "Security_Credentials", "Security_Cryptography", "Storage_Streams", "Win32_System_TpmBaseServices"] }
+hkdf = "0.12"
+sha2.workspace = true
+
+# Quick unlock with Touch ID (src/biometric/macos.rs): a Keychain item with the
+# `BiometryCurrentSet` access control; `OSX_10_15` gives the data-protection keychain.
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "3.7", features = ["OSX_10_15"] }

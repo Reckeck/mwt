@@ -3,6 +3,7 @@ import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { BaseCurrencyField } from '@/features/base-currency-choice'
+import { BiometricUnlockButton } from '@/features/biometric-unlock'
 import { required, useFormValidation } from '@/shared/lib/form'
 import { useSettingsStore } from '@/shared/store/settings'
 import { Button } from '@/shared/ui/button'
@@ -69,5 +70,7 @@ watch(
     <Button type="submit" size="lg" class="w-full" :disabled="busy" :loading="busy">
       {{ t('auth.open') }}
     </Button>
+
+    <BiometricUnlockButton v-if="!plain && !props.disabled" :path="path" :disabled="busy" />
   </form>
 </template>

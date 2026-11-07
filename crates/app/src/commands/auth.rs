@@ -146,12 +146,24 @@ pub async fn unlock_vault(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<VaultInfo, String> {
-    crate::commands::sandbox::leave(&app, &state);
+    unlock_with(input, &app, &state, true).await
+}
+
+/// The unlock path shared by the password and the biometric entry. `typed` is
+/// whether a person typed the password: only then the 7-day biometric window
+/// starts over (a password released by the biometrics is not a new entry).
+pub(crate) async fn unlock_with(
+    input: UnlockInput,
+    app: &AppHandle,
+    state: &AppState,
+    typed: bool,
+) -> Result<VaultInfo, String> {
+    crate::commands::sandbox::leave(app, state);
     let path =
-        crate::platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
+        crate::platform_fs::resolve_vault_to_open(app, &input.path).map_err(err_to_string)?;
     let pin_key = pin_guarded(&path);
     if let Some(key) = &pin_key {
-        let wait = app_settings::current_settings(&app).pin_retry_after(key, now_secs());
+        let wait = app_settings::current_settings(app).pin_retry_after(key, now_secs());
         if wait > 0 {
             let secs = u32::try_from(wait).unwrap_or(u32::MAX);
             return Err(err_to_string(trade_core::Error::PinRetryLater { secs }));
@@ -162,20 +174,20 @@ pub async fn unlock_vault(
         .lock()
         .ok()
         .and_then(|guard| guard.as_ref().map(|vault| vault.path.clone()));
-    close_if_open_at(open_path.as_deref(), &path, &mut AppLockSteps { app: &app })
+    close_if_open_at(open_path.as_deref(), &path, &mut AppLockSteps { app })
         .map_err(err_to_string)?;
     // A linked vault first takes in what changed in its external copy.
     let open_sync =
-        crate::platform_fs::links::sync_before_open(&app, &path).map_err(err_to_string)?;
-    let device = crate::commands::app_settings::device_id(&app);
+        crate::platform_fs::links::sync_before_open(app, &path).map_err(err_to_string)?;
+    let device = crate::commands::app_settings::device_id(app);
     let opened = UnlockedVault::open_as(path.clone(), &input.password, Some(&device));
     if let Some(key) = &pin_key {
-        note_pin_attempt(&app, key, &opened);
+        note_pin_attempt(app, key, &opened);
     }
     let mut vault = opened.map_err(crate::commands::err_to_string)?;
     // Edits made elsewhere reach the opened vault; the password is only
     // needed for this call and is not kept.
-    if crate::platform_fs::links::take_in(&app, &mut vault, open_sync, &input.password)
+    if crate::platform_fs::links::take_in(app, &mut vault, open_sync, &input.password)
         .map_err(err_to_string)?
         == crate::platform_fs::links::TakeIn::Reopen
     {
@@ -183,13 +195,13 @@ pub async fn unlock_vault(
         vault = UnlockedVault::open_as(path.clone(), &input.password, Some(&device))
             .map_err(crate::commands::err_to_string)?;
     }
-    crate::platform_fs::attach_mirror(&app, &mut vault);
+    crate::platform_fs::attach_mirror(app, &mut vault);
     crate::vault_writer::install(&mut vault);
-    store_vault(&state, vault)?;
+    store_vault(state, vault)?;
     // The base currency lives in the app config, so push it into the opened
     // vault before reading the info back out.
-    app_settings::sync_base_currency(&state, &app);
-    crate::sync::on_unlock(&app);
+    app_settings::sync_base_currency(state, app);
+    crate::sync::on_unlock(app);
     let info = info_of(
         state
             .vault
@@ -204,7 +216,11 @@ pub async fn unlock_vault(
     *state.vault_path.lock().map_err(|err| {
         err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
     })? = path.clone();
-    crate::commands::vault_recents::add_recent(&app, &path.to_string_lossy());
+    crate::commands::vault_recents::add_recent(app, &path.to_string_lossy());
+    if typed {
+        crate::biometric::system_gate(&app_settings::config_dir(app))
+            .password_entered(&path.to_string_lossy());
+    }
     Ok(info)
 }
 
@@ -427,6 +443,7 @@ pub fn exit_without_saving(app: AppHandle) {
 #[tauri::command]
 pub async fn change_password(
     input: ChangePasswordInput,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
@@ -438,7 +455,11 @@ pub async fn change_password(
     }
     vault
         .change_password(&input.current_password, &input.new_password)
-        .map_err(crate::commands::err_to_string)
+        .map_err(crate::commands::err_to_string)?;
+    // The bound password is stale now: quick unlock starts over.
+    crate::biometric::system_gate(&app_settings::config_dir(&app))
+        .disable(&vault.path.to_string_lossy());
+    Ok(())
 }
 
 /// Give the open vault that has no password one. The file is rewritten
@@ -480,5 +501,8 @@ pub async fn remove_vault_password(
     }
     vault
         .remove_password(&input.current_password)
-        .map_err(err_to_string)
+        .map_err(err_to_string)?;
+    crate::biometric::system_gate(&app_settings::config_dir(&app))
+        .disable(&vault.path.to_string_lossy());
+    Ok(())
 }

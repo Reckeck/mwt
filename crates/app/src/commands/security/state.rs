@@ -1,5 +1,5 @@
 use tauri::{AppHandle, State};
-use trade_core::ipc_contract::security::{BiometricState, SecurityLevel, SecurityState};
+use trade_core::ipc_contract::security::{SecurityLevel, SecurityState};
 use trade_core::service::security_level::level_of_vault_file;
 
 use crate::commands::{AppState, app_settings, err_to_string, lock_vault};
@@ -41,8 +41,7 @@ pub async fn security_state(
         min_allowed_level,
         has_device_keys: crate::autolock::has_device_keys(&app),
         autolock: settings.autolock(),
-        // Biometrics come with H5C.
-        biometric: BiometricState::Unavailable,
+        biometric: super::biometric::state_of(&app, &path),
         pin_retry_after_secs: (level == SecurityLevel::Pin && wait > 0)
             .then(|| u32::try_from(wait).unwrap_or(u32::MAX)),
     })

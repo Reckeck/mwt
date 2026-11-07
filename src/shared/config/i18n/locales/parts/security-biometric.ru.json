@@ -1,1 +1,26 @@
-{}
+{
+  "biometric.title": "Вход по биометрии",
+  "biometric.toggle": "Быстрый вход",
+  "biometric.toggleWindows": "Windows Hello (лицо, отпечаток или PIN Windows)",
+  "biometric.toggleHint": "Пароль всё равно нужен раз в 7 дней",
+  "biometric.off": "Выключено. Сброс произойдёт при смене пароля или отпечатков.",
+  "biometric.on": "Включено. Сброс произойдёт при смене пароля или отпечатков.",
+  "biometric.expired": "Нужен пароль: прошло 7 дней. Войдите по паролю при следующем открытии.",
+  "biometric.unavailable": "На этой системе нет защищённого хранилища для ключа, вход только по паролю.",
+  "biometric.enableTitle": "Включить биометрию",
+  "biometric.enableHint": "Введите пароль, чтобы привязать ключ к биометрии этого устройства.",
+  "biometric.password": "Пароль",
+  "biometric.passwordHint": "Пароль от 16 символов",
+  "biometric.enable": "Включить",
+  "biometric.enabled": "Быстрый вход включён",
+  "biometric.enableFailed": "Не удалось включить быстрый вход",
+  "biometric.disabled": "Быстрый вход выключен",
+  "biometric.disableFailed": "Не удалось выключить быстрый вход",
+  "biometric.signIn": "Войти по биометрии",
+  "biometric.failedTitle": "Биометрия не сработала",
+  "biometric.failedText": "Запрос отменён или не распознан. Повторите или введите пароль.",
+  "biometric.resetTitle": "Биометрия выключена",
+  "biometric.resetText": "Сменился пароль или добавлен новый отпечаток. Войдите по паролю и включите её заново в настройках.",
+  "biometric.passwordTitle": "Нужен пароль",
+  "biometric.passwordText": "Прошло 7 дней с последнего ввода. После входа биометрия снова заработает."
+}

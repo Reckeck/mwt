@@ -69,12 +69,17 @@ export const useVaultStore = defineStore('vault', {
      *  default one, and `select_vault` cannot be used for a file that does not
      *  exist yet (creation). */
     async unlock(path: string, password: string) {
+      return await this.openWith('unlock_vault', { path, password })
+    },
+    /** Quick unlock (H7A): the OS releases the password after Touch ID or Windows Hello, Rust opens the vault with it. */
+    async unlockByBiometric(path: string) {
+      return await this.openWith('biometric_unlock', { path })
+    },
+    async openWith(command: 'unlock_vault' | 'biometric_unlock', input: { path: string; password?: string }) {
       this.busy = true
       this.error = null
       try {
-        this.info = await call<VaultInfo>('unlock_vault', {
-          input: { path, password },
-        })
+        this.info = await call<VaultInfo>(command, { input })
         this.locked = false
         localStorage.setItem('trade-app:unlocked', 'true')
         this.status = {
