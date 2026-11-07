@@ -382,6 +382,9 @@ impl UnlockedVault {
         let password = if key.is_plain() { "" } else { password };
         // After the password check: a wrong password must not hint the vault is in use.
         let lock = crate::storage::VaultLock::acquire(&path)?;
+        // Under the lock no other instance is raising this vault: a temp file
+        // of a re-encryption is what a crash left behind.
+        crate::vault_io::local::sweep_reencrypt_leftovers(&path);
         let migrated = decoded.from_version < crate::VAULT_FORMAT_VERSION;
         if migrated {
             // The file as it was stays next to the vault before anything rewrites it.

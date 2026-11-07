@@ -29,8 +29,13 @@ use serde::de::DeserializeOwned;
 use crate::VAULT_FORMAT_VERSION;
 use crate::crypto;
 use crate::crypto::SealKey;
+use crate::crypto::kdf_profile::KdfParams;
 use crate::error::{Error, Result};
+use crate::ipc_contract::security::RaiseStage;
 use crate::model::vault::VaultDoc;
+use crate::vault_io::local::{
+    create_synced, read_back, reencrypt_tmp_path, replace_with, still_the_written_file,
+};
 
 pub mod v1;
 pub mod v2;
@@ -203,9 +208,19 @@ fn parse<T: DeserializeOwned>(bytes: &[u8], fmt: SnapshotFormat) -> Result<T> {
 /// Read-only helpers applied to a vault file on disk.
 pub struct VaultFile;
 
+/// The points of a re-encryption a test can break.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReencryptStep {
+    Written,
+    Verified,
+}
+
 impl VaultFile {
     /// Create a brand new encrypted vault at `path` (refuses to overwrite).
-    pub fn create(path: &Path, password: &str) -> Result<PathBuf> {
+    /// Tests only: it seals at the standard cost, so outside them a vault is
+    /// created with a [`SealKey`] (`create_keyed`) that carries its cost.
+    #[cfg(test)]
+    pub(crate) fn create(path: &Path, password: &str) -> Result<PathBuf> {
         if path.exists() {
             return Err(Error::AlreadyExists(path.display().to_string()));
         }
@@ -259,6 +274,102 @@ impl VaultFile {
         Ok(file)
     }
 
+    /// Move the vault at `path` onto a new key at the cost `kdf`, losing
+    /// nothing: the new file is written next to the old one, opened from the
+    /// disk with `password` and compared with `doc`, and only then takes the
+    /// old file's place. On any failure the old file is as it was and the
+    /// session key still fits it. On success the caller swaps in the returned
+    /// key: until then saves would go out at the old cost.
+    ///
+    /// An empty `password` is refused like in `set_password`: the crypto
+    /// level is never a vault without one.
+    ///
+    /// `doc` must be what the file holds, so the caller flushes pending saves
+    /// first and keeps the vault locked. `on_stage` reports each stage before
+    /// it starts; the backup before all this is the caller's.
+    pub fn reencrypt_verified(
+        path: &Path,
+        doc: &VaultDoc,
+        fmt: SnapshotFormat,
+        password: &str,
+        kdf: KdfParams,
+        on_stage: impl FnMut(RaiseStage),
+    ) -> Result<SealKey> {
+        Self::reencrypt_with_faults(path, doc, fmt, password, kdf, on_stage, |_, _| Ok(()))
+    }
+
+    /// [`Self::reencrypt_verified`] with a `fault` called after each step, so
+    /// a test can break the run exactly there.
+    fn reencrypt_with_faults(
+        path: &Path,
+        doc: &VaultDoc,
+        fmt: SnapshotFormat,
+        password: &str,
+        kdf: KdfParams,
+        mut on_stage: impl FnMut(RaiseStage),
+        mut fault: impl FnMut(ReencryptStep, &Path) -> Result<()>,
+    ) -> Result<SealKey> {
+        if password.is_empty() {
+            return Err(Error::InvalidInput(
+                "the new password must not be empty".into(),
+            ));
+        }
+        on_stage(RaiseStage::Reencrypt);
+        let fmt = fmt.for_writing();
+        let key = SealKey::fresh_with(password.as_bytes(), kdf)?;
+        let sealed = crypto::seal_with(&key, fmt, &encode(doc, fmt)?)?;
+
+        // A name of its own per run (a leftover of a crash is swept when the
+        // vault opens). The handle `create_synced` keeps is what gets read
+        // back and verified, and the rename only goes ahead while the name
+        // still points at that very file with those very bytes.
+        let tmp = reencrypt_tmp_path(path);
+        let mut file = create_synced(&tmp, &sealed)?;
+        let result = fault(ReencryptStep::Written, &tmp)
+            .and_then(|()| {
+                on_stage(RaiseStage::Verify);
+                let written = read_back(&mut file)?;
+                Self::verify_reencrypted(&written, doc, password, kdf)?;
+                if written != sealed {
+                    return Err(Error::Crypto(
+                        "the re-encrypted vault is not what was written".into(),
+                    ));
+                }
+                Ok(written)
+            })
+            .and_then(|written| {
+                fault(ReencryptStep::Verified, &tmp)?;
+                still_the_written_file(&file, &tmp, &written)?;
+                replace_with(&tmp, path)
+            });
+        drop(file);
+        if result.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        result.map(|()| key)
+    }
+
+    fn verify_reencrypted(
+        written: &[u8],
+        doc: &VaultDoc,
+        password: &str,
+        kdf: KdfParams,
+    ) -> Result<()> {
+        let (plaintext, fmt, key) = crypto::open_bytes_keyed(written, password.as_bytes())?;
+        let decoded = decode_versioned(&plaintext, fmt)?;
+        if key.kdf() != kdf {
+            return Err(Error::Crypto(
+                "the re-encrypted vault has the wrong key cost".into(),
+            ));
+        }
+        if decoded.doc != *doc {
+            return Err(Error::Crypto(
+                "the re-encrypted vault differs from the open one".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Copy the file as it is before a migration rewrites it:
     /// `vault.wallet` → `vault.wallet.v1.bak`. An existing copy is kept, so
     /// the first, untouched file survives repeated opens.
@@ -272,13 +383,22 @@ impl VaultFile {
         Ok(target)
     }
 
-    /// Re-encrypt & atomically persist the whole document.
-    pub fn save(path: &Path, password: &str, doc: &VaultDoc, fmt: SnapshotFormat) -> Result<()> {
+    /// Re-encrypt & atomically persist the whole document. Tests only, like
+    /// [`Self::create`]: a fresh standard header would quietly lower a
+    /// hardened vault's cost; real saves go through [`Self::seal_and_write`].
+    #[cfg(test)]
+    pub(crate) fn save(
+        path: &Path,
+        password: &str,
+        doc: &VaultDoc,
+        fmt: SnapshotFormat,
+    ) -> Result<()> {
         Self::save_sealed(path, password, doc, fmt).map(|_| ())
     }
 
     /// [`Self::save`], handing back the exact bytes written (for a mirror copy).
-    pub fn save_sealed(
+    #[cfg(test)]
+    pub(crate) fn save_sealed(
         path: &Path,
         password: &str,
         doc: &VaultDoc,
@@ -306,6 +426,7 @@ impl VaultFile {
         Ok(target)
     }
 
+    #[cfg(test)]
     fn save_impl(
         path: &Path,
         password: &str,
@@ -936,5 +1057,314 @@ mod tests {
             .hint(),
             "****"
         );
+    }
+
+    // -- files of every version ---------------------------------------------
+
+    /// The header as builds before the crypto level wrote it, field by field:
+    /// nothing here follows the current constants.
+    fn old_build_header(fmt: SnapshotFormat) -> crypto::header::VaultHeader {
+        crypto::header::VaultHeader {
+            version: 1,
+            kdf_id: 0,
+            kdf_mem_kib: 64 * 1024,
+            kdf_iters: 3,
+            kdf_par: 1,
+            salt: [0x11; crypto::SALT_LEN],
+            nonce: [0x22; crypto::NONCE_LEN],
+            payload_fmt: fmt.as_u8(),
+        }
+    }
+
+    #[test]
+    fn a_full_document_from_an_old_build_opens_in_every_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let doc = crate::model::fixtures::full_doc();
+        for fmt in [
+            SnapshotFormat::Json,
+            SnapshotFormat::Bin,
+            SnapshotFormat::Pack,
+        ] {
+            let path = dir.path().join(format!("{fmt:?}.wallet"));
+            let header = old_build_header(fmt);
+            let file = crypto::seal(&header, b"pw", &encode(&doc, fmt).unwrap()).unwrap();
+            std::fs::write(&path, file).unwrap();
+
+            let (decoded, read, key) = VaultFile::open_keyed(&path, "pw").unwrap();
+            assert_eq!((decoded.doc, read), (doc.clone(), fmt));
+            assert_eq!(key.kdf(), KdfParams::STANDARD);
+            assert!(matches!(
+                VaultFile::open(&path, "wrong"),
+                Err(Error::Secret)
+            ));
+        }
+    }
+
+    #[test]
+    fn a_plain_file_keeps_its_document() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plain.wallet");
+        let doc = crate::model::fixtures::full_doc();
+        let fmt = SnapshotFormat::Pack;
+        std::fs::write(&path, crypto::seal_plain(fmt, &encode(&doc, fmt).unwrap())).unwrap();
+        let (decoded, _, key) = VaultFile::open_keyed(&path, "").unwrap();
+        assert_eq!(decoded.doc, doc);
+        assert!(key.is_plain());
+    }
+
+    // -- re-encryption ------------------------------------------------------
+
+    /// The cheapest cost the limits allow: these tests run the KDF a lot.
+    const TEST_KDF: KdfParams = KdfParams::hardened(64 * 1024, 1, 1);
+
+    fn old_vault(dir: &Path) -> (PathBuf, VaultDoc, Vec<u8>) {
+        let path = dir.join("v.wallet");
+        let doc = crate::model::fixtures::full_doc();
+        let key = SealKey::fresh(b"pw").unwrap();
+        let fmt = SnapshotFormat::Pack;
+        VaultFile::seal_and_write(&path, &key, &encode(&doc, fmt).unwrap(), fmt).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        (path, doc, bytes)
+    }
+
+    fn entries(dir: &Path) -> usize {
+        std::fs::read_dir(dir).unwrap().count()
+    }
+
+    fn assert_old_vault_intact(path: &Path, doc: &VaultDoc, bytes: &[u8]) {
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+        assert_eq!(&VaultFile::open(path, "pw").unwrap().0, doc);
+        assert_eq!(entries(path.parent().unwrap()), 1, "no temp file left");
+    }
+
+    fn faulted(
+        path: &Path,
+        doc: &VaultDoc,
+        fault: impl FnMut(ReencryptStep, &Path) -> Result<()>,
+    ) -> Result<SealKey> {
+        VaultFile::reencrypt_with_faults(
+            path,
+            doc,
+            SnapshotFormat::Pack,
+            "pw",
+            TEST_KDF,
+            |_| {},
+            fault,
+        )
+    }
+
+    #[test]
+    fn reencrypting_moves_the_vault_to_the_new_cost_with_its_data() {
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
+            let dir = tempfile::tempdir().unwrap();
+            let (path, doc, _) = old_vault(dir.path());
+            let mut stages = Vec::new();
+            let key = VaultFile::reencrypt_verified(&path, &doc, fmt, "pw", TEST_KDF, |stage| {
+                stages.push(stage);
+            })
+            .unwrap();
+
+            assert_eq!(stages, [RaiseStage::Reencrypt, RaiseStage::Verify]);
+            assert_eq!(key.kdf(), TEST_KDF);
+            let (decoded, read, reopened) = VaultFile::open_keyed(&path, "pw").unwrap();
+            assert_eq!((decoded.doc, read), (doc, fmt));
+            assert_eq!(reopened.kdf(), TEST_KDF);
+            assert_eq!(entries(dir.path()), 1, "no temp file left");
+            let level = crypto::header::level_of_container(&std::fs::read(&path).unwrap());
+            assert_eq!(
+                level.unwrap(),
+                crate::ipc_contract::security::SecurityLevel::Crypto
+            );
+        }
+    }
+
+    #[test]
+    fn a_failure_before_the_rename_leaves_the_old_file() {
+        for step in [ReencryptStep::Written, ReencryptStep::Verified] {
+            let dir = tempfile::tempdir().unwrap();
+            let (path, doc, bytes) = old_vault(dir.path());
+            let result = faulted(&path, &doc, |at, _| {
+                if at == step {
+                    Err(Error::Io("the power went out".into()))
+                } else {
+                    Ok(())
+                }
+            });
+            assert!(matches!(result, Err(Error::Io(_))), "{step:?}");
+            assert_old_vault_intact(&path, &doc, &bytes);
+        }
+    }
+
+    #[test]
+    fn a_failed_rename_leaves_the_old_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, doc, bytes) = old_vault(dir.path());
+        let result = faulted(&path, &doc, |at, tmp| {
+            if at == ReencryptStep::Verified {
+                std::fs::remove_file(tmp).unwrap();
+            }
+            Ok(())
+        });
+        assert!(result.is_err());
+        assert_old_vault_intact(&path, &doc, &bytes);
+    }
+
+    #[test]
+    fn a_new_file_that_does_not_open_never_replaces_the_old_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, doc, bytes) = old_vault(dir.path());
+        let result = faulted(&path, &doc, |at, tmp| {
+            if at == ReencryptStep::Written {
+                let mut file = std::fs::read(tmp).unwrap();
+                let last = file.len() - 1;
+                file[last] ^= 1;
+                std::fs::write(tmp, file).unwrap();
+            }
+            Ok(())
+        });
+        assert!(matches!(result, Err(Error::Secret)));
+        assert_old_vault_intact(&path, &doc, &bytes);
+    }
+
+    #[test]
+    fn a_new_file_with_another_document_never_replaces_the_old_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, doc, bytes) = old_vault(dir.path());
+        let result = faulted(&path, &doc, |at, tmp| {
+            if at == ReencryptStep::Written {
+                let key = SealKey::fresh_with(b"pw", TEST_KDF).unwrap();
+                let fmt = SnapshotFormat::Pack;
+                let empty = encode(&VaultDoc::default(), fmt).unwrap();
+                std::fs::write(tmp, crypto::seal_with(&key, fmt, &empty).unwrap()).unwrap();
+            }
+            Ok(())
+        });
+        assert!(matches!(result, Err(Error::Crypto(_))));
+        assert_old_vault_intact(&path, &doc, &bytes);
+    }
+
+    #[test]
+    fn a_new_file_at_a_lower_cost_never_replaces_the_old_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, doc, bytes) = old_vault(dir.path());
+        let result = faulted(&path, &doc, |at, tmp| {
+            if at == ReencryptStep::Written {
+                let key = SealKey::fresh(b"pw").unwrap();
+                let fmt = SnapshotFormat::Pack;
+                let same = encode(&doc, fmt).unwrap();
+                std::fs::write(tmp, crypto::seal_with(&key, fmt, &same).unwrap()).unwrap();
+            }
+            Ok(())
+        });
+        assert!(matches!(result, Err(Error::Crypto(_))));
+        assert_old_vault_intact(&path, &doc, &bytes);
+    }
+
+    #[test]
+    fn a_temp_file_left_by_a_crash_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, doc, bytes) = old_vault(dir.path());
+        let leftover = crate::vault_io::local::tests::foreign_reencrypt_leftover(&path);
+        std::fs::write(&leftover, b"half a file").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+
+        VaultFile::reencrypt_verified(&path, &doc, SnapshotFormat::Pack, "pw", TEST_KDF, |_| {})
+            .unwrap();
+        assert_eq!(std::fs::read(&leftover).unwrap(), b"half a file");
+        assert_eq!(VaultFile::open(&path, "pw").unwrap().0, doc);
+        assert_eq!(entries(dir.path()), 2, "the vault and the old leftover");
+    }
+
+    #[test]
+    fn opening_the_vault_sweeps_what_a_crashed_reencryption_left() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, _, _) = old_vault(dir.path());
+        let leftover = crate::vault_io::local::tests::foreign_reencrypt_leftover(&path);
+        std::fs::write(&leftover, b"half a file").unwrap();
+        let wrong = crate::service::UnlockedVault::open(path.clone(), "wrong");
+        assert!(matches!(wrong, Err(Error::Secret)));
+        assert!(leftover.exists(), "a wrong password touches nothing");
+        let vault = crate::service::UnlockedVault::open(path.clone(), "pw").unwrap();
+        assert!(!leftover.exists());
+        drop(vault);
+    }
+
+    #[test]
+    fn a_temp_file_changed_after_verification_never_replaces_the_old_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, doc, bytes) = old_vault(dir.path());
+        // Same document and cost, so only the swap check can catch it.
+        let other = SealKey::fresh_with(b"pw", TEST_KDF).unwrap();
+        let fmt = SnapshotFormat::Pack;
+        let impostor = crypto::seal_with(&other, fmt, &encode(&doc, fmt).unwrap()).unwrap();
+        let result = faulted(&path, &doc, |at, tmp| {
+            if at == ReencryptStep::Verified {
+                std::fs::write(tmp, &impostor).unwrap();
+            }
+            Ok(())
+        });
+        assert!(matches!(result, Err(Error::Io(_))), "{:?}", result.err());
+        assert_old_vault_intact(&path, &doc, &bytes);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_temp_file_swapped_for_a_symlink_never_replaces_the_old_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, doc, bytes) = old_vault(dir.path());
+        let elsewhere = tempfile::tempdir().unwrap();
+        let target = elsewhere.path().join("planted");
+        std::fs::write(&target, b"planted").unwrap();
+        let result = faulted(&path, &doc, |at, tmp| {
+            if at == ReencryptStep::Verified {
+                std::fs::remove_file(tmp).unwrap();
+                std::os::unix::fs::symlink(&target, tmp).unwrap();
+            }
+            Ok(())
+        });
+        assert!(result.is_err());
+        assert_old_vault_intact(&path, &doc, &bytes);
+        assert_eq!(std::fs::read(&target).unwrap(), b"planted");
+    }
+
+    #[test]
+    fn reencrypting_with_an_empty_password_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, doc, bytes) = old_vault(dir.path());
+        let mut stages = Vec::new();
+        let result = VaultFile::reencrypt_verified(
+            &path,
+            &doc,
+            SnapshotFormat::Pack,
+            "",
+            TEST_KDF,
+            |stage| {
+                stages.push(stage);
+            },
+        );
+        assert!(matches!(result, Err(Error::InvalidInput(_))));
+        assert!(stages.is_empty());
+        assert_old_vault_intact(&path, &doc, &bytes);
+    }
+
+    #[test]
+    fn a_vault_stays_at_its_cost_through_saves_and_reopening() {
+        use crate::service::UnlockedVault;
+        let dir = tempfile::tempdir().unwrap();
+        let (path, doc, _) = old_vault(dir.path());
+        VaultFile::reencrypt_verified(&path, &doc, SnapshotFormat::Pack, "pw", TEST_KDF, |_| {})
+            .unwrap();
+
+        let mut vault = UnlockedVault::open(path.clone(), "pw").unwrap();
+        vault.switch_format(SnapshotFormat::Json).unwrap();
+        drop(vault);
+
+        let (decoded, read, key) = VaultFile::open_keyed(&path, "pw").unwrap();
+        assert_eq!(read, SnapshotFormat::Json);
+        assert_eq!(key.kdf(), TEST_KDF);
+        // Opening repairs this fixture's tree and adds the cash wallet, so the
+        // stores are not equal to the input; none of them goes.
+        let kept: Vec<_> = decoded.doc.stores.iter().map(|store| &store.id).collect();
+        assert!(doc.stores.iter().all(|store| kept.contains(&&store.id)));
     }
 }

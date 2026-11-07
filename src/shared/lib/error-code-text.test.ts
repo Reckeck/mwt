@@ -15,7 +15,7 @@ describe('errorCodeText', () => {
     expect(errorCodeText('NO_SUCH_CODE', t, te)).toBe(t('errors.UNKNOWN'))
   })
 
-  it.each(['IO', 'ALREADY_EXISTS', 'UNSUPPORTED', 'SERIALIZE', 'DESERIALIZE', 'VAULT_BUSY'])(
+  it.each(['IO', 'ALREADY_EXISTS', 'UNSUPPORTED', 'SERIALIZE', 'DESERIALIZE', 'VAULT_BUSY', 'VAULT_TOO_HEAVY'])(
     'has its own text for %s',
     (code) => {
       expect(errorCodeText(code, t, te)).not.toBe(t('errors.UNKNOWN'))

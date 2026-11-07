@@ -104,6 +104,8 @@ pub fn delete_in_app_folder(
         std::fs::remove_file(&found).map_err(|err| Error::Io(err.to_string()))?;
         removed.push(name);
     }
+    // A raise to the crypto level that crashed midway leaves a sealed copy.
+    crate::vault_io::local::sweep_reencrypt_leftovers(&real);
     Ok(DeletedVault {
         file_name,
         backups: removed,
@@ -151,6 +153,22 @@ mod tests {
         let dir = root.path().join("vaults");
         std::fs::create_dir(&dir).unwrap();
         (root, dir)
+    }
+
+    #[test]
+    fn deleting_a_vault_sweeps_its_reencryption_leftovers() {
+        let (_root, dir) = setup();
+        let vault = dir.join("a.wallet");
+        let other = dir.join("b.wallet");
+        write_vault(&vault);
+        write_vault(&other);
+        let leftover = crate::vault_io::local::tests::foreign_reencrypt_leftover(&vault);
+        let not_ours = crate::vault_io::local::tests::foreign_reencrypt_leftover(&other);
+        std::fs::write(&leftover, b"sealed copy").unwrap();
+        std::fs::write(&not_ours, b"sealed copy").unwrap();
+        delete_in_app_folder(&dir, &vault, Protected::default()).unwrap();
+        assert!(!vault.exists() && !leftover.exists());
+        assert!(other.exists() && not_ours.exists());
     }
 
     #[test]

@@ -21,7 +21,39 @@ header = u32 version | u8 kdf_id | u32 mem_kib | u32 iters | u8 par
        | [u8;16] salt | [u8;24] nonce | u8 payload_fmt
 ```
 
-- **KDF** — Argon2id, `m=65536 KiB (64 MiB)`, `t=3`, `p=1`, 32-byte output.
+- **KDF** — Argon2id v0x13, 32-byte output, at the cost **stored in the header**:
+  a file always opens with the `mem_kib`/`iters`/`par` it was sealed with, and
+  every later save keeps them (`SealKey` carries the cost). `kdf_id`:
+  `0` = the standard cost every vault below the crypto level uses
+  (`m=65536 KiB (64 MiB)`, `t=3`, `p=1`); `1` = no password (plain payload
+  with a SHA-256 checksum, the cost fields must be zero); `2` = the crypto
+  level, a hardened cost picked on the device (`KdfProfile`: desktop 1 GiB,
+  `t=3`, `p=4`; phone the heaviest of 256/128/64 MiB, `t=3`, `p=1`, that
+  derives within 3 s). Builds before id `2` answer `Unsupported` ("update the
+  app"), never a wrong password.
+- **Bounds** — the header is read before anything authenticates it, so the
+  cost is checked before a single block is allocated: `mem_kib` 64 MiB…1 GiB,
+  `iters` 1…4, `par` 1…4 (`KdfParams::check`). Outside them is `Error::Secret`:
+  a changed header is one more file that does not open.
+- **Memory ceiling** — inside the bounds a header can still ask for more than
+  the device has, and on Linux/Android an allocation that size "succeeds"
+  under overcommit and gets the app killed. Every derivation (open, raise,
+  calibration) reads `/proc/meminfo` at that moment and allows 3/4 of
+  `MemAvailable` (`kdf_profile::kdf_memory_ceiling_kib`), clamped to
+  64 MiB..1 GiB; without that file (Windows, macOS) it is 1 GiB.
+  `set_kdf_memory_ceiling_kib` is an explicit override (tests); the
+  ceiling is the lower of the two. A vault above it is `Error::VaultTooHeavy`
+  (`VAULT_TOO_HEAVY`) before any allocation: the file is fine, it opens once
+  other apps free memory or on a device with more.
+  Calibration never tries a rung above the ceiling.
+- **A cost change needs no container bump**: the cost is data in the header,
+  not a constant; `VAULT_CONTAINER_VERSION` changes only with the byte layout.
+- **Raising the cost** (`VaultFile::reencrypt_verified`) writes the new file
+  to `.<name>.reencrypt.<pid>.<uuid>.tmp` (`create_new`), reads it back
+  through the same handle, opens and compares it with the open document, and
+  renames it over the vault only while the name still is that file with those
+  bytes. A leftover of a crash is swept when the vault opens and when it is
+  deleted. An empty password is refused.
 - **AEAD** — XChaCha20-Poly1305: `key = XChaCha20Poly1305::new(derive_key(pw, salt))`,
   `nonce = random 24B`, `aad = header.bytes()`, a new random salt+nonce on
   every write (no nonce reuse across collisions).
@@ -31,8 +63,10 @@ header = u32 version | u8 kdf_id | u32 mem_kib | u32 iters | u8 par
 
 ## Key invariants
 
-1. `KDF_MEM_KIB/KDF_ITERS/KDF_PAR` are global (also stored in the header).
-2. `VaultHeader::from_bytes` checks `kdf_id == Argon2id` and the length.
+1. The KDF cost is the header's, not a global; `KDF_MEM_KIB/KDF_ITERS/KDF_PAR`
+   are only the standard cost (`kdf_id` 0) new vaults get.
+2. `VaultHeader::from_bytes` checks the length and that `kdf_id` is 0, 1 or 2;
+   `KdfParams::check` checks the cost bounds before allocating.
 3. All integrity rests on AEAD: there is no separate MAC/checksum (and none is needed).
 4. The key is derived by Argon2 once at unlock and lives in memory while the
    vault is open (`crypto::SealKey`, `Zeroizing`, wiped on lock and

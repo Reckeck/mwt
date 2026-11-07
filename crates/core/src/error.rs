@@ -99,6 +99,12 @@ pub enum Error {
     /// switched off in it (sync, handing the vault over, cloud sources).
     #[error("sandbox: {0}")]
     Sandbox(String),
+
+    /// The vault asks for more memory to derive its key than this device can
+    /// give. The file is not damaged and the password was not tried: the
+    /// vault opens on a device with more memory.
+    #[error("this device does not have enough memory to open the vault: {0}")]
+    VaultTooHeavy(String),
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -251,6 +257,7 @@ impl Error {
             Error::SyncConflict(_) => "SYNC_CONFLICT",
             Error::PeerSync(failure) => failure.code(),
             Error::Sandbox(_) => "SANDBOX",
+            Error::VaultTooHeavy(_) => "VAULT_TOO_HEAVY",
         }
     }
 }
