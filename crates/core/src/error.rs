@@ -118,6 +118,29 @@ pub enum Error {
     /// permission, IP not whitelisted); the message keeps the exchange code.
     #[error("the exchange rejected the key: {0}")]
     ExchangeKeyRejected(String),
+
+    /// Too many wrong PINs in a row: the next try is allowed in `secs`
+    /// seconds. This only slows guessing in the app; it does not protect a
+    /// copied file.
+    #[error("too many wrong PINs, try again in {secs} s")]
+    PinRetryLater { secs: u32 },
+
+    /// A new level-2 PIN must be at least six digits and digits only.
+    #[error(
+        "the PIN must be at least {} digits",
+        crate::service::security_level::MIN_PIN_DIGITS
+    )]
+    PinFormat,
+
+    /// A level-3 password must be at least 16 characters and not weak.
+    #[error("the password is too short or too weak for level 3")]
+    PasswordTooWeak,
+
+    /// The change would protect the vault more cheaply than it may be: it
+    /// holds crypto-module data (stage 1: exchange keys on this device), or a
+    /// copy from elsewhere is at a lower level than the vault here.
+    #[error("this would lower the vault's protection")]
+    SecurityDowngradeRefused,
 }
 
 /// A wallet-tree rule a write would break. Each one has its own IPC code so
@@ -274,6 +297,10 @@ impl Error {
             Error::SecurityLevelRequired => "SECURITY_LEVEL_REQUIRED",
             Error::ExchangeKeyNotReadOnly => "EXCHANGE_KEY_NOT_READ_ONLY",
             Error::ExchangeKeyRejected(_) => "EXCHANGE_KEY_REJECTED",
+            Error::PinRetryLater { .. } => "PIN_RETRY_LATER",
+            Error::PinFormat => "PIN_FORMAT",
+            Error::PasswordTooWeak => "PASSWORD_TOO_WEAK",
+            Error::SecurityDowngradeRefused => "SECURITY_DOWNGRADE_REFUSED",
         }
     }
 }

@@ -4,6 +4,7 @@
 //! `service::sync`, the transport in the app crate.
 
 pub mod alias;
+pub mod crypto_gate;
 pub mod derived;
 pub mod fields;
 pub mod flatten;

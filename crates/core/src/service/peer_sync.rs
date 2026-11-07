@@ -358,6 +358,7 @@ impl UnlockedVault {
         device_id: &str,
     ) -> Result<SyncSummary> {
         Self::check_incoming(incoming)?;
+        self.sync_check_level(incoming)?;
         self.track_changes()?;
         let value = self.doc_value()?;
         let records = view::records(&value);
@@ -378,6 +379,7 @@ impl UnlockedVault {
         incoming: &BTreeMap<String, RecordState>,
     ) -> Result<Option<AfterApply>> {
         Self::check_incoming(incoming)?;
+        self.sync_check_level(incoming)?;
         self.track_changes()?;
         let mut copy = self.sandbox();
         let peer = PeerRef {
@@ -464,6 +466,7 @@ impl UnlockedVault {
         external: bool,
     ) -> Result<Option<AppliedBatch>> {
         Self::check_incoming(incoming)?;
+        self.sync_check_level(incoming)?;
         self.track_changes()?;
         for state in incoming.values() {
             if let Some(latest) = state.latest() {

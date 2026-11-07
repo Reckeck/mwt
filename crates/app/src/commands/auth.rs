@@ -1,10 +1,12 @@
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use trade_core::ipc_contract::security::SecurityLevel;
 use trade_core::ipc_contract::{
     ChangePasswordInput, CreateVaultInput, RemoveVaultPasswordInput, SetVaultPasswordInput,
     SetVaultPasswordResult, UnlockInput, VaultInfo, VaultStatus,
 };
 use trade_core::service::UnlockedVault;
+use trade_core::service::security_level::{check_new_secret, level_of_vault_file};
 
 use crate::commands::{AppState, app_settings, err_to_string, lock_vault, require_vault};
 
@@ -84,6 +86,10 @@ pub async fn create_vault(
     state: State<'_, AppState>,
 ) -> Result<VaultInfo, String> {
     crate::commands::sandbox::leave(&app, &state);
+    // A new vault with a password is level 2: a PIN of six digits or more.
+    if let Some(pin) = input.password.as_deref() {
+        check_new_secret(SecurityLevel::Pin, pin).map_err(err_to_string)?;
+    }
     let path = crate::platform_fs::resolve_new_vault(&app, &input.path).map_err(err_to_string)?;
     // `None` = a vault without a password; an empty one is refused by the core.
     let mut vault = UnlockedVault::create_with(path.clone(), input.password.as_deref())
@@ -143,6 +149,14 @@ pub async fn unlock_vault(
     crate::commands::sandbox::leave(&app, &state);
     let path =
         crate::platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
+    let pin_key = pin_guarded(&path);
+    if let Some(key) = &pin_key {
+        let wait = app_settings::current_settings(&app).pin_retry_after(key, now_secs());
+        if wait > 0 {
+            let secs = u32::try_from(wait).unwrap_or(u32::MAX);
+            return Err(err_to_string(trade_core::Error::PinRetryLater { secs }));
+        }
+    }
     let open_path = state
         .vault
         .lock()
@@ -154,8 +168,11 @@ pub async fn unlock_vault(
     let open_sync =
         crate::platform_fs::links::sync_before_open(&app, &path).map_err(err_to_string)?;
     let device = crate::commands::app_settings::device_id(&app);
-    let mut vault = UnlockedVault::open_as(path.clone(), &input.password, Some(&device))
-        .map_err(crate::commands::err_to_string)?;
+    let opened = UnlockedVault::open_as(path.clone(), &input.password, Some(&device));
+    if let Some(key) = &pin_key {
+        note_pin_attempt(&app, key, &opened);
+    }
+    let mut vault = opened.map_err(crate::commands::err_to_string)?;
     // Edits made elsewhere reach the opened vault; the password is only
     // needed for this call and is not kept.
     if crate::platform_fs::links::take_in(&app, &mut vault, open_sync, &input.password)
@@ -189,6 +206,37 @@ pub async fn unlock_vault(
     })? = path.clone();
     crate::commands::vault_recents::add_recent(&app, &path.to_string_lossy());
     Ok(info)
+}
+
+/// The key under which wrong PINs for the vault at `path` are counted, when
+/// it is a level-2 vault (the delay is for a short PIN, not a long password).
+fn pin_guarded(path: &std::path::Path) -> Option<String> {
+    level_of_vault_file(path)
+        .is_ok_and(|level| level == SecurityLevel::Pin)
+        .then(|| path.to_string_lossy().into_owned())
+}
+
+/// Count a wrong PIN, or forget the count once the vault opened. Any other
+/// failure (a busy file, too little memory) is not a guess and counts nothing.
+fn note_pin_attempt<T>(app: &AppHandle, key: &str, opened: &trade_core::Result<T>) {
+    let mut settings = app_settings::current_settings(app);
+    let changed = match opened {
+        Ok(_) => settings.reset_pin_failures(key),
+        Err(trade_core::Error::Secret) => {
+            settings.record_pin_failure(key, now_secs());
+            true
+        }
+        Err(_) => false,
+    };
+    if changed {
+        let _ = app_settings::save(&app_settings::config_dir(app), &settings);
+    }
+}
+
+pub(crate) fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
 }
 
 #[tauri::command]
@@ -383,6 +431,11 @@ pub async fn change_password(
 ) -> Result<(), String> {
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().ok_or("Vault is locked")?;
+    // A level-2 PIN changes to a PIN of six digits or more; the level-3 rule
+    // is in the core, which keeps the cost of the key.
+    if vault.security_level() == SecurityLevel::Pin {
+        check_new_secret(SecurityLevel::Pin, &input.new_password).map_err(err_to_string)?;
+    }
     vault
         .change_password(&input.current_password, &input.new_password)
         .map_err(crate::commands::err_to_string)
@@ -399,6 +452,7 @@ pub async fn set_vault_password(
     crate::commands::sandbox::refuse(&state, "a vault password")?;
     let mut guard = require_vault(&state).map_err(err_to_string)?;
     let vault = guard.as_mut().ok_or("Vault is locked")?;
+    check_new_secret(SecurityLevel::Pin, &input.new_password).map_err(err_to_string)?;
     let removed_copies = vault
         .set_password(&input.new_password, input.delete_plain_copies)
         .map_err(err_to_string)?;

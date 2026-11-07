@@ -426,20 +426,6 @@ impl UnlockedVault {
 }
 
 #[cfg(test)]
-impl UnlockedVault {
-    /// The vault re-keyed at level 3 in place, as raising the level does
-    /// (the cheapest hardened cost, for tests).
-    pub(crate) fn raise_to_level3_for_tests(&mut self) {
-        use crate::crypto::kdf_profile::{KDF_MEM_KIB_MIN, KdfParams};
-        let kdf = KdfParams::hardened(KDF_MEM_KIB_MIN, 1, 1);
-        let key = SealKey::fresh_with(self.password.as_bytes(), kdf).expect("key");
-        self.key = Some(std::sync::Arc::new(key));
-        self.adopt_device_secrets().expect("adopt");
-        self.persist().expect("persist");
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::store::ExchangeProvider;

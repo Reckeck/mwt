@@ -740,11 +740,24 @@ async fn pair<H: Host>(
     }
 }
 
+/// `Bye` reason: this vault is below level 3 and refused crypto-module data.
+pub(super) const SECURITY_LEVEL_BYE: &str = "security_level_required";
+
 /// The other device said goodbye with a reason. `paused` and `forgotten` mean
 /// it cut this device off on purpose: remember it (so discovery stops dialing
-/// it) and tell the user once. Any other reason is a plain quiet close, as
-/// before (older builds send none of these).
+/// it) and tell the user once. `security_level_required`: it is below level
+/// 3 and did not take the crypto-module data this device sent; shown once.
+/// Any other reason is a plain quiet close, as before (older builds send
+/// none of these).
 fn heard_bye<H: Host>(app: &H, peer: &Peer, reason: &str) -> Stop {
+    if reason == SECURITY_LEVEL_BYE {
+        super::emit_error(
+            app,
+            &Error::SecurityLevelRequired,
+            Some((peer.device_id.as_str(), peer.name.as_str())),
+        );
+        return Stop::Quiet;
+    }
     let Some(cut) = SyncCutReason::from_wire(reason) else {
         return Stop::Quiet;
     };
@@ -1059,6 +1072,18 @@ async fn apply_shown<H: Host>(
 ) -> Flow<()> {
     if incoming.is_empty() {
         return Ok(());
+    }
+    // Crypto-module data only reaches a level-3 vault: the other device hears
+    // why, this one shows it (`SECURITY_LEVEL_REQUIRED`).
+    if let Err(err) = app.with_vault(|vault| vault.sync_check_level(&incoming)) {
+        if matches!(err, Error::SecurityLevelRequired) {
+            let _ = wire
+                .send(&Message::Bye {
+                    reason: SECURITY_LEVEL_BYE.into(),
+                })
+                .await;
+        }
+        return Err(Stop::Failed(err));
     }
     let (unreliable, applied_once) = app
         .hub()

@@ -56,6 +56,7 @@ mod investments;
 mod passive;
 mod password;
 mod property_links;
+pub mod security_level;
 pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
 mod goals;
 mod health;
