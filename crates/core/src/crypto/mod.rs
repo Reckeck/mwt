@@ -305,30 +305,68 @@ pub fn open_bytes_keyed(
 ) -> Result<(Vec<u8>, SnapshotFormat, SealKey)> {
     let (header, ct) = parse_file(bytes)?;
     if header.is_plain() {
-        // A plain file has no KDF fields. Having them means an encrypted file
-        // whose id was changed: not a damaged plain one, nothing to read.
-        if header.kdf_mem_kib != 0 || header.kdf_iters != 0 || header.kdf_par != 0 {
-            return Err(Error::Secret);
-        }
         // No password: the one given (if any) is ignored.
-        let fmt = SnapshotFormat::from_u8(header.payload_fmt).ok_or(Error::Unsupported)?;
-        let split = ct.len().checked_sub(32).ok_or(Error::Unsupported)?;
-        let (payload, checksum) = ct.split_at(split);
-        if plain_checksum(&header.bytes(), payload).as_slice() != checksum {
-            return Err(Error::Deserialize("the vault file is damaged".into()));
-        }
-        return Ok((payload.to_vec(), fmt, SealKey::plain()));
+        let (payload, fmt) = open_plain(&header, ct)?;
+        return Ok((payload, fmt, SealKey::plain()));
     }
     let key = SealKey::derive(password, header.salt, header.kdf())?;
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&*key.key));
+    let (pt, fmt) = decrypt(&header, ct, &key)?;
+    Ok((pt, fmt, key))
+}
 
+/// The payload of a plain file after its header (`ct`), checksum checked.
+fn open_plain(header: &VaultHeader, ct: &[u8]) -> Result<(Vec<u8>, SnapshotFormat)> {
+    // A plain file has no KDF fields. Having them means an encrypted file
+    // whose id was changed: not a damaged plain one, nothing to read.
+    if header.kdf_mem_kib != 0 || header.kdf_iters != 0 || header.kdf_par != 0 {
+        return Err(Error::Secret);
+    }
+    let fmt = SnapshotFormat::from_u8(header.payload_fmt).ok_or(Error::Unsupported)?;
+    let split = ct.len().checked_sub(32).ok_or(Error::Unsupported)?;
+    let (payload, checksum) = ct.split_at(split);
+    if plain_checksum(&header.bytes(), payload).as_slice() != checksum {
+        return Err(Error::Deserialize("the vault file is damaged".into()));
+    }
+    Ok((payload.to_vec(), fmt))
+}
+
+fn decrypt(header: &VaultHeader, ct: &[u8], key: &SealKey) -> Result<(Vec<u8>, SnapshotFormat)> {
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(&*key.key));
     let aad = header.bytes();
     let nonce = XNonce::from_slice(&header.nonce);
     let pt = cipher
         .decrypt(nonce, Payload { msg: ct, aad: &aad })
         .map_err(|_| Error::Secret)?;
     let fmt = SnapshotFormat::from_u8(header.payload_fmt).ok_or(Error::Unsupported)?;
-    Ok((pt, fmt, key))
+    Ok((pt, fmt))
+}
+
+/// Whether the encrypted file `bytes` claims to be sealed under `key` itself:
+/// its header carries the key's salt and cost. Reads the header only (no KDF,
+/// no decryption); [`open_bytes_with`] is what proves it.
+pub fn sealed_under(bytes: &[u8], key: &SealKey) -> bool {
+    !key.plain
+        && parse_file(bytes).is_ok_and(|(header, _)| {
+            !header.is_plain() && header.salt == key.salt && header.kdf() == key.kdf
+        })
+}
+
+/// Open a vault file with an already derived key, running no KDF: a plain
+/// file only with the plain key, an encrypted one only when its header
+/// carries this key's salt and cost and the AEAD check passes. A file under
+/// any other key is [`Error::Secret`].
+pub fn open_bytes_with(bytes: &[u8], key: &SealKey) -> Result<(Vec<u8>, SnapshotFormat)> {
+    let (header, ct) = parse_file(bytes)?;
+    if header.is_plain() != key.plain {
+        return Err(Error::Secret);
+    }
+    if header.is_plain() {
+        return open_plain(&header, ct);
+    }
+    if header.salt != key.salt || header.kdf() != key.kdf {
+        return Err(Error::Secret);
+    }
+    decrypt(&header, ct, key)
 }
 
 /// A fresh random key for one blob (an attachment's file).

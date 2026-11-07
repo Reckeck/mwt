@@ -54,6 +54,33 @@ header = u32 version | u8 kdf_id | u32 mem_kib | u32 iters | u8 par
   renames it over the vault only while the name still is that file with those
   bytes. A leftover of a crash is swept when the vault opens and when it is
   deleted. An empty password is refused.
+- **Changing or setting the password** (`change_password_with`,
+  `set_password_with` in `service/password.rs`). A change keeps the vault's
+  KDF cost (`SealKey::with_new_password`: new salt, same id and parameters, so
+  level 3 stays level 3). Setting a password on a plain vault takes the
+  standard cost. The steps run in this order, and a crash after any of them
+  leaves files that one of the two passwords opens:
+  1. `<vault>.secrets` is sealed under the new key into `.secrets.next`; the
+     file under the old key stays.
+  2. The vault is written under the new key (atomic write; the mirror gets
+     the same bytes in that write) and read back from the disk with the new
+     key.
+  3. `.secrets.next` is renamed over `.secrets`. If the process died before
+     this rename, the next load with the new key does it.
+  4. The copies are handled. Each re-sealed copy goes to a
+     `.reencrypt.*.tmp` file, which is read back and opened with the new key
+     before it is renamed over the copy.
+  `vault_io::copies::inventory` lists every `<vault>.*.bak` (slot,
+  `.vN.bak`, pre-sync, stamped) as plain, under the session key, under
+  another key, or unreadable. It compares the header's salt and cost with
+  the session key and runs no KDF. Pre-sync copies always follow the new
+  key; on a change, one that cannot be re-sealed is deleted. Plain copies are
+  kept, re-sealed or deleted as the caller asks. A copy is deleted only
+  after step 2 succeeds. Copies under the old password are re-sealed only
+  on request, using the old password once per salt. Copies the new password
+  does not open are returned in the report for the user to choose. Removing
+  the password is refused while exchange keys are on this device: their
+  file would be sealed under a key anyone can derive.
 - **AEAD** — XChaCha20-Poly1305: `key = XChaCha20Poly1305::new(derive_key(pw, salt))`,
   `nonce = random 24B`, `aad = header.bytes()`, a new random salt+nonce on
   every write (no nonce reuse across collisions).

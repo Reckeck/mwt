@@ -24,6 +24,7 @@ use crate::model::vault::{PendingImport, Settings, VaultDoc, iso_to_millis, now_
 use crate::pricing::history::secs_or_now;
 use crate::storage::{SnapshotFormat, VaultFile};
 
+pub use password::{CopyPolicy, PlainCopies, RotationReport};
 pub use saving::{FlushJob, Flushed, SaveHook};
 
 mod adjustments;
@@ -589,30 +590,16 @@ impl UnlockedVault {
     ///
     /// The current password is checked against the file on disk (decryption is
     /// the verifier), so an unlocked but unattended session cannot be re-keyed
-    /// by whoever sits down at it. No `.bak` is written on purpose (and the
-    /// pre-sync backups are deleted): a copy that
-    /// still opens with the old password would defeat changing a leaked one.
+    /// by whoever sits down at it. No `.bak` is written on purpose: a copy
+    /// that still opens with the old password would defeat changing a leaked
+    /// one. The new key keeps the vault's KDF cost, the device secrets file
+    /// follows the key, the pre-sync copies are re-sealed under it; other
+    /// copies are left for the user ([`Self::change_password_with`]).
     pub fn change_password(&mut self, current_password: &str, new_password: &str) -> Result<()> {
-        if new_password.is_empty() {
-            return Err(Error::InvalidInput(
-                "the new password must not be empty".into(),
-            ));
-        }
-        if !self.is_encrypted() {
-            return Err(Error::InvalidInput(
-                "the vault has no password to change: set one".into(),
-            ));
-        }
-        VaultFile::open(&self.path, current_password)?;
-        // A new password gets a new salt; the file is rewritten under it at once.
-        self.key = Some(std::sync::Arc::new(SealKey::fresh(
-            new_password.as_bytes(),
-        )?));
-        self.password = Zeroizing::new(new_password.to_string());
-        self.persist_now()?;
-        // Pre-sync copies are sealed under the old password: gone with it.
-        self.remove_sync_backups();
-        Ok(())
+        // The copies next to the vault stay as they are, except the ones from
+        // before a sync, which follow the vault (see `password.rs`).
+        self.change_password_with(current_password, new_password, CopyPolicy::default())
+            .map(drop)
     }
 
     /// Re-encode on disk (dev JSON <-> prod binary) — mostly used by tests.
@@ -4437,7 +4424,7 @@ mod tests {
     }
 
     #[test]
-    fn change_password_deletes_the_pre_sync_backups() {
+    fn change_password_reseals_the_pre_sync_backups() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("pw.wallet");
         let mut vault = UnlockedVault::create(path.clone(), "old").unwrap();
@@ -4445,13 +4432,18 @@ mod tests {
         vault.sync_backup().unwrap();
         assert!(vault.has_sync_backup());
         vault.change_password("old", "new").unwrap();
-        assert!(!vault.has_sync_backup());
-        let leftovers = std::fs::read_dir(dir.path())
+        assert!(vault.has_sync_backup());
+        let copies: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
             .filter_map(|entry| entry.ok())
-            .filter(|entry| entry.file_name().to_string_lossy().contains(".presync"))
-            .count();
-        assert_eq!(leftovers, 0);
+            .map(|entry| entry.path())
+            .filter(|file| file.to_string_lossy().contains(".presync"))
+            .collect();
+        assert_eq!(copies.len(), 2);
+        for copy in copies {
+            assert!(VaultFile::open(&copy, "new").is_ok());
+            assert!(matches!(VaultFile::open(&copy, "old"), Err(Error::Secret)));
+        }
     }
 
     #[test]
