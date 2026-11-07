@@ -254,11 +254,18 @@ pub fn run() {
             // settings
             settings::get_settings,
             settings::update_settings,
+            #[cfg(debug_assertions)]
             settings::dev_dump_vault,
             settings::vault_schema,
-            settings::dev_export_vault,
+            #[cfg(debug_assertions)]
             settings::dev_apply_vault_json,
+            // dev_* return or write the decrypted vault: development builds only
+            // (the macro keeps `#[cfg]` on list items, tauri-macros 2.7.4)
+            #[cfg(debug_assertions)]
+            settings::dev_export_vault,
+            #[cfg(debug_assertions)]
             settings::dev_open_vault_json_in_editor,
+            #[cfg(debug_assertions)]
             settings::dev_reload_vault_json_from_editor,
             // losses, chains, rates
             losses::get_tx_loss,

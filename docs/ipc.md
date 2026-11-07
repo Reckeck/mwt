@@ -533,12 +533,12 @@ The graph is stored in the vault as JSON (`WorkflowGraph { version, nodes, edges
 | `notification_permission` | `request: bool` | `"granted" \| "denied" \| "prompt"` — whether the system allows notifications; `request` — ask |
 | `notification_storage` | — | `"keyring" \| "memory"` — where the notification schedule for a locked vault lives: an encrypted file with a key in the system keyring, or memory only |
 | `get_autostart` / `set_autostart` | — / `enabled: bool` | `bool` — launch at system sign-in (`tauri-plugin-autostart`, the argument `--hidden`: the window is not shown, the app is in the tray) |
-| `dev_dump_vault` | — | `DevDumpVaultOutput { json }` — the decrypted `VaultDoc` as one pretty JSON (the DEV screen only) |
-| `dev_export_vault` | — | `Option<String>` — the path of the written file, `None` if the user closed the dialog. Rust does the native save dialog + the write: the webview cannot download files (`URL.createObjectURL` + `<a download>` does not work in WebKitGTK) |
+| `dev_dump_vault` | — | `DevDumpVaultOutput { json }` — the decrypted `VaultDoc` as one pretty JSON (the DEV screen only) Development builds only: the command does not exist in release builds |
+| `dev_export_vault` | — | `Option<String>` — the path of the written file, `None` if the user closed the dialog. Rust does the native save dialog + the write: the webview cannot download files (`URL.createObjectURL` + `<a download>` does not work in WebKitGTK) Development builds only: the command does not exist in release builds |
 | `vault_schema` | — | `serde_json::Value` — the JSON Schema of `VaultDoc` from `schemars` (for hints in the editor; the document shape lives only in Rust) |
-| `dev_apply_vault_json` | `json`, `base?` | `String` — the canonical re-serialization of the written document. With `base` (the JSON the editor loaded or saved last) only what differs from it is written, so a record another device sent meanwhile stays (`apply_document_edit`); without it the document is replaced as a whole. A refusal (before writing, `.bak` is not touched) on invalid JSON (`json` or `base`), an unknown schema or a wrong payload version |
-| `dev_open_vault_json_in_editor` | — | `String` — the scratch file path. Writes the document and launches `$EDITOR` detached, without waiting |
-| `dev_reload_vault_json_from_editor` | — | `String` — the scratch file contents. A path is not accepted: the frontend can read only this file |
+| `dev_apply_vault_json` | `json`, `base?` | `String` — the canonical re-serialization of the written document. With `base` (the JSON the editor loaded or saved last) only what differs from it is written, so a record another device sent meanwhile stays (`apply_document_edit`); without it the document is replaced as a whole. A refusal (before writing, `.bak` is not touched) on invalid JSON (`json` or `base`), an unknown schema or a wrong payload version Development builds only: the command does not exist in release builds |
+| `dev_open_vault_json_in_editor` | — | `String` — the scratch file path. Writes the document and launches `$EDITOR` detached, without waiting Development builds only: the command does not exist in release builds |
+| `dev_reload_vault_json_from_editor` | — | `String` — the scratch file contents. A path is not accepted: the frontend can read only this file Development builds only: the command does not exist in release builds |
 
 ### security (`crates/app/src/commands/security/`, DTOs in `crates/core/src/ipc_contract/security.rs`)
 
