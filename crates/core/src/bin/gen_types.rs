@@ -610,6 +610,24 @@ fn main() {
         trade_core::ipc_contract::CandlePoint,
     );
 
+    // Security levels, autolock, biometrics: `ipc_contract/security.rs`.
+    export!(
+        trade_core::ipc_contract::security::SecurityLevel,
+        trade_core::ipc_contract::security::SecurityState,
+        trade_core::ipc_contract::security::BiometricState,
+        trade_core::ipc_contract::security::AutolockSettings,
+        trade_core::ipc_contract::security::RaiseToCryptoInput,
+        trade_core::ipc_contract::security::RaiseToCryptoReport,
+        trade_core::ipc_contract::security::RaiseProgress,
+        trade_core::ipc_contract::security::RaiseStage,
+        trade_core::ipc_contract::security::ValidatePasswordStrengthInput,
+        trade_core::ipc_contract::security::PasswordStrength,
+        trade_core::ipc_contract::security::PasswordStrengthReport,
+        trade_core::ipc_contract::security::BiometricEnableInput,
+        trade_core::ipc_contract::security::BiometricUnlockInput,
+        trade_core::ipc_contract::security::ExchangeKeyState,
+    );
+
     if !ok {
         eprintln!("gen-types: one or more types failed to export");
         std::process::exit(1);

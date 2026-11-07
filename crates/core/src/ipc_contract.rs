@@ -27,6 +27,8 @@ use crate::model::transaction::{
 use crate::model::vault::DailyBudgetMode;
 use crate::service::{AutomationDraft, BudgetDraft, ContactDraft, GoalDraft, PriceAlertDraft};
 
+pub mod security;
+
 // -- auth --------------------------------------------------------------------
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]

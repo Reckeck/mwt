@@ -23,7 +23,7 @@ mod vault_writer;
 use commands::{
     AppState, analytics, app_settings, attachments, auth, calc, categories, contacts, enrichment,
     exchange, losses, mobile, notifications, planning, portfolio, pricing, rates, sandbox,
-    settings, shared_events, sources, stores, transactions, transactions_bulk,
+    security, settings, shared_events, sources, stores, transactions, transactions_bulk,
     updates as update_commands, vault_backups, vault_link, vault_recents, workflows,
 };
 use tauri::Manager;
@@ -450,6 +450,16 @@ pub fn run() {
             commands::transfer::transfer_send,
             commands::transfer::transfer_send_code,
             commands::transfer::transfer_send_cancel,
+            // security levels, autolock, biometrics
+            security::state::security_state,
+            security::autolock::set_autolock,
+            security::autolock::autolock_activity,
+            security::raise::raise_to_crypto_level,
+            security::raise::validate_password_strength,
+            security::biometric::biometric_enable,
+            security::biometric::biometric_disable,
+            security::biometric::biometric_unlock,
+            security::keys::read_exchange_key_state,
         ])
         .setup(|app| {
             // Before any vault is opened: what a crashed run left of the sandbox goes.

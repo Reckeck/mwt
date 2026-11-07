@@ -1,11 +1,14 @@
 // The onboarding gate (AGENTS.md rule 12, skill `onboarding`): every screen has a tour, every tour
 // step points at an element that exists, every tour, `What's new` and learning-centre text is there
 // in both locales. Static: reads the sources, runs nothing. Unused `data-tour` targets are only reported.
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
+import { duplicateLocaleKeys, mergeLocale } from '@/shared/config/i18n/parts'
+import type { LocaleMessages, LocaleParts } from '@/shared/config/i18n/parts'
 import { TOURLESS_ROUTES, TOURS } from '@/shared/lib/tour/tours'
 import { WHATS_NEW } from '@/shared/config/whats-new'
 
@@ -23,12 +26,32 @@ for (const file of walk(join(ROOT, 'src'), '.vue')) {
   }
 }
 
-const locales: Record<string, Record<string, string>> = Object.fromEntries(
-  ['ru', 'en'].map((lang) => [
-    lang,
-    JSON.parse(readFileSync(join(ROOT, `src/shared/config/i18n/locales/${lang}.json`), 'utf8')),
-  ]),
-)
+const readJson = (path: string): LocaleMessages => JSON.parse(readFileSync(path, 'utf8'))
+
+/** Every language as the app sees it, main file and parts together, and the keys two files both define. */
+function readLocales(dir: string) {
+  const parts: LocaleParts = Object.fromEntries(
+    readdirSync(join(dir, 'parts'))
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => [name, readJson(join(dir, 'parts', name))]),
+  )
+  const bases = ['ru', 'en'].map((lang) => [lang, readJson(join(dir, `${lang}.json`))] as const)
+  return {
+    locales: Object.fromEntries(bases.map(([lang, base]) => [lang, mergeLocale(base, lang, parts)])),
+    duplicates: bases.flatMap(([lang, base]) => duplicateLocaleKeys(base, lang, parts)),
+  }
+}
+
+function differingKeys(locales: Record<string, LocaleMessages>): string[] {
+  const ru = new Set(Object.keys(locales.ru))
+  const en = new Set(Object.keys(locales.en))
+  return [
+    ...[...ru].filter((key) => !en.has(key)).map((key) => `i18n key "${key}" is in ru.json only`),
+    ...[...en].filter((key) => !ru.has(key)).map((key) => `i18n key "${key}" is in en.json only`),
+  ]
+}
+
+const { locales, duplicates } = readLocales(join(ROOT, 'src/shared/config/i18n/locales'))
 
 function missingKey(key: string, where: string): string[] {
   return Object.entries(locales)
@@ -76,12 +99,26 @@ describe('check-onboarding', () => {
   })
 
   it('the two locales hold the same keys', () => {
-    const ru = new Set(Object.keys(locales.ru))
-    const en = new Set(Object.keys(locales.en))
-    expectNone([
-      ...[...ru].filter((key) => !en.has(key)).map((key) => `i18n key "${key}" is in ru.json only`),
-      ...[...en].filter((key) => !ru.has(key)).map((key) => `i18n key "${key}" is in en.json only`),
-    ])
+    expectNone(differingKeys(locales))
+  })
+
+  it('no key is defined in two files of a language', () => {
+    expectNone(duplicates)
+  })
+
+  it('a key in a part of one language only fails the comparison, a repeated key is found', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'check-onboarding-'))
+    try {
+      mkdirSync(join(dir, 'parts'))
+      writeFileSync(join(dir, 'ru.json'), '{ "shared.key": "текст" }')
+      writeFileSync(join(dir, 'en.json'), '{ "shared.key": "text" }')
+      writeFileSync(join(dir, 'parts', 'demo.ru.json'), '{ "demo.only": "текст", "shared.key": "ещё раз" }')
+      const parsed = readLocales(dir)
+      expect(differingKeys(parsed.locales)).toEqual(['i18n key "demo.only" is in ru.json only'])
+      expect(parsed.duplicates).toEqual(['i18n key "shared.key" is in both ru.json and demo.ru.json'])
+    } finally {
+      rmSync(dir, { recursive: true })
+    }
   })
 
   it('reports', () => {
