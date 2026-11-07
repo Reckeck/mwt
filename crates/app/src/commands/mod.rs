@@ -18,6 +18,7 @@ pub mod portfolio;
 pub mod pricing;
 pub mod rates;
 pub mod sandbox;
+pub mod security;
 pub mod settings;
 pub mod shared_events;
 pub mod sources;

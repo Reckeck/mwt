@@ -29,6 +29,11 @@ import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockStores, mockTransactions, priceOf } from './demo'
 import { sandboxCommands } from './commands-sandbox'
+import { securityAutolockCommands } from './commands-security-autolock'
+import { securityBiometricCommands } from './commands-security-biometric'
+import { securityKeysCommands } from './commands-security-keys'
+import { securityRaiseCommands } from './commands-security-raise'
+import { securityStateCommands } from './commands-security-state'
 import { keepPristine, refusedInSandbox } from './sandbox-state'
 import { seedMock } from './scenario-seed'
 import { mockAppSettings, mockSettings } from './vault-data'
@@ -65,6 +70,11 @@ const MOCK_COMMANDS: MockCommands = {
   ...sourcesCommands,
   ...exchangeAccountsCommands,
   ...devReportCommands,
+  ...securityStateCommands,
+  ...securityAutolockCommands,
+  ...securityRaiseCommands,
+  ...securityBiometricCommands,
+  ...securityKeysCommands,
 }
 
 /** What still answers in the `error` scenario: enough to unlock and reach the screen. */

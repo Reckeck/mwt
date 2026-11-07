@@ -449,6 +449,11 @@ type AttachmentIdInput = { id: string, };
 type AttachmentKind = "file" | "link";
 
 /**
+ * Sleep and the lock screen always close the vault, so there is no field for them.
+ */
+type AutolockSettings = { enabled: boolean, minutes: number, };
+
+/**
  * An automation as the app shows it: a workflow built from an
  * [`AutomationSpec`]. Not stored as such (the vault keeps the workflow).
  */
@@ -641,6 +646,12 @@ type Binding = "any" | { "asset": AssetRef } | { "pair": { base: AssetRef, quote
  * Binding shape of a sub-account type, as the creation form needs it.
  */
 type BindingShapeName = "asset" | "pair" | "market";
+
+type BiometricEnableInput = { password: string, };
+
+type BiometricState = "unavailable" | "available" | "enabled" | "password_required";
+
+type BiometricUnlockInput = { path: string, };
 
 type Budget = { id: string, active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, 
 /**
@@ -2046,6 +2057,12 @@ type ExchangeCoinRow = { coin: string, exchange: Amount, ledger: Amount,
  * `exchange − ledger`: what imports have not explained yet.
  */
 diff: Amount, };
+
+/**
+ * What this device knows about the exchange key of a store. The key itself never
+ * leaves the device file; `exchange_key_status` keeps the hint and the sub-accounts.
+ */
+type ExchangeKeyState = "missing" | "not_verified" | "read_only" | "level_required";
 
 /**
  * Whether a key is stored. The secret is never part of this response.
@@ -3843,6 +3860,14 @@ month: string, amount: Amount, };
  */
 type PassiveShare = { category: string, amount: Amount, };
 
+type PasswordStrength = "weak" | "medium" | "strong";
+
+type PasswordStrengthReport = { strength: PasswordStrength, 
+/**
+ * The password has the minimum length the crypto level requires.
+ */
+long_enough: boolean, };
+
 type PayUtilityBillInput = { property_id: string, 
 /**
  * `YYYY-MM`.
@@ -4441,6 +4466,17 @@ type QueuedActions = { id: string, workflow_id: string, run_id: string, created_
 summary: string, transactions: Array<Transaction>, };
 
 /**
+ * Payload of the `security-raise-progress` event.
+ */
+type RaiseProgress = { stage: RaiseStage, };
+
+type RaiseStage = "backup" | "reencrypt" | "verify";
+
+type RaiseToCryptoInput = { current_password: string, new_password: string, backup_path: string, };
+
+type RaiseToCryptoReport = { level: SecurityLevel, backup_path: string, };
+
+/**
  * A rate in force from a day on.
  */
 type RatePeriod = { 
@@ -4905,6 +4941,14 @@ label: string,
  * What a nameless entity is about: a budget's category or wallet.
  */
 subject: EntityRef | null, archived: boolean, };
+
+/**
+ * How the vault is protected. Never stored: it follows from the container,
+ * no encryption is `Ledger`, the old `kdf_id` is `Pin`, the new one `Crypto`.
+ */
+type SecurityLevel = "ledger" | "pin" | "crypto";
+
+type SecurityState = { level: SecurityLevel, min_allowed_level: SecurityLevel, has_device_keys: boolean, autolock: AutolockSettings, biometric: BiometricState, pin_retry_after_secs: number | null, };
 
 /**
  * Input to select or pick a vault file.
@@ -7144,6 +7188,8 @@ anomaly: boolean,
  * the fixed amount, or the rent.
  */
 monthly: Amount, };
+
+type ValidatePasswordStrengthInput = { password: string, };
 
 /**
  * A graph and what is wrong with it.

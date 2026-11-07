@@ -43,6 +43,7 @@ The frontend parses the code and shows a localized message.
 | `vault-save-failed` | `string` or `{ reason, exiting }` | the batched vault write failed (it retries by itself); `exiting` — on exit, the window offers "Retry" / "Quit without saving" |
 | `vault-saved` | — | a write succeeded again after an error |
 | `update-state` | `UpdateStatusDto` | the update check changed phase: checking, downloading (`percent`), ready, available (hand-updated installs), up to date, error |
+| `security-raise-progress` | `RaiseProgress { stage: RaiseStage }` | the move to the crypto level reached a stage: `backup`, `reencrypt`, `verify` (`raise_to_crypto_level`; nothing sends it yet) |
 
 Background tasks live in `crates/app/src/scheduler.rs`: one thread, a tick every 30 s,
 only while the vault is unlocked — Bybit import, automations, alerts (prices of their
@@ -538,6 +539,22 @@ The graph is stored in the vault as JSON (`WorkflowGraph { version, nodes, edges
 | `dev_apply_vault_json` | `json`, `base?` | `String` — the canonical re-serialization of the written document. With `base` (the JSON the editor loaded or saved last) only what differs from it is written, so a record another device sent meanwhile stays (`apply_document_edit`); without it the document is replaced as a whole. A refusal (before writing, `.bak` is not touched) on invalid JSON (`json` or `base`), an unknown schema or a wrong payload version |
 | `dev_open_vault_json_in_editor` | — | `String` — the scratch file path. Writes the document and launches `$EDITOR` detached, without waiting |
 | `dev_reload_vault_json_from_editor` | — | `String` — the scratch file contents. A path is not accepted: the frontend can read only this file |
+
+### security (`crates/app/src/commands/security/`, DTOs in `crates/core/src/ipc_contract/security.rs`)
+
+Not implemented yet: every command answers `UNSUPPORTED`, in the browser mock too.
+
+| Command | Input | Output |
+|---|---|---|
+| `security_state` | — | `SecurityState { level, min_allowed_level, has_device_keys, autolock, biometric, pin_retry_after_secs? }`; the level is not stored, it comes from the vault container |
+| `set_autolock` | `AutolockSettings { enabled, minutes }` | `AutolockSettings`; sleep and the lock screen always close the vault, there is no field for that |
+| `autolock_activity` | — | `()` — the user is active, the idle timer starts over |
+| `raise_to_crypto_level` | `RaiseToCryptoInput { current_password, new_password, backup_path }` | `RaiseToCryptoReport { level, backup_path }`; progress goes to the `security-raise-progress` event |
+| `validate_password_strength` | `ValidatePasswordStrengthInput { password }` | `PasswordStrengthReport { strength: weak \| medium \| strong, long_enough }` |
+| `biometric_enable` | `BiometricEnableInput { password }` | `BiometricState` (`unavailable`, `available`, `enabled`, `password_required`) |
+| `biometric_disable` | — | `BiometricState` |
+| `biometric_unlock` | `BiometricUnlockInput { path }` | `VaultInfo` |
+| `read_exchange_key_state` | `ExchangeKeyStatusInput { store_id }` | `ExchangeKeyState` (`missing`, `not_verified`, `read_only`, `level_required`) |
 
 ### exchange (read-only)
 | `inspect_tx` | `InspectTxInput { tx_hash, network? }` | `InspectTxResult { fetched, info?, hints[], notice? }` |
