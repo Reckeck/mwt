@@ -270,8 +270,17 @@ pub fn take_in(
             let target = get(app, &path).map_or_else(String::new, |link| shown(&link.location()));
             return Err(Error::SyncConflict(target));
         }
-        pull(app, &path, &remote)?;
-        return Ok(TakeIn::Reopen);
+        match pull(app, &path, &remote) {
+            Ok(()) => return Ok(TakeIn::Reopen),
+            // A copy protected more cheaply than this vault does not replace
+            // it: this vault opens as it is, the copy waits for the user.
+            Err(err @ Error::SecurityDowngradeRefused) => {
+                mark_remote_changed(app, &path);
+                mark_failed(app, &path, &err.to_string());
+                return Ok(TakeIn::Done);
+            }
+            Err(err) => return Err(err),
+        }
     }
     // The copy's bytes are now part of this vault: the next push compares
     // against them.
@@ -338,15 +347,40 @@ pub fn push_replacing(app: &AppHandle, vault: &Path, link: &VaultLink, bytes: &[
 /// `<vault>.bak`.
 fn pull(app: &AppHandle, vault: &Path, remote: &[u8]) -> Result<()> {
     validate_vault_bytes(remote)?;
+    refuse_cheaper(&std::fs::read(vault)?, remote)?;
     VaultFile::backup(vault)?;
     trade_core::crypto::atomic_write(vault, remote)?;
     mark_synced(app, vault, remote);
     Ok(())
 }
 
+/// A pull never lowers the protection: an external copy at a lower level
+/// than the vault here (an old level-2 copy of a level-3 vault) is refused.
+fn refuse_cheaper(local: &[u8], remote: &[u8]) -> Result<()> {
+    if trade_core::service::security_level::container_is_cheaper(local, remote) {
+        return Err(Error::SecurityDowngradeRefused);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_copy_at_a_lower_level_is_not_pulled() {
+        let dir = tempfile::tempdir().unwrap();
+        let plain = UnlockedVault::create_with(dir.path().join("plain.wallet"), None).unwrap();
+        let pin = UnlockedVault::create(dir.path().join("pin.wallet"), "482913").unwrap();
+        let plain_bytes = std::fs::read(&plain.path).unwrap();
+        let pin_bytes = std::fs::read(&pin.path).unwrap();
+        assert!(matches!(
+            refuse_cheaper(&pin_bytes, &plain_bytes),
+            Err(Error::SecurityDowngradeRefused)
+        ));
+        assert!(refuse_cheaper(&plain_bytes, &pin_bytes).is_ok());
+        assert!(refuse_cheaper(&pin_bytes, &pin_bytes).is_ok());
+    }
 
     #[test]
     fn the_remote_changed_error_carries_its_code() {

@@ -1,1 +1,7 @@
-{}
+{
+  "errors.PIN_RETRY_LATER": "Too many wrong PINs. Wait a little and try again: after five wrong tries every next one waits longer (30 s, 1 min, 5 min, 15 min). The wait does not protect a copied file; level 3 does.",
+  "errors.PIN_FORMAT": "A new PIN must be at least 6 digits, digits only",
+  "errors.PASSWORD_TOO_WEAK": "For level 3 the password must be at least 16 characters and not weak",
+  "errors.SECURITY_DOWNGRADE_REFUSED": "This would lower the vault's protection. The vault keeps crypto data, so it stays at level 3",
+  "errors.SYNC_SECURITY_LEVEL_REQUIRED": "“{name}” or this device is below level 3: crypto data syncs only between devices at level 3. Go to level 3 on both."
+}

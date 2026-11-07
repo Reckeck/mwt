@@ -25,8 +25,10 @@ use std::sync::Arc;
 use zeroize::Zeroizing;
 
 use super::UnlockedVault;
+use super::security_level;
 use crate::crypto::{self, SealKey, device_secrets};
 use crate::error::{Error, Result};
+use crate::ipc_contract::security::SecurityLevel;
 use crate::storage::{SnapshotFormat, VaultFile, decode_versioned};
 use crate::vault_io::backups;
 use crate::vault_io::copies::{self, CopyKind, CopySeal, VaultCopy};
@@ -137,6 +139,8 @@ impl UnlockedVault {
                 "the new password must not be empty".into(),
             ));
         }
+        // A password at the standard cost is level 2.
+        self.check_not_below_min(SecurityLevel::Pin)?;
         let key = SealKey::fresh(new_password.as_bytes())?;
         self.rotate(key, new_password, None, policy, fault)
     }
@@ -174,6 +178,11 @@ impl UnlockedVault {
                 "the vault has no password to change: set one".into(),
             ));
         }
+        // At level 3 the new password meets the level-3 rule: a short one
+        // would take the vault's protection down while its cost stays.
+        if self.security_level() == SecurityLevel::Crypto {
+            security_level::check_new_secret(SecurityLevel::Crypto, new_password)?;
+        }
         VaultFile::open(&self.path, current_password)?;
         // A new salt at the same cost: `SealKey::fresh` would quietly take a
         // hardened vault down to the standard cost.
@@ -190,8 +199,9 @@ impl UnlockedVault {
     /// could open them any more); other backups stay as they are, encrypted
     /// under the password they were made with.
     ///
-    /// Refused while exchange keys are on this device: their file would end
-    /// up under a key anyone can derive.
+    /// Refused (`SECURITY_DOWNGRADE_REFUSED`) while the vault holds
+    /// crypto-module data: exchange keys on this device would end up under a
+    /// key anyone can derive.
     pub fn remove_password(&mut self, current_password: &str) -> Result<()> {
         if self.sandbox {
             return Err(Error::Unsupported);
@@ -199,13 +209,7 @@ impl UnlockedVault {
         if !self.is_encrypted() {
             return Err(Error::InvalidInput("the vault has no password".into()));
         }
-        if self.has_device_keys()
-            || (self.keys_on_device() && device_secrets::secrets_path(&self.path).exists())
-        {
-            return Err(Error::InvalidInput(
-                "exchange keys are stored on this device: remove them before the password".into(),
-            ));
-        }
+        self.check_not_below_min(SecurityLevel::Ledger)?;
         VaultFile::open(&self.path, current_password)?;
         self.rekey(Arc::new(SealKey::plain()), "")?;
         // The pre-sync copies are sealed under the password just removed: the
@@ -214,7 +218,7 @@ impl UnlockedVault {
         Ok(())
     }
 
-    fn session_key(&self) -> Result<Arc<SealKey>> {
+    pub(super) fn session_key(&self) -> Result<Arc<SealKey>> {
         self.key
             .clone()
             .ok_or_else(|| Error::Crypto("the vault has no key".into()))
@@ -236,7 +240,7 @@ impl UnlockedVault {
     /// The vault file as it is on the disk opens with `key` and holds this
     /// vault: read back, no KDF (the key's salt and cost must be the
     /// header's, so the password that made the key opens it too).
-    fn verify_on_disk(&self, key: &SealKey) -> Result<()> {
+    pub(super) fn verify_on_disk(&self, key: &SealKey) -> Result<()> {
         let bytes = Zeroizing::new(crypto::read_all(&self.path)?);
         let (payload, fmt) = crypto::open_bytes_with(&bytes, key)?;
         let decoded = decode_versioned(&Zeroizing::new(payload), fmt)?;
@@ -308,7 +312,7 @@ impl UnlockedVault {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn rotate_copy(
+    pub(super) fn rotate_copy(
         &self,
         copy: &VaultCopy,
         old_key: &SealKey,
@@ -646,6 +650,9 @@ mod tests {
             .id
     }
 
+    /// A level-3 password the strength rule takes.
+    const STRONG: &str = "Tr0ub4dor&3-Horse-Battery!";
+
     /// A level-3 vault (password "pw") with an exchange key on this device.
     fn level3_with_key() -> (tempfile::TempDir, UnlockedVault, String) {
         let (dir, mut vault) = empty_vault();
@@ -817,7 +824,7 @@ mod tests {
     fn a_hardened_vault_keeps_its_cost_and_its_device_keys() {
         let (dir, mut vault, store) = level3_with_key();
         let before = vault.session_key().unwrap();
-        vault.change_password("pw", "new").unwrap();
+        vault.change_password("pw", STRONG).unwrap();
         let after = vault.session_key().unwrap();
         assert_eq!(after.kdf(), before.kdf());
         assert_ne!(after.salt(), before.salt());
@@ -831,7 +838,7 @@ mod tests {
             UnlockedVault::open(path.clone(), "pw"),
             Err(Error::Secret)
         ));
-        let reopened = UnlockedVault::open(path, "new").unwrap();
+        let reopened = UnlockedVault::open(path, STRONG).unwrap();
         assert_eq!(reopened.security_level(), SecurityLevel::Crypto);
         let key = reopened.device_key(&store).unwrap().expect("the key stays");
         assert_eq!(key.keys.api_key, "KEYKEYKEY123");
@@ -843,7 +850,7 @@ mod tests {
         let before = std::fs::read(&vault.path).unwrap();
         assert!(matches!(
             vault.remove_password("pw"),
-            Err(Error::InvalidInput(_))
+            Err(Error::SecurityDowngradeRefused)
         ));
         assert!(vault.is_encrypted());
         assert_eq!(std::fs::read(&vault.path).unwrap(), before);

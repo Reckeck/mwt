@@ -43,7 +43,7 @@ The frontend parses the code and shows a localized message.
 | `vault-save-failed` | `string` or `{ reason, exiting }` | the batched vault write failed (it retries by itself); `exiting` — on exit, the window offers "Retry" / "Quit without saving" |
 | `vault-saved` | — | a write succeeded again after an error |
 | `update-state` | `UpdateStatusDto` | the update check changed phase: checking, downloading (`percent`), ready, available (hand-updated installs), up to date, error |
-| `security-raise-progress` | `RaiseProgress { stage: RaiseStage }` | the move to the crypto level reached a stage: `backup`, `reencrypt`, `verify` (`raise_to_crypto_level`; nothing sends it yet) |
+| `security-raise-progress` | `RaiseProgress { stage: RaiseStage }` | the move to the crypto level reached a stage: `backup`, `reencrypt`, `verify` (`raise_to_crypto_level`) |
 
 Background tasks live in `crates/app/src/scheduler.rs`: one thread, a tick every 30 s,
 only while the vault is unlocked — Bybit import, automations, alerts (prices of their
@@ -56,14 +56,14 @@ assets no more than once in 5 minutes), reminders. System notifications are
 | Command | Input | Output |
 |---|---|---|
 | `vault_status` | — | `VaultStatus { exists, unlocked, path, info, storage, encrypted, sandbox }`; `sandbox` — a sandbox vault is open (see "sandbox"), `serde(default)`; `encrypted` — the vault at `path` has a password (read from the file header; `false` — a sign-in screen without a password field and without "Lock"; an unreadable file is considered encrypted); `storage`: `files` (desktop) or `app` (Android/iOS, the vault in app storage) |
-| `create_vault` | `CreateVaultInput { path, password?, cash_name?, crypto? }` | `VaultInfo { …, encrypted }` — `password` unset/`null` = a vault without a password (the file is not encrypted), an empty string is `INVALID_INPUT`; the vault is created at once with a single "Cash" wallet (`cash_name` is its name in the user's language). `crypto` — the "cryptocurrencies" direction (`Settings.crypto`), without the field — `true`. A `path` without separators is a name: the file goes into the app directory; a URI is `INVALID_INPUT` |
-| `unlock_vault` | `UnlockInput { path, password }` | `VaultInfo`; `content://` in `path` is first copied into the app directory; for a linked vault the copy is reconciled first — `SYNC_CONFLICT` if both sides changed |
+| `create_vault` | `CreateVaultInput { path, password?, cash_name?, crypto? }` | `VaultInfo { …, encrypted }` — `password` unset/`null` = a vault without a password (the file is not encrypted), an empty string is `INVALID_INPUT`, a password that is not 6+ digits `PIN_FORMAT`; the vault is created at once with a single "Cash" wallet (`cash_name` is its name in the user's language). `crypto` — the "cryptocurrencies" direction (`Settings.crypto`), without the field — `true`. A `path` without separators is a name: the file goes into the app directory; a URI is `INVALID_INPUT` |
+| `unlock_vault` | `UnlockInput { path, password }` | `VaultInfo`; `content://` in `path` is first copied into the app directory; for a linked vault the copy is reconciled first — `SYNC_CONFLICT` if both sides changed. A level-2 file: after 5 wrong PINs `PIN_RETRY_LATER` until the wait is over (30 s, 1 min, 5 min, 15 min; kept in the app settings per path, reset by a correct PIN); a KDF heavier than the device can give is `VAULT_TOO_HEAVY` |
 | `lock_vault_cmd` | — | `()` |
 | `flush_vault` | — | `()` — write pending changes now (the window went to the background, "Retry" after an error) |
 | `exit_without_saving` | — | — quit although the latest changes could not be written |
-| `change_password` | `ChangePasswordInput { current_password, new_password }` | `()`; the current password is verified by decrypting the file (`SECRET` on failure), `.bak` is not written; for a vault without a password — `INVALID_INPUT` (there is `set_vault_password`) |
-| `set_vault_password` | `SetVaultPasswordInput { new_password, delete_plain_copies }` | `SetVaultPasswordResult { removed_copies }`; only on a vault without a password (otherwise `INVALID_INPUT`), the file is rewritten encrypted at once and atomically, a linked external copy receives the encrypted bytes in the same write. `delete_plain_copies` — after the write the unencrypted `.bak` files of this vault are deleted (only in the vault folder, through `backups::resolve`; encrypted copies, foreign and non-vault files remain) |
-| `remove_vault_password` | `RemoveVaultPasswordInput { current_password, external_copy_too }` | `()`; only on a vault with a password; the current password is verified by decrypting the file (`SECRET`, the file does not change); for a vault with an external copy without `external_copy_too` — `INVALID_INPUT` (the copy will also lose its password, consent is needed); old encrypted copies keep the old password |
+| `change_password` | `ChangePasswordInput { current_password, new_password }` | `()`; the current password is verified by decrypting the file (`SECRET` on failure), `.bak` is not written; for a vault without a password — `INVALID_INPUT` (there is `set_vault_password`). The new password follows the vault's level: 6+ digits at level 2 (`PIN_FORMAT`), 16+ characters and not weak at level 3 (`PASSWORD_TOO_WEAK`); the KDF cost is kept |
+| `set_vault_password` | `SetVaultPasswordInput { new_password, delete_plain_copies }` | `SetVaultPasswordResult { removed_copies }`; only on a vault without a password (otherwise `INVALID_INPUT`), the new PIN is 6+ digits (`PIN_FORMAT`), the file is rewritten encrypted at once and atomically, a linked external copy receives the encrypted bytes in the same write. `delete_plain_copies` — after the write the unencrypted `.bak` files of this vault are deleted (only in the vault folder, through `backups::resolve`; encrypted copies, foreign and non-vault files remain) |
+| `remove_vault_password` | `RemoveVaultPasswordInput { current_password, external_copy_too }` | `()`; only on a vault with a password; the current password is verified by decrypting the file (`SECRET`, the file does not change); for a vault with an external copy without `external_copy_too` — `INVALID_INPUT` (the copy will also lose its password, consent is needed); old encrypted copies keep the old password; a vault with crypto data (level 3 only) — `SECURITY_DOWNGRADE_REFUSED` |
 
 ### sandbox (`crates/app/src/commands/sandbox.rs`, core — `crates/core/src/sandbox`)
 The sandbox is a separate temporary vault with 12 months of demo data; everything done in it is erased. It lives in `app_cache_dir()/sandbox/sandbox.wallet` (the release and the dev build each have their own folder), **without a password** (the open variant of the container: demo data is no secret, and a key in memory would cost Argon2 on every open and reset). The seed is deterministic: a fixed seed and ids, the "today" date (UTC) comes as a parameter.
@@ -542,16 +542,22 @@ The graph is stored in the vault as JSON (`WorkflowGraph { version, nodes, edges
 
 ### security (`crates/app/src/commands/security/`, DTOs in `crates/core/src/ipc_contract/security.rs`)
 
-Not implemented yet: every command answers `UNSUPPORTED`, in the browser mock too.
+`security_state`, `raise_to_crypto_level` and `validate_password_strength` are implemented
+(H5A; the browser mock answers them too); biometric is H5C. Levels and their rules: `docs/security.md`,
+"Security levels". Error codes: `PIN_FORMAT` (a new level-2 PIN is not 6+ digits), `PASSWORD_TOO_WEAK`
+(a level-3 password is shorter than 16 or weak), `PIN_RETRY_LATER` (too many wrong PINs, the message
+carries the wait in seconds; `unlock_vault`), `SECURITY_DOWNGRADE_REFUSED` (the change would leave a vault
+with crypto data below level 3, or the external copy is protected more cheaply), `SECURITY_LEVEL_REQUIRED`
+(a sync batch with crypto data below level 3; the sync error event names the device).
 
 | Command | Input | Output |
 |---|---|---|
-| `security_state` | — | `SecurityState { level, min_allowed_level, has_device_keys, autolock, biometric, pin_retry_after_secs? }`; the level is not stored, it comes from the vault container |
+| `security_state` | — | `SecurityState { level, min_allowed_level, has_device_keys, autolock, biometric, pin_retry_after_secs? }`; the level is not stored, it comes from the vault container (a locked vault: the selected file's header, `min_allowed_level` = `level`); `pin_retry_after_secs` only at level 2 while a wait is due; `biometric` is `unavailable` until H5C |
 | `set_autolock` | `AutolockSettings { enabled, minutes }` | `AutolockSettings`; sleep and the lock screen always close the vault, there is no field for that |
 | `autolock_activity` | — | `()` — the user is active, the idle timer starts over |
 | `autolock_hold_for_picker` | — | `()` — a webview file input or camera is about to open: for at most 5 minutes (or until the app is back in the foreground) the Android background lock does not count the app as left |
-| `raise_to_crypto_level` | `RaiseToCryptoInput { current_password, new_password, backup_path }` | `RaiseToCryptoReport { level, backup_path }`; progress goes to the `security-raise-progress` event |
-| `validate_password_strength` | `ValidatePasswordStrengthInput { password }` | `PasswordStrengthReport { strength: weak \| medium \| strong, long_enough }` |
+| `raise_to_crypto_level` | `RaiseToCryptoInput { current_password, new_password, backup_path }` | `RaiseToCryptoReport { level, backup_path }`; progress goes to the `security-raise-progress` event. `backup_path` must be empty (the backup is made next to the vault and re-sealed under the new key at the end); a wrong PIN is `SECRET` (a vault without a password goes straight to level 3, `current_password` is ignored and its plain copies are re-sealed or deleted), a weak password `PASSWORD_TOO_WEAK`, a vault already at level 3 `INVALID_INPUT`, the sandbox `SANDBOX` |
+| `validate_password_strength` | `ValidatePasswordStrengthInput { password }` | `PasswordStrengthReport { strength: weak \| medium \| strong, long_enough }`; the password is only graded, never kept |
 | `biometric_enable` | `BiometricEnableInput { password }` | `BiometricState` (`unavailable`, `available`, `enabled`, `password_required`) |
 | `biometric_disable` | — | `BiometricState` |
 | `biometric_unlock` | `BiometricUnlockInput { path }` | `VaultInfo` |

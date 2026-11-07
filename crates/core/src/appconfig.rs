@@ -153,6 +153,11 @@ pub struct AppSettings {
     #[serde(default)]
     #[ts(optional)]
     pub autolock: Option<AutolockSettings>,
+    /// Wrong PINs in a row per level-2 vault file (the path), for the delay
+    /// before the next try. Kept here so a restart does not reset it.
+    #[serde(default)]
+    #[ts(skip)]
+    pub pin_failures: BTreeMap<String, PinFailures>,
 }
 
 /// Autolock range and default, minutes of idle time.
@@ -186,6 +191,43 @@ pub fn validate_autolock(
         ));
     }
     Ok(input.clone())
+}
+
+/// Wrong PINs typed in a row for one vault, and when the last one was.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PinFailures {
+    pub count: u32,
+    /// Unix seconds of the last wrong PIN.
+    pub last_failed_at_secs: u64,
+}
+
+/// Wrong PINs that cost nothing; the delays after them grow.
+pub const PIN_FREE_ATTEMPTS: u32 = 5;
+
+/// The wait after `count` wrong PINs in a row: the first five tries are free,
+/// then 30 s, 1 min, 5 min, and 15 min from then on. It slows a person at the
+/// unlock screen; it does not stop anyone holding a copy of the file.
+pub fn pin_retry_delay_secs(count: u32) -> u64 {
+    if count < PIN_FREE_ATTEMPTS {
+        return 0;
+    }
+    match count - PIN_FREE_ATTEMPTS {
+        0 => 30,
+        1 => 60,
+        2 => 300,
+        _ => 900,
+    }
+}
+
+/// Seconds left before the next PIN may be tried at `now_secs`; 0 = now. A
+/// clock moved back never makes the wait longer than the delay itself.
+pub fn pin_retry_after_secs(failures: Option<&PinFailures>, now_secs: u64) -> u64 {
+    let Some(failures) = failures else {
+        return 0;
+    };
+    let delay = pin_retry_delay_secs(failures.count);
+    let since = now_secs.saturating_sub(failures.last_failed_at_secs);
+    delay.saturating_sub(since).min(delay)
 }
 
 /// The device a just-received vault copy came from, to be trusted at its first
@@ -278,11 +320,29 @@ impl Default for AppSettings {
             declined_tours: Vec::new(),
             pending_trusts: Vec::new(),
             autolock: None,
+            pin_failures: BTreeMap::new(),
         }
     }
 }
 
 impl AppSettings {
+    /// Seconds before the next PIN for the vault at `path` may be tried.
+    pub fn pin_retry_after(&self, path: &str, now_secs: u64) -> u64 {
+        pin_retry_after_secs(self.pin_failures.get(path), now_secs)
+    }
+
+    /// Count a wrong PIN for the vault at `path`.
+    pub fn record_pin_failure(&mut self, path: &str, now_secs: u64) {
+        let entry = self.pin_failures.entry(path.to_string()).or_default();
+        entry.count = entry.count.saturating_add(1);
+        entry.last_failed_at_secs = now_secs;
+    }
+
+    /// Forget the wrong PINs for `path` after it opened; `true` if any were kept.
+    pub fn reset_pin_failures(&mut self, path: &str) -> bool {
+        self.pin_failures.remove(path).is_some()
+    }
+
     /// The autolock in force: the stored one, else the defaults.
     pub fn autolock(&self) -> AutolockSettings {
         self.autolock.clone().unwrap_or_else(default_autolock)
@@ -812,6 +872,36 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn five_wrong_pins_are_free_then_the_wait_grows() {
+        let delays: Vec<u64> = (0..=10).map(pin_retry_delay_secs).collect();
+        assert_eq!(delays, [0, 0, 0, 0, 0, 30, 60, 300, 900, 900, 900]);
+    }
+
+    #[test]
+    fn the_pin_delay_survives_a_restart_and_resets_on_success() {
+        let dir = temp_dir("pin-delay");
+        let mut settings = AppSettings::default();
+        for _ in 0..5 {
+            settings.record_pin_failure("/v.wallet", 1_000);
+        }
+        assert_eq!(settings.pin_retry_after("/v.wallet", 1_000), 30);
+        assert_eq!(settings.pin_retry_after("/v.wallet", 1_020), 10);
+        assert_eq!(settings.pin_retry_after("/v.wallet", 1_030), 0);
+        assert_eq!(settings.pin_retry_after("/other.wallet", 1_000), 0);
+        // A clock moved back does not make the wait longer than the delay.
+        assert_eq!(settings.pin_retry_after("/v.wallet", 10), 30);
+        save_settings(&dir, &settings).unwrap();
+        let mut loaded = load_settings(&dir);
+        assert_eq!(loaded.pin_retry_after("/v.wallet", 1_000), 30);
+        loaded.record_pin_failure("/v.wallet", 1_100);
+        assert_eq!(loaded.pin_retry_after("/v.wallet", 1_100), 60);
+        assert!(loaded.reset_pin_failures("/v.wallet"));
+        assert_eq!(loaded.pin_retry_after("/v.wallet", 1_100), 0);
+        assert!(!loaded.reset_pin_failures("/v.wallet"));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
     fn temp_dir(tag: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("tradeapp-appconfig-{tag}-{}", uuid::Uuid::new_v4()));
@@ -990,6 +1080,13 @@ mod tests {
                 enabled: false,
                 minutes: 30,
             }),
+            pin_failures: BTreeMap::from([(
+                "/v.wallet".to_string(),
+                PinFailures {
+                    count: 6,
+                    last_failed_at_secs: 1_700_000_000,
+                },
+            )]),
         };
         save_settings(&dir, &settings).expect("save");
         assert_eq!(load_settings(&dir), settings);

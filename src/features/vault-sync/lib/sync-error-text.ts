@@ -9,6 +9,8 @@ const CUT_CODES = new Set(['SYNC_PAUSED_BY_PEER', 'SYNC_FORGOTTEN_BY_PEER'])
  */
 export function syncErrorDescription(event: SyncErrorEvent, t: Translate): string | undefined {
   if (CUT_CODES.has(event.code)) return t(`errors.${event.code}`, { name: event.peer_name ?? '' })
+  if (event.code === 'SECURITY_LEVEL_REQUIRED')
+    return t('errors.SYNC_SECURITY_LEVEL_REQUIRED', { name: event.peer_name ?? '' })
   if (event.code === 'SYNC_VERSION_MISMATCH' && event.peer_name) {
     const own = event.own_version ?? ''
     return event.peer_version

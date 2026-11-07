@@ -12,6 +12,7 @@ const VAULT_ERROR_KEYS: Record<string, string> = {
   INCOMPATIBLE_VAULT: 'vault.incompatible',
   VAULT_BUSY: 'auth.vaultBusy',
   VAULT_TOO_HEAVY: 'auth.vaultTooHeavy',
+  PIN_RETRY_LATER: 'errors.PIN_RETRY_LATER',
   SYNC_CONFLICT: 'vaultLink.conflictTitle',
 }
 

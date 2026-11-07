@@ -107,6 +107,52 @@ header = u32 version | u8 kdf_id | u32 mem_kib | u32 iters | u8 par
 5. Tests cover: wrong password, tampered file, missing magic,
    salt/nonce randomness (in fact — that they are random).
 
+## Security levels
+
+The level is not stored: it is the vault container's `kdf_id` (0 = level 2,
+PIN; 1 = level 1, plain; 2 = level 3, crypto). Code:
+`crates/core/src/service/security_level.rs`, the rule is mirrored in
+`src/shared/lib/vault-password.ts`.
+
+- **A new secret.** Level 2: a PIN of at least 6 digits, digits only
+  (`PIN_FORMAT`). Level 3: at least 16 characters and not weak by an own
+  heuristic without a dictionary (few distinct characters or mostly runs like
+  `aaaa`, `1234` is weak; `PASSWORD_TOO_WEAK`). An older shorter password still
+  opens its vault and is accepted where the current one is typed.
+- **The raise to level 3** (`raise_to_crypto_level`) checks the current PIN
+  first (a wrong one is `SECRET`, nothing changes); a level-1 vault has none, goes
+  straight to level 3 and its current password is ignored. Its steps leave, if the process dies after any of
+  them, a vault that opens at exactly one level with all its data: a backup of
+  the file as it is (level 2, or a plain copy at level 1); a re-encryption at the hardened cost into a temp file that
+  is read back, opened and compared before the rename over the vault (before
+  it the vault is at its old level, after it level 3); the session takes the new key and
+  the device secrets follow it; the document is written again (the external
+  copy gets the same bytes) and read back from the disk; only then the copies
+  cheaper than level 3 next to the vault (the backup, `.bak`, `.vN.bak`, the
+  pre-sync ones) are re-sealed under the new key or, if they cannot be,
+  deleted. A plain copy never stays next to a level-3 vault after a raise. After an
+  interruption the backup stays and opens with the old PIN (or is the plain copy).
+  The KDF cost is calibrated on this device, or on the phone profile when the
+  vault has an external copy (it may be opened on a phone). Progress goes to
+  the `security-raise-progress` event.
+- **No downgrade.** A vault that holds crypto data (stage 1: exchange keys on
+  this device or their file next to the vault) does not go below level 3:
+  removing or weakening its password is `SECURITY_DOWNGRADE_REFUSED`, and the
+  external copy is not pulled in when its bytes are protected more cheaply
+  than the local vault (the link is marked failed instead). A password change
+  keeps the vault's KDF cost.
+- **Sync.** A batch with crypto data is refused below level 3 with
+  `SECURITY_LEVEL_REQUIRED`; the refusing device tells the other one, which
+  shows the same code with the device's name. Ordinary records sync at any
+  level.
+- **PIN delay.** On a level-2 vault five wrong PINs are free, then each next
+  try waits 30 s, 1 min, 5 min, then 15 min (`PIN_RETRY_LATER`). The counter is
+  kept per vault path in the app settings, so it survives a restart, and is
+  reset by a correct PIN. It only slows guessing through the app: a copied
+  file is guessed offline at the KDF's cost, which is what level 3 is for.
+- **Heavy vault.** A vault whose KDF needs more memory than the device can give
+  is refused at unlock with `VAULT_TOO_HEAVY` instead of crashing.
+
 ## Window Content Security Policy
 
 The app window runs under a strict CSP (`app.security.csp` in
@@ -133,14 +179,14 @@ inline script is blocked.
 
 ## Recommendations for the user
 
-- A password of 12+ characters, unique, not from a dictionary. Everything else is already covered
-  by the KDF parameters.
+- Level 3 with a password of 16+ characters, unique, not from a dictionary, for a vault
+  with crypto data. Everything else is already covered by the KDF parameters.
 - Back up the vault file (it is just a file, safe to copy).
 
 ## Known limitations / hardening roadmap
 
-- There is no in-app rate limiter for unlock attempts (guessing against a local
-  process is the OS's job; an exponential delay could be added to the unlock command if desired).
+- The PIN delay (see "Security levels") limits guessing through the app only; it
+  does not protect a copied file.
 - The decrypted vault key sits in the memory of the `multi-wallet-tracker` process; YubiKey/TPM
   key isolation is out of scope for v1.
 - `categories` and prices are not encrypted separately (the whole document body is encrypted as one,

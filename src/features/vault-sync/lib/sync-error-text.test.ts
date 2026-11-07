@@ -36,6 +36,12 @@ describe('syncErrorDescription', () => {
     )
   })
 
+  it('says that crypto data waits for level 3', () => {
+    expect(syncErrorDescription(event({ code: 'SECURITY_LEVEL_REQUIRED' }), t)).toBe(
+      'errors.SYNC_SECURITY_LEVEL_REQUIRED|{"name":"Phone"}',
+    )
+  })
+
   it('leaves other codes to the default text', () => {
     expect(syncErrorDescription(event({ code: 'SYNC_CHANNEL' }), t)).toBeUndefined()
   })
