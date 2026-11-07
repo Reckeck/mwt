@@ -82,8 +82,26 @@ The primitives are defined in `crypto/mod.rs` and **must not be changed**
 without changing `VAULT_CONTAINER_VERSION` (which would break every existing
 vault):
 
-- KDF: `Argon2id`, v0x13, 64 MiB, 3 iterations, parallelism 1
-  (`KDF_MEM_KIB`, `KDF_ITERS`, `KDF_PAR`).
+- KDF: `Argon2id`, v0x13. The **cost** is not a primitive: it is stored in
+  the header and a file opens with its own (`header.kdf()`, `SealKey`
+  carries it into every save), so a new cost needs **no container bump**.
+  `kdf_id` 0 is the standard cost (64 MiB, 3 iterations, parallelism 1:
+  `KDF_MEM_KIB`, `KDF_ITERS`, `KDF_PAR`), 1 is no password, 2 is the crypto
+  level, hardened per device (`crypto/kdf_profile.rs`: `KdfProfile`,
+  `calibrate`). Old builds answer `Unsupported` to id 2.
+- KDF bounds: `KdfParams::check` (64 MiB…1 GiB, 1…4 iterations, 1…4 lanes)
+  runs before any allocation; outside them is `Error::Secret`. Do not widen
+  them past what a profile writes: a changed header could hang or kill the
+  unlock.
+- Memory ceiling: `kdf_profile::kdf_memory_ceiling_kib`, read at derive
+  time: 3/4 of `MemAvailable` from `/proc/meminfo` (1 GiB where there is no
+  such file), lowered by the `set_kdf_memory_ceiling_kib` override. A cost
+  above it is `Error::VaultTooHeavy` (`VAULT_TOO_HEAVY`), never `Secret`: the
+  file is fine, the device is too small. `try_reserve` alone is no guard
+  under overcommit. Calibration never tries a rung above the ceiling.
+- Only a `SealKey` writes a vault outside tests: `VaultFile::create`/`save`
+  and `crypto::random_header` seal at the standard cost and are
+  `#[cfg(test)]`, so nothing can quietly lower a hardened vault.
 - Cipher: `XChaCha20-Poly1305`, 24-byte nonce, 16-byte tag.
 - Key: 32 bytes, `key.zeroize()` after the cipher is created: **do not
   remove it**.
@@ -113,7 +131,10 @@ Invariants:
   Details: `docs/storage-platforms.md`, "Batched writes".
 - Writes go only through `atomic_write`: temp file + `fsync` + `rename`. A
   direct `fs::write` to the vault path is not allowed: a crash midway leaves a
-  file that never opens again.
+  file that never opens again. The one other writer is
+  `VaultFile::reencrypt_verified` (raising the cost): its own
+  `create_new` temp file, read back and verified through the same handle,
+  renamed only while the name is still that file.
 
 `switch_format` (`service.rs`) exists to force a JSON↔MessagePack switch (a
 request for bincode writes MessagePack). This is also a migration, so it needs
@@ -159,11 +180,20 @@ These cases must return `Error::Secret` and **not panic**:
 
 1. a valid file + a wrong password;
 2. a file with a changed ciphertext byte (tamper);
-3. a file with a changed header byte;
-4. a truncated file;
+3. a file with a changed header byte (including a KDF cost outside the
+   bounds, or a kdf id changed to another known one).
+
+These must return `Error::Unsupported` ("not a vault this build can read",
+not a wrong password) and **not panic**:
+
+4. a file truncated inside the header or the tag (cut later, inside the
+   ciphertext, it is `Secret` like any tamper);
 5. an empty file;
 6. a file with a foreign magic;
-7. a file with a `VAULT_CONTAINER_VERSION` from the future.
+7. a file with a `VAULT_CONTAINER_VERSION` or a kdf id from the future.
+
+And a cost inside the bounds but above the memory ceiling is
+`Error::VaultTooHeavy`, before anything is allocated.
 
 Plus: vault creation, reopening, a round trip of all fields in all formats,
 saving and reloading, migration from all previous versions.
