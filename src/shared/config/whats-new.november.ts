@@ -3,6 +3,16 @@ import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_NOVEMBER: WhatsNewEntry[] = [
   {
+    id: 'vaultProtection',
+    date: '2026-11-08',
+    points: [
+      { key: 'levels', route: 'settings:vault' },
+      { key: 'autolock', route: 'settings:vault' },
+      { key: 'deviceKeys', route: 'settings:vault' },
+      { key: 'quickUnlock', route: 'settings:vault' },
+    ],
+  },
+  {
     id: 'syncStageE',
     date: '2026-11-05',
     points: [{ key: 'platform', route: 'settings:sync:sync-devices' }],

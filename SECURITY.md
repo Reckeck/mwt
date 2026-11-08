@@ -27,7 +27,28 @@ MWT keeps its data in one local, encrypted vault file. The threat model is in
 - Remote access: the local-network sync channel ([docs/sync.md](docs/sync.md)) pairing, trust or
   authentication, or a request the app sends that exposes balances or credentials.
 - Importing a crafted file (vault, CSV, exported data) that runs code or corrupts the vault.
-- Exchange API keys stored in the vault being exposed or used beyond read-only requests.
+- Exchange API keys being exposed (they live only in the device secrets file, never in the vault
+  document, sync, backups or the JSON view) or used beyond read-only requests.
+- The `dev_*` commands or a decrypted document on disk in a release build (they exist only in
+  development builds).
+
+## What the protection does
+
+- Protection levels: no password, a PIN, and a long password (level 3) with a memory-hard key
+  derivation whose cost is read from the vault file header. Exchange API keys and crypto data
+  require level 3 and never go below it.
+- Autolock on idle, sleep and screen lock; it cannot be turned off while the device holds API keys.
+- Exchange API keys stay on the device they were entered on, in a separate encrypted file.
+- Changing the password re-encrypts the vault and its backup copies next to it.
+- Quick unlock (Touch ID on macOS, Windows Hello, the fingerprint on Android) binds the password
+  to the device by the OS.
+- Not yet checked on a real device: sleep and screen-lock autolock on each OS, Touch ID,
+  Windows Hello and the Android fingerprint unlock.
+
+**The honest limit.** If malware runs on a system that is unlocked, or controls your OS account,
+this protection only makes attacks harder: the vault key and the decrypted data are in the
+memory of the running app and can be read by software with your rights. The protection is
+strongest for a stolen or copied file and a locked, powered-off or sleeping device.
 
 Out of scope (known limits, see [docs/security.md](docs/security.md)):
 

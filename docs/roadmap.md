@@ -98,7 +98,8 @@ the `[Unreleased]` section. Here — what changed in essence.
 - `[ ]` Over Bluetooth (BLE) on top of the same protocol
 
 ## Phase 4 — Hardening / polish `[ ]`
-- `[ ]` Auto-lock on inactivity, a pause after N failed unlock attempts
+- `[x]` Auto-lock on inactivity, sleep and screen lock (sleep and screen-lock events not yet checked on a real device); PIN retry delay (`docs/security.md`)
+- `[x]` Quick unlock at level 3: Touch ID, Windows Hello, Android fingerprint (not yet checked on a real device)
 - `[ ]` Windows/macOS builds in CI (GitHub Actions + mise steps identical to local ones)
 - `[ ]` E2E smoke: create vault → transaction → chart → lock/unlock
 - `[ ]` Performance: indexes on transactions, lazy charts on big data

@@ -1,11 +1,8 @@
+import { SECURITY_TOUR_STEPS } from './tours.security.ts'
 import { TOGETHER_TOURS } from './tours.together.ts'
+import type { TourStep } from './tours.types.ts'
 
-/** One stop of a tour: the element (by `data-tour`) and the i18n keys of its popover. */
-export interface TourStep {
-  target: string
-  key: string
-  side?: 'top' | 'right' | 'bottom' | 'left'
-}
+export type { TourStep } from './tours.types.ts'
 
 /**
  * Every analytics section: its tabs and filter, its own steps, the facts in
@@ -114,6 +111,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'settings-tabs', key: 'settings.tabs', side: 'bottom' },
     { target: 'settings-updates', key: 'settings.updates', side: 'top' },
     { target: 'vault-security', key: 'settings.security', side: 'top' },
+    ...SECURITY_TOUR_STEPS,
     { target: 'sync-device-list', key: 'settings.deviceList', side: 'top' },
     { target: 'sync-forgotten-devices', key: 'settings.forgottenDevices', side: 'top' },
     { target: 'sync-add-device', key: 'settings.addDevice', side: 'top' },

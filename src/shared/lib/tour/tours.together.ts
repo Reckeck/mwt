@@ -1,4 +1,4 @@
-import type { TourStep } from './tours.ts'
+import type { TourStep } from './tours.types.ts'
 
 /** The tours of the `Together` events: the list, and the screen of one event with its three sections. */
 export const TOGETHER_TOURS: Record<string, TourStep[]> = {
