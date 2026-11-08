@@ -1,5 +1,4 @@
-//! No hardware-bound biometric storage that was verified: Linux and Android (H7B
-//! has its own). Everything is `Unavailable`.
+//! No hardware-bound biometric storage that was verified: Linux. Everything is `Unavailable`.
 
 use zeroize::Zeroizing;
 

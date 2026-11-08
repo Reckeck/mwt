@@ -12,9 +12,11 @@
 //! to the app settings: not in the vault and never synced. The core knows
 //! nothing about any of this.
 
+#[cfg(target_os = "android")]
+mod android;
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(not(any(target_os = "macos", windows)))]
+#[cfg(not(any(target_os = "macos", windows, target_os = "android")))]
 mod unsupported;
 #[cfg(windows)]
 mod windows;
@@ -28,9 +30,11 @@ use serde::{Deserialize, Serialize};
 use trade_core::ipc_contract::security::BiometricState;
 use zeroize::Zeroizing;
 
+#[cfg(target_os = "android")]
+pub use android::Platform;
 #[cfg(target_os = "macos")]
 pub use macos::Platform;
-#[cfg(not(any(target_os = "macos", windows)))]
+#[cfg(not(any(target_os = "macos", windows, target_os = "android")))]
 pub use unsupported::Platform;
 #[cfg(windows)]
 pub use windows::Platform;
@@ -55,7 +59,10 @@ pub enum BioError {
     Invalidated,
     /// The user dismissed the system prompt or it did not recognise them.
     // Only a platform with a real prompt reports it.
-    #[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
+    #[cfg_attr(
+        not(any(target_os = "macos", windows, target_os = "android")),
+        allow(dead_code)
+    )]
     Cancelled,
     Failed,
 }
