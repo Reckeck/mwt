@@ -97,5 +97,5 @@ device only and is not offered to the others.
 
 ## What is dangerous here
 
-The file contains **all** transactions and Bybit keys in plain text. Do not commit
+The file contains **all** transactions in plain text (exchange API keys are not in the document: they live only in the device secrets file). Do not commit
 it, do not push it to a repository, do not show it in a screenshot without preparation.

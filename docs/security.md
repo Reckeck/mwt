@@ -158,8 +158,54 @@ PIN; 1 = level 1, plain; 2 = level 3, crypto). Code:
   Hello (a TPM-backed key signs a fixed challenge, and the signature wraps the
   password). On Windows adding a fingerprint does not reset the binding, and the
   Hello PIN opens it too; resets are a Hello or PIN reset, a password change and the
-  7-day password rule. Where the OS offers no such binding (Linux, Android for
-  now) the feature is `unavailable`.
+  7-day password rule. On Android an AES-GCM key in the Android Keystore (StrongBox
+  when the phone has it) is usable only after a strong (Class 3) biometric check and is
+  dropped when a new fingerprint is enrolled; the password is sealed and opened only
+  through BiometricPrompt with that key. A weaker face unlock shows the feature as
+  `unavailable`. Where the OS offers no such binding (Linux) the feature is
+  `unavailable` and there is no button. **Not yet checked on a real device:** Touch ID,
+  Windows Hello and Android binding, the 7-day rule and the resets above are covered by
+  unit tests and compile checks only (the Android Kotlin part is not compiled on the
+  development machine either).
+
+## Exchange API keys: only on the device
+
+Exchange API keys never enter the vault document. They live in `<vault>.secrets`
+(`crypto/device_secrets.rs`), next to the vault file, sealed with XChaCha20-Poly1305
+under a key derived from the vault key by HKDF with its own `info`. The file is not part
+of the external copy, of sync or of backups, and the keys are not in the JSON view. A key is
+decrypted for the duration of one request and wiped afterwards. Keys are accepted
+only at level 3; at levels 1 and 2 the form leads to the raise wizard and a previously
+stored key is not used. A key that can trade or withdraw is refused (only read-only keys
+are accepted); a network failure during that check is shown as "not verified", not as a
+refusal. A second device has no key until the user creates its own.
+
+On a password change the secrets file is re-sealed under the new key first (`.secrets.next`,
+renamed after the vault is written and read back), so a crash leaves files that one of the
+two passwords opens. Old vault files from before this protection are moved into the
+secrets file on the first unlock at level 3; the field in the document is then empty.
+
+## Autolock
+
+The vault closes after idle time (default 15 minutes, range 5-60), on system sleep and on
+screen lock. Closing drops the open vault and the key from memory and deletes decrypted
+attachments that were opened for other programs. Idle is counted in the backend from window
+activity reported at most every 30 s, not by a timer in the UI. Autolock can be turned off
+only while the device holds no API keys; sleep and screen lock always lock. Sleep and screen
+lock come from OS events on Linux (logind) and Windows; on every desktop a gap between two
+ticks is the fallback for a machine that slept. On Android the existing background lock
+(`sync/lock_policy.rs`, `sync/background.rs`) decides, capped by the autolock time while keys
+are on the device. The decision logic runs in unit tests on fake clocks.
+**Not yet checked on a real device:** sleep and screen-lock events on each OS (Linux,
+Windows, macOS, which has no event watcher of its own and relies on the tick gap), and the
+Android background behaviour.
+
+## Development commands
+
+The `dev_*` commands (`dev_dump_vault`, `dev_apply_vault_json`, `dev_export_vault`, the two
+external-editor ones) are compiled only into development builds
+(`#[cfg(debug_assertions)]`, also on their `generate_handler!` entries). A release build
+has none of them, and no code path in it writes the decrypted document to disk.
 
 ## Window Content Security Policy
 
@@ -189,9 +235,15 @@ inline script is blocked.
 
 - Level 3 with a password of 16+ characters, unique, not from a dictionary, for a vault
   with crypto data. Everything else is already covered by the KDF parameters.
+- Keep autolock on. Use read-only exchange keys, a separate one per device.
 - Back up the vault file (it is just a file, safe to copy).
 
 ## Known limitations / hardening roadmap
+
+- **Malware on an unlocked system.** While the vault is open its key and decrypted data are in
+  process memory, and the OS account can read them. Protection levels, autolock and device-only
+  keys make attacks harder and shorten the exposure; they do not stop software running as the
+  user on an unlocked machine.
 
 - The PIN delay (see "Security levels") limits guessing through the app only; it
   does not protect a copied file.

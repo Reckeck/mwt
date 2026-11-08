@@ -1,1 +1,13 @@
-{}
+{
+  "tour.securityOnboarding.level.title": "Protection level",
+  "tour.securityOnboarding.level.body": "Shows how the vault is protected now and what that protects. There is no \"lower\" button: level 3 starts when you connect an exchange.",
+  "tour.securityOnboarding.raise.title": "Going to level 3",
+  "tour.securityOnboarding.raise.body": "API keys need level 3. The wizard first saves a copy of the file, then strengthens the encryption and asks for a new password of at least 16 characters.",
+  "tour.securityOnboarding.biometric.title": "Quick unlock",
+  "tour.securityOnboarding.biometric.body": "Touch ID, Windows Hello or the fingerprint on Android open the vault without typing the password. The password is still asked every 7 days and after it changes.",
+  "whatsNew.vaultProtection.title": "Vault protection",
+  "whatsNew.vaultProtection.levels": "The vault has protection levels: no password, a PIN, and a long password (level 3). Settings show the current level and lead to the next one, and changing the password re-encrypts the backup copies next to the file too.",
+  "whatsNew.vaultProtection.autolock": "Autolock closes the vault when idle (15 minutes by default) and on sleep or screen lock, and decrypted attachments are deleted. It cannot be turned off while the device holds API keys.",
+  "whatsNew.vaultProtection.deviceKeys": "Exchange API keys live only on this device, in a separate encrypted file: they are not synced, not in backups and not in the JSON. Another device needs its own read-only key.",
+  "whatsNew.vaultProtection.quickUnlock": "At level 3 the vault can be opened with Touch ID on macOS, Windows Hello or the fingerprint on Android. The password is still required every 7 days and after it changes; on macOS and Android also after a new fingerprint is added."
+}
