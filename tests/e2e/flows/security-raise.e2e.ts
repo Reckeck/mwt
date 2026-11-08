@@ -23,11 +23,12 @@ for (const [width, theme] of [
        const biometric = await import(urlOf('shared/api/mock/commands-security-biometric.ts'))
        biometric.mockBiometric.set('unavailable')
        const { queryClient } = await import(urlOf('app/providers/query/index.ts'))
-       // Back to the start of the mock vault (a run before this one raised it) and forget cached answers.
+       // Back to the start of the mock vault (a run before this one raised it) and refetch cached answers.
+       // reset, not clear: the shell outlives this test and its observers must stay attached to the cache.
        keys.mockKeyLevelRequired.value = true
        level.mockSecurityLevel.value = null
        data.mockPassword.value = 'secret'
-       queryClient.clear()
+       await queryClient.resetQueries()
        const tree = await call('get_store_tree')
        return tree.find((node) => node.store.name === 'Bybit').store.id`,
     )
