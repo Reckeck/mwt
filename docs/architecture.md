@@ -48,6 +48,8 @@ nothing to the webview, Rust calls them (`run_mobile_plugin`):
 - `crates/plugin-saf` — picking a document with a persistent permission (`platform_fs`);
 - `crates/plugin-net` — local-network sync: multicast lock, foreground
   service, device key in the Keystore;
+- `crates/plugin-biometric` — quick unlock: a Keystore key released only by `BiometricPrompt`
+  with a `CryptoObject` (`biometric/android.rs`);
 - `crates/plugin-insets` — system bars: status bar, navigation, cutout and keyboard
   insets as the CSS variables `--native-inset-*` and `--native-ime` (WebView reports
   `env(safe-area-inset-*)` as zeros), icon color matching the theme

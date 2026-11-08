@@ -53,7 +53,8 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_saf::init())
         .plugin(tauri_plugin_net::init())
-        .plugin(tauri_plugin_insets::init());
+        .plugin(tauri_plugin_insets::init())
+        .plugin(tauri_plugin_biometric::init());
     // Autostart, global keys and window geometry exist on desktops only.
     #[cfg(desktop)]
     let builder = builder

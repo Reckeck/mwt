@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="mwt_bio_title">Разблокировать хранилище</string>
+  <string name="mwt_bio_subtitle">Подтвердите отпечатком пальца или лицом</string>
+  <string name="mwt_bio_negative">Ввести пароль</string>
+</resources>

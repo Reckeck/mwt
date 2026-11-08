@@ -1,0 +1,19 @@
+[package]
+name = "tauri-plugin-biometric"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Android biometric quick unlock: a Keystore key released only by BiometricPrompt (Multi Wallet Tracker)"
+links = "tauri-plugin-biometric"
+
+[lints]
+workspace = true
+
+[dependencies]
+tauri = { version = "2" }
+serde.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+tauri-plugin = { version = "2.7", features = ["build"] }
