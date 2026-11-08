@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Laptop, MonitorSmartphone, Plus, Smartphone } from 'lucide-vue-next'
 
-import { useSyncActions, useSyncAgo, useSyncPeers, useSyncStatus } from '@/features/vault-sync'
+import { useSyncActions, useSyncAgo, useSyncLevelRefusal, useSyncPeers, useSyncStatus } from '@/features/vault-sync'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useVaultStore } from '@/shared/store/vault'
 import { Badge } from '@/shared/ui/badge'
@@ -11,6 +11,8 @@ import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { SectionState } from '@/shared/ui/section-state'
 import { SettingsSection } from '@/shared/ui/settings-section'
+
+import SyncLevelBanner from './SyncLevelBanner.vue'
 
 /**
  * Trusted devices: this one first (marked `main` when it is), then the paired
@@ -22,6 +24,7 @@ const { status, offers } = useSyncStatus()
 const { peers, list, forgotten } = useSyncPeers()
 const { pair, pairAgain, forget, resume } = useSyncActions()
 const ago = useSyncAgo()
+const { refusal } = useSyncLevelRefusal()
 const isPhone = useIsPhone()
 const vault = useVaultStore()
 
@@ -39,12 +42,15 @@ function add() {
 
 function lastLine(peer: SyncPeerView) {
   const state = t(peer.online ? 'sync.devices.stateOn' : 'sync.devices.stateOff')
+  if (refusal.peers.includes(peer.name)) return `${state} · ${t('sync.devices.noCrypto')}`
   const when = peer.last_synced_at ? ago(peer.last_synced_at, Date.now()) : t('sync.devices.neverShort')
   return `${state} · ${when}`
 }
 </script>
 
 <template>
+  <div class="grid gap-4">
+  <SyncLevelBanner />
   <SettingsSection :title="t('sync.devices.title')" :description="t('sync.devices.description')">
     <SectionState :loading="peers.isPending.value || status.isPending.value" :error="peers.error.value" skeleton="list" compact @retry="peers.refetch()">
       <ul class="grid" data-tour="sync-device-list">
@@ -70,6 +76,9 @@ function lastLine(peer: SyncPeerView) {
               </Badge>
             </span>
             <span class="truncate text-xs text-muted-foreground">{{ lastLine(peer) }}</span>
+            <span v-if="refusal.peers.includes(peer.name)" class="text-xs text-warning" data-tour="sync-level-required" data-peer-level-required>
+              {{ t('sync.devices.levelRequired', { name: peer.name }) }}
+            </span>
           </div>
           <div class="flex shrink-0 items-center gap-2 max-md:w-full max-md:justify-end">
             <Button
@@ -152,4 +161,5 @@ function lastLine(peer: SyncPeerView) {
       <p v-if="list.length" class="text-xs text-muted-foreground">{{ t('sync.devices.forgetHint') }}</p>
     </SectionState>
   </SettingsSection>
+  </div>
 </template>

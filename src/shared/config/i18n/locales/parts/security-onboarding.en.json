@@ -9,5 +9,13 @@
   "whatsNew.vaultProtection.levels": "The vault has protection levels: no password, a PIN, and a long password (level 3). Settings show the current level and lead to the next one, and changing the password re-encrypts the backup copies next to the file too.",
   "whatsNew.vaultProtection.autolock": "Autolock closes the vault when idle (15 minutes by default) and on sleep or screen lock, and decrypted attachments are deleted. It cannot be turned off while the device holds API keys.",
   "whatsNew.vaultProtection.deviceKeys": "Exchange API keys live only on this device, in a separate encrypted file: they are not synced, not in backups and not in the JSON. Another device needs its own read-only key.",
-  "whatsNew.vaultProtection.quickUnlock": "At level 3 the vault can be opened with Touch ID on macOS, Windows Hello or the fingerprint on Android. The password is still required every 7 days and after it changes; on macOS and Android also after a new fingerprint is added."
+  "whatsNew.vaultProtection.quickUnlock": "At level 3 the vault can be opened with Touch ID on macOS, Windows Hello or the fingerprint on Android. The password is still required every 7 days and after it changes; on macOS and Android also after a new fingerprint is added.",
+  "sync.levelRequired.title": "Crypto data was not accepted on this device",
+  "sync.levelRequired.text": "The protection level here is below 3, so crypto data does not arrive. Other data syncs as usual.",
+  "sync.levelRequired.raise": "Go to level 3",
+  "sync.devices.noCrypto": "no crypto data",
+  "sync.devices.levelRequired": "{name} is still below protection level 3: crypto data is not sent to it.",
+  "tour.securityOnboarding.syncLevel.title": "Refused: level 3 needed",
+  "tour.securityOnboarding.syncLevel.body": "A device below level 3 does not accept crypto data while everything else syncs. Here you see which device refused, and the button leads to the level 3 wizard.",
+  "whatsNew.vaultProtection.syncLevel": "When a device below level 3 does not accept crypto data, sync says so: a banner with a button to the level 3 wizard appears on it, and the sender's device list marks that device. Other data syncs as usual."
 }

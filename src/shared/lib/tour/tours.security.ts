@@ -10,3 +10,8 @@ export const SECURITY_TOUR_STEPS: TourStep[] = [
   { target: 'security-raise-start', key: 'securityOnboarding.raise', side: 'bottom' },
   { target: 'biometric-toggle', key: 'securityOnboarding.biometric', side: 'top' },
 ]
+
+/** The `Level 3 required` refusal of sync (Settings -> Sync -> Devices): the banner on the refusing device, the note on the sender's row. */
+export const SYNC_LEVEL_TOUR_STEPS: TourStep[] = [
+  { target: 'sync-level-required', key: 'securityOnboarding.syncLevel', side: 'bottom' },
+]
