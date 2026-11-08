@@ -1,4 +1,4 @@
-import { SECURITY_TOUR_STEPS } from './tours.security.ts'
+import { SECURITY_TOUR_STEPS, SYNC_LEVEL_TOUR_STEPS } from './tours.security.ts'
 import { TOGETHER_TOURS } from './tours.together.ts'
 import type { TourStep } from './tours.types.ts'
 
@@ -112,6 +112,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'settings-updates', key: 'settings.updates', side: 'top' },
     { target: 'vault-security', key: 'settings.security', side: 'top' },
     ...SECURITY_TOUR_STEPS,
+    ...SYNC_LEVEL_TOUR_STEPS,
     { target: 'sync-device-list', key: 'settings.deviceList', side: 'top' },
     { target: 'sync-forgotten-devices', key: 'settings.forgottenDevices', side: 'top' },
     { target: 'sync-add-device', key: 'settings.addDevice', side: 'top' },

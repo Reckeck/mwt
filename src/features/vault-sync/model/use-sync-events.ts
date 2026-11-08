@@ -1,15 +1,19 @@
 // check-ui-ignore invalidate-all: a batch that moved the ledger changes what every screen derives
 import { useQueryClient } from '@tanstack/vue-query'
+import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { call } from '@/shared/api/ipc'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
 import { notify } from '@/shared/lib/notify'
 import { useSettingsStore } from '@/shared/store/settings'
+import { useVaultStore } from '@/shared/store/vault'
 
 import { syncErrorDescription } from '../lib/sync-error-text'
 import { keysOfBatch, touchesSettings } from '../lib/sync-keys'
 
 import { useSyncActions } from './use-sync-actions'
+import { useSyncLevelRefusal } from './use-sync-level-refusal'
 import { SYNC_HISTORY_KEY, SYNC_JOURNAL_KEY, SYNC_PEERS_KEY, SYNC_STATUS_KEY } from './use-sync-status'
 
 /** The sessions a status names, to tell a new or gone device from a progress tick. */
@@ -30,6 +34,24 @@ export function useSyncEvents() {
   const settingsStore = useSettingsStore()
   // Called here, in setup: the composable injects the query client.
   const { undo } = useSyncActions()
+  const levels = useSyncLevelRefusal()
+  const vault = useVaultStore()
+  // A refusal belongs to the unlocked session.
+  watch(
+    () => vault.locked,
+    (locked) => {
+      if (locked) levels.reset()
+    },
+  )
+
+  /** Both sides get the same code: this device is the one below level 3, or it is the peer that is. */
+  async function noteLevelRefusal(peerName: string | null) {
+    const state = await call<SecurityState>('security_state').catch(() => null)
+    if (!state) return
+    if (state.level === 'crypto') {
+      if (peerName) levels.refusedBy(peerName)
+    } else levels.refusedHere()
+  }
 
   /** Re-read what a batch changed: the whole app only when the ledger moved. */
   function refreshAfter(summary: SyncSummary, collections: readonly string[] = []) {
@@ -52,6 +74,7 @@ export function useSyncEvents() {
     void queryClient.invalidateQueries({ queryKey: SYNC_JOURNAL_KEY })
     void queryClient.invalidateQueries({ queryKey: SYNC_HISTORY_KEY })
     void queryClient.invalidateQueries({ queryKey: SYNC_PEERS_KEY })
+    levels.accepted(batch.peer_name)
     // A stamp-only batch changed nothing the user could see or undo.
     if (batch.summary.total === 0) return
     notify.success(t('sync.synced', { name: batch.peer_name, count: batch.summary.total }), {
@@ -62,6 +85,7 @@ export function useSyncEvents() {
   // A closed or locked session ends quietly; what arrives here is worth telling.
   useBackendEvent<SyncErrorEvent>('sync-error', (event) => {
     const error = { code: event.code, message: event.message }
+    if (event.code === 'SECURITY_LEVEL_REQUIRED') void noteLevelRefusal(event.peer_name)
     void queryClient.invalidateQueries({ queryKey: SYNC_JOURNAL_KEY })
     void queryClient.invalidateQueries({ queryKey: SYNC_PEERS_KEY })
     // Cut off on purpose or an incompatible version: the sentence names the device.

@@ -10,6 +10,7 @@ export const WHATS_NEW_NOVEMBER: WhatsNewEntry[] = [
       { key: 'autolock', route: 'settings:vault' },
       { key: 'deviceKeys', route: 'settings:vault' },
       { key: 'quickUnlock', route: 'settings:vault' },
+      { key: 'syncLevel', route: 'settings:sync:sync-devices' },
     ],
   },
   {
