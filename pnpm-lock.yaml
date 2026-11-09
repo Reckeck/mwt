@@ -9,9 +9,7 @@ overrides:
   minimatch@<11.0.1: ^11.0.1
 
 patchedDependencies:
-  vue-sonner@2.0.9:
-    hash: 3f997e18922ae1f41faa96a4c4e3eb0e9b46efb81d17fb0dad6c86d6a4319311
-    path: patches/vue-sonner@2.0.9.patch
+  vue-sonner@2.0.9: 3f997e18922ae1f41faa96a4c4e3eb0e9b46efb81d17fb0dad6c86d6a4319311
 
 importers:
 
@@ -99,8 +97,8 @@ importers:
         specifier: ^0.6.2
         version: 0.6.2(lightweight-charts@5.2.1)
       lucide-vue-next:
-        specifier: ^0.468.0
-        version: 0.468.0(vue@3.5.44(typescript@5.8.3))
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.44(typescript@5.8.3))
       pinia:
         specifier: ^4.1.0
         version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@5.8.3)(vue@3.5.44(typescript@5.8.3))
@@ -1662,8 +1660,8 @@ packages:
     resolution: {integrity: sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==}
     engines: {node: 20 || >=22}
 
-  lucide-vue-next@0.468.0:
-    resolution: {integrity: sha512-quV/6T8YB1XK0VOEnebg3Byd8Rsan5/m95cvjnuHV4vcS3qEnLAybkrSh0hk3ppavx+V7R1PjNW+mGDvcBdz4A==}
+  lucide-vue-next@1.0.0:
+    resolution: {integrity: sha512-V6SPvx1IHTj/UY+FrIYWV5faISsPSb8BnWSFDxAtezWKvWc9ZZ40PDrdu1/Qb5vg4lHWr1hs1BAMGVGm6V1Xdg==}
     deprecated: Package deprecated. Please use @lucide/vue instead.
     peerDependencies:
       vue: '>=3.0.1'
@@ -3543,7 +3541,7 @@ snapshots:
 
   lru-cache@11.5.3: {}
 
-  lucide-vue-next@0.468.0(vue@3.5.44(typescript@5.8.3)):
+  lucide-vue-next@1.0.0(vue@3.5.44(typescript@5.8.3)):
     dependencies:
       vue: 3.5.44(typescript@5.8.3)
 

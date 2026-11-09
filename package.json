@@ -41,7 +41,7 @@
     "grid-layout-plus": "^1.1.1",
     "lightweight-charts": "^5.2.1",
     "lightweight-charts-drawing": "^0.6.2",
-    "lucide-vue-next": "^0.468.0",
+    "lucide-vue-next": "^1.0.0",
     "pinia": "^4.1.0",
     "reka-ui": "^2.11.0",
     "tailwind-merge": "^3.7.0",
