@@ -65,8 +65,10 @@ Renaming a field, changing its type or meaning, removing an enum variant:
    These definitions are never edited again.
 2. `impl From<VaultDocVN> for VaultDoc` (or a `vN → vN+1` step), losing
    nothing.
-3. Add the version to the `match` in `storage::decode_versioned` and bump
-   `VAULT_FORMAT_VERSION`.
+3. `impl storage::chain::Legacy` for the frozen document (its `VERSION` and
+   the schema one step up), add one line to `schema_chain!` in
+   `storage/chain.rs` and bump `VAULT_FORMAT_VERSION`. There is no `match` to
+   edit: `decode_versioned` is generated from that listing.
 4. Tests: an old document in JSON **and** the binary format migrates without
    loss (example: `a_v1_document_migrates_from_json_and_bincode`); opening
    creates `.vN.bak` and rewrites the file

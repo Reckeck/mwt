@@ -17,16 +17,17 @@
 //!
 //! The payload's `version` is read first, then the document is decoded with
 //! the schema of that version and migrated up step by step (`v1` → `v2` →
-//! current; v3 runs automations as workflows, see `v2`).
+//! current; v3 runs automations as workflows, see `v2`). The steps are
+//! composed from one listing in [`chain`], not by hand.
 //! A version from the future is refused. To change the schema in a way an
 //! older file cannot be read with: freeze the current shape in a `vN` module,
-//! bump [`VAULT_FORMAT_VERSION`], add the step and its tests.
+//! bump [`crate::VAULT_FORMAT_VERSION`], add the step (one `From`, one
+//! `impl Legacy`, one line in `schema_chain!`) and its tests.
 
 use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 
-use crate::VAULT_FORMAT_VERSION;
 use crate::crypto;
 use crate::crypto::SealKey;
 use crate::crypto::kdf_profile::KdfParams;
@@ -37,6 +38,7 @@ use crate::vault_io::local::{
     create_synced, read_back, reencrypt_tmp_path, replace_with, still_the_written_file,
 };
 
+pub mod chain;
 pub mod v1;
 pub mod v2;
 
@@ -114,7 +116,7 @@ pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
 #[derive(Debug, Clone)]
 pub struct Decoded {
     pub doc: VaultDoc,
-    /// The version on disk; below [`VAULT_FORMAT_VERSION`] when migrated.
+    /// The version on disk; below [`crate::VAULT_FORMAT_VERSION`] when migrated.
     pub from_version: u32,
 }
 
@@ -134,22 +136,7 @@ pub fn decode_versioned(bytes: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
         parse::<VaultDoc>(bytes, fmt)?;
         return Err(Error::Unsupported);
     };
-    let doc = match version {
-        VAULT_FORMAT_VERSION => parse::<VaultDoc>(bytes, fmt)
-            .map_err(|err| Error::IncompatibleVault(err.to_string()))?,
-        2 => VaultDoc::from(
-            parse::<v2::VaultDocV2>(bytes, fmt)
-                .map_err(|err| Error::IncompatibleVault(err.to_string()))?,
-        ),
-        1 => VaultDoc::from(v2::VaultDocV2::from(
-            parse::<v1::VaultDocV1>(bytes, fmt)
-                .map_err(|err| Error::IncompatibleVault(err.to_string()))?,
-        )),
-        _ => return Err(Error::Unsupported),
-    };
-    if doc.version != VAULT_FORMAT_VERSION {
-        return Err(Error::Unsupported);
-    }
+    let doc = chain::upgrade(version, bytes, fmt)?;
     Ok(Decoded {
         doc,
         from_version: version,
@@ -463,6 +450,7 @@ pub fn probe(path: &Path) -> Result<SnapshotFormat> {
 mod tests {
     use super::*;
     use crate::Amount;
+    use crate::VAULT_FORMAT_VERSION;
     use crate::model::transaction::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta};
     use crate::model::vault::{ExchangeKeys, Exchanges};
     use serde_json::Value as Json;
