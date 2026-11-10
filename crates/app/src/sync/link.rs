@@ -25,10 +25,12 @@ use trade_core::sync::RecordState;
 use trade_core::sync::journal::SyncJournalOutcome;
 use trade_core::sync::manifest::Manifest;
 use trade_core::sync::protocol::{
-    Hello, MANIFEST_PER_MESSAGE, Message, RECORDS_PER_MESSAGE, decode, encode,
+    Hello, Identity, MANIFEST_PER_MESSAGE, Message, RECORDS_PER_MESSAGE, decode, encode,
 };
 use trade_core::sync::registry::UNION_DAYS;
-use trade_core::sync::session::{Channel, ClockWatch, Handshake, Skew, skew_of};
+use trade_core::sync::session::{
+    Channel, ClockWatch, Handshake, Skew, check_commit, commit_to, new_nonce, skew_of,
+};
 use trade_core::sync::stamp::{device_tag, now_ms};
 
 use super::host::Host;
@@ -139,6 +141,8 @@ pub(super) async fn read_frame(reader: &mut OwnedReadHalf) -> Result<Vec<u8>> {
 /// sending large batches at each other cannot block one another.
 struct Wire {
     channel: Channel,
+    /// The six digits of a pairing in this session (set after the identities).
+    pairing_code: String,
     out: mpsc::UnboundedSender<Vec<u8>>,
     frames: mpsc::Receiver<Vec<u8>>,
     /// When the last frame came (or the session last showed it was alive).
@@ -167,6 +171,18 @@ impl Wire {
                 return Ok(Some(decode(&bytes)?));
             }
         }
+    }
+}
+
+/// The other side's [`Identity`], the message after the hellos (protocol 4).
+async fn read_identity(wire: &mut Wire) -> Flow<Identity> {
+    match tokio::time::timeout(HANDSHAKE_TIMEOUT, wire.next())
+        .await
+        .map_err(|_| failure(PeerSyncFailure::Channel))??
+    {
+        Some(Message::Identity(identity)) => Ok(identity),
+        Some(_) => Err(failure(PeerSyncFailure::Channel)),
+        None => Err(Stop::Quiet),
     }
 }
 
@@ -355,6 +371,7 @@ async fn session<H: Host>(
     });
     let mut wire = Wire {
         channel,
+        pairing_code: String::new(),
         out,
         frames,
         heard: Instant::now(),
@@ -383,23 +400,22 @@ async fn session<H: Host>(
         }
     };
     let versions = app.versions();
-    wire.send(&Message::Hello(Hello {
-        protocol: versions.0,
-        format: versions.1,
-        device_id: settings.device_id.clone(),
-        device_name: super::device_name(&settings),
-        proof: wire.channel.proof(&vault_id),
-        now_ms: now_ms(),
-        main: main_here,
-        prefer_main: settings.sync.prefer_main,
-        needs_pairing: !trusted,
-        rank,
-        instance,
-        unreached,
-        app_version: app.app_version(),
-    }))
+    // Protocol 4: the first message says nothing about this device. Who it is
+    // goes out only after the other side proved it holds the vault (below).
+    let nonce = new_nonce();
+    wire.send(&Message::Hello(Hello::first(
+        versions.0,
+        versions.1,
+        wire.channel.proof(&vault_id),
+        app.app_version(),
+        if dialer {
+            commit_to(&nonce)
+        } else {
+            Vec::new()
+        },
+    )))
     .await?;
-    let theirs = match tokio::time::timeout(HANDSHAKE_TIMEOUT, wire.next())
+    let hello = match tokio::time::timeout(HANDSHAKE_TIMEOUT, wire.next())
         .await
         .map_err(|_| failure(PeerSyncFailure::Channel))??
     {
@@ -407,17 +423,66 @@ async fn session<H: Host>(
         Some(_) => return Err(failure(PeerSyncFailure::Channel)),
         None => return Err(Stop::Quiet),
     };
-    if !wire.channel.verify_proof(&vault_id, &theirs.proof) {
+    if !wire.channel.verify_proof(&vault_id, &hello.proof) {
         return Err(failure(PeerSyncFailure::OtherVault));
     }
-    if (theirs.protocol, theirs.format) != versions {
+    if (hello.protocol, hello.format) != versions {
+        // An older build (protocol 3) named itself in its hello; a newer one
+        // does not, so a trusted key gives the name it was paired under.
+        let known = app.with_vault(|vault| {
+            Ok(vault
+                .sync_state()
+                .trusted(&remote_key)
+                .map(|peer| (peer.device_id.clone(), peer.name.clone())))
+        })?;
+        let (device_id, name) = match known {
+            Some((id, name)) if hello.device_id.is_empty() => (id, name),
+            _ => (hello.device_id.clone(), hello.device_name.clone()),
+        };
         return Err(Stop::Incompatible {
-            device_id: theirs.device_id.clone(),
-            name: theirs.device_name.clone(),
-            version: theirs.app_version.clone(),
+            device_id,
+            name,
+            version: hello.app_version.clone(),
             own: app.app_version(),
         });
     }
+    let mine = Identity {
+        device_id: settings.device_id.clone(),
+        device_name: super::device_name(&settings),
+        now_ms: 0,
+        main: main_here,
+        prefer_main: settings.sync.prefer_main,
+        needs_pairing: !trusted,
+        rank,
+        instance,
+        unreached,
+        nonce: nonce.clone(),
+    };
+    // The listener speaks first, so the dialer's nonce, fixed by its commit,
+    // cannot depend on the listener's.
+    let theirs = if dialer {
+        let theirs = read_identity(&mut wire).await?;
+        wire.send(&Message::Identity(Identity {
+            now_ms: now_ms(),
+            ..mine
+        }))
+        .await?;
+        theirs
+    } else {
+        wire.send(&Message::Identity(Identity {
+            now_ms: now_ms(),
+            ..mine
+        }))
+        .await?;
+        let theirs = read_identity(&mut wire).await?;
+        check_commit(&hello.commit, &theirs.nonce)?;
+        theirs
+    };
+    wire.pairing_code = if dialer {
+        wire.channel.pairing_code(&nonce, &theirs.nonce)
+    } else {
+        wire.channel.pairing_code(&theirs.nonce, &nonce)
+    };
     // Which address is this device: discovery needs it to skip a device that
     // cut this one off (or that was paused here), even when the session ends
     // right below.
@@ -632,7 +697,7 @@ async fn pair<H: Host>(
             peer_name: peer.name.clone(),
         },
     );
-    let code = wire.channel.pairing_code();
+    let code = wire.pairing_code.clone();
     let expires_ms =
         now_ms().saturating_add(u64::try_from(PAIRING_TIMEOUT.as_millis()).unwrap_or(u64::MAX));
     let show_code = |app: &H| {

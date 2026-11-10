@@ -16,17 +16,28 @@ Only devices with the same vault see each other: the mDNS tag is derived from
 the vault id and changes daily, and the handshake proves knowledge of the vault
 id (see below).
 
-## A session opens: Noise and Hello
+## A session opens: Noise, Hello and Identity
 
 Every connection, dialed or accepted, starts the same way
-(`crates/app/src/sync/link.rs`, `session`):
+(`crates/app/src/sync/link.rs`, `session`). Since protocol 4 nothing about the
+device leaves before the other side proved it holds the vault:
 
-1. A Noise handshake `XX_25519_ChaChaPoly_BLAKE2s`. Both sides present their
-   static device key.
-2. Each side sends `Hello`: protocol version, vault format version, device id and
-   name, the vault proof, the time, whether it is the main device, its rank,
-   `needs_pairing`, `unreached`, and its app version.
-3. The checks run in this order; the first to fail ends the session:
+| Step | Dialer | Listener |
+|---|---|---|
+| 1 | Noise handshake `XX_25519_ChaChaPoly_BLAKE2s`: both present their static device key | same |
+| 2 | `Hello { protocol, format, proof, app_version, commit = SHA256(nonce_d) }`, identity fields empty | `Hello { protocol, format, proof, app_version }`, identity fields empty |
+| 3 | checks 1 and 2 below (the proof, then the versions) | same |
+| 4 | waits | `Identity { device_id, device_name, now_ms, main, prefer_main, needs_pairing, rank, instance, unreached, nonce = nonce_l }` |
+| 5 | `Identity { ..., nonce = nonce_d }` | `SHA256(nonce_d)` must equal the commit, else `SYNC_CHANNEL` |
+| 6 | checks 3 to 7 below, on the identity | same |
+
+`nonce_d` and `nonce_l` are 32 random bytes each. A device that fails the proof
+gets only an anonymous `Hello` (versions and the app version) and learns neither
+the name nor the id of this device. The `Hello` keeps its protocol 3 shape with
+the identity fields sent empty, so an old build can still decode it and refuse
+on the version (see [Compatibility](compatibility.md#protocol-4-identity-after-the-vault-proof)).
+
+The checks run in this order; the first to fail ends the session:
 
 | Order | Check | Outcome |
 |---|---|---|
@@ -43,9 +54,14 @@ A trusted key goes straight to the exchange. An unknown key, or one whose
 
 ## Pairing
 
-The pairing code is six digits derived from the Noise `handshake_hash`. A device
-in the middle of the connection (MITM) has two different handshakes, so its two
-screens show two different codes; the user sees the mismatch.
+The pairing code is six digits:
+`HMAC(handshake_hash, "mwt-sas4" || nonce_d || nonce_l)`. A device in the middle
+of the connection (MITM) has two different handshakes, so its two screens show
+two different codes; the user sees the mismatch. The dialer commits to `nonce_d`
+in its `Hello`, before it sees `nonce_l`, and the listener sends `nonce_l` before
+it sees `nonce_d`: neither end of a MITM can try keys or nonces until the two
+codes match, so it gets one guess, 1 in 10^6. (Protocol 3 used the hash alone,
+about 2^20 tries away from a match for someone who also knew the vault id.)
 
 ```mermaid
 sequenceDiagram
@@ -53,8 +69,11 @@ sequenceDiagram
     participant A as Device A
     participant B as Device B
     participant UB as User at device B
-    A->>B: Noise handshake, then Hello
-    B->>A: Hello (needs_pairing)
+    A->>B: Noise handshake, then Hello (proof, commit to nonce_d)
+    B->>A: Hello (proof)
+    Note over A,B: proofs and versions checked, nothing else known yet
+    B->>A: Identity (needs_pairing, nonce_l)
+    A->>B: Identity (nonce_d, matches the commit)
     Note over A,B: key unknown, so the pairing banner appears
     UA->>A: press Pair
     A->>B: PairRequest
@@ -172,7 +191,7 @@ When device X pauses this device or forgets it, X tells it why before it
 closes: `Bye { reason: "paused" }` or `"forgotten"`. The wire format has no new
 message variant, so older builds see a plain `Bye` and close quietly. A
 forgotten device gets `forgotten` only if it did not ask to pair (a
-`PairRequest` right after `Hello` is the way back).
+`PairRequest` right after the identities is the way back).
 
 The receiver:
 
