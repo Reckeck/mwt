@@ -738,6 +738,61 @@ pub fn money_unit(body: &Value) -> Option<String> {
         .map(|unit| unit.to_lowercase())
 }
 
+/// The label of a crypto-module record: its own words, never its key (a
+/// hash, a contract or `<source>|<account>` says nothing to the user).
+/// `None` when this collection has no label of its own.
+fn crypto_label(name: &str, body: &Value) -> Option<String> {
+    // A token's network is part of its key, so the value may be an opaque id
+    // when a record arrives with nothing but its key filled in.
+    let key_part = |path: &str| text_at(body, path).filter(|text| !looks_opaque(text));
+    let parts: Vec<String> = match name {
+        "crypto_events" => [
+            text_at(body, "kind").map(|kind| humanize(&kind)),
+            text_at(body, "protocol")
+                .or_else(|| text_at(body, "method"))
+                .map(|what| clip(&what)),
+            text_at(body, "time").map(|stamp| day_of(&stamp).to_string()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
+        "crypto_tokens" => [
+            text_at(body, "symbol").map(|symbol| symbol.to_uppercase()),
+            key_part("chain").map(|chain| humanize(&chain)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
+        "crypto_positions" => [
+            text_at(body, "name").map(|text| clip(&text)),
+            text_at(body, "protocol").map(|protocol| humanize(&protocol)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
+        "crypto_overrides" => [
+            text_at(body, "comment").map(|text| clip(&text)),
+            text_at(body, "kind").map(|kind| humanize(&kind)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
+        "crypto_snapshots" => [
+            text_at(body, "at").map(|stamp| day_of(&stamp).to_string()),
+            text_at(body, "value_usd").map(|value| format!("{value} USD")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
+        "crypto_wiped_at" => text_at(body, "at")
+            .map(|stamp| day_of(&stamp).to_string())
+            .into_iter()
+            .collect(),
+        _ => return None,
+    };
+    Some(parts.join(", "))
+}
+
 fn transaction_label(tag: Option<&str>, body: &Value) -> String {
     let what = text_at(body, "meta.comment").or_else(|| {
         lookup(body, "meta.categories")
@@ -778,6 +833,9 @@ pub fn label(coll: &Collection, value: &Value) -> String {
     let (tag, body) = body_of(coll, value);
     if coll.name == "transactions" {
         return transaction_label(tag, body);
+    }
+    if let Some(label) = crypto_label(coll.name, body) {
+        return label;
     }
     if coll.name == "inflation_points" {
         return [
@@ -820,6 +878,31 @@ mod tests {
         assert_eq!(fields.tag.as_deref(), Some("topup"));
         assert_eq!(fields.fields.get("meta.comment"), Some(&json!("hi")));
         assert_eq!(join(coll, &fields), tx);
+    }
+
+    /// A crypto record is named by its own words, never by its key: a token
+    /// by its symbol, an operation by what it did and when.
+    #[test]
+    fn crypto_records_read_as_words() {
+        let token = find("crypto_tokens").expect("rule");
+        let record = json!({
+            "chain": "ethereum", "contract": "0xa0b8", "symbol": "usdc",
+            "name": "USD Coin", "decimals": 6
+        });
+        assert_eq!(
+            record_key(token, &record).as_deref(),
+            Some("ethereum|0xa0b8")
+        );
+        assert_eq!(label(token, &record), "USDC, Ethereum");
+
+        let events = find("crypto_events").expect("rule");
+        let swap = json!({
+            "id": "cev-1", "chain": "ethereum", "account_id": "cacc-1",
+            "time": "2026-11-10T10:00:00Z", "kind": "swap",
+            "protocol": "uniswap-v3", "legs": [],
+            "tracking": {"chain_tx": {"chain": "ethereum", "hash": "0xdead"}}
+        });
+        assert_eq!(label(events, &swap), "Swap, uniswap-v3, 2026-11-10");
     }
 
     #[test]

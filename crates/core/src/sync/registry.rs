@@ -208,6 +208,9 @@ pub const LOCAL: &[&str] = &[
     "holdings",
     "sync",
     "exchanges",
+    // How far each source has read each crypto account: the page of a
+    // provider this device talked to, meaningless on another one.
+    "crypto_cursors",
 ];
 
 /// Collections that synced credentials before they became local: entries of
@@ -466,6 +469,38 @@ pub static COLLECTIONS: &[Collection] = &[
         crate::model::vault::MAX_IMPORT_RUNS,
         "at",
     ),
+    // -- the crypto module (stage 2) ---------------------------------------
+    //
+    // One rule per top-level field: records by id, so one edited operation
+    // travels alone. Nothing derived is stored, so there is nothing here to
+    // re-derive. `crypto_cursors` is in `LOCAL`.
+    records("crypto_accounts", ID),
+    records("crypto_events", ID),
+    records("crypto_overrides", ID),
+    // A token is its network plus its contract; the symbol is not identity.
+    records("crypto_tokens", &["chain", "contract"]),
+    records("crypto_positions", ID),
+    records("crypto_snapshots", ID),
+    // A wipe of the module reaches the other devices as an ordinary record.
+    records("crypto_wiped_at", ID),
+    // Quotes, like `price_cache`: written once, unioned silently, and the
+    // first sync sends only the recent ones.
+    Collection {
+        name: "crypto_prices",
+        rule: Rule::Union { cap: None },
+        key: &["token_key", "ts"],
+        flatten: &[],
+        flatten_by: &[],
+        flatten_inner: &[],
+        derived: &[],
+        recomputed: &[],
+        skip: &[],
+        age: Some("ts"),
+        secret: false,
+        secret_fields: &[],
+        whole: false,
+        cache: true,
+    },
     Collection {
         name: "discarded_imports",
         rule: Rule::Union {

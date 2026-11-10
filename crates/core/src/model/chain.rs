@@ -91,9 +91,9 @@ impl Chain {
                 Chain::Ethereum => Some("ethereum"),
                 Chain::Bsc => Some("binancecoin"),
                 Chain::Solana => Some("solana"),
-                Chain::Polygon => Some("matic-network"),
-                Chain::Arbitrum => Some("arbitrum"),
-                Chain::Optimism => Some("optimism"),
+                Chain::Polygon => Some("polygon-ecosystem-token"),
+                Chain::Arbitrum => Some("ethereum"), // ETH on Arbitrum One
+                Chain::Optimism => Some("ethereum"), // ETH on OP Mainnet
                 Chain::Avalanche => Some("avalanche-2"),
                 Chain::Base => Some("ethereum"), // ETH on Base
                 Chain::Tron => Some("tron"),

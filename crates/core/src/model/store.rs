@@ -704,6 +704,18 @@ pub struct Store {
     #[serde(default)]
     #[ts(optional)]
     pub asset_class: Option<String>,
+    /// The crypto module's account this wallet shows, when the wallet is driven
+    /// by the engine: a connected public address (`StoreKind::Crypto`) or an
+    /// exchange read through its API key (`StoreKind::Exchange`).
+    ///
+    /// A wallet with this set holds no hand-made operations at all: the engine
+    /// reads the chain and writes `crypto_events`, and the interface switches
+    /// off everything that would create, edit or delete an operation here. The
+    /// field is what tells every screen and check which wallets those are
+    /// (decision P5 of 2026-11-11).
+    #[serde(default)]
+    #[ts(optional)]
+    pub crypto_account_id: Option<String>,
 }
 
 impl Store {

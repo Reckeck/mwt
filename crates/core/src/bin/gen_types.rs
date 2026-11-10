@@ -628,6 +628,110 @@ fn main() {
         trade_core::ipc_contract::security::ExchangeKeyState,
     );
 
+    // The crypto module (stage 2), one block per domain: the spec that owns
+    // `ipc_contract/cryptotrack/<domain>.rs` adds its types to its own block
+    // here, so two specs never edit the same lines. E0 opens the blocks and
+    // names no DTO of its own; the stored model already travels with
+    // `VaultDoc` above.
+
+    // accounts — spec E9
+    export!(
+        trade_core::ipc_contract::cryptotrack::accounts::QuarantinedHolding,
+        trade_core::ipc_contract::cryptotrack::accounts::MonthChange,
+        trade_core::ipc_contract::cryptotrack::accounts::CryptoAccountView,
+        trade_core::ipc_contract::cryptotrack::accounts::ConnectAddressInput,
+        trade_core::ipc_contract::cryptotrack::accounts::ConnectAddressResult,
+        trade_core::ipc_contract::cryptotrack::accounts::UpdateAccountInput,
+        trade_core::ipc_contract::cryptotrack::accounts::CryptoAccountRefInput,
+    );
+    // tokens — spec E2
+    export!(
+        trade_core::cryptotrack::tokens::TokenStatus,
+        trade_core::ipc_contract::cryptotrack::tokens::TokenWarning,
+        trade_core::ipc_contract::cryptotrack::tokens::TokenView,
+        trade_core::ipc_contract::cryptotrack::tokens::TokenRefInput,
+        trade_core::ipc_contract::cryptotrack::tokens::SetTokenBasisInput,
+    );
+    // operations — spec E10
+    export!(
+        trade_core::ipc_contract::cryptotrack::operations::CryptoOpFilter,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoOpLeg,
+        trade_core::ipc_contract::cryptotrack::operations::OwnEntry,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoContractRule,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoOpRow,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoOpsPage,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoOpFacets,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoOpTokenFacet,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoListOperationsInput,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoOperationDetailInput,
+        trade_core::ipc_contract::cryptotrack::operations::ChainSide,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoChainMember,
+        trade_core::ipc_contract::cryptotrack::operations::CandidateReason,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoLinkCandidate,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoOperationDetail,
+        trade_core::ipc_contract::cryptotrack::operations::OverrideField,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoSetOverrideInput,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoSetOverrideResult,
+        trade_core::ipc_contract::cryptotrack::operations::CryptoExchangeSuggestion,
+    );
+    // links — spec E13
+    export!(
+        trade_core::ipc_contract::cryptotrack::links::CryptoLinkCandidatesInput,
+        trade_core::ipc_contract::cryptotrack::links::CryptoLinkOption,
+        trade_core::ipc_contract::cryptotrack::links::CryptoLinkInput,
+        trade_core::ipc_contract::cryptotrack::links::CryptoUnlinkInput,
+        trade_core::ipc_contract::cryptotrack::links::CryptoPairsInput,
+        trade_core::ipc_contract::cryptotrack::links::CryptoPairFiat,
+        trade_core::ipc_contract::cryptotrack::links::CryptoPair,
+    );
+    // sync — spec E6
+    export!(
+        trade_core::ipc_contract::cryptotrack::sync::CryptoSyncState,
+        trade_core::ipc_contract::cryptotrack::sync::CryptoSyncAccountStatus,
+        trade_core::ipc_contract::cryptotrack::sync::CryptoSyncStatus,
+    );
+    // network — spec E17
+    export!(
+        trade_core::ipc_contract::cryptotrack::network::EndpointKind,
+        trade_core::ipc_contract::cryptotrack::network::EndpointView,
+        trade_core::ipc_contract::cryptotrack::network::NetworkView,
+        trade_core::ipc_contract::cryptotrack::network::NetworkSettings,
+        trade_core::ipc_contract::cryptotrack::network::SetNetworkSettingsInput,
+        trade_core::ipc_contract::cryptotrack::network::TestNetworkInput,
+        trade_core::ipc_contract::cryptotrack::network::NetworkTestOutcome,
+        trade_core::ipc_contract::cryptotrack::network::NetworkTestResult,
+    );
+    // wipe — spec E12
+    export!(
+        trade_core::ipc_contract::cryptotrack::wipe::CryptoWipeCounts,
+        trade_core::ipc_contract::cryptotrack::wipe::CryptoWipedWallet,
+        trade_core::ipc_contract::cryptotrack::wipe::CryptoWipePreview,
+        trade_core::ipc_contract::cryptotrack::wipe::CryptoWipeInput,
+        trade_core::ipc_contract::cryptotrack::wipe::CryptoWipeReport,
+    );
+    // relations — spec E15
+    export!(
+        trade_core::ipc_contract::cryptotrack::relations::CryptoRelationsInput,
+        trade_core::ipc_contract::cryptotrack::relations::CryptoRelationRow,
+        trade_core::ipc_contract::cryptotrack::relations::CryptoFiatRelation,
+        trade_core::ipc_contract::cryptotrack::relations::CryptoRelationGroup,
+        trade_core::ipc_contract::cryptotrack::relations::CryptoFiatGroup,
+        trade_core::ipc_contract::cryptotrack::relations::CryptoRelations,
+    );
+    // transition — spec E11
+    export!(
+        trade_core::ipc_contract::cryptotrack::transition::CryptoRetiredWallet,
+        trade_core::ipc_contract::cryptotrack::transition::CryptoTransitionPlan,
+        trade_core::ipc_contract::cryptotrack::transition::CryptoArchiveReport,
+    );
+    // positions — spec D0
+    export!(
+        trade_core::cryptotrack::protocols::PositionKind,
+        trade_core::cryptotrack::protocols::PositionStatus,
+        trade_core::ipc_contract::cryptotrack::positions::PositionAssetView,
+        trade_core::ipc_contract::cryptotrack::positions::PositionView,
+    );
+
     if !ok {
         eprintln!("gen-types: one or more types failed to export");
         std::process::exit(1);

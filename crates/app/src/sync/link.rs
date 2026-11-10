@@ -15,6 +15,7 @@ use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 use trade_core::error::{Error, PeerSyncFailure, Result};
+use trade_core::ipc_contract::security::SecurityLevel;
 use trade_core::ipc_contract::{
     SyncClockEvent, SyncConfirmReason, SyncCutReason, SyncOfferEvent, SyncPairingEvent,
     SyncPendingPlan, SyncPhase, SyncPlanEvent, SyncProgress, SyncRole, SyncSessionView,
@@ -275,6 +276,9 @@ pub(super) struct Peer {
     pub(super) take_main_ordered: AtomicBool,
     /// Consecutive `Time` reports within the warn bound since the last drift.
     pub(super) stable_reports: AtomicU32,
+    /// How the other device's vault is protected, as it said in its identity:
+    /// below level 3 it is sent no crypto-module records (spec E6).
+    pub(super) security_level: SecurityLevel,
 }
 
 /// Runs `work` on the open vault only while it is still the vault this
@@ -457,6 +461,7 @@ async fn session<H: Host>(
         instance,
         unreached,
         nonce: nonce.clone(),
+        security_level: app.with_vault(|vault| Ok(vault.security_level()))?,
     };
     // The listener speaks first, so the dialer's nonce, fixed by its commit,
     // cannot depend on the listener's.
@@ -647,6 +652,7 @@ async fn session<H: Host>(
         take_main_heard: AtomicBool::new(false),
         take_main_ordered: AtomicBool::new(false),
         stable_reports: AtomicU32::new(0),
+        security_level: theirs.security_level,
     };
 
     let mut reason = None;
@@ -944,7 +950,9 @@ async fn send_records<H: Host>(app: &H, peer: &Peer, wire: &mut Wire, keys: &[St
     let chunks: Vec<&[String]> = keys.chunks(RECORDS_PER_MESSAGE).collect();
     let count = chunks.len();
     for (index, chunk) in chunks.into_iter().enumerate() {
-        let records = with_peer_vault(app, peer, |vault| vault.sync_records(chunk))?;
+        let records = with_peer_vault(app, peer, |vault| {
+            vault.sync_records_for(chunk, peer.security_level)
+        })?;
         wire.send(&Message::Records {
             records: records.into_iter().collect(),
             last: index + 1 == count,
@@ -968,7 +976,17 @@ async fn exchange<H: Host>(
     let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
     wire.send(&Message::Peers { peers }).await?;
     let since = now_ms().saturating_sub(UNION_DAYS * 24 * 3600 * 1000);
-    let (mine, mark) = with_peer_vault(app, peer, |vault| vault.sync_manifest_marked(Some(since)))?;
+    let (mine, mark, withheld) = with_peer_vault(app, peer, |vault| {
+        vault.sync_manifest_marked_for(Some(since), peer.security_level)
+    })?;
+    if withheld > 0 {
+        // The crypto records stay here: this side tells the user why, once.
+        super::emit_error(
+            app,
+            &Error::SecurityLevelRequired,
+            Some((peer.device_id.as_str(), peer.name.as_str())),
+        );
+    }
     let entries: Vec<(String, u64)> = mine
         .iter()
         .map(|(key, digest)| (key.clone(), *digest))
@@ -1138,17 +1156,20 @@ async fn apply_shown<H: Host>(
     if incoming.is_empty() {
         return Ok(());
     }
-    // Crypto-module data only reaches a level-3 vault: the other device hears
-    // why, this one shows it (`SECURITY_LEVEL_REQUIRED`).
-    if let Err(err) = app.with_vault(|vault| vault.sync_check_level(&incoming)) {
-        if matches!(err, Error::SecurityLevelRequired) {
-            let _ = wire
-                .send(&Message::Bye {
-                    reason: SECURITY_LEVEL_BYE.into(),
-                })
-                .await;
+    // Crypto-module data only lives in a level-3 vault. A sender that knows
+    // this level leaves it out; whatever still arrives (a broken or hostile
+    // peer) is dropped here and the rest is applied, so one stray record does
+    // not end the session. The user is told once (`SECURITY_LEVEL_REQUIRED`).
+    let (incoming, dropped) = app.with_vault(|vault| Ok(vault.sync_admit(incoming)))?;
+    if dropped > 0 {
+        super::emit_error(
+            app,
+            &Error::SecurityLevelRequired,
+            Some((peer.device_id.as_str(), peer.name.as_str())),
+        );
+        if incoming.is_empty() {
+            return Ok(());
         }
-        return Err(Stop::Failed(err));
     }
     let (unreliable, applied_once) = app
         .hub()
@@ -1396,7 +1417,7 @@ async fn live<H: Host>(
                 flush_at = None;
                 let keys: Vec<String> = std::mem::take(&mut pending).into_iter().collect();
                 for chunk in keys.chunks(RECORDS_PER_MESSAGE) {
-                    let records = with_peer_vault(app, peer, |vault| vault.sync_records(chunk))?;
+                    let records = with_peer_vault(app, peer, |vault| vault.sync_records_for(chunk, peer.security_level))?;
                     wire.send(&Message::Changed { records: records.into_iter().collect() }).await?;
                 }
             }
@@ -1422,7 +1443,7 @@ async fn live<H: Host>(
                     // vault may already be closed: then there is nothing to send.
                     let keys: Vec<String> = std::mem::take(&mut pending).into_iter().collect();
                     for chunk in keys.chunks(RECORDS_PER_MESSAGE) {
-                        let Ok(records) = with_peer_vault(app, peer, |vault| vault.sync_records(chunk)) else {
+                        let Ok(records) = with_peer_vault(app, peer, |vault| vault.sync_records_for(chunk, peer.security_level)) else {
                             break;
                         };
                         if wire.send(&Message::Changed { records: records.into_iter().collect() }).await.is_err() {

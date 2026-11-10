@@ -5,6 +5,7 @@ pub mod attachment;
 pub mod category;
 pub mod chain;
 pub mod contact;
+pub mod cryptotrack;
 pub mod datasource;
 pub mod deposit;
 pub mod enrichment;
