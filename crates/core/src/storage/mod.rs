@@ -17,16 +17,17 @@
 //!
 //! The payload's `version` is read first, then the document is decoded with
 //! the schema of that version and migrated up step by step (`v1` → `v2` →
-//! current; v3 runs automations as workflows, see `v2`).
+//! current; v3 runs automations as workflows, see `v2`). The steps are
+//! composed from one listing in [`chain`], not by hand.
 //! A version from the future is refused. To change the schema in a way an
 //! older file cannot be read with: freeze the current shape in a `vN` module,
-//! bump [`VAULT_FORMAT_VERSION`], add the step and its tests.
+//! bump [`crate::VAULT_FORMAT_VERSION`], add the step (one `From`, one
+//! `impl Legacy`, one line in `schema_chain!`) and its tests.
 
 use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 
-use crate::VAULT_FORMAT_VERSION;
 use crate::crypto;
 use crate::crypto::SealKey;
 use crate::crypto::kdf_profile::KdfParams;
@@ -37,6 +38,7 @@ use crate::vault_io::local::{
     create_synced, read_back, reencrypt_tmp_path, replace_with, still_the_written_file,
 };
 
+pub mod chain;
 pub mod v1;
 pub mod v2;
 
@@ -114,7 +116,7 @@ pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
 #[derive(Debug, Clone)]
 pub struct Decoded {
     pub doc: VaultDoc,
-    /// The version on disk; below [`VAULT_FORMAT_VERSION`] when migrated.
+    /// The version on disk; below [`crate::VAULT_FORMAT_VERSION`] when migrated.
     pub from_version: u32,
 }
 
@@ -134,22 +136,7 @@ pub fn decode_versioned(bytes: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
         parse::<VaultDoc>(bytes, fmt)?;
         return Err(Error::Unsupported);
     };
-    let doc = match version {
-        VAULT_FORMAT_VERSION => parse::<VaultDoc>(bytes, fmt)
-            .map_err(|err| Error::IncompatibleVault(err.to_string()))?,
-        2 => VaultDoc::from(
-            parse::<v2::VaultDocV2>(bytes, fmt)
-                .map_err(|err| Error::IncompatibleVault(err.to_string()))?,
-        ),
-        1 => VaultDoc::from(v2::VaultDocV2::from(
-            parse::<v1::VaultDocV1>(bytes, fmt)
-                .map_err(|err| Error::IncompatibleVault(err.to_string()))?,
-        )),
-        _ => return Err(Error::Unsupported),
-    };
-    if doc.version != VAULT_FORMAT_VERSION {
-        return Err(Error::Unsupported);
-    }
+    let doc = chain::upgrade(version, bytes, fmt)?;
     Ok(Decoded {
         doc,
         from_version: version,
@@ -463,6 +450,7 @@ pub fn probe(path: &Path) -> Result<SnapshotFormat> {
 mod tests {
     use super::*;
     use crate::Amount;
+    use crate::VAULT_FORMAT_VERSION;
     use crate::model::transaction::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta};
     use crate::model::vault::{ExchangeKeys, Exchanges};
     use serde_json::Value as Json;
@@ -708,6 +696,112 @@ mod tests {
         }
     }
 
+    // -- migrations ---------------------------------------------------------
+    //
+    // One case per (version, format): the skeleton below is the same for
+    // every version, so it is written once and the cases say what differs.
+
+    /// The three encoders in one place: the payload bytes a file of that era
+    /// held. bincode is positional, so such a case hands over the frozen
+    /// struct itself; JSON and MessagePack carry field names, so the raw
+    /// document will do.
+    fn encode_as(payload: &impl serde::Serialize, fmt: SnapshotFormat) -> Vec<u8> {
+        match fmt {
+            SnapshotFormat::Json => serde_json::to_vec(payload).expect("a json payload"),
+            SnapshotFormat::Bin => {
+                bincode::serde::encode_to_vec(payload, bincode::config::standard())
+                    .expect("a bincode payload")
+            }
+            SnapshotFormat::Pack => rmp_serde::to_vec_named(payload).expect("a packed payload"),
+        }
+    }
+
+    /// A vault file holding `payload` as a file of that era held it: the
+    /// header of `fmt`, sealed with "pw", written atomically. Hands back the
+    /// path and the untouched bytes, for the backup assertion.
+    fn sealed(
+        dir: &Path,
+        name: &str,
+        payload: &impl serde::Serialize,
+        fmt: SnapshotFormat,
+    ) -> (PathBuf, Vec<u8>) {
+        let path = dir.join(name);
+        let (header, _, _) = crypto::random_header(fmt);
+        let file = crypto::seal(&header, b"pw", &encode_as(payload, fmt)).expect("seal");
+        crypto::atomic_write(&path, &file).expect("write the vault");
+        (path, file)
+    }
+
+    /// What a migration on open must leave behind: the untouched file as
+    /// `.v<N>.bak`, the vault rewritten at the current version in the format
+    /// it is written in from now on (bincode never again), and a second open
+    /// that neither migrates again nor replaces the backup.
+    fn assert_migrated_once(path: &Path, original: &[u8], from_version: u32, fmt: SnapshotFormat) {
+        // Built by hand: `VaultFile::backup_version` would make the copy a
+        // missing backup should be caught by.
+        let mut name = path.file_name().unwrap_or_default().to_os_string();
+        name.push(format!(".v{from_version}.bak"));
+        let backup = path.with_file_name(name);
+        assert_eq!(
+            std::fs::read(&backup).expect("the kept original"),
+            original,
+            "the backup is the untouched file"
+        );
+
+        let (decoded, written) = VaultFile::open_versioned(path, "pw").expect("reopen the vault");
+        assert_eq!(written, fmt.for_writing(), "rewritten in another format");
+        assert_eq!(
+            decoded.from_version, VAULT_FORMAT_VERSION,
+            "the file was not rewritten at the current version"
+        );
+
+        // A second open neither migrates nor replaces the first backup.
+        drop(crate::service::UnlockedVault::open(path.to_path_buf(), "pw").expect("open again"));
+        assert_eq!(std::fs::read(&backup).expect("the kept original"), original);
+    }
+
+    /// One `#[test]` per (version, format): `payload` as a file of that
+    /// version held it, `decoded` what the migrated document must hold, and
+    /// `opened` what the vault shows once it is open. A format no case names
+    /// is missing from the list, where it can be seen.
+    macro_rules! migration_cases {
+        (
+            version: $version:literal,
+            formats: [$($fmt:ident as $case:ident),+ $(,)?],
+            payload: $payload:expr,
+            decoded: $decoded:expr,
+            opened: $opened:expr,
+        ) => {
+            $(
+                #[test]
+                fn $case() {
+                    let fmt = SnapshotFormat::$fmt;
+                    let payload = $payload;
+
+                    // Decoding alone: the version found and the document built.
+                    let decoded = decode_versioned(&encode_as(&payload, fmt), fmt)
+                        .unwrap_or_else(|err| panic!("a v{} payload in {fmt:?}: {err:?}", $version));
+                    assert_eq!(decoded.from_version, $version);
+                    assert_eq!(decoded.doc.version, VAULT_FORMAT_VERSION);
+                    let check_decoded = $decoded;
+                    check_decoded(&decoded.doc);
+
+                    // The same payload as a file on disk: opened, migrated,
+                    // kept as a backup, and migrated only once.
+                    let dir = tempfile::tempdir().expect("temp dir");
+                    let (path, original) =
+                        sealed(dir.path(), &format!("v{}.wallet", $version), &payload, fmt);
+                    let vault = crate::service::UnlockedVault::open(path.clone(), "pw")
+                        .expect("open the migrated vault");
+                    let check_opened = $opened;
+                    check_opened(&vault);
+                    drop(vault);
+                    assert_migrated_once(&path, &original, $version, fmt);
+                }
+            )+
+        };
+    }
+
     /// The full document as a v1 file holds it, and what it becomes in v2.
     fn as_v1(doc: &VaultDoc) -> (Json, VaultDoc) {
         let mut json: Json = serde_json::to_value(doc).unwrap();
@@ -800,56 +894,39 @@ mod tests {
         (json, expected)
     }
 
-    /// A v1 file in either v1 encoding migrates to v2 with nothing lost.
-    #[test]
-    fn a_v1_document_migrates_from_json_and_bincode() {
-        let (v1_json, expected) = as_v1(&crate::model::fixtures::full_doc());
-        let json_bytes = serde_json::to_vec(&v1_json).unwrap();
-        let decoded = decode_versioned(&json_bytes, SnapshotFormat::Json).unwrap();
-        assert_eq!(decoded.from_version, 1);
-        assert_eq!(decoded.doc, expected);
-
-        // A bincode v1 payload is exactly the v1 field list, by position.
-        let v1_doc: v1::VaultDocV1 = serde_json::from_value(v1_json).unwrap();
-        let bin_bytes =
-            bincode::serde::encode_to_vec(&v1_doc, bincode::config::standard()).unwrap();
-        let decoded = decode_versioned(&bin_bytes, SnapshotFormat::Bin).unwrap();
-        assert_eq!(decoded.from_version, 1);
-        assert_eq!(decoded.doc, expected);
-        assert_eq!(decoded.doc.version, VAULT_FORMAT_VERSION);
+    /// `as_v1` of the full fixture, built once: the fixture takes a fresh id
+    /// and timestamp on every call, while a case builds the payload and the
+    /// expected document in two steps.
+    fn as_v1_fixture() -> &'static (Json, VaultDoc) {
+        static FIXTURE: std::sync::OnceLock<(Json, VaultDoc)> = std::sync::OnceLock::new();
+        FIXTURE.get_or_init(|| as_v1(&crate::model::fixtures::full_doc()))
     }
 
-    /// Opening a v1 vault keeps the untouched file as `.v1.bak`, rewrites the
-    /// vault as v2 and never writes bincode again.
-    #[test]
-    fn opening_a_v1_vault_backs_it_up_and_rewrites_it() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("old.wallet");
-        let (v1_json, expected) = as_v1(&crate::model::fixtures::full_doc());
-        let v1_doc: v1::VaultDocV1 = serde_json::from_value(v1_json).unwrap();
-        let plain = bincode::serde::encode_to_vec(&v1_doc, bincode::config::standard()).unwrap();
-        let (header, _, _) = crypto::random_header(SnapshotFormat::Bin);
-        let file = crypto::seal(&header, b"pw", &plain).unwrap();
-        crypto::atomic_write(&path, &file).unwrap();
+    /// The full document as a v1 file holds it, typed: a bincode v1 payload
+    /// is exactly this struct's field list, by position.
+    fn as_v1_doc() -> (v1::VaultDocV1, VaultDoc) {
+        let (json, expected) = as_v1_fixture();
+        (
+            serde_json::from_value(json.clone()).expect("the v1 field list"),
+            expected.clone(),
+        )
+    }
 
-        let vault = crate::service::UnlockedVault::open(path.clone(), "pw").unwrap();
-        assert_eq!(vault.doc.contacts, expected.contacts);
-        assert_eq!(vault.doc.reminders, expected.reminders);
-        drop(vault);
-
-        let backup = dir.path().join("old.wallet.v1.bak");
-        assert_eq!(
-            std::fs::read(&backup).unwrap(),
-            file,
-            "backup is the untouched file"
-        );
-        let (decoded, fmt) = VaultFile::open_versioned(&path, "pw").unwrap();
-        assert_eq!(fmt, SnapshotFormat::Pack);
-        assert_eq!(decoded.from_version, VAULT_FORMAT_VERSION);
-
-        // A second open neither migrates nor replaces the first backup.
-        drop(crate::service::UnlockedVault::open(path.clone(), "pw").unwrap());
-        assert_eq!(std::fs::read(&backup).unwrap(), file);
+    migration_cases! {
+        version: 1,
+        formats: [
+            Json as a_v1_file_in_json_migrates_and_is_backed_up,
+            Bin as a_v1_file_in_bincode_migrates_and_is_backed_up,
+        ],
+        payload: as_v1_doc().0,
+        // A v1 file migrates with nothing lost: every field v1 did not have
+        // takes its default, and nothing it did have changes.
+        decoded: |doc: &VaultDoc| assert_eq!(*doc, as_v1_doc().1),
+        opened: |vault: &crate::service::UnlockedVault| {
+            let expected = as_v1_doc().1;
+            assert_eq!(vault.doc.contacts, expected.contacts);
+            assert_eq!(vault.doc.reminders, expected.reminders);
+        },
     }
 
     /// A v2 document with automations, as v2 stored them.
@@ -884,30 +961,24 @@ mod tests {
         json
     }
 
-    /// v2 → v3: an automation becomes a workflow with the same id, its last
-    /// date the schedule's mark, its runs workflow runs with the same outcome;
-    /// in both v2 encodings.
-    #[test]
-    fn a_v2_automation_migrates_to_a_workflow_from_json_and_pack() {
-        let json = v2_with_automations();
-        for (bytes, fmt) in [
-            (serde_json::to_vec(&json).unwrap(), SnapshotFormat::Json),
-            (
-                rmp_serde::to_vec_named(&json).unwrap(),
-                SnapshotFormat::Pack,
-            ),
-        ] {
-            let decoded = decode_versioned(&bytes, fmt).unwrap();
-            assert_eq!(decoded.from_version, 2, "{fmt:?}");
-            let doc = decoded.doc;
-            assert_eq!(doc.version, VAULT_FORMAT_VERSION);
+    migration_cases! {
+        version: 2,
+        formats: [
+            Json as a_v2_file_in_json_migrates_and_is_backed_up,
+            Pack as a_v2_file_in_pack_migrates_and_is_backed_up,
+        ],
+        payload: v2_with_automations(),
+        // v2 -> v3: an automation becomes a workflow with the same id, its
+        // last date the schedule's mark, its runs workflow runs with the
+        // same outcome.
+        decoded: |doc: &VaultDoc| {
             let workflow = doc
                 .workflows
                 .iter()
                 .find(|item| item.id == "salary")
-                .unwrap();
+                .expect("the automation became a workflow");
             assert_eq!(workflow.name, "Salary");
-            let spec = workflow.automation.as_ref().unwrap();
+            let spec = workflow.automation.as_ref().expect("the automation form");
             assert_eq!(
                 spec.schedule,
                 crate::model::planning::Schedule::Monthly { day: 20 }
@@ -916,7 +987,7 @@ mod tests {
                 spec.preset,
                 Some(crate::model::planning::AutomationPreset::Salary)
             );
-            let graph = crate::workflow::Graph::parse(&workflow.graph).unwrap();
+            let graph = crate::workflow::Graph::parse(&workflow.graph).expect("the graph parses");
             assert!(!crate::workflow::validate::has_errors(
                 &crate::workflow::validate(&graph)
             ));
@@ -924,7 +995,7 @@ mod tests {
                 .workflow_state
                 .iter()
                 .find(|state| state.workflow_id == "salary")
-                .unwrap();
+                .expect("the schedule mark");
             assert_eq!(
                 state.marks.get("schedule:t").map(String::as_str),
                 Some("2026-09-20T09:00:00Z")
@@ -948,35 +1019,16 @@ mod tests {
                 },
                 Vec::new()
             )));
-        }
-    }
-
-    /// Opening a v2 vault with automations keeps the untouched file as
-    /// `.v2.bak`, and the automations show as before.
-    #[test]
-    fn opening_a_v2_vault_backs_it_up_and_keeps_its_automations() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("v2.wallet");
-        let plain = rmp_serde::to_vec_named(&v2_with_automations()).unwrap();
-        let (header, _, _) = crypto::random_header(SnapshotFormat::Pack);
-        let file = crypto::seal(&header, b"pw", &plain).unwrap();
-        crypto::atomic_write(&path, &file).unwrap();
-
-        let vault = crate::service::UnlockedVault::open(path.clone(), "pw").unwrap();
-        let automations = vault.automations();
-        assert_eq!(automations.len(), 1);
-        assert_eq!(
-            automations[0].last_planned_at.as_deref(),
-            Some("2026-09-20T09:00:00Z")
-        );
-        assert_eq!(vault.automation_runs(Some("salary")).len(), 3);
-        drop(vault);
-        assert_eq!(
-            std::fs::read(dir.path().join("v2.wallet.v2.bak")).unwrap(),
-            file
-        );
-        let (decoded, _) = VaultFile::open_versioned(&path, "pw").unwrap();
-        assert_eq!(decoded.from_version, VAULT_FORMAT_VERSION);
+        },
+        opened: |vault: &crate::service::UnlockedVault| {
+            let automations = vault.automations();
+            assert_eq!(automations.len(), 1);
+            assert_eq!(
+                automations[0].last_planned_at.as_deref(),
+                Some("2026-09-20T09:00:00Z")
+            );
+            assert_eq!(vault.automation_runs(Some("salary")).len(), 3);
+        },
     }
 
     /// v2 carries field names: a field missing from an older v2 file takes its

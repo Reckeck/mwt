@@ -36,21 +36,17 @@ fn save_recents(app: &AppHandle, recents: &[RecentVault]) {
     write_recents(&recents_path(app), recents);
 }
 
+/// The list as it is on disk: no file yet means no recents, an unreadable
+/// one is kept aside and said so (`trade_core::jsonstore`).
 fn read_recents(path: &Path) -> Vec<RecentVault> {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+    trade_core::jsonstore::read::<Vec<RecentVault>>(path).or_default_logged("recent vaults")
 }
 
+/// Write the list atomically: a half-written file would read as "no recents".
 fn write_recents(path: &Path, recents: &[RecentVault]) {
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+    if let Err(err) = trade_core::jsonstore::write(path, recents) {
+        eprintln!("recent vaults: not saved: {err}");
     }
-    let _ = std::fs::write(
-        path,
-        serde_json::to_string_pretty(recents).unwrap_or_default(),
-    );
 }
 
 /// Point recents that lay in a moved app directory (the default vault) at

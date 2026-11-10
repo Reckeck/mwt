@@ -338,3 +338,9 @@ impl From<VaultDocV1> for VaultDocV2 {
         }
     }
 }
+
+/// Where v1 sits in the chain (`storage::chain`): one step up is v2.
+impl super::chain::Legacy for VaultDocV1 {
+    type Next = VaultDocV2;
+    const VERSION: u32 = 1;
+}

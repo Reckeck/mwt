@@ -504,7 +504,11 @@ release files. JSON and MessagePack store names: a field added with
 `#[serde(default)]` is read from an old v2 file without a version bump.
 
 Reading: first `version`, then the document is parsed by the schema of that version and
-migrated along the chain. The v1 schema is frozen in `crates/core/src/storage/v1.rs`
+migrated along the chain. The chain is one listing — `schema_chain!` in
+`crates/core/src/storage/chain.rs`, newest version first; each frozen schema says through
+`impl Legacy` which version it is and which schema is one step up, so the order is checked
+by the compiler and a step cannot be skipped by accident.
+The v1 schema is frozen in `crates/core/src/storage/v1.rs`
 (types that changed in v2 are copied, the rest are reused) and is never edited.
 v1 → v2 loses nothing: new fields get default values.
 Before the first write after a migration the file is copied to `<vault>.v1.bak`;
