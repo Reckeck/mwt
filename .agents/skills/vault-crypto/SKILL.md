@@ -69,10 +69,12 @@ Renaming a field, changing its type or meaning, removing an enum variant:
    the schema one step up), add one line to `schema_chain!` in
    `storage/chain.rs` and bump `VAULT_FORMAT_VERSION`. There is no `match` to
    edit: `decode_versioned` is generated from that listing.
-4. Tests: an old document in JSON **and** the binary format migrates without
-   loss (example: `a_v1_document_migrates_from_json_and_bincode`); opening
-   creates `.vN.bak` and rewrites the file
-   (`opening_a_v1_vault_backs_it_up_and_rewrites_it`).
+4. Tests: one `migration_cases!` block in `storage/mod.rs` with the payload
+   of that version and the formats a file of that era could hold — JSON
+   **and** the binary format. It generates one test per format: the document
+   migrates without loss, opening creates `.vN.bak`, the file is rewritten at
+   the current version and is migrated only once (example: the v1 block, with
+   `Json` and `Bin`).
 5. Update `docs/data-model.md` ("Versions and migrations").
 
 A bump without a migration is not allowed: `decode` rejects an unknown
