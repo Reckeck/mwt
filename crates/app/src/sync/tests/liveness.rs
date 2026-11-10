@@ -11,9 +11,6 @@ struct RawPeer {
 }
 
 async fn raw_peer(main: &TestHost) -> RawPeer {
-    use trade_core::sync::protocol::{Hello, Message, decode, encode};
-    use trade_core::sync::session::Handshake;
-
     let raw_key = DeviceKey::generate().unwrap();
     let public_key = raw_key.public_hex();
     main.with_vault(|vault| vault.sync_trust_peer("raw-device", "Raw", &public_key))
@@ -25,49 +22,15 @@ async fn raw_peer(main: &TestHost) -> RawPeer {
         let (stream, peer) = listener.accept().await.unwrap();
         crate::sync::link::run(server, stream, peer, 1, false).await;
     });
-    let stream = TcpStream::connect(addr).await.unwrap();
-    let (mut reader, mut writer) = stream.into_split();
-    let mut handshake = Handshake::initiator(&raw_key).unwrap();
-    while !handshake.is_finished() {
-        if handshake.my_turn() {
-            crate::sync::link::write_frame(&mut writer, &handshake.write().unwrap())
-                .await
-                .unwrap();
-        } else {
-            handshake
-                .read(&crate::sync::link::read_frame(&mut reader).await.unwrap())
-                .unwrap();
-        }
-    }
-    let mut channel = handshake.finish().unwrap();
+    let mut raw = RawLink::dial(addr, &raw_key).await;
     let vault_id = main.with_vault(|vault| Ok(vault.doc.id.clone())).unwrap();
-    let hello = Message::Hello(Hello {
-        protocol: trade_core::sync::protocol::PROTOCOL_VERSION,
-        format: trade_core::VAULT_FORMAT_VERSION,
-        device_id: "raw-device".into(),
-        device_name: "Raw".into(),
-        proof: channel.proof(&vault_id),
-        now_ms: trade_core::sync::stamp::now_ms(),
-        main: false,
-        prefer_main: false,
-        needs_pairing: false,
-        rank: 0,
-        instance: String::new(),
-        unreached: false,
-        app_version: String::new(),
-    });
-    for frame in channel.seal(&encode(&hello).unwrap()).unwrap() {
-        crate::sync::link::write_frame(&mut writer, &frame)
-            .await
-            .unwrap();
-    }
-    loop {
-        let frame = crate::sync::link::read_frame(&mut reader).await.unwrap();
-        if let Some(bytes) = channel.open(&frame).unwrap() {
-            assert!(matches!(decode(&bytes).unwrap(), Message::Hello(_)));
-            break;
-        }
-    }
+    raw.introduce(&vault_id, raw_identity("raw-device", "Raw"))
+        .await;
+    let RawLink {
+        reader,
+        writer,
+        channel,
+    } = raw;
     // The write half stays open (dropped with the test) but is never used again.
     std::mem::forget(writer);
     RawPeer { reader, channel }

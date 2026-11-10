@@ -12,7 +12,7 @@ the two sides differ. The policy is binding for every sync change.
 Every session starts with a `Hello` from each side (the dialer and the listener
 alike). It carries:
 
-- `protocol`: `PROTOCOL_VERSION`, now 3 (2 added the `security` notice category, 3 made purchases entries of their own);
+- `protocol`: `PROTOCOL_VERSION`, now 4 (2 added the `security` notice category, 3 made purchases entries of their own, 4 moved the identity behind the vault proof);
 - `format`: `VAULT_FORMAT_VERSION`, now 3;
 - `app_version`: the sender's app version, informational only.
 
@@ -163,7 +163,7 @@ With an old device the whole field is still one value:
 5. Every change states what an old peer sees, what the new side does with it, and
    the test.
 
-The fields added by the repair stages follow the rules: `Hello.app_version`,
+The fields added by the repair stages follow the rules: `Hello.commit`, `Hello.app_version`,
 `Hello.instance`, `Hello.unreached`, `SyncState.paused`, `SyncState.cut_by`,
 `TxOrigin::Workflow.run_key` and `Settings.schedule_timezone`. The cut-off notice
 reuses the existing `Bye { reason }` variant.
@@ -173,6 +173,8 @@ reuses the existing `Bye { reason }` variant.
 In `crates/core/src/sync/protocol.rs` and `crates/app/src/sync/tests.rs`:
 
 - an older `Hello` without the newer fields decodes, with an empty version;
+- a protocol 3 `Hello` decodes in a protocol 4 build, and a protocol 4 first
+  `Hello` decodes in a protocol 3 build with an empty identity;
 - an unknown message variant is an error, not a panic;
 - a different protocol or format is refused on both sides once, the peer stays
   trusted and the address is not marked failing;
@@ -361,6 +363,51 @@ Known limit (catalog 85). An older build drops a new optional field when it
 rebuilds a record, so its digest never equals the newer build's. Each session
 there gives a plan, a journal line and a toast until it is updated. A newer
 build cannot fix this from its side.
+
+## Protocol 4: identity after the vault proof
+
+`PROTOCOL_VERSION` goes from 3 to 4 (catalog item 46). Before, the first
+`Hello` carried the device id, name, mDNS instance, main flag, rank and clock,
+so any device on the network that dialed learned them before it proved it holds
+the vault; and the pairing code came from the handshake hash alone, so a device
+in the middle that also knew the vault id could grind its key until both codes
+matched (about 2^20 tries).
+
+Now the first `Hello` carries only `protocol`, `format`, the proof,
+`app_version` and, from the dialer, `commit = SHA256(nonce_d)`; the identity
+fields are sent empty. After the proof and the versions pass, the listener
+sends `Message::Identity` with its nonce, the dialer answers with its own, and
+the listener checks the dialer's nonce against the commit (`SYNC_CHANNEL`
+otherwise). The pairing code is `HMAC(handshake_hash, "mwt-sas4" || nonce_d ||
+nonce_l)`. Steps and the diagram: [Pairing and trust](pairing.md#a-session-opens-noise-hello-and-identity).
+
+- **3 and 4 do not sync.** Devices on the previous version stop syncing with
+  updated ones until they are updated too. Nothing is exchanged and nothing
+  changes in either vault; trust is kept and the pair joins by itself once both
+  are updated.
+- **An old build still refuses cleanly.** The first `Hello` keeps the variant
+  and the shape of protocol 3 (`commit` is a new `#[serde(default)]` field, an
+  old build ignores it), so a protocol 3 build decodes it, verifies the proof and
+  shows its usual `SYNC_VERSION_MISMATCH`. The device name in its message is
+  empty (the old text cannot be changed); the version of the new side is shown.
+  `Message::Identity` never reaches an old build: it is sent only after the
+  versions matched.
+- **The new side names the old device.** A protocol 3 `Hello` is full, so the
+  protocol 4 side shows the old device's name and version. Between two newer
+  builds that differ (a later protocol or format), the name comes from the list
+  of trusted devices by the Noise key; an untrusted one stays unnamed.
+- **No vault change.** Nothing in the vault format changes; no migration.
+
+Tests: `pairing_code_depends_on_both_nonces`, `commit_mismatch_is_rejected`
+(`sync/session.rs`); `an_identity_round_trips`,
+`a_protocol_three_hello_still_decodes`,
+`a_protocol_four_hello_decodes_in_an_old_build_without_identity`
+(`sync/protocol.rs`); `a_device_without_the_vault_learns_no_name`,
+`a_wrong_nonce_ends_the_session`, `a_protocol_three_dialer_is_refused_with_its_name`,
+`a_protocol_three_listener_is_refused_with_its_name`,
+`both_devices_show_one_code_bound_to_the_nonces`
+(`crates/app/src/sync/tests/handshake.rs`); `a_protocol_three_peer_is_refused_on_both_sides`
+(`crates/app/src/sync/tests.rs`).
 
 ## What an old peer still gets wrong
 

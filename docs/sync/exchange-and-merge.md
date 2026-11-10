@@ -42,8 +42,10 @@ sequenceDiagram
     participant A as Device A
     participant B as Device B
     A->>B: Noise handshake
-    A->>B: Hello (versions, proof, role)
-    B->>A: Hello
+    A->>B: Hello (versions, proof, commit)
+    B->>A: Hello (versions, proof)
+    B->>A: Identity (device, role, nonce)
+    A->>B: Identity (device, role, nonce)
     Note over A,B: checks and optional pairing, see Pairing and trust
     A->>B: Peers (trusted devices)
     B->>A: Peers
@@ -65,7 +67,7 @@ sequenceDiagram
 
 The steps, as `link.rs` runs them:
 
-1. **Noise and Hello.** See [Pairing and trust](pairing.md).
+1. **Noise, Hello and Identity.** See [Pairing and trust](pairing.md).
 2. **Peers.** Both sides send their trusted-device list and merge the other's.
    If the merge shows that this device was revoked, the session ends
    (`SYNC_REVOKED`).

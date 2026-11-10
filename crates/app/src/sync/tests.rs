@@ -20,6 +20,7 @@ use trade_core::service::{SyncTap, UnlockedVault};
 use trade_core::sync::session::DeviceKey;
 
 mod dialing;
+mod handshake;
 mod identity;
 mod liveness;
 
@@ -281,6 +282,122 @@ fn seed(host: &TestHost, comment: &str) {
         Ok(())
     })
     .unwrap();
+}
+
+// -- a peer by hand ------------------------------------------------------------
+
+/// The other end of a link, driven by hand: Noise done, messages one by one.
+struct RawLink {
+    reader: tokio::net::tcp::OwnedReadHalf,
+    writer: tokio::net::tcp::OwnedWriteHalf,
+    channel: trade_core::sync::session::Channel,
+}
+
+impl RawLink {
+    /// Finish the Noise handshake on `stream` with `key`, as the dialer or not.
+    async fn handshake(stream: TcpStream, key: &DeviceKey, dialer: bool) -> Self {
+        use trade_core::sync::session::Handshake;
+        let (mut reader, mut writer) = stream.into_split();
+        let mut handshake = if dialer {
+            Handshake::initiator(key).unwrap()
+        } else {
+            Handshake::responder(key).unwrap()
+        };
+        while !handshake.is_finished() {
+            if handshake.my_turn() {
+                super::link::write_frame(&mut writer, &handshake.write().unwrap())
+                    .await
+                    .unwrap();
+            } else {
+                handshake
+                    .read(&super::link::read_frame(&mut reader).await.unwrap())
+                    .unwrap();
+            }
+        }
+        Self {
+            reader,
+            writer,
+            channel: handshake.finish().unwrap(),
+        }
+    }
+
+    async fn dial(addr: std::net::SocketAddr, key: &DeviceKey) -> Self {
+        Self::handshake(TcpStream::connect(addr).await.unwrap(), key, true).await
+    }
+
+    async fn send(&mut self, message: &trade_core::sync::protocol::Message) {
+        let bytes = trade_core::sync::protocol::encode(message).unwrap();
+        for frame in self.channel.seal(&bytes).unwrap() {
+            super::link::write_frame(&mut self.writer, &frame)
+                .await
+                .unwrap();
+        }
+    }
+
+    async fn send_raw(&mut self, bytes: &[u8]) {
+        for frame in self.channel.seal(bytes).unwrap() {
+            super::link::write_frame(&mut self.writer, &frame)
+                .await
+                .unwrap();
+        }
+    }
+
+    /// The next message; `None` once the connection closed (or after 10 s).
+    async fn next(&mut self) -> Option<trade_core::sync::protocol::Message> {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let frame = super::link::read_frame(&mut self.reader).await.ok()?;
+                if let Some(bytes) = self.channel.open(&frame).unwrap() {
+                    return Some(trade_core::sync::protocol::decode(&bytes).unwrap());
+                }
+            }
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
+    /// Protocol 4 as the dialer: the hello with a proof and a commit, then
+    /// the other side's hello and identity, then `ours` with the committed
+    /// nonce. The other side's identity.
+    async fn introduce(
+        &mut self,
+        vault_id: &str,
+        ours: trade_core::sync::protocol::Identity,
+    ) -> trade_core::sync::protocol::Identity {
+        use trade_core::sync::protocol::{Hello, Message};
+        use trade_core::sync::session::commit_to;
+        let hello = Hello::first(
+            trade_core::sync::protocol::PROTOCOL_VERSION,
+            trade_core::VAULT_FORMAT_VERSION,
+            self.channel.proof(vault_id),
+            String::new(),
+            commit_to(&ours.nonce),
+        );
+        self.send(&Message::Hello(hello)).await;
+        assert!(matches!(self.next().await, Some(Message::Hello(_))));
+        let Some(Message::Identity(theirs)) = self.next().await else {
+            panic!("no identity after the hellos");
+        };
+        self.send(&Message::Identity(ours)).await;
+        theirs
+    }
+}
+
+/// The identity of a hand-driven client that trusts the other side.
+fn raw_identity(device_id: &str, name: &str) -> trade_core::sync::protocol::Identity {
+    trade_core::sync::protocol::Identity {
+        device_id: device_id.into(),
+        device_name: name.into(),
+        now_ms: trade_core::sync::stamp::now_ms(),
+        main: false,
+        prefer_main: false,
+        needs_pairing: false,
+        rank: 0,
+        instance: String::new(),
+        unreached: false,
+        nonce: trade_core::sync::session::new_nonce(),
+    }
 }
 
 /// The same vault twice (a copied file).
@@ -1086,8 +1203,16 @@ async fn a_different_protocol_is_refused_on_both_sides() {
 /// protocol 2 builds, whose item holds its purchases whole.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_protocol_two_peer_is_refused_on_both_sides() {
-    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 3);
+    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 4);
     assert_refused_on_both_sides((2, trade_core::VAULT_FORMAT_VERSION)).await;
+}
+
+/// Protocol 4 (identity after the vault proof) does not sync with protocol
+/// 3 builds; a real protocol 3 build is played by hand in `handshake.rs`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_protocol_three_peer_is_refused_on_both_sides() {
+    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 4);
+    assert_refused_on_both_sides((3, trade_core::VAULT_FORMAT_VERSION)).await;
 }
 
 /// The `sync-error` payloads of a device, in order.
@@ -1145,9 +1270,6 @@ async fn a_different_format_is_refused_on_both_sides() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn an_unknown_message_variant_closes_the_session_without_a_panic() {
-    use trade_core::sync::protocol::{Hello, Message, decode, encode};
-    use trade_core::sync::session::Handshake;
-
     let dir = tempfile::tempdir().unwrap();
     let (left, _right) = same_vault(dir.path());
     let (main, main_events) = device("Laptop", left, SyncRole::Main);
@@ -1165,58 +1287,18 @@ async fn an_unknown_message_variant_closes_the_session_without_a_panic() {
         super::link::run(server, stream, peer, 1, false).await;
     });
 
-    // A peer by hand: the handshake and a valid hello, then a message no build knows.
-    let stream = TcpStream::connect(addr).await.unwrap();
-    let (mut reader, mut writer) = stream.into_split();
-    let mut handshake = Handshake::initiator(&raw_key).unwrap();
-    while !handshake.is_finished() {
-        if handshake.my_turn() {
-            super::link::write_frame(&mut writer, &handshake.write().unwrap())
-                .await
-                .unwrap();
-        } else {
-            handshake
-                .read(&super::link::read_frame(&mut reader).await.unwrap())
-                .unwrap();
-        }
-    }
-    let mut channel = handshake.finish().unwrap();
+    // A peer by hand: the handshake, valid hellos and identities, then a message no build knows.
+    let mut raw = RawLink::dial(addr, &raw_key).await;
     let vault_id = main.with_vault(|vault| Ok(vault.doc.id.clone())).unwrap();
-    let hello = Message::Hello(Hello {
-        protocol: trade_core::sync::protocol::PROTOCOL_VERSION,
-        format: trade_core::VAULT_FORMAT_VERSION,
-        device_id: "raw-device".into(),
-        device_name: "Raw".into(),
-        proof: channel.proof(&vault_id),
-        now_ms: trade_core::sync::stamp::now_ms(),
-        main: false,
-        prefer_main: false,
-        needs_pairing: false,
-        rank: 0,
-        instance: String::new(),
-        unreached: false,
-        app_version: String::new(),
-    });
-    for frame in channel.seal(&encode(&hello).unwrap()).unwrap() {
-        super::link::write_frame(&mut writer, &frame).await.unwrap();
-    }
-    // Their hello comes back.
-    let their_hello = loop {
-        let frame = super::link::read_frame(&mut reader).await.unwrap();
-        if let Some(bytes) = channel.open(&frame).unwrap() {
-            break decode(&bytes).unwrap();
-        }
-    };
-    assert!(matches!(their_hello, Message::Hello(_)));
+    raw.introduce(&vault_id, raw_identity("raw-device", "Raw"))
+        .await;
     let unknown =
         rmp_serde::to_vec_named(&serde_json::json!({"from_a_newer_build": {"x": 1}})).unwrap();
-    for frame in channel.seal(&unknown).unwrap() {
-        super::link::write_frame(&mut writer, &frame).await.unwrap();
-    }
+    raw.send_raw(&unknown).await;
 
     // The session ends: the connection closes, nothing panicked, the hub is intact.
     let closed = tokio::time::timeout(Duration::from_secs(10), async {
-        while super::link::read_frame(&mut reader).await.is_ok() {}
+        while super::link::read_frame(&mut raw.reader).await.is_ok() {}
     })
     .await;
     assert!(closed.is_ok(), "the session did not close");
@@ -2044,8 +2126,7 @@ async fn unreliable_clears_after_stable_time_reports() {
 
 #[tokio::test]
 async fn clock_skew_refusal_is_not_retried() {
-    use trade_core::sync::protocol::{Hello, Message, encode};
-    use trade_core::sync::session::{Handshake, SKEW_REFUSE_MS};
+    use trade_core::sync::session::SKEW_REFUSE_MS;
 
     let dir = tempfile::tempdir().unwrap();
     let (left, _right) = same_vault(dir.path());
@@ -2064,40 +2145,12 @@ async fn clock_skew_refusal_is_not_retried() {
         super::link::run(server, stream, peer, 1, false).await;
     });
 
-    let stream = TcpStream::connect(addr).await.unwrap();
-    let (mut reader, mut writer) = stream.into_split();
-    let mut handshake = Handshake::initiator(&raw_key).unwrap();
-    while !handshake.is_finished() {
-        if handshake.my_turn() {
-            super::link::write_frame(&mut writer, &handshake.write().unwrap())
-                .await
-                .unwrap();
-        } else {
-            handshake
-                .read(&super::link::read_frame(&mut reader).await.unwrap())
-                .unwrap();
-        }
-    }
-    let mut channel = handshake.finish().unwrap();
+    let mut raw = RawLink::dial(addr, &raw_key).await;
     let vault_id = main.with_vault(|vault| Ok(vault.doc.id.clone())).unwrap();
-    let hello = Message::Hello(Hello {
-        protocol: trade_core::sync::protocol::PROTOCOL_VERSION,
-        format: trade_core::VAULT_FORMAT_VERSION,
-        device_id: "raw-device".into(),
-        device_name: "Raw".into(),
-        proof: channel.proof(&vault_id),
-        now_ms: trade_core::sync::stamp::now_ms() + SKEW_REFUSE_MS + 3_600_000,
-        main: false,
-        prefer_main: false,
-        needs_pairing: false,
-        rank: 0,
-        instance: "skewed-instance".into(),
-        unreached: false,
-        app_version: String::new(),
-    });
-    for frame in channel.seal(&encode(&hello).unwrap()).unwrap() {
-        super::link::write_frame(&mut writer, &frame).await.unwrap();
-    }
+    let mut skewed = raw_identity("raw-device", "Raw");
+    skewed.now_ms = trade_core::sync::stamp::now_ms() + SKEW_REFUSE_MS + 3_600_000;
+    skewed.instance = "skewed-instance".into();
+    raw.introduce(&vault_id, skewed).await;
     let joined = tokio::time::timeout(Duration::from_secs(10), session)
         .await
         .expect("session task ended");

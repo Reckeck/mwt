@@ -3,8 +3,10 @@
 //!
 //! - Noise `XX_25519_ChaChaPoly_BLAKE2s`: both sides prove their static key;
 //!   a trusted device is recognised by it.
-//! - The pairing code is six digits from the handshake hash: a device in the
-//!   middle would see two different codes.
+//! - The pairing code is six digits from the handshake hash and a nonce of
+//!   each side: a device in the middle would see two different codes, and the
+//!   dialer commits to its nonce before it sees the listener's, so the middle
+//!   cannot grind its keys until both codes match (protocol 4).
 //! - The vault proof is an HMAC of the handshake hash keyed by the vault id,
 //!   which only someone who decrypted the vault knows; it is bound to the
 //!   role, so a proof cannot be reflected back.
@@ -30,6 +32,30 @@ const CHUNK: usize = NOISE_MAX - TAG_LEN;
 /// session the same way; the detail would only help an attacker.
 fn noise_err(_err: snow::Error) -> Error {
     Error::PeerSync(crate::error::PeerSyncFailure::Channel)
+}
+
+/// Bytes of the nonce each side adds to the pairing code.
+pub const NONCE_LEN: usize = 32;
+
+/// A fresh random nonce for [`Channel::pairing_code`].
+pub fn new_nonce() -> Vec<u8> {
+    rand::random::<[u8; NONCE_LEN]>().to_vec()
+}
+
+/// The commitment the dialer sends in its first `Hello`.
+pub fn commit_to(nonce: &[u8]) -> Vec<u8> {
+    use sha2::Digest;
+    Sha256::digest(nonce).to_vec()
+}
+
+/// The dialer's nonce matches what it committed to; anything else ends the
+/// session like any other broken channel.
+pub fn check_commit(commit: &[u8], nonce: &[u8]) -> Result<()> {
+    if nonce.len() == NONCE_LEN && commit_to(nonce) == commit {
+        Ok(())
+    } else {
+        Err(Error::PeerSync(crate::error::PeerSyncFailure::Channel))
+    }
 }
 
 /// A static key pair for this device, hex.
@@ -205,9 +231,12 @@ impl Channel {
         hex(&self.remote_static)
     }
 
-    /// The six-digit code both screens show while pairing.
-    pub fn pairing_code(&self) -> String {
-        let digest = mac(&self.hash, &[b"mwt-sas"]).finalize().into_bytes();
+    /// The six-digit code both screens show while pairing: bound to this
+    /// connection and to the nonces of the dialer and the listener, in that order.
+    pub fn pairing_code(&self, dialer_nonce: &[u8], listener_nonce: &[u8]) -> String {
+        let digest = mac(&self.hash, &[b"mwt-sas4", dialer_nonce, listener_nonce])
+            .finalize()
+            .into_bytes();
         let number = u32::from_be_bytes([digest[0], digest[1], digest[2], digest[3]]) % 1_000_000;
         format!("{number:06}")
     }
@@ -402,10 +431,74 @@ mod tests {
         let left = DeviceKey::generate().unwrap();
         let right = DeviceKey::generate().unwrap();
         let (one, two) = handshake(&left, &right);
-        assert_eq!(one.pairing_code(), two.pairing_code());
-        assert_eq!(one.pairing_code().len(), 6);
+        let (dialer, listener) = (new_nonce(), new_nonce());
+        assert_eq!(
+            one.pairing_code(&dialer, &listener),
+            two.pairing_code(&dialer, &listener)
+        );
         assert_eq!(one.remote_static, right.public);
         assert_eq!(two.remote_static, left.public);
+    }
+
+    /// Protocol 4: the code binds the dialer's committed nonce and the
+    /// listener's nonce, so a device in the middle cannot grind its key.
+    #[test]
+    fn pairing_code_depends_on_both_nonces() {
+        let (one, two) = handshake(
+            &DeviceKey::generate().unwrap(),
+            &DeviceKey::generate().unwrap(),
+        );
+        let dialer = [1u8; NONCE_LEN];
+        let listener = [2u8; NONCE_LEN];
+        let code = one.pairing_code(&dialer, &listener);
+        assert_eq!(code, two.pairing_code(&dialer, &listener));
+        assert_eq!(code.len(), 6);
+        assert!(code.chars().all(|digit| digit.is_ascii_digit()));
+        // Several nonces on either side: one fixed pair could collide (1 in 10^6).
+        let by_dialer: std::collections::BTreeSet<String> = (0..8u8)
+            .map(|seed| one.pairing_code(&[seed; NONCE_LEN], &listener))
+            .collect();
+        let by_listener: std::collections::BTreeSet<String> = (0..8u8)
+            .map(|seed| one.pairing_code(&dialer, &[seed; NONCE_LEN]))
+            .collect();
+        assert!(by_dialer.len() > 1, "the dialer's nonce changes the code");
+        assert!(
+            by_listener.len() > 1,
+            "the listener's nonce changes the code"
+        );
+        // The order matters: swapping the roles gives another code.
+        let swapped: std::collections::BTreeSet<String> = (0..8u8)
+            .map(|seed| {
+                let mine = [seed; NONCE_LEN];
+                let other = [seed.wrapping_add(100); NONCE_LEN];
+                one.pairing_code(&mine, &other) + &one.pairing_code(&other, &mine)
+            })
+            .filter(|both| both[..6] != both[6..])
+            .collect();
+        assert!(!swapped.is_empty());
+    }
+
+    #[test]
+    fn commit_mismatch_is_rejected() {
+        let nonce = new_nonce();
+        assert_eq!(nonce.len(), NONCE_LEN);
+        assert_ne!(nonce, new_nonce());
+        let commit = commit_to(&nonce);
+        assert_eq!(commit.len(), 32);
+        assert!(check_commit(&commit, &nonce).is_ok());
+        let channel = |result: Result<()>| {
+            matches!(
+                result,
+                Err(Error::PeerSync(crate::error::PeerSyncFailure::Channel))
+            )
+        };
+        assert!(channel(check_commit(&commit, &new_nonce())));
+        assert!(channel(check_commit(&[], &nonce)));
+        assert!(channel(check_commit(&commit_to(&[]), &[])));
+        assert!(channel(check_commit(
+            &commit_to(&nonce[..16]),
+            &nonce[..16]
+        )));
     }
 
     #[test]

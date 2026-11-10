@@ -3,6 +3,14 @@ import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_NOVEMBER: WhatsNewEntry[] = [
   {
+    id: 'syncProtocol4',
+    date: '2026-11-10',
+    points: [
+      { key: 'update', route: 'settings:sync:sync-devices' },
+      { key: 'private', route: 'settings:sync:sync-devices' },
+    ],
+  },
+  {
     id: 'vaultProtection',
     date: '2026-11-08',
     points: [
