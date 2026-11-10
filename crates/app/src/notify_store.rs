@@ -40,13 +40,16 @@ pub struct NotifyMemory {
     pub last_alert_check: Option<Instant>,
 }
 
+/// Every field defaults: a snapshot written by another build is missing
+/// whatever was added since, and losing one collection must not throw the
+/// rest of the file away.
 #[derive(Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 struct Stored {
     snapshot: Option<NotificationSnapshot>,
     shown: Vec<NoticeRecord>,
     fired_alerts: Vec<(String, String)>,
     /// Absent in a file of an older build: those firings apply as before.
-    #[serde(default)]
     fired_bases: HashMap<String, AlertBase>,
 }
 
@@ -134,11 +137,17 @@ pub fn load(app: &AppHandle) -> NotifyMemory {
     let Ok(plain) = cipher.decrypt(XNonce::from_slice(nonce), sealed) else {
         return memory;
     };
-    if let Ok(stored) = serde_json::from_slice::<Stored>(&plain) {
-        memory.snapshot = stored.snapshot;
-        memory.shown = stored.shown;
-        memory.fired_alerts = stored.fired_alerts;
-        memory.fired_bases = stored.fired_bases;
+    match serde_json::from_slice::<Stored>(&plain) {
+        Ok(stored) => {
+            memory.snapshot = stored.snapshot;
+            memory.shown = stored.shown;
+            memory.fired_alerts = stored.fired_alerts;
+            memory.fired_bases = stored.fired_bases;
+        }
+        // It decrypted, so the keyring key is right and the file is ours:
+        // nothing to retry, but a silent empty snapshot would look like a
+        // first start for ever.
+        Err(err) => eprintln!("notifications: the kept snapshot is unreadable: {err}"),
     }
     memory
 }
@@ -178,6 +187,20 @@ pub fn save(app: &AppHandle, memory: &mut NotifyMemory) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A snapshot file of a build that did not have a field yet still loads,
+    /// with that field at its default.
+    #[test]
+    fn a_snapshot_from_an_older_build_loads_with_defaults() {
+        let stored: Stored = serde_json::from_slice(b"{}").expect("a file from before the fields");
+        assert!(stored.snapshot.is_none());
+        assert!(stored.shown.is_empty());
+        assert!(stored.fired_alerts.is_empty());
+        assert!(stored.fired_bases.is_empty());
+
+        let partial: Stored = serde_json::from_slice(br#"{"shown":[]}"#).expect("older file");
+        assert!(partial.fired_alerts.is_empty());
+    }
 
     #[test]
     fn a_key_survives_hex() {

@@ -12,6 +12,7 @@ pub mod datasource;
 pub mod error;
 pub mod exchange;
 pub mod ipc_contract;
+pub mod jsonstore;
 pub mod market;
 pub mod model;
 pub mod pricing;

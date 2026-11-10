@@ -15,6 +15,7 @@ use crate::Amount;
 
 use crate::error::{Error, Result};
 use crate::ipc_contract::security::AutolockSettings;
+use crate::jsonstore;
 
 /// Settings file name inside the app config directory.
 pub const SETTINGS_FILE: &str = "app_settings.json";
@@ -704,22 +705,27 @@ pub fn currencies_path(config_dir: &Path) -> PathBuf {
 }
 
 /// Read the settings, falling back to defaults when the file is missing or
-/// unreadable. A corrupt file must never keep the app from starting.
+/// unreadable. A corrupt file must never keep the app from starting; its
+/// bytes are kept next to it (see [`crate::jsonstore`]).
 pub fn load_settings(config_dir: &Path) -> AppSettings {
-    let path = settings_path(config_dir);
-    let mut settings: AppSettings = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default();
+    read_settings(config_dir).1
+}
+
+/// [`load_settings`], also telling whether there was no file at all — the
+/// only case that is a first run. A file that would not parse is not one:
+/// the user did have settings, and they are kept as `.broken` instead.
+fn read_settings(config_dir: &Path) -> (bool, AppSettings) {
+    let load = jsonstore::read::<AppSettings>(&settings_path(config_dir));
+    let first_run = matches!(load, jsonstore::Load::Missing);
+    let mut settings = load.or_default_logged("app settings");
     settings.normalize();
-    settings
+    (first_run, settings)
 }
 
 /// [`load_settings`], but a first run (no settings file yet) is stamped with
 /// `today` and saved, so later reads know what came before the install.
 pub fn load_or_init_settings(config_dir: &Path, today: &str) -> AppSettings {
-    let first_run = !settings_path(config_dir).exists();
-    let mut settings = load_settings(config_dir);
+    let (first_run, mut settings) = read_settings(config_dir);
     if first_run {
         settings.installed_at = Some(today.to_string());
         // Unsaved, the next start is a "first run" again: harmless.
@@ -730,22 +736,22 @@ pub fn load_or_init_settings(config_dir: &Path, today: &str) -> AppSettings {
 
 /// Write the settings, creating the config directory when needed.
 pub fn save_settings(config_dir: &Path, settings: &AppSettings) -> Result<()> {
-    write_json(&settings_path(config_dir), settings)
+    jsonstore::write(&settings_path(config_dir), settings)
 }
 
 /// Read the last successfully fetched catalog, if there is one.
 pub fn load_currencies(config_dir: &Path) -> Option<SupportedCurrencies> {
-    let path = currencies_path(config_dir);
-    let mut catalog: SupportedCurrencies = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())?;
+    let mut catalog = jsonstore::read::<SupportedCurrencies>(&currencies_path(config_dir))
+        .or_default_logged("currency cache");
     catalog.normalize();
+    // An empty catalog is no catalog: a missing file, and a broken one, both
+    // send the caller to the network or the built-in list.
     (!catalog.is_empty()).then_some(catalog)
 }
 
 /// Cache the catalog so the next offline start still offers real currencies.
 pub fn save_currencies(config_dir: &Path, catalog: &SupportedCurrencies) -> Result<()> {
-    write_json(&currencies_path(config_dir), catalog)
+    jsonstore::write(&currencies_path(config_dir), catalog)
 }
 
 /// Where a currency catalog came from — drives the notice next to the pickers.
@@ -855,17 +861,6 @@ fn merge_catalog(
         CatalogSource::Cache
     };
     (catalog.with_fallback(), source, complete)
-}
-
-fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|err| Error::Io(format!("cannot create {}: {err}", parent.display())))?;
-    }
-    let body =
-        serde_json::to_string_pretty(value).map_err(|err| Error::Serialize(err.to_string()))?;
-    std::fs::write(path, body)
-        .map_err(|err| Error::Io(format!("cannot write {}: {err}", path.display())))
 }
 
 #[cfg(test)]
@@ -1162,6 +1157,23 @@ mod tests {
         let dir = temp_dir("corrupt");
         std::fs::write(settings_path(&dir), "{ not json").expect("write");
         assert_eq!(load_settings(&dir), AppSettings::default());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A corrupt file is not a first run: its bytes are kept next to it, and
+    /// the install day is not stamped as if the app had just arrived.
+    #[test]
+    fn a_corrupt_settings_file_is_kept_aside_and_is_no_first_run() {
+        let dir = temp_dir("corrupt-kept");
+        let path = settings_path(&dir);
+        std::fs::write(&path, "{ not json").expect("write");
+
+        let settings = load_or_init_settings(&dir, "2026-11-10");
+        assert_eq!(settings.installed_at, None);
+        assert_eq!(
+            std::fs::read_to_string(jsonstore::broken_path(&path)).expect("kept copy"),
+            "{ not json"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
