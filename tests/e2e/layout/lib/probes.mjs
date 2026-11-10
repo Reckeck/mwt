@@ -106,15 +106,21 @@ export const TOUCH = `
   const bars = [...document.querySelectorAll('body *')]
     .filter((node) => getComputedStyle(node).position === 'fixed' && node.getBoundingClientRect().height > 0)
     .map((node) => ({ node, rect: node.getBoundingClientRect() }))
-  const underBar = (el, rect) =>
-    bars.some(({ node, rect: bar }) => !node.contains(el) && rect.bottom > bar.top && rect.top < bar.bottom && rect.right > bar.left && rect.left < bar.right)
-  // Half scrolled out of its scroller: measured where the user scrolls it.
+  // The hit area counts, not the box: a 16px checkbox 6px above the bar has its ::after under it.
+  const underBar = (el, rect) => {
+    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2
+    const halfX = Math.max(rect.width, 40) / 2, halfY = Math.max(rect.height, 40) / 2
+    return bars.some(({ node, rect: bar }) => !node.contains(el) && cy + halfY > bar.top && cy - halfY < bar.bottom && cx + halfX > bar.left && cx - halfX < bar.right)
+  }
+  // Half scrolled out of its scroller: measured where the user scrolls it. The hit area counts here
+  // too: a 16px checkbox whose box is inside has its ::after cut by the bottom navigation under the scroller.
   const clipped = (el, rect) => {
+    const cy = rect.top + rect.height / 2, halfY = Math.max(rect.height, 40) / 2
     for (let node = el.parentElement; node; node = node.parentElement) {
       const oy = getComputedStyle(node).overflowY
       if (oy !== 'auto' && oy !== 'scroll') continue
       const box = node.getBoundingClientRect()
-      return rect.top < box.top || rect.bottom > box.bottom
+      return cy - halfY < box.top || cy + halfY > box.bottom
     }
     return false
   }
