@@ -330,6 +330,16 @@ impl From<VaultDocV1> for VaultDocV2 {
             attachments: Vec::new(),
             attachment_keys: Vec::new(),
             shared_events: Vec::new(),
+            // The crypto module came with payload v4.
+            crypto_accounts: Vec::new(),
+            crypto_events: Vec::new(),
+            crypto_overrides: Vec::new(),
+            crypto_tokens: Vec::new(),
+            crypto_positions: Vec::new(),
+            crypto_snapshots: Vec::new(),
+            crypto_cursors: Vec::new(),
+            crypto_prices: Vec::new(),
+            crypto_wiped_at: Vec::new(),
         };
         VaultDocV2 {
             doc,

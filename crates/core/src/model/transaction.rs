@@ -597,6 +597,13 @@ impl TxKind {
         )
     }
 
+    /// Kinds a form may still offer for a new record. Spot and futures trades and DeFi
+    /// actions are read by the crypto module (spec E14); a stored one stays readable and
+    /// editable, nobody types a new one.
+    pub fn typed_by_hand(self) -> bool {
+        !matches!(self, Self::TradeSpot | Self::TradeFutures | Self::Defi)
+    }
+
     pub fn tag(self) -> &'static str {
         match self {
             Self::Topup => "topup",

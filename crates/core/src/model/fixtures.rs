@@ -4,6 +4,11 @@ use crate::Amount;
 use crate::model::category::CategoryGroup;
 use crate::model::chain::Chain;
 use crate::model::contact::{Contact, ContactAccount, ContactKind, DetailKind};
+use crate::model::cryptotrack::{
+    CryptoAccount, CryptoAsset, CryptoCursor, CryptoDirection, CryptoFee, CryptoLeg,
+    CryptoOverride, CryptoPosition, CryptoPricePoint, CryptoSnapshot, CryptoToken, CryptoTx,
+    CryptoTxKind, CryptoWipe, TokenId, TokenVerdict, TrackingRef,
+};
 use crate::model::enrichment::{
     EnrichmentData, EnrichmentRecord, EnrichmentSource, EnrichmentStatus,
 };
@@ -568,6 +573,124 @@ pub fn full_doc() -> VaultDoc {
     doc.tx_properties = vec![crate::model::vault::TxProperty {
         tx_id: "tx1".into(),
         property_id: "flat".into(),
+    }];
+    // The crypto module: one record of every collection, so a round trip and
+    // the sync registry see a filled one.
+    let token = TokenId::new(
+        Chain::Ethereum,
+        "0xA0b86991C6218b36c1d19D4a2e9Eb0cE3606eB48",
+    );
+    doc.crypto_accounts = vec![CryptoAccount {
+        source: Some("etherscan".into()),
+        note: "cold".into(),
+        ..CryptoAccount::new(
+            "cacc-1",
+            "Cold EVM",
+            Chain::Ethereum,
+            "0xAbCd00000000000000000000000000000000Ef01",
+            "2026-11-01T00:00:00Z",
+        )
+    }];
+    doc.crypto_events = vec![CryptoTx {
+        id: "cev-1".into(),
+        chain: Chain::Ethereum,
+        account_id: "cacc-1".into(),
+        time: "2026-11-02T10:00:00Z".into(),
+        block: Some(21_000_000),
+        from: "0xabcd".into(),
+        to: "0xbeef".into(),
+        legs: vec![
+            CryptoLeg {
+                direction: CryptoDirection::Out,
+                asset: CryptoAsset::Native {
+                    chain: Chain::Ethereum,
+                },
+                amount: amount("0.5"),
+                counterparty: Some("0xbeef".into()),
+            },
+            CryptoLeg {
+                direction: CryptoDirection::In,
+                asset: CryptoAsset::Token(token.clone()),
+                amount: amount("1800.25"),
+                counterparty: None,
+            },
+        ],
+        gas: Some(CryptoFee {
+            asset: CryptoAsset::Native {
+                chain: Chain::Ethereum,
+            },
+            amount: amount("0.0021"),
+        }),
+        protocol: Some("uniswap-v3".into()),
+        method: Some("exactInputSingle".into()),
+        kind: CryptoTxKind::Swap,
+        raw: Some("{\"hash\":\"0xdead\"}".into()),
+        tracking: TrackingRef::ChainTx {
+            chain: Chain::Ethereum,
+            hash: "0xdead".into(),
+        },
+    }];
+    doc.crypto_overrides = vec![CryptoOverride {
+        id: "covr-1".into(),
+        event_id: "cev-1".into(),
+        kind: Some(CryptoTxKind::Transfer),
+        comment: Some("to the exchange".into()),
+        categories: vec!["savings".into()],
+        flow_id: Some("flow".into()),
+        contact_id: None,
+        not_exchange: false,
+        hidden: false,
+        fiat_tx_id: Some("tx-1".into()),
+        updated_at: "2026-11-03T00:00:00Z".into(),
+    }];
+    doc.crypto_tokens = vec![CryptoToken {
+        name: "USD Coin".into(),
+        coingecko_id: Some("usd-coin".into()),
+        basis_usd: Some(Amount::parse("0.99").unwrap()),
+        verdict: Some(TokenVerdict::Confirmed),
+        ..CryptoToken::new(token.clone(), "USDC", 6)
+    }];
+    doc.crypto_positions = vec![CryptoPosition {
+        id: "cpos-1".into(),
+        account_id: "cacc-1".into(),
+        chain: Chain::Ethereum,
+        protocol: "aave-v3".into(),
+        name: "USDC supply".into(),
+        legs: vec![CryptoLeg {
+            direction: CryptoDirection::In,
+            asset: CryptoAsset::Token(token.clone()),
+            amount: amount("1000"),
+            counterparty: None,
+        }],
+        receipts: vec![CryptoAsset::Token(TokenId::new(
+            Chain::Ethereum,
+            "0x98c23e9d8f34fefb1b7bd6a91b7ff122d4aa2f93",
+        ))],
+        updated_at: "2026-11-03T00:00:00Z".into(),
+    }];
+    doc.crypto_snapshots = vec![CryptoSnapshot {
+        id: "csnap-1".into(),
+        at: "2026-11-03T00:00:00Z".into(),
+        account_id: Some("cacc-1".into()),
+        value_usd: amount("2800.75"),
+    }];
+    doc.crypto_cursors = vec![CryptoCursor {
+        id: "etherscan|cacc-1".into(),
+        source: "etherscan".into(),
+        account_id: "cacc-1".into(),
+        cursor: Some("21000000".into()),
+        updated_at: "2026-11-03T00:00:00Z".into(),
+    }];
+    doc.crypto_prices = vec![CryptoPricePoint {
+        token_key: token.key(),
+        value_usd: amount("1.0001"),
+        ts: "2026-11-03T00:00:00Z".into(),
+        source: "coingecko".into(),
+    }];
+    doc.crypto_wiped_at = vec![CryptoWipe {
+        id: "cwipe-1".into(),
+        at: "2026-10-01T00:00:00Z".into(),
+        device_id: "devaaaaa".into(),
     }];
     // Sync bookkeeping, including a stored record value (MessagePack must
     // carry arbitrary JSON in a batch for undo).

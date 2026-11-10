@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::state::{RecordState, TrustedPeer};
 use crate::error::{Error, Result};
+use crate::ipc_contract::security::SecurityLevel;
 
 /// Bumped on an incompatible change; devices on different versions refuse
 /// to sync and ask to update instead.
@@ -168,6 +169,16 @@ pub struct Identity {
     /// [`super::session::NONCE_LEN`] random bytes for the pairing code; the
     /// dialer's must match the commit of its `Hello`.
     pub nonce: Vec<u8>,
+    /// How the sender's vault is protected. A level-3 sender leaves the
+    /// crypto module's records out of everything it sends to a receiver below
+    /// level 3 (spec E6). Absent from an older build, which then counts as
+    /// the lowest level: nothing crypto is sent to a device that did not say.
+    #[serde(default = "lowest_level")]
+    pub security_level: SecurityLevel,
+}
+
+fn lowest_level() -> SecurityLevel {
+    SecurityLevel::Ledger
 }
 
 pub fn encode(message: &Message) -> Result<Vec<u8>> {
@@ -281,7 +292,20 @@ mod tests {
             instance: "phone._mwt".into(),
             unreached: true,
             nonce: vec![7; 32],
+            security_level: SecurityLevel::Crypto,
         }
+    }
+
+    #[test]
+    fn an_identity_without_a_level_counts_as_the_lowest() {
+        let mut value = serde_json::to_value(identity()).unwrap();
+        value.as_object_mut().unwrap().remove("security_level");
+        let bytes = rmp_serde::to_vec_named(&value).unwrap();
+        let read: Identity = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(read.security_level, SecurityLevel::Ledger);
+        let full = rmp_serde::to_vec_named(&identity()).unwrap();
+        let read: Identity = rmp_serde::from_slice(&full).unwrap();
+        assert_eq!(read.security_level, SecurityLevel::Crypto);
     }
 
     #[test]

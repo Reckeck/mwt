@@ -167,9 +167,9 @@ fn run_of(run: AutomationRunV2) -> WorkflowRun {
     }
 }
 
-/// Where v2 sits in the chain (`storage::chain`): one step up is the live
-/// document, so this is the last step of a migration.
+/// Where v2 sits in the chain (`storage::chain`): one step up is v3 (the
+/// `From` above builds the document this step hands over).
 impl super::chain::Legacy for VaultDocV2 {
-    type Next = VaultDoc;
+    type Next = super::v3::VaultDocV3;
     const VERSION: u32 = 2;
 }

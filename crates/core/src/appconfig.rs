@@ -92,6 +92,20 @@ pub struct AppSettings {
     /// `None` = not asked yet.
     #[serde(default)]
     pub enrichment_opt_in: Option<bool>,
+    /// Consent to read the followed crypto addresses from public explorers and
+    /// nodes in the background (spec E6); `None` = not asked yet. Without a
+    /// yes the module makes no network call. A device's own answer: it is not
+    /// part of the vault and not synced. Not sent to the frontend; the
+    /// tracking status carries it.
+    #[serde(default)]
+    #[ts(skip)]
+    pub crypto_tracking_consent: Option<bool>,
+    /// When the consent above was given (RFC 3339), on this device; cleared
+    /// when it is withdrawn, so a later yes records its own date. `None` for a
+    /// consent given before the date was kept. Per device, like the consent.
+    #[serde(default)]
+    #[ts(optional)]
+    pub crypto_tracking_consent_at: Option<String>,
     /// System-wide key combination that opens "+ Transaction", in the
     /// `CmdOrCtrl+Shift+Space` form; `None` = off, so it never fights the
     /// window manager's own bindings unless the user asks for it.
@@ -304,6 +318,8 @@ impl Default for AppSettings {
             timezone: None,
             inflation: default_inflation(),
             enrichment_opt_in: None,
+            crypto_tracking_consent: None,
+            crypto_tracking_consent_at: None,
             quick_add_shortcut: None,
             completed_tours: Vec::new(),
             seen_whats_new: Vec::new(),
@@ -327,6 +343,12 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
+    /// Whether the user said yes to reading the followed crypto addresses.
+    /// The only gate in front of the module's network calls.
+    pub fn crypto_tracking_allowed(&self) -> bool {
+        self.crypto_tracking_consent == Some(true)
+    }
+
     /// Seconds before the next PIN for the vault at `path` may be tried.
     pub fn pin_retry_after(&self, path: &str, now_secs: u64) -> u64 {
         pin_retry_after_secs(self.pin_failures.get(path), now_secs)
@@ -1050,6 +1072,8 @@ mod tests {
             timezone: Some("Asia/Bangkok".into()),
             inflation: default_inflation(),
             enrichment_opt_in: Some(true),
+            crypto_tracking_consent: Some(true),
+            crypto_tracking_consent_at: Some("2026-11-12T10:00:00Z".into()),
             quick_add_shortcut: Some("CmdOrCtrl+Shift+Space".into()),
             completed_tours: vec!["dashboard".into()],
             seen_whats_new: vec!["2026-10-round-13".into()],

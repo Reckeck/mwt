@@ -17,8 +17,9 @@
 //!
 //! The payload's `version` is read first, then the document is decoded with
 //! the schema of that version and migrated up step by step (`v1` → `v2` →
-//! current; v3 runs automations as workflows, see `v2`). The steps are
-//! composed from one listing in [`chain`], not by hand.
+//! `v3` → current; v3 runs automations as workflows, see `v2`, and v4 opens
+//! the crypto module's collections, see `v3`). The steps are composed from
+//! one listing in [`chain`], not by hand.
 //! A version from the future is refused. To change the schema in a way an
 //! older file cannot be read with: freeze the current shape in a `vN` module,
 //! bump [`crate::VAULT_FORMAT_VERSION`], add the step (one `From`, one
@@ -41,6 +42,7 @@ use crate::vault_io::local::{
 pub mod chain;
 pub mod v1;
 pub mod v2;
+pub mod v3;
 
 pub use crate::vault_io::local::{VAULT_EXT, VaultLock, backup_path, ensure_wallet_ext};
 
@@ -856,6 +858,16 @@ mod tests {
             }
         }
         let mut expected = doc.clone();
+        // The crypto module came with v4: the v1 field list does not hold it.
+        expected.crypto_accounts.clear();
+        expected.crypto_events.clear();
+        expected.crypto_overrides.clear();
+        expected.crypto_tokens.clear();
+        expected.crypto_positions.clear();
+        expected.crypto_snapshots.clear();
+        expected.crypto_cursors.clear();
+        expected.crypto_prices.clear();
+        expected.crypto_wiped_at.clear();
         expected.workflows.clear();
         expected.workflow_runs.clear();
         expected.notification_log.clear();
@@ -1031,6 +1043,71 @@ mod tests {
         },
     }
 
+    /// The full document as a v3 file holds it, and what it becomes in v4:
+    /// the crypto module's collections came with v4, so a v3 file has none of
+    /// them and nothing else changes.
+    fn as_v3(doc: &VaultDoc) -> (Json, VaultDoc) {
+        let mut json: Json = serde_json::to_value(doc).unwrap();
+        json["version"] = Json::from(3);
+        let root = json.as_object_mut().unwrap();
+        let crypto: Vec<String> = root
+            .keys()
+            .filter(|name| name.starts_with("crypto_"))
+            .cloned()
+            .collect();
+        // The fixture fills every crypto collection, so this also checks the
+        // v3 payload really goes in without them.
+        assert_eq!(crypto.len(), 9, "the crypto collections of the document");
+        for name in &crypto {
+            root.remove(name);
+        }
+        let mut expected = doc.clone();
+        expected.crypto_accounts.clear();
+        expected.crypto_events.clear();
+        expected.crypto_overrides.clear();
+        expected.crypto_tokens.clear();
+        expected.crypto_positions.clear();
+        expected.crypto_snapshots.clear();
+        expected.crypto_cursors.clear();
+        expected.crypto_prices.clear();
+        expected.crypto_wiped_at.clear();
+        (json, expected)
+    }
+
+    /// `as_v3` of the full fixture, built once (see `as_v1_fixture`).
+    fn as_v3_fixture() -> &'static (Json, VaultDoc) {
+        static FIXTURE: std::sync::OnceLock<(Json, VaultDoc)> = std::sync::OnceLock::new();
+        FIXTURE.get_or_init(|| as_v3(&crate::model::fixtures::full_doc()))
+    }
+
+    migration_cases! {
+        version: 3,
+        formats: [
+            Json as a_v3_file_in_json_migrates_and_is_backed_up,
+            Pack as a_v3_file_in_pack_migrates_and_is_backed_up,
+        ],
+        payload: as_v3_fixture().0.clone(),
+        // v3 -> v4: no data changes. Everything the file held is still there,
+        // and the crypto collections it could not hold are empty.
+        decoded: |doc: &VaultDoc| {
+            assert_eq!(*doc, as_v3_fixture().1);
+            assert!(doc.crypto_accounts.is_empty());
+            assert!(doc.crypto_events.is_empty());
+            assert!(doc.crypto_prices.is_empty());
+        },
+        opened: |vault: &crate::service::UnlockedVault| {
+            let expected = &as_v3_fixture().1;
+            assert_eq!(vault.doc.contacts, expected.contacts);
+            assert_eq!(vault.doc.transactions, expected.transactions);
+            assert!(vault.doc.crypto_events.is_empty());
+            // A document with no crypto data does not force level 3.
+            assert_eq!(
+                vault.min_allowed_level(),
+                crate::ipc_contract::security::SecurityLevel::Ledger
+            );
+        },
+    }
+
     /// v2 carries field names: a field missing from an older v2 file takes its
     /// default instead of breaking the read (the reason bincode was dropped).
     #[test]
@@ -1042,6 +1119,21 @@ mod tests {
         let out = decode(&bytes, SnapshotFormat::Pack).unwrap();
         assert!(out.notification_log.is_empty());
         assert_eq!(out.contacts, doc.contacts);
+    }
+
+    /// The stored `crypto` setting is still read as written, in both formats an
+    /// old file can hold (spec E14: the switch is gone, the field stays).
+    #[test]
+    fn the_stored_crypto_setting_is_read_back_in_json_and_pack() {
+        for stored in [Some(true), Some(false), None] {
+            let mut doc = crate::model::fixtures::full_doc();
+            doc.settings.crypto = stored;
+            for format in [SnapshotFormat::Json, SnapshotFormat::Pack] {
+                let bytes = encode(&doc, format).unwrap();
+                let out = decode(&bytes, format).unwrap();
+                assert_eq!(out.settings.crypto, stored, "{format:?}");
+            }
+        }
     }
 
     /// A version-1 file from before the schema break says so, instead of

@@ -150,9 +150,9 @@ pub struct Settings {
     /// The user hid the "Where to start" checklist (plan H3; it lived in localStorage).
     #[serde(default)]
     pub onboarding_checklist_hidden: bool,
-    /// The vault keeps crypto: crypto wallets, exchanges and coins are shown.
-    /// `None` = a vault from before the question; [`crate::UnlockedVault::open`]
-    /// answers it from the wallets it already has.
+    /// Whether the vault holds crypto. Derived since spec E14 (the crypto module has data, or a
+    /// hand-made crypto wallet remains): [`crate::UnlockedVault::open`] refreshes this copy, nobody
+    /// sets it. The field stays in the file for compatibility with old and new builds.
     #[serde(default)]
     pub crypto: Option<bool>,
     /// The IANA zone schedule moments are computed in, the same on every
@@ -724,6 +724,43 @@ pub struct VaultDoc {
     /// Shared events: things bought together and split between people.
     #[serde(default)]
     pub shared_events: Vec<crate::model::shared_event::SharedEvent>,
+    // -- the crypto module (stage 2, decision P1 of 2026-11-10) ------------
+    //
+    // Sibling top-level fields instead of one nested object: a sync stamp, a
+    // tombstone and an undo copy are per record, so editing one operation
+    // sends one record and the 16 MiB message limit is never reached.
+    // Nothing derived is stored (balances, average prices): it is computed
+    // from the events. Each field serializes even when empty, so
+    // `every_vault_field_has_a_sync_rule` sees it.
+    /// Addresses the crypto module follows.
+    #[serde(default)]
+    pub crypto_accounts: Vec<crate::model::cryptotrack::CryptoAccount>,
+    /// Operations the module read from its sources.
+    #[serde(default)]
+    pub crypto_events: Vec<crate::model::cryptotrack::CryptoTx>,
+    /// The user's corrections over what a source reported.
+    #[serde(default)]
+    pub crypto_overrides: Vec<crate::model::cryptotrack::CryptoOverride>,
+    /// Tokens the module has met, with what it takes to show and price them.
+    #[serde(default)]
+    pub crypto_tokens: Vec<crate::model::cryptotrack::CryptoToken>,
+    /// Holdings inside protocols (the DeFi stage fills them).
+    #[serde(default)]
+    pub crypto_positions: Vec<crate::model::cryptotrack::CryptoPosition>,
+    /// The module's value over time, so its history survives a refetch.
+    #[serde(default)]
+    pub crypto_snapshots: Vec<crate::model::cryptotrack::CryptoSnapshot>,
+    /// How far each source has read each account: this device's own progress,
+    /// never synced (`sync::registry::LOCAL`).
+    #[serde(default)]
+    pub crypto_cursors: Vec<crate::model::cryptotrack::CryptoCursor>,
+    /// Cached token prices; a cache, so it unions silently between devices.
+    #[serde(default)]
+    pub crypto_prices: Vec<crate::model::cryptotrack::CryptoPricePoint>,
+    /// Wipes of the module, so the other devices learn about one through an
+    /// ordinary sync instead of sending the data back.
+    #[serde(default)]
+    pub crypto_wiped_at: Vec<crate::model::cryptotrack::CryptoWipe>,
 }
 
 /// JSON Schema of the decrypted document.
@@ -789,6 +826,15 @@ impl Default for VaultDoc {
             attachment_keys: Vec::new(),
             shared_events: Vec::new(),
             sync: crate::sync::SyncState::default(),
+            crypto_accounts: Vec::new(),
+            crypto_events: Vec::new(),
+            crypto_overrides: Vec::new(),
+            crypto_tokens: Vec::new(),
+            crypto_positions: Vec::new(),
+            crypto_snapshots: Vec::new(),
+            crypto_cursors: Vec::new(),
+            crypto_prices: Vec::new(),
+            crypto_wiped_at: Vec::new(),
         }
     }
 }

@@ -104,6 +104,7 @@ macro_rules! schema_chain {
 
 schema_chain! {
     current: VaultDoc = crate::VAULT_FORMAT_VERSION,
+    3 => super::v3::VaultDocV3,
     2 => super::v2::VaultDocV2,
     1 => super::v1::VaultDocV1,
 }
@@ -208,6 +209,10 @@ mod tests {
         );
         assert_eq!(
             <super::super::v2::VaultDocV2 as Legacy>::VERSION + 1,
+            <super::super::v3::VaultDocV3 as Legacy>::VERSION
+        );
+        assert_eq!(
+            <super::super::v3::VaultDocV3 as Legacy>::VERSION + 1,
             crate::VAULT_FORMAT_VERSION
         );
     }

@@ -397,6 +397,7 @@ fn raw_identity(device_id: &str, name: &str) -> trade_core::sync::protocol::Iden
         instance: String::new(),
         unreached: false,
         nonce: trade_core::sync::session::new_nonce(),
+        security_level: trade_core::ipc_contract::security::SecurityLevel::Ledger,
     }
 }
 
@@ -2051,6 +2052,7 @@ fn peer_of(session: &str, device_id: &str) -> super::link::Peer {
         take_main_heard: Default::default(),
         take_main_ordered: Default::default(),
         stable_reports: Default::default(),
+        security_level: trade_core::ipc_contract::security::SecurityLevel::Ledger,
     }
 }
 
