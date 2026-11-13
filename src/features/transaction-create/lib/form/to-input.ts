@@ -59,11 +59,11 @@ export function formToInput(form: TransactionFormState): TransactionInput | null
       }
     case 'convert': {
       if (!form.fromAsset || !form.toAsset || !form.from || !form.to) return null
-      const p2p = form.convertMode === 'p2p'
+      const through = form.via !== null
       return {
         type: 'convert',
         ...shared,
-        common: p2p
+        common: through
           ? {
               ...shared.common,
               contact_id: viaContact(form.via) ?? shared.common.contact_id,

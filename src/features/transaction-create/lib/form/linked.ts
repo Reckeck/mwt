@@ -2,6 +2,7 @@
 
 import { parseDecimal } from '@/shared/lib/decimal'
 import type { TransactionFormState } from './form-state'
+import { splitBalanced, splitTotals } from './form-helpers'
 import { formToInput } from './to-input'
 
 /** Kinds that may be split between several recipients. */
@@ -38,10 +39,21 @@ function trimmed(value: number, places: number): string {
 /**
  * One exchange paid out to several accounts: one operation per account, the
  * given amount split in proportion to what lands on each; the first takes
- * the rounding rest so the parts add up to exactly what was given.
+ * the rounding rest so the parts add up to exactly what was given. `toAmount`
+ * is the total received; the first account gets `toShare`, or what the extra
+ * rows leave. The fee belongs to the exchange, so only the first part carries
+ * it. `null` while the shares do not add up to the total.
  */
 function splitConvert(form: TransactionFormState, main: Extract<TransactionInput, { type: 'convert' }>) {
-  const rows = [{ to: form.to, receive: form.toAmount }, ...form.extra]
+  const totals = splitTotals(form)
+  if (!totals || !splitBalanced(totals)) return null
+  const digits = [form.toAmount, form.toShare, ...form.extra.map((row) => row.receive)].map(
+    (raw) => raw.split(/[.,]/)[1]?.trim().length ?? 0,
+  )
+  const receivePlaces = Math.max(2, ...digits)
+  const extraSum = form.extra.reduce((sum, row) => sum + Number(parseDecimal(row.receive) ?? 0), 0)
+  const first = form.toShare.trim() ? form.toShare.trim() : trimmed(totals.total - extraSum, receivePlaces)
+  const rows = [{ to: form.to, receive: first }, ...form.extra]
   const received = rows.map((row) => Number(parseDecimal(row.receive) ?? Number.NaN))
   const total = received.reduce((sum, value) => sum + value, 0)
   const given = Number(parseDecimal(form.fromAmount) ?? Number.NaN)
@@ -57,6 +69,7 @@ function splitConvert(form: TransactionFormState, main: Extract<TransactionInput
       from: { ...main.from, amount: trimmed(shares[index], places) },
       to: { ...main.to, account: row.to, amount: row.receive.trim() },
       rate_override: index === 0 ? main.rate_override : null,
+      fee: index === 0 ? main.fee : null,
     })
   }
   return out

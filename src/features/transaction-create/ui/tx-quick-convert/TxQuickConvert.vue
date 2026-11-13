@@ -16,17 +16,21 @@ import { useTxForm } from '../../model/use-tx-form'
 import { AccountRefPicker } from '../account-ref-picker'
 import { convertAsTransfer } from '../../lib/form'
 import { AvailableHint } from '../available-hint'
+import { ConvertVia } from '../convert-via'
+import { SplitRows } from '../split-rows'
+import { useConvertSplit } from '../../model/use-convert-split'
 
 /**
  * Exchange in the short form (OpForm-1 · 6): what is given and what is got,
  * each with its currency as a chip, then from which wallet into which. The rate
  * follows from the two amounts and is set against the market at the operation's
- * time (Currency-1 · 6); P2P, several accounts and a typed rate stay in the full editor.
+ * time (Currency-1 · 6); a typed rate stays in the full editor.
  */
 const { t } = useI18n()
 const { form, check, preview, sameCurrency, noteExpression } = useTxForm()
 const settings = useSettingsStore()
 const fromStore = computed(() => accountStoreId(form.from))
+const { split, remainder, distributedLine } = useConvertSplit()
 
 /** `Deal rate 93.75 ₽ per USDT`: the price of one received unit in the given currency. */
 const rate = computed(() => {
@@ -97,12 +101,34 @@ function recordAsTransfer() {
   </div>
 
   <div class="grid items-start gap-3 @md:grid-cols-2">
-    <FormField :label="t('tx.quick.fromWallet')" required :error="check.error('from')">
-      <AccountRefPicker v-model="form.from" :contacts="false" />
-    </FormField>
-    <FormField :label="t('tx.quick.toWallet')" required :error="check.error('to')">
-      <AccountRefPicker v-model="form.to" :contacts="false" :exclude-store-id="fromStore" />
-    </FormField>
+    <div class="flex min-w-0 flex-col gap-1.5">
+      <FormField :label="t('tx.quick.fromWallet')" required :error="check.error('from')">
+        <AccountRefPicker v-model="form.from" :contacts="false" />
+      </FormField>
+      <ConvertVia />
+    </div>
+    <div class="flex min-w-0 flex-col gap-1.5">
+      <FormField class="min-w-0" :label="t('tx.quick.toWallet')" required :error="check.error('to')">
+        <div class="flex items-start gap-2">
+          <div class="min-w-0 flex-1">
+            <AccountRefPicker v-model="form.to" :contacts="false" :exclude-store-id="fromStore" />
+          </div>
+          <AmountInput
+            v-if="split"
+            v-model="form.toShare"
+            class="w-24 shrink-0"
+            :placeholder="remainder"
+            :aria-label="t('tx.split.accountN', { n: 1 })"
+          />
+          <!-- The rows below carry a delete button; its width is held here so every right edge lines up. -->
+          <div v-if="split" class="size-9 shrink-0" aria-hidden="true" />
+        </div>
+      </FormField>
+      <SplitRows v-model="form.extra" kind="convert" :via="form.viaOpen" />
+      <p v-if="split" class="text-xs" :class="check.error('shares') ? 'text-destructive' : 'text-muted-foreground'">
+        {{ distributedLine }}
+      </p>
+    </div>
   </div>
 
   <!-- One currency has no rate: `1.00 THB per THB` says nothing. -->

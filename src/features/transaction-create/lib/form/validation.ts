@@ -2,7 +2,10 @@
 
 import { parseDecimal } from '@/shared/lib/decimal'
 import type { TransactionFormState } from './form-state'
+import { splitBalanced, splitTotals } from './form-helpers'
 import { SPLITTABLE, formToInputs } from './linked'
+
+export { splitTotals }
 
 /**
  * What still has to be filled before the form can be saved, as i18n keys
@@ -16,7 +19,7 @@ export function missingFields(form: TransactionFormState): string[] {
       if (!form.from) out.push('from')
       if (!form.fromAsset) out.push('fromAsset')
       if (blank(form.fromAmount)) out.push('fromAmount')
-      if (form.convertMode === 'p2p' && !form.via) out.push('via')
+      if (form.viaOpen && !form.via) out.push('via')
       if (!form.to) out.push('to')
       if (!form.toAsset) out.push('toAsset')
       if (blank(form.toAmount)) out.push('toAmount')
@@ -51,6 +54,8 @@ export function missingFields(form: TransactionFormState): string[] {
       if (blank(form.amount)) out.push('amount')
   }
   if (SPLITTABLE.includes(form.kind) && form.extra.some((row) => !row.to || blank(row.receive))) out.push('extra')
+  const totals = splitTotals(form)
+  if (totals && !splitBalanced(totals)) out.push('shares')
   return out
 }
 

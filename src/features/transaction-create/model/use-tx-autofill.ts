@@ -3,6 +3,7 @@ import { computed, ref, toRaw, watch } from 'vue'
 import { parseDecimal } from '@/shared/lib/decimal'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { splitTotals } from '../lib/form/form-helpers'
 import { debtChoices, suggestedProperty } from '../transaction-form.model'
 import { useAccountAsset } from './use-account-asset'
 import type { TxFormState } from './use-tx-form-state'
@@ -149,29 +150,28 @@ export function useTxAutofill(state: TxFormState) {
       form.toAmount = autoToAmount
     },
   )
-  /** Everything the exchange brings in, over all receiving accounts. */
-  const receivedTotal = computed(() =>
-    [form.toAmount, ...form.extra.map((row) => row.receive)].reduce(
-      (sum, value) => sum + Number(parseDecimal(value) ?? 0),
-      0,
-    ),
-  )
+  /** What the destinations add up to; with one destination, the received amount. */
+  const distributedTotal = computed(() => splitTotals(form)?.distributed ?? Number(parseDecimal(form.toAmount) ?? 0))
   /** «1 USDT = 92.5 RUB» from the two amounts, when no rate was typed. */
   const impliedRate = computed(() => {
     if (form.kind !== 'convert' || form.rate.trim()) return ''
     const give = Number(parseDecimal(form.fromAmount) ?? Number.NaN)
-    const got = receivedTotal.value
+    const got = Number(parseDecimal(form.toAmount) ?? Number.NaN)
     if (!(give > 0 && got > 0) || !form.fromAsset || !form.toAsset) return ''
     const rate = got / give
     return `1 ${form.fromAsset.symbol} = ${Number(rate.toPrecision(8))} ${form.toAsset.symbol}`
   })
 
-  /* --- P2P: the money goes to a person and comes back from them --- */
-  function pickConvertMode(value: unknown) {
-    if (value !== 'direct' && value !== 'p2p') return
-    form.convertMode = value
-    // Through someone, both ends are your own accounts.
-    if (value === 'p2p' && form.to && !('store' in form.to)) form.to = null
+  /* --- through an intermediary: the money goes to a person and comes back from them --- */
+  /** «+ through an intermediary»: the field appears; through someone, both ends are your own accounts. */
+  function openVia() {
+    form.viaOpen = true
+    if (form.to && !('store' in form.to)) form.to = null
+  }
+  /** The intermediary is dropped: the field goes away and what it held with it. */
+  function closeVia() {
+    form.viaOpen = false
+    form.via = null
   }
 
   // The first account an exchange lands on is there to pick, not picked for you.
@@ -203,5 +203,5 @@ export function useTxAutofill(state: TxFormState) {
     },
   )
 
-  return { propertyName, swapSides, toAccount, receivedTotal, impliedRate, pickConvertMode, debts, debtValue }
+  return { propertyName, swapSides, toAccount, distributedTotal, impliedRate, openVia, closeVia, debts, debtValue }
 }

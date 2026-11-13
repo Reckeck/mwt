@@ -78,9 +78,6 @@ export interface TransactionEditDialogProps {
   storeId?: string
 }
 
-/** How an exchange goes: straight between accounts, or through someone (P2P). */
-export type ConvertMode = 'direct' | 'p2p'
-
 /**
  * One more account the money lands on (the first one is the form's own
  * «to»). Each becomes its own operation; all are saved as one chain.

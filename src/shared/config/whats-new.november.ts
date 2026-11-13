@@ -3,6 +3,14 @@ import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_NOVEMBER: WhatsNewEntry[] = [
   {
+    id: 'exchangeVia',
+    date: '2026-11-14',
+    points: [
+      { key: 'via', route: 'transactions' },
+      { key: 'split', route: 'transactions' },
+    ],
+  },
+  {
     id: 'phoneAutomations',
     date: '2026-11-13',
     points: [
