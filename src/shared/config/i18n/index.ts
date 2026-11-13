@@ -3,6 +3,7 @@ import { createI18n } from 'vue-i18n'
 import en from '@/shared/config/i18n/locales/en.json'
 import ru from '@/shared/config/i18n/locales/ru.json'
 import { mergeLocale } from '@/shared/config/i18n/parts'
+import { ruPlural } from '@/shared/config/i18n/plural'
 import type { LocaleMessages } from '@/shared/config/i18n/parts'
 
 export const LOCALE_STORAGE_KEY = 'trade-app:locale'
@@ -38,6 +39,7 @@ export const i18n = createI18n({
   locale: resolveLocale(detectLocalePreference()),
   fallbackLocale: 'en',
   messages: { en: mergeLocale(en, 'en', LOCALE_PARTS), ru: mergeLocale(ru, 'ru', LOCALE_PARTS) },
+  pluralRules: { ru: ruPlural },
 })
 
 /** Persist a preference so the next cold start honours it before the vault opens. */

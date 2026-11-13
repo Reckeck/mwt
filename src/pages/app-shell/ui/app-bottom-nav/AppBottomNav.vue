@@ -43,7 +43,10 @@ function pick(run: () => void) {
   run()
 }
 
-const ITEM = 'flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-md text-[0.6875rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+/** Five equal columns: `basis-0` and no padding of its own, so a `Button` item (it brings `px-4`) is exactly as wide as a link and «+» stays in the middle. */
+const ITEM =
+  'flex min-h-12 min-w-0 shrink grow basis-0 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-0 text-[0.6875rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+const LABEL = 'max-w-full truncate'
 const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px-1 text-left text-sm font-normal last:border-0'
 </script>
 
@@ -60,8 +63,8 @@ const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px
       :class="cn(ITEM, isActive(item) ? 'text-primary' : 'text-muted-foreground')"
       :aria-current="isActive(item) ? 'page' : undefined"
     >
-      <component :is="item.icon" class="size-5" />
-      {{ t(item.key) }}
+      <component :is="item.icon" class="size-5 shrink-0" />
+      <span :class="LABEL">{{ t(item.key) }}</span>
     </RouterLink>
     <Button variant="ghost" :class="cn(ITEM, 'h-auto text-muted-foreground')" :aria-label="t('quickAdd.title')" @click="emit('quickAdd')">
       <span class="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow">
@@ -75,8 +78,8 @@ const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px
       :class="cn(ITEM, isActive(item) ? 'text-primary' : 'text-muted-foreground')"
       :aria-current="isActive(item) ? 'page' : undefined"
     >
-      <component :is="item.icon" class="size-5" />
-      {{ t(item.key) }}
+      <component :is="item.icon" class="size-5 shrink-0" />
+      <span :class="LABEL">{{ t(item.key) }}</span>
     </RouterLink>
     <Button
       variant="ghost"
@@ -84,8 +87,8 @@ const ROW = 'h-auto min-h-12 w-full justify-start gap-3 rounded-none border-b px
       data-bottom-more
       @click="moreOpen = true"
     >
-      <Menu class="size-5" />
-      {{ t('nav.more') }}
+      <Menu class="size-5 shrink-0" />
+      <span :class="LABEL">{{ t('nav.more') }}</span>
     </Button>
   </nav>
 
