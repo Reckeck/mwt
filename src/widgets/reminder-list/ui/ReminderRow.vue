@@ -1,16 +1,20 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { AlarmClock, ExternalLink, Pencil, Pin, Repeat, Trash2, Wallet } from 'lucide-vue-next'
 
+import { ActionMenu } from '@/shared/ui/action-menu'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
+import { ConfirmDialog } from '@/shared/ui/confirm-dialog'
 import { KeptMark } from '@/shared/ui/kept-mark'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
 import { formatDateTime } from '@/shared/lib/format'
+import { useIsPhone } from '@/shared/lib/phone'
 import { pageEntityKey } from '@/shared/lib/entity-link'
 import { openQuickAdd } from '@/shared/lib/quick-add'
 
@@ -20,6 +24,37 @@ import { SNOOZES, type SnoozeChoice, dueOf, overdue, repeatLabel, sourceLink } f
 const props = defineProps<{ reminder: Reminder }>()
 const emit = defineEmits<{ done: []; snooze: [choice: SnoozeChoice]; finish: []; edit: []; remove: []; allowMerging: [] }>()
 const { t } = useI18n()
+const phone = useIsPhone()
+const confirmOpen = ref(false)
+function confirmRemove() {
+  confirmOpen.value = false
+  emit('remove')
+}
+
+/**
+ * A phone: snooze, finish, edit and delete fold into one «⋯» (the sheet has no
+ * sub-menus, so the snoozes are flat rows); one already ticked off is only
+ * edited or deleted.
+ */
+const menu = computed(() => [
+  ...SNOOZES.map((choice) => ({
+    id: `snooze-${choice}`,
+    label: t(`reminder.snooze.${choice}`),
+    icon: AlarmClock,
+    hidden: props.reminder.done,
+    run: () => emit('snooze', choice),
+  })),
+  {
+    id: 'finish',
+    label: props.reminder.source ? t('reminder.mute') : t('reminder.finishSeries'),
+    icon: Repeat,
+    hidden: props.reminder.done || !(props.reminder.repeat || props.reminder.source),
+    run: () => emit('finish'),
+  },
+  { id: 'keep', label: t('keep.allow'), icon: Pin, hidden: !props.reminder.keep, run: () => emit('allowMerging') },
+  { id: 'edit', label: t('reminder.edit'), icon: Pencil, run: () => emit('edit') },
+  { id: 'delete', label: t('reminder.delete'), icon: Trash2, destructive: true, separated: true, run: () => (confirmOpen.value = true) },
+])
 
 /** `Pay` (Auto-2 · 10): the payment form filled with the reminder's category and wallet. */
 function pay() {
@@ -80,7 +115,8 @@ function pay() {
       <Wallet class="size-4" />
       {{ t('reminder.payAction') }}
     </Button>
-    <DropdownMenu v-if="!props.reminder.done" align="end">
+    <ActionMenu v-if="phone" :actions="menu" :label="t('reminder.actions')" :sheet="{ title: props.reminder.text }" />
+    <DropdownMenu v-if="!phone && !props.reminder.done" align="end">
       <template #trigger>
         <Button variant="ghost" size="sm" class="h-8 gap-1 px-2 text-muted-foreground" :title="t('reminder.snoozeAction')">
           <AlarmClock class="size-4" />
@@ -97,6 +133,7 @@ function pay() {
       </DropdownMenuItem>
     </DropdownMenu>
     <div
+      v-if="!phone"
       class="flex shrink-0 items-center gap-1 pointer-coarse:gap-2 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100"
     >
       <Button
@@ -124,5 +161,12 @@ function pay() {
         <Trash2 class="size-4" />
       </ConfirmButton>
     </div>
+    <ConfirmDialog
+      v-if="phone"
+      v-model:open="confirmOpen"
+      :title="t('reminder.delete')"
+      :description="t('actions.confirmDeleteNamed', { name: props.reminder.text })"
+      @confirm="confirmRemove"
+    />
   </li>
 </template>

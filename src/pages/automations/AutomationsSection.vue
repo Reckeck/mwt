@@ -7,8 +7,10 @@ import { Download, Plus, Variable } from 'lucide-vue-next'
 
 import { WorkflowImportDialog } from '@/features/workflow-manage'
 import { WorkflowVars } from '@/widgets/workflow-vars'
+import { ActionMenu } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
+import type { UiAction } from '@/shared/ui/context-menu'
 import { RouteTabs } from '@/shared/ui/route-tabs'
 import { call } from '@/shared/api/ipc'
 import { useIsPhone } from '@/shared/lib/phone'
@@ -47,34 +49,45 @@ const varsOpen = computed({
   get: () => route.query.vars === '1',
   set: (open: boolean) => void router.replace({ query: { ...route.query, vars: open ? '1' : undefined } }),
 })
+
+/** The phone's «⋯»: the secondary actions; `Create` stays a button beside it. */
+const phoneActions = computed<UiAction[]>(() => [
+  { id: 'vars', label: t('workflow.tab.vars'), icon: Variable, run: () => (varsOpen.value = true) },
+  {
+    id: 'import',
+    label: t('automations.mine.import'),
+    icon: Download,
+    hidden: !(onMine.value && mine.data.value?.length),
+    run: () => (importOpen.value = true),
+  },
+])
 </script>
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <!-- A phone (Auto-1 · 1, 390): the actions line up under the title, 44 px, the tabs below them. -->
-    <div :class="phone ? 'flex flex-col-reverse gap-3' : 'flex flex-wrap items-center justify-between gap-3'">
+    <!-- A phone: one row, the tabs take the free width, «⋯» holds the secondary actions, «+» stays in sight. -->
+    <div v-if="phone" class="flex items-center gap-2">
+      <div class="min-w-0 flex-1" data-tour="section-tabs"><RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" /></div>
+      <ActionMenu :actions="phoneActions" :label="t('automations.actions')" />
+      <Button v-if="onMine" size="sm" class="size-11" :aria-label="t('automations.mine.create')" data-mine-create data-tour="automations-create" @click="create">
+        <Plus class="size-4" />
+      </Button>
+    </div>
+    <div v-else class="flex flex-wrap items-center justify-between gap-3">
       <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" /></div>
-      <div class="flex items-center gap-2" :class="phone && 'justify-end'">
-        <Button variant="outline" size="sm" :class="phone && 'size-11'" :aria-label="t('workflow.tab.vars')" data-tour="workflow-vars-open" @click="varsOpen = true">
+      <div class="flex items-center gap-2">
+        <Button variant="outline" size="sm" :aria-label="t('workflow.tab.vars')" data-tour="workflow-vars-open" @click="varsOpen = true">
           <Variable class="size-4" />
-          <span v-if="!phone">{{ t('workflow.tab.vars') }}</span>
+          {{ t('workflow.tab.vars') }}
         </Button>
         <template v-if="onMine">
-          <Button
-            v-if="mine.data.value?.length"
-            variant="outline"
-            size="sm"
-            :class="phone && 'h-11 px-4'"
-            data-mine-import
-            data-tour="automations-import"
-            @click="importOpen = true"
-          >
+          <Button v-if="mine.data.value?.length" variant="outline" size="sm" data-mine-import data-tour="automations-import" @click="importOpen = true">
             <Download class="size-4" />
             {{ t('automations.mine.import') }}
           </Button>
-          <Button size="sm" :class="phone && 'size-11'" :aria-label="t('automations.mine.create')" data-mine-create data-tour="automations-create" @click="create">
+          <Button size="sm" :aria-label="t('automations.mine.create')" data-mine-create data-tour="automations-create" @click="create">
             <Plus class="size-4" />
-            <span v-if="!phone">{{ t('automations.mine.create') }}</span>
+            {{ t('automations.mine.create') }}
           </Button>
         </template>
       </div>

@@ -23,9 +23,15 @@ export const dueOf = (reminder: Reminder) =>
 
 export const overdue = (reminder: Reminder) => !reminder.done && new Date(dueOf(reminder)).getTime() < Date.now()
 
+/**
+ * «каждый месяц», «каждые 2 месяца», «каждые 5 месяцев»: Russian needs the
+ * determiner to agree with the unit, so every unit carries the whole phrase
+ * instead of «каждые» glued to a bare noun.
+ */
 export function repeatLabel(repeat: ReminderRepeat): string {
   const t = i18n.global.t
-  return `${t('reminder.every')} ${repeat.every > 1 ? `${repeat.every} ` : ''}${t(`reminder.unit.${repeat.unit}`, repeat.every)}`
+  if (repeat.every <= 1) return t(`reminder.repeatEvery.${repeat.unit}`)
+  return t(`reminder.repeatEveryN.${repeat.unit}`, { count: repeat.every })
 }
 
 /** Where an automatic reminder comes from: the wallet, the goal, the contact. */

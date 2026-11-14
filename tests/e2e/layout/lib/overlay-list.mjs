@@ -148,9 +148,10 @@ export const OVERLAYS = [
   { id: 'reminder', route: '/automations/reminders', phone: true, open: [{ query: { new: 'reminder' } }], layer: overlay('reminder'), keys: ['new'] },
   { id: 'price-alert', route: '/automations/alerts', phone: true, open: [{ query: { new: 'alert' } }], layer: overlay('price-alert'), keys: ['new'] },
   { id: 'automation-edit', route: '/automations?edit={automation}', phone: true, fresh: true, open: [{ wait: 900 }], layer: overlay('automation-edit'), keys: ['edit'] },
-  { id: 'confirm', route: '/automations/reminders', phone: true, open: [{ click: '[data-slot="confirm-button"]' }], layer: overlay('confirm') },
+  // On a phone the row's actions live in the «⋯» sheet and delete asks with a dialog, not with the in-place button.
+  { id: 'confirm', route: '/automations/reminders', phone: true, open: [{ click: '[data-slot="confirm-button"]' }], phoneOpen: [{ click: '[aria-label="Действия с напоминанием"]', wait: 700 }, { click: MENU_ITEM, text: 'Удалить напоминание' }], layer: overlay('confirm') },
   { id: 'workflow-import', route: '/automations', open: [{ click: '[data-tour="automations-import"]' }], layer: overlay('workflow-import') },
-  { id: 'workflow-vars', route: '/automations', phone: true, open: [{ click: '[data-tour="workflow-vars-open"]' }], layer: overlay('workflow-vars') },
+  { id: 'workflow-vars', route: '/automations', phone: true, open: [{ click: '[data-tour="workflow-vars-open"]' }], phoneOpen: [{ click: '[aria-label="Действия раздела"]', wait: 700 }, { click: MENU_ITEM, text: 'Переменные' }], layer: overlay('workflow-vars') },
 
   // 3.7 Settings (windows inside ?settings=)
   { id: 'password-change', route: '/?settings=vault&section=file', phone: true, open: [{ click: 'button', text: 'Сменить пароль' }], layer: overlay('password-change') },

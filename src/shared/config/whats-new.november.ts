@@ -3,6 +3,15 @@ import type { WhatsNewEntry } from './whats-new.types'
 
 export const WHATS_NEW_NOVEMBER: WhatsNewEntry[] = [
   {
+    id: 'phoneAutomations',
+    date: '2026-11-13',
+    points: [
+      { key: 'bar', route: 'dashboard' },
+      { key: 'actions', route: 'automations' },
+      { key: 'repeat', route: 'automations-reminders' },
+    ],
+  },
+  {
     id: 'syncProtocol4',
     date: '2026-11-10',
     points: [

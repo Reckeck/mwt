@@ -3,21 +3,17 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { RouterLink, useRouter } from 'vue-router'
-import { ChevronDown, Copy, FileInput, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, FileInput, Plus } from 'lucide-vue-next'
 
-import { LessonList, OutcomeBadge, WORKFLOW_TEMPLATES } from '@/entities/workflow'
+import { LessonList, WORKFLOW_TEMPLATES } from '@/entities/workflow'
 import { WorkflowImportDialog, useWorkflowActions } from '@/features/workflow-manage'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Card } from '@/shared/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
-import { ConfirmButton } from '@/shared/ui/confirm-button'
-import { EntityLink } from '@/shared/ui/entity-link'
-import { Switch } from '@/shared/ui/switch'
 import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
-import { formatDateTime } from '@/shared/lib/format'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
+
+import { WorkflowCard } from './ui/workflow-card'
 
 /** Every workflow: on or off, its last run, open, run, share, delete; and where to start. */
 const { t } = useI18n()
@@ -29,9 +25,8 @@ const runs = useQuery({
   queryKey: WORKFLOW_KEYS.runs,
   queryFn: () => call<WorkflowRun[]>('list_workflow_runs', { input: { workflow_id: null, limit: 200 } }),
 })
-/** The last real run, as a list of none or one for the template. */
-const lastRun = (id: string) =>
-  (runs.data.value ?? []).filter((run) => run.workflow_id === id && !run.dry_run).slice(0, 1)
+/** The last real run, or none. */
+const lastRun = (id: string) => (runs.data.value ?? []).find((run) => run.workflow_id === id && !run.dry_run) ?? null
 const empty = computed(() => workflows.isSuccess.value && !(workflows.data.value ?? []).length)
 const importOpen = ref(false)
 /** Folded once the user has workflows of their own; open for a first visit. */
@@ -73,64 +68,19 @@ watch(
       @retry="workflows.refetch()"
     >
       <div class="grid gap-4">
-        <Card v-for="workflow in workflows.data.value ?? []" :key="workflow.id" data-tour="workflow-card">
-          <div class="flex flex-wrap items-start gap-3">
-            <!-- On a touch screen the switch steps off the card's edge, so its hit area fits inside. -->
-            <Switch
-              class="pointer-coarse:my-2.5"
-              :model-value="workflow.active"
-              :aria-label="t('workflow.active')"
-              :disabled="actions.setActive.isPending.value"
-              @update:model-value="(active) => actions.setActive.mutate({ id: workflow.id, active })"
-            />
-            <div class="grid min-w-0 flex-1 gap-1">
-              <span class="flex flex-wrap items-center gap-2">
-                <EntityLink :target="{ kind: 'workflow', id: workflow.id }" :label="workflow.name" plain class="font-medium" />
-                <!-- Built from the automation form: changed there. -->
-                <Badge v-if="workflow.automation" variant="secondary" :title="t('workflow.list.automationHint')">
-                  {{ t('workflow.list.automation') }}
-                </Badge>
-              </span>
-              <p v-if="workflow.description" class="text-sm text-muted-foreground">{{ workflow.description }}</p>
-              <p class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <template v-for="run in lastRun(workflow.id)" :key="run.id">
-                  <OutcomeBadge :outcome="run.outcome" />
-                  {{ formatDateTime(run.started_at) }}
-                </template>
-                <template v-if="!lastRun(workflow.id).length">{{ t('workflow.list.neverRan') }}</template>
-              </p>
-            </div>
-            <div class="flex items-center gap-1">
-              <Button variant="ghost" size="icon" :aria-label="t('workflow.list.edit')" @click="router.push({ name: 'workflow-edit', params: { id: workflow.id } })">
-                <Pencil class="size-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                :aria-label="t('workflow.runNow')"
-                :disabled="actions.runNow.isPending.value"
-                @click="actions.runNow.mutate({ id: workflow.id })"
-              >
-                <Play class="size-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                :aria-label="t('workflow.list.export')"
-                @click="actions.exportFile.mutate(workflow.id)"
-              >
-                <Copy class="size-4" />
-              </Button>
-              <ConfirmButton
-                :label="t('workflow.list.delete')"
-                :confirm-label="t('actions.confirmDeleteNamed', { name: workflow.name })"
-                @confirm="actions.remove.mutate(workflow.id)"
-              >
-                <Trash2 class="size-4" />
-              </ConfirmButton>
-            </div>
-          </div>
-        </Card>
+        <WorkflowCard
+          v-for="workflow in workflows.data.value ?? []"
+          :key="workflow.id"
+          :workflow="workflow"
+          :last-run="lastRun(workflow.id)"
+          :switching="actions.setActive.isPending.value"
+          :running="actions.runNow.isPending.value"
+          @active="(active) => actions.setActive.mutate({ id: workflow.id, active })"
+          @edit="router.push({ name: 'workflow-edit', params: { id: workflow.id } })"
+          @run="actions.runNow.mutate({ id: workflow.id })"
+          @export="actions.exportFile.mutate(workflow.id)"
+          @remove="actions.remove.mutate(workflow.id)"
+        />
 
         <!-- Lessons and templates are for starting out: open while there is nothing of one's own. -->
       </div>
