@@ -2,7 +2,7 @@
 
 import { USDT } from '@/entities/asset'
 
-import type { ConvertMode, SplitRow } from '../../transaction-form.types'
+import type { SplitRow } from '../../transaction-form.types'
 
 /**
  * Everything the transaction form edits, flat and string-typed the way the
@@ -32,14 +32,18 @@ export interface TransactionFormState {
   unitPrice: string
 
   // convert
-  convertMode: ConvertMode
-  /** P2P: who the money goes through (a contact, their card, or text). */
+  /** Who the money goes through (a contact, their card, or text). */
   via: AccountRef | null
+  /** The «through whom» field was asked for: it stays on screen even while empty. */
+  viaOpen: boolean
+  /** Several destinations: how much of `toAmount` lands on `to`; empty = what the extra rows leave. */
+  toShare: string
   /** More recipients of an exchange or a top-up, saved with it as one chain. */
   extra: SplitRow[]
   fromAsset: AssetRef | null
   fromAmount: string
   toAsset: AssetRef | null
+  /** Everything received, over all destinations. */
   toAmount: string
   rate: string
 
@@ -112,7 +116,8 @@ export function emptyForm(storeId: string, kind: TxKind): TransactionFormState {
     toAsset: null,
     toAmount: '',
     rate: '',
-    convertMode: 'direct',
+    viaOpen: false,
+    toShare: '',
     via: null,
     extra: [],
     soldAsset: null,

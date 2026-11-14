@@ -1,6 +1,7 @@
 /** Small pieces the input builders share: idents, the fee, the price stamp, P2P sides, common fields. */
 
 import { keepOriginalMoment } from '@/shared/lib/datetime'
+import { parseDecimal } from '@/shared/lib/decimal'
 import type { TransactionFormState } from './form-state'
 
 export const text = (raw: string): string | null => raw.trim() || null
@@ -81,4 +82,19 @@ export function details(form: TransactionFormState): KindDetails {
     tx_hash: text(form.txHash),
     source_store_id: (form.categories.includes('cashback') && text(form.sourceStoreId)) || undefined,
   }
+}
+
+/** What the destinations of a split exchange add up to, and the total they must match. */
+export function splitTotals(form: TransactionFormState): { distributed: number; total: number } | null {
+  if (form.kind !== 'convert' || !form.extra.length) return null
+  const number = (raw: string) => Number(parseDecimal(raw) ?? 0)
+  const total = number(form.toAmount)
+  const extra = form.extra.reduce((sum, row) => sum + number(row.receive), 0)
+  const first = form.toShare.trim() ? number(form.toShare) : total - extra
+  return { distributed: first + extra, total }
+}
+
+/** Whether the destinations add up to the total, within rounding noise. */
+export function splitBalanced(totals: { distributed: number; total: number }): boolean {
+  return Math.abs(totals.distributed - totals.total) < 1e-9
 }

@@ -81,7 +81,7 @@ const { form, check, props, isProperty, propertyName, overruns, noteExpression }
   <div v-if="form.kind === 'topup' && !props.template && !isProperty" class="grid gap-1.5">
     <p v-if="form.extra.length" class="text-xs text-muted-foreground">{{ t('tx.split.topupHint') }}</p>
     <FormField :error="check.error('extra')">
-      <SplitRows v-model="form.extra" kind="topup" mode="direct" />
+      <SplitRows v-model="form.extra" kind="topup" />
     </FormField>
   </div>
 </template>

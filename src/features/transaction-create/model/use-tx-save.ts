@@ -136,9 +136,11 @@ export function useTxSave(state: TxFormState, onSaved: (tx: Transaction) => void
       // The short form's dialog says it itself, with `Open` or `Undo` (OpForm-1 · 4).
       success: (tx) => {
         // Nothing saved: the core's rule was told under its field.
-        if (!tx || (props.compact && !editing.value)) return ''
+        if (!tx) return ''
         if (editing.value) return t('tx.updated')
-        return linked.value ? t('tx.split.saved', { count: form.extra.length + 1 }) : t('form.saved')
+        // A chain says how many operations it became, even from the short form: one click wrote several.
+        if (linked.value) return t('tx.split.saved', { count: form.extra.length + 1 })
+        return props.compact ? '' : t('form.saved')
       },
     },
   })

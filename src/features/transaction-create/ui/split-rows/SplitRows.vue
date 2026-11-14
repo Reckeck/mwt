@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { Plus } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
 
@@ -31,22 +30,22 @@ function remove(index: number) {
 </script>
 
 <template>
-  <div class="grid gap-2" data-tour="tx-split">
+  <div class="flex min-w-0 flex-col gap-2" data-tour="tx-split">
     <SplitRowItem
       v-for="(row, index) in rows"
       :key="row.id"
       v-model="rows[index]"
       :kind="props.kind"
-      :mode="props.mode"
+      :via="props.via"
       :index="index"
       @remove="remove(index)"
     />
-    <div class="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="outline" size="sm" @click="add">
-        <Plus class="size-4" />
-        {{ t('tx.split.addAccount') }}
-      </Button>
-      <span v-if="rows.length" class="text-xs text-muted-foreground">{{ t('tx.split.linkedHint') }}</span>
-    </div>
+    <Button
+      type="button"
+      variant="link"
+      class="touch-min h-auto self-start px-0 py-0"
+      data-tx-add-account
+      @click="add"
+    >{{ t('tx.split.addAccount') }}</Button>
   </div>
 </template>

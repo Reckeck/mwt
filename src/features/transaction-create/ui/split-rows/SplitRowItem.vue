@@ -5,11 +5,11 @@ import { Trash2 } from 'lucide-vue-next'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
 
-import type { ConvertMode, SplitRow } from '../../transaction-form.types'
+import type { SplitRow } from '../../transaction-form.types'
 import { AccountRefPicker } from '../account-ref-picker'
 
 /** One more account money arrives on: the account and how much lands there. */
-const props = defineProps<{ kind: TxKind; mode: ConvertMode; index: number }>()
+const props = defineProps<{ kind: TxKind; via?: boolean; index: number }>()
 const row = defineModel<SplitRow>({ required: true })
 const emit = defineEmits<{ remove: [] }>()
 
@@ -17,15 +17,17 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="grid items-start gap-2 @xl:grid-cols-[minmax(0,1fr)_10rem_2rem]">
-    <AccountRefPicker
-      v-model="row.to"
-      :contacts="props.kind === 'convert' && props.mode !== 'p2p'"
-      :raw="false"
-      :aria-label="t('tx.split.accountN', { n: props.index + 2 })"
-    />
-    <AmountInput v-model="row.receive" :placeholder="t('form.amount')" :aria-label="t('form.amount')" />
-    <Button type="button" variant="ghost" size="icon"  :aria-label="t('actions.delete')" @click="emit('remove')">
+  <div class="flex items-start gap-2">
+    <div class="min-w-0 flex-1">
+      <AccountRefPicker
+        v-model="row.to"
+        :contacts="props.kind === 'convert' && !props.via"
+        :raw="false"
+        :aria-label="t('tx.split.accountN', { n: props.index + 2 })"
+      />
+    </div>
+    <AmountInput v-model="row.receive" class="w-24 shrink-0" :placeholder="t('form.amount')" :aria-label="t('form.amount')" />
+    <Button type="button" variant="ghost" size="icon" :aria-label="t('actions.delete')" @click="emit('remove')">
       <Trash2 class="size-4" />
     </Button>
   </div>
