@@ -1,22 +1,15 @@
 import { type Ref, watch } from 'vue'
-import { useLocalStorage } from '@vueuse/core'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { type RecentPlace, clearRecentPlaces, places } from '@/shared/lib/recent-places-state'
+
 import { placeTitle } from '../lib/place-title'
 
-/** A place the user opened: the address to come back to, with its filter, and the title it had then. */
-export interface RecentPlace {
-  /** The full path: `Money › Spending · October` comes back to October (Paths 1 · 7). */
-  path: string
-  title: string
-  /** When it was last open, ISO; older records have none. */
-  at?: string
-}
+export type { RecentPlace }
+export { clearRecentPlaces }
 
 const LIMIT = 5
-/** The device's own list (Shell · 4: an empty search shows where one was last). */
-const places = useLocalStorage<RecentPlace[]>('trade-app:recent-places', [])
 
 /** The screen without its query: one place per screen, the newest filter wins. */
 export const placeKey = (path: string) => path.split('?')[0] ?? path

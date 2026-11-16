@@ -1,4 +1,6 @@
 import { queryClient } from '@/app/providers/query'
+import { clearRecentPlaces } from '@/shared/lib/recent-places-state'
+import { clearRecentEntities } from '@/shared/lib/recent-entities'
 import { onVaultClosed } from '@/shared/lib/vault-lifecycle'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useTradeLookupStore } from '@/shared/store/tradeLookup'
@@ -14,6 +16,8 @@ export function registerVaultClosedSubscribers(): () => void {
     const settings = useSettingsStore()
     settings.forgetVault()
     resetTradeLookup()
+    clearRecentEntities()
+    clearRecentPlaces()
     // A replaced vault is already open: its settings are loaded again (a lock reloads on unlock).
     if (reason === 'switched') settings.loadVault().catch(() => {})
   })

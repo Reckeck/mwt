@@ -6,7 +6,10 @@ import { i18n } from '@/shared/config/i18n'
 import { VueQueryPlugin, queryClient } from '@/app/providers/query'
 import { router } from '@/app/providers/router'
 import { registerVaultClosedSubscribers } from '@/app/vault-closed-subscribers'
+import { purgeLegacyRecents } from '@/shared/lib/purge-legacy-recents'
 import '@/app/styles.css'
+
+purgeLegacyRecents()
 
 const app = createApp(App)
 

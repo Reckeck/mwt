@@ -2,6 +2,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { call } from '@/shared/api/ipc'
+import { clearRecentPlaces, places } from '@/shared/lib/recent-places-state'
+import { recentEntities, rememberEntity } from '@/shared/lib/recent-entities'
 import { emitVaultClosed } from '@/shared/lib/vault-lifecycle'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useTradeLookupStore } from '@/shared/store/tradeLookup'
@@ -48,5 +50,14 @@ describe('vault closed subscribers', () => {
     resolveA({ display_decimals: 3 } as Settings)
     await pending
     expect(settings.vault).toBeNull()
+  })
+
+  it('empties both recents lists', () => {
+    rememberEntity({ kind: 'category', id: 't1' }, 'To Mom')
+    places.value.push({ path: '/money', title: 'Money' })
+    emitVaultClosed('locked')
+    expect(recentEntities.value).toEqual([])
+    expect(places.value).toEqual([])
+    clearRecentPlaces()
   })
 })
