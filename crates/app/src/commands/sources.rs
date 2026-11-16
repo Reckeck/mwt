@@ -68,20 +68,40 @@ pub async fn refresh_due_sources(app: &AppHandle) {
     announce(app, notices);
 }
 
+/// A page fetch for the picker: refused in the sandbox and while locked, so a
+/// vault-less call is no read-back channel. The vault guard is dropped before
+/// any `.await` (rule 3).
+fn allow_page_fetch(state: &AppState) -> Result<(), String> {
+    crate::commands::sandbox::refuse(state, "fetching a data source")?;
+    drop(require_vault(state).map_err(err_to_string)?);
+    Ok(())
+}
+
+async fn preview_page(state: &AppState, url: &str) -> Result<SourcePreview, String> {
+    allow_page_fetch(state)?;
+    let body = state.pricing.fetch_page(url).await.map_err(err_to_string)?;
+    datasource::preview(url, &body)
+        .map_err(|message| err_to_string(trade_core::Error::InvalidInput(message)))
+}
+
+async fn test_method(state: &AppState, draft: &DataSourceDraft) -> Result<Extracted, String> {
+    allow_page_fetch(state)?;
+    let body = state
+        .pricing
+        .fetch_page(&draft.url)
+        .await
+        .map_err(err_to_string)?;
+    datasource::extract(&draft.method, draft.output, &draft.number, &body)
+        .map_err(|message| err_to_string(trade_core::Error::InvalidInput(message)))
+}
+
 /// The page at `url` for the picker: safe HTML, JSON text or file rows.
 #[tauri::command]
 pub async fn datasource_preview(
     url: String,
     state: State<'_, AppState>,
 ) -> Result<SourcePreview, String> {
-    crate::commands::sandbox::refuse(&state, "fetching a data source")?;
-    let body = state
-        .pricing
-        .fetch_page(&url)
-        .await
-        .map_err(err_to_string)?;
-    datasource::preview(&url, &body)
-        .map_err(|message| err_to_string(trade_core::Error::InvalidInput(message)))
+    preview_page(&state, &url).await
 }
 
 /// Run the form's method against the live page without saving anything.
@@ -90,14 +110,7 @@ pub async fn datasource_test(
     draft: DataSourceDraft,
     state: State<'_, AppState>,
 ) -> Result<Extracted, String> {
-    crate::commands::sandbox::refuse(&state, "fetching a data source")?;
-    let body = state
-        .pricing
-        .fetch_page(&draft.url)
-        .await
-        .map_err(err_to_string)?;
-    datasource::extract(&draft.method, draft.output, &draft.number, &body)
-        .map_err(|message| err_to_string(trade_core::Error::InvalidInput(message)))
+    test_method(&state, &draft).await
 }
 
 /// Every source with the places that use it.
@@ -230,4 +243,36 @@ pub async fn set_inflation_source(
     }
     let _ = app.emit("rates-updated", ());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn draft() -> DataSourceDraft {
+        serde_json::from_value(serde_json::json!({
+            "name": "rate",
+            "url": "http://127.0.0.1:1/",
+            "method": { "kind": "css", "selector": "p" },
+            "output": "number",
+            "interval": "day",
+        }))
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn locked_vault_refuses_preview_without_a_request() {
+        let state = AppState::new();
+        let err = preview_page(&state, "http://127.0.0.1:1/")
+            .await
+            .unwrap_err();
+        assert!(err.starts_with("REQUIRES_UNLOCK"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn locked_vault_refuses_test_without_a_request() {
+        let state = AppState::new();
+        let err = test_method(&state, &draft()).await.unwrap_err();
+        assert!(err.starts_with("REQUIRES_UNLOCK"), "{err}");
+    }
 }
