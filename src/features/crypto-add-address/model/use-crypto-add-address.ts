@@ -16,6 +16,7 @@ import {
 } from '@/entities/crypto-account'
 import { call, parseError } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
+import { localDay } from '@/shared/lib/datetime'
 import { type FieldError, required, useFormValidation } from '@/shared/lib/form'
 import { useSecurityState } from '@/shared/api/security-state'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
@@ -24,8 +25,8 @@ import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 
 export type ConnectStep = 'consent' | 'address' | 'start'
 
-/** Whether a start moment is today or earlier: a date in the future has no history to read. */
-const notFuture = (date: string) => date <= new Date().toISOString().slice(0, 10)
+/** Whether a start day is today (the user's own day, not UTC) or earlier: a date in the future has no history to read. */
+export const notFuture = (date: string) => date <= localDay()
 
 /**
  * The connect-an-address dialog: the one-time consent (asked only until it is given), the network

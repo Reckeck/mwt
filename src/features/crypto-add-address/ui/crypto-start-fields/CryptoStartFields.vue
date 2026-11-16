@@ -5,7 +5,7 @@ import { Label } from '@/shared/ui/label'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { FormField } from '@/shared/ui/form-field'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
-import { formatDay } from '@/shared/lib/format'
+import { formatCalendarDay } from '@/shared/lib/datetime'
 
 /** Step 3 (mockup 10): from which date the history counts, or all of it. */
 const props = defineProps<{ error: string | undefined }>()
@@ -39,7 +39,7 @@ const { t } = useI18n()
     </FormField>
 
     <p class="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
-      {{ whole ? t('cryptoTrack.connect.wholeNote') : t('cryptoTrack.connect.fromNote', { date: formatDay(`${date}T00:00:00Z`) }) }}
+      {{ whole ? t('cryptoTrack.connect.wholeNote') : t('cryptoTrack.connect.fromNote', { date: formatCalendarDay(date) }) }}
     </p>
   </div>
 </template>
