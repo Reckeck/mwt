@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::Amount;
+use crate::model::cryptotrack::CryptoPricePoint;
 use crate::model::vault::{FxPoint, PricePoint};
 
 /// Most points one currency or asset keeps (≈ 83 days hourly, years daily).
@@ -49,6 +50,18 @@ impl Point for FxPoint {
     }
     fn value(&self) -> Amount {
         self.per_usd
+    }
+}
+
+impl Point for CryptoPricePoint {
+    fn series(&self) -> &str {
+        &self.token_key
+    }
+    fn ts(&self) -> &str {
+        &self.ts
+    }
+    fn value(&self) -> Amount {
+        self.value_usd
     }
 }
 
@@ -165,6 +178,11 @@ impl RateIndex {
     }
 
     pub fn of_prices(cache: &[PricePoint]) -> Self {
+        Self::of(cache)
+    }
+
+    /// The historic crypto prices of `crypto_prices`, never thinned.
+    pub fn of_crypto(cache: &[CryptoPricePoint]) -> Self {
         Self::of(cache)
     }
 
