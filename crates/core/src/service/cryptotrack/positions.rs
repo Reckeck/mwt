@@ -73,14 +73,24 @@ use crate::service::price_info::PriceOrigin;
 
 use super::super::UnlockedVault;
 
+/// Whether a re-read position says what the stored one already says: the
+/// legs, the name and the receipts, whatever the moment of the reading.
+fn same_but_for_the_moment(stored: &CryptoPosition, read: &CryptoPosition) -> bool {
+    CryptoPosition {
+        updated_at: read.updated_at.clone(),
+        ..stored.clone()
+    } == *read
+}
+
 /// What a pass of the protocol adapters stored.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CryptoPositionsApplied {
     /// Positions added.
     pub added: usize,
-    /// Positions that were already there and were rewritten.
+    /// Positions that were already there and whose legs, name or receipts
+    /// changed, so they were rewritten.
     pub rewritten: usize,
-    /// Operations of those positions added or rewritten.
+    /// Operations of those positions added or changed.
     pub events: usize,
     /// Positions closed because their protocol, asked successfully, no
     /// longer reports them.
@@ -128,6 +138,11 @@ impl UnlockedVault {
                 .iter_mut()
                 .find(|have| have.id == record.id)
             {
+                // The same legs, name and receipts as stored: only the moment
+                // of the reading differs. Rewriting that would encrypt the
+                // vault, tell the screens and queue a sync record every pass
+                // for nothing, so it is not a change.
+                Some(have) if same_but_for_the_moment(have, &record) => {}
                 Some(have) => {
                     *have = record;
                     out.rewritten += 1;
@@ -163,10 +178,16 @@ impl UnlockedVault {
                 .iter_mut()
                 .find(|have| have.id == event.id)
             {
-                Some(have) => *have = event.clone(),
-                None => self.doc.crypto_events.push(event.clone()),
+                Some(have) if *have == *event => {}
+                Some(have) => {
+                    *have = event.clone();
+                    out.events += 1;
+                }
+                None => {
+                    self.doc.crypto_events.push(event.clone());
+                    out.events += 1;
+                }
             }
-            out.events += 1;
         }
         if out.is_unchanged() {
             return Ok(out);

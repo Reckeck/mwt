@@ -889,13 +889,30 @@ fn applying_a_reading_stores_the_legs_and_nothing_derived() {
     assert_eq!(vault.doc.crypto_positions.len(), 1);
     assert_eq!(vault.doc.crypto_positions[0], live.stored());
 
-    // A second pass of the same position rewrites the one record.
+    // A second pass of the identical position (only the moment differs)
+    // changes nothing, so it saves nothing.
+    let mut later = live.clone();
+    later.read_at = "2026-05-13T09:15:00Z".into();
+    let before = vault.doc.crypto_positions.clone();
     let again = vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&later), &[], &[])
         .expect("the reading is stored again");
-    assert_eq!(again.added, 0);
-    assert_eq!(again.rewritten, 1);
+    assert!(again.is_unchanged(), "{again:?}");
+    assert_eq!(vault.doc.crypto_positions, before);
+
+    // A reading that says something new rewrites the one record.
+    let mut moved = later.clone();
+    moved.legs = vec![leg(CryptoDirection::In, token(USDC), "2500")];
+    let changed = vault
+        .crypto_apply_positions(ACCOUNT, &[moved], &[], &[])
+        .expect("the changed reading is stored");
+    assert_eq!(changed.added, 0);
+    assert_eq!(changed.rewritten, 1);
     assert_eq!(vault.doc.crypto_positions.len(), 1);
+    assert_eq!(
+        vault.doc.crypto_positions[0].updated_at,
+        "2026-05-13T09:15:00Z"
+    );
 }
 
 #[test]
