@@ -25,6 +25,27 @@ So platform differences are reduced to three questions:
 3. **A copy in an external file** (optional). After every save the
    sealed vault bytes are written into the chosen document (`mirror`).
 
+## The device secrets file
+
+Next to the local vault file lies `<vault>.secrets` (the vault's file name plus
+`.secrets`; `crypto/device_secrets.rs`). It holds what must stay on this device:
+the exchange API keys and the per-network endpoints and Blockscout key. It is
+sealed under a key derived from the open vault's key and written atomically.
+
+- **It is not part of the vault bytes.** The external copy (`mirror`), sync,
+  transfers and the backups (`.bak`, `.vN.bak`) never carry it. A vault opened
+  from a copy, from a backup or on another device has no secrets there, and the
+  user adds them on that device.
+- **It follows the vault's name.** The file is looked up by the vault's path.
+  Without it (a vault file moved, renamed or restored without it, or the file
+  lost) the vault opens normally with no stored keys and endpoints.
+  A file that exists but cannot be opened (damaged, or sealed under another
+  key) is the `SECRET` error, never a panic.
+- **It leaves with the vault.** Deleting a vault removes its secrets file, and
+  creating a vault under a path removes a leftover one.
+- **A password change re-seals it** through `<vault>.secrets.next` (see
+  [Security](security.md)).
+
 ## Platforms
 
 | | Linux | Windows | macOS | Android | iOS |

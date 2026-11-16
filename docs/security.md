@@ -141,10 +141,17 @@ PIN; 1 = level 1, plain; 2 = level 3, crypto). Code:
   external copy is not pulled in when its bytes are protected more cheaply
   than the local vault (the link is marked failed instead). A password change
   keeps the vault's KDF cost.
-- **Sync.** A batch with crypto data is refused below level 3 with
-  `SECURITY_LEVEL_REQUIRED`; the refusing device tells the other one, which
-  shows the same code with the device's name. Ordinary records sync at any
-  level.
+- **Sync.** Crypto-module records only travel between level-3 vaults. Each side says
+  its level in `Identity.security_level`; a sender leaves the crypto collections
+  out of its manifest and of every batch for a receiver below level 3 (and does
+  not answer a request for such a key), so they never reach the network. The
+  receiver does not rely on that: `sync_admit` drops such records from a batch
+  and applies the rest, and the session goes on. When something was dropped,
+  `SECURITY_LEVEL_REQUIRED` is shown once with the sender's name. A
+  `Bye` with the reason `security_level_required` is only accepted (it shows the
+  same error and closes quietly); this build does not send it. Ordinary records
+  sync at any level. A peer that does not say its level counts as the lowest one
+  ([compatibility](sync/compatibility.md)).
 - **PIN delay.** On a level-2 vault five wrong PINs are free, then each next
   try waits 30 s, 1 min, 5 min, then 15 min (`PIN_RETRY_LATER`). The counter is
   kept per vault path in the app settings, so it survives a restart, and is
