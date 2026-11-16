@@ -126,7 +126,7 @@ the frontend does not duplicate it.
   `savings`), otherwise the parent's.
 - `binding` — a sub-account's strict binding: `asset(AssetRef)` (a currency or token),
   `pair { base, quote }` (both coins, exchange in both directions), `market(spot | futures | earn)`.
-  A root has `any`. A transaction with a foreign asset gets `BINDING_MISMATCH` (V15);
+  A root has `any`. A transaction with a foreign asset gets `BINDING_MISMATCH` (V15); a wallet the crypto module reads (`Store.crypto_account_id`) refuses every hand-made entry (V16) — on either side of a transfer, in an automation or a bulk edit;
   changing the binding is rejected if the posted transactions do not fit into it.
 - `deposit: DepositTerms { rates[{ from, rate }], capitalization, opened_at?, term_months?, auto_accrue, pds? }` —
   on `savings`/`deposit`/`pds` sub-accounts; rates are a history, interest is computed by day
