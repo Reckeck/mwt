@@ -1,0 +1,4 @@
+{
+  "note": "Real value: Ethereum Core WETH getReserveNormalizedIncome quoted in D-protocol-facts, section 5 (the word is hand-encoded).",
+  "result": "0x00000000000000000000000000000000000000000377c76ef87bf156375094a1"
+}

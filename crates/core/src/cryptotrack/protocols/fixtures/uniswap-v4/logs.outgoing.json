@@ -1,0 +1,18 @@
+{
+  "_source": "Hand-built from the documented return layout (D-protocol-facts, Uniswap v4 sections 7 and 8); NOT a live node answer. Token, hook and wallet addresses are synthetic; hashes and numbers were computed outside Rust with an independent Python Keccak-256 and arbitrary-precision integers. Transfer logs with the wallet as sender: token 33 left at block 2500, so it is not held.",
+  "result": [
+    {
+      "address": "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e",
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x0000000000000000000000001111111111111111111111111111111111111111",
+        "0x0000000000000000000000009999999999999999999999999999999999999999",
+        "0x0000000000000000000000000000000000000000000000000000000000000021"
+      ],
+      "data": "0x",
+      "blockNumber": "0x9c4",
+      "logIndex": "0x2",
+      "removed": false
+    }
+  ]
+}

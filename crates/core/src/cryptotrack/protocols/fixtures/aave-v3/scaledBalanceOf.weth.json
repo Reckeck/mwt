@@ -1,0 +1,4 @@
+{
+  "note": "Hand-built from the documented layout (D-protocol-facts, Aave v3); not a live node answer. aToken.scaledBalanceOf(user).",
+  "result": "0x0000000000000000000000000000000000000000000000001bc16d674ec80000"
+}

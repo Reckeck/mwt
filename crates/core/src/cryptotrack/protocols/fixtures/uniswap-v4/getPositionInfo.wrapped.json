@@ -1,0 +1,4 @@
+{
+  "_source": "Hand-built from the documented return layout (D-protocol-facts, Uniswap v4 sections 7 and 8); NOT a live node answer. Token, hook and wallet addresses are synthetic; hashes and numbers were computed outside Rust with an independent Python Keccak-256 and arbitrary-precision integers. getPositionInfo with feeGrowthInsideLast1 = 2^256 - 5e27, so the accumulator has wrapped since the snapshot.",
+  "result": "0x000000000000000000000000000000000000000000000000002bdc545d6b4b870000000000000000000000000000000200000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffefd818d0e0ed7ecf78000000"
+}
