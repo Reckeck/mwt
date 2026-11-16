@@ -424,7 +424,7 @@ impl UnlockedVault {
                 // The engine's average is USD per unit and covers only the
                 // part whose cost is known; `None` means the cost is not
                 // known, and nothing downstream turns that into a zero.
-                avg_cost: state.average_usd().map(|usd| usd * fx),
+                avg_cost: state.average_usd().and_then(|usd| math::mul(usd, fx)),
             });
         }
         self.add_unfolded_positions(&ledger, &mut out);
@@ -469,6 +469,14 @@ impl UnlockedVault {
                 if leg.direction != CryptoDirection::In || !leg.amount.is_positive() {
                     continue;
                 }
+                // A token nobody confirmed is outside every total, whoever sent
+                // it: a position adapter lists all the NFTs an address holds,
+                // including those a stranger dropped there.
+                if let CryptoAsset::Token(token) = &leg.asset
+                    && !tokens::counts_in_totals(&self.doc, token)
+                {
+                    continue;
+                }
                 let asset_key = leg.asset.key();
                 if ledger
                     .positions
@@ -484,7 +492,9 @@ impl UnlockedVault {
             }
         }
         for ((store_id, asset_key), (asset, quantity)) in missing {
-            if self.price_quote_for(&asset_key).info.origin == PriceOrigin::None {
+            // The price is looked up by the asset's own key; `asset_key` is
+            // the module's key (`ethereum|0x..`), which no price is stored by.
+            if self.price_quote_for(&asset.key()).info.origin == PriceOrigin::None {
                 out.left_out.push(CryptoOutsideTotals {
                     account_id: None,
                     store_id: Some(store_id.clone()),
@@ -605,8 +615,8 @@ mod tests {
     use super::*;
     use crate::model::cryptotrack::CryptoSnapshot;
     use crate::model::cryptotrack::{
-        CryptoAccount, CryptoDirection, CryptoLeg, CryptoPricePoint, CryptoToken, CryptoTx,
-        CryptoTxKind, TokenId, TokenVerdict, TrackingRef,
+        CryptoAccount, CryptoDirection, CryptoLeg, CryptoPosition, CryptoPricePoint, CryptoToken,
+        CryptoTx, CryptoTxKind, TokenId, TokenVerdict, TrackingRef,
     };
     use crate::model::store::StoreScope;
     use crate::model::transaction::Transaction;
@@ -1022,6 +1032,83 @@ mod tests {
         assert_eq!(left[0].reason, CryptoLeftOut::Quarantined);
         assert_eq!(left[0].asset_key, token.key());
         assert_eq!(left[0].symbol, "USDC");
+    }
+
+    /// A position an adapter read, holding `quantity` of `asset` as a leg
+    /// no operation accounts for.
+    fn position_of(account_id: &str, asset: CryptoAsset, quantity: &str) -> CryptoPosition {
+        CryptoPosition {
+            id: format!("pos-{account_id}"),
+            account_id: account_id.to_string(),
+            chain: Chain::Ethereum,
+            protocol: "uniswap-v3".into(),
+            name: "Pool".into(),
+            legs: vec![CryptoLeg {
+                direction: CryptoDirection::In,
+                asset,
+                amount: amount(quantity),
+                counterparty: None,
+            }],
+            receipts: Vec::new(),
+            updated_at: "2026-03-05T10:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn a_priced_leg_of_an_unfolded_position_is_not_left_out_for_want_of_a_price() {
+        let (_dir, mut vault) = empty_vault();
+        quote(&mut vault, &eth_ref(), "2000");
+        let wallet = followed(&mut vault, "cacc-1", "Cold", ME);
+        vault
+            .doc
+            .crypto_positions
+            .push(position_of("cacc-1", eth(), "2"));
+        vault.recompute_holdings();
+
+        assert_eq!(holding_of(&vault, &wallet, &eth_ref()), amount("2"));
+        let left = vault.crypto_outside_totals();
+        assert!(left.is_empty(), "a priced leg is not unpriced: {left:?}");
+        assert_eq!(vault.net_worth().financial, amount("4000"));
+    }
+
+    #[test]
+    fn a_quarantined_token_in_a_position_leg_stays_out_and_is_not_valued() {
+        let (_dir, mut vault) = empty_vault();
+        let wallet = followed(&mut vault, "cacc-1", "Cold", ME);
+        let token = TokenId::new(Chain::Ethereum, UNKNOWN);
+        // A stranger's NFT position holds a token that calls itself USDC, and
+        // the dollar peg would price anything by that symbol at 1 USD.
+        vault
+            .doc
+            .crypto_tokens
+            .push(CryptoToken::new(token.clone(), "USDC", 6));
+        let pretender = AssetRef {
+            symbol: "USDC".into(),
+            name: "USDC".into(),
+            coingecko_id: None,
+            chain: Some(Chain::Ethereum),
+            contract: Some(UNKNOWN.into()),
+            quote: "USDC".into(),
+        };
+        vault.doc.crypto_positions.push(position_of(
+            "cacc-1",
+            CryptoAsset::Token(token.clone()),
+            "1000000000",
+        ));
+        vault.recompute_holdings();
+
+        assert_eq!(vault.net_worth().financial, Amount::ZERO);
+        assert_eq!(holding_of(&vault, &wallet, &pretender), Amount::ZERO);
+        let shown = vault.crypto_list_positions(&[], "2026-03-06T00:00:00Z");
+        assert_eq!(shown.len(), 1);
+        assert_eq!(shown[0].value_usd, None, "unknown, not zero and not 1e9");
+        assert_eq!(shown[0].assets[0].value_usd, None);
+
+        // Once the user takes the token in, the leg counts like any other.
+        vault.crypto_confirm_token(&token).expect("confirmed");
+        quote(&mut vault, &pretender, "1");
+        vault.recompute_holdings();
+        assert_eq!(vault.net_worth().financial, amount("1000000000"));
     }
 
     #[test]

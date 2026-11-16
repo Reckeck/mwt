@@ -26,6 +26,24 @@ impl UnlockedVault {
         name: &str,
         decimals: u8,
     ) -> Result<TokenStatus> {
+        let (status, changed) = self.register_token_unsaved(token, symbol, name, decimals)?;
+        if changed {
+            self.persist()?;
+        }
+        Ok(status)
+    }
+
+    /// [`Self::crypto_register_token`] without the save: the caller owns it
+    /// and saves once for however many tokens it noted (a batch can meet
+    /// hundreds of junk tokens, and each save is a full encryption under the
+    /// vault's lock). Returns the status and whether the document changed.
+    pub(super) fn register_token_unsaved(
+        &mut self,
+        token: &TokenId,
+        symbol: &str,
+        name: &str,
+        decimals: u8,
+    ) -> Result<(TokenStatus, bool)> {
         let symbol = sanitize_symbol(symbol);
         let name = sanitize_name(name);
         // A symbol that is empty after cleaning still needs something to show.
@@ -58,10 +76,7 @@ impl UnlockedVault {
                 true
             }
         };
-        if changed {
-            self.persist()?;
-        }
-        Ok(tokens::status(&self.doc, token))
+        Ok((tokens::status(&self.doc, token), changed))
     }
 
     /// The tokens met so far, each with its status, its basis and what is

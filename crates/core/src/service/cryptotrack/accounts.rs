@@ -17,6 +17,8 @@
 
 use std::collections::BTreeMap;
 
+use rust_decimal::Decimal;
+
 use super::super::UnlockedVault;
 use crate::Amount;
 use crate::cryptotrack::engine::math;
@@ -191,8 +193,12 @@ impl UnlockedVault {
             .find(|(secs, _)| *secs <= cutoff)
             .filter(|(secs, _)| cutoff - *secs <= 7 * DAY)?;
         let (_, now) = points.last()?;
-        let change = now.value_usd - then.value_usd;
-        let pct = math::div(change * Amount::from(100), then.value_usd).map(|value| value.round(2));
+        // Both ends are recorded values, but a document may carry any number:
+        // a change a decimal cannot hold is no number, not a panic.
+        let change = math::sub(now.value_usd, then.value_usd)?;
+        let pct = math::mul(change, Amount::from(100))
+            .and_then(|scaled| math::div(scaled, then.value_usd))
+            .map(|value| value.round(2));
         Some(MonthChange {
             change_usd: change.round(2),
             change_pct: pct.filter(|_| then.value_usd.is_positive()),
@@ -232,9 +238,15 @@ impl UnlockedVault {
                 let entry = held
                     .entry((event.account_id.clone(), key))
                     .or_insert_with(|| (Amount::ZERO, event.time.clone(), token.clone()));
+                // A junk token may report any number; one a decimal cannot hold
+                // saturates instead of taking the list (and the app) down.
                 entry.0 = match leg.direction {
-                    CryptoDirection::In => entry.0 + leg.amount,
-                    CryptoDirection::Out => entry.0 - leg.amount,
+                    CryptoDirection::In => {
+                        math::add(entry.0, leg.amount).unwrap_or(Amount::new(Decimal::MAX))
+                    }
+                    CryptoDirection::Out => {
+                        math::sub(entry.0, leg.amount).unwrap_or(Amount::new(Decimal::MIN))
+                    }
                 };
                 if event.time < entry.1 {
                     entry.1 = event.time.clone();
@@ -378,7 +390,8 @@ impl UnlockedVault {
         self.crypto_sync_holdings()
     }
 
-    /// Stop following an address: the account and its read position go, the
+    /// Stop following an address: the account, its read positions and its
+    /// cursors go, the
     /// operations already read stay until the module is wiped (spec E12). The
     /// wallet that showed it is archived, because nothing drives it any more
     /// and it must not turn into a hand-kept wallet.
@@ -397,6 +410,12 @@ impl UnlockedVault {
         self.doc
             .crypto_cursors
             .retain(|cursor| cursor.account_id != account_id);
+        // A position is a derived reading of the account: left behind, it
+        // would stay listed as open and valued, and its receipts would keep
+        // being dropped from the capital of other accounts on the network.
+        self.doc
+            .crypto_positions
+            .retain(|position| position.account_id != account_id);
         for store in &mut self.doc.stores {
             if store.crypto_account_id.as_deref() == Some(account_id) {
                 store.crypto_account_id = None;
@@ -672,6 +691,96 @@ mod tests {
         assert!(vault.crypto_list_accounts()[0].quarantine.is_empty());
         vault.crypto_reject_token(&token).unwrap();
         assert!(vault.crypto_list_accounts()[0].quarantine.is_empty());
+    }
+
+    #[test]
+    fn two_huge_transfers_of_a_junk_token_do_not_take_the_list_down() {
+        // A token with no decimals may report any whole number: two transfers
+        // of 5e28 add up to 1e29, which a decimal cannot hold. The sum must
+        // saturate, not panic (the events are already stored, so a panic here
+        // would repeat on every opening of the list).
+        let (_dir, mut vault) = empty_vault();
+        let done = vault
+            .crypto_connect_address(&connect(ADDRESS, "Main"))
+            .unwrap();
+        let token = TokenId::new(Chain::Ethereum, SCAM);
+        vault
+            .crypto_register_token(&token, "JUNK", "Junk", 0)
+            .unwrap();
+        let huge = "50000000000000000000000000000";
+        for time in ["2026-10-14T10:00:00Z", "2026-10-15T10:00:00Z"] {
+            vault.doc.crypto_events.push(event(
+                &done.account_id,
+                &token,
+                huge,
+                CryptoDirection::In,
+                time,
+            ));
+        }
+        let listed = vault.crypto_list_accounts().remove(0);
+        assert_eq!(listed.quarantine.len(), 1);
+        assert!(listed.quarantine[0].quantity >= Amount::parse(huge).unwrap());
+    }
+
+    #[test]
+    fn a_month_change_that_does_not_fit_says_nothing_instead_of_panicking() {
+        use crate::model::cryptotrack::CryptoSnapshot;
+        let (_dir, mut vault) = empty_vault();
+        let snapshot = |day: &str, value: &str| CryptoSnapshot {
+            id: format!("snap-{day}"),
+            at: format!("{day}T12:00:00Z"),
+            account_id: Some("acc".into()),
+            value_usd: Amount::parse(value).unwrap(),
+        };
+        vault.doc.crypto_snapshots = vec![
+            snapshot("2026-10-13", "-70000000000000000000000000000"),
+            snapshot("2026-11-12", "70000000000000000000000000000"),
+        ];
+        let now = unix_secs("2026-11-12T12:00:00Z").unwrap();
+        assert_eq!(vault.crypto_month_change("acc", now), None);
+        // A change that fits but whose percentage does not: no percentage.
+        vault.doc.crypto_snapshots = vec![
+            snapshot("2026-10-13", "1"),
+            snapshot("2026-11-12", "70000000000000000000000000000"),
+        ];
+        let change = vault.crypto_month_change("acc", now).unwrap();
+        assert_eq!(change.change_pct, None);
+    }
+
+    #[test]
+    fn forgetting_an_account_takes_its_positions_and_their_receipts_with_it() {
+        use crate::model::cryptotrack::CryptoPosition;
+        let (_dir, mut vault) = empty_vault();
+        let gone = vault
+            .crypto_connect_address(&connect(ADDRESS, "Main"))
+            .unwrap();
+        let kept = vault
+            .crypto_connect_address(&connect(SCAM, "Other"))
+            .unwrap();
+        let receipt = CryptoAsset::Token(TokenId::new(Chain::Ethereum, SCAM));
+        let position = |account: &str| CryptoPosition {
+            id: format!("pos-{account}"),
+            account_id: account.to_string(),
+            chain: Chain::Ethereum,
+            protocol: "lido".into(),
+            name: "Staked".into(),
+            legs: Vec::new(),
+            receipts: vec![receipt.clone()],
+            updated_at: "2026-11-01T00:00:00Z".into(),
+        };
+        vault.doc.crypto_positions = vec![position(&gone.account_id), position(&kept.account_id)];
+
+        vault.crypto_forget_account(&gone.account_id).unwrap();
+
+        assert_eq!(vault.doc.crypto_positions.len(), 1);
+        assert_eq!(vault.doc.crypto_positions[0].account_id, kept.account_id);
+        assert!(
+            vault
+                .crypto_list_positions(&[], "2026-11-02T00:00:00Z")
+                .iter()
+                .all(|view| view.account_id != gone.account_id),
+            "a forgotten account's position is no longer listed"
+        );
     }
 
     #[test]

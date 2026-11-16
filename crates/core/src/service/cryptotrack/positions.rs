@@ -63,6 +63,7 @@ use crate::cryptotrack::protocols::{
     annual_percentage_rate, fees_usd, impermanent_loss, impermanent_loss_ratio, is_closed, kind_of,
     net_result, receipt_tokens, worth_usd,
 };
+use crate::cryptotrack::tokens;
 use crate::error::Result;
 use crate::ipc_contract::cryptotrack::positions::{PositionAssetView, PositionView};
 use crate::model::cryptotrack::{
@@ -73,14 +74,24 @@ use crate::service::price_info::PriceOrigin;
 
 use super::super::UnlockedVault;
 
+/// Whether a re-read position says what the stored one already says: the
+/// legs, the name and the receipts, whatever the moment of the reading.
+fn same_but_for_the_moment(stored: &CryptoPosition, read: &CryptoPosition) -> bool {
+    CryptoPosition {
+        updated_at: read.updated_at.clone(),
+        ..stored.clone()
+    } == *read
+}
+
 /// What a pass of the protocol adapters stored.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CryptoPositionsApplied {
     /// Positions added.
     pub added: usize,
-    /// Positions that were already there and were rewritten.
+    /// Positions that were already there and whose legs, name or receipts
+    /// changed, so they were rewritten.
     pub rewritten: usize,
-    /// Operations of those positions added or rewritten.
+    /// Operations of those positions added or changed.
     pub events: usize,
     /// Positions closed because their protocol, asked successfully, no
     /// longer reports them.
@@ -128,6 +139,11 @@ impl UnlockedVault {
                 .iter_mut()
                 .find(|have| have.id == record.id)
             {
+                // The same legs, name and receipts as stored: only the moment
+                // of the reading differs. Rewriting that would encrypt the
+                // vault, tell the screens and queue a sync record every pass
+                // for nothing, so it is not a change.
+                Some(have) if same_but_for_the_moment(have, &record) => {}
                 Some(have) => {
                     *have = record;
                     out.rewritten += 1;
@@ -163,10 +179,16 @@ impl UnlockedVault {
                 .iter_mut()
                 .find(|have| have.id == event.id)
             {
-                Some(have) => *have = event.clone(),
-                None => self.doc.crypto_events.push(event.clone()),
+                Some(have) if *have == *event => {}
+                Some(have) => {
+                    *have = event.clone();
+                    out.events += 1;
+                }
+                None => {
+                    self.doc.crypto_events.push(event.clone());
+                    out.events += 1;
+                }
             }
-            out.events += 1;
         }
         if out.is_unchanged() {
             return Ok(out);
@@ -402,6 +424,14 @@ impl UnlockedVault {
     /// position of the app is valued at; `None`, never zero, when nothing
     /// knows it.
     fn price_now_usd(&self, asset: &CryptoAsset) -> Option<Amount> {
+        // A token that is quarantined or rejected has no price here, whatever
+        // its symbol says: the dollar peg would otherwise price a stranger's
+        // "USDC" at 1 USD and put it into the position's value.
+        if let CryptoAsset::Token(token) = asset
+            && !tokens::counts_in_totals(&self.doc, token)
+        {
+            return None;
+        }
         let quote = self.price_quote_for(&self.crypto_asset_ref(asset).key());
         if quote.info.origin != PriceOrigin::None {
             return Some(quote.usd);
