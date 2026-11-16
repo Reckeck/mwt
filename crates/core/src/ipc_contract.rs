@@ -27,6 +27,7 @@ use crate::model::transaction::{
 use crate::model::vault::DailyBudgetMode;
 use crate::service::{AutomationDraft, BudgetDraft, ContactDraft, GoalDraft, PriceAlertDraft};
 
+pub mod cryptotrack;
 pub mod security;
 
 // -- auth --------------------------------------------------------------------
@@ -41,7 +42,7 @@ pub struct CreateVaultInput {
     /// Name of the cash wallet every vault starts with, in the user's language.
     #[serde(default)]
     pub cash_name: Option<String>,
-    /// The vault keeps crypto; `None` = yes (callers from before the question).
+    /// Read for compatibility and ignored: whether the vault holds crypto is derived (spec E14).
     #[serde(default)]
     pub crypto: Option<bool>,
 }
@@ -825,10 +826,46 @@ impl TransactionKinds {
             special: allowed
                 .iter()
                 .copied()
-                .filter(|tx_kind| !tx_kind.is_verb() && tx_kind.in_form())
+                .filter(|tx_kind| {
+                    !tx_kind.is_verb() && tx_kind.in_form() && tx_kind.typed_by_hand()
+                })
                 .collect(),
-            default: default_kind(kind),
+            default: Some(default_kind(kind))
+                .filter(|tx_kind| tx_kind.typed_by_hand())
+                .unwrap_or(TxKind::Transfer),
         }
+    }
+}
+
+#[cfg(test)]
+mod transaction_kinds_tests {
+    use super::*;
+
+    #[test]
+    fn no_form_offers_a_trade_or_defi_for_a_new_record() {
+        for kind in [
+            StoreKind::Cash,
+            StoreKind::Bank,
+            StoreKind::Exchange,
+            StoreKind::Crypto,
+            StoreKind::Property,
+            StoreKind::Loyalty,
+            StoreKind::Liability,
+        ] {
+            let kinds = TransactionKinds::for_store_kind(kind);
+            for offered in kinds
+                .verbs
+                .iter()
+                .chain(&kinds.special)
+                .chain([&kinds.default])
+            {
+                assert!(offered.typed_by_hand(), "{kind:?} offers {offered:?}");
+            }
+        }
+        assert_eq!(
+            TransactionKinds::for_store_kind(StoreKind::Exchange).default,
+            TxKind::Transfer
+        );
     }
 }
 
@@ -1751,7 +1788,7 @@ pub struct UpdateSettingsInput {
     pub dashboard_period: Option<crate::model::vault::DashPeriod>,
     #[serde(default)]
     pub onboarding_checklist_hidden: Option<bool>,
-    /// Show crypto wallets, exchanges and coins.
+    /// Read for compatibility and ignored: whether the vault holds crypto is derived (spec E14).
     #[serde(default)]
     pub crypto: Option<bool>,
     /// Replaces the flat inflation table of the group, percent by currency
