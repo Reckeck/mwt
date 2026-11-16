@@ -13,7 +13,8 @@ import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 
-import { type OverrideRequest, useSaveMeaning } from '../model/use-crypto-override'
+import { buildOverride } from '../lib/build-override'
+import { useSaveMeaning } from '../model/use-crypto-override'
 
 /**
  * The meaning of an operation: its category (the same directory as every other operation), a description
@@ -55,20 +56,8 @@ const save = useSaveMeaning(() => {
 })
 const counterparty = computed(() => (props.row.legs[0]?.direction === 'in' ? props.row.from : props.row.to))
 
-/** Only what the user changed is sent: an untouched field is not a correction. */
 function submit() {
-  const input: OverrideRequest = { event_id: props.row.id, same_contract: wide.value }
-  const clear: OverrideField[] = []
-  if (category.value) input.categories = [category.value]
-  else if (props.row.categories.length) clear.push('categories')
-  const text = description.value.trim()
-  if (text !== (props.row.comment ?? '')) {
-    if (text) input.comment = text
-    else clear.push('comment')
-  }
-  if (contact.value) input.contact_id = contact.value
-  else if (props.row.contact_id) clear.push('contact')
-  save.mutate({ ...input, clear })
+  save.mutate(buildOverride(props.row, { category: category.value, description: description.value, contact: contact.value }, wide.value))
 }
 </script>
 
@@ -98,7 +87,7 @@ function submit() {
     </FormField>
     <p class="rounded-lg bg-muted p-3 text-sm text-muted-foreground">{{ t('cryptoTrack.operations.meaning.readonly') }}</p>
     <template v-if="sameContract > 1" #footer-start>
-      <Button type="button" variant="outline" :class="wide && 'border-primary'" data-crypto-contract @click="wide = !wide">
+      <Button type="button" variant="outline" :class="wide && 'border-primary'" :aria-pressed="wide" data-crypto-contract @click="wide = !wide">
         {{ wide ? t('cryptoTrack.operations.meaning.contractOn', { count: sameContract }) : t('cryptoTrack.operations.meaning.contractAsk', { count: sameContract }) }}
       </Button>
     </template>

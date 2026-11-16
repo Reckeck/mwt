@@ -27,7 +27,7 @@
   "cryptoTrack.positions.actions.label": "Действия с позицией",
   "cryptoTrack.positions.actions.open": "Открыть детали",
   "cryptoTrack.positions.actions.operations": "Операции",
-  "cryptoTrack.positions.actions.operationsHint": "Список операций по этому протоколу и сети",
+  "cryptoTrack.positions.actions.operationsHint": "Операции этого адреса в этой сети",
   "cryptoTrack.positions.summary.missing": "не учтено: {count} без величины",
   "cryptoTrack.positions.empty.title": "Пока нет позиций DeFi",
   "cryptoTrack.positions.empty.description": "Позиции читаются из блокчейна по адресам ваших кошельков: ликвидность в Uniswap, займы в Aave, стейкинг в Lido. Добавьте адрес кошелька, и после первой синхронизации они появятся здесь.",

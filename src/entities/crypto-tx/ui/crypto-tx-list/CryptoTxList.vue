@@ -9,6 +9,7 @@ import { formatDay } from '@/shared/lib/format'
 import { useIsPhone } from '@/shared/lib/phone'
 
 import { CRYPTO_OPS_PAGE } from '../../model/use-crypto-ops'
+import { groupByDay } from '../../lib/group-by-day'
 import { opTitle, shortAddress } from '../../lib/op-view'
 import CryptoTxRow from '../crypto-tx-row/CryptoTxRow.vue'
 import type { CryptoTxListProps } from './crypto-tx-list.types'
@@ -24,27 +25,7 @@ const emit = defineEmits<{ open: [row: CryptoOpRow]; more: [] }>()
 const { t } = useI18n()
 const phone = useIsPhone()
 
-interface Day {
-  date: string
-  rows: CryptoOpRow[]
-  /** USD value of what has a price; `null` when none has. */
-  total: number | null
-}
-/** Rows arrive newest first; a new day starts where the date changes. */
-const days = computed<Day[]>(() => {
-  const out: Day[] = []
-  for (const row of props.rows) {
-    const date = row.time.slice(0, 10)
-    let day = out.at(-1)
-    if (!day || day.date !== date) {
-      day = { date, rows: [], total: null }
-      out.push(day)
-    }
-    day.rows.push(row)
-    if (row.value_usd) day.total = (day.total ?? 0) + Number(row.value_usd)
-  }
-  return out
-})
+const days = computed(() => groupByDay(props.rows))
 const dayLabel = (date: string) => {
   const text = formatDay(`${date}T12:00:00`).replaceAll('.', '')
   return text.charAt(0).toUpperCase() + text.slice(1)

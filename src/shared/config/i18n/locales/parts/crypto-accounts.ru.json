@@ -1,5 +1,4 @@
 {
-  "cryptoTrack.accounts.unavailable": "Подключение адресов ещё не готово.",
   "cryptoTrack.accounts.updated": "Обновлено {time}",
   "cryptoTrack.accounts.notRead": "Адрес ещё не читали",
   "cryptoTrack.accounts.readOnly": "Только чтение",
@@ -39,7 +38,6 @@
   "cryptoTrack.empty.where": "Создать → Кошелёк → вид «Крипта». Сети, свой узел и согласие — в Настройках, подраздел «Крипта».",
   "cryptoTrack.empty.connect": "Подключить адрес",
   "cryptoTrack.connect.kindNote": "Крипто-кошелёк ведёт движок: на следующем шаге подключим публичный адрес в сети. Приложение только читает его — отправить монеты нельзя, seed-фраза и приватный ключ не нужны.",
-  "cryptoTrack.connect.defaultName": "Основной",
   "cryptoTrack.connect.title": "Подключить адрес",
   "cryptoTrack.connect.stepAddress": "Шаг 2 из 3: сеть и публичный адрес.",
   "cryptoTrack.connect.stepStart": "Шаг 3 из 3: операции раньше этой даты не загружаем.",

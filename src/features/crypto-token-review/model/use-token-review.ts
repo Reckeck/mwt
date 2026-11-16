@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
-import { CRYPTO_ACCOUNTS_KEY } from '@/entities/crypto-account'
-import { CRYPTO_TOKENS_KEY, type QuarantineRow } from '@/entities/crypto-token'
+import type { QuarantineRow } from '@/entities/crypto-token'
 import { call } from '@/shared/api/ipc'
-import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
+
+import { refreshAfterTokenVerdict } from './refresh'
 
 const ref = (row: QuarantineRow): TokenRefInput => ({ chain: row.chain, contract: row.contract })
 
@@ -13,11 +13,7 @@ const ref = (row: QuarantineRow): TokenRefInput => ({ chain: row.chain, contract
  */
 export function useTokenReview() {
   const queryClient = useQueryClient()
-  const refresh = () => {
-    for (const queryKey of [CRYPTO_ACCOUNTS_KEY, CRYPTO_TOKENS_KEY, ...LEDGER_KEYS, ...PLANNING_KEYS]) {
-      void queryClient.invalidateQueries({ queryKey })
-    }
-  }
+  const refresh = () => refreshAfterTokenVerdict(queryClient)
   // `Undo` takes the verdict back: the token returns to the quarantine and leaves the capital again.
   const takeBack = (_data: unknown, row: unknown) =>
     call<TokenStatus>('crypto_clear_token_verdict', { input: ref(row as QuarantineRow) })

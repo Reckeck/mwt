@@ -62,6 +62,8 @@ const ownCurrency = computed(() => {
 })
 const moneyWallet = computed(() => ['bank', 'cash', 'liability'].includes(props.store.kind))
 const live = computed(() => !props.store.archived)
+/** DeFi positions live on an address; an exchange read through its key holds none. */
+const withPositions = computed(() => props.engine && props.store.kind !== 'exchange')
 /** What may record an operation, now or later: off for a wallet the engine drives. */
 const manual = computed(() => live.value && !props.engine)
 </script>
@@ -90,7 +92,7 @@ const manual = computed(() => live.value && !props.engine)
       {{ t('adjustment.open') }}
     </DropdownMenuItem>
     <!-- The only way into the positions screen from a wallet: an address holds them, so this is where it belongs. -->
-    <DropdownMenuItem v-if="props.engine" value="positions" data-gear="positions" @select="emit('positions')">
+    <DropdownMenuItem v-if="withPositions" value="positions" data-gear="positions" @select="emit('positions')">
       <Layers class="size-4 shrink-0" />
       {{ t('cryptoTrack.positions.title') }}
     </DropdownMenuItem>

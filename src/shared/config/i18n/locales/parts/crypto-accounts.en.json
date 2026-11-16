@@ -1,5 +1,4 @@
 {
-  "cryptoTrack.accounts.unavailable": "Connecting addresses is not ready yet.",
   "cryptoTrack.accounts.updated": "Updated {time}",
   "cryptoTrack.accounts.notRead": "Not read yet",
   "cryptoTrack.accounts.readOnly": "Read-only",
@@ -39,7 +38,6 @@
   "cryptoTrack.empty.where": "Create → Wallet → the Crypto kind. Networks, your own node and the consent are in Settings, the Crypto subsection.",
   "cryptoTrack.empty.connect": "Connect an address",
   "cryptoTrack.connect.kindNote": "The engine keeps a crypto wallet: the next step connects a public address on a network. The app only reads it, coins cannot be sent, and no seed phrase or private key is needed.",
-  "cryptoTrack.connect.defaultName": "Main",
   "cryptoTrack.connect.title": "Connect an address",
   "cryptoTrack.connect.stepAddress": "Step 2 of 3: the network and the public address.",
   "cryptoTrack.connect.stepStart": "Step 3 of 3: operations before this date are not loaded.",

@@ -52,6 +52,7 @@ function pick(option: CryptoLinkOption) {
       :empty-icon="Link2"
       skeleton="list"
       compact
+      @retry="candidates.refetch()"
     >
       <ul class="divide-y divide-border" data-crypto-ref-options>
         <li v-for="option in options" :key="option.row.id" class="relative">
