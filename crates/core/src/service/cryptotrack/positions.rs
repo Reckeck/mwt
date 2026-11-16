@@ -131,8 +131,10 @@ impl UnlockedVault {
         events: &[CryptoTx],
         reviewed: &[ProtocolReview],
     ) -> Result<CryptoPositionsApplied> {
-        let mut out = CryptoPositionsApplied::default();
-        out.migrated = self.migrate_legacy_position_records(account_id);
+        let mut out = CryptoPositionsApplied {
+            migrated: self.migrate_legacy_position_records(account_id),
+            ..CryptoPositionsApplied::default()
+        };
         for reading in readings
             .iter()
             .filter(|reading| reading.account_id == account_id)
