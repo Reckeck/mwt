@@ -37,8 +37,10 @@ pub fn run(root: &Path, args: &LinuxArgs) -> Result<()> {
     if which("flatpak-builder").is_none() {
         run_inherited(
             root,
+            // -Syu, never -Sy: the image lags the mirrors, and a database sync without a full
+            // upgrade is a partial upgrade (new openssl against old libssl consumers).
             &Cmd::new("pacman").args([
-                "-Sy",
+                "-Syu",
                 "--noconfirm",
                 "--needed",
                 "flatpak",
