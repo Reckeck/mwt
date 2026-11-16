@@ -22,6 +22,8 @@ const PERP_PREFIX: &str = "perp:";
 pub struct RateBook {
     fx: RateIndex,
     prices: RateIndex,
+    /// Historic crypto prices (`crypto_prices`), by `<chain>|<contract>` key.
+    crypto: RateIndex,
     /// Prices transactions recorded, for assets no provider quotes.
     stamps: RateIndex,
     /// Hand-set unit prices: `(price, currency)` per asset key (D24).
@@ -58,7 +60,9 @@ impl RateBook {
         if let Some(code) = asset_key.strip_prefix(FIAT_PREFIX) {
             return self.fx_at(code, secs).map(|rate| one() / rate);
         }
-        self.prices.at(asset_key, secs)
+        self.prices
+            .at(asset_key, secs)
+            .or_else(|| self.crypto.at(asset_key, secs))
     }
 
     /// [`RateBook::price_at`] with the moment its rate was taken; `None` for
@@ -81,7 +85,10 @@ impl RateBook {
             let (at, rate) = self.fx.point_at(&code, secs)?;
             return (!rate.is_zero()).then(|| (one() / rate, Some(at)));
         }
-        let (at, price) = self.prices.point_at(asset_key, secs)?;
+        let (at, price) = self
+            .prices
+            .point_at(asset_key, secs)
+            .or_else(|| self.crypto.point_at(asset_key, secs))?;
         Some((price, Some(at)))
     }
 
@@ -105,6 +112,8 @@ impl RateBook {
             .at_or_before(asset_key, secs)
             .or_else(|| self.stamps.at_or_before(asset_key, secs))
             .or_else(|| self.prices.at(asset_key, secs))
+            .or_else(|| self.crypto.at_or_before(asset_key, secs))
+            .or_else(|| self.crypto.at(asset_key, secs))
     }
 
     /// `amount` of `from` in `to` at `secs`, both currency codes (fiat, or the
@@ -222,6 +231,7 @@ impl UnlockedVault {
         RateBook {
             fx: RateIndex::of_fx(&self.doc.fx_cache),
             prices: RateIndex::of_prices(&self.doc.price_cache),
+            crypto: RateIndex::of_crypto(&self.doc.crypto_prices),
             stamps,
             curves: self.valuation_curves(),
             manual: self

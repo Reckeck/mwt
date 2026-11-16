@@ -144,9 +144,25 @@ pub fn container_is_cheaper(local: &[u8], remote: &[u8]) -> bool {
 }
 
 /// Whether the document holds crypto-module data, which ties it to level 3.
-/// Stage 1 has none (`VaultDoc` has no crypto section yet); E0 extends this.
-pub fn doc_carries_crypto_data(_doc: &VaultDoc) -> bool {
-    false
+///
+/// One non-empty `crypto_*` collection is enough: the module's addresses and
+/// operations are what level 3 exists for, so while any of them is stored the
+/// vault may not be protected more cheaply (`check_not_below_min`).
+///
+/// `crypto_wiped_at` is the one exception, and it has to be: wiping the
+/// module (spec E12) empties every collection and leaves exactly that mark
+/// behind, so that the other devices learn about the wipe through an ordinary
+/// sync. Counting the mark as data would mean a wiped vault could never go
+/// back below level 3.
+pub fn doc_carries_crypto_data(doc: &VaultDoc) -> bool {
+    !doc.crypto_accounts.is_empty()
+        || !doc.crypto_events.is_empty()
+        || !doc.crypto_overrides.is_empty()
+        || !doc.crypto_tokens.is_empty()
+        || !doc.crypto_positions.is_empty()
+        || !doc.crypto_snapshots.is_empty()
+        || !doc.crypto_cursors.is_empty()
+        || !doc.crypto_prices.is_empty()
 }
 
 /// What the raise to level 3 did.
@@ -216,6 +232,28 @@ impl UnlockedVault {
             return Err(Error::SecurityLevelRequired);
         }
         Ok(())
+    }
+
+    /// What of a sync batch this vault may take in: below level 3 the crypto
+    /// module's records are dropped and the rest is applied. The second item
+    /// counts what was dropped. A sender that knows this vault's level
+    /// ([`crate::sync::protocol::Identity::security_level`]) sends none of
+    /// them, so this only fires on a broken or hostile peer.
+    /// [`Self::sync_check_level`] stays behind it as the last fuse.
+    pub fn sync_admit(
+        &self,
+        incoming: std::collections::BTreeMap<String, RecordState>,
+    ) -> (std::collections::BTreeMap<String, RecordState>, usize) {
+        if self.security_level() == SecurityLevel::Crypto {
+            return (incoming, 0);
+        }
+        let before = incoming.len();
+        let kept: std::collections::BTreeMap<String, RecordState> = incoming
+            .into_iter()
+            .filter(|(key, _)| !crate::sync::crypto_gate::carries_crypto_data(std::iter::once(key)))
+            .collect();
+        let dropped = before - kept.len();
+        (kept, dropped)
     }
 
     /// Raise the vault to level 3 with `new_password` at the cost `kdf` (see
@@ -344,8 +382,20 @@ impl UnlockedVault {
         })
     }
 
-    /// What follows a successful raise. Empty in stage 1 (E11 hooks in here).
-    fn after_raise(&mut self) {}
+    /// What follows a successful raise: the module takes over the crypto, so
+    /// the wallets kept by hand are retired (spec E11).
+    ///
+    /// A failure to write here is not a failed raise — the level-3 file is
+    /// already on the disk, verified, and the archiving changes no record,
+    /// only the `archived` flag. So the flags are left to the same idempotent
+    /// step in the open chain (`UnlockedVault::open_as`), which is what the
+    /// spec means by a crash between the re-encryption and the archiving
+    /// repairing itself.
+    fn after_raise(&mut self) {
+        if self.retire_manual_crypto_wallets().changed {
+            let _ = self.persist_now();
+        }
+    }
 }
 
 #[cfg(test)]

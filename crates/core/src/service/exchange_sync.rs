@@ -5,6 +5,36 @@
 //! The ledger stays the source of truth: balances come from operations. The
 //! live balance only enters as a correction ("Adjustment"), so history is
 //! kept and a later import still lands before it.
+//!
+//! Since spec E7 an exchange is read by the crypto module: a record becomes a
+//! [`crate::model::cryptotrack::CryptoTx`] at once instead of waiting in
+//! `pending_imports` for the user to confirm it, and the conversion of what
+//! an older build staged lives in
+//! [`super::cryptotrack`]'s `legacy_bybit`. Everything the old import stored
+//! stays readable and keeps deduplicating — the queue, the refused ids and
+//! the `exec_id` of a booked transaction all answer
+//! [`UnlockedVault::decided_import_ids`] — so a record that was already
+//! settled one way is never counted the other way as well.
+//!
+//! Since spec E7 an exchange is read by the crypto module: a record becomes a
+//! [`crate::model::cryptotrack::CryptoTx`] at once instead of waiting in
+//! `pending_imports` for the user to confirm it, and the conversion of what
+//! an older build staged lives in
+//! [`super::cryptotrack`]'s `legacy_bybit`. Everything the old import stored
+//! stays readable and keeps deduplicating — the queue, the refused ids and
+//! the `exec_id` of a booked transaction all answer
+//! [`UnlockedVault::decided_import_ids`] — so a record that was already
+//! settled one way is never counted the other way as well.
+//!
+//! Since spec E7 an exchange is read by the crypto module: a record becomes a
+//! [`crate::model::cryptotrack::CryptoTx`] at once instead of waiting in
+//! `pending_imports` for the user to confirm it, and the conversion of what
+//! an older build staged lives in
+//! [`super::cryptotrack`]'s `legacy_bybit`. Everything the old import stored
+//! stays readable and keeps deduplicating — the queue, the refused ids and
+//! the `exec_id` of a booked transaction all answer
+//! [`UnlockedVault::decided_import_ids`] — so a record that was already
+//! settled one way is never counted the other way as well.
 
 use std::collections::HashSet;
 
@@ -252,11 +282,18 @@ impl UnlockedVault {
         known
     }
 
-    /// Ids an import has already settled: booked into an operation or
-    /// discarded. The staged queue is not part of it, so a queue entry can be
+    /// Ids an import has already settled: an operation of the crypto module,
+    /// a ledger transaction the old import booked, or a record the user
+    /// refused. The staged queue is not part of it, so a queue entry can be
     /// checked against it.
+    ///
+    /// All three belong here because all three keep one record from being
+    /// counted twice (spec E7): an `exec_id` the module holds as an operation
+    /// must never be fetched into the ledger as well, and an `exec_id` the
+    /// ledger already books must never become an operation of the module.
     pub(crate) fn decided_import_ids(&self) -> HashSet<String> {
         let mut decided: HashSet<String> = self.doc.discarded_imports.iter().cloned().collect();
+        decided.extend(self.bybit_event_ids());
         decided.extend(
             self.doc
                 .transactions
@@ -270,8 +307,15 @@ impl UnlockedVault {
     }
 
     /// One sync of an exchange wallet: leave out what the settings do not
-    /// want and what was seen before, stage the rest (or book it at once),
-    /// and keep the sync in the history.
+    /// want and what was seen before, record the rest as operations of the
+    /// crypto module, and keep the sync in the history.
+    ///
+    /// Nothing is staged any more (spec E7): a record becomes an operation at
+    /// once, so there is no queue to confirm and no verification screen.
+    /// `ImportRun::staged` therefore stays `0` — the field keeps its meaning
+    /// and simply stops being written (`AGENTS.md`, rule 5) — and
+    /// `ImportRun::confirmed` counts what reached the module, which is what
+    /// "it is in, nothing is pending" always meant.
     pub fn sync_exchange(
         &mut self,
         store_id: &str,
@@ -281,6 +325,10 @@ impl UnlockedVault {
     ) -> Result<ImportRun> {
         let root = self.root_of(store_id);
         let settings = self.import_settings(&root)?;
+        // The queue an older build left behind is put through by the same
+        // conversion, and before this batch, so one record cannot arrive
+        // twice by two routes.
+        let adopted = self.adopt_legacy_bybit()?;
         let mut known = self.known_import_ids();
         let mut run = ImportRun {
             id: uuid::Uuid::new_v4().to_string(),
@@ -303,22 +351,22 @@ impl UnlockedVault {
             known.insert(imp.exec_id.clone());
             fresh.push(imp);
         }
-        let ids: Vec<String> = fresh.iter().map(|imp| imp.exec_id.clone()).collect();
         let count = |kind: ImportKind| fresh.iter().filter(|imp| imp.kind == kind).count() as u32;
         run.trades = count(ImportKind::Fill);
         run.transfers = count(ImportKind::Transfer);
-        run.staged = self.stage_imports(fresh)?;
-        if settings.auto_confirm && !ids.is_empty() {
-            run.confirmed = self.confirm_pending_imports(&ids)?;
-        }
+        let stored = self.bybit_store(&root, &fresh)?;
+        run.known += stored.known;
+        run.confirmed = stored.recorded() + adopted.converted;
         // A poll that brought nothing new refreshes the last empty run in memory
         // and writes nothing: the background import polls every few minutes.
-        if run.staged == 0 && run.confirmed == 0 {
+        if run.confirmed == 0 {
             self.note_empty_run(run.clone());
             return Ok(run);
         }
         self.keep_import_run(run.clone());
-        self.persist()?;
+        // The fills became events of the module, and the capital is read from
+        // `doc.holdings`, which `persist` does not re-derive (spec E8).
+        self.crypto_sync_holdings()?;
         Ok(run)
     }
 
@@ -455,6 +503,12 @@ impl UnlockedVault {
     /// while operations of this wallet wait for confirmation (they explain
     /// the difference) or when the settings turn it off. Returns the ids of
     /// the corrections made.
+    ///
+    /// A wallet the crypto module drives is never corrected (spec E7): its
+    /// balance is recomputed from the operations the module holds, so writing
+    /// the exchange's live balance into the ledger as well would count the
+    /// same coins twice. The old queue is what this was for, and it is still
+    /// served while one exists.
     pub fn reconcile_exchange(
         &mut self,
         store_id: &str,
@@ -468,7 +522,7 @@ impl UnlockedVault {
             .pending_imports
             .iter()
             .any(|pending| self.root_of(&pending.store_id) == root);
-        if !settings.auto_reconcile || waiting {
+        if !settings.auto_reconcile || waiting || self.exchange_is_engine_driven(&root) {
             return Ok(Vec::new());
         }
         let at = crate::calendar::iso(now);
@@ -633,7 +687,7 @@ mod tests {
     }
 
     #[test]
-    fn a_sync_never_stages_what_was_booked_or_discarded() {
+    fn a_sync_records_at_once_and_never_what_was_settled() {
         let (_dir, mut vault, wallet, _) = bybit();
         let first = vault
             .sync_exchange(
@@ -646,10 +700,14 @@ mod tests {
                 now(),
             )
             .unwrap();
-        assert_eq!((first.fetched, first.staged), (2, 2));
+        // Nothing waits for confirmation any more: both fills are operations
+        // of the module, and `staged` is not written (rule 5).
+        assert_eq!((first.fetched, first.staged, first.confirmed), (2, 0, 2));
         assert_eq!((first.trades, first.transfers), (2, 0), "both are fills");
-        vault.confirm_pending_imports(&["a".to_string()]).unwrap();
-        vault.discard_pending_imports(&["b".to_string()]).unwrap();
+        assert!(vault.pending_imports().is_empty());
+        assert_eq!(vault.doc.crypto_events.len(), 2);
+
+        // The exchange answers with the same two fills on the next poll.
         let again = vault
             .sync_exchange(
                 &wallet,
@@ -661,20 +719,32 @@ mod tests {
                 now(),
             )
             .unwrap();
-        assert_eq!((again.staged, again.known), (0, 2));
+        assert_eq!((again.confirmed, again.known), (0, 2));
+        assert_eq!(vault.doc.crypto_events.len(), 2, "two, not four");
         assert_eq!(vault.import_runs(&wallet).len(), 2);
+
+        // A record the user refused before stays refused and never becomes an
+        // operation.
+        vault.remember_discarded(["c".to_owned()]);
+        let refused = vault
+            .sync_exchange(
+                &wallet,
+                vec![buy(&wallet, "c", "SOLUSDT", "1700000000000")],
+                ImportSource::Auto,
+                now(),
+            )
+            .unwrap();
+        assert_eq!((refused.confirmed, refused.known), (0, 1));
+        assert_eq!(vault.doc.crypto_events.len(), 2);
     }
 
+    /// The queue an older build wrote is still confirmed the way it was: a
+    /// user's file may hold one, and rule 5 keeps it readable.
     #[test]
     fn imported_operations_carry_the_import_mark_and_a_known_coin_id() {
         let (_dir, mut vault, wallet, _) = bybit();
         vault
-            .sync_exchange(
-                &wallet,
-                vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")],
-                ImportSource::Manual,
-                now(),
-            )
+            .stage_imports(vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")])
             .unwrap();
         vault.confirm_pending_imports(&[]).unwrap();
         let tx = vault.doc.transactions.last().unwrap();
@@ -718,7 +788,7 @@ mod tests {
                 now(),
             )
             .unwrap();
-        assert_eq!((run.staged, run.filtered), (1, 2));
+        assert_eq!((run.confirmed, run.filtered), (1, 2));
 
         // Unified not imported at all: fills are left out.
         let mut off = vault.import_settings(&wallet).unwrap();
@@ -737,11 +807,11 @@ mod tests {
                 now(),
             )
             .unwrap();
-        assert_eq!((run.staged, run.filtered), (0, 1));
+        assert_eq!((run.confirmed, run.filtered), (0, 1));
     }
 
     #[test]
-    fn an_account_can_book_into_a_chosen_sub_account() {
+    fn a_booked_record_can_go_into_a_chosen_sub_account() {
         let (_dir, mut vault, wallet, _) = bybit();
         let [funding, _, _] = vault.ensure_bybit_accounts(&wallet, ACCOUNT_NAMES).unwrap();
         let settings = ImportSettings {
@@ -753,15 +823,12 @@ mod tests {
             ..ImportSettings::default()
         };
         vault.set_import_settings(&wallet, settings).unwrap();
-        let run = vault
-            .sync_exchange(
-                &wallet,
-                vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")],
-                ImportSource::Auto,
-                now(),
-            )
+        // The route still decides where a record from an older build's queue
+        // is booked.
+        vault
+            .stage_imports(vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")])
             .unwrap();
-        assert_eq!(run.confirmed, 1);
+        assert_eq!(vault.confirm_pending_imports(&[]).unwrap(), 1);
         assert!(vault.pending_imports().is_empty());
         let Transaction::TradeSpot(trade) = vault.doc.transactions.last().unwrap() else {
             panic!("a spot trade");
@@ -794,12 +861,7 @@ mod tests {
     fn the_live_balance_is_set_once_everything_is_booked() {
         let (_dir, mut vault, wallet, unified) = bybit();
         vault
-            .sync_exchange(
-                &wallet,
-                vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")],
-                ImportSource::Manual,
-                now(),
-            )
+            .stage_imports(vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")])
             .unwrap();
         let live = vec![balance("UNIFIED", &[("SOL", "1.5"), ("USDT", "400")])];
         // Something waits for confirmation: it explains the difference.
@@ -849,6 +911,45 @@ mod tests {
         );
     }
 
+    /// Once the module drives the wallet, the ledger is not corrected towards
+    /// the exchange any more: the same coins would then be counted both as
+    /// operations of the module and as a ledger holding.
+    #[test]
+    fn a_wallet_on_the_engine_is_not_corrected_into_the_ledger() {
+        let (_dir, mut vault, wallet, _) = bybit();
+        vault
+            .sync_exchange(
+                &wallet,
+                vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")],
+                ImportSource::Manual,
+                now(),
+            )
+            .unwrap();
+        assert!(vault.exchange_is_engine_driven(&wallet));
+        let before = vault.doc.transactions.len();
+        let live = vec![balance("UNIFIED", &[("SOL", "1.5"), ("USDT", "400")])];
+        assert!(
+            vault
+                .reconcile_exchange(&wallet, &live, now())
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            vault.doc.transactions.len(),
+            before,
+            "no correction written"
+        );
+        // Whatever the wallet holds is derived from the module's operations;
+        // nothing was written into the ledger to match the exchange.
+        assert!(
+            !vault
+                .doc
+                .transactions
+                .iter()
+                .any(|tx| tx.kind() == TxKind::Adjustment)
+        );
+    }
+
     #[test]
     fn a_failed_sync_is_kept_with_its_reason() {
         let (_dir, mut vault, wallet, _) = bybit();
@@ -895,11 +996,13 @@ mod tests {
                 preview.filtered,
                 preview.new
             ),
-            (3, 1, 1, 1)
+            (3, 1, 1, 1),
+            "the one already recorded as an operation counts as known"
         );
         assert_eq!(preview.items[0].exec_id, "sol");
-        // Not one record staged, the saved settings untouched.
-        assert_eq!(vault.pending_imports().len(), 1);
+        // Not one record kept, the saved settings untouched.
+        assert!(vault.pending_imports().is_empty());
+        assert_eq!(vault.doc.crypto_events.len(), 1);
         assert!(vault.import_settings(&wallet).unwrap().coins.is_empty());
         // Skipping the unified account in the draft leaves every fill out.
         let skip = ImportSettings {

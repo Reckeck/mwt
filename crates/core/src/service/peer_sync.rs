@@ -12,6 +12,7 @@ use zeroize::Zeroizing;
 
 use super::UnlockedVault;
 use crate::error::{Error, Result};
+use crate::ipc_contract::security::SecurityLevel;
 use crate::ipc_contract::{AfterApply, StoreBalanceChange, SyncCutReason};
 #[cfg(test)]
 use crate::model::transaction::TxOrigin;
@@ -27,6 +28,18 @@ use crate::sync::track::Tracker;
 use crate::sync::view::{self, record_key, split_key};
 use crate::sync::{BatchEntry, RecordState, Stamp, SyncBatch, SyncSummary, TrustedPeer};
 use keep::{generated_key, reminder_identity};
+
+/// Whether a device protected at `level` may hold the crypto module's records
+/// (only level 3 may, spec E0).
+fn may_hold_crypto(level: SecurityLevel) -> bool {
+    level == SecurityLevel::Crypto
+}
+
+/// Whether the record key (`collection:key`) belongs to the crypto module.
+fn is_crypto_key(key: &str) -> bool {
+    split_key(key)
+        .is_some_and(|(coll, _)| crate::sync::crypto_gate::is_crypto_collection(coll.name))
+}
 
 /// Told the keys of every local save, so a live session can send them on.
 pub trait SyncTap: Send + Sync {
@@ -239,13 +252,32 @@ impl UnlockedVault {
     /// One digest per record and deletion. `union_since_ms` leaves out cached
     /// prices and rates older than that (a first sync sends 90 days).
     pub fn sync_manifest(&mut self, union_since_ms: Option<u64>) -> Result<Manifest> {
+        Ok(self
+            .sync_manifest_for(union_since_ms, SecurityLevel::Crypto)?
+            .0)
+    }
+
+    /// [`Self::sync_manifest`] for a peer protected at `peer`: below level 3
+    /// the crypto module's records are left out, so their keys never reach
+    /// the network. Also says how many records were left out.
+    pub fn sync_manifest_for(
+        &mut self,
+        union_since_ms: Option<u64>,
+        peer: SecurityLevel,
+    ) -> Result<(Manifest, usize)> {
         self.track_changes()?;
         let value = self.doc_value()?;
         let records = view::records(&value);
         let keeps_fx = self.fx_history_filter();
+        let withhold = !may_hold_crypto(peer);
+        let mut withheld = 0;
         let mut manifest = Manifest::new();
         for key in records.keys() {
             if !self.wants_cache_key(key, &keeps_fx) {
+                continue;
+            }
+            if withhold && is_crypto_key(key) {
+                withheld += 1;
                 continue;
             }
             if let (Some(since), Some((coll, _))) = (union_since_ms, split_key(key))
@@ -262,13 +294,17 @@ impl UnlockedVault {
         }
         for key in self.doc.sync.tombstones.keys() {
             if !records.contains_key(key) {
+                if withhold && is_crypto_key(key) {
+                    withheld += 1;
+                    continue;
+                }
                 manifest.insert(
                     key.clone(),
                     digest(&Self::shared_state(self.state_of(&records, key), key)),
                 );
             }
         }
-        Ok(manifest)
+        Ok((manifest, withheld))
     }
 
     /// [`Self::sync_manifest`] and the newest stamp of this device's clock at
@@ -280,6 +316,17 @@ impl UnlockedVault {
     ) -> Result<(Manifest, Stamp)> {
         let manifest = self.sync_manifest(union_since_ms)?;
         Ok((manifest, self.clock.last()))
+    }
+
+    /// [`Self::sync_manifest_marked`] for a peer protected at `peer` (see
+    /// [`Self::sync_manifest_for`]); the third item counts the records left out.
+    pub fn sync_manifest_marked_for(
+        &mut self,
+        union_since_ms: Option<u64>,
+        peer: SecurityLevel,
+    ) -> Result<(Manifest, Stamp, usize)> {
+        let (manifest, withheld) = self.sync_manifest_for(union_since_ms, peer)?;
+        Ok((manifest, self.clock.last(), withheld))
     }
 
     /// Whether a cache point is worth syncing here: rates of a currency that
@@ -306,12 +353,25 @@ impl UnlockedVault {
 
     /// The full state of each asked record (absent keys come back empty).
     pub fn sync_records(&mut self, keys: &[String]) -> Result<BTreeMap<String, RecordState>> {
+        self.sync_records_for(keys, SecurityLevel::Crypto)
+    }
+
+    /// [`Self::sync_records`] for a peer protected at `peer`: below level 3 a
+    /// crypto record is not answered even when asked for (a broken or hostile
+    /// peer may ask for any key), so it never leaves this device.
+    pub fn sync_records_for(
+        &mut self,
+        keys: &[String],
+        peer: SecurityLevel,
+    ) -> Result<BTreeMap<String, RecordState>> {
         self.track_changes()?;
         let value = self.doc_value()?;
         let records = view::records(&value);
+        let withhold = !may_hold_crypto(peer);
         Ok(keys
             .iter()
             .filter(|key| split_key(key).is_some())
+            .filter(|key| !(withhold && is_crypto_key(key)))
             .map(|key| {
                 let mut state = self.state_of(&records, key);
                 if let (Some((coll, _)), Some(stamps)) = (split_key(key), state.stamps.as_mut()) {
@@ -478,7 +538,7 @@ impl UnlockedVault {
         // A deletion old enough to be compacted, for a key this device knows
         // nothing about, is not news: the senders had it acked everywhere
         // else. Storing it would only restart its age.
-        let incoming = &self.without_compacted(incoming, &records);
+        let incoming = &self.after_wipe(self.without_compacted(incoming, &records));
         let seen = self.doc.sync.seen_by.get(&peer.device_id).cloned();
         let plan_of = |batch: &BTreeMap<String, RecordState>| {
             if external {
@@ -658,6 +718,29 @@ impl UnlockedVault {
             })
             .map(|(key, state)| (key.clone(), state.clone()))
             .collect()
+    }
+
+    /// `incoming` without the crypto-module records a wipe here has already
+    /// outlived (spec E12).
+    ///
+    /// A device that was offline while the module was wiped still holds every
+    /// record of it; the ordinary merge would take them back, because this
+    /// vault no longer has anything to compare them against — a record it
+    /// never saw leaves no tombstone behind, and quotes union silently. The
+    /// mark the wipe left says when it happened, so those records are dropped
+    /// here and whatever that device made *after* the wipe still arrives.
+    /// Silently: a peer handing over its old records is the normal course of
+    /// a wipe, not a fault to report.
+    fn after_wipe(&self, incoming: BTreeMap<String, RecordState>) -> BTreeMap<String, RecordState> {
+        let wipes = self
+            .doc
+            .crypto_wiped_at
+            .iter()
+            .map(|wipe| (wipe.id.as_str(), wipe.at.as_str()));
+        match crate::sync::crypto_gate::newest_wipe(wipes, &self.doc.sync.stamps) {
+            Some(mark) => crate::sync::crypto_gate::without_wiped(incoming, &mark).0,
+            None => incoming,
+        }
     }
 
     /// Read another copy of this vault (its sealed bytes) without locking,
@@ -3051,5 +3134,162 @@ mod tests {
         vault.sync_cut_by("dev-a", SyncCutReason::Paused).unwrap();
         vault.sync_forget_peer("dev-a").unwrap();
         assert_eq!(vault.sync_cut_reason("dev-a"), None);
+    }
+}
+
+/// The security level in synchronisation (spec E6, decision R3): a device
+/// below level 3 still receives everything that is not the crypto module's,
+/// and the module's records never leave the sender for it.
+#[cfg(test)]
+mod level_pair_tests {
+    use super::tests::two_devices;
+    use super::*;
+    use crate::error::Error;
+    use crate::model::chain::Chain;
+    use crate::model::cryptotrack::CryptoAccount;
+    use crate::model::store::StoreKind;
+
+    const ADDRESS: &str = "0x00000000000000000000000000000000000000aa";
+
+    fn peer(name: &str) -> PeerRef {
+        PeerRef {
+            device_id: format!("{name}-id"),
+            name: name.into(),
+        }
+    }
+
+    fn crypto_keys<'key>(keys: impl IntoIterator<Item = &'key String>) -> Vec<String> {
+        keys.into_iter()
+            .filter(|key| is_crypto_key(key))
+            .cloned()
+            .collect()
+    }
+
+    /// A level-3 `left` that follows an address and has a wallet of its own,
+    /// and a level-2 `right` with another wallet.
+    fn pair() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
+        let (dir, mut left, mut right) = two_devices();
+        left.raise_to_level3_for_tests();
+        assert_eq!(left.security_level(), SecurityLevel::Crypto);
+        assert_ne!(right.security_level(), SecurityLevel::Crypto);
+        left.create_store("FromLeft", StoreKind::Crypto, "#111", "", None)
+            .unwrap();
+        right
+            .create_store("FromRight", StoreKind::Crypto, "#222", "", None)
+            .unwrap();
+        // Ordinary operations on the shared cash wallet, one from each side.
+        for (vault, comment) in [(&mut left, "from left"), (&mut right, "from right")] {
+            let cash = vault
+                .doc
+                .stores
+                .iter()
+                .find(|store| store.kind == StoreKind::Cash && store.parent_id.is_none())
+                .map(|store| store.id.clone())
+                .unwrap();
+            vault
+                .add_transaction(super::super::test_support::income(&cash, "100", comment))
+                .unwrap();
+        }
+        left.doc.crypto_accounts.push(CryptoAccount::new(
+            "acc-1",
+            "Main",
+            Chain::Ethereum,
+            ADDRESS,
+            "2026-01-01T00:00:00Z",
+        ));
+        (dir, left, right)
+    }
+
+    fn has_store(vault: &UnlockedVault, name: &str) -> bool {
+        vault.doc.stores.iter().any(|store| store.name == name)
+    }
+
+    #[test]
+    fn a_level_two_device_gets_everything_but_the_crypto_records() {
+        let (_dir, mut left, mut right) = pair();
+        let right_level = right.security_level();
+        let left_level = left.security_level();
+
+        // What each side puts on the wire, as the session builds it.
+        let (to_right_manifest, withheld) = left.sync_manifest_for(None, right_level).unwrap();
+        let (to_left_manifest, none) = right.sync_manifest_for(None, left_level).unwrap();
+        assert!(withheld > 0, "the sender must know it held something back");
+        assert_eq!(none, 0);
+        // The full manifest does carry the module, so the filter is what hides it.
+        assert!(!crypto_keys(left.sync_manifest(None).unwrap().keys()).is_empty());
+        assert!(crypto_keys(to_right_manifest.keys()).is_empty());
+
+        let (right_wants, _) = right.sync_diff(&to_left_manifest, &to_right_manifest);
+        let (left_wants, _) = left.sync_diff(&to_right_manifest, &to_left_manifest);
+        // A peer that asks for the module's keys anyway gets nothing for them.
+        let mut greedy = right_wants.clone();
+        greedy.extend(crypto_keys(left.sync_manifest(None).unwrap().keys()));
+        let to_right = left.sync_records_for(&greedy, right_level).unwrap();
+        let to_left = right.sync_records_for(&left_wants, left_level).unwrap();
+        assert!(crypto_keys(to_right.keys()).is_empty());
+        assert!(to_right.keys().any(|key| key.starts_with("stores:")));
+
+        let (kept, dropped) = right.sync_admit(to_right);
+        assert_eq!(dropped, 0, "nothing should arrive that has to be dropped");
+        right.sync_apply(&kept, &peer("left")).unwrap();
+        left.sync_apply(&to_left, &peer("right")).unwrap();
+
+        assert!(has_store(&right, "FromLeft"));
+        assert!(has_store(&left, "FromRight"));
+        // The ordinary operations of both sides reached both.
+        assert_eq!(left.doc.transactions.len(), 2);
+        assert_eq!(right.doc.transactions.len(), 2);
+        assert!(right.doc.crypto_accounts.is_empty());
+        assert_eq!(left.doc.crypto_accounts.len(), 1);
+    }
+
+    #[test]
+    fn a_level_three_pair_still_exchanges_the_module() {
+        let (_dir, mut left, mut right) = pair();
+        right.raise_to_level3_for_tests();
+        let (manifest, withheld) = left.sync_manifest_for(None, SecurityLevel::Crypto).unwrap();
+        assert_eq!(withheld, 0);
+        assert!(!crypto_keys(manifest.keys()).is_empty());
+        let (wants, _) = right.sync_diff(&Manifest::new(), &manifest);
+        let records = left
+            .sync_records_for(&wants, SecurityLevel::Crypto)
+            .unwrap();
+        let (kept, dropped) = right.sync_admit(records);
+        assert_eq!(dropped, 0);
+        right.sync_apply(&kept, &peer("left")).unwrap();
+        assert_eq!(right.doc.crypto_accounts.len(), 1);
+    }
+
+    /// The receiver does not rely on the sender: a peer that sends the module
+    /// anyway has it dropped and the rest applied, and the fuse behind it still
+    /// refuses a batch that was not filtered.
+    #[test]
+    fn a_hostile_sender_loses_only_the_crypto_records() {
+        let (_dir, mut left, mut right) = pair();
+        let all: Vec<String> = left.sync_manifest(None).unwrap().keys().cloned().collect();
+        let sent = left.sync_records(&all).unwrap();
+        assert!(!crypto_keys(sent.keys()).is_empty());
+
+        assert!(matches!(
+            right.sync_apply(&sent, &peer("left")),
+            Err(Error::SecurityLevelRequired)
+        ));
+        let (kept, dropped) = right.sync_admit(sent);
+        assert!(dropped > 0);
+        assert!(crypto_keys(kept.keys()).is_empty());
+        right.sync_apply(&kept, &peer("left")).unwrap();
+        assert!(has_store(&right, "FromLeft"));
+        assert!(right.doc.crypto_accounts.is_empty());
+    }
+
+    #[test]
+    fn a_level_three_receiver_drops_nothing() {
+        let (_dir, mut left, mut right) = pair();
+        right.raise_to_level3_for_tests();
+        let all: Vec<String> = left.sync_manifest(None).unwrap().keys().cloned().collect();
+        let sent = left.sync_records(&all).unwrap();
+        let count = sent.len();
+        let (kept, dropped) = right.sync_admit(sent);
+        assert_eq!((kept.len(), dropped), (count, 0));
     }
 }

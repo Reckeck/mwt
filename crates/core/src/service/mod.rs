@@ -41,6 +41,8 @@ mod budget;
 mod bulk;
 mod categories;
 mod contacts;
+mod cryptotrack;
+pub use cryptotrack::network::{NetworkProbe, NetworkRequest, Probe, test_endpoint};
 mod dashboard;
 mod dashboard_tiles;
 mod dashboard_today;
@@ -461,6 +463,14 @@ impl UnlockedVault {
         let secrets_scrubbed = vault.scrub_sync_secrets();
         // Level 3: exchange keys of an old document move to the device file.
         let keys_moved = vault.adopt_device_secrets()?;
+        // Level 3 and the module has written nothing of its own yet: that is
+        // what a crash between the re-encryption and the archiving leaves
+        // behind (spec E11), so the archiving runs here. Once the module has
+        // an account or an event, a crypto wallet without one is a wallet the
+        // user made on purpose and nothing here touches it.
+        let retired = vault.doc.crypto_accounts.is_empty()
+            && vault.doc.crypto_events.is_empty()
+            && vault.retire_manual_crypto_wallets().changed;
         if migrated
             || keys_moved
             || envelopes_settled
@@ -469,6 +479,7 @@ impl UnlockedVault {
             || incomplete
             || attachments_pruned
             || repaired
+            || retired
             || secrets_scrubbed
             || fmt != vault.fmt
         {
@@ -502,24 +513,28 @@ impl UnlockedVault {
         &self.base_currency
     }
 
-    /// The vault keeps crypto (wallets, exchanges, coins are shown).
+    /// The vault holds crypto: the module has an address or an operation, or
+    /// the vault still carries a hand-made crypto wallet or exchange. Derived
+    /// from what the document holds (spec E14), never chosen by the user: the
+    /// stored `settings.crypto` is only a copy of this answer, kept for old
+    /// builds and old files.
     pub fn crypto_enabled(&self) -> bool {
-        self.doc.settings.crypto.unwrap_or(true)
+        !self.doc.crypto_accounts.is_empty()
+            || !self.doc.crypto_events.is_empty()
+            || self.doc.stores.iter().any(|store| store.kind.is_crypto())
     }
 
-    /// A vault from before the crypto question answers it with what it holds:
-    /// a crypto wallet or an exchange in use means yes. Only in memory — the
-    /// next write stores it, and every device works it out the same way.
+    /// Refresh the stored copy of [`Self::crypto_enabled`]. Only in memory:
+    /// the next write stores it, and every device works it out the same way.
     fn answer_crypto(&mut self) {
-        if self.doc.settings.crypto.is_some() {
-            return;
-        }
-        let holds_crypto = self
-            .doc
-            .stores
-            .iter()
-            .any(|store| !store.archived && store.kind.is_crypto());
-        self.doc.settings.crypto = Some(holds_crypto);
+        self.doc.settings.crypto = Some(self.crypto_enabled());
+    }
+
+    /// The settings as the interface sees them: `crypto` is the derived answer.
+    pub fn settings_view(&self) -> Settings {
+        let mut settings = self.doc.settings.clone();
+        settings.crypto = Some(self.crypto_enabled());
+        settings
     }
 
     /// A copy of the vault in memory for emulation: every operation and rule
@@ -665,9 +680,7 @@ impl UnlockedVault {
         if let Some(hidden) = input.onboarding_checklist_hidden {
             settings.onboarding_checklist_hidden = hidden;
         }
-        if let Some(crypto) = input.crypto {
-            settings.crypto = Some(crypto);
-        }
+        // `input.crypto` is read for compatibility and ignored: the answer is derived (spec E14).
         if let Some(interval) = input.fx_refresh_interval_sec {
             settings.fx_refresh_interval_sec = interval.clamp(30, 3600);
         }
@@ -729,11 +742,10 @@ impl UnlockedVault {
             }
             settings.notifications = notifications;
         }
-        let out = settings.clone();
-        if out != before {
+        if *settings != before {
             self.persist()?;
         }
-        Ok(out)
+        Ok(self.settings_view())
     }
 
     // -- stores -------------------------------------------------------------
@@ -1639,6 +1651,12 @@ impl UnlockedVault {
                 }
             })
             .collect();
+
+        // The crypto module's wallets hold no transactions at all (decision
+        // P5): their balances come from the engine's fold, so the capital
+        // reads one `doc.holdings` either way (spec E8,
+        // `cryptotrack::totals`).
+        self.apply_crypto_holdings();
     }
 
     // -- analytics ----------------------------------------------------------
@@ -4345,10 +4363,13 @@ mod tests {
         );
     }
 
-    // -- crypto direction ----------------------------------------------------
+    // -- crypto direction (derived since spec E14) -----------------------------
 
     /// A vault written before the crypto question, reopened.
-    fn reopened_without_answer(with_exchange: bool) -> (tempfile::TempDir, UnlockedVault) {
+    fn reopened_with(
+        stored: Option<bool>,
+        with_exchange: bool,
+    ) -> (tempfile::TempDir, UnlockedVault) {
         let dir = tempdir().unwrap();
         let path = dir.path().join("crypto.wallet");
         let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
@@ -4357,7 +4378,7 @@ mod tests {
                 .create_store("Bybit", StoreKind::Exchange, "#f0b90b", "", None)
                 .unwrap();
         }
-        vault.doc.settings.crypto = None;
+        vault.doc.settings.crypto = stored;
         vault.persist_now().unwrap();
         drop(vault);
         let reopened = UnlockedVault::open(path, "pw").unwrap();
@@ -4366,36 +4387,49 @@ mod tests {
 
     #[test]
     fn an_old_vault_with_an_exchange_keeps_crypto() {
-        let (_dir, vault) = reopened_without_answer(true);
-        assert_eq!(vault.doc.settings.crypto, Some(true));
-        assert!(vault.crypto_enabled());
+        for stored in [None, Some(true), Some(false)] {
+            let (_dir, vault) = reopened_with(stored, true);
+            assert_eq!(vault.doc.settings.crypto, Some(true), "stored {stored:?}");
+            assert!(vault.crypto_enabled());
+        }
     }
 
     #[test]
-    fn an_old_vault_without_crypto_wallets_hides_crypto() {
-        let (_dir, vault) = reopened_without_answer(false);
-        assert_eq!(vault.doc.settings.crypto, Some(false));
-        assert!(!vault.crypto_enabled());
+    fn an_old_vault_without_crypto_records_reads_no_crypto() {
+        for stored in [None, Some(false)] {
+            let (_dir, vault) = reopened_with(stored, false);
+            assert_eq!(vault.doc.settings.crypto, Some(false), "stored {stored:?}");
+            assert!(!vault.crypto_enabled());
+        }
     }
 
     #[test]
-    fn the_crypto_direction_is_switched_in_settings() {
+    fn the_crypto_answer_follows_the_module_and_cannot_be_set() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("crypto.wallet");
-        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
-        assert!(vault.crypto_enabled());
+        let mut vault = UnlockedVault::create(path, "pw").unwrap();
+        assert!(!vault.crypto_enabled());
+        // The old switch is read and ignored.
         let settings = vault
             .update_settings(crate::ipc_contract::UpdateSettingsInput {
-                crypto: Some(false),
+                crypto: Some(true),
                 ..Default::default()
             })
             .unwrap();
         assert_eq!(settings.crypto, Some(false));
-        vault.persist_now().unwrap();
-        drop(vault);
-        // An answer is kept even when the wallets would say otherwise.
-        let reopened = UnlockedVault::open(path, "pw").unwrap();
-        assert!(!reopened.crypto_enabled());
+        assert!(!vault.crypto_enabled());
+        vault
+            .doc
+            .crypto_accounts
+            .push(crate::model::cryptotrack::CryptoAccount::new(
+                "acc",
+                "Main",
+                crate::model::chain::Chain::Solana,
+                "So11111111111111111111111111111111111111112",
+                "2026-11-10T00:00:00Z",
+            ));
+        assert!(vault.crypto_enabled());
+        assert_eq!(vault.settings_view().crypto, Some(true));
     }
 
     #[test]
@@ -4407,6 +4441,23 @@ mod tests {
         let packed = rmp_serde::to_vec_named(&json).unwrap();
         let from_pack: Settings = rmp_serde::from_slice(&packed).unwrap();
         assert_eq!(from_pack.crypto, None);
+    }
+
+    /// An old file keeps its stored field through a read in both formats.
+    #[test]
+    fn a_stored_crypto_field_survives_both_formats() {
+        for stored in [Some(true), Some(false)] {
+            let settings = Settings {
+                crypto: stored,
+                ..Settings::default()
+            };
+            let json = serde_json::to_value(&settings).unwrap();
+            let from_json: Settings = serde_json::from_value(json.clone()).unwrap();
+            let packed = rmp_serde::to_vec_named(&json).unwrap();
+            let from_pack: Settings = rmp_serde::from_slice(&packed).unwrap();
+            assert_eq!(from_json.crypto, stored);
+            assert_eq!(from_pack.crypto, stored);
+        }
     }
 
     // -- password ------------------------------------------------------------
