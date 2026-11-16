@@ -22,6 +22,9 @@ import { call } from '@/shared/api/ipc'
 /** A catalog that came back cached or built-in is asked for again after this long. */
 const CATALOG_RETRY_MS = 60_000
 
+/** Counts the vault closings; a `loadVault` that started before the latest one is stale. */
+let vaultEpoch = 0
+
 export const useSettingsStore = defineStore('settings', {
   state: () => ({
     /** User-scoped preferences, stored outside the vault. */
@@ -79,11 +82,23 @@ export const useSettingsStore = defineStore('settings', {
       this.appLoaded = true
     },
 
+    /** The vault they belonged to is closed: drop them, and ignore any load still in flight. */
+    forgetVault() {
+      vaultEpoch += 1
+      this.vault = null
+      this.vaultFailed = false
+    },
+
     async loadVault() {
+      const epoch = vaultEpoch
       try {
-        this.vault = await call<Settings>('get_settings')
+        const loaded = await call<Settings>('get_settings')
+        // A response for a vault that has been closed since the call: never show it.
+        if (epoch !== vaultEpoch) return
+        this.vault = loaded
         this.vaultFailed = false
       } catch (err) {
+        if (epoch !== vaultEpoch) return
         this.vaultFailed = true
         throw err
       }

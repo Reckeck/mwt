@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/vue-query'
 import { useRouter } from 'vue-router'
 
 import { useVaultStore } from '@/shared/store/vault'
@@ -12,7 +11,6 @@ import { useUnlockVault } from './useUnlockVault'
 export function useOpenReceivedVault() {
   const vault = useVaultStore()
   const router = useRouter()
-  const queryClient = useQueryClient()
   const unlocking = useUnlockVault()
 
   /** `true`: the vault is open. `false`: the password (or the base currency) is still to be asked. */
@@ -24,8 +22,6 @@ export function useOpenReceivedVault() {
     if (!plain || unlocking.baseCurrency.asked.value) return false
     await unlocking.submit()
     if (unlocking.error.value !== null || unlocking.conflict.value) return false
-    // Another vault: nothing cached belongs to it.
-    queryClient.clear()
     return true
   }
 
