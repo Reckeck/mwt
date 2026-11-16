@@ -148,6 +148,11 @@ pub struct WorkflowRun {
     pub trace: Vec<crate::workflow::TraceStep>,
     #[serde(default)]
     pub dry_run: bool,
+    /// Local date an automation run was planned for; `None` on older records.
+    #[serde(default, with = "crate::model::iso_date")]
+    #[ts(type = "string | null", optional)]
+    #[schemars(with = "Option<String>")]
+    pub planned_date: Option<crate::time::LocalDate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]

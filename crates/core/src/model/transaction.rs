@@ -82,6 +82,12 @@ pub enum TxOrigin {
         /// its schedule: the same moment made on two devices is booked once.
         #[serde(default)]
         planned_at: Option<String>,
+        /// The local date it was planned for, in the schedule's zone; an old
+        /// record goes by the local date of `planned_at`.
+        #[serde(default, with = "crate::model::iso_date")]
+        #[ts(type = "string | null", optional)]
+        #[schemars(with = "Option<String>")]
+        planned_date: Option<crate::time::LocalDate>,
         /// Booked with an approximate amount (a salary that differs every
         /// time); cleared when the user puts in the real one. Lives here, not
         /// in `TxMeta`, so v1 bincode files (read by position) keep reading.

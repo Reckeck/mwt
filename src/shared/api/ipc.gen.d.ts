@@ -7996,6 +7996,11 @@ type TxOrigin = "manual" | { "import": { exec_id: string, } } | { "automation": 
  */
 planned_at: string | null, 
 /**
+ * The local date it was planned for, in the schedule's zone; an old
+ * record goes by the local date of `planned_at`.
+ */
+planned_date?: string | null, 
+/**
  * Booked with an approximate amount (a salary that differs every
  * time); cleared when the user puts in the real one. Lives here, not
  * in `TxMeta`, so v1 bincode files (read by position) keep reading.
@@ -9057,7 +9062,11 @@ queued: number,
 /**
  * The run in words, step by step.
  */
-trace: Array<TraceStep>, dry_run: boolean, };
+trace: Array<TraceStep>, dry_run: boolean, 
+/**
+ * Local date an automation run was planned for; `None` on older records.
+ */
+planned_date?: string | null, };
 
 /**
  * What a workflow's triggers last saw, so each fires once per occasion.

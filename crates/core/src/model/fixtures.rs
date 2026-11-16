@@ -357,6 +357,7 @@ pub fn full_doc() -> VaultDoc {
             queued: 0,
             trace: Vec::new(),
             dry_run: false,
+            planned_date: None,
         })
         .collect();
     let targets = [

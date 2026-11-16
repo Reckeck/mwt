@@ -164,6 +164,7 @@ fn run_of(run: AutomationRunV2) -> WorkflowRun {
             values: Default::default(),
         }],
         dry_run: false,
+        planned_date: None,
     }
 }
 

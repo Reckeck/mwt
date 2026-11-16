@@ -410,6 +410,7 @@ pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunRep
                 .sum(),
             trace,
             dry_run: ctx.mode == RunMode::DryRun,
+            planned_date: None,
         },
         transactions: created,
         queued,

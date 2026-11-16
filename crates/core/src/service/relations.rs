@@ -929,6 +929,7 @@ mod tests {
             workflow_id: "wf".into(),
             run_id: "run".into(),
             planned_at: None,
+            planned_date: None,
             estimated: false,
             run_key: None,
         };

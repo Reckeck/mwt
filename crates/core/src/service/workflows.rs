@@ -15,7 +15,9 @@ use crate::model::planning::RejectReason;
 use crate::model::store::AssetRef;
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::now_iso;
+use crate::planning::schedule::{fresh_moments, processed_dates};
 use crate::pricing::history::{secs_or_now, unix_secs};
+use crate::time::{Clock, FixedClock, LocalDate};
 use crate::workflow::RunKey;
 use crate::workflow::automation;
 use crate::workflow::exec::{
@@ -600,6 +602,7 @@ impl UnlockedVault {
                     values: Default::default(),
                 }],
                 dry_run: false,
+                planned_date: None,
             };
             match self
                 .doc
@@ -1307,6 +1310,7 @@ impl UnlockedVault {
                 values: Default::default(),
             }],
             dry_run: false,
+            planned_date: None,
         };
         self.doc.workflow_runs.push(run.clone());
         pass.runs.push(run);
@@ -1859,8 +1863,12 @@ impl UnlockedVault {
         zone: &str,
         pass: &mut WorkflowPass,
     ) -> Vec<EmittedEvent> {
+        // One zone for every moment and date of an automation, the one
+        // ordinary workflows use too: the device may travel, a date stays.
+        let zone = self.schedule_zone(zone);
+        let zone = zone.as_str();
         let cal = Calendar::new(zone);
-        let done = self.automation_processed();
+        let processed = self.automation_processed();
         let key = automation::schedule_key();
         let mut due: Vec<(i64, Workflow, Graph, Node)> = Vec::new();
         for workflow in self.active_workflows() {
@@ -1881,13 +1889,9 @@ impl UnlockedVault {
                 .map_or(start, |mark| mark.max(start));
             let (moments, _) =
                 schedule_moments_limited(&trigger.params, &cal, after, now, usize::MAX);
-            let fresh: Vec<i64> = moments
-                .iter()
-                .copied()
-                .filter(|moment| {
-                    !done.contains(&(workflow.id.clone(), crate::calendar::iso(*moment)))
-                })
-                .collect();
+            let mut done = processed_dates(&processed, &workflow.id, &cal);
+            done.extend(self.booked_planned_dates(&workflow.id));
+            let fresh = fresh_moments(&moments, &done, &cal);
             let overflow = fresh.len().saturating_sub(MAX_CATCH_UP);
             for moment in &fresh[..overflow] {
                 let label = trigger_label(&trigger.kind, &crate::calendar::iso(*moment));
@@ -1910,7 +1914,7 @@ impl UnlockedVault {
             ctx.trigger_values = BTreeMap::from([("at".to_string(), WfValue::Date(at))]);
             ctx.mode = RunMode::Live;
             let before = self.doc.transactions.len();
-            let report = exec::run(self, &graph, &ctx);
+            let mut report = exec::run(self, &graph, &ctx);
             // What an automation books belongs to its property (plan G4).
             if let Some(property) = workflow
                 .automation
@@ -1927,10 +1931,41 @@ impl UnlockedVault {
                     self.set_property_link(&id, Some(&property));
                 }
             }
+            let planned = cal.date_of(moment);
+            self.stamp_planned_date(&report.run.created, planned);
+            report.run.planned_date = Some(planned);
             self.keep_run(&report, pass);
             events.extend(report.events);
         }
         events
+    }
+
+    /// Local planned dates written on the operations an automation booked.
+    fn booked_planned_dates(&self, workflow_id: &str) -> HashSet<LocalDate> {
+        self.doc
+            .transactions
+            .iter()
+            .filter_map(|tx| match &tx.meta().origin {
+                TxOrigin::Workflow {
+                    workflow_id: maker,
+                    planned_date: Some(date),
+                    ..
+                } if maker == workflow_id => Some(*date),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Record the local date a run was planned for on the operations it made.
+    fn stamp_planned_date(&mut self, created: &[String], date: LocalDate) {
+        for tx in &mut self.doc.transactions {
+            if !created.contains(&tx.meta().id) {
+                continue;
+            }
+            if let TxOrigin::Workflow { planned_date, .. } = &mut tx.meta_mut().origin {
+                *planned_date = Some(date);
+            }
+        }
     }
 
     /// Operations added since a workflow last looked, and where it is now.
@@ -1960,6 +1995,12 @@ impl UnlockedVault {
     /// Fire every trigger that is due: waits that are over, schedules,
     /// new operations, thresholds crossed, then the events they sent.
     pub fn run_due_workflows(&mut self, now: i64, zone: &str) -> Result<WorkflowPass> {
+        self.run_due_workflows_at(&FixedClock(now), zone)
+    }
+
+    /// [`Self::run_due_workflows`] at the moment `clock` reads.
+    pub fn run_due_workflows_at(&mut self, clock: &dyn Clock, zone: &str) -> Result<WorkflowPass> {
+        let now = clock.now_unix();
         let mut pass = WorkflowPass::default();
         let mut events = Vec::new();
 

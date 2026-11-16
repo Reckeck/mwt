@@ -2659,6 +2659,7 @@ mod tests {
                 workflow_id: "salary".into(),
                 run_id: run.into(),
                 planned_at: Some("2026-11-01".into()),
+                planned_date: None,
                 estimated: false,
                 run_key: None,
             };

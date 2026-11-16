@@ -623,7 +623,7 @@ fn workflows_tick(app: &AppHandle) {
             return;
         };
         vault.set_notice_language(ru);
-        let Ok(pass) = vault.run_due_workflows(now_secs(), &zone) else {
+        let Ok(pass) = vault.run_due_workflows_at(&trade_core::time::SystemClock, &zone) else {
             return;
         };
         // Savings accounts that ask for it get last month's interest booked.
