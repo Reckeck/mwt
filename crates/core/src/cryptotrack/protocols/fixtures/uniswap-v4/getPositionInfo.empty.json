@@ -1,0 +1,4 @@
+{
+  "_source": "Hand-built from the documented return layout (D-protocol-facts, Uniswap v4 sections 7 and 8); NOT a live node answer. Token, hook and wallet addresses are synthetic; hashes and numbers were computed outside Rust with an independent Python Keccak-256 and arbitrary-precision integers. getPositionInfo of a position whose liquidity was removed: liquidity 0, growth snapshots as they were.",
+  "result": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000007"
+}

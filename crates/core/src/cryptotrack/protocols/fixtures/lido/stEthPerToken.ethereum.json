@@ -1,0 +1,4 @@
+{
+ "result": "0x00000000000000000000000000000000000000000000000011566d4f3d4c1039",
+ "note": "live eth_call answer documented in D-protocol-facts section 9 (wstETH.stEthPerToken at one mainnet block); the file is rebuilt from the documented value, not captured by this task"
+}

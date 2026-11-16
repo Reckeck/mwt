@@ -1,0 +1,4 @@
+{
+ "result": "0x0000000000000000000000000000000000000000000000001bc16d674ec80000",
+ "note": "hand-built from the documented layout (one uint256 word): 2 wstETH"
+}

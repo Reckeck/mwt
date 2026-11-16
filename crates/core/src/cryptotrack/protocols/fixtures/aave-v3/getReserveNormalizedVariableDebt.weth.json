@@ -1,0 +1,4 @@
+{
+  "note": "Hand-built from the documented layout (D-protocol-facts, Aave v3); not a live node answer. 1.05 ray plus one unit, chosen so that floor and ceil differ by one wei.",
+  "result": "0x000000000000000000000000000000000000000003648a260e3486a65a000001"
+}
