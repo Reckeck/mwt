@@ -17,7 +17,8 @@ The frontend parses the code and shows a localized message.
 | `prices-updated` | `RefreshResult` | after `refresh_all` (the button, the tray, the "price refresh interval" timer in the scheduler while the window is on screen) and `ensure_fx` (if anything was found); screens refresh the "price" keys from `use-cache-events`, not from the command response |
 | `rates-updated` | — | after `refresh_rates` (the "Refresh" button in the inflation settings and the scheduler's daily `rates_tick`) and `set_inflation_mode`; the frontend refreshes `inflation-overview`, `report`, `interest-tax` (`use-cache-events`) |
 | `sources-updated` | — | after `datasource_*` and the background `sources_tick`; the frontend refreshes `data-sources` (`prices-updated` and `rates-updated` are sent together with it) |
-| `bybit-import-pending` | `{ staged: number }` | background Bybit polling found new trades (D2.4) |
+| `bybit-import-pending` | `{ staged: 0, recorded: number }` | background Bybit polling recorded new operations. Since spec E7 they go straight into the crypto module, so `staged` is always 0; the event keeps its name so an older window still listens |
+| `crypto-updated` | `{ account_id }` | a background read stored something new for the account; the frontend drops every `['crypto']` query and the ledger keys the capital is computed from |
 | `automation-created` | `{ tx_ids: string[] }` | the scheduler created automation transactions |
 | `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | a run was not created: not enough funds, a credit card limit or the transaction failed validation (D26); a toast with "Retry / Skip" + a system notification |
 | `automation-skipped` | `{ count }` | after a long break, old dates beyond 24 are recorded as skipped |
@@ -566,21 +567,22 @@ with crypto data below level 3, or the external copy is protected more cheaply),
 
 ### crypto module (`crates/app/src/commands/cryptotrack/`, DTOs in `crates/core/src/ipc_contract/cryptotrack/`)
 
-The scaffold of stage 2 (spec E0): every command is registered in `generate_handler!` and answers
-`UNSUPPORTED: crypto: … arrives with spec <id>` until the spec named in the last column writes its body,
-its DTOs and its service. The browser mock
-(`src/shared/api/mock/commands-crypto-<domain>.ts`) answers the same refusal, so a screen built against a
-stub behaves the same in `pnpm dev` and in the application. The input and output of a command belong to
-its owner spec: E0 fixes the names, the files and who owns them, not the shapes. There is no crypto
-section and no `/crypto` route: a followed address is an ordinary wallet of kind `Crypto` whose
-`Store.crypto_account_id` points at the account (decision P5 of 2026-11-11).
+Stage 2 (engine and EVM, specs E0-E17) and stage 3 (DeFi positions, D0-D6) are implemented: every command
+below has a body in `crates/core/src/service/cryptotrack/` and a branch in the browser mock
+(`src/shared/api/mock/commands-crypto-<domain>.ts`), so a screen behaves the same in `pnpm dev` and in the
+application. The module is read-only by design: it follows public addresses and Bybit through GET calls, and no
+command takes or returns a seed phrase or a private key (a string that looks like one is refused with
+`SECRET_REFUSED` and never stored). A followed address is an ordinary wallet of kind `Crypto` whose
+`Store.crypto_account_id` points at the account (decision P5 of 2026-11-11); the positions screen is the route
+`crypto-positions`, the operations list is a tab of "Transactions". Background reads are announced by the
+`crypto-updated` event.
 
 | Command | Input | Output | Owner |
 |---|---|---|---|
-| `crypto_list_accounts` | spec E9 | spec E9 | E9 — the addresses and exchanges the module follows |
-| `crypto_connect_address` | spec E9 | spec E9 | E9 — follow a public address (from the wallet wizard; a seed phrase or private key is refused) |
-| `crypto_update_account` | spec E9 | spec E9 | E9 — rename, note, stop counting |
-| `crypto_forget_account` | spec E9 | spec E9 | E9 — stop following; the events stay until a wipe |
+| `crypto_list_accounts` | — | `CryptoAccountView[] { id, name, chain, address, source?, archived, note, created_at, store_id?, quarantine[], month_change? }` | E9 — the addresses and exchanges the module follows, with the tokens waiting for a decision and the month's change of value (only from two real snapshots) |
+| `crypto_connect_address` | `ConnectAddressInput { chain, address, name, start_date? }` | `ConnectAddressResult { account_id, store_id }` | E9 — follow a public address (from the wallet wizard; a seed phrase or private key is refused with `SECRET_REFUSED`); operations before `start_date` are not loaded and that day's balance is written as one opening adjustment |
+| `crypto_update_account` | `UpdateAccountInput { account_id, name?, note?, archived? }` | — | E9 — rename, note, stop counting; only the passed fields change |
+| `crypto_forget_account` | `CryptoAccountRefInput { account_id }` | — | E9 — stop following; the events stay until a wipe |
 | `crypto_list_tokens` | — | `TokenView[]` | E2 — the known and the quarantined tokens |
 | `crypto_confirm_token` | `TokenRefInput` | `TokenStatus` | E2 — take a quarantined token into the totals |
 | `crypto_reject_token` | `TokenRefInput` | `TokenStatus` | E2 — hide a token (a scam airdrop) |
@@ -589,9 +591,9 @@ section and no `/crypto` route: a followed address is an ordinary wallet of kind
 | `crypto_list_operations` | `CryptoListOperationsInput { filter, offset, limit, dismissed }` | `CryptoOpsPage { items, total, facets, suggestion }` | E10 — one page (100) of the operations, newest first, filtered by account, network, token, protocol, kind, address; `suggestion` is the banner «looks like an exchange» (first page only) |
 | `crypto_operation_detail` | `CryptoOperationDetailInput { id, with_candidates }` | `CryptoOperationDetail` | E10 — one operation: legs, gas, its chain, the `https` explorer address (built here, opened by the UI only on a click), fiat candidates on request |
 | `crypto_set_override` | `CryptoSetOverrideInput` | `CryptoSetOverrideResult { flow_id, applied }` | E10 — a correction in `crypto_overrides` (kind, comment, categories, contact, hidden, chain with a fiat operation, optionally for the whole contract); no command creates or deletes an operation |
-| `crypto_sync_status` | spec E6 | spec E6 | E6 — what each account's last read did |
-| `crypto_sync_now` | spec E6 | spec E6 | E6 — read the followed accounts without waiting for the tick |
-| `crypto_set_tracking_consent` | spec E6 | spec E6 | E6 — the one-time consent; without it no network call at all |
+| `crypto_sync_status` | — | `CryptoSyncStatus { consent?, running, runs_here, accounts[] { account_id, state: waiting \| reading \| done \| failed, last_ok_at?, error?, added } }` | E6 — what each account's last read did; `error` is a code, and a partial pass carries a `PARTIAL: …` note; `runs_here` is false on a device that only receives the result by sync |
+| `crypto_sync_now` | — | — | E6 — read the followed accounts without waiting for the tick; refused without the consent and on a device that does not run the jobs |
+| `crypto_set_tracking_consent` | `consent: bool` | — | E6 — the one-time consent; without it the reading makes no network call, and withdrawing it stops a running pass before its next request; a yes starts the catch-up at once |
 | `crypto_network_settings` | — | `NetworkSettings` | E17 — RPC, Blockscout, explorer and presets per network; `editable` is false below level 3; the Blockscout key is never returned, only `blockscout_key_set` |
 | `crypto_set_network_settings` | `SetNetworkSettingsInput` | — | E17 — `https` only, apart from `localhost` for an own node; empty = preset; `blockscout_key` null = keep, empty = remove (decision R8: a device secret in `<vault>.secrets`, sent in a header) |
 | `crypto_test_network` | `TestNetworkInput` | `NetworkTestResult` | E17 — the connection test, on the user's button; refused without the tracking consent |
@@ -619,6 +621,10 @@ section and no `/crypto` route: a followed address is an ordinary wallet of kind
 | `clear_exchange_key` | `ClearExchangeKeyInput { store_id }` | `ExchangeKeyStatus` |
 
 ### Bybit import — staging (D2.4)
+
+Since spec E7 an import records an exchange's operations as crypto events at once (`sync_bybit`); nothing new
+waits in `pending_imports`. `list_pending_imports`, `confirm_pending_imports` and `discard_pending_imports` remain
+for what an older build staged (and its ids keep deduplicating); no screen calls them any more.
 | `import_bybit_history` | `ImportBybitHistoryInput { store_id, category?, limit? }` | `ImportBybitHistoryOutput { staged, notice?, run? }` — sync "now": downloads trades, transfers and Earn, drops those already seen (in staging, posted, discarded) and those not needed by the import settings, **puts new ones into staging** (or posts at once with `auto_confirm`), then on a mismatch sets the live balance with a correction; `run` is a record in the sync history |
 | `get_import_settings` | `store_id` | `ImportSettings { trades, transfers, earn, auto_confirm, auto_reconcile, coins, since?, categories{trades?,transfers?,earn?}, accounts[{account, store_id?}] }` — what and where the exchange imports |
 | `preview_bybit_import` | `SetImportSettingsInput { store_id, settings }` | `ImportPreviewOutput { preview?: { fetched, known, filtered, new, items }, notice? }` — what a sync would load with these (including unsaved) settings; writes nothing |
@@ -632,9 +638,10 @@ section and no `/crypto` route: a followed address is an ordinary wallet of kind
 | `bybit_balances` | `store_id` | `Vec<ExchangeAccountBalance { account, store_id?, rows[{ coin, exchange, ledger, diff }] }>` — FUND/UNIFIED/EARN balances via the API next to the sub-account's books; if everything is posted and the books diverge, it first sets the live balance with a correction (`auto_reconcile`) |
 
 Invariants of the block:
-- **No command creates transactions by itself.** Only `confirm_pending_imports`;
-  the background polling (`ExchangeProfile.import_interval_sec` per exchange, `0` = off) puts trades into
-  `pending_imports` and sends an event — the user decides.
+- **An import records crypto events, not ledger transactions** (spec E7): the background polling
+  (`ExchangeProfile.import_interval_sec` per exchange, `0` = off) and `import_bybit_history` write `CryptoTx` records
+  and send `bybit-import-pending`. Only the legacy `confirm_pending_imports` creates a transaction, from what an older
+  build staged.
 - The import takes trades, internal transfers (`/v5/asset/transfer/query-inter-transfer-list`) and Earn income (`/v5/earn/yield`); a trade's category is set on request, not guessed from the symbol.
 - The key is looked up on the wallet and its parents; someone else's key is not substituted.
 - Deduplication by `execId` (`PendingImport.exec_id`; for transfers `transfer:<id>`, for Earn `earn:<id>`), so a repeated import
