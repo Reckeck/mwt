@@ -165,5 +165,16 @@ export function mockVaultDoc(): VaultDoc {
     asset_price_sources: [],
     deposit_rate_sources: [],
     attachments: [],
+    // The crypto module (payload v4) is empty in the mock until its own
+    // commands arrive.
+    crypto_accounts: [],
+    crypto_events: [],
+    crypto_overrides: [],
+    crypto_tokens: [],
+    crypto_positions: [],
+    crypto_snapshots: [],
+    crypto_cursors: [],
+    crypto_prices: [],
+    crypto_wiped_at: [],
   }
 }

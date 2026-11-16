@@ -7,6 +7,7 @@ import { resolve, type MockCommands } from './core'
 import { mockPassword } from './vault-data'
 import { mockKeyLevelRequired } from './commands-security-keys'
 import { mockSecurityLevel } from './commands-security-state'
+import { cryptoTransitionCommands } from './commands-crypto-transition'
 
 const reject = (code: string, message: string) => Promise.reject({ code, message })
 
@@ -38,6 +39,12 @@ export const securityRaiseCommands: MockCommands = {
     mockSecurityLevel.value = 'crypto'
     // The wallets' keys work from now on.
     mockKeyLevelRequired.value = false
+    // The hand-kept crypto wallets go to the archive inside the move, as the backend's `after_raise` does.
+    await cryptoTransitionCommands.crypto_archive_manual_wallets({
+      cmd: 'crypto_archive_manual_wallets',
+      args: undefined,
+      body: undefined,
+    })
     const report: RaiseToCryptoReport = { level: 'crypto', backup_path: '' }
     return resolve(report)
   },

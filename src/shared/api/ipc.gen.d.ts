@@ -169,6 +169,12 @@ inflation: { [key in string]: Amount },
  */
 enrichment_opt_in: boolean | null, 
 /**
+ * When the consent above was given (RFC 3339), on this device; cleared
+ * when it is withdrawn, so a later yes records its own date. `None` for a
+ * consent given before the date was kept. Per device, like the consent.
+ */
+crypto_tracking_consent_at?: string, 
+/**
  * System-wide key combination that opens "+ Transaction", in the
  * `CmdOrCtrl+Shift+Space` form; `None` = off, so it never fights the
  * window manager's own bindings unless the user asks for it.
@@ -936,6 +942,11 @@ planned_fixed: Amount,
 savings: Amount, };
 
 /**
+ * Why a fiat operation looks like the payment for a crypto one.
+ */
+type CandidateReason = "same_day" | { "near_date": { days: number, } } | "amount_fits";
+
+/**
  * Single OHLCV candle point for charting.
  */
 type CandlePoint = { ts: string, open: string, high: string, low: string, close: string, volume: string, };
@@ -1159,6 +1170,11 @@ unpriced: number, };
  */
 type Chain = "bitcoin" | "ethereum" | "bsc" | "solana" | "polygon" | "arbitrum" | "optimism" | "avalanche" | "base" | "tron" | "litecoin" | "dogecoin" | "cardano" | "xrp" | "polkadot" | "cosmos" | "near" | "ton" | "algorand" | "fiat";
 
+/**
+ * What one member of an exchange chain is.
+ */
+type ChainSide = "fiat" | "crypto";
+
 type ChangeItem = { kind: ChangeKind, 
 /**
  * Readable name of the record (never its raw key); may be empty.
@@ -1236,6 +1252,28 @@ type ConfirmPendingImportsOutput = { confirmed: number, };
  * Which copy wins after `SYNC_CONFLICT`.
  */
 type ConflictSide = "local" | "remote";
+
+/**
+ * Connect a public address, read-only. There is no field for a seed phrase
+ * or a private key anywhere in this contract, and a string that looks like
+ * one is refused (`SECRET_REFUSED`) and never stored.
+ */
+type ConnectAddressInput = { chain: Chain, address: string, 
+/**
+ * The wallet's name; empty takes the shortened address.
+ */
+name: string, 
+/**
+ * `YYYY-MM-DD`: operations before it are not loaded and the balance of
+ * that day is written as one opening adjustment. `None` reads the whole
+ * history.
+ */
+start_date?: string, };
+
+/**
+ * What connecting created: the account and the wallet that shows it.
+ */
+type ConnectAddressResult = { account_id: string, store_id: string, };
 
 type Contact = { id: string, name: string, kind: ContactKind, accounts: Array<ContactAccount>, note: string, archived: boolean, created_at: string, 
 /**
@@ -1471,9 +1509,1110 @@ password: string | null,
  */
 cash_name: string | null, 
 /**
- * The vault keeps crypto; `None` = yes (callers from before the question).
+ * Read for compatibility and ignored: whether the vault holds crypto is derived (spec E14).
  */
 crypto: boolean | null, };
+
+/**
+ * An address the module follows. Every account is shown by a
+ * [`crate::model::store::Store`] whose `crypto_account_id` points back here
+ * (decision P5): a connected address by a wallet of kind `Crypto`, an
+ * exchange read through its key by one of kind `Exchange`. The module owns
+ * the reading, the wallet owns the presentation, and the value reaches the
+ * capital through `doc.holdings` like any other wallet's.
+ */
+type CryptoAccount = { id: string, name: string, chain: Chain, 
+/**
+ * Normalized by [`normalize_address`] when built with
+ * [`CryptoAccount::new`].
+ */
+address: string, 
+/**
+ * The source that reads it (`etherscan`, `bybit`…); `None` until one is
+ * chosen.
+ */
+source: string | null, 
+/**
+ * Watched but not counted in the module's value.
+ */
+archived: boolean, note: string, created_at: string, };
+
+/**
+ * Which account a command is about.
+ */
+type CryptoAccountRefInput = { account_id: string, };
+
+/**
+ * One followed account as the wallet page reads it.
+ */
+type CryptoAccountView = { id: string, name: string, chain: Chain, address: string, 
+/**
+ * The source that reads it (`bybit` for an exchange); `None` is the
+ * network's public explorer.
+ */
+source: string | null, archived: boolean, note: string, 
+/**
+ * The date the module follows the address from (RFC3339 UTC).
+ */
+created_at: string, 
+/**
+ * The wallet that shows this account (`Store::crypto_account_id`).
+ */
+store_id: string | null, 
+/**
+ * Tokens of this account that wait for a decision.
+ */
+quarantine: Array<QuarantinedHolding>, 
+/**
+ * The month's change in its value; `None` when the snapshots do not reach back far enough.
+ */
+month_change?: MonthChange, };
+
+/**
+ * What the archiving did. A second run reports `changed: false` and an empty
+ * list: the step is idempotent, so the wizard, the raise and the next open
+ * can all run it.
+ */
+type CryptoArchiveReport = { 
+/**
+ * Whether this call archived anything at all.
+ */
+changed: boolean, 
+/**
+ * The wallets this call archived, with what each took out of the totals.
+ */
+wallets: Array<CryptoRetiredWallet>, };
+
+/**
+ * What an operation or a position holds: the network's own coin, or a token
+ * on it.
+ */
+type CryptoAsset = { "native": { chain: Chain, } } | { "token": TokenId };
+
+/**
+ * One member of the chain an operation is in.
+ */
+type CryptoChainMember = { side: ChainSide, id: string, 
+/**
+ * The wallet it belongs to.
+ */
+place: string, 
+/**
+ * Signed: the way it moved for its own wallet.
+ */
+amount: Amount, currency: string, time: string, 
+/**
+ * The operation the detail is about.
+ */
+is_this: boolean, };
+
+/**
+ * What the user decided for every operation that goes through one contract,
+ * those already read and those a later refetch brings.
+ */
+type CryptoContractRule = { kind?: CryptoTxKind, categories: Array<string>, contact_id?: string, };
+
+/**
+ * How far a source has read one account. Belongs to the device: it names a
+ * page of a provider this device talked to, so it is listed in
+ * `sync::registry::LOCAL`.
+ */
+type CryptoCursor = { 
+/**
+ * `<source>|<account_id>`.
+ */
+id: string, source: string, account_id: string, 
+/**
+ * The provider's own cursor (a block, a page token).
+ */
+cursor: string | null, updated_at: string, };
+
+/**
+ * Which way an asset moved, from the followed account's point of view.
+ */
+type CryptoDirection = "in" | "out";
+
+/**
+ * The one best guess of an unlinked incoming operation that was paid for by
+ * a fiat one, for the banner «looks like an exchange».
+ */
+type CryptoExchangeSuggestion = { event_id: string, symbol: string, amount: Amount, candidate: CryptoLinkCandidate, };
+
+/**
+ * What the network charged for an operation.
+ */
+type CryptoFee = { asset: CryptoAsset, amount: Amount, };
+
+/**
+ * The fiat group, capped and counted the same way.
+ */
+type CryptoFiatGroup = { items: Array<CryptoFiatRelation>, total: number, };
+
+/**
+ * A fiat record paired with one operation of the account.
+ */
+type CryptoFiatRelation = { event_id: string, fiat: CryptoPairFiat, 
+/**
+ * The filter to open the operation with: the account only; the card is
+ * opened by `event_id` (`?op=`).
+ */
+filter: CryptoOpFilter, };
+
+/**
+ * One asset movement of an operation. A swap has two legs, a transfer one.
+ */
+type CryptoLeg = { direction: CryptoDirection, asset: CryptoAsset, 
+/**
+ * Quantity in whole units (never raw integer units): money is `Amount`.
+ */
+amount: Amount, 
+/**
+ * The other side of this leg, when the source names it.
+ */
+counterparty: string | null, };
+
+/**
+ * A fiat operation the user may tie to a crypto one. The app only suggests:
+ * nothing is linked until the user confirms.
+ */
+type CryptoLinkCandidate = { transaction_id: string, place: string, 
+/**
+ * Signed, in the currency the wallet holds.
+ */
+amount: Amount, currency: string, time: string, comment: string, reasons: Array<CandidateReason>, 
+/**
+ * Fiat per one unit of the coin, when both sums are known.
+ */
+rate?: Amount, 
+/**
+ * The coin's symbol the rate is for.
+ */
+rate_symbol?: string, };
+
+/**
+ * What the fiat record being edited looks like, so the picker can offer the
+ * crypto operations that look like the same movement of money. The record may
+ * not be saved yet, so this is a draft and not an id.
+ */
+type CryptoLinkCandidatesInput = { 
+/**
+ * RFC3339 of the fiat record.
+ */
+time: string, 
+/**
+ * The fiat sum, when the form has one (the sign does not matter).
+ */
+amount?: Amount, 
+/**
+ * The currency of `amount`.
+ */
+currency?: string, };
+
+/**
+ * Point a crypto operation at a fiat record.
+ */
+type CryptoLinkInput = { event_id: string, fiat_tx_id: string, };
+
+/**
+ * One suggestion. Never applied by the application itself.
+ */
+type CryptoLinkOption = { row: CryptoOpRow, 
+/**
+ * How many days apart the two are.
+ */
+days: number, 
+/**
+ * The fiat sum fits the coin's value that day within a few percent.
+ */
+fits: boolean, };
+
+/**
+ * Which page of the list to read.
+ */
+type CryptoListOperationsInput = { filter: CryptoOpFilter, offset: number, 
+/**
+ * Capped at [`OPERATIONS_PAGE`].
+ */
+limit?: number, };
+
+type CryptoOpFacets = { chains: Array<Chain>, protocols: Array<string>, tokens: Array<CryptoOpTokenFacet>, };
+
+/**
+ * What the operations list is narrowed to. Every field is optional, and the
+ * whole filter lives in the page's query parameters, so a link from another
+ * screen (spec E15) opens the list already narrowed.
+ */
+type CryptoOpFilter = { 
+/**
+ * The followed accounts to read; empty is every one.
+ */
+account_ids: Array<string>, chain?: Chain, 
+/**
+ * A token: its price key (`ethereum|0x…`, `ethereum|native`) or its symbol.
+ */
+token?: string, protocol?: string, 
+/**
+ * The kind as the user sees it, a correction included.
+ */
+kind?: CryptoTxKind, 
+/**
+ * Part of the sender or recipient address.
+ */
+address?: string, 
+/**
+ * Also the operations the user hid from the totals.
+ */
+show_hidden: boolean, };
+
+/**
+ * One asset movement of a row, with its symbol already resolved.
+ */
+type CryptoOpLeg = { direction: CryptoDirection, 
+/**
+ * The price key of the asset.
+ */
+asset_key: string, 
+/**
+ * What to show: the token's symbol, the coin's, an exchange's ticker.
+ */
+symbol: string, 
+/**
+ * Whole units, never negative; the direction says which way.
+ */
+amount: Amount, };
+
+/**
+ * One operation as the list shows it: the event with the user's correction
+ * already laid over it.
+ */
+type CryptoOpRow = { id: string, account_id: string, 
+/**
+ * The wallet or exchange the account is shown by.
+ */
+account_name: string, 
+/**
+ * The network. `None` for a coin on an exchange: it does not lie on a
+ * network, and the name «Fiat» must never be shown for it.
+ */
+network?: Chain, 
+/**
+ * The exchange, when the operation is one of its fills.
+ */
+exchange?: string, 
+/**
+ * RFC3339 UTC.
+ */
+time: string, 
+/**
+ * The kind after the correction.
+ */
+kind: CryptoTxKind, 
+/**
+ * The kind the source reported.
+ */
+source_kind: CryptoTxKind, legs: Array<CryptoOpLeg>, gas?: CryptoFee, 
+/**
+ * The gas coin's symbol.
+ */
+gas_symbol?: string, protocol?: string, from: string, to: string, 
+/**
+ * A short, readable form of the transaction hash, or of the fill id.
+ */
+reference: string, 
+/**
+ * The USD value of the movement at its day, when a price is cached.
+ */
+value_usd?: Amount, flow_id?: string, contact_id?: string, 
+/**
+ * The contact's name: the chosen one, else the one whose saved address
+ * matches the other side (shown, never stored).
+ */
+contact_name?: string, 
+/**
+ * Whether `contact_name` came from an address match, not from a choice.
+ */
+contact_guessed: boolean, comment?: string, categories: Array<string>, hidden: boolean, 
+/**
+ * A correction stands over this operation.
+ */
+corrected: boolean, 
+/**
+ * Set when this is not an operation of the chain but an entry the module
+ * wrote itself to explain a balance: no hash, no explorer page, and its
+ * kind cannot be corrected.
+ */
+own_entry?: OwnEntry, 
+/**
+ * A rule for its contract decided its kind, its category or its
+ * counterparty (not its own correction).
+ */
+by_rule: boolean, 
+/**
+ * Whether a link to a page about it exists. The address itself is only
+ * built in the detail, when the user opens the operation.
+ */
+linkable: boolean, };
+
+type CryptoOpTokenFacet = { key: string, symbol: string, };
+
+/**
+ * One operation with everything the card shows.
+ */
+type CryptoOperationDetail = { row: CryptoOpRow, 
+/**
+ * The page about it (`https` only), built from the stored reference now,
+ * with the user's explorer where one is set. Nothing is requested from
+ * it: the address is only opened when the user clicks.
+ */
+url?: string, 
+/**
+ * For an exchange fill: the id to look for on the page.
+ */
+url_note?: string, method?: string, block?: bigint, tracking: TrackingRef, 
+/**
+ * The other members of the chain, this one among them.
+ */
+chain: Array<CryptoChainMember>, 
+/**
+ * The cost basis comes from the linked operation, not the market.
+ */
+basis_from_chain: boolean, 
+/**
+ * How many operations go to the same contract.
+ */
+same_contract_count: number, 
+/**
+ * The rule the user set for this operation's contract, if any: it is
+ * visible here and removed with `remove_contract_rule`.
+ */
+contract_rule?: CryptoContractRule, 
+/**
+ * The contract the rule is about, as the user can read it.
+ */
+contract?: string, 
+/**
+ * The best guesses of what paid for this operation; asked for with
+ * `with_candidates`.
+ */
+candidates: Array<CryptoLinkCandidate>, };
+
+/**
+ * Which operation to open, and whether to look for what it could be paid by.
+ */
+type CryptoOperationDetailInput = { id: string, 
+/**
+ * Ask for the fiat operations that look like what this one was paid with.
+ */
+with_candidates: boolean, };
+
+/**
+ * One page of the list.
+ */
+type CryptoOpsPage = { items: Array<CryptoOpRow>, 
+/**
+ * How many operations match the filter in all.
+ */
+total: number, 
+/**
+ * What the filter can offer, over the accounts asked for.
+ */
+facets: CryptoOpFacets, 
+/**
+ * On the first page only: an operation that looks like an exchange.
+ */
+suggestion?: CryptoExchangeSuggestion, };
+
+/**
+ * The user's correction over what a source reported. The event itself is
+ * left as it came, so a refetch does not lose the correction.
+ */
+type CryptoOverride = { id: string, 
+/**
+ * The event it corrects.
+ */
+event_id: string, kind: CryptoTxKind | null, comment: string | null, 
+/**
+ * Keys of the ledger categories the operation counts under.
+ */
+categories: Array<string>, 
+/**
+ * The chain of operations this event belongs to: the same `flow_id` a
+ * fiat [`crate::model::transaction::TxMeta`] carries. This is how an
+ * exchange of fiat for coins is told: neither leg is an exchange on its
+ * own, the chain is (decision P6). It lives here and not on the event
+ * because a refetch rewrites the event and keeps the override.
+ */
+flow_id?: string, 
+/**
+ * Who the operation went with or through — the same contact directory a
+ * fiat [`crate::model::transaction::TxMeta`] points at. The network only
+ * reports addresses, so «through whom» can never come from a source: an
+ * address matched against a contact's [`crate::model::contact::DetailKind::CryptoAddress`]
+ * account fills it, and the user names it where no match exists
+ * (decision P8).
+ */
+contact_id?: string, 
+/**
+ * The user said this is not an exchange: the app stops suggesting a fiat
+ * operation for it. A decision about their own data, so it lives here and
+ * syncs, and is not a remembered browser setting (spec E10).
+ */
+not_exchange?: boolean, 
+/**
+ * Out of the module's lists and totals (dust, a scam airdrop).
+ */
+hidden: boolean, 
+/**
+ * The fiat record (`TxMeta::id`) the user pointed this operation at, so
+ * the two are shown to each other. A visible reference only: it joins no
+ * chain, changes no cost basis and no sum (that is `flow_id`). It lives
+ * here and not on the fiat `TxMeta` so it is gated and wiped with the
+ * crypto collections: a fiat record never carries a chain's data to a
+ * device below level 3 (spec E13). The record may be gone later; readers
+ * treat that as «not found», not as an error.
+ */
+fiat_tx_id?: string, updated_at: string, };
+
+/**
+ * One pointer with both ends resolved. An end that no longer exists is
+ * `None`: a calm «not found» for the screen, never an error.
+ */
+type CryptoPair = { event_id: string, fiat_tx_id: string, event?: CryptoOpRow, fiat?: CryptoPairFiat, };
+
+/**
+ * The fiat side of a pointer, as much as a row needs.
+ */
+type CryptoPairFiat = { id: string, 
+/**
+ * The wallet it belongs to.
+ */
+place: string, 
+/**
+ * Signed: the way it moved for its own wallet.
+ */
+amount: Amount, currency: string, time: string, comment: string, };
+
+/**
+ * Which pointers to read: the ones of one operation, or of one fiat record.
+ */
+type CryptoPairsInput = { event_id?: string, fiat_tx_id?: string, };
+
+/**
+ * A holding inside a protocol (lending, staking, a liquidity pool). Filled
+ * by the DeFi stage (D0 and later); the field exists from E0 so the sync
+ * registry and the vault schema do not change again.
+ */
+type CryptoPosition = { id: string, account_id: string, chain: Chain, 
+/**
+ * `uniswap-v3`, `aave-v3`, …
+ */
+protocol: string, 
+/**
+ * What the protocol calls this position, for the list.
+ */
+name: string, 
+/**
+ * What is held in it; a debt leg is [`CryptoDirection::Out`].
+ */
+legs: Array<CryptoLeg>, 
+/**
+ * The tokens the protocol handed over as the receipt for *this* position
+ * (an aToken and its debt token, stETH, the position NFT), as the
+ * adapter that read the chain saw them.
+ *
+ * They sit in the wallet and a node reports them as holdings, so they
+ * are kept here to be left out of the capital — the money behind them is
+ * already counted as the position. The static table in
+ * `cryptotrack::protocols::receipt_tokens` can only hold what a protocol
+ * publishes for every market in advance; this is what was actually seen.
+ */
+receipts: Array<CryptoAsset>, updated_at: string, };
+
+/**
+ * One asset a position holds or owes.
+ */
+type CryptoPositionAsset = { 
+/**
+ * The module's own key ([`crate::model::cryptotrack::CryptoAsset::key`]).
+ */
+asset_key: string, symbol: string, 
+/**
+ * A supply is `in`, a debt `out`.
+ */
+direction: CryptoDirection, 
+/**
+ * In whole units.
+ */
+quantity: Amount, 
+/**
+ * What that quantity is worth now; `None` when no price is known.
+ */
+value_usd?: Amount, };
+
+/**
+ * What sort of position it is. This is what decides whether impermanent
+ * loss against holding means anything at all.
+ */
+type CryptoPositionKind = "pool" | "lending" | "staking";
+
+/**
+ * Whether the position is still open.
+ */
+type CryptoPositionStatus = "open" | "closed";
+
+/**
+ * One DeFi position as the screen reads it (spec D5).
+ */
+type CryptoPositionView = { 
+/**
+ * Record key of `doc.crypto_positions`:
+ * `<protocol>|<chain>|<protocol's own id>`.
+ */
+id: string, 
+/**
+ * The followed account that holds it.
+ */
+account_id: string, 
+/**
+ * The wallet that shows that account; `None` while none does.
+ */
+store_id?: string, chain: Chain, 
+/**
+ * `uniswap-v3`, `aave-v3`, …
+ */
+protocol: string, 
+/**
+ * What the protocol calls the position.
+ */
+name: string, kind: CryptoPositionKind, status: CryptoPositionStatus, 
+/**
+ * What it holds and owes.
+ */
+assets: Array<CryptoPositionAsset>, 
+/**
+ * What went in, at the price of the day it went in, minus what has been
+ * taken back out at the price of its day: the capital still in the
+ * position, and the figure the change of value is measured against.
+ */
+invested_usd?: Amount, 
+/**
+ * What was ever put in, at the price of each deposit's own day, never
+ * lowered by a withdrawal: what the user risked. This is the figure the
+ * mockups show as «вложено по цене депозита» and the one the rate is
+ * measured on. What came back out is the difference of the two.
+ */
+put_in_usd?: Amount, 
+/**
+ * What it is worth now: supplies minus debts, principal only. A closed
+ * position is a real zero here and adds nothing to the portfolio.
+ */
+value_usd?: Amount, 
+/**
+ * What the protocol accrued on the balance itself (an aToken's
+ * interest, stETH's rebase). **Informational**: already inside the value
+ * change. `None` for a pool, which accrues through fees instead.
+ */
+accrued_usd?: Amount, 
+/**
+ * Fees already taken out of the position, at the price of the day they
+ * were taken.
+ */
+fees_collected_usd?: Amount, 
+/**
+ * Fees the position still holds, at today's price.
+ */
+fees_uncollected_usd?: Amount, 
+/**
+ * Against simply holding the deposited coins: negative is the usual
+ * case. **Informational**: already inside the value change. `None` for a
+ * one-sided position, which has nothing to compare against.
+ */
+il_usd?: Amount, 
+/**
+ * The same as a fraction of what holding would have been worth
+ * (`-0.057191` is -5.7191 %).
+ */
+il_ratio?: Amount, 
+/**
+ * What the network charged for this position's operations.
+ */
+gas_usd?: Amount, 
+/**
+ * The whole result: `(value - invested) + fees collected + fees
+ * uncollected - gas`. Nothing else, and never the loss or the accrual a
+ * second time.
+ */
+net_usd?: Amount, 
+/**
+ * The simple annual rate of that result on the capital ever put in — not
+ * on what is still in, which a withdrawal lowers — as a fraction
+ * (`0.125` is 12.5 %). `None` when nothing went in or no time has
+ * passed. A closed position keeps the rate of its own period.
+ */
+apr?: Amount, 
+/**
+ * The numbers are an approximation and the row must say so. It comes
+ * from the adapter together with the numbers (a Uniswap v4 pool behind a
+ * hook); the screen never decides it on its own.
+ */
+approximate: boolean, 
+/**
+ * When the position was opened (RFC3339 UTC).
+ */
+opened_at?: string, 
+/**
+ * When it was closed; `None` while it is open.
+ */
+closed_at?: string, 
+/**
+ * When the stored reading was taken (RFC3339 UTC).
+ */
+updated_at: string, 
+/**
+ * What the position's operations are found under: the row's link into
+ * the operations list (spec D5).
+ */
+tracking: TrackingRef, };
+
+/**
+ * A cached token price, in USD. A cache: it unions between devices and never
+ * reaches the sync question (`cache: true` in the registry).
+ */
+type CryptoPricePoint = { 
+/**
+ * [`CryptoAsset::key`].
+ */
+token_key: string, value_usd: Amount, 
+/**
+ * RFC3339 UTC; the first sync sends only recent points.
+ */
+ts: string, 
+/**
+ * The provider that quoted it.
+ */
+source: string, };
+
+/**
+ * One group of the tab, shaped like the app's other relation groups
+ * (`service::relations::RelationGroup`): the answer for an account with years
+ * of history has to stay bounded, so the items are capped and `total` is how
+ * many there are in all. The screen names the rest with the same
+ * `entity.more` phrase — a list cut in silence tells the user something
+ * untrue about their own data.
+ */
+type CryptoRelationGroup = { items: Array<CryptoRelationRow>, total: number, };
+
+/**
+ * One counterparty or protocol, with the filter that lists its operations.
+ */
+type CryptoRelationRow = { 
+/**
+ * Unique within its group.
+ */
+key: string, 
+/**
+ * What to show: an account's or a contact's name, a protocol.
+ */
+label: string, 
+/**
+ * The address behind the row, for an address row.
+ */
+address?: string, 
+/**
+ * How many visible operations the filter lists.
+ */
+count: number, 
+/**
+ * RFC3339 of the latest of them.
+ */
+last_time: string, 
+/**
+ * The operations filter this row opens, the account already in it.
+ */
+filter: CryptoOpFilter, };
+
+/**
+ * What an account dealt with. Never stored.
+ */
+type CryptoRelations = { 
+/**
+ * The user's other followed addresses it moved coins with.
+ */
+own_addresses: CryptoRelationGroup, 
+/**
+ * Counterparties the user named an exchanger.
+ */
+exchanges: CryptoRelationGroup, protocols: CryptoRelationGroup, fiat: CryptoFiatGroup, };
+
+/**
+ * Whose relations to read: one followed account (the wallet's own).
+ */
+type CryptoRelationsInput = { account_id: string, };
+
+/**
+ * One wallet the move retires. It is archived and nothing in it is deleted:
+ * its operations, holdings and history stay readable in the archive.
+ */
+type CryptoRetiredWallet = { store_id: string, name: string, kind: StoreKind, 
+/**
+ * What this wallet holds today in the base currency: its share of
+ * [`CryptoTransitionPlan::leaving_base`]. Counted the way the capital
+ * counts it, so a futures contract (notional, not money) is not in it.
+ */
+leaving_base: Amount, };
+
+/**
+ * Put a correction over one operation, or over every operation of its
+ * contract. The fields given are set, the ones in `clear` go back to what
+ * the source reported, everything else is left. An amount cannot be given:
+ * a correction changes classification and attributes only.
+ */
+type CryptoSetOverrideInput = { event_id: string, kind?: CryptoTxKind, comment?: string, categories?: Array<string>, contact_id?: string, 
+/**
+ * Hide the operation from the lists and the totals, or show it again.
+ */
+hidden?: boolean, 
+/**
+ * Tie the operation to this fiat operation: the declaration «this is an
+ * exchange». Both get one chain id; no amount changes.
+ */
+link_transaction_id?: string, clear: Array<OverrideField>, 
+/**
+ * Make what is given (the kind, the categories, the contact) a rule for
+ * the contract of this operation: it reaches every operation that goes
+ * through it, now and after any later refetch, below an operation's own
+ * correction. The fields in `clear` are taken off the rule.
+ */
+same_contract: boolean, 
+/**
+ * Remove the rule of this operation's contract.
+ */
+remove_contract_rule: boolean, 
+/**
+ * «Not an exchange»: stop suggesting a fiat operation for this one (or
+ * take the answer back).
+ */
+not_exchange?: boolean, };
+
+/**
+ * What a correction did.
+ */
+type CryptoSetOverrideResult = { 
+/**
+ * The chain id the operation is in now, if any.
+ */
+flow_id?: string, 
+/**
+ * How many operations the correction reached.
+ */
+applied: number, };
+
+/**
+ * The module's value at a moment, kept so its history survives a refetch
+ * (balances themselves are never stored).
+ */
+type CryptoSnapshot = { id: string, 
+/**
+ * RFC3339 UTC.
+ */
+at: string, 
+/**
+ * One account, or the whole module when `None`.
+ */
+account_id: string | null, value_usd: Amount, };
+
+/**
+ * One followed account's reading.
+ */
+type CryptoSyncAccountStatus = { account_id: string, state: CryptoSyncState, 
+/**
+ * When the last read finished well (RFC3339).
+ */
+last_ok_at: string | null, 
+/**
+ * The error code of the last failed read (`NETWORK`, `UNSUPPORTED`...).
+ */
+error: string | null, 
+/**
+ * Operations added by the read in progress or the last one.
+ */
+added: number, };
+
+/**
+ * What an account's last read did.
+ */
+type CryptoSyncState = "waiting" | "reading" | "done" | "failed";
+
+/**
+ * What the module is doing in the background.
+ */
+type CryptoSyncStatus = { 
+/**
+ * The user's answer to "may the module talk to the providers": `None`
+ * until asked. Without a yes there is no network call at all.
+ */
+consent: boolean | null, 
+/**
+ * A pass is running now.
+ */
+running: boolean, 
+/**
+ * This device runs the tracking (in a sync group only the main device
+ * does; the others get the result by sync).
+ */
+runs_here: boolean, accounts: Array<CryptoSyncAccountStatus>, };
+
+/**
+ * A token the module has met, with what it takes to show and price it.
+ */
+type CryptoToken = { 
+/**
+ * Record key, with [`CryptoToken::contract`]: see
+ * `sync::registry::COLLECTIONS`.
+ */
+chain: Chain, 
+/**
+ * Normalized by [`normalize_address`] when built with
+ * [`CryptoToken::new`].
+ */
+contract: string, symbol: string, name: string, decimals: number, 
+/**
+ * CoinGecko coin id, when the token is known there.
+ */
+coingecko_id: string | null, 
+/**
+ * The user hid it: a scam airdrop is not worth showing or pricing.
+ */
+hidden: boolean, 
+/**
+ * What the old purchases of this token cost, in USD per unit: bought
+ * before the module followed the address, so no event carries it.
+ */
+basis_usd?: Amount, 
+/**
+ * The user's decision on the token. A refetch rewrites a token's text
+ * and never this, so a decision outlives it; with none, the built-in
+ * list or the quarantine decides (`cryptotrack::tokens::status`).
+ */
+verdict?: TokenVerdict, 
+/**
+ * When the verdict was decided (RFC3339 UTC); `None` with no verdict, and
+ * for a verdict an older release stored. Set and cleared together with
+ * `verdict`, so the settings list can say "hidden on <date>".
+ */
+verdict_at?: string, };
+
+/**
+ * What entering the module would change, computed on demand and stored
+ * nowhere: which hand-kept wallets the move archives and how much capital
+ * leaves the totals with them. This is the number the wizard warns with
+ * before the password is typed.
+ */
+type CryptoTransitionPlan = { 
+/**
+ * The currency `leaving_base` and every `leaving_base` below are in.
+ */
+base_currency: string, 
+/**
+ * The wallets about to be archived, in the order the wallet list has
+ * them. Empty when the user kept no crypto by hand.
+ */
+wallets: Array<CryptoRetiredWallet>, 
+/**
+ * The sum of the wallets' `leaving_base`: what the capital loses once
+ * the module accounts for anything.
+ */
+leaving_base: Amount, };
+
+/**
+ * One operation of the crypto module. Built with every field named
+ * (there is no `Default`), so a new source cannot forget
+ * [`CryptoTx::tracking`] — see the examples at the top of this module.
+ */
+type CryptoTx = { id: string, chain: Chain, 
+/**
+ * The followed account this event belongs to.
+ */
+account_id: string, 
+/**
+ * RFC3339 UTC, as everywhere in the document.
+ */
+time: string, block: bigint | null, 
+/**
+ * Sender address, as the source reported it.
+ */
+from: string, 
+/**
+ * Recipient address, as the source reported it.
+ */
+to: string, legs: Array<CryptoLeg>, gas: CryptoFee | null, 
+/**
+ * The protocol the call belongs to (`uniswap`, `aave`…), when known.
+ */
+protocol: string | null, 
+/**
+ * The contract method, when the source named it.
+ */
+method: string | null, kind: CryptoTxKind, 
+/**
+ * The source's own answer for this event, kept for a later re-read. A
+ * text, not a parsed value: every format stores it the same way.
+ */
+raw: string | null, tracking: TrackingRef, };
+
+/**
+ * What an operation did, as far as the module could tell.
+ */
+type CryptoTxKind = "transfer" | "swap" | "approve" | "stake" | "unstake" | "claim" | "bridge" | "contract" | "unknown";
+
+/**
+ * Remove the pointer of a crypto operation.
+ */
+type CryptoUnlinkInput = { event_id: string, };
+
+/**
+ * A wipe of the module (spec E12), kept as a record so the other devices
+ * learn about it through an ordinary sync instead of seeing the data come
+ * back from them.
+ */
+type CryptoWipe = { id: string, 
+/**
+ * RFC3339 UTC of the wipe.
+ */
+at: string, 
+/**
+ * The device that wiped.
+ */
+device_id: string, };
+
+/**
+ * How many records each collection of the module holds, so the confirmation
+ * says what goes in numbers rather than in words.
+ */
+type CryptoWipeCounts = { 
+/**
+ * Followed addresses.
+ */
+accounts: number, 
+/**
+ * Operations the module read from its sources.
+ */
+events: number, 
+/**
+ * The user's corrections over what a source reported.
+ */
+overrides: number, 
+/**
+ * Tokens the module met, quarantine included.
+ */
+tokens: number, 
+/**
+ * Holdings inside protocols.
+ */
+positions: number, 
+/**
+ * Points of the module's own value history.
+ */
+snapshots: number, 
+/**
+ * How far each source has read: this device's progress, never synced.
+ */
+cursors: number, 
+/**
+ * Cached token quotes.
+ */
+prices: number, };
+
+/**
+ * The word the user types to confirm. The window asks for it in the user's
+ * language; what reaches the vault is the one fixed token `WIPE_CONFIRM`
+ * (`crate::service::cryptotrack::wipe`), so a stray call with no argument
+ * cannot wipe anything.
+ */
+type CryptoWipeInput = { confirm: string, };
+
+/**
+ * What a wipe would remove, counted on demand and stored nowhere.
+ */
+type CryptoWipePreview = { counts: CryptoWipeCounts, 
+/**
+ * The wallets that lose their link to the module and are archived.
+ */
+wallets: Array<CryptoWipedWallet>, 
+/**
+ * The currency `value_delta` is in.
+ */
+base_currency: string, 
+/**
+ * What the capital becomes minus what it is now: negative when the
+ * module holds something. Counted on a copy of the vault in memory, so
+ * it accounts for the hand-kept wallets that stop yielding their coins
+ * to the module and come back into the totals.
+ */
+value_delta: Amount, 
+/**
+ * RFC 3339 of the newest backup next to the vault, if there is one. The
+ * wipe takes a backup of its own either way; this is what the user has
+ * already.
+ */
+backup_at: string | null, 
+/**
+ * The device secrets file exists and goes with the wipe: the exchange
+ * keys, the per-network endpoints and the Blockscout key of this device.
+ */
+device_secrets: boolean, 
+/**
+ * Nothing of the module is here: a wipe would remove nothing.
+ */
+empty: boolean, };
+
+/**
+ * What the wipe did.
+ */
+type CryptoWipeReport = { 
+/**
+ * Records removed, per collection.
+ */
+counts: CryptoWipeCounts, 
+/**
+ * The wallets that lost their link to the module and were archived.
+ * Nothing in them was deleted: their operations and history stay
+ * readable in the archive.
+ */
+wallets: Array<CryptoWipedWallet>, base_currency: string, 
+/**
+ * What the capital lost, in `base_currency`.
+ */
+value_delta: Amount, 
+/**
+ * The backup the wipe took and opened before it removed anything, by
+ * file name next to the vault. `None` only when there was nothing to
+ * remove, so nothing was risked.
+ */
+backup: string | null, 
+/**
+ * The device secrets file was removed: the exchange keys, the endpoints
+ * and the Blockscout key of this device went with it.
+ */
+device_secrets_removed: boolean, 
+/**
+ * RFC 3339 of the mark left behind, the one the other devices read.
+ */
+wiped_at: string | null, 
+/**
+ * The protection may now go below level 3.
+ */
+can_lower_level: boolean, };
+
+/**
+ * A wallet the module leads: a `Store` of kind `Crypto` carrying
+ * `crypto_account_id`.
+ *
+ * A wipe does not delete it. The wallet loses the link to the module and is
+ * archived, because a wallet carries history and other records point at it,
+ * so deleting one would take fiat operations and holdings with it.
+ */
+type CryptoWipedWallet = { store_id: string, name: string, };
 
 /**
  * Catalog of currencies the base/favourite pickers may offer.
@@ -1901,6 +3040,36 @@ goal_ids: Array<string>, };
  * An event a run sent with "Send event".
  */
 type EmittedEvent = { name: string, payload: WfValue, };
+
+/**
+ * Which endpoint of a network a command is about.
+ */
+type EndpointKind = "rpc" | "blockscout";
+
+/**
+ * One endpoint as the screen shows it: what is used now and what the presets
+ * are.
+ */
+type EndpointView = { 
+/**
+ * The address in use: the user's own, else the first preset. Empty when
+ * the network has no preset and the user set none (a Blockscout instance
+ * for BNB Smart Chain).
+ */
+value: string, 
+/**
+ * The user's own address is in use, not a preset.
+ */
+custom: boolean, 
+/**
+ * The built-in addresses, the first one is the default.
+ */
+presets: Array<string>, 
+/**
+ * Only the host (and port) of `value`: what the provider is, without a
+ * path that may carry a provider key. Safe to show in a list.
+ */
+host: string, };
 
 type EnrichmentData = { fee: Fee | null, confirmed: boolean | null, block_time: string | null, from_address: string | null, to_address: string | null, token_name: string | null, token_decimals: number | null, contract: string | null, };
 
@@ -3458,6 +4627,27 @@ total: Amount,
 current: boolean, };
 
 /**
+ * How an address's value moved over about a month, from the module's own daily snapshots.
+ *
+ * Only ever made from two real snapshots of the account: the latest one, and the latest one at
+ * or before 30 days ago (no more than 7 days older than that day). With no snapshot that old a
+ * number would come from a short window, so there is no `MonthChange` at all.
+ */
+type MonthChange = { 
+/**
+ * Value now minus value then, USD.
+ */
+change_usd: Amount, 
+/**
+ * The same as a percent of the value then; `None` when that was zero.
+ */
+change_pct?: Amount, 
+/**
+ * The day of the older snapshot (RFC3339 UTC).
+ */
+since: string, };
+
+/**
  * The month so far against the previous month to the same date.
  */
 type MonthPace = { currency: string, 
@@ -3634,6 +4824,53 @@ change: Comparison,
  */
 series: Array<Amount>, };
 
+/**
+ * The endpoints of every network.
+ */
+type NetworkSettings = { 
+/**
+ * They can be changed here: protection level 3 on a real vault. Below it
+ * the presets are shown and used, read-only.
+ */
+editable: boolean, networks: Array<NetworkView>, 
+/**
+ * When the tracking consent was given on this device (RFC 3339); filled
+ * by the command from the app settings, not by the vault.
+ */
+consent_at?: string, 
+/**
+ * The name of this device if one is set; the screen shows it next to the date.
+ */
+consent_device?: string, };
+
+/**
+ * How a connection test ended.
+ */
+type NetworkTestOutcome = "ok" | "wrong_network" | "unreachable" | "bad_answer";
+
+/**
+ * The result of a connection test. Carries no text from the provider.
+ */
+type NetworkTestResult = { chain: Chain, kind: EndpointKind, outcome: NetworkTestOutcome, latency_ms: number, 
+/**
+ * The latest block, from a node that answered.
+ */
+block?: number, };
+
+/**
+ * One network's endpoints.
+ */
+type NetworkView = { chain: Chain, label: string, 
+/**
+ * EIP-155 chain id; a node answering with another one is the wrong network.
+ */
+chain_id: number, rpc: EndpointView, blockscout: EndpointView, explorer: EndpointView, 
+/**
+ * A Blockscout key is stored on this device. The key itself never comes
+ * back to the screen.
+ */
+blockscout_key_set: boolean, };
+
 type NetworthPoint = { month: string, financial: Amount, 
 /**
  * The part of `financial` held in crypto wallets and on exchanges; the
@@ -3755,6 +4992,11 @@ type OpeningBalance = { asset: AssetRef, amount: Amount,
 at?: string, };
 
 /**
+ * A field of a correction.
+ */
+type OverrideField = "kind" | "comment" | "categories" | "contact" | "flow";
+
+/**
  * «Income and spending» card: the month against the one before.
  */
 type OverviewFlow = { income: Amount, spent: Amount, net: Amount, previous_spent: Amount, 
@@ -3782,6 +5024,11 @@ type OverviewYear = { saved: Amount, saved_pct: Amount, best_month: string | nul
  * A field edited on both devices where the other device's later edit won.
  */
 type OverwrittenField = { collection: string, label: string, field: string, before: string, after: string, };
+
+/**
+ * What the module's own entry stands for.
+ */
+type OwnEntry = "opening" | "reconciliation";
 
 type ParamDef = { name: string, kind: ParamKind, label: LocalizedText, 
 /**
@@ -4462,6 +5709,22 @@ needs_rate: boolean, };
 type Purpose = "everyday" | "savings" | "investment" | "transit";
 
 /**
+ * A token of the account that waits for the user's decision, with how much
+ * of it arrived. The symbol, the contract's warnings and the status come from
+ * `crypto_list_tokens`: this is only what that list cannot say.
+ */
+type QuarantinedHolding = { chain: Chain, contract: string, 
+/**
+ * What came in, minus what went out, in whole units. Never counted in
+ * the address's value while the token is in quarantine.
+ */
+quantity: Amount, 
+/**
+ * When the first operation with this token happened (RFC3339 UTC).
+ */
+first_seen: string, };
+
+/**
  * Operations a workflow prepared behind a "Wait for confirmation" node.
  */
 type QueuedActions = { id: string, workflow_id: string, run_id: string, created_at: string, 
@@ -5001,6 +6264,17 @@ type SetManualPriceInput = { asset_key: string, unit_price: Amount, currency: st
  */
 type SetMyAutomationActiveInput = { kind: MineKind, id: string, active: boolean, };
 
+/**
+ * Save one network. An empty address goes back to the preset.
+ */
+type SetNetworkSettingsInput = { chain: Chain, rpc: string, blockscout: string, explorer: string, 
+/**
+ * The optional Blockscout key: `None` leaves the stored key as it is, an
+ * empty text removes it, any other text replaces it. Empty means keyless
+ * reads, the module works the same, only slower.
+ */
+blockscout_key?: string, };
+
 type SetShareOverrideInput = { event_id: string, participant_id: string, 
 /**
  * `None` takes the hand-set total back.
@@ -5014,6 +6288,11 @@ type SetSharedDueInput = { event_id: string, participant_id: string,
 due_at: string | null, };
 
 type SetSharedItemSplitInput = { event_id: string, item_id: string, split: ItemSplit, };
+
+/**
+ * Set (`Some`) or clear (`None`) the cost basis of a token.
+ */
+type SetTokenBasisInput = { chain: Chain, contract: string, basis_usd: Amount | null, };
 
 /**
  * Set a password on the open vault that has none.
@@ -5128,9 +6407,9 @@ dashboard_period: DashPeriod,
  */
 onboarding_checklist_hidden: boolean, 
 /**
- * The vault keeps crypto: crypto wallets, exchanges and coins are shown.
- * `None` = a vault from before the question; [`crate::UnlockedVault::open`]
- * answers it from the wallets it already has.
+ * Whether the vault holds crypto. Derived since spec E14 (the crypto module has data, or a
+ * hand-made crypto wallet remains): [`crate::UnlockedVault::open`] refreshes this copy, nobody
+ * sets it. The field stays in the file for compatibility with old and new builds.
  */
 crypto: boolean | null, 
 /**
@@ -5573,7 +6852,19 @@ deposit?: DepositTerms,
 /**
  * Portfolio basket of everything held here unless an asset has its own (plan F).
  */
-asset_class?: string, };
+asset_class?: string, 
+/**
+ * The crypto module's account this wallet shows, when the wallet is driven
+ * by the engine: a connected public address (`StoreKind::Crypto`) or an
+ * exchange read through its API key (`StoreKind::Exchange`).
+ *
+ * A wallet with this set holds no hand-made operations at all: the engine
+ * reads the chain and writes `crypto_events`, and the interface switches
+ * off everything that would create, edit or delete an operation here. The
+ * field is what tells every screen and check which wallets those are
+ * (decision P5 of 2026-11-11).
+ */
+crypto_account_id?: string, };
 
 type StoreBalanceChange = { id: string, name: string, before: Amount, after: Amount, currency: string, };
 
@@ -6156,6 +7447,21 @@ type TestExpect = {
  */
 outcome: string, transactions: number | null, queued: number | null, notices: number | null, };
 
+/**
+ * Ask one endpoint whether it answers.
+ */
+type TestNetworkInput = { chain: Chain, kind: EndpointKind, 
+/**
+ * The address typed in the field, not yet saved; `None` tests the one in use.
+ */
+url?: string, 
+/**
+ * A key typed in the field, not yet saved. `None` or empty uses the stored
+ * key only when the address under test is the instance that key belongs
+ * to; any other address is tested without a key.
+ */
+blockscout_key?: string, };
+
 type Theme = "auto" | "light" | "dark";
 
 /**
@@ -6188,6 +7494,54 @@ amount: Amount | null, };
  * What the strip asks the user to do.
  */
 type TodayTodoKind = "shortfall" | "rejected_run" | "unconfirmed_run" | "queued_workflow" | "pending_import" | "points_expire" | "insurance_ends" | "utility_overdue" | "reminder";
+
+/**
+ * Identity of a token: its network and its contract address there.
+ *
+ * The symbol is deliberately not part of it — two tokens share a symbol, and
+ * one token renames itself — so a price series and a holding stay with the
+ * contract.
+ */
+type TokenId = { chain: Chain, 
+/**
+ * Normalized by [`normalize_address`] when built with [`TokenId::new`].
+ */
+contract: string, };
+
+/**
+ * Which token a command is about.
+ */
+type TokenRefInput = { chain: Chain, contract: string, };
+
+/**
+ * Where a token stands.
+ */
+type TokenStatus = "known" | "quarantined" | "confirmed" | "rejected";
+
+/**
+ * The user's decision on a token that is not on the built-in list.
+ */
+type TokenVerdict = "confirmed" | "rejected";
+
+/**
+ * One token as the list shows it. `symbol` and `name` are already cleaned
+ * (length, control characters, links) and are plain text, never markup.
+ */
+type TokenView = { chain: Chain, contract: string, symbol: string, name: string, decimals: number, status: TokenStatus, 
+/**
+ * What the old purchases cost, USD per unit, when the user said.
+ */
+basis_usd: Amount | null, warnings: Array<TokenWarning>, 
+/**
+ * When the user confirmed or rejected it (RFC3339 UTC); `None` with no
+ * verdict. The hidden-token list reads it for "hidden on <date>".
+ */
+decided_at?: string, };
+
+/**
+ * Why a token's text deserves a second look.
+ */
+type TokenWarning = "look_alike" | "imitates_known";
 
 /**
  * Where the free money of the month should go (plan F).
@@ -6252,6 +7606,13 @@ type TraceStep = { node_id: string, kind: string, status: StepStatus, text_ru: s
  * Output port → its value as text.
  */
 values: { [key in string]: string }, };
+
+/**
+ * What an operation was found through, so it can be fetched, deduplicated
+ * and shown again. Never optional: an event whose origin is unknown cannot
+ * be refreshed or deduplicated.
+ */
+type TrackingRef = { "chain_tx": { chain: Chain, hash: string, } } | { "address": { chain: Chain, address: string, } } | { "position": { protocol: string, chain: Chain, id: string, } } | { "exchange_history": { exchange: string, exec_id: string, } };
 
 /**
  * Opening or closing (part of) a futures position.
@@ -6745,6 +8106,11 @@ estimated: boolean, };
 type UpcomingKind = "automation" | "housing" | "loan_payment" | "reminder" | "rejected_run" | "unconfirmed_run" | "debt";
 
 /**
+ * Rename an account, change its note or stop counting it.
+ */
+type UpdateAccountInput = { account_id: string, name?: string, note?: string, archived?: boolean, };
+
+/**
  * Partial update: only the fields present in the payload are touched.
  */
 type UpdateAppSettingsInput = { theme: Theme | null, locale: Locale | null, base_currency: string | null, 
@@ -6917,7 +8283,7 @@ manual_income: Amount | null,
  */
 manual_expenses: Amount | null, dashboard_period: DashPeriod | null, onboarding_checklist_hidden: boolean | null, 
 /**
- * Show crypto wallets, exchanges and coins.
+ * Read for compatibility and ignored: whether the vault holds crypto is derived (spec E14).
  */
 crypto: boolean | null, 
 /**
@@ -7340,7 +8706,45 @@ attachments: Array<Attachment>,
 /**
  * Shared events: things bought together and split between people.
  */
-shared_events: Array<SharedEvent>, };
+shared_events: Array<SharedEvent>, 
+/**
+ * Addresses the crypto module follows.
+ */
+crypto_accounts: Array<CryptoAccount>, 
+/**
+ * Operations the module read from its sources.
+ */
+crypto_events: Array<CryptoTx>, 
+/**
+ * The user's corrections over what a source reported.
+ */
+crypto_overrides: Array<CryptoOverride>, 
+/**
+ * Tokens the module has met, with what it takes to show and price them.
+ */
+crypto_tokens: Array<CryptoToken>, 
+/**
+ * Holdings inside protocols (the DeFi stage fills them).
+ */
+crypto_positions: Array<CryptoPosition>, 
+/**
+ * The module's value over time, so its history survives a refetch.
+ */
+crypto_snapshots: Array<CryptoSnapshot>, 
+/**
+ * How far each source has read each account: this device's own progress,
+ * never synced (`sync::registry::LOCAL`).
+ */
+crypto_cursors: Array<CryptoCursor>, 
+/**
+ * Cached token prices; a cache, so it unions silently between devices.
+ */
+crypto_prices: Array<CryptoPricePoint>, 
+/**
+ * Wipes of the module, so the other devices learn about one through an
+ * ordinary sync instead of sending the data back.
+ */
+crypto_wiped_at: Array<CryptoWipe>, };
 
 type VaultInfo = { path: string, doc_version: number, id: string, created_at: string, format: string, base_currency: string, 
 /**
