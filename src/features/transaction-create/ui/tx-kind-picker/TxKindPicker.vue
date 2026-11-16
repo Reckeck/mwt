@@ -5,9 +5,9 @@ import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
 import { useTxForm } from '../../model/use-tx-form'
 
-/** The kinds the wallet offers, and where a trade is booked when not on this account. */
+/** The kinds the wallet offers. */
 const { t } = useI18n()
-const { form, offered, pickKind, verbLabel, tradeOnUnified, unifiedAccount } = useTxForm()
+const { form, offered, pickKind, verbLabel } = useTxForm()
 </script>
 
 <template>
@@ -25,7 +25,4 @@ const { form, offered, pickKind, verbLabel, tradeOnUnified, unifiedAccount } = u
     <ToggleGroupItem v-for="entry in offered" :key="entry" :value="entry">{{ verbLabel(entry) }}</ToggleGroupItem>
   </ToggleGroup>
 
-  <p v-if="tradeOnUnified && unifiedAccount" class="text-xs text-muted-foreground">
-    {{ t('tx.tradeOnUnified', { name: unifiedAccount.name }) }}
-  </p>
 </template>

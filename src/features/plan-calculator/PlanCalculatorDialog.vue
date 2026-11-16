@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Button } from '@/shared/ui/button'
@@ -16,13 +16,15 @@ const emit = defineEmits<{ apply: [plan: CalculatorPlan] }>()
 
 const { t } = useI18n()
 const calculator = ref<InstanceType<typeof PlanCalculator> | null>(null)
+/** Only the source is chosen: the plan becomes a top-up, not an exchange. */
+const topup = computed(() => calculator.value?.exchange === false)
 </script>
 
 <template>
   <Dialog overlay="plan-calculator"
     v-model:open="open"
     :title="props.exchange ? t('calc.titleAt', { exchange: props.exchange }) : t('calc.title')"
-    :description="t('calc.hint')"
+    :description="t(topup ? 'calc.hintTopup' : 'calc.hint')"
     size="form"
   >
     <!-- A form, so Enter in any field applies the plan like the button does. -->
@@ -32,7 +34,9 @@ const calculator = ref<InstanceType<typeof PlanCalculator> | null>(null)
 
     <template #footer>
       <Button variant="outline" class="max-sm:hidden" @click="open = false">{{ t('actions.close') }}</Button>
-      <Button type="submit" form="plan-calculator-form" class="max-sm:w-full" data-trade-calc-apply>{{ t('calc.apply') }}</Button>
+      <Button type="submit" form="plan-calculator-form" class="max-sm:w-full" data-trade-calc-apply>
+        {{ t(topup ? 'calc.applyTopup' : 'calc.apply') }}
+      </Button>
     </template>
   </Dialog>
 </template>

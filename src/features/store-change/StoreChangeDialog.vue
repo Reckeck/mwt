@@ -18,7 +18,6 @@ import { call, parseError } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
-import { useSettingsStore } from '@/shared/store/settings'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
 import { CONVERTIBLE_KINDS, convertibleKinds } from './store-change.constants'
@@ -44,8 +43,7 @@ const isRoot = computed(() => !props.store.parent_id)
 const isCashRoot = computed(() => isRoot.value && props.store.kind === 'cash')
 const hasChildren = computed(() => nodes.value.some((node) => node.store.parent_id === props.store.id))
 
-const settings = useSettingsStore()
-const kinds = computed(() => convertibleKinds(props.store.kind, settings.cryptoEnabled))
+const kinds = computed(() => convertibleKinds(props.store.kind))
 
 const actions = computed<StoreChangeAction[]>(() => {
   const out: StoreChangeAction[] = []

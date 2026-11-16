@@ -46,7 +46,9 @@ function choose(value: StoreKind) {
           <span class="text-xs font-normal text-muted-foreground">{{ t(`stores.kindHint.${info.kind}`) }}</span>
         </Button>
       </div>
-      <p class="text-xs text-muted-foreground">{{ t('storeWizard.kindMatters') }}</p>
+      <p class="text-xs text-muted-foreground">
+        {{ t(kind === 'crypto' ? 'cryptoTrack.connect.kindNote' : 'storeWizard.kindMatters') }}
+      </p>
     </template>
     <template v-else>
       <p v-if="!subTypes.length" class="text-sm text-muted-foreground">{{ t('errors.SUB_TYPE_NOT_ALLOWED') }}</p>

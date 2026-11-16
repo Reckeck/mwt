@@ -3,8 +3,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check } from 'lucide-vue-next'
 
-/** Step 1: what the move changes. No archive item yet: the capital warning arrives with the addresses (E11). */
-const props = defineProps<{ level: SecurityLevel }>()
+import { RaiseCapitalWarning } from './raise-capital-warning'
+
+/** Step 1: what the move changes, and the capital that leaves the totals with the archive (E11). */
+const props = defineProps<{ level: SecurityLevel; plan: CryptoTransitionPlan | undefined }>()
 const { t } = useI18n()
 
 const items = computed(() => [
@@ -24,5 +26,6 @@ const items = computed(() => [
         <span>{{ t(`securityRaise.warning.${item}`) }}</span>
       </li>
     </ul>
+    <RaiseCapitalWarning :plan="props.plan" />
   </div>
 </template>

@@ -21,8 +21,6 @@ export function useCreateVault() {
   const passwordRepeat = ref('')
   /** `With a password` (the default) or `no password`: a plain vault skips the password fields altogether. */
   const withPassword = ref(true)
-  /** The vault keeps crypto wallets and exchanges; most people start without them. */
-  const crypto = ref(false)
   const baseCurrency = useBaseCurrencyChoice()
   const error = ref<string | null>(null)
   const busy = ref(false)
@@ -31,7 +29,6 @@ export function useCreateVault() {
     password.value = ''
     passwordRepeat.value = ''
     withPassword.value = true
-    crypto.value = false
     baseCurrency.reset()
     error.value = null
     // Pre-fill the default location only while it is still free — suggesting a
@@ -72,7 +69,7 @@ export function useCreateVault() {
     busy.value = true
     error.value = null
     try {
-      await vault.createVault(target, withPassword.value ? password.value : null, crypto.value)
+      await vault.createVault(target, withPassword.value ? password.value : null)
       await baseCurrency.save()
       await router.replace({ name: 'dashboard' })
     } catch (err) {
@@ -82,5 +79,5 @@ export function useCreateVault() {
     }
   }
 
-  return { path, password, passwordRepeat, withPassword, crypto, baseCurrency, error, busy, reset, browse, submit }
+  return { path, password, passwordRepeat, withPassword, baseCurrency, error, busy, reset, browse, submit }
 }
