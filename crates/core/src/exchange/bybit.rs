@@ -306,6 +306,9 @@ impl BybitClient {
         BybitClient {
             client: Client::builder()
                 .timeout(Duration::from_secs(10))
+                // The host is fixed; a redirect would carry the signed
+                // request somewhere else.
+                .redirect(reqwest::redirect::Policy::none())
                 .build()
                 .expect("reqwest client"),
             base_url,
@@ -347,9 +350,9 @@ impl BybitClient {
         let signature = hex_encode(&mac.finalize().into_bytes());
 
         let mut headers = HeaderMap::new();
-        headers.insert("X-BAPI-API-KEY", header(api_key)?);
+        headers.insert("X-BAPI-API-KEY", sensitive_header(api_key)?);
         headers.insert("X-BAPI-TIMESTAMP", header(&timestamp_ms.to_string())?);
-        headers.insert("X-BAPI-SIGN", header(&signature)?);
+        headers.insert("X-BAPI-SIGN", sensitive_header(&signature)?);
         headers.insert("X-BAPI-RECV-WINDOW", header(&recv_window.to_string())?);
         // HMAC mode; sent by every official sample client.
         headers.insert("X-BAPI-SIGN-TYPE", header("2")?);
@@ -394,12 +397,12 @@ impl BybitClient {
             .headers(headers)
             .send()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
 
         let envelope: ApiEnvelope<ExecutionPage> = resp
             .json()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         if envelope.retcode != 0 {
             return Err(Error::Network(format!(
                 "bybit error {}: {}",
@@ -471,12 +474,12 @@ impl BybitClient {
                     .headers(headers)
                     .send()
                     .await
-                    .map_err(|err| Error::Network(err.to_string()))?;
+                    .map_err(|err| Error::Network(err.without_url().to_string()))?;
 
                 let envelope: ApiEnvelope<ExecutionPage> = resp
                     .json()
                     .await
-                    .map_err(|err| Error::Network(err.to_string()))?;
+                    .map_err(|err| Error::Network(err.without_url().to_string()))?;
                 if envelope.retcode != 0 {
                     // No permission for this category (common for inverse on a
                     // spot-only key): skip it, keep sweeping the others.
@@ -719,10 +722,10 @@ impl BybitClient {
             .headers(headers)
             .send()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?
+            .map_err(|err| Error::Network(err.without_url().to_string()))?
             .json()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         Ok(envelope)
     }
 
@@ -924,6 +927,13 @@ fn header(value: &str) -> Result<HeaderValue> {
     HeaderValue::from_str(value).map_err(|_| Error::InvalidInput("invalid header value".into()))
 }
 
+/// A header value that Debug output and HTTP/2 compression never show.
+fn sensitive_header(value: &str) -> Result<HeaderValue> {
+    let mut parsed = header(value)?;
+    parsed.set_sensitive(true);
+    Ok(parsed)
+}
+
 impl BybitClient {
     /// Milliseconds since the Unix epoch, for signing and query windows.
     fn now_millis() -> u64 {
@@ -1037,6 +1047,15 @@ mod tests {
             headers.get("X-BAPI-SIGN").unwrap(),
             "00960eb36f4785bbb9ace7c3d6f42e4e418141a5afbc0d626bb55e53ef001f59"
         );
+    }
+
+    #[test]
+    fn the_key_and_the_signature_are_marked_sensitive() {
+        let headers =
+            BybitClient::signed_headers("key123", "secret", 5000, 1, "category=spot").unwrap();
+        assert!(headers.get("X-BAPI-API-KEY").unwrap().is_sensitive());
+        assert!(headers.get("X-BAPI-SIGN").unwrap().is_sensitive());
+        assert!(!headers.get("X-BAPI-TIMESTAMP").unwrap().is_sensitive());
     }
 
     #[test]

@@ -251,6 +251,15 @@ impl Tracker {
         guard.values().flatten().cloned().collect()
     }
 
+    /// Forget every reading: they carry the amounts of the legs, so they must
+    /// not outlive the vault they were read for (lock, swap, wipe).
+    pub fn clear_positions(&self) {
+        self.positions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    }
+
     fn waiting_for_retry(&self, account_id: &str) -> bool {
         self.with_accounts(|accounts| {
             accounts
@@ -842,6 +851,12 @@ pub fn consent_changed(app: &AppHandle) {
 /// and that is what makes a momentary figure absent instead of zero.
 pub fn live_positions() -> Vec<PositionReading> {
     TRACKER.positions()
+}
+
+/// Drop the readings of the protocol adapters from memory: called when the
+/// vault locks or is replaced and when the module is wiped.
+pub fn forget_live_positions() {
+    TRACKER.clear_positions();
 }
 
 /// What the module is doing, for the screen.
@@ -1557,6 +1572,16 @@ mod tests {
         let live = tracker.positions();
         assert_eq!(live, vec![reading]);
         assert!(live[0].approximate);
+    }
+
+    #[test]
+    fn clearing_the_positions_forgets_every_reading() {
+        let tracker = Tracker::new();
+        tracker.remember_positions("cacc-1", vec![supply("2026-11-16T10:00:00Z")]);
+        tracker.remember_positions("cacc-2", vec![supply("2026-11-16T10:00:00Z")]);
+        assert_eq!(tracker.positions().len(), 2);
+        tracker.clear_positions();
+        assert!(tracker.positions().is_empty());
     }
 
     fn supply(read_at: &str) -> PositionReading {

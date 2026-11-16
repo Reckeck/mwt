@@ -8,6 +8,8 @@
 //!
 //! Commands: `crates/app/src/commands/cryptotrack/network.rs`.
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::model::chain::Chain;
@@ -72,7 +74,7 @@ pub struct NetworkSettings {
 }
 
 /// Save one network. An empty address goes back to the preset.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 pub struct SetNetworkSettingsInput {
     pub chain: Chain,
     pub rpc: String,
@@ -86,7 +88,7 @@ pub struct SetNetworkSettingsInput {
 }
 
 /// Ask one endpoint whether it answers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 pub struct TestNetworkInput {
     pub chain: Chain,
     pub kind: EndpointKind,
@@ -98,6 +100,39 @@ pub struct TestNetworkInput {
     /// to; any other address is tested without a key.
     #[ts(optional)]
     pub blockscout_key: Option<String>,
+}
+
+// The Blockscout key and the addresses (a path may carry a provider key)
+// never reach a log line through `{:?}`.
+impl fmt::Debug for SetNetworkSettingsInput {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SetNetworkSettingsInput")
+            .field("chain", &self.chain)
+            .field("rpc", &"<hidden>")
+            .field("blockscout", &"<hidden>")
+            .field("explorer", &"<hidden>")
+            .field(
+                "blockscout_key",
+                &self.blockscout_key.as_ref().map(|_| "<hidden>"),
+            )
+            .finish()
+    }
+}
+
+impl fmt::Debug for TestNetworkInput {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TestNetworkInput")
+            .field("chain", &self.chain)
+            .field("kind", &self.kind)
+            .field("url", &self.url.as_ref().map(|_| "<hidden>"))
+            .field(
+                "blockscout_key",
+                &self.blockscout_key.as_ref().map(|_| "<hidden>"),
+            )
+            .finish()
+    }
 }
 
 /// How a connection test ended.
@@ -124,4 +159,30 @@ pub struct NetworkTestResult {
     /// The latest block, from a node that answered.
     #[ts(optional, type = "number")]
     pub block: Option<u64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug_of_the_inputs_hides_keys_and_addresses() {
+        let saved = SetNetworkSettingsInput {
+            chain: Chain::Ethereum,
+            rpc: "https://rpc.example/v2/rpc-secret".into(),
+            blockscout: "https://scan.example/blockscout-secret".into(),
+            explorer: "https://explorer.example/explorer-secret".into(),
+            blockscout_key: Some("key-secret".into()),
+        };
+        let tested = TestNetworkInput {
+            chain: Chain::Ethereum,
+            kind: EndpointKind::Blockscout,
+            url: Some("https://scan.example/url-secret".into()),
+            blockscout_key: Some("key-secret".into()),
+        };
+        let text = format!("{saved:?} {tested:?}");
+        assert!(!text.contains("secret"), "{text}");
+        assert!(text.contains("<hidden>"));
+        assert!(text.contains("Ethereum"));
+    }
 }
