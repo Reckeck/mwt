@@ -1,0 +1,16 @@
+{
+  "cryptoTrack.relations.tab": "Relations",
+  "cryptoTrack.relations.group.own_addresses": "Your other addresses",
+  "cryptoTrack.relations.group.exchanges": "Exchangers",
+  "cryptoTrack.relations.group.protocols": "Protocols",
+  "cryptoTrack.relations.group.fiat": "Money records",
+  "cryptoTrack.relations.count": "Operations: {count}",
+  "cryptoTrack.relations.emptyTitle": "No relations yet",
+  "cryptoTrack.relations.emptyHint": "Your other addresses, exchangers and protocols this address dealt with, and the money records paired with its operations, appear here. Start from the address's operations.",
+  "cryptoTrack.relations.openOperations": "Open operations",
+  "tour.wallet.cryptoRelations.title": "Relations",
+  "tour.wallet.cryptoRelations.body": "Your other addresses, exchangers, protocols and money records tied to this address. A row opens the operations with the right filter.",
+  "whatsNew.cryptoRelations.title": "A Relations tab for an address",
+  "whatsNew.cryptoRelations.tab": "For an address the app follows, the Relations tab shows your other addresses, exchangers, protocols and paired records. It is worked out from the operations each time and nothing is stored.",
+  "whatsNew.cryptoRelations.opens": "A row opens the operations already filtered by it. Ordinary wallets no longer have a Relations tab: the same links are in the wallet card."
+}

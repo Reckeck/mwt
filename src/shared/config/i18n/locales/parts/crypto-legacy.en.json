@@ -1,0 +1,6 @@
+{
+  "cryptoTrack.legacy.recordedRow": "Operations recorded",
+  "cryptoTrack.legacy.recordedHint": "Operations from the exchange go into the crypto section at once: there is nothing left to confirm. Records that waited for confirmation in earlier versions were carried over to the same place — not one is lost and not one is counted twice.",
+  "cryptoTrack.legacy.lastSync": "Checked {when}, operations recorded: {recorded}",
+  "cryptoTrack.legacy.syncedDetail": "Recorded: {recorded}, already there: {known}"
+}

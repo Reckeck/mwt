@@ -71,8 +71,6 @@ export const useSettingsStore = defineStore('settings', {
     /** Decimal places used to render balances: a device setting, the vault's old copy until taken over. */
     displayDecimals: (state): number => state.app?.display_decimals ?? state.vault?.display_decimals ?? 8,
     dashboardWidgets: (state): DashboardWidgetCfg[] => state.vault?.dashboard_widgets ?? [],
-    /** The vault keeps crypto: crypto wallets, exchanges and coins are shown. Unknown = yes. */
-    cryptoEnabled: (state): boolean => state.vault?.crypto !== false,
   },
 
   actions: {

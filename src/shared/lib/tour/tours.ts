@@ -1,13 +1,11 @@
-import { SECURITY_TOUR_STEPS, SYNC_LEVEL_TOUR_STEPS } from './tours.security.ts'
-import { TOGETHER_TOURS } from './tours.together.ts'
+import { CRYPTO_STORES_STEPS, CRYPTO_WALLET_STEPS } from './tours.crypto.ts'
+import { MODULE_TOURS } from './tours.modules.ts'
+import { CRYPTO_NETWORK_TOUR_STEPS, SECURITY_TOUR_STEPS, SYNC_LEVEL_TOUR_STEPS } from './tours.security.ts'
 import type { TourStep } from './tours.types.ts'
 
 export type { TourStep } from './tours.types.ts'
 
-/**
- * Every analytics section: its tabs and filter, its own steps, the facts in
- * words and the export. A step whose element is not on screen is skipped.
- */
+/** Every analytics section: its tabs and filter, its own steps, the facts in words and the export (a step with no element is skipped). */
 function analytics(own: TourStep[]): TourStep[] {
   return [
     { target: 'section-tabs', key: 'analytics.tabs', side: 'bottom' },
@@ -63,12 +61,11 @@ export const WORKFLOW_EDITOR_EMPTY: TourStep[] = [
 ]
 
 /**
- * Tours by route name. Steps whose element is not on the screen are skipped,
- * so one tour serves wallets of every kind. Every route has one — the
- * `check-onboarding` gate says so (see the `onboarding` skill).
+ * Tours by route name. Steps whose element is not on the screen are skipped, so one tour serves wallets of every
+ * kind. Every route has one: the `check-onboarding` gate says so (see the `onboarding` skill).
  */
 export const TOURS: Record<string, TourStep[]> = {
-  ...TOGETHER_TOURS,
+  ...MODULE_TOURS,
   'automations-workflows': workflows([
     { target: 'workflow-lessons', key: 'workflows.lessons', side: 'bottom' },
     { target: 'workflow-templates', key: 'workflows.templates', side: 'bottom' },
@@ -113,6 +110,7 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'vault-security', key: 'settings.security', side: 'top' },
     ...SECURITY_TOUR_STEPS,
     ...SYNC_LEVEL_TOUR_STEPS,
+    ...CRYPTO_NETWORK_TOUR_STEPS,
     { target: 'sync-device-list', key: 'settings.deviceList', side: 'top' },
     { target: 'sync-forgotten-devices', key: 'settings.forgottenDevices', side: 'top' },
     { target: 'sync-add-device', key: 'settings.addDevice', side: 'top' },
@@ -132,13 +130,14 @@ export const TOURS: Record<string, TourStep[]> = {
   stores: [
     { target: 'stores-list', key: 'stores.list', side: 'top' },
     { target: 'stores-create', key: 'stores.create', side: 'left' },
+    ...CRYPTO_STORES_STEPS,
   ],
   wallet: [
+    ...CRYPTO_WALLET_STEPS,
     { target: 'wallet-actions', key: 'wallet.operation', side: 'bottom' },
     { target: 'wallet-gear', key: 'wallet.settings', side: 'bottom' },
     { target: 'wallet-sub-accounts', key: 'wallet.subAccounts', side: 'bottom' },
     { target: 'wallet-all-operations', key: 'wallet.allOperations', side: 'bottom' },
-    { target: 'wallet-relations', key: 'wallet.relations', side: 'top' },
     { target: 'utility-reminders', key: 'wallet.utilityReminders', side: 'bottom' },
     { target: 'property-value', key: 'wallet.propertyValue', side: 'bottom' },
     { target: 'vehicle-card', key: 'wallet.vehicle', side: 'bottom' },

@@ -11,12 +11,43 @@ export const WHATS_NEW_NOVEMBER: WhatsNewEntry[] = [
     ],
   },
   {
+    id: 'cryptoRelations',
+    date: '2026-11-14',
+    points: [
+      { key: 'tab', route: 'wallet' },
+      { key: 'opens', route: 'crypto-operations' },
+    ],
+  },
+  {
+    id: 'cryptoLinks',
+    date: '2026-11-14',
+    points: [{ key: 'pointer', route: 'crypto-operations' }],
+  },
+  {
     id: 'phoneAutomations',
     date: '2026-11-13',
     points: [
       { key: 'bar', route: 'dashboard' },
       { key: 'actions', route: 'automations' },
       { key: 'repeat', route: 'automations-reminders' },
+    ],
+  },
+  {
+    id: 'cryptoAddresses',
+    date: '2026-11-12',
+    points: [
+      { key: 'connect', route: 'stores' },
+      { key: 'quarantine', route: 'wallet' },
+      { key: 'readOnly', route: 'wallet' },
+    ],
+  },
+  {
+    id: 'cryptoOperations',
+    date: '2026-11-12',
+    points: [
+      { key: 'list', route: 'crypto-operations' },
+      { key: 'exchange', route: 'crypto-operations' },
+      { key: 'meaning', route: 'crypto-operations' },
     ],
   },
   {

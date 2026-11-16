@@ -1,0 +1,18 @@
+{
+  "tour.cryptoNetwork.presets.title": "Presets",
+  "tour.cryptoNetwork.presets.body": "Ready public nodes of this network. Press one to fill the field, then check the connection.",
+  "tour.cryptoNetwork.wipeBackup.title": "Backup first",
+  "tour.cryptoNetwork.wipeBackup.body": "Make a copy of the vault here. Without a fresh copy the wipe does not start.",
+  "whatsNew.cryptoEngine.title": "Crypto: following a public address",
+  "whatsNew.cryptoEngine.follow": "Wallets → Connect an address: the engine reads the address on its own and keeps its assets and operations up to date. Nothing is typed in by hand.",
+  "whatsNew.cryptoEngine.tokens": "Unknown tokens that arrive on their own wait in quarantine: press Recognise to count one, or hide it. A token's current price comes from the app's usual price sources; the price at the time of a past operation comes from DeFiLlama, asked by token and date, and the address is never sent.",
+  "whatsNew.cryptoBybit.title": "Bybit now runs on the engine",
+  "whatsNew.cryptoBybit.moved": "The Bybit connection is read by the same engine as the addresses. Your old Bybit imports were converted once, the cost basis stays.",
+  "whatsNew.cryptoBybit.queue": "The queue of trades to check is gone: new trades land in the operations of the wallet by themselves.",
+  "whatsNew.cryptoWipe.title": "Crypto: wiping the module",
+  "whatsNew.cryptoWipe.backup": "Settings → Crypto → Wiping removes the whole crypto module from the vault. A copy of the vault is made and checked first; without it nothing is deleted.",
+  "whatsNew.cryptoWipe.wallets": "No wallet is deleted: each goes to the archive with its history, and the keys of this device are removed.",
+  "whatsNew.cryptoManualEnd.title": "The end of hand-made crypto records",
+  "whatsNew.cryptoManualEnd.forms": "The old forms for spot, futures and DeFi records are gone: crypto now comes from a connected address or exchange.",
+  "whatsNew.cryptoManualEnd.readable": "Records you made by hand stay in the vault and stay readable, in the archive."
+}

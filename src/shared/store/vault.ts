@@ -98,13 +98,13 @@ export const useVaultStore = defineStore('vault', {
         this.busy = false
       }
     },
-    /** `crypto`: the vault keeps crypto wallets and exchanges (asked on create); `password: null` — a vault without a password. */
-    async createVault(path: string, password: string | null, crypto: boolean) {
+    /** `password: null` — a vault without a password. */
+    async createVault(path: string, password: string | null) {
       this.busy = true
       this.error = null
       try {
         this.info = await call<VaultInfo>('create_vault', {
-          input: { path, password, cash_name: null, crypto },
+          input: { path, password, cash_name: null },
         })
         this.locked = false
         localStorage.setItem('trade-app:unlocked', 'true')
