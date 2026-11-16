@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
+
+import { CRYPTO_ACCOUNTS_KEY, CRYPTO_TRANSITION_KEY } from '@/entities/crypto-account'
+import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
 
 import { SECURITY_STATE_QUERY_KEY, useSecurityState } from '@/shared/api/security-state'
 import { useRaiseWizardState } from '@/shared/lib/raise-wizard-state'
@@ -13,6 +16,7 @@ import { Dialog } from '@/shared/ui/dialog'
 import { WizardSteps } from '@/shared/ui/wizard-steps'
 
 import { useRaiseRun } from '../model/use-raise-run'
+import { useTransitionPlan } from '../model/use-transition-plan'
 import {
   RAISE_STEPS,
   STEP_BACKUP,
@@ -41,6 +45,9 @@ const wizard = useRaiseWizardState()
 const vault = useVaultStore()
 const queryClient = useQueryClient()
 const security = useSecurityState()
+const { plan } = useTransitionPlan(computed(() => wizard.open))
+/** The wallets step 1 warned about: the backend archives them inside the move, so the answer is kept before it. */
+const archived = ref<CryptoRetiredWallet[]>([])
 
 /** Only a vault with a PIN asks for it; a plain one (level 1) goes straight to the new password. */
 const level = computed<SecurityLevel>(() => (security.data.value?.level === 'ledger' ? 'ledger' : 'pin'))
@@ -97,6 +104,10 @@ const { stage, failure, report, mutation } = useRaiseRun({
     // The label «no password», the lock and the key state follow the new level.
     await vault.refreshStatus().catch(() => {})
     await queryClient.invalidateQueries({ queryKey: [SECURITY_STATE_QUERY_KEY] })
+    // The archived wallets leave the lists and the totals.
+    for (const queryKey of [STORE_TREE_QUERY_KEY, CRYPTO_ACCOUNTS_KEY, CRYPTO_TRANSITION_KEY]) {
+      void queryClient.invalidateQueries({ queryKey })
+    }
     step.value = STEP_DONE
     emit('raised')
   },
@@ -136,12 +147,18 @@ function finish() {
   clearSecrets()
 }
 
+/** A screen that takes the wizard down with it (a route change) must not leave the shared state open. */
+onBeforeUnmount(() => {
+  if (wizard.open) finish()
+})
+
 function stop() {
   confirmOpen.value = false
   finish()
 }
 
 function startRun() {
+  archived.value = plan.value?.wallets ?? []
   mutation.mutate()
 }
 
@@ -164,7 +181,7 @@ function retry() {
   >
     <div class="grid gap-4" data-raise-wizard :data-step="step">
       <WizardSteps :step="step" :titles="RAISE_STEPS.map((name) => t(`securityRaise.step.${name}`))" />
-      <RaiseWarningStep v-if="step === STEP_WARNING" :level="level" />
+      <RaiseWarningStep v-if="step === STEP_WARNING" :level="level" :plan="plan" />
       <form
         v-else-if="step === STEP_PASSWORD"
         id="raise-password-form"
@@ -185,6 +202,7 @@ function retry() {
         v-else
         :minutes="security.data.value?.autolock.minutes ?? null"
         :backup-path="report?.backup_path ?? ''"
+        :archived="archived"
       />
     </div>
 

@@ -4,8 +4,8 @@ import { Check, CircleAlert } from 'lucide-vue-next'
 
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert'
 
-/** Step 5: what level 3 turned on. The Bybit key is typed again afterwards: it is not held in memory during the move. */
-const props = defineProps<{ minutes: number | null; backupPath: string }>()
+/** Step 5: what level 3 turned on and what went to the archive. The Bybit key is typed again afterwards: it is not held in memory during the move. */
+const props = defineProps<{ minutes: number | null; backupPath: string; archived: CryptoRetiredWallet[] }>()
 const { t } = useI18n()
 </script>
 
@@ -18,6 +18,12 @@ const { t } = useI18n()
     </Alert>
     <ul class="grid gap-2 text-sm">
       <li class="flex items-start gap-2"><Check class="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />{{ t('securityRaise.done.exchanges') }}</li>
+      <li v-if="props.archived.length" class="flex items-start gap-2" data-raise-archived>
+        <Check class="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+        <span class="min-w-0 break-words">
+          {{ t('securityRaise.done.archived', { names: props.archived.map((wallet) => wallet.name).join(', ') } ) }}
+        </span>
+      </li>
       <li v-if="props.minutes !== null" class="flex items-start gap-2">
         <Check class="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />{{ t('securityRaise.done.autolock', { minutes: props.minutes }) }}
       </li>

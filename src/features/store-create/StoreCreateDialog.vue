@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import { CryptoAddressDialog } from '@/features/crypto-add-address/@x/store-create'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
@@ -37,12 +38,23 @@ const createStore = useCreateStore(state, (store) => emit('created', store))
 
 const stepTitles = computed(() => steps.value.map((entry) => t(`storeWizard.step.${isSub.value && entry === 'pick' ? 'subType' : entry}`)))
 
+/** `Crypto wallet`: connecting a public address takes over after step 1 (mockups 07 to 10, spec E9). */
+const connectOpen = ref(false)
+function connectAddress() {
+  open.value = false
+  connectOpen.value = true
+}
 /** `Loyalty and bonuses`: the Bonuses wizard (name, card, point value) takes over from step 1, on its own page. */
 watch(programOpen, (handed) => {
   if (!handed) return
   programOpen.value = false
+  if (kind.value === 'crypto') return connectAddress()
   open.value = false
   void router.push({ name: 'transactions-bonuses', query: { new: 'program' } })
+})
+// A preset kind (the sidebar group's «+») has no step 1 to hand over from.
+watch(open, (value) => {
+  if (value && props.kind === 'crypto' && !props.parent) connectAddress()
 })
 
 /** Each step checks its own fields: `Next` moves on, the last one creates. */
@@ -95,4 +107,5 @@ function submit(event?: Event) {
       </Button>
     </template>
   </Dialog>
+  <CryptoAddressDialog v-model:open="connectOpen" @created="(storeId) => router.push({ name: 'wallet', params: { id: storeId } })" />
 </template>

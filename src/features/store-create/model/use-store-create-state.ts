@@ -30,9 +30,7 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   const step = ref<StoreCreateStep>('pick')
   const kind = ref<StoreKind>('bank')
   const subType = ref<SubType | null>(null)
-  const creatableKinds = computed(() =>
-    (catalog.data.value?.kinds ?? []).filter((info) => info.user_creatable && (settings.cryptoEnabled || !info.crypto)),
-  )
+  const creatableKinds = computed(() => (catalog.data.value?.kinds ?? []).filter((info) => info.user_creatable))
   const subTypes = computed(() =>
     props.parent ? (kindInfo(catalog.data.value, props.parent.kind)?.sub_types ?? []) : [],
   )
@@ -190,8 +188,9 @@ function setup(props: StoreCreateDialogProps, open: Ref<boolean>) {
   })
 
   const exchange = useExchangeSub(props, open, step, subType)
-  const toBonuses = () => !isSub.value && kind.value === 'loyalty'
-  const wizard = useWizardSteps(step, isSub, offersOpening, () => Boolean(props.kind), exchange.exchangeSub, toBonuses)
+  /** A programme is made by the Bonuses wizard, a crypto wallet by connecting an address (spec E9): `Next` hands over. */
+  const handsOver = () => !isSub.value && (kind.value === 'loyalty' || kind.value === 'crypto')
+  const wizard = useWizardSteps(step, isSub, offersOpening, () => Boolean(props.kind), exchange.exchangeSub, handsOver)
 
   const exchangeRoot = computed(() => !isSub.value && kind.value === 'exchange')
   /** Key and secret go together: one without the other cannot connect. */

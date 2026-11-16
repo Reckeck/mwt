@@ -2,7 +2,9 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { CryptoRefRow, useLinkCryptoOperation } from '@/features/crypto-ref-picker/@x/transaction-create'
 import { TxPreviewCard } from '@/entities/transaction'
+import { txId } from '@/shared/lib/transactions'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
@@ -21,10 +23,7 @@ import { TxKindTabs } from './ui/tx-kind-tabs'
 import { TxMissingSummary } from './ui/tx-missing-summary'
 import { TxQuickCash } from './ui/tx-quick-cash'
 import { TxQuickConvert } from './ui/tx-quick-convert'
-import { TxQuickDefi } from './ui/tx-quick-defi'
-import { TxQuickFutures } from './ui/tx-quick-futures'
 import { TxQuickMore } from './ui/tx-quick-more'
-import { TxQuickSpot } from './ui/tx-quick-spot'
 import { TxQuickTransfer } from './ui/tx-quick-transfer'
 import { TxSpotSection } from './ui/tx-spot-section'
 import { TxTransferSection } from './ui/tx-transfer-section'
@@ -46,16 +45,23 @@ const props = withDefaults(defineProps<TransactionFormProps>(), {
   prefill: null,
   compact: false,
 })
-defineSlots<{ store?: () => unknown; hint?: () => unknown }>()
+defineSlots<{ store?: () => unknown }>()
 
 /** `saved` after every successful write; `submit` instead in template mode. */
 const emit = defineEmits<{ saved: [tx: Transaction]; submit: [] }>()
 
 /** Bumped after each save: the next operation in a series starts with fresh pickers and no errors. */
 const round = ref(0)
+/** A crypto operation chosen for a new record: the pointer is written after the save, with the saved id. */
+const cryptoPending = ref<CryptoOpRow | null>(null)
+const linkCrypto = useLinkCryptoOperation()
 const { form, check, save, valid, showFills, debouncedDraft, preview, isProperty, changedElsewhere, refreshFromOtherDevice } = provideTxForm(props, (tx) => {
   check.reset()
   round.value += 1
+  if (cryptoPending.value) {
+    linkCrypto.mutate({ event_id: cryptoPending.value.id, fiat_tx_id: txId(tx) })
+    cryptoPending.value = null
+  }
   emit('saved', tx)
 })
 
@@ -63,12 +69,10 @@ const { form, check, save, valid, showFills, debouncedDraft, preview, isProperty
 const quickCash = computed(() => props.compact && (form.kind === 'payment' || form.kind === 'topup') && !isProperty.value)
 /** Exchange and transfer take their wallets as sides, so the dialog's wallet field is not shown. */
 const quickSides = computed(() => (props.compact && ['convert', 'transfer'].includes(form.kind) ? form.kind : null))
-/** Spot, futures and DeFi of `Trade · <exchange>` (OpForm-2 · 9–11): the exchange's own wallet, no comment line. */
-const quickDeal = computed(() =>
-  props.compact && ['trade_spot', 'trade_futures', 'defi'].includes(form.kind) ? form.kind : null,
-)
 
 const { t } = useI18n()
+/** The row exists for a fiat payment or top-up of a real record, not for a template. */
+const showCryptoRef = computed(() => !props.template && (form.kind === 'payment' || form.kind === 'topup'))
 
 function submit() {
   if (props.template) emit('submit')
@@ -104,16 +108,12 @@ defineExpose({
     <SyncChangedBanner v-if="changedElsewhere" @refresh="refreshFromOtherDevice" />
     <TxKindTabs v-if="props.compact" />
     <TxKindPicker v-else />
-    <slot name="hint" />
 
     <TxQuickCash v-if="quickCash" :key="round">
       <template #store><slot name="store" /></template>
     </TxQuickCash>
     <TxQuickConvert v-else-if="quickSides === 'convert'" :key="`c${round}`" />
     <TxQuickTransfer v-else-if="quickSides === 'transfer'" :key="`t${round}`" />
-    <TxQuickSpot v-else-if="quickDeal === 'trade_spot'" :key="`s${round}`" />
-    <TxQuickFutures v-else-if="quickDeal === 'trade_futures'" :key="`f${round}`" />
-    <TxQuickDefi v-else-if="quickDeal === 'defi'" :key="`d${round}`" />
     <template v-else>
       <slot v-if="props.compact" name="store" />
       <TxCashSection v-if="form.kind === 'topup' || form.kind === 'payment' || form.kind === 'defi'" />
@@ -126,7 +126,7 @@ defineExpose({
 
     <TxFillsList v-if="showFills" />
     <template v-if="props.compact">
-      <FormField v-if="quickSides !== 'convert' && !quickDeal" for="tx-comment" :label="t('form.comment')">
+      <FormField v-if="quickSides !== 'convert'" for="tx-comment" :label="t('form.comment')">
         <Input id="tx-comment" v-model="form.comment" autocomplete="off" :placeholder="t('form.optional')" />
       </FormField>
       <TxQuickMore />
@@ -136,5 +136,18 @@ defineExpose({
       <TxMissingSummary />
       <TxPreviewCard v-if="debouncedDraft" :preview="preview.data.value" :loading="preview.isFetching.value" />
     </template>
+
+    <!--
+      Last in the form on purpose (rule 17): the row appears once the module answers whether it has an
+      account, and from here that answer moves nothing that is already on screen.
+    -->
+    <CryptoRefRow
+      v-if="showCryptoRef"
+      v-model:pending="cryptoPending"
+      :tx-id="props.transaction ? txId(props.transaction) : null"
+      :time="form.timestamp"
+      :amount="form.amount"
+      :currency="form.asset?.symbol"
+    />
   </form>
 </template>

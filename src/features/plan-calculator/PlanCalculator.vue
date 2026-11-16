@@ -48,7 +48,7 @@ function apply(event?: Event) {
 
 function emitPlan() {
   if (mode.value === 'position') {
-    // `Spot` on the exchange: USDT given, the coin bought — the same sums as the calculation.
+    // An exchange of USDT for the coin: the amount given and the units it buys, the same sums as the calculation.
     emit('apply', {
       mode: 'position',
       from: { ...USDT },
@@ -63,8 +63,11 @@ function emitPlan() {
   emit('apply', { mode: 'converter', from: from.value, to: to.value, amount: amount.value.trim(), price: priceIn.value.trim() })
 }
 
+/** Both sides are known (always in `position`, in `converter` once the second asset is chosen): the plan becomes an exchange, else a top-up. */
+const exchange = computed(() => mode.value === 'position' || Boolean(to.value))
+
 /** The dialog owns the "apply" button, so it reads these. */
-defineExpose({ apply })
+defineExpose({ apply, exchange })
 </script>
 
 <template>

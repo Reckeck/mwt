@@ -15,20 +15,20 @@ import { NewPasswordFields } from '@/shared/ui/new-password-fields'
 import { WizardSteps } from '@/shared/ui/wizard-steps'
 
 import { useCreateVault } from './useCreateVault'
-import VaultCryptoChoice from './VaultCryptoChoice.vue'
 import VaultProtectionChoice from './VaultProtectionChoice.vue'
 
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
 const vault = useVaultStore()
-const { path, password, passwordRepeat, withPassword, crypto, baseCurrency, error, busy, reset, browse, submit } =
+const { path, password, passwordRepeat, withPassword, baseCurrency, error, busy, reset, browse, submit } =
   useCreateVault()
 const { currency, asked } = baseCurrency
 
-/** 1 — `File and protection`, 2 — `How you will keep records` (Full-New-Encrypt 1–2). */
+/** 1 — `File and protection`, 2 — `Base currency`, asked only on a fresh install (Full-New-Encrypt 1–2). */
 const step = ref(1)
-const titles = computed(() => [t('vaultCreate.stepFile'), t('vaultCreate.stepAccounting')])
+const titles = computed(() => [t('vaultCreate.stepFile'), t('vaultCreate.stepCurrency')])
+const lastStep = computed(() => (asked.value ? 2 : 1))
 
 watch(open, (isOpen) => {
   if (isOpen) {
@@ -53,9 +53,9 @@ const form = useFormValidation(
   { resetOn: [open, step] },
 )
 
-/** `Next` checks the first step, `Create` the second. */
+/** `Next` checks the first step, `Create` the last one. */
 function onSubmit(event: Event) {
-  if (step.value === 1) form.submit(() => (step.value = 2), event)
+  if (step.value < lastStep.value) form.submit(() => (step.value = 2), event)
   else form.submit(submit, event)
 }
 </script>
@@ -64,7 +64,7 @@ function onSubmit(event: Event) {
   <!-- Where the file lies and whether it has a password, then how the books are kept; the vault is saved and opened. -->
   <Dialog overlay="vault-create" v-model:open="open" :title="t('auth.createVaultTitle')" size="sm">
     <form id="create-form" class="grid gap-4" @submit.prevent="onSubmit">
-      <WizardSteps :step="step" :titles="titles" />
+      <WizardSteps v-if="asked" :step="step" :titles="titles" />
 
       <template v-if="step === 1">
         <!-- App storage (Android/iOS): a name; the file lives inside the app. -->
@@ -103,8 +103,7 @@ function onSubmit(event: Event) {
       </template>
 
       <template v-else>
-        <BaseCurrencyField v-if="asked" v-model="currency" :error="form.error('currency')" />
-        <VaultCryptoChoice v-model="crypto" />
+        <BaseCurrencyField v-model="currency" :error="form.error('currency')" />
       </template>
 
       <p
@@ -121,7 +120,7 @@ function onSubmit(event: Event) {
         {{ step === 1 ? t('actions.cancel') : t('actions.back') }}
       </Button>
       <Button form="create-form" type="submit" :disabled="busy" :loading="busy">
-        {{ step === 1 ? t('actions.next') : t('auth.createVaultButton') }}
+        {{ step < lastStep ? t('actions.next') : t('auth.createVaultButton') }}
       </Button>
     </template>
   </Dialog>

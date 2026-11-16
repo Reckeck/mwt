@@ -1,11 +1,21 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import en from '@/shared/config/i18n/locales/en.json'
-import ru from '@/shared/config/i18n/locales/ru.json'
-
 import { SYNC_COLLECTIONS, collectionKey, sortedChanges } from './collections'
+
+const LOCALES = resolve(__dirname, '../../../shared/config/i18n/locales')
+
+/**
+ * A locale as the running app sees it: the main file with `locales/parts/*` laid
+ * over it, the way `mergeLocale` does it. A name may live in either.
+ */
+function locale(lang: 'en' | 'ru'): Record<string, string> {
+  const parts = readdirSync(resolve(LOCALES, 'parts'))
+    .filter((file) => file.endsWith(`.${lang}.json`))
+    .map((file) => JSON.parse(readFileSync(resolve(LOCALES, 'parts', file), 'utf8')))
+  return Object.assign(JSON.parse(readFileSync(resolve(LOCALES, `${lang}.json`), 'utf8')), ...parts)
+}
 
 /** Names of the collections in the Rust registry, read from its source. */
 function registryNames(): string[] {
@@ -25,9 +35,11 @@ describe('collectionKey', () => {
   })
 
   it('has a Russian and an English name for each', () => {
+    const english = locale('en')
+    const russian = locale('ru')
     for (const name of SYNC_COLLECTIONS) {
-      expect((en as Record<string, string>)[`sync.coll.${name}`], `en ${name}`).toBeTruthy()
-      expect((ru as Record<string, string>)[`sync.coll.${name}`], `ru ${name}`).toBeTruthy()
+      expect(english[`sync.coll.${name}`], `en ${name}`).toBeTruthy()
+      expect(russian[`sync.coll.${name}`], `ru ${name}`).toBeTruthy()
     }
   })
 

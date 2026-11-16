@@ -4,16 +4,17 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 
+import { applyPlan } from '../lib/form/apply-plan'
 import type { TxFormState } from './use-tx-form-state'
 
 /**
  * Which kinds the wallet offers and which one the form is on: the wallet's
- * default, a transfer to a contact, an automation preset or a calculator plan;
- * trades go to the exchange's Unified account.
+ * default, a transfer to a contact, an automation preset or a calculator plan.
+ * Trades and DeFi actions are never offered for a new record (spec E14).
  */
 export function useTxKind(state: TxFormState) {
   const { t } = useI18n()
-  const { props, form, editing, storeKind, contextStore, nodes, isProperty } = state
+  const { props, form, editing, storeKind, isProperty } = state
 
   /** Which kinds this wallet accepts. The binding lives in Rust; the form only asks. */
   const kinds = useQuery({
@@ -55,41 +56,6 @@ export function useTxKind(state: TxFormState) {
     { immediate: true },
   )
 
-  /**
-   * Spot and futures live on the exchange's Unified Trading account: a trade
-   * entered on the wallet itself or on its funding or earn account is booked
-   * there. An older spot or futures sub-account keeps its own trades.
-   */
-  const unifiedAccount = computed(() => {
-    const store = contextStore.value
-    if (store?.kind !== 'exchange') return null
-    const market = typeof store.binding === 'object' && 'market' in store.binding ? store.binding.market : null
-    if (market === 'spot' || market === 'futures' || market === 'unified') return null
-    const rootId = store.parent_id ?? store.id
-    return (
-      nodes.value.find(
-        (node) =>
-          node.store.parent_id === rootId &&
-          !node.store.archived &&
-          typeof node.store.binding === 'object' &&
-          'market' in node.store.binding &&
-          node.store.binding.market === 'unified',
-      )?.store ?? null
-    )
-  })
-  const tradeOnUnified = computed(
-    () => !editing.value && Boolean(unifiedAccount.value) && ['trade_spot', 'trade_futures'].includes(form.kind),
-  )
-  watch(
-    [tradeOnUnified, () => form.storeId],
-    ([onUnified]) => {
-      if (editing.value) return
-      const target = onUnified && unifiedAccount.value ? unifiedAccount.value.id : props.storeId
-      if (form.storeId !== target) form.storeId = target
-    },
-    { immediate: true },
-  )
-
   /** The kind always has a value: pressing the active one again is ignored. */
   function pickKind(value: unknown) {
     if (typeof value !== 'string' || !value) return
@@ -108,25 +74,10 @@ export function useTxKind(state: TxFormState) {
     ([plan, data]) => {
       if (!plan || !data || plan === appliedPlan || editing.value) return
       appliedPlan = plan
-      if (plan.from && plan.to && offered.value.includes('trade_spot')) {
-        // A position is a spot buy: the amount given, and the units it bought.
-        form.kind = 'trade_spot'
-        form.soldAsset = plan.from
-        form.boughtAsset = plan.to
-        form.soldQty = plan.amount
-        if (plan.mode === 'position' && plan.quantity) form.boughtQty = plan.quantity
-      } else if (plan.from) {
-        form.kind = offered.value.includes('topup') ? 'topup' : form.kind
-        form.asset = plan.from
-        form.amount = plan.amount
-      }
-      if (plan.price) {
-        form.price = plan.price
-        form.priceCurrency = 'usd'
-      }
+      applyPlan(form, plan, offered.value)
     },
     { immediate: true },
   )
 
-  return { kinds, offered, unifiedAccount, tradeOnUnified, pickKind, verbLabel }
+  return { kinds, offered, pickKind, verbLabel }
 }

@@ -1,3 +1,4 @@
+import { CRYPTO_OPERATIONS_KEY } from '@/entities/crypto-tx'
 import { CAPITAL_HEALTH_KEY } from '@/shared/api/queries'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
 import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
@@ -24,6 +25,19 @@ export const ALL_COLLECTIONS: ReadonlySet<string> = new Set([
   'valuations',
   'tx_properties',
   'data_sources',
+  // The crypto module: its operations, tokens, positions, snapshots and
+  // quotes all move the capital through the totals (spec E8), and a wipe
+  // takes the whole section away. Until the section has queries of its own
+  // (specs E9 and E10 narrow these down), a crypto batch re-reads everything,
+  // exactly as a price batch already does.
+  'crypto_accounts',
+  'crypto_events',
+  'crypto_overrides',
+  'crypto_tokens',
+  'crypto_positions',
+  'crypto_snapshots',
+  'crypto_prices',
+  'crypto_wiped_at',
 ])
 
 /** What a contact, category or reminder shows up in besides its own list. */
@@ -54,13 +68,13 @@ export const KEYS_OF: Record<string, Keys> = {
   shared_events: [['shared-events'], ['debt-terms'], ['contacts'], ['dashboard-today']],
   price_alerts: [['price-alerts']],
   categorization_rules: [['categorization-rules']],
-  pending_imports: [['pending-imports']],
-  discarded_imports: [['pending-imports']],
+  pending_imports: [CRYPTO_OPERATIONS_KEY],
+  discarded_imports: [CRYPTO_OPERATIONS_KEY],
   enrichments: [['enrichments'], ['transactions'], ['search-index']],
   utility_items: [['utilities'], ['utility-trend'], ['utility-bill'], ['upcoming']],
   meter_readings: [['utilities'], ['utility-trend'], ['utility-bill'], ['upcoming']],
   calc_scenarios: [['calc-scenarios'], ['calc-invest'], ['goals'], ['goal-progress']],
-  exchanges: [['bybit-key-status'], ['pending-imports']],
+  exchanges: [['bybit-key-status'], CRYPTO_OPERATIONS_KEY],
   emergency_fund: [['emergency-fund'], ['net-worth']],
   health_last: [CAPITAL_HEALTH_KEY, ['dashboard-today']],
   attachments: [['attachments']],
