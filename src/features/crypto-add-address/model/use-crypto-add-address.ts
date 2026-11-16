@@ -6,13 +6,16 @@ import {
   CRYPTO_ACCOUNTS_KEY,
   CRYPTO_TRANSITION_KEY,
   CONNECTABLE_NETWORKS,
+  defaultWalletName,
   isEvmAddress,
   isSecretRefusal,
   isStartDate,
   looksLikeSecret,
+  networkLabel,
   useCryptoSyncStatus,
 } from '@/entities/crypto-account'
 import { call, parseError } from '@/shared/api/ipc'
+import { useStoreTree } from '@/shared/api/queries'
 import { type FieldError, required, useFormValidation } from '@/shared/lib/form'
 import { useSecurityState } from '@/shared/api/security-state'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
@@ -60,7 +63,17 @@ export function useCryptoAddAddress(open: Ref<boolean>, onCreated: (storeId: str
   const step = ref<ConnectStep>('address')
   const chain = ref<Chain>('ethereum')
   const address = ref('')
-  const name = ref('')
+  /** What the user typed; `null` until they touch the field, so the default follows the network and the address. */
+  const typedName = ref<string | null>(null)
+  /** Names of the top-level wallets: a new one must not repeat any (`STORE_NAME_TAKEN`). */
+  const tree = useStoreTree(open)
+  const takenNames = computed(() => (tree.data.value ?? []).map((node) => node.store.name))
+  const name = computed({
+    get: () => typedName.value ?? defaultWalletName(networkLabel(chain.value), address.value, takenNames.value),
+    set: (value: string) => {
+      typedName.value = value
+    },
+  })
   const wholeHistory = ref(false)
   const startDate = ref('')
   /** The last paste was refused as a secret. Only the fact is kept, never the text. */
@@ -74,7 +87,7 @@ export function useCryptoAddAddress(open: Ref<boolean>, onCreated: (storeId: str
     step.value = sync.data.value?.consent === true ? 'address' : 'consent'
     chain.value = 'ethereum'
     address.value = ''
-    name.value = t('cryptoTrack.connect.defaultName')
+    typedName.value = null
     wholeHistory.value = false
     startDate.value = `${new Date().getFullYear()}-01-01`
     refused.value = false
