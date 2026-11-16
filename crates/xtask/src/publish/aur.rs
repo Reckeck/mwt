@@ -109,7 +109,7 @@ pub fn steps(plan: &Plan) -> Vec<Step> {
     };
     vec![
         Step::Run(Cmd::new("pacman").args([
-            "-Sy",
+            "-Syu",
             "--noconfirm",
             "--needed",
             "base-devel",

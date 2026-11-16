@@ -41,7 +41,7 @@ pub fn run(root: &Path, args: &LinuxArgs) -> Result<()> {
     }
     run_inherited(
         root,
-        &Cmd::new("pacman").args(["-Sy", "--noconfirm", "--needed", "base-devel"]),
+        &Cmd::new("pacman").args(["-Syu", "--noconfirm", "--needed", "base-devel"]),
     )?;
     if run_inherited(root, &Cmd::new("id").arg("builder")).is_err() {
         run_inherited(root, &Cmd::new("useradd").args(["-m", "builder"]))?;
