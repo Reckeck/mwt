@@ -508,6 +508,8 @@ pub fn run() {
         .setup(|app| {
             // Before any vault is opened: what a crashed run left of the sandbox goes.
             sandbox::erase_on_start(app.handle());
+            // Decrypted attachments a crashed run left for other programs go too.
+            commands::attachments::wipe_opened(app.handle());
             // Resolve the default vault location once (`platform_fs::vaults_dir`).
             let default_path = platform_fs::default_vault_path(app.handle());
             let state = app.state::<AppState>();
@@ -621,6 +623,7 @@ pub fn run() {
                 }
                 // The demo data does not outlive the run.
                 sandbox::erase_on_exit(app);
+                commands::attachments::wipe_opened(app);
             }
             _ => {}
         });
