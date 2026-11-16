@@ -301,8 +301,16 @@ impl UnlockedVault {
                 .find(|have| have.id == event.id)
             {
                 Some(have) => {
-                    if *have != event {
-                        *have = event;
+                    // Merged, not replaced: this batch holds only some of
+                    // the facts of the transaction.
+                    let arrival = engine::Arrival {
+                        anchored: made.anchored.contains(&event.id),
+                        poisoned: made.poisoned.contains(&event.id),
+                    };
+                    let mut merged = have.clone();
+                    engine::combine(&mut merged, event, arrival);
+                    if *have != merged {
+                        *have = merged;
                     }
                     out.rewritten += 1;
                 }
@@ -1433,5 +1441,263 @@ mod tests {
                 scan
             );
         }
+    }
+
+    // --- one transaction, facts spread over several batches ---------------
+
+    const ROUTER: &str = "0x3333333333333333333333333333333333333333";
+    const SWAP_HASH: &str = "0xaaaa000000000000000000000000000000000000000000000000000000000001";
+
+    fn piece(
+        kind: RawKind,
+        tail: &str,
+        from: &str,
+        to: &str,
+        asset: RawAsset,
+        value: Uint256,
+    ) -> RawEvent {
+        RawEvent {
+            id: format!("evm:1:{SWAP_HASH}:{tail}"),
+            chain_id: 1,
+            hash: SWAP_HASH.into(),
+            kind,
+            block: 21_000_000,
+            time: "2026-03-05T10:00:00Z".into(),
+            from: from.into(),
+            to: to.into(),
+            asset,
+            value,
+            method: None,
+            succeeded: true,
+            fee: None,
+            payload: "{}".into(),
+        }
+    }
+
+    /// The `transactions` list: the call itself, with its fee and its value.
+    fn call_row(value: &str) -> RawEvent {
+        let mut row = piece(
+            RawKind::Transaction,
+            "tx",
+            ME,
+            ROUTER,
+            native(),
+            units(value),
+        );
+        row.method = Some("0x04e45aaf".into());
+        row.fee = Some(units("2100000000000000"));
+        row
+    }
+
+    fn token_out() -> RawEvent {
+        piece(
+            RawKind::TokenTransfer,
+            "7",
+            ME,
+            ROUTER,
+            token(),
+            units("1500000000"),
+        )
+    }
+
+    fn token_in() -> RawEvent {
+        piece(
+            RawKind::TokenTransfer,
+            "8",
+            ROUTER,
+            ME,
+            token(),
+            units("1800000000"),
+        )
+    }
+
+    fn apply_pages(vault: &mut UnlockedVault, pages: &[Vec<RawEvent>]) {
+        for page in pages {
+            let mut step = request();
+            step.history_done = false;
+            vault
+                .crypto_apply_batch(&step, &batch(page.clone(), Vec::new()))
+                .expect("a page applied");
+        }
+    }
+
+    fn only_event(vault: &UnlockedVault) -> CryptoTx {
+        assert_eq!(vault.doc.crypto_events.len(), 1, "one operation");
+        vault.doc.crypto_events[0].clone()
+    }
+
+    fn leg_of(event: &CryptoTx, direction: CryptoDirection, asset: &CryptoAsset) -> Option<Amount> {
+        event
+            .legs
+            .iter()
+            .find(|leg| leg.direction == direction && leg.asset == *asset)
+            .map(|leg| leg.amount)
+    }
+
+    #[test]
+    fn a_token_send_keeps_its_gas_when_the_lists_come_in_two_batches() {
+        let (_dir, mut vault) = followed();
+        apply_pages(&mut vault, &[vec![call_row("0")], vec![token_out()]]);
+        let event = only_event(&vault);
+        assert_eq!(
+            leg_of(&event, CryptoDirection::Out, &usdc()),
+            Some(amount("1500"))
+        );
+        assert_eq!(
+            event.gas.as_ref().map(|fee| fee.amount),
+            Some(amount("0.0021"))
+        );
+        assert_eq!(event.kind, CryptoTxKind::Transfer);
+        assert_eq!(event.method.as_deref(), Some("0x04e45aaf"));
+    }
+
+    #[test]
+    fn a_swap_for_eth_value_keeps_both_legs_over_three_batches() {
+        let (_dir, mut vault) = followed();
+        let internal = piece(
+            RawKind::InternalTransfer,
+            "i0",
+            ROUTER,
+            ME,
+            native(),
+            units("1000000000000000"),
+        );
+        apply_pages(
+            &mut vault,
+            &[
+                vec![call_row("500000000000000000")],
+                vec![token_in()],
+                vec![internal],
+            ],
+        );
+        let event = only_event(&vault);
+        assert_eq!(event.kind, CryptoTxKind::Swap);
+        assert_eq!(
+            leg_of(&event, CryptoDirection::Out, &eth()),
+            Some(amount("0.5"))
+        );
+        assert_eq!(
+            leg_of(&event, CryptoDirection::In, &usdc()),
+            Some(amount("1800"))
+        );
+        assert_eq!(
+            leg_of(&event, CryptoDirection::In, &eth()),
+            Some(amount("0.001"))
+        );
+        assert!(event.gas.is_some());
+    }
+
+    #[test]
+    fn a_token_to_eth_swap_keeps_the_token_leg_when_the_internal_list_follows() {
+        let (_dir, mut vault) = followed();
+        let internal = piece(
+            RawKind::InternalTransfer,
+            "i0",
+            ROUTER,
+            ME,
+            native(),
+            units("700000000000000000"),
+        );
+        apply_pages(
+            &mut vault,
+            &[vec![call_row("0")], vec![token_out()], vec![internal]],
+        );
+        let event = only_event(&vault);
+        assert_eq!(event.kind, CryptoTxKind::Swap);
+        assert_eq!(
+            leg_of(&event, CryptoDirection::Out, &usdc()),
+            Some(amount("1500"))
+        );
+        assert_eq!(
+            leg_of(&event, CryptoDirection::In, &eth()),
+            Some(amount("0.7"))
+        );
+        assert!(event.gas.is_some());
+    }
+
+    #[test]
+    fn the_batch_order_does_not_change_the_operation() {
+        let pieces = [
+            vec![call_row("500000000000000000")],
+            vec![token_in()],
+            vec![piece(
+                RawKind::InternalTransfer,
+                "i0",
+                ROUTER,
+                ME,
+                native(),
+                units("1000000000000000"),
+            )],
+        ];
+        let reference = {
+            let (_dir, mut vault) = followed();
+            apply_pages(&mut vault, &[pieces.concat()]);
+            only_event(&vault)
+        };
+        for order in [
+            [0, 1, 2],
+            [0, 2, 1],
+            [1, 0, 2],
+            [1, 2, 0],
+            [2, 0, 1],
+            [2, 1, 0],
+        ] {
+            let (_dir, mut vault) = followed();
+            let pages: Vec<Vec<RawEvent>> =
+                order.iter().map(|index| pieces[*index].clone()).collect();
+            apply_pages(&mut vault, &pages);
+            let event = only_event(&vault);
+            assert_eq!(event.legs.len(), reference.legs.len(), "order {order:?}");
+            for leg in &reference.legs {
+                assert_eq!(
+                    leg_of(&event, leg.direction, &leg.asset),
+                    Some(leg.amount),
+                    "order {order:?}"
+                );
+            }
+            assert_eq!(event.gas, reference.gas, "order {order:?}");
+            assert_eq!(event.kind, reference.kind, "order {order:?}");
+            assert_eq!(event.method, reference.method, "order {order:?}");
+            assert_eq!(event.from, reference.from, "order {order:?}");
+        }
+    }
+
+    #[test]
+    fn reading_the_same_batches_again_does_not_grow_the_operation() {
+        let (_dir, mut vault) = followed();
+        let pages = [vec![call_row("500000000000000000")], vec![token_in()]];
+        apply_pages(&mut vault, &pages);
+        let once = only_event(&vault);
+        apply_pages(&mut vault, &pages);
+        apply_pages(&mut vault, &[pages.concat()]);
+        // A refresh that cuts the same facts at another place.
+        apply_pages(
+            &mut vault,
+            &[vec![token_in(), call_row("500000000000000000")]],
+        );
+        assert_eq!(only_event(&vault), once);
+        assert_eq!(once.legs.len(), 2);
+    }
+
+    #[test]
+    fn a_transaction_straddling_the_batch_boundary_keeps_every_leg() {
+        // `BATCH_EVENTS` cuts the facts of one transaction: the first batch
+        // ends after the sent token, the second starts with the received one.
+        let (_dir, mut vault) = followed();
+        apply_pages(
+            &mut vault,
+            &[vec![call_row("0"), token_out()], vec![token_in()]],
+        );
+        let event = only_event(&vault);
+        assert_eq!(event.kind, CryptoTxKind::Swap);
+        assert_eq!(
+            leg_of(&event, CryptoDirection::Out, &usdc()),
+            Some(amount("1500"))
+        );
+        assert_eq!(
+            leg_of(&event, CryptoDirection::In, &usdc()),
+            Some(amount("1800"))
+        );
+        assert!(event.gas.is_some());
     }
 }

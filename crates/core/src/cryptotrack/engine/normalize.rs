@@ -31,7 +31,7 @@
 //! from a method selector it cannot verify. It does handle them once they are
 //! set (see [`super::basis`]).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Amount;
 use crate::cryptotrack::chains;
@@ -68,6 +68,18 @@ pub struct Normalized {
     /// the same bytes whatever order the pages arrived in.
     pub events: Vec<CryptoTx>,
     pub unread: Vec<Unread>,
+    /// Ids of the events whose batch held the transaction fact itself: only
+    /// those speak for the sender, the recipient, the method and the gas.
+    pub anchored: BTreeSet<String>,
+    /// Ids of the events with a doubtful quantity (rule 3).
+    pub poisoned: BTreeSet<String>,
+}
+
+/// How an operation arrived, for [`combine`].
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Arrival {
+    pub anchored: bool,
+    pub poisoned: bool,
 }
 
 /// Facts of one network into operations of one followed address.
@@ -79,8 +91,18 @@ pub fn normalize(raw: &[RawEvent], who: Followed<'_>) -> Normalized {
     let mut out = Normalized::default();
     for (hash, mut facts) in groups {
         facts.sort_by_key(|fact| (fact.block, rank(fact.kind), position(fact), fact.id.clone()));
-        out.events
-            .push(operation(hash, &facts, who, &mut out.unread));
+        let unread_before = out.unread.len();
+        let event = operation(hash, &facts, who, &mut out.unread);
+        if facts.iter().any(|fact| fact.kind == RawKind::Transaction) {
+            out.anchored.insert(event.id.clone());
+        }
+        if out.unread[unread_before..]
+            .iter()
+            .any(|entry| entry.reason.starts_with("a quantity could not be read"))
+        {
+            out.poisoned.insert(event.id.clone());
+        }
+        out.events.push(event);
     }
     out.events
         .sort_by(|left, right| (&left.time, &left.id).cmp(&(&right.time, &right.id)));
@@ -273,6 +295,75 @@ fn shape(legs: &[CryptoLeg], paid_gas: bool, called_a_method: bool) -> CryptoTxK
         (0, 0) => CryptoTxKind::Unknown,
         (_, 0) | (0, _) => CryptoTxKind::Transfer,
         _ => CryptoTxKind::Swap,
+    }
+}
+
+/// Folds an operation read from one batch into the stored one of the same
+/// id. The explorer lists a transaction in several lists, and a long one can
+/// straddle a batch boundary, so one batch rarely holds every fact of it:
+/// replacing the stored operation would erase what the other batches found
+/// (the gas, the leg of the other list).
+///
+/// The merge is idempotent and does not depend on the order of the batches:
+/// chain facts never change, so a leg only grows as more facts are seen. A
+/// leg of one direction and asset keeps the larger quantity seen (a re-read
+/// of the same facts, or of a different slice of them, never adds a leg
+/// twice); gas known wins; the kind is derived again from the merged shape.
+/// What it cannot do: two logs of one token and direction on both sides of a
+/// boundary give the larger of the two, not their sum; the reconciliation
+/// against the node's balance adjusts that remainder.
+pub fn combine(have: &mut CryptoTx, incoming: CryptoTx, arrival: Arrival) {
+    if arrival.poisoned {
+        // Rule 3: a doubtful quantity poisons the whole operation.
+        *have = incoming;
+        return;
+    }
+    for leg in incoming.legs {
+        match have
+            .legs
+            .iter_mut()
+            .find(|seen| seen.direction == leg.direction && seen.asset == leg.asset)
+        {
+            Some(seen) => {
+                if seen.counterparty != leg.counterparty {
+                    seen.counterparty = None;
+                }
+                if leg.amount > seen.amount {
+                    seen.amount = leg.amount;
+                }
+            }
+            None => have.legs.push(leg),
+        }
+    }
+    have.legs
+        .sort_by_key(|leg| (leg.direction == CryptoDirection::In, leg.asset.key()));
+    if incoming.gas.is_some() {
+        have.gas = incoming.gas;
+    }
+    if arrival.anchored {
+        have.block = incoming.block;
+        have.from = incoming.from;
+        have.to = incoming.to;
+        have.method = incoming.method;
+        have.raw = incoming.raw;
+    } else if have.method.is_none() {
+        have.method = incoming.method;
+    }
+    if incoming.time < have.time {
+        have.time = incoming.time;
+    }
+    if have.protocol.is_none() {
+        have.protocol = incoming.protocol;
+    }
+    if matches!(
+        have.kind,
+        CryptoTxKind::Transfer
+            | CryptoTxKind::Swap
+            | CryptoTxKind::Contract
+            | CryptoTxKind::Unknown
+    ) || have.legs.is_empty()
+    {
+        have.kind = shape(&have.legs, have.gas.is_some(), have.method.is_some());
     }
 }
 
