@@ -923,6 +923,10 @@ impl UnlockedVault {
             .collect();
         let snapshots = self.positions_at(&cutoffs);
         let (base, _) = self.base_and_fx();
+        // The crypto module writes no transactions, so the replay below cannot
+        // see it: an earlier point takes its value from the snapshots the
+        // module wrote on every read (spec E8, `cryptotrack::totals`).
+        let module = self.crypto_history(&cutoffs, |store_id| ctx.in_scope(store_id));
         // The current point is today's valuation, the same function and rates
         // as `net_worth_base`, so every screen shows one capital.
         let current = (ctx.scope.is_none() && ctx.currency.eq_ignore_ascii_case(&base))
@@ -930,7 +934,8 @@ impl UnlockedVault {
         ctx.months
             .iter()
             .zip(cutoffs.iter().zip(snapshots))
-            .map(|(month, (cutoff, positions))| {
+            .enumerate()
+            .map(|(index, (month, (cutoff, positions)))| {
                 let mut point = NetworthPoint {
                     month: calendar::month_key(*month),
                     ..NetworthPoint::default()
@@ -956,9 +961,20 @@ impl UnlockedVault {
                     }
                     return point;
                 }
+                // What the module was worth then, in the report's currency. A
+                // month it has no record of adds nothing and supersedes
+                // nothing, so an unknown rate is a gap as well, not a zero.
+                let module_value = module
+                    .value_usd(index)
+                    .and_then(|usd| book.convert(usd, "usd", &ctx.currency, *cutoff));
                 let mut loans: HashMap<&str, Amount> = HashMap::new();
                 for ((store_id, _), (asset, qty)) in &positions {
                     if !ctx.in_scope(store_id) {
+                        continue;
+                    }
+                    // The hand-kept wallet the module took over: the same coins
+                    // counted once, as in the present.
+                    if module_value.is_some() && module.supersedes(store_id, asset) {
                         continue;
                     }
                     let value = Self::value_at(&book, asset, *qty, &ctx.currency, *cutoff);
@@ -982,6 +998,10 @@ impl UnlockedVault {
                     } else {
                         point.financial += value;
                     }
+                }
+                if let Some(value) = module_value {
+                    point.financial += value;
+                    point.crypto += value;
                 }
                 if ctx.scope.is_none() {
                     for balance in self.contact_balances_until(*cutoff) {

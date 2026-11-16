@@ -92,6 +92,25 @@ impl UnlockedVault {
                 change_24h_pct: change,
             };
         }
+        // A crypto token priced only by the history cache (`crypto_prices`):
+        // its newest point, with the moment, so the hint shows how old it is.
+        let historic = self
+            .doc
+            .crypto_prices
+            .iter()
+            .filter(|point| point.token_key == asset_key && !point.value_usd.is_zero())
+            .max_by(|left, right| left.ts.cmp(&right.ts));
+        if let Some(point) = historic {
+            return PriceQuote {
+                usd: point.value_usd,
+                info: PriceInfo {
+                    origin: PriceOrigin::Market,
+                    source: Some(point.source.clone()),
+                    at: Some(point.ts.clone()),
+                },
+                change_24h_pct: None,
+            };
+        }
         if let Some((at, usd)) = self.last_stamp(asset_key) {
             return PriceQuote {
                 usd,
