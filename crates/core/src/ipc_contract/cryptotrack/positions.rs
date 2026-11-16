@@ -51,7 +51,7 @@ pub struct PositionAssetView {
 #[ts(rename = "CryptoPositionView")]
 pub struct PositionView {
     /// Record key of `doc.crypto_positions`:
-    /// `<protocol>|<chain>|<protocol's own id>`.
+    /// `<account_id>|<protocol>|<chain>|<protocol's own id>`.
     pub id: String,
     /// The followed account that holds it.
     pub account_id: String,

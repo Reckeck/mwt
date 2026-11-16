@@ -2066,7 +2066,7 @@ type CryptoPositionStatus = "open" | "closed";
 type CryptoPositionView = { 
 /**
  * Record key of `doc.crypto_positions`:
- * `<protocol>|<chain>|<protocol's own id>`.
+ * `<account_id>|<protocol>|<chain>|<protocol's own id>`.
  */
 id: string, 
 /**

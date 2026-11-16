@@ -61,7 +61,7 @@ use crate::cryptotrack::prices;
 use crate::cryptotrack::protocols::{
     AssetAmount, NetParts, PositionKey, PositionReading, PositionStatus, ProtocolReview,
     annual_percentage_rate, fees_usd, impermanent_loss, impermanent_loss_ratio, is_closed, kind_of,
-    net_result, receipt_tokens, worth_usd,
+    net_result, receipt_tokens, record_id_prefixes, worth_usd,
 };
 use crate::cryptotrack::tokens;
 use crate::error::Result;
@@ -96,6 +96,10 @@ pub struct CryptoPositionsApplied {
     /// Positions closed because their protocol, asked successfully, no
     /// longer reports them.
     pub closed: usize,
+    /// Records an older build keyed without the account that were renamed to
+    /// the current key, or dropped because the current key already held the
+    /// same position.
+    pub migrated: usize,
 }
 
 impl CryptoPositionsApplied {
@@ -128,6 +132,7 @@ impl UnlockedVault {
         reviewed: &[ProtocolReview],
     ) -> Result<CryptoPositionsApplied> {
         let mut out = CryptoPositionsApplied::default();
+        out.migrated = self.migrate_legacy_position_records(account_id);
         for reading in readings
             .iter()
             .filter(|reading| reading.account_id == account_id)
@@ -163,7 +168,7 @@ impl UnlockedVault {
                     && !is_closed(&record.legs)
                     && !readings
                         .iter()
-                        .any(|reading| reading.key.record_id() == record.id)
+                        .any(|reading| reading.record_id() == record.id)
             }) {
                 for leg in &mut record.legs {
                     leg.amount = Amount::ZERO;
@@ -206,6 +211,60 @@ impl UnlockedVault {
         Ok(out)
     }
 
+    /// Bring this account's records written under the old key
+    /// (`<protocol>|<chain>|<id>`, no account) to the current one.
+    ///
+    /// The old key was shared by every account holding the same Aave reserve
+    /// or stETH, so such a record carries the legs of whichever account wrote
+    /// last, and `account_id` says which. It is renamed in place (history of
+    /// a closed position survives, ADR-02); when the current key already
+    /// holds the position — an older build re-created the old record after
+    /// a newer one migrated — the old one is dropped, since the newer build
+    /// reads the chain itself. The other account's record that the old key
+    /// had overwritten comes back with that account's next pass.
+    ///
+    /// Returns how many records it touched.
+    fn migrate_legacy_position_records(&mut self, account_id: &str) -> usize {
+        let wanted: Vec<(String, String)> = self
+            .doc
+            .crypto_positions
+            .iter()
+            .filter(|record| record.account_id == account_id && is_legacy_keyed(record))
+            .map(|record| (record.id.clone(), current_id_of(record)))
+            .collect();
+        for (legacy, current) in &wanted {
+            if self
+                .doc
+                .crypto_positions
+                .iter()
+                .any(|have| have.id == *current)
+            {
+                self.doc.crypto_positions.retain(|have| have.id != *legacy);
+            } else if let Some(record) = self
+                .doc
+                .crypto_positions
+                .iter_mut()
+                .find(|have| have.id == *legacy)
+            {
+                record.id.clone_from(current);
+            }
+        }
+        wanted.len()
+    }
+
+    /// Whether `record` is keyed the old way and the current key holds the
+    /// same position of the same account.
+    pub(super) fn is_shadowed_legacy_position(&self, record: &CryptoPosition) -> bool {
+        if !is_legacy_keyed(record) {
+            return false;
+        }
+        let current = current_id_of(record);
+        self.doc
+            .crypto_positions
+            .iter()
+            .any(|have| have.id == current)
+    }
+
     /// Every stored position with its money, newest reading first.
     ///
     /// `live` is what this device's own last pass read
@@ -223,10 +282,12 @@ impl UnlockedVault {
             .doc
             .crypto_positions
             .iter()
+            // A record of the old key that the current key already holds is a
+            // stale twin (an older build on another device wrote it): counting
+            // both would count the position twice.
+            .filter(|record| !self.is_shadowed_legacy_position(record))
             .map(|record| {
-                let reading = live
-                    .iter()
-                    .find(|reading| reading.key.record_id() == record.id);
+                let reading = live.iter().find(|reading| reading.record_id() == record.id);
                 self.position_view(record, reading, at)
             })
             .collect();
@@ -292,6 +353,7 @@ impl UnlockedVault {
         now: &str,
     ) -> PositionView {
         let key = PositionKey::new(&record.protocol, record.chain, position_id_of(record));
+        let account_id = record.account_id.as_str();
         let legs: &[CryptoLeg] =
             reading.map_or(record.legs.as_slice(), |read| read.legs.as_slice());
         let kind = reading.map_or_else(|| kind_of(legs), |read| read.kind);
@@ -305,7 +367,7 @@ impl UnlockedVault {
             },
             |read| read.status,
         );
-        let history = self.position_history(&key);
+        let history = self.position_history(&key, account_id);
         let value_usd = self.legs_value_usd(legs);
         // With nothing stored under this position the base for the comparison
         // with holding is unknown, not zero: `worth_usd` of an empty list is a
@@ -455,7 +517,7 @@ impl UnlockedVault {
     }
 
     /// What the position's own operations say about it.
-    fn position_history(&self, key: &PositionKey) -> PositionHistory {
+    fn position_history(&self, key: &PositionKey, account_id: &str) -> PositionHistory {
         let tracking = key.tracking();
         let mut out = PositionHistory::default();
         let mut invested = Some(Amount::ZERO);
@@ -467,7 +529,7 @@ impl UnlockedVault {
             .doc
             .crypto_events
             .iter()
-            .filter(|event| event.tracking == tracking)
+            .filter(|event| event.tracking == tracking && event.account_id == account_id)
         {
             if out.first_at.is_none() {
                 out.first_at = Some(event.time.clone());
@@ -558,14 +620,35 @@ struct PositionHistory {
 }
 
 /// The protocol's own id of a position, out of its record key
-/// (`<protocol>|<chain>|<id>`). The id may itself contain a `|`, so only the
-/// first two parts are cut off.
+/// (`<account_id>|<protocol>|<chain>|<id>`, or the older
+/// `<protocol>|<chain>|<id>`). The id may itself contain a `|`, so only the
+/// known prefix is cut off.
 fn position_id_of(record: &CryptoPosition) -> &str {
+    let (current, legacy) = record_id_prefixes(record);
     record
         .id
-        .splitn(3, '|')
-        .nth(2)
-        .unwrap_or(record.id.as_str())
+        .strip_prefix(&current)
+        .or_else(|| record.id.strip_prefix(&legacy))
+        .unwrap_or_else(|| {
+            record
+                .id
+                .splitn(3, '|')
+                .nth(2)
+                .unwrap_or(record.id.as_str())
+        })
+}
+
+/// Whether the record is keyed the way builds before the account joined the
+/// key did.
+fn is_legacy_keyed(record: &CryptoPosition) -> bool {
+    let (current, legacy) = record_id_prefixes(record);
+    !record.id.starts_with(&current) && record.id.starts_with(&legacy)
+}
+
+/// The key the record has, or would have under the current format.
+fn current_id_of(record: &CryptoPosition) -> String {
+    PositionKey::new(&record.protocol, record.chain, position_id_of(record))
+        .record_id(&record.account_id)
 }
 
 fn legs_of(event: &CryptoTx, direction: CryptoDirection) -> impl Iterator<Item = &CryptoLeg> {
