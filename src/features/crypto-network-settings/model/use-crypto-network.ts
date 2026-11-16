@@ -1,11 +1,13 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 
+import { CRYPTO_ACCOUNTS_KEY } from '@/entities/crypto-account'
 import { call, parseError } from '@/shared/api/ipc'
 
 /** Everything the crypto settings read lives under this key, so one invalidation reaches all of it. */
 export const CRYPTO_NETWORK_KEY = ['crypto', 'network-settings'] as const
-export const CRYPTO_CONSENT_KEY = ['crypto', 'consent'] as const
+/** The sync status is one cache entry for the whole module: the connect dialog and Settings read the same one. */
+export const CRYPTO_SYNC_STATUS_KEY = [...CRYPTO_ACCOUNTS_KEY, 'sync'] as const
 
 export function useNetworkSettings() {
   return useQuery({
@@ -18,8 +20,9 @@ export function useNetworkSettings() {
 /** The one-time consent to talk to the providers: `null` until asked. The status is E6's, the consent a field of it. */
 export function useTrackingConsent() {
   return useQuery({
-    queryKey: CRYPTO_CONSENT_KEY,
-    queryFn: async () => (await call<CryptoSyncStatus>('crypto_sync_status')).consent ?? null,
+    queryKey: CRYPTO_SYNC_STATUS_KEY,
+    queryFn: () => call<CryptoSyncStatus>('crypto_sync_status'),
+    select: (status) => status.consent ?? null,
     placeholderData: keepPreviousData,
   })
 }
