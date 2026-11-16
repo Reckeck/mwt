@@ -90,6 +90,21 @@ impl UnlockedVault {
         }
     }
 
+    /// V16: a wallet the crypto module reads (`Store::crypto_account_id`)
+    /// takes no hand-made entry. The engine writes its operations itself, so a
+    /// ledger entry beside them counts the same money twice. The interface
+    /// hides the actions of such a wallet; this makes the rule hold for every
+    /// other way in — a transfer from another wallet, an automation, a bulk
+    /// edit, a balance adjustment.
+    fn refuse_engine_wallet(store: &Store) -> Result<()> {
+        if store.crypto_account_id.is_some() {
+            return Err(invalid(
+                "this wallet is read by the crypto module and takes no hand-made operations",
+            ));
+        }
+        Ok(())
+    }
+
     /// V7: a contact side names an existing contact, and an active account of it.
     fn check_account(&self, account: &AccountRef) -> Result<()> {
         match account {
@@ -229,6 +244,7 @@ impl UnlockedVault {
         // V1, V2
         for id in Self::store_sides(tx) {
             let store = self.live_store(id)?;
+            Self::refuse_engine_wallet(store)?;
             if !allowed_kinds(store.kind).contains(&kind) {
                 return Err(invalid(format!(
                     "a {} is not possible on this kind of wallet",
@@ -239,7 +255,7 @@ impl UnlockedVault {
         if let Transaction::AssetSell(inner) = tx
             && let Some(target) = &inner.proceeds_to
         {
-            self.live_store(target)?;
+            Self::refuse_engine_wallet(self.live_store(target)?)?;
         }
 
         // V3: what each kind of store may hold.
@@ -731,5 +747,49 @@ mod tests {
             .update_categorization_rule(&late.id, "такси", "transport", false)
             .unwrap();
         assert_eq!(vault.categorization_rules().len(), 2);
+    }
+
+    /// V16 (review item 7.3): a wallet the crypto module reads takes no
+    /// hand-made entry, whichever way it is reached — the engine writes its
+    /// operations, and a second hand-kept ledger beside them counts the same
+    /// money twice. The interface hides the actions; this is the rule itself.
+    #[test]
+    fn a_wallet_the_crypto_module_reads_takes_no_hand_made_entry() {
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let followed = store(&mut vault, "Cold", StoreKind::Crypto, None);
+        vault
+            .doc
+            .stores
+            .iter_mut()
+            .find(|have| have.id == followed)
+            .expect("the wallet was created")
+            .crypto_account_id = Some("cacc-1".into());
+
+        assert!(
+            rejected(vault.add_transaction(income(&followed, "1", "x"))).contains("crypto module")
+        );
+        assert!(
+            rejected(vault.add_transaction(payment(&followed, "1", "x"))).contains("crypto module")
+        );
+        // Reached as the other side of a transfer from an ordinary wallet.
+        let into = transfer_between(
+            AccountRef::Store(cash.clone()),
+            AccountRef::Store(followed.clone()),
+            usd(),
+            "1",
+        );
+        assert!(rejected(vault.add_transaction(into)).contains("crypto module"));
+        let out_of = transfer_between(
+            AccountRef::Store(followed.clone()),
+            AccountRef::Store(cash.clone()),
+            usd(),
+            "1",
+        );
+        assert!(rejected(vault.add_transaction(out_of)).contains("crypto module"));
+
+        // An ordinary wallet is not affected, and nothing was written above.
+        vault.add_transaction(income(&cash, "1", "x")).unwrap();
+        assert_eq!(vault.doc.transactions.len(), 1);
     }
 }
