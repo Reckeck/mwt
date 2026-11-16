@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 import { call } from '@/shared/api/ipc'
+import { emitVaultClosed } from '@/shared/lib/vault-lifecycle'
 
 interface VaultState {
   status: VaultStatus | null
@@ -78,6 +79,7 @@ export const useVaultStore = defineStore('vault', {
     async openWith(command: 'unlock_vault' | 'biometric_unlock', input: { path: string; password?: string }) {
       this.busy = true
       this.error = null
+      const wasOpen = !this.locked
       try {
         this.info = await call<VaultInfo>(command, { input })
         this.locked = false
@@ -91,6 +93,7 @@ export const useVaultStore = defineStore('vault', {
           encrypted: this.info.encrypted,
           sandbox: false,
         }
+        if (wasOpen) emitVaultClosed('switched')
       } catch (err) {
         this.error = (err as Error).message
         throw err
@@ -102,6 +105,7 @@ export const useVaultStore = defineStore('vault', {
     async createVault(path: string, password: string | null) {
       this.busy = true
       this.error = null
+      const wasOpen = !this.locked
       try {
         this.info = await call<VaultInfo>('create_vault', {
           input: { path, password, cash_name: null },
@@ -117,6 +121,7 @@ export const useVaultStore = defineStore('vault', {
           encrypted: this.info.encrypted,
           sandbox: false,
         }
+        if (wasOpen) emitVaultClosed('switched')
       } catch (err) {
         this.error = (err as Error).message
         throw err
@@ -130,6 +135,7 @@ export const useVaultStore = defineStore('vault', {
       const status = await call<VaultStatus>('vault_status')
       this.status = status
       localStorage.setItem('trade-app:unlocked', 'false')
+      emitVaultClosed('locked')
     },
     /** `Open the sandbox`: the demo vault opens in place of the unlock screen. Not remembered as the last vault. */
     async openSandbox() {
@@ -141,9 +147,11 @@ export const useVaultStore = defineStore('vault', {
     },
     async enterSandbox(command: 'open_sandbox' | 'reset_sandbox') {
       this.busy = true
+      const wasOpen = !this.locked
       try {
         this.info = await call<VaultInfo>(command)
         await this.refreshStatus()
+        if (wasOpen) emitVaultClosed('switched')
         return this.info
       } finally {
         this.busy = false
@@ -154,11 +162,14 @@ export const useVaultStore = defineStore('vault', {
       await call('close_sandbox')
       this.info = null
       await this.refreshStatus()
+      emitVaultClosed('sandbox-exit')
     },
     /** The backend locked or unlocked the vault by itself (`vault-changed`, subscribed in App.vue). */
     applyStatus(status: VaultStatus) {
+      const wasOpen = !this.locked
       this.status = status
       this.locked = status.unlocked !== true
+      if (wasOpen && this.locked) emitVaultClosed('locked')
     },
   },
 })
