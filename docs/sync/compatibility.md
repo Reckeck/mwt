@@ -398,6 +398,22 @@ nonce_l)`. Steps and the diagram: [Pairing and trust](pairing.md#a-session-opens
   of trusted devices by the Noise key; an untrusted one stays unnamed.
 - **No vault change.** Nothing in the vault format changes; no migration.
 
+### `Identity.security_level`
+
+`Identity` carries the sender's `security_level` (`ledger`, `pin` or `crypto`: how
+its vault is protected, level 1 to 3). A level-3 sender uses it to leave the crypto
+module's collections out of everything it sends to a receiver below level 3.
+
+- The field is `#[serde(default)]`, so the protocol stays 4. A missing field
+  (an older build) reads as the lowest level, `ledger`: nothing crypto is sent
+  to a device that did not say, even when it is at level 3.
+- A receiver below level 3 never trusts the sender: `sync_admit` drops crypto
+  records that arrive anyway and applies the rest, and `SECURITY_LEVEL_REQUIRED`
+  is shown once with the sender's name (the code calls such a sender broken or
+  hostile). A level-3 receiver takes everything.
+- A `Bye` with the reason `security_level_required` is understood and closes
+  quietly with the same notice; the current build does not send it.
+
 ## Payload 3 and payload 4 do not sync
 
 `VAULT_FORMAT_VERSION` 4 adds the crypto module's collections. The `format`

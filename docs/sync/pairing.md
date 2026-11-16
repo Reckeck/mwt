@@ -27,7 +27,7 @@ device leaves before the other side proved it holds the vault:
 | 1 | Noise handshake `XX_25519_ChaChaPoly_BLAKE2s`: both present their static device key | same |
 | 2 | `Hello { protocol, format, proof, app_version, commit = SHA256(nonce_d) }`, identity fields empty | `Hello { protocol, format, proof, app_version }`, identity fields empty |
 | 3 | checks 1 and 2 below (the proof, then the versions) | same |
-| 4 | waits | `Identity { device_id, device_name, now_ms, main, prefer_main, needs_pairing, rank, instance, unreached, nonce = nonce_l }` |
+| 4 | waits | `Identity { device_id, device_name, now_ms, main, prefer_main, needs_pairing, rank, instance, unreached, nonce = nonce_l, security_level }` |
 | 5 | `Identity { ..., nonce = nonce_d }` | `SHA256(nonce_d)` must equal the commit, else `SYNC_CHANNEL` |
 | 6 | checks 3 to 7 below, on the identity | same |
 
