@@ -235,7 +235,7 @@ fn a_supply_reports_what_it_cost_what_it_accrued_and_its_rate() {
         .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
-    assert_eq!(row.id, "aave-v3|ethereum|usdc-reserve");
+    assert_eq!(row.id, "cacc-1|aave-v3|ethereum|usdc-reserve");
     assert_eq!(row.store_id.as_deref(), Some(wallet.as_str()));
     assert_eq!(row.status, PositionStatus::Open);
     assert_eq!(row.invested_usd, Some(amount("1000")));
@@ -972,7 +972,7 @@ fn review(protocol: &str, chain: Chain, kept: &[&PositionReading], at: &str) -> 
     ProtocolReview {
         protocol: protocol.to_string(),
         chain,
-        kept: kept.iter().map(|live| live.key.record_id()).collect(),
+        kept: kept.iter().map(|live| live.record_id()).collect(),
         read_at: at.to_string(),
     }
 }
@@ -994,7 +994,7 @@ fn a_position_the_protocol_no_longer_reports_is_closed_and_keeps_its_row() {
     assert_eq!(applied.closed, 1);
     assert_eq!(vault.doc.crypto_positions.len(), 1, "history is kept");
     let stored = &vault.doc.crypto_positions[0];
-    assert_eq!(stored.id, live.key.record_id());
+    assert_eq!(stored.id, live.record_id());
     assert_eq!(stored.legs.len(), 1, "the legs stay, at zero");
     assert!(stored.legs[0].amount.is_zero());
     assert_eq!(stored.legs[0].asset, token(USDC));
@@ -1124,4 +1124,161 @@ fn a_closed_position_opens_again_when_the_protocol_reports_it() {
     assert_eq!(applied.closed, 0);
     assert_eq!(vault.doc.crypto_positions, vec![back.stored()]);
     assert_eq!(only(&vault, &[]).status, PositionStatus::Open);
+}
+
+// -- one reserve, two followed accounts (review item 7.19) ----------------------
+
+const SECOND: &str = "cacc-2";
+
+fn follow_second(vault: &mut UnlockedVault) {
+    vault.doc.crypto_accounts.push(CryptoAccount::new(
+        SECOND,
+        "Hot EVM",
+        Chain::Ethereum,
+        OUTSIDE,
+        "2026-02-01T00:00:00Z",
+    ));
+}
+
+fn usdc_supply_of(account: &str, quantity: &str) -> PositionReading {
+    PositionReading {
+        account_id: account.to_string(),
+        ..reading(
+            &PositionKey::new("aave-v3", Chain::Ethereum, "usdc-reserve"),
+            PositionKind::Lending,
+            vec![leg(CryptoDirection::In, token(USDC), quantity)],
+            FeeReading::none_earned(),
+        )
+    }
+}
+
+#[test]
+fn two_accounts_in_one_reserve_are_two_records_with_their_own_legs() {
+    let (_dir, mut vault, _wallet) = followed();
+    follow_second(&mut vault);
+    let first = usdc_supply_of(ACCOUNT, "1000");
+    let second = usdc_supply_of(SECOND, "250");
+    vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&first), &[], &[])
+        .expect("the first account is stored");
+    vault
+        .crypto_apply_positions(SECOND, std::slice::from_ref(&second), &[], &[])
+        .expect("the second account is stored");
+
+    assert_eq!(vault.doc.crypto_positions.len(), 2);
+    let stored = |account: &str| {
+        vault
+            .doc
+            .crypto_positions
+            .iter()
+            .find(|record| record.account_id == account)
+            .expect("each account keeps its record")
+    };
+    assert_eq!(stored(ACCOUNT).legs[0].amount, amount("1000"));
+    assert_eq!(stored(SECOND).legs[0].amount, amount("250"));
+    assert_ne!(stored(ACCOUNT).id, stored(SECOND).id);
+}
+
+#[test]
+fn closing_one_accounts_position_leaves_the_others_open() {
+    let (_dir, mut vault, _wallet) = followed();
+    follow_second(&mut vault);
+    let first = usdc_supply_of(ACCOUNT, "1000");
+    let second = usdc_supply_of(SECOND, "250");
+    for (account, live) in [(ACCOUNT, &first), (SECOND, &second)] {
+        vault
+            .crypto_apply_positions(account, std::slice::from_ref(live), &[], &[])
+            .expect("stored");
+    }
+    // The first account withdrew: its protocol review no longer keeps it.
+    let gone = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
+    let applied = vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[gone])
+        .expect("the withdrawal is stored");
+    assert_eq!(applied.closed, 1);
+    let open = vault
+        .doc
+        .crypto_positions
+        .iter()
+        .filter(|record| !is_closed(&record.legs))
+        .collect::<Vec<_>>();
+    assert_eq!(open.len(), 1);
+    assert_eq!(open[0].account_id, SECOND);
+}
+
+/// What a build from before the account joined the key stored.
+fn legacy_record(live: &PositionReading) -> CryptoPosition {
+    CryptoPosition {
+        id: live.key.legacy_record_id(),
+        ..live.stored()
+    }
+}
+
+#[test]
+fn a_record_of_the_old_key_is_renamed_once_its_account_is_applied() {
+    let (_dir, mut vault, _wallet) = followed();
+    let live = usdc_supply_of(ACCOUNT, "1000");
+    vault.doc.crypto_positions.push(legacy_record(&live));
+
+    let applied = vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
+        .expect("the pass stores the reading");
+    assert_eq!(applied.migrated, 1);
+    assert_eq!(applied.added, 0, "the old record became the new one");
+    assert_eq!(vault.doc.crypto_positions.len(), 1);
+    assert_eq!(vault.doc.crypto_positions[0].id, live.record_id());
+}
+
+#[test]
+fn a_closed_record_of_the_old_key_stays_closed_under_the_new_one() {
+    let (_dir, mut vault, _wallet) = followed();
+    let live = usdc_supply_of(ACCOUNT, "1000");
+    let mut closed = legacy_record(&live);
+    closed.legs[0].amount = Amount::ZERO;
+    vault.doc.crypto_positions.push(closed);
+
+    // The protocol lists nothing: the row is neither duplicated nor revived,
+    // and ADR-02 closing keeps working on it.
+    let gone = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
+    vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[gone])
+        .expect("the pass is stored");
+    assert_eq!(vault.doc.crypto_positions.len(), 1);
+    assert_eq!(vault.doc.crypto_positions[0].id, live.record_id());
+    assert!(is_closed(&vault.doc.crypto_positions[0].legs));
+}
+
+#[test]
+fn an_old_key_record_written_back_by_an_older_build_is_not_counted_twice() {
+    let (_dir, mut vault, _wallet) = followed();
+    let live = usdc_supply_of(ACCOUNT, "1000");
+    vault.doc.crypto_positions.push(live.stored());
+    // An older build on another device synced the same position back under
+    // the old key.
+    vault.doc.crypto_positions.push(legacy_record(&live));
+
+    assert_eq!(
+        vault.crypto_list_positions(&[], LATER).len(),
+        1,
+        "the stale twin is not listed"
+    );
+    let applied = vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
+        .expect("the pass is stored");
+    assert_eq!(applied.migrated, 1);
+    assert_eq!(vault.doc.crypto_positions, vec![live.stored()]);
+}
+
+#[test]
+fn a_position_of_one_account_does_not_take_the_others_history() {
+    let (_dir, mut vault, _wallet) = followed();
+    follow_second(&mut vault);
+    let first = usdc_supply_of(ACCOUNT, "1000");
+    let second = usdc_supply_of(SECOND, "250");
+    vault.doc.crypto_positions.push(first.stored());
+    vault.doc.crypto_positions.push(second.stored());
+    let rows = vault.crypto_list_positions(&[], LATER);
+    assert_eq!(rows.len(), 2);
+    assert_ne!(rows[0].id, rows[1].id);
+    assert!(rows.iter().all(|row| row.id.starts_with(&row.account_id)));
 }

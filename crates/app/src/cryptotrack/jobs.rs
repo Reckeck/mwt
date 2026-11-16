@@ -915,7 +915,7 @@ async fn read_one_protocol(
     for key in found.keys {
         match adapter.read_position(request, &key).await {
             Ok(Some(reading)) => {
-                kept.insert(key.record_id());
+                kept.insert(key.record_id(request.account_id));
                 out.readings.push(reading);
                 if let Ok(events) = adapter.events(request, &key).await {
                     out.events.extend(events);
@@ -929,7 +929,7 @@ async fn read_one_protocol(
             // simply missing from the answer, which reads as "closed" — so it
             // is named as missed and kept, never closed.
             Err(error) => {
-                kept.insert(key.record_id());
+                kept.insert(key.record_id(request.account_id));
                 out.missed
                     .push(format!("{} ({})", adapter.protocol(), error.code()));
             }
@@ -1279,7 +1279,7 @@ mod tests {
 
     fn record_ids(protocol: &str, ids: &[&str]) -> std::collections::BTreeSet<String> {
         ids.iter()
-            .map(|id| PositionKey::new(protocol, Chain::Ethereum, id).record_id())
+            .map(|id| PositionKey::new(protocol, Chain::Ethereum, id).record_id("cacc-1"))
             .collect()
     }
 
@@ -2077,7 +2077,7 @@ mod tests {
         ProtocolReview {
             protocol: "aave-v3".into(),
             chain: Chain::Ethereum,
-            kept: kept.iter().map(|live| live.key.record_id()).collect(),
+            kept: kept.iter().map(|live| live.record_id()).collect(),
             read_at: read_at.into(),
         }
     }

@@ -450,6 +450,10 @@ impl UnlockedVault {
     fn add_unfolded_positions(&self, ledger: &Ledger, out: &mut Capital) {
         let mut missing: BTreeMap<(String, String), (AssetRef, Amount)> = BTreeMap::new();
         for record in &self.doc.crypto_positions {
+            // A stale twin of the old key counts the same money again.
+            if self.is_shadowed_legacy_position(record) {
+                continue;
+            }
             let followed = self
                 .doc
                 .crypto_accounts
@@ -1069,6 +1073,22 @@ mod tests {
         let left = vault.crypto_outside_totals();
         assert!(left.is_empty(), "a priced leg is not unpriced: {left:?}");
         assert_eq!(vault.net_worth().financial, amount("4000"));
+    }
+
+    #[test]
+    fn a_stale_old_key_twin_of_a_position_is_not_counted_twice() {
+        let (_dir, mut vault) = empty_vault();
+        quote(&mut vault, &eth_ref(), "2000");
+        let wallet = followed(&mut vault, "cacc-1", "Cold", ME);
+        let mut current = position_of("cacc-1", eth(), "2");
+        current.id = "cacc-1|uniswap-v3|ethereum|7".into();
+        let mut twin = current.clone();
+        twin.id = "uniswap-v3|ethereum|7".into();
+        vault.doc.crypto_positions.push(current);
+        vault.doc.crypto_positions.push(twin);
+        vault.recompute_holdings();
+
+        assert_eq!(holding_of(&vault, &wallet, &eth_ref()), amount("2"));
     }
 
     #[test]

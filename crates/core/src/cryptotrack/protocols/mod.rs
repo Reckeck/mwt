@@ -72,7 +72,7 @@ pub use fees::{
 pub use node::{Answer, Node};
 pub use position::{
     AssetAmount, PositionKey, PositionKind, PositionReading, PositionStatus, ProtocolReview,
-    is_closed, kind_of,
+    is_closed, kind_of, record_id_prefixes,
 };
 pub use wide::U256;
 
@@ -408,7 +408,7 @@ mod tests {
             reading.approximate,
             "the flag comes from the adapter, not from the screen"
         );
-        assert_eq!(reading.stored().id, "stub-v1|ethereum|1");
+        assert_eq!(reading.stored().id, "cacc-1|stub-v1|ethereum|1");
         assert!(
             adapter
                 .events(request, &found[0])
@@ -445,6 +445,6 @@ mod tests {
                 }
             }
         }
-        assert_eq!(read, ["stub-v1|ethereum|1"]);
+        assert_eq!(read, ["cacc-1|stub-v1|ethereum|1"]);
     }
 }

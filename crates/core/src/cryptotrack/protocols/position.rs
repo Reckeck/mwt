@@ -71,9 +71,27 @@ impl PositionKey {
     }
 
     /// The record key of `doc.crypto_positions`:
-    /// `<protocol>|<chain>|<id>`. Deterministic, so two devices that read
-    /// the same position hold one record and the sync has nothing to merge.
-    pub fn record_id(&self) -> String {
+    /// `<account_id>|<protocol>|<chain>|<id>`. Deterministic, so two devices
+    /// that read the same position of the same account hold one record and
+    /// the sync has nothing to merge.
+    ///
+    /// The account is part of it because [`PositionKey::id`] is only unique
+    /// within a protocol, not within the vault: an Aave reserve or the stETH
+    /// contract is the same id for every followed address that holds it, and
+    /// without the account two of them would share one record and overwrite
+    /// each other's legs.
+    pub fn record_id(&self, account_id: &str) -> String {
+        format!("{account_id}|{}", self.record_tail())
+    }
+
+    /// What the record key was before the account joined it:
+    /// `<protocol>|<chain>|<id>`. Only for recognising a record an older
+    /// build wrote ([`record_id_prefixes`]); nothing is written under it.
+    pub fn legacy_record_id(&self) -> String {
+        self.record_tail()
+    }
+
+    fn record_tail(&self) -> String {
         format!("{}|{}|{}", self.protocol, chain_slug(self.chain), self.id)
     }
 
@@ -86,6 +104,15 @@ impl PositionKey {
             id: self.id.clone(),
         }
     }
+}
+
+/// The two prefixes a stored position's record id can start with, current
+/// first: `<account_id>|<protocol>|<chain>|` and the older
+/// `<protocol>|<chain>|`. What follows is the protocol's own id, which may
+/// itself contain a `|`.
+pub fn record_id_prefixes(record: &CryptoPosition) -> (String, String) {
+    let legacy = format!("{}|{}|", record.protocol, chain_slug(record.chain));
+    (format!("{}|{legacy}", record.account_id), legacy)
 }
 
 /// What sort of position it is. This is what decides whether impermanent
@@ -176,7 +203,7 @@ pub struct ProtocolReview {
     /// [`super::ProtocolAdapter::protocol`].
     pub protocol: String,
     pub chain: Chain,
-    /// Record ids ([`PositionKey::record_id`]) of the positions that are not
+    /// Record ids ([`PositionKey::record_id`], with this account) of the positions that are not
     /// gone: read, or found and not readable right now.
     pub kept: BTreeSet<String>,
     /// When the pass took the review (RFC3339 UTC): a position closed by it
@@ -223,11 +250,16 @@ pub struct PositionReading {
 }
 
 impl PositionReading {
+    /// The record key of this reading: the position of this account.
+    pub fn record_id(&self) -> String {
+        self.key.record_id(&self.account_id)
+    }
+
     /// The durable part of the reading: the record `doc.crypto_positions`
     /// keeps. Nothing derived goes in — no value, no fee, no rate.
     pub fn stored(&self) -> CryptoPosition {
         CryptoPosition {
-            id: self.key.record_id(),
+            id: self.record_id(),
             account_id: self.account_id.clone(),
             chain: self.key.chain,
             protocol: self.key.protocol.clone(),
@@ -260,7 +292,9 @@ mod tests {
     #[test]
     fn a_key_is_one_record_and_one_tracking_reference() {
         let key = PositionKey::new("uniswap-v3", Chain::Arbitrum, "123456");
-        assert_eq!(key.record_id(), "uniswap-v3|arbitrum|123456");
+        assert_eq!(key.record_id("cacc-1"), "cacc-1|uniswap-v3|arbitrum|123456");
+        assert_eq!(key.legacy_record_id(), "uniswap-v3|arbitrum|123456");
+        assert_ne!(key.record_id("cacc-1"), key.record_id("cacc-2"));
         assert_eq!(
             key.tracking(),
             TrackingRef::Position {
@@ -319,7 +353,7 @@ mod tests {
             read_at: "2026-11-16T10:00:00Z".into(),
         };
         let stored = reading.stored();
-        assert_eq!(stored.id, "aave-v3|ethereum|0xbeef");
+        assert_eq!(stored.id, "cacc-1|aave-v3|ethereum|0xbeef");
         assert_eq!(stored.account_id, "cacc-1");
         assert_eq!(stored.protocol, "aave-v3");
         assert_eq!(stored.legs, reading.legs);
