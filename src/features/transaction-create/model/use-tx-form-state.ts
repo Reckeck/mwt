@@ -24,6 +24,7 @@ function repeatForm(source: Transaction, storeId: string) {
     flowId: '',
     txHash: '',
     orderId: '',
+    forMonth: '',
   })
 }
 

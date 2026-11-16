@@ -43,3 +43,21 @@ describe('useTxFormState: Repeat', () => {
     expect(form.amount).toBe('100')
   })
 })
+
+describe('useTxFormState: Repeat of for_month', () => {
+  it('opens without the month label and sends no for_month', () => {
+    const withMonth = structuredClone(prefill) as unknown as { payment: { details: Record<string, unknown> } }
+    withMonth.payment.details.for_month = '2026-09'
+    const props = { storeId: 's1', prefill: withMonth, transaction: null } as unknown as TransactionFormProps
+    let state!: ReturnType<typeof useTxFormState>
+    const host = defineComponent({
+      setup() {
+        state = useTxFormState(props)
+        return {}
+      },
+      template: '<div />',
+    })
+    mount(host, { global: { plugins: [createPinia(), [VueQueryPlugin, { queryClient: new QueryClient() }]] } })
+    expect(state.form.forMonth).toBe('')
+  })
+})
