@@ -794,41 +794,6 @@ async fn a_revocation_closes_that_link_and_the_others_hear_of_it() {
     assert!(origin.try_recv().is_err());
 }
 
-/// Accepts the pairing and declines the list of changes.
-fn accept_pairing_decline_plan(host: TestHost, mut events: Events) -> Arc<Mutex<Vec<String>>> {
-    let seen = Arc::new(Mutex::new(Vec::new()));
-    let log = seen.clone();
-    tokio::spawn(async move {
-        while let Some((event, payload)) = events.recv().await {
-            let session = payload
-                .get("session_id")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
-            match event.as_str() {
-                super::OFFER_EVENT => {
-                    super::send(&host, &session, Order::StartPairing);
-                }
-                super::PAIRING_EVENT => {
-                    super::send(&host, &session, Order::Decide(true));
-                }
-                super::PLAN_EVENT => {
-                    super::send(&host, &session, Order::Decide(false));
-                }
-                super::ERROR_EVENT => {
-                    let code = payload
-                        .get("code")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default();
-                    log.lock().unwrap().push(code.to_string());
-                }
-                _ => {}
-            }
-        }
-    });
-    seen
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn declining_the_list_of_changes_is_not_a_failure() {
     let dir = tempfile::tempdir().unwrap();
@@ -836,17 +801,24 @@ async fn declining_the_list_of_changes_is_not_a_failure() {
     let (main, main_events) = device("Laptop", left, SyncRole::Main);
     let (client, client_events) = device("Phone", right, SyncRole::Client);
     seed(&main, "salary on the laptop");
-    let main_errors = accept_pairing_decline_plan(main.clone(), main_events);
-    let client_errors = accept_pairing_decline_plan(client.clone(), client_events);
+    // Both accept the pairing and decline the list of changes.
+    let main_seen = responder(main.clone(), main_events, Some(false));
+    let client_seen = responder(client.clone(), client_events, Some(false));
     connect(&main, &client).await;
-    until("the plan declined and the links gone", || {
-        comments(&main).len() == 1 && main.hub().links.is_empty() && client.hub().links.is_empty()
+    // No links exist before the session starts, so "links empty" is true at
+    // once: wait for the question first, then for the decline to end them.
+    until("the list of changes asked", || client_seen.plans() == 1).await;
+    until("the links gone after the decline", || {
+        main.hub().links.is_empty() && client.hub().links.is_empty()
     })
     .await;
+    assert_eq!(comments(&main).len(), 1);
     assert!(comments(&client).is_empty());
+    // An error event travels through a channel to the collector task, after
+    // the session ended: give it time to arrive before asserting that none did.
     tokio::time::sleep(Duration::from_millis(200)).await;
-    assert!(main_errors.lock().unwrap().is_empty());
-    assert!(client_errors.lock().unwrap().is_empty());
+    assert_eq!(*main_seen.errors.lock().unwrap(), Vec::<String>::new());
+    assert_eq!(*client_seen.errors.lock().unwrap(), Vec::<String>::new());
     assert!(client.hub().failures.is_empty());
     assert!(main.hub().failures.is_empty());
 }
