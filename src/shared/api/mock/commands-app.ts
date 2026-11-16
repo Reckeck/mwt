@@ -49,7 +49,6 @@ export const vaultCommands: MockCommands = {
     if (body?.password === '') throw { code: 'INVALID_INPUT', message: 'the password must not be empty' }
     mockPassword.value = typeof body?.password === 'string' ? body.password : null
     mockInfo.encrypted = mockPassword.value !== null
-    if (typeof body?.crypto === 'boolean') mockSettings.crypto = body.crypto
     mockStatus.value = {
       path: String(body?.path ?? mockStatus.value.path),
       exists: true,

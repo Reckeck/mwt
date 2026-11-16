@@ -5,6 +5,7 @@ import { mockContacts } from './ledger'
 import type { AppError } from '../ipc'
 import { mockFilterTxs, mockStores, mockTransactions, priceOf, timestampOf } from './demo'
 import { mockAppSettings } from './vault-data'
+import { ENGINE_HOLDINGS } from './crypto-engine-holdings'
 
 /** Mirrors `MAX_STORE_DEPTH` in Rust: a root is depth 0, so two levels. */
 const MOCK_MAX_DEPTH = 1
@@ -66,6 +67,16 @@ const mockPricesAsOf = new Date(Date.now() - 4 * 60_000).toISOString()
 /** Positions held on the store itself, like `store_positions` in Rust. */
 export function mockOwnPositions(storeId: string): StorePosition[] {
   const byAsset = new Map<string, { asset: AssetRef; qty: number; cost: number }>()
+  // A wallet led by the crypto module holds what the engine read (see `crypto-engine-holdings.ts`).
+  if (mockStore(storeId)?.crypto_account_id) {
+    for (const holding of ENGINE_HOLDINGS) {
+      byAsset.set(holding.asset.symbol.toUpperCase(), {
+        asset: holding.asset,
+        qty: Number(holding.quantity),
+        cost: Number(holding.avgCost),
+      })
+    }
+  }
   // Legs carry their own sign, so a trade or transfer needs no special case.
   for (const leg of mockTransactions.flatMap(txLegs)) {
     if (leg.store_id !== storeId || leg.asset.contract?.startsWith('perp:')) continue

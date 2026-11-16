@@ -1,16 +1,16 @@
-/** Commands: the exchange key, Bybit accounts and the import staging. */
+/** Commands: the exchange key, Bybit accounts and the exchange sync. */
 
 import { mockImportSettings } from './catalog'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockStores, newStore } from './demo'
 import {
+  mockExchangeRecords,
   mockExecutions,
   mockImportRuns,
   mockImportSettingsByStore,
   mockKeyStatus,
-  mockPendingImports,
-  mockPendingStore,
+  mockRecordedStore,
 } from './exchange-data'
 
 /** Commands: exchange (read-only prefill). */
@@ -105,35 +105,47 @@ export const exchangeAccountsCommands: MockCommands = {
   },
 }
 
-/** Commands: bybit import staging (D2.4). */
+/** Commands: the exchange sync (spec E7: recorded at once, never staged). */
 export const bybitImportStagingCommands: MockCommands = {
   import_bybit_history: ({ body }) => {
     if (!mockKeyStatus.value.configured) return resolve({ staged: 0, notice: 'no_key', run: null })
-    // Records belong to the wallet synced, as the backend stages them.
-    mockPendingStore.value = mockPendingImports().map((entry) => ({ ...entry, store_id: String(body?.store_id ?? '') }))
+    const storeId = String(body?.store_id ?? '')
+    const records = mockExchangeRecords(storeId)
+    // A record the sync saw before is known, never recorded a second time:
+    // the same `exec_id` always gives the same operation.
+    const fresh = records.filter((entry) => !mockRecordedStore.value.includes(entry.exec_id))
+    mockRecordedStore.value = [...mockRecordedStore.value, ...fresh.map((entry) => entry.exec_id)]
     const run: ImportRun = {
       id: crypto.randomUUID(),
-      store_id: String(body?.store_id ?? ''),
+      store_id: storeId,
       at: new Date().toISOString(),
       source: 'manual',
-      fetched: mockPendingImports().length,
-      staged: mockPendingImports().length,
-      known: 0,
+      fetched: records.length,
+      // Nothing is staged any more; the field stays readable and stays 0.
+      staged: 0,
+      known: records.length - fresh.length,
       filtered: 0,
-      confirmed: 0,
-      trades: mockPendingImports().filter((entry) => entry.kind === 'fill').length,
-      transfers: mockPendingImports().filter((entry) => entry.kind === 'transfer').length,
+      confirmed: fresh.length,
+      trades: fresh.filter((entry) => entry.kind === 'fill').length,
+      transfers: fresh.filter((entry) => entry.kind === 'transfer').length,
       reconcile_tx_id: null,
       error: null,
     }
     mockImportRuns.unshift(run)
-    return resolve({ staged: run.staged, notice: null, run })
+    return resolve({ staged: 0, notice: null, run })
   },
   preview_bybit_import: (_call) => {
     if (!mockKeyStatus.value.configured) return resolve({ preview: null, notice: 'no_key' })
-    const items = mockPendingImports()
+    const items = mockExchangeRecords()
+    const fresh = items.filter((entry) => !mockRecordedStore.value.includes(entry.exec_id))
     return resolve({
-      preview: { fetched: items.length, known: 0, filtered: 0, new: items.length, items },
+      preview: {
+        fetched: items.length,
+        known: items.length - fresh.length,
+        filtered: 0,
+        new: fresh.length,
+        items: fresh,
+      },
       notice: null,
     })
   },
@@ -151,21 +163,16 @@ export const bybitImportStagingCommands: MockCommands = {
   list_imported_transactions: (_call) => {
     return resolve({ total: 0, items: [] })
   },
+  // The queue has no screen any more, but the three commands stay: a vault
+  // written by an older build may still hold one, and the backend keeps
+  // reading it (`AGENTS.md`, rule 5). Nothing stages into it, so it is empty.
   list_pending_imports: (_call) => {
-    return resolve({ imports: mockPendingImports() })
+    return resolve({ imports: [] })
   },
-  confirm_pending_imports: ({ body }) => {
-    const input = body as ConfirmPendingImportsInput
-    const ids = input.exec_ids.length ? input.exec_ids : mockPendingImports().map((entry) => entry.exec_id)
-    const staged = mockPendingImports()
-    mockPendingStore.value = staged.filter((entry) => !ids.includes(entry.exec_id))
-    return resolve({ confirmed: staged.length - mockPendingStore.value.length })
+  confirm_pending_imports: (_call) => {
+    return resolve({ confirmed: 0 })
   },
-  discard_pending_imports: ({ body }) => {
-    const input = body as DiscardPendingImportsInput
-    const ids = input.exec_ids.length ? input.exec_ids : mockPendingImports().map((entry) => entry.exec_id)
-    const staged = mockPendingImports()
-    mockPendingStore.value = staged.filter((entry) => !ids.includes(entry.exec_id))
-    return resolve({ discarded: staged.length - mockPendingStore.value.length })
+  discard_pending_imports: (_call) => {
+    return resolve({ discarded: 0 })
   },
 }

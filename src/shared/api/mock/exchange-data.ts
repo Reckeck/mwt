@@ -1,4 +1,4 @@
-/** Mock exchange state: the key, executions, staged imports, syncs. */
+/** Mock exchange state: the key, executions, the records a sync brings, syncs. */
 
 /** Reassigned by commands: a holder, since an imported binding cannot be assigned. */
 export const mockKeyStatus: { value: ExchangeKeyStatus } = {
@@ -35,18 +35,28 @@ export const mockExecutions: BybitExecution[] = [
   },
 ]
 
-/** Staged fills for the browser mock of the D2.4 import flow. */
+/**
+ * `exec_id`s this mock has already turned into operations of the crypto
+ * section. A sync that sees them again reports them as known instead of
+ * recording them twice, which is the rule the real conversion holds to
+ * (spec E7).
+ */
 /** Reassigned by commands: a holder, since an imported binding cannot be assigned. */
-export const mockPendingStore: { value: PendingImport[] } = { value: [] }
+export const mockRecordedStore: { value: string[] } = { value: [] }
 /** Syncs of the mock exchanges, newest first. */
 export const mockImportRuns: ImportRun[] = []
 export const mockImportSettingsByStore = new Map<string, ImportSettings>()
 const mockKeyStatusStoreId = 'mock-store-bybit'
 
-export function mockPendingImports(storeId = mockKeyStatusStoreId): PendingImport[] {
-  if (mockPendingStore.value.length) return mockPendingStore.value
-  const now = Date.now()
-  mockPendingStore.value = ['a1', 'a2'].map((suffix, index) => ({
+/**
+ * What a sweep of the mock exchange reports: two fills, a move between the
+ * user's own Bybit accounts and an Earn payout. The shape is still
+ * `PendingImport` because that is what the command passes the backend; it is
+ * no longer kept anywhere.
+ */
+export function mockExchangeRecords(storeId = mockKeyStatusStoreId): PendingImport[] {
+  const now = Date.UTC(2024, 4, 30, 10, 13, 20)
+  const records: PendingImport[] = ['a1', 'a2'].map((suffix, index) => ({
     exec_id: `mock-exec-${suffix}`,
     store_id: storeId,
     category: 'spot',
@@ -68,9 +78,9 @@ export function mockPendingImports(storeId = mockKeyStatusStoreId): PendingImpor
     from_account: null,
     to_account: null,
   }))
-  // A move between Bybit accounts and an Earn payout, like a real sweep stages.
+  // A move between Bybit accounts and an Earn payout, like a real sweep brings.
   const quiet = { side: '', price: '0', fee: '0', fee_asset: '', is_maker: null, closed_size: null, closed_pnl: null }
-  mockPendingStore.value.push(
+  records.push(
     {
       ...quiet,
       exec_id: 'transfer:mock-1',
@@ -104,5 +114,5 @@ export function mockPendingImports(storeId = mockKeyStatusStoreId): PendingImpor
       to_account: 'EARN',
     },
   )
-  return mockPendingStore.value
+  return records
 }

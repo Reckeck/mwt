@@ -8,6 +8,16 @@ import { devReportCommands } from './commands-dev'
 import { bybitImportStagingCommands, exchangeAccountsCommands, exchangeReadOnlyCommands } from './commands-exchange'
 import { attachmentCommands } from './commands-attachments'
 import { bulkCommands } from './commands-bulk'
+import { cryptoAccountsCommands } from './commands-crypto-accounts'
+import { cryptoLinksCommands } from './commands-crypto-links'
+import { cryptoNetworkCommands } from './commands-crypto-network'
+import { cryptoOperationsCommands } from './commands-crypto-operations'
+import { cryptoPositionsCommands } from './commands-crypto-positions'
+import { cryptoRelationsCommands } from './commands-crypto-relations'
+import { cryptoSyncCommands } from './commands-crypto-sync'
+import { cryptoTokensCommands } from './commands-crypto-tokens'
+import { cryptoTransitionCommands } from './commands-crypto-transition'
+import { cryptoWipeCommands } from './commands-crypto-wipe'
 import { contactsCommands, transactionsCommands } from './commands-ledger'
 import { loyaltyDepositCommands } from './commands-loyalty'
 import { sharedEventCommands } from './commands-shared-events'
@@ -75,6 +85,17 @@ const MOCK_COMMANDS: MockCommands = {
   ...securityRaiseCommands,
   ...securityBiometricCommands,
   ...securityKeysCommands,
+  // Crypto module (stage 2): every command answers UNSUPPORTED until its spec fills it.
+  ...cryptoAccountsCommands,
+  ...cryptoTokensCommands,
+  ...cryptoOperationsCommands,
+  ...cryptoSyncCommands,
+  ...cryptoNetworkCommands,
+  ...cryptoWipeCommands,
+  ...cryptoLinksCommands,
+  ...cryptoRelationsCommands,
+  ...cryptoTransitionCommands,
+  ...cryptoPositionsCommands,
 }
 
 /** What still answers in the `error` scenario: enough to unlock and reach the screen. */
