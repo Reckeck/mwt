@@ -390,7 +390,8 @@ impl UnlockedVault {
         self.crypto_sync_holdings()
     }
 
-    /// Stop following an address: the account and its read position go, the
+    /// Stop following an address: the account, its read positions and its
+    /// cursors go, the
     /// operations already read stay until the module is wiped (spec E12). The
     /// wallet that showed it is archived, because nothing drives it any more
     /// and it must not turn into a hand-kept wallet.
@@ -409,6 +410,12 @@ impl UnlockedVault {
         self.doc
             .crypto_cursors
             .retain(|cursor| cursor.account_id != account_id);
+        // A position is a derived reading of the account: left behind, it
+        // would stay listed as open and valued, and its receipts would keep
+        // being dropped from the capital of other accounts on the network.
+        self.doc
+            .crypto_positions
+            .retain(|position| position.account_id != account_id);
         for store in &mut self.doc.stores {
             if store.crypto_account_id.as_deref() == Some(account_id) {
                 store.crypto_account_id = None;
@@ -738,6 +745,42 @@ mod tests {
         ];
         let change = vault.crypto_month_change("acc", now).unwrap();
         assert_eq!(change.change_pct, None);
+    }
+
+    #[test]
+    fn forgetting_an_account_takes_its_positions_and_their_receipts_with_it() {
+        use crate::model::cryptotrack::CryptoPosition;
+        let (_dir, mut vault) = empty_vault();
+        let gone = vault
+            .crypto_connect_address(&connect(ADDRESS, "Main"))
+            .unwrap();
+        let kept = vault
+            .crypto_connect_address(&connect(SCAM, "Other"))
+            .unwrap();
+        let receipt = CryptoAsset::Token(TokenId::new(Chain::Ethereum, SCAM));
+        let position = |account: &str| CryptoPosition {
+            id: format!("pos-{account}"),
+            account_id: account.to_string(),
+            chain: Chain::Ethereum,
+            protocol: "lido".into(),
+            name: "Staked".into(),
+            legs: Vec::new(),
+            receipts: vec![receipt.clone()],
+            updated_at: "2026-11-01T00:00:00Z".into(),
+        };
+        vault.doc.crypto_positions = vec![position(&gone.account_id), position(&kept.account_id)];
+
+        vault.crypto_forget_account(&gone.account_id).unwrap();
+
+        assert_eq!(vault.doc.crypto_positions.len(), 1);
+        assert_eq!(vault.doc.crypto_positions[0].account_id, kept.account_id);
+        assert!(
+            vault
+                .crypto_list_positions(&[], "2026-11-02T00:00:00Z")
+                .iter()
+                .all(|view| view.account_id != gone.account_id),
+            "a forgotten account's position is no longer listed"
+        );
     }
 
     #[test]
