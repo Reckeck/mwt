@@ -60,6 +60,9 @@ pub(crate) fn capped_rank(rank: u32) -> u32 {
 }
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+/// After a failed write: how long to look for the other side's `Bye` or its
+/// closing of the connection before the failure counts as real.
+const GOODBYE_GRACE: Duration = Duration::from_millis(500);
 /// A device that forgot the caller waits this long for an explicit pairing
 /// request; without one it tells the caller it was forgotten.
 #[cfg(not(test))]
@@ -151,14 +154,37 @@ struct Wire {
 }
 
 impl Wire {
-    async fn send(&mut self, message: &Message) -> Result<()> {
+    async fn send(&mut self, message: &Message) -> Flow<()> {
         let bytes = encode(message)?;
         for frame in self.channel.seal(&bytes)? {
-            self.out
-                .send(frame)
-                .map_err(|_| Error::PeerSync(PeerSyncFailure::Channel))?;
+            if self.out.send(frame).is_err() {
+                return Err(self.write_failed().await);
+            }
         }
         Ok(())
+    }
+
+    /// The writing task is gone: the connection broke. When the other side
+    /// said `Bye` or closed on purpose (a declined list of changes, a cut-off)
+    /// the write only lost the race with its goodbye, which is no failure to
+    /// show; anything else is a real channel error.
+    async fn write_failed(&mut self) -> Stop {
+        let deadline = Instant::now() + GOODBYE_GRACE;
+        loop {
+            match tokio::time::timeout_at(deadline, self.frames.recv()).await {
+                Ok(Some(frame)) => match self.channel.open(&frame) {
+                    Ok(Some(bytes)) => {
+                        if matches!(decode(&bytes), Ok(Message::Bye { .. })) {
+                            return Stop::Quiet;
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(err) => return Stop::Failed(err),
+                },
+                Ok(None) => return Stop::Quiet,
+                Err(_) => return failure(PeerSyncFailure::Channel),
+            }
+        }
     }
 
     /// The next whole message; `None` when the connection closed.
@@ -1521,4 +1547,76 @@ fn hand_over_if_preferred<H: Host>(app: &H, peer: &Peer) -> bool {
         super::send(app, &peer.session_id, Order::TakeMain);
     }
     hand_over
+}
+
+#[cfg(test)]
+mod wire_tests {
+    use trade_core::sync::session::DeviceKey;
+
+    use super::*;
+
+    /// Both ends of an encrypted channel, handshaken in memory.
+    fn channels() -> (Channel, Channel) {
+        let mut dialer = Handshake::initiator(&DeviceKey::generate().unwrap()).unwrap();
+        let mut listener = Handshake::responder(&DeviceKey::generate().unwrap()).unwrap();
+        while !(dialer.is_finished() && listener.is_finished()) {
+            if dialer.my_turn() {
+                listener.read(&dialer.write().unwrap()).unwrap();
+            } else {
+                dialer.read(&listener.write().unwrap()).unwrap();
+            }
+        }
+        (dialer.finish().unwrap(), listener.finish().unwrap())
+    }
+
+    /// A wire whose writing task has already died, with `incoming` waiting to
+    /// be read; the sender of `incoming` is returned so a test can keep the
+    /// connection open or drop it.
+    fn broken_wire(incoming: &[Message]) -> (Wire, mpsc::Sender<Vec<u8>>) {
+        let (own, mut theirs) = channels();
+        let (out, outgoing) = mpsc::unbounded_channel();
+        drop(outgoing);
+        let (frames_in, frames) = mpsc::channel(64);
+        for message in incoming {
+            for frame in theirs.seal(&encode(message).unwrap()).unwrap() {
+                frames_in.try_send(frame).unwrap();
+            }
+        }
+        let wire = Wire {
+            channel: own,
+            pairing_code: String::new(),
+            out,
+            frames,
+            heard: Instant::now(),
+        };
+        (wire, frames_in)
+    }
+
+    fn time() -> Message {
+        Message::Time { now_ms: 1 }
+    }
+
+    #[tokio::test]
+    async fn a_write_after_the_peers_bye_is_a_quiet_stop() {
+        let (mut wire, _open) = broken_wire(&[Message::Bye {
+            reason: "declined".into(),
+        }]);
+        assert!(matches!(wire.send(&time()).await, Err(Stop::Quiet)));
+    }
+
+    #[tokio::test]
+    async fn a_write_after_the_peer_closed_is_a_quiet_stop() {
+        let (mut wire, open) = broken_wire(&[]);
+        drop(open);
+        assert!(matches!(wire.send(&time()).await, Err(Stop::Quiet)));
+    }
+
+    #[tokio::test]
+    async fn a_write_to_a_silent_broken_connection_is_still_a_failure() {
+        let (mut wire, _open) = broken_wire(&[time()]);
+        assert!(matches!(
+            wire.send(&time()).await,
+            Err(Stop::Failed(Error::PeerSync(PeerSyncFailure::Channel)))
+        ));
+    }
 }
