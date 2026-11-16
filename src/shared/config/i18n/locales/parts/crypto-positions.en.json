@@ -27,7 +27,7 @@
   "cryptoTrack.positions.actions.label": "Position actions",
   "cryptoTrack.positions.actions.open": "Open details",
   "cryptoTrack.positions.actions.operations": "Operations",
-  "cryptoTrack.positions.actions.operationsHint": "The operations list for this protocol and network",
+  "cryptoTrack.positions.actions.operationsHint": "The operations of this address on this network",
   "cryptoTrack.positions.summary.missing": "not counted: {count} without the figure",
   "cryptoTrack.positions.empty.title": "No DeFi positions yet",
   "cryptoTrack.positions.empty.description": "Positions are read from the chain at the addresses of your wallets: liquidity in Uniswap, supplies and loans in Aave, staking in Lido. Add a wallet address and they appear after its first sync.",
