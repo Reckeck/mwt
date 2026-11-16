@@ -1686,4 +1686,166 @@ mod tests {
         assert_eq!(dates[0], "2026-10-30T09:00:00Z");
         assert_eq!(dates[1], "2026-12-01T09:00:00Z");
     }
+
+    /// Planned moments of every booking an automation workflow made, oldest first.
+    fn planned_of_bookings(vault: &UnlockedVault) -> Vec<String> {
+        vault
+            .doc
+            .transactions
+            .iter()
+            .filter_map(|tx| match &tx.meta().origin {
+                TxOrigin::Workflow {
+                    planned_at: Some(planned),
+                    ..
+                } => Some(planned.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Monthly rent on the 15th at 09:00 Berlin, started on Jan 1.
+    fn berlin_rent(vault: &mut UnlockedVault, from: &str) -> Automation {
+        let account = store(vault, "Cash", StoreKind::Cash, None);
+        let income = {
+            let mut funding = income(&account, "1000", "float");
+            at(&mut funding, "2026-01-01T00:00:00Z");
+            funding
+        };
+        vault.add_transaction(income).unwrap();
+        monthly(vault, "Rent", 15, rent_draft(&account, from))
+    }
+
+    /// G6: one booking per planned date; a later tick the same day books nothing.
+    #[test]
+    fn golden_g6_a_monthly_automation_fires_once_per_planned_date() {
+        let (_dir, mut vault) = empty_vault();
+        berlin_rent(&mut vault, "300");
+        let tick = |vault: &mut UnlockedVault, iso: &str| {
+            vault
+                .run_due_workflows(secs(iso), "Europe/Berlin")
+                .unwrap()
+                .created
+                .len()
+        };
+        assert_eq!(tick(&mut vault, "2026-01-14T12:00:00Z"), 0);
+        assert_eq!(planned_of_bookings(&vault).len(), 0);
+        assert_eq!(tick(&mut vault, "2026-01-15T09:00:00Z"), 1);
+        assert_eq!(planned_of_bookings(&vault), ["2026-01-15T08:00:00Z"]);
+        assert_eq!(tick(&mut vault, "2026-01-15T20:00:00Z"), 0);
+        assert_eq!(planned_of_bookings(&vault).len(), 1);
+        assert_eq!(tick(&mut vault, "2026-02-20T12:00:00Z"), 1);
+        assert_eq!(
+            planned_of_bookings(&vault),
+            ["2026-01-15T08:00:00Z", "2026-02-15T08:00:00Z"]
+        );
+    }
+
+    /// G7: a long absence books up to `MAX_CATCH_UP` dates and journals the older ones as skipped.
+    #[test]
+    fn golden_g7_catch_up_books_the_newest_and_skips_the_older() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        // The one monthly date inside 40 days is booked, nothing is skipped.
+        let rent = monthly(&mut vault, "Rent", 15, salary_draft(&card, "1"));
+        let pass = vault
+            .run_due_workflows(secs("2026-02-10T12:00:00Z"), "Europe/Berlin")
+            .unwrap();
+        assert_eq!((pass.created.len(), pass.skipped), (1, 0));
+        assert_eq!(planned_of_bookings(&vault), ["2026-01-15T08:00:00Z"]);
+        assert_eq!(outcomes(&vault, &rent.id), ["created"]);
+
+        // A daily automation over the same 40 days: 24 booked, 16 skipped.
+        let daily = vault
+            .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
+                for_month_offset: None,
+                name: "Daily".into(),
+                active: true,
+                preset: None,
+                schedule: Schedule::EveryNDays { days: 1 },
+                starts_at: "2026-01-01T00:00:00Z".into(),
+                template: salary_draft(&card, "1"),
+                amount_mode: Default::default(),
+                workday_shift: Default::default(),
+                property_id: None,
+            })
+            .unwrap();
+        let before = planned_of_bookings(&vault).len();
+        let pass = vault
+            .run_due_workflows(secs("2026-02-10T12:00:00Z"), "Europe/Berlin")
+            .unwrap();
+        assert_eq!(pass.created.len(), MAX_CATCH_UP);
+        assert_eq!(pass.skipped, 41 - MAX_CATCH_UP);
+        assert_eq!(planned_of_bookings(&vault).len() - before, MAX_CATCH_UP);
+        let runs = outcomes(&vault, &daily.id);
+        assert_eq!(runs.len(), 41);
+        assert_eq!(
+            runs.iter().filter(|run| **run == "skipped").count(),
+            41 - MAX_CATCH_UP
+        );
+    }
+
+    /// G8: the first numbers a user sees after G6's rent and a liability card.
+    #[test]
+    fn golden_g8_net_worth_and_the_daily_budget_after_the_rent() {
+        let (_dir, mut vault) = empty_vault();
+        vault.set_base_currency("usd");
+        quote_usd(&mut vault);
+        berlin_rent(&mut vault, "300");
+        let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
+        let card = vault
+            .create_store_with(
+                "Card",
+                StoreKind::Liability,
+                "",
+                "",
+                None,
+                StoreExtras {
+                    liability: Some(LiabilityTerms {
+                        kind: LiabilityKind::CreditCard,
+                        rate: None,
+                        limit: Some(amount("1000")),
+                        due_day: Some(25),
+                        monthly_payment: None,
+                    }),
+                    ..StoreExtras::default()
+                },
+            )
+            .unwrap()
+            .id;
+        let side = |from: &str, to: &str, sum: &str| {
+            transfer_between(
+                AccountRef::Store(from.into()),
+                AccountRef::Store(to.into()),
+                usd(),
+                sum,
+            )
+        };
+        vault.add_transaction(side(&card, &bank, "500")).unwrap();
+        vault
+            .add_transaction(payment(&card, "200", "shop"))
+            .unwrap();
+        let mut interest = payment(&card, "10", "interest");
+        interest.meta_mut().categories = vec!["loan_interest".into()];
+        vault.add_transaction(interest).unwrap();
+        vault.add_transaction(side(&bank, &card, "300")).unwrap();
+
+        for iso in ["2026-01-15T09:00:00Z", "2026-02-20T12:00:00Z"] {
+            vault.run_due_workflows(secs(iso), "Europe/Berlin").unwrap();
+        }
+        assert_eq!(planned_of_bookings(&vault).len(), 2);
+
+        let worth = vault.net_worth();
+        assert_eq!(worth.financial, amount("600"));
+        assert_eq!(worth.liabilities, amount("410"));
+        assert_eq!(worth.net, amount("190"));
+        let budget = vault.daily_budget(secs("2026-02-20T12:00:00Z"), "Europe/Berlin");
+        // Feb has no income and the 300 rent is mandatory: -300 over 28 days,
+        // 20 days elapsed incl. today -> -214.2857... (the code's figure today).
+        assert_eq!(budget.fixed, amount("300"));
+        assert_eq!(budget.days, 28);
+        assert_eq!(budget.spent_today, amount("0"));
+        assert_eq!(budget.left_today.round(2), amount("-214.29"));
+    }
 }

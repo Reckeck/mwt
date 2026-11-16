@@ -82,6 +82,8 @@ mod sync_journal;
 mod vehicle;
 mod where_went;
 pub use peer_sync::{AppliedBatch, ExternalMerge, PeerRef, SyncTap, UndoReport};
+#[cfg(test)]
+mod golden_tests;
 mod preview;
 mod price_info;
 mod rates;

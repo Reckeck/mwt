@@ -1,0 +1,145 @@
+//! Characterization ("golden") tests: each pins an output that a later fix
+//! must NOT change. All instants are fixed; nothing reads the wall clock.
+
+use super::UnlockedVault;
+use super::reports::{Report, ReportFilter, ReportKind};
+use super::test_support::*;
+use crate::model::store::{Binding, StoreKind, SubType};
+
+/// BTC store (`Cold`): buy 1 @ 40 000 (Jan 1), buy 1 @ 50 000 (Jan 2),
+/// sell 1 @ 60 000 (`sale_day`). Base currency usd.
+fn btc_stream(sale_day: &str) -> (tempfile::TempDir, UnlockedVault, String) {
+    let (dir, mut vault) = setup();
+    vault.set_base_currency("usd");
+    let store = vault.doc.stores[1].id.clone();
+    let mut first = income_of(&store, btc(), "1", "40000", "buy");
+    at(&mut first, "2026-01-01T00:00:00Z");
+    vault.add_transaction(first).unwrap();
+    let mut second = income_of(&store, btc(), "1", "50000", "buy");
+    at(&mut second, "2026-01-02T00:00:00Z");
+    vault.add_transaction(second).unwrap();
+    let mut sale = sell_btc(&store, "1", "60000", "60000");
+    at(&mut sale, sale_day);
+    vault.add_transaction(sale).unwrap();
+    (dir, vault, store)
+}
+
+fn avg_cost_of(vault: &UnlockedVault, store: &str) -> Option<crate::Amount> {
+    vault
+        .doc
+        .holdings
+        .iter()
+        .find(|holding| holding.store_id == store && holding.asset.key() == btc().key())
+        .and_then(|holding| holding.avg_cost)
+}
+
+/// G1: a sale does not move the average cost.
+#[test]
+fn golden_g1_holdings_after_buy_buy_sell() {
+    let (_dir, vault, store) = btc_stream("2026-01-03T00:00:00Z");
+    assert_eq!(holding_of(&vault, &store, &btc()), amount("1"));
+    assert_eq!(avg_cost_of(&vault, &store), Some(amount("45000")));
+}
+
+/// G2: realized PnL of the same stream.
+#[test]
+fn golden_g2_realized_pnl() {
+    let (_dir, vault, _store) = btc_stream("2026-01-03T00:00:00Z");
+    let pnl = vault.realized_pnl();
+    assert_eq!(pnl.total_base, amount("15000"));
+    assert_eq!(pnl.legs.len(), 1);
+    assert_eq!(pnl.legs[0].side, "sell");
+    assert_eq!(pnl.fees_base, amount("0"));
+}
+
+/// G3: unrealized PnL at a BTC quote of 60 000.
+#[test]
+fn golden_g3_unrealized_pnl() {
+    let (_dir, mut vault, store) = btc_stream("2026-01-03T00:00:00Z");
+    vault.apply_prices(&[crate::model::vault::PricePoint {
+        asset_key: btc().key(),
+        value_usd: amount("60000"),
+        ts: "2026-01-03T00:00:00Z".into(),
+        source: "test".into(),
+        change_24h_pct: None,
+    }]);
+    let overview = vault.store_overview(&store, true).unwrap();
+    assert_eq!(overview.unrealized_base, amount("15000"));
+}
+
+/// G4: the PnL report puts the February sale into February.
+#[test]
+fn golden_g4_pnl_report_by_month() {
+    let (_dir, vault, _store) = btc_stream("2026-02-03T00:00:00Z");
+    let filter = ReportFilter {
+        from: Some("2026-01".into()),
+        to: Some("2026-02".into()),
+        ..ReportFilter::default()
+    };
+    let Report::Pnl(report) = vault
+        .report(
+            ReportKind::Pnl,
+            &filter,
+            secs("2026-03-01T12:00:00Z"),
+            "UTC",
+        )
+        .unwrap()
+    else {
+        panic!("a pnl report")
+    };
+    assert_eq!(report.rows.len(), 2);
+    assert_eq!(report.rows[0].realized, amount("0"));
+    assert_eq!(report.rows[1].realized, amount("15000"));
+    assert_eq!(report.total_realized, amount("15000"));
+    assert!(report.has_data);
+}
+
+/// G5: merging two BTC token accounts keeps quantity, average and PnL.
+#[test]
+fn golden_g5_merge_without_corrections() {
+    use super::store_change::{StoreChange, StoreChangeInput};
+    let (_dir, mut vault) = empty_vault();
+    vault.set_base_currency("usd");
+    let wallet = store(&mut vault, "Wallet", StoreKind::Crypto, None);
+    let token = |vault: &mut UnlockedVault, name: &str| {
+        vault
+            .create_store_with(
+                name,
+                StoreKind::Crypto,
+                "#000",
+                "",
+                Some(wallet.clone()),
+                super::StoreExtras {
+                    sub_type: Some(SubType::Token),
+                    binding: Some(Binding::Asset(btc())),
+                    ..super::StoreExtras::default()
+                },
+            )
+            .unwrap()
+            .id
+    };
+    let first = token(&mut vault, "BTC A");
+    let second = token(&mut vault, "BTC B");
+    let mut buy_a = income_of(&first, btc(), "1", "40000", "buy");
+    at(&mut buy_a, "2026-01-01T00:00:00Z");
+    vault.add_transaction(buy_a).unwrap();
+    let mut buy_b = income_of(&second, btc(), "1", "50000", "buy");
+    at(&mut buy_b, "2026-01-02T00:00:00Z");
+    vault.add_transaction(buy_b).unwrap();
+    let realized_before = vault.realized_pnl().total_base;
+
+    let plan = vault
+        .apply_store_change(&StoreChangeInput {
+            store_id: first.clone(),
+            change: StoreChange::MergeInto {
+                target_id: second.clone(),
+            },
+        })
+        .unwrap();
+
+    assert_eq!(plan.moved_transactions, 1);
+    assert!(vault.find_store(&first).is_none());
+    assert_eq!(holding_of(&vault, &second, &btc()), amount("2"));
+    assert_eq!(avg_cost_of(&vault, &second), Some(amount("45000")));
+    assert_eq!(vault.realized_pnl().total_base, realized_before);
+}
