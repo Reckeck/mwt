@@ -63,7 +63,7 @@ const firstWithSum = computed(() => blocks.value.flatMap((block) => block.items)
       </Button>
     </div>
 
-    <p v-if="!all.length" class="py-6 text-center text-sm text-muted-foreground">{{ t('categories.manage.noMatch') }}</p>
+    <p v-if="!categories.isPending.value && !all.length" class="py-6 text-center text-sm text-muted-foreground">{{ t('categories.manage.noMatch') }}</p>
 
     <template v-for="block in blocks" :key="block.id">
       <p class="pt-2.5 pb-0.5 text-xs font-medium text-muted-foreground">{{ t(block.title) }}</p>

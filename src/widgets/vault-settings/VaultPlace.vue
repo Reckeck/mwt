@@ -21,7 +21,7 @@ const reveal = useMutation({
 <template>
   <div class="grid gap-1.5">
     <span class="text-sm font-medium">{{ t('vaultFile.whereTitle') }}</span>
-    <div class="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-1.5">
+    <div class="flex min-h-8.5 min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-1.5">
       <span class="min-w-0 break-all text-sm" data-vault-path>{{ vault.status?.path }}</span>
       <Button v-if="isDesktop" variant="secondary" size="sm" class="shrink-0" :loading="reveal.isPending.value" @click="reveal.mutate()">
         {{ t('vaultFile.reveal') }}
