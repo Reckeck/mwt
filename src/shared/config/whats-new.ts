@@ -9,11 +9,13 @@ import type { WhatsNewEntry } from './whats-new.types'
 // The extension lets tests/checks/onboarding.check.ts load this file.
 import { WHATS_NEW_ARCHIVE } from './whats-new.archive.ts'
 import { WHATS_NEW_AUTUMN } from './whats-new.autumn.ts'
+import { WHATS_NEW_CRYPTO_NETWORK } from './whats-new.crypto-network.ts'
 import { WHATS_NEW_NOVEMBER } from './whats-new.november.ts'
 
 export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
+  ...WHATS_NEW_CRYPTO_NETWORK,
   ...WHATS_NEW_NOVEMBER,
   {
     id: 'togetherEvents',
@@ -142,7 +144,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       { key: 'calendar', route: 'transactions' },
       { key: 'contacts', route: 'transactions' },
       { key: 'form' },
-      { key: 'deal', route: 'stores' },
     ],
   },
   {
@@ -190,7 +191,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
   {
     id: 'vaultSetup',
     date: '2026-10-22',
-    points: [{ key: 'currency' }, { key: 'direction', route: 'settings:accounting:direction' }],
+    points: [{ key: 'currency' }],
   },
   {
     id: 'dashboardNew',

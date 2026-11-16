@@ -1,0 +1,16 @@
+{
+  "cryptoTrack.relations.tab": "Связи",
+  "cryptoTrack.relations.group.own_addresses": "Ваши другие адреса",
+  "cryptoTrack.relations.group.exchanges": "Обменники",
+  "cryptoTrack.relations.group.protocols": "Протоколы",
+  "cryptoTrack.relations.group.fiat": "Записи в деньгах",
+  "cryptoTrack.relations.count": "Операций: {count}",
+  "cryptoTrack.relations.emptyTitle": "Связей пока нет",
+  "cryptoTrack.relations.emptyHint": "Здесь появятся ваши другие адреса, обменники и протоколы, с которыми работал адрес, и записи в деньгах, привязанные к его операциям. Начните с операций адреса.",
+  "cryptoTrack.relations.openOperations": "Открыть операции",
+  "tour.wallet.cryptoRelations.title": "Связи",
+  "tour.wallet.cryptoRelations.body": "Ваши другие адреса, обменники, протоколы и записи в деньгах, связанные с этим адресом. Строка открывает операции с нужным фильтром.",
+  "whatsNew.cryptoRelations.title": "Вкладка «Связи» у адреса",
+  "whatsNew.cryptoRelations.tab": "У адреса, который ведёт приложение, вкладка «Связи» показывает ваши другие адреса, обменники, протоколы и привязанные записи. Всё считается из операций при каждом открытии, ничего не хранится.",
+  "whatsNew.cryptoRelations.opens": "Строка открывает операции, уже отфильтрованные по ней. У обычных кошельков вкладки «Связи» больше нет: те же связи видны в карточке кошелька."
+}

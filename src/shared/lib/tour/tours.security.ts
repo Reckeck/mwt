@@ -1,5 +1,8 @@
 import type { TourStep } from './tours.types.ts'
 
+/** The Settings -> Crypto steps (spec E17) join the settings tour through here, which keeps `tours.ts` under its size limit. */
+export { CRYPTO_NETWORK_TOUR_STEPS } from './tours.crypto-network.ts'
+
 /**
  * Vault protection steps of the settings tour (Settings -> Vault): the level card, the way to level 3
  * from the exchange key form, and quick unlock. A step whose element is not on screen is skipped

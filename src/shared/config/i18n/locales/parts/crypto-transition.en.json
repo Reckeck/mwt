@@ -1,0 +1,8 @@
+{
+  "securityRaise.capital.title": "{count} wallet leaves the totals | {count} wallets leave the totals",
+  "securityRaise.capital.kept": "Nothing is deleted: the wallets go to the archive and their records stay readable. A connected exchange and followed addresses stay where they are. The capital leaves the totals at once, before the first address is connected.",
+  "securityRaise.done.archived": "Archived: {names}. The records are kept and stay readable",
+  "whatsNew.cryptoTransition.title": "Crypto: the move to level 3 and the archive",
+  "whatsNew.cryptoTransition.warning": "Before the move to level 3 the wizard shows how much capital leaves the totals together with the old crypto wallets you kept by hand.",
+  "whatsNew.cryptoTransition.archive": "Such wallets are not deleted, they go to the archive: the records stay readable. A connected exchange stays."
+}

@@ -1,0 +1,6 @@
+{
+  "cryptoTrack.legacy.recordedRow": "Записано операций",
+  "cryptoTrack.legacy.recordedHint": "Операции с биржи попадают в крипто-раздел сразу: подтверждать их больше не нужно. Записи, которые ждали подтверждения в прошлых версиях, перенесены туда же — ни одна не потеряна и ни одна не учтена дважды.",
+  "cryptoTrack.legacy.lastSync": "Проверено {when}, записано операций: {recorded}",
+  "cryptoTrack.legacy.syncedDetail": "Записано: {recorded}, уже было: {known}"
+}

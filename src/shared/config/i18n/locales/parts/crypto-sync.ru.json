@@ -1,0 +1,10 @@
+{
+  "sync.coll.crypto_accounts": "Крипто-адреса",
+  "sync.coll.crypto_events": "Крипто-операции",
+  "sync.coll.crypto_overrides": "Поправки к крипто-операциям",
+  "sync.coll.crypto_tokens": "Токены",
+  "sync.coll.crypto_positions": "Позиции DeFi",
+  "sync.coll.crypto_snapshots": "Снимки крипто-балансов",
+  "sync.coll.crypto_prices": "Цены токенов",
+  "sync.coll.crypto_wiped_at": "Стирание крипто-модуля"
+}

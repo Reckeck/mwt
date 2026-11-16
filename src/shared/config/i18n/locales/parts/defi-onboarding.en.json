@@ -1,0 +1,15 @@
+{
+  "tourName.crypto-positions": "DeFi positions",
+  "tour.defi.list.title": "What your addresses hold",
+  "tour.defi.list.body": "Pools, loans and staking of the followed addresses. The app only reads them from the network: a position cannot be added or edited here.",
+  "tour.defi.net.title": "A dash is not zero",
+  "tour.defi.net.body": "The net result is what the position earned beyond what was put in. A dash means «nobody knows this figure» (no token price or no history), never a zero. The ≈ mark means the adapter itself called the number approximate.",
+  "tour.defi.fees.title": "Fees and accruals",
+  "tour.defi.fees.body": "A pool has fees, a loan or staking has accruals, and they are already inside the value. Loss against holding is shown for reference and is not part of the net.",
+  "defiOnboarding.connect": "Connect an address",
+  "cryptoTrack.positions.hint.putIn": "What the position cost on the day it was put in: at the deposit-day price, not today's.",
+  "cryptoTrack.positions.hint.value": "What the position is worth now, at current token prices. The result is a figure of its own: it also counts fees, gas and withdrawals.",
+  "whatsNew.cryptoPositions.title": "DeFi positions",
+  "whatsNew.cryptoPositions.screen": "A new «DeFi positions» screen: pools, loans and staking of your addresses, amount put in and current value, net result, fees and accruals. The data is only read from the network.",
+  "whatsNew.cryptoPositions.unknown": "A dash means «the figure is unknown», never a zero; the ≈ mark means the adapter called the number approximate. Loss against holding is shown for reference and is not part of the net."
+}

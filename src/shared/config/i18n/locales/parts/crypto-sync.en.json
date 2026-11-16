@@ -1,0 +1,10 @@
+{
+  "sync.coll.crypto_accounts": "Crypto addresses",
+  "sync.coll.crypto_events": "Crypto operations",
+  "sync.coll.crypto_overrides": "Crypto corrections",
+  "sync.coll.crypto_tokens": "Tokens",
+  "sync.coll.crypto_positions": "DeFi positions",
+  "sync.coll.crypto_snapshots": "Crypto balance snapshots",
+  "sync.coll.crypto_prices": "Token prices",
+  "sync.coll.crypto_wiped_at": "Crypto module wipe"
+}
