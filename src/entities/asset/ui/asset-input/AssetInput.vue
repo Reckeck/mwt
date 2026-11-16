@@ -69,9 +69,7 @@ const fiatCodes = computed(() => new Set(settings.fiatCurrencies))
 const favoriteRows = computed(() =>
   query.value.trim()
     ? []
-    : favorites.withBase.value
-        .map((code) => ({ code: code.toUpperCase(), fiat: fiatCodes.value.has(code) }))
-        .filter((row) => row.fiat || settings.cryptoEnabled),
+    : favorites.withBase.value.map((code) => ({ code: code.toUpperCase(), fiat: fiatCodes.value.has(code) })),
 )
 const fiatHits = computed(() => {
   const shown = new Set(favoriteRows.value.map((row) => row.code.toLowerCase()))
@@ -101,8 +99,7 @@ function onInput(value: string) {
     clearedByTyping = true
     asset.value = null
   }
-  // Without the crypto direction there is no coin to look up: fiat comes from the catalog.
-  if (settings.cryptoEnabled) schedule(value)
+  schedule(value)
 }
 
 function close(symbol: string) {
