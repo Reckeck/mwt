@@ -13,6 +13,29 @@ use crate::exec::Cmd;
 const PACKAGE: &str = "multi-wallet-tracker-bin";
 const KEY_VAR: &str = "AUR_SSH_PRIVATE_KEY";
 
+/// The AUR's SSH host keys, pinned: the private key is sent only to a host that proves one of
+/// them. Their SHA256 fingerprints are published at https://aur.archlinux.org/ (the unit test
+/// below checks the keys against them). When the AUR rotates its keys the push fails with a host
+/// key error: take the new keys from `ssh-keyscan aur.archlinux.org`, compare their fingerprints
+/// with that page, and replace the lines and `AUR_FINGERPRINTS`.
+const AUR_KNOWN_HOSTS: &[&str] = &[
+    "aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN\n",
+    "aur.archlinux.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBLMiLrP8pVi5BFX2i3vepSUnpedeiewE5XptnUnau+ZoeUOPkpoCgZZuYfpaIQfhhJJI5qgnjJmr4hyJbe/zxow=\n",
+    "aur.archlinux.org ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDKF9vAFWdgm9Bi8uc+tYRBmXASBb5cB5iZsB7LOWWFeBrLp3r14w0/9S2vozjgqY5sJLDPONWoTTaVTbhe3vwO8CBKZTEt1AcWxuXNlRnk9FliR1/eNB9uz/7y1R0+c1Md+P98AJJSJWKN12nqIDIhjl2S1vOUvm7FNY43fU2knIhEbHybhwWeg+0wxpKwcAd/JeL5i92Uv03MYftOToUijd1pqyVFdJvQFhqD4v3M157jxS5FTOBrccAEjT+zYmFyD8WvKUa9vUclRddNllmBJdy4NyLB8SvVZULUPrP3QOlmzemeKracTlVOUG1wsDbxknF1BwSCU7CmU6UFP90kpWIyz66bP0bl67QAvlIc52Yix7pKJPbw85+zykvnfl2mdROsaT8p8R9nwCdFsBc9IiD0NhPEHcyHRwB8fokXTajk2QnGhL+zP5KnkmXnyQYOCUYo3EKMXIlVOVbPDgRYYT/XqvBuzq5S9rrU70KoI/S5lDnFfx/+lPLdtcnnEPk=\n",
+];
+
+#[cfg(test)]
+pub(super) const AUR_FINGERPRINTS: [&str; 3] = [
+    "SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4", // ed25519
+    "SHA256:uTa/0PndEgPZTf76e1DFqXKJEXKsn7m9ivhLQtzGOCI", // ecdsa
+    "SHA256:5s5cIyReIfNNVGRFdDbe3hdYiI5OelHGpw2rOUud3Q8", // rsa
+];
+
+#[cfg(test)]
+pub(super) fn aur_known_hosts() -> &'static [&'static str] {
+    AUR_KNOWN_HOSTS
+}
+
 /// The workflow annotation for a run without a key (nothing is pushed, the job stays green).
 pub const NO_KEY_WARNING: &str =
     "::warning::AUR_SSH_PRIVATE_KEY is not set: multi-wallet-tracker-bin is not pushed to the AUR";
@@ -36,6 +59,8 @@ pub struct Plan {
 pub enum Step {
     /// `$AUR_SSH_PRIVATE_KEY` into `~/.ssh/aur`, mode 0600.
     WriteKey(PathBuf),
+    /// The pinned host keys of the AUR into `known_hosts`.
+    WriteKnownHosts(PathBuf),
     Run(Cmd),
     /// The stdout of a command into a file.
     Capture {
@@ -75,6 +100,9 @@ impl Step {
     pub fn show(&self) -> String {
         match self {
             Self::WriteKey(path) => format!("write ${KEY_VAR} to {} (mode 0600)", path.display()),
+            Self::WriteKnownHosts(path) => {
+                format!("write the pinned AUR host keys to {}", path.display())
+            }
             Self::Run(cmd) => display(cmd),
             Self::Capture { cmd, out, append } => {
                 format!(
@@ -96,7 +124,10 @@ pub fn steps(plan: &Plan) -> Vec<Step> {
     let key = plan.home.join(".ssh/aur");
     let clone = plan.work.join("aur");
     let clone_text = clone.display().to_string();
-    let ssh = format!("ssh -i {} -o IdentitiesOnly=yes", key.display());
+    let ssh = format!(
+        "ssh -i {} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes",
+        key.display()
+    );
     let git = |rest: &[&str]| {
         Cmd::new("git")
             .args([
@@ -117,11 +148,7 @@ pub fn steps(plan: &Plan) -> Vec<Step> {
             "openssh",
         ])),
         Step::WriteKey(key),
-        Step::Capture {
-            cmd: Cmd::new("ssh-keyscan").args(["-t", "ed25519,rsa", "aur.archlinux.org"]),
-            out: plan.home.join(".ssh/known_hosts"),
-            append: true,
-        },
+        Step::WriteKnownHosts(plan.home.join(".ssh/known_hosts")),
         Step::Run(Cmd::new("sh").args(["-c", "id builder >/dev/null 2>&1 || useradd -m builder"])),
         Step::Run(
             Cmd::new("git")
@@ -232,6 +259,10 @@ fn exec(cmd: &Cmd) -> Result<bool> {
 fn execute(step: &Step) -> Result<bool> {
     match step {
         Step::WriteKey(path) => write_key(path)?,
+        Step::WriteKnownHosts(path) => {
+            println!("$ {}", step.show());
+            std::fs::write(path, AUR_KNOWN_HOSTS.concat())?;
+        }
         Step::Run(cmd) => {
             if !exec(cmd)? {
                 bail!("`{}` failed", cmd.program);

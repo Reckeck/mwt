@@ -15,6 +15,13 @@ use crate::exec::{Cmd, run_inherited, which};
 const TEMPLATE: &str = "dev.mwt.MultiWalletTracker";
 const DEV_NAME: &str = "<name>Multi Wallet Tracker Dev</name>";
 const REMOTE: &str = "https://dl.flathub.org/repo/flathub.flatpakrepo";
+const SHARED_MODULES_URL: &str = "https://github.com/flathub/shared-modules.git";
+/// The `flathub/shared-modules` commit the manifest's module
+/// (`libayatana-appindicator/libayatana-appindicator-gtk3.json`) is taken from. Pinned because
+/// flathub removes and renames modules there, and a build from `HEAD` would break the release
+/// the day it does. To update: `git ls-remote <url> HEAD`, check that the manifest's module
+/// still exists in that commit, then replace this constant.
+const SHARED_MODULES_COMMIT: &str = "c91a81101cf9bcf9fc8132e8c3ebed741ad8bae6";
 
 /// Another channel gets a copy of a template file under its own id and name.
 fn rewrite(text: &str, flatpak_id: &str, app_name: &str) -> String {
@@ -54,17 +61,25 @@ pub fn run(root: &Path, args: &LinuxArgs) -> Result<()> {
     if modules.exists() {
         std::fs::remove_dir_all(&modules)?;
     }
-    run_inherited(
-        root,
-        &Cmd::new("git")
-            .args([
-                "clone",
-                "--depth",
-                "1",
-                "https://github.com/flathub/shared-modules.git",
-            ])
-            .arg(modules.display().to_string()),
-    )?;
+    // A commit cannot be cloned with `--depth 1`: fetch exactly it into an empty repository.
+    std::fs::create_dir_all(&modules)?;
+    let modules_text = modules.display().to_string();
+    for rest in [
+        vec!["init", "--quiet"],
+        vec![
+            "fetch",
+            "--depth",
+            "1",
+            SHARED_MODULES_URL,
+            SHARED_MODULES_COMMIT,
+        ],
+        vec!["checkout", "--quiet", "FETCH_HEAD"],
+    ] {
+        run_inherited(
+            root,
+            &Cmd::new("git").args(["-C", &modules_text]).args(rest),
+        )?;
+    }
     std::fs::copy(
         release.join(format!(
             "multi-wallet-tracker-{version}-linux-x86_64.tar.gz"
@@ -131,5 +146,26 @@ mod tests {
     fn the_dev_template_is_left_as_it_is() {
         let text = "dev.mwt.MultiWalletTracker";
         assert_eq!(rewrite(text, TEMPLATE, "x"), text);
+    }
+
+    #[test]
+    fn the_shared_modules_pin_is_a_full_commit_hash() {
+        assert_eq!(SHARED_MODULES_COMMIT.len(), 40);
+        assert!(
+            SHARED_MODULES_COMMIT
+                .chars()
+                .all(|ch| ch.is_ascii_hexdigit())
+        );
+    }
+
+    #[test]
+    fn the_manifest_takes_its_module_from_the_pinned_checkout() {
+        let manifest = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../packaging/flatpak")
+                .join(format!("{TEMPLATE}.yml")),
+        )
+        .unwrap();
+        assert!(manifest.contains("shared-modules/libayatana-appindicator/"));
     }
 }
