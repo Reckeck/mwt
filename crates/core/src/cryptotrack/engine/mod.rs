@@ -50,7 +50,7 @@ pub mod snapshot;
 
 pub use basis::{AssetState, Doubt, Inputs, Ledger, Prices, Quote, fold};
 pub use ids::Adjustment;
-pub use normalize::{Followed, Normalized, Unread, normalize};
+pub use normalize::{Arrival, Followed, Normalized, Unread, combine, normalize};
 pub use overrides::EventView;
 pub use reconcile::{Reading, Reconciled, adjust};
 pub use snapshot::Snapshots;
