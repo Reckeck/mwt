@@ -37,6 +37,7 @@ export function formFromTransaction(stored: Transaction, storeId: string): Trans
         txHash: record.details.tx_hash ?? '',
         sourceStoreId: record.details.source_store_id ?? '',
         unitPrice: record.details.unit_price ?? '',
+        forMonth: record.details.for_month ?? '',
         ...stampToPrice(record.price),
       })
       break
@@ -50,6 +51,7 @@ export function formFromTransaction(stored: Transaction, storeId: string): Trans
         counterpart: record.to,
         network: record.details.network ?? '',
         txHash: record.details.tx_hash ?? '',
+        forMonth: record.details.for_month ?? '',
         ...stampToPrice(record.price),
       })
       break

@@ -6,7 +6,7 @@ import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { useSettingsStore } from '@/shared/store/settings'
 
-import { pricedAsset, toIsoTimestamp } from '../transaction-form.model'
+import { pricedAsset, pricedAssetKey, toIsoTimestamp } from '../transaction-form.model'
 import type { TxFormState } from './use-tx-form-state'
 import { keepPreviousFor } from '@/shared/lib/query'
 
@@ -117,13 +117,26 @@ export function useTxPricing(state: TxFormState) {
     }
   })
 
+  // The price belongs to the asset it was set for: another asset clears it, unless the price was
+  // changed after the previous snapshot (a fill sets asset and price in one tick).
+  let priceSnapshot = form.price
+  watch(
+    () => pricedAssetKey(form),
+    () => {
+      if (form.price === priceSnapshot) {
+        form.price = ''
+        form.priceCurrency = ''
+      }
+      priceSnapshot = form.price
+    },
+  )
+
   // Moving an operation to another date re-prices it there, unless the price
   // was changed by hand in this edit.
-  const loadedPrice = form.price
   watch(
     () => form.timestamp,
     () => {
-      if (editing.value && form.price === loadedPrice) form.price = ''
+      if (editing.value && form.price === priceSnapshot) form.price = ''
     },
   )
 

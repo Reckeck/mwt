@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
 
+import { emptyForm } from '../transaction-form.model'
 import { applyPlan } from '../lib/form/apply-plan'
 import type { TxFormState } from './use-tx-form-state'
 
@@ -51,7 +52,11 @@ export function useTxKind(state: TxFormState) {
         form.kind = props.initial.kind
         if (!form.categories.length) form.categories = [...props.initial.categories]
         if (props.initial.to && props.initial.to !== props.storeId) form.to = { store: props.initial.to }
-      } else if (!offered.value.includes(form.kind)) form.kind = data.default
+      } else if (!offered.value.includes(form.kind)) {
+        // Repeat of a kind this wallet does not offer: the wallet's normal new form, not a switched copy.
+        if (props.prefill) Object.assign(form, emptyForm(props.storeId, data.default))
+        else form.kind = data.default
+      }
     },
     { immediate: true },
   )

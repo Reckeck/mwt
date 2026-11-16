@@ -18,6 +18,13 @@ export function pricedAsset(form: TransactionFormState): AssetRef | null {
   }
 }
 
+/** The identity of the priced asset (`symbol|coingecko_id|chain|contract`), `''` without one. */
+export function pricedAssetKey(form: TransactionFormState): string {
+  const asset = pricedAsset(form)
+  if (!asset) return ''
+  return [asset.symbol, asset.coingecko_id, asset.chain, asset.contract].map((part) => part ?? '').join('|')
+}
+
 /** Build the backend input, or `null` while a required asset is missing. */
 export function formToInput(form: TransactionFormState): TransactionInput | null {
   const shared = { common: common(form), fee: feeInput(form) }

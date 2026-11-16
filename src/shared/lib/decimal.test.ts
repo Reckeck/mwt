@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { decimalAdd, decimalInput, decimalMul, decimalSub, parseDecimal } from './decimal'
+import { decimalAdd, decimalCmp, decimalInput, decimalMul, decimalShare, decimalSub, parseDecimal } from './decimal'
 
 describe('parseDecimal', () => {
   it('accepts a comma as the decimal mark and trims', () => {
@@ -50,5 +50,33 @@ describe('decimalInput', () => {
     expect(decimalInput(0, 2)).toBe('')
     expect(decimalInput(-1, 2)).toBe('')
     expect(decimalInput(Number.NaN, 2)).toBe('')
+  })
+})
+
+describe('decimalCmp', () => {
+  it('compares exactly', () => {
+    expect(decimalCmp('0.1', '0.10')).toBe(0)
+    expect(decimalCmp('0.30000000000000004', '0.3')).toBe(1)
+    expect(decimalCmp('-1', '0.5')).toBe(-1)
+  })
+
+  it('is null for a non-number', () => {
+    expect(decimalCmp('x', '1')).toBeNull()
+  })
+})
+
+describe('decimalShare', () => {
+  it('splits a given amount by parts exactly, rounding half away from zero', () => {
+    expect(decimalShare('100', '3000', '9000', 2)).toBe('33.33')
+    expect(decimalShare('100', '6000', '9000', 2)).toBe('66.67')
+    expect(decimalShare('0.3', '1', '3', 1)).toBe('0.1')
+    expect(decimalShare('1', '1', '8', 2)).toBe('0.13')
+    expect(decimalShare('-1', '1', '8', 2)).toBe('-0.13')
+  })
+
+  it('is null for a non-number or a non-positive total', () => {
+    expect(decimalShare('100', '1', '0', 2)).toBeNull()
+    expect(decimalShare('100', '1', '-3', 2)).toBeNull()
+    expect(decimalShare('x', '1', '3', 2)).toBeNull()
   })
 })

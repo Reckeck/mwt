@@ -81,6 +81,24 @@ describe('AmountInput', () => {
     expect(expressions()).toEqual([])
   })
 
+  it('Esc restores the model when the expression was typed key by key', async () => {
+    const { input, type, model } = setup({}, '700')
+    await input.trigger('focus')
+    for (const text of ['1', '1+', '1+2']) await type(text)
+    await input.trigger('keydown', { key: 'Escape' })
+    expect((input.element as HTMLInputElement).value).toBe('700')
+    expect(model()).toBe('700')
+  })
+
+  it('blur on a broken key-by-key expression restores the model', async () => {
+    const { input, type, model } = setup({}, '300')
+    await input.trigger('focus')
+    for (const text of ['5', '50', '500', '500/', '500/0']) await type(text)
+    await input.trigger('blur')
+    expect((input.element as HTMLInputElement).value).toBe('300')
+    expect(model()).toBe('300')
+  })
+
   it('does not let Enter or Esc out of the field while an expression is open', async () => {
     const { input, type } = setup()
     await type('1+2')

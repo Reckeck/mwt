@@ -16,13 +16,14 @@ interface Context {
 /**
  * The typed-expression side of an amount field. While the text holds an
  * operator the field shows it raw and the model keeps the last good number;
- * Enter/blur turns it into the result, Esc puts back what was there at focus.
+ * Enter/blur turns it into the result, Esc puts back what was there at focus (text and model: the keystrokes before the first operator had already written the model).
  */
 export function useAmountExpression(context: Context) {
   /** The raw text while it is an expression; `null` for a plain number. */
   const expr = ref<string | null>(null)
   const attempted = ref(false)
   let atFocus = ''
+  let modelAtFocus = ''
 
   const outcome = computed<AmountExprOutcome | null>(() => {
     if (expr.value === null) return null
@@ -41,6 +42,7 @@ export function useAmountExpression(context: Context) {
 
   function onFocus() {
     atFocus = context.display.value
+    modelAtFocus = normalizeAmount(atFocus, context.options()).canonical
   }
 
   /** Typed text goes here first; `true` when it is an expression and was taken over. */
@@ -76,6 +78,7 @@ export function useAmountExpression(context: Context) {
   function cancel(): boolean {
     if (expr.value === null) return false
     context.display.value = atFocus
+    context.setModel(modelAtFocus)
     expr.value = null
     attempted.value = false
     return true

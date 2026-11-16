@@ -60,3 +60,32 @@ export function decimalMul(left: string, right: string): string | null {
 export function decimalInput(value: number, digits: number): string {
   return Number.isFinite(value) && value > 0 ? String(+value.toFixed(digits)) : ''
 }
+
+/** Sign of `left − right`; `null` when either side is not a number. */
+export function decimalCmp(left: string, right: string): -1 | 0 | 1 | null {
+  const lhs = parseDecimal(left)
+  const rhs = parseDecimal(right)
+  if (lhs === null || rhs === null) return null
+  const digits = Math.max(places(lhs), places(rhs))
+  const diff = scaled(lhs, digits) - scaled(rhs, digits)
+  return diff === 0n ? 0 : diff < 0n ? -1 : 1
+}
+
+/**
+ * `given × part ÷ total` rounded half away from zero to `digits` places;
+ * `null` when an input is not a number or `total` is not positive.
+ */
+export function decimalShare(given: string, part: string, total: string, digits: number): string | null {
+  const amount = parseDecimal(given)
+  const portion = parseDecimal(part)
+  const whole = parseDecimal(total)
+  if (amount === null || portion === null || whole === null) return null
+  const divisor = scaled(whole, places(whole))
+  if (divisor <= 0n) return null
+  const numerator =
+    scaled(amount, places(amount)) * scaled(portion, places(portion)) * 10n ** BigInt(digits + places(whole))
+  const denominator = divisor * 10n ** BigInt(places(amount) + places(portion))
+  const magnitude = numerator < 0n ? -numerator : numerator
+  const rounded = (2n * magnitude + denominator) / (2n * denominator)
+  return unscaled(numerator < 0n ? -rounded : rounded, digits)
+}

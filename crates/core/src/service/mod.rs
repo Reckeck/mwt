@@ -1527,6 +1527,7 @@ impl UnlockedVault {
             .ok_or_else(|| Error::Missing("transaction".into()))?;
         let mut origin = self.doc.transactions[index].meta().origin.clone();
         let keep = self.doc.transactions[index].meta().keep;
+        let utility_item_id = self.doc.transactions[index].meta().utility_item_id.clone();
         // A new amount for an operation booked approximately is the real one.
         if let TxOrigin::Workflow { estimated, .. } = &mut origin
             && *estimated
@@ -1539,6 +1540,8 @@ impl UnlockedVault {
         tx.meta_mut().origin = origin;
         // The «keep» mark is not the form's to change.
         tx.meta_mut().keep = keep;
+        // Nor is the utility bill it settles: the form has no such field.
+        tx.meta_mut().utility_item_id = utility_item_id;
         self.prepare_transaction(&mut tx)?;
         let event_edit = if follow_events {
             self.plan_shared_tx_edit(id, &tx)?
@@ -5492,5 +5495,22 @@ mod persist_tests {
             reopened.settings.fx_refresh_interval_sec, 1800,
             "an unrelated setting was lost by the editor write"
         );
+    }
+
+    #[test]
+    fn editing_a_transaction_keeps_its_utility_link() {
+        use super::test_support::{empty_vault, income, store};
+        use crate::model::store::StoreKind;
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let mut payment = income(&cash, "100", "water");
+        payment.meta_mut().utility_item_id = Some("util-1".into());
+        let saved = vault.add_transaction(payment).unwrap();
+        let id = saved.meta().id.clone();
+
+        // The form sends no link: the stored one stays.
+        let edited = income(&cash, "120", "water");
+        let updated = vault.update_transaction(&id, edited).unwrap();
+        assert_eq!(updated.meta().utility_item_id.as_deref(), Some("util-1"));
     }
 }
