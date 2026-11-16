@@ -36,9 +36,13 @@ on:
         description: Registry path of the CI images
         value: ${{ jobs.images.outputs.base }}
 
-# Newer runs of the same PR/branch replace older ones; main always finishes.
+# Newer runs of the same PR/branch replace older ones; main always finishes. `github.workflow` is
+# the caller's name when release.yml calls this workflow, so the release run's checks sit in a group
+# of their own: a manual run of this workflow on the same branch no longer cancels them (a
+# cancelled `checks` is neither a failure for cancel-on-red nor a success for `publish`). The
+# `ci-` prefix keeps the group apart from release.yml's own `release-<ref>` (names are case-blind).
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:

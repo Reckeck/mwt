@@ -69,7 +69,10 @@ What makes CI fast and what must not be broken:
   otherwise `cargo test` took about 5.5 min instead of about 30 s. The KDF
   parameters did not change.
 - **A new push cancels the old run** (`concurrency` with `cancel-in-progress`
-  on all branches except `main`): a release from `main` is not interrupted.
+  on all branches except `main`): a release from `main` is not interrupted. The
+  group name carries `github.workflow`, which is the caller's name when
+  `release.yml` calls `ci.yml`: the checks of a release run are not cancelled by
+  a manual `ci.yml` run on the same branch.
 - **Pre-releases without LTO.** The dev channel (pre-releases from
   `development`, manual and local builds) is built with
   `CARGO_PROFILE_RELEASE_LTO=off` and `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16`:

@@ -227,9 +227,30 @@ fn aur_steps_never_carry_the_key() {
     let text: String = all.iter().map(Step::show).collect::<Vec<_>>().join("\n");
     assert!(!text.contains("SECRET") && !text.contains("PRIVATE KEY"));
     assert!(text.contains("write $AUR_SSH_PRIVATE_KEY to /root/.ssh/aur (mode 0600)"));
-    assert!(text.contains("-i /root/.ssh/aur -o IdentitiesOnly=yes"));
+    assert!(text.contains("-i /root/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"));
+    assert!(text.contains("write the pinned AUR host keys to /root/.ssh/known_hosts"));
+    assert!(!text.contains("ssh-keyscan"));
     assert!(text.contains("render.sh 0.1.0 /rel/multi-wallet-tracker-0.1.0-linux-x86_64.tar.gz https://github.com/Reckeck/mwt/releases/download/v0.1.0/"));
     assert!(text.trim_end().ends_with("push origin HEAD:master"));
+}
+
+#[test]
+fn the_pinned_aur_host_keys_match_the_published_fingerprints() {
+    use base64::Engine;
+    use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
+    use sha2::{Digest, Sha256};
+
+    let fingerprints: Vec<String> = super::aur::aur_known_hosts()
+        .iter()
+        .map(|line| {
+            let mut fields = line.split_whitespace();
+            assert_eq!(fields.next(), Some("aur.archlinux.org"));
+            let _kind = fields.next().unwrap();
+            let blob = STANDARD.decode(fields.next().unwrap()).unwrap();
+            format!("SHA256:{}", STANDARD_NO_PAD.encode(Sha256::digest(blob)))
+        })
+        .collect();
+    assert_eq!(fingerprints, super::aur::AUR_FINGERPRINTS);
 }
 
 fn manifest_names(version: &str, with_apk: bool) -> Vec<String> {
