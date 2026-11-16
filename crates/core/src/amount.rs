@@ -16,6 +16,11 @@ pub struct Amount(pub Decimal);
 
 impl Amount {
     pub const ZERO: Amount = Amount(Decimal::ZERO);
+    pub const MAX: Amount = Amount(Decimal::MAX);
+    pub const MIN: Amount = Amount(Decimal::MIN);
+    /// Largest magnitude `parse` accepts: 10^18.
+    pub const MAX_INPUT: Amount =
+        Amount(Decimal::from_parts(0xA764_0000, 0x0DE0_B6B3, 0, false, 0));
 
     pub fn new(value: Decimal) -> Self {
         Amount(value)
@@ -26,9 +31,42 @@ impl Amount {
         if trimmed.is_empty() {
             return Ok(Amount::ZERO);
         }
-        Decimal::from_str_exact(trimmed)
+        let value = Decimal::from_str_exact(trimmed)
             .map(Amount)
-            .map_err(|_| Error::InvalidInput(format!("bad number: {trimmed}")))
+            .map_err(|_| Error::InvalidInput(format!("bad number: {trimmed}")))?;
+        if !value.within_input_bound() {
+            return Err(Error::InvalidInput(format!(
+                "number out of range: {trimmed}"
+            )));
+        }
+        Ok(value)
+    }
+
+    /// `|self| <= MAX_INPUT`.
+    pub fn within_input_bound(self) -> bool {
+        self.0.abs() <= Self::MAX_INPUT.0
+    }
+
+    pub fn checked_add(self, rhs: Amount) -> Option<Amount> {
+        self.0.checked_add(rhs.0).map(Amount)
+    }
+
+    pub fn checked_sub(self, rhs: Amount) -> Option<Amount> {
+        self.0.checked_sub(rhs.0).map(Amount)
+    }
+
+    pub fn checked_mul(self, rhs: Amount) -> Option<Amount> {
+        self.0.checked_mul(rhs.0).map(Amount)
+    }
+
+    /// `None` on overflow and on a zero divisor.
+    pub fn checked_div(self, rhs: Amount) -> Option<Amount> {
+        self.0.checked_div(rhs.0).map(Amount)
+    }
+
+    /// The saturation bound for a result whose true sign is `negative`.
+    fn bound(negative: bool) -> Amount {
+        if negative { Amount::MIN } else { Amount::MAX }
     }
 
     pub fn from_f64(value: f64) -> Self {
@@ -141,26 +179,28 @@ impl Amount {
 impl Add for Amount {
     type Output = Amount;
     fn add(self, rhs: Amount) -> Amount {
-        Amount(self.0 + rhs.0)
+        self.checked_add(rhs)
+            .unwrap_or_else(|| Amount::bound(rhs.is_negative()))
     }
 }
 
 impl AddAssign for Amount {
     fn add_assign(&mut self, rhs: Amount) {
-        self.0 += rhs.0;
+        *self = *self + rhs;
     }
 }
 
 impl Sub for Amount {
     type Output = Amount;
     fn sub(self, rhs: Amount) -> Amount {
-        Amount(self.0 - rhs.0)
+        self.checked_sub(rhs)
+            .unwrap_or_else(|| Amount::bound(self.is_negative()))
     }
 }
 
 impl SubAssign for Amount {
     fn sub_assign(&mut self, rhs: Amount) {
-        self.0 -= rhs.0;
+        *self = *self - rhs;
     }
 }
 
@@ -174,14 +214,20 @@ impl Neg for Amount {
 impl Mul for Amount {
     type Output = Amount;
     fn mul(self, rhs: Amount) -> Amount {
-        Amount(self.0 * rhs.0)
+        self.checked_mul(rhs)
+            .unwrap_or_else(|| Amount::bound(self.is_negative() != rhs.is_negative()))
     }
 }
 
+/// A zero divisor gives `ZERO`; an overflowing quotient saturates.
 impl Div for Amount {
     type Output = Amount;
     fn div(self, rhs: Amount) -> Amount {
-        Amount(self.0 / rhs.0)
+        if rhs.is_zero() {
+            return Amount::ZERO;
+        }
+        self.checked_div(rhs)
+            .unwrap_or_else(|| Amount::bound(self.is_negative() != rhs.is_negative()))
     }
 }
 
@@ -349,5 +395,63 @@ mod tests {
         let tenth = Amount::parse("0.1").unwrap();
         let fifth = Amount::parse("0.2").unwrap();
         assert_eq!((tenth + fifth).to_string(), "0.3");
+    }
+
+    fn amount(raw: &str) -> Amount {
+        Amount(Decimal::from_str_exact(raw).unwrap())
+    }
+
+    #[test]
+    fn operators_saturate_instead_of_panicking() {
+        let one = amount("1");
+        assert_eq!(Amount::MAX + one, Amount::MAX);
+        assert_eq!(Amount::MIN - one, Amount::MIN);
+        assert_eq!(Amount::MAX * amount("2"), Amount::MAX);
+        assert_eq!(Amount::MAX * amount("-2"), Amount::MIN);
+        assert_eq!(one / Amount::ZERO, Amount::ZERO);
+        assert_eq!(Amount::MIN / amount("-0.0001"), Amount::MAX);
+        let mut total = Amount::MAX;
+        total += one;
+        assert_eq!(total, Amount::MAX);
+        let mut low = Amount::MIN;
+        low -= one;
+        assert_eq!(low, Amount::MIN);
+        assert_eq!((amount("0.1") + amount("0.2")).to_string(), "0.3");
+    }
+
+    #[test]
+    fn checked_operators_report_overflow() {
+        let one = amount("1");
+        assert_eq!(Amount::MAX.checked_add(one), None);
+        assert_eq!(Amount::MIN.checked_sub(one), None);
+        assert_eq!(Amount::MAX.checked_mul(amount("2")), None);
+        assert_eq!(one.checked_div(Amount::ZERO), None);
+        assert_eq!(Amount::MIN.checked_div(amount("-0.0001")), None);
+        assert_eq!(amount("2").checked_add(one), Some(amount("3")));
+        assert_eq!(amount("2").checked_sub(one), Some(one));
+        assert_eq!(amount("2").checked_mul(amount("3")), Some(amount("6")));
+        assert_eq!(amount("6").checked_div(amount("3")), Some(amount("2")));
+    }
+
+    #[test]
+    fn parse_is_bounded() {
+        assert!(Amount::parse("1000000000000000000").is_ok());
+        assert!(matches!(
+            Amount::parse("1000000000000000001"),
+            Err(Error::InvalidInput(_))
+        ));
+        assert!(matches!(
+            Amount::parse("-1000000000000000001"),
+            Err(Error::InvalidInput(_))
+        ));
+        assert_eq!(Amount::parse("").unwrap(), Amount::ZERO);
+        assert!(Amount::MAX_INPUT.within_input_bound());
+        assert!(!amount("1000000000000000001").within_input_bound());
+    }
+
+    #[test]
+    fn deserialize_keeps_huge_vault_values() {
+        let parsed: Amount = serde_json::from_str("\"79228162514264337593543950335\"").unwrap();
+        assert_eq!(parsed, Amount::MAX);
     }
 }
