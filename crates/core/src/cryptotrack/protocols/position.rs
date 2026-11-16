@@ -30,6 +30,8 @@
 //! and the gas computable from the document alone, with no second storage
 //! shape and no second price path.
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::Amount;
@@ -159,6 +161,27 @@ pub fn kind_of(legs: &[CryptoLeg]) -> PositionKind {
 /// Whether nothing is left in the position: every leg is gone or zero.
 pub fn is_closed(legs: &[CryptoLeg]) -> bool {
     legs.iter().all(|leg| leg.amount.is_zero())
+}
+
+/// What one protocol's discovery said about an account on one network, once
+/// it *succeeded*: which of the positions it still sees.
+///
+/// This is the only thing that lets the vault tell "the protocol no longer
+/// reports this position" from "the pass did not manage to ask". A protocol
+/// that refused outright has no review at all, and a position whose own read
+/// refused stays in [`ProtocolReview::kept`] — a refusal says nothing about
+/// the position, so it must not be taken for a withdrawal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtocolReview {
+    /// [`super::ProtocolAdapter::protocol`].
+    pub protocol: String,
+    pub chain: Chain,
+    /// Record ids ([`PositionKey::record_id`]) of the positions that are not
+    /// gone: read, or found and not readable right now.
+    pub kept: BTreeSet<String>,
+    /// When the pass took the review (RFC3339 UTC): a position closed by it
+    /// is stamped with this.
+    pub read_at: String,
 }
 
 /// One position as an adapter read it: quantities and facts, no money.

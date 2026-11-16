@@ -43,7 +43,9 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
 use trade_core::crypto::device_secrets::BlockscoutKey;
-use trade_core::cryptotrack::protocols::{PositionReading, ProtocolRequest, Registry};
+use trade_core::cryptotrack::protocols::{
+    PositionReading, ProtocolRequest, ProtocolReview, Registry,
+};
 use trade_core::cryptotrack::rpc::{RpcClient, RpcConfig};
 use trade_core::cryptotrack::sources::evm::{
     BalanceRequest, Cursor, EvmSource, HistoryRequest, RawAsset, SourceBatch, Stream,
@@ -116,6 +118,10 @@ pub trait Reader: Send + Sync {
 pub struct ProtocolsRead {
     pub readings: Vec<PositionReading>,
     pub events: Vec<CryptoTx>,
+    /// What each protocol that *answered* still sees for the account, so a
+    /// position that is no longer in it can be closed in the vault. A
+    /// protocol that refused has no entry: its silence closes nothing.
+    pub reviewed: Vec<ProtocolReview>,
     /// The protocols whose read failed, each as `<protocol> (<CODE>)`: one
     /// endpoint that refuses a method, one rate limit or one position too old
     /// for a log scan must not turn the other protocols' positions into "this
@@ -537,16 +543,26 @@ async fn read_positions<H: Host, R: Reader>(
     still_here(host, vault_id)?;
     let read = reader.positions(target).await?;
     tracker.remember_positions(&target.account_id, read.readings.clone());
-    if read.readings.is_empty() && read.events.is_empty() {
+    // Nothing read, no operations and no protocol that answered: there is
+    // nothing to store and nothing to close. A protocol that answered with an
+    // empty list is not nothing — that is how a full withdrawal looks.
+    if read.readings.is_empty() && read.events.is_empty() && read.reviewed.is_empty() {
         return Ok(read.missed);
     }
-    host.with_vault(|vault| {
+    let applied = host.with_vault(|vault| {
         if vault.doc.id != vault_id {
             return Err(Error::RequiresUnlock);
         }
-        vault.crypto_apply_positions(&target.account_id, &read.readings, &read.events)
+        vault.crypto_apply_positions(
+            &target.account_id,
+            &read.readings,
+            &read.events,
+            &read.reviewed,
+        )
     })?;
-    host.updated(&target.account_id);
+    if !applied.is_unchanged() {
+        host.updated(&target.account_id);
+    }
     Ok(read.missed)
 }
 
@@ -694,6 +710,10 @@ async fn read_protocols(
             Ok(part) => {
                 out.readings.extend(part.readings);
                 out.events.extend(part.events);
+                out.reviewed.extend(part.reviewed);
+                // A position whose own read refused is named here too: the
+                // pass is partial, whatever the protocol's discovery said.
+                out.missed.extend(part.missed);
             }
             Err(error) => {
                 refusals += 1;
@@ -722,25 +742,36 @@ async fn read_one_protocol(
     request: ProtocolRequest<'_>,
 ) -> Result<ProtocolsRead> {
     let mut out = ProtocolsRead::default();
+    let mut kept = std::collections::BTreeSet::new();
     for key in adapter.discover(request).await? {
         match adapter.read_position(request, &key).await {
             Ok(Some(reading)) => {
+                kept.insert(key.record_id());
                 out.readings.push(reading);
                 if let Ok(events) = adapter.events(request, &key).await {
                     out.events.extend(events);
                 }
             }
-            // The protocol says this position is gone: nothing to store.
+            // The protocol says this position is gone: nothing to store, and
+            // not kept, so the vault closes the row it holds for it.
             Ok(None) => {}
             // A refused read says nothing about the position. Swallowing it
             // would leave the pass looking complete while the position is
-            // simply missing from the answer, which reads as "closed".
+            // simply missing from the answer, which reads as "closed" — so it
+            // is named as missed and kept, never closed.
             Err(error) => {
+                kept.insert(key.record_id());
                 out.missed
                     .push(format!("{} ({})", adapter.protocol(), error.code()));
             }
         }
     }
+    out.reviewed.push(ProtocolReview {
+        protocol: adapter.protocol().to_string(),
+        chain: request.chain,
+        kept,
+        read_at: trade_core::model::vault::now_iso(),
+    });
     Ok(out)
 }
 
@@ -840,6 +871,7 @@ mod tests {
     use trade_core::Amount;
     use trade_core::cryptotrack::protocols::{
         AdapterFuture, FeeReading, PositionKey, PositionKind, PositionStatus, ProtocolAdapter,
+        ProtocolReview,
     };
     use trade_core::cryptotrack::sources::evm::{RawEvent, RawKind, Uint256};
     use trade_core::model::chain::Chain;
@@ -860,6 +892,8 @@ mod tests {
         name: &'static str,
         keys: Vec<PositionKey>,
         broken: Vec<String>,
+        /// Discovered, but the protocol says it is gone when it is read.
+        gone: Vec<String>,
         refuses: bool,
     }
 
@@ -872,6 +906,7 @@ mod tests {
                     .map(|id| PositionKey::new(name, Chain::Ethereum, id))
                     .collect(),
                 broken: Vec::new(),
+                gone: Vec::new(),
                 refuses: false,
             }
         }
@@ -881,8 +916,14 @@ mod tests {
                 name,
                 keys: Vec::new(),
                 broken: Vec::new(),
+                gone: Vec::new(),
                 refuses: true,
             }
+        }
+
+        fn with_gone(mut self, id: &str) -> Self {
+            self.gone.push(id.to_string());
+            self
         }
 
         fn with_broken_read(mut self, id: &str) -> Self {
@@ -920,6 +961,9 @@ mod tests {
             Box::pin(async move {
                 if self.broken.contains(&key.id) {
                     return Err(Error::Network("this one position refused".into()));
+                }
+                if self.gone.contains(&key.id) {
+                    return Ok(None);
                 }
                 Ok(Some(PositionReading {
                     key: key.clone(),
@@ -1002,14 +1046,69 @@ mod tests {
             .expect("the other position is still read");
         assert_eq!(read.readings.len(), 1);
         assert_eq!(read.readings[0].key.id, "weth-reserve");
-        assert!(
-            read.missed.is_empty(),
-            "discovery worked, so the protocol itself is not reported as missed"
+        assert_eq!(
+            read.missed,
+            vec!["aave-v3 (NETWORK)".to_string()],
+            "a position whose read refused makes the pass partial: it must not look complete"
         );
     }
 
+    fn record_ids(protocol: &str, ids: &[&str]) -> std::collections::BTreeSet<String> {
+        ids.iter()
+            .map(|id| PositionKey::new(protocol, Chain::Ethereum, id).record_id())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_protocol_that_answered_with_nothing_is_reviewed_and_keeps_nothing() {
+        let registry = Registry::new(vec![Box::new(StubAdapter::working("aave-v3", &[]))]);
+        let read = read_protocols(&registry, Chain::Ethereum, protocol_request(ME, "cacc-1"))
+            .await
+            .expect("an empty answer is an answer");
+        assert!(read.readings.is_empty());
+        assert_eq!(read.reviewed.len(), 1);
+        assert_eq!(read.reviewed[0].protocol, "aave-v3");
+        assert_eq!(read.reviewed[0].chain, Chain::Ethereum);
+        assert!(read.reviewed[0].kept.is_empty());
+        assert!(!read.reviewed[0].read_at.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_position_that_is_gone_is_not_kept_and_one_that_refused_is() {
+        let registry = Registry::new(vec![Box::new(
+            StubAdapter::working("aave-v3", &["usdc-reserve", "weth-reserve", "dai-reserve"])
+                .with_gone("usdc-reserve")
+                .with_broken_read("weth-reserve"),
+        )]);
+        let read = read_protocols(&registry, Chain::Ethereum, protocol_request(ME, "cacc-1"))
+            .await
+            .expect("the pass is partial, not failed");
+        assert_eq!(
+            read.reviewed[0].kept,
+            record_ids("aave-v3", &["weth-reserve", "dai-reserve"]),
+            "gone is out; read or merely unreadable is kept"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_protocol_that_refused_has_no_review_so_nothing_is_closed_on_its_word() {
+        let registry = Registry::new(vec![
+            Box::new(StubAdapter::working("aave-v3", &[])),
+            Box::new(StubAdapter::refusing("uniswap-v4")),
+        ]);
+        let read = read_protocols(&registry, Chain::Ethereum, protocol_request(ME, "cacc-1"))
+            .await
+            .expect("a partial pass");
+        let reviewed: Vec<&str> = read
+            .reviewed
+            .iter()
+            .map(|review| review.protocol.as_str())
+            .collect();
+        assert_eq!(reviewed, vec!["aave-v3"]);
+    }
+
     type Script = Box<dyn Fn(&str, usize) -> Result<SourceBatch> + Send + Sync>;
-    type Reading = (Vec<PositionReading>, Vec<CryptoTx>);
+    type Reading = (Vec<PositionReading>, Vec<CryptoTx>, Vec<ProtocolReview>);
     type Protocols = Box<dyn Fn(&str) -> Result<Reading> + Send + Sync>;
     type SharedVault = Arc<Mutex<Option<UnlockedVault>>>;
 
@@ -1078,7 +1177,7 @@ mod tests {
                 script: Box::new(script),
                 asked: Mutex::new(HashMap::new()),
                 during: Box::new(|| {}),
-                protocols: Box::new(|_| Ok((Vec::new(), Vec::new()))),
+                protocols: Box::new(|_| Ok((Vec::new(), Vec::new(), Vec::new()))),
             }
         }
 
@@ -1133,9 +1232,10 @@ mod tests {
                 self.vault.try_lock().is_ok(),
                 "the vault lock was held while the network was read"
             );
-            (self.protocols)(&target.address).map(|(readings, events)| ProtocolsRead {
+            (self.protocols)(&target.address).map(|(readings, events, reviewed)| ProtocolsRead {
                 readings,
                 events,
+                reviewed,
                 missed: Vec::new(),
             })
         }
@@ -1438,8 +1538,11 @@ mod tests {
             closed_at: None,
             read_at: "2026-03-02T10:00:00Z".into(),
         };
-        let stub = Stub::new(&host.vault, |address, _| one_page(address, 1))
-            .holding((vec![reading.clone()], Vec::new()));
+        let stub = Stub::new(&host.vault, |address, _| one_page(address, 1)).holding((
+            vec![reading.clone()],
+            Vec::new(),
+            Vec::new(),
+        ));
         let tracker = Tracker::new();
 
         let report = run_pass(&host, &stub, &tracker, false).await;
@@ -1454,6 +1557,120 @@ mod tests {
         let live = tracker.positions();
         assert_eq!(live, vec![reading]);
         assert!(live[0].approximate);
+    }
+
+    fn supply(read_at: &str) -> PositionReading {
+        PositionReading {
+            key: PositionKey::new("aave-v3", Chain::Ethereum, "usdc-reserve"),
+            account_id: "cacc-1".into(),
+            name: "USDC supply".into(),
+            kind: PositionKind::Lending,
+            status: PositionStatus::Open,
+            legs: vec![CryptoLeg {
+                direction: CryptoDirection::In,
+                asset: CryptoAsset::Native {
+                    chain: Chain::Ethereum,
+                },
+                amount: Amount::parse("1").unwrap(),
+                counterparty: None,
+            }],
+            fees: FeeReading::none_earned(),
+            receipts: Vec::new(),
+            approximate: false,
+            opened_at: None,
+            closed_at: None,
+            read_at: read_at.into(),
+        }
+    }
+
+    fn aave_review(kept: &[&PositionReading], read_at: &str) -> ProtocolReview {
+        ProtocolReview {
+            protocol: "aave-v3".into(),
+            chain: Chain::Ethereum,
+            kept: kept.iter().map(|live| live.key.record_id()).collect(),
+            read_at: read_at.into(),
+        }
+    }
+
+    /// One more pass over `host` that the protocols answer with `answer`.
+    async fn pass_answering(host: &TestHost, answer: Reading) {
+        let stub = Stub::new(&host.vault, |address, _| one_page(address, 1)).holding(answer);
+        run_pass(host, &stub, &Tracker::new(), true).await;
+    }
+
+    fn stored_supply(host: &TestHost) -> Option<trade_core::model::cryptotrack::CryptoPosition> {
+        host.with_vault(|vault| Ok(vault.doc.crypto_positions.first().cloned()))
+            .unwrap()
+    }
+
+    /// Spec D0 / review item 7.4: a full withdrawal answers with no reading
+    /// at all, and used to leave the stored position open for good.
+    #[tokio::test]
+    async fn a_full_withdrawal_closes_the_stored_position_and_tells_the_screens() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = TestHost::new(
+            vault_with(dir.path(), "one.wallet", &[("cacc-1", ME)]),
+            true,
+        );
+        let held = supply("2026-03-02T10:00:00Z");
+        pass_answering(
+            &host,
+            (
+                vec![held.clone()],
+                Vec::new(),
+                vec![aave_review(&[&held], "2026-03-02T10:00:00Z")],
+            ),
+        )
+        .await;
+        let before = host.updates().len();
+
+        // Everything withdrawn: Aave is asked, answers, and lists nothing.
+        pass_answering(
+            &host,
+            (
+                Vec::new(),
+                Vec::new(),
+                vec![aave_review(&[], "2026-03-03T10:00:00Z")],
+            ),
+        )
+        .await;
+
+        let closed = stored_supply(&host).expect("the row stays");
+        assert!(closed.legs.iter().all(|leg| leg.amount.is_zero()));
+        assert_eq!(closed.updated_at, "2026-03-03T10:00:00Z");
+        // The pass's own completion tells the screens once; the close is a
+        // second, separate change they must hear about.
+        assert_eq!(host.updates().len(), before + 2, "the screens are told");
+    }
+
+    #[tokio::test]
+    async fn an_empty_answer_without_a_review_leaves_a_stored_position_open_and_quiet() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = TestHost::new(
+            vault_with(dir.path(), "one.wallet", &[("cacc-1", ME)]),
+            true,
+        );
+        let held = supply("2026-03-02T10:00:00Z");
+        pass_answering(
+            &host,
+            (
+                vec![held.clone()],
+                Vec::new(),
+                vec![aave_review(&[&held], "2026-03-02T10:00:00Z")],
+            ),
+        )
+        .await;
+        let before = host.updates().len();
+
+        // The protocol refused: no reading, no review.
+        pass_answering(&host, (Vec::new(), Vec::new(), Vec::new())).await;
+
+        assert_eq!(stored_supply(&host), Some(held.stored()));
+        assert_eq!(
+            host.updates().len(),
+            before + 1,
+            "only the pass's own completion: the positions changed nothing"
+        );
     }
 
     #[test]

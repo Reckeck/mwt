@@ -59,9 +59,9 @@ use crate::Amount;
 use crate::cryptotrack::engine::{ids, math};
 use crate::cryptotrack::prices;
 use crate::cryptotrack::protocols::{
-    AssetAmount, NetParts, PositionKey, PositionReading, PositionStatus, annual_percentage_rate,
-    fees_usd, impermanent_loss, impermanent_loss_ratio, is_closed, kind_of, net_result,
-    receipt_tokens, worth_usd,
+    AssetAmount, NetParts, PositionKey, PositionReading, PositionStatus, ProtocolReview,
+    annual_percentage_rate, fees_usd, impermanent_loss, impermanent_loss_ratio, is_closed, kind_of,
+    net_result, receipt_tokens, worth_usd,
 };
 use crate::error::Result;
 use crate::ipc_contract::cryptotrack::positions::{PositionAssetView, PositionView};
@@ -82,6 +82,16 @@ pub struct CryptoPositionsApplied {
     pub rewritten: usize,
     /// Operations of those positions added or rewritten.
     pub events: usize,
+    /// Positions closed because their protocol, asked successfully, no
+    /// longer reports them.
+    pub closed: usize,
+}
+
+impl CryptoPositionsApplied {
+    /// Whether the pass stored nothing at all.
+    pub fn is_unchanged(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 impl UnlockedVault {
@@ -89,13 +99,22 @@ impl UnlockedVault {
     /// and their operations. Saves once, and re-derives the holdings, because
     /// a position changes what the capital counts.
     ///
+    /// `reviewed` is what each protocol that *answered* still sees
+    /// ([`ProtocolReview`]). A stored position of this account that such a
+    /// review no longer lists is closed: its legs go to zero and the row
+    /// stays, so its history and the periods it was open in survive, and the
+    /// next reading under the same id simply overwrites it. A protocol that
+    /// refused has no review, and nothing is closed on its word.
+    ///
     /// A reading of another account is ignored: a pass answers for exactly
-    /// the account it was started for.
+    /// the account it was started for. A pass with nothing to change saves
+    /// nothing.
     pub fn crypto_apply_positions(
         &mut self,
         account_id: &str,
         readings: &[PositionReading],
         events: &[CryptoTx],
+        reviewed: &[ProtocolReview],
     ) -> Result<CryptoPositionsApplied> {
         let mut out = CryptoPositionsApplied::default();
         for reading in readings
@@ -119,9 +138,24 @@ impl UnlockedVault {
                 }
             }
         }
-        self.doc
-            .crypto_positions
-            .sort_by(|left, right| left.id.cmp(&right.id));
+        for review in reviewed {
+            for record in self.doc.crypto_positions.iter_mut().filter(|record| {
+                record.account_id == account_id
+                    && record.chain == review.chain
+                    && record.protocol == review.protocol
+                    && !review.kept.contains(&record.id)
+                    && !is_closed(&record.legs)
+                    && !readings
+                        .iter()
+                        .any(|reading| reading.key.record_id() == record.id)
+            }) {
+                for leg in &mut record.legs {
+                    leg.amount = Amount::ZERO;
+                }
+                record.updated_at.clone_from(&review.read_at);
+                out.closed += 1;
+            }
+        }
         for event in events.iter().filter(|event| event.account_id == account_id) {
             match self
                 .doc
@@ -134,6 +168,12 @@ impl UnlockedVault {
             }
             out.events += 1;
         }
+        if out.is_unchanged() {
+            return Ok(out);
+        }
+        self.doc
+            .crypto_positions
+            .sort_by(|left, right| left.id.cmp(&right.id));
         self.doc
             .crypto_events
             .sort_by(|left, right| (&left.time, &left.id).cmp(&(&right.time, &right.id)));
