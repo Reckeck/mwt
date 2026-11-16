@@ -41,8 +41,10 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use chrono::NaiveDate;
 use tauri::{AppHandle, Emitter, Manager};
 use trade_core::crypto::device_secrets::BlockscoutKey;
+use trade_core::cryptotrack::prices;
 use trade_core::cryptotrack::protocols::{
     PositionReading, ProtocolRequest, ProtocolReview, Registry,
 };
@@ -55,8 +57,9 @@ use trade_core::ipc_contract::cryptotrack::sync::{
     CryptoPages, CryptoSyncAccountStatus, CryptoSyncState, CryptoSyncStatus, CryptoSyncTarget,
 };
 use trade_core::model::chain::Chain;
-use trade_core::model::cryptotrack::CryptoTx;
+use trade_core::model::cryptotrack::{CryptoAsset, CryptoPricePoint, CryptoTx};
 use trade_core::model::vault::now_iso;
+use trade_core::pricing::PricingService;
 use trade_core::service::NetworkRequest;
 use trade_core::service::UnlockedVault;
 use trade_core::sync::stamp::now_ms;
@@ -71,6 +74,13 @@ const RETRY_AFTER: Duration = Duration::from_secs(5 * 60);
 const BATCH_EVENTS: usize = 400;
 /// Pages one account may read in one pass; the cursor resumes the rest.
 const MAX_PAGES_PER_PASS: usize = 100;
+/// Days of historic prices one account asks for in one pass: one request per
+/// day, all the contracts of that day together. The rest waits for the next
+/// pass, oldest first, so an empty cache is filled in steps and not at once.
+const MAX_PRICE_DAYS_PER_PASS: usize = 20;
+/// A price the provider did not have is not asked for again this long: it
+/// would answer the same on every pass.
+const PRICE_MISS_PAUSE: Duration = Duration::from_secs(24 * 60 * 60);
 
 // -- the two edges of a pass ----------------------------------------------------
 
@@ -111,6 +121,14 @@ pub trait Reader: Send + Sync {
         &self,
         target: &CryptoSyncTarget,
     ) -> impl Future<Output = Result<ProtocolsRead>> + Send;
+
+    /// The USD prices of `wanted` assets on one day (spec D7, wave 0): one
+    /// request, no address and no key in it. A price the provider does not
+    /// have is missing from the answer, never zero.
+    fn historic_prices(
+        &self,
+        wanted: &[(CryptoAsset, NaiveDate)],
+    ) -> impl Future<Output = Result<Vec<CryptoPricePoint>>> + Send;
 }
 
 /// What one pass over the protocols of a network read.
@@ -156,6 +174,10 @@ pub struct Tracker {
     /// [`UnlockedVault::crypto_list_positions`] then leaves those figures
     /// absent rather than zero.
     positions: Mutex<BTreeMap<String, Vec<PositionReading>>>,
+    /// `(asset key, day)` the provider had no price for, and when it said so.
+    /// Device-local and not stored: after a restart one request per day finds
+    /// out again.
+    price_misses: Mutex<BTreeMap<(String, NaiveDate), Instant>>,
 }
 
 impl Tracker {
@@ -165,6 +187,7 @@ impl Tracker {
             force: AtomicBool::new(false),
             accounts: Mutex::new(BTreeMap::new()),
             positions: Mutex::new(BTreeMap::new()),
+            price_misses: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -258,6 +281,53 @@ impl Tracker {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
+    }
+
+    /// What is still worth asking for out of `missing` (oldest day first):
+    /// without what the provider recently said it does not have, and cut to
+    /// [`MAX_PRICE_DAYS_PER_PASS`] days.
+    fn prices_to_ask(
+        &self,
+        missing: Vec<(CryptoAsset, NaiveDate)>,
+    ) -> Vec<(CryptoAsset, NaiveDate)> {
+        let mut guard = self
+            .price_misses
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.retain(|_, said_at| said_at.elapsed() < PRICE_MISS_PAUSE);
+        let mut days = Vec::new();
+        let mut out = Vec::new();
+        for (asset, date) in missing {
+            if guard.contains_key(&(asset.key(), date)) {
+                continue;
+            }
+            if !days.contains(&date) {
+                if days.len() >= MAX_PRICE_DAYS_PER_PASS {
+                    break;
+                }
+                days.push(date);
+            }
+            out.push((asset, date));
+        }
+        out
+    }
+
+    /// Remember which of `asked` the provider answered nothing for.
+    fn note_price_misses(&self, asked: &[(CryptoAsset, NaiveDate)], answered: &[CryptoPricePoint]) {
+        let mut guard = self
+            .price_misses
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (asset, date) in asked {
+            let key = asset.key();
+            let stamp = prices::date_ts(*date);
+            let found = answered
+                .iter()
+                .any(|point| point.token_key == key && point.ts == stamp);
+            if !found {
+                guard.insert((key, *date), Instant::now());
+            }
+        }
     }
 
     fn waiting_for_retry(&self, account_id: &str) -> bool {
@@ -522,7 +592,10 @@ async fn read_account<H: Host, R: Reader>(
         if finished || cursor.is_none() {
             // The history is in, so the position's own operations have
             // something to sit next to: what a protocol holds is read last.
-            let missed = read_positions(host, reader, tracker, vault_id, target).await?;
+            let mut missed = read_positions(host, reader, tracker, vault_id, target).await?;
+            // The operations are in: the price of each one's day is what
+            // every figure of the module stands on.
+            missed.extend(fill_prices(host, reader, tracker, vault_id, target).await?);
             let note = (!missed.is_empty()).then(|| format!("PARTIAL: {}", missed.join(", ")));
             tracker.set(&target.account_id, CryptoSyncState::Done, note, added);
             return Ok(());
@@ -575,6 +648,64 @@ async fn read_positions<H: Host, R: Reader>(
     Ok(read.missed)
 }
 
+/// The prices of the days of an account's operations that the cache lacks
+/// (spec D7, wave 0), after its history is read.
+///
+/// Copy, release, network, apply (`AGENTS.md`, rules 3 and 4): the missing
+/// `(asset, day)` pairs are listed under the vault, the vault is let go, each
+/// day is one request (consent and vault checked before it), and what came
+/// back is stored in one write. A failed day does not drop the others and does
+/// not touch what is stored: the pass is partial, and the answer names the
+/// error's code only, never its text.
+async fn fill_prices<H: Host, R: Reader>(
+    host: &H,
+    reader: &R,
+    tracker: &Tracker,
+    vault_id: &str,
+    target: &CryptoSyncTarget,
+) -> std::result::Result<Option<String>, Stop> {
+    if !host.consent() {
+        return Err(Stop::Cancelled);
+    }
+    let missing = host.with_vault(|vault| {
+        if vault.doc.id != vault_id {
+            return Err(Error::RequiresUnlock);
+        }
+        Ok(prices::missing_for_account(&vault.doc, &target.account_id))
+    })?;
+    let mut by_day: BTreeMap<NaiveDate, Vec<(CryptoAsset, NaiveDate)>> = BTreeMap::new();
+    for (asset, date) in tracker.prices_to_ask(missing) {
+        by_day.entry(date).or_default().push((asset, date));
+    }
+    let mut fetched = Vec::new();
+    let mut failure = None;
+    for group in by_day.values() {
+        if !host.consent() {
+            return Err(Stop::Cancelled);
+        }
+        still_here(host, vault_id)?;
+        match reader.historic_prices(group).await {
+            Ok(points) => {
+                tracker.note_price_misses(group, &points);
+                fetched.extend(points);
+            }
+            Err(err) => failure = Some(err.code().to_string()),
+        }
+    }
+    if !fetched.is_empty() {
+        let stored = host.with_vault(|vault| {
+            if vault.doc.id != vault_id {
+                return Err(Error::RequiresUnlock);
+            }
+            vault.crypto_apply_prices(&fetched)
+        })?;
+        if stored > 0 {
+            host.updated(&target.account_id);
+        }
+    }
+    Ok(failure.map(|code| format!("prices ({code})")))
+}
+
 // -- the application's side -----------------------------------------------------
 
 struct AppHost(AppHandle);
@@ -612,6 +743,8 @@ struct EvmReader {
     /// Talks to the node: balances. It never carries the Blockscout key, and it
     /// accepts a loopback address, because the user's own node is often one.
     node: RpcClient,
+    /// Historic prices: DeFiLlama, no key.
+    pricing: PricingService,
 }
 
 impl EvmReader {
@@ -623,6 +756,7 @@ impl EvmReader {
                 allow_loopback_http: true,
                 ..RpcConfig::default()
             })?,
+            pricing: PricingService::default(),
         })
     }
 
@@ -689,6 +823,13 @@ impl Reader for EvmReader {
             rpc: settings.rpc.as_deref(),
         };
         read_protocols(&registry, target.chain, request).await
+    }
+
+    async fn historic_prices(
+        &self,
+        wanted: &[(CryptoAsset, NaiveDate)],
+    ) -> Result<Vec<CryptoPricePoint>> {
+        self.pricing.fetch_historic_prices(wanted).await
     }
 }
 
@@ -1125,6 +1266,8 @@ mod tests {
     type Script = Box<dyn Fn(&str, usize) -> Result<SourceBatch> + Send + Sync>;
     type Reading = (Vec<PositionReading>, Vec<CryptoTx>, Vec<ProtocolReview>);
     type Protocols = Box<dyn Fn(&str) -> Result<Reading> + Send + Sync>;
+    type PriceScript =
+        Box<dyn Fn(&[(CryptoAsset, NaiveDate)]) -> Result<Vec<CryptoPricePoint>> + Send + Sync>;
     type SharedVault = Arc<Mutex<Option<UnlockedVault>>>;
 
     struct TestHost {
@@ -1179,6 +1322,10 @@ mod tests {
         during: Box<dyn Fn() + Send + Sync>,
         /// What the protocol adapters would have read for an address.
         protocols: Protocols,
+        /// What the price provider answers for one day's request.
+        prices: PriceScript,
+        /// Every price request, as the days and asset keys it named.
+        priced: Mutex<Vec<(NaiveDate, Vec<String>)>>,
     }
 
     impl Stub {
@@ -1193,6 +1340,8 @@ mod tests {
                 asked: Mutex::new(HashMap::new()),
                 during: Box::new(|| {}),
                 protocols: Box::new(|_| Ok((Vec::new(), Vec::new(), Vec::new()))),
+                prices: Box::new(|_| Ok(Vec::new())),
+                priced: Mutex::new(Vec::new()),
             }
         }
 
@@ -1204,6 +1353,22 @@ mod tests {
 
         fn calls(&self) -> usize {
             self.calls.load(Ordering::SeqCst)
+        }
+
+        /// The provider's answer for a day's price request.
+        fn quoting(
+            mut self,
+            script: impl Fn(&[(CryptoAsset, NaiveDate)]) -> Result<Vec<CryptoPricePoint>>
+            + Send
+            + Sync
+            + 'static,
+        ) -> Self {
+            self.prices = Box::new(script);
+            self
+        }
+
+        fn price_requests(&self) -> Vec<(NaiveDate, Vec<String>)> {
+            self.priced.lock().unwrap().clone()
         }
     }
 
@@ -1253,6 +1418,26 @@ mod tests {
                 reviewed,
                 missed: Vec::new(),
             })
+        }
+
+        async fn historic_prices(
+            &self,
+            wanted: &[(CryptoAsset, NaiveDate)],
+        ) -> Result<Vec<CryptoPricePoint>> {
+            assert!(
+                self.vault.try_lock().is_ok(),
+                "the vault lock was held while the prices were fetched"
+            );
+            let day = wanted.first().map(|(_, date)| *date).unwrap();
+            assert!(
+                wanted.iter().all(|(_, date)| *date == day),
+                "one day per request"
+            );
+            self.priced
+                .lock()
+                .unwrap()
+                .push((day, wanted.iter().map(|(asset, _)| asset.key()).collect()));
+            (self.prices)(wanted)
         }
     }
 
@@ -1314,6 +1499,149 @@ mod tests {
         assert!(host.updates().is_empty());
         // Even a forced pass (the "read now" button) goes through the same gate.
         assert!(!may_start(false, true, false));
+    }
+
+    fn eth() -> CryptoAsset {
+        CryptoAsset::Native {
+            chain: Chain::Ethereum,
+        }
+    }
+
+    fn march_first() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()
+    }
+
+    fn quote(wanted: &[(CryptoAsset, NaiveDate)]) -> Result<Vec<CryptoPricePoint>> {
+        Ok(wanted
+            .iter()
+            .map(|(asset, date)| CryptoPricePoint {
+                token_key: asset.key(),
+                value_usd: Amount::parse("2000").unwrap(),
+                ts: prices::date_ts(*date),
+                source: "defillama".into(),
+            })
+            .collect())
+    }
+
+    #[tokio::test]
+    async fn a_missing_price_is_asked_once_and_stored() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = TestHost::new(vault_with(dir.path(), "a.wallet", &[("acc-a", ME)]), true);
+        let stub = Stub::new(&host.vault, |address, _| one_page(address, 1)).quoting(quote);
+        let tracker = Tracker::new();
+
+        run_pass(&host, &stub, &tracker, false).await;
+
+        assert_eq!(
+            stub.price_requests(),
+            vec![(march_first(), vec![eth().key()])]
+        );
+        host.with_vault(|vault| {
+            let found = prices::lookup(&vault.doc, &eth(), march_first());
+            assert_eq!(found.value, Amount::parse("2000").ok());
+            assert!(!found.stale);
+            Ok(())
+        })
+        .unwrap();
+        let status = tracker.statuses(&["acc-a".to_string()]);
+        assert_eq!(status[0].state, CryptoSyncState::Done);
+        assert_eq!(status[0].error, None);
+    }
+
+    #[tokio::test]
+    async fn without_consent_no_price_is_asked() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = TestHost::new(vault_with(dir.path(), "a.wallet", &[("acc-a", ME)]), false);
+        let stub = Stub::new(&host.vault, |address, _| one_page(address, 1)).quoting(quote);
+        run_pass(&host, &stub, &Tracker::new(), true).await;
+        assert!(stub.price_requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn consent_withdrawn_before_the_price_request_stops_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = Arc::new(TestHost::new(
+            vault_with(dir.path(), "a.wallet", &[("acc-a", ME)]),
+            true,
+        ));
+        let mut stub = Stub::new(&host.vault, |address, _| one_page(address, 1)).quoting(quote);
+        let withdrawn = host.clone();
+        // The user says no while the protocols are being read.
+        stub.protocols = Box::new(move |_| {
+            withdrawn.consent.store(false, Ordering::SeqCst);
+            Ok((Vec::new(), Vec::new(), Vec::new()))
+        });
+        let report = run_pass(&*host, &stub, &Tracker::new(), false).await;
+        assert!(report.cancelled);
+        assert!(stub.price_requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_second_pass_asks_neither_for_what_is_stored_nor_for_what_was_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = TestHost::new(vault_with(dir.path(), "a.wallet", &[("acc-a", ME)]), true);
+        let stub = Stub::new(&host.vault, |address, _| one_page(address, 1)).quoting(quote);
+        let tracker = Tracker::new();
+        run_pass(&host, &stub, &tracker, false).await;
+        run_pass(&host, &stub, &tracker, true).await;
+        assert_eq!(stub.price_requests().len(), 1, "stored: not asked again");
+
+        // A provider with nothing for the day is not asked again either.
+        let dir = tempfile::tempdir().unwrap();
+        let host = TestHost::new(vault_with(dir.path(), "b.wallet", &[("acc-a", ME)]), true);
+        let stub =
+            Stub::new(&host.vault, |address, _| one_page(address, 1)).quoting(|_| Ok(Vec::new()));
+        let tracker = Tracker::new();
+        run_pass(&host, &stub, &tracker, false).await;
+        run_pass(&host, &stub, &tracker, true).await;
+        assert_eq!(stub.price_requests().len(), 1, "not found: not asked again");
+        let status = tracker.statuses(&["acc-a".to_string()]);
+        assert_eq!(status[0].error, None, "no price is not a failure");
+    }
+
+    #[tokio::test]
+    async fn a_refused_price_request_makes_the_pass_partial_and_keeps_the_prices() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = TestHost::new(vault_with(dir.path(), "a.wallet", &[("acc-a", ME)]), true);
+        host.with_vault(|vault| {
+            let kept = quote(&[(eth(), NaiveDate::from_ymd_opt(2026, 1, 5).unwrap())])?;
+            vault.crypto_apply_prices(&kept).map(|_| ())
+        })
+        .unwrap();
+        let stub = Stub::new(&host.vault, |address, _| one_page(address, 1))
+            .quoting(|_| Err(Error::Network("http://secret.example/0xabc".into())));
+        let tracker = Tracker::new();
+
+        let report = run_pass(&host, &stub, &tracker, false).await;
+
+        assert_eq!((report.read, report.failed), (1, 0));
+        let status = tracker.statuses(&["acc-a".to_string()]);
+        assert_eq!(status[0].state, CryptoSyncState::Done);
+        assert_eq!(
+            status[0].error.as_deref(),
+            Some("PARTIAL: prices (NETWORK)")
+        );
+        host.with_vault(|vault| {
+            assert_eq!(vault.doc.crypto_prices.len(), 1, "what was stored stays");
+            assert_eq!(vault.doc.crypto_events.len(), 1, "the history is in");
+            Ok(())
+        })
+        .unwrap();
+        // An outage is not "no price": the next pass tries again.
+        run_pass(&host, &stub, &tracker, true).await;
+        assert_eq!(stub.price_requests().len(), 2);
+    }
+
+    #[test]
+    fn a_pass_asks_for_a_bounded_number_of_days() {
+        let tracker = Tracker::new();
+        let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let missing: Vec<_> = (0..60)
+            .map(|offset| (eth(), start + chrono::Days::new(offset)))
+            .collect();
+        let asked = tracker.prices_to_ask(missing);
+        assert_eq!(asked.len(), MAX_PRICE_DAYS_PER_PASS);
+        assert_eq!(asked[0].1, start, "the oldest day goes first");
     }
 
     #[tokio::test]

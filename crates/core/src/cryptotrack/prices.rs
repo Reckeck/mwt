@@ -10,7 +10,9 @@
 //! [`crate::pricing::llama`] and does not touch the document; the functions
 //! here apply its answer and read the cache back.
 
-use chrono::NaiveDate;
+use std::collections::{BTreeMap, BTreeSet};
+
+use chrono::{DateTime, NaiveDate};
 
 use crate::Amount;
 use crate::error::Result;
@@ -77,6 +79,52 @@ pub fn lookup(doc: &VaultDoc, asset: &CryptoAsset, date: NaiveDate) -> PriceLook
             stale: true,
         },
     }
+}
+
+/// The `(asset, day)` pairs of one account's operations whose price of that
+/// very day is not in `crypto_prices` and that DeFiLlama can quote at all
+/// (spec D7, wave 0). Every asset of every leg and of the gas counts: an
+/// operation's value needs the price of its day, not of a neighbour.
+///
+/// Oldest day first, so a capped fetch fills the history from its start and
+/// a later pass goes on from where this one stopped. Pure: it reads the
+/// document and asks nothing; the caller decides what to fetch.
+pub fn missing_for_account(doc: &VaultDoc, account_id: &str) -> Vec<(CryptoAsset, NaiveDate)> {
+    let have: BTreeSet<(&str, &str)> = doc
+        .crypto_prices
+        .iter()
+        .map(|point| (point.token_key.as_str(), point.ts.as_str()))
+        .collect();
+    let mut wanted: BTreeMap<(NaiveDate, String), CryptoAsset> = BTreeMap::new();
+    for event in doc
+        .crypto_events
+        .iter()
+        .filter(|event| event.account_id == account_id)
+    {
+        let Ok(moment) = DateTime::parse_from_rfc3339(&event.time) else {
+            continue;
+        };
+        let date = moment.naive_utc().date();
+        let stamp = date_ts(date);
+        let assets = event
+            .legs
+            .iter()
+            .map(|leg| &leg.asset)
+            .chain(event.gas.iter().map(|fee| &fee.asset));
+        for asset in assets {
+            let key = asset.key();
+            if have.contains(&(key.as_str(), stamp.as_str()))
+                || crate::pricing::llama::llama_coin(asset).is_none()
+            {
+                continue;
+            }
+            wanted.entry((date, key)).or_insert_with(|| asset.clone());
+        }
+    }
+    wanted
+        .into_iter()
+        .map(|((date, _), asset)| (asset, date))
+        .collect()
 }
 
 /// Apply a fetch outcome and answer from the cache. A failed fetch (offline,
@@ -200,5 +248,58 @@ mod tests {
         let found = resolve(&mut doc, &asset(), day(2), Ok(vec![point(day(2), "4")]));
         assert_eq!(found.value, Amount::parse("4").ok());
         assert!(!found.stale);
+    }
+
+    fn event_on(date: &str, asset: CryptoAsset) -> crate::model::cryptotrack::CryptoTx {
+        use crate::model::cryptotrack::{
+            CryptoDirection, CryptoLeg, CryptoTx, CryptoTxKind, TrackingRef,
+        };
+        CryptoTx {
+            id: format!("evt-{date}"),
+            chain: Chain::Ethereum,
+            account_id: "acc".into(),
+            time: format!("{date}T10:30:00Z"),
+            block: None,
+            from: String::new(),
+            to: String::new(),
+            legs: vec![CryptoLeg {
+                direction: CryptoDirection::In,
+                asset,
+                amount: Amount::parse("1").unwrap(),
+                counterparty: None,
+            }],
+            gas: None,
+            protocol: None,
+            method: None,
+            kind: CryptoTxKind::default(),
+            raw: None,
+            tracking: TrackingRef::ChainTx {
+                chain: Chain::Ethereum,
+                hash: format!("0x{date}"),
+            },
+        }
+    }
+
+    #[test]
+    fn missing_lists_the_days_without_an_exact_price() {
+        let mut doc = VaultDoc::default();
+        doc.crypto_events = vec![
+            event_on("2026-03-01", asset()),
+            event_on("2026-03-02", asset()),
+            event_on("2026-03-02", asset()),
+        ];
+        apply_historic(&mut doc, &[point(day(1), "2")]);
+        // A point of an older day does not stand in for the exact one.
+        let missing = missing_for_account(&doc, "acc");
+        assert_eq!(missing, vec![(asset(), day(2))]);
+        assert!(missing_for_account(&doc, "other").is_empty());
+    }
+
+    #[test]
+    fn missing_skips_what_the_provider_cannot_quote() {
+        let mut doc = VaultDoc::default();
+        let unsupported = CryptoAsset::Token(TokenId::new(Chain::Algorand, "31566704"));
+        doc.crypto_events = vec![event_on("2026-03-01", unsupported)];
+        assert!(missing_for_account(&doc, "acc").is_empty());
     }
 }
