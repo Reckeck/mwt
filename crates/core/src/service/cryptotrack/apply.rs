@@ -29,10 +29,10 @@ use std::collections::BTreeMap;
 use super::super::UnlockedVault;
 use super::recompute::CryptoBatch;
 use crate::cryptotrack::sources::evm::{Cursor, RawAsset, SOURCE_ID, SourceBatch, Stream};
-use crate::cryptotrack::{chains, tokens};
+use crate::cryptotrack::{chains, prices, tokens};
 use crate::error::{Error, Result};
 use crate::ipc_contract::cryptotrack::sync::{CryptoPages, CryptoPagesApplied, CryptoSyncTarget};
-use crate::model::cryptotrack::{CryptoCursor, normalize_address};
+use crate::model::cryptotrack::{CryptoCursor, CryptoPricePoint, normalize_address};
 use crate::model::vault::{iso_to_millis, now_iso};
 
 impl UnlockedVault {
@@ -261,6 +261,23 @@ impl UnlockedVault {
         }
         Ok(())
     }
+
+    /// Store the historic prices a pass fetched (spec D7, wave 0), saving
+    /// once and only if something changed. Returns how many points are new or
+    /// different. `crypto_prices` is a cache that is never thinned, so this is
+    /// the only writer it needs.
+    pub fn crypto_apply_prices(&mut self, fresh: &[CryptoPricePoint]) -> Result<usize> {
+        let before = self.doc.crypto_prices.clone();
+        prices::apply_historic(&mut self.doc, fresh);
+        let changed = fresh
+            .iter()
+            .filter(|point| !point.value_usd.is_zero() && !before.contains(point))
+            .count();
+        if changed > 0 {
+            self.persist()?;
+        }
+        Ok(changed)
+    }
 }
 
 fn cursor_id(account_id: &str) -> String {
@@ -486,5 +503,34 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, Error::NotFound(_)));
         assert!(vault.doc.crypto_cursors.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod price_tests {
+    use super::*;
+    use crate::Amount;
+    use crate::model::chain::Chain;
+    use crate::model::cryptotrack::{CryptoAsset, TokenId};
+
+    #[test]
+    fn prices_are_stored_once_and_a_repeat_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut vault = UnlockedVault::create(dir.path().join("p.wallet"), "pw").unwrap();
+        let asset = CryptoAsset::Token(TokenId::new(Chain::Ethereum, "0xabc"));
+        let point = CryptoPricePoint {
+            token_key: asset.key(),
+            value_usd: Amount::parse("2").unwrap(),
+            ts: prices::date_ts(chrono::NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()),
+            source: "defillama".into(),
+        };
+        assert_eq!(
+            vault
+                .crypto_apply_prices(std::slice::from_ref(&point))
+                .unwrap(),
+            1
+        );
+        assert_eq!(vault.crypto_apply_prices(&[point]).unwrap(), 0);
+        assert_eq!(vault.doc.crypto_prices.len(), 1);
     }
 }
