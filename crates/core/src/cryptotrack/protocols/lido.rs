@@ -398,6 +398,7 @@ mod tests {
             account_id: "cacc-1",
             since: None,
             rpc: Some(url),
+            memory: None,
         }
     }
 

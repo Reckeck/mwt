@@ -128,6 +128,9 @@ pub struct ProtocolsRead {
     /// account holds nothing". Only the error's own code travels here —
     /// never the message, which can carry the endpoint URL and with it a key.
     pub missed: Vec<String>,
+    /// What each protocol that answered wants kept for its next pass, by
+    /// protocol id; `None` forgets what was kept.
+    pub memory: Vec<(String, Option<String>)>,
 }
 
 // -- status ---------------------------------------------------------------------
@@ -555,19 +558,25 @@ async fn read_positions<H: Host, R: Reader>(
     // Nothing read, no operations and no protocol that answered: there is
     // nothing to store and nothing to close. A protocol that answered with an
     // empty list is not nothing — that is how a full withdrawal looks.
-    if read.readings.is_empty() && read.events.is_empty() && read.reviewed.is_empty() {
+    if read.readings.is_empty()
+        && read.events.is_empty()
+        && read.reviewed.is_empty()
+        && read.memory.is_empty()
+    {
         return Ok(read.missed);
     }
     let applied = host.with_vault(|vault| {
         if vault.doc.id != vault_id {
             return Err(Error::RequiresUnlock);
         }
-        vault.crypto_apply_positions(
+        let applied = vault.crypto_apply_positions(
             &target.account_id,
             &read.readings,
             &read.events,
             &read.reviewed,
-        )
+        )?;
+        vault.crypto_remember_protocols(&target.account_id, &read.memory)?;
+        Ok(applied)
     })?;
     if !applied.is_unchanged() {
         host.updated(&target.account_id);
@@ -687,8 +696,9 @@ impl Reader for EvmReader {
             account_id: &target.account_id,
             since: Some(&target.start),
             rpc: settings.rpc.as_deref(),
+            memory: None,
         };
-        read_protocols(&registry, target.chain, request).await
+        read_protocols(&registry, target.chain, request, &target.protocol_memory).await
     }
 }
 
@@ -708,6 +718,7 @@ async fn read_protocols(
     registry: &Registry,
     chain: Chain,
     request: ProtocolRequest<'_>,
+    memory: &std::collections::BTreeMap<String, String>,
 ) -> Result<ProtocolsRead> {
     let mut out = ProtocolsRead::default();
     let mut asked = 0_usize;
@@ -715,8 +726,13 @@ async fn read_protocols(
     let mut last_refusal = None;
     for adapter in registry.for_chain(chain) {
         asked += 1;
+        let request = ProtocolRequest {
+            memory: memory.get(adapter.protocol()).map(String::as_str),
+            ..request
+        };
         match read_one_protocol(adapter, request).await {
             Ok(part) => {
+                out.memory.extend(part.memory);
                 out.readings.extend(part.readings);
                 out.events.extend(part.events);
                 out.reviewed.extend(part.reviewed);
@@ -752,7 +768,10 @@ async fn read_one_protocol(
 ) -> Result<ProtocolsRead> {
     let mut out = ProtocolsRead::default();
     let mut kept = std::collections::BTreeSet::new();
-    for key in adapter.discover(request).await? {
+    let found = adapter.discover_scan(request).await?;
+    out.memory
+        .push((adapter.protocol().to_string(), found.memory));
+    for key in found.keys {
         match adapter.read_position(request, &key).await {
             Ok(Some(reading)) => {
                 kept.insert(key.record_id());
@@ -775,12 +794,21 @@ async fn read_one_protocol(
             }
         }
     }
-    out.reviewed.push(ProtocolReview {
-        protocol: adapter.protocol().to_string(),
-        chain: request.chain,
-        kept,
-        read_at: trade_core::model::vault::now_iso(),
-    });
+    if found.complete {
+        out.reviewed.push(ProtocolReview {
+            protocol: adapter.protocol().to_string(),
+            chain: request.chain,
+            kept,
+            read_at: trade_core::model::vault::now_iso(),
+        });
+    } else {
+        // The scan could not see all of the history: what it found is read
+        // and stored, but a position missing from it may only be further
+        // back, so it is no review and closes nothing (ADR-02), and the pass
+        // is named partial.
+        out.missed
+            .push(format!("{} (INCOMPLETE)", adapter.protocol()));
+    }
     Ok(out)
 }
 
@@ -885,8 +913,8 @@ mod tests {
 
     use trade_core::Amount;
     use trade_core::cryptotrack::protocols::{
-        AdapterFuture, FeeReading, PositionKey, PositionKind, PositionStatus, ProtocolAdapter,
-        ProtocolReview,
+        AdapterFuture, Discovery, FeeReading, PositionKey, PositionKind, PositionStatus,
+        ProtocolAdapter, ProtocolReview,
     };
     use trade_core::cryptotrack::sources::evm::{RawEvent, RawKind, Uint256};
     use trade_core::model::chain::Chain;
@@ -910,6 +938,8 @@ mod tests {
         /// Discovered, but the protocol says it is gone when it is read.
         gone: Vec<String>,
         refuses: bool,
+        /// Discovery found `keys` but could not see all the history.
+        incomplete: bool,
     }
 
     impl StubAdapter {
@@ -923,6 +953,7 @@ mod tests {
                 broken: Vec::new(),
                 gone: Vec::new(),
                 refuses: false,
+                incomplete: false,
             }
         }
 
@@ -933,7 +964,13 @@ mod tests {
                 broken: Vec::new(),
                 gone: Vec::new(),
                 refuses: true,
+                incomplete: false,
             }
+        }
+
+        fn incomplete(mut self) -> Self {
+            self.incomplete = true;
+            self
         }
 
         fn with_gone(mut self, id: &str) -> Self {
@@ -965,6 +1002,21 @@ mod tests {
                     return Err(Error::Network("the endpoint refused the method".into()));
                 }
                 Ok(self.keys.clone())
+            })
+        }
+
+        /// Echoes the memory it was given, so a test sees what travelled.
+        fn discover_scan<'fut>(
+            &'fut self,
+            request: ProtocolRequest<'fut>,
+        ) -> AdapterFuture<'fut, Discovery> {
+            Box::pin(async move {
+                let keys = self.discover(request).await?;
+                Ok(Discovery {
+                    keys,
+                    complete: !self.incomplete,
+                    memory: Some(format!("after {}", request.memory.unwrap_or("nothing"))),
+                })
             })
         }
 
@@ -1013,6 +1065,7 @@ mod tests {
             account_id,
             since: None,
             rpc: None,
+            memory: None,
         }
     }
 
@@ -1024,9 +1077,14 @@ mod tests {
             Box::new(StubAdapter::working("aave-v3", &["usdc-reserve"])),
             Box::new(StubAdapter::refusing("uniswap-v4")),
         ]);
-        let read = read_protocols(&registry, Chain::Ethereum, protocol_request(ME, "cacc-1"))
-            .await
-            .expect("a partial pass is still a pass");
+        let read = read_protocols(
+            &registry,
+            Chain::Ethereum,
+            protocol_request(ME, "cacc-1"),
+            &Default::default(),
+        )
+        .await
+        .expect("a partial pass is still a pass");
         assert_eq!(read.readings.len(), 1);
         assert_eq!(read.readings[0].key.protocol, "aave-v3");
         assert_eq!(
@@ -1042,8 +1100,13 @@ mod tests {
             Box::new(StubAdapter::refusing("aave-v3")),
             Box::new(StubAdapter::refusing("uniswap-v4")),
         ]);
-        let outcome =
-            read_protocols(&registry, Chain::Ethereum, protocol_request(ME, "cacc-1")).await;
+        let outcome = read_protocols(
+            &registry,
+            Chain::Ethereum,
+            protocol_request(ME, "cacc-1"),
+            &Default::default(),
+        )
+        .await;
         assert!(
             outcome.is_err(),
             "nothing was read, so the pass failed and the user has to be told"
@@ -1056,9 +1119,14 @@ mod tests {
             StubAdapter::working("aave-v3", &["usdc-reserve", "weth-reserve"])
                 .with_broken_read("usdc-reserve"),
         )]);
-        let read = read_protocols(&registry, Chain::Ethereum, protocol_request(ME, "cacc-1"))
-            .await
-            .expect("the other position is still read");
+        let read = read_protocols(
+            &registry,
+            Chain::Ethereum,
+            protocol_request(ME, "cacc-1"),
+            &Default::default(),
+        )
+        .await
+        .expect("the other position is still read");
         assert_eq!(read.readings.len(), 1);
         assert_eq!(read.readings[0].key.id, "weth-reserve");
         assert_eq!(
@@ -1077,9 +1145,14 @@ mod tests {
     #[tokio::test]
     async fn a_protocol_that_answered_with_nothing_is_reviewed_and_keeps_nothing() {
         let registry = Registry::new(vec![Box::new(StubAdapter::working("aave-v3", &[]))]);
-        let read = read_protocols(&registry, Chain::Ethereum, protocol_request(ME, "cacc-1"))
-            .await
-            .expect("an empty answer is an answer");
+        let read = read_protocols(
+            &registry,
+            Chain::Ethereum,
+            protocol_request(ME, "cacc-1"),
+            &Default::default(),
+        )
+        .await
+        .expect("an empty answer is an answer");
         assert!(read.readings.is_empty());
         assert_eq!(read.reviewed.len(), 1);
         assert_eq!(read.reviewed[0].protocol, "aave-v3");
@@ -1095,9 +1168,14 @@ mod tests {
                 .with_gone("usdc-reserve")
                 .with_broken_read("weth-reserve"),
         )]);
-        let read = read_protocols(&registry, Chain::Ethereum, protocol_request(ME, "cacc-1"))
-            .await
-            .expect("the pass is partial, not failed");
+        let read = read_protocols(
+            &registry,
+            Chain::Ethereum,
+            protocol_request(ME, "cacc-1"),
+            &Default::default(),
+        )
+        .await
+        .expect("the pass is partial, not failed");
         assert_eq!(
             read.reviewed[0].kept,
             record_ids("aave-v3", &["weth-reserve", "dai-reserve"]),
@@ -1111,15 +1189,73 @@ mod tests {
             Box::new(StubAdapter::working("aave-v3", &[])),
             Box::new(StubAdapter::refusing("uniswap-v4")),
         ]);
-        let read = read_protocols(&registry, Chain::Ethereum, protocol_request(ME, "cacc-1"))
-            .await
-            .expect("a partial pass");
+        let read = read_protocols(
+            &registry,
+            Chain::Ethereum,
+            protocol_request(ME, "cacc-1"),
+            &Default::default(),
+        )
+        .await
+        .expect("a partial pass");
         let reviewed: Vec<&str> = read
             .reviewed
             .iter()
             .map(|review| review.protocol.as_str())
             .collect();
         assert_eq!(reviewed, vec!["aave-v3"]);
+    }
+
+    #[tokio::test]
+    async fn an_incomplete_discovery_is_read_and_named_but_is_not_a_review() {
+        // ADR-02: a scan that may not have reached an old position must not
+        // tell the vault what the account "still holds", or the position it
+        // missed would be closed while it is alive.
+        let registry = Registry::new(vec![
+            Box::new(StubAdapter::working("aave-v3", &["usdc-reserve"])),
+            Box::new(StubAdapter::working("uniswap-v4", &["11", "22"]).incomplete()),
+        ]);
+        let read = read_protocols(
+            &registry,
+            Chain::Ethereum,
+            protocol_request(ME, "cacc-1"),
+            &Default::default(),
+        )
+        .await
+        .expect("an incomplete scan is not an error for the account");
+        assert_eq!(read.readings.len(), 3, "what was found is still read");
+        let reviewed: Vec<&str> = read
+            .reviewed
+            .iter()
+            .map(|review| review.protocol.as_str())
+            .collect();
+        assert_eq!(reviewed, vec!["aave-v3"], "no review for the partial one");
+        assert_eq!(read.missed, vec!["uniswap-v4 (INCOMPLETE)".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn what_an_adapter_remembers_goes_back_to_it_on_the_next_pass() {
+        let registry = Registry::new(vec![
+            Box::new(StubAdapter::working("aave-v3", &[])),
+            Box::new(StubAdapter::working("uniswap-v4", &["11"]).incomplete()),
+        ]);
+        let memory =
+            std::collections::BTreeMap::from([("uniswap-v4".to_string(), "scan-1".to_string())]);
+        let read = read_protocols(
+            &registry,
+            Chain::Ethereum,
+            protocol_request(ME, "cacc-1"),
+            &memory,
+        )
+        .await
+        .expect("a pass");
+        assert_eq!(
+            read.memory,
+            vec![
+                ("aave-v3".to_string(), Some("after nothing".to_string())),
+                ("uniswap-v4".to_string(), Some("after scan-1".to_string())),
+            ],
+            "each adapter gets its own memory and only that"
+        );
     }
 
     type Script = Box<dyn Fn(&str, usize) -> Result<SourceBatch> + Send + Sync>;
@@ -1252,6 +1388,7 @@ mod tests {
                 events,
                 reviewed,
                 missed: Vec::new(),
+                memory: Vec::new(),
             })
         }
     }
