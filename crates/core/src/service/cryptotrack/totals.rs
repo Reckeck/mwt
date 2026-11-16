@@ -484,7 +484,9 @@ impl UnlockedVault {
             }
         }
         for ((store_id, asset_key), (asset, quantity)) in missing {
-            if self.price_quote_for(&asset_key).info.origin == PriceOrigin::None {
+            // The price is looked up by the asset's own key; `asset_key` is
+            // the module's key (`ethereum|0x..`), which no price is stored by.
+            if self.price_quote_for(&asset.key()).info.origin == PriceOrigin::None {
                 out.left_out.push(CryptoOutsideTotals {
                     account_id: None,
                     store_id: Some(store_id.clone()),
@@ -605,8 +607,8 @@ mod tests {
     use super::*;
     use crate::model::cryptotrack::CryptoSnapshot;
     use crate::model::cryptotrack::{
-        CryptoAccount, CryptoDirection, CryptoLeg, CryptoPricePoint, CryptoToken, CryptoTx,
-        CryptoTxKind, TokenId, TokenVerdict, TrackingRef,
+        CryptoAccount, CryptoDirection, CryptoLeg, CryptoPosition, CryptoPricePoint, CryptoToken,
+        CryptoTx, CryptoTxKind, TokenId, TokenVerdict, TrackingRef,
     };
     use crate::model::store::StoreScope;
     use crate::model::transaction::Transaction;
@@ -1022,6 +1024,43 @@ mod tests {
         assert_eq!(left[0].reason, CryptoLeftOut::Quarantined);
         assert_eq!(left[0].asset_key, token.key());
         assert_eq!(left[0].symbol, "USDC");
+    }
+
+    /// A position an adapter read, holding `quantity` of `asset` as a leg
+    /// no operation accounts for.
+    fn position_of(account_id: &str, asset: CryptoAsset, quantity: &str) -> CryptoPosition {
+        CryptoPosition {
+            id: format!("pos-{account_id}"),
+            account_id: account_id.to_string(),
+            chain: Chain::Ethereum,
+            protocol: "uniswap-v3".into(),
+            name: "Pool".into(),
+            legs: vec![CryptoLeg {
+                direction: CryptoDirection::In,
+                asset,
+                amount: amount(quantity),
+                counterparty: None,
+            }],
+            receipts: Vec::new(),
+            updated_at: "2026-03-05T10:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn a_priced_leg_of_an_unfolded_position_is_not_left_out_for_want_of_a_price() {
+        let (_dir, mut vault) = empty_vault();
+        quote(&mut vault, &eth_ref(), "2000");
+        let wallet = followed(&mut vault, "cacc-1", "Cold", ME);
+        vault
+            .doc
+            .crypto_positions
+            .push(position_of("cacc-1", eth(), "2"));
+        vault.recompute_holdings();
+
+        assert_eq!(holding_of(&vault, &wallet, &eth_ref()), amount("2"));
+        let left = vault.crypto_outside_totals();
+        assert!(left.is_empty(), "a priced leg is not unpriced: {left:?}");
+        assert_eq!(vault.net_worth().financial, amount("4000"));
     }
 
     #[test]
