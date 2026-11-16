@@ -84,7 +84,7 @@
   "cryptoTrack.hiddenTokens.emptyBody": "A token you hide in a wallet lands here, and you can bring it back.",
   "cryptoTrack.hiddenTokens.notCounted": "not in your capital",
   "cryptoTrack.hiddenTokens.restore": "Restore",
-  "cryptoTrack.hiddenTokens.restored": "{symbol} is back in your assets",
+  "cryptoTrack.hiddenTokens.restored": "{symbol} is back in the quarantine",
   "cryptoTrack.hiddenTokens.failed": "Couldn't restore the token",
   "cryptoTrack.hiddenTokens.quarantineTitle": "Quarantine of new tokens",
   "cryptoTrack.hiddenTokens.quarantineBody": "A new token waits in quarantine and does not count in your capital until you press Recognize on the wallet page. Here is only the common list of hidden ones.",

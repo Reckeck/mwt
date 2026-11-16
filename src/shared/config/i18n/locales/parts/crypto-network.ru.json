@@ -84,7 +84,7 @@
   "cryptoTrack.hiddenTokens.emptyBody": "Токен, который вы скроете в кошельке, окажется здесь, и его можно вернуть.",
   "cryptoTrack.hiddenTokens.notCounted": "в капитал не входит",
   "cryptoTrack.hiddenTokens.restore": "Вернуть",
-  "cryptoTrack.hiddenTokens.restored": "{symbol} вернулся в активы",
+  "cryptoTrack.hiddenTokens.restored": "{symbol} вернулся в карантин",
   "cryptoTrack.hiddenTokens.failed": "Не удалось вернуть токен",
   "cryptoTrack.hiddenTokens.quarantineTitle": "Карантин новых токенов",
   "cryptoTrack.hiddenTokens.quarantineBody": "Новый токен попадает в карантин и не считается в капитале, пока вы не нажмёте «Признать» на странице кошелька. Здесь только общий список скрытых.",

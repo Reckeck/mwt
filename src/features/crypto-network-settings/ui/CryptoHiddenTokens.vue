@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useCryptoAccounts } from '@/entities/crypto-account'
 import { CRYPTO_TOKENS_KEY } from '@/entities/crypto-token'
+import { refreshAfterTokenVerdict } from '@/features/crypto-token-review/@x/crypto-network-settings'
 import { call } from '@/shared/api/ipc'
 import { formatDate } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
@@ -43,19 +44,20 @@ const hidden = computed(() => (tokens.data.value ?? []).filter((token) => token.
 const labelOf = (chain: string) => networks.data.value?.networks.find((entry) => entry.chain === chain)?.label ?? chain
 const short = (contract: string) => (contract.length > 12 ? `${contract.slice(0, 6)}…${contract.slice(-3)}` : contract)
 
-function change(verdict: 'crypto_confirm_token' | 'crypto_reject_token', token: TokenView) {
+function change(verdict: 'crypto_clear_token_verdict' | 'crypto_reject_token', token: TokenView) {
   return call(verdict, { input: { chain: token.chain, contract: token.contract } satisfies TokenRefInput })
 }
 
 const restore = useMutation({
-  mutationFn: (token: TokenView) => change('crypto_confirm_token', token),
-  onSuccess: () => void queryClient.invalidateQueries({ queryKey: CRYPTO_TOKENS_KEY }),
+  // Back to the quarantine, not into the capital: recognising a token is a decision made on the wallet.
+  mutationFn: (token: TokenView) => change('crypto_clear_token_verdict', token),
+  onSuccess: () => refreshAfterTokenVerdict(queryClient),
   meta: {
     success: (_data: unknown, token: unknown) => t('cryptoTrack.hiddenTokens.restored', { symbol: (token as TokenView).symbol }),
     error: 'cryptoTrack.hiddenTokens.failed',
     undo: async (_data: unknown, token: unknown) => {
       await change('crypto_reject_token', token as TokenView)
-      void queryClient.invalidateQueries({ queryKey: CRYPTO_TOKENS_KEY })
+      refreshAfterTokenVerdict(queryClient)
     },
   },
 })
