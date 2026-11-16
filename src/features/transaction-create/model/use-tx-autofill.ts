@@ -151,7 +151,7 @@ export function useTxAutofill(state: TxFormState) {
     },
   )
   /** What the destinations add up to; with one destination, the received amount. */
-  const distributedTotal = computed(() => splitTotals(form)?.distributed ?? Number(parseDecimal(form.toAmount) ?? 0))
+  const distributedTotal = computed(() => Number(splitTotals(form)?.distributed ?? parseDecimal(form.toAmount) ?? 0))
   /** «1 USDT = 92.5 RUB» from the two amounts, when no rate was typed. */
   const impliedRate = computed(() => {
     if (form.kind !== 'convert' || form.rate.trim()) return ''

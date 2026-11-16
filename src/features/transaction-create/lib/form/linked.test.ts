@@ -87,3 +87,53 @@ describe('missingFields for an exchange', () => {
     expect(missingFields(exchange({ viaOpen: true, via: { store: 'store-9' } }))).not.toContain('via')
   })
 })
+
+describe('formToInputs for a top-up', () => {
+  it('books the fee and hash on the first part only', () => {
+    const form: TransactionFormState = {
+      ...emptyForm('store-1', 'topup'),
+      asset: usdt,
+      amount: '1000',
+      feeAmount: '1',
+      txHash: '0xabc',
+      extra: [{ id: 'a', to: { store: 's3' }, receive: '500' }],
+    }
+    const out = formToInputs(form) as Extract<TransactionInput, { type: 'topup' }>[]
+    expect(out).toHaveLength(2)
+    expect(out[0].fee?.amount).toBe('1')
+    expect(out[0].details.tx_hash).toBe('0xabc')
+    expect(out[1].fee).toBeNull()
+    expect(out[1].details.tx_hash).toBeNull()
+    expect(out[1].amount).toBe('500')
+    expect(out[1].store_id).toBe('s3')
+    expect(out[1].from).toEqual(out[0].from)
+  })
+})
+
+describe('split exactness', () => {
+  const tiny = (over: Partial<TransactionFormState>) =>
+    exchange({
+      fromAmount: '0.3',
+      toAmount: '3',
+      toShare: '1',
+      rate: '',
+      extra: [{ id: 'a', to: { store: 'store-3' }, receive: '2' }],
+      ...over,
+    })
+
+  it('splits 0.3 into exact 0.1 and 0.2', () => {
+    const out = parts(tiny({}))
+    expect(out[0].from.amount).toBe('0.1')
+    expect(out[1].from.amount).toBe('0.2')
+  })
+
+  it('balances exactly', () => {
+    const base = { toAmount: '0.3', toShare: '0.1' }
+    expect(missingFields(tiny({ ...base, extra: [{ id: 'a', to: { store: 's' }, receive: '0.2' }] }))).not.toContain(
+      'shares',
+    )
+    expect(missingFields(tiny({ ...base, extra: [{ id: 'a', to: { store: 's' }, receive: '0.2000001' }] }))).toContain(
+      'shares',
+    )
+  })
+})

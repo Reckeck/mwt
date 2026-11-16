@@ -1,6 +1,6 @@
 /** Several linked operations from one form: a split convert or top-up. */
 
-import { parseDecimal } from '@/shared/lib/decimal'
+import { decimalAdd, decimalCmp, decimalShare, decimalSub, parseDecimal } from '@/shared/lib/decimal'
 import type { TransactionFormState } from './form-state'
 import { splitBalanced, splitTotals } from './form-helpers'
 import { formToInput } from './to-input'
@@ -26,14 +26,15 @@ export function formToInputs(form: TransactionFormState): TransactionInput[] | n
   const out: TransactionInput[] = [main]
   for (const row of form.extra) {
     if (main.type !== 'topup' || !row.to || !('store' in row.to)) return null
-    out.push({ ...main, store_id: row.to.store, amount: row.receive.trim() })
+    out.push({
+      ...main,
+      store_id: row.to.store,
+      amount: row.receive.trim(),
+      fee: null,
+      details: { ...main.details, tx_hash: null },
+    })
   }
   return out
-}
-
-/** A decimal string with at most `places` digits after the point, no trailing zeros. */
-function trimmed(value: number, places: number): string {
-  return String(Number(value.toFixed(places)))
 }
 
 /**
@@ -47,26 +48,33 @@ function trimmed(value: number, places: number): string {
 function splitConvert(form: TransactionFormState, main: Extract<TransactionInput, { type: 'convert' }>) {
   const totals = splitTotals(form)
   if (!totals || !splitBalanced(totals)) return null
-  const digits = [form.toAmount, form.toShare, ...form.extra.map((row) => row.receive)].map(
-    (raw) => raw.split(/[.,]/)[1]?.trim().length ?? 0,
+  const extraSum = form.extra.reduce<string | null>(
+    (sum, row) => (sum === null ? null : decimalAdd(sum, row.receive)),
+    '0',
   )
-  const receivePlaces = Math.max(2, ...digits)
-  const extraSum = form.extra.reduce((sum, row) => sum + Number(parseDecimal(row.receive) ?? 0), 0)
-  const first = form.toShare.trim() ? form.toShare.trim() : trimmed(totals.total - extraSum, receivePlaces)
+  if (extraSum === null) return null
+  const first = form.toShare.trim() ? form.toShare.trim() : decimalSub(totals.total, extraSum)
+  if (first === null) return null
   const rows = [{ to: form.to, receive: first }, ...form.extra]
-  const received = rows.map((row) => Number(parseDecimal(row.receive) ?? Number.NaN))
-  const total = received.reduce((sum, value) => sum + value, 0)
-  const given = Number(parseDecimal(form.fromAmount) ?? Number.NaN)
-  if (!(total > 0 && given > 0) || received.some((value) => !(value > 0))) return null
-  const places = Math.max(2, form.fromAmount.split(/[.,]/)[1]?.length ?? 0)
-  const shares = received.map((value) => Number((given * (value / total)).toFixed(places)))
-  shares[0] = Number((given - shares.slice(1).reduce((sum, value) => sum + value, 0)).toFixed(places))
+  const total = rows.reduce<string | null>((sum, row) => (sum === null ? null : decimalAdd(sum, row.receive)), '0')
+  const given = parseDecimal(form.fromAmount)
+  const positive = (value: string | null) => value !== null && decimalCmp(value, '0') === 1
+  if (total === null || given === null || !positive(total) || !positive(given)) return null
+  if (!rows.every((row) => positive(row.receive))) return null
+  const places = Math.max(2, given.split('.')[1]?.length ?? 0)
+  const shares = rows.map((row) => decimalShare(given, row.receive, total, places))
+  const rest = shares
+    .slice(1)
+    .reduce<string | null>((sum, value) => (sum === null || value === null ? null : decimalAdd(sum, value)), '0')
+  const head = rest === null ? null : decimalSub(given, rest)
+  if (head === null || shares.some((value) => value === null)) return null
+  shares[0] = head
   const out: TransactionInput[] = []
   for (const [index, row] of rows.entries()) {
     if (!row.to) return null
     out.push({
       ...main,
-      from: { ...main.from, amount: trimmed(shares[index], places) },
+      from: { ...main.from, amount: shares[index] as string },
       to: { ...main.to, account: row.to, amount: row.receive.trim() },
       rate_override: index === 0 ? main.rate_override : null,
       fee: index === 0 ? main.fee : null,
