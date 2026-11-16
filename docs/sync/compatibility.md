@@ -13,7 +13,7 @@ Every session starts with a `Hello` from each side (the dialer and the listener
 alike). It carries:
 
 - `protocol`: `PROTOCOL_VERSION`, now 4 (2 added the `security` notice category, 3 made purchases entries of their own, 4 moved the identity behind the vault proof);
-- `format`: `VAULT_FORMAT_VERSION`, now 3;
+- `format`: `VAULT_FORMAT_VERSION`, now 4 (4 opened the crypto module's collections);
 - `app_version`: the sender's app version, informational only.
 
 The checks, in order: the vault proof (a different vault is `SYNC_OTHER_VAULT`),
@@ -397,6 +397,18 @@ nonce_l)`. Steps and the diagram: [Pairing and trust](pairing.md#a-session-opens
   builds that differ (a later protocol or format), the name comes from the list
   of trusted devices by the Noise key; an untrusted one stays unnamed.
 - **No vault change.** Nothing in the vault format changes; no migration.
+
+## Payload 3 and payload 4 do not sync
+
+`VAULT_FORMAT_VERSION` 4 adds the crypto module's collections. The `format`
+check at the handshake therefore refuses a pair where one device is still on
+payload 3: it is the honest answer, because a payload 3 build meeting a
+`crypto_events` record would answer `InvalidInput: sync: unknown record` in the
+middle of an exchange. Nothing is exchanged, nothing changes in either vault,
+trust is kept and the pair joins by itself once both are updated. The user
+accepted this price on 2026-11-10. The migration itself converts no data, so
+updating a device is enough: see
+[Versions and migrations](../data-model.md#versions-and-migrations).
 
 Tests: `pairing_code_depends_on_both_nonces`, `commit_mismatch_is_rejected`
 (`sync/session.rs`); `an_identity_round_trips`,

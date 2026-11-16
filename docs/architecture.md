@@ -31,6 +31,8 @@ is a thin shell: `tauri::Builder`, commands and state.
 │  appconfig.rs— app settings (outside the vault, JSON)│
 │  service.rs  — UnlockedVault: all mutations + analytics│
 │  pricing/    — price providers, cache, FX            │
+│  cryptotrack/— the crypto engine: sources (EVM,      │
+│                Bybit), tokens, RPC client, prices    │
 │  crypto/     — XChaCha20-Poly1305 + Argon2id,        │
 │                fixed 55-byte header (AAD)            │
 │  storage/    — SnapshotFormat (JSON/MessagePack),    │
@@ -56,6 +58,38 @@ nothing to the webview, Rust calls them (`run_mobile_plugin`):
   (`set_system_bars`) and "move to back" (`move_to_back`). The frontend reads them
   through `--safe-*` and the `*-safe` utilities (`src/app/styles.css`).
 
+## The crypto module
+
+A user follows public addresses and exchanges; the module reads them and nothing is typed in by hand. The stored data
+is nine sibling `crypto_*` fields of the vault (no nested object; `docs/data-model.md` -> "The crypto module").
+
+- **Core** (`crates/core/src/cryptotrack/`) is pure and Tauri-free: `source.rs` (the traits), `sources/evm` (Blockscout
+  history + node balances) and `sources/bybit.rs`, `rpc/` (a JSON-RPC client with a per-host limiter and a rule that
+  one address's calls are never merged with another's), `tokens/` (identity by network + contract, quarantine),
+  `prices.rs` (historic quotes, fetched by `pricing/llama.rs`) and `engine/` (operations, the user's overrides, cost
+  basis, reconciliation with the node, snapshots). Nothing derived is stored.
+- **The vault side** is `service/cryptotrack/`: `apply.rs` stores a batch, `recompute.rs` folds everything again and is
+  the only place that knows "now", plus accounts, tokens, links, relations, `transition.rs` and `wipe.rs`.
+- **The shell** (`crates/app`): `commands/cryptotrack/*` are thin IPC handlers; `cryptotrack/jobs.rs` and the scheduler
+  run the background reads. A network call follows the usual pattern: copy the inputs under the mutex, release it,
+  fetch, take it again and apply.
+- **Device secrets.** The exchange keys, the per-network endpoints and the Blockscout key live in `<vault>.secrets`,
+  encrypted with a key derived from the vault key, outside the vault bytes, so sync, the mirror and backups never carry
+  them. The wipe removes this file.
+- **Sync levels.** Crypto collections travel only at protection level 3; below it the sender omits them and the
+  receiver refuses them. Cursors are device-local. A wipe is a synced record that other devices honour.
+- **Entering and leaving.** Raising to level 3 archives the hand-kept crypto wallets (nothing deleted); the wipe makes
+  a checked backup first, then clears the module and archives its wallets.
+- **Frontend.** There is no section of its own: the module appears in wallets of the Crypto kind (assets, quarantine,
+  operations, relations tabs), in the "Crypto operations" list under Transactions, and in Settings -> Crypto (networks,
+  consent, hidden tokens, wiping). The browser mock lives in `src/shared/api/mock/commands-crypto-*.ts`.
+- **DeFi positions** (`/crypto/positions`, `src/pages/crypto-positions`, slice `src/entities/crypto-position`) is a read-only
+  screen over what the adapters found: the engine computes every figure and the page only composes them. A missing figure
+  is a dash, never a zero, and `≈` marks what an adapter called approximate. Its onboarding is a route tour (list, net
+  tile, fees), an empty state that leads to connecting an address on the wallets screen, hints on the tile labels and the
+  breakdown note, and a "What's new" entry; texts are in `locales/parts/defi-onboarding.*`. The anchors inside the detail
+  dialog have their own names and are listed in `CRYPTO_TOURLESS_TARGETS`.
+
 ## Where things live on disk
 
 Paths are for the dev app (`dev.mwt.desktop`); a release from `main` stores everything
@@ -68,6 +102,7 @@ the same way, but in `mwt.desktop` directories (channels — `docs/ci.md`).
 | `~/.config/dev.mwt.desktop/currencies.json` | currency catalog cache (fiat + crypto) | plain JSON |
 | `~/.config/dev.mwt.desktop/recent_vaults.json` | recent vaults | plain JSON |
 | `~/.config/dev.mwt.desktop/vault_links.json` | which vault is mirrored to which external file | plain JSON |
+| `<vault>.secrets` (next to the vault) | device secrets: exchange keys, per-network endpoints, Blockscout key; never synced or backed up | encrypted with a key derived from the vault key |
 
 Paths on other OSes, Android (the vault in app storage, `content://` import) and
 the copy in an external file — `docs/storage-platforms.md`.

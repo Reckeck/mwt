@@ -7,7 +7,7 @@ portfolio container, not an asset; an asset is represented by a `Holding` inside
 
 | Field | Type | Comment |
 |---|---|---|
-| `version` | `u32` | `VAULT_FORMAT_VERSION = 3`. A file of an older version opens and migrates (`storage::decode_versioned`): an untouched copy is placed next to it as `<vault>.v<N>.bak`, then the document is rewritten in the current version. A version from the future is `UNSUPPORTED`; a file of a known version that does not fit its schema is `INCOMPATIBLE_VAULT`. Details — the "Versions and migrations" section below |
+| `version` | `u32` | `VAULT_FORMAT_VERSION = 4`. A file of an older version opens and migrates (`storage::decode_versioned`): an untouched copy is placed next to it as `<vault>.v<N>.bak`, then the document is rewritten in the current version. A version from the future is `UNSUPPORTED`; a file of a known version that does not fit its schema is `INCOMPATIBLE_VAULT`. Details — the "Versions and migrations" section below |
 | `id` | `String` | uuid |
 | `created_at` | `String` | RFC3339 UTC |
 | `settings` | `Settings` | vault-scoped: decimals, widgets, intervals, tray |
@@ -28,6 +28,7 @@ portfolio container, not an asset; an asset is represented by a `Holding` inside
 | `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | planning. Since v3 automations are schemes (`workflows`) with `Workflow.automation: AutomationSpec { preset, schedule, starts_at, template, amount_mode (fixed/varies), workday_shift (none/back/forward) }`: the graph is built from a form (`workflow::automation`), runs are `workflow_runs`; `Automation`/`AutomationRun` are only IPC views. `preset` is a ready wallet template (salary, DCA, loan payment…); `UtilityItem.property_id` — utilities always belong to a property; `PriceAlert.store_id` (`serde(default)`) — the exchange whose terminal holds the alert, `None` — common. v2: `Reminder.repeat` (every N days/weeks/months/years), `Reminder.source` (an auto-reminder and its source), `muted`, `user_edited`, `snoozed_until`; `MeterReading.day` (day of month, `None` = month end) |
 | `notification_log` | `Vec<NoticeRecord>` | v2: shown notifications (a "source + occurrence" key, so as not to repeat after a restart), at most 500 |
 | `sync` | `SyncState` | `serde(default)`: change stamps, tombstones, trusted devices, batches for undo, vault transfers to new devices (`transfers`) — device sync (`docs/sync.md`); not exported to TS, a copy from the JSON editor is ignored |
+| `crypto_accounts`, `crypto_events`, `crypto_overrides`, `crypto_tokens`, `crypto_positions`, `crypto_snapshots`, `crypto_cursors`, `crypto_prices`, `crypto_wiped_at` | `Vec<…>` | v4, `serde(default)`: the crypto module (`model/cryptotrack.rs`). Sibling top-level fields rather than one nested object, so a sync stamp, a tombstone and an undo copy are per record (decision of 2026-11-10). Nothing derived is stored: balances and average prices are computed from `crypto_events`. A token's identity is `chain` + `contract` (not its symbol), an EVM contract and address are lowercased on creation (`TokenId::new`, `CryptoAccount::new`); `CryptoTx.tracking: TrackingRef` says what the operation was found through and is never optional. `crypto_cursors` belongs to the device (`sync::registry::LOCAL`), `crypto_prices` is a cache (`Rule::Union`, `cache: true`), the rest are `Rule::Records`; all of the synced ones are behind the level-3 gate (`sync::crypto_gate::CRYPTO_COLLECTIONS`), and one non-empty collection forbids protecting the vault below level 3 (`service::security_level::doc_carries_crypto_data`) |
 
 ### Settings — vault-scoped only
 
@@ -42,12 +43,10 @@ a month carrying over the remainder, the default; `until_income` — until the n
 income), `budget_currency` (empty = the base currency), `notifications` (v2:
 system notifications on/off, hide details while the vault is locked,
 the time of auto-reminders, per category — on/off, how many days ahead, whether to create
-auto-reminders), `inflation_manual` (flat annual inflation by lowercase currency, only where the group differs from the shipped table; group data), `inflation_adopted` (device flag: this device copied its old app-config rates into `inflation_manual`), `crypto` (direction: whether the vault accounts for cryptocurrencies;
-`false` hides `crypto`/`exchange` wallets, exchange widgets, and
-coins in the currency and asset pickers in the interface and stops background exchange polling; data and
-balances remain in the totals; the field is absent in an old or imported vault, then
-`open` derives it in memory — `true` if there is a non-archived crypto wallet or
-exchange — and writes it on the next save).
+auto-reminders), `inflation_manual` (flat annual inflation by lowercase currency, only where the group differs from the shipped table; group data), `inflation_adopted` (device flag: this device copied its old app-config rates into `inflation_manual`), `crypto` (derived since spec E14, never chosen by the user: `true` when the crypto module holds an address or an operation
+or the vault still carries a hand-made crypto wallet or exchange. The stored field stays for compatibility: `open` refreshes
+it in memory and the next save writes it, `get_settings` and `update_settings` answer with the derived value, an incoming
+`crypto` is read and ignored. Its one consumer is the background exchange polling; the interface no longer hides crypto).
 
 Settings that describe the **user**, not this vault, live not in the document
 but next to the app — see "App settings" below.
@@ -487,7 +486,7 @@ Security guarantees:
   orders, so even a leaked key cannot move funds.
 
 Versions: `VAULT_CONTAINER_VERSION = 1` (the container format did not change),
-`VAULT_FORMAT_VERSION = 2` (the document schema).
+`VAULT_FORMAT_VERSION = 4` (the document schema).
 
 ## Versions and migrations
 
@@ -528,8 +527,99 @@ with v3 and does not run automations a second time. The "amount is approximate" 
 by `TxOrigin::Workflow { planned_at, estimated }`, not by `TxMeta`: v1 bincode files are
 read by field position, and a new field in `TxMeta` would break them.
 
+v3 → v4 (`storage/v3.rs`): nothing is converted. v4 adds the crypto module's own
+top-level collections (`crypto_accounts`, `crypto_events`, `crypto_overrides`,
+`crypto_tokens`, `crypto_positions`, `crypto_snapshots`, `crypto_cursors`,
+`crypto_prices`, `crypto_wiped_at`); they are additive and defaulted, so a v3 file is read
+by the current types and its crypto collections come out empty. The bump exists for the
+handshake: a build that does not know the module says "the versions differ, update"
+instead of meeting an unknown sync collection halfway through an exchange (the user
+accepted the price — no sync between the devices until both are updated — on 2026-11-10).
+The file copy is `<vault>.v3.bak`.
+
 A new incompatible change: freeze the current schema in `storage::vN`, bump
 `VAULT_FORMAT_VERSION`, add a migration step and tests for both formats.
+
+## The crypto module
+
+The module follows public addresses and exchanges and reads them itself; no crypto record is typed in by hand any more.
+It lives in nine **sibling top-level fields** of `VaultDoc` (`model/cryptotrack.rs`), all `serde(default)`, so there is
+no nested `crypto` object: one stamp, one tombstone and one undo copy per record.
+
+| Field | Record | Notes |
+|---|---|---|
+| `crypto_accounts` | `CryptoAccount` | a followed address (`chain`, lowercased `address`) or an exchange (`source`); a wallet (`Store`, kind `crypto`) points to it through `crypto_account_id` |
+| `crypto_events` | `CryptoTx` | one operation per transaction per account; the id is a function of the facts (`engine/ids.rs`), so a refetch overwrites instead of appending; `legs`, `gas`, `kind`, `tracking` (what it was found through) |
+| `crypto_overrides` | `CryptoOverride` | the user's corrections laid over an event (kind, comment, categories, contact, "not an exchange", hidden, link to a fiat transaction); events are never edited |
+| `crypto_tokens` | `CryptoToken` | identity is `chain` + `contract`, never the symbol; `verdict` (the user's call), `hidden`, `basis_usd`; the status (`Known`, `Quarantined`, confirmed, rejected) is derived |
+| `crypto_positions` | `CryptoPosition` | what a protocol holds for an account (filled by a protocol adapter; the trait exists, no adapter ships yet) |
+| `crypto_snapshots` | `CryptoSnapshot` | what the module was worth at a moment, because a past balance cannot be fetched again |
+| `crypto_cursors` | `CryptoCursor` | how far this device read a source; device-local (`sync::registry::LOCAL`), never synced |
+| `crypto_prices` | `CryptoPricePoint` | historic quotes by `(token_key, ts)`, written once and never thinned; a cache (`Rule::Union`) apart from `price_cache` |
+| `crypto_wiped_at` | `CryptoWipe` | the mark a wipe leaves (see below) |
+
+Nothing derived is stored: holdings, average cost, realized profit, gas and income are folded again from `crypto_events`
+plus `crypto_overrides` on every read (`cryptotrack/engine/`). Differences against the balance a node reports are written
+down as operations of their own.
+
+### The engine and its sources
+
+`crates/core/src/cryptotrack/` is pure: a source reads the network and returns a batch, the engine
+(`normalize` -> `overrides` -> `basis` -> `reconcile` -> `snapshot`) turns raw facts into operations and figures, and
+only `service/cryptotrack/recompute.rs` and `apply.rs` touch the document (AGENTS.md rules 3 and 4).
+
+- **EVM** (`sources/evm`): history and held tokens from Blockscout API v2, balances from a node over JSON-RPC
+  (`rpc/`, with a per-host limiter and a privacy rule: one address per request batch, different addresses are spaced
+  apart in time). Six networks (`chains.rs`): Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Smart Chain.
+  Only `https` endpoints (plain `http` for localhost).
+- **Bybit** (`sources/bybit.rs`): an exchange is read by the same engine as an address. The old import queue
+  (`pending_imports`, the check screen) is gone; what an old file holds is converted once
+  (`service/cryptotrack/legacy_bybit.rs`). The old fields stay readable and are no longer written: `pending_imports`,
+  `discarded_imports` (a refused `exec_id` is never converted again) and `TxOrigin::Import { exec_id }`
+  (already booked transactions stay as they are and their `exec_id`s count as decided).
+- **Tokens** (`tokens/`): a contract on the built-in list is `Known`; anything else that arrives is `Quarantined`
+  and stays out of the value, profit, reports and capital until the user recognises it (or hides it).
+- **Prices** (`cryptotrack/prices.rs`, fetch in `pricing/llama.rs`): historic prices come from DeFiLlama
+  by `(chain, contract, date)`; the address is never an input of the request. A missing price is `None` with a
+  staleness mark, never zero.
+
+### What stays on the device
+
+The device secrets file `<vault>.secrets` (`crypto/device_secrets.rs`) holds what must never leave the device and is
+never part of the vault bytes, so the mirror, sync, transfers and backups do not carry it: the exchange keys, the
+per-network endpoints (own RPC node, Blockscout instance, explorer; a node URL often carries a provider key) and the
+optional Blockscout key. Its key is derived from the vault key by HKDF with its own `info`; the cipher is the vault's;
+a new vault key re-seals it in two steps (`.secrets.next`). The consent to read the networks is not in the vault at all: it is `crypto_tracking_consent` in the app settings
+(`appconfig.rs`), per device.
+
+### Sync levels
+
+Every synced `crypto_*` collection is registered in `sync::registry` as records by id (tokens by `chain` + `contract`;
+prices as a silent union) and listed in `sync::crypto_gate::CRYPTO_COLLECTIONS`. Crypto data travels only between vaults
+at **level 3**: the sender leaves these keys out for a peer below level 3 and the receiver refuses a batch that
+carries them. A vault that holds any crypto data (or a device secrets file) cannot be protected below level 3
+(`service::security_level::doc_carries_crypto_data`). `crypto_cursors` never travels.
+
+### The move to level 3 and the archive
+
+Raising the vault to level 3 starts from a wizard that first names the capital that would leave the totals
+(`crypto_transition_plan`, computed every time, stored nowhere). The wizard's last step archives the crypto wallets
+kept by hand (`crypto_archive_manual_wallets`, idempotent): `Store::archived` is set, nothing is deleted and the
+records stay readable. What the module reads itself stays: a wallet with a followed address, and an exchange of a
+provider the module talks to (Bybit), with or without a key today, because its records are converted rather than
+retired. Exchanges the module cannot read (Binance, OKX) are archived like the other hand-kept wallets. Below level 3
+the archiving does nothing.
+
+### The wipe
+
+`service/cryptotrack/wipe.rs` removes the module from the vault, and its order is the design: the typed word is
+checked; a backup is made through `create_backup`, reopened with the session password and compared; only then every
+`crypto_*` collection is cleared, the wallets the module led lose their link and are archived (not deleted), the
+exchange key index goes and the capital is recounted; a `crypto_wiped_at` record is left; the document is written;
+the device secrets file is removed last (a crash in between would leave a vault that believes it has keys). The
+command layer drops the biometric binding afterwards. The mark travels to other devices as an ordinary record:
+`sync::crypto_gate::newest_wipe` / `without_wiped` drop what the wipe has outlived, so a device that was offline does
+not hand the data back, while anything made after the wipe travels as usual.
 
 ## Auto-reminders
 
