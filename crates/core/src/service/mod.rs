@@ -463,14 +463,12 @@ impl UnlockedVault {
         let secrets_scrubbed = vault.scrub_sync_secrets();
         // Level 3: exchange keys of an old document move to the device file.
         let keys_moved = vault.adopt_device_secrets()?;
-        // Level 3 and the module has written nothing of its own yet: that is
-        // what a crash between the re-encryption and the archiving leaves
-        // behind (spec E11), so the archiving runs here. Once the module has
-        // an account or an event, a crypto wallet without one is a wallet the
-        // user made on purpose and nothing here touches it.
-        let retired = vault.doc.crypto_accounts.is_empty()
-            && vault.doc.crypto_events.is_empty()
-            && vault.retire_manual_crypto_wallets().changed;
+        // The raise to level 3 was cut short between the re-encryption and
+        // the archiving (spec E11): it left its mark in the document, so the
+        // archiving runs here and the mark goes. Without the mark nothing is
+        // archived, whatever the level: a vault raised before the crypto
+        // module existed keeps the wallets its user keeps by hand.
+        let retired = vault.finish_cut_short_raise();
         if migrated
             || keys_moved
             || envelopes_settled
@@ -5417,6 +5415,7 @@ mod persist_tests {
             onboarding_checklist_hidden: true,
             crypto: Some(false),
             schedule_timezone: Some("Asia/Bangkok".into()),
+            crypto_raise_pending: true,
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.

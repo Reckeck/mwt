@@ -288,6 +288,7 @@ an older protocol 3 build sees:
 | `dashboard_widgets`, `dashboard_period`, `pinned` under `skip` | never sent, never taken | keeps sending its own; a new device ignores them. It stops receiving the new device's layout |
 | `Settings.inflation_manual` (flat rates by currency, split per currency) | additive entries `inflation_manual.<currency>` | does not know it; keeps its rates in its app config and computes with them; the group's rates do not reach it until it is updated |
 | `Settings.inflation_adopted` under `skip` | never sent | none; a peer's flag does not cancel this device's adoption |
+| `Settings.crypto_raise_pending` under `skip` (additive, `#[serde(default)]`) | never sent | none; a peer's mark does not say that a raise was cut short here |
 | `PriceStamp.price_base_currency` | field inside `price`, an unknown field is ignored | drops the label when it re-saves a transaction through its typed document; the number is then read as before (without a label) |
 | `Workflow.max_amount_currency` | additive field of `workflows` | ignores it; the cap stays "in the base of the runner" |
 | Text of an automatic reminder | the field `text` is the same | keeps rewriting the text in its own language; a new device does not rewrite in reply (a text equal to one of the two renderings is left alone, nothing is stamped) |
@@ -301,7 +302,7 @@ Device name to be in the `skip` of the `settings` rule and no Group name there.
 
 - Device: `display_decimals`, `fx_refresh_interval_sec`, `minimize_to_tray`
   (also in the app config), `dashboard_widgets`, `dashboard_period`, `pinned`,
-  `inflation_adopted`, `notifications.system`,
+  `inflation_adopted`, `crypto_raise_pending`, `notifications.system`,
   `notifications.hide_details_when_locked`.
 - Group: everything else, among it `notifications.default_time`,
   `notifications.categories`, `inflation_mode`, `inflation_source`,

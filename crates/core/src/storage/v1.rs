@@ -251,6 +251,7 @@ impl From<VaultDocV1> for VaultDocV2 {
                 onboarding_checklist_hidden: false,
                 crypto: None,
                 schedule_timezone: None,
+                crypto_raise_pending: false,
             },
             stores: old.stores,
             holdings: old.holdings,

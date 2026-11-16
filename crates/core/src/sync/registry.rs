@@ -229,6 +229,7 @@ pub const DEVICE_SETTINGS: &[&str] = &[
     "dashboard_period",
     "pinned",
     "inflation_adopted",
+    "crypto_raise_pending",
 ];
 
 /// What the `settings` rule skips: `DEVICE_SETTINGS` and the device parts of
@@ -242,6 +243,7 @@ const SETTINGS_SKIP: &[&str] = &[
     "dashboard_period",
     "pinned",
     "inflation_adopted",
+    "crypto_raise_pending",
     "notifications.system",
     "notifications.hide_details_when_locked",
 ];
@@ -290,6 +292,9 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     // This device has given its old table to the group; a peer's flag says
     // nothing about the rates kept here.
     ("inflation_adopted", Scope::Device),
+    // This device's raise to level 3 was cut short before the archiving of
+    // the hand-kept crypto wallets; a peer's raise says nothing about it.
+    ("crypto_raise_pending", Scope::Device),
     ("manual_income", Scope::Group),
     ("manual_expenses", Scope::Group),
     ("categories_rev", Scope::Group),

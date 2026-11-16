@@ -54,11 +54,16 @@
 //! `crypto_account_id`, the exchange keys — and an archived wallet is no
 //! longer a candidate. So a second run finds nothing, changes nothing and
 //! writes nothing, and the step can be run by the wizard, by the raise
-//! itself ([`UnlockedVault::raise_to_crypto`]) and by every open of a level-3
-//! vault. That last one is what makes a failure between the re-encryption and
-//! the archiving repair itself: the open chain in `service::mod` runs this
-//! step like its other repairs and persists once if any of them changed
-//! something.
+//! itself ([`UnlockedVault::raise_to_crypto`]) and by an open that finds the
+//! raise's mark (`Settings::crypto_raise_pending`). That last one is what
+//! makes a failure between the re-encryption and the archiving repair itself:
+//! the raise sets the mark before it re-encrypts, so it is in the first
+//! level-3 file, and clears it when the archiving is done. The open chain in
+//! `service::mod` runs the step only when the mark is set and persists once
+//! if any of its repairs changed something. A level-3 vault without the mark
+//! (raised before the module existed) is never archived by an open: the
+//! wallets it keeps by hand are the user's, and the wizard is the one way
+//! they leave.
 
 use std::collections::BTreeSet;
 
@@ -513,33 +518,150 @@ mod tests {
         assert!(!vault.retire_manual_crypto_wallets().changed);
     }
 
-    /// The acceptance line of spec E11: a crash between the re-encryption and
-    /// the archiving is repaired at the next open.
-    #[test]
-    fn an_open_finishes_an_archiving_the_raise_did_not_reach() {
+    /// A raise cut short right after the level-3 file was written: the vault
+    /// as the crash left it, with the raise's mark on disk and the hand-kept
+    /// wallet not yet archived. Returns the wallet's id and the path.
+    fn cut_short_raise() -> (tempfile::TempDir, std::path::PathBuf, String) {
+        use crate::crypto::kdf_profile::{KDF_MEM_KIB_MIN, KdfParams};
+        use crate::service::security_level::RaiseStep;
         let (dir, mut vault) = empty_vault();
         let path = dir.path().join("test.wallet");
         quote(&mut vault, &eth_ref(), "2000");
-        vault.raise_to_level3_for_tests();
-        // The vault as the crash left it: level 3 on the disk, the hand-kept
-        // wallet still counting.
         let old = hand_kept(&mut vault, "Old cold", StoreKind::Crypto);
-        vault
-            .persist()
-            .expect("the state before the repair is saved");
-        assert_eq!(vault.net_worth().financial, amount("4000"));
+        let password = vault.password.clone();
+        let kdf = KdfParams::hardened(KDF_MEM_KIB_MIN, 1, 1);
+        let cut = vault.raise_inner(
+            &password,
+            &password,
+            kdf,
+            |_| {},
+            |step| {
+                if step == RaiseStep::Persisted {
+                    Err(crate::error::Error::Unsupported)
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert!(cut.is_err(), "the raise stops after the file is written");
+        assert!(!archived(&vault, &old), "the archiving was not reached");
+        assert!(vault.doc.settings.crypto_raise_pending);
         drop(vault);
+        (dir, path, old)
+    }
+
+    /// The acceptance line of spec E11: a crash between the re-encryption and
+    /// the archiving is repaired at the next open — and only that crash: the
+    /// raise leaves a mark, and the open acts on the mark, not on the level.
+    #[test]
+    fn an_open_finishes_an_archiving_the_raise_did_not_reach() {
+        let (_dir, path, old) = cut_short_raise();
 
         let reopened = UnlockedVault::open(path, "pw").expect("the level-3 file opens");
 
         assert!(
             archived(&reopened, &old),
-            "the open chain runs the same step and finishes the move"
+            "the open chain finishes the move the raise began"
         );
         assert_eq!(
             reopened.net_worth().financial,
             Amount::ZERO,
             "and the retired coins are out of the totals"
         );
+        assert!(
+            !reopened.doc.settings.crypto_raise_pending,
+            "the mark goes with the archiving"
+        );
+    }
+
+    /// The mark is cleared on disk, so the next open has nothing to finish:
+    /// a wallet the user restored after that stays restored.
+    #[test]
+    fn a_finished_archiving_is_not_repeated_by_the_next_open() {
+        let (_dir, path, old) = cut_short_raise();
+        let mut reopened = UnlockedVault::open(path.clone(), "pw").expect("opens");
+        assert!(archived(&reopened, &old));
+        store_mut(&mut reopened, &old).archived = false;
+        reopened.recompute_holdings();
+        reopened.persist().expect("the restored wallet is saved");
+        drop(reopened);
+
+        let again = UnlockedVault::open(path, "pw").expect("opens again");
+
+        assert!(!again.doc.settings.crypto_raise_pending);
+        assert!(!archived(&again, &old), "nothing archives it a second time");
+        assert_eq!(again.net_worth().financial, amount("4000"));
+    }
+
+    /// A vault that was at level 3 before the module (stage 1 raised it for
+    /// the exchange keys) and holds a wallet kept by hand: no raise is cut
+    /// short, so opening it archives nothing and the capital is as it was.
+    #[test]
+    fn a_level_3_vault_without_the_mark_keeps_its_hand_kept_wallets() {
+        let (dir, mut vault) = empty_vault();
+        let path = dir.path().join("test.wallet");
+        quote(&mut vault, &eth_ref(), "2000");
+        vault.raise_to_level3_for_tests();
+        assert!(!vault.doc.settings.crypto_raise_pending);
+        let old = hand_kept(&mut vault, "Old cold", StoreKind::Crypto);
+        let binance = store(&mut vault, "Old exchange", StoreKind::Exchange, None);
+        provider(&mut vault, &binance, ExchangeProvider::Binance);
+        vault
+            .add_transaction(income_of(&binance, eth_ref(), "1", "2000", "bought"))
+            .expect("the purchase is booked");
+        vault.persist().expect("saved");
+        let capital = vault.net_worth().financial;
+        assert_eq!(capital, amount("6000"));
+        drop(vault);
+
+        let reopened = UnlockedVault::open(path.clone(), "pw").expect("opens");
+
+        assert!(!archived(&reopened, &old));
+        assert!(!archived(&reopened, &binance));
+        assert_eq!(
+            reopened.net_worth().financial,
+            capital,
+            "the capital is the same, and not counted twice"
+        );
+        // A second open changes nothing either.
+        drop(reopened);
+        let again = UnlockedVault::open(path, "pw").expect("opens");
+        assert!(!archived(&again, &old));
+        assert_eq!(again.net_worth().financial, capital);
+    }
+
+    /// A raise that runs to the end leaves no mark, in memory or on disk.
+    #[test]
+    fn a_finished_raise_leaves_no_mark() {
+        let (dir, mut vault) = empty_vault();
+        let path = dir.path().join("test.wallet");
+        quote(&mut vault, &eth_ref(), "2000");
+        let old = hand_kept(&mut vault, "Old cold", StoreKind::Crypto);
+        vault.raise_to_level3_for_tests();
+
+        assert!(archived(&vault, &old), "the raise archives at its end");
+        assert!(!vault.doc.settings.crypto_raise_pending);
+        drop(vault);
+        let (doc, _) = crate::storage::VaultFile::open(&path, "pw").expect("reads back");
+        assert!(!doc.settings.crypto_raise_pending, "and not on disk either");
+    }
+
+    /// A raise that fails before the level-3 file exists changes nothing: the
+    /// vault stays where it was, and no mark is left in memory to be saved.
+    #[test]
+    fn a_raise_that_never_reached_level_3_leaves_no_mark() {
+        use crate::crypto::kdf_profile::{KDF_MEM_KIB_MIN, KdfParams};
+        let (_dir, mut vault) = empty_vault();
+        let password = vault.password.clone();
+        // A wrong current password: refused before anything is written.
+        let refused = vault.raise_inner(
+            "not the password",
+            &password,
+            KdfParams::hardened(KDF_MEM_KIB_MIN, 1, 1),
+            |_| {},
+            |_| Ok(()),
+        );
+        assert!(refused.is_err());
+        assert!(!vault.doc.settings.crypto_raise_pending);
     }
 }

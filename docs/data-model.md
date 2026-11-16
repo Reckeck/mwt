@@ -43,7 +43,7 @@ a month carrying over the remainder, the default; `until_income` — until the n
 income), `budget_currency` (empty = the base currency), `notifications` (v2:
 system notifications on/off, hide details while the vault is locked,
 the time of auto-reminders, per category — on/off, how many days ahead, whether to create
-auto-reminders), `inflation_manual` (flat annual inflation by lowercase currency, only where the group differs from the shipped table; group data), `inflation_adopted` (device flag: this device copied its old app-config rates into `inflation_manual`), `crypto` (derived since spec E14, never chosen by the user: `true` when the crypto module holds an address or an operation
+auto-reminders), `inflation_manual` (flat annual inflation by lowercase currency, only where the group differs from the shipped table; group data), `crypto_raise_pending` (device flag: the raise to level 3 re-encrypted the vault and has not finished archiving the hand-kept crypto wallets; set by the raise, cleared when the archiving is done, and the only thing that makes an open archive them), `inflation_adopted` (device flag: this device copied its old app-config rates into `inflation_manual`), `crypto` (derived since spec E14, never chosen by the user: `true` when the crypto module holds an address or an operation
 or the vault still carries a hand-made crypto wallet or exchange. The stored field stays for compatibility: `open` refreshes
 it in memory and the next save writes it, `get_settings` and `update_settings` answer with the derived value, an incoming
 `crypto` is read and ignored. Its one consumer is the background exchange polling; the interface no longer hides crypto).

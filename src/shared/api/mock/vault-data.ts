@@ -43,6 +43,7 @@ export const mockSettings: Settings = {
   inflation_source: {},
   inflation_manual: {},
   inflation_adopted: false,
+  crypto_raise_pending: false,
   fx_refresh_interval_sec: 300,
   minimize_to_tray: true,
   savings_rate: '0.10',
