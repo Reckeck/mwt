@@ -281,7 +281,8 @@ impl UnlockedVault {
             }
         }
         for (_, (contract, symbol, name, decimals)) in met {
-            self.crypto_register_token(&TokenId::new(chain, contract), symbol, name, decimals)?;
+            // Saved once with the rest of the batch, not once per token.
+            self.register_token_unsaved(&TokenId::new(chain, contract), symbol, name, decimals)?;
         }
 
         for event in made.events {
@@ -1019,6 +1020,49 @@ mod tests {
         assert_eq!(
             String::from_utf8_lossy(&one_device),
             String::from_utf8_lossy(&other_device)
+        );
+    }
+
+    /// Counts the saves a vault asks for.
+    struct CountSaves(std::sync::atomic::AtomicUsize);
+
+    impl crate::service::saving::SaveHook for CountSaves {
+        fn dirty(&self) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    /// Saves one batch of `tokens` junk airdrops costs.
+    fn saves_for_a_batch_of(tokens: u64) -> usize {
+        let (_dir, mut vault) = followed();
+        let saves = std::sync::Arc::new(CountSaves(std::sync::atomic::AtomicUsize::new(0)));
+        vault.set_write_behind(Some(saves.clone()));
+        let facts = (1..=tokens)
+            .map(|index| {
+                let junk = RawAsset::Token {
+                    contract: format!("0x{index:040x}"),
+                    symbol: format!("JUNK{index}"),
+                    name: "Junk".into(),
+                    decimals: 18,
+                    suspect: true,
+                };
+                transfer(index, 5, junk, units("1000"), true)
+            })
+            .collect();
+        vault
+            .crypto_apply_batch(&request(), &batch(facts, Vec::new()))
+            .expect("applied");
+        assert_eq!(vault.doc.crypto_tokens.len() as u64, tokens);
+        saves.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[test]
+    fn a_batch_saves_once_however_many_new_tokens_it_met() {
+        let one = saves_for_a_batch_of(1);
+        assert_eq!(
+            saves_for_a_batch_of(40),
+            one,
+            "the saves must not grow with the number of tokens"
         );
     }
 
