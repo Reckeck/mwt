@@ -13,6 +13,20 @@ import type { TransactionFormProps } from '../transaction-form.types'
 import { TX_PROPERTY_LINKS_KEY, useContacts, useStoreTree } from '@/shared/api/queries'
 import { useSharedEvents } from '@/entities/shared-event'
 
+/** Repeat: a copy for a new date, so the price, the moment and the one-off ids of the original are dropped. */
+function repeatForm(source: Transaction, storeId: string) {
+  const form = formFromTransaction(source, storeId)
+  return Object.assign(form, {
+    price: '',
+    priceCurrency: '',
+    timestamp: '',
+    originalTimestamp: '',
+    flowId: '',
+    txHash: '',
+    orderId: '',
+  })
+}
+
 /** The form's data and what it reads about the wallet it is opened on. */
 export function useTxFormState(props: TransactionFormProps) {
   const editing = computed(() => props.transaction !== null && !props.template)
@@ -36,7 +50,7 @@ export function useTxFormState(props: TransactionFormProps) {
     props.transaction
       ? formFromTransaction(props.transaction, props.storeId)
       : props.prefill
-        ? formFromTransaction(props.prefill, props.storeId)
+        ? repeatForm(props.prefill, props.storeId)
         : emptyForm(props.storeId, 'payment'),
   )
   // Continuing a chain: the new operation joins it.
