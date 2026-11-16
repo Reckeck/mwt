@@ -16,6 +16,7 @@ pub mod fx_sources;
 pub mod history;
 pub mod inflation;
 pub mod key_rate;
+pub mod llama;
 pub mod page;
 
 use reqwest::Client;
@@ -55,6 +56,27 @@ fn parse_simple_price(
         })
         .collect()
 }
+/// Whether a miss may be answered by a price found by SYMBOL. Never for a
+/// token with a contract: symbols are free to borrow, so a scam token named
+/// USDC would get the real USDC price.
+fn symbol_fallback_allowed(asset: &AssetRef) -> bool {
+    asset
+        .contract
+        .as_deref()
+        .is_none_or(|contract| contract.trim().is_empty())
+}
+
+/// The USD price of `contract` in a CoinGecko token-price answer. Providers
+/// key by the lowercase address while the caller may hold the checksummed one.
+fn token_price_in(body: &HashMap<String, HashMap<String, f64>>, contract: &str) -> Option<Amount> {
+    let wanted = contract.trim().to_lowercase();
+    body.iter()
+        .find(|(key, _)| key.to_lowercase() == wanted)
+        .and_then(|(_, quote)| quote.get("usd"))
+        .copied()
+        .map(Amount::from_f64)
+}
+
 const COINCAP_V2: &str = "https://api.coincap.io/v2";
 const BINANCE_API: &str = "https://api.binance.com/api/v3";
 const ER_API: &str = "https://open.er-api.com/v6";
@@ -255,6 +277,15 @@ impl PricingService {
                 source: "coingecko-token",
             });
         }
+        // A token is its contract: when the contract is unknown to the
+        // provider the answer is "no price", never the price of another coin
+        // that happens to share the symbol.
+        if !symbol_fallback_allowed(asset) {
+            return Err(Error::Pricing(format!(
+                "no price for token {} by contract",
+                asset.symbol
+            )));
+        }
         // 3) CoinCap search
         if let Ok((usd, change)) = self.coincap_symbol(asset).await {
             return Ok(Quote {
@@ -333,11 +364,8 @@ impl PricingService {
             .json()
             .await
             .map_err(|err| Error::Network(err.to_string()))?;
-        body.get(contract)
-            .and_then(|quote| quote.get("usd"))
-            .copied()
+        token_price_in(&body, contract)
             .ok_or_else(|| Error::Pricing(format!("no price for {symbol} token")))
-            .map(Amount::from_f64)
     }
 
     async fn coincap_symbol(&self, asset: &AssetRef) -> Result<(Amount, Option<Amount>)> {
@@ -477,5 +505,43 @@ mod tests {
         assert_eq!(change, Some(Amount::parse("-1.23").unwrap()));
         assert_eq!(parsed["tether"].1, None);
         assert!(!parsed.contains_key("broken"));
+    }
+
+    #[test]
+    fn native_coin_ids_are_the_gas_coin_not_the_governance_token() {
+        // Confirmed against CoinGecko /simple/price on 2026-11-11: `arbitrum`
+        // and `optimism` are the ARB and OP governance tokens (about $0.16 and
+        // $0.10), `matic-network` is the legacy MATIC token, while Polygon PoS
+        // pays gas in POL (`polygon-ecosystem-token`). Arbitrum One and
+        // Optimism pay gas in ETH.
+        assert_eq!(
+            Chain::Polygon.info().cg_coin_id,
+            Some("polygon-ecosystem-token")
+        );
+        assert_eq!(Chain::Arbitrum.info().cg_coin_id, Some("ethereum"));
+        assert_eq!(Chain::Optimism.info().cg_coin_id, Some("ethereum"));
+    }
+
+    #[test]
+    fn contract_lookup_ignores_case() {
+        let body: HashMap<String, HashMap<String, f64>> =
+            serde_json::from_str(r#"{"0xabcdef0000000000000000000000000000000001":{"usd":1.5}}"#)
+                .unwrap();
+        let checksummed = "0xAbCdEf0000000000000000000000000000000001";
+        assert_eq!(
+            token_price_in(&body, checksummed),
+            Some(Amount::from_f64(1.5))
+        );
+        assert_eq!(token_price_in(&body, "0xdead"), None);
+    }
+
+    #[test]
+    fn a_contract_miss_never_falls_back_to_the_symbol() {
+        let mut scam = AssetRef::crypto("USDC", "Fake USDC", None, Chain::Ethereum);
+        scam.contract = Some("0x0000000000000000000000000000000000000bad".into());
+        assert!(!symbol_fallback_allowed(&scam));
+        // A plain coin without a contract may still be found by its symbol.
+        let coin = AssetRef::crypto("BTC", "Bitcoin", None, Chain::Bitcoin);
+        assert!(symbol_fallback_allowed(&coin));
     }
 }

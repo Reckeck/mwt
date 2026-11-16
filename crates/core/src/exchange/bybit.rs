@@ -222,6 +222,22 @@ struct ApiEnvelope<T> {
 struct ExecutionPage {
     #[serde(default)]
     list: Vec<ApiExecution>,
+    /// Bybit's cursor for the next page *inside the same time window*; empty
+    /// when the window has been read out. Taking it is what lets a resumable
+    /// reader continue a window it was interrupted in (spec E7).
+    #[serde(default, rename = "nextPageCursor")]
+    next_page_cursor: String,
+}
+
+/// One page of fills together with the cursor that continues its window:
+/// what a source with a kept place needs, as opposed to
+/// [`BybitClient::all_executions`], which sweeps everything in one call and
+/// remembers nothing.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ExecutionsPage {
+    pub fills: Vec<Execution>,
+    /// `None` when this was the last page of the window.
+    pub next_page: Option<String>,
 }
 
 /// Bybit's execution objects are camelCase (`execPrice`, `isMaker`,
@@ -483,6 +499,56 @@ impl BybitClient {
         all.sort_by(|left, right| right.exec_time.cmp(&left.exec_time));
         all.truncate(max_total as usize);
         Ok(all)
+    }
+
+    /// One page of fills of one product inside one time window, with the
+    /// cursor that continues that window.
+    ///
+    /// The window bound (at most seven days) and the paging are Bybit's own;
+    /// everything about *where* to read comes from the caller, so a reader
+    /// can keep its place across runs and devices (spec E7). Credentials are
+    /// used to sign and are never put into the URL.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn executions_page(
+        &self,
+        api_key: &str,
+        api_secret: &str,
+        category: Category,
+        start_ms: u64,
+        end_ms: u64,
+        page: Option<&str>,
+        limit: u32,
+    ) -> Result<ExecutionsPage> {
+        if api_key.is_empty() || api_secret.is_empty() {
+            return Ok(ExecutionsPage::default());
+        }
+        let limit = limit.clamp(1, 100);
+        let mut query = format!(
+            "category={}&startTime={start_ms}&endTime={end_ms}&limit={limit}",
+            category.as_str()
+        );
+        if let Some(cursor) = page.filter(|cursor| !cursor.is_empty()) {
+            query.push_str("&cursor=");
+            query.push_str(cursor);
+        }
+        let envelope: ApiEnvelope<ExecutionPage> = self
+            .signed_envelope(api_key, api_secret, "/v5/execution/list", &query)
+            .await?;
+        if let Some(err) = key_rejection(envelope.retcode, &envelope.retmsg) {
+            return Err(err);
+        }
+        let page = envelope_result(envelope)?;
+        Ok(ExecutionsPage {
+            fills: page
+                .list
+                .into_iter()
+                .map(|row| Execution {
+                    category: category.as_str().into(),
+                    ..Execution::from(row)
+                })
+                .collect(),
+            next_page: Some(page.next_page_cursor).filter(|cursor| !cursor.is_empty()),
+        })
     }
 }
 
