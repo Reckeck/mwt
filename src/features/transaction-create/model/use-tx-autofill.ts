@@ -178,6 +178,7 @@ export function useTxAutofill(state: TxFormState) {
   watch(
     () => form.kind,
     (kind) => {
+      if (editing.value || props.prefill) return
       if (kind === 'transfer' && form.to && 'store' in form.to && form.to.store === props.storeId) form.to = null
     },
     { immediate: true },
