@@ -46,6 +46,7 @@ pub async fn crypto_wipe_module(
 ) -> Result<CryptoWipeReport, String> {
     let report = with_vault_mut(&state, |vault| vault.crypto_wipe_module(&input.confirm))?;
     if report.wiped_at.is_some() {
+        crate::cryptotrack::jobs::forget_live_positions();
         let path = with_vault(&state, |vault| Ok(vault.path.clone()))?;
         crate::biometric::system_gate(&app_settings::config_dir(&app))
             .disable(&path.to_string_lossy());

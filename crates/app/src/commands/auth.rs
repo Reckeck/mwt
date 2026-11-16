@@ -321,6 +321,8 @@ impl LockSteps for AppLockSteps<'_> {
         if let Ok(mut guard) = lock_vault(&state) {
             *guard = None;
         }
+        // The amounts the adapters read must not outlive the vault.
+        crate::cryptotrack::jobs::forget_live_positions();
     }
 }
 
@@ -415,6 +417,8 @@ fn store_vault(state: &AppState, vault: UnlockedVault) -> Result<(), String> {
         previous.flush_pending().map_err(err_to_string)?;
     }
     *guard = Some(vault);
+    // Another vault: the readings of the previous one are not its own.
+    crate::cryptotrack::jobs::forget_live_positions();
     Ok(())
 }
 
