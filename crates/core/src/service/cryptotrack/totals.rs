@@ -424,7 +424,7 @@ impl UnlockedVault {
                 // The engine's average is USD per unit and covers only the
                 // part whose cost is known; `None` means the cost is not
                 // known, and nothing downstream turns that into a zero.
-                avg_cost: state.average_usd().map(|usd| usd * fx),
+                avg_cost: state.average_usd().and_then(|usd| math::mul(usd, fx)),
             });
         }
         self.add_unfolded_positions(&ledger, &mut out);

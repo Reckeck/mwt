@@ -3,6 +3,7 @@
 //! transaction, or the dollar peg of a stablecoin.
 
 use crate::Amount;
+use crate::cryptotrack::engine::math;
 use crate::model::transaction::LegRole;
 use crate::pricing::history::secs_or_now;
 
@@ -184,11 +185,11 @@ impl UnlockedVault {
         if then.value_usd.is_zero() {
             return None;
         }
-        Some(
-            ((now_usd / then.value_usd - Amount::new(rust_decimal::Decimal::ONE))
-                * Amount::new(rust_decimal::Decimal::from(100)))
-            .round(2),
-        )
+        // Prices come from the network: a ratio a decimal cannot hold is no
+        // number, not a panic.
+        let ratio = math::div(now_usd, then.value_usd)?;
+        let change = math::sub(ratio, Amount::new(rust_decimal::Decimal::ONE))?;
+        math::mul(change, Amount::new(rust_decimal::Decimal::from(100))).map(|pct| pct.round(2))
     }
 
     /// The last price a transaction recorded for the asset, with its moment.

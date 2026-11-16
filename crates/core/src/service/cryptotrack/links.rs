@@ -11,7 +11,7 @@ use chrono::NaiveDate;
 
 use super::super::UnlockedVault;
 use crate::Amount;
-use crate::cryptotrack::engine::{ids, overrides};
+use crate::cryptotrack::engine::{ids, math, overrides};
 use crate::error::{Error, Result};
 use crate::ipc_contract::cryptotrack::links::{
     CryptoLinkCandidatesInput, CryptoLinkInput, CryptoLinkOption, CryptoPair, CryptoPairFiat,
@@ -101,7 +101,12 @@ impl UnlockedVault {
         }
         self.convert_at(amount.abs(), currency, "usd", &input.time)
             .is_some_and(|usd| {
-                (usd - value).abs() * Amount::from(100) <= value * Amount::from(TOLERANCE_PERCENT)
+                // Values come from the network and from prices: one a decimal
+                // cannot hold is not a fit, and is not a panic either.
+                let spread =
+                    math::sub(usd, value).and_then(|diff| math::mul(diff.abs(), Amount::from(100)));
+                let allowed = math::mul(value, Amount::from(TOLERANCE_PERCENT));
+                matches!((spread, allowed), (Some(spread), Some(allowed)) if spread <= allowed)
             })
     }
 

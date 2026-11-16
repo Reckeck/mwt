@@ -63,6 +63,7 @@
 use std::collections::BTreeSet;
 
 use crate::Amount;
+use crate::cryptotrack::engine::math;
 use crate::error::Result;
 use crate::ipc_contract::cryptotrack::transition::{
     CryptoArchiveReport, CryptoRetiredWallet, CryptoTransitionPlan,
@@ -85,7 +86,8 @@ impl UnlockedVault {
         let wallets = self.manual_crypto_wallets(fx);
         let mut leaving = Amount::ZERO;
         for wallet in &wallets {
-            leaving += wallet.leaving_base;
+            leaving = math::add(leaving, wallet.leaving_base)
+                .unwrap_or(Amount::new(rust_decimal::Decimal::MAX));
         }
         CryptoTransitionPlan {
             base_currency,
@@ -263,7 +265,12 @@ impl UnlockedVault {
             if holding.store_id != store_id || holding.asset.is_derivative() {
                 continue;
             }
-            total += holding.quantity * self.price_usd_for(&holding.asset.key()) * fx;
+            // A quantity from the network times a price may not fit a decimal:
+            // the wallet then counts as the largest value, not as a panic.
+            let value = math::mul(holding.quantity, self.price_usd_for(&holding.asset.key()))
+                .and_then(|usd| math::mul(usd, fx))
+                .unwrap_or(Amount::new(rust_decimal::Decimal::MAX));
+            total = math::add(total, value).unwrap_or(Amount::new(rust_decimal::Decimal::MAX));
         }
         total
     }
