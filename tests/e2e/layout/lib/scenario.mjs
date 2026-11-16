@@ -113,6 +113,24 @@ async function loginOnce(page) {
   await page.eval(`window.__mockLatency = 150; return true`)
 }
 
+/**
+ * Put the data back the way the units measure it. The overlays need an event somebody else leads, so
+ * they create one («Дача»); every unit of a job shares the browser, hence the mock and the query
+ * cache. A list another unit had already fetched then comes from the cache without it, the fresh
+ * answer arrives 150 ms later and inserts the row — a layout shift of a page that did nothing
+ * wrong. Which units share a browser depends on `--jobs` and `--shard`, so the failure moved with
+ * the split. The purchase it made stays in the ledger, as it does while the overlay runs.
+ */
+export async function restoreSeed(page) {
+  await page.eval(`
+    const { call } = await import('/src/shared/api/ipc.ts')
+    const events = await call('list_shared_events', { filter: { include_archived: true } })
+    for (const event of events.filter((entry) => entry.title === 'Дача')) {
+      await call('delete_shared_event', { id: event.id })
+    }
+    return true`)
+}
+
 export async function setTheme(page, theme) {
   await page.eval(`${APP} await gp.$pinia._s.get('settings').updateApp({ theme: '${theme}' }); return true`)
   await page.sleep(300)

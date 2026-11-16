@@ -25,6 +25,9 @@ for (const [width, theme] of [
        const { queryClient } = await import(urlOf('app/providers/query/index.ts'))
        // Back to the start of the mock vault (a run before this one raised it) and refetch cached answers.
        // reset, not clear: the shell outlives this test and its observers must stay attached to the cache.
+       // The wizard's state is one object for the whole app: another flow may have left it interrupted.
+       const wizard = await import(urlOf('shared/lib/raise-wizard-state.ts'))
+       Object.assign(wizard.useRaiseWizardState(), { open: false, interrupted: false })
        keys.mockKeyLevelRequired.value = true
        level.mockSecurityLevel.value = null
        data.mockPassword.value = 'secret'

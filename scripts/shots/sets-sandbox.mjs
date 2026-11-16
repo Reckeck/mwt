@@ -5,7 +5,7 @@ const chosen = {
   eval: `
     const app = await import('/src/shared/api/mock/vault-data.ts')
     app.mockAppSettings.base_currency_chosen = true
-    // A year of `What's new` is not what these shots show.
+    // A year of "What's new" is not what these shots show (backticks here would close this template literal).
     app.mockAppSettings.installed_at = '2999-01-01'
     for (let tries = 0; !document.querySelector('#app')?.__vue_app__ && tries < 300; tries++) await new Promise((done) => setTimeout(done, 100))
     await document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('settings').loadApp()
