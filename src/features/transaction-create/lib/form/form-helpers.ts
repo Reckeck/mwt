@@ -81,6 +81,7 @@ export function details(form: TransactionFormState): KindDetails {
     network: form.network || null,
     tx_hash: text(form.txHash),
     source_store_id: (form.categories.includes('cashback') && text(form.sourceStoreId)) || undefined,
+    for_month: text(form.forMonth) ?? undefined,
   }
 }
 

@@ -30,6 +30,8 @@ export interface TransactionFormState {
   sourceStoreId: string
   /** Property bought (topup on an `asset` store): price of one unit, base currency. */
   unitPrice: string
+  /** Income: the month it is for («YYYY-MM»); carried unchanged, no field. */
+  forMonth: string
 
   // convert
   /** Who the money goes through (a contact, their card, or text). */
@@ -111,6 +113,7 @@ export function emptyForm(storeId: string, kind: TxKind): TransactionFormState {
     txHash: '',
     sourceStoreId: '',
     unitPrice: '',
+    forMonth: '',
     fromAsset: null,
     fromAmount: '',
     toAsset: null,
