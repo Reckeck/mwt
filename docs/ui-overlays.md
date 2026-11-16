@@ -145,8 +145,7 @@ Legend. "Selector": **shared** — only Reka's `[role="dialog"]` (`Dialog` on de
 | 60 | `budget` | `features/budget-edit/BudgetDialog.vue` | a limit | "Limit" on "Plan" (`data-plan-limit`), `?new=limit`, Ctrl K, the glance "Set a limit", `SpendingCategories` | sheet | shared | no |
 | 61 | `goal` | `features/goal-edit/GoalDialog.vue` | a goal | "Plan", "Where the money is", the calculator, a wallet, a wallet card | sheet | shared | no |
 | 62 | `goal-delete` | `features/goal-delete/ui/GoalDelete.vue` | confirmation, inside `GoalDetailsSheet` | the goal card | a dialog over a sheet | shared | no |
-| 63 | `plan-calculator` | `features/plan-calculator/PlanCalculatorDialog.vue` | the plan calculator | "Investments", a wallet | sheet | shared | no |
-| 64 | `trade-record` | `features/trade-record/TradeRecordDialog.vue` | recording a trade | "Investments" | sheet | shared | no |
+| 63 | `plan-calculator` | `features/plan-calculator/PlanCalculatorDialog.vue` | the plan calculator | a wallet | sheet | shared | no |
 | 65 | `emergency-fund` | `features/emergency-fund-edit/EmergencyFundDialog.vue` | the cushion | `FundCard`, "Health" | sheet | shared | no |
 | 66 | `money-wallets-filter` | `pages/money/ui/money-toolbar/MoneyToolbar.vue:79` | a `Popover`: wallet selection; next to it the period and export (`data-tour="period-picker"`, `report-export`, `report-filter`) | a toolbar button | a `Popover` on both (w ≤ 18 rem) | exists: `data-tour` (buttons) | no |
 | 67 | `report-export` | `features/report-export/ReportExportButton.vue` | a `DropdownMenu` | a button | menu | none | no |
@@ -301,7 +300,7 @@ What remained unchecked and why:
 |---|---|---|
 | 16, 57, 70 (desktop) | `money-tooltip`, `chart-tooltips`, `report-term` | Reka `Tooltip`: no `overlay` prop, opens only on hover and closes when the mouse leaves, Esc/"Back" do not touch it |
 | 28, 95 | `home-store-create`, `vault-unlock` | a special state is needed: an empty wallet wizard on Home; a vault with a password (the mock vault has no password, "Open" signs in at once) |
-| 32, 34, 62-65, 74-75, 78-79, 82 | `tx-link`, `tx-bulk-pick`, `goal-delete` (is in the cross-cutting one), `plan-calculator`, `trade-record`, `emergency-fund`, `automation-simulate`, `automation-confirm`, `template-dialog`, `source`, `workflow-leave` | the entry takes several steps through a card menu / selecting rows / leaving the editor; `data-overlay` exists, the entry does not |
+| 32, 34, 62-63, 65, 74-75, 78-79, 82 | `tx-link`, `tx-bulk-pick`, `goal-delete` (is in the cross-cutting one), `plan-calculator`, `emergency-fund`, `automation-simulate`, `automation-confirm`, `template-dialog`, `source`, `workflow-leave` | the entry takes several steps through a card menu / selecting rows / leaving the editor; `data-overlay` exists, the entry does not |
 | 35, 67 | `tx-export`, `report-export` | a `DropdownMenu` without an `overlay` prop and without a shared selector |
 | 38, 45-46, 49-56, 58 | `debt-terms`, `sidebar-wallet-menu`, `sidebar-pinned-menu`, `asset-details`, `utility`, `vehicle`, `property-value`, `asset-class`, `attachments`, `exchange-menu`, `chart-menu`, `wallet-settings-dialogs` | a wallet of a special kind is needed (debt, asset, vehicle), a pinned item or an expanded sidebar group; right click on a chart |
 | 43 | `store-delete` | the "Delete" item is inactive for wallets with transactions, and in the mock all of them have some |

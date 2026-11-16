@@ -93,8 +93,6 @@ The "currency / date" column: where the currency comes from and whether there is
 | # | file:line | what amount | currency / date | decision |
 |---|---|---|---|---|
 | OF1 | `features/transaction-create/ui/tx-quick-convert/TxQuickConvert.vue:34,48-51,97` | market price, overpayment, overpayment in base | symbol; no date | M |
-| OF2 | `features/transaction-create/ui/tx-quick-spot/TxQuickSpot.vue:80,130` | the trade total in the preview | quote symbol | M |
-| OF3 | `features/transaction-create/ui/tx-quick-futures/TxQuickFutures.vue:55` | liquidation price | base | M |
 | OF4 | `features/transaction-create/model/use-tx-budget.ts:57` | budget overrun (a form warning) | budget currency | T |
 | OF5 | `features/transaction-create/model/use-tx-pricing.ts:113` | the "1 BTC = …" hint at a field | symbol | T |
 | OF6 | `features/store-adjust/lib/adjustment-rows.ts:45; model/use-adjustment.ts:162` | "was / will be" rows in the adjustment dialog | asset symbol | M |

@@ -163,11 +163,11 @@ fails the test `every_vault_field_has_a_sync_rule`.
 
 | Rule | Behaviour | Collections |
 |---|---|---|
-| `Records` | records by key, merge per field, deletion is a tombstone | stores (accounts), transactions, categories, contacts, budgets, goals, reminders, price_alerts, categorization_rules, utility_items, meter_readings, enrichments, manual_prices, envelopes, debt_terms, shared_events, key_rates, pending_imports, workflows, workflow_vars, workflow_queue, workflow_state, workflow_waits, calc_scenarios, inflation_points, asset_classes, asset_class_of, valuations, tx_properties, data_sources, asset_price_sources, deposit_rate_sources, attachments, attachment_keys |
+| `Records` | records by key, merge per field, deletion is a tombstone | stores (accounts), transactions, categories, contacts, budgets, goals, reminders, price_alerts, categorization_rules, utility_items, meter_readings, enrichments, manual_prices, envelopes, debt_terms, shared_events, key_rates, pending_imports, workflows, workflow_vars, workflow_queue, workflow_state, workflow_waits, calc_scenarios, inflation_points, asset_classes, asset_class_of, valuations, tx_properties, data_sources, asset_price_sources, deposit_rate_sources, attachments, attachment_keys, crypto_accounts, crypto_events, crypto_overrides, crypto_tokens (key `chain`+`contract`), crypto_positions, crypto_snapshots, crypto_wiped_at |
 | `Single` | one object whose fields merge like a record's | settings, exchanges, emergency_fund, health_last |
 | `Log { cap, order }` | merged like `Records`, then ordered by a time field (ties broken by key, so every device keeps the same records) and cut to a cap; trimming is not a deletion. A record the cap cuts at once is not counted as added and makes no batch entry, but it is still requested each session | notification_log (500, `delivered_at`), workflow_runs (1000, `started_at`), import_runs (500, `at`) |
-| `Union { cap }` | union of immutable points, no stamps | price_cache, fx_cache (each session sends 90 days), discarded_imports (cap 20 000) |
-| not synced (`LOCAL`) | identity, schema and derived data | `version`, `id`, `created_at`, `holdings` (recomputed), `sync` |
+| `Union { cap }` | union of immutable points, no stamps | price_cache, fx_cache, crypto_prices (each session sends 90 days), discarded_imports (cap 20 000) |
+| not synced (`LOCAL`) | identity, schema and derived data | `version`, `id`, `created_at`, `holdings` (recomputed), `sync`, `crypto_cursors` (how far a source read on this device) |
 
 The older text listed an `automation_runs` log and "schemes". Neither exists in
 the registry: automations became workflows, and automation run history is
@@ -184,7 +184,7 @@ These registry flags shape how a record splits into mergeable fields.
 | `whole` | the record is one value with one stamp (its fields only make sense together, or it may be null); the later write wins entirely | `health_last` |
 | `secret` | a credentials collection: no label or value is shown in the question, batches or journal | exchanges, attachment_keys |
 | `secret_fields` | individual credential fields are shown as a mask | `data_sources.url`, `workflow_vars.value` |
-| `cache` | derived data each device refreshes on its own: unions in silently, never reaches the question, the window or the journal | price_cache, fx_cache |
+| `cache` | derived data each device refreshes on its own: unions in silently, never reaches the question, the window or the journal | price_cache, fx_cache, crypto_prices |
 
 **`workflow_state` in detail.** `marks` is `trigger node id -> last moment fired`
 (or the last side of a threshold). It merges per entry, each entry by its own
