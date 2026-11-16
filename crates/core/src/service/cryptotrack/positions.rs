@@ -63,6 +63,7 @@ use crate::cryptotrack::protocols::{
     annual_percentage_rate, fees_usd, impermanent_loss, impermanent_loss_ratio, is_closed, kind_of,
     net_result, receipt_tokens, worth_usd,
 };
+use crate::cryptotrack::tokens;
 use crate::error::Result;
 use crate::ipc_contract::cryptotrack::positions::{PositionAssetView, PositionView};
 use crate::model::cryptotrack::{
@@ -423,6 +424,14 @@ impl UnlockedVault {
     /// position of the app is valued at; `None`, never zero, when nothing
     /// knows it.
     fn price_now_usd(&self, asset: &CryptoAsset) -> Option<Amount> {
+        // A token that is quarantined or rejected has no price here, whatever
+        // its symbol says: the dollar peg would otherwise price a stranger's
+        // "USDC" at 1 USD and put it into the position's value.
+        if let CryptoAsset::Token(token) = asset
+            && !tokens::counts_in_totals(&self.doc, token)
+        {
+            return None;
+        }
         let quote = self.price_quote_for(&self.crypto_asset_ref(asset).key());
         if quote.info.origin != PriceOrigin::None {
             return Some(quote.usd);

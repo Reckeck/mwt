@@ -469,6 +469,14 @@ impl UnlockedVault {
                 if leg.direction != CryptoDirection::In || !leg.amount.is_positive() {
                     continue;
                 }
+                // A token nobody confirmed is outside every total, whoever sent
+                // it: a position adapter lists all the NFTs an address holds,
+                // including those a stranger dropped there.
+                if let CryptoAsset::Token(token) = &leg.asset
+                    && !tokens::counts_in_totals(&self.doc, token)
+                {
+                    continue;
+                }
                 let asset_key = leg.asset.key();
                 if ledger
                     .positions
@@ -1061,6 +1069,46 @@ mod tests {
         let left = vault.crypto_outside_totals();
         assert!(left.is_empty(), "a priced leg is not unpriced: {left:?}");
         assert_eq!(vault.net_worth().financial, amount("4000"));
+    }
+
+    #[test]
+    fn a_quarantined_token_in_a_position_leg_stays_out_and_is_not_valued() {
+        let (_dir, mut vault) = empty_vault();
+        let wallet = followed(&mut vault, "cacc-1", "Cold", ME);
+        let token = TokenId::new(Chain::Ethereum, UNKNOWN);
+        // A stranger's NFT position holds a token that calls itself USDC, and
+        // the dollar peg would price anything by that symbol at 1 USD.
+        vault
+            .doc
+            .crypto_tokens
+            .push(CryptoToken::new(token.clone(), "USDC", 6));
+        let pretender = AssetRef {
+            symbol: "USDC".into(),
+            name: "USDC".into(),
+            coingecko_id: None,
+            chain: Some(Chain::Ethereum),
+            contract: Some(UNKNOWN.into()),
+            quote: "USDC".into(),
+        };
+        vault.doc.crypto_positions.push(position_of(
+            "cacc-1",
+            CryptoAsset::Token(token.clone()),
+            "1000000000",
+        ));
+        vault.recompute_holdings();
+
+        assert_eq!(vault.net_worth().financial, Amount::ZERO);
+        assert_eq!(holding_of(&vault, &wallet, &pretender), Amount::ZERO);
+        let shown = vault.crypto_list_positions(&[], "2026-03-06T00:00:00Z");
+        assert_eq!(shown.len(), 1);
+        assert_eq!(shown[0].value_usd, None, "unknown, not zero and not 1e9");
+        assert_eq!(shown[0].assets[0].value_usd, None);
+
+        // Once the user takes the token in, the leg counts like any other.
+        vault.crypto_confirm_token(&token).expect("confirmed");
+        quote(&mut vault, &pretender, "1");
+        vault.recompute_holdings();
+        assert_eq!(vault.net_worth().financial, amount("1000000000"));
     }
 
     #[test]
