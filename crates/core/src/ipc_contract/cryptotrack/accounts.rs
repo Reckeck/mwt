@@ -90,15 +90,16 @@ pub struct ConnectAddressInput {
     pub start_date: Option<String>,
 }
 
-// The address field is whatever the user pasted until it has been checked,
-// so it never reaches a log line through `{:?}`.
+// The address and the name are whatever the user pasted until they have been
+// checked (a pasted secret may land in either), so neither reaches a log line
+// through `{:?}`.
 impl fmt::Debug for ConnectAddressInput {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ConnectAddressInput")
             .field("chain", &self.chain)
             .field("address", &"<hidden>")
-            .field("name", &self.name)
+            .field("name", &"<hidden>")
             .field("start_date", &self.start_date)
             .finish()
     }
@@ -127,4 +128,22 @@ pub struct UpdateAccountInput {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 pub struct CryptoAccountRefInput {
     pub account_id: String,
+}
+
+#[cfg(test)]
+mod debug_tests {
+    use super::*;
+
+    #[test]
+    fn debug_of_connect_address_hides_the_address_and_the_name() {
+        let input = ConnectAddressInput {
+            chain: Chain::Ethereum,
+            address: "0xaddress-secret".into(),
+            name: "pasted-name-secret".into(),
+            start_date: Some("2026-01-01".into()),
+        };
+        let text = format!("{input:?}");
+        assert!(!text.contains("secret"), "{text}");
+        assert!(text.contains("2026-01-01"));
+    }
 }
