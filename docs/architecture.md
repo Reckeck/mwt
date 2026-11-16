@@ -21,7 +21,8 @@ is a thin shell: `tauri::Builder`, commands and state.
 │             vault_path: Mutex<PathBuf>, pricing }   │
 │  commands/{auth,stores,transactions,categories,     │
 │             pricing,portfolio,settings,exchange,     │
-│             app_settings,vault_recents}             │
+│             cryptotrack,security,sync,app_settings, │
+│             vault_recents, …}                       │
 └──────────────────────────┬──────────────────────────┘
                            │ (shared dependency via the workspace)
 ┌──────────────────────────┴──────────────────────────┐
@@ -80,7 +81,7 @@ is nine sibling `crypto_*` fields of the vault (no nested object; `docs/data-mod
   receiver refuses them. Cursors are device-local. A wipe is a synced record that other devices honour.
 - **Entering and leaving.** Raising to level 3 archives the hand-kept crypto wallets (nothing deleted); the wipe makes
   a checked backup first, then clears the module and archives its wallets.
-- **Frontend.** There is no section of its own: the module appears in wallets of the Crypto kind (assets, quarantine,
+- **Frontend.** The module has one route of its own, `/crypto/positions` (below); everything else appears in wallets of the Crypto kind (assets, quarantine,
   operations, relations tabs), in the "Crypto operations" list under Transactions, and in Settings -> Crypto (networks,
   consent, hidden tokens, wiping). The browser mock lives in `src/shared/api/mock/commands-crypto-*.ts`.
 - **DeFi positions** (`/crypto/positions`, `src/pages/crypto-positions`, slice `src/entities/crypto-position`) is a read-only

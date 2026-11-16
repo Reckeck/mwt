@@ -15,26 +15,6 @@
 //! the `exec_id` of a booked transaction all answer
 //! [`UnlockedVault::decided_import_ids`] — so a record that was already
 //! settled one way is never counted the other way as well.
-//!
-//! Since spec E7 an exchange is read by the crypto module: a record becomes a
-//! [`crate::model::cryptotrack::CryptoTx`] at once instead of waiting in
-//! `pending_imports` for the user to confirm it, and the conversion of what
-//! an older build staged lives in
-//! [`super::cryptotrack`]'s `legacy_bybit`. Everything the old import stored
-//! stays readable and keeps deduplicating — the queue, the refused ids and
-//! the `exec_id` of a booked transaction all answer
-//! [`UnlockedVault::decided_import_ids`] — so a record that was already
-//! settled one way is never counted the other way as well.
-//!
-//! Since spec E7 an exchange is read by the crypto module: a record becomes a
-//! [`crate::model::cryptotrack::CryptoTx`] at once instead of waiting in
-//! `pending_imports` for the user to confirm it, and the conversion of what
-//! an older build staged lives in
-//! [`super::cryptotrack`]'s `legacy_bybit`. Everything the old import stored
-//! stays readable and keeps deduplicating — the queue, the refused ids and
-//! the `exec_id` of a booked transaction all answer
-//! [`UnlockedVault::decided_import_ids`] — so a record that was already
-//! settled one way is never counted the other way as well.
 
 use std::collections::HashSet;
 

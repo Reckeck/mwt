@@ -552,7 +552,7 @@ no nested `crypto` object: one stamp, one tombstone and one undo copy per record
 | `crypto_events` | `CryptoTx` | one operation per transaction per account; the id is a function of the facts (`engine/ids.rs`), so a refetch overwrites instead of appending; `legs`, `gas`, `kind`, `tracking` (what it was found through) |
 | `crypto_overrides` | `CryptoOverride` | the user's corrections laid over an event (kind, comment, categories, contact, "not an exchange", hidden, link to a fiat transaction); events are never edited |
 | `crypto_tokens` | `CryptoToken` | identity is `chain` + `contract`, never the symbol; `verdict` (the user's call), `hidden`, `basis_usd`; the status (`Known`, `Quarantined`, confirmed, rejected) is derived |
-| `crypto_positions` | `CryptoPosition` | what a protocol holds for an account (filled by a protocol adapter; the trait exists, no adapter ships yet) |
+| `crypto_positions` | `CryptoPosition` | what a protocol holds for an account: the legs (quantities, never money), the receipt tokens seen, `updated_at`. Filled by the shipped adapters (Uniswap v3/v4, Aave v3, Lido); the id is `<protocol>\|<chain>\|<id>`. A position the protocol no longer reports is closed by zeroing its legs and the row stays (ADR 02); nothing derived (value, fees, results) is stored |
 | `crypto_snapshots` | `CryptoSnapshot` | what the module was worth at a moment, because a past balance cannot be fetched again |
 | `crypto_cursors` | `CryptoCursor` | how far this device read a source; device-local (`sync::registry::LOCAL`), never synced |
 | `crypto_prices` | `CryptoPricePoint` | historic quotes by `(token_key, ts)`, written once and never thinned; a cache (`Rule::Union`) apart from `price_cache` |
