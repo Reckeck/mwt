@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
-import { PendingImports } from '@/features/pending-imports'
 import { TransactionRow } from '@/entities/transaction'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -13,8 +12,11 @@ import { openTxDetails } from '@/shared/lib/tx-details'
 import { keepPreviousFor } from '@/shared/lib/query'
 
 /**
- * The operations of one exchange wallet: what waits for confirmation, then
- * what was already brought in (marked `Exchange import`), newest first.
+ * The operations of one exchange wallet that reached the ledger (marked
+ * `Exchange import`), newest first. Nothing waits for confirmation any more:
+ * since spec E7 a record the exchange reports becomes an operation of the
+ * crypto section straight away, and the records an older build left waiting
+ * were carried through by the same conversion.
  */
 const props = defineProps<{ storeId: string }>()
 const { t } = useI18n()
@@ -35,10 +37,7 @@ const total = computed(() => imported.data.value?.total ?? 0)
 
 <template>
   <div class="grid gap-4" data-tour="exchange-imported">
-    <section class="grid gap-2">
-      <h3 class="text-sm font-semibold">{{ t('importedOps.pending') }}</h3>
-      <PendingImports :store-id="props.storeId" compact />
-    </section>
+    <p class="text-sm text-muted-foreground">{{ t('cryptoTrack.legacy.recordedHint') }}</p>
     <section class="grid gap-2">
       <h3 class="text-sm font-semibold">{{ t('importedOps.booked', { count: total }) }}</h3>
       <EmptyState v-if="imported.isSuccess.value && !items.length" compact :title="t('importedOps.empty')" />

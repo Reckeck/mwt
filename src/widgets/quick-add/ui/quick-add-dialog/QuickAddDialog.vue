@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeftRight } from 'lucide-vue-next'
 
-import { DEAL_GROUPS, DEAL_PHONE_GROUPS, TransactionForm, type TransactionInitial } from '@/features/transaction-create'
+import { DEAL_GROUPS, TransactionForm, type TransactionInitial } from '@/features/transaction-create'
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -20,8 +19,8 @@ import { useQuickAddSeries } from '../../model/use-quick-add-series'
  * Ctrl N from anywhere (OpForm-1): the short form, with the wallet as one of
  * its fields — next to the category — and starting on the one used last.
  * Enter saves and closes; Ctrl Enter saves and starts the next one.
- * With `deal` it is `Trade · <exchange>` (OpForm-2 · 9–11): the exchange's own
- * wallet, fixed, and its tabs Exchange · Transfer | Spot · Futures · DeFi.
+ * With `deal` it is the exchange's own wallet (OpForm-2), fixed, with the tabs
+ * Exchange · Transfer; there are no hand-typed trades, the crypto module reads them.
  */
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ deal?: { store: Store; kind: TxKind } | null }>()
@@ -51,7 +50,7 @@ const title = computed(() => {
   const base = props.deal ? t('deal.title', { name: props.deal.store.name }) : t('quickAdd.title')
   return series.series.value ? `${base} · ${t('quickAdd.inRow', { n: series.series.value + 1 })}` : base
 })
-const kindGroups = computed(() => (props.deal ? (phone.value ? DEAL_PHONE_GROUPS : DEAL_GROUPS) : null))
+const kindGroups = computed(() => (props.deal ? DEAL_GROUPS : null))
 
 const storeId = ref('')
 /** Typed before the wallet changed: the form is rebuilt for the new wallet with these in. */
@@ -136,11 +135,6 @@ function onSaved(tx: Transaction) {
         :kind-groups="kindGroups"
         @saved="onSaved"
       >
-        <template v-if="props.deal" #hint>
-          <p class="flex items-center gap-2 text-sm text-muted-foreground" data-deal-hint>
-            <ArrowLeftRight class="size-4 shrink-0" />{{ t('deal.hint', { name: props.deal.store.name }) }}
-          </p>
-        </template>
         <template v-if="!props.deal" #store>
           <FormField for="quick-add-store" :label="t('quickAdd.store')" required>
             <StoreNodeSelect id="quick-add-store" v-model="storeId" :nodes="nodes" class="w-full" />

@@ -22,6 +22,7 @@ function back() {
 /** Each tab is a child route, so a tab has its own address. */
 const tabs = computed(() => [
   { name: 'transactions', label: t('transactions.tab.list') },
+  { name: 'crypto-operations', label: t('cryptoTrack.operations.title') },
   { name: 'transactions-calendar', label: t('transactions.tab.calendar') },
   { name: 'transactions-bonuses', label: t('transactions.tab.bonuses') },
 ])

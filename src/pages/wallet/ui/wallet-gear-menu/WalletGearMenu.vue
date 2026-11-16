@@ -7,6 +7,7 @@ import {
   FolderPlus,
   HandCoins,
   Goal as GoalIcon,
+  Layers,
   Plus,
   RefreshCw,
   Repeat,
@@ -34,6 +35,8 @@ const props = defineProps<{
   operation: boolean
   /** A phone has no `Sell` button in the header: it waits here. */
   sell?: boolean
+  /** Driven by the crypto engine: nothing here records an operation or corrects the balance by hand (spec E9). */
+  engine?: boolean
 }>()
 const emit = defineEmits<{
   settings: []
@@ -45,6 +48,7 @@ const emit = defineEmits<{
   goal: []
   automation: []
   refresh: []
+  positions: []
 }>()
 
 const { t } = useI18n()
@@ -58,6 +62,8 @@ const ownCurrency = computed(() => {
 })
 const moneyWallet = computed(() => ['bank', 'cash', 'liability'].includes(props.store.kind))
 const live = computed(() => !props.store.archived)
+/** What may record an operation, now or later: off for a wallet the engine drives. */
+const manual = computed(() => live.value && !props.engine)
 </script>
 
 <template>
@@ -79,9 +85,14 @@ const live = computed(() => !props.store.archived)
       <HandCoins class="size-4 shrink-0" />
       {{ t('wallet.sell') }}
     </DropdownMenuItem>
-    <DropdownMenuItem v-if="props.store.kind !== 'property' && live" value="adjust" data-gear="adjust" @select="emit('adjust')">
+    <DropdownMenuItem v-if="props.store.kind !== 'property' && manual" value="adjust" data-gear="adjust" @select="emit('adjust')">
       <Scale class="size-4 shrink-0" />
       {{ t('adjustment.open') }}
+    </DropdownMenuItem>
+    <!-- The only way into the positions screen from a wallet: an address holds them, so this is where it belongs. -->
+    <DropdownMenuItem v-if="props.engine" value="positions" data-gear="positions" @select="emit('positions')">
+      <Layers class="size-4 shrink-0" />
+      {{ t('cryptoTrack.positions.title') }}
     </DropdownMenuItem>
     <DropdownMenuItem value="refresh" :disabled="props.refreshing" @select="emit('refresh')">
       <RefreshCw class="size-4 shrink-0" />
@@ -95,7 +106,7 @@ const live = computed(() => !props.store.archived)
       <ArrowLeftRight class="size-4 shrink-0" />
       {{ t('palette.converter') }}
     </DropdownMenuItem>
-    <DropdownMenuItem v-if="props.canAddChild && !props.hasChildren" value="sub-account" data-gear="sub-account" @select="emit('subAccount')">
+    <DropdownMenuItem v-if="props.canAddChild && !props.hasChildren && !props.engine" value="sub-account" data-gear="sub-account" @select="emit('subAccount')">
       <FolderPlus class="size-4 shrink-0" />
       {{ t('stores.newSubAccountShort') }}
     </DropdownMenuItem>
@@ -103,7 +114,7 @@ const live = computed(() => !props.store.archived)
       <GoalIcon class="size-4 shrink-0" />
       {{ t('goal.makeFromStore') }}
     </DropdownMenuItem>
-    <DropdownMenuItem v-if="live" value="automation" @select="emit('automation')">
+    <DropdownMenuItem v-if="manual" value="automation" @select="emit('automation')">
       <Repeat class="size-4 shrink-0" />
       {{ t('automation.makeFromStore') }}
     </DropdownMenuItem>

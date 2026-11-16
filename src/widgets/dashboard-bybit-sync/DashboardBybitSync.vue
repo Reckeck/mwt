@@ -5,22 +5,20 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { RefreshCw } from 'lucide-vue-next'
 
-import { PendingImports, useExchangeSync } from '@/features/pending-imports'
+import { useExchangeSync } from '@/features/exchange-sync'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 
 /**
- * Bybit on the dashboard: what the last sync brought, what waits for
- * confirmation — one by one or all at once — and a sync on demand.
+ * Bybit on the dashboard: what the last sync brought and a sync on demand.
+ * Nothing waits for confirmation any more — a record becomes an operation of
+ * the crypto section at once (spec E7).
  */
 const props = defineProps<{ storeId: string }>()
 const { t } = useI18n()
 const sync = useExchangeSync()
-
-/** Rows the widget shows; the rest are a click away in the wallet settings. */
-const WIDGET_ROWS = 6
 
 const runs = useQuery({
   // no placeholder: another exchange's runs
@@ -47,9 +45,10 @@ const last = computed(() => runs.data.value?.[0] ?? null)
         <template v-else-if="last.error">
           <span class="text-destructive">{{ t('bybitSync.lastFailed', { when: formatDateTime(last.at) }) }}: {{ t(`import.notice.${last.error}`) }}</span>
         </template>
-        <template v-else>{{ t('bybitSync.last', { when: formatDateTime(last.at), staged: last.staged }) }}</template>
+        <template v-else>
+          {{ t('cryptoTrack.legacy.lastSync', { when: formatDateTime(last.at), recorded: last.confirmed }) }}
+        </template>
       </p>
-      <PendingImports :store-id="props.storeId" :limit="WIDGET_ROWS" compact />
       <RouterLink
         :to="{ name: 'wallet-settings', params: { id: props.storeId }, query: { tab: 'imported' } }"
         class="justify-self-start text-xs text-primary underline-offset-4 hover:underline"

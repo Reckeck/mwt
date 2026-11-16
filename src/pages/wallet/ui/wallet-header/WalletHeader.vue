@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ChevronLeft } from 'lucide-vue-next'
 
-import { Money } from '@/entities/currency'
+import { CryptoAddressCard } from '@/entities/crypto-account'
+import { Money, PnlText } from '@/entities/currency'
 import { walletSubtitle } from '@/entities/store'
 import { type PageCrumb, PageHeader } from '@/shared/ui/page-header'
 import { Button } from '@/shared/ui/button'
@@ -34,6 +35,12 @@ const props = defineProps<{
   exchange?: boolean
   /** Nothing in it yet (Wallets-3 · 18): the first step below replaces the buttons; a phone keeps only the title. */
   empty?: boolean
+  /** The wallet is driven by the crypto engine: it only reads, so no button here creates an operation (spec E9). */
+  engine?: boolean
+  /** The followed account of an address wallet, for the card; `null` while it loads. */
+  account?: CryptoAccountView | null
+  /** When the account was last read (RFC3339). */
+  readAt?: string | null
 }>()
 const emit = defineEmits<{
   act: [kind: TxKind]
@@ -62,7 +69,9 @@ const crumbs = computed<PageCrumb[]>(() => [
 /** A root wallet on a phone: «‹» to the list instead of a trail. */
 const rootOnPhone = computed(() => phone.value && !props.ancestors.length)
 
-const actions = computed(() => walletActions(props.store, Boolean(props.exchange)))
+const actions = computed(() => (props.engine ? [] : walletActions(props.store, Boolean(props.exchange))))
+/** An address wallet shows the address card instead of the icon and the plain sum (mockups 01 and 02). */
+const addressCard = computed(() => props.engine && props.store.kind === 'crypto' && props.account)
 /** Property (Wallets-2 · 10): `value not set · Estimate` until it has one, and `Sell`. */
 const property = computed(() => props.store.kind === 'property' && !props.store.parent_id)
 /** `rate 93.75 ₽ · Bank · in the budget` or `Exchange · BTC, USDT`; a phone drops the rate, property its asset's code. */
@@ -71,7 +80,8 @@ const subtitle = computed(() => {
   const own = props.figure.base
   const rate = own?.rate && !phone.value ? [t('wallet.rate', { rate: formatMoney(own.rate, { currency: props.figure.currency }) })] : []
   const assets = own || property.value || !props.figure.assets.length ? [] : [props.figure.assets.join(', ')]
-  return [...rate, walletSubtitle(props.store, t), ...assets].join(' · ')
+  const driven = props.engine && !addressCard.value ? [t('cryptoTrack.accounts.engineDriven')] : []
+  return [...rate, walletSubtitle(props.store, t), ...driven, ...assets].join(' · ')
 })
 const unvalued = computed(() => property.value && !Number(props.figure.amount))
 </script>
@@ -92,10 +102,31 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
     <PageHeader v-else :crumbs="crumbs" />
 
     <div v-if="!(props.empty && phone)" class="flex items-center gap-3">
-      <span class="flex size-12 shrink-0 items-center justify-center rounded-[10px] bg-muted text-muted-foreground max-md:hidden">
+      <CryptoAddressCard
+        v-if="addressCard"
+        class="min-w-0 flex-1"
+        :name="addressCard.name"
+        :chain="addressCard.chain"
+        :address="addressCard.address"
+        :source="addressCard.source"
+        :read-at="props.readAt ?? null"
+      >
+        <span class="text-2xl font-semibold" data-wallet-sum>
+          <Money glance :amount="props.figure.amount" :currency="props.figure.currency" :decimals="2" />
+        </span>
+        <span v-if="props.figure.base" class="text-caption text-muted-foreground">
+          ≈ <Money glance :amount="props.figure.base.amount" :decimals="2" />
+        </span>
+        <!-- Only from two real snapshots a month apart; with no such pair the line is not drawn at all. -->
+        <span v-if="addressCard.month_change" class="text-caption text-muted-foreground" data-crypto-month-change>
+          <PnlText :amount="addressCard.month_change.change_usd" currency="usd" :pct="addressCard.month_change.change_pct ?? null" :decimals="2" />
+          · {{ t('cryptoTrack.accounts.perMonth') }}
+        </span>
+      </CryptoAddressCard>
+      <span v-else class="flex size-12 shrink-0 items-center justify-center rounded-[10px] bg-muted text-muted-foreground max-md:hidden">
         <component :is="storeIcon(props.store)" class="size-5" />
       </span>
-      <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div v-if="!addressCard" class="flex min-w-0 flex-1 flex-col gap-0.5">
         <span class="text-xl font-semibold tabular-nums max-md:text-[1.75rem] max-md:leading-tight" data-wallet-sum>
           <Money glance :amount="props.figure.amount" :currency="props.figure.currency" :decimals="2" />
         </span>
@@ -111,7 +142,7 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
         </span>
       </div>
       <WalletActions
-        v-if="!phone && !props.empty"
+        v-if="!phone && !props.empty && !props.engine"
         :actions="actions"
         :phone="false"
         :disabled="props.store.archived"
@@ -123,7 +154,8 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
         :can-add-child="props.canAddChild"
         :has-children="props.hasChildren"
         :refreshing="props.refreshing"
-        :operation="!actions.length"
+        :operation="!actions.length && !props.engine"
+        :engine="props.engine"
         :sell="property && phone"
         @settings="emit('settings')"
         @operation="emit('operation')"
@@ -134,10 +166,11 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
         @goal="emit('goal')"
         @automation="emit('automation')"
         @refresh="emit('refresh')"
+        @positions="router.push({ name: 'crypto-positions' })"
       />
     </div>
 
-    <WalletActions v-if="phone && !props.empty" :actions="actions" phone :disabled="props.store.archived" @act="(kind) => emit('act', kind)" />
+    <WalletActions v-if="phone && !props.empty && !props.engine" :actions="actions" phone :disabled="props.store.archived" @act="(kind) => emit('act', kind)" />
 
     <p v-if="props.store.archived" class="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
       {{ t('wallet.archivedHint') }}

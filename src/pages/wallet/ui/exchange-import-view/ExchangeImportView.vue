@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { Check, Download, RefreshCw } from 'lucide-vue-next'
 
 import { useExchangeDisconnect, useExchangeKeyStatus } from '@/features/exchange-key'
-import { PendingImports, useExchangeSync } from '@/features/pending-imports'
+import { useExchangeSync } from '@/features/exchange-sync'
 import { ExchangeBalances } from '@/widgets/exchange-balances'
 import { Button, buttonVariants } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -59,7 +59,12 @@ const counts = computed(() => {
   const run = lastOk.value
   if (!run) return null
   const split = run.trades + run.transfers > 0
-  return { trades: split ? run.trades : run.staged, transfers: run.transfers, known: run.known }
+  return {
+    trades: split ? run.trades : run.staged,
+    transfers: run.transfers,
+    known: run.known,
+    recorded: run.confirmed,
+  }
 })
 const ROW = 'flex items-center justify-between gap-3 py-1.5 text-sm'
 </script>
@@ -113,15 +118,17 @@ const ROW = 'flex items-center justify-between gap-3 py-1.5 text-sm'
           <div v-if="!phone" :class="ROW">
             <span class="text-muted-foreground">{{ t('exchangeImport.transfers') }}</span><span class="tabular-nums">{{ counts.transfers }}</span>
           </div>
+          <div :class="ROW">
+            <span class="text-muted-foreground">{{ t('cryptoTrack.legacy.recordedRow') }}</span><span class="tabular-nums">{{ counts.recorded }}</span>
+          </div>
           <div :class="ROW"><span class="text-muted-foreground">{{ t('exchangeImport.duplicates') }}</span><span class="tabular-nums">{{ counts.known }}</span></div>
         </template>
-        <p v-if="!phone" class="mt-2 flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm">
+        <p v-if="!phone" class="mt-2 flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm" data-import-dedupe>
           <Check class="mt-0.5 size-4 shrink-0" />
-          {{ t('exchangeImport.dedupe') }}
+          {{ t('cryptoTrack.legacy.recordedHint') }}
         </p>
       </Card>
     </div>
-    <Card><PendingImports :store-id="props.store.id" /></Card>
     <ExchangeBalances :store-id="props.store.id" />
   </div>
   <EmptyState v-else :title="t('wallet.importNeedsKey')">

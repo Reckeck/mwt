@@ -7,7 +7,7 @@ import { useConversions, useFavoriteCurrencies } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
 import { formatAsOf } from '@/shared/lib/format'
-import { withCryptoShown, withoutLoyalty } from '@/shared/lib/store-tree'
+import { withoutLoyalty } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import type { WalletMode, WalletSort } from '../stores.types'
@@ -45,8 +45,7 @@ export function useWalletTable() {
   const base = computed(() => settings.baseCurrency.toLowerCase())
 
   const allRoots = computed(() => withoutLoyalty(tree.data.value ?? []))
-  /** Hidden crypto wallets leave the list, not the total. */
-  const roots = computed(() => withCryptoShown(allRoots.value, settings.cryptoEnabled))
+  const roots = allRoots
   const archivedCount = computed(() => roots.value.filter((node) => node.store.archived).length)
   const total = computed(() =>
     allRoots.value.filter((node) => !node.store.archived).reduce((sum, node) => sum + Number(node.subtree_base), 0),

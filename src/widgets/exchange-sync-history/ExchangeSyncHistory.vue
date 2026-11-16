@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { AlertTriangle, RefreshCw } from 'lucide-vue-next'
 
-import { useExchangeSync } from '@/features/pending-imports'
+import { useExchangeSync } from '@/features/exchange-sync'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
@@ -16,6 +16,10 @@ import { formatDateTime } from '@/shared/lib/format'
  * Every sync of one exchange wallet: when, what started it, how many records
  * came and what became of them, the correction that set the live balance, or
  * why it failed and what to do about it.
+ *
+ * A run of an older build counted records it staged for confirmation; since
+ * spec E7 a record becomes an operation at once, so `staged` is only ever read
+ * (`AGENTS.md`, rule 5) and the count column shows whichever the run wrote.
  */
 const props = defineProps<{ storeId: string }>()
 const { t } = useI18n()
@@ -47,7 +51,7 @@ const empty = computed(() => runs.isSuccess.value && !(runs.data.value ?? []).le
             <TableHead>{{ t('syncHistory.when') }}</TableHead>
             <TableHead>{{ t('syncHistory.source') }}</TableHead>
             <TableHead class="text-right">{{ t('syncHistory.fetched') }}</TableHead>
-            <TableHead class="text-right">{{ t('syncHistory.staged') }}</TableHead>
+            <TableHead class="text-right">{{ t('cryptoTrack.legacy.recordedRow') }}</TableHead>
             <TableHead class="text-right">{{ t('syncHistory.known') }}</TableHead>
             <TableHead class="text-right">{{ t('syncHistory.filtered') }}</TableHead>
             <TableHead>{{ t('syncHistory.result') }}</TableHead>
@@ -65,15 +69,16 @@ const empty = computed(() => runs.isSuccess.value && !(runs.data.value ?? []).le
             </TableCell>
             <template v-else>
               <TableCell class="text-right tabular-nums">{{ run.fetched }}</TableCell>
-              <TableCell class="text-right tabular-nums">{{ run.staged }}</TableCell>
+              <TableCell class="text-right tabular-nums">{{ run.confirmed || run.staged }}</TableCell>
               <TableCell class="text-right tabular-nums text-muted-foreground">{{ run.known }}</TableCell>
               <TableCell class="text-right tabular-nums text-muted-foreground">{{ run.filtered }}</TableCell>
               <TableCell>
                 <span class="flex flex-wrap gap-1">
                   <Badge v-if="run.confirmed" variant="secondary">{{ t('syncHistory.confirmed', { count: run.confirmed }) }}</Badge>
-                  <Badge v-else-if="run.staged" variant="outline">{{ t('syncHistory.waiting') }}</Badge>
                   <Badge v-if="run.reconcile_tx_id" variant="outline">{{ t('syncHistory.reconciled') }}</Badge>
-                  <span v-if="!run.staged && !run.reconcile_tx_id" class="text-xs text-muted-foreground">{{ t('syncHistory.nothingNew') }}</span>
+                  <span v-if="!run.confirmed && !run.staged && !run.reconcile_tx_id" class="text-xs text-muted-foreground">
+                    {{ t('syncHistory.nothingNew') }}
+                  </span>
                 </span>
               </TableCell>
             </template>

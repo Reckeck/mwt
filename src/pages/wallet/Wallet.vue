@@ -25,6 +25,7 @@ import { openQuickAdd } from '@/shared/lib/quick-add'
 import { useSettingsStore } from '@/shared/store/settings'
 
 import { walletFigure } from './lib/wallet-figure'
+import { useEngineWallet } from './model/use-engine-wallet'
 import { type WalletTabsKind, useWalletScope, useWalletTabs } from './model/use-wallet-view'
 import { SubAccountTiles } from './ui/sub-account-tiles'
 import { WalletEmpty } from './ui/wallet-empty'
@@ -43,6 +44,9 @@ const { includeChildren, scopeValue } = useWalletScope(storeId)
 const { overview, base, store, isArchived, children, hasChildren, positions, ancestors, parentPath, canAddChild, ownShare } =
   useStoreOverview(storeId, includeChildren)
 const decimals = computed(() => settingsStore.displayDecimals)
+
+/** A connected address or an exchange read through its key only reads: nothing here records an operation (spec E9). */
+const { engine, account, readAt } = useEngineWallet(store)
 
 // A bonus programme is not a wallet: old links land on its tab (plan G1).
 watch(
@@ -66,7 +70,7 @@ const tabsKind = computed<WalletTabsKind>(() => {
   if (isHomeRoot.value) return 'home'
   return store.value?.kind === 'crypto' || store.value?.kind === 'exchange' || store.value?.kind === 'property' ? 'coins' : 'money'
 })
-const { tab, tabs, more } = useWalletTabs(tabsKind, hasTerminal)
+const { tab, tabs, more } = useWalletTabs(tabsKind, hasTerminal, engine)
 
 /**
  * The header's sum. An exchange always counts its sub-accounts in it and lists
@@ -97,7 +101,7 @@ const sellOpen = ref(false)
 /** Kinds the settings may switch to; the change itself is the `Change kind` dialog. */
 const kinds = computed(() =>
   store.value && !store.value.parent_id && CONVERTIBLE_KINDS.includes(store.value.kind)
-    ? convertibleKinds(store.value.kind, settingsStore.cryptoEnabled)
+    ? convertibleKinds(store.value.kind)
     : [],
 )
 const calculatorOpen = ref(false)
@@ -132,6 +136,7 @@ function onApplyPlan(payload: CalculatorPlan) {
  */
 const isEmpty = computed(
   () =>
+    !engine.value &&
     store.value?.kind !== 'property' &&
     !hasChildren.value &&
     overview.data.value?.tx_count === 0 &&
@@ -155,6 +160,7 @@ function openWallet(created: Store) {
         :refreshing="priceRefresh.isPending.value"
         :exchange="isExchangeNode"
         :empty="isEmpty"
+        :engine="engine" :account="account" :read-at="readAt"
         @act="act"
         @settings="settingsOpen = true"
         @operation="openTransaction"
@@ -209,6 +215,7 @@ function openWallet(created: Store) {
           :exchange="isExchangeNode"
           :has-key="bybitHasKey"
           :refreshing="priceRefresh.isPending.value"
+          :engine="engine" :account="account"
           @operation="openTransaction"
           @refresh="priceRefresh.mutate()"
         />
