@@ -86,6 +86,8 @@ pub fn spawn(app: AppHandle) {
                     sources_tick(&app);
                 }
                 workflows_tick(&app);
+                // The crypto module reads the followed addresses (spec E6).
+                crate::cryptotrack::jobs::cryptotrack_tick(&app);
                 alerts_tick(&app, &mut memory);
                 reminders_tick(&app, &mut memory);
             }
@@ -490,8 +492,14 @@ fn show_locked(app: &AppHandle, records: Vec<NoticeRecord>, system: bool) {
 // -- 1. Bybit import -------------------------------------------------------------
 
 /// Poll each exchange on its own interval (`ExchangeProfile.import_interval_sec`,
-/// `0` disables it) and stage any new fills for the user to confirm. A vault
-/// that keeps no crypto hides its exchanges, so they are not polled either.
+/// `0` disables it) and record any new fills as operations of the crypto
+/// module. A vault that keeps no crypto hides its exchanges, so they are not
+/// polled either.
+///
+/// Since spec E7 nothing waits for the user: a record becomes an operation at
+/// once, so the notice says what was recorded instead of what there is to
+/// confirm, and the queue an older build staged is put through by the same
+/// conversion inside the sync.
 fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
     let due: Vec<trade_core::crypto::device_secrets::DeviceKey> = {
         let state = app.state::<AppState>();
@@ -522,46 +530,46 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
             .last_bybit
             .insert(key.keys.store_id.clone(), Instant::now());
     }
-    let Ok((staged, confirmed)) = tauri::async_runtime::block_on(poll_bybit_once(app, due)) else {
+    let Ok(recorded) = tauri::async_runtime::block_on(poll_bybit_once(app, due)) else {
         return;
     };
-    if confirmed > 0 {
-        let _ = app.emit("automation-created", serde_json::json!({ "tx_ids": [] }));
+    if recorded == 0 {
+        return;
     }
-    if staged > 0 {
-        let _ = app.emit(
-            "bybit-import-pending",
-            serde_json::json!({ "staged": staged }),
-        );
-        let ru = russian(app);
-        record_and_deliver(
-            app,
-            vec![notice(
-                NoticeCategory::BybitImport,
-                format!("bybit:{}", now_secs()),
-                notice_title(NoticeCategory::BybitImport, ru),
-                if ru {
-                    format!("Новых операций на подтверждение: {staged}")
-                } else {
-                    format!("New operations to confirm: {staged}")
-                },
-                Some(trade_core::routes::TRANSACTIONS.into()),
-                trade_core::model::vault::now_iso(),
-            )],
-        );
-    }
+    // The screens re-read on this event, as they did when records were staged:
+    // the event keeps its name so an older window still listens.
+    let _ = app.emit("automation-created", serde_json::json!({ "tx_ids": [] }));
+    let _ = app.emit(
+        "bybit-import-pending",
+        serde_json::json!({ "staged": 0, "recorded": recorded }),
+    );
+    let ru = russian(app);
+    record_and_deliver(
+        app,
+        vec![notice(
+            NoticeCategory::BybitImport,
+            format!("bybit:{}", now_secs()),
+            notice_title(NoticeCategory::BybitImport, ru),
+            if ru {
+                format!("Записано операций с биржи: {recorded}")
+            } else {
+                format!("Operations recorded from the exchange: {recorded}")
+            },
+            Some(trade_core::routes::TRANSACTIONS.into()),
+            trade_core::model::vault::now_iso(),
+        )],
+    );
 }
 
 /// One polling pass over the given keys (decrypted for this pass only).
-/// Returns how many operations were newly staged and how many were booked
-/// at once. Each sync, failed ones included, lands in the wallet's history.
+/// Returns how many operations the pass recorded, the queue of an older build
+/// included. Each sync, failed ones included, lands in the wallet's history.
 async fn poll_bybit_once(
     app: &AppHandle,
     keys: Vec<trade_core::crypto::device_secrets::DeviceKey>,
-) -> Result<(u32, u32), String> {
+) -> Result<u32, String> {
     let state = app.state::<AppState>();
-    let mut staged_total = 0u32;
-    let mut confirmed_total = 0u32;
+    let mut recorded_total = 0u32;
     for key in keys {
         // Network calls happen with no guard held. A key refused by its
         // read-only check skips this pass and stays not verified; a manual
@@ -583,10 +591,9 @@ async fn poll_bybit_once(
             }
             Err(err) => return Err(err),
         };
-        staged_total += run.staged.saturating_sub(run.confirmed);
-        confirmed_total += run.confirmed;
+        recorded_total += run.confirmed;
     }
-    Ok((staged_total, confirmed_total))
+    Ok(recorded_total)
 }
 
 // -- 2. Workflows and automations ---------------------------------------------------

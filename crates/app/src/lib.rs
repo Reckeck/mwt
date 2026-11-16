@@ -7,6 +7,7 @@ mod autolock;
 mod autostart;
 mod biometric;
 mod commands;
+mod cryptotrack;
 #[cfg(desktop)]
 mod legacy;
 mod notify_store;
@@ -472,6 +473,37 @@ pub fn run() {
             security::biometric::biometric_disable,
             security::biometric::biometric_unlock,
             security::keys::read_exchange_key_state,
+            // crypto module (stage 2): E0 registers every name, each spec
+            // fills the body of its own file; until then they answer
+            // UNSUPPORTED (`commands/cryptotrack/mod.rs`)
+            commands::cryptotrack::accounts::crypto_list_accounts,
+            commands::cryptotrack::accounts::crypto_connect_address,
+            commands::cryptotrack::accounts::crypto_update_account,
+            commands::cryptotrack::accounts::crypto_forget_account,
+            commands::cryptotrack::tokens::crypto_list_tokens,
+            commands::cryptotrack::tokens::crypto_confirm_token,
+            commands::cryptotrack::tokens::crypto_reject_token,
+            commands::cryptotrack::tokens::crypto_clear_token_verdict,
+            commands::cryptotrack::tokens::crypto_set_token_basis,
+            commands::cryptotrack::operations::crypto_list_operations,
+            commands::cryptotrack::operations::crypto_operation_detail,
+            commands::cryptotrack::operations::crypto_set_override,
+            commands::cryptotrack::sync::crypto_sync_status,
+            commands::cryptotrack::sync::crypto_sync_now,
+            commands::cryptotrack::sync::crypto_set_tracking_consent,
+            commands::cryptotrack::network::crypto_network_settings,
+            commands::cryptotrack::network::crypto_set_network_settings,
+            commands::cryptotrack::network::crypto_test_network,
+            commands::cryptotrack::wipe::crypto_wipe_preview,
+            commands::cryptotrack::wipe::crypto_wipe_module,
+            commands::cryptotrack::links::crypto_link_candidates,
+            commands::cryptotrack::links::crypto_link_operation,
+            commands::cryptotrack::links::crypto_unlink_operation,
+            commands::cryptotrack::links::crypto_link_pairs,
+            commands::cryptotrack::relations::crypto_relations,
+            commands::cryptotrack::transition::crypto_transition_plan,
+            commands::cryptotrack::transition::crypto_archive_manual_wallets,
+            commands::cryptotrack::positions::crypto_list_positions,
         ])
         .setup(|app| {
             // Before any vault is opened: what a crashed run left of the sandbox goes.

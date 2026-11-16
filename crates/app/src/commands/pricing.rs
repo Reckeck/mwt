@@ -188,10 +188,17 @@ pub async fn ensure_fx(
 }
 
 /// Open a URL (typically an explorer tx link) in the default browser.
+///
+/// The string is checked before it reaches the desktop
+/// ([`trade_core::external_url::check_external_url`]): an explorer address can
+/// come from the vault and so from another device, and `open_url` would hand a
+/// `file:` or a program's own scheme straight to the system. Neither the
+/// refusal nor the failure repeats the link, which may carry a key.
 #[tauri::command]
 pub async fn open_explorer(_app: AppHandle, url: String) -> Result<(), String> {
+    trade_core::external_url::check_external_url(&url).map_err(err_to_string)?;
     tauri_plugin_opener::open_url(&url, None::<&str>)
-        .map_err(|_| format!("failed to open {url}"))?;
+        .map_err(|_| "failed to open the link".to_string())?;
     Ok(())
 }
 
