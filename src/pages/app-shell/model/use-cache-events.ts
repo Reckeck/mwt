@@ -1,3 +1,4 @@
+import { CRYPTO_OPERATIONS_KEY } from '@/entities/crypto-tx'
 import { useQueryClient } from '@tanstack/vue-query'
 
 import { PRICED_KEYS } from '@/features/price-refresh'
@@ -19,8 +20,9 @@ export function useCacheEvents() {
     for (const queryKey of keys) void queryClient.invalidateQueries({ queryKey })
   }
 
-  // The background poller never writes transactions, it only stages fills.
-  useBackendEvent('bybit-import-pending', () => invalidate([['pending-imports']]))
+  // The background poller records fills as operations of the crypto module
+  // (spec E7); there is no staging queue any more.
+  useBackendEvent('bybit-import-pending', () => invalidate([CRYPTO_OPERATIONS_KEY]))
 
   // A refresh that priced operations saved without a price changes their
   // badges and every cost basis built on them.
@@ -40,6 +42,11 @@ export function useCacheEvents() {
     invalidate([['data-sources'], ['inflation-overview'], ['report']])
     invalidate(PRICED_KEYS)
   })
+  // A background pass of the crypto module finished for one address: its positions,
+  // operations, tokens and read status all change, and so does every holding the
+  // engine contributes — a wallet's sum and the dashboard total are built from them.
+  // Without this the screen keeps 30-second-stale data until the user navigates away.
+  useBackendEvent('crypto-updated', () => invalidate([['crypto'], ...LEDGER_KEYS]))
   useBackendEvent('automation-created', () => invalidate(PLANNING_AND_LEDGER))
   // Runs in the background may leave questions, queued operations or sleeping runs.
   useBackendEvent('workflows-ran', () => invalidate([WORKFLOW_KEYS.runs, WORKFLOW_KEYS.queue, WORKFLOW_KEYS.waits]))

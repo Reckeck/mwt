@@ -91,11 +91,11 @@ const since = useLastVisit()
 const catalogOpen = ref(false)
 const placed = computed(() => layout.value.map((item) => String(item.i)))
 
-/** Trading widgets are offered only while the vault has an exchange with a provider and keeps crypto. */
+/** Trading widgets are offered only while the vault has an exchange with a provider. */
 const tree = useStoreTree()
 const settings = useSettingsStore()
 const exchanges = computed<DashboardCatalogExchange[]>(() =>
-  (settings.cryptoEnabled ? (tree.data.value ?? []) : [])
+  (tree.data.value ?? [])
     .map((node) => node.store)
     .filter((store) => store.kind === 'exchange' && !store.archived && store.exchange)
     .map((store) => ({ id: store.id, name: store.name })),

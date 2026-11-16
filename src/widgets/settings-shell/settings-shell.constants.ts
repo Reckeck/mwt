@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { Book, ChartPie, Code, Database, Sun, Wifi } from 'lucide-vue-next'
+import { Book, ChartPie, Code, Coins, Database, Sun, Wifi } from 'lucide-vue-next'
 
 /** `?settings=list`: on a phone the list of groups, before any group is opened. */
 export const SETTINGS_LIST = 'list'
@@ -71,11 +71,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       {
         id: 'general',
         titleKey: 'settingsShell.tab.general',
-        sections: [
-          section('currencies', 'currencies'),
-          section('direction', 'direction'),
-          section('rates', 'ratesTable'),
-        ],
+        sections: [section('currencies', 'currencies'), section('rates', 'ratesTable')],
       },
       {
         id: 'money',
@@ -107,6 +103,30 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'devices', titleKey: 'settingsShell.tab.devices', sections: [section('sync-devices', 'syncDevices')] },
       { id: 'history', titleKey: 'settingsShell.tab.history', sections: [section('sync-history', 'syncHistory')] },
       { id: 'transfer', titleKey: 'settingsShell.tab.transfer', sections: [section('sync-transfer', 'syncTransfer')] },
+    ],
+  },
+  {
+    id: 'crypto',
+    titleKey: 'settingsShell.group.crypto',
+    hintKey: 'settingsShell.group.cryptoHint',
+    icon: Coins,
+    tabs: [
+      {
+        id: 'networks',
+        titleKey: 'settingsShell.tab.cryptoNetworks',
+        sections: [section('crypto-networks', 'cryptoNetworks')],
+      },
+      {
+        id: 'consent',
+        titleKey: 'settingsShell.tab.cryptoConsent',
+        sections: [section('crypto-consent', 'cryptoConsent')],
+      },
+      {
+        id: 'tokens',
+        titleKey: 'settingsShell.tab.cryptoTokens',
+        sections: [section('crypto-tokens', 'cryptoTokens')],
+      },
+      { id: 'wipe', titleKey: 'settingsShell.tab.cryptoWipe', sections: [section('crypto-wipe', 'cryptoWipe')] },
     ],
   },
   {

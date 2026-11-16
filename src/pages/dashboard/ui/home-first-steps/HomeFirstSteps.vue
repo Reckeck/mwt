@@ -34,7 +34,7 @@ const steps = computed<Step[]>(() => [
   {
     key: 'vault',
     done: true,
-    hint: t(settings.cryptoEnabled ? 'home.steps.vaultCrypto' : 'home.steps.vaultPlain', {
+    hint: t('home.steps.vaultHint', {
       currency: settings.baseCurrency.toUpperCase(),
     }),
   },

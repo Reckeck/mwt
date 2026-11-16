@@ -27,20 +27,26 @@ export type WalletTabsKind = 'home' | 'money' | 'coins' | 'exchange'
 /**
  * The tabs a wallet's kind needs, kept in the URL so a link or «Back» returns
  * to them: a card opens on its operations, a coin wallet on its positions, an
- * exchange adds its terminal and keeps the import and relations under `More`;
+ * exchange adds its terminal and keeps the import under `More`;
  * a home opens on its utilities beside its operations (Wallets-2 · 10). Old `?view=terminal|import` links still land.
+ * `Relations` belongs only to a wallet the crypto engine drives (spec E15); an old `?tab=relations` on any other
+ * wallet is not a known tab, so it opens the first one (the overview) instead of a blank screen.
+ *
+ * `engine` comes from the page, which already knows it (`useEngineWallet`): a hook does not look the wallet up
+ * again, and a composable is never called behind a condition.
  */
-export function useWalletTabs(kind: Ref<WalletTabsKind>, hasTerminal: Ref<boolean>) {
+export function useWalletTabs(kind: Ref<WalletTabsKind>, hasTerminal: Ref<boolean>, engine: Ref<boolean>) {
   const { t } = useI18n()
   const route = useRoute()
   const router = useRouter()
   const phone = useIsPhone()
+  const driven = engine
 
   const label = {
     utilities: () => t('walletSettings.utilities'),
     positions: () => t('pos.title'),
     history: () => t('wallet.tab.operations'),
-    relations: () => t('wallet.relations'),
+    relations: () => t('cryptoTrack.relations.tab'),
     terminal: () => t('wallet.view.terminal'),
     import: () => t('wallet.view.import'),
   }
@@ -48,17 +54,20 @@ export function useWalletTabs(kind: Ref<WalletTabsKind>, hasTerminal: Ref<boolea
 
   const tabs = computed(() => {
     if (kind.value === 'home') return [tabOf('utilities'), tabOf('history')]
-    if (kind.value === 'money') return [tabOf('history'), tabOf('positions'), tabOf('relations')]
-    if (kind.value === 'coins') return [tabOf('positions'), tabOf('history'), tabOf('relations')]
+    if (kind.value === 'money') return [tabOf('history'), tabOf('positions')]
+    if (kind.value === 'coins')
+      return [tabOf('positions'), tabOf('history'), ...(driven.value ? [tabOf('relations')] : [])]
     return [tabOf('positions'), tabOf('history'), ...(hasTerminal.value && !phone.value ? [tabOf('terminal')] : [])]
   })
   /** A phone has no room for the terminal in the strip (Wallets-1 · 7): it joins `More`. */
   const more = computed(() =>
     kind.value === 'exchange'
-      ? [...(hasTerminal.value && phone.value ? [tabOf('terminal')] : []), tabOf('import'), tabOf('relations')]
-      : kind.value === 'home'
-        ? [tabOf('relations')]
-        : [],
+      ? [
+          ...(hasTerminal.value && phone.value ? [tabOf('terminal')] : []),
+          tabOf('import'),
+          ...(driven.value ? [tabOf('relations')] : []),
+        ]
+      : [],
   )
 
   const known = (value: unknown) => [...tabs.value, ...more.value].some((tab) => tab.value === value)

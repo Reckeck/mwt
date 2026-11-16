@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, RefreshCw } from 'lucide-vue-next'
 
 import { UtilityDialog } from '@/features/utility-edit'
+import { CryptoOperations } from '@/widgets/crypto-operations'
 import { ExchangeTerminal } from '@/widgets/exchange-terminal'
 import { StoreTransactions } from '@/widgets/store-transactions'
 import { Button } from '@/shared/ui/button'
 import { Tabs, type TabDef } from '@/shared/ui/tabs'
 import { formatAsOf } from '@/shared/lib/format'
 
+import { isEngineDriven } from '../../lib/engine-wallet'
+import { CryptoRelations } from '../crypto-relations'
 import { ExchangeImportView } from '../exchange-import-view'
 import { UtilitiesTab } from '../utilities-tab'
 import { WalletPositions } from '../wallet-positions'
-import { WalletRelations } from '../wallet-relations'
 
 /**
  * The wallet's working area under its header: the tabs its kind needs
@@ -36,6 +38,9 @@ const props = defineProps<{
   exchange?: boolean
   hasKey: boolean
   refreshing: boolean
+  /** Driven by the crypto engine (spec E9). */
+  engine?: boolean
+  account?: CryptoAccountView | null
 }>()
 const tab = defineModel<string>('tab', { required: true })
 const emit = defineEmits<{ operation: []; refresh: [] }>()
@@ -43,6 +48,8 @@ const emit = defineEmits<{ operation: []; refresh: [] }>()
 const { t } = useI18n()
 /** `+ Item` beside the tabs (Wallets-2 · 10); on a phone the tab puts it under the list. */
 const itemOpen = ref(false)
+/** The followed account of an engine-driven wallet: the one condition, from the page's own helper. */
+const engineAccountId = computed(() => (isEngineDriven(props.store) ? props.store.crypto_account_id : undefined))
 </script>
 
 <template>
@@ -77,11 +84,15 @@ const itemOpen = ref(false)
         :prices-as-of="props.pricesAsOf"
         :exchange="props.exchange"
         :has-key="props.hasKey"
+        :engine="props.engine"
+        :account="props.account"
         @operation="emit('operation')"
       />
     </template>
     <template #history>
-      <StoreTransactions :store-id="props.storeId" :include-children="props.includeChildren" bare />
+      <!-- A wallet the engine drives reads its operations from the network: its own list, read-only (spec E10). -->
+      <CryptoOperations v-if="engineAccountId" :account-ids="[engineAccountId]" bare />
+      <StoreTransactions v-else :store-id="props.storeId" :include-children="props.includeChildren" bare />
     </template>
     <template #terminal>
       <ExchangeTerminal :store-id="props.storeId" />
@@ -90,7 +101,8 @@ const itemOpen = ref(false)
       <ExchangeImportView :store="props.store" :has-key="props.hasKey" />
     </template>
     <template #relations>
-      <WalletRelations :store-id="props.storeId" />
+      <!-- Who the address dealt with, from its events (spec E15); only a wallet the engine drives has the tab. -->
+      <CryptoRelations v-if="engineAccountId" :account-id="engineAccountId" />
     </template>
   </Tabs>
 </template>

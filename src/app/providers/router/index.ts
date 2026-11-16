@@ -4,6 +4,7 @@ import { type RouteLocationNormalized, createRouter, createWebHistory } from 'vu
 import { i18n } from '@/shared/config/i18n'
 
 import { automationsRoutes } from './automations.routes'
+import { cryptoRoutes } from './crypto.routes'
 import { moneyRoutes } from './money.routes'
 
 export const router = createRouter({
@@ -59,6 +60,13 @@ export const router = createRouter({
               redirect: (to) => ({ name: 'contacts', query: to.query, hash: to.hash }),
             },
             {
+              // What the crypto module read from its sources; the filter is in the query (spec E10).
+              path: 'crypto',
+              name: 'crypto-operations',
+              component: () => import('@/pages/crypto-operations').then((page) => page.CryptoOperations),
+              meta: { i18n: 'cryptoTrack.operations.title' },
+            },
+            {
               path: 'calendar',
               name: 'transactions-calendar',
               component: () => import('@/pages/transactions').then((page) => page.TransactionsCalendar),
@@ -79,6 +87,7 @@ export const router = createRouter({
           meta: { i18n: 'nav.contacts' },
         },
         moneyRoutes,
+        cryptoRoutes,
         ...automationsRoutes,
         {
           // The settings window opens over any page; old links land on the dashboard with it open.

@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus } from 'lucide-vue-next'
+import { Plus, Radar } from 'lucide-vue-next'
 
 import { AssetRevalueButton } from '@/features/asset-revalue'
+import { ConfirmDialog } from '@/shared/ui/confirm-dialog'
 import { AssetDetailsSheet } from '@/widgets/asset-details'
 import { StorePositions } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 
+import { CryptoQuarantine } from '../crypto-quarantine'
+import { useTokenTakeBack } from '../../model/use-token-take-back'
 import { WalletAssets } from '../wallet-assets'
 import { WalletExtras } from '../wallet-extras'
 import { WalletIncoming } from '../wallet-incoming'
@@ -30,10 +33,15 @@ const props = defineProps<{
   /** An exchange's own wallet: the list is its spot by currency. */
   exchange?: boolean
   hasKey: boolean
+  /** The wallet is driven by the crypto engine: no `Add operation`, and the quarantine sits under the assets (spec E9). */
+  engine?: boolean
+  /** The followed account of an address wallet. */
+  account?: CryptoAccountView | null
 }>()
 const emit = defineEmits<{ operation: [] }>()
 const { t } = useI18n()
 
+const takeBack = useTokenTakeBack()
 const detailsOpen = ref(false)
 const picked = ref<StorePosition | null>(null)
 function openPosition(position: StorePosition) {
@@ -44,7 +52,14 @@ function openPosition(position: StorePosition) {
 
 <template>
   <div class="flex flex-col gap-4">
-    <EmptyState v-if="props.positions.length === 0" :title="t('wallet.empty')" :description="t('wallet.emptyHint')">
+    <EmptyState
+      v-if="props.positions.length === 0 && props.engine"
+      :icon="Radar"
+      :title="t('cryptoTrack.assets.emptyTitle')"
+      :description="t('cryptoTrack.assets.emptyHint')"
+      data-tour="crypto-assets"
+    />
+    <EmptyState v-else-if="props.positions.length === 0" :title="t('wallet.empty')" :description="t('wallet.emptyHint')">
       <Button :disabled="props.store.archived" @click="emit('operation')">
         <Plus class="size-4" />
         {{ t('wallet.addOperation') }}
@@ -66,6 +81,9 @@ function openPosition(position: StorePosition) {
     </StorePositions>
     <WalletAssets
       v-else
+      :tour="props.engine ? 'crypto-assets' : undefined"
+      :shares="props.engine && props.store.kind === 'crypto'"
+      :row-actions="props.engine ? takeBack.rowActions : undefined"
       :positions="props.positions"
       :base="props.base"
       :decimals="props.decimals"
@@ -74,7 +92,15 @@ function openPosition(position: StorePosition) {
       @open="openPosition"
     />
 
-    <WalletIncoming v-if="props.store.kind === 'crypto'" :store-id="props.storeId" />
+    <CryptoQuarantine v-if="props.engine && props.account" :holdings="props.account.quarantine" />
+    <p
+      v-else-if="props.engine && props.store.kind === 'crypto' && props.positions.length"
+      class="text-sm text-muted-foreground"
+    >
+      {{ t('cryptoTrack.quarantine.footnote') }}
+    </p>
+
+    <WalletIncoming v-if="props.store.kind === 'crypto' && !props.engine" :store-id="props.storeId" />
 
     <!-- Futures positions: shown, never counted in the totals. -->
     <StorePositions
@@ -86,6 +112,15 @@ function openPosition(position: StorePosition) {
     />
     <WalletExtras :store="props.store" :has-key="props.hasKey" />
 
+    <ConfirmDialog
+      v-model:open="takeBack.open.value"
+      overlay="crypto-take-back"
+      :title="t('cryptoTrack.assets.takeBackTitle', { symbol: takeBack.asking.value?.symbol ?? '' })"
+      :description="t('cryptoTrack.assets.takeBackBody')"
+      :confirm-label="t('cryptoTrack.assets.takeBack')"
+      :pending="takeBack.pending.value"
+      @confirm="takeBack.confirm"
+    />
     <AssetDetailsSheet
       v-model:open="detailsOpen"
       :position="picked"

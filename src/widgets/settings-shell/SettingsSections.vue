@@ -15,12 +15,13 @@ import { QuickAddSettings } from '@/widgets/quick-add-settings'
 import { UpdateSettings } from '@/widgets/update-settings'
 import { SyncDevices, SyncHistory, SyncSettings, SyncTransfer } from '@/widgets/sync-settings'
 import { VaultDevTools } from '@/widgets/vault-dev-tools'
-import { VaultDirection } from '@/widgets/vault-direction'
 import { VaultJsonEditor } from '@/widgets/vault-json-editor'
 import { SecurityLevel } from '@/widgets/security-level'
 import { VaultSettings } from '@/widgets/vault-settings'
 import { BiometricSettings } from '@/features/biometric-unlock'
 import { VaultAutolock } from '@/features/vault-autolock'
+import { CryptoConsent, CryptoHiddenTokens, CryptoNetworks } from '@/features/crypto-network-settings'
+import { CryptoWipeEntry } from '@/features/crypto-wipe'
 import { SettingsSection } from '@/shared/ui/settings-section'
 
 import type { SettingsSection as SectionDef } from './settings-shell.constants'
@@ -50,13 +51,16 @@ const { t } = useI18n()
       <HelpWhatsNew v-else-if="section.id === 'whats-new'" />
       <SettingsSection v-else-if="section.id === 'notifications'" :title="t('settingsShell.section.notifications')"><NotificationSettings /></SettingsSection>
       <template v-else-if="section.id === 'vault'"><VaultSettings /><SecurityLevel /><BiometricSettings /><VaultAutolock /></template>
-      <VaultDirection v-else-if="section.id === 'direction'" />
       <CurrencySettings v-else-if="section.id === 'currencies'" />
       <FxRates v-else-if="section.id === 'rates'" />
       <BudgetSettings v-else-if="section.id === 'budget'" />
       <CategoryManager v-else-if="section.id === 'categories'" />
       <CategorizationRules v-else-if="section.id === 'rules'" />
       <InflationSettings v-else-if="section.id === 'inflation'" />
+      <CryptoNetworks v-else-if="section.id === 'crypto-networks'" />
+      <CryptoConsent v-else-if="section.id === 'crypto-consent'" />
+      <CryptoHiddenTokens v-else-if="section.id === 'crypto-tokens'" />
+      <CryptoWipeEntry v-else-if="section.id === 'crypto-wipe'" />
       <EnrichmentSettings v-else-if="section.id === 'enrichment'" />
       <SyncSettings v-else-if="section.id === 'sync'" />
       <SyncDevices v-else-if="section.id === 'sync-devices'" />

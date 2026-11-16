@@ -1,16 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { Calculator, Plus } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
 import { signClass } from '@/shared/lib/format'
-import { Button } from '@/shared/ui/button'
 
 import { investMoney } from '../../lib/invest-view'
 
-/** `Profit · Fees · Invested` (all three on a phone too), `Work out a trade` (Money 4 · 23) and `Record a trade` (Money 2 · 13). */
+/** `Profit · Fees · Invested` (all three on a phone too); trades are read by the crypto module, not recorded here. */
 const props = defineProps<{ profit: string; fees: string; invested: string; currency: string }>()
-const emit = defineEmits<{ record: []; calc: [] }>()
 
 const { t } = useI18n()
 </script>
@@ -34,10 +31,6 @@ const { t } = useI18n()
         <span class="text-xs text-muted-foreground">{{ t('money.invest.invested') }}</span>
         <b class="text-xl tabular-nums max-md:text-base"><Money v-bind="investMoney(props.invested, props.currency)" /></b>
       </section>
-    </div>
-    <div class="flex justify-end gap-2 max-md:grid max-md:grid-cols-2">
-      <Button variant="ghost" class="max-md:h-10" data-invest-calc @click="emit('calc')"><Calculator />{{ t('calc.title') }}</Button>
-      <Button variant="outline" class="max-md:h-10" data-invest-record @click="emit('record')"><Plus />{{ t('money.invest.record') }}</Button>
     </div>
   </div>
 </template>

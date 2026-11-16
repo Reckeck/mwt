@@ -28,7 +28,7 @@ const shown = computed(() => (props.phone ? props.actions.filter((action) => act
     <Button
       v-for="action in shown"
       :key="action.kind"
-      :variant="action.variant"
+      variant="outline"
       class="h-11 px-1 text-caption"
       :disabled="props.disabled"
       :data-deal="action.kind"
@@ -38,11 +38,15 @@ const shown = computed(() => (props.phone ? props.actions.filter((action) => act
     </Button>
   </div>
   <div v-else-if="shown.length" class="flex items-center gap-2" data-tour="wallet-actions">
-    <template v-for="action in shown" :key="action.kind">
-      <span v-if="action.separated" class="h-6 w-px bg-border" aria-hidden="true" />
-      <Button :variant="action.variant" :disabled="props.disabled" :data-deal="action.kind" @click="emit('act', action.kind)">
-        {{ t(action.label) }}
-      </Button>
-    </template>
+    <Button
+      v-for="action in shown"
+      :key="action.kind"
+      variant="outline"
+      :disabled="props.disabled"
+      :data-deal="action.kind"
+      @click="emit('act', action.kind)"
+    >
+      {{ t(action.label) }}
+    </Button>
   </div>
 </template>

@@ -3,7 +3,9 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Money } from '@/entities/currency'
+import { ActionMenu } from '@/shared/ui/action-menu'
 import { Button } from '@/shared/ui/button'
+import type { UiAction } from '@/shared/ui/context-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { currencySymbol, formatAsOf, formatPct, formatQuantity } from '@/shared/lib/format'
 import { useIsPhone } from '@/shared/lib/phone'
@@ -21,6 +23,12 @@ const props = defineProps<{
   decimals: number
   spot?: boolean
   pricesAsOf?: string | null
+  /** The share of the wallet's value as a number: an address wallet's table (mockups 01 and 02). */
+  shares?: boolean
+  /** The `data-tour` anchor, when a tour of its own points at the table (`crypto-assets`). */
+  tour?: string
+  /** A row's «⋯» menu (a sheet on a phone); a row with no actions keeps its place so nothing shifts. */
+  rowActions?: (position: StorePosition) => UiAction[]
 }>()
 const emit = defineEmits<{ open: [position: StorePosition] }>()
 const { t } = useI18n()
@@ -44,12 +52,13 @@ const rows = computed(() =>
       }
     }),
 )
+const sharePct = (share: number) => formatPct(share * 100, { decimals: 1 })
 const asOf = computed(() => (props.pricesAsOf ? formatAsOf(props.pricesAsOf) : ''))
 const TH = 'h-9 px-3 text-xs font-medium text-muted-foreground'
 </script>
 
 <template>
-  <section class="flex flex-col gap-3" data-tour="wallet-positions">
+  <section class="flex flex-col gap-3" :data-tour="props.tour ?? 'wallet-positions'">
     <div v-if="props.spot && phone" class="flex items-baseline justify-between gap-2">
       <h3 class="heading-card">{{ t('wallet.spotByCurrency') }}</h3>
       <span v-if="asOf" class="text-xs text-muted-foreground">{{ asOf }}</span>
@@ -57,11 +66,10 @@ const TH = 'h-9 px-3 text-xs font-medium text-muted-foreground'
 
     <!-- A phone: one line per asset, the value on the right. -->
     <div v-if="phone" class="rounded-xl border border-border bg-card px-3 shadow-sm">
+      <div v-for="row in rows" :key="row.id" class="flex items-center gap-1 border-b border-border last:border-0">
       <Button
-        v-for="row in rows"
-        :key="row.id"
         variant="ghost"
-        class="h-auto min-h-13 w-full justify-start gap-3 rounded-none border-b border-border px-0 py-1.5 text-left font-normal last:border-0 hover:bg-transparent"
+        class="h-auto min-h-13 min-w-0 flex-1 justify-start gap-3 rounded-none px-0 py-1.5 text-left font-normal hover:bg-transparent"
         @click="emit('open', row.position)"
       >
         <span v-if="props.spot" class="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-muted text-2xs font-semibold">
@@ -71,14 +79,23 @@ const TH = 'h-9 px-3 text-xs font-medium text-muted-foreground'
           <span class="truncate font-medium">{{ props.spot ? `${row.quantity} ${row.symbol}` : row.symbol }}</span>
           <span class="truncate text-xs text-muted-foreground">
             <template v-if="props.spot && row.priced">{{ t('wallet.assets.priceShort') }} <Money :amount="row.position.price_base" :currency="props.base" /></template>
+            <template v-else-if="!props.spot && props.shares && row.priced">{{ row.quantity }} · <Money :amount="row.position.price_base" :currency="props.base" /></template>
             <template v-else-if="!props.spot">{{ row.quantity }}</template>
           </span>
         </span>
         <span class="flex flex-col items-end">
           <span class="font-medium tabular-nums"><Money :amount="row.position.value_base" :currency="props.base" :decimals="2" /></span>
           <span v-if="props.spot" :class="cn('text-xs', row.tone)">{{ row.change }}</span>
+          <span v-else-if="props.shares" class="text-xs text-muted-foreground">{{ sharePct(row.share) }}</span>
         </span>
       </Button>
+      <ActionMenu
+        v-if="props.rowActions?.(row.position).length"
+        :actions="props.rowActions(row.position)"
+        :label="t('cryptoTrack.assets.rowActions', { name: row.symbol })"
+      />
+      <span v-else-if="props.rowActions" class="size-8 shrink-0" aria-hidden="true" />
+      </div>
     </div>
 
     <div v-else class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
@@ -95,6 +112,8 @@ const TH = 'h-9 px-3 text-xs font-medium text-muted-foreground'
             <TableHead :class="[TH, 'text-right']">
               {{ props.spot ? t('wallet.assets.inBase', { sign: currencySymbol(props.base) }) : t('pos.value') }}
             </TableHead>
+            <TableHead v-if="props.shares" :class="[TH, 'text-right']">{{ t('wallet.assets.share') }}</TableHead>
+            <TableHead v-if="props.rowActions" :class="[TH, 'w-12']"><span class="sr-only">{{ t('cryptoTrack.assets.actions') }}</span></TableHead>
             <template v-if="props.spot">
               <TableHead :class="[TH, 'text-right']">{{ t('wallet.assets.change24h') }}</TableHead>
               <TableHead :class="TH">{{ t('wallet.assets.share') }}</TableHead>
@@ -111,6 +130,14 @@ const TH = 'h-9 px-3 text-xs font-medium text-muted-foreground'
             </TableCell>
             <TableCell class="px-3 py-2.5 text-right font-semibold tabular-nums">
               <Money :amount="row.position.value_base" :currency="props.base" :decimals="2" />
+            </TableCell>
+            <TableCell v-if="props.shares" class="px-3 py-2.5 text-right text-muted-foreground tabular-nums">{{ sharePct(row.share) }}</TableCell>
+            <TableCell v-if="props.rowActions" class="w-12 px-3 py-2.5" @click.stop>
+              <ActionMenu
+                v-if="props.rowActions(row.position).length"
+                :actions="props.rowActions(row.position)"
+                :label="t('cryptoTrack.assets.rowActions', { name: row.symbol })"
+              />
             </TableCell>
             <template v-if="props.spot">
               <TableCell :class="cn('px-3 py-2.5 text-right tabular-nums', row.tone)">{{ row.change }}</TableCell>
