@@ -404,7 +404,12 @@ mod price_tests {
             ts: prices::date_ts(chrono::NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()),
             source: "defillama".into(),
         };
-        assert_eq!(vault.crypto_apply_prices(&[point.clone()]).unwrap(), 1);
+        assert_eq!(
+            vault
+                .crypto_apply_prices(std::slice::from_ref(&point))
+                .unwrap(),
+            1
+        );
         assert_eq!(vault.crypto_apply_prices(&[point]).unwrap(), 0);
         assert_eq!(vault.doc.crypto_prices.len(), 1);
     }

@@ -282,12 +282,14 @@ mod tests {
 
     #[test]
     fn missing_lists_the_days_without_an_exact_price() {
-        let mut doc = VaultDoc::default();
-        doc.crypto_events = vec![
-            event_on("2026-03-01", asset()),
-            event_on("2026-03-02", asset()),
-            event_on("2026-03-02", asset()),
-        ];
+        let mut doc = VaultDoc {
+            crypto_events: vec![
+                event_on("2026-03-01", asset()),
+                event_on("2026-03-02", asset()),
+                event_on("2026-03-02", asset()),
+            ],
+            ..VaultDoc::default()
+        };
         apply_historic(&mut doc, &[point(day(1), "2")]);
         // A point of an older day does not stand in for the exact one.
         let missing = missing_for_account(&doc, "acc");
@@ -297,9 +299,11 @@ mod tests {
 
     #[test]
     fn missing_skips_what_the_provider_cannot_quote() {
-        let mut doc = VaultDoc::default();
         let unsupported = CryptoAsset::Token(TokenId::new(Chain::Algorand, "31566704"));
-        doc.crypto_events = vec![event_on("2026-03-01", unsupported)];
+        let doc = VaultDoc {
+            crypto_events: vec![event_on("2026-03-01", unsupported)],
+            ..VaultDoc::default()
+        };
         assert!(missing_for_account(&doc, "acc").is_empty());
     }
 }
