@@ -95,12 +95,10 @@
   "cryptoTrack.hiddenTokens.noAddress": "Подключённых адресов пока нет: карантин появится вместе с первым.",
   "cryptoTrack.hiddenTokens.noteTitle": "Скрытие не меняет сумм",
   "cryptoTrack.hiddenTokens.noteBody": "Скрытие это признак в хранилище. Операции по токену остаются в истории, модуль ничего не удаляет и не правит.",
-  "cryptoTrack.wipeEntry.title": "Стереть крипто-модуль",
   "cryptoTrack.wipeEntry.removes": "Удалятся подключённые адреса и их кошельки, события, позиции, снимки, цены и карантин.",
   "cryptoTrack.wipeEntry.stays": "Останутся фиатные операции, остальные кошельки и биржевой импорт по ключу.",
   "cryptoTrack.wipeEntry.level": "После стирания уровень защиты можно понизить: запрет снимается.",
   "cryptoTrack.wipeEntry.action": "Стереть модуль…",
-  "cryptoTrack.wipeEntry.notReady": "Стирание пока недоступно",
   "cryptoTrack.wipeEntry.askTitle": "Что спросят в подтверждении",
   "cryptoTrack.wipeEntry.askBody": "Окно покажет числа: сколько кошельков, событий и токенов уйдёт и на сколько уменьшится капитал. Попросит ввести слово и проверит, что свежая копия есть.",
   "tourName.cryptoNetwork": "Настройки крипты",
@@ -123,7 +121,6 @@
   "whatsNew.cryptoNetworkSettings.key": "Ключ Blockscout необязателен: с ним чтение идёт быстрее. Он хранится только на этом устройстве и не синхронизируется.",
   "whatsNew.cryptoNetworkSettings.consent": "Согласие на чтение сетей можно отозвать в любой момент, и запросы прекращаются вместе с ним.",
   "whatsNew.cryptoNetworkSettings.tokens": "Скрытые токены собраны в одном списке, любой можно вернуть.",
-  "cryptoTrack.wipeEntry.previewReady": "Предпросмотр стирания открыт",
   "cryptoTrack.consent.givenOnDevice": "Дано {date} · устройство «{device}»",
   "cryptoTrack.consent.givenOn": "Дано {date}"
 }

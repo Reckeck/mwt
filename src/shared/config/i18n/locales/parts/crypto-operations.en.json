@@ -1,5 +1,4 @@
 {
-  "cryptoTrack.operations.unavailable": "The crypto operations are not ready yet.",
   "cryptoTrack.operations.title": "Crypto operations",
   "cryptoTrack.operations.pageHint": "The operations of every connected address. They come from the network and are never typed in.",
   "cryptoTrack.operations.readonlyNote": "Operations come from the network. They cannot be added or deleted: the list is read again on every refresh. Only their meaning can change: the category, the description, the counterparty and the exchange.",

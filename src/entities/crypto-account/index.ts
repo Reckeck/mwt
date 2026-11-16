@@ -3,5 +3,5 @@ export { useCryptoAccountOf, useCryptoAccounts, useCryptoSyncStatus } from './mo
 export { CONNECTABLE_NETWORKS, DEFAULT_SOURCE_LABEL, networkLabel } from './crypto-account.constants'
 export { isEvmAddress, isStartDate, shortAddress } from './lib/address'
 export { defaultWalletName, uniqueWalletName } from './lib/wallet-name'
-export { SECRET_REFUSED, isSecretRefusal, looksLikeSecret } from '@/shared/lib/crypto-secret'
+export { isSecretRefusal, looksLikeSecret } from '@/shared/lib/crypto-secret'
 export { CryptoAddressCard } from './ui/crypto-address-card'

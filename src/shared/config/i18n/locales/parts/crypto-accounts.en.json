@@ -1,5 +1,4 @@
 {
-  "cryptoTrack.accounts.unavailable": "Connecting addresses is not ready yet.",
   "cryptoTrack.accounts.updated": "Updated {time}",
   "cryptoTrack.accounts.notRead": "Not read yet",
   "cryptoTrack.accounts.readOnly": "Read-only",

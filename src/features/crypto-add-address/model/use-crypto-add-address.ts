@@ -221,7 +221,6 @@ export function useCryptoAddAddress(open: Ref<boolean>, onCreated: (storeId: str
   const addressError = computed(() =>
     serverError.value?.field === 'address' ? serverError.value.message : form.error('address'),
   )
-  const stepNumber = computed(() => (step.value === 'start' ? 3 : 2))
 
   return {
     step,
@@ -238,12 +237,10 @@ export function useCryptoAddAddress(open: Ref<boolean>, onCreated: (storeId: str
     connect,
     raising,
     onRaised: () => (raised.value = true),
-    startConnect,
     networks: CONNECTABLE_NETWORKS,
     setAddress,
     next,
     back,
     addressError,
-    stepNumber,
   }
 }
