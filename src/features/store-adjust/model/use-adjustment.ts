@@ -35,17 +35,28 @@ export function useAdjustment(props: AdjustmentDialogProps, open: Ref<boolean>) 
   )
 
   const editing = computed(() => (props.transaction ? body(props.transaction, 'adjustment') : null))
-  const timestamp = ref('')
+  const dateValue = ref('')
+  /** A new correction is dated by the core (`now`, to the second) until the user picks a date. */
+  const dateTouched = ref(false)
+  const timestamp = computed({
+    get: () => dateValue.value,
+    set: (value: string) => {
+      dateValue.value = value
+      dateTouched.value = true
+    },
+  })
   const comment = ref('')
   const rows = ref<AdjustmentRow[]>([])
   /** The moment saved: the edited correction keeps its seconds while the field is left as it was. */
-  const moment = computed(() => keepOriginalMoment(timestamp.value, editing.value?.meta.timestamp))
+  const moment = computed(() =>
+    !editing.value && !dateTouched.value ? null : keepOriginalMoment(dateValue.value, editing.value?.meta.timestamp),
+  )
 
   const draft = useQuery({
     queryKey: computed(() => [
       'adjustment-draft',
       props.storeId,
-      timestamp.value,
+      moment.value,
       props.transaction ? txId(props.transaction) : null,
     ]),
     placeholderData: keepPreviousFor(() => props.storeId),
@@ -80,12 +91,9 @@ export function useAdjustment(props: AdjustmentDialogProps, open: Ref<boolean>) 
     open,
     (isOpen) => {
       if (!isOpen) return
-      // a new correction of money is for now: the short form has no date field
-      timestamp.value = editing.value
-        ? toLocalInput(editing.value.meta.timestamp)
-        : fiatOnly.value
-          ? toLocalInput(new Date().toISOString())
-          : ''
+      // a new correction is for now (the core's own moment) until the date is touched
+      dateValue.value = editing.value ? toLocalInput(editing.value.meta.timestamp) : ''
+      dateTouched.value = false
       comment.value = editing.value?.meta.comment ?? ''
       rows.value = []
       pinned.value = new Set((editing.value?.lines ?? []).map((line) => assetKey(line.asset)))
@@ -108,7 +116,7 @@ export function useAdjustment(props: AdjustmentDialogProps, open: Ref<boolean>) 
   )
   const form = useFormValidation(
     () => ({
-      timestamp: required(timestamp.value),
+      timestamp: !editing.value && !dateTouched.value ? null : required(dateValue.value),
       rows: rows.value.some(badRow)
         ? t('validation.number')
         : changed.value.length
