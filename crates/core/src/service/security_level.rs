@@ -311,14 +311,27 @@ impl UnlockedVault {
         // and the backup just made is among them.
         let found = copies::inventory(&self.path, &old_key)?;
 
-        let new_key = Arc::new(VaultFile::reencrypt_verified(
+        // The mark goes into the very document the level-3 file is made of,
+        // so it exists on disk from the first moment the vault is level 3 and
+        // an interruption after that is recognisable at the next open
+        // (`UnlockedVault::open_as`). Nothing else saves between here and the
+        // re-encryption; if that fails the vault stays at its old level and
+        // the mark is taken back, so no later save writes it there.
+        self.doc.settings.crypto_raise_pending = true;
+        let new_key = match VaultFile::reencrypt_verified(
             &self.path,
             &self.doc,
             self.fmt,
             new_password,
             kdf,
             &mut on_stage,
-        )?);
+        ) {
+            Ok(key) => Arc::new(key),
+            Err(err) => {
+                self.doc.settings.crypto_raise_pending = false;
+                return Err(err);
+            }
+        };
         // The file is level 3 from here: the session follows it at once, so
         // a later failure never writes cheaper bytes over it.
         self.key = Some(new_key.clone());
@@ -383,18 +396,41 @@ impl UnlockedVault {
     }
 
     /// What follows a successful raise: the module takes over the crypto, so
-    /// the wallets kept by hand are retired (spec E11).
+    /// the wallets kept by hand are retired (spec E11) and the raise's mark
+    /// is taken off.
     ///
     /// A failure to write here is not a failed raise — the level-3 file is
     /// already on the disk, verified, and the archiving changes no record,
-    /// only the `archived` flag. So the flags are left to the same idempotent
-    /// step in the open chain (`UnlockedVault::open_as`), which is what the
-    /// spec means by a crash between the re-encryption and the archiving
-    /// repairing itself.
+    /// only the `archived` flag. The mark stays on disk in that case, and the
+    /// same idempotent step in the open chain (`UnlockedVault::open_as`)
+    /// finishes the job: that is what the spec means by a crash between the
+    /// re-encryption and the archiving repairing itself.
     fn after_raise(&mut self) {
-        if self.retire_manual_crypto_wallets().changed {
-            let _ = self.persist_now();
+        self.retire_manual_crypto_wallets();
+        self.doc.settings.crypto_raise_pending = false;
+        let _ = self.persist_now();
+    }
+
+    /// The open chain's half of the raise: when the mark of a raise cut short
+    /// is set, finish the archiving and take the mark off. Returns whether
+    /// anything changed, so the chain saves once.
+    ///
+    /// Only the mark decides. A vault at level 3 without it was raised before
+    /// the crypto module existed (stage 1, for the exchange keys) or has
+    /// finished its raise: the wallets it keeps by hand are the user's, were
+    /// never shown the transition wizard, and are not touched here.
+    pub(super) fn finish_cut_short_raise(&mut self) -> bool {
+        if !self.doc.settings.crypto_raise_pending {
+            return false;
         }
+        // Below level 3 the mark means nothing (a copy that went back to an
+        // older file): leave it for the open that finds the level-3 file.
+        if self.security_level() != SecurityLevel::Crypto {
+            return false;
+        }
+        self.retire_manual_crypto_wallets();
+        self.doc.settings.crypto_raise_pending = false;
+        true
     }
 }
 

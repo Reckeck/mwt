@@ -160,6 +160,15 @@ pub struct Settings {
     /// device that runs a schedule writes its own zone.
     #[serde(default)]
     pub schedule_timezone: Option<String>,
+    /// The raise to level 3 re-encrypted this vault and has not yet archived
+    /// the hand-kept crypto wallets (spec E11). The raise sets it before the
+    /// re-encryption, so it is on disk in the very first level-3 file, and
+    /// clears it when the archiving is done. An open that finds it set
+    /// finishes the archiving; a level-3 vault without it is never archived
+    /// by an open. The device's own: a peer's mark says nothing about a raise
+    /// that was cut short here (`sync::registry::SETTINGS_SCOPE`).
+    #[serde(default)]
+    pub crypto_raise_pending: bool,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -239,6 +248,7 @@ impl Default for Settings {
             onboarding_checklist_hidden: false,
             crypto: None,
             schedule_timezone: None,
+            crypto_raise_pending: false,
         }
     }
 }

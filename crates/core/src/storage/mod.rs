@@ -698,6 +698,36 @@ mod tests {
         }
     }
 
+    /// The mark of a raise cut short (`Settings::crypto_raise_pending`) is
+    /// additive: it survives a save and an open in both file formats, and a
+    /// document written before it existed reads as "no raise pending".
+    #[test]
+    fn the_raise_mark_survives_saving_and_opening_in_both_formats() {
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("test.wallet");
+            let mut doc = sample_doc();
+            doc.settings.crypto_raise_pending = true;
+            VaultFile::create(&path, "pw").unwrap();
+            VaultFile::save(&path, "pw", &doc, fmt).unwrap();
+
+            let (out, read) = VaultFile::open(&path, "pw").unwrap();
+            assert_eq!(read, fmt);
+            assert!(out.settings.crypto_raise_pending, "{fmt:?}");
+
+            // A file from a build that did not know the field.
+            let mut json = serde_json::to_value(&doc).unwrap();
+            json["settings"]
+                .as_object_mut()
+                .unwrap()
+                .remove("crypto_raise_pending")
+                .expect("the field is serialized");
+            let old = encode_as(&json, fmt);
+            let older = decode(&old, fmt).unwrap();
+            assert!(!older.settings.crypto_raise_pending, "{fmt:?}");
+        }
+    }
+
     // -- migrations ---------------------------------------------------------
     //
     // One case per (version, format): the skeleton below is the same for

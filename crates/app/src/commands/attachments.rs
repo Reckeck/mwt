@@ -83,8 +83,12 @@ pub async fn open_attachment(
         }
     };
     if let Some(url) = item.url.as_deref() {
+        // The record may have come from a paired device or the JSON editor,
+        // neither of which checks the link: only a web or mail address goes
+        // to the system, and the error does not repeat the link.
+        trade_core::external_url::check_attachment_url(url).map_err(err_to_string)?;
         return tauri_plugin_opener::open_url(url, None::<&str>)
-            .map_err(|_| format!("failed to open {url}"));
+            .map_err(|_| "failed to open the link".to_string());
     }
     let cache = opened_dir(&app).ok_or("no cache directory")?;
     let _ = std::fs::remove_dir_all(&cache);

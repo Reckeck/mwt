@@ -6417,7 +6417,17 @@ crypto: boolean | null,
  * device so they agree on which moment it is. `None` until the first
  * device that runs a schedule writes its own zone.
  */
-schedule_timezone: string | null, };
+schedule_timezone: string | null, 
+/**
+ * The raise to level 3 re-encrypted this vault and has not yet archived
+ * the hand-kept crypto wallets (spec E11). The raise sets it before the
+ * re-encryption, so it is on disk in the very first level-3 file, and
+ * clears it when the archiving is done. An open that finds it set
+ * finishes the archiving; a level-3 vault without it is never archived
+ * by an open. The device's own: a peer's mark says nothing about a raise
+ * that was cut short here (`sync::registry::SETTINGS_SCOPE`).
+ */
+crypto_raise_pending: boolean, };
 
 /**
  * Which way the money of a settlement went, relative to the organizer.
