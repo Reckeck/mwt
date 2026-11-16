@@ -16,6 +16,7 @@ import { fixx3 } from './sets-fixx3.mjs'
 import { pack2c } from './sets-pack2c.mjs'
 import { pack2b } from './sets-pack2b.mjs'
 import { together } from './sets-together.mjs'
+import { defi } from './sets-defi.mjs'
 
 
 /** The device goes offline: `navigator.onLine` false and the event `useOnline` listens to. */
@@ -724,4 +725,4 @@ const report = REPORT_NAMES.flatMap((name) => {
   return found ? [{ ...found, scenarios: ['year'], canvas: undefined }] : []
 })
 
-export const SETS = { together, pack2b, pack2c, fixx3, fixx2, salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges, batch3, report }
+export const SETS = { defi, together, pack2b, pack2c, fixx3, fixx2, salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges, batch3, report }

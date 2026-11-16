@@ -37,6 +37,7 @@ import {
   measureView,
   open,
   PHONE,
+  restoreSeed,
   setTheme,
   toastOverDialog,
   views,
@@ -203,7 +204,12 @@ describe('check-layout', () => {
       () =>
         timed(unit.name, async () => {
           await sized(touch ? 390 : 1280, touch ? 844 : 720, touch)
-          settle('overlays', await overlays(page, { touch, label: unit.label, only: ids }))
+          // The overlays leave an event of their own behind; the units measuring views must not see it.
+          try {
+            settle('overlays', await overlays(page, { touch, label: unit.label, only: ids }))
+          } finally {
+            await restoreSeed(page)
+          }
         }),
       240_000,
     )

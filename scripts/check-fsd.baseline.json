@@ -91,7 +91,6 @@
   "no-segmentless-slices src/widgets/utility-list": 1,
   "no-segmentless-slices src/widgets/utility-stats": 1,
   "no-segmentless-slices src/widgets/vault-dev-tools": 1,
-  "no-segmentless-slices src/widgets/vault-direction": 1,
   "no-segmentless-slices src/widgets/vault-settings": 1,
   "no-segmentless-slices src/widgets/vehicle-card": 1,
   "no-segmentless-slices src/widgets/whats-new": 1,
