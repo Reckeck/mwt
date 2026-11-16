@@ -172,12 +172,12 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
 
         let body: serde_json::Value = resp
             .json()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
 
         let mut hits = Vec::new();
         if let Some(coins) = body.get("coins").and_then(|list| list.as_array()) {
@@ -228,7 +228,7 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!(
                 "coingecko http {:?}",
@@ -238,7 +238,7 @@ impl PricingService {
         let coins: Vec<CoinListEntry> = resp
             .json()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         let mut out: Vec<String> = coins
             .into_iter()
             .filter_map(|coin| {
@@ -320,7 +320,7 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!(
                 "coingecko http {:?}",
@@ -330,7 +330,7 @@ impl PricingService {
         let body: HashMap<String, serde_json::Value> = resp
             .json()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         Ok(parse_simple_price(&body))
     }
 
@@ -353,7 +353,7 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!(
                 "token price http {:?}",
@@ -363,7 +363,7 @@ impl PricingService {
         let body: HashMap<String, HashMap<String, f64>> = resp
             .json()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         token_price_in(&body, contract)
             .ok_or_else(|| Error::Pricing(format!("no price for {symbol} token")))
     }
@@ -378,14 +378,14 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!("coincap http {:?}", resp.status())));
         }
         let body: serde_json::Value = resp
             .json()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         let arr = body
             .get("data")
             .and_then(|data| data.as_array())
@@ -422,14 +422,14 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!("binance http {:?}", resp.status())));
         }
         let body: serde_json::Value = resp
             .json()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         body.get("price")
             .and_then(|price| price.as_str())
             .and_then(|text| Decimal::from_str_exact(text).ok())
@@ -446,14 +446,14 @@ impl PricingService {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!("er-api http {:?}", resp.status())));
         }
         let body: HashMap<String, serde_json::Value> = resp
             .json()
             .await
-            .map_err(|err| Error::Network(err.to_string()))?;
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
         let rates = body
             .get("rates")
             .cloned()

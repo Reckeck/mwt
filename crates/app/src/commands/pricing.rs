@@ -4,6 +4,8 @@ use trade_core::ipc_contract::{
     AssetPriceInput, CachedPrice, CandlePoint, ConvertAmountInput, ConvertedAmount, EnsureFxInput,
     EnsureFxOutput, GetCandlesInput, GetCandlesOutput, RefreshResult,
 };
+use trade_core::model::cryptotrack::{CryptoToken, TokenId};
+use trade_core::model::store::AssetRef;
 use trade_core::pricing::AssetSearchHit;
 
 use crate::commands::{AppState, err_to_string, require_vault};
@@ -78,9 +80,15 @@ pub async fn refresh_all(
         let favored = favorites
             .iter()
             .filter_map(|code| vault.favorite_asset(code));
-        held.chain(favored)
+        let wanted = held
+            .chain(favored)
             .filter(|asset| seen.insert(asset.key()))
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+        // Tokens the crypto module found are quoted only with its consent and
+        // never in the sandbox: the request names the contract to a third party.
+        let module_allowed = !crate::commands::sandbox::is_active(&state)
+            && crate::commands::app_settings::current_settings(&app).crypto_tracking_allowed();
+        without_module_tokens(wanted, &vault.doc.crypto_tokens, module_allowed)
     };
 
     let prices = state
@@ -127,6 +135,30 @@ pub async fn refresh_all(
     };
     let _ = app.emit("prices-updated", &result);
     Ok(result)
+}
+
+/// Drops the assets that came from the crypto module (a `crypto_tokens` record
+/// with the same network and contract) unless `module_allowed`. Everything else
+/// the user holds is kept.
+fn without_module_tokens(
+    assets: Vec<AssetRef>,
+    tokens: &[CryptoToken],
+    module_allowed: bool,
+) -> Vec<AssetRef> {
+    if module_allowed {
+        return assets;
+    }
+    let module_keys: std::collections::HashSet<String> =
+        tokens.iter().map(|token| token.id().key()).collect();
+    assets
+        .into_iter()
+        .filter(|asset| match (asset.chain, asset.contract.as_deref()) {
+            (Some(chain), Some(contract)) => {
+                !module_keys.contains(&TokenId::new(chain, contract).key())
+            }
+            _ => true,
+        })
+        .collect()
 }
 
 /// Fetch the rates of `currencies` for a day that the cache lacks (today by
@@ -234,4 +266,50 @@ pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, Str
         .collect();
 
     Ok(GetCandlesOutput { candles })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use trade_core::model::chain::Chain;
+
+    const CONTRACT: &str = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+
+    fn module_token() -> CryptoToken {
+        CryptoToken::new(TokenId::new(Chain::Ethereum, CONTRACT), "USDC", 6)
+    }
+
+    fn token_asset() -> AssetRef {
+        AssetRef {
+            symbol: "USDC".into(),
+            name: "USD Coin".into(),
+            coingecko_id: None,
+            chain: Some(Chain::Ethereum),
+            contract: Some(CONTRACT.into()),
+            quote: "USDC".into(),
+        }
+    }
+
+    fn own_coin() -> AssetRef {
+        AssetRef::crypto("BTC", "Bitcoin", Some("bitcoin"), Chain::Bitcoin)
+    }
+
+    #[test]
+    fn without_consent_no_module_contract_is_quoted() {
+        let kept = without_module_tokens(vec![own_coin(), token_asset()], &[module_token()], false);
+        assert_eq!(kept.len(), 1);
+        assert!(kept.iter().all(|asset| asset.contract.is_none()));
+    }
+
+    #[test]
+    fn with_consent_module_tokens_are_quoted() {
+        let kept = without_module_tokens(vec![own_coin(), token_asset()], &[module_token()], true);
+        assert_eq!(kept.len(), 2);
+    }
+
+    #[test]
+    fn a_contract_the_user_added_by_hand_is_not_a_module_token() {
+        let kept = without_module_tokens(vec![token_asset()], &[], false);
+        assert_eq!(kept.len(), 1);
+    }
 }
