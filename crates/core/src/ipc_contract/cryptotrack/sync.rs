@@ -79,6 +79,9 @@ pub struct CryptoSyncTarget {
     pub finished_at_ms: Option<i64>,
     /// Tokens whose balance the node is asked for.
     pub tokens: Vec<RawAsset>,
+    /// What each protocol adapter left for its next pass over this account,
+    /// by protocol id (opaque text, the device's own).
+    pub protocol_memory: std::collections::BTreeMap<String, String>,
 }
 
 /// What to store from the pages read so far.

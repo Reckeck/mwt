@@ -99,6 +99,41 @@ pub struct ProtocolRequest<'req> {
     /// one; `None` means the presets of [`crate::cryptotrack::chains`], tried
     /// in order ([`node::Node::new`]).
     pub rpc: Option<&'req str>,
+    /// What this adapter left for itself on an earlier pass
+    /// ([`Discovery::memory`]): opaque to everyone but the adapter, kept by
+    /// the device and handed back per protocol. `None` on the first pass and
+    /// whenever the device has nothing (or lost it), so an adapter must work
+    /// without it.
+    pub memory: Option<&'req str>,
+}
+
+/// What one discovery found, and whether it is the whole answer.
+///
+/// [`ProtocolAdapter::discover`] returns the positions alone, which is right
+/// for a protocol that can list everything an address holds. A protocol that
+/// finds positions by scanning history (Uniswap v4) may stop before it has
+/// seen all of it: then the list is still worth reading, but it is **not a
+/// review** — a position missing from it may exist further back, and the
+/// caller must not close a stored position on its silence (ADR-02).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Discovery {
+    pub keys: Vec<PositionKey>,
+    /// `false`: the history was not all seen, `keys` may lack positions.
+    pub complete: bool,
+    /// Opaque state for the next pass ([`ProtocolRequest::memory`]). It
+    /// replaces what the device holds for the protocol, and `None` clears it.
+    pub memory: Option<String>,
+}
+
+impl Discovery {
+    /// A whole answer that leaves nothing for the next pass.
+    pub fn complete(keys: Vec<PositionKey>) -> Self {
+        Self {
+            keys,
+            complete: true,
+            memory: None,
+        }
+    }
 }
 
 /// A DeFi protocol's reading of an address.
@@ -118,6 +153,17 @@ pub trait ProtocolAdapter: Send + Sync {
         &'fut self,
         request: ProtocolRequest<'fut>,
     ) -> AdapterFuture<'fut, Vec<PositionKey>>;
+
+    /// [`Self::discover`] with the means to say that the answer is partial
+    /// and to remember where a scan stands. The default is a complete answer
+    /// with no memory; an adapter that scans history overrides it, and its
+    /// `discover` returns only a complete result.
+    fn discover_scan<'fut>(
+        &'fut self,
+        request: ProtocolRequest<'fut>,
+    ) -> AdapterFuture<'fut, Discovery> {
+        Box::pin(async move { Ok(Discovery::complete(self.discover(request).await?)) })
+    }
 
     /// What one position holds now. `None` when it is gone between the
     /// discovery and the read — a position that vanished is not an error.
@@ -345,6 +391,7 @@ mod tests {
             account_id: "cacc-1",
             since: None,
             rpc: None,
+            memory: None,
         };
         let found = adapter.discover(request).await.expect("a discovery");
         assert_eq!(
@@ -384,6 +431,7 @@ mod tests {
             account_id: "cacc-1",
             since: None,
             rpc: None,
+            memory: None,
         };
         let mut read = Vec::new();
         for adapter in registry.for_chain(Chain::Ethereum) {

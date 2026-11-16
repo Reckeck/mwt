@@ -17,15 +17,30 @@
 //! are found as `balanceOf` promised, so a wallet whose positions are recent
 //! costs a window or two.
 //!
+//! **The scan remembers** ([`ScanMemory`], handed back through
+//! [`ProtocolRequest::memory`] and kept by the device): the newest transfer
+//! of every token seen, the block the history was read down to and the block
+//! it was read up to. A later pass reads only the blocks above that (a few
+//! requests for a quiet wallet) and goes on below it only while `balanceOf`
+//! still promises more than was found. The newest [`REORG_MARGIN`] blocks
+//! are never remembered, so a reorg cannot leave a transfer that did not
+//! happen. Memory that cannot be read, belongs to another wallet or
+//! contradicts `balanceOf` is dropped and the scan starts over.
+//!
 //! **What this cannot do** (gaps, see the report of D2):
 //!
 //! * the PoolManager deployment block, the natural floor of the scan, is not
-//!   in the facts document (its "Unverified" item 5), so there is none: the
-//!   scan goes back at most [`MAX_SCAN_WINDOWS`] windows. A position older
-//!   than that on a fast chain is **not found, and the read says so with an
-//!   error** (`balanceOf` promised more than the logs showed) rather than
-//!   returning a short list. A position the user enters by token id still
-//!   reads: [`ProtocolAdapter::read_position`] needs only the id;
+//!   in the facts document (its "Unverified" item 5), so there is none. One
+//!   pass reads at most `windows_per_pass` windows ([`MAX_SCAN_WINDOWS`],
+//!   3 million blocks); a position older than that is **not found on that
+//!   pass, and the answer says so**: [`Discovery::complete`] is `false`, the
+//!   positions that were found are returned, and the next pass goes on
+//!   below the floor it remembers. An incomplete answer is never a review
+//!   of what the address holds, so the caller closes nothing on it
+//!   (ADR-02); the plain [`ProtocolAdapter::discover`], which has no way to
+//!   say "partial", refuses with an error instead. A position the user
+//!   enters by token id still reads: [`ProtocolAdapter::read_position`]
+//!   needs only the id;
 //! * a burned NFT is not held by anyone, so a closed v4 position is never
 //!   discovered; [`ProtocolAdapter::read_position`] answers `None` for it.
 //!
@@ -68,6 +83,7 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::cryptotrack::rpc::RpcClient;
@@ -78,7 +94,7 @@ use crate::model::cryptotrack::{CryptoAsset, CryptoDirection, CryptoLeg, CryptoT
 
 use super::tick_math::principal;
 use super::{
-    AdapterFuture, Answer, AssetAmount, FeeReading, Node, PositionKey, PositionKind,
+    AdapterFuture, Answer, AssetAmount, Discovery, FeeReading, Node, PositionKey, PositionKind,
     PositionReading, PositionStatus, ProtocolAdapter, ProtocolRequest, U256,
 };
 
@@ -169,10 +185,20 @@ const NATIVE_DECIMALS: u8 = 18;
 /// consistently across providers (facts section 9).
 const SCAN_WINDOW: u64 = 10_000;
 
-/// How many windows backwards discovery reads before it gives up. There is no
-/// deployment block to stop at (facts, "Unverified" 5), and a window is two
-/// requests, so the scan is bounded: 300 windows is 3 million blocks.
+/// How many windows one pass of discovery reads before it stops with a
+/// partial answer. There is no deployment block to stop at (facts,
+/// "Unverified" 5), and a window is two requests, so a pass is bounded: 300
+/// windows is 3 million blocks. The next pass goes on from where this one
+/// stopped.
 const MAX_SCAN_WINDOWS: u32 = 300;
+
+/// The newest blocks a remembered scan does not trust: a transfer that deep
+/// may still be reorganised away, so the next pass reads them again.
+const REORG_MARGIN: u64 = 128;
+
+/// A memory larger than this is not kept (and not read): it is a bad
+/// answer or somebody else's text, and a scan can always start over.
+const MAX_MEMORY_BYTES: usize = 1 << 20;
 
 /// The ticks the protocol allows (`TickMath.MIN_TICK`/`MAX_TICK`).
 const MAX_TICK: i64 = 887_272;
@@ -184,12 +210,18 @@ const MAX_POSITIONS: usize = 10_000;
 /// [`Node`] per request.
 pub struct UniswapV4 {
     client: RpcClient,
+    /// The log windows one pass may read before it stops with a partial
+    /// answer ([`MAX_SCAN_WINDOWS`] outside the tests).
+    windows_per_pass: u32,
 }
 
 /// The adapter for [`super::Registry::builtin`]:
 /// `uniswap_v4::adapter(node.clone())`.
 pub fn adapter(node: RpcClient) -> Box<dyn ProtocolAdapter> {
-    Box::new(UniswapV4 { client: node })
+    Box::new(UniswapV4 {
+        client: node,
+        windows_per_pass: MAX_SCAN_WINDOWS,
+    })
 }
 
 /// The position NFT of this protocol on `chain` (see
@@ -214,6 +246,13 @@ impl ProtocolAdapter for UniswapV4 {
         request: ProtocolRequest<'fut>,
     ) -> AdapterFuture<'fut, Vec<PositionKey>> {
         Box::pin(async move { self.discover_keys(request).await })
+    }
+
+    fn discover_scan<'fut>(
+        &'fut self,
+        request: ProtocolRequest<'fut>,
+    ) -> AdapterFuture<'fut, Discovery> {
+        Box::pin(async move { self.scan(request).await })
     }
 
     fn read_position<'fut>(
@@ -252,8 +291,154 @@ impl Newest {
     }
 }
 
+/// One transfer of a token, as the memory keeps it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Remembered {
+    token: String,
+    block: u64,
+    index: u64,
+    incoming: bool,
+}
+
+/// Where a scan of one wallet stands, kept by the device between passes.
+///
+/// The blocks `floor..=head` were read completely and `seen` is the newest
+/// transfer of every token that touches the wallet in them.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ScanMemory {
+    version: u8,
+    owner: String,
+    manager: String,
+    floor: u64,
+    head: u64,
+    seen: Vec<Remembered>,
+}
+
+const MEMORY_VERSION: u8 = 1;
+const MAX_REMEMBERED: usize = 4 * MAX_POSITIONS;
+
+impl ScanMemory {
+    /// `None` for anything that is not a usable memory of *this* wallet on
+    /// *this* network at a chain that has reached `head`.
+    fn load(text: &str, owner: &str, manager: &str, latest: u64) -> Option<Self> {
+        if text.len() > MAX_MEMORY_BYTES {
+            return None;
+        }
+        let memory: Self = serde_json::from_str(text).ok()?;
+        let usable = memory.version == MEMORY_VERSION
+            && memory.owner == owner
+            && memory.manager == manager
+            && memory.head <= latest
+            && memory.floor <= memory.head.saturating_add(1)
+            && memory.seen.len() <= MAX_REMEMBERED
+            && memory.seen.iter().all(|entry| {
+                !entry.token.is_empty()
+                    && entry.token.len() <= 78
+                    && entry.token.bytes().all(|byte| byte.is_ascii_digit())
+                    && entry.block >= memory.floor
+                    && entry.block <= memory.head
+            });
+        usable.then_some(memory)
+    }
+
+    fn newest(&self) -> HashMap<String, Newest> {
+        self.seen
+            .iter()
+            .map(|entry| {
+                (
+                    entry.token.clone(),
+                    Newest {
+                        block: entry.block,
+                        index: entry.index,
+                        incoming: entry.incoming,
+                    },
+                )
+            })
+            .collect()
+    }
+}
+
+/// How a walk over the logs ended.
+enum WalkEnd {
+    /// As many held tokens as `balanceOf` promised.
+    Whole,
+    /// The pass ran out of windows before it found them all.
+    Short,
+    /// The logs and `balanceOf` cannot both be right.
+    Disagrees,
+}
+
+struct Walk {
+    newest: HashMap<String, Newest>,
+    floor: u64,
+    head: u64,
+    end: WalkEnd,
+}
+
+impl Walk {
+    /// The held tokens, newest transfer first.
+    fn held(&self) -> Vec<(&String, &Newest)> {
+        let mut held: Vec<(&String, &Newest)> = self
+            .newest
+            .iter()
+            .filter(|(_, entry)| entry.incoming)
+            .collect();
+        held.sort_by_key(|(_, entry)| std::cmp::Reverse(entry.rank()));
+        held
+    }
+
+    /// What the next pass starts from, without the blocks a reorg could
+    /// still change. `None` when it would be too big to keep.
+    fn memory(&self, owner: &str, manager: &str, latest: u64) -> Option<String> {
+        let head = self.head.min(latest.saturating_sub(REORG_MARGIN));
+        let seen: Vec<Remembered> = self
+            .newest
+            .iter()
+            .filter(|(_, entry)| entry.block <= head)
+            .map(|(token, entry)| Remembered {
+                token: token.clone(),
+                block: entry.block,
+                index: entry.index,
+                incoming: entry.incoming,
+            })
+            .collect();
+        if seen.len() > MAX_REMEMBERED {
+            return None;
+        }
+        let text = serde_json::to_string(&ScanMemory {
+            version: MEMORY_VERSION,
+            owner: owner.to_string(),
+            manager: manager.to_string(),
+            floor: self.floor.min(head.saturating_add(1)),
+            head,
+            seen,
+        })
+        .ok()?;
+        (text.len() <= MAX_MEMORY_BYTES).then_some(text)
+    }
+}
+
+/// The two log filters of a wallet.
+struct Filters {
+    incoming: Vec<Value>,
+    outgoing: Vec<Value>,
+}
+
 impl UniswapV4 {
+    /// The positions alone, for a caller with no way to take a partial
+    /// answer: a scan that did not reach the start is an error here, never a
+    /// short list.
     async fn discover_keys(&self, request: ProtocolRequest<'_>) -> Result<Vec<PositionKey>> {
+        let found = self.scan(request).await?;
+        if !found.complete {
+            return Err(Error::Network(
+                "the log scan did not reach the start of the history".into(),
+            ));
+        }
+        Ok(found.keys)
+    }
+
+    async fn scan(&self, request: ProtocolRequest<'_>) -> Result<Discovery> {
         let deployment = deployment(request.chain).ok_or(Error::Unsupported)?;
         let node = Node::new(&self.client, &request)?;
         let owner = abi::address_word(node.address())?;
@@ -266,56 +451,105 @@ impl UniswapV4 {
             .filter(|count| *count <= MAX_POSITIONS)
             .ok_or_else(|| Error::Network("implausible position count".into()))?;
         if count == 0 {
-            return Ok(Vec::new());
+            // Nothing is held, so there is nothing to remember: the first
+            // position of a later pass is a recent one.
+            return Ok(Discovery::complete(Vec::new()));
         }
 
         let owner_topic = format!("0x{}", hex(&owner));
-        let incoming = vec![json!(TRANSFER_TOPIC), Value::Null, json!(owner_topic)];
-        let outgoing = vec![json!(TRANSFER_TOPIC), json!(owner_topic)];
+        let filters = Filters {
+            incoming: vec![json!(TRANSFER_TOPIC), Value::Null, json!(owner_topic)],
+            outgoing: vec![json!(TRANSFER_TOPIC), json!(owner_topic)],
+        };
         let latest = node.block_number().await?;
+        let remembered = request
+            .memory
+            .and_then(|text| ScanMemory::load(text, node.address(), deployment.manager, latest));
+        let had_memory = remembered.is_some();
+        let mut walk = self
+            .walk(&node, deployment, &filters, count, latest, remembered)
+            .await?;
+        if had_memory && matches!(walk.end, WalkEnd::Disagrees) {
+            // What was remembered contradicts the chain: read it all again.
+            walk = self
+                .walk(&node, deployment, &filters, count, latest, None)
+                .await?;
+        }
+        let complete = match walk.end {
+            WalkEnd::Whole => true,
+            WalkEnd::Short => false,
+            WalkEnd::Disagrees => {
+                return Err(Error::Network(format!(
+                    "balanceOf promised {count} positions, the logs showed {}",
+                    walk.held().len()
+                )));
+            }
+        };
+        Ok(Discovery {
+            keys: walk
+                .held()
+                .into_iter()
+                .map(|(token, _)| PositionKey::new(PROTOCOL, request.chain, token))
+                .collect(),
+            complete,
+            memory: walk.memory(node.address(), deployment.manager, latest),
+        })
+    }
 
-        let mut newest: HashMap<String, Newest> = HashMap::new();
-        let mut window_end = latest;
+    /// Read the logs: first the blocks above what is remembered, oldest
+    /// first, then below it, newest first, while `balanceOf` promises more
+    /// than was found. One pass reads at most `windows_per_pass` windows.
+    async fn walk(
+        &self,
+        node: &Node<'_>,
+        deployment: &Deployment,
+        filters: &Filters,
+        count: usize,
+        latest: u64,
+        start: Option<ScanMemory>,
+    ) -> Result<Walk> {
+        // Nothing read yet is the empty range just above the newest block.
+        let (newest, floor, head) = match &start {
+            Some(memory) => (memory.newest(), memory.floor, memory.head),
+            None => (HashMap::new(), latest.saturating_add(1), latest),
+        };
+        let mut walk = Walk {
+            newest,
+            floor,
+            head,
+            end: WalkEnd::Short,
+        };
         let mut windows = 0u32;
-        loop {
-            let window_start = window_end.saturating_sub(SCAN_WINDOW - 1);
-            for (is_incoming, topics) in [(true, &incoming), (false, &outgoing)] {
-                let logs = node
-                    .logs(deployment.manager, topics.clone(), window_start, window_end)
-                    .await?;
-                for log in &logs {
-                    let Some((token, seen)) = parse_transfer(log, is_incoming)? else {
-                        continue;
-                    };
-                    // Windows run newest first: the first sight of a token
-                    // is its newest transfer, except inside one window.
-                    let slot = newest.entry(token).or_insert(seen);
-                    if seen.rank() > slot.rank() {
-                        *slot = seen;
-                    }
-                }
+        while walk.head < latest {
+            if windows >= self.windows_per_pass {
+                return Ok(walk);
             }
-            let held = newest.values().filter(|entry| entry.incoming).count();
+            let to = walk.head.saturating_add(SCAN_WINDOW).min(latest);
+            let from = walk.head.saturating_add(1);
+            read_window(node, deployment, filters, (from, to), &mut walk.newest).await?;
+            walk.head = to;
             windows += 1;
-            if held >= count || window_start == 0 || windows >= MAX_SCAN_WINDOWS {
-                break;
+        }
+        loop {
+            let held = walk.newest.values().filter(|entry| entry.incoming).count();
+            if held >= count || walk.floor == 0 {
+                walk.end = if held == count {
+                    WalkEnd::Whole
+                } else {
+                    WalkEnd::Disagrees
+                };
+                return Ok(walk);
             }
-            window_end = window_start - 1;
+            if windows >= self.windows_per_pass {
+                return Ok(walk);
+            }
+            let window_end = walk.floor - 1;
+            let window_start = window_end.saturating_sub(SCAN_WINDOW - 1);
+            let span = (window_start, window_end);
+            read_window(node, deployment, filters, span, &mut walk.newest).await?;
+            walk.floor = window_start;
+            windows += 1;
         }
-
-        let mut held: Vec<(&String, &Newest)> =
-            newest.iter().filter(|(_, entry)| entry.incoming).collect();
-        if held.len() != count {
-            return Err(Error::Network(format!(
-                "balanceOf promised {count} positions, the logs showed {}",
-                held.len()
-            )));
-        }
-        held.sort_by_key(|(_, entry)| std::cmp::Reverse(entry.rank()));
-        Ok(held
-            .into_iter()
-            .map(|(token, _)| PositionKey::new(PROTOCOL, request.chain, token))
-            .collect())
     }
 
     async fn read(
@@ -498,6 +732,33 @@ impl UniswapV4 {
             read_at: crate::model::vault::now_iso(),
         })
     }
+}
+
+/// The transfers to and from the wallet in one range, merged into `newest`:
+/// a transfer replaces the one a token has only when it is later in the
+/// chain, whatever order the ranges are read in.
+async fn read_window(
+    node: &Node<'_>,
+    deployment: &Deployment,
+    filters: &Filters,
+    (from, to): (u64, u64),
+    newest: &mut HashMap<String, Newest>,
+) -> Result<()> {
+    for (is_incoming, topics) in [(true, &filters.incoming), (false, &filters.outgoing)] {
+        let logs = node
+            .logs(deployment.manager, topics.clone(), from, to)
+            .await?;
+        for log in &logs {
+            let Some((token, seen)) = parse_transfer(log, is_incoming)? else {
+                continue;
+            };
+            let slot = newest.entry(token).or_insert(seen);
+            if seen.rank() > slot.rank() {
+                *slot = seen;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn currency_asset(chain: Chain, currency: &str) -> CryptoAsset {
@@ -769,6 +1030,7 @@ fn keccak_f(state: &mut [u64; 25], constants: &[u64; 24], rotations: &[u32; 25])
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
 
     use super::super::node::stub;
@@ -950,6 +1212,21 @@ mod tests {
     fn adapter_for_tests() -> UniswapV4 {
         UniswapV4 {
             client: stub::client(),
+            windows_per_pass: MAX_SCAN_WINDOWS,
+        }
+    }
+
+    fn adapter_with_windows(windows_per_pass: u32) -> UniswapV4 {
+        UniswapV4 {
+            client: stub::client(),
+            windows_per_pass,
+        }
+    }
+
+    fn request_with<'req>(url: &'req str, memory: Option<&'req str>) -> ProtocolRequest<'req> {
+        ProtocolRequest {
+            memory,
+            ..request(url)
         }
     }
 
@@ -960,6 +1237,7 @@ mod tests {
             account_id: "cacc-1",
             since: None,
             rpc: Some(url),
+            memory: None,
         }
     }
 
@@ -1309,13 +1587,30 @@ mod tests {
         incoming: Value,
         outgoing: Value,
     ) -> (SpanLog, impl Fn(&str, &Value, usize) -> Value) {
+        log_node_at(
+            Arc::new(AtomicU64::new(25_000)),
+            balance,
+            widest,
+            incoming,
+            outgoing,
+        )
+    }
+
+    /// [`log_node`] whose latest block can move between passes.
+    fn log_node_at(
+        latest: Arc<AtomicU64>,
+        balance: u128,
+        widest: u64,
+        incoming: Value,
+        outgoing: Value,
+    ) -> (SpanLog, impl Fn(&str, &Value, usize) -> Value) {
         let spans: SpanLog = Arc::default();
         let log = Arc::clone(&spans);
         let owner_topic = format!("0x{}", hex(&abi::address_word(OWNER).expect("an address")));
         let handler = move |method: &str, params: &Value, _index: usize| -> Value {
             match method {
                 "eth_call" => json!(format!("0x{}", word(balance))),
-                "eth_blockNumber" => json!("0x61a8"),
+                "eth_blockNumber" => json!(format!("0x{:x}", latest.load(Ordering::SeqCst))),
                 "eth_getLogs" => {
                     let filter = &params[0];
                     let block = |field: &str| {
@@ -1501,6 +1796,161 @@ mod tests {
         );
         let (url, _) = stub::serve(handler).await;
         assert!(adapter_for_tests().discover(request(&url)).await.is_err());
+    }
+
+    // --- a scan that remembers and may stop short ---------------------------
+
+    fn wallet_logs() -> (Value, Value) {
+        (
+            fixture_value(include_str!("fixtures/uniswap-v4/logs.incoming.json")),
+            fixture_value(include_str!("fixtures/uniswap-v4/logs.outgoing.json")),
+        )
+    }
+
+    fn ids(found: &Discovery) -> Vec<&str> {
+        found.keys.iter().map(|key| key.id.as_str()).collect()
+    }
+
+    #[tokio::test]
+    async fn a_second_pass_reads_only_the_blocks_that_are_new() {
+        let latest = Arc::new(AtomicU64::new(25_000));
+        let (incoming, outgoing) = wallet_logs();
+        let (spans, handler) = log_node_at(Arc::clone(&latest), 2, u64::MAX, incoming, outgoing);
+        let (url, _) = stub::serve(handler).await;
+        let adapter = adapter_for_tests();
+
+        let first = adapter
+            .discover_scan(request(&url))
+            .await
+            .expect("a first pass");
+        assert!(first.complete);
+        assert_eq!(ids(&first), vec!["11", "22"]);
+        let memory = first.memory.clone().expect("the scan left a memory");
+        assert_eq!(
+            spans.lock().expect("log").len(),
+            6,
+            "three windows, two filters"
+        );
+        spans.lock().expect("log").clear();
+
+        latest.store(25_500, Ordering::SeqCst);
+        let second = adapter
+            .discover_scan(request_with(&url, Some(&memory)))
+            .await
+            .expect("a second pass");
+        assert!(second.complete);
+        assert_eq!(ids(&second), vec!["11", "22"], "what was found is not lost");
+        let asked = spans.lock().expect("log").clone();
+        assert_eq!(asked.len(), 2, "one window, two filters: {asked:?}");
+        assert!(
+            asked
+                .iter()
+                .all(|(from, to)| *from > 24_000 && *to == 25_500),
+            "only the newest blocks: {asked:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_position_older_than_the_window_is_a_partial_answer_and_not_an_error() {
+        // balanceOf says 2; one window per pass reaches only token 11.
+        let (incoming, outgoing) = wallet_logs();
+        let (_, handler) = log_node(2, u64::MAX, incoming, outgoing);
+        let (url, _) = stub::serve(handler).await;
+        let adapter = adapter_with_windows(1);
+
+        let found = adapter
+            .discover_scan(request(&url))
+            .await
+            .expect("a partial answer is an answer");
+        assert!(!found.complete, "the history was not all seen");
+        assert_eq!(ids(&found), vec!["11"], "what was seen is still returned");
+        assert!(found.memory.is_some(), "and the scan remembers where it is");
+        // The plain `discover` has no way to say "partial": it must not
+        // return a short list as if it were whole (ADR-02).
+        assert!(adapter.discover(request(&url)).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn the_next_pass_goes_on_below_where_the_last_one_stopped() {
+        let (incoming, outgoing) = wallet_logs();
+        let (spans, handler) = log_node(2, u64::MAX, incoming, outgoing);
+        let (url, _) = stub::serve(handler).await;
+        let adapter = adapter_with_windows(2);
+
+        // 25 000-15 001 and 15 000-5 001: token 22 (block 3000) is below.
+        let first = adapter
+            .discover_scan(request(&url))
+            .await
+            .expect("a first pass");
+        assert!(!first.complete);
+        assert_eq!(ids(&first), vec!["11"]);
+        let memory = first.memory.expect("a memory");
+        spans.lock().expect("log").clear();
+
+        let second = adapter
+            .discover_scan(request_with(&url, Some(&memory)))
+            .await
+            .expect("a second pass");
+        assert!(second.complete, "the history now reaches the start");
+        assert_eq!(ids(&second), vec!["11", "22"], "token 11 was not forgotten");
+        let asked = spans.lock().expect("log").clone();
+        assert!(
+            asked
+                .iter()
+                .all(|(from, to)| *to <= 5_000 || *from > 24_000),
+            "nothing between 5 001 and the new blocks is read again: {asked:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_memory_that_cannot_be_used_is_ignored() {
+        let (incoming, outgoing) = wallet_logs();
+        let (_, handler) = log_node(2, u64::MAX, incoming, outgoing);
+        let (url, _) = stub::serve(handler).await;
+        for memory in ["not json", "{\"v\":99}", ""] {
+            let found = adapter_for_tests()
+                .discover_scan(request_with(&url, Some(memory)))
+                .await
+                .expect("a full scan instead");
+            assert!(found.complete);
+            assert_eq!(ids(&found), vec!["11", "22"], "memory {memory:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_memory_that_disagrees_with_balance_of_is_dropped_and_the_scan_redone() {
+        // The first pass saw tokens 11 and 22. Later the node says the
+        // wallet holds one (22 was a reorged log): the memory is wrong, and
+        // a fresh scan is the answer, not an error that would repeat.
+        let latest = Arc::new(AtomicU64::new(25_000));
+        let (incoming, outgoing) = wallet_logs();
+        let (_, handler) = log_node_at(Arc::clone(&latest), 2, u64::MAX, incoming, outgoing);
+        let (url, _) = stub::serve(handler).await;
+        let memory = adapter_for_tests()
+            .discover_scan(request(&url))
+            .await
+            .expect("a first pass")
+            .memory
+            .expect("a memory");
+
+        let (incoming, outgoing) = wallet_logs();
+        let incoming = Value::Array(
+            incoming
+                .as_array()
+                .expect("logs")
+                .iter()
+                .filter(|log| log["blockNumber"] != "0xbb8")
+                .cloned()
+                .collect(),
+        );
+        let (_, handler) = log_node_at(latest, 1, u64::MAX, incoming, outgoing);
+        let (url, _) = stub::serve(handler).await;
+        let found = adapter_for_tests()
+            .discover_scan(request_with(&url, Some(&memory)))
+            .await
+            .expect("a fresh scan");
+        assert!(found.complete);
+        assert_eq!(ids(&found), vec!["11"]);
     }
 
     #[tokio::test]

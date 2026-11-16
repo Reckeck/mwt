@@ -24,6 +24,8 @@
 //!   nothing new is skipped, so a refresh of a quiet address costs a few
 //!   requests instead of the whole history.
 
+use std::collections::BTreeMap;
+
 use super::super::UnlockedVault;
 use super::recompute::CryptoBatch;
 use crate::cryptotrack::sources::evm::{Cursor, RawAsset, SOURCE_ID, SourceBatch, Stream};
@@ -71,6 +73,7 @@ impl UnlockedVault {
                         .filter(|record| record.cursor.is_none())
                         .map(|record| iso_to_millis(&record.updated_at)),
                     tokens: held,
+                    protocol_memory: self.crypto_protocol_memory(&account.id),
                 }
             })
             .collect()
@@ -82,6 +85,68 @@ impl UnlockedVault {
             .crypto_cursors
             .iter()
             .find(|record| record.id == id)
+    }
+
+    /// What the protocol adapters left for themselves, by protocol id.
+    fn crypto_protocol_memory(&self, account_id: &str) -> BTreeMap<String, String> {
+        let prefix = memory_id(account_id, "");
+        self.doc
+            .crypto_cursors
+            .iter()
+            .filter(|record| record.source == PROTOCOL_SOURCE && record.account_id == account_id)
+            .filter_map(|record| {
+                let protocol = record.id.strip_prefix(&prefix)?;
+                Some((protocol.to_string(), record.cursor.clone()?))
+            })
+            .collect()
+    }
+
+    /// Keep what the protocol adapters want to remember about an account
+    /// (`None` forgets), beside the source cursors and as local as they are:
+    /// a block a scan has reached names this device's own reading. Saves
+    /// only when something differs.
+    pub fn crypto_remember_protocols(
+        &mut self,
+        account_id: &str,
+        memory: &[(String, Option<String>)],
+    ) -> Result<()> {
+        let mut changed = false;
+        for (protocol, state) in memory {
+            let id = memory_id(account_id, protocol);
+            let slot = self
+                .doc
+                .crypto_cursors
+                .iter()
+                .position(|record| record.id == id);
+            match (slot, state) {
+                (Some(at), Some(text)) => {
+                    if self.doc.crypto_cursors[at].cursor.as_deref() != Some(text) {
+                        self.doc.crypto_cursors[at].cursor = Some(text.clone());
+                        self.doc.crypto_cursors[at].updated_at = now_iso();
+                        changed = true;
+                    }
+                }
+                (None, Some(text)) => {
+                    self.doc.crypto_cursors.push(CryptoCursor {
+                        id,
+                        source: PROTOCOL_SOURCE.to_string(),
+                        account_id: account_id.to_string(),
+                        cursor: Some(text.clone()),
+                        updated_at: now_iso(),
+                    });
+                    changed = true;
+                }
+                (Some(at), None) => {
+                    self.doc.crypto_cursors.remove(at);
+                    changed = true;
+                }
+                (None, None) => {}
+            }
+        }
+        if changed {
+            self.persist()?;
+        }
+        Ok(())
     }
 
     fn crypto_set_cursor(&mut self, account_id: &str, cursor: Option<String>) {
@@ -200,6 +265,14 @@ impl UnlockedVault {
 
 fn cursor_id(account_id: &str) -> String {
     format!("{SOURCE_ID}|{account_id}")
+}
+
+/// The `source` of the records that hold an adapter's memory, apart from the
+/// source cursors (their id never starts with `protocol|`).
+const PROTOCOL_SOURCE: &str = "protocol";
+
+fn memory_id(account_id: &str, protocol: &str) -> String {
+    format!("{PROTOCOL_SOURCE}|{account_id}|{protocol}")
 }
 
 /// The lists of events; the held tokens are a state, not a history.
@@ -356,6 +429,53 @@ mod tests {
             .crypto_apply_pages(&pages(false, false), &page(3, Some(more.clone())))
             .unwrap();
         assert_eq!(again.next_cursor, Some(more));
+    }
+
+    #[test]
+    fn an_adapters_memory_is_kept_per_account_and_protocol_and_leaves_the_cursor_alone() {
+        let (_dir, mut vault) = empty_vault();
+        vault.doc.crypto_accounts = vec![
+            account("acc-1", Chain::Ethereum),
+            account("acc-2", Chain::Ethereum),
+        ];
+        vault
+            .crypto_apply_pages(&pages(true, false), &page(1, None))
+            .unwrap();
+        let remember = |vault: &mut UnlockedVault, account: &str, text: Option<&str>| {
+            vault
+                .crypto_remember_protocols(
+                    account,
+                    &[("uniswap-v4".to_string(), text.map(str::to_string))],
+                )
+                .unwrap();
+        };
+
+        remember(&mut vault, "acc-1", Some("scan-1"));
+        remember(&mut vault, "acc-2", Some("scan-2"));
+        let targets = vault.crypto_sync_targets();
+        assert_eq!(targets[0].protocol_memory["uniswap-v4"], "scan-1");
+        assert_eq!(targets[1].protocol_memory["uniswap-v4"], "scan-2");
+        assert!(
+            targets[0].refresh,
+            "the source cursor is still the finished one"
+        );
+        assert_eq!(targets[0].cursor, None);
+
+        remember(&mut vault, "acc-1", Some("scan-1b"));
+        let records = vault.doc.crypto_cursors.len();
+        assert_eq!(
+            vault.crypto_sync_targets()[0].protocol_memory["uniswap-v4"],
+            "scan-1b",
+            "an update replaces, it does not add a record"
+        );
+        remember(&mut vault, "acc-1", None);
+        assert!(vault.crypto_sync_targets()[0].protocol_memory.is_empty());
+        assert_eq!(vault.doc.crypto_cursors.len(), records - 1);
+        assert_eq!(
+            vault.crypto_sync_targets()[1].protocol_memory.len(),
+            1,
+            "another account's memory is not touched"
+        );
     }
 
     #[test]
