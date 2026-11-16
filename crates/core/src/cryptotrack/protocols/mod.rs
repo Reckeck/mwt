@@ -71,7 +71,8 @@ pub use fees::{
 };
 pub use node::{Answer, Node};
 pub use position::{
-    AssetAmount, PositionKey, PositionKind, PositionReading, PositionStatus, is_closed, kind_of,
+    AssetAmount, PositionKey, PositionKind, PositionReading, PositionStatus, ProtocolReview,
+    is_closed, kind_of,
 };
 pub use wide::U256;
 

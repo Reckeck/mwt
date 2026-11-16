@@ -5,7 +5,7 @@
 //! operations, stored legs, prices — and come out the same.
 
 use super::*;
-use crate::cryptotrack::protocols::{FeeReading, PositionKey, PositionKind};
+use crate::cryptotrack::protocols::{FeeReading, PositionKey, PositionKind, ProtocolReview};
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::{
     CryptoAccount, CryptoFee, CryptoPricePoint, CryptoToken, TokenId, TokenVerdict, TrackingRef,
@@ -231,7 +231,7 @@ fn a_supply_reports_what_it_cost_what_it_accrued_and_its_rate() {
         FeeReading::none_earned(),
     );
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[deposit])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[deposit], &[])
         .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
@@ -287,7 +287,7 @@ fn a_debt_position_is_the_collateral_minus_the_loan_and_has_no_loss() {
         FeeReading::none_earned(),
     );
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[deposit])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[deposit], &[])
         .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
@@ -356,7 +356,7 @@ fn pool_vault() -> (
         },
     );
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[mint, collect])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[mint, collect], &[])
         .expect("the reading is stored");
     (dir, vault, key, live)
 }
@@ -472,7 +472,7 @@ fn a_position_whose_token_has_no_price_shows_a_dash_and_not_a_zero() {
         FeeReading::none_earned(),
     );
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[deposit])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[deposit], &[])
         .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
@@ -507,7 +507,7 @@ fn a_position_without_a_single_stored_operation_shows_a_dash_and_not_a_zero() {
         FeeReading::none_earned(),
     );
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
         .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
@@ -554,7 +554,7 @@ fn a_pool_without_a_stored_history_shows_a_dash_for_the_loss_against_holding() {
         FeeReading::none_earned(),
     );
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
         .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
@@ -608,7 +608,7 @@ fn a_closed_position_is_frozen_and_adds_nothing_to_the_value() {
         FeeReading::none_earned(),
     );
     vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[deposit, exit])
+        .crypto_apply_positions(ACCOUNT, &[live], &[deposit, exit], &[])
         .expect("the reading is stored");
 
     // Read without a live reading: a closed position's numbers must stand on
@@ -691,7 +691,7 @@ fn a_position_is_not_counted_twice_against_the_receipt_token_on_the_wallet() {
     from_the_node.tracking = ids::address_ref(Chain::Ethereum, ME);
     from_the_node.legs[0].counterparty = None;
     vault
-        .crypto_apply_positions(ACCOUNT, &[], &[came_in, deposit, from_the_node])
+        .crypto_apply_positions(ACCOUNT, &[], &[came_in, deposit, from_the_node], &[])
         .expect("the operations are stored");
 
     // The receipt is recognized from the stored operations alone, so a device
@@ -745,7 +745,7 @@ fn a_position_read_without_a_single_operation_still_counts_in_the_capital() {
         )
     };
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
         .expect("the reading is stored");
 
     let held: Vec<(String, Amount)> = vault
@@ -772,7 +772,7 @@ fn a_position_read_without_a_single_operation_still_counts_in_the_capital() {
     // A second reading of the same position replaces it instead of adding to
     // it: the capital follows the chain, it does not accumulate passes.
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
         .expect("the reading is stored again");
     assert_eq!(
         vault
@@ -798,7 +798,7 @@ fn a_position_read_without_a_single_operation_still_counts_in_the_capital() {
         )
     };
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&borrowed), &[])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&borrowed), &[], &[])
         .expect("the reading is stored");
     let symbols: Vec<String> = vault
         .doc
@@ -832,7 +832,7 @@ fn a_position_without_a_history_learns_its_receipt_from_the_adapter_and_the_tabl
         )
     };
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
         .expect("the reading is stored");
 
     let receipts = vault.crypto_position_receipts();
@@ -882,7 +882,7 @@ fn applying_a_reading_stores_the_legs_and_nothing_derived() {
         },
     );
     let applied = vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
         .expect("the reading is stored");
     assert_eq!(applied.added, 1);
     assert_eq!(applied.rewritten, 0);
@@ -891,7 +891,7 @@ fn applying_a_reading_stores_the_legs_and_nothing_derived() {
 
     // A second pass of the same position rewrites the one record.
     let again = vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[])
+        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
         .expect("the reading is stored again");
     assert_eq!(again.added, 0);
     assert_eq!(again.rewritten, 1);
@@ -912,7 +912,7 @@ fn a_reading_of_another_account_is_not_stored() {
         )
     };
     let applied = vault
-        .crypto_apply_positions(ACCOUNT, &[stranger], &[])
+        .crypto_apply_positions(ACCOUNT, &[stranger], &[], &[])
         .expect("the pass stores nothing");
     assert_eq!(applied, CryptoPositionsApplied::default());
     assert!(vault.doc.crypto_positions.is_empty());
@@ -929,7 +929,7 @@ fn a_position_survives_a_save_and_a_reopen() {
         FeeReading::none_earned(),
     );
     vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[])
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
         .expect("the reading is stored");
     vault.flush_pending().expect("the write lands");
     let path = vault.path.clone();
@@ -937,4 +937,174 @@ fn a_position_survives_a_save_and_a_reopen() {
     let reopened = UnlockedVault::open(path, "pw").expect("the vault reopens");
     assert_eq!(reopened.doc.crypto_positions, vec![live.stored()]);
     let _ = dir;
+}
+
+// -- a position the protocol no longer reports ----------------------------------
+
+fn supply_reading() -> PositionReading {
+    reading(
+        &PositionKey::new("aave-v3", Chain::Ethereum, "usdc-reserve"),
+        PositionKind::Lending,
+        vec![leg(CryptoDirection::In, token(USDC), "1000")],
+        FeeReading::none_earned(),
+    )
+}
+
+/// What a successful discovery of `protocol` on `chain` left in `kept`.
+fn review(protocol: &str, chain: Chain, kept: &[&PositionReading], at: &str) -> ProtocolReview {
+    ProtocolReview {
+        protocol: protocol.to_string(),
+        chain,
+        kept: kept.iter().map(|live| live.key.record_id()).collect(),
+        read_at: at.to_string(),
+    }
+}
+
+#[test]
+fn a_position_the_protocol_no_longer_reports_is_closed_and_keeps_its_row() {
+    let (_dir, mut vault, _wallet) = followed();
+    let live = supply_reading();
+    vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
+        .expect("the supply is stored");
+
+    // The next pass: the protocol was asked, and lists nothing.
+    let gone = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
+    let applied = vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[gone])
+        .expect("the withdrawal is stored");
+
+    assert_eq!(applied.closed, 1);
+    assert_eq!(vault.doc.crypto_positions.len(), 1, "history is kept");
+    let stored = &vault.doc.crypto_positions[0];
+    assert_eq!(stored.id, live.key.record_id());
+    assert_eq!(stored.legs.len(), 1, "the legs stay, at zero");
+    assert!(stored.legs[0].amount.is_zero());
+    assert_eq!(stored.legs[0].asset, token(USDC));
+    assert_eq!(stored.updated_at, "2026-05-14T09:00:00Z");
+    let row = only(&vault, &[]);
+    assert_eq!(row.status, PositionStatus::Closed);
+}
+
+#[test]
+fn a_protocol_that_was_not_reviewed_leaves_its_positions_alone() {
+    // Aave refused (it has no review), Uniswap answered with nothing: the
+    // supply says nothing about either.
+    let (_dir, mut vault, _wallet) = followed();
+    let live = supply_reading();
+    vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
+        .expect("the supply is stored");
+    let other = review("uniswap-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
+    let applied = vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[other])
+        .expect("nothing to change");
+    assert_eq!(applied, CryptoPositionsApplied::default());
+    assert_eq!(vault.doc.crypto_positions, vec![live.stored()]);
+}
+
+#[test]
+fn a_position_the_review_found_but_could_not_read_is_not_closed() {
+    let (_dir, mut vault, _wallet) = followed();
+    let live = supply_reading();
+    vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
+        .expect("the supply is stored");
+    let found = review("aave-v3", Chain::Ethereum, &[&live], "2026-05-14T09:00:00Z");
+    let applied = vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[found])
+        .expect("nothing to change");
+    assert_eq!(applied, CryptoPositionsApplied::default());
+    assert_eq!(vault.doc.crypto_positions, vec![live.stored()]);
+}
+
+#[test]
+fn a_review_closes_only_its_own_account_and_network() {
+    let (_dir, mut vault, _wallet) = followed();
+    let live = supply_reading();
+    // Another followed address, another reserve of the same protocol: the
+    // review of this account has no say over it.
+    let mut elsewhere = reading(
+        &PositionKey::new("aave-v3", Chain::Ethereum, "weth-reserve"),
+        PositionKind::Lending,
+        vec![leg(CryptoDirection::In, ether(), "3")],
+        FeeReading::none_earned(),
+    )
+    .stored();
+    elsewhere.account_id = "cacc-elsewhere".into();
+    vault.doc.crypto_positions.push(elsewhere.clone());
+    vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
+        .expect("the supply is stored");
+
+    // Same protocol, another network: no say over an Ethereum position.
+    let base = review("aave-v3", Chain::Base, &[], "2026-05-14T09:00:00Z");
+    let none = vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[base])
+        .expect("nothing to change");
+    assert_eq!(none, CryptoPositionsApplied::default());
+
+    // The right network closes this account's position and not the other's.
+    let right = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
+    let applied = vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[right])
+        .expect("the withdrawal is stored");
+    assert_eq!(applied.closed, 1);
+    let untouched = vault
+        .doc
+        .crypto_positions
+        .iter()
+        .find(|have| have.account_id == "cacc-elsewhere")
+        .expect("the other account's row is still there");
+    assert_eq!(untouched, &elsewhere);
+}
+
+#[test]
+fn a_closed_position_is_not_rewritten_by_the_next_pass() {
+    let (_dir, mut vault, _wallet) = followed();
+    let live = supply_reading();
+    vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
+        .expect("the supply is stored");
+    let first = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
+    vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[first])
+        .expect("closed");
+    let again = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:15:00Z");
+    let applied = vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[again])
+        .expect("nothing to change");
+    assert_eq!(applied, CryptoPositionsApplied::default());
+    assert_eq!(
+        vault.doc.crypto_positions[0].updated_at, "2026-05-14T09:00:00Z",
+        "the close is stamped once, not at every pass"
+    );
+}
+
+#[test]
+fn a_closed_position_opens_again_when_the_protocol_reports_it() {
+    let (_dir, mut vault, _wallet) = followed();
+    let live = supply_reading();
+    vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
+        .expect("the supply is stored");
+    let gone = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
+    vault
+        .crypto_apply_positions(ACCOUNT, &[], &[], &[gone])
+        .expect("closed");
+
+    let back = reading(
+        &live.key,
+        PositionKind::Lending,
+        vec![leg(CryptoDirection::In, token(USDC), "250")],
+        FeeReading::none_earned(),
+    );
+    let kept = review("aave-v3", Chain::Ethereum, &[&back], "2026-05-15T09:00:00Z");
+    let applied = vault
+        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&back), &[], &[kept])
+        .expect("reopened");
+    assert_eq!(applied.rewritten, 1);
+    assert_eq!(applied.closed, 0);
+    assert_eq!(vault.doc.crypto_positions, vec![back.stored()]);
+    assert_eq!(only(&vault, &[]).status, PositionStatus::Open);
 }
