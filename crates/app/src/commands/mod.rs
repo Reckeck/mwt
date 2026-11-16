@@ -8,6 +8,7 @@ pub mod auth;
 pub mod calc;
 pub mod categories;
 pub mod contacts;
+pub mod cryptotrack;
 pub mod enrichment;
 pub mod exchange;
 pub mod losses;

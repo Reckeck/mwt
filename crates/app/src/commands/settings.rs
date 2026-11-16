@@ -41,7 +41,7 @@ fn editor_command() -> String {
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
     let guard = require_vault(&state).map_err(err_to_string)?;
-    Ok(guard.as_ref().unwrap().doc.settings.clone())
+    Ok(guard.as_ref().unwrap().settings_view())
 }
 
 #[tauri::command]
