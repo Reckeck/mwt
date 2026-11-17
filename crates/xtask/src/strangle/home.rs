@@ -190,11 +190,12 @@ pub fn allowed_files(workspace: &Workspace, area: &Area) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::strangle::fixture::FIX_MAP;
 
     #[test]
     fn the_leaves_stems_resolve_to_their_target_structure_groups() {
-        let map = Map::parse(include_str!("../../strangle.toml")).unwrap();
-        let leaves = &map.areas[map.area_index("leaves").unwrap()];
+        let map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
+        let leaves = &map.areas[map.area_index("leaves").expect(FIX_MAP)];
         let groups: std::collections::BTreeMap<String, String> = homes(&map, leaves)
             .into_iter()
             .map(|home| (home.stem, home.group))
@@ -211,7 +212,7 @@ mod tests {
             ("losses", "household"),
             ("relations", "household"),
         ] {
-            assert_eq!(groups[stem], group, "{stem}");
+            assert_eq!(groups[stem], group, "{FIX_MAP}: {stem}");
         }
     }
 }

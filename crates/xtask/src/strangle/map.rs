@@ -274,6 +274,7 @@ impl Layout {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::strangle::fixture::FIX_MAP;
 
     const SMALL: &str = r#"
 service_dir = "svc"
@@ -307,12 +308,16 @@ regions = [{ file = "mod.rs", from = "// -- first", to = "// -- second" }]
 
     #[test]
     fn the_shipped_map_parses_and_names_are_unique() {
-        let map = Map::parse(include_str!("../../strangle.toml")).unwrap();
-        assert!(map.areas.iter().any(|area| area.name == "loyalty"));
+        let map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
+        assert!(
+            map.areas.iter().any(|area| area.name == "loyalty"),
+            "{FIX_MAP}"
+        );
         assert!(
             map.areas
                 .iter()
-                .all(|area| !area.task.is_empty() && !area.group.is_empty())
+                .all(|area| !area.task.is_empty() && !area.group.is_empty()),
+            "{FIX_MAP}: an area has no task or group"
         );
     }
 

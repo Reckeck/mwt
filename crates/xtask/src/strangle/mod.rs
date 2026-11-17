@@ -132,6 +132,10 @@ pub mod fixture {
 
     use super::*;
 
+    /// Prefix of every live-tree assertion message: the map is the file to fix.
+    pub const FIX_MAP: &str =
+        "the live tree and crates/xtask/strangle.toml disagree; fix strangle.toml";
+
     const MAP: &str = r#"
 service_dir = "crates/svc"
 command_dir = "crates/app"

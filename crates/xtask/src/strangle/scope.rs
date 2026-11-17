@@ -123,10 +123,11 @@ fn names_path(entry: &str, path: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::strangle::fixture::FIX_MAP;
 
     fn real_workspace() -> Workspace {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        Workspace::load(&root).unwrap()
+        Workspace::load(&root).expect(FIX_MAP)
     }
 
     fn changed(paths: &[&str]) -> Vec<String> {
@@ -147,7 +148,7 @@ mod tests {
             found
                 .iter()
                 .any(|line| line.contains("no single task allows every changed file")),
-            "{found:?}"
+            "{FIX_MAP}: {found:?}"
         );
     }
 
@@ -165,14 +166,14 @@ mod tests {
         );
         assert!(
             found.iter().any(|line| line.contains("no single task")),
-            "{found:?}"
+            "{FIX_MAP}: {found:?}"
         );
         let named = findings(
             &real_workspace(),
             &changed(&["crates/core/src/lib.rs", "crates/app/src/main.rs"]),
             Some("T26"),
         );
-        assert_eq!(named.len(), 2, "{named:?}");
+        assert_eq!(named.len(), 2, "{FIX_MAP}: {named:?}");
     }
 
     #[test]
@@ -182,16 +183,16 @@ mod tests {
             &changed(&["crates/core/src/lib.rs", "Cargo.lock", "README.md"]),
             Some("T6"),
         );
-        assert!(found.is_empty(), "{found:?}");
+        assert!(found.is_empty(), "{FIX_MAP}: {found:?}");
     }
 
     #[test]
     fn a_pilot_command_file_is_green_for_t13_and_red_for_an_area_task() {
         let file = changed(&["crates/app/src/commands/planning.rs"]);
         let owner = findings(&real_workspace(), &file, Some("T13"));
-        assert!(owner.is_empty(), "{owner:?}");
+        assert!(owner.is_empty(), "{FIX_MAP}: {owner:?}");
         let other = findings(&real_workspace(), &file, Some("T26"));
-        assert_eq!(other.len(), 1, "{other:?}");
+        assert_eq!(other.len(), 1, "{FIX_MAP}: {other:?}");
     }
 
     #[test]
@@ -201,31 +202,31 @@ mod tests {
             &changed(&["crates/core/src/service/loyalty.rs"]),
             None,
         );
-        assert!(found.is_empty(), "{found:?}");
+        assert!(found.is_empty(), "{FIX_MAP}: {found:?}");
     }
 
     #[test]
     fn an_extra_stub_is_green_for_its_task_and_red_for_another() {
         let file = changed(&["crates/core/src/usecases/react.rs"]);
         let owner = findings(&real_workspace(), &file, Some("T45"));
-        assert!(owner.is_empty(), "{owner:?}");
+        assert!(owner.is_empty(), "{FIX_MAP}: {owner:?}");
         let other = findings(&real_workspace(), &file, Some("T26"));
-        assert_eq!(other.len(), 1, "{other:?}");
+        assert_eq!(other.len(), 1, "{FIX_MAP}: {other:?}");
     }
 
     #[test]
     fn a_directory_stub_owns_its_files() {
         let file = changed(&["crates/core/src/cryptotrack/service/positions.rs"]);
         let found = findings(&real_workspace(), &file, Some("T47"));
-        assert!(found.is_empty(), "{found:?}");
+        assert!(found.is_empty(), "{FIX_MAP}: {found:?}");
     }
 
     #[test]
     fn money_tree_is_owned_by_the_t8_foundation() {
         let file = changed(&["crates/core/src/money/tree.rs"]);
         let owner = findings(&real_workspace(), &file, Some("T8"));
-        assert!(owner.is_empty(), "{owner:?}");
+        assert!(owner.is_empty(), "{FIX_MAP}: {owner:?}");
         let other = findings(&real_workspace(), &file, Some("T26"));
-        assert_eq!(other.len(), 1, "{other:?}");
+        assert_eq!(other.len(), 1, "{FIX_MAP}: {other:?}");
     }
 }
