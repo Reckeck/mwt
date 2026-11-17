@@ -4,7 +4,21 @@
 /** Installed once per document: layout shifts and long tasks, readable and resettable. */
 export const INSTALL_OBSERVERS = `
   if (window.__layout) return true
-  window.__layout = { cls: 0, shifts: [], long: [] }
+  window.__layout = { cls: 0, shifts: [], details: [], long: [], navAt: 0 }
+  // Where a shift came from: up to 3 sources, each with up to 3 ancestors, both rects, ms since the navigation.
+  const path = (node) => {
+    const parts = []
+    for (let el = node; el && el.nodeType === 1 && parts.length < 4; el = el.parentElement) {
+      const cls = String(el.className?.baseVal ?? el.className ?? '').trim().split(/\\s+/).filter(Boolean).slice(0, 3).join('.')
+      const data = [...el.attributes].filter((attr) => attr.name.startsWith('data-')).slice(0, 2).map((attr) => '[' + attr.name + (attr.value ? '=' + attr.value.slice(0, 20) : '') + ']').join('')
+      parts.push(el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (cls ? '.' + cls : '') + data)
+    }
+    return parts.reverse().join(' > ')
+  }
+  const box = (rect) => '[' + [rect.x, rect.y, rect.width, rect.height].map((value) => Math.round(value)).join(',') + ']'
+  const describeShift = (entry) => (entry.sources ?? []).slice(0, 3).map((source) =>
+    'shift source +' + Math.round(entry.startTime - window.__layout.navAt) + 'ms ' + entry.value.toFixed(3) + ' ' + path(source.node) +
+    ' from ' + box(source.previousRect) + ' to ' + box(source.currentRect))
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       if (entry.hadRecentInput) continue
@@ -12,6 +26,7 @@ export const INSTALL_OBSERVERS = `
       const node = entry.sources?.[0]?.node
       const what = node && node.nodeType === 1 ? node.tagName.toLowerCase() + '.' + String(node.className).trim().split(/\\s+/).slice(0, 3).join('.') : '?'
       window.__layout.shifts.push(what + ' ' + entry.value.toFixed(3))
+      window.__layout.details.push(...describeShift(entry))
     }
   }).observe({ type: 'layout-shift', buffered: true })
   try {
@@ -22,7 +37,7 @@ export const INSTALL_OBSERVERS = `
   return true
 `
 
-export const RESET_OBSERVERS = `window.__layout.cls = 0; window.__layout.shifts = []; window.__layout.long = []; return true`
+export const RESET_OBSERVERS = `window.__layout.cls = 0; window.__layout.shifts = []; window.__layout.details = []; window.__layout.long = []; return true`
 export const READ_OBSERVERS = `return window.__layout`
 
 /** A short, stable name for an element in a report. */

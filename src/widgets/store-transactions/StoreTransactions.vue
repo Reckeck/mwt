@@ -13,6 +13,7 @@ import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
 import { storeTxFilter, txFilterToQuery } from '@/shared/lib/tx-filter'
+import { useTxContextPending } from '@/shared/lib/tx-context'
 
 import { openTxDetails } from '@/shared/lib/tx-details'
 
@@ -38,6 +39,8 @@ watch(
  */
 const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioSummary>('get_summary') })
 const { query: txs, rows, total } = useTxPages(filter)
+/** The names in the rows (wallets, categories, contacts, attachments) are final in the first frame too. */
+const namesPending = useTxContextPending()
 
 const openDetails = openTxDetails
 
@@ -63,7 +66,7 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
       </div>
     </template>
     <SectionState
-      :loading="txs.isPending.value || summary.isPending.value"
+      :loading="txs.isPending.value || summary.isPending.value || namesPending"
       :error="txs.error.value"
       :empty="!rows.length"
       :empty-title="t('filter.empty')"
