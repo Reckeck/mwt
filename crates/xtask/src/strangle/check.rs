@@ -5,8 +5,12 @@
 //! 3. no `persist()` call is left in the area's files;
 //! 4. the area's test names are the baseline's;
 //! 5. (`--diff <base>`) the changed files are inside the task's allowed set.
+//!
+//! `check <area>` runs every rule on that area. `check --all` runs rules 1-4 only on the areas that
+//! have moved (a shim with the forward markers, `stubs = true`) and rule 5 once, against the union
+//! of the allowed sets of all areas: it is the CI gate, so an area that has not moved is not red.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::process::Command;
 
@@ -17,7 +21,7 @@ use syn::{Block, Expr, Stmt};
 
 use super::Workspace;
 use super::baseline::{self, AreaBaseline, Baseline, production_methods};
-use super::forward::forwarded_names;
+use super::forward::forwarded_entries;
 use super::home::{allowed_files, area_files, homes};
 use super::map::Area;
 
@@ -26,10 +30,10 @@ pub struct CheckArgs {
     /// One area of `strangle.toml`.
     #[arg(required_unless_present_any = ["all", "write_baseline"])]
     pub area: Option<String>,
-    /// Every area.
+    /// Every area that has moved.
     #[arg(long, conflicts_with = "area")]
     pub all: bool,
-    /// Also fail when a file outside the area's allowed set changed since this revision (jj).
+    /// Also fail when a file outside the allowed set changed since this revision (`git diff`).
     #[arg(long, value_name = "BASE", conflicts_with = "write_baseline")]
     pub diff: Option<String>,
     /// Write `baseline.json` from the tree as it is now (once, before the areas move).
@@ -56,21 +60,13 @@ pub fn run(root: &Path, args: &CheckArgs) -> Result<()> {
         .as_deref()
         .map(|base| changed_files(root, base))
         .transpose()?;
-    let areas: Vec<&Area> = match &args.area {
-        Some(name) => vec![&workspace.map.areas[workspace.map.area_index(name)?]],
-        None => workspace.map.areas.iter().collect(),
-    };
-    let mut findings = Vec::new();
-    for area in areas {
-        let subject = Subject {
-            root,
-            workspace: &workspace,
-            area,
-            baseline: baseline.area(&area.name)?,
-            changed: changed.as_deref(),
-        };
-        findings.extend(check_area(&subject)?);
-    }
+    let findings = findings(
+        root,
+        &workspace,
+        &baseline,
+        args.area.as_deref(),
+        changed.as_deref(),
+    )?;
     if findings.is_empty() {
         println!("check: ok");
         return Ok(());
@@ -82,24 +78,71 @@ pub fn run(root: &Path, args: &CheckArgs) -> Result<()> {
     )
 }
 
+/// Every finding for one area (`only`) or for the moved areas, and rule 5 for the changed files.
+fn findings(
+    root: &Path,
+    workspace: &Workspace,
+    baseline: &Baseline,
+    only: Option<&str>,
+    changed: Option<&[String]>,
+) -> Result<Vec<String>> {
+    let areas: Vec<&Area> = match only {
+        Some(name) => vec![&workspace.map.areas[workspace.map.area_index(name)?]],
+        None => workspace
+            .map
+            .areas
+            .iter()
+            .filter(|area| has_moved(root, workspace, area))
+            .collect(),
+    };
+    let mut found = Vec::new();
+    for area in &areas {
+        let subject = Subject {
+            root,
+            workspace,
+            area,
+            baseline: baseline.area(&area.name)?,
+        };
+        found.extend(check_area(&subject)?);
+    }
+    if let Some(changed) = changed {
+        let (label, scope) = match only {
+            Some(name) => (name, areas),
+            None => ("all", workspace.map.areas.iter().collect()),
+        };
+        let allowed: BTreeSet<String> = scope
+            .iter()
+            .flat_map(|area| allowed_files(workspace, area))
+            .collect();
+        found.extend(outside_allowed(label, changed, &allowed));
+    }
+    Ok(found)
+}
+
+/// An area has moved when it gets stubs and one of its shims carries the forward markers.
+fn has_moved(root: &Path, workspace: &Workspace, area: &Area) -> bool {
+    area.stubs
+        && homes(&workspace.map, area).iter().any(|home| {
+            std::fs::read_to_string(root.join(home.shim()))
+                .is_ok_and(|text| forwarded_entries(&text).is_some())
+        })
+}
+
 /// What a rule looks at.
 struct Subject<'run> {
     root: &'run Path,
     workspace: &'run Workspace,
     area: &'run Area,
     baseline: &'run AreaBaseline,
-    /// Files changed since the base revision; `None` without `--diff`.
-    changed: Option<&'run [String]>,
 }
 
 type Rule = fn(&Subject) -> Result<Vec<String>>;
 
-const RULES: [(&str, Rule); 5] = [
+const RULES: [(&str, Rule); 4] = [
     ("parity", parity),
     ("logic", no_logic),
     ("persist", no_persist),
     ("tests", test_names),
-    ("files", allowed_set),
 ];
 
 /// Every finding of every rule, as `<area>: <rule>: <detail>`.
@@ -113,35 +156,47 @@ fn check_area(subject: &Subject) -> Result<Vec<String>> {
     Ok(findings)
 }
 
-/// Rule 1: the baseline methods and the forward entries are the same set.
+/// Rule 1: the baseline methods and the forward entries are the same set, with the same signatures.
 fn parity(subject: &Subject) -> Result<Vec<String>> {
-    let mut forwarded = BTreeSet::new();
+    let mut forwarded = BTreeMap::new();
     for home in homes(&subject.workspace.map, subject.area) {
         let path = subject.root.join(home.shim());
         if let Ok(text) = std::fs::read_to_string(&path) {
-            forwarded.extend(forwarded_names(&text).unwrap_or_default());
+            for entry in forwarded_entries(&text).unwrap_or_default() {
+                forwarded.insert(entry.name, entry.signature);
+            }
         }
     }
-    let wanted: BTreeSet<String> = subject
+    let wanted: BTreeMap<String, String> = subject
         .baseline
         .methods
         .iter()
-        .map(|method| method.name.clone())
+        .map(|method| (method.name.clone(), method.signature.clone()))
         .collect();
-    Ok(difference("not forwarded", &wanted, &forwarded)
+    let (wanted_names, forwarded_names) = (names(&wanted), names(&forwarded));
+    let differing = wanted.iter().filter_map(|(name, old)| {
+        let new = forwarded.get(name)?;
+        (old != new).then(|| format!("signature differs: {name}: {old} vs {new}"))
+    });
+    Ok(difference("not forwarded", &wanted_names, &forwarded_names)
         .into_iter()
         .chain(difference(
             "forwarded but not in the baseline",
-            &forwarded,
-            &wanted,
+            &forwarded_names,
+            &wanted_names,
         ))
+        .chain(differing)
         .collect())
+}
+
+fn names(entries: &BTreeMap<String, String>) -> BTreeSet<String> {
+    entries.keys().cloned().collect()
 }
 
 /// Rule 2: an `impl UnlockedVault` method may be left only as a plain delegate.
 fn no_logic(subject: &Subject) -> Result<Vec<String>> {
     let mut found = Vec::new();
-    for path in area_files(&subject.workspace.map, subject.area) {
+    for path in area_files(subject.workspace, subject.area) {
         let Ok(source) = std::fs::read_to_string(subject.root.join(&path)) else {
             continue;
         };
@@ -159,7 +214,7 @@ fn no_logic(subject: &Subject) -> Result<Vec<String>> {
 /// Rule 3: no `persist()` call outside tests.
 fn no_persist(subject: &Subject) -> Result<Vec<String>> {
     let mut found = Vec::new();
-    for path in area_files(&subject.workspace.map, subject.area) {
+    for path in area_files(subject.workspace, subject.area) {
         let Some(scanned) = subject.workspace.corpus.get(&path) else {
             continue;
         };
@@ -188,17 +243,13 @@ fn test_names(subject: &Subject) -> Result<Vec<String>> {
         .collect())
 }
 
-/// Rule 5: every changed file is one the area may change.
-fn allowed_set(subject: &Subject) -> Result<Vec<String>> {
-    let Some(changed) = subject.changed else {
-        return Ok(Vec::new());
-    };
-    let allowed = allowed_files(&subject.workspace.map, subject.area);
-    Ok(changed
+/// Rule 5: every changed file is one of the allowed set.
+fn outside_allowed(label: &str, changed: &[String], allowed: &BTreeSet<String>) -> Vec<String> {
+    changed
         .iter()
         .filter(|path| !allowed.contains(*path))
-        .map(|path| format!("{path} is outside the allowed set"))
-        .collect())
+        .map(|path| format!("{label}: files: {path} is outside the allowed set"))
+        .collect()
 }
 
 /// `<what>: <name>` for every name of `left` that `right` lacks.
@@ -244,16 +295,17 @@ impl<'ast> Visit<'ast> for ControlFlow {
     }
 }
 
-/// The files that differ from `base` in the working copy, by path from the repository root.
+/// The files changed from `base` to `HEAD`, by path from the repository root (`git` also reads a
+/// colocated jj repository).
 fn changed_files(root: &Path, base: &str) -> Result<Vec<String>> {
-    let output = Command::new("jj")
-        .args(["diff", "--name-only", "--from", base])
+    let output = Command::new("git")
+        .args(["diff", "--name-only", &format!("{base}...HEAD")])
         .current_dir(root)
         .output()
-        .context("run `jj diff`")?;
+        .context("run `git diff`")?;
     if !output.status.success() {
         bail!(
-            "jj diff: {}",
+            "git diff: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
@@ -267,25 +319,25 @@ fn changed_files(root: &Path, base: &str) -> Result<Vec<String>> {
 mod tests {
     use super::*;
     use crate::strangle::area_fixture::{
-        PURE, SCENARIO, SERVICE, TESTS, moved_tree, original_tree,
+        ORIGINAL, PURE, SCENARIO, SERVICE, TESTS, moved_files, moved_tree, original_tree,
     };
     use crate::strangle::fixture::TempTree;
+    use crate::strangle::map::MAP_FILE;
 
     /// The baseline of the original tree, then the findings on `after`.
-    fn findings(after: &TempTree, changed: Option<&[String]>) -> Vec<String> {
+    fn found_in(after: &TempTree, changed: Option<&[String]>) -> Vec<String> {
         let before = original_tree();
         let baseline =
             baseline::capture(before.root(), &Workspace::load(before.root()).unwrap()).unwrap();
         let workspace = Workspace::load(after.root()).unwrap();
-        let area = &workspace.map.areas[0];
-        let subject = Subject {
-            root: after.root(),
-            workspace: &workspace,
-            area,
-            baseline: baseline.area("loyalty").unwrap(),
+        findings(
+            after.root(),
+            &workspace,
+            &baseline,
+            Some("loyalty"),
             changed,
-        };
-        check_area(&subject).unwrap()
+        )
+        .unwrap()
     }
 
     fn broken(path: &str, from: &str, to: &str) -> Vec<String> {
@@ -297,14 +349,14 @@ mod tests {
                 text
             }
         });
-        findings(&tree, Some(&[]))
+        found_in(&tree, Some(&[]))
     }
 
     #[test]
     fn the_good_fixture_is_green() {
         let tree = moved_tree(|_, text| text);
         let changed = [SERVICE.to_string(), PURE.to_string(), SCENARIO.to_string()];
-        assert_eq!(findings(&tree, Some(&changed)), Vec::<String>::new());
+        assert_eq!(found_in(&tree, Some(&changed)), Vec::<String>::new());
     }
 
     #[test]
@@ -386,11 +438,11 @@ mod tests {
             "crates/core/src/service/mod.rs".to_string(),
         ];
         assert_eq!(
-            findings(&tree, Some(&changed)),
+            found_in(&tree, Some(&changed)),
             ["loyalty: files: crates/core/src/service/mod.rs is outside the allowed set"]
         );
         // Without `--diff` the rule does not look.
-        assert!(findings(&tree, None).is_empty());
+        assert!(found_in(&tree, None).is_empty());
     }
 
     #[test]
@@ -404,7 +456,6 @@ mod tests {
             workspace: &workspace,
             area,
             baseline: baseline.area("loyalty").unwrap(),
-            changed: None,
         };
         let found = check_area(&subject).unwrap();
         assert!(
@@ -419,6 +470,147 @@ mod tests {
             found
                 .iter()
                 .any(|line| line.contains("not forwarded: clash")),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn a_changed_signature_breaks_parity() {
+        let found = broken(
+            SERVICE,
+            "pub fn clash(&self, id: &str) -> bool",
+            "pub fn clash(&self, id: &String) -> bool",
+        );
+        assert_eq!(
+            found,
+            [
+                "loyalty: parity: signature differs: clash: pub fn clash(&self, id: &str) -> bool vs pub fn clash(&self, id: &String) -> bool"
+            ]
+        );
+    }
+
+    const DEEP_MAP: &str = r#"
+service_dir = "crates/core/src/service"
+command_dir = "crates/app/src"
+scan_dirs = ["crates/core/src"]
+
+[[area]]
+name = "loyalty"
+task = "T26"
+group = "household"
+context = "household"
+files = ["loyalty.rs"]
+
+[[area]]
+name = "pending"
+task = "T27"
+group = "household"
+context = "household"
+files = ["pending.rs"]
+
+[[area]]
+name = "deep"
+task = "T28"
+group = "household"
+context = "household"
+files = ["deep/"]
+
+[[area]]
+name = "vault_side"
+task = "phase-6"
+stubs = false
+group = "vault"
+context = "vault"
+files = ["vault.rs"]
+"#;
+
+    const UNMOVED: &str = "impl UnlockedVault {\n    pub fn p(&self) -> u8 {\n        self.persist();\n        1\n    }\n}\n";
+    const PENDING: &str = "crates/core/src/service/pending.rs";
+    const VAULT: &str = "crates/core/src/service/vault.rs";
+    const DEEP: &str = "crates/core/src/service/deep/inner.rs";
+    const DEEP_WITH_TEST: &str = "impl UnlockedVault {\n    pub fn d(&self) -> u8 {\n        1\n    }\n}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn deep_works() {}\n}\n";
+
+    /// Loyalty moved or not, plus an unmoved area, a phase-6 area and a directory area.
+    fn many_areas(moved: bool, deep: &str) -> TempTree {
+        let files: Vec<(&str, String)> = if moved {
+            moved_files()
+        } else {
+            vec![(SERVICE, ORIGINAL.to_string())]
+        };
+        let mut all: Vec<(&str, String)> = files
+            .into_iter()
+            .filter(|(path, _)| *path != MAP_FILE)
+            .collect();
+        all.extend([
+            (MAP_FILE, DEEP_MAP.to_string()),
+            (PENDING, UNMOVED.to_string()),
+            (VAULT, UNMOVED.to_string()),
+            (DEEP, deep.to_string()),
+        ]);
+        let borrowed: Vec<(&str, &str)> = all
+            .iter()
+            .map(|(path, text)| (*path, text.as_str()))
+            .collect();
+        TempTree::new(&borrowed)
+    }
+
+    fn baseline_of(tree: &TempTree) -> Baseline {
+        baseline::capture(tree.root(), &Workspace::load(tree.root()).unwrap()).unwrap()
+    }
+
+    fn all_findings(
+        tree: &TempTree,
+        baseline: &Baseline,
+        changed: Option<&[String]>,
+    ) -> Vec<String> {
+        let workspace = Workspace::load(tree.root()).unwrap();
+        findings(tree.root(), &workspace, baseline, None, changed).unwrap()
+    }
+
+    #[test]
+    fn all_skips_unmoved_and_phase_six_areas_and_checks_the_files_once() {
+        let baseline = baseline_of(&many_areas(false, DEEP_WITH_TEST));
+        let tree = many_areas(true, "");
+        // `deep` has no shim yet: skipped, even though its files lost their methods.
+        assert_eq!(
+            all_findings(&tree, &baseline, Some(&[])),
+            Vec::<String>::new()
+        );
+        let changed = [
+            PURE.to_string(),
+            PENDING.to_string(),
+            VAULT.to_string(),
+            "Cargo.lock".to_string(),
+            "README.md".to_string(),
+        ];
+        assert_eq!(
+            all_findings(&tree, &baseline, Some(&changed)),
+            [
+                "all: files: Cargo.lock is outside the allowed set",
+                "all: files: README.md is outside the allowed set"
+            ]
+        );
+        // Named on its own, the unmoved area is red.
+        let workspace = Workspace::load(tree.root()).unwrap();
+        let named = findings(tree.root(), &workspace, &baseline, Some("pending"), None).unwrap();
+        assert!(!named.is_empty());
+    }
+
+    #[test]
+    fn a_file_in_a_service_directory_is_part_of_the_area() {
+        let baseline = baseline_of(&many_areas(false, DEEP_WITH_TEST));
+        let area = baseline.area("deep").unwrap();
+        assert_eq!(area.methods.len(), 1);
+        assert_eq!(area.tests, ["deep_works"]);
+        // The test in the directory disappears: `deep` is red on its tests.
+        let tree = many_areas(
+            false,
+            "impl UnlockedVault {\n    pub fn d(&self) -> u8 {\n        1\n    }\n}\n",
+        );
+        let workspace = Workspace::load(tree.root()).unwrap();
+        let found = findings(tree.root(), &workspace, &baseline, Some("deep"), None).unwrap();
+        assert!(
+            found.contains(&"deep: tests: test missing: deep_works".to_string()),
             "{found:?}"
         );
     }

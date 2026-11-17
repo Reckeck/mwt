@@ -1,7 +1,7 @@
 //! The files a rewriting subcommand touches, held in memory: read on first use, edited, then either
 //! written (`write`) or only compared (`changed`, for `--check`). One home for "declare a module once".
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -15,6 +15,8 @@ struct Entry {
 pub struct FileSet {
     root: PathBuf,
     entries: BTreeMap<String, Entry>,
+    /// Paths to delete on `write`.
+    removed: BTreeSet<String>,
 }
 
 impl FileSet {
@@ -22,12 +24,15 @@ impl FileSet {
         Self {
             root: root.to_path_buf(),
             entries: BTreeMap::new(),
+            removed: BTreeSet::new(),
         }
     }
 
     pub fn exists(&mut self, path: &str) -> bool {
-        self.entry(path)
-            .is_ok_and(|entry| entry.original.is_some() || !entry.current.is_empty())
+        !self.removed.contains(path)
+            && self
+                .entry(path)
+                .is_ok_and(|entry| entry.original.is_some() || !entry.current.is_empty())
     }
 
     /// The current text; a missing file reads as empty.
@@ -37,6 +42,13 @@ impl FileSet {
 
     pub fn set(&mut self, path: &str, text: String) -> Result<()> {
         self.entry(path)?.current = text;
+        Ok(())
+    }
+
+    /// Deletes the file on `write`.
+    pub fn remove(&mut self, path: &str) -> Result<()> {
+        self.set(path, String::new())?;
+        self.removed.insert(path.to_string());
         Ok(())
     }
 
@@ -84,6 +96,10 @@ impl FileSet {
     pub fn write(&self) -> Result<()> {
         for path in self.changed() {
             let file = self.root.join(path);
+            if self.removed.contains(path) {
+                std::fs::remove_file(&file).with_context(|| format!("remove {path}"))?;
+                continue;
+            }
             if let Some(dir) = file.parent() {
                 std::fs::create_dir_all(dir)
                     .with_context(|| format!("create {}", dir.display()))?;
@@ -165,6 +181,17 @@ mod tests {
             .declare("missing.rs", "one", &lines(&["pub mod one;"]))
             .unwrap();
         assert_eq!(files.read("missing.rs").unwrap(), "pub mod one;\n");
+    }
+
+    #[test]
+    fn a_removed_file_is_deleted_on_write() {
+        let tree = TempTree::new(&[("a.rs", "x\n"), ("b.rs", "y\n")]);
+        let mut files = FileSet::new(tree.root());
+        files.remove("a.rs").unwrap();
+        assert!(!files.exists("a.rs"));
+        files.write().unwrap();
+        assert!(!tree.root().join("a.rs").exists());
+        assert!(tree.root().join("b.rs").exists());
     }
 
     #[test]

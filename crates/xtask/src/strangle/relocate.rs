@@ -8,7 +8,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use clap::Args;
 use proc_macro2::{Delimiter, Spacing, TokenStream, TokenTree};
-use syn::Visibility;
+use syn::{Item, Visibility};
 
 use super::fileset::FileSet;
 use super::forward::{FORWARD_BEGIN, FORWARD_END};
@@ -41,7 +41,12 @@ fn relocate(files: &mut FileSet, map: &Map, area: &str) -> Result<Vec<String>> {
     for home in homes(map, area) {
         let shim = home.shim();
         let source = files.read(&shim)?.to_string();
-        if source.is_empty() {
+        if source.is_empty() && files.exists(&home.directory_module()) {
+            bail!(
+                "{} is a directory module: move it by hand (`mod.rs` and its children) or give the stem a `{shim}` file",
+                home.directory_module()
+            );
+        } else if source.is_empty() {
             report.push(format!("{shim} is not a single file: skipped"));
         } else if source.contains(FORWARD_BEGIN) {
             report.push(format!("{shim} is a shim already: skipped"));
@@ -59,8 +64,41 @@ fn move_file(files: &mut FileSet, home: &Home, source: &str) -> Result<()> {
         bail!("{target} is not a placeholder stub: run `strangle scaffold` first");
     }
     let shim = shim_text(home, source)?;
-    files.set(&target, rewrite_paths(source, home)?)?;
+    for child in out_of_line_modules(home, source)? {
+        move_child(files, home, &child)?;
+    }
+    files.set(&target, rewrite_paths(source, home, 0)?)?;
     files.set(&home.shim(), shim)
+}
+
+/// The names of the `mod x;` declarations of the file (inline modules move with the text).
+fn out_of_line_modules(home: &Home, source: &str) -> Result<Vec<String>> {
+    let file = syn::parse_file(source).with_context(|| format!("parse {}", home.shim()))?;
+    Ok(file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Mod(node) if node.content.is_none() => Some(node.ident.to_string()),
+            _ => None,
+        })
+        .collect())
+}
+
+/// `service/<stem>/<child>.rs` to `<group>/<stem>/<child>.rs`; the child sits one module deeper.
+fn move_child(files: &mut FileSet, home: &Home, child: &str) -> Result<()> {
+    let (from, to) = (home.child_source(child), home.child_target(child));
+    let text = files.read(&from)?.to_string();
+    if text.is_empty() {
+        bail!(
+            "{}: `mod {child};` has no file {from} (a nested directory module: move it by hand)",
+            home.shim()
+        );
+    }
+    if files.exists(&to) {
+        bail!("{to} exists already: not overwritten");
+    }
+    files.set(&to, rewrite_paths(&text, home, 1)?)?;
+    files.remove(&from)
 }
 
 /// The shim: a doc line, the `pub use` of the public items, and the empty forward region.
@@ -87,8 +125,9 @@ fn shim_text(home: &Home, source: &str) -> Result<String> {
     Ok(text)
 }
 
-/// The source with `super::` and `crate::service::<stem>` paths rewritten for the new home.
-fn rewrite_paths(source: &str, home: &Home) -> Result<String> {
+/// The source with `super::` and `crate::service::<stem>` paths rewritten for the new home;
+/// `depth` is how many modules below the area's file the source sits (a child module: 1).
+fn rewrite_paths(source: &str, home: &Home, depth: usize) -> Result<String> {
     let tokens: TokenStream = source
         .parse()
         .map_err(|error| anyhow::anyhow!("tokenize {}: {error}", home.shim()))?;
@@ -97,7 +136,7 @@ fn rewrite_paths(source: &str, home: &Home) -> Result<String> {
         home,
         splices: Vec::new(),
     };
-    rewriter.walk(&tokens.into_iter().collect::<Vec<_>>(), 0)?;
+    rewriter.walk(&tokens.into_iter().collect::<Vec<_>>(), depth)?;
     Ok(source::apply(source, rewriter.splices))
 }
 
@@ -277,13 +316,67 @@ use super::loyalty::T;
 mod inner { use super::d; use super::super::e; fn f() { super::super::super::g; } }
 ";
         assert_eq!(
-            rewrite_paths(source, &homes[0]).unwrap(),
+            rewrite_paths(source, &homes[0], 0).unwrap(),
             "pub(super) fn a() { assert!(crate::service::b()); let _ = crate::c; }
 use crate::household::loyalty::T;
 mod inner { use super::d; use crate::service::e; fn f() { crate::g; } }
 "
         );
         let climbing = "fn a() { super::super::super::g; }";
-        assert!(rewrite_paths(climbing, &homes[0]).is_err());
+        assert!(rewrite_paths(climbing, &homes[0], 0).is_err());
+    }
+
+    #[test]
+    fn out_of_line_child_modules_move_next_to_the_pure_file() {
+        let tree = original_tree();
+        let with_child = format!("{ORIGINAL}\n#[cfg(test)]\nmod loyalty_tests;\n");
+        let child = "use super::*;\nuse super::super::golden;\n";
+        std::fs::write(tree.root().join(SERVICE), with_child).unwrap();
+        std::fs::create_dir_all(tree.root().join("crates/core/src/service/loyalty")).unwrap();
+        std::fs::write(
+            tree.root()
+                .join("crates/core/src/service/loyalty/loyalty_tests.rs"),
+            child,
+        )
+        .unwrap();
+        relocated(&tree).unwrap();
+        assert!(read(&tree, PURE).ends_with("#[cfg(test)]\nmod loyalty_tests;\n"));
+        assert_eq!(
+            read(&tree, "crates/core/src/household/loyalty/loyalty_tests.rs"),
+            "use super::*;\nuse crate::service::golden;\n"
+        );
+        assert!(
+            !tree
+                .root()
+                .join("crates/core/src/service/loyalty/loyalty_tests.rs")
+                .exists()
+        );
+    }
+
+    #[test]
+    fn a_child_module_without_a_file_is_reported_and_nothing_is_written() {
+        let tree = original_tree();
+        std::fs::write(
+            tree.root().join(SERVICE),
+            format!("{ORIGINAL}\nmod gone;\n"),
+        )
+        .unwrap();
+        let error = relocated(&tree).unwrap_err();
+        assert!(error.to_string().contains("mod gone;"), "{error}");
+        assert!(read(&tree, PURE).starts_with(PLACEHOLDER));
+    }
+
+    #[test]
+    fn a_directory_module_is_refused_by_name() {
+        let tree = original_tree();
+        std::fs::write(tree.root().join(SERVICE), "").unwrap();
+        std::fs::create_dir_all(tree.root().join("crates/core/src/service/loyalty")).unwrap();
+        std::fs::write(
+            tree.root().join("crates/core/src/service/loyalty/mod.rs"),
+            "mod a;\n",
+        )
+        .unwrap();
+        let error = relocated(&tree).unwrap_err();
+        assert!(error.to_string().contains("directory module"), "{error}");
     }
 }

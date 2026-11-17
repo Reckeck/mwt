@@ -5,6 +5,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use super::Workspace;
 use super::map::{Area, Map};
 use super::scaffold::stems;
 
@@ -56,6 +57,31 @@ impl Home {
         ]
     }
 
+    /// `service/<stem>/<child>.rs`: an out-of-line child module of the old file.
+    pub fn child_source(&self, child: &str) -> String {
+        format!("{}/{}/{child}.rs", self.service_dir, self.stem)
+    }
+
+    /// `service/<stem>/mod.rs`: the stem as a directory module.
+    pub fn directory_module(&self) -> String {
+        format!("{}/{}/mod.rs", self.service_dir, self.stem)
+    }
+
+    /// `<group>/<stem>/<child>.rs`: where a child module lands next to the pure file.
+    pub fn child_target(&self, child: &str) -> String {
+        format!("{}/{}/{}/{child}.rs", self.core_dir, self.group, self.stem)
+    }
+
+    /// The directories of the stem whose every file belongs to it: the children of the old file
+    /// and of the pure and scenario modules.
+    fn directories(&self) -> [String; 3] {
+        [
+            format!("{}/{}/", self.service_dir, self.stem),
+            format!("{}/{}/{}/", self.core_dir, self.group, self.stem),
+            format!("{}/usecases/{}/{}/", self.core_dir, self.context, self.stem),
+        ]
+    }
+
     /// `crate::<group>::<stem>`.
     pub fn pure_path(&self) -> String {
         format!("crate::{}::{}", self.group, self.stem)
@@ -88,18 +114,37 @@ pub fn homes(map: &Map, area: &Area) -> Vec<Home> {
         .collect()
 }
 
-/// Every file of every stem of an area, sorted.
-pub fn area_files(map: &Map, area: &Area) -> Vec<String> {
-    let mut files: Vec<String> = homes(map, area).iter().flat_map(Home::files).collect();
-    files.sort();
-    files.dedup();
-    files
+/// Every file of the area, sorted: the whole-file spans of the map (so the files under
+/// `service/<dir>/` too), the paths of each stem, and the scanned files in the stems' directories.
+pub fn area_files(workspace: &Workspace, area: &Area) -> Vec<String> {
+    let map = &workspace.map;
+    let index = map.area_index(&area.name).ok();
+    let mut files: BTreeSet<String> = workspace
+        .layout
+        .spans()
+        .iter()
+        .filter(|span| span.whole && Some(span.area) == index)
+        .map(|span| format!("{}/{}", map.service_dir, span.file))
+        .collect();
+    for home in homes(map, area) {
+        files.extend(home.files());
+        for directory in home.directories() {
+            files.extend(
+                workspace
+                    .corpus
+                    .under(&directory)
+                    .map(|(path, _)| path.to_string()),
+            );
+        }
+    }
+    files.into_iter().collect()
 }
 
 /// The files a task of the area may change (spec D5): the area files, its `ipc_contract` stub, and
 /// the shared files its regions cut from.
-pub fn allowed_files(map: &Map, area: &Area) -> BTreeSet<String> {
-    let mut allowed: BTreeSet<String> = area_files(map, area).into_iter().collect();
+pub fn allowed_files(workspace: &Workspace, area: &Area) -> BTreeSet<String> {
+    let map = &workspace.map;
+    let mut allowed: BTreeSet<String> = area_files(workspace, area).into_iter().collect();
     if area.ipc_contract {
         allowed.insert(format!("{}/ipc_contract/{}.rs", core_dir(map), area.name));
     }
@@ -109,4 +154,33 @@ pub fn allowed_files(map: &Map, area: &Area) -> BTreeSet<String> {
             .map(|region| format!("{}/{}", map.service_dir, region.file)),
     );
     allowed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_leaves_stems_resolve_to_their_target_structure_groups() {
+        let map = Map::parse(include_str!("../../strangle.toml")).unwrap();
+        let leaves = &map.areas[map.area_index("leaves").unwrap()];
+        let groups: std::collections::BTreeMap<String, String> = homes(&map, leaves)
+            .into_iter()
+            .map(|home| (home.stem, home.group))
+            .collect();
+        for (stem, group) in [
+            ("categories", "money"),
+            ("ledger", "money"),
+            ("validate", "money"),
+            ("store_months", "money"),
+            ("month_balance", "money"),
+            ("search", "money"),
+            ("envelopes", "planning"),
+            ("vehicle", "household"),
+            ("losses", "household"),
+            ("relations", "household"),
+        ] {
+            assert_eq!(groups[stem], group, "{stem}");
+        }
+    }
 }

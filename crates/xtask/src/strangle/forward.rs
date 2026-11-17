@@ -156,22 +156,44 @@ fn region_lines(lines: &[&str]) -> Option<(usize, usize)> {
     Some((begin, end))
 }
 
-/// The names of the methods the forward block of a shim delegates (none for a shim without markers).
-pub fn forwarded_names(shim: &str) -> Option<Vec<String>> {
+/// One entry of a forward block: the method name and its signature as one normalized line.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ForwardEntry {
+    pub name: String,
+    pub signature: String,
+}
+
+/// The entries of the forward block of a shim (none for a shim without markers). An entry is the
+/// `pub fn ...` lines up to the `=>` line that names its target.
+pub fn forwarded_entries(shim: &str) -> Option<Vec<ForwardEntry>> {
     let lines: Vec<&str> = shim.split_inclusive('\n').collect();
     let (begin, end) = region_lines(&lines)?;
-    Some(
-        lines[begin + 1..end]
-            .iter()
-            .filter_map(|line| {
-                let rest = line.trim().strip_prefix("pub ")?;
-                let rest = rest.strip_prefix("async ").unwrap_or(rest);
-                let name = rest.strip_prefix("fn ")?;
-                let end = name.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))?;
-                Some(name[..end].to_string())
-            })
-            .collect(),
-    )
+    let mut entries = Vec::new();
+    let mut open: Option<Vec<&str>> = None;
+    for line in lines[begin + 1..end].iter().map(|line| line.trim()) {
+        if line.starts_with("=>") {
+            entries.extend(open.take().and_then(|parts| entry_from(&parts)));
+        } else if let Some(parts) = open.as_mut() {
+            parts.push(line);
+        } else if line.starts_with("pub ") {
+            open = Some(vec![line]);
+        }
+    }
+    Some(entries)
+}
+
+fn entry_from(parts: &[&str]) -> Option<ForwardEntry> {
+    let signature = parts
+        .join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let after_fn = signature.split_once("fn ")?.1;
+    let end = after_fn.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))?;
+    Some(ForwardEntry {
+        name: after_fn[..end].to_string(),
+        signature,
+    })
 }
 
 #[cfg(test)]
@@ -274,10 +296,24 @@ pub fn a_test(doc: &VaultDoc) {}
     }
 
     #[test]
-    fn forwarded_names_reads_the_entries_back() {
+    fn forwarded_entries_reads_names_and_signatures_back() {
         let shim =
             std::fs::read_to_string(moved_tree(|_, text| text).root().join(SERVICE)).unwrap();
-        assert_eq!(forwarded_names(&shim).unwrap(), ["set_info", "clash"]);
-        assert_eq!(forwarded_names("pub fn x() {}"), None);
+        let entries = forwarded_entries(&shim).unwrap();
+        let listed: Vec<(&str, &str)> = entries
+            .iter()
+            .map(|entry| (entry.name.as_str(), entry.signature.as_str()))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                (
+                    "set_info",
+                    "pub fn set_info(&mut self, id: &str, info: Info) -> Result<Store>"
+                ),
+                ("clash", "pub fn clash(&self, id: &str) -> bool"),
+            ]
+        );
+        assert_eq!(forwarded_entries("pub fn x() {}"), None);
     }
 }

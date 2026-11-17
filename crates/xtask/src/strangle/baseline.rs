@@ -80,7 +80,7 @@ pub fn capture(root: &Path, workspace: &Workspace) -> Result<Baseline> {
 
 /// The names of the test functions in the files of the area.
 pub fn test_names(workspace: &Workspace, area: &Area) -> BTreeSet<String> {
-    area_files(&workspace.map, area)
+    area_files(workspace, area)
         .iter()
         .filter_map(|path| workspace.corpus.get(path))
         .flat_map(|scanned| scanned.facts.tests.iter())
@@ -91,7 +91,7 @@ pub fn test_names(workspace: &Workspace, area: &Area) -> BTreeSet<String> {
 /// `pub` methods of the production `impl UnlockedVault` blocks in the files of the area.
 fn public_methods(root: &Path, workspace: &Workspace, area: &Area) -> Result<Vec<BaselineMethod>> {
     let mut found = Vec::new();
-    for path in area_files(&workspace.map, area) {
+    for path in area_files(workspace, area) {
         if workspace.corpus.get(&path).is_none() {
             continue;
         }

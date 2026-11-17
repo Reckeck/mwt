@@ -28,7 +28,10 @@ files = [
     "vehicle.rs", "envelopes.rs", "categories.rs", "ledger.rs", "validate.rs",
     "store_months.rs", "month_balance.rs", "search.rs", "losses.rs", "relations.rs",
 ]
-homes = { envelopes = "planning" }
+homes = {
+    envelopes = "planning", categories = "money", ledger = "money", validate = "money",
+    store_months = "money", month_balance = "money", search = "money",
+}
 
 [[area]]
 name = "money_core"
