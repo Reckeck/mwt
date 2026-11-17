@@ -605,6 +605,7 @@ async fn poll_bybit_once(
             trade_core::model::vault::ImportSource::Auto,
         )
         .await
+        .map_err(String::from)
         {
             Ok(run) => run,
             Err(err)

@@ -9,12 +9,13 @@ use tauri_plugin_notification::{NotificationExt, PermissionState};
 use trade_core::model::notify::{NoticeCategory, NoticeRecord};
 use trade_core::service::{notice, notice_title};
 
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 /// Every notice shown so far, newest first.
 #[tauri::command]
-pub async fn list_notifications(state: State<'_, AppState>) -> Result<Vec<NoticeRecord>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn list_notifications(state: State<'_, AppState>) -> Result<Vec<NoticeRecord>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().notifications())
 }
 
@@ -23,18 +24,18 @@ pub async fn list_notifications(state: State<'_, AppState>) -> Result<Vec<Notice
 pub async fn mark_notifications_read(
     keys: Option<Vec<String>>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<(), IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .mark_notifications_read(keys.as_deref())
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Show a notice right now, to check that they come through.
 #[tauri::command]
-pub async fn send_test_notification(app: AppHandle) -> Result<(), String> {
+pub async fn send_test_notification(app: AppHandle) -> Result<(), IpcError> {
     crate::commands::sandbox::refuse_app(&app, "system notifications")?;
     let ru = crate::scheduler::russian(&app);
     let record = notice(
@@ -55,7 +56,7 @@ pub async fn send_test_notification(app: AppHandle) -> Result<(), String> {
 
 /// `granted`, `denied` or `prompt`: whether the system shows the app's notices.
 #[tauri::command]
-pub async fn notification_permission(app: AppHandle, request: bool) -> Result<String, String> {
+pub async fn notification_permission(app: AppHandle, request: bool) -> Result<String, IpcError> {
     let mut state = app
         .notification()
         .permission_state()
@@ -77,15 +78,18 @@ pub async fn notification_permission(app: AppHandle, request: bool) -> Result<St
 /// Whether the app starts with the system, hidden in the tray.
 #[cfg(desktop)]
 #[tauri::command]
-pub async fn get_autostart(app: AppHandle) -> Result<bool, String> {
-    app.autolaunch().is_enabled().map_err(|err| err.to_string())
+pub async fn get_autostart(app: AppHandle) -> Result<bool, IpcError> {
+    Ok(app
+        .autolaunch()
+        .is_enabled()
+        .map_err(|err| err.to_string())?)
 }
 
 /// Start with the system (hidden in the tray, so reminders come after a
 /// reboot) or not.
 #[cfg(desktop)]
 #[tauri::command]
-pub async fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
+pub async fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, IpcError> {
     let launcher = app.autolaunch();
     if enabled {
         launcher.enable().map_err(|err| err.to_string())?;
@@ -93,19 +97,19 @@ pub async fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String
     } else {
         launcher.disable().map_err(|err| err.to_string())?;
     }
-    launcher.is_enabled().map_err(|err| err.to_string())
+    Ok(launcher.is_enabled().map_err(|err| err.to_string())?)
 }
 
 /// A phone starts apps itself; the app never does.
 #[cfg(mobile)]
 #[tauri::command]
-pub async fn get_autostart(_app: AppHandle) -> Result<bool, String> {
+pub async fn get_autostart(_app: AppHandle) -> Result<bool, IpcError> {
     Ok(false)
 }
 
 #[cfg(mobile)]
 #[tauri::command]
-pub async fn set_autostart(_app: AppHandle, enabled: bool) -> Result<bool, String> {
+pub async fn set_autostart(_app: AppHandle, enabled: bool) -> Result<bool, IpcError> {
     if enabled {
         return Err(
             "UNSUPPORTED: starting with the system is not available on this platform".into(),
@@ -117,7 +121,7 @@ pub async fn set_autostart(_app: AppHandle, enabled: bool) -> Result<bool, Strin
 /// Whether notices of a locked vault survive a restart (a keyring answered)
 /// or are kept in memory only.
 #[tauri::command]
-pub async fn notification_storage(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn notification_storage(state: State<'_, AppState>) -> Result<String, IpcError> {
     let persistent = state
         .notify
         .lock()

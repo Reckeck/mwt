@@ -27,7 +27,8 @@ pub async fn crypto_network_settings(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<NetworkSettings, String> {
-    let mut settings = with_vault(&state, |vault| Ok(vault.crypto_network_settings()))?;
+    let mut settings =
+        with_vault::<_, String>(&state, |vault| Ok(vault.crypto_network_settings()))?;
     // The consent is this device's own answer and lives in the app settings.
     let app_settings = current_settings(&app);
     if app_settings.crypto_tracking_allowed() {
@@ -62,7 +63,7 @@ pub async fn crypto_test_network(
             "the sandbox talks to no network".into(),
         )));
     }
-    let (url, key) = with_vault(&state, |vault| vault.crypto_test_target(&input))?;
+    let (url, key) = with_vault::<_, String>(&state, |vault| vault.crypto_test_target(&input))?;
     let probe = NetworkProbe::new().map_err(err_to_string)?;
     test_endpoint(&probe, consent, input.chain, input.kind, &url, key.as_ref())
         .await

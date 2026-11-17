@@ -11,8 +11,8 @@ use trade_core::service::{CalcScenarioDeleted, CalcScenarioDraft, ScenarioPrefil
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
-use crate::commands::err_to_string;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::IpcError;
 
 /// Pure calculator preview (converter / position). Needs no vault state —
 /// the whole computation happens in `trade_core::calc`.
@@ -20,15 +20,15 @@ use crate::commands::planning::{with_vault, with_vault_mut};
 pub async fn calc_preview(
     input: CalcInput,
     _state: State<'_, AppState>,
-) -> Result<CalcResult, String> {
+) -> Result<CalcResult, IpcError> {
     Ok(calc::preview(&input))
 }
 
 // -- investment calculator (plan A) ----------------------------------------------
 
 #[tauri::command]
-pub async fn calc_invest_simulate(input: InvestInput) -> Result<InvestResult, String> {
-    invest::simulate(&input).map_err(err_to_string)
+pub async fn calc_invest_simulate(input: InvestInput) -> Result<InvestResult, IpcError> {
+    invest::simulate(&input).map_err(IpcError::from)
 }
 
 #[tauri::command]
@@ -36,24 +36,26 @@ pub async fn calc_invest_solve(
     input: InvestInput,
     target: Amount,
     unknown: SolveUnknown,
-) -> Result<SolveResult, String> {
-    invest::solve(&input, target, unknown).map_err(err_to_string)
+) -> Result<SolveResult, IpcError> {
+    invest::solve(&input, target, unknown).map_err(IpcError::from)
 }
 
 /// "What pays off more?": the plan, a higher rate and larger contributions.
 #[tauri::command]
-pub async fn calc_invest_compare(input: InvestInput) -> Result<InvestCompare, String> {
-    invest::compare(&input).map_err(err_to_string)
+pub async fn calc_invest_compare(input: InvestInput) -> Result<InvestCompare, IpcError> {
+    invest::compare(&input).map_err(IpcError::from)
 }
 
 /// The largest withdrawal the plan pays to the end of its term, when the asked one runs out.
 #[tauri::command]
-pub async fn calc_invest_safe_withdrawal(input: InvestInput) -> Result<Option<Amount>, String> {
-    invest::safe_withdrawal(&input).map_err(err_to_string)
+pub async fn calc_invest_safe_withdrawal(input: InvestInput) -> Result<Option<Amount>, IpcError> {
+    invest::safe_withdrawal(&input).map_err(IpcError::from)
 }
 
 #[tauri::command]
-pub async fn calc_scenarios_list(state: State<'_, AppState>) -> Result<Vec<CalcScenario>, String> {
+pub async fn calc_scenarios_list(
+    state: State<'_, AppState>,
+) -> Result<Vec<CalcScenario>, IpcError> {
     with_vault(&state, |vault| Ok(vault.calc_scenarios()))
 }
 
@@ -61,7 +63,7 @@ pub async fn calc_scenarios_list(state: State<'_, AppState>) -> Result<Vec<CalcS
 pub async fn calc_scenario_save(
     draft: CalcScenarioDraft,
     state: State<'_, AppState>,
-) -> Result<CalcScenario, String> {
+) -> Result<CalcScenario, IpcError> {
     with_vault_mut(&state, |vault| vault.save_calc_scenario(draft))
 }
 
@@ -69,7 +71,7 @@ pub async fn calc_scenario_save(
 pub async fn calc_scenario_delete(
     id: String,
     state: State<'_, AppState>,
-) -> Result<CalcScenarioDeleted, String> {
+) -> Result<CalcScenarioDeleted, IpcError> {
     with_vault_mut(&state, |vault| vault.delete_calc_scenario(&id))
 }
 
@@ -78,7 +80,7 @@ pub async fn calc_scenario_delete(
 pub async fn calc_scenario_restore(
     deleted: CalcScenarioDeleted,
     state: State<'_, AppState>,
-) -> Result<CalcScenario, String> {
+) -> Result<CalcScenario, IpcError> {
     with_vault_mut(&state, |vault| vault.restore_calc_scenario(deleted))
 }
 
@@ -90,7 +92,7 @@ pub async fn calc_scenario_prefill(
     currency: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<ScenarioPrefill, String> {
+) -> Result<ScenarioPrefill, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
         vault.scenario_prefill(&source, &currency, now_secs(), &zone)
