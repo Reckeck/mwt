@@ -1425,6 +1425,20 @@ rate_override: Amount | null, };
 type ConvertedAmount = { amount: Amount | null, };
 
 /**
+ * One moved correction whose counted balance is raised by what the other
+ * account held at that moment.
+ */
+type CorrectionShift = { tx_id: string, timestamp: string, from_store_id: string, 
+/**
+ * Whose correction it is.
+ */
+from_store_name: string, asset: AssetRef, after_old: Amount, after_new: Amount, 
+/**
+ * `after_new - after_old`.
+ */
+other_balance: Amount, };
+
+/**
  * Create the missing Funding / Unified / Earn sub-accounts of a Bybit wallet.
  */
 type CreateBybitAccountsInput = { store_id: string, 
@@ -6916,6 +6930,11 @@ conflicts: Array<StoreChangeConflict>,
  * Merge: how many operations move to the target.
  */
 moved_transactions: number, 
+/**
+ * Merge: corrections whose counted balance grows by what the other
+ * account held at that moment.
+ */
+corrections: Array<CorrectionShift>, 
 /**
  * Why the change cannot be made at all.
  */

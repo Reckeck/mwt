@@ -131,6 +131,7 @@ export const storeTreeCommands: MockCommands = {
       kept: [item(store, store.sub_type)],
       archived: [],
       conflicts: [],
+      corrections: [],
       moved_transactions: typeof input.change === 'object' && 'merge_into' in input.change ? touching : 0,
       error: null,
     }
@@ -169,6 +170,7 @@ export const storeTreeCommands: MockCommands = {
       kept: [item(store, store.sub_type)],
       archived: [],
       conflicts: [],
+      corrections: [],
       moved_transactions: typeof input.change === 'object' && 'merge_into' in input.change ? touching : 0,
       error: null,
     }

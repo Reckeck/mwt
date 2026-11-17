@@ -7,7 +7,7 @@
 //! would no longer fit. Applying writes a `.bak` of the vault first and then
 //! the whole change at once — or nothing.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::error::{Error, Result};
 use crate::model::store::{
@@ -16,7 +16,9 @@ use crate::model::store::{
 };
 use crate::model::transaction::{LegRole, Transaction, allowed_kinds};
 use crate::model::vault::VaultDoc;
+use crate::money::store_change::{CorrectionShift, CreatedAt, MergeInput, merge_plan};
 use crate::storage::VaultFile;
+use crate::sync::view::full_key;
 
 use super::UnlockedVault;
 
@@ -73,6 +75,10 @@ pub struct StoreChangePlan {
     pub conflicts: Vec<StoreChangeConflict>,
     /// Merge: how many operations move to the target.
     pub moved_transactions: u32,
+    /// Merge: corrections whose counted balance grows by what the other
+    /// account held at that moment.
+    #[serde(default)]
+    pub corrections: Vec<CorrectionShift>,
     /// Why the change cannot be made at all.
     pub error: Option<String>,
 }
@@ -504,12 +510,31 @@ impl UnlockedVault {
         if target.archived {
             return Err(Error::Archived(target.id));
         }
-        plan.moved_transactions = self
+        let created: HashMap<String, CreatedAt> = self
             .doc
             .transactions
             .iter()
-            .filter(|tx| tx.touches(id))
-            .count() as u32;
+            .filter_map(|tx| {
+                let id = &tx.meta().id;
+                let stamps = self.doc.sync.stamps.get(&full_key("transactions", id))?;
+                let stamp = &stamps.created;
+                Some((
+                    id.clone(),
+                    CreatedAt((stamp.wall, stamp.count, stamp.device.clone())),
+                ))
+            })
+            .collect();
+        let merge = merge_plan(&MergeInput {
+            transactions: &self.doc.transactions,
+            source_id: id,
+            target_id,
+            source_name: &source.name,
+            target_name: &target.name,
+            created: &created,
+        });
+        plan.moved_transactions = merge.moved_transactions;
+        self.write_shifted_corrections(&merge.shifts);
+        plan.corrections = merge.shifts;
         // Drop the account itself, then point every reference at the target.
         self.doc.stores.retain(|store| store.id != id);
         self.doc.exchanges.bybit.retain(|keys| keys.store_id != id);
@@ -520,6 +545,27 @@ impl UnlockedVault {
             .map_err(|err| Error::Deserialize(err.to_string()))?;
         plan.kept.push(item(&source, source.sub_type));
         Ok(HashSet::from([target_id.to_string()]))
+    }
+
+    /// Set the counted balance of every shifted correction line.
+    fn write_shifted_corrections(&mut self, shifts: &[CorrectionShift]) {
+        for shift in shifts {
+            let line = self
+                .doc
+                .transactions
+                .iter_mut()
+                .filter(|tx| tx.meta().id == shift.tx_id)
+                .find_map(|tx| match tx {
+                    Transaction::Adjustment(inner) => inner
+                        .lines
+                        .iter_mut()
+                        .find(|line| line.asset.key() == shift.asset.key()),
+                    _ => None,
+                });
+            if let Some(line) = line {
+                line.after = shift.after_new;
+            }
+        }
     }
 
     /// The operations on `stores` that break the rules of the account they are
@@ -865,5 +911,141 @@ mod tests {
             Some(SubType::Account),
             "an older account stays what it is"
         );
+    }
+}
+
+#[cfg(test)]
+mod merge_correction_tests {
+    use super::super::test_support::*;
+    use super::*;
+    use crate::Amount;
+    use crate::model::transaction::{AdjustmentLine, AdjustmentTx, PriceStamp, TxMeta};
+
+    fn rub() -> AssetRef {
+        AssetRef::fiat("RUB", "RUB")
+    }
+
+    fn card(vault: &mut UnlockedVault, bank: &str, name: &str) -> String {
+        vault
+            .create_store_with(
+                name,
+                StoreKind::Bank,
+                "#000",
+                "",
+                Some(bank.into()),
+                crate::service::StoreExtras {
+                    sub_type: Some(SubType::Card),
+                    binding: Some(Binding::Asset(rub())),
+                    ..crate::service::StoreExtras::default()
+                },
+            )
+            .unwrap()
+            .id
+    }
+
+    fn correct(vault: &mut UnlockedVault, store_id: &str, after: &str, timestamp: &str) -> String {
+        let mut meta = TxMeta::new("count");
+        meta.timestamp = timestamp.into();
+        let saved = vault
+            .add_transaction(Transaction::Adjustment(AdjustmentTx {
+                meta,
+                store_id: store_id.into(),
+                lines: vec![AdjustmentLine {
+                    asset: rub(),
+                    before: Amount::ZERO,
+                    after: amount(after),
+                    price: PriceStamp::default(),
+                }],
+                fee: None,
+            }))
+            .unwrap();
+        saved.meta().id.clone()
+    }
+
+    fn topup_at(vault: &mut UnlockedVault, store_id: &str, raw: &str, timestamp: &str) {
+        let mut tx = income_of(store_id, rub(), raw, "0.01", "in");
+        at(&mut tx, timestamp);
+        vault.add_transaction(tx).unwrap();
+    }
+
+    /// `(before, after)` of the correction line.
+    fn line_of(vault: &UnlockedVault, id: &str) -> (Amount, Amount) {
+        vault
+            .doc
+            .transactions
+            .iter()
+            .find_map(|tx| match tx {
+                Transaction::Adjustment(inner) if inner.meta.id == id => {
+                    Some((inner.lines[0].before, inner.lines[0].after))
+                }
+                _ => None,
+            })
+            .unwrap()
+    }
+
+    fn scenario() -> (
+        tempfile::TempDir,
+        UnlockedVault,
+        String,
+        String,
+        String,
+        String,
+    ) {
+        let (dir, mut vault) = empty_vault();
+        let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
+        let first = card(&mut vault, &bank, "Card 1");
+        let second = card(&mut vault, &bank, "Card 2");
+        topup_at(&mut vault, &first, "300", "2026-01-01T00:00:00Z");
+        let source_fix = correct(&mut vault, &first, "80", "2026-03-01T00:00:00Z");
+        topup_at(&mut vault, &first, "50", "2026-03-10T00:00:00Z");
+        topup_at(&mut vault, &second, "1000", "2026-01-15T00:00:00Z");
+        let target_fix = correct(&mut vault, &second, "1200", "2026-04-01T00:00:00Z");
+        (dir, vault, first, second, source_fix, target_fix)
+    }
+
+    fn merge(first: &str, second: &str) -> StoreChangeInput {
+        StoreChangeInput {
+            store_id: first.into(),
+            change: StoreChange::MergeInto {
+                target_id: second.into(),
+            },
+        }
+    }
+
+    #[test]
+    fn merge_keeps_every_delta_and_the_sum() {
+        let (_dir, mut vault, first, second, source_fix, target_fix) = scenario();
+        let delta = |vault: &UnlockedVault, id: &str| {
+            let (before, after) = line_of(vault, id);
+            after - before
+        };
+        let source_delta = delta(&vault, &source_fix);
+        let target_delta = delta(&vault, &target_fix);
+        let sum = holding_of(&vault, &first, &rub()) + holding_of(&vault, &second, &rub());
+
+        let plan = vault.apply_store_change(&merge(&first, &second)).unwrap();
+
+        assert_eq!(plan.corrections.len(), 2);
+        assert_eq!(plan.corrections[0].after_old, amount("80"));
+        assert_eq!(plan.corrections[0].after_new, amount("1080"));
+        assert_eq!(plan.corrections[1].after_old, amount("1200"));
+        assert_eq!(plan.corrections[1].after_new, amount("1330"));
+        assert_eq!(delta(&vault, &source_fix), source_delta);
+        assert_eq!(delta(&vault, &target_fix), target_delta);
+        assert_eq!(line_of(&vault, &source_fix).1, amount("1080"));
+        assert_eq!(holding_of(&vault, &second, &rub()), sum);
+        assert_eq!(sum, amount("1330"));
+    }
+
+    #[test]
+    fn the_plan_shows_what_apply_does() {
+        let (_dir, mut vault, first, second, source_fix, _target_fix) = scenario();
+        let document = serde_json::to_value(&vault.doc).unwrap();
+        let planned = vault.plan_store_change(&merge(&first, &second));
+        assert_eq!(serde_json::to_value(&vault.doc).unwrap(), document);
+        assert_eq!(line_of(&vault, &source_fix).1, amount("80"));
+
+        let applied = vault.apply_store_change(&merge(&first, &second)).unwrap();
+        assert_eq!(planned.corrections, applied.corrections);
     }
 }
