@@ -26,29 +26,29 @@ afterEach(() => {
 })
 
 describe('PlanNext', () => {
-  it('keeps the section and its tour anchor while pending, with a h-16 skeleton', () => {
+  it('keeps the section and its tour anchor while pending, with a one-line skeleton', () => {
     vi.mocked(call).mockImplementation(() => new Promise(() => undefined))
     const wrapper = mountNext()
     expect(wrapper.find('[data-tour="plan-next"]').exists()).toBe(true)
-    expect(wrapper.find('.h-16').exists()).toBe(true)
+    expect(wrapper.find('.h-5').exists()).toBe(true)
   })
 
-  it('shows one h-16 line for an empty list', async () => {
+  it('shows one line for an empty list', async () => {
     vi.mocked(call).mockResolvedValue([])
     const wrapper = mountNext()
     await flushPromises()
     expect(wrapper.find('[data-tour="plan-next"]').exists()).toBe(true)
-    const line = wrapper.find('p.h-16')
+    const line = wrapper.find('p.min-h-5')
     expect(line.text()).toContain('ничего не запланировано')
     expect(wrapper.find('ul').exists()).toBe(false)
   })
 
-  it('shows one h-16 line when the query is rejected', async () => {
+  it('shows one line when the query is rejected', async () => {
     vi.mocked(call).mockRejectedValue(new Error('boom'))
     const wrapper = mountNext()
     await flushPromises()
     expect(wrapper.find('[data-tour="plan-next"]').exists()).toBe(true)
-    expect(wrapper.find('p.h-16').text()).toContain('Не удалось')
+    expect(wrapper.find('p.min-h-5').text()).toContain('Не удалось')
   })
 
   it('lists the items when filled', async () => {
