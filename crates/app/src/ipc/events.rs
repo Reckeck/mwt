@@ -176,6 +176,7 @@ mod tests {
     #[test]
     fn the_registry_pins_every_pub_event_constant() {
         use crate::commands::security::raise::RAISE_PROGRESS_EVENT;
+        use crate::platform_fs::MIRROR_FAILED_EVENT;
         use crate::sync::handover::{NEARBY_EVENT, RECEIVE_EVENT, SEND_EVENT};
         use crate::sync::{
             CLOCK_EVENT, ERROR_EVENT, OFFER_EVENT, PAIRING_EVENT, PLAN_EVENT, STATUS_EVENT,
@@ -194,6 +195,7 @@ mod tests {
             (SYNCED_EVENT, VaultSynced::NAME),
             (ERROR_EVENT, SyncError::NAME),
             (CLOCK_EVENT, SyncClock::NAME),
+            (MIRROR_FAILED_EVENT, VaultMirrorFailed::NAME),
         ];
         for (constant, registered) in pairs {
             assert_eq!(constant, registered);
