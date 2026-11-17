@@ -22,24 +22,13 @@ use crate::crypto::SealKey;
 use crate::error::{Error, Result};
 use crate::storage::{SnapshotFormat, VaultFile, encode};
 
+use crate::kernel::session::Commit;
+
 use super::UnlockedVault;
 
 /// Told that the vault has unsaved changes (the app's writer thread).
 pub trait SaveHook: Send + Sync {
     fn dirty(&self);
-}
-
-/// Batching state of an open vault.
-#[derive(Default)]
-pub(super) struct SaveState {
-    /// Changes not on disk yet.
-    dirty: bool,
-    /// Bumped by every change; a job snapshots it.
-    revision: u64,
-    /// The newest revision on disk, shared with the jobs in flight.
-    gate: Arc<Mutex<u64>>,
-    /// Batched mode: wake the writer instead of writing.
-    hook: Option<Arc<dyn SaveHook>>,
 }
 
 /// One snapshot of the document on its way to disk, sealed off the vault lock.
@@ -94,13 +83,13 @@ impl UnlockedVault {
         if self.sandbox {
             return Ok(());
         }
-        self.save.revision += 1;
-        self.save.dirty = true;
-        if let Some(hook) = &self.save.hook {
-            hook.dirty();
-            return Ok(());
+        match self.session.mark() {
+            Commit::Wake => {
+                self.session.wake();
+                Ok(())
+            }
+            Commit::WriteNow | Commit::Nothing => self.persist_now(),
         }
-        self.persist_now()
     }
 
     /// Write the document now, whatever is batched: the file must be current
@@ -109,8 +98,7 @@ impl UnlockedVault {
         if self.sandbox {
             return Ok(());
         }
-        self.save.revision += 1;
-        self.save.dirty = true;
+        self.session.touch();
         let Some(job) = self.prepare_flush()? else {
             return Ok(());
         };
@@ -121,7 +109,7 @@ impl UnlockedVault {
 
     /// Write batched changes, if any, before something reads the file itself.
     pub fn flush_pending(&mut self) -> Result<()> {
-        if self.save.dirty {
+        if self.session.is_dirty() {
             self.persist_now()
         } else {
             Ok(())
@@ -131,20 +119,20 @@ impl UnlockedVault {
     /// Batched mode: from now on `persist` wakes `hook` instead of writing.
     pub fn set_write_behind(&mut self, hook: Option<Arc<dyn SaveHook>>) {
         if !self.sandbox {
-            self.save.hook = hook;
+            self.session.set_hook(hook);
         }
     }
 
     /// Whether changes are waiting for the writer.
     pub fn has_unsaved_changes(&self) -> bool {
-        self.save.dirty
+        self.session.is_dirty()
     }
 
     /// Snapshot the dirty document for the writer (under the vault lock):
     /// stamps the changes for sync, encodes, and returns the job to seal off
     /// the lock. `None` when nothing is waiting.
     pub fn prepare_flush(&mut self) -> Result<Option<FlushJob>> {
-        if self.sandbox || !self.save.dirty {
+        if self.sandbox || !self.session.is_dirty() {
             return Ok(None);
         }
         let key = self
@@ -177,8 +165,8 @@ impl UnlockedVault {
             fmt: self.fmt,
             plaintext,
             key,
-            revision: self.save.revision,
-            gate: self.save.gate.clone(),
+            revision: self.session.revision(),
+            gate: self.session.gate(),
             mirror: self.mirror.clone(),
         }))
     }
@@ -186,8 +174,8 @@ impl UnlockedVault {
     /// Back under the vault lock after [`FlushJob::write`]: clean unless the
     /// document changed meanwhile (then the next batch carries it).
     pub fn finish_flush(&mut self, done: &Flushed) {
-        if done.path == self.path && done.revision == self.save.revision {
-            self.save.dirty = false;
+        if done.path == self.path && done.revision == self.session.revision() {
+            self.session.finish(done.revision);
         }
     }
 
@@ -201,7 +189,7 @@ impl Drop for UnlockedVault {
     /// Closing (lock, switch, exit) must not lose batched changes. The app
     /// flushes before it gets here; this is the last line, so it says so.
     fn drop(&mut self) {
-        if self.save.dirty
+        if self.session.is_dirty()
             && !self.sandbox
             && let Err(err) = self.persist_now()
         {

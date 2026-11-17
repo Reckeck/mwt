@@ -308,7 +308,7 @@ pub struct UnlockedVault {
     /// The key derived at unlock: saves seal with it, Argon2 does not run again.
     key: Option<std::sync::Arc<SealKey>>,
     /// Unsaved changes and the batched writer (see `saving`).
-    save: saving::SaveState,
+    session: crate::kernel::session::Session,
     /// What the session knows of the device secrets file (see `exchange_keys`).
     device_keys: exchange_keys::DeviceKeys,
 }
@@ -371,7 +371,7 @@ impl UnlockedVault {
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: Some(std::sync::Arc::new(key)),
-            save: saving::SaveState::default(),
+            session: crate::kernel::session::Session::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
         };
         vault.start_tracking()?;
@@ -436,7 +436,7 @@ impl UnlockedVault {
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: Some(std::sync::Arc::new(key)),
-            save: saving::SaveState::default(),
+            session: crate::kernel::session::Session::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
         };
         if let Some(device_id) = device_id {
@@ -557,7 +557,7 @@ impl UnlockedVault {
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: None,
-            save: saving::SaveState::default(),
+            session: crate::kernel::session::Session::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
         }
     }
