@@ -1,0 +1,253 @@
+# Area map of the core-strangler phase (spec trade-app.core-strangler, table F2, D1, D5).
+#
+# One [[area]] per row of F2. `files` are paths under `service_dir` (a trailing `/` takes the whole
+# directory); `regions` cut a part of a shared file between two marker lines (the first line that
+# starts with `from`, up to but not including the first line that starts with `to`), so they survive
+# line drift. `group` is the target module group (`<group>/<area>.rs`), `context` the scenario home
+# (`usecases/<context>/<area>.rs`), `task` the plan task that owns the area. `homes` overrides the
+# group of single files whose target-structure home differs from the area's. `stubs = false` keeps
+# an area out of `scaffold`; `ipc_contract = true` gives it an `ipc_contract/<area>.rs` stub.
+
+service_dir = "crates/core/src/service"
+command_dir = "crates/app/src"
+scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src"]
+
+# Files every area task may change besides its own (spec D5).
+grants = ["crates/core/src/bin/gen_types.rs"]
+
+# Shared files no area task may change: only a foundation task that lists them (or a grant) may.
+guarded = [
+    "crates/core/src/lib.rs",
+    "crates/core/src/ipc_contract.rs",
+    "crates/core/src/kernel/events.rs",
+    "crates/core/src/service/golden_tests.rs",
+    "crates/core/src/service/test_support.rs",
+    "crates/core/src/kernel/golden_tests.rs",
+    "crates/app/src/",
+]
+
+# The foundation tasks that change files inside `service/`, the group dirs or `usecases/`.
+[[foundation]]
+task = "T5"
+files = ["crates/core/src/service/forward.rs", "crates/core/src/service/mod.rs"]
+
+[[foundation]]
+# The module wiring `scaffold` writes; the area stubs belong to their area tasks.
+task = "T6"
+files = [
+    "crates/core/src/lib.rs",
+    "crates/core/src/ipc_contract.rs",
+    "crates/core/src/usecases/mod.rs",
+    "crates/core/src/cryptotrack/mod.rs",
+    "crates/core/src/household/mod.rs",
+    "crates/core/src/money/mod.rs",
+    "crates/core/src/planning/mod.rs",
+    "crates/core/src/reports/mod.rs",
+    "crates/core/src/sync/mod.rs",
+    "crates/core/src/vault/mod.rs",
+    "crates/core/src/workflow/mod.rs",
+    "crates/core/src/usecases/cryptotrack/mod.rs",
+    "crates/core/src/usecases/household/mod.rs",
+    "crates/core/src/usecases/money/mod.rs",
+    "crates/core/src/usecases/planning/mod.rs",
+    "crates/core/src/usecases/reports/mod.rs",
+    "crates/core/src/usecases/sync/mod.rs",
+    "crates/core/src/usecases/vault/mod.rs",
+    "crates/core/src/usecases/workflow/mod.rs",
+]
+
+[[foundation]]
+task = "T7"
+files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
+task = "T8"
+files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
+task = "T9"
+files = ["crates/core/src/kernel/events.rs"]
+
+[[foundation]]
+task = "T13"
+files = ["crates/app/src/commands/planning.rs", "crates/app/src/lib.rs"]
+
+[[foundation]]
+task = "T54"
+files = [
+    "crates/app/src/commands/shared_events.rs", "crates/app/src/commands/contacts.rs",
+    "crates/app/src/commands/attachments.rs", "crates/app/src/commands/losses.rs",
+    "crates/app/src/commands/categories.rs",
+]
+
+[[foundation]]
+task = "T55"
+files = [
+    "crates/app/src/commands/stores.rs", "crates/app/src/commands/transactions.rs",
+    "crates/app/src/commands/transactions_bulk.rs", "crates/app/src/commands/rates.rs",
+    "crates/app/src/commands/pricing.rs", "crates/app/src/commands/portfolio.rs",
+    "crates/app/src/commands/enrichment.rs",
+]
+
+[[foundation]]
+task = "T56"
+files = [
+    "crates/app/src/commands/planning.rs", "crates/app/src/commands/analytics.rs",
+    "crates/app/src/commands/notifications.rs", "crates/app/src/commands/sources.rs",
+    "crates/app/src/commands/calc.rs",
+]
+
+[[foundation]]
+task = "T57"
+files = [
+    "crates/app/src/commands/workflows.rs", "crates/app/src/commands/exchange.rs",
+    "crates/app/src/commands/sync.rs", "crates/app/src/commands/cryptotrack/",
+    "crates/app/src/sync/",
+]
+
+[[foundation]]
+task = "T60"
+files = ["crates/core/src/service/mod.rs"]
+
+[[area]]
+name = "loyalty"
+task = "T26"
+group = "household"
+context = "household"
+files = ["loyalty.rs"]
+
+[[area]]
+name = "leaves"
+task = "T27"
+group = "household"
+context = "household"
+files = [
+    "vehicle.rs", "envelopes.rs", "categories.rs", "ledger.rs", "validate.rs",
+    "store_months.rs", "month_balance.rs", "search.rs", "losses.rs", "relations.rs",
+]
+homes = {
+    envelopes = "planning", categories = "money", ledger = "money", validate = "money",
+    store_months = "money", month_balance = "money", search = "money",
+}
+
+[[area]]
+name = "money_core"
+task = "T28"
+group = "money"
+context = "money"
+files = [
+    "rates.rs", "valuation.rs", "worth.rs", "adjustments.rs", "rebase.rs",
+    "store_change.rs", "preview.rs", "bulk.rs",
+]
+
+[[area]]
+name = "money_rest"
+task = "B7"
+group = "money"
+context = "money"
+files = [
+    "price_info.rs", "inflation.rs", "interest.rs", "asset_holdings.rs", "investments.rs",
+    "enrichment.rs",
+]
+
+[[area]]
+name = "mod_stores"
+task = "B4"
+group = "money"
+context = "money"
+regions = [{ file = "mod.rs", from = "// -- stores", to = "// -- transactions" }]
+
+[[area]]
+name = "mod_transactions"
+task = "B5"
+group = "money"
+context = "money"
+regions = [{ file = "mod.rs", from = "// -- transactions", to = "// -- holdings recomputation" }]
+
+[[area]]
+name = "mod_portfolio"
+task = "B6"
+group = "money"
+context = "money"
+regions = [{ file = "mod.rs", from = "// -- holdings recomputation", to = "// -- exchange keys" }]
+
+[[area]]
+name = "mod_exchange_import"
+task = "E7"
+group = "cryptotrack"
+context = "cryptotrack"
+regions = [{ file = "mod.rs", from = "// -- exchange keys", to = "// -- helpers" }]
+
+[[area]]
+name = "household"
+task = "T29"
+group = "household"
+context = "household"
+files = [
+    "contacts.rs", "debts.rs", "shared_events/", "utilities.rs", "property_links.rs",
+    "attachments.rs", "attachments_cleanup.rs",
+]
+
+[[area]]
+name = "planning"
+task = "T30"
+group = "planning"
+context = "planning"
+files = [
+    "budget.rs", "goals.rs", "emergency.rs", "automations.rs", "recurring.rs", "scenarios.rs",
+    "allocation.rs", "passive.rs", "health.rs", "notifications.rs", "auto_reminders.rs",
+    "agenda.rs", "agenda/", "my_automations.rs", "automation_card.rs", "datasources.rs",
+]
+
+[[area]]
+name = "reports"
+task = "T31"
+group = "reports"
+context = "reports"
+files = [
+    "reports.rs", "where_went.rs", "insights.rs", "dashboard.rs", "dashboard_today.rs",
+    "dashboard_tiles.rs", "notify_snapshot.rs",
+]
+stem = { "reports.rs" = "overview" }
+
+[[area]]
+name = "cryptotrack"
+task = "T32"
+group = "cryptotrack"
+context = "cryptotrack"
+files = ["cryptotrack/", "exchange_sync.rs"]
+stem = { "cryptotrack/" = "tracking" }
+
+[[area]]
+name = "workflow"
+task = "T33"
+group = "workflow"
+context = "workflow"
+files = ["workflows.rs", "workflows/", "workflow_templates.rs"]
+
+[[area]]
+name = "sync"
+task = "T34"
+group = "sync"
+context = "sync"
+files = ["peer_sync.rs", "peer_sync/", "sync_ids.rs", "sync_journal.rs"]
+
+[[area]]
+name = "vault_side"
+task = "phase-6"
+stubs = false
+group = "vault"
+context = "vault"
+files = [
+    "password.rs", "security_level.rs", "security_level_tests.rs", "backups.rs",
+    "exchange_keys.rs", "saving.rs",
+]
+regions = [{ file = "mod.rs", from = "impl UnlockedVault {", to = "// -- stores" }]
+
+[[area]]
+name = "misc"
+task = "phase-6"
+stubs = false
+group = "vault"
+context = "vault"
+files = ["document_edit.rs"]

@@ -25,6 +25,7 @@ mod release;
 mod runner;
 mod sccache;
 mod sink;
+mod strangle;
 mod tauri_config;
 mod version;
 
@@ -123,6 +124,10 @@ async fn run() -> Result<i32> {
         }
         Command::Audit => {
             return audit::run(&root);
+        }
+        Command::Strangle(args) => {
+            strangle::run(&root, args)?;
+            return Ok(0);
         }
         Command::Publish(args) => {
             publish::run_publish(&root, args)?;
