@@ -59,6 +59,10 @@ domain_events! {
     VaultLocked { reason: LockReason, closed: bool },
     Committed { revision: u64 },
     KeysChanged { keys: Vec<String> },
+    AutomationDeleted { id: String },
+    AutomationRetried { id: String },
+    GoalPaused { id: String },
+    GoalResumed { id: String },
 }
 
 /// Told the keys of every local save, so a live session can send them on.
@@ -202,6 +206,27 @@ mod tests {
         assert_eq!(
             seen,
             [format!("lock:{:?}", DomainEvent::VaultLocked(locked))]
+        );
+    }
+
+    #[test]
+    fn planning_events_convert_from_their_payloads() {
+        let id = || "item-1".to_string();
+        assert_eq!(
+            DomainEvent::from(AutomationDeleted { id: id() }),
+            DomainEvent::AutomationDeleted(AutomationDeleted { id: id() })
+        );
+        assert_eq!(
+            DomainEvent::from(AutomationRetried { id: id() }),
+            DomainEvent::AutomationRetried(AutomationRetried { id: id() })
+        );
+        assert_eq!(
+            DomainEvent::from(GoalPaused { id: id() }),
+            DomainEvent::GoalPaused(GoalPaused { id: id() })
+        );
+        assert_eq!(
+            DomainEvent::from(GoalResumed { id: id() }),
+            DomainEvent::GoalResumed(GoalResumed { id: id() })
         );
     }
 }
