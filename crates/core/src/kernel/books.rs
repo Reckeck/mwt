@@ -92,14 +92,18 @@ mod tests {
     #[test]
     fn books_build_each_field_once() {
         let (_dir, vault) = open_vault();
-        let books = vault.books();
         let before = builds();
+        let books = vault.books();
         assert_eq!(builds(), before, "nothing is built before the first ask");
         books.rate_book();
         books.curves().count();
         books.base();
         books.rate_book();
         assert_eq!(builds(), before + 1);
+        // The other fields are built once too: a repeated ask is the same value.
+        assert!(std::ptr::eq(books.shared_ratios(), books.shared_ratios()));
+        assert!(std::ptr::eq(books.shared_extras(), books.shared_extras()));
+        assert_eq!(builds(), before + 1, "they do not build another book");
     }
 
     #[test]
