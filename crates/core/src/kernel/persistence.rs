@@ -1,6 +1,7 @@
 //! The port behind every save: where a sealed snapshot goes. A vault on disk
-//! writes through [`FileStore`]; a sandbox copy writes through [`SandboxStore`],
-//! which does no I/O at all, so the writing code never asks "is this a sandbox".
+//! writes through [`FileStore`]; a sandbox session holds [`SandboxStore`], which
+//! does no I/O at all. The sandbox gate in the service write path stays until a
+//! later wave.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
