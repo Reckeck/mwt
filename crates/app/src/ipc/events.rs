@@ -38,6 +38,14 @@ pub fn payload_ts<P: TS>() -> String {
 #[ts(rename = "unknown")]
 pub struct InlineJson(#[ts(type = "unknown")] pub serde_json::Value);
 
+/// The payload of `vault-locked`: why the vault was locked and whether it
+/// closed (`false` when the flush failed and the vault stayed open).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct VaultLockedPayload {
+    pub reason: String,
+    pub closed: bool,
+}
+
 /// Declares the events: `"name" => Marker(PayloadType)`.
 macro_rules! app_events {
     ( $( $name:literal => $marker:ident($payload:ty) ),* $(,)? ) => {
@@ -81,6 +89,7 @@ app_events! {
     "toggle-lock" => ToggleLock(()),
     "tray-navigate" => TrayNavigate(String),
     "vault-changed" => VaultChanged(trade_core::ipc_contract::VaultStatus),
+    "vault-locked" => VaultLocked(VaultLockedPayload),
     // `SAVE_FAILED_EVENT`: a string, or `{ reason, exiting }` on exit.
     "vault-save-failed" => VaultSaveFailed(InlineJson),
     // `SAVED_EVENT`
@@ -122,6 +131,7 @@ mod tests {
         "notification",
         "enrichment-ready",
         "vault-changed",
+        "vault-locked",
         "quick-add",
         "refresh-prices",
         "toggle-lock",
@@ -171,6 +181,12 @@ mod tests {
             VaultSaveFailed::NAME
         );
         assert_eq!(crate::updates::STATE_EVENT, UpdateState::NAME);
+    }
+
+    #[test]
+    fn vault_changed_still_fires() {
+        assert_eq!(VaultChanged::NAME, "vault-changed");
+        assert_eq!(VaultLocked::NAME, "vault-locked");
     }
 
     #[test]
