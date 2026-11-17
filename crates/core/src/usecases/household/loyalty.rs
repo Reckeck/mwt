@@ -7,6 +7,7 @@ use crate::household::loyalty::{
     LoyaltyUpdate, plan_adjust_points, plan_create_loyalty_program, plan_set_loyalty_info,
 };
 use crate::kernel::tx::Tx;
+use crate::model::ids::StoreId;
 use crate::model::store::{LoyaltyInfo, Store, StoreKind};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
@@ -16,7 +17,7 @@ use crate::service::{StoreExtras, UnlockedVault};
 /// points' hand-set price, so the wallet counts in net worth.
 pub fn set_loyalty_info(
     vault: &mut UnlockedVault,
-    store_id: &str,
+    store_id: impl Into<StoreId>,
     info: LoyaltyInfo,
 ) -> Result<Store> {
     let update = plan_set_loyalty_info(&vault.doc, store_id, info, &now_iso())?;
@@ -37,7 +38,7 @@ fn apply_loyalty_update(tx: &mut Tx<'_>, update: LoyaltyUpdate) -> Result<Store>
     let stored = doc
         .stores
         .iter_mut()
-        .find(|candidate| candidate.id == store_id)
+        .find(|candidate| candidate.id == store_id.as_str())
         .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
     stored.loyalty = Some(info);
     Ok(stored.clone())
@@ -59,14 +60,14 @@ pub fn create_loyalty_program(
         ..StoreExtras::default()
     };
     let store = vault.create_store_with(name, StoreKind::Loyalty, color, "", None, extras)?;
-    set_loyalty_info(vault, &store.id, programme.info)
+    set_loyalty_info(vault, store.id, programme.info)
 }
 
 /// Credit (`delta` > 0) or spend points of a programme, optionally tied
 /// to the card whose purchase earned them.
 pub fn adjust_points(
     vault: &mut UnlockedVault,
-    store_id: &str,
+    store_id: impl Into<StoreId>,
     delta: Amount,
     comment: &str,
     source_store_id: Option<String>,

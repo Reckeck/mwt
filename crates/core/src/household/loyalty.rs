@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::kernel::books::Books;
+use crate::model::ids::StoreId;
 use crate::model::store::{LoyaltyInfo, StoreKind};
 use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, TopupTx, Transaction, TxMeta};
 use crate::model::vault::{ManualPrice, VaultDoc};
@@ -56,7 +57,7 @@ pub struct CashbackReport {
 /// price of a point (`None` when a point is worth nothing).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoyaltyUpdate {
-    pub store_id: String,
+    pub store_id: StoreId,
     /// `asset_key` of the programme's points, whose old price is replaced.
     pub asset_key: String,
     pub info: LoyaltyInfo,
@@ -88,11 +89,16 @@ fn symbol_taken_by_other(doc: &VaultDoc, store_id: Option<&str>, symbol: &str) -
 
 /// The programme shares its symbol with another one. Computed for the
 /// view, never stored; the form asks to rename.
-pub fn loyalty_symbol_clash(doc: &VaultDoc, store_id: &str) -> bool {
-    find_store(doc, store_id)
+pub fn loyalty_symbol_clash(doc: &VaultDoc, store_id: impl Into<StoreId>) -> bool {
+    let store_id = store_id.into();
+    find_store(doc, store_id.as_str())
         .and_then(|store| store.loyalty.as_ref())
         .is_some_and(|info| {
-            symbol_taken_by_other(doc, Some(store_id), &normalized_symbol(&info.points_symbol))
+            symbol_taken_by_other(
+                doc,
+                Some(store_id.as_str()),
+                &normalized_symbol(&info.points_symbol),
+            )
         })
 }
 
@@ -160,16 +166,17 @@ pub(crate) fn checked_loyalty_info(
 /// `now` stamps the hand-set price.
 pub fn plan_set_loyalty_info(
     doc: &VaultDoc,
-    store_id: &str,
+    store_id: impl Into<StoreId>,
     info: LoyaltyInfo,
     now: &str,
 ) -> Result<LoyaltyUpdate> {
-    let store =
-        find_store(doc, store_id).ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
+    let store_id = store_id.into();
+    let store = find_store(doc, store_id.as_str())
+        .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
     if store.kind != StoreKind::Loyalty {
         return Err(Error::InvalidInput("not a bonus programme".into()));
     }
-    let info = checked_loyalty_info(doc, Some(store_id), info)?;
+    let info = checked_loyalty_info(doc, Some(store_id.as_str()), info)?;
     let asset_key = info.asset(&store.name).key();
     let price = info.point_value.is_positive().then(|| ManualPrice {
         asset_key: asset_key.clone(),
@@ -178,7 +185,7 @@ pub fn plan_set_loyalty_info(
         updated_at: now.to_string(),
     });
     Ok(LoyaltyUpdate {
-        store_id: store_id.to_string(),
+        store_id,
         asset_key,
         info,
         price,
@@ -202,14 +209,15 @@ pub fn plan_create_loyalty_program(
 /// programme, optionally tied to the card whose purchase earned them.
 pub fn plan_adjust_points(
     doc: &VaultDoc,
-    store_id: &str,
+    store_id: impl Into<StoreId>,
     delta: Amount,
     comment: &str,
     source_store_id: Option<String>,
     timestamp: Option<String>,
 ) -> Result<Transaction> {
-    let store =
-        find_store(doc, store_id).ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
+    let store_id = store_id.into();
+    let store = find_store(doc, store_id.as_str())
+        .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
     let info = store
         .loyalty
         .clone()

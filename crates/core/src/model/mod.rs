@@ -12,6 +12,7 @@ pub mod enrichment;
 pub mod entity_ref;
 #[cfg(any(test, feature = "testkit"))]
 pub mod fixtures;
+pub mod ids;
 pub mod inflation;
 pub(crate) mod iso_date;
 pub mod notify;
