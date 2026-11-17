@@ -645,6 +645,19 @@ mod tests {
     }
 
     #[test]
+    fn an_out_of_range_fetch_is_recorded_and_not_due() {
+        let (_dir, mut vault) = vault();
+        let id = vault.save_data_source(draft(vec![])).unwrap().source.id;
+        vault
+            .apply_source_fetch(&id, Err("number out of range".into()), true)
+            .unwrap();
+        let source = vault.data_source(&id).unwrap();
+        assert!(source.checked_at.is_some());
+        assert_eq!(source.failures, 1);
+        assert!(!is_due(source, chrono::Utc::now()));
+    }
+
+    #[test]
     fn a_jump_waits_for_confirmation() {
         let (_dir, mut vault) = vault();
         let id = vault.save_data_source(draft(vec![])).unwrap().source.id;

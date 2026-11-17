@@ -443,6 +443,18 @@ struct Run {
     depleted_at: Option<u32>,
 }
 
+/// `balance` in money of today; a quotient beyond a decimal saturates to the
+/// bound of its sign.
+fn deflate(balance: Decimal, deflator: Decimal) -> Decimal {
+    balance.checked_div(deflator).unwrap_or_else(|| {
+        if balance.is_sign_negative() == deflator.is_sign_negative() {
+            Decimal::MAX
+        } else {
+            Decimal::MIN
+        }
+    })
+}
+
 impl Run {
     /// `None` when a number outgrows a decimal.
     fn new(input: &InvestInput, start: NaiveDate, horizon: u32) -> Option<Run> {
@@ -582,6 +594,10 @@ impl Run {
             deflator = deflator
                 .checked_mul(self.inflation_month)
                 .unwrap_or(Decimal::MAX);
+            if deflator.is_zero() {
+                // Underflow to zero: the smallest positive keeps the division defined.
+                deflator = Decimal::new(1, 28);
+            }
             if (month - 1).is_multiple_of(12) {
                 years.push(InvestYear {
                     year: (month - 1) / 12 + 1,
@@ -597,7 +613,7 @@ impl Run {
             year.withdrawn += money(step.withdrawn);
             year.invested = money(invested);
             year.balance = money(step.balance);
-            year.real_balance = money(step.balance / deflator);
+            year.real_balance = money(deflate(step.balance, deflator));
             let date = self
                 .start
                 .checked_add_months(Months::new(month - 1))
@@ -616,7 +632,7 @@ impl Run {
         let contributed = sum(|step| step.contributed);
         InvestResult {
             final_nominal: money(self.final_balance()),
-            final_real: money(self.final_balance() / deflator),
+            final_real: money(deflate(self.final_balance(), deflator)),
             contributed,
             invested: money(self.initial) + contributed,
             interest: sum(|step| step.interest),
@@ -816,6 +832,14 @@ mod tests {
 
     fn amt(raw: &str) -> Amount {
         Amount::parse(raw).unwrap()
+    }
+
+    #[test]
+    fn deflating_past_a_decimal_saturates_by_sign() {
+        let tiny = Decimal::new(1, 28);
+        assert_eq!(deflate(Decimal::MAX, tiny), Decimal::MAX);
+        assert_eq!(deflate(Decimal::MIN, tiny), Decimal::MIN);
+        assert_eq!(deflate(Decimal::MAX, -tiny), Decimal::MIN);
     }
 
     fn assert_amt(actual: Amount, expected: &str) {
@@ -1074,6 +1098,16 @@ mod tests {
             ..input
         };
         assert_eq!(safe_withdrawal(&none).unwrap(), None);
+    }
+
+    #[test]
+    fn a_deflator_that_underflows_gives_a_finite_real_balance() {
+        let input = InvestInput {
+            inflation_pct: amt("-99.9999999999999999999"),
+            ..base("1000", "0", 120)
+        };
+        let res = simulate(&input).unwrap();
+        assert_eq!(res.years.len(), 10);
     }
 
     #[test]

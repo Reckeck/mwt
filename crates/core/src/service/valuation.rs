@@ -67,7 +67,8 @@ impl ValuationCurve {
         };
         let elapsed = (secs - last_at).min(MAX_MONTHS * MONTH_SECS);
         let whole = elapsed / MONTH_SECS;
-        let start = last * rule.monthly.pow_int(u32::try_from(whole).unwrap_or(0));
+        let growth = rule.monthly.pow_int(u32::try_from(whole).unwrap_or(0));
+        let start = last.checked_mul(growth).unwrap_or(Amount::MAX);
         let end = start * rule.monthly;
         let share = secs_amount(elapsed - whole * MONTH_SECS) / secs_amount(MONTH_SECS);
         let value = start + (end - start) * share;
@@ -661,6 +662,14 @@ mod tests {
 
     fn near(left: Amount, right: &str) -> bool {
         (left - amount(right)).abs() < amount("0.01")
+    }
+
+    #[test]
+    fn a_huge_value_with_a_growth_rule_saturates() {
+        let huge = curve(&[(0, "1000000000000000000")], Some(("100", None)));
+        let value = huge.value_at(MAX_MONTHS * MONTH_SECS).unwrap();
+        assert!(value > amount("1000000000000000000"));
+        assert!(value <= Amount::MAX);
     }
 
     #[test]

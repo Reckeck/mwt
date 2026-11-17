@@ -24,7 +24,14 @@ pub fn parse_number(text: &str, format: &NumberFormat) -> Option<Amount> {
     let raw = first_number_token(&cleaned)?;
     let normalized = normalize(&raw, format.decimal_comma)?;
     let value = rust_decimal::Decimal::from_str(&normalized).ok()?;
-    Some(Amount::new(value) * format.multiplier)
+    scaled(Amount::new(value), format)
+}
+
+/// `value * multiplier`, `None` when it overflows or leaves the input bound.
+pub(super) fn scaled(value: Amount, format: &NumberFormat) -> Option<Amount> {
+    value
+        .checked_mul(format.multiplier)
+        .filter(|product| product.within_input_bound())
 }
 
 /// The digits, separators and sign of the first number in `text`.
@@ -135,6 +142,15 @@ mod tests {
             Some(amount("14.00"))
         );
         assert_eq!(parse_number("2025 6,35", &russian()), Some(amount("2025")));
+    }
+
+    #[test]
+    fn a_number_out_of_range_is_none() {
+        let format = NumberFormat {
+            multiplier: amount("10"),
+            ..english()
+        };
+        assert_eq!(parse_number("79228162514264337593543950335", &format), None);
     }
 
     #[test]

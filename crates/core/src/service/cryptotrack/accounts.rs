@@ -433,6 +433,12 @@ mod tests {
     use crate::model::chain::Chain;
     use crate::model::cryptotrack::{CryptoLeg, CryptoTx, CryptoTxKind, TrackingRef};
 
+    /// A junk token reports quantities past the input bound, so these tests
+    /// build them without `Amount::parse`.
+    fn unbounded(text: &str) -> Amount {
+        Amount::new(text.parse().expect("a test amount"))
+    }
+
     const ADDRESS: &str = "0x7a3F19c4D2b85E6F0a9C41b7cE3a0D8e2f4b9bC1";
     const SCAM: &str = "0x00000000000000000000000000000000deadbeef";
 
@@ -648,7 +654,7 @@ mod tests {
             legs: vec![CryptoLeg {
                 direction,
                 asset: CryptoAsset::Token(token.clone()),
-                amount: Amount::parse(amount).unwrap(),
+                amount: unbounded(amount),
                 counterparty: None,
             }],
             gas: None,
@@ -719,7 +725,7 @@ mod tests {
         }
         let listed = vault.crypto_list_accounts().remove(0);
         assert_eq!(listed.quarantine.len(), 1);
-        assert!(listed.quarantine[0].quantity >= Amount::parse(huge).unwrap());
+        assert!(listed.quarantine[0].quantity >= unbounded(huge));
     }
 
     #[test]
@@ -730,7 +736,7 @@ mod tests {
             id: format!("snap-{day}"),
             at: format!("{day}T12:00:00Z"),
             account_id: Some("acc".into()),
-            value_usd: Amount::parse(value).unwrap(),
+            value_usd: unbounded(value),
         };
         vault.doc.crypto_snapshots = vec![
             snapshot("2026-10-13", "-70000000000000000000000000000"),

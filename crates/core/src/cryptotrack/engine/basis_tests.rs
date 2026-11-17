@@ -20,7 +20,7 @@ mod tests {
     const POOL: &str = "0x5555555555555555555555555555555555555555";
 
     fn amount(text: &str) -> Amount {
-        Amount::parse(text).expect("a test amount")
+        Amount::new(text.parse().expect("a test amount"))
     }
 
     fn eth() -> CryptoAsset {

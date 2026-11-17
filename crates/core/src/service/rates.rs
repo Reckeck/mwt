@@ -124,9 +124,9 @@ impl RateBook {
         if from == to {
             return Some(amount);
         }
-        let usd = amount * self.code_usd(&from, secs)?;
+        let usd = amount.checked_mul(self.code_usd(&from, secs)?)?;
         let to_unit = self.code_usd(&to, secs)?;
-        (!to_unit.is_zero()).then(|| usd / to_unit)
+        usd.checked_div(to_unit)
     }
 
     /// Price of one unit of a leg's asset in `base` at the moment of the
@@ -525,6 +525,17 @@ mod tests {
             fx("rub", "100", "2026-06-01T00:00:00Z"),
             fx("thb", "40", "2026-06-01T00:00:00Z"),
         ]);
+    }
+
+    #[test]
+    fn convert_of_a_huge_amount_is_none_not_a_panic() {
+        let (_dir, mut vault) = empty_vault();
+        vault.base_currency = "usd".into();
+        vault.apply_fx(&[fx("eur", "0.000000000001", "2026-01-01T00:00:00Z")]);
+        assert_eq!(
+            vault.convert_at(Amount::MAX_INPUT, "eur", "usd", "2026-01-15T00:00:00Z"),
+            None
+        );
     }
 
     #[test]

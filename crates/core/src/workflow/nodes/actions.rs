@@ -2,6 +2,7 @@
 //! queue, stop, events and waits.
 
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use serde_json::Value;
 
 use crate::Amount;
@@ -29,6 +30,24 @@ const SAME_RUN_WINDOW_SECS: i64 = 24 * 3600;
 
 fn places_for(asset: &AssetRef) -> u32 {
     if asset.is_fiat() { 2 } else { 8 }
+}
+
+/// The longest wait a node may ask for: 100 years of hours.
+const MAX_WAIT_HOURS: i64 = 876_000;
+
+/// Whole seconds in a wait of `hours`; a wait beyond the limit is an error.
+fn wait_seconds(hours: Amount) -> Result<i64, String> {
+    let hours = hours.into_inner();
+    if hours < Decimal::ZERO {
+        return Err("the wait cannot be negative".into());
+    }
+    if hours > Decimal::from(MAX_WAIT_HOURS) {
+        return Err("the wait is too long".into());
+    }
+    (hours * Decimal::from(3600))
+        .trunc()
+        .to_i64()
+        .ok_or_else(|| "the wait is too long".to_string())
 }
 
 fn positive(amount: Option<Amount>, what: &str) -> Result<Amount, String> {
@@ -554,13 +573,14 @@ impl Executor<'_> {
                         ),
                     ));
                 }
-                let hours = json_number(&self.raw_param(node, "timeout_hours"))
+                let hours = self
+                    .number_param(node, "timeout_hours")?
                     .unwrap_or(Amount::ZERO)
                     .max(Amount::ZERO);
                 let resume_at = if hours.is_zero() {
                     String::new()
                 } else {
-                    crate::calendar::iso(now + (hours.to_f64() * 3600.0) as i64)
+                    crate::calendar::iso(now + wait_seconds(hours)?)
                 };
                 Err(Halt::Wait(Box::new(WorkflowWait {
                     id: self.wait_id(node),
@@ -604,15 +624,13 @@ impl Executor<'_> {
                 ))
             }
             "action.wait" => {
-                let hours = self
-                    .number_input(node, "hours")?
-                    .unwrap_or(Amount::ZERO)
-                    .max(Amount::ZERO);
-                let resume_at = crate::calendar::iso(now + (hours.to_f64() * 3600.0) as i64);
+                let hours = self.number_input(node, "hours")?.unwrap_or(Amount::ZERO);
+                let wait = wait_seconds(hours)?;
+                let resume_at = crate::calendar::iso(now + wait);
                 if self.ctx.mode == RunMode::DryRun {
                     // The emulation goes on at once, but as at the moment the
                     // real run would wake: dates and reminders after it see that.
-                    self.advance_clock((hours.to_f64() * 3600.0) as i64);
+                    self.advance_clock(wait);
                     return Ok(Step::next(
                         "out",
                         format!(
@@ -754,4 +772,106 @@ impl Executor<'_> {
 
 fn secs_of(timestamp: &str, fallback: i64) -> i64 {
     crate::pricing::history::unix_secs(timestamp).unwrap_or(fallback)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::workflow::RunOutcome;
+    use serde_json::json;
+
+    fn outcome_of(kind: &str, params: serde_json::Value) -> crate::workflow::RunOutcome {
+        let dir = tempfile::tempdir().unwrap();
+        let vault =
+            crate::service::UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+        let graph = serde_json::json!({
+            "version": 1,
+            "nodes": [
+                { "id": "t", "kind": "trigger.manual", "params": {} },
+                { "id": "n", "kind": kind, "params": params },
+            ],
+            "edges": [{
+                "id": "t.out>n.in", "from": "t", "from_port": "out", "to": "n", "to_port": "in",
+            }],
+        })
+        .to_string();
+        let now = crate::calendar::now_secs() + 5;
+        vault
+            .dry_run_workflow(
+                &graph,
+                None,
+                None,
+                std::collections::BTreeMap::new(),
+                now,
+                "UTC",
+            )
+            .unwrap()
+            .run
+            .outcome
+    }
+
+    fn failure(kind: &str, params: serde_json::Value) -> String {
+        match outcome_of(kind, params) {
+            RunOutcome::Failed { message } => message,
+            other => panic!("expected a failure, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_huge_wait_is_an_error_not_a_wrapped_time() {
+        for hours in [
+            1_000_000_000_000_000_000_i64,
+            9_000_000_000_000_000,
+            876_001,
+        ] {
+            assert!(
+                failure("action.wait", json!({ "hours": hours })).contains("the wait is too long")
+            );
+        }
+        assert!(
+            failure(
+                "action.confirm",
+                json!({ "timeout_hours": 1_000_000_000_000_000_000_i64 })
+            )
+            .contains("the wait is too long")
+        );
+    }
+
+    #[test]
+    fn a_day_wait_is_exactly_86400_seconds() {
+        assert_eq!(
+            super::wait_seconds(crate::Amount::parse("24").unwrap()),
+            Ok(86_400)
+        );
+        assert_eq!(
+            super::wait_seconds(crate::Amount::parse("876000").unwrap()),
+            Ok(876_000 * 3600)
+        );
+        assert!(matches!(
+            outcome_of("action.wait", json!({ "hours": "24" })),
+            RunOutcome::Done
+        ));
+    }
+
+    #[test]
+    fn a_wait_beyond_the_number_bound_is_an_error_not_zero() {
+        assert!(
+            failure(
+                "action.wait",
+                json!({ "hours": 10_000_000_000_000_000_000_u64 })
+            )
+            .contains("out of range")
+        );
+        assert!(
+            failure(
+                "action.confirm",
+                json!({ "timeout_hours": 10_000_000_000_000_000_000_u64 })
+            )
+            .contains("out of range")
+        );
+    }
+
+    #[test]
+    fn a_negative_wait_is_an_error() {
+        assert!(super::wait_seconds(crate::Amount::parse("-1").unwrap()).is_err());
+    }
 }
