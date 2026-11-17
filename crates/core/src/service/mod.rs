@@ -21,6 +21,7 @@ use crate::model::transaction::{
     TransferTx, TxMeta, TxOrigin,
 };
 use crate::model::vault::{PendingImport, Settings, VaultDoc, iso_to_millis, now_iso};
+use crate::money::cost_basis::{self, CostBook, Movement, PositionKey};
 use crate::pricing::history::secs_or_now;
 use crate::storage::{SnapshotFormat, VaultFile};
 
@@ -82,6 +83,8 @@ mod sync_journal;
 mod vehicle;
 mod where_went;
 pub use peer_sync::{AppliedBatch, ExternalMerge, PeerRef, SyncTap, UndoReport};
+#[cfg(test)]
+mod golden_tests;
 mod preview;
 mod price_info;
 mod rates;
@@ -1574,9 +1577,8 @@ impl UnlockedVault {
     fn recompute_holdings(&mut self) {
         // A correction keeps the real balance; its difference follows history.
         self.rebase_adjustments();
-        // key: (store_id, asset_key) -> (quantity, avg_cost)
-        let mut qty: HashMap<(String, String), Amount> = HashMap::new();
-        let mut cost: HashMap<(String, String), Amount> = HashMap::new();
+        let mut cost_book = CostBook::default();
+        let mut seen: HashSet<PositionKey> = HashSet::new();
         let base = self.base_currency.to_ascii_lowercase();
         let base = if base.is_empty() {
             crate::appconfig::DEFAULT_BASE_CURRENCY.to_string()
@@ -1595,31 +1597,14 @@ impl UnlockedVault {
         for tx in &txs {
             let secs = secs_or_now(&tx.meta().timestamp);
             for leg in tx.legs() {
-                let key = (leg.store_id.clone(), leg.asset.key());
                 let delta = leg.amount;
                 if delta.is_zero() {
                     continue;
                 }
+                let key = position_key(&leg);
                 let price = book.leg_price_in_base(&leg, &base, secs);
-                let cur = qty.get(&key).copied().unwrap_or(Amount::ZERO);
-                let new_qty = cur + delta;
-
-                if delta.is_positive() && leg.role != LegRole::Fee && !price.is_zero() {
-                    // weighted average cost
-                    let new_cost = {
-                        let old = cost.get(&key).copied().unwrap_or(Amount::ZERO);
-                        let total_cost = old * cur + price * delta;
-                        if new_qty == Amount::ZERO {
-                            Amount::ZERO
-                        } else {
-                            total_cost / new_qty
-                        }
-                    };
-                    cost.insert(key.clone(), new_cost);
-                }
-                // sells keep avg_cost unchanged (realized PnL measured against
-                // it is computed on demand in analytics)
-                qty.insert(key, new_qty);
+                cost_book.apply(&key, delta, movement_of(&leg, price));
+                seen.insert(key);
             }
         }
 
@@ -1635,21 +1620,23 @@ impl UnlockedVault {
             }
         }
 
-        self.doc.holdings = qty
+        self.doc.holdings = seen
             .into_iter()
-            .filter(|(_, quantity)| !quantity.is_zero())
-            .map(|((store_id, asset_key), quantity)| {
-                let asset = identity
-                    .remove(&(store_id.clone(), asset_key.clone()))
-                    .unwrap_or_else(|| AssetRef::fiat("UNKNOWN", "Unknown"));
-                let avg_cost = cost.get(&(store_id.clone(), asset_key.clone())).copied();
-                Holding {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    store_id,
-                    asset,
-                    quantity,
-                    avg_cost,
+            .filter_map(|key| {
+                let position = cost_book.position(&key);
+                if position.quantity.is_zero() {
+                    return None;
                 }
+                let asset = identity
+                    .remove(&(key.store_id.clone(), key.asset_key.clone()))
+                    .unwrap_or_else(|| AssetRef::fiat("UNKNOWN", "Unknown"));
+                Some(Holding {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    store_id: key.store_id,
+                    asset,
+                    quantity: position.quantity,
+                    avg_cost: position.cost,
+                })
             })
             .collect();
 
@@ -1759,10 +1746,8 @@ impl UnlockedVault {
                 let price_usd = quote.usd;
                 let value_usd = holding.quantity * price_usd;
                 let price_base = price_usd * fx;
-                let unrealized_base = match holding.avg_cost {
-                    Some(cost) => (price_base - cost) * holding.quantity.abs(),
-                    None => Amount::ZERO,
-                };
+                let unrealized_base =
+                    cost_basis::unrealized(holding.quantity, holding.avg_cost, price_base);
                 StorePosition {
                     asset: holding.asset.clone(),
                     quantity: holding.quantity,
@@ -2369,9 +2354,7 @@ impl UnlockedVault {
         }
         movements.sort_by(|left, right| left.0.cmp(&right.0));
 
-        // avg cost tracking per (store, asset)
-        let mut cost: HashMap<(String, String), Amount> = HashMap::new();
-        let mut qty: HashMap<(String, String), Amount> = HashMap::new();
+        let mut cost_book = CostBook::default();
         let mut total = Amount::ZERO;
         let mut fees = Amount::ZERO;
         let mut legs = Vec::new();
@@ -2381,9 +2364,9 @@ impl UnlockedVault {
             if delta.is_zero() || leg.asset.is_derivative() {
                 continue;
             }
-            let key = (leg.store_id.clone(), leg.asset.key());
+            let key = position_key(leg);
             let price = book.leg_price_in_base(leg, &base, secs_or_now(ts));
-            let cur = qty.get(&key).copied().unwrap_or(Amount::ZERO);
+            let realized = cost_book.apply(&key, delta, movement_of(leg, price));
             match leg.role {
                 // A fee is a cost of its own, never a sale at a profit.
                 LegRole::Fee => fees += delta.abs() * price,
@@ -2401,38 +2384,23 @@ impl UnlockedVault {
                         side: "settled".into(),
                     });
                 }
-                // Moving to one's own wallet, or spending without a known
-                // price, realizes nothing.
-                LegRole::Principal
-                    if delta.is_negative() && leg.to_store_id.is_none() && !price.is_zero() =>
-                {
-                    let avg = cost.get(&key).copied().unwrap_or(Amount::ZERO);
-                    let pnl = (price - avg) * delta.abs();
-                    total += pnl;
-                    legs.push(PnlLeg {
-                        ts: ts.clone(),
-                        tx_id: tx_id.to_string(),
-                        store_id: leg.store_id.clone(),
-                        asset_key: leg.asset.key(),
-                        quantity: delta.abs(),
-                        pnl_base: pnl,
-                        side: "sell".into(),
-                    });
+                // Only the covered part of a sale that leaves the user's
+                // wallets is a profit; the rule lives in `cost_basis`.
+                LegRole::Principal | LegRole::Adjustment => {
+                    if let Some(sale) = realized {
+                        total += sale.pnl_base;
+                        legs.push(PnlLeg {
+                            ts: ts.clone(),
+                            tx_id: tx_id.to_string(),
+                            store_id: leg.store_id.clone(),
+                            asset_key: leg.asset.key(),
+                            quantity: sale.quantity,
+                            pnl_base: sale.pnl_base,
+                            side: "sell".into(),
+                        });
+                    }
                 }
-                LegRole::Principal | LegRole::Adjustment if delta.is_positive() => {
-                    let new_qty = cur + delta;
-                    let new_cost = if new_qty.is_zero() {
-                        Amount::ZERO
-                    } else {
-                        (cost.get(&key).copied().unwrap_or(Amount::ZERO) * cur + price * delta)
-                            / new_qty
-                    };
-                    cost.insert(key.clone(), new_cost);
-                }
-                // Found missing: the position shrinks, nothing is sold.
-                LegRole::Principal | LegRole::Adjustment => {}
             }
-            qty.insert(key, cur + delta);
         }
         RealizedPnl {
             total_base: total,
@@ -3308,6 +3276,32 @@ struct TreeCtx<'doc> {
 const TOP_ASSETS: usize = 3;
 
 /// Live before archived, then by name.
+fn position_key(leg: &Leg) -> PositionKey {
+    PositionKey {
+        store_id: leg.store_id.clone(),
+        asset_key: leg.asset.key(),
+    }
+}
+
+/// How a leg moves its position. A leg outside cost basis (fiat, derivative,
+/// fee, settled PnL) still moves the quantity, but at an unknown price, so it
+/// neither sets a cost nor realizes a profit.
+fn movement_of(leg: &Leg, price_base: Amount) -> Movement {
+    let price_base = if cost_basis::takes_part(leg) {
+        price_base
+    } else {
+        Amount::ZERO
+    };
+    if leg.amount.is_positive() {
+        Movement::Incoming { price_base }
+    } else {
+        Movement::Outgoing {
+            price_base,
+            leaves: leg.role == LegRole::Principal && leg.to_store_id.is_none(),
+        }
+    }
+}
+
 fn sort_tree(nodes: &mut [StoreTreeNode]) {
     nodes.sort_by(|left, right| {
         left.store
@@ -4742,22 +4736,67 @@ mod tests {
     }
 
     /// The average cost a holding carries must equal the one PnL measures
-    /// against, since both come from the same leg replay.
+    /// against, since both replays use `cost_basis`. An unpriced buy moves
+    /// the quantity but does not dilute the cost.
     #[test]
     fn average_cost_is_consistent_with_pnl() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        let mut buy = income_of(&store, btc(), "1", "40000", "buy");
+        let cost_of = |vault: &UnlockedVault| {
+            vault
+                .doc
+                .holdings
+                .iter()
+                .find(|holding| holding.store_id == store && holding.asset.key() == btc().key())
+                .map(|holding| (holding.quantity, holding.avg_cost))
+                .unwrap()
+        };
+        let mut buy = income_of(&store, btc(), "1", "50000", "buy");
         at(&mut buy, "2026-01-01T00:00:00Z");
         vault.add_transaction(buy).unwrap();
+        let mut unpriced = income_of(&store, btc(), "1", "0", "airdrop");
+        at(&mut unpriced, "2026-01-02T00:00:00Z");
+        vault.add_transaction(unpriced).unwrap();
+        let (quantity, cost) = cost_of(&vault);
+        assert_eq!(quantity, amount("2"));
+        assert_eq!(cost, Some(amount("50000")));
 
+        let mut sell = sell_btc(&store, "1", "60000", "60000");
+        at(&mut sell, "2026-01-03T00:00:00Z");
+        vault.add_transaction(sell).unwrap();
+        let pnl = vault.realized_pnl();
+        assert_eq!(pnl.legs.len(), 1);
+        assert_eq!(
+            pnl.legs[0].pnl_base,
+            (amount("60000") - cost.unwrap()) * amount("1")
+        );
+        assert_eq!(pnl.legs[0].pnl_base, amount("10000"));
+        let (quantity, cost) = cost_of(&vault);
+        assert_eq!(quantity, amount("1"));
+        assert_eq!(cost, Some(amount("50000")));
+    }
+
+    /// Paying 0.5 BTC the vault never saw arrive is spending, not profit,
+    /// and leaves no cost behind.
+    #[test]
+    fn spending_from_an_untracked_crypto_balance_is_not_profit() {
+        let (_dir, mut vault) = setup();
+        let store = vault.doc.stores[1].id.clone();
+        let mut sale = sell_btc(&store, "0.5", "30000", "60000");
+        at(&mut sale, "2026-01-01T00:00:00Z");
+        vault.add_transaction(sale).unwrap();
+
+        let pnl = vault.realized_pnl();
+        assert_eq!(pnl.total_base, Amount::ZERO);
+        assert!(pnl.legs.is_empty());
         let holding = vault
             .doc
             .holdings
             .iter()
             .find(|holding| holding.store_id == store && holding.asset.key() == btc().key())
             .unwrap();
-        assert_eq!(holding.avg_cost.unwrap().to_string(), "40000");
+        assert_eq!(holding.quantity, amount("-0.5"));
+        assert_eq!(holding.avg_cost, None);
     }
 
     #[test]

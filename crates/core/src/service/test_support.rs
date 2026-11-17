@@ -229,3 +229,8 @@ pub fn quote_usd(vault: &mut UnlockedVault) {
         change_24h_pct: None,
     });
 }
+
+/// Unix seconds of a fixed instant, so a test never reads the wall clock.
+pub fn secs(iso: &str) -> i64 {
+    crate::pricing::history::unix_secs(iso).unwrap()
+}

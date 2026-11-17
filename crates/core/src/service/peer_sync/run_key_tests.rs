@@ -301,6 +301,7 @@ fn old_peer_tx(vault: &mut UnlockedVault, run: &str, key: Option<&str>) {
             workflow_id: "salary".into(),
             run_id: run.into(),
             planned_at: Some("2026-11-01T09:00:00Z".into()),
+            planned_date: None,
             estimated: false,
             run_key: key.map(str::to_string),
         };

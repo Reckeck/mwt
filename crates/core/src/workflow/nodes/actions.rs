@@ -144,6 +144,7 @@ impl Executor<'_> {
             workflow_id: self.ctx.workflow_id.clone(),
             run_id: self.ctx.run_id.clone(),
             planned_at: planned.map(crate::calendar::iso),
+            planned_date: None,
             estimated: false,
             run_key: self.ctx.run_key.clone(),
         };

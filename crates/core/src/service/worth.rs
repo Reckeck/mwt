@@ -365,13 +365,12 @@ mod tests {
     use crate::model::store::{AssetRef, LiabilityKind, LiabilityTerms, StoreScope};
     use crate::service::StoreExtras;
 
-    /// A credit card: draw the loan, buy with the card, interest, pay back.
-    #[test]
-    fn a_loan_is_a_negative_balance_and_a_liability() {
-        let (_dir, mut vault) = empty_vault();
+    /// A bank and a credit card: draw 500, pay 200 at a shop, 10 interest,
+    /// repay 300 (the repayment is priced at 1, as an app-booked one is).
+    fn credit_card_story(vault: &mut UnlockedVault) -> (String, Transaction, Transaction) {
         vault.set_base_currency("usd");
-        quote_usd(&mut vault);
-        let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
+        quote_usd(vault);
+        let bank = store(vault, "Bank", StoreKind::Bank, None);
         let card = vault
             .create_store_with(
                 "Card",
@@ -405,13 +404,24 @@ mod tests {
         let mut interest = payment(&card, "10", "interest");
         interest.meta_mut().categories = vec!["loan_interest".into()];
         vault.add_transaction(interest.clone()).unwrap();
-        let repay = transfer_between(
-            AccountRef::Store(bank.clone()),
+        let mut repay = transfer_between(
+            AccountRef::Store(bank),
             AccountRef::Store(card.clone()),
             usd(),
             "300",
         );
+        if let Transaction::Transfer(transfer) = &mut repay {
+            transfer.price = usd_price("1");
+        }
         vault.add_transaction(repay.clone()).unwrap();
+        (card, interest, repay)
+    }
+
+    /// A credit card: draw the loan, buy with the card, interest, pay back.
+    #[test]
+    fn a_loan_is_a_negative_balance_and_a_liability() {
+        let (_dir, mut vault) = empty_vault();
+        let (card, interest, repay) = credit_card_story(&mut vault);
 
         assert_eq!(holding_of(&vault, &card, &usd()), amount("-410"));
         let worth = vault.net_worth();
@@ -432,6 +442,53 @@ mod tests {
         // paying the loan off is a mandatory cost; the card is outside the budget
         assert_eq!(vault.classify_flow(&repay), FlowClass::Fixed);
         assert_eq!(vault.classify_flow(&interest), FlowClass::Ignored);
+    }
+
+    /// A fiat card is never a position: no profit, no cost, no unrealized
+    /// result, however the repayment is priced.
+    #[test]
+    fn a_liability_store_books_no_profit() {
+        use super::super::ledger::TxFilter;
+        use super::super::reports::{Report, ReportFilter, ReportKind};
+        let (_dir, mut vault) = empty_vault();
+        let (card, _interest, _repay) = credit_card_story(&mut vault);
+
+        let pnl = vault.realized_pnl();
+        assert_eq!(pnl.total_base, Amount::ZERO);
+        assert!(pnl.legs.is_empty());
+        let holding = vault
+            .doc
+            .holdings
+            .iter()
+            .find(|holding| holding.store_id == card)
+            .unwrap();
+        assert_eq!(holding.quantity, amount("-410"));
+        assert_eq!(holding.avg_cost, None);
+        assert_eq!(
+            vault.store_overview(&card, true).unwrap().unrealized_base,
+            Amount::ZERO
+        );
+        let Report::Pnl(report) = vault
+            .report(
+                ReportKind::Pnl,
+                &ReportFilter::default(),
+                secs("2026-03-01T12:00:00Z"),
+                "UTC",
+            )
+            .unwrap()
+        else {
+            panic!("a pnl report")
+        };
+        assert!(!report.has_data);
+        assert_eq!(report.total_realized, Amount::ZERO);
+        let filter = TxFilter {
+            realized: true,
+            ..TxFilter::default()
+        };
+        assert!(vault.list_transactions(&filter, "UTC").unwrap().is_empty());
+        let worth = vault.net_worth();
+        assert_eq!(worth.liabilities, amount("410"));
+        assert_eq!(worth.net, amount("-210"));
     }
 
     /// Plan §7.3, one row at a time.

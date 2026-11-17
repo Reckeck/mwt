@@ -139,6 +139,7 @@ pub(crate) fn draft_to_transaction(
         workflow_id: automation_id.to_string(),
         run_id: String::new(),
         planned_at: (!planned_at.is_empty()).then(|| planned_at.to_string()),
+        planned_date: None,
         estimated: false,
         run_key: None,
     };
@@ -409,6 +410,16 @@ impl UnlockedVault {
     /// Change what an automation does: its graph is built again, the old one
     /// kept as a version. Dates already processed stay processed.
     pub fn update_automation(&mut self, id: &str, draft: AutomationDraft) -> Result<Automation> {
+        self.update_automation_at(id, draft, calendar::now_secs())
+    }
+
+    /// [`Self::update_automation`] with the edit moment given by the caller.
+    pub fn update_automation_at(
+        &mut self,
+        id: &str,
+        draft: AutomationDraft,
+        edited_at: i64,
+    ) -> Result<Automation> {
         self.check_automation(&draft)?;
         let spec = draft.spec();
         let graph = serde_json::to_string(&automation_graph(&spec))
@@ -431,6 +442,11 @@ impl UnlockedVault {
         workflow.name = draft.name.trim().to_string();
         workflow.active = draft.active;
         workflow.updated_at = now;
+        let schedule_changed = workflow.automation.as_ref().is_some_and(|old| {
+            old.schedule != spec.schedule
+                || old.time != spec.time
+                || old.workday_shift != spec.workday_shift
+        });
         workflow.automation = Some(spec.clone());
         // A start moved later holds the schedule back until then.
         let key = graph_of::schedule_key();
@@ -440,6 +456,14 @@ impl UnlockedVault {
             .is_none_or(|mark| secs_or_now(&mark) < secs_or_now(&start))
         {
             self.wf_set_mark(id, &key, &start);
+        }
+        // A changed schedule plans from the edit on: nothing is back-filled.
+        if schedule_changed
+            && self
+                .wf_mark(id, &key)
+                .is_none_or(|mark| secs_or_now(&mark) < edited_at)
+        {
+            self.wf_set_mark(id, &key, &calendar::iso(edited_at));
         }
         self.persist()?;
         self.automation(id)
@@ -757,6 +781,7 @@ impl UnlockedVault {
                 values: Default::default(),
             }],
             dry_run: false,
+            planned_date: None,
         });
         self.persist()?;
         Ok(saved)
@@ -903,6 +928,23 @@ mod tests {
         TransactionDraft::Payment(PaymentTx { ..inner })
     }
 
+    fn monthly_draft(name: &str, day: u8, template: TransactionDraft) -> AutomationDraft {
+        AutomationDraft {
+            time: None,
+            asks: false,
+            for_month_offset: None,
+            name: name.into(),
+            active: true,
+            preset: None,
+            schedule: Schedule::Monthly { day },
+            starts_at: "2026-01-01T00:00:00Z".into(),
+            template,
+            amount_mode: Default::default(),
+            workday_shift: Default::default(),
+            property_id: None,
+        }
+    }
+
     fn monthly(
         vault: &mut UnlockedVault,
         name: &str,
@@ -910,20 +952,7 @@ mod tests {
         template: TransactionDraft,
     ) -> Automation {
         vault
-            .create_automation(AutomationDraft {
-                time: None,
-                asks: false,
-                for_month_offset: None,
-                name: name.into(),
-                active: true,
-                preset: None,
-                schedule: Schedule::Monthly { day },
-                starts_at: "2026-01-01T00:00:00Z".into(),
-                template,
-                amount_mode: Default::default(),
-                workday_shift: Default::default(),
-                property_id: None,
-            })
+            .create_automation(monthly_draft(name, day, template))
             .unwrap()
     }
 
@@ -1685,5 +1714,398 @@ mod tests {
         // 1 November 2026 is a Sunday: back to Friday.
         assert_eq!(dates[0], "2026-10-30T09:00:00Z");
         assert_eq!(dates[1], "2026-12-01T09:00:00Z");
+    }
+
+    /// Planned moments of every booking an automation workflow made, oldest first.
+    fn planned_of_bookings(vault: &UnlockedVault) -> Vec<String> {
+        vault
+            .doc
+            .transactions
+            .iter()
+            .filter_map(|tx| match &tx.meta().origin {
+                TxOrigin::Workflow {
+                    planned_at: Some(planned),
+                    ..
+                } => Some(planned.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Monthly rent on the 15th at 09:00 Berlin, started on Jan 1.
+    fn berlin_rent(vault: &mut UnlockedVault, from: &str) -> Automation {
+        let account = store(vault, "Cash", StoreKind::Cash, None);
+        let income = {
+            let mut funding = income(&account, "1000", "float");
+            at(&mut funding, "2026-01-01T00:00:00Z");
+            funding
+        };
+        vault.add_transaction(income).unwrap();
+        monthly(vault, "Rent", 15, rent_draft(&account, from))
+    }
+
+    /// G6: one booking per planned date; a later tick the same day books nothing.
+    #[test]
+    fn golden_g6_a_monthly_automation_fires_once_per_planned_date() {
+        let (_dir, mut vault) = empty_vault();
+        berlin_rent(&mut vault, "300");
+        let tick = |vault: &mut UnlockedVault, iso: &str| {
+            vault
+                .run_due_workflows(secs(iso), "Europe/Berlin")
+                .unwrap()
+                .created
+                .len()
+        };
+        assert_eq!(tick(&mut vault, "2026-01-14T12:00:00Z"), 0);
+        assert_eq!(planned_of_bookings(&vault).len(), 0);
+        assert_eq!(tick(&mut vault, "2026-01-15T09:00:00Z"), 1);
+        assert_eq!(planned_of_bookings(&vault), ["2026-01-15T08:00:00Z"]);
+        assert_eq!(tick(&mut vault, "2026-01-15T20:00:00Z"), 0);
+        assert_eq!(planned_of_bookings(&vault).len(), 1);
+        assert_eq!(tick(&mut vault, "2026-02-20T12:00:00Z"), 1);
+        assert_eq!(
+            planned_of_bookings(&vault),
+            ["2026-01-15T08:00:00Z", "2026-02-15T08:00:00Z"]
+        );
+    }
+
+    /// G7: a long absence books up to `MAX_CATCH_UP` dates and journals the older ones as skipped.
+    #[test]
+    fn golden_g7_catch_up_books_the_newest_and_skips_the_older() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        // The one monthly date inside 40 days is booked, nothing is skipped.
+        let rent = monthly(&mut vault, "Rent", 15, salary_draft(&card, "1"));
+        let pass = vault
+            .run_due_workflows(secs("2026-02-10T12:00:00Z"), "Europe/Berlin")
+            .unwrap();
+        assert_eq!((pass.created.len(), pass.skipped), (1, 0));
+        assert_eq!(planned_of_bookings(&vault), ["2026-01-15T08:00:00Z"]);
+        assert_eq!(outcomes(&vault, &rent.id), ["created"]);
+
+        // A daily automation over the same 40 days: 24 booked, 16 skipped.
+        let daily = vault
+            .create_automation(AutomationDraft {
+                time: None,
+                asks: false,
+                for_month_offset: None,
+                name: "Daily".into(),
+                active: true,
+                preset: None,
+                schedule: Schedule::EveryNDays { days: 1 },
+                starts_at: "2026-01-01T00:00:00Z".into(),
+                template: salary_draft(&card, "1"),
+                amount_mode: Default::default(),
+                workday_shift: Default::default(),
+                property_id: None,
+            })
+            .unwrap();
+        let before = planned_of_bookings(&vault).len();
+        let pass = vault
+            .run_due_workflows(secs("2026-02-10T12:00:00Z"), "Europe/Berlin")
+            .unwrap();
+        assert_eq!(pass.created.len(), MAX_CATCH_UP);
+        assert_eq!(pass.skipped, 41 - MAX_CATCH_UP);
+        assert_eq!(planned_of_bookings(&vault).len() - before, MAX_CATCH_UP);
+        let runs = outcomes(&vault, &daily.id);
+        assert_eq!(runs.len(), 41);
+        assert_eq!(
+            runs.iter().filter(|run| **run == "skipped").count(),
+            41 - MAX_CATCH_UP
+        );
+    }
+
+    /// G8: the first numbers a user sees after G6's rent and a liability card.
+    #[test]
+    fn golden_g8_net_worth_and_the_daily_budget_after_the_rent() {
+        let (_dir, mut vault) = empty_vault();
+        vault.set_base_currency("usd");
+        quote_usd(&mut vault);
+        berlin_rent(&mut vault, "300");
+        let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
+        let card = vault
+            .create_store_with(
+                "Card",
+                StoreKind::Liability,
+                "",
+                "",
+                None,
+                StoreExtras {
+                    liability: Some(LiabilityTerms {
+                        kind: LiabilityKind::CreditCard,
+                        rate: None,
+                        limit: Some(amount("1000")),
+                        due_day: Some(25),
+                        monthly_payment: None,
+                    }),
+                    ..StoreExtras::default()
+                },
+            )
+            .unwrap()
+            .id;
+        let side = |from: &str, to: &str, sum: &str| {
+            transfer_between(
+                AccountRef::Store(from.into()),
+                AccountRef::Store(to.into()),
+                usd(),
+                sum,
+            )
+        };
+        vault.add_transaction(side(&card, &bank, "500")).unwrap();
+        vault
+            .add_transaction(payment(&card, "200", "shop"))
+            .unwrap();
+        let mut interest = payment(&card, "10", "interest");
+        interest.meta_mut().categories = vec!["loan_interest".into()];
+        vault.add_transaction(interest).unwrap();
+        vault.add_transaction(side(&bank, &card, "300")).unwrap();
+
+        for iso in ["2026-01-15T09:00:00Z", "2026-02-20T12:00:00Z"] {
+            vault.run_due_workflows(secs(iso), "Europe/Berlin").unwrap();
+        }
+        assert_eq!(planned_of_bookings(&vault).len(), 2);
+
+        let worth = vault.net_worth();
+        assert_eq!(worth.financial, amount("600"));
+        assert_eq!(worth.liabilities, amount("410"));
+        assert_eq!(worth.net, amount("190"));
+        let budget = vault.daily_budget(secs("2026-02-20T12:00:00Z"), "Europe/Berlin");
+        // Feb has no income and the 300 rent is mandatory: -300 over 28 days,
+        // 20 days elapsed incl. today -> -214.2857... (the code's figure today).
+        assert_eq!(budget.fixed, amount("300"));
+        assert_eq!(budget.days, 28);
+        assert_eq!(budget.spent_today, amount("0"));
+        assert_eq!(budget.left_today.round(2), amount("-214.29"));
+    }
+
+    fn bookings(vault: &UnlockedVault) -> usize {
+        planned_of_bookings(vault).len()
+    }
+
+    fn pass_at(vault: &mut UnlockedVault, iso: &str, zone: &str) -> usize {
+        vault
+            .run_due_workflows(secs(iso), zone)
+            .unwrap()
+            .created
+            .len()
+    }
+
+    /// Red before the fix: another device zone on a later tick booked the same date again.
+    #[test]
+    fn a_zone_change_does_not_book_a_date_twice() {
+        let (_dir, mut vault) = empty_vault();
+        berlin_rent(&mut vault, "1");
+        // Bangkok 15 Mar 09:00 = 02:00Z; Jan and Feb are caught up with it.
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-15T03:00:00Z", "Asia/Bangkok"),
+            3
+        );
+        assert_eq!(
+            planned_of_bookings(&vault).last().unwrap(),
+            "2026-03-15T02:00:00Z"
+        );
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-20T12:00:00Z", "Europe/Moscow"),
+            0
+        );
+        assert_eq!(bookings(&vault), 3);
+    }
+
+    /// The sync-merge path pins another zone after the fire; the date is still booked once.
+    #[test]
+    fn a_pinned_zone_changed_by_sync_does_not_book_a_date_twice() {
+        let (_dir, mut vault) = empty_vault();
+        berlin_rent(&mut vault, "1");
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-15T03:00:00Z", "Asia/Bangkok"),
+            3
+        );
+        vault.doc.settings.schedule_timezone = Some("Europe/Moscow".into());
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-20T12:00:00Z", "Asia/Bangkok"),
+            0
+        );
+        assert_eq!(bookings(&vault), 3);
+    }
+
+    /// Red before the fix: the moment's date in the new zone (the 16th) was
+    /// booked instead of the stored one (the 15th), so the 16th was lost.
+    #[test]
+    fn a_zone_moving_east_across_midnight_still_books_the_next_day() {
+        let (_dir, mut vault) = empty_vault();
+        let account = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let mut funding = income(&account, "1000", "float");
+        at(&mut funding, "2026-01-01T00:00:00Z");
+        vault.add_transaction(funding).unwrap();
+        vault
+            .create_automation(AutomationDraft {
+                time: Some("23:30".into()),
+                starts_at: "2026-03-14T00:00:00Z".into(),
+                schedule: Schedule::EveryNDays { days: 1 },
+                ..monthly_draft("Late", 1, rent_draft(&account, "1"))
+            })
+            .unwrap();
+        // 23:30 Moscow on the 14th and 15th is 20:30Z.
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-15T21:00:00Z", "Europe/Moscow"),
+            2
+        );
+        // 20:30Z on the 15th is 03:30 on the 16th in Bangkok.
+        vault.doc.settings.schedule_timezone = Some("Asia/Bangkok".into());
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-16T20:00:00Z", "Asia/Bangkok"),
+            1
+        );
+    }
+
+    #[test]
+    fn a_record_from_before_planned_date_falls_back_to_planned_at() {
+        let (_dir, mut vault) = empty_vault();
+        berlin_rent(&mut vault, "1");
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-15T03:00:00Z", "Asia/Bangkok"),
+            3
+        );
+        for tx in &mut vault.doc.transactions {
+            if let TxOrigin::Workflow { planned_date, .. } = &mut tx.meta_mut().origin {
+                *planned_date = None;
+            }
+        }
+        vault.doc.settings.schedule_timezone = Some("Europe/Moscow".into());
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-20T12:00:00Z", "Asia/Bangkok"),
+            0
+        );
+    }
+
+    #[test]
+    fn a_booking_carries_the_planned_local_date() {
+        let (_dir, mut vault) = empty_vault();
+        berlin_rent(&mut vault, "1");
+        pass_at(&mut vault, "2026-01-15T09:00:00Z", "Europe/Berlin");
+        let dates: Vec<_> = vault
+            .doc
+            .transactions
+            .iter()
+            .filter_map(|tx| match &tx.meta().origin {
+                TxOrigin::Workflow { planned_date, .. } => *planned_date,
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            dates,
+            [crate::time::LocalDate::from_ymd_opt(2026, 1, 15).unwrap()]
+        );
+        let runs: Vec<_> = vault
+            .doc
+            .workflow_runs
+            .iter()
+            .filter_map(|run| run.planned_date)
+            .collect();
+        assert_eq!(runs, dates);
+    }
+
+    /// Red before the fix: a time edited later made the same date fresh again.
+    #[test]
+    fn a_time_moved_later_does_not_book_the_date_again() {
+        let (_dir, mut vault) = empty_vault();
+        let rent = berlin_rent(&mut vault, "1");
+        let zone = "Europe/Berlin";
+        assert_eq!(pass_at(&mut vault, "2026-03-15T08:30:00Z", zone), 3);
+        let mut draft = monthly_draft("Rent", 15, rent.template.clone());
+        draft.time = Some("18:00".into());
+        vault
+            .update_automation_at(&rent.id, draft, secs("2026-03-15T08:31:00Z"))
+            .unwrap();
+        assert_eq!(pass_at(&mut vault, "2026-03-15T20:00:00Z", zone), 0);
+        assert_eq!(bookings(&vault), 3);
+        // 15 Apr 18:00 CEST = 16:00Z books normally.
+        assert_eq!(pass_at(&mut vault, "2026-04-15T16:30:00Z", zone), 1);
+    }
+
+    #[test]
+    fn a_start_mark_is_not_a_processed_date() {
+        let (_dir, mut vault) = empty_vault();
+        let account = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let mut draft = monthly_draft("Rent", 15, salary_draft(&account, "1"));
+        draft.starts_at = "2026-03-15T09:00:00Z".into(); // 10:00 Berlin
+        draft.time = Some("18:00".into());
+        vault.create_automation(draft).unwrap();
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-15T17:05:00Z", "Europe/Berlin"),
+            1
+        );
+    }
+
+    /// Open question 4: an edited day books nothing back-dated.
+    #[test]
+    fn a_day_moved_later_does_not_book_the_new_day_back() {
+        let (_dir, mut vault) = empty_vault();
+        let rent = berlin_rent(&mut vault, "1");
+        let zone = "Europe/Berlin";
+        assert_eq!(pass_at(&mut vault, "2026-03-15T08:30:00Z", zone), 3);
+        let draft = monthly_draft("Rent", 18, rent.template.clone());
+        vault
+            .update_automation_at(&rent.id, draft, secs("2026-03-20T12:00:00Z"))
+            .unwrap();
+        assert_eq!(pass_at(&mut vault, "2026-03-20T13:00:00Z", zone), 0);
+        assert_eq!(bookings(&vault), 3);
+        assert_eq!(pass_at(&mut vault, "2026-04-18T12:00:00Z", zone), 1);
+    }
+
+    fn daily_at_0230(vault: &mut UnlockedVault, starts_at: &str) {
+        let card = store(vault, "Card", StoreKind::Bank, None);
+        let mut draft = monthly_draft("Daily", 1, salary_draft(&card, "1"));
+        draft.schedule = Schedule::EveryNDays { days: 1 };
+        draft.starts_at = starts_at.into();
+        draft.time = Some("02:30".into());
+        vault.create_automation(draft).unwrap();
+    }
+
+    #[test]
+    fn dst_gap_books_the_date_once() {
+        let (_dir, mut vault) = empty_vault();
+        daily_at_0230(&mut vault, "2026-03-28T23:00:00Z");
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-29T01:35:00Z", "Europe/Berlin"),
+            1
+        );
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-29T05:00:00Z", "Europe/Berlin"),
+            0
+        );
+        assert_eq!(bookings(&vault), 1);
+    }
+
+    #[test]
+    fn dst_overlap_books_the_date_once() {
+        let (_dir, mut vault) = empty_vault();
+        daily_at_0230(&mut vault, "2026-10-24T23:00:00Z");
+        assert_eq!(
+            pass_at(&mut vault, "2026-10-25T00:35:00Z", "Europe/Berlin"),
+            1
+        );
+        assert_eq!(
+            pass_at(&mut vault, "2026-10-25T01:40:00Z", "Europe/Berlin"),
+            0
+        );
+        assert_eq!(bookings(&vault), 1);
+    }
+
+    #[test]
+    fn the_clock_form_and_the_wrapper_give_the_same_pass() {
+        let tick = "2026-03-15T08:30:00Z";
+        let (_dir_a, mut wrapped) = empty_vault();
+        berlin_rent(&mut wrapped, "1");
+        let (_dir_b, mut clocked) = empty_vault();
+        berlin_rent(&mut clocked, "1");
+        let left = wrapped
+            .run_due_workflows(secs(tick), "Europe/Berlin")
+            .unwrap();
+        let right = clocked
+            .run_due_workflows_at(&crate::time::FixedClock(secs(tick)), "Europe/Berlin")
+            .unwrap();
+        assert_eq!(left.created.len(), right.created.len());
+        assert_eq!(planned_of_bookings(&wrapped), planned_of_bookings(&clocked));
     }
 }

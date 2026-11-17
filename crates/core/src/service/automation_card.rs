@@ -693,6 +693,7 @@ mod tests {
             queued: 0,
             trace: Vec::new(),
             dry_run: false,
+            planned_date: None,
         });
         vault.doc.workflow_waits.push(WorkflowWait {
             id: "wait1".into(),

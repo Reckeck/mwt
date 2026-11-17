@@ -20,6 +20,7 @@ import { LEDGER_KEYS } from '@/shared/lib/planning'
 import { STORE_TREE_QUERY_KEY, flattenStoreTree } from '@/shared/lib/store-tree'
 import { codeErrorMessage } from '@/shared/lib/vault-error'
 
+import StoreChangeCorrections from './StoreChangeCorrections.vue'
 import { CONVERTIBLE_KINDS, convertibleKinds } from './store-change.constants'
 import type { StoreChangeAction, StoreChangeDialogProps } from './store-change.types'
 import { useStoreTree } from '@/shared/api/queries'
@@ -210,6 +211,7 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
           <p v-if="action === 'merge_into'" class="text-sm">
             {{ t('storeChange.movedTransactions', { count: plan.data.value.moved_transactions }) }}
           </p>
+          <StoreChangeCorrections :corrections="plan.data.value.corrections" />
           <div v-if="plan.data.value.conflicts.length" class="grid gap-1">
             <p class="flex items-center gap-1.5 text-xs font-medium text-destructive">
               <AlertTriangle class="size-3.5" />

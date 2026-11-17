@@ -2622,6 +2622,7 @@ fn post_elsewhere(vault: &mut UnlockedVault, card: &str, workflow: &Workflow) {
             workflow_id: workflow.id.clone(),
             run_id: "other-device-run".into(),
             planned_at: Some("2026-12-01T09:00:00Z".into()),
+            planned_date: None,
             estimated: false,
             run_key: None,
         };
