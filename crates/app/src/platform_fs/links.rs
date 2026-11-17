@@ -10,6 +10,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
+use trade_core::crypto::{self, SealKey};
 use trade_core::error::{Error, Result};
 use trade_core::ipc_contract::{ConflictSide, VaultLinkStatus};
 use trade_core::service::{ExternalMerge, UnlockedVault};
@@ -17,7 +18,10 @@ use trade_core::storage::VaultFile;
 use trade_core::vault_io::mirror::{
     PushOutcome, SyncAction, compare_and_push, content_hash, reconcile,
 };
-use trade_core::vault_io::{VaultLocation, import::validate_vault_bytes};
+use trade_core::vault_io::{
+    VaultLocation,
+    import::{probe_open, validate_vault_bytes},
+};
 
 use super::{read_location, release_link_target, shown, write_location};
 
@@ -270,7 +274,7 @@ pub fn take_in(
             let target = get(app, &path).map_or_else(String::new, |link| shown(&link.location()));
             return Err(Error::SyncConflict(target));
         }
-        match pull(app, &path, &remote) {
+        match pull(app, &path, &remote, Some(&local_key(&path, password)?)) {
             Ok(()) => return Ok(TakeIn::Reopen),
             // A copy protected more cheaply than this vault does not replace
             // it: this vault opens as it is, the copy waits for the user.
@@ -303,7 +307,8 @@ pub fn resolve_conflict(app: &AppHandle, vault: &Path, keep: ConflictSide) -> Re
         }
         ConflictSide::Remote => {
             let remote = read_location(app, &link.location())?;
-            pull(app, vault, &remote)
+            // No password here (the vault is not open): the header check only.
+            pull(app, vault, &remote, None)
         }
     }
 }
@@ -343,14 +348,31 @@ pub fn push_replacing(app: &AppHandle, vault: &Path, link: &VaultLink, bytes: &[
     }
 }
 
+/// The key of the local vault file, derived from the open vault's password.
+fn local_key(vault: &Path, password: &str) -> Result<SealKey> {
+    let (_, _, key) = crypto::open_bytes_keyed(&std::fs::read(vault)?, password.as_bytes())?;
+    Ok(key)
+}
+
 /// Replace the local vault with the external copy; the local file stays as
-/// `<vault>.bak`.
-fn pull(app: &AppHandle, vault: &Path, remote: &[u8]) -> Result<()> {
+/// `<vault>.bak`. With the open vault's `key` the copy must fully open under
+/// it first; without one (no open vault) only its header is checked.
+fn pull(app: &AppHandle, vault: &Path, remote: &[u8], key: Option<&SealKey>) -> Result<()> {
+    replace_local(vault, remote, key)?;
+    mark_synced(app, vault, remote);
+    Ok(())
+}
+
+/// The checks and the file work of [`pull`]: every refusal comes before the
+/// `.bak` and the replace.
+fn replace_local(vault: &Path, remote: &[u8], key: Option<&SealKey>) -> Result<()> {
     validate_vault_bytes(remote)?;
+    if let Some(key) = key {
+        probe_open(remote, key)?;
+    }
     refuse_cheaper(&std::fs::read(vault)?, remote)?;
     VaultFile::backup(vault)?;
-    trade_core::crypto::atomic_write(vault, remote)?;
-    mark_synced(app, vault, remote);
+    crypto::atomic_write(vault, remote)?;
     Ok(())
 }
 
@@ -380,6 +402,40 @@ mod tests {
         ));
         assert!(refuse_cheaper(&plain_bytes, &pin_bytes).is_ok());
         assert!(refuse_cheaper(&pin_bytes, &pin_bytes).is_ok());
+    }
+
+    fn pin_vault(dir: &Path) -> (PathBuf, SealKey) {
+        let vault = UnlockedVault::create(dir.join("v.wallet"), "482913").unwrap();
+        let bytes = std::fs::read(&vault.path).unwrap();
+        let (_, _, key) = crypto::open_bytes_keyed(&bytes, b"482913").unwrap();
+        (vault.path.clone(), key)
+    }
+
+    #[test]
+    fn an_external_copy_that_does_not_open_is_refused_and_nothing_is_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, key) = pin_vault(dir.path());
+        let local = std::fs::read(&path).unwrap();
+        let truncated = &local[..local.len() - 8];
+        assert!(validate_vault_bytes(truncated).is_ok());
+        assert!(replace_local(&path, truncated, Some(&key)).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), local);
+        assert!(!path.with_extension("wallet.bak").exists());
+    }
+
+    #[test]
+    fn a_good_external_copy_still_replaces() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, key) = pin_vault(dir.path());
+        let local = std::fs::read(&path).unwrap();
+        let (plaintext, fmt) = crypto::open_bytes_with(&local, &key).unwrap();
+        let copy = crypto::seal_with(&key, fmt, &plaintext).unwrap();
+        replace_local(&path, &copy, Some(&key)).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), copy);
+        assert_eq!(
+            std::fs::read(path.with_extension("wallet.bak")).unwrap(),
+            local
+        );
     }
 
     #[test]
