@@ -19,6 +19,9 @@ const CONTAINER_DIR: &str = "/sccache";
 /// The containers share the host network: on the default port 4226 they would talk to the host's
 /// server (which cannot see their rustc) and hang.
 pub const CONTAINER_PORT: u16 = 4227;
+/// 0 keeps the in-container sccache server alive after the last request, so it never shuts down
+/// between cargo invocations of one run.
+const CONTAINER_IDLE_TIMEOUT: u32 = 0;
 
 /// Env for the cargo tasks of this run; set once by `prepare`.
 static HOST_ENV: OnceLock<Vec<(String, String)>> = OnceLock::new();
@@ -85,6 +88,8 @@ pub fn container_args(disabled: bool, home: Option<&Path>, port: u16) -> Vec<Str
         format!("SCCACHE_CACHE_SIZE={CONTAINER_SIZE}"),
         "-e".into(),
         format!("SCCACHE_SERVER_PORT={port}"),
+        "-e".into(),
+        format!("SCCACHE_IDLE_TIMEOUT={CONTAINER_IDLE_TIMEOUT}"),
     ]
 }
 
@@ -277,6 +282,11 @@ mod tests {
         assert!(args.contains(&"SCCACHE_DIR=/sccache".to_string()));
         assert!(args.contains(&"SCCACHE_CACHE_SIZE=4G".to_string()));
         assert!(args.contains(&"SCCACHE_SERVER_PORT=4227".to_string()));
+        let idle = args
+            .iter()
+            .position(|arg| arg == "SCCACHE_IDLE_TIMEOUT=0")
+            .expect("idle timeout arg");
+        assert_eq!(args[idle - 1], "-e");
         assert!(container_args(true, Some(&home), CONTAINER_PORT).is_empty());
         assert!(container_args(false, None, CONTAINER_PORT).is_empty());
     }

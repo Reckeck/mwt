@@ -385,9 +385,22 @@ a cache of compiled crates (on `main` this is intended, decision 26).
   Build Tools must be on the image: xtask checks with vswhere and fails otherwise, it
   installs nothing; the MSI is built by WiX; the zip is made by the `zip` crate).
 - macOS in CI is paused (`clippy-macos`, `build-macos` are turned off).
-- The Android build is long (release + LTO, three architectures,
-  `ANDROID_TARGETS`): a 2 h timeout.
+- The Android build is long (release + LTO, `ANDROID_TARGETS`): a 2 h timeout.
+  Dev pre-releases build `aarch64` only, prod releases build all three ABIs.
+  Local builds keep three (`ANDROID_TARGETS=aarch64` to shorten).
 - `images.yml` needs docker and `packages: write` on `GITHUB_TOKEN`.
+
+**Concurrency.** What a newer run cancels, per workflow:
+
+- `release.yml` (group `release-<ref>`): only a push to `development` cancels
+  the older run of that branch. A release from `main` and a manual run are not
+  cancelled and wait for the running one, so a release is never interrupted. A
+  cancel during `publish` is accepted: the newer run supersedes the
+  pre-release, and splitting the group per job would let two `publish` jobs
+  interleave and break the uniqueness of the pre-release number `N`.
+- `ci.yml` (group `ci-<workflow>-<PR or ref>`): any run except on `main` is
+  cancelled by a newer one for the same PR or branch. `main` is not cancelled
+  so that a merged commit always gets its full result.
 
 ## Secrets (Settings → Secrets and variables → Actions)
 
