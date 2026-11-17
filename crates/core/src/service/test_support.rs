@@ -1,6 +1,8 @@
 //! Builders shared by the service tests: each takes the minimum a user would
 //! supply, so a test reads as the transaction it describes.
 
+#![cfg_attr(not(test), allow(dead_code))] // only the testkit builders use part of it
+#[cfg(test)]
 use tempfile::tempdir;
 
 use super::UnlockedVault;
@@ -28,6 +30,7 @@ pub fn usd_price(raw: &str) -> PriceStamp {
     }
 }
 
+#[cfg(test)]
 pub fn empty_vault() -> (tempfile::TempDir, UnlockedVault) {
     let dir = tempdir().unwrap();
     let vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
@@ -35,6 +38,7 @@ pub fn empty_vault() -> (tempfile::TempDir, UnlockedVault) {
 }
 
 /// A vault with an exchange (`Binance`) and a cold wallet (`Cold`).
+#[cfg(test)]
 pub fn setup() -> (tempfile::TempDir, UnlockedVault) {
     let (dir, mut vault) = empty_vault();
     vault

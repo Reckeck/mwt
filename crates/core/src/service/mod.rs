@@ -95,7 +95,7 @@ mod relations;
 mod reports;
 mod store_change;
 mod store_months;
-#[cfg(test)]
+#[cfg(any(test, feature = "testkit"))]
 pub(crate) mod test_support;
 mod utilities;
 mod validate;

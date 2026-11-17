@@ -1,7 +1,7 @@
 //! Record builders for tests: each takes the minimum a test names and fills the
 //! rest from the shared fixtures (`model::fixtures`, `service::test_support`),
-//! so no record is spelled out twice. Compiled under `cfg(test)` only, because
-//! both of those are.
+//! so no record is spelled out twice. Compiled under `cfg(test)` and the
+//! `testkit` feature, like both of those.
 
 use crate::model::fixtures;
 use crate::model::planning::Goal;

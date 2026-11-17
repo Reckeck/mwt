@@ -10,7 +10,7 @@ pub mod datasource;
 pub mod deposit;
 pub mod enrichment;
 pub mod entity_ref;
-#[cfg(test)]
+#[cfg(any(test, feature = "testkit"))]
 pub mod fixtures;
 pub mod inflation;
 pub(crate) mod iso_date;
