@@ -567,6 +567,45 @@ mod tests {
         assert_eq!(merged.value, right.value);
     }
 
+    fn highest_wall(stamps: &RecordStamps) -> u64 {
+        stamps
+            .fields
+            .values()
+            .chain(std::iter::once(&stamps.created))
+            .map(|stamp| stamp.wall)
+            .max()
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn a_kind_change_stores_no_stamp_beyond_the_future_limit() {
+        let coll = find("transactions").expect("rule");
+        let limit = poison_limit();
+        let far = limit + 1_000;
+        let topup = json!({"topup": {"meta": {"id": "t"}, "amount": "1"}});
+        let payment = json!({"payment": {"meta": {"id": "t"}, "amount": "2"}});
+        // One side poisoned, and both poisoned (the winner's stamps are
+        // the ones stored, so they must come out lowered).
+        for (left_wall, right_wall) in [(far, 4), (far, far + 5)] {
+            let left = state(
+                topup.clone(),
+                at(left_wall, "a"),
+                &[("amount", at(left_wall, "a"))],
+            );
+            let right = state(
+                payment.clone(),
+                at(right_wall, "b"),
+                &[("amount", at(right_wall, "b"))],
+            );
+            let merged = both_ways(coll, &left, &right);
+            let stamps = merged.stamps.expect("stamps");
+            assert!(
+                highest_wall(&stamps) <= limit,
+                "a poisoned stamp survived the kind change"
+            );
+        }
+    }
+
     #[test]
     fn a_lost_kind_change_is_reported_as_overwritten() {
         let coll = find("transactions").expect("rule");
