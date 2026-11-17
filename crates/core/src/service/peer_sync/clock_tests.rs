@@ -41,8 +41,9 @@ fn a_future_stamp_does_not_poison_the_clock() {
     let (_dir, mut left, mut right) = two_devices();
     let key = poisoned_contact(&mut left);
     exchange(&mut left, &mut right);
-    // The record arrived with its stamp ...
-    assert!(right.doc.sync.stamps[&key].created.wall > limit());
+    // The record arrived, its poisoned stamp stored lowered ...
+    assert!(right.doc.sync.stamps.contains_key(&key));
+    assert!(right.doc.sync.stamps[&key].created.wall <= limit());
     // ... but the clock did not follow it.
     right.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
     let stamp = &right.sync_state().trusted("cc").unwrap().stamp;
@@ -194,4 +195,69 @@ fn recreating_over_a_poisoned_tombstone_survives() {
         "the recreated record was erased"
     );
     assert!(has_contact(&right, &contact.id));
+}
+
+fn name_of(vault: &UnlockedVault, id: &str) -> String {
+    vault
+        .doc
+        .contacts
+        .iter()
+        .find(|contact| contact.id == id)
+        .unwrap()
+        .name
+        .clone()
+}
+
+fn rename(vault: &mut UnlockedVault, id: &str, name: &str) {
+    let draft = ContactDraft {
+        name: name.into(),
+        kind: ContactKind::Person,
+        ..ContactDraft::default()
+    };
+    vault.update_contact(id, draft).unwrap();
+}
+
+#[test]
+fn an_edit_made_in_the_poisoned_window_survives_after_it() {
+    let (_dir, mut left, mut right) = two_devices();
+    let key = poisoned_contact(&mut left);
+    let id = key.trim_start_matches("contacts:").to_string();
+    exchange(&mut left, &mut right);
+    rename(&mut right, &id, "Edited in the window");
+    exchange(&mut left, &mut right);
+    exchange(&mut left, &mut right);
+    // The merge stored every poisoned stamp lowered, so none of them can
+    // become valid (and beat the edit) once it ages.
+    for vault in [&left, &right] {
+        let stamps = &vault.doc.sync.stamps[&key];
+        assert!(stamps.created.wall <= limit(), "created stayed poisoned");
+        assert!(stamps.fields.values().all(|stamp| stamp.wall <= limit()));
+    }
+    assert_eq!(name_of(&left, &id), "Edited in the window");
+    assert_eq!(name_of(&right, &id), "Edited in the window");
+}
+
+#[test]
+fn two_devices_with_twelve_hours_of_clock_skew_converge() {
+    let (_dir, mut left, mut right) = two_devices();
+    let contact = plain_contact(&mut left);
+    let key = format!("contacts:{}", contact.id);
+    // The left clock runs twelve hours ahead: inside the limit, not poisoned.
+    let ahead = now_ms() + 12 * 3600 * 1000;
+    let stamps = left.doc.sync.stamps.get_mut(&key).unwrap();
+    stamps.created = Stamp::new(ahead, 0, "aaaaaaaa");
+    for stamp in stamps.fields.values_mut() {
+        *stamp = Stamp::new(ahead, 0, "aaaaaaaa");
+    }
+    left.persist().unwrap();
+    exchange(&mut left, &mut right);
+    rename(&mut right, &contact.id, "Right edit");
+    rename(&mut left, &contact.id, "Left edit");
+    exchange(&mut left, &mut right);
+    exchange(&mut left, &mut right);
+    assert_eq!(
+        name_of(&left, &contact.id),
+        name_of(&right, &contact.id),
+        "the devices diverged"
+    );
 }
