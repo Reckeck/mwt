@@ -91,9 +91,17 @@ pub const GROUPS: &[Group] = &[
             "appconfig",
             "ipc_contract",
             "usecases",
-            "household",
-            "reports",
         ],
+    },
+    Group {
+        name: "household",
+        layer: 5,
+        modules: &["household"],
+    },
+    Group {
+        name: "reports",
+        layer: 5,
+        modules: &["reports"],
     },
     // Test support on top of everything: compiled only under `cfg(test)` or the `testkit` feature.
     Group {
@@ -112,5 +120,31 @@ pub fn is_legal(from: &str, to: &str) -> bool {
     match (group_of(from), group_of(to)) {
         (Some(user), Some(used)) => used.layer < user.layer || used.name == user.name,
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn household_and_reports_are_their_own_groups() {
+        assert_eq!(
+            group_of("household").map(|group| group.name),
+            Some("household")
+        );
+        assert_eq!(group_of("reports").map(|group| group.name), Some("reports"));
+    }
+
+    #[test]
+    fn household_may_not_use_service() {
+        assert!(!is_legal("household", "service"));
+        assert!(!is_legal("reports", "service"));
+    }
+
+    #[test]
+    fn household_may_use_lower_layers_and_itself() {
+        assert!(is_legal("household", "money"));
+        assert!(is_legal("household", "household"));
     }
 }

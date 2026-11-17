@@ -129,17 +129,7 @@ pub(super) fn stems(area: &Area) -> BTreeSet<String> {
     }
     area.files
         .iter()
-        .map(|entry| {
-            area.stem.get(entry).map_or_else(
-                || {
-                    entry
-                        .trim_end_matches('/')
-                        .trim_end_matches(".rs")
-                        .to_string()
-                },
-                Clone::clone,
-            )
-        })
+        .map(|entry| area.stem_of(entry))
         .filter(|stem| !stem.ends_with("_tests"))
         .collect()
 }
@@ -198,7 +188,7 @@ impl Module {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strangle::fixture::TempTree;
+    use crate::strangle::fixture::{FIX_MAP, TempTree};
     use crate::strangle::map::MAP_FILE;
 
     const MAP: &str = r#"
@@ -265,18 +255,26 @@ stubs = false
 
     #[test]
     fn no_stub_of_the_real_map_is_named_like_its_group_or_context() {
-        let map = Map::parse(include_str!("../../strangle.toml")).unwrap();
+        let map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
         for stub in stubs(&map) {
-            assert_ne!(stub.name, stub.group, "{} in {}", stub.name, stub.task);
-            assert_ne!(stub.name, stub.context, "{} in {}", stub.name, stub.task);
+            assert_ne!(
+                stub.name, stub.group,
+                "{FIX_MAP}: {} in {}",
+                stub.name, stub.task
+            );
+            assert_ne!(
+                stub.name, stub.context,
+                "{FIX_MAP}: {} in {}",
+                stub.name, stub.task
+            );
         }
     }
 
     #[test]
     fn a_stem_entry_of_the_map_renames_a_directory_entry() {
-        let map = Map::parse(include_str!("../../strangle.toml")).unwrap();
-        let area = &map.areas[map.area_index("cryptotrack").unwrap()];
-        assert!(stems(area).contains("tracking"));
+        let map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
+        let area = &map.areas[map.area_index("cryptotrack").expect(FIX_MAP)];
+        assert!(stems(area).contains("tracking"), "{FIX_MAP}");
     }
 
     #[test]

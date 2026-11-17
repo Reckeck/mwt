@@ -313,7 +313,7 @@ pub fn detail(stat: &AreaStats) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strangle::fixture;
+    use crate::strangle::fixture::{self, FIX_MAP};
 
     #[test]
     fn counts_follow_the_area_map_on_a_fixture_tree() {
@@ -380,24 +380,30 @@ mod tests {
     #[test]
     fn the_real_tree_is_close_to_the_numbers_of_the_spec() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let workspace = Workspace::load(&root).unwrap();
+        let workspace = Workspace::load(&root).expect(FIX_MAP);
         let report = compute(&workspace);
         assert!(
             (1..=496 + 25).contains(&report.totals.pub_methods),
-            "{}",
+            "{FIX_MAP}: {}",
             report.totals.pub_methods
         );
         assert!(
             (402..=402 + 25).contains(&report.totals.commands),
-            "{}",
+            "{FIX_MAP}: {}",
             report.totals.commands
         );
-        assert_eq!(report.totals.unmapped_pub_methods, 0);
+        assert_eq!(
+            report.totals.unmapped_pub_methods, 0,
+            "{FIX_MAP}: a pub method is not mapped"
+        );
         let loyalty = report
             .areas
             .iter()
             .find(|area| area.name == "loyalty")
-            .unwrap();
-        assert!(loyalty.lines > 0 && loyalty.commands_any >= 4);
+            .expect(FIX_MAP);
+        assert!(
+            loyalty.lines > 0 && loyalty.commands_any >= 4,
+            "{FIX_MAP}: loyalty area looks empty"
+        );
     }
 }

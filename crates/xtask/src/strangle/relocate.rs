@@ -118,7 +118,7 @@ fn shim_text(home: &Home, source: &str) -> Result<String> {
         .collect();
     let mut text = format!(
         "//! Shim of the `{}` area: moved to `{}` (spec core-strangler, D1).\n",
-        home.stem,
+        home.source(),
         home.pure_path()
     );
     match public.as_slice() {
@@ -247,6 +247,7 @@ mod tests {
     use super::*;
     use crate::strangle::area_fixture::{ORIGINAL, PURE, SERVICE, original_tree};
     use crate::strangle::fixture::TempTree;
+    use crate::strangle::map::MAP_FILE;
 
     fn relocated(tree: &TempTree) -> Result<Vec<String>> {
         let map = Map::load(tree.root())?;
@@ -407,5 +408,40 @@ mod inner { use super::d; use crate::service::e; fn f() { crate::g; } }
             "{error}"
         );
         assert!(error.contains("cannot be renamed to `tracking`"), "{error}");
+    }
+
+    #[test]
+    fn the_shim_doc_line_names_the_source_area_not_the_stem() {
+        let original = original_tree();
+        let map = std::fs::read_to_string(original.root().join(MAP_FILE))
+            .unwrap()
+            .replace(
+                "files = [\"loyalty.rs\"]",
+                "files = [\"reports.rs\"]\nstem = { \"reports.rs\" = \"overview\" }",
+            );
+        let tree = TempTree::new(&[
+            (MAP_FILE, &map),
+            (
+                "crates/core/src/service/reports.rs",
+                &ORIGINAL.replace("service::loyalty", "service::reports"),
+            ),
+            ("crates/core/src/household/overview.rs", "//! placeholder\n"),
+            (
+                "crates/core/src/household/overview_tests.rs",
+                "//! placeholder\n",
+            ),
+            (
+                "crates/core/src/usecases/household/overview.rs",
+                "//! placeholder\n",
+            ),
+        ]);
+        relocated(&tree).unwrap();
+        let shim = read(&tree, "crates/core/src/service/reports.rs");
+        assert!(
+            shim.starts_with(
+                "//! Shim of the `reports` area: moved to `crate::household::overview` (spec core-strangler, D1).\n"
+            ),
+            "{shim}"
+        );
     }
 }

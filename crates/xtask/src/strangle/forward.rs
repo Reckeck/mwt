@@ -94,14 +94,12 @@ fn entries_of(
         let index = LineIndex::new(&source);
         for item in &file.items {
             let Item::Fn(node) = item else { continue };
-            let Some(entry) = entry_of(&source, &index, node, &module) else {
-                continue;
-            };
-            let name = node.sig.ident.to_string();
-            if methods.iter().any(|method| method.name == name) {
-                entries.push(entry);
-            } else {
-                skipped.push(name);
+            match classify(node, methods) {
+                Delegate::Moved(receiver) => {
+                    entries.push(entry_of(&source, &index, node, &module, &receiver));
+                }
+                Delegate::Unmoved => skipped.push(node.sig.ident.to_string()),
+                Delegate::Other => {}
             }
         }
     }
@@ -140,11 +138,47 @@ pub(super) fn receiver_of(first: &FnArg) -> Option<Receiver> {
     Some(Receiver { text, marker })
 }
 
-fn entry_of(source: &str, index: &LineIndex, node: &ItemFn, module: &str) -> Option<String> {
+/// What a function of a new file is to the shim.
+pub(super) enum Delegate {
+    /// A baseline method with a receiver-shaped first parameter: forwarded and rewired.
+    Moved(Receiver),
+    /// Receiver-shaped and public, but not a baseline method: reported by `forward`.
+    Unmoved,
+    /// Not a public non-test function with a receiver-shaped first parameter.
+    Other,
+}
+
+/// The one rule that decides a delegate target, shared by `forward` and `rewire`.
+pub(super) fn classify(node: &ItemFn, methods: &[BaselineMethod]) -> Delegate {
     if !matches!(node.vis, Visibility::Public(_)) || node.attrs.iter().any(is_test_attr) {
-        return None;
+        return Delegate::Other;
     }
-    let receiver = receiver_of(node.sig.inputs.first()?)?;
+    let Some(receiver) = node.sig.inputs.first().and_then(receiver_of) else {
+        return Delegate::Other;
+    };
+    let name = node.sig.ident.to_string();
+    if methods.iter().any(|method| method.name == name) {
+        Delegate::Moved(receiver)
+    } else {
+        Delegate::Unmoved
+    }
+}
+
+/// The receiver of a function that is a delegate target (see [`classify`]).
+pub(super) fn delegate_target(node: &ItemFn, methods: &[BaselineMethod]) -> Option<Receiver> {
+    match classify(node, methods) {
+        Delegate::Moved(receiver) => Some(receiver),
+        Delegate::Unmoved | Delegate::Other => None,
+    }
+}
+
+fn entry_of(
+    source: &str,
+    index: &LineIndex,
+    node: &ItemFn,
+    module: &str,
+    receiver: &Receiver,
+) -> String {
     let parts = Parts::new(source, index, &node.sig);
     let params: Vec<String> = std::iter::once(receiver.text.to_string())
         .chain(parts.params.iter().skip(1).cloned())
@@ -159,7 +193,7 @@ fn entry_of(source: &str, index: &LineIndex, node: &ItemFn, module: &str) -> Opt
         entry += &format!(" {marker}");
     }
     entry += ";\n";
-    Some(entry)
+    entry
 }
 
 /// The text with everything between the marker lines replaced by `block`.

@@ -17,13 +17,12 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use clap::Args;
-use syn::visit::{self, Visit};
 use syn::{Block, Expr, Stmt};
 
 use super::Workspace;
 use super::baseline::{self, AreaBaseline, Baseline, production_methods};
 use super::forward::forwarded_entries;
-use super::home::{allowed_files, area_files, homes};
+use super::home::{Home, allowed_files, area_files, homes};
 use super::map::Area;
 use super::scope;
 
@@ -164,23 +163,27 @@ fn check_area(subject: &Subject) -> Result<Vec<String>> {
     Ok(findings)
 }
 
+/// The token that marks a binding `mut`, with its trailing space.
+const BINDING_MUT: &str = "mut ";
+
 /// The signature without `mut` on parameter bindings (`mut name: T`): the delegate leaves the
 /// binding out, so both sides are compared without it. `&mut T` and `&mut self` stay.
 fn without_binding_mut(signature: &str) -> String {
     let mut text = String::with_capacity(signature.len());
     let mut rest = signature;
-    while let Some(at) = rest.find("mut ") {
+    while let Some(at) = rest.find(BINDING_MUT) {
         let (before, after) = rest.split_at(at);
         text.push_str(before);
-        let name_len = after[4..]
+        let name_len = after[BINDING_MUT.len()..]
             .find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
             .unwrap_or(0);
         let starts_param = text.ends_with('(') || text.ends_with(", ");
-        let is_binding = starts_param && name_len > 0 && after[4 + name_len..].starts_with(':');
+        let is_binding =
+            starts_param && name_len > 0 && after[BINDING_MUT.len() + name_len..].starts_with(':');
         if !is_binding {
-            text.push_str("mut ");
+            text.push_str(BINDING_MUT);
         }
-        rest = &after[4..];
+        rest = &after[BINDING_MUT.len()..];
     }
     text.push_str(rest);
     text
@@ -224,20 +227,33 @@ fn names(entries: &BTreeMap<String, String>) -> BTreeSet<String> {
     entries.keys().cloned().collect()
 }
 
-/// Rule 2: an `impl UnlockedVault` method may be left only as a plain delegate.
+/// Rule 2: no `impl UnlockedVault` method in the group or usecases files; the shim keeps only
+/// passthrough calls into `crate::<group>` or `crate::usecases`.
 fn no_logic(subject: &Subject) -> Result<Vec<String>> {
+    let homes = homes(&subject.workspace.map, subject.area);
+    let shims: BTreeSet<String> = homes.iter().map(Home::shim).collect();
+    let targets: BTreeSet<&str> = homes
+        .iter()
+        .map(|home| home.group.as_str())
+        .chain(["usecases"])
+        .collect();
     let mut found = Vec::new();
     for path in area_files(subject.workspace, subject.area) {
         let Ok(source) = std::fs::read_to_string(subject.root.join(&path)) else {
             continue;
         };
         let file = syn::parse_file(&source).with_context(|| format!("parse {path}"))?;
-        found.extend(
-            production_methods(&file)
-                .into_iter()
-                .filter(|method| has_logic(&method.block))
-                .map(|method| format!("{path}: `{}` has a body with logic", method.sig.ident)),
-        );
+        let is_shim = shims.contains(&path);
+        found.extend(production_methods(&file).into_iter().filter_map(|method| {
+            if !is_shim {
+                Some("is an `impl UnlockedVault` method outside the shim")
+            } else if !is_passthrough(&method.block, &targets) {
+                Some("is not a passthrough call into the group or usecases")
+            } else {
+                None
+            }
+            .map(|why| format!("{path}: `{}` {why}", method.sig.ident))
+        }));
     }
     Ok(found)
 }
@@ -290,39 +306,31 @@ fn difference(what: &str, left: &BTreeSet<String>, right: &BTreeSet<String>) -> 
         .collect()
 }
 
-/// A body is a plain delegate when it is one call without control flow in it.
-fn has_logic(block: &Block) -> bool {
-    match block.stmts.as_slice() {
-        [] => false,
-        [Stmt::Expr(expr @ (Expr::Call(_) | Expr::MethodCall(_)), _)] => {
-            let mut flow = ControlFlow(false);
-            flow.visit_expr(expr);
-            flow.0
-        }
-        _ => true,
-    }
+/// A body is a passthrough when it is one call of `crate::<target>::...` whose arguments are plain
+/// names, optionally borrowed.
+fn is_passthrough(block: &Block, targets: &BTreeSet<&str>) -> bool {
+    let [Stmt::Expr(Expr::Call(call), _)] = block.stmts.as_slice() else {
+        return false;
+    };
+    let Expr::Path(callee) = call.func.as_ref() else {
+        return false;
+    };
+    let segments: Vec<String> = callee
+        .path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect();
+    matches!(segments.as_slice(), [root, target, _, ..] if root == "crate" && targets.contains(target.as_str()))
+        && call.args.iter().all(is_plain_argument)
 }
 
-/// Finds a branch, loop, closure or nested block.
-struct ControlFlow(bool);
-
-impl<'ast> Visit<'ast> for ControlFlow {
-    fn visit_expr(&mut self, node: &'ast Expr) {
-        if matches!(
-            node,
-            Expr::If(_)
-                | Expr::Match(_)
-                | Expr::While(_)
-                | Expr::ForLoop(_)
-                | Expr::Loop(_)
-                | Expr::Closure(_)
-                | Expr::Block(_)
-                | Expr::Unsafe(_)
-                | Expr::Async(_)
-        ) {
-            self.0 = true;
-        }
-        visit::visit_expr(self, node);
+/// A name (`self`, `id`), or a borrow of one.
+fn is_plain_argument(arg: &Expr) -> bool {
+    match arg {
+        Expr::Path(_) => true,
+        Expr::Reference(borrow) => is_plain_argument(&borrow.expr),
+        _ => false,
     }
 }
 
@@ -417,27 +425,60 @@ mod tests {
         );
     }
 
+    fn with_shim_impl(body: &str) -> Vec<String> {
+        let method = format!(
+            "\nimpl UnlockedVault {{\n    pub fn x(&self) -> u8 {{\n        {body}\n    }}\n}}\n"
+        );
+        broken(
+            SERVICE,
+            "// forward:begin",
+            &format!("{method}// forward:begin"),
+        )
+    }
+
     #[test]
-    fn an_impl_body_with_logic_is_found_and_a_plain_delegate_is_not() {
-        let logic = "\nimpl UnlockedVault {\n    pub fn x(&self) -> u8 {\n        if true { 1 } else { 2 }\n    }\n}\n";
+    fn an_impl_method_in_a_group_file_is_found() {
+        let method = "\nimpl UnlockedVault {\n    pub fn x(&self) -> u8 {\n        crate::household::loyalty::go(self)\n    }\n}\n";
         let found = broken(
             PURE,
             "pub struct Card {",
-            &format!("{logic}pub struct Card {{"),
+            &format!("{method}pub struct Card {{"),
         );
         assert_eq!(
             found,
-            [format!("loyalty: logic: {PURE}: `x` has a body with logic")]
+            [format!(
+                "loyalty: logic: {PURE}: `x` is an `impl UnlockedVault` method outside the shim"
+            )]
         );
-        let delegate = "\nimpl UnlockedVault {\n    pub fn x(&self) -> u8 {\n        crate::household::loyalty::go(self)\n    }\n}\n";
-        assert!(
-            broken(
-                PURE,
-                "pub struct Card {",
-                &format!("{delegate}pub struct Card {{")
-            )
-            .is_empty()
-        );
+    }
+
+    #[test]
+    fn a_shim_body_with_extra_logic_is_found() {
+        for body in [
+            "if true { 1 } else { 2 }",
+            "let n = 1; crate::household::loyalty::go(self, n)",
+            "other::go(self)",
+            "crate::household::loyalty::go(self, 1 + 2)",
+            "self.go()",
+        ] {
+            assert_eq!(
+                with_shim_impl(body),
+                [format!(
+                    "loyalty: logic: {SERVICE}: `x` is not a passthrough call into the group or usecases"
+                )],
+                "{body}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_plain_passthrough_shim_passes() {
+        for body in [
+            "crate::household::loyalty::go(self)",
+            "crate::usecases::household::loyalty::go(self, &id)",
+        ] {
+            assert!(with_shim_impl(body).is_empty(), "{body}");
+        }
     }
 
     #[test]
