@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use super::Workspace;
 use super::home::{allowed_files, core_dir};
-use super::map::Foundation;
+use super::map::{ExtraStub, Foundation};
 
 /// The findings for `changed`: every file no task allows, and a diff that no single task covers.
 /// With `task` the diff must fit that task alone.
@@ -45,6 +45,7 @@ fn join(tasks: &BTreeSet<&str>) -> String {
 struct Owners<'run> {
     areas: Vec<(&'run str, BTreeSet<String>)>,
     foundations: &'run [Foundation],
+    extra_stubs: Vec<(&'run str, String)>,
     scope: Vec<String>,
 }
 
@@ -72,6 +73,11 @@ impl<'run> Owners<'run> {
                 .map(|area| (area.task.as_str(), allowed_files(workspace, area)))
                 .collect(),
             foundations: &map.foundations,
+            extra_stubs: map
+                .extra_stubs
+                .iter()
+                .map(|stub| (stub.task.as_str(), stub_path(&core, stub)))
+                .collect(),
             scope,
         }
     }
@@ -89,17 +95,28 @@ impl<'run> Owners<'run> {
         let by_foundation = self
             .foundations
             .iter()
-            .filter(|foundation| {
-                foundation.files.iter().any(|entry| {
-                    if entry.ends_with('/') {
-                        path.starts_with(entry)
-                    } else {
-                        path == entry
-                    }
-                })
-            })
+            .filter(|foundation| foundation.files.iter().any(|entry| names_path(entry, path)))
             .map(|foundation| foundation.task.as_str());
-        by_area.chain(by_foundation).collect()
+        let by_stub = self
+            .extra_stubs
+            .iter()
+            .filter(|(_, entry)| names_path(entry, path))
+            .map(|(task, _)| *task);
+        by_area.chain(by_foundation).chain(by_stub).collect()
+    }
+}
+
+/// The stub's path from the workspace root (`path` is under the core `src/`).
+fn stub_path(core: &str, stub: &ExtraStub) -> String {
+    format!("{core}/{}", stub.path)
+}
+
+/// An entry names a file by equality and a directory (trailing `/`) by prefix.
+fn names_path(entry: &str, path: &str) -> bool {
+    if entry.ends_with('/') {
+        path.starts_with(entry)
+    } else {
+        path == entry
     }
 }
 
@@ -185,5 +202,30 @@ mod tests {
             None,
         );
         assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn an_extra_stub_is_green_for_its_task_and_red_for_another() {
+        let file = changed(&["crates/core/src/usecases/react.rs"]);
+        let owner = findings(&real_workspace(), &file, Some("T45"));
+        assert!(owner.is_empty(), "{owner:?}");
+        let other = findings(&real_workspace(), &file, Some("T26"));
+        assert_eq!(other.len(), 1, "{other:?}");
+    }
+
+    #[test]
+    fn a_directory_stub_owns_its_files() {
+        let file = changed(&["crates/core/src/cryptotrack/service/positions.rs"]);
+        let found = findings(&real_workspace(), &file, Some("T47"));
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn money_tree_is_owned_by_the_t8_foundation() {
+        let file = changed(&["crates/core/src/money/tree.rs"]);
+        let owner = findings(&real_workspace(), &file, Some("T8"));
+        assert!(owner.is_empty(), "{owner:?}");
+        let other = findings(&real_workspace(), &file, Some("T26"));
+        assert_eq!(other.len(), 1, "{other:?}");
     }
 }
