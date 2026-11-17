@@ -61,7 +61,7 @@ impl Calendar {
 
     /// Local date of an RFC3339 moment.
     pub fn date_of_iso(&self, iso: &str) -> Option<NaiveDate> {
-        crate::pricing::history::unix_secs(iso).map(|secs| self.date_of(secs))
+        crate::time::unix_secs(iso).map(|secs| self.date_of(secs))
     }
 
     /// The moment a local wall-clock time happens. A time skipped by a DST

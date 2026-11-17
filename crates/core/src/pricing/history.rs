@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::Amount;
 use crate::model::cryptotrack::CryptoPricePoint;
 use crate::model::vault::{FxPoint, PricePoint};
+pub use crate::time::{secs_or_now, unix_secs};
 
 /// Most points one currency or asset keeps (≈ 83 days hourly, years daily).
 pub const HISTORY_CAP: usize = 2000;
@@ -19,20 +20,6 @@ pub const HOURLY_KEEP: usize = 24 * 7;
 
 const HOUR: i64 = 3600;
 const DAY: i64 = 86_400;
-
-/// Unix seconds of an RFC3339 timestamp. Plain string order is not enough:
-/// `…:00Z` and `…:00.5Z` sort the wrong way round.
-pub fn unix_secs(iso: &str) -> Option<i64> {
-    use time::format_description::well_known::Rfc3339;
-    time::OffsetDateTime::parse(iso.trim(), &Rfc3339)
-        .ok()
-        .map(|moment| moment.unix_timestamp())
-}
-
-/// Unix seconds of `iso`, or now when it is empty or unreadable.
-pub fn secs_or_now(iso: &str) -> i64 {
-    unix_secs(iso).unwrap_or_else(|| time::OffsetDateTime::now_utc().unix_timestamp())
-}
 
 /// A cached point of one series (a currency or an asset key).
 trait Point: Clone {
