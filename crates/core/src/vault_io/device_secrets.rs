@@ -289,6 +289,15 @@ mod tests {
     }
 
     #[test]
+    fn the_file_key_differs_from_the_vault_key() {
+        let params = KdfParams::hardened(64 * 1024, 3, 1);
+        let key = SealKey::fresh_with(b"pw", params).expect("key");
+        // The vault key, derived again from what built `key`.
+        let vault_key = crate::crypto::derive_key(b"pw", key.salt(), &params).expect("vault key");
+        assert_ne!(*file_key(&key), vault_key);
+    }
+
+    #[test]
     fn secrets_round_trip_through_the_file() {
         let dir = tempfile::tempdir().expect("dir");
         let vault = dir.path().join("v.wallet");
