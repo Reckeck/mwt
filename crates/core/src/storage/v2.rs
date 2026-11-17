@@ -191,8 +191,10 @@ struct FrozenNode {
 
 #[derive(Serialize)]
 struct FrozenPosition {
-    x: f64,
-    y: f64,
+    #[serde(rename = "x")]
+    horizontal: f64,
+    #[serde(rename = "y")]
+    vertical: f64,
 }
 
 #[derive(Serialize)]
@@ -210,8 +212,8 @@ fn frozen_node(id: &str, kind: &str, params: Map<String, Value>, column: f64) ->
         kind: kind.into(),
         params,
         position: FrozenPosition {
-            x: column * 280.0,
-            y: 0.0,
+            horizontal: column * 280.0,
+            vertical: 0.0,
         },
         disabled: false,
         label: String::new(),
