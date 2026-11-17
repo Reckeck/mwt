@@ -5,7 +5,8 @@
 # starts with `from`, up to but not including the first line that starts with `to`), so they survive
 # line drift. `group` is the target module group (`<group>/<area>.rs`), `context` the scenario home
 # (`usecases/<context>/<area>.rs`), `task` the plan task that owns the area. `homes` overrides the
-# group of single files whose target-structure home differs from the area's.
+# group of single files whose target-structure home differs from the area's. `stubs = false` keeps
+# an area out of `scaffold`; `ipc_contract = true` gives it an `ipc_contract/<area>.rs` stub.
 
 service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
@@ -132,6 +133,7 @@ files = ["peer_sync.rs", "peer_sync/", "sync_ids.rs", "sync_journal.rs"]
 [[area]]
 name = "vault_side"
 task = "phase-6"
+stubs = false
 group = "vault"
 context = "vault"
 files = [
@@ -143,6 +145,7 @@ regions = [{ file = "mod.rs", from = "impl UnlockedVault {", to = "// -- stores"
 [[area]]
 name = "misc"
 task = "phase-6"
+stubs = false
 group = "vault"
 context = "vault"
 files = ["document_edit.rs"]

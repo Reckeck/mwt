@@ -41,6 +41,16 @@ pub struct Area {
     /// File stem to group, for the files whose home differs from `group`.
     #[serde(default)]
     pub homes: BTreeMap<String, String>,
+    /// Whether `scaffold` makes stubs for the area (the phase-6 areas have none).
+    #[serde(default = "yes")]
+    pub stubs: bool,
+    /// The area needs its own `ipc_contract/<area>.rs` stub for new DTOs.
+    #[serde(default)]
+    pub ipc_contract: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Debug, Deserialize)]

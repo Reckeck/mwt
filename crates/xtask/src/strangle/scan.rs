@@ -13,7 +13,7 @@ use syn::{
 };
 
 /// The type whose impl blocks the areas are made of.
-const VAULT_TYPE: &str = "UnlockedVault";
+pub(super) const VAULT_TYPE: &str = "UnlockedVault";
 
 /// A method of `impl UnlockedVault`.
 #[derive(Debug, Clone)]
@@ -218,7 +218,7 @@ fn idents_of(tokens: TokenStream) -> Vec<String> {
     found
 }
 
-fn names_type(ty: &Type, name: &str) -> bool {
+pub(super) fn names_type(ty: &Type, name: &str) -> bool {
     matches!(ty, Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == name))
 }
 
