@@ -34,7 +34,7 @@
 use argon2::{Algorithm, Argon2, Block, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
-use rand::RngCore;
+use rand::Rng;
 use zeroize::Zeroizing;
 
 use self::format::SnapshotFormat;
@@ -112,8 +112,8 @@ pub(crate) fn random_header(
 ) -> (VaultHeader, [u8; SALT_LEN], [u8; NONCE_LEN]) {
     let mut salt = [0u8; SALT_LEN];
     let mut nonce = [0u8; NONCE_LEN];
-    rand::thread_rng().fill_bytes(&mut salt);
-    rand::thread_rng().fill_bytes(&mut nonce);
+    rand::rng().fill_bytes(&mut salt);
+    rand::rng().fill_bytes(&mut nonce);
     let header = VaultHeader::new(payload_fmt, salt, nonce);
     (header, salt, nonce)
 }
@@ -164,7 +164,7 @@ impl SealKey {
     /// [`Self::fresh`] at the cost `kdf`: the move to the crypto level.
     pub fn fresh_with(password: &[u8], kdf: KdfParams) -> Result<Self> {
         let mut salt = [0u8; SALT_LEN];
-        rand::thread_rng().fill_bytes(&mut salt);
+        rand::rng().fill_bytes(&mut salt);
         Self::derive(password, salt, kdf)
     }
 
@@ -196,7 +196,7 @@ pub fn seal_with(key: &SealKey, payload_fmt: SnapshotFormat, plaintext: &[u8]) -
         return Ok(seal_plain(payload_fmt, plaintext));
     }
     let mut nonce = [0u8; NONCE_LEN];
-    rand::thread_rng().fill_bytes(&mut nonce);
+    rand::rng().fill_bytes(&mut nonce);
     let header = VaultHeader::with_kdf(payload_fmt, key.kdf, key.salt, nonce);
     encrypt(&header, &key.key, plaintext)
 }
@@ -371,7 +371,7 @@ pub fn open_bytes_with(bytes: &[u8], key: &SealKey) -> Result<(Vec<u8>, Snapshot
 /// A fresh random key for one blob (an attachment's file).
 pub fn random_blob_key() -> Zeroizing<[u8; KEY_LEN]> {
     let mut key = Zeroizing::new([0u8; KEY_LEN]);
-    rand::thread_rng().fill_bytes(&mut *key);
+    rand::rng().fill_bytes(&mut *key);
     key
 }
 
@@ -379,7 +379,7 @@ pub fn random_blob_key() -> Zeroizing<[u8; KEY_LEN]> {
 /// file cannot be swapped for another one sealed with the same key.
 pub(crate) fn seal_blob(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
     let mut nonce = [0u8; NONCE_LEN];
-    rand::thread_rng().fill_bytes(&mut nonce);
+    rand::rng().fill_bytes(&mut nonce);
     let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
     let ct = cipher
         .encrypt(

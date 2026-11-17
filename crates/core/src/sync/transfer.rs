@@ -103,8 +103,10 @@ pub fn decode(bytes: &[u8]) -> Result<TransferMessage> {
 
 /// A fresh six-digit code from the OS random source.
 pub fn new_code() -> String {
-    use rand::Rng;
-    let number: u32 = rand::rngs::OsRng.gen_range(0..1_000_000);
+    use rand::RngExt;
+    use rand::rand_core::UnwrapErr;
+    use rand::rngs::SysRng;
+    let number: u32 = UnwrapErr(SysRng).random_range(0..1_000_000);
     format!("{number:06}")
 }
 

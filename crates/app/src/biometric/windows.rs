@@ -16,7 +16,7 @@
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use hkdf::Hkdf;
-use rand::RngCore;
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use windows::Security::Credentials::{
     KeyCredential, KeyCredentialCreationOption, KeyCredentialManager, KeyCredentialStatus,
@@ -130,8 +130,8 @@ impl BiometricVault for Platform {
             }
             let mut salt = [0u8; SALT_LEN];
             let mut nonce = [0u8; NONCE_LEN];
-            rand::thread_rng().fill_bytes(&mut salt);
-            rand::thread_rng().fill_bytes(&mut nonce);
+            rand::rng().fill_bytes(&mut salt);
+            rand::rng().fill_bytes(&mut nonce);
             let key = wrap_key(&first, &salt)?;
             let cipher = XChaCha20Poly1305::new(key.as_ref().into());
             let ciphertext = cipher
