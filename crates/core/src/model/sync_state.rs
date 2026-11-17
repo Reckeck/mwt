@@ -5,6 +5,24 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
+/// Characters of the device id kept in a stamp: enough to break ties, short
+/// enough that thousands of stamps do not bloat the vault.
+pub const DEVICE_TAG_LEN: usize = 8;
+
+/// How far ahead of the wall clock a stamp may be and still move a clock, and
+/// the skew at which devices refuse to sync (`session::SKEW_REFUSE_MS` is this).
+/// A record stamped beyond it is stored as it is, but never drags a clock along.
+pub const MAX_FUTURE_MS: u64 = 24 * 3600 * 1000;
+
+/// The part of a device id a stamp carries.
+pub fn device_tag(device_id: &str) -> String {
+    device_id
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .take(DEVICE_TAG_LEN)
+        .collect()
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Stamp {
     /// Unix milliseconds.
@@ -12,7 +30,7 @@ pub struct Stamp {
     pub wall: u64,
     #[serde(rename = "c")]
     pub count: u32,
-    /// [`crate::sync::stamp::device_tag`] of the device that made the change.
+    /// [`device_tag`] of the device that made the change.
     #[serde(rename = "d")]
     pub device: String,
 }
@@ -154,7 +172,7 @@ pub struct SyncBatch {
     pub peer_name: String,
     /// RFC3339.
     pub applied_at: String,
-    pub summary: crate::sync::plan::SyncSummary,
+    pub summary: SyncSummary,
     pub entries: Vec<BatchEntry>,
     /// RFC3339 of the undo, once undone.
     #[serde(default)]
@@ -238,7 +256,7 @@ pub struct SyncState {
     pub transfers: Vec<TransferRecord>,
     /// The journal of taken batches, newest last (at most `MAX_JOURNAL`).
     #[serde(default)]
-    pub journal: Vec<crate::sync::journal::SyncJournalEntry>,
+    pub journal: Vec<SyncJournalEntry>,
     /// Device ids whose exchange the user paused ("Decline" on a list of
     /// changes). Local bookkeeping: never synced, never part of `peers`.
     #[serde(default)]
@@ -376,7 +394,7 @@ impl SyncState {
     /// (a newer, live entry) lifts an older revocation, an older entry never
     /// lifts a newer one. A live entry cannot swap the key of a live one.
     pub fn merge_peers(&mut self, remote: &[TrustedPeer], now: u64) -> bool {
-        let limit = now.saturating_add(crate::sync::session::SKEW_REFUSE_MS);
+        let limit = now.saturating_add(MAX_FUTURE_MS);
         let mut changed = false;
         for theirs in remote {
             if theirs.stamp.wall > limit {
@@ -424,8 +442,113 @@ impl SyncState {
 /// Whether `device_id` is this device (`own` is its id or the tag of it; an
 /// empty `own` matches nothing).
 pub fn is_own_device(own: &str, device_id: &str) -> bool {
-    let tag = crate::sync::stamp::device_tag(own);
-    !tag.is_empty() && tag == crate::sync::stamp::device_tag(device_id)
+    let tag = device_tag(own);
+    !tag.is_empty() && tag == device_tag(device_id)
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeKind {
+    #[default]
+    Added,
+    Updated,
+    Deleted,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ChangeItem {
+    pub kind: ChangeKind,
+    /// Readable name of the record (never its raw key); may be empty.
+    pub label: String,
+    /// The record's key inside its collection, for identity.
+    #[serde(default)]
+    pub key: String,
+    /// What an updated record changes, field by field.
+    #[serde(default)]
+    pub fields: Vec<FieldChange>,
+}
+
+/// One user-meaningful field of an updated record, as display-ready text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct FieldChange {
+    /// Dotted field name (`meta.comment`); the UI maps it to a label.
+    pub field: String,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    /// Set when the values are amounts of this currency or asset: the UI
+    /// shows them with `<Money>`.
+    #[serde(default)]
+    pub money_currency: Option<String>,
+}
+
+/// Changes to one collection (`transactions`, `stores`, …).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct CollectionChanges {
+    pub collection: String,
+    pub added: u32,
+    pub updated: u32,
+    pub deleted: u32,
+    /// The first `MAX_ITEMS` of `sync::plan` changes, for the list under the summary.
+    pub items: Vec<ChangeItem>,
+}
+
+/// A field edited on both devices where the other device's later edit won.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct OverwrittenField {
+    pub collection: String,
+    pub label: String,
+    pub field: String,
+    pub before: String,
+    pub after: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncSummary {
+    pub total: u32,
+    pub collections: Vec<CollectionChanges>,
+    pub overwritten: Vec<OverwrittenField>,
+    /// Records of an external copy where both sides lacked field stamps and
+    /// the values differed: there is no shared history to say who changed
+    /// what, so the pick is arbitrary (but the same on every run).
+    #[serde(default)]
+    pub unstamped_conflicts: u32,
+}
+
+/// How a batch ended.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncJournalOutcome {
+    #[default]
+    Applied,
+    Declined,
+    Failed,
+    /// The vault was handed to the device (a transfer): nothing to apply.
+    Sent,
+}
+
+/// How many records of one collection a batch touched.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncJournalCount {
+    pub collection: String,
+    pub count: u32,
+}
+
+/// One batch, as the journal tells it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncJournalEntry {
+    pub id: String,
+    /// RFC3339.
+    pub at: String,
+    /// The device the batch came from.
+    pub peer_name: String,
+    pub counts: Vec<SyncJournalCount>,
+    /// The record's label when the batch changed exactly one.
+    #[serde(default)]
+    pub label: Option<String>,
+    pub outcome: SyncJournalOutcome,
+    /// The kept batch behind an applied line, for "Undo" while it is kept.
+    #[serde(default)]
+    pub batch_id: Option<String>,
 }
 
 #[cfg(test)]
@@ -564,7 +687,7 @@ mod tests {
     #[test]
     fn an_entry_stamped_far_in_the_future_is_skipped() {
         let mut state = state_with(vec![entry("dev", "kk", 10, false)]);
-        let ahead = NOW + crate::sync::session::SKEW_REFUSE_MS + 1;
+        let ahead = NOW + MAX_FUTURE_MS + 1;
         assert!(!state.merge_peers(&[entry("dev", "kk", ahead, true)], NOW));
         assert!(!state.merge_peers(&[entry("other", "oo", ahead, false)], NOW));
         assert_eq!(state.peers.len(), 1);

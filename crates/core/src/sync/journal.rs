@@ -3,49 +3,12 @@
 //! newest [`MAX_JOURNAL`] lines stay. No record values, no keys: only
 //! collection names, counts and, for a single change, its label.
 
-use serde::{Deserialize, Serialize};
-
 use super::plan::SyncSummary;
 
 /// Lines kept.
 pub const MAX_JOURNAL: usize = 200;
 
-/// How a batch ended.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub enum SyncJournalOutcome {
-    #[default]
-    Applied,
-    Declined,
-    Failed,
-    /// The vault was handed to the device (a transfer): nothing to apply.
-    Sent,
-}
-
-/// How many records of one collection a batch touched.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-pub struct SyncJournalCount {
-    pub collection: String,
-    pub count: u32,
-}
-
-/// One batch, as the journal tells it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-pub struct SyncJournalEntry {
-    pub id: String,
-    /// RFC3339.
-    pub at: String,
-    /// The device the batch came from.
-    pub peer_name: String,
-    pub counts: Vec<SyncJournalCount>,
-    /// The record's label when the batch changed exactly one.
-    #[serde(default)]
-    pub label: Option<String>,
-    pub outcome: SyncJournalOutcome,
-    /// The kept batch behind an applied line, for "Undo" while it is kept.
-    #[serde(default)]
-    pub batch_id: Option<String>,
-}
+pub use crate::model::sync_state::{SyncJournalCount, SyncJournalEntry, SyncJournalOutcome};
 
 impl SyncJournalEntry {
     /// Drop the label of a line about a secret collection (written before

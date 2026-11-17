@@ -8,25 +8,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Characters of the device id kept in a stamp: enough to break ties, short
-/// enough that thousands of stamps do not bloat the vault.
-pub const DEVICE_TAG_LEN: usize = 8;
-
-pub use crate::model::sync_state::Stamp;
-
-/// How far ahead of the wall clock a stamp may be and still move a clock, and
-/// the skew at which devices refuse to sync (`session::SKEW_REFUSE_MS` is this).
-/// A record stamped beyond it is stored as it is, but never drags a clock along.
-pub const MAX_FUTURE_MS: u64 = 24 * 3600 * 1000;
-
-/// The part of a device id a stamp carries.
-pub fn device_tag(device_id: &str) -> String {
-    device_id
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .take(DEVICE_TAG_LEN)
-        .collect()
-}
+pub use crate::model::sync_state::{DEVICE_TAG_LEN, MAX_FUTURE_MS, Stamp, device_tag};
 
 /// Unix milliseconds now; a clock before 1970 reads as 0.
 pub fn now_ms() -> u64 {

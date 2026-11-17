@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::model::planning::{
@@ -126,10 +126,18 @@ impl From<VaultDocV2> for VaultDoc {
 
 /// The mark the schedule starts from: nothing planned before the start.
 fn start_mark(spec: &AutomationSpec) -> String {
-    crate::pricing::history::unix_secs(&spec.starts_at).map_or_else(
+    frozen_unix_secs(&spec.starts_at).map_or_else(
         || spec.starts_at.clone(),
         |secs| crate::calendar::iso(secs - 1),
     )
+}
+
+/// Unix seconds of an RFC3339 timestamp, as v2 read the start of a schedule.
+fn frozen_unix_secs(iso: &str) -> Option<i64> {
+    use time::format_description::well_known::Rfc3339;
+    time::OffsetDateTime::parse(iso.trim(), &Rfc3339)
+        .ok()
+        .map(|moment| moment.unix_timestamp())
 }
 
 /// The graph JSON the v2 → v3 step stores, as the builder made it at v3
@@ -137,40 +145,87 @@ fn start_mark(spec: &AutomationSpec) -> String {
 /// or a month offset: "on schedule" → "Create transaction". A copy, so a later
 /// change of the live builder cannot change what a v2 file migrates to.
 fn frozen_graph(spec: &AutomationSpec) -> String {
-    let graph = json!({
-        "version": 3,
-        "nodes": [
-            frozen_node(TRIGGER, "trigger.schedule", frozen_schedule_params(spec), 0.0),
-            frozen_node(ACTION, "action.transaction", frozen_action_params(spec), 2.0),
+    let graph = FrozenGraph {
+        version: 3,
+        nodes: vec![
+            frozen_node(
+                TRIGGER,
+                "trigger.schedule",
+                frozen_schedule_params(spec),
+                0.0,
+            ),
+            frozen_node(
+                ACTION,
+                "action.transaction",
+                frozen_action_params(spec),
+                2.0,
+            ),
         ],
-        "edges": [
+        edges: vec![
             frozen_edge(TRIGGER, "at", ACTION, "date"),
             frozen_edge(TRIGGER, "out", ACTION, "in"),
         ],
-        "comments": [],
-    });
+        comments: Vec::new(),
+    };
     serde_json::to_string(&graph).unwrap_or_default()
 }
 
-fn frozen_node(id: &str, kind: &str, params: Map<String, Value>, column: f64) -> Value {
-    json!({
-        "id": id,
-        "kind": kind,
-        "params": params,
-        "position": { "x": column * 280.0, "y": 0.0 },
-        "disabled": false,
-        "label": "",
-    })
+// The fields follow the order the live graph writes its JSON in.
+#[derive(Serialize)]
+struct FrozenGraph {
+    version: u32,
+    nodes: Vec<FrozenNode>,
+    edges: Vec<FrozenEdge>,
+    comments: Vec<Value>,
 }
 
-fn frozen_edge(from: &str, from_port: &str, to: &str, to_port: &str) -> Value {
-    json!({
-        "id": format!("{from}.{from_port}>{to}.{to_port}"),
-        "from": from,
-        "from_port": from_port,
-        "to": to,
-        "to_port": to_port,
-    })
+#[derive(Serialize)]
+struct FrozenNode {
+    id: String,
+    kind: String,
+    params: Map<String, Value>,
+    position: FrozenPosition,
+    disabled: bool,
+    label: String,
+}
+
+#[derive(Serialize)]
+struct FrozenPosition {
+    x: f64,
+    y: f64,
+}
+
+#[derive(Serialize)]
+struct FrozenEdge {
+    id: String,
+    from: String,
+    from_port: String,
+    to: String,
+    to_port: String,
+}
+
+fn frozen_node(id: &str, kind: &str, params: Map<String, Value>, column: f64) -> FrozenNode {
+    FrozenNode {
+        id: id.into(),
+        kind: kind.into(),
+        params,
+        position: FrozenPosition {
+            x: column * 280.0,
+            y: 0.0,
+        },
+        disabled: false,
+        label: String::new(),
+    }
+}
+
+fn frozen_edge(from: &str, from_port: &str, to: &str, to_port: &str) -> FrozenEdge {
+    FrozenEdge {
+        id: format!("{from}.{from_port}>{to}.{to_port}"),
+        from: from.into(),
+        from_port: from_port.into(),
+        to: to.into(),
+        to_port: to_port.into(),
+    }
 }
 
 /// "On schedule" parameters; the migrated spec has no time and no shift.
