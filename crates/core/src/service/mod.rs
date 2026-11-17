@@ -55,6 +55,7 @@ mod enrichment;
 mod envelopes;
 mod exchange_keys;
 mod exchange_sync;
+mod forward;
 mod investments;
 mod passive;
 mod password;
