@@ -86,6 +86,12 @@ pub const GROUPS: &[Group] = &[
         layer: 5,
         modules: &["service", "sandbox", "appconfig", "ipc_contract"],
     },
+    // Test support on top of everything: compiled only under `cfg(test)` or the `testkit` feature.
+    Group {
+        name: "testkit",
+        layer: 6,
+        modules: &["testkit"],
+    },
 ];
 
 pub fn group_of(module: &str) -> Option<&'static Group> {
