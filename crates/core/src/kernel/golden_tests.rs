@@ -8,8 +8,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::kernel::session::SaveHook;
 use crate::model::notify::{MAX_NOTICE_LOG, NoticeCategory, NoticeRecord};
-use crate::service::{ContactDraft, FlushJob, Flushed, SaveHook, SyncTap, UnlockedVault};
+use crate::service::{ContactDraft, FlushJob, Flushed, SyncTap, UnlockedVault};
 use crate::vault_io::VaultMirror;
 
 /// Every sealed file the vault handed to the mirror, in order.
