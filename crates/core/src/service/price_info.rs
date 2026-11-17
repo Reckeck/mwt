@@ -164,6 +164,16 @@ impl UnlockedVault {
                 },
                 change_24h_pct: None,
             },
+            // The base currency is worth itself: with no rate yet the base
+            // figure is the quantity (the USD side stays a placeholder).
+            None if code == self.base_and_fx().0 => PriceQuote {
+                usd: Amount::new(rust_decimal::Decimal::ONE) / self.base_and_fx().1,
+                info: PriceInfo {
+                    origin: PriceOrigin::Fiat,
+                    ..PriceInfo::default()
+                },
+                change_24h_pct: None,
+            },
             None => PriceQuote::default(),
         }
     }
