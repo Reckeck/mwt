@@ -78,4 +78,14 @@ describe('useAdjustment moment', () => {
     const sent = argsOf<{ input: { transaction: { common: { timestamp: string } } } }>('update_transaction').input
     expect(sent.transaction.common.timestamp).toBe(original)
   })
+
+  it('is dated by the core, and not validated, until the date is touched; then both change together', async () => {
+    vi.mocked(call).mockImplementation(async () => ({ lines: [] }) as never)
+    const { api } = mountAdjustment(null)
+    await settle()
+    expect(api.form.errors.value.timestamp).toBeNull()
+    api.timestamp.value = ''
+    await nextTick()
+    expect(api.form.errors.value.timestamp).toBeTruthy()
+  })
 })

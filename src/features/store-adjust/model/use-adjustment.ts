@@ -47,9 +47,11 @@ export function useAdjustment(props: AdjustmentDialogProps, open: Ref<boolean>) 
   })
   const comment = ref('')
   const rows = ref<AdjustmentRow[]>([])
+  /** The core dates the correction (`now`): a new one whose date the user has not picked. */
+  const datedByCore = computed(() => !editing.value && !dateTouched.value)
   /** The moment saved: the edited correction keeps its seconds while the field is left as it was. */
   const moment = computed(() =>
-    !editing.value && !dateTouched.value ? null : keepOriginalMoment(dateValue.value, editing.value?.meta.timestamp),
+    datedByCore.value ? null : keepOriginalMoment(dateValue.value, editing.value?.meta.timestamp),
   )
 
   const draft = useQuery({
@@ -116,7 +118,7 @@ export function useAdjustment(props: AdjustmentDialogProps, open: Ref<boolean>) 
   )
   const form = useFormValidation(
     () => ({
-      timestamp: !editing.value && !dateTouched.value ? null : required(dateValue.value),
+      timestamp: datedByCore.value ? null : required(dateValue.value),
       rows: rows.value.some(badRow)
         ? t('validation.number')
         : changed.value.length
