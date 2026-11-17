@@ -98,7 +98,12 @@ impl RotationReport {
     /// Write every failed step to stderr as a warning: the key change
     /// succeeded, so nobody else would see them. `operation` names the call.
     pub fn warn_failed(&self, operation: &str) {
-        warn_failures(operation, &self.failed, |line| eprintln!("{line}"));
+        self.warn_failed_to(operation, |line| eprintln!("{line}"));
+    }
+
+    /// [`Self::warn_failed`] with the lines going to `sink`.
+    pub(super) fn warn_failed_to(&self, operation: &str, sink: impl FnMut(&str)) {
+        warn_failures(operation, &self.failed, sink);
     }
 }
 
@@ -146,14 +151,28 @@ impl UnlockedVault {
         } else {
             PlainCopies::Keep
         };
-        let report = self.set_password_with(
+        self.set_password_warning_to(
             new_password,
             CopyPolicy {
                 plain,
                 reencrypt_old: false,
             },
-        )?;
-        report.warn_failed("set_password");
+            |_| Ok(()),
+            |line| eprintln!("{line}"),
+        )
+    }
+
+    /// The body of [`Self::set_password`]: the failed cleanup steps go to
+    /// `sink` as warnings, and `fault` is the test hook of the rotation.
+    fn set_password_warning_to(
+        &mut self,
+        new_password: &str,
+        policy: CopyPolicy,
+        fault: impl FnMut(RotateStep) -> Result<()>,
+        sink: impl FnMut(&str),
+    ) -> Result<u32> {
+        let report = self.set_password_inner(new_password, policy, fault)?;
+        report.warn_failed_to("set_password", sink);
         Ok(u32::try_from(report.deleted.len()).unwrap_or(u32::MAX))
     }
 
@@ -959,8 +978,9 @@ mod tests {
         let path = vault.path.clone();
         let backup = vault.create_backup().unwrap();
         let copy = backups::resolve(&path, &backup.name).unwrap();
-        let report = vault
-            .set_password_inner(
+        let mut lines = Vec::new();
+        vault
+            .set_password_warning_to(
                 "pw",
                 CopyPolicy {
                     plain: PlainCopies::Delete,
@@ -972,15 +992,45 @@ mod tests {
                     }
                     Ok(())
                 },
+                |line| lines.push(line.to_owned()),
             )
             .unwrap();
-        let mut lines = Vec::new();
-        warn_failures("set_password", &report.failed, |line| {
-            lines.push(line.to_owned());
-        });
         assert_eq!(lines.len(), 1, "{lines:?}");
         assert!(lines[0].starts_with("warning: set_password: step \"copy "));
-        assert!(lines[0].contains(&report.failed[0].reason));
+    }
+
+    #[test]
+    fn a_failed_cleanup_after_the_raise_is_logged_as_a_warning() {
+        use crate::crypto::kdf_profile::{KDF_MEM_KIB_MIN, KdfParams};
+        use crate::service::security_level::RaiseStep;
+
+        let (dir, mut vault) = empty_vault();
+        let foreign = {
+            let other_dir = tempdir().unwrap();
+            let other =
+                UnlockedVault::create(other_dir.path().join("a.wallet"), "ancient").unwrap();
+            std::fs::read(&other.path).unwrap()
+        };
+        let presync = dir.path().join("test.wallet.presync.bak");
+        std::fs::write(&presync, foreign).unwrap();
+        let mut lines = Vec::new();
+        vault
+            .raise_warning_to(
+                "pw",
+                STRONG,
+                KdfParams::hardened(KDF_MEM_KIB_MIN, 1, 1),
+                |_| {},
+                |at| {
+                    if at == RaiseStep::Persisted {
+                        std::fs::remove_file(&presync).unwrap();
+                    }
+                    Ok(())
+                },
+                |line| lines.push(line.to_owned()),
+            )
+            .unwrap();
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].starts_with("warning: raise_to_crypto: step \"copy "));
     }
 
     #[test]

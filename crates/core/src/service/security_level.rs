@@ -285,8 +285,31 @@ impl UnlockedVault {
         current_password: &str,
         new_password: &str,
         kdf: KdfParams,
+        on_stage: impl FnMut(RaiseStage),
+        fault: impl FnMut(RaiseStep) -> Result<()>,
+    ) -> Result<RaiseReport> {
+        self.raise_warning_to(
+            current_password,
+            new_password,
+            kdf,
+            on_stage,
+            fault,
+            |line| {
+                eprintln!("{line}");
+            },
+        )
+    }
+
+    /// [`Self::raise_inner`] with the warnings about failed cleanup steps
+    /// going to `sink`.
+    pub(super) fn raise_warning_to(
+        &mut self,
+        current_password: &str,
+        new_password: &str,
+        kdf: KdfParams,
         mut on_stage: impl FnMut(RaiseStage),
         mut fault: impl FnMut(RaiseStep) -> Result<()>,
+        sink: impl FnMut(&str),
     ) -> Result<RaiseReport> {
         if self.sandbox {
             return Err(Error::Unsupported);
@@ -393,9 +416,7 @@ impl UnlockedVault {
                 .failed
                 .push(RotationFailure::new("inventory", &err)),
         }
-        warn_failures("raise_to_crypto", &rotation.failed, |line| {
-            eprintln!("{line}");
-        });
+        warn_failures("raise_to_crypto", &rotation.failed, sink);
         self.after_raise();
         Ok(RaiseReport {
             backup: backups::backup_dir(&self.path).join(&backup.name),
