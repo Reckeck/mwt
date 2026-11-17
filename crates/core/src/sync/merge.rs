@@ -121,7 +121,9 @@ fn merge_core(
         (Some(_), None) => unchanged(&resolve_deletion(local, remote)),
         (None, Some(_)) => unchanged(&resolve_deletion(remote, local)),
         (None, None) => {
-            let tombstone = local.tombstone.clone().max(remote.tombstone.clone());
+            let limit = poison_limit();
+            let tombstone = demote_tombstone(&local.tombstone, limit)
+                .max(demote_tombstone(&remote.tombstone, limit));
             unchanged(&RecordState {
                 value: None,
                 stamps: None,
@@ -145,18 +147,37 @@ fn demote_poisoned(mut stamps: RecordStamps, limit: u64) -> RecordStamps {
     stamps
 }
 
+/// The newest wall time (ms) a stamp may carry before it counts as poisoned.
+fn poison_limit() -> u64 {
+    super::stamp::now_ms().saturating_add(super::stamp::MAX_FUTURE_MS)
+}
+
+/// A tombstone beyond `limit` counts as wall 0, like a poisoned record stamp.
+fn demote_tombstone(
+    tombstone: &Option<super::stamp::Stamp>,
+    limit: u64,
+) -> Option<super::stamp::Stamp> {
+    tombstone.clone().map(|mut stamp| {
+        if stamp.wall > limit {
+            stamp.wall = 0;
+        }
+        stamp
+    })
+}
+
 /// A live record against a side that has it deleted (or never had it).
 fn resolve_deletion(alive: &RecordState, other: &RecordState) -> RecordState {
+    let limit = poison_limit();
     let changed = alive
         .stamps
-        .as_ref()
-        .map(|stamps| stamps.latest().clone())
+        .clone()
+        .map(|stamps| demote_poisoned(stamps, limit).latest().clone())
         .unwrap_or_default();
-    match &other.tombstone {
-        Some(deleted) if *deleted > changed => RecordState {
+    match demote_tombstone(&other.tombstone, limit) {
+        Some(deleted) if deleted > changed => RecordState {
             value: None,
             stamps: None,
-            tombstone: Some(deleted.clone()),
+            tombstone: Some(deleted),
         },
         _ => RecordState {
             value: alive.value.clone(),
@@ -174,7 +195,7 @@ fn merge_fields(
     seen: Option<&super::stamp::Stamp>,
     external: bool,
 ) -> Merged {
-    let limit = super::stamp::now_ms().saturating_add(super::stamp::MAX_FUTURE_MS);
+    let limit = poison_limit();
     let local_stamps = demote_poisoned(local.stamps.clone().unwrap_or_default(), limit);
     let remote_stamps = demote_poisoned(remote.stamps.clone().unwrap_or_default(), limit);
     let local_fields = split(coll, mine);
