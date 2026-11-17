@@ -557,7 +557,7 @@ impl UnlockedVault {
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: None,
-            session: crate::kernel::session::Session::default(),
+            session: crate::kernel::session::Session::sandboxed(),
             device_keys: exchange_keys::DeviceKeys::default(),
         }
     }

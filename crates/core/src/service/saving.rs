@@ -14,14 +14,14 @@
 //! job that finishes after a newer one is dropped instead of overwriting it.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 
 use zeroize::Zeroizing;
 
-use crate::crypto::SealKey;
 use crate::error::{Error, Result};
-use crate::storage::{SnapshotFormat, VaultFile, encode};
+use crate::storage::encode;
 
+use crate::kernel::persistence::{Persistence, SealedWrite};
 use crate::kernel::session::Commit;
 pub use crate::kernel::session::SaveHook;
 use crate::kernel::tx::Tx;
@@ -30,19 +30,15 @@ use super::UnlockedVault;
 
 /// One snapshot of the document on its way to disk, sealed off the vault lock.
 pub struct FlushJob {
-    path: PathBuf,
-    fmt: SnapshotFormat,
-    plaintext: Zeroizing<Vec<u8>>,
-    key: Arc<SealKey>,
-    revision: u64,
-    gate: Arc<Mutex<u64>>,
+    write: SealedWrite,
+    store: Arc<dyn Persistence>,
     mirror: Option<Arc<dyn crate::vault_io::VaultMirror>>,
 }
 
 impl std::fmt::Debug for FlushJob {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FlushJob")
-            .field("revision", &self.revision)
+            .field("revision", &self.write.revision)
             .finish_non_exhaustive()
     }
 }
@@ -52,24 +48,18 @@ impl std::fmt::Debug for FlushJob {
 pub struct Flushed {
     pub path: PathBuf,
     pub revision: u64,
+    /// The bytes that went out; `None` when nothing was written.
+    pub sealed: Option<Vec<u8>>,
 }
 
 impl FlushJob {
     /// Seal and write. Needs no vault lock; writes are serialised by the gate.
     pub fn write(self) -> Result<Flushed> {
-        let mut newest = self.gate.lock().unwrap_or_else(PoisonError::into_inner);
-        if self.revision > *newest {
-            let sealed =
-                VaultFile::seal_and_write(&self.path, &self.key, &self.plaintext, self.fmt)?;
-            *newest = self.revision;
-            if let Some(mirror) = &self.mirror {
-                mirror.push(&sealed);
-            }
+        let done = self.store.write(self.write)?;
+        if let (Some(sealed), Some(mirror)) = (&done.sealed, &self.mirror) {
+            mirror.push(sealed);
         }
-        Ok(Flushed {
-            path: self.path,
-            revision: self.revision,
-        })
+        Ok(done)
     }
 }
 
@@ -206,12 +196,15 @@ impl UnlockedVault {
         };
         let plaintext = Zeroizing::new(encoded?);
         Ok(Some(FlushJob {
-            path: self.path.clone(),
-            fmt: self.fmt,
-            plaintext,
-            key,
-            revision: self.session.revision(),
-            gate: self.session.gate(),
+            write: SealedWrite {
+                path: self.path.clone(),
+                fmt: self.fmt,
+                plaintext,
+                key,
+                revision: self.session.revision(),
+                gate: self.session.gate(),
+            },
+            store: self.session.store(),
             mirror: self.mirror.clone(),
         }))
     }
@@ -250,6 +243,7 @@ mod tests {
     use super::super::test_support::empty_vault;
     use super::*;
     use crate::crypto::parse_file;
+    use crate::storage::VaultFile;
 
     /// Counts the wake-ups instead of running a writer thread.
     #[derive(Default)]

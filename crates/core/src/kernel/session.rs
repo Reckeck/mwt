@@ -4,6 +4,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use super::persistence::{FileStore, Persistence, SandboxStore};
+
 /// Told that the vault has unsaved changes (the app's writer thread).
 pub trait SaveHook: Send + Sync {
     fn dirty(&self);
@@ -21,7 +23,6 @@ pub enum Commit {
 }
 
 /// Batching state of an open vault.
-#[derive(Default)]
 pub struct Session {
     /// Changes not on disk yet.
     dirty: bool,
@@ -31,9 +32,37 @@ pub struct Session {
     gate: Arc<Mutex<u64>>,
     /// Batched mode: wake the writer instead of writing.
     hook: Option<Arc<dyn SaveHook>>,
+    /// Where the sealed snapshots go.
+    store: Arc<dyn Persistence>,
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        Self::with_store(Arc::new(FileStore))
+    }
 }
 
 impl Session {
+    /// A session whose writes go nowhere: a sandbox copy.
+    pub fn sandboxed() -> Self {
+        Self::with_store(Arc::new(SandboxStore))
+    }
+
+    fn with_store(store: Arc<dyn Persistence>) -> Self {
+        Self {
+            dirty: false,
+            revision: 0,
+            gate: Arc::default(),
+            hook: None,
+            store,
+        }
+    }
+
+    /// The store a flush job writes through.
+    pub fn store(&self) -> Arc<dyn Persistence> {
+        self.store.clone()
+    }
+
     /// Bump the revision and set dirty, with no word on how it gets written.
     pub fn touch(&mut self) {
         self.revision += 1;
