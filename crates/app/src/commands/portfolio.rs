@@ -15,6 +15,7 @@ use trade_core::service::{
 use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 #[tauri::command]
 pub async fn get_summary(state: State<'_, AppState>) -> Result<PortfolioSummary, IpcError> {
@@ -240,3 +241,5 @@ pub async fn property_valuation_delete(
         .delete_valuation(&id)
         .map_err(IpcError::from)
 }
+
+ipc_commands!(portfolio_commands, PORTFOLIO_NAMES, commands::portfolio: [get_summary, get_history, get_asset_holdings, get_investments, get_store_months, get_realized_pnl, get_store_history, get_store_pnl, get_net_worth, set_manual_price, clear_manual_price, asset_classes_get, asset_classes_set, asset_class_assign, topup_advice, property_valuations, property_valuation_add, property_valuation_delete]);

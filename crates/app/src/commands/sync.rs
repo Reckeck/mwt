@@ -12,6 +12,7 @@ use trade_core::sync::journal::SyncJournalEntry;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 use crate::sync::{self, Order};
 
 #[tauri::command]
@@ -260,3 +261,5 @@ pub async fn sync_restore_backup(state: State<'_, AppState>) -> Result<(), IpcEr
     let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
     vault.sync_restore_backup().map_err(IpcError::from)
 }
+
+ipc_commands!(sync_commands, SYNC_NAMES, commands::sync: [sync_status, sync_set_settings, sync_open_firewall, sync_open_notification_settings, sync_pair, sync_dismiss_offer, sync_confirm_pairing, sync_decide_plan, sync_peers, sync_forget_peer, sync_resume_peer, sync_history, sync_journal, sync_undo, allow_merging, sync_restore_backup]);

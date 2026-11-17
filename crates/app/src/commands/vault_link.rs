@@ -10,6 +10,7 @@ use trade_core::ipc_contract::{LinkVaultInput, ResolveVaultConflictInput, VaultL
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 use crate::platform_fs::{self, links};
 
 /// Path of the unlocked vault; the guard is gone when this returns, so a
@@ -99,3 +100,5 @@ pub async fn resolve_vault_conflict(
     let path = platform_fs::resolve_vault_to_open(&app, &input.path)?;
     links::resolve_conflict(&app, &path, input.keep, &input.password).map_err(IpcError::from)
 }
+
+ipc_commands!(vault_link_commands, VAULT_LINK_NAMES, commands::vault_link: [vault_link_status, link_vault_external, unlink_vault_external, resolve_vault_conflict]);

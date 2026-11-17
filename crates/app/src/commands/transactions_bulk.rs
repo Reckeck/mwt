@@ -8,6 +8,7 @@ use trade_core::service::{DeletedTransaction, TxCategories, TxStore};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 #[tauri::command]
 pub async fn delete_transactions(
@@ -60,3 +61,5 @@ pub async fn move_transactions(
         .move_transactions(changes)
         .map_err(IpcError::from)
 }
+
+ipc_commands!(transactions_bulk_commands, TRANSACTIONS_BULK_NAMES, commands::transactions_bulk: [delete_transactions, restore_transactions, set_transaction_categories, move_transactions]);
