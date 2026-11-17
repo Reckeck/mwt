@@ -362,19 +362,16 @@ impl VaultFile {
     /// Copy the file as it is before a migration rewrites it:
     /// `vault.wallet` → `vault.wallet.v1.bak`. An existing copy is kept, so
     /// the first, untouched file survives repeated opens. The copy is written
-    /// atomically; a leftover that is not a whole vault file is made again: one
-    /// that does not parse, or one shorter than the file it copies (a header
-    /// is valid in a truncated copy, and the header holds no length).
+    /// atomically (`copy_atomically`: tmp + rename), so a new short copy cannot
+    /// appear; a leftover that does not parse (a short copy an older build
+    /// left) is made again. The container header holds no ciphertext length and
+    /// the AEAD tag needs the password, so wholeness is judged by the header
+    /// alone, never by comparing with the source: that file may have grown.
     pub fn backup_version(path: &Path, version: u32) -> Result<PathBuf> {
         let mut name = path.file_name().unwrap_or_default().to_os_string();
         name.push(format!(".v{version}.bak"));
         let target = path.with_file_name(name);
-        let source_len = std::fs::metadata(path)
-            .map_err(|err| Error::Io(err.to_string()))?
-            .len();
-        let kept = std::fs::read(&target).is_ok_and(|bytes| {
-            crypto::parse_file(&bytes).is_ok() && bytes.len() as u64 >= source_len
-        });
+        let kept = std::fs::read(&target).is_ok_and(|bytes| crypto::parse_file(&bytes).is_ok());
         if !kept {
             copy_atomically(path, &target)?;
         }
@@ -578,31 +575,9 @@ mod tests {
         VaultFile::create(&path, "pw").unwrap();
         let first = VaultFile::backup_version(&path, 3).unwrap();
         let kept = std::fs::read(&first).unwrap();
-        // Rewritten at the same size, as a migration on open would leave it.
-        VaultFile::save(
-            &path,
-            "pw",
-            &VaultDoc::default(),
-            SnapshotFormat::for_profile(),
-        )
-        .unwrap();
+        VaultFile::save(&path, "pw", &sample_doc(), SnapshotFormat::Json).unwrap();
         VaultFile::backup_version(&path, 3).unwrap();
         assert_eq!(std::fs::read(&first).unwrap(), kept);
-    }
-
-    #[test]
-    fn a_header_valid_truncated_pre_migration_copy_is_remade() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("v.wallet");
-        VaultFile::create(&path, "pw").unwrap();
-        let whole = std::fs::read(&path).unwrap();
-        let target = dir.path().join("v.wallet.v3.bak");
-        // Magic, header and the tag are all there; the ciphertext is cut.
-        let cut = whole.len() - 1;
-        std::fs::write(&target, &whole[..cut]).unwrap();
-        assert!(crypto::parse_file(&std::fs::read(&target).unwrap()).is_ok());
-        VaultFile::backup_version(&path, 3).unwrap();
-        assert_eq!(std::fs::read(&target).unwrap(), whole);
     }
 
     #[test]
