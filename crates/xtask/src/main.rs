@@ -75,6 +75,10 @@ async fn run() -> Result<i32> {
         ci::ci_ok::run()?;
         return Ok(0);
     }
+    if matches!(cli.command, Command::CiChanges) {
+        ci::changes::run()?;
+        return Ok(0);
+    }
     let root = lock::find_root()?;
     let mut built = None;
     let plan = match &cli.command {
@@ -193,6 +197,10 @@ async fn run() -> Result<i32> {
         }
         Command::CiOk => {
             ci::ci_ok::run()?;
+            return Ok(0);
+        }
+        Command::CiChanges => {
+            ci::changes::run()?;
             return Ok(0);
         }
         Command::CiPnpmInstall => {

@@ -75,6 +75,7 @@ jobs:
   # release.yml, workflow_dispatch, a push to main), means `platforms=true`. A skipped lane
   # counts as ok in ci-ok.
   changes:
+    needs: xtask
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -83,29 +84,19 @@ jobs:
     outputs:
       platforms: ${{ steps.decide.outputs.platforms }}
     steps:
-      - id: decide
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      - name: Decide
+        id: decide
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          platforms=true
-          if [ "$EVENT" = pull_request ]; then
-            files=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
-              --jq '.[] | .filename, (.previous_filename // empty)')
-            platforms=false
-            while IFS= read -r file; do
-              case "$file" in
-                src/* | public/* | tests/* | docs/* | *.md | biome.json \
-                  | vite.config.ts | vitest.config.ts | tsconfig*.json | steiger.config.ts) ;;
-                *) platforms=true ;;
-              esac
-            done <<< "$files"
-            # An empty file list is not "only frontend": run the lanes.
-            [ -n "$files" ] || platforms=true
-          fi
-          echo "platforms=${platforms}" >> "$GITHUB_OUTPUT"
-          echo "platforms=${platforms}"
+        run: bin/xtask ci-changes
 
   # ------------------------------------------------------------------ xtask
   # xtask compiled once per platform; every job below downloads it into bin/ instead of running

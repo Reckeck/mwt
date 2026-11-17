@@ -206,7 +206,7 @@ Jobs of the checks (all start from the same `images` / `xtask` / `deps` steps):
 
 | Job | Runs | What it does |
 |---|---|---|
-| `changes` | always | decides from the PR's changed files whether the platform lanes run (a narrow allowlist of skippable paths; `package.json` and `pnpm-lock.yaml` do not skip) |
+| `changes` | always (after `xtask`; `xtask ci-changes`) | decides from the PR's changed files whether the platform lanes run (a narrow allowlist of skippable paths; `package.json` and `pnpm-lock.yaml` do not skip) |
 | `check-lint` | `ci-linux` | `bin/xtask check --exclude @frontend --exclude @platforms --exclude @tests`: fmt, clippy, gen-types, the other Rust tasks |
 | `test` | `ci-linux` | `bin/xtask check test`: the fast unit tests (2027 core tests) |
 | `test-convergence` | `ci-linux` | `bin/xtask check test-slow`: the slow convergence/perf tests (12 core tests) |
@@ -228,7 +228,7 @@ in `@tests` (`crates/xtask/src/checks/groups.rs`), then in a job (`test` or
   **Every workflow step is one line** (no `run: |` blocks); the rest of the logic is
   hidden xtask commands in `crates/xtask/src/ci/`: `ci-container-env [--cargo]` (mise
   shims and cargo on PATH, `mise trust`; it comes right after the xtask download),
-  `ci-ok` (the `RESULTS` of the lanes; needs no checkout), `ci-pnpm-install`
+  `ci-ok` (the `RESULTS` of the lanes; needs no checkout), `ci-changes` (`changes`: `EVENT`, `PR_NUMBER`, `GITHUB_REPOSITORY`; the skip allowlist), `ci-pnpm-install`
   (`release.yml` frontend), `cache-cleanup` (`cache-cleanup.yml`: `EVENT`, `PR_NUMBER`,
   `BRANCH`, `GH_REPO`; that workflow compiles xtask with `cargo xtask`). `deps-cook`
   installs cargo-chef itself when missing and ends with `sccache --show-stats`;
