@@ -3,9 +3,11 @@
 //! vault on such a path (on Android and iOS inside the app's own storage), so
 //! this is the only code that ever writes a vault.
 
-use std::fs::{File, OpenOptions};
+use std::collections::BTreeMap;
+use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
 
 use crate::error::{Error, Result};
 
@@ -187,64 +189,54 @@ pub fn backup_path(path: &Path) -> PathBuf {
 /// Keeps a vault open in one app instance at a time.
 ///
 /// Every save rewrites the whole file, so two windows editing the same vault
-/// would silently undo each other. The lock is `<vault>.lock` holding the
-/// owner's PID; a lock whose process is gone (a crash) is taken over. The
-/// owning process may open the vault again (re-unlock, tests).
+/// would silently undo each other. The lock is an OS advisory lock on
+/// `<vault>.lock`: the OS releases it when the process ends, so a crash
+/// leaves nothing stale and the file content is never read. The owning
+/// process may open the vault again (re-unlock, tests); the lock is released
+/// when the last handle is dropped.
 #[derive(Debug)]
 pub struct VaultLock {
-    path: PathBuf,
-    owned: bool,
+    _held: Option<Arc<File>>,
 }
+
+/// The locks this process holds, so it can share one instead of locking the
+/// same file twice (two open file descriptions of one file exclude each other).
+static HELD: Mutex<BTreeMap<PathBuf, Weak<File>>> = Mutex::new(BTreeMap::new());
 
 impl VaultLock {
     /// A lock that holds nothing: for a sandbox copy of a vault that never
     /// touches the file.
     pub fn detached() -> Self {
-        Self {
-            path: PathBuf::new(),
-            owned: false,
-        }
+        Self { _held: None }
     }
 
     pub fn acquire(vault: &Path) -> Result<Self> {
         let mut name = vault.file_name().unwrap_or_default().to_os_string();
         name.push(".lock");
         let path = vault.with_file_name(name);
-        let own = std::process::id();
-        if let Some(holder) = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|raw| raw.trim().parse::<u32>().ok())
-        {
-            if holder == own {
-                return Ok(Self { path, owned: false });
-            }
-            if process_alive(holder) {
+        let mut held = HELD.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(shared) = held.get(&path).and_then(Weak::upgrade) {
+            return Ok(Self {
+                _held: Some(shared),
+            });
+        }
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .map_err(|err| Error::Io(err.to_string()))?;
+        match file.try_lock() {
+            Ok(()) => {}
+            Err(TryLockError::WouldBlock) => {
                 return Err(Error::VaultBusy(vault.display().to_string()));
             }
+            Err(TryLockError::Error(err)) => return Err(Error::Io(err.to_string())),
         }
-        std::fs::write(&path, own.to_string()).map_err(|err| Error::Io(err.to_string()))?;
-        Ok(Self { path, owned: true })
+        let file = Arc::new(file);
+        held.insert(path, Arc::downgrade(&file));
+        Ok(Self { _held: Some(file) })
     }
-}
-
-impl Drop for VaultLock {
-    fn drop(&mut self) {
-        if self.owned {
-            std::fs::remove_file(&self.path).ok();
-        }
-    }
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn process_alive(pid: u32) -> bool {
-    Path::new(&format!("/proc/{pid}")).exists()
-}
-
-/// Without `/proc` a leftover lock cannot be told from a live one; it is
-/// ignored rather than locking the user out after a crash.
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
-fn process_alive(_pid: u32) -> bool {
-    false
 }
 
 /// File extension of a vault on disk.
@@ -392,32 +384,66 @@ pub(crate) mod tests {
         }
     }
 
+    fn lock_path(dir: &tempfile::TempDir) -> PathBuf {
+        dir.path().join("v.wallet.lock")
+    }
+
     #[test]
-    fn a_vault_lock_keeps_other_processes_out() {
+    fn the_same_process_may_acquire_again() {
         let dir = tempfile::tempdir().unwrap();
         let vault = dir.path().join("v.wallet");
-        let lock_file = dir.path().join("v.wallet.lock");
-        {
-            let _held = VaultLock::acquire(&vault).unwrap();
-            assert!(lock_file.exists());
-            // The same process may open it again.
-            assert!(VaultLock::acquire(&vault).is_ok());
-            assert!(
-                lock_file.exists(),
-                "a re-entrant lock does not release the first"
-            );
-        }
-        assert!(!lock_file.exists());
-        // PID 1 is always alive on Linux: another process holds it.
-        std::fs::write(&lock_file, "1").unwrap();
-        if cfg!(any(target_os = "linux", target_os = "android")) {
-            assert!(matches!(
-                VaultLock::acquire(&vault),
-                Err(Error::VaultBusy(_))
-            ));
-        }
-        // A dead holder is taken over.
-        std::fs::write(&lock_file, "4294967000").unwrap();
+        let first = VaultLock::acquire(&vault).unwrap();
+        let second = VaultLock::acquire(&vault).unwrap();
+        drop(first);
+        assert!(
+            VaultLock::acquire(&vault).is_ok(),
+            "the second handle still holds the shared lock"
+        );
+        drop(second);
+    }
+
+    #[test]
+    fn dropping_the_last_handle_releases_the_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = dir.path().join("v.wallet");
+        drop(VaultLock::acquire(&vault).unwrap());
+        let other = File::options().write(true).open(lock_path(&dir)).unwrap();
+        assert!(other.try_lock().is_ok());
+    }
+
+    #[test]
+    fn a_second_instance_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = dir.path().join("v.wallet");
+        let other_instance = File::create(lock_path(&dir)).unwrap();
+        other_instance.try_lock().unwrap();
+        assert!(matches!(
+            VaultLock::acquire(&vault),
+            Err(Error::VaultBusy(_))
+        ));
+        drop(other_instance);
+        assert!(VaultLock::acquire(&vault).is_ok());
+    }
+
+    #[test]
+    fn a_crash_leaves_no_stale_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = dir.path().join("v.wallet");
+        // A crashed instance leaves its lock file behind, held by nobody. The file
+        // names a live process (PID 1): the old PID scheme refused it (on Linux),
+        // the OS lock does not care, since nobody holds the lock.
+        std::fs::write(lock_path(&dir), "1").unwrap();
+        assert!(VaultLock::acquire(&vault).is_ok());
+    }
+
+    #[test]
+    fn a_stale_pid_file_from_the_old_scheme_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = dir.path().join("v.wallet");
+        std::fs::write(lock_path(&dir), "4294967000").unwrap();
+        assert!(VaultLock::acquire(&vault).is_ok());
+        std::fs::write(lock_path(&dir), "1").unwrap();
+        drop(VaultLock::acquire(&vault));
         assert!(VaultLock::acquire(&vault).is_ok());
     }
 }
