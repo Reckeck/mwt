@@ -118,9 +118,11 @@ vaults.
 1. The user enters the master password → `auth::unlock_vault` →
    `VaultFile::open(path, password)` → `crypto::open_bytes` (AEAD check of the
    password) → `VaultDoc` deserialization. The result is stored in `AppState.vault`.
-2. All mutations (store/tx/settings) go through `UnlockedVault::*` methods,
-   each of which ends with `persist()` — re-encryption and an
-   atomic write to disk.
+2. All mutations (store/tx/settings) go through `UnlockedVault::transact`, which marks
+   the document through `persist()`. The app's write-behind writer then does the
+   re-encryption and the atomic write to disk, batching a burst of changes into one write.
+   `persist_now` writes at once: it is used for copy, re-key and close. Without a
+   hook (tests, tools) `persist()` writes at once.
 3. Prices: `refresh_all` first takes a snapshot of what it needs (assets, base currency)
    and releases the mutex, then does the network fetches (library await),
    then locks the vault again and applies the cache through `apply_prices/apply_fx`.
@@ -129,6 +131,25 @@ vaults.
    `get_app_settings` before unlock, so the theme and language are applied already on
    the sign-in screen; after `open`/`create` the base currency is pushed into the vault
    through `sync_base_currency`.
+
+## Layers and ports
+
+The kernel (`crates/core/src/kernel/`) is the one place where a change of the open
+vault is committed. It grows by the strangler rule. What exists:
+
+- `Session` — the write state of an open vault: dirty flag, revision, the write gate,
+  the store and the event bus.
+- `Tx`, `Books`, `Collection`, `Record` — a transaction over the document and typed access to its records.
+- `Persistence` (port) — where a sealed snapshot goes: `FileStore`, `SandboxStore`
+  (no I/O), `Mirrored` (copy to an external document).
+- `ChangeSink` (port) — told the keys of every local save, so a live sync session can send them on.
+- `Clock` (port, `time.rs`) — `SystemClock` and `FixedClock` for tests.
+- Event bus (`EventBus`, `DomainEvent`: `VaultLocked`, `Committed`, `KeysChanged`) —
+  the write-behind hook and the sync tap are its subscribers.
+- `SaveHook` and `Commit` — how a marked change is told to the writer.
+
+Not built yet: the sandbox gate still lives in the service write path; the
+strangler moves continue in later waves.
 
 ## Principles
 

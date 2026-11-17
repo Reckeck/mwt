@@ -8,6 +8,7 @@ mod autostart;
 mod biometric;
 mod commands;
 mod cryptotrack;
+mod ipc;
 #[cfg(desktop)]
 mod legacy;
 mod notify_store;

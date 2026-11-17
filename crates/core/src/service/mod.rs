@@ -96,7 +96,7 @@ mod reports;
 mod store_change;
 mod store_months;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 mod utilities;
 mod validate;
 mod valuation;
@@ -375,6 +375,33 @@ impl UnlockedVault {
         vault.start_tracking()?;
         vault.ensure_cash_wallet("Cash")?;
         Ok(vault)
+    }
+
+    /// A vault over `doc` that touches no file and runs no Argon2: a plain
+    /// key, a detached lock, saves going to `store`. For tests and the test
+    /// kit only.
+    #[cfg(any(test, feature = "testkit"))]
+    pub fn with_persistence(
+        doc: VaultDoc,
+        store: std::sync::Arc<dyn crate::kernel::persistence::Persistence>,
+    ) -> Self {
+        Self {
+            path: PathBuf::from("in-memory.wallet"),
+            fmt: SnapshotFormat::for_profile(),
+            doc,
+            base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
+            notice_ru: true,
+            password: Zeroizing::new(String::new()),
+            _lock: crate::storage::VaultLock::detached(),
+            sandbox: false,
+            tracker: None,
+            clock: crate::sync::Clock::default(),
+            sync_tap: None,
+            announce: std::collections::BTreeSet::new(),
+            key: Some(std::sync::Arc::new(SealKey::plain())),
+            session: crate::kernel::session::Session::with_store(store),
+            device_keys: exchange_keys::DeviceKeys::default(),
+        }
     }
 
     /// The vault password typed again (before handing the vault to another

@@ -9,6 +9,10 @@ description = "Multi Wallet Tracker core: domain model, encrypted vault, pricing
 [lints]
 workspace = true
 
+[features]
+# Test kit (`crate::testkit`); becomes its own crate later.
+testkit = []
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true

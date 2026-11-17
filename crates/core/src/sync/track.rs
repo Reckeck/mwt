@@ -8,7 +8,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use serde_json::Value;
 
 use super::registry::Rule;
-use super::stamp::{Clock, Stamp};
+use super::stamp::{Clock, MAX_FUTURE_MS, Stamp, now_ms};
 use super::state::{RecordStamps, SyncState};
 use super::view::{comparable, records, split, split_key};
 
@@ -44,10 +44,33 @@ fn prints(doc: &Value) -> HashMap<String, Print> {
 }
 
 /// The stamp of a change in this save: the save's tick, or one past the
-/// record's `floor` when that stamp lies ahead of the tick.
+/// record's `floor` when that stamp lies ahead of the tick. A `floor` further
+/// ahead than [`MAX_FUTURE_MS`] marks a poisoned record (peers would skip a
+/// stamp one past it): the change is stamped now and a warning is logged.
 fn stamp_for(base: &mut Option<Stamp>, clock: &mut Clock, floor: Option<&Stamp>) -> Stamp {
-    let tick = base.get_or_insert_with(|| clock.tick()).clone();
+    stamp_for_at(base, clock, floor, now_ms(), &mut |message| {
+        eprintln!("{message}");
+    })
+}
+
+/// [`stamp_for`] with an explicit `now` (ms) and the sink of the warning.
+fn stamp_for_at(
+    base: &mut Option<Stamp>,
+    clock: &mut Clock,
+    floor: Option<&Stamp>,
+    now: u64,
+    warn: &mut dyn FnMut(&str),
+) -> Stamp {
+    let tick = base.get_or_insert_with(|| clock.tick_at(now)).clone();
     match floor {
+        Some(existing) if existing.wall > now.saturating_add(MAX_FUTURE_MS) => {
+            warn(&format!(
+                "sync: a record is stamped {} ms ahead of the clock (limit {MAX_FUTURE_MS}); \
+                 the edit is stamped now",
+                existing.wall - now
+            ));
+            tick
+        }
         Some(existing) => tick.max(clock.tick_after(existing)),
         None => tick,
     }
@@ -153,7 +176,6 @@ impl Tracker {
 mod tests {
     use serde_json::json;
 
-    use super::super::stamp::now_ms;
     use super::*;
 
     #[test]
@@ -215,6 +237,39 @@ mod tests {
         state.stamps.insert("stores:a".into(), stamps);
         stamped(&new, &mut Clock::new("dev1"), &mut state, &old);
         assert!(*state.stamps["stores:a"].field("name") > future);
+    }
+
+    #[test]
+    fn a_stamp_within_the_limit_still_gets_one_past_it() {
+        let now = 1_000_000;
+        let existing = Stamp::new(now + MAX_FUTURE_MS, 2, "zz");
+        let mut warnings = Vec::new();
+        let at = stamp_for_at(
+            &mut None,
+            &mut Clock::new("dev1"),
+            Some(&existing),
+            now,
+            &mut |message| warnings.push(message.to_string()),
+        );
+        assert_eq!(at, Stamp::new(now + MAX_FUTURE_MS, 3, "dev1"));
+        assert!(warnings.is_empty(), "an in-limit stamp warned");
+    }
+
+    #[test]
+    fn a_stamp_beyond_the_limit_is_capped_to_now() {
+        let now = 1_000_000;
+        let existing = Stamp::new(now + MAX_FUTURE_MS + 1, 2, "zz");
+        let mut warnings = Vec::new();
+        let at = stamp_for_at(
+            &mut None,
+            &mut Clock::new("dev1"),
+            Some(&existing),
+            now,
+            &mut |message| warnings.push(message.to_string()),
+        );
+        assert_eq!(at.wall, now);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("86400001 ms ahead"));
     }
 
     #[test]
