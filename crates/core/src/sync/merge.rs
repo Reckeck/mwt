@@ -152,14 +152,17 @@ fn poison_limit() -> u64 {
     super::stamp::now_ms().saturating_add(super::stamp::MAX_FUTURE_MS)
 }
 
-/// A tombstone beyond `limit` counts as wall 0, like a poisoned record stamp.
+/// A tombstone beyond `limit` is capped to now (the T42 cap): the deletion
+/// still beats what was stamped before it, and the capped stamp is what the
+/// merge stores, so a record recreated afterwards is stamped past it and
+/// survives. Wall 0 would instead lose the deletion to any live copy.
 fn demote_tombstone(
     tombstone: &Option<super::stamp::Stamp>,
     limit: u64,
 ) -> Option<super::stamp::Stamp> {
     tombstone.clone().map(|mut stamp| {
         if stamp.wall > limit {
-            stamp.wall = 0;
+            stamp.wall = limit.saturating_sub(super::stamp::MAX_FUTURE_MS);
         }
         stamp
     })
