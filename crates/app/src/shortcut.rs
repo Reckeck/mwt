@@ -6,6 +6,7 @@
 use crate::ipc::events::{AppEvent, QuickAdd};
 #[cfg(desktop)]
 use tauri::Manager;
+#[cfg(desktop)]
 use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Runtime};
 #[cfg(desktop)]
