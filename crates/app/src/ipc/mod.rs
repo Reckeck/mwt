@@ -1,7 +1,28 @@
 //! The typed IPC layer: the error type commands return and, later, the
 //! run-time helpers around it.
 
+#[cfg_attr(
+    not(test),
+    expect(
+        unused_macros,
+        unused_imports,
+        reason = "first callers are the context declarations (T12-T15)"
+    )
+)]
+pub(crate) mod commands;
 mod error;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "first callers are the emit sites (T21)")
+)]
+#[cfg_attr(
+    test,
+    allow(dead_code, reason = "`emit` has no test caller: no mock app")
+)]
+pub(crate) mod events;
+mod extract;
 pub mod opener;
+#[expect(dead_code, reason = "first caller is the #[ipc] expansion (T9, T10)")]
+pub mod run;
 
 pub use error::IpcError;
