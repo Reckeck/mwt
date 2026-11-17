@@ -171,10 +171,13 @@ fn demote_tombstone(
 /// A live record against a side that has it deleted (or never had it).
 fn resolve_deletion(alive: &RecordState, other: &RecordState) -> RecordState {
     let limit = poison_limit();
-    let changed = alive
+    let lowered = alive
         .stamps
         .clone()
-        .map(|stamps| demote_poisoned(stamps, limit).latest().clone())
+        .map(|stamps| demote_poisoned(stamps, limit));
+    let changed = lowered
+        .as_ref()
+        .map(|stamps| stamps.latest().clone())
         .unwrap_or_default();
     match demote_tombstone(&other.tombstone, limit) {
         Some(deleted) if deleted > changed => RecordState {
@@ -184,7 +187,7 @@ fn resolve_deletion(alive: &RecordState, other: &RecordState) -> RecordState {
         },
         _ => RecordState {
             value: alive.value.clone(),
-            stamps: alive.stamps.clone(),
+            stamps: lowered,
             tombstone: None,
         },
     }
@@ -212,7 +215,11 @@ fn merge_fields(
             Some(mine),
             Some(theirs),
         );
-        let winner = if take_remote { remote } else { local };
+        let (winner, winner_stamps) = if take_remote {
+            (remote, remote_stamps.clone())
+        } else {
+            (local, local_stamps.clone())
+        };
         // The kind this device had is gone: that is an overwrite when this
         // device itself changed the record (edited a field, or made the new
         // kind: a kind change is a fresh record with a later `created`).
@@ -231,7 +238,9 @@ fn merge_fields(
         return Merged {
             state: RecordState {
                 value: winner.value.clone(),
-                stamps: winner.stamps.clone(),
+                // Stored lowered, so a far-future stamp cannot become valid
+                // again once it ages.
+                stamps: winner.stamps.as_ref().map(|_| winner_stamps),
                 tombstone: None,
             },
             overwrote,
@@ -556,6 +565,45 @@ mod tests {
         );
         let merged = both_ways(coll, &left, &right);
         assert_eq!(merged.value, right.value);
+    }
+
+    fn highest_wall(stamps: &RecordStamps) -> u64 {
+        stamps
+            .fields
+            .values()
+            .chain(std::iter::once(&stamps.created))
+            .map(|stamp| stamp.wall)
+            .max()
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn a_kind_change_stores_no_stamp_beyond_the_future_limit() {
+        let coll = find("transactions").expect("rule");
+        let limit = poison_limit();
+        let far = limit + 1_000;
+        let topup = json!({"topup": {"meta": {"id": "t"}, "amount": "1"}});
+        let payment = json!({"payment": {"meta": {"id": "t"}, "amount": "2"}});
+        // One side poisoned, and both poisoned (the winner's stamps are
+        // the ones stored, so they must come out lowered).
+        for (left_wall, right_wall) in [(far, 4), (far, far + 5)] {
+            let left = state(
+                topup.clone(),
+                at(left_wall, "a"),
+                &[("amount", at(left_wall, "a"))],
+            );
+            let right = state(
+                payment.clone(),
+                at(right_wall, "b"),
+                &[("amount", at(right_wall, "b"))],
+            );
+            let merged = both_ways(coll, &left, &right);
+            let stamps = merged.stamps.expect("stamps");
+            assert!(
+                highest_wall(&stamps) <= limit,
+                "a poisoned stamp survived the kind change"
+            );
+        }
     }
 
     #[test]
