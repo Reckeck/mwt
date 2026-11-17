@@ -101,3 +101,45 @@ impl<'run> Owners<'run> {
         by_area.chain(by_foundation).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn real_workspace() -> Workspace {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        Workspace::load(&root).unwrap()
+    }
+
+    fn changed(paths: &[&str]) -> Vec<String> {
+        paths.iter().map(|path| (*path).to_string()).collect()
+    }
+
+    #[test]
+    fn a_diff_over_two_areas_is_red_without_a_task() {
+        let found = findings(
+            &real_workspace(),
+            &changed(&[
+                "crates/core/src/service/loyalty.rs",
+                "crates/core/src/service/rates.rs",
+            ]),
+            None,
+        );
+        assert!(
+            found
+                .iter()
+                .any(|line| line.contains("no single task allows every changed file")),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn a_diff_inside_one_area_is_green() {
+        let found = findings(
+            &real_workspace(),
+            &changed(&["crates/core/src/service/loyalty.rs"]),
+            None,
+        );
+        assert!(found.is_empty(), "{found:?}");
+    }
+}

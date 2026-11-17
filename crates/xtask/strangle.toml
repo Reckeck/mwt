@@ -21,8 +21,28 @@ task = "T5"
 files = ["crates/core/src/service/forward.rs", "crates/core/src/service/mod.rs"]
 
 [[foundation]]
+# The module wiring `scaffold` writes; the area stubs belong to their area tasks.
 task = "T6"
-files = ["crates/core/src/"]
+files = [
+    "crates/core/src/lib.rs",
+    "crates/core/src/usecases/mod.rs",
+    "crates/core/src/cryptotrack/mod.rs",
+    "crates/core/src/household/mod.rs",
+    "crates/core/src/money/mod.rs",
+    "crates/core/src/planning/mod.rs",
+    "crates/core/src/reports/mod.rs",
+    "crates/core/src/sync/mod.rs",
+    "crates/core/src/vault/mod.rs",
+    "crates/core/src/workflow/mod.rs",
+    "crates/core/src/usecases/cryptotrack/mod.rs",
+    "crates/core/src/usecases/household/mod.rs",
+    "crates/core/src/usecases/money/mod.rs",
+    "crates/core/src/usecases/planning/mod.rs",
+    "crates/core/src/usecases/reports/mod.rs",
+    "crates/core/src/usecases/sync/mod.rs",
+    "crates/core/src/usecases/vault/mod.rs",
+    "crates/core/src/usecases/workflow/mod.rs",
+]
 
 [[foundation]]
 task = "T7"
