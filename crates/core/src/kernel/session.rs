@@ -77,7 +77,7 @@ impl Session {
 
     /// Publish the events of a finished transaction: only a touched one that
     /// returned `Ok` calls this; an untouched one drops them.
-    pub fn deliver(&self, touched: bool, events: Vec<DomainEvent>) {
+    pub(crate) fn deliver(&self, touched: bool, events: Vec<DomainEvent>) {
         if !touched {
             return;
         }
