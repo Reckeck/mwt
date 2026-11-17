@@ -17,7 +17,8 @@ use trade_core::appconfig::{
 };
 use trade_core::ipc_contract::CurrencyCatalogOutput;
 
-use crate::commands::{AppState, err_to_string, lock_vault};
+use crate::commands::{AppState, lock_vault};
+use crate::ipc::IpcError;
 
 /// App config directory. Panics only if the platform refuses to name it, which
 /// would leave the app with nowhere to keep either this or the recent vaults.
@@ -94,7 +95,7 @@ pub fn app_platform() -> &'static str {
 /// Read the app settings. Never fails: a missing or corrupt file yields the
 /// defaults, and the lock screen must be able to render them.
 #[tauri::command]
-pub async fn get_app_settings(app: AppHandle) -> Result<AppSettings, String> {
+pub async fn get_app_settings(app: AppHandle) -> Result<AppSettings, IpcError> {
     Ok(load(&config_dir(&app)))
 }
 
@@ -107,15 +108,15 @@ pub async fn update_app_settings(
     app: AppHandle,
     input: UpdateAppSettingsInput,
     state: State<'_, AppState>,
-) -> Result<AppSettings, String> {
+) -> Result<AppSettings, IpcError> {
     let dir = config_dir(&app);
     let mut settings = load(&dir);
     settings.apply(&input);
-    save(&dir, &settings).map_err(err_to_string)?;
+    save(&dir, &settings)?;
 
     // Push the base currency into the vault if one is open. The guard is taken
     // and released without any `.await` in between.
-    let mut guard = lock_vault(&state).map_err(err_to_string)?;
+    let mut guard = lock_vault(&state)?;
     if let Some(vault) = guard.as_mut() {
         vault.set_base_currency(settings.base());
     }
@@ -127,7 +128,7 @@ pub async fn update_app_settings(
 /// Can the app own a system-wide key here, and what should a compositor
 /// binding run otherwise.
 #[tauri::command]
-pub async fn get_shortcut_support() -> Result<trade_core::ipc_contract::ShortcutSupport, String> {
+pub async fn get_shortcut_support() -> Result<trade_core::ipc_contract::ShortcutSupport, IpcError> {
     let exe = std::env::current_exe()
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_else(|_| "multi-wallet-tracker".into());
@@ -144,7 +145,7 @@ pub async fn get_shortcut_support() -> Result<trade_core::ipc_contract::Shortcut
 pub async fn set_quick_add_shortcut(
     app: AppHandle,
     shortcut: Option<String>,
-) -> Result<AppSettings, String> {
+) -> Result<AppSettings, IpcError> {
     let dir = config_dir(&app);
     let mut settings = load(&dir);
     let wanted = shortcut
@@ -153,10 +154,10 @@ pub async fn set_quick_add_shortcut(
     if let Err(err) = crate::shortcut::apply(&app, wanted.as_deref()) {
         // Put the previous one back; if that fails too, nothing is registered.
         crate::shortcut::apply(&app, settings.quick_add_shortcut.as_deref()).ok();
-        return Err(err);
+        return Err(err.into());
     }
     settings.quick_add_shortcut = wanted;
-    save(&dir, &settings).map_err(err_to_string)?;
+    save(&dir, &settings)?;
     Ok(settings)
 }
 
@@ -171,7 +172,7 @@ pub async fn set_quick_add_shortcut(
 pub async fn get_supported_currencies(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<CurrencyCatalogOutput, String> {
+) -> Result<CurrencyCatalogOutput, IpcError> {
     let dir = config_dir(&app);
     let (catalog, source) = build_currency_catalog(&dir, &state.pricing).await;
     Ok(CurrencyCatalogOutput {

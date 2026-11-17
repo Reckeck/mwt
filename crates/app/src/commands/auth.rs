@@ -9,7 +9,8 @@ use trade_core::kernel::events::{LockReason, VaultLocked};
 use trade_core::service::security_level::{check_new_secret, level_of_vault_file};
 use trade_core::service::{CopyPolicy, UnlockedVault};
 
-use crate::commands::{AppState, app_settings, err_to_string, lock_vault, require_vault};
+use crate::commands::{AppState, app_settings, lock_vault, require_vault};
+use crate::ipc::IpcError;
 use crate::state::LockBus;
 
 /// Vault identity for the unlock screen. The base currency is *not* part of the
@@ -27,17 +28,17 @@ pub fn info_of(vault: &UnlockedVault) -> VaultInfo {
 }
 
 #[tauri::command]
-pub async fn vault_status(state: State<'_, AppState>) -> Result<VaultStatus, String> {
+pub async fn vault_status(state: State<'_, AppState>) -> Result<VaultStatus, IpcError> {
     status_of(&state)
 }
 
-pub(crate) fn status_of(state: &AppState) -> Result<VaultStatus, String> {
+pub(crate) fn status_of(state: &AppState) -> Result<VaultStatus, IpcError> {
     let mut path = state
         .vault_path
         .lock()
         .map_err(|_| "lock".to_string())?
         .clone();
-    let guard = lock_vault(state).map_err(err_to_string)?;
+    let guard = lock_vault(state)?;
     // The sandbox keeps the real path as the "last vault"; what is open is its own file.
     if crate::commands::sandbox::is_active(state)
         && let Some(vault) = guard.as_ref()
@@ -80,17 +81,16 @@ pub async fn create_vault(
     input: CreateVaultInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<VaultInfo, String> {
+) -> Result<VaultInfo, IpcError> {
     leave_sandbox(&app, &state);
     // A new vault with a password is level 2: a PIN of six digits or more.
     if let Some(pin) = input.password.as_deref() {
-        check_new_secret(SecurityLevel::Pin, pin).map_err(err_to_string)?;
+        check_new_secret(SecurityLevel::Pin, pin)?;
     }
-    let path = crate::platform_fs::resolve_new_vault(&app, &input.path).map_err(err_to_string)?;
+    let path = crate::platform_fs::resolve_new_vault(&app, &input.path)?;
     close_open_vault(&app, &state, &path)?;
     // `None` = a vault without a password; an empty one is refused by the core.
-    let mut vault = UnlockedVault::create_with(path.clone(), input.password.as_deref())
-        .map_err(crate::commands::err_to_string)?;
+    let mut vault = UnlockedVault::create_with(path.clone(), input.password.as_deref())?;
     crate::vault_writer::install(&mut vault);
     if let Some(name) = input
         .cash_name
@@ -104,9 +104,7 @@ pub async fn create_vault(
             .find(|store| store.kind == trade_core::model::store::StoreKind::Cash)
             .map(|store| store.id.clone())
     {
-        vault
-            .update_store(&cash, name, "#16a34a", "", Default::default())
-            .map_err(crate::commands::err_to_string)?;
+        vault.update_store(&cash, name, "#16a34a", "", Default::default())?;
     }
     store_vault(&state, vault)?;
     // The base currency lives in the app config, so push it into the new vault
@@ -117,13 +115,13 @@ pub async fn create_vault(
         state
             .vault
             .lock()
-            .map_err(|_| err_to_string(trade_core::Error::Crypto("lock poisoned".into())))?
+            .map_err(|_| IpcError::from(trade_core::Error::Crypto("lock poisoned".into())))?
             .as_ref()
             .expect("just stored"),
     );
     // Update vault_path and record in recents
     *state.vault_path.lock().map_err(|err| {
-        err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+        IpcError::from(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
     })? = path.clone();
     crate::commands::vault_recents::add_recent(&app, &path.to_string_lossy());
     Ok(info)
@@ -134,7 +132,7 @@ pub async fn unlock_vault(
     input: UnlockInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<VaultInfo, String> {
+) -> Result<VaultInfo, IpcError> {
     unlock_with(input, &app, &state, true).await
 }
 
@@ -146,37 +144,33 @@ pub(crate) async fn unlock_with(
     app: &AppHandle,
     state: &AppState,
     typed: bool,
-) -> Result<VaultInfo, String> {
+) -> Result<VaultInfo, IpcError> {
     leave_sandbox(app, state);
-    let path =
-        crate::platform_fs::resolve_vault_to_open(app, &input.path).map_err(err_to_string)?;
+    let path = crate::platform_fs::resolve_vault_to_open(app, &input.path)?;
     let pin_key = pin_guarded(&path);
     if let Some(key) = &pin_key {
         let wait = app_settings::current_settings(app).pin_retry_after(key, now_secs());
         if wait > 0 {
             let secs = u32::try_from(wait).unwrap_or(u32::MAX);
-            return Err(err_to_string(trade_core::Error::PinRetryLater { secs }));
+            return Err(IpcError::from(trade_core::Error::PinRetryLater { secs }));
         }
     }
     close_open_vault(app, state, &path)?;
     // A linked vault first takes in what changed in its external copy.
-    let open_sync =
-        crate::platform_fs::links::sync_before_open(app, &path).map_err(err_to_string)?;
+    let open_sync = crate::platform_fs::links::sync_before_open(app, &path)?;
     let device = crate::commands::app_settings::device_id(app);
     let opened = UnlockedVault::open_as(path.clone(), &input.password, Some(&device));
     if let Some(key) = &pin_key {
         note_pin_attempt(app, key, &opened);
     }
-    let mut vault = opened.map_err(crate::commands::err_to_string)?;
+    let mut vault = opened?;
     // Edits made elsewhere reach the opened vault; the password is only
     // needed for this call and is not kept.
-    if crate::platform_fs::links::take_in(app, &mut vault, open_sync, &input.password)
-        .map_err(err_to_string)?
+    if crate::platform_fs::links::take_in(app, &mut vault, open_sync, &input.password)?
         == crate::platform_fs::links::TakeIn::Reopen
     {
         drop(vault);
-        vault = UnlockedVault::open_as(path.clone(), &input.password, Some(&device))
-            .map_err(crate::commands::err_to_string)?;
+        vault = UnlockedVault::open_as(path.clone(), &input.password, Some(&device))?;
     }
     crate::platform_fs::attach_mirror(app, &mut vault);
     crate::vault_writer::install(&mut vault);
@@ -190,14 +184,14 @@ pub(crate) async fn unlock_with(
             .vault
             .lock()
             .map_err(|err| {
-                err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+                IpcError::from(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
             })?
             .as_ref()
             .expect("just stored"),
     );
     // Update vault_path and record in recents
     *state.vault_path.lock().map_err(|err| {
-        err_to_string(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+        IpcError::from(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
     })? = path.clone();
     crate::commands::vault_recents::add_recent(app, &path.to_string_lossy());
     if typed {
@@ -239,8 +233,8 @@ pub(crate) fn now_secs() -> u64 {
 }
 
 #[tauri::command]
-pub async fn lock_vault_cmd(app: AppHandle) -> Result<(), String> {
-    close_session(&app).map_err(err_to_string)
+pub async fn lock_vault_cmd(app: AppHandle) -> Result<(), IpcError> {
+    close_session(&app).map_err(IpcError::from)
 }
 
 /// The single way a vault is closed: flush, snapshot, stop sync, drop, then
@@ -306,7 +300,7 @@ fn close_open_vault(
     app: &AppHandle,
     state: &AppState,
     target: &std::path::Path,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let open = state
         .vault
         .lock()
@@ -314,7 +308,7 @@ fn close_open_vault(
         .and_then(|guard| guard.as_ref().map(|vault| vault.path.clone()));
     close_if_open(open.as_deref(), target, &mut AppLockSteps { app })
         .map(drop)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Opening a vault while one is open here (the same file or another): close the
@@ -497,13 +491,13 @@ mod lock_order_tests {
 
 /// Put a freshly opened vault in place, writing the previous one's batched
 /// changes first (switching vaults must not lose them).
-fn store_vault(state: &AppState, vault: UnlockedVault) -> Result<(), String> {
+fn store_vault(state: &AppState, vault: UnlockedVault) -> Result<(), IpcError> {
     let mut guard = state
         .vault
         .lock()
-        .map_err(|_| err_to_string(trade_core::Error::Crypto("lock poisoned".into())))?;
+        .map_err(|_| IpcError::from(trade_core::Error::Crypto("lock poisoned".into())))?;
     if let Some(previous) = guard.as_mut() {
-        previous.flush_pending().map_err(err_to_string)?;
+        previous.flush_pending()?;
     }
     *guard = Some(vault);
     // Another vault: the readings of the previous one are not its own.
@@ -514,8 +508,8 @@ fn store_vault(state: &AppState, vault: UnlockedVault) -> Result<(), String> {
 /// Write the batched changes now: the window went to the background (a phone
 /// may kill the app there) or the user pressed «Retry» after a failed save.
 #[tauri::command]
-pub async fn flush_vault(app: AppHandle) -> Result<(), String> {
-    crate::vault_writer::flush_now(&app).map_err(err_to_string)
+pub async fn flush_vault(app: AppHandle) -> Result<(), IpcError> {
+    crate::vault_writer::flush_now(&app).map_err(IpcError::from)
 }
 
 /// Quit although the last changes could not be written (the user chose so).
@@ -530,13 +524,13 @@ pub async fn change_password(
     input: ChangePasswordInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<(), IpcError> {
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().ok_or("Vault is locked")?;
     // A level-2 PIN changes to a PIN of six digits or more; the level-3 rule
     // is in the core, which keeps the cost of the key.
     if vault.security_level() == SecurityLevel::Pin {
-        check_new_secret(SecurityLevel::Pin, &input.new_password).map_err(err_to_string)?;
+        check_new_secret(SecurityLevel::Pin, &input.new_password)?;
     }
     let salt_before = vault.key_salt();
     let outcome = vault
@@ -551,7 +545,7 @@ pub async fn change_password(
         crate::biometric::system_gate(&app_settings::config_dir(&app))
             .disable(&vault.path.to_string_lossy());
     });
-    outcome.map_err(crate::commands::err_to_string)
+    outcome.map_err(IpcError::from)
 }
 
 /// The bound password is stale as soon as the key changed, whatever the
@@ -598,14 +592,12 @@ mod key_change_tests {
 pub async fn set_vault_password(
     input: SetVaultPasswordInput,
     state: State<'_, AppState>,
-) -> Result<SetVaultPasswordResult, String> {
+) -> Result<SetVaultPasswordResult, IpcError> {
     crate::commands::sandbox::refuse(&state, "a vault password")?;
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().ok_or("Vault is locked")?;
-    check_new_secret(SecurityLevel::Pin, &input.new_password).map_err(err_to_string)?;
-    let removed_copies = vault
-        .set_password(&input.new_password, input.delete_plain_copies)
-        .map_err(err_to_string)?;
+    check_new_secret(SecurityLevel::Pin, &input.new_password)?;
+    let removed_copies = vault.set_password(&input.new_password, input.delete_plain_copies)?;
     Ok(SetVaultPasswordResult { removed_copies })
 }
 
@@ -617,20 +609,18 @@ pub async fn remove_vault_password(
     input: RemoveVaultPasswordInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     crate::commands::sandbox::refuse(&state, "a vault password")?;
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().ok_or("Vault is locked")?;
     if !input.external_copy_too
         && crate::platform_fs::links::is_linked(&app, &vault.path.to_string_lossy())
     {
-        return Err(err_to_string(trade_core::Error::InvalidInput(
+        return Err(IpcError::from(trade_core::Error::InvalidInput(
             "the vault has an external copy that would lose its password too: confirm it".into(),
         )));
     }
-    vault
-        .remove_password(&input.current_password)
-        .map_err(err_to_string)?;
+    vault.remove_password(&input.current_password)?;
     crate::biometric::system_gate(&app_settings::config_dir(&app))
         .disable(&vault.path.to_string_lossy());
     Ok(())

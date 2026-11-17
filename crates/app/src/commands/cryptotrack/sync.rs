@@ -8,20 +8,20 @@ use trade_core::ipc_contract::cryptotrack::sync::CryptoSyncStatus;
 use trade_core::model::vault::now_iso;
 
 use crate::commands::app_settings::{config_dir, current_settings, save};
-use crate::commands::err_to_string;
 use crate::cryptotrack::jobs;
+use crate::ipc::IpcError;
 
 /// What each account's last read did, and what the module is reading now.
 #[tauri::command]
-pub async fn crypto_sync_status(app: AppHandle) -> Result<CryptoSyncStatus, String> {
-    jobs::status(&app).map_err(err_to_string)
+pub async fn crypto_sync_status(app: AppHandle) -> Result<CryptoSyncStatus, IpcError> {
+    jobs::status(&app).map_err(IpcError::from)
 }
 
 /// Read the followed accounts now, without waiting for the tick. Refused
 /// without the user's consent, and on a device that does not run the jobs.
 #[tauri::command]
-pub async fn crypto_sync_now(app: AppHandle) -> Result<(), String> {
-    jobs::read_now(&app).map_err(err_to_string)
+pub async fn crypto_sync_now(app: AppHandle) -> Result<(), IpcError> {
+    jobs::read_now(&app).map_err(IpcError::from)
 }
 
 /// The one-time consent to talk to the providers, after the pattern of
@@ -29,7 +29,7 @@ pub async fn crypto_sync_now(app: AppHandle) -> Result<(), String> {
 /// and withdrawing it stops them again (a running pass ends before its next
 /// request). A yes starts the catch-up at once.
 #[tauri::command]
-pub async fn crypto_set_tracking_consent(app: AppHandle, consent: bool) -> Result<(), String> {
+pub async fn crypto_set_tracking_consent(app: AppHandle, consent: bool) -> Result<(), IpcError> {
     let dir = config_dir(&app);
     let mut settings = current_settings(&app);
     settings.crypto_tracking_consent = Some(consent);
@@ -42,7 +42,7 @@ pub async fn crypto_set_tracking_consent(app: AppHandle, consent: bool) -> Resul
     } else {
         None
     };
-    save(&dir, &settings).map_err(err_to_string)?;
+    save(&dir, &settings)?;
     if consent {
         jobs::consent_changed(&app);
     }

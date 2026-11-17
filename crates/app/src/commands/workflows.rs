@@ -23,7 +23,8 @@ use trade_core::workflow::{
 };
 
 use crate::commands::app_settings::current_zone;
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 /// Most runs one listing returns by default.
 const DEFAULT_RUNS: u32 = 100;
@@ -31,38 +32,38 @@ const DEFAULT_RUNS: u32 = 100;
 fn with_vault<T>(
     state: &State<'_, AppState>,
     read: impl FnOnce(&UnlockedVault) -> trade_core::Result<T>,
-) -> Result<T, String> {
-    let guard = require_vault(state).map_err(err_to_string)?;
-    read(guard.as_ref().unwrap()).map_err(err_to_string)
+) -> Result<T, IpcError> {
+    let guard = require_vault(state)?;
+    read(guard.as_ref().unwrap()).map_err(IpcError::from)
 }
 
 fn with_vault_mut<T>(
     state: &State<'_, AppState>,
     write: impl FnOnce(&mut UnlockedVault) -> trade_core::Result<T>,
-) -> Result<T, String> {
-    let mut guard = require_vault(state).map_err(err_to_string)?;
-    write(guard.as_mut().unwrap()).map_err(err_to_string)
+) -> Result<T, IpcError> {
+    let mut guard = require_vault(state)?;
+    write(guard.as_mut().unwrap()).map_err(IpcError::from)
 }
 
 /// Every node there is, with its ports, fields and help (works locked too).
 #[tauri::command]
-pub async fn workflow_node_catalog() -> Result<Vec<NodeDef>, String> {
+pub async fn workflow_node_catalog() -> Result<Vec<NodeDef>, IpcError> {
     Ok(catalog().to_vec())
 }
 
 #[tauri::command]
-pub async fn validate_workflow(input: ValidateWorkflowInput) -> Result<Vec<GraphIssue>, String> {
-    let graph = Graph::parse(&input.graph).map_err(err_to_string)?;
+pub async fn validate_workflow(input: ValidateWorkflowInput) -> Result<Vec<GraphIssue>, IpcError> {
+    let graph = Graph::parse(&input.graph)?;
     Ok(validate(&graph))
 }
 
 #[tauri::command]
-pub async fn list_workflows(state: State<'_, AppState>) -> Result<Vec<Workflow>, String> {
+pub async fn list_workflows(state: State<'_, AppState>) -> Result<Vec<Workflow>, IpcError> {
     with_vault(&state, |vault| Ok(vault.workflows()))
 }
 
 #[tauri::command]
-pub async fn get_workflow(id: String, state: State<'_, AppState>) -> Result<Workflow, String> {
+pub async fn get_workflow(id: String, state: State<'_, AppState>) -> Result<Workflow, IpcError> {
     with_vault(&state, |vault| vault.workflow(&id))
 }
 
@@ -70,7 +71,7 @@ pub async fn get_workflow(id: String, state: State<'_, AppState>) -> Result<Work
 pub async fn save_workflow(
     input: SaveWorkflowInput,
     state: State<'_, AppState>,
-) -> Result<SavedWorkflow, String> {
+) -> Result<SavedWorkflow, IpcError> {
     with_vault_mut(&state, |vault| {
         vault.save_workflow(
             input.id.as_deref().filter(|id| !id.is_empty()),
@@ -85,7 +86,7 @@ pub async fn save_workflow(
 pub async fn save_workflow_draft(
     input: SaveWorkflowDraftInput,
     state: State<'_, AppState>,
-) -> Result<Workflow, String> {
+) -> Result<Workflow, IpcError> {
     with_vault_mut(&state, |vault| {
         vault.save_workflow_draft(&input.id, &input.graph, now_secs())
     })
@@ -95,7 +96,7 @@ pub async fn save_workflow_draft(
 pub async fn discard_workflow_draft(
     id: String,
     state: State<'_, AppState>,
-) -> Result<Workflow, String> {
+) -> Result<Workflow, IpcError> {
     with_vault_mut(&state, |vault| vault.discard_workflow_draft(&id))
 }
 
@@ -103,14 +104,14 @@ pub async fn discard_workflow_draft(
 pub async fn set_workflow_active(
     input: SetWorkflowActiveInput,
     state: State<'_, AppState>,
-) -> Result<Workflow, String> {
+) -> Result<Workflow, IpcError> {
     with_vault_mut(&state, |vault| {
         vault.set_workflow_active(&input.id, input.active, now_secs())
     })
 }
 
 #[tauri::command]
-pub async fn delete_workflow(id: String, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn delete_workflow(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| vault.delete_workflow(&id))
 }
 
@@ -118,7 +119,7 @@ pub async fn delete_workflow(id: String, state: State<'_, AppState>) -> Result<(
 pub async fn restore_workflow_version(
     input: RestoreWorkflowVersionInput,
     state: State<'_, AppState>,
-) -> Result<SavedWorkflow, String> {
+) -> Result<SavedWorkflow, IpcError> {
     with_vault_mut(&state, |vault| {
         vault.restore_workflow_version(&input.id, &input.saved_at, now_secs())
     })
@@ -130,7 +131,7 @@ pub async fn dry_run_workflow(
     input: DryRunWorkflowInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<RunReport, String> {
+) -> Result<RunReport, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
         vault.dry_run_workflow(
@@ -150,7 +151,7 @@ pub async fn run_workflow_now(
     input: RunWorkflowInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<RunReport, String> {
+) -> Result<RunReport, IpcError> {
     let zone = current_zone(&app);
     let ru = crate::scheduler::russian(&app);
     let report = with_vault_mut(&state, |vault| {
@@ -171,7 +172,7 @@ pub async fn run_workflow_now(
 pub async fn list_workflow_runs(
     input: ListWorkflowRunsInput,
     state: State<'_, AppState>,
-) -> Result<Vec<WorkflowRun>, String> {
+) -> Result<Vec<WorkflowRun>, IpcError> {
     let limit = input.limit.unwrap_or(DEFAULT_RUNS) as usize;
     with_vault(&state, |vault| {
         Ok(vault.workflow_runs(input.workflow_id.as_deref(), limit))
@@ -179,7 +180,9 @@ pub async fn list_workflow_runs(
 }
 
 #[tauri::command]
-pub async fn list_workflow_queue(state: State<'_, AppState>) -> Result<Vec<QueuedActions>, String> {
+pub async fn list_workflow_queue(
+    state: State<'_, AppState>,
+) -> Result<Vec<QueuedActions>, IpcError> {
     with_vault(&state, |vault| Ok(vault.workflow_queue()))
 }
 
@@ -188,7 +191,7 @@ pub async fn confirm_workflow_queued(
     id: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<Transaction>, String> {
+) -> Result<Vec<Transaction>, IpcError> {
     let saved = with_vault_mut(&state, |vault| vault.confirm_queued(&id))?;
     let ids: Vec<&str> = saved.iter().map(|tx| tx.meta().id.as_str()).collect();
     let _ = app.emit("automation-created", serde_json::json!({ "tx_ids": ids }));
@@ -196,13 +199,18 @@ pub async fn confirm_workflow_queued(
 }
 
 #[tauri::command]
-pub async fn discard_workflow_queued(id: String, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn discard_workflow_queued(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| vault.discard_queued(&id))
 }
 
 /// Runs asleep: timers and questions waiting for an answer.
 #[tauri::command]
-pub async fn list_workflow_waits(state: State<'_, AppState>) -> Result<Vec<WorkflowWait>, String> {
+pub async fn list_workflow_waits(
+    state: State<'_, AppState>,
+) -> Result<Vec<WorkflowWait>, IpcError> {
     with_vault(&state, |vault| Ok(vault.workflow_waits()))
 }
 
@@ -212,7 +220,7 @@ pub async fn answer_workflow_wait(
     input: AnswerWorkflowWaitInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<RunReport, String> {
+) -> Result<RunReport, IpcError> {
     let zone = current_zone(&app);
     let ru = crate::scheduler::russian(&app);
     let report = with_vault_mut(&state, |vault| {
@@ -231,7 +239,7 @@ pub async fn answer_workflow_wait(
 }
 
 #[tauri::command]
-pub async fn list_workflow_vars(state: State<'_, AppState>) -> Result<Vec<WorkflowVar>, String> {
+pub async fn list_workflow_vars(state: State<'_, AppState>) -> Result<Vec<WorkflowVar>, IpcError> {
     with_vault(&state, |vault| Ok(vault.workflow_vars()))
 }
 
@@ -239,7 +247,7 @@ pub async fn list_workflow_vars(state: State<'_, AppState>) -> Result<Vec<Workfl
 pub async fn set_workflow_var(
     input: SetWorkflowVarInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| {
         vault.set_workflow_var(input.scope, &input.name, &input.value)
     })
@@ -249,7 +257,7 @@ pub async fn set_workflow_var(
 pub async fn delete_workflow_var(
     input: DeleteWorkflowVarInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| {
         vault.delete_workflow_var(&input.scope, &input.name)
     })
@@ -257,7 +265,7 @@ pub async fn delete_workflow_var(
 
 /// The workflow as a file's text.
 #[tauri::command]
-pub async fn export_workflow(id: String, state: State<'_, AppState>) -> Result<String, String> {
+pub async fn export_workflow(id: String, state: State<'_, AppState>) -> Result<String, IpcError> {
     with_vault(&state, |vault| vault.export_workflow(&id))
 }
 
@@ -266,7 +274,7 @@ pub async fn export_workflow(id: String, state: State<'_, AppState>) -> Result<S
 pub async fn import_workflow(
     input: ImportWorkflowInput,
     state: State<'_, AppState>,
-) -> Result<SavedWorkflow, String> {
+) -> Result<SavedWorkflow, IpcError> {
     with_vault_mut(&state, |vault| {
         vault.import_workflow(&input.json, &input.stores, now_secs())
     })
@@ -277,7 +285,7 @@ pub async fn import_workflow(
 pub async fn preview_workflow_import(
     json: String,
     state: State<'_, AppState>,
-) -> Result<WorkflowImportPreview, String> {
+) -> Result<WorkflowImportPreview, IpcError> {
     with_vault(&state, |vault| vault.preview_workflow_import(&json))
 }
 
@@ -285,7 +293,7 @@ pub async fn preview_workflow_import(
 #[tauri::command]
 pub async fn workflow_templates(
     state: State<'_, AppState>,
-) -> Result<Vec<WorkflowTemplateInfo>, String> {
+) -> Result<Vec<WorkflowTemplateInfo>, IpcError> {
     with_vault(&state, |vault| Ok(vault.workflow_templates()))
 }
 
@@ -295,7 +303,7 @@ pub async fn workflow_from_template(
     input: WorkflowFromTemplateInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<SavedWorkflow, String> {
+) -> Result<SavedWorkflow, IpcError> {
     let locale = if crate::scheduler::russian(&app) {
         "ru"
     } else {
@@ -310,7 +318,7 @@ pub async fn workflow_from_template(
 pub async fn save_workflow_test(
     input: SaveWorkflowTestInput,
     state: State<'_, AppState>,
-) -> Result<Workflow, String> {
+) -> Result<Workflow, IpcError> {
     with_vault_mut(&state, |vault| {
         vault.save_workflow_test(&input.workflow_id, input.test)
     })
@@ -320,7 +328,7 @@ pub async fn save_workflow_test(
 pub async fn delete_workflow_test(
     input: DeleteWorkflowTestInput,
     state: State<'_, AppState>,
-) -> Result<Workflow, String> {
+) -> Result<Workflow, IpcError> {
     with_vault_mut(&state, |vault| {
         vault.delete_workflow_test(&input.workflow_id, &input.test_id)
     })
@@ -332,7 +340,7 @@ pub async fn run_workflow_tests(
     id: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<WorkflowTestResult>, String> {
+) -> Result<Vec<WorkflowTestResult>, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
         vault.run_workflow_tests(&id, now_secs(), &zone)

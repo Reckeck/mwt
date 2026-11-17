@@ -6,11 +6,12 @@ use trade_core::ipc_contract::{
 use trade_core::model::category::Category;
 use trade_core::model::planning::CategorizationRule;
 
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 #[tauri::command]
-pub async fn list_categories(state: State<'_, AppState>) -> Result<Vec<Category>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn list_categories(state: State<'_, AppState>) -> Result<Vec<Category>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().doc.categories.clone())
 }
 
@@ -18,23 +19,23 @@ pub async fn list_categories(state: State<'_, AppState>) -> Result<Vec<Category>
 pub async fn create_category(
     input: CreateCategoryInput,
     state: State<'_, AppState>,
-) -> Result<Category, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Category, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .create_category(input.key.as_deref(), &input.name, input.group)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
 pub async fn update_category(
     input: UpdateCategoryInput,
     state: State<'_, AppState>,
-) -> Result<Category, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Category, IpcError> {
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    let input = vault.rebase_category_input(input).map_err(err_to_string)?;
+    let input = vault.rebase_category_input(input)?;
     vault
         .update_category(
             &input.key,
@@ -43,7 +44,7 @@ pub async fn update_category(
             input.essential,
             input.passive,
         )
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
@@ -51,30 +52,30 @@ pub async fn archive_category(
     key: String,
     archived: bool,
     state: State<'_, AppState>,
-) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<(), IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .archive_category(&key, archived)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
-pub async fn delete_category(key: String, state: State<'_, AppState>) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn delete_category(key: String, state: State<'_, AppState>) -> Result<(), IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .delete_category(&key)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
 pub async fn list_categorization_rules(
     state: State<'_, AppState>,
-) -> Result<Vec<CategorizationRule>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Vec<CategorizationRule>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().categorization_rules())
 }
 
@@ -82,50 +83,50 @@ pub async fn list_categorization_rules(
 pub async fn create_categorization_rule(
     input: CreateRuleInput,
     state: State<'_, AppState>,
-) -> Result<CategorizationRule, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<CategorizationRule, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .create_categorization_rule(&input.pattern, &input.category)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
 pub async fn update_categorization_rule(
     input: UpdateRuleInput,
     state: State<'_, AppState>,
-) -> Result<CategorizationRule, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<CategorizationRule, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .update_categorization_rule(&input.id, &input.pattern, &input.category, input.active)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
 pub async fn delete_categorization_rule(
     id: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<(), IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .delete_categorization_rule(&id)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
 pub async fn reorder_categorization_rules(
     ids: Vec<String>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<(), IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .reorder_categorization_rules(&ids)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }

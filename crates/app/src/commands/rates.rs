@@ -7,7 +7,8 @@ use trade_core::model::inflation::{InflationMode, InflationSource};
 use trade_core::pricing::PricingService;
 use trade_core::service::{FetchedRates, InflationCurrency};
 
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 /// Months of inflation asked for: the chart's two years plus a spare.
 const INFLATION_MONTHS_BACK: u32 = 25;
@@ -33,25 +34,23 @@ async fn fetch_rates(pricing: &PricingService, today: NaiveDate) -> FetchedRates
 
 /// Fetch, apply, tell the user about new figures and emit `rates-updated`.
 /// Fails with `NETWORK` only when no source answered at all.
-pub async fn refresh_rates_now(app: &AppHandle) -> Result<Vec<InflationCurrency>, String> {
+pub async fn refresh_rates_now(app: &AppHandle) -> Result<Vec<InflationCurrency>, IpcError> {
     let state = app.state::<AppState>();
     // Locked: nothing to apply to, so do not fetch either.
-    drop(require_vault(&state).map_err(err_to_string)?);
+    drop(require_vault(&state)?);
     let today = chrono::Utc::now().date_naive();
     let fetched = fetch_rates(&state.pricing, today).await;
     if fetched.key_rates.is_none() && fetched.inflation.is_empty() {
-        return Err(err_to_string(trade_core::Error::Network(
+        return Err(IpcError::from(trade_core::Error::Network(
             "no rate source answered".into(),
         )));
     }
     let russian = crate::scheduler::russian(app);
     let (fresh, overview) = {
-        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let mut guard = require_vault(&state)?;
         let vault = guard.as_mut().unwrap();
-        let notices = vault
-            .apply_rates(&fetched, russian)
-            .map_err(err_to_string)?;
-        let fresh = vault.log_notices(notices).map_err(err_to_string)?;
+        let notices = vault.apply_rates(&fetched, russian)?;
+        let fresh = vault.log_notices(notices)?;
         (fresh, vault.inflation_overview())
     };
     crate::scheduler::deliver(app, fresh, false);
@@ -61,7 +60,7 @@ pub async fn refresh_rates_now(app: &AppHandle) -> Result<Vec<InflationCurrency>
 
 /// Refresh inflation and the key rate now.
 #[tauri::command]
-pub async fn refresh_rates(app: AppHandle) -> Result<Vec<InflationCurrency>, String> {
+pub async fn refresh_rates(app: AppHandle) -> Result<Vec<InflationCurrency>, IpcError> {
     refresh_rates_now(&app).await
 }
 
@@ -69,8 +68,8 @@ pub async fn refresh_rates(app: AppHandle) -> Result<Vec<InflationCurrency>, Str
 #[tauri::command]
 pub async fn get_inflation_overview(
     state: State<'_, AppState>,
-) -> Result<Vec<InflationCurrency>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Vec<InflationCurrency>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().inflation_overview())
 }
 
@@ -81,12 +80,10 @@ pub async fn set_inflation_mode(
     mode: Option<InflationMode>,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<InflationCurrency>, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Vec<InflationCurrency>, IpcError> {
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    vault
-        .set_inflation_mode(&currency, mode)
-        .map_err(err_to_string)?;
+    vault.set_inflation_mode(&currency, mode)?;
     let overview = vault.inflation_overview();
     drop(guard);
     let _ = app.emit("rates-updated", ());

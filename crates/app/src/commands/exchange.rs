@@ -27,7 +27,8 @@ use trade_core::model::vault::{ImportRun, ImportSource, PendingImport};
 use trade_core::service::ImportedTransactions;
 use trade_core::txinfo::{TxInfo, TxInfoService};
 
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 /// Look up a transaction hash and suggest form fields.
 ///
@@ -37,7 +38,7 @@ use crate::commands::{AppState, err_to_string, require_vault};
 pub async fn inspect_tx(
     input: InspectTxInput,
     state: State<'_, AppState>,
-) -> Result<InspectTxResult, String> {
+) -> Result<InspectTxResult, IpcError> {
     crate::commands::sandbox::refuse(&state, "looking up a transaction online")?;
     let hash = input.tx_hash.trim();
     if hash.is_empty() {
@@ -155,7 +156,7 @@ async fn usable_key(state: &AppState, store_id: Option<&str>) -> Result<Option<D
 pub async fn bybit_executions(
     input: BybitExecutionsInput,
     state: State<'_, AppState>,
-) -> Result<BybitExecutionsResult, String> {
+) -> Result<BybitExecutionsResult, IpcError> {
     // No wallet in context (the global form): any key will do. The form
     // stays usable: a key it may not use (below level 3, refused, unreadable)
     // reads as no key here; the wallet's exchange tab says why.
@@ -210,8 +211,8 @@ pub async fn bybit_executions(
 pub async fn exchange_key_status(
     input: ExchangeKeyStatusInput,
     state: State<'_, AppState>,
-) -> Result<ExchangeKeyStatus, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<ExchangeKeyStatus, IpcError> {
+    let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     match vault.bybit_key_for(&input.store_id) {
         Some(entry) => Ok(vault.exchange_key_status(&entry.store_id)),
@@ -232,33 +233,30 @@ pub async fn exchange_key_status(
 pub async fn set_exchange_key(
     input: SetExchangeKeyInput,
     state: State<'_, AppState>,
-) -> Result<ExchangeKeyStatus, String> {
+) -> Result<ExchangeKeyStatus, IpcError> {
     crate::commands::sandbox::refuse(&state, "an exchange key")?;
     let api_key = zeroize::Zeroizing::new(input.api_key.trim().to_string());
     let api_secret = zeroize::Zeroizing::new(input.api_secret.trim().to_string());
     {
-        let guard = require_vault(&state).map_err(err_to_string)?;
+        let guard = require_vault(&state)?;
         guard
             .as_ref()
             .unwrap()
-            .check_exchange_key_input(&input.store_id, &api_key, &api_secret)
-            .map_err(err_to_string)?;
+            .check_exchange_key_input(&input.store_id, &api_key, &api_secret)?;
     }
     let verified = match BybitClient::default()
         .check_key(&api_key, &api_secret)
         .await
     {
         Ok(KeyCheck::ReadOnly) => true,
-        Ok(KeyCheck::NotReadOnly) => return Err(err_to_string(Error::ExchangeKeyNotReadOnly)),
-        Err(err @ Error::ExchangeKeyRejected(_)) => return Err(err_to_string(err)),
+        Ok(KeyCheck::NotReadOnly) => return Err(Error::ExchangeKeyNotReadOnly.into()),
+        Err(err @ Error::ExchangeKeyRejected(_)) => return Err(err.into()),
         Err(_) => false,
     };
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    vault
-        .store_device_key(&input.store_id, &api_key, &api_secret, verified)
-        .map_err(err_to_string)?;
-    vault.persist().map_err(err_to_string)?;
+    vault.store_device_key(&input.store_id, &api_key, &api_secret, verified)?;
+    vault.persist()?;
     Ok(vault.exchange_key_status(&input.store_id))
 }
 
@@ -267,13 +265,13 @@ pub async fn set_exchange_key(
 pub async fn set_exchange_targets(
     input: SetExchangeTargetsInput,
     state: State<'_, AppState>,
-) -> Result<ExchangeKeyStatus, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<ExchangeKeyStatus, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .set_exchange_targets(&input.store_id, input.spot_store_id, input.futures_store_id)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// The exchange's own background import interval; `0` turns it off.
@@ -281,13 +279,13 @@ pub async fn set_exchange_targets(
 pub async fn set_import_interval(
     input: SetImportIntervalInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<(), IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .set_import_interval(&input.store_id, input.interval_sec)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Everything the exchange's trading terminal remembers.
@@ -295,13 +293,13 @@ pub async fn set_import_interval(
 pub async fn get_terminal_state(
     store_id: String,
     state: State<'_, AppState>,
-) -> Result<TerminalState, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<TerminalState, IpcError> {
+    let guard = require_vault(&state)?;
     guard
         .as_ref()
         .unwrap()
         .terminal_state(&store_id)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Patch the terminal: only the fields present change.
@@ -309,13 +307,13 @@ pub async fn get_terminal_state(
 pub async fn update_terminal_state(
     input: UpdateTerminalStateInput,
     state: State<'_, AppState>,
-) -> Result<TerminalState, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<TerminalState, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .update_terminal_state(&input.store_id, input.patch)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Replace one symbol's chart drawings in the exchange's terminal.
@@ -323,13 +321,13 @@ pub async fn update_terminal_state(
 pub async fn save_terminal_drawings(
     input: SaveTerminalDrawingsInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<(), IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .save_terminal_drawings(&input.store_id, &input.symbol, &input.json)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Remove the stored Bybit key for a specific store.
@@ -337,13 +335,9 @@ pub async fn save_terminal_drawings(
 pub async fn clear_exchange_key(
     input: ClearExchangeKeyInput,
     state: State<'_, AppState>,
-) -> Result<ExchangeKeyStatus, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .clear_device_key(&input.store_id)
-        .map_err(err_to_string)?;
+) -> Result<ExchangeKeyStatus, IpcError> {
+    let mut guard = require_vault(&state)?;
+    guard.as_mut().unwrap().clear_device_key(&input.store_id)?;
     Ok(ExchangeKeyStatus::default())
 }
 
@@ -371,7 +365,7 @@ fn import_notice(message: &str) -> &'static str {
 pub async fn create_bybit_accounts(
     input: CreateBybitAccountsInput,
     state: State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, IpcError> {
     let mut wanted = [true; 3];
     if input.detect {
         // Detection is a convenience: without a usable key all are created.
@@ -383,7 +377,7 @@ pub async fn create_bybit_accounts(
             wanted = trade_core::exchange::bybit::accounts_in_use(&balances);
         }
     }
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
     let names = [
         input.funding_name.trim(),
@@ -393,7 +387,7 @@ pub async fn create_bybit_accounts(
     vault
         .ensure_bybit_accounts_for(&input.store_id, names, wanted)
         .map(|ids| ids.into_iter().flatten().collect())
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// What each Bybit account holds per the API, next to the ledger's figures.
@@ -404,23 +398,17 @@ pub async fn create_bybit_accounts(
 pub async fn bybit_balances(
     store_id: String,
     state: State<'_, AppState>,
-) -> Result<Vec<ExchangeAccountBalance>, String> {
-    let Some(key) = usable_key(&state, Some(&store_id))
-        .await
-        .map_err(err_to_string)?
-    else {
+) -> Result<Vec<ExchangeAccountBalance>, IpcError> {
+    let Some(key) = usable_key(&state, Some(&store_id)).await? else {
         return Ok(Vec::new());
     };
     let root_id = key.keys.store_id.clone();
     let balances = BybitClient::default()
         .balances(&key.keys.api_key, &key.keys.api_secret)
-        .await
-        .map_err(err_to_string)?;
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+        .await?;
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    vault
-        .reconcile_exchange(&root_id, &balances, now_secs())
-        .map_err(err_to_string)?;
+    vault.reconcile_exchange(&root_id, &balances, now_secs())?;
     Ok(vault.bybit_reconcile(&root_id, &balances))
 }
 
@@ -434,10 +422,8 @@ pub(crate) async fn sync_bybit(
     mut key: DeviceKey,
     limit: u32,
     source: ImportSource,
-) -> Result<ImportRun, String> {
-    ensure_read_only(state, &mut key)
-        .await
-        .map_err(err_to_string)?;
+) -> Result<ImportRun, IpcError> {
+    ensure_read_only(state, &mut key).await?;
     let root_id = key.keys.store_id.as_str();
     let (api_key, api_secret) = (key.keys.api_key.as_str(), key.keys.api_secret.as_str());
     let client = BybitClient::default();
@@ -450,7 +436,7 @@ pub(crate) async fn sync_bybit(
                 .ok_or("REQUIRES_UNLOCK: vault was locked mid-sync")?;
             return vault
                 .record_import_error(root_id, source, import_notice(&message), now_secs())
-                .map_err(err_to_string);
+                .map_err(IpcError::from);
         }
     };
     let mut run = {
@@ -458,9 +444,7 @@ pub(crate) async fn sync_bybit(
         let vault = guard
             .as_mut()
             .ok_or("REQUIRES_UNLOCK: vault was locked mid-sync")?;
-        vault
-            .sync_exchange(root_id, imports, source, now_secs())
-            .map_err(err_to_string)?
+        vault.sync_exchange(root_id, imports, source, now_secs())?
     };
     // The live balance is optional: a key without wallet rights still syncs.
     if let Ok(balances) = client.balances(api_key, api_secret).await {
@@ -468,9 +452,7 @@ pub(crate) async fn sync_bybit(
         let vault = guard
             .as_mut()
             .ok_or("REQUIRES_UNLOCK: vault was locked mid-sync")?;
-        let made = vault
-            .reconcile_exchange(root_id, &balances, now_secs())
-            .map_err(err_to_string)?;
+        let made = vault.reconcile_exchange(root_id, &balances, now_secs())?;
         run.reconcile_tx_id = made.into_iter().next();
     }
     Ok(run)
@@ -510,11 +492,8 @@ async fn fetch_bybit(
 pub async fn preview_bybit_import(
     input: SetImportSettingsInput,
     state: State<'_, AppState>,
-) -> Result<ImportPreviewOutput, String> {
-    let Some(key) = usable_key(&state, Some(&input.store_id))
-        .await
-        .map_err(err_to_string)?
-    else {
+) -> Result<ImportPreviewOutput, IpcError> {
+    let Some(key) = usable_key(&state, Some(&input.store_id)).await? else {
         return Ok(ImportPreviewOutput {
             preview: None,
             notice: Some("no_key".into()),
@@ -530,7 +509,7 @@ pub async fn preview_bybit_import(
     .await
     {
         Ok(imports) => {
-            let guard = require_vault(&state).map_err(err_to_string)?;
+            let guard = require_vault(&state)?;
             let preview = guard
                 .as_ref()
                 .unwrap()
@@ -553,8 +532,8 @@ pub async fn preview_bybit_import(
 pub async fn import_bybit_history(
     input: ImportBybitHistoryInput,
     state: State<'_, AppState>,
-) -> Result<ImportBybitHistoryOutput, String> {
-    let Some(key) = request_key(&state, Some(&input.store_id)).map_err(err_to_string)? else {
+) -> Result<ImportBybitHistoryOutput, IpcError> {
+    let Some(key) = request_key(&state, Some(&input.store_id))? else {
         return Ok(ImportBybitHistoryOutput {
             staged: 0,
             notice: Some("no_key".into()),
@@ -575,26 +554,26 @@ pub async fn import_bybit_history(
 pub async fn get_import_settings(
     store_id: String,
     state: State<'_, AppState>,
-) -> Result<ImportSettings, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<ImportSettings, IpcError> {
+    let guard = require_vault(&state)?;
     guard
         .as_ref()
         .unwrap()
         .import_settings(&store_id)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
 pub async fn set_import_settings(
     input: SetImportSettingsInput,
     state: State<'_, AppState>,
-) -> Result<ImportSettings, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<ImportSettings, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .set_import_settings(&input.store_id, input.settings)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Syncs of one exchange wallet, newest first.
@@ -602,8 +581,8 @@ pub async fn set_import_settings(
 pub async fn list_import_runs(
     store_id: String,
     state: State<'_, AppState>,
-) -> Result<Vec<ImportRun>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Vec<ImportRun>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().import_runs(&store_id))
 }
 
@@ -612,8 +591,8 @@ pub async fn list_import_runs(
 pub async fn list_imported_transactions(
     input: ListImportedTransactionsInput,
     state: State<'_, AppState>,
-) -> Result<ImportedTransactions, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<ImportedTransactions, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().imported_transactions(
         &input.store_id,
         input.limit.unwrap_or(50).clamp(1, 500) as usize,
@@ -625,8 +604,8 @@ pub async fn list_imported_transactions(
 #[tauri::command]
 pub async fn list_pending_imports(
     state: State<'_, AppState>,
-) -> Result<ListPendingImportsOutput, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<ListPendingImportsOutput, IpcError> {
+    let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     Ok(ListPendingImportsOutput {
         imports: vault.pending_imports(),
@@ -638,12 +617,10 @@ pub async fn list_pending_imports(
 pub async fn confirm_pending_imports(
     input: ConfirmPendingImportsInput,
     state: State<'_, AppState>,
-) -> Result<ConfirmPendingImportsOutput, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<ConfirmPendingImportsOutput, IpcError> {
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    let confirmed = vault
-        .confirm_pending_imports(&input.exec_ids)
-        .map_err(err_to_string)?;
+    let confirmed = vault.confirm_pending_imports(&input.exec_ids)?;
     Ok(ConfirmPendingImportsOutput { confirmed })
 }
 
@@ -652,12 +629,10 @@ pub async fn confirm_pending_imports(
 pub async fn discard_pending_imports(
     input: DiscardPendingImportsInput,
     state: State<'_, AppState>,
-) -> Result<DiscardPendingImportsOutput, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<DiscardPendingImportsOutput, IpcError> {
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    let discarded = vault
-        .discard_pending_imports(&input.exec_ids)
-        .map_err(err_to_string)?;
+    let discarded = vault.discard_pending_imports(&input.exec_ids)?;
     Ok(DiscardPendingImportsOutput { discarded })
 }
 

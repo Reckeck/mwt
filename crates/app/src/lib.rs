@@ -47,7 +47,7 @@ pub fn run() {
     #[cfg(desktop)]
     legacy::migrate_dirs();
     let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
+        .plugin(ipc::opener::Opener::plugin())
         .plugin(tauri_plugin_dialog::init())
         // Rust-side file access for document URIs (`platform_fs`); no JS permission.
         .plugin(tauri_plugin_fs::init())

@@ -10,15 +10,17 @@ use trade_core::kernel::events::EventBus;
 use trade_core::model::attachment::{Attachment, AttachmentKind};
 use trade_core::service::NewFile;
 
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
+use crate::ipc::opener::UrlKind;
 use crate::state::on_vault_locked;
 
 #[tauri::command]
 pub async fn list_attachments(
     input: ListAttachmentsInput,
     state: State<'_, AppState>,
-) -> Result<Vec<Attachment>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Vec<Attachment>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard
         .as_ref()
         .unwrap()
@@ -29,36 +31,31 @@ pub async fn list_attachments(
 pub async fn add_attachment_link(
     input: AddAttachmentLinkInput,
     state: State<'_, AppState>,
-) -> Result<Attachment, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
+) -> Result<Attachment, IpcError> {
+    let mut guard = require_vault(&state)?;
+    Ok(guard
         .as_mut()
         .unwrap()
-        .add_attachment_link(input.owner, &input.url, &input.title)
-        .map_err(err_to_string)
+        .add_attachment_link(input.owner, &input.url, &input.title)?)
 }
 
 #[tauri::command]
 pub async fn add_attachment_file(
     input: AddAttachmentFileInput,
     state: State<'_, AppState>,
-) -> Result<Attachment, String> {
+) -> Result<Attachment, IpcError> {
     let bytes = BASE64
         .decode(input.data_base64.as_bytes())
-        .map_err(|_| "the file did not arrive whole".to_string())?;
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .add_attachment_file(
-            input.owner,
-            NewFile {
-                name: &input.name,
-                mime: input.mime.as_deref(),
-                bytes: &bytes,
-            },
-        )
-        .map_err(err_to_string)
+        .map_err(|_| IpcError::from("the file did not arrive whole"))?;
+    let mut guard = require_vault(&state)?;
+    Ok(guard.as_mut().unwrap().add_attachment_file(
+        input.owner,
+        NewFile {
+            name: &input.name,
+            mime: input.mime.as_deref(),
+            bytes: &bytes,
+        },
+    )?)
 }
 
 /// A link opens in the browser; a file is opened into the app's cache and
@@ -69,9 +66,9 @@ pub async fn open_attachment(
     app: AppHandle,
     input: AttachmentIdInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let (item, bytes) = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
+        let guard = require_vault(&state)?;
         let vault = guard.as_ref().unwrap();
         let item = vault
             .list_attachments(None)
@@ -81,25 +78,25 @@ pub async fn open_attachment(
         if item.kind == AttachmentKind::Link {
             (item, Vec::new())
         } else {
-            vault.read_attachment(&input.id).map_err(err_to_string)?
+            vault.read_attachment(&input.id)?
         }
     };
     if let Some(url) = item.url.as_deref() {
         // The record may have come from a paired device or the JSON editor,
         // neither of which checks the link: only a web or mail address goes
         // to the system, and the error does not repeat the link.
-        trade_core::external_url::check_attachment_url(url).map_err(err_to_string)?;
-        return tauri_plugin_opener::open_url(url, None::<&str>)
-            .map_err(|_| "failed to open the link".to_string());
+        return state.opener.open_url(url, UrlKind::Attachment);
     }
     let cache = opened_dir(&app).ok_or("no cache directory")?;
     let _ = std::fs::remove_dir_all(&cache);
     let dir = cache.join(&item.id);
-    std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|err| IpcError::from(err.to_string()))?;
     let path = dir.join(safe_name(&item.title));
-    std::fs::write(&path, bytes).map_err(|err| err.to_string())?;
-    tauri_plugin_opener::open_path(&path, None::<&str>)
-        .map_err(|_| format!("failed to open {}", item.title))
+    std::fs::write(&path, bytes).map_err(|err| IpcError::from(err.to_string()))?;
+    state
+        .opener
+        .open_path(&path)
+        .map_err(|_| IpcError::from(format!("failed to open {}", item.title)))
 }
 
 /// Where decrypted attachments are put to be opened by another program.
@@ -152,26 +149,18 @@ mod wipe_tests {
 pub async fn remove_attachment(
     input: AttachmentIdInput,
     state: State<'_, AppState>,
-) -> Result<Attachment, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .remove_attachment(&input.id)
-        .map_err(err_to_string)
+) -> Result<Attachment, IpcError> {
+    let mut guard = require_vault(&state)?;
+    Ok(guard.as_mut().unwrap().remove_attachment(&input.id)?)
 }
 
 #[tauri::command]
 pub async fn restore_attachment(
     input: AttachmentIdInput,
     state: State<'_, AppState>,
-) -> Result<Attachment, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .restore_attachment(&input.id)
-        .map_err(err_to_string)
+) -> Result<Attachment, IpcError> {
+    let mut guard = require_vault(&state)?;
+    Ok(guard.as_mut().unwrap().restore_attachment(&input.id)?)
 }
 
 /// The file's own name without anything that could leave the folder.
@@ -196,13 +185,12 @@ fn safe_name(title: &str) -> String {
 pub async fn rename_attachment(
     input: RenameAttachmentInput,
     state: State<'_, AppState>,
-) -> Result<Attachment, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
-    guard
+) -> Result<Attachment, IpcError> {
+    let mut guard = require_vault(&state)?;
+    Ok(guard
         .as_mut()
         .unwrap()
-        .rename_attachment(&input.id, &input.title)
-        .map_err(err_to_string)
+        .rename_attachment(&input.id, &input.title)?)
 }
 
 /// "Save as…": the save dialog, then the opened bytes where it points.
@@ -212,18 +200,19 @@ pub async fn save_attachment_as(
     app: AppHandle,
     input: AttachmentIdInput,
     state: State<'_, AppState>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, IpcError> {
     let (item, bytes) = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
-        guard
-            .as_ref()
-            .unwrap()
-            .read_attachment(&input.id)
-            .map_err(err_to_string)?
+        let guard = require_vault(&state)?;
+        guard.as_ref().unwrap().read_attachment(&input.id)?
     };
     let name = safe_name(&item.title);
     let extension = name.rsplit_once('.').map(|(_, ext)| ext.to_string());
     let extensions: Vec<&str> = extension.iter().map(String::as_str).collect();
-    crate::platform_fs::save_bytes_dialog(&app, &name, &name, &extensions, &bytes)
-        .map_err(err_to_string)
+    Ok(crate::platform_fs::save_bytes_dialog(
+        &app,
+        &name,
+        &name,
+        &extensions,
+        &bytes,
+    )?)
 }

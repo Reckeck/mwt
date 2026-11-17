@@ -5,7 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, Manager, State};
 
-use crate::commands::{AppState, err_to_string, lock_vault};
+use crate::commands::{AppState, lock_vault};
+use crate::ipc::IpcError;
 use trade_core::ipc_contract::{
     DeleteVaultFileInput, DeleteVaultFileOutput, ExportVaultCopyInput, PickedVault, RecentVault,
     RelocateRecentVaultInput, RestoreRecentVaultInput, SelectVaultInput, VaultStorage,
@@ -180,7 +181,7 @@ fn relocated(mut recents: Vec<RecentVault>, old: &str, new_path: &str) -> Vec<Re
 // --- Tauri commands ---
 
 #[tauri::command]
-pub async fn recent_vaults(app: AppHandle) -> Result<Vec<RecentVault>, String> {
+pub async fn recent_vaults(app: AppHandle) -> Result<Vec<RecentVault>, IpcError> {
     let mut recents = load_recents(&app);
     // Refresh exists flag
     for recent in &mut recents {
@@ -206,7 +207,7 @@ pub async fn recent_vaults(app: AppHandle) -> Result<Vec<RecentVault>, String> {
 }
 
 #[tauri::command]
-pub async fn forget_recent_vault(app: AppHandle, input: SelectVaultInput) -> Result<(), String> {
+pub async fn forget_recent_vault(app: AppHandle, input: SelectVaultInput) -> Result<(), IpcError> {
     remove_recent(&app, &input.path);
     Ok(())
 }
@@ -216,7 +217,7 @@ pub async fn forget_recent_vault(app: AppHandle, input: SelectVaultInput) -> Res
 pub async fn restore_recent_vault(
     app: AppHandle,
     input: RestoreRecentVaultInput,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let mut recents = load_recents(&app);
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -242,9 +243,9 @@ pub async fn restore_recent_vault(
 pub async fn relocate_recent_vault(
     app: AppHandle,
     input: RelocateRecentVaultInput,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     // The row may only point at a file that exists and is a vault: anything else is refused.
-    ensure_vault_file(Path::new(&input.new_path)).map_err(err_to_string)?;
+    ensure_vault_file(Path::new(&input.new_path))?;
     let recents = relocated(load_recents(&app), &input.path, &input.new_path);
     save_recents(&app, &recents);
     Ok(())
@@ -258,11 +259,11 @@ pub async fn delete_vault_file(
     app: AppHandle,
     state: State<'_, AppState>,
     input: DeleteVaultFileInput,
-) -> Result<DeleteVaultFileOutput, String> {
-    let dir = crate::platform_fs::vaults_dir(&app).map_err(err_to_string)?;
-    let sandbox = crate::commands::sandbox::dir(&app).map_err(err_to_string)?;
+) -> Result<DeleteVaultFileOutput, IpcError> {
+    let dir = crate::platform_fs::vaults_dir(&app)?;
+    let sandbox = crate::commands::sandbox::dir(&app)?;
     let open_path = {
-        let unlocked = lock_vault(&state).map_err(err_to_string)?.is_some();
+        let unlocked = lock_vault(&state)?.is_some();
         let path = state
             .vault_path
             .lock()
@@ -273,8 +274,7 @@ pub async fn delete_vault_file(
         open_vault: open_path.as_deref(),
         sandbox: Some(sandbox.root()),
     };
-    let done =
-        delete_in_app_folder(&dir, Path::new(&input.path), protected).map_err(err_to_string)?;
+    let done = delete_in_app_folder(&dir, Path::new(&input.path), protected)?;
     remove_recent(&app, &input.path);
     Ok(DeleteVaultFileOutput {
         file_name: done.file_name,
@@ -302,7 +302,7 @@ pub async fn export_vault_copy(
     app: AppHandle,
     state: State<'_, AppState>,
     input: ExportVaultCopyInput,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, IpcError> {
     let source = Path::new(&input.path);
     // The copy is what is on disk: batched edits of the open vault go first.
     // The guard is dropped before the file is read and before the dialog.
@@ -311,9 +311,9 @@ pub async fn export_vault_copy(
             .vault
             .lock()
             .map_err(|_| "lock poisoned".to_string())?;
-        flush_if_open(guard.as_mut(), source).map_err(err_to_string)?;
+        flush_if_open(guard.as_mut(), source)?;
     }
-    let bytes = read_vault_bytes(source).map_err(err_to_string)?;
+    let bytes = read_vault_bytes(source)?;
     let open_path = state
         .vault_path
         .lock()
@@ -321,12 +321,12 @@ pub async fn export_vault_copy(
         .clone();
     let name = display_name_of(&input.path);
     crate::platform_fs::save_vault_copy_dialog(&app, &name, &bytes, &[source, &open_path])
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
-pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<PickedVault>, String> {
-    crate::platform_fs::pick_vault(&app, save).map_err(crate::commands::err_to_string)
+pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<PickedVault>, IpcError> {
+    crate::platform_fs::pick_vault(&app, save).map_err(IpcError::from)
 }
 
 #[cfg(test)]
@@ -457,7 +457,10 @@ mod tests {
             dir.as_path(),
         ] {
             let err = ensure_vault_file(bad).unwrap_err();
-            assert!(err_to_string(err).starts_with("INVALID_INPUT"), "{bad:?}");
+            assert!(
+                IpcError::from(err).to_string().starts_with("INVALID_INPUT"),
+                "{bad:?}"
+            );
         }
         std::fs::remove_dir_all(&dir).ok();
     }

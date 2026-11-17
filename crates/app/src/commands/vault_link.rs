@@ -8,13 +8,14 @@ use tauri::{AppHandle, State};
 use trade_core::error::Error;
 use trade_core::ipc_contract::{LinkVaultInput, ResolveVaultConflictInput, VaultLinkStatus};
 
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 use crate::platform_fs::{self, links};
 
 /// Path of the unlocked vault; the guard is gone when this returns, so a
 /// dialog can stay open without blocking other commands (AGENTS.md rule 3).
-fn unlocked_path(state: &AppState) -> Result<PathBuf, String> {
-    let guard = require_vault(state).map_err(err_to_string)?;
+fn unlocked_path(state: &AppState) -> Result<PathBuf, IpcError> {
+    let guard = require_vault(state)?;
     Ok(guard
         .as_ref()
         .map(|vault| vault.path.clone())
@@ -22,8 +23,8 @@ fn unlocked_path(state: &AppState) -> Result<PathBuf, String> {
 }
 
 /// Re-read the link for the unlocked vault and start or stop its copying.
-fn reattach(app: &AppHandle, state: &AppState) -> Result<(), String> {
-    let mut guard = require_vault(state).map_err(err_to_string)?;
+fn reattach(app: &AppHandle, state: &AppState) -> Result<(), IpcError> {
+    let mut guard = require_vault(state)?;
     if let Some(vault) = guard.as_mut() {
         platform_fs::attach_mirror(app, vault);
     }
@@ -34,7 +35,7 @@ fn reattach(app: &AppHandle, state: &AppState) -> Result<(), String> {
 pub async fn vault_link_status(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<VaultLinkStatus, String> {
+) -> Result<VaultLinkStatus, IpcError> {
     let path = unlocked_path(&state)?;
     Ok(links::get(&app, &path)
         .map(|link| link.status())
@@ -48,17 +49,15 @@ pub async fn link_vault_external(
     input: LinkVaultInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Option<VaultLinkStatus>, String> {
+) -> Result<Option<VaultLinkStatus>, IpcError> {
     crate::commands::sandbox::refuse(&state, "an external copy")?;
     let path = unlocked_path(&state)?;
     let name = trade_core::vault_io::display_name_of(&path.to_string_lossy());
-    let Some(target) =
-        platform_fs::pick_link_target(&app, input.existing, &name).map_err(err_to_string)?
-    else {
+    let Some(target) = platform_fs::pick_link_target(&app, input.existing, &name)? else {
         return Ok(None);
     };
     if target.as_path() == Some(path.as_path()) {
-        return Err(err_to_string(Error::InvalidInput(
+        return Err(IpcError::from(Error::InvalidInput(
             "the copy must be a different file than the vault".into(),
         )));
     }
@@ -70,13 +69,13 @@ pub async fn link_vault_external(
     };
     links::set(&app, &path, link.clone());
     // The copy is of the file: the batched changes go into it first.
-    crate::vault_writer::flush_now(&app).map_err(err_to_string)?;
-    let bytes = std::fs::read(&path).map_err(|err| err_to_string(err.into()))?;
+    crate::vault_writer::flush_now(&app)?;
+    let bytes = std::fs::read(&path).map_err(Error::from)?;
     links::push_replacing(&app, &path, &link, &bytes);
     reattach(&app, &state)?;
     let status = links::get(&app, &path).map(|link| link.status());
     if let Some(error) = status.as_ref().and_then(|status| status.last_error.clone()) {
-        return Err(err_to_string(Error::Io(error)));
+        return Err(IpcError::from(Error::Io(error)));
     }
     Ok(status)
 }
@@ -85,7 +84,7 @@ pub async fn link_vault_external(
 pub async fn unlink_vault_external(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let path = unlocked_path(&state)?;
     links::remove(&app, &path);
     reattach(&app, &state)
@@ -96,7 +95,7 @@ pub async fn unlink_vault_external(
 pub async fn resolve_vault_conflict(
     input: ResolveVaultConflictInput,
     app: AppHandle,
-) -> Result<(), String> {
-    let path = platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
-    links::resolve_conflict(&app, &path, input.keep, &input.password).map_err(err_to_string)
+) -> Result<(), IpcError> {
+    let path = platform_fs::resolve_vault_to_open(&app, &input.path)?;
+    links::resolve_conflict(&app, &path, input.keep, &input.password).map_err(IpcError::from)
 }

@@ -12,7 +12,8 @@ use trade_core::ipc_contract::{UnlockInput, VaultInfo};
 use trade_core::service::security_level::level_of_vault_file;
 
 use crate::biometric::{BioError, system_gate};
-use crate::commands::{AppState, app_settings, err_to_string, require_vault};
+use crate::commands::{AppState, app_settings, require_vault};
+use crate::ipc::IpcError;
 
 /// Quick unlock exists only for level 3; below it the state is `Unavailable`.
 pub(crate) fn state_of(app: &AppHandle, path: &Path) -> BiometricState {
@@ -28,9 +29,8 @@ pub(crate) fn state_of(app: &AppHandle, path: &Path) -> BiometricState {
 pub async fn biometric_state(
     input: BiometricUnlockInput,
     app: AppHandle,
-) -> Result<BiometricState, String> {
-    let path =
-        crate::platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
+) -> Result<BiometricState, IpcError> {
+    let path = crate::platform_fs::resolve_vault_to_open(&app, &input.path)?;
     Ok(state_of(&app, &path))
 }
 
@@ -41,16 +41,14 @@ pub async fn biometric_enable(
     input: BiometricEnableInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<BiometricState, String> {
+) -> Result<BiometricState, IpcError> {
     let path = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
+        let guard = require_vault(&state)?;
         let vault = guard.as_ref().ok_or("Vault is locked")?;
         if vault.security_level() != SecurityLevel::Crypto {
-            return Err(BioError::Unavailable.to_ipc());
+            return Err(BioError::Unavailable.to_ipc().into());
         }
-        vault
-            .check_password(&input.password)
-            .map_err(err_to_string)?;
+        vault.check_password(&input.password)?;
         vault.path.clone()
     };
     let dir = app_settings::config_dir(&app);
@@ -67,9 +65,9 @@ pub async fn biometric_enable(
 pub async fn biometric_disable(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<BiometricState, String> {
+) -> Result<BiometricState, IpcError> {
     let path = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
+        let guard = require_vault(&state)?;
         guard.as_ref().ok_or("Vault is locked")?.path.clone()
     };
     system_gate(&app_settings::config_dir(&app)).disable(&path.to_string_lossy());
@@ -83,11 +81,10 @@ pub async fn biometric_unlock(
     input: BiometricUnlockInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<VaultInfo, String> {
-    let path =
-        crate::platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
+) -> Result<VaultInfo, IpcError> {
+    let path = crate::platform_fs::resolve_vault_to_open(&app, &input.path)?;
     if state_of(&app, &path) == BiometricState::Unavailable {
-        return Err(BioError::Unavailable.to_ipc());
+        return Err(BioError::Unavailable.to_ipc().into());
     }
     let dir = app_settings::config_dir(&app);
     let id = path.to_string_lossy().into_owned();
@@ -107,11 +104,11 @@ pub async fn biometric_unlock(
     )
     .await;
     if let Err(message) = &opened
-        && message.starts_with("SECRET")
+        && message.to_string().starts_with("SECRET")
     {
         // The stored password no longer opens the vault: the binding is stale.
         system_gate(&app_settings::config_dir(&app)).disable(&path.to_string_lossy());
-        return Err(BioError::Invalidated.to_ipc());
+        return Err(BioError::Invalidated.to_ipc().into());
     }
     opened
 }
