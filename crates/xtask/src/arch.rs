@@ -136,8 +136,11 @@ fn is_skipped_dir(name: &str) -> bool {
     matches!(name, "bin" | "tests")
 }
 
+/// Test files by name: `tests.rs`, `*_tests.rs`, `test_*.rs`.
 fn is_test_file(name: &str) -> bool {
-    name.contains("test")
+    name == "tests.rs"
+        || name.ends_with("_tests.rs")
+        || (name.starts_with("test_") && name.ends_with(".rs"))
 }
 
 /// The top-level module a file belongs to: `model/vault.rs` and `model.rs` are `model`.
@@ -196,6 +199,9 @@ fn collect_files(dir: &Path, skipped: &mut Files, files: &mut Vec<PathBuf>) -> R
         }
     }
     for subdir in subdirs {
+        if skipped.test_dirs.contains(&subdir) {
+            continue;
+        }
         collect_files(&subdir, skipped, files)?;
     }
     Ok(())
@@ -206,6 +212,7 @@ fn collect_files(dir: &Path, skipped: &mut Files, files: &mut Vec<PathBuf>) -> R
 #[derive(Default)]
 struct Files {
     test: BTreeSet<PathBuf>,
+    test_dirs: BTreeSet<PathBuf>,
     testkit: BTreeSet<PathBuf>,
 }
 
@@ -222,6 +229,7 @@ fn declare_gated_modules(file: &Path, gated: &mut Files) -> Result<()> {
     let dir = child_dir(file);
     for name in scan::test_modules(&text) {
         gated.test.extend(module_files(&dir, &name));
+        gated.test_dirs.insert(dir.join(&name));
     }
     for name in scan::testkit_modules(&text) {
         gated.testkit.extend(module_files(&dir, &name));
@@ -313,6 +321,46 @@ mod tests {
             .collect();
         assert!(!fixtures.is_empty());
         assert!(fixtures.iter().all(|edge| edge.from_module == TESTKIT));
+    }
+
+    #[test]
+    fn a_downward_import_is_not_reported() {
+        let edges = [edge("service/x.rs", 1, "service", "model")];
+        let report = evaluate(&edges, &[], false);
+        assert!(report.violations.is_empty());
+        assert_eq!(report.failures(), 0);
+    }
+
+    #[test]
+    fn is_test_file_matches_only_test_names() {
+        for name in ["tests.rs", "vault_tests.rs", "test_vault.rs"] {
+            assert!(is_test_file(name), "{name}");
+        }
+        for name in ["latest.rs", "attestation.rs", "contest.rs", "testkit.rs"] {
+            assert!(!is_test_file(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_cfg_test_module_declaration_skips_its_subdirectory() {
+        let root = std::env::temp_dir().join(format!("xtask-arch-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("model/fixtures")).unwrap();
+        fs::write(root.join("lib.rs"), "").unwrap();
+        fs::write(
+            root.join("model/mod.rs"),
+            "#[cfg(test)]\nmod fixtures;\nuse crate::service::A;\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("model/fixtures/helper.rs"),
+            "use crate::service::B;\n",
+        )
+        .unwrap();
+        let edges = scan(&root).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        let files: Vec<&str> = edges.iter().map(|edge| edge.from_file.as_str()).collect();
+        assert_eq!(files, vec!["model/mod.rs"]);
     }
 
     #[test]
