@@ -1406,7 +1406,8 @@ impl UnlockedVault {
     /// Whether an operation already books `moment` of `workflow_id`.
     fn moment_booked(&self, workflow_id: &str, moment: &str) -> bool {
         self.booked_moments()
-            .contains(&(workflow_id.to_string(), moment.to_string()))
+            .iter()
+            .any(|(id, _, booked)| id == workflow_id && booked == moment)
     }
 
     /// Whether an operation already carries the run key `key`.
@@ -1812,26 +1813,7 @@ impl UnlockedVault {
     /// was rolled back (a sync). Only records without a stored date (old
     /// ones) are dated later by their moment.
     pub(crate) fn automation_processed(&self) -> Vec<Processed> {
-        let mut out = Vec::new();
-        for tx in &self.doc.transactions {
-            match &tx.meta().origin {
-                TxOrigin::Automation {
-                    automation_id,
-                    planned_at,
-                } => out.push((automation_id.clone(), None, planned_at.clone())),
-                TxOrigin::Workflow {
-                    workflow_id,
-                    planned_at,
-                    planned_date,
-                    ..
-                } if planned_at.is_some() || planned_date.is_some() => out.push((
-                    workflow_id.clone(),
-                    *planned_date,
-                    planned_at.clone().unwrap_or_default(),
-                )),
-                _ => {}
-            }
-        }
+        let mut out = self.booked_moments();
         for run in &self.doc.workflow_runs {
             let planned = match &run.outcome {
                 RunOutcome::Rejected {
@@ -1851,25 +1833,27 @@ impl UnlockedVault {
         out
     }
 
-    /// Planned moments an operation was booked for: the same marker the
-    /// scheduled run itself goes by.
-    fn booked_moments(&self) -> HashSet<(String, String)> {
-        let mut out = HashSet::new();
+    /// Planned moments operations were booked for, as `(workflow id, stored
+    /// planned date, RFC3339 moment)`: the same marker the scheduled run
+    /// itself goes by. The one place that reads the origin of an operation.
+    fn booked_moments(&self) -> Vec<Processed> {
+        let mut out = Vec::new();
         for tx in &self.doc.transactions {
             match &tx.meta().origin {
                 TxOrigin::Automation {
                     automation_id,
                     planned_at,
-                } => {
-                    out.insert((automation_id.clone(), planned_at.clone()));
-                }
+                } => out.push((automation_id.clone(), None, planned_at.clone())),
                 TxOrigin::Workflow {
                     workflow_id,
-                    planned_at: Some(planned_at),
+                    planned_at,
+                    planned_date,
                     ..
-                } => {
-                    out.insert((workflow_id.clone(), planned_at.clone()));
-                }
+                } if planned_at.is_some() || planned_date.is_some() => out.push((
+                    workflow_id.clone(),
+                    *planned_date,
+                    planned_at.clone().unwrap_or_default(),
+                )),
                 _ => {}
             }
         }

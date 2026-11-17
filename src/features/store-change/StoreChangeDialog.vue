@@ -60,6 +60,7 @@ const kind = ref<StoreKind>('bank')
 const parentId = ref('')
 const targetId = ref('')
 const confirmName = ref('')
+const targetName = computed(() => nodes.value.find((node) => node.store.id === targetId.value)?.store.name ?? '')
 
 watch(open, (isOpen) => {
   if (!isOpen) return
@@ -211,7 +212,7 @@ const subTypeLabel = (subType: SubType | null) => (subType ? t(`subType.${subTyp
           <p v-if="action === 'merge_into'" class="text-sm">
             {{ t('storeChange.movedTransactions', { count: plan.data.value.moved_transactions }) }}
           </p>
-          <StoreChangeCorrections :corrections="plan.data.value.corrections" />
+          <StoreChangeCorrections :corrections="plan.data.value.corrections" :source="props.store" :target-name="targetName" />
           <div v-if="plan.data.value.conflicts.length" class="grid gap-1">
             <p class="flex items-center gap-1.5 text-xs font-medium text-destructive">
               <AlertTriangle class="size-3.5" />

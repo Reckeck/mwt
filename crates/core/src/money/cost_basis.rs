@@ -207,6 +207,17 @@ mod tests {
     }
 
     #[test]
+    fn held_units_of_unknown_cost_keep_the_mix_unknown() {
+        let mut book = CostBook::default();
+        buy(&mut book, "1", "0");
+        buy(&mut book, "1", "50000");
+        let position = book.position(&key());
+        assert_eq!(position.quantity, amount("2"));
+        assert_eq!(position.cost, None);
+        assert_eq!(sell(&mut book, "1", "60000"), None);
+    }
+
+    #[test]
     fn own_wallet_move_realizes_nothing_but_moves_quantity() {
         let mut book = CostBook::default();
         buy(&mut book, "2", "40000");

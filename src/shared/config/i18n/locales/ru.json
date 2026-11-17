@@ -2906,7 +2906,7 @@
   "storeChange.wallet": "кошелёк",
   "storeChange.movedTransactions": "Операций перейдёт: {count}",
   "storeChange.corrections": "Сдвинутся корректировки остатка: {count}",
-  "storeChange.correctionLine": "{wallet}, {date}: было засчитано {was}, станет {now}, потому что {held} лежало на другом счёте",
+  "storeChange.correctionLine": "{wallet}, {date}: было засчитано {was}, станет {now}, потому что {held} лежало на счёте {other}",
   "storeChange.conflicts": "Не подойдут после изменения: {count}. Исправьте или удалите их, затем повторите.",
   "storeChange.confirm": "Введите «{name}», чтобы подтвердить",
   "storeChange.apply": "Применить",
