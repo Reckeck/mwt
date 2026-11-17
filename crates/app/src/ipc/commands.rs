@@ -187,12 +187,13 @@ mod tests {
             .collect()
     }
 
-    /// The names of the `#[tauri::command]` functions in one source text.
+    /// The names of the `#[tauri::command]` and `#[ipc]` functions in one source text.
     fn command_fns(source: &str) -> Vec<String> {
         let lines: Vec<&str> = source.lines().collect();
         let mut names = Vec::new();
         for (index, line) in lines.iter().enumerate() {
-            if !line.trim_start().starts_with("#[tauri::command") {
+            let attribute = line.trim_start();
+            if !(attribute.starts_with("#[tauri::command") || attribute.starts_with("#[ipc")) {
                 continue;
             }
             let declaration = lines[index..]
