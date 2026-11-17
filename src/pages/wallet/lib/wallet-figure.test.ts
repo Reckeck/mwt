@@ -55,7 +55,11 @@ describe('walletFigure', () => {
   })
 
   it('lists several positions biggest first and shows the base sum', () => {
-    const figure = walletFigure([crypto('BTC', '1', '5000'), fiat('EUR', '10', '1000', '100'), crypto('ETH', '1', '9000')], '15000', 'rub')
+    const figure = walletFigure(
+      [crypto('BTC', '1', '5000'), fiat('EUR', '10', '1000', '100'), crypto('ETH', '1', '9000')],
+      '15000',
+      'rub',
+    )
     expect(figure.assets).toEqual(['ETH', 'BTC', 'EUR'])
     expect(figure.currency).toBe('rub')
     expect(figure.base).toBeNull()

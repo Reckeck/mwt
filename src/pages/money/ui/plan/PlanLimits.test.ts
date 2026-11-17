@@ -18,7 +18,10 @@ const mounted: ReturnType<typeof mount>[] = []
 
 function mountLimits() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div />' } }] })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: { template: '<div />' } }],
+  })
   const wrapper = mount(PlanLimits, {
     props: { filter: {} as ReportFilter },
     global: {
