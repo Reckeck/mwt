@@ -8,6 +8,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use crate::Amount;
 use crate::calendar::{self, Calendar, first_of_month};
 use crate::error::{Error, Result};
+use crate::kernel::books::Books;
 use crate::model::planning::{Envelope, Goal};
 use crate::model::store::StoreScope;
 use crate::model::transaction::LegRole;
@@ -570,18 +571,18 @@ impl UnlockedVault {
     /// Average of `income − fixed − daily` over the last non-empty months
     /// before the current one, in the budget currency; `None` without any.
     pub fn free_surplus_avg(&self, now: i64, zone: &str) -> Option<Amount> {
-        self.free_surplus_avg_in(&self.rate_book(), now, zone)
+        self.free_surplus_avg_in(&self.books(), now, zone)
     }
 
-    /// [`Self::free_surplus_avg`] over a book the caller already built.
-    fn free_surplus_avg_in(&self, book: &RateBook, now: i64, zone: &str) -> Option<Amount> {
+    /// [`Self::free_surplus_avg`] over the books of one request.
+    fn free_surplus_avg_in(&self, books: &Books, now: i64, zone: &str) -> Option<Amount> {
         let cal = Calendar::new(zone);
         let mut month = first_of_month(cal.date_of(now));
         let mut found: Vec<Amount> = Vec::new();
         for _ in 0..24 {
             month = first_of_month(month - Duration::days(1));
             let summary = self
-                .month_summary_in(book, &calendar::month_key(month), zone)
+                .month_summary_in(books, &calendar::month_key(month), zone)
                 .ok()?;
             if summary.income.is_zero() && summary.fixed.is_zero() && summary.daily.is_zero() {
                 continue;
@@ -746,7 +747,7 @@ impl UnlockedVault {
 
         // All goals together against what is usually left over.
         let currency = self.budget_currency();
-        if let Some(surplus) = self.free_surplus_avg_in(book, now, zone) {
+        if let Some(surplus) = self.free_surplus_avg_in(&books, now, zone) {
             let need_total = out
                 .iter()
                 .filter_map(|progress| {

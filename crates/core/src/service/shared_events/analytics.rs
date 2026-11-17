@@ -89,20 +89,8 @@ impl UnlockedVault {
     }
 
     /// Spending that has no payment of mine behind it: my part of other
-    /// people's purchases and what I wrote off.
-    pub(crate) fn shared_extra_flows(
-        &self,
-        book: &RateBook,
-        cal: &Calendar,
-        currency: &str,
-        from: i64,
-        to: i64,
-    ) -> Vec<Flow> {
-        self.extra_flows_from(&self.shared_extras(), book, cal, currency, from, to)
-    }
-
-    /// [`Self::shared_extra_flows`] over entries the caller already collected
-    /// (`Books` keeps them, so a request collects them once).
+    /// people's purchases and what I wrote off, over entries the caller already
+    /// collected (`Books` keeps them, so a request collects them once).
     pub(crate) fn extra_flows_from(
         &self,
         extras: &[SharedExtra],

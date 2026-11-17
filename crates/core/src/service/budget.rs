@@ -505,13 +505,13 @@ impl UnlockedVault {
     /// Income, mandatory spending, everyday spending and savings of a calendar
     /// month (`YYYY-MM`) in the budget currency (plan §7.3).
     pub fn month_summary(&self, month: &str, zone: &str) -> Result<MonthSummary> {
-        self.month_summary_in(&self.rate_book(), month, zone)
+        self.month_summary_in(&self.books(), month, zone)
     }
 
-    /// [`Self::month_summary`] over a book the caller already built.
+    /// [`Self::month_summary`] over the books of one request.
     pub(crate) fn month_summary_in(
         &self,
-        book: &RateBook,
+        books: &Books,
         month: &str,
         zone: &str,
     ) -> Result<MonthSummary> {
@@ -526,15 +526,7 @@ impl UnlockedVault {
             complete: true,
             ..MonthSummary::default()
         };
-        let mut flows = self.payment_flows(
-            book,
-            &self.shared_payment_ratios(),
-            &cal,
-            &currency,
-            from,
-            to,
-        );
-        flows.extend(self.shared_extra_flows(book, &cal, &currency, from, to));
+        let flows = self.flows_between_in(books, &cal, &currency, from, to);
         for flow in flows {
             out.complete &= flow.priced();
             match flow.class {
