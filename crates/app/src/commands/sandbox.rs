@@ -86,14 +86,14 @@ fn close_vault(state: &AppState) {
 }
 
 /// Leave the sandbox: close its vault and erase its folder. `false` when it
-/// was not open (nothing was done).
+/// was not open (nothing was done). Opened attachments are not wiped here: the
+/// caller announces `VaultLocked{SandboxLeave}`, whose subscriber does it.
 pub fn leave(app: &AppHandle, state: &AppState) -> bool {
     if !is_active(state) {
         return false;
     }
     close_vault(state);
     erase_on_start(app);
-    crate::commands::attachments::wipe_opened(app);
     true
 }
 
@@ -155,7 +155,7 @@ pub async fn reset_sandbox(
 /// "Exit": back to the unlock screen, the demo data erased.
 #[tauri::command]
 pub async fn close_sandbox(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    if leave(&app, &state) {
+    if crate::commands::auth::leave_sandbox(&app, &state) {
         Ok(())
     } else {
         Err(err_to_string(Error::Sandbox(

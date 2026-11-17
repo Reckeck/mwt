@@ -259,7 +259,7 @@ fn close_session_for(app: &AppHandle, reason: LockReason) -> trade_core::Result<
 }
 
 /// Leave the sandbox if it is open, announcing it. Whether it was open.
-fn leave_sandbox(app: &AppHandle, state: &AppState) -> bool {
+pub(crate) fn leave_sandbox(app: &AppHandle, state: &AppState) -> bool {
     let left = crate::commands::sandbox::leave(app, state);
     announce_sandbox_leave(left, &mut AppLockSteps { app })
 }
