@@ -76,7 +76,7 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
           openable
           group-by-day
           :fx-per-usd="summary.data.value?.fx_per_usd"
-          :base-currency="summary.data.value?.base_currency"
+          :base-currency="props.baseCurrency || summary.data.value?.base_currency"
           @open="openDetails"
           :row-actions="rowMenu.actions"
           @more="txs.fetchNextPage()"

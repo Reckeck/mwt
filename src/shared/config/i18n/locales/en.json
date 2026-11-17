@@ -5127,6 +5127,7 @@
   "money.plan.createGoal": "Create a goal",
   "money.plan.next": "Later this month",
   "money.plan.fromAutomations": "from Automations",
+  "money.plan.nothingNext": "Nothing planned until the end of the month",
   "money.plan.kind.automation": "Workflow",
   "money.plan.kind.reminder": "Reminder",
   "money.plan.kind.other": "Payment",
