@@ -1,6 +1,8 @@
 //! `cargo xtask`: the build and check engine (task graph, fail-fast, logs).
 
 mod annotate;
+#[allow(dead_code, reason = "read by the `arch` check, wired in core-edges#T2")]
+mod arch;
 mod audit;
 mod build;
 mod bundle;
