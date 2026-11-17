@@ -33,7 +33,7 @@ pub enum Command {
     },
     /// Dependency advisories (cargo-audit, pnpm audit) minus the reasoned exceptions of audit-ignore.toml.
     Audit,
-    /// Helper of the core-strangler phase: facts about the areas of `service/` (`strangle stats`).
+    /// Helper of the core-strangler phase: moves areas out of `impl UnlockedVault` (stats, scaffold, widen, carve, relocate, forward, check, callers, rewire).
     Strangle(crate::strangle::StrangleArgs),
     /// A GitHub release or pre-release: SHA256SUMS, then `gh release create`.
     #[command(hide = true)]
