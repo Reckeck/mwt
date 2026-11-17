@@ -28,9 +28,10 @@ const kindText = (kind: UpcomingKind) => t(`money.plan.kind.${KIND_LABEL[kind] ?
       <h2 class="heading-section">{{ t('money.plan.next') }}</h2>
       <RouterLink :to="{ name: 'automations' }" class="text-xs text-muted-foreground hover:text-foreground">{{ t('money.plan.fromAutomations') }}</RouterLink>
     </header>
-    <!-- The block is always shown: loading and the empty line (also on an error) are one line tall, so nothing below jumps. -->
-    <Skeleton v-if="upcoming.isPending.value" class="h-5" />
-    <p v-else-if="!items.length" class="min-h-5 text-sm text-muted-foreground">{{ t('money.plan.nothingNext') }}</p>
+    <!-- Always mounted: loading, the empty line and an error are one h-16 block, so nothing below jumps. -->
+    <Skeleton v-if="upcoming.isPending.value" class="h-16" />
+    <p v-else-if="upcoming.isError.value" class="flex h-16 items-center text-sm text-muted-foreground">{{ t('money.plan.nextFailed') }}</p>
+    <p v-else-if="!items.length" class="flex h-16 items-center text-sm text-muted-foreground">{{ t('money.plan.nothingNext') }}</p>
     <ul v-else class="grid gap-2">
       <li v-for="item in items" :key="`${item.kind}-${item.source_id}-${item.at}`" class="flex min-w-0 items-center gap-2 text-sm">
         <Badge variant="secondary" class="shrink-0">{{ kindText(item.kind) }}</Badge>
