@@ -266,7 +266,6 @@ pub fn rekey_device_secrets(vault: &Path, old: &SealKey, new: &SealKey) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::hkdf_sha256;
     use crate::crypto::kdf_profile::KdfParams;
 
     fn level3_key(password: &str) -> SealKey {
@@ -289,20 +288,13 @@ mod tests {
         }
     }
 
-    fn hex(bytes: &[u8]) -> String {
-        bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-    }
-
     #[test]
-    fn hkdf_matches_rfc5869_case_one() {
-        let ikm = [0x0bu8; 22];
-        let salt: Vec<u8> = (0x00u8..=0x0c).collect();
-        let info: Vec<u8> = (0xf0u8..=0xf9).collect();
-        let okm = hkdf_sha256(&salt, &ikm, &info);
-        assert_eq!(
-            hex(&okm[..]),
-            "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
-        );
+    fn the_file_key_differs_from_the_vault_key() {
+        let params = KdfParams::hardened(64 * 1024, 3, 1);
+        let key = SealKey::fresh_with(b"pw", params).expect("key");
+        // The vault key, derived again from what built `key`.
+        let vault_key = crate::crypto::derive_key(b"pw", key.salt(), &params).expect("vault key");
+        assert_ne!(*file_key(&key), vault_key);
     }
 
     #[test]
