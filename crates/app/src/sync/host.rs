@@ -13,6 +13,7 @@ use trade_core::sync::session::DeviceKey;
 
 use super::{Hub, SyncHub};
 use crate::commands::{AppState, require_vault};
+use crate::ipc::events::AppEvent;
 
 pub(crate) trait Host: Clone + Send + Sync + 'static {
     fn hub(&self) -> MutexGuard<'_, Hub>;
@@ -25,6 +26,10 @@ pub(crate) trait Host: Clone + Send + Sync + 'static {
         false
     }
     fn emit<S: Serialize + Clone>(&self, event: &str, payload: S);
+    /// The typed emit: the event fixes its name and payload, a wrong payload does not compile.
+    fn emit_event<E: AppEvent>(&self, payload: &E::Payload) {
+        self.emit(E::NAME, payload.clone());
+    }
     /// Show notices that arrived by sync (the system notice follows focus).
     fn deliver(&self, notices: Vec<NoticeRecord>);
     /// The previous main device handed its role over.

@@ -40,15 +40,23 @@ use trade_core::ipc_contract::{
 use trade_core::service::SyncTap;
 
 use crate::commands::AppState;
+use crate::ipc::events::{SyncError, SyncStatusChanged};
 use host::Host;
 
-/// Events the windows listen to.
+/// Event names the tests match on (the senders use the typed `emit_event`).
+#[cfg(test)]
 pub const STATUS_EVENT: &str = "sync-status";
+#[cfg(test)]
 pub const OFFER_EVENT: &str = "sync-offer";
+#[cfg(test)]
 pub const PAIRING_EVENT: &str = "sync-pairing";
+#[cfg(test)]
 pub const PLAN_EVENT: &str = "sync-plan-ready";
+#[cfg(test)]
 pub const SYNCED_EVENT: &str = "vault-synced";
+#[cfg(test)]
 pub const ERROR_EVENT: &str = "sync-error";
+#[cfg(test)]
 pub const CLOCK_EVENT: &str = "sync-clock";
 
 /// Failed handshakes or declined pairings from one address before it is
@@ -598,7 +606,7 @@ pub(crate) fn clear_errors(hub: &mut Hub) {
 }
 
 pub(crate) fn emit_status<H: Host>(app: &H) {
-    app.emit(STATUS_EVENT, status(app));
+    app.emit_event::<SyncStatusChanged>(&status(app));
 }
 
 pub(crate) fn emit_error<H: Host>(app: &H, err: &trade_core::Error, peer: Option<(&str, &str)>) {
@@ -632,16 +640,13 @@ pub(crate) fn emit_error_with<H: Host>(
     if repeated {
         return;
     }
-    app.emit(
-        ERROR_EVENT,
-        trade_core::ipc_contract::SyncErrorEvent {
-            code,
-            message: err.to_string(),
-            peer_name: peer.map(|(_, name)| name.to_string()),
-            peer_version: versions.map(|(theirs, _)| theirs.to_string()),
-            own_version: versions.map(|(_, own)| own.to_string()),
-        },
-    );
+    app.emit_event::<SyncError>(&trade_core::ipc_contract::SyncErrorEvent {
+        code,
+        message: err.to_string(),
+        peer_name: peer.map(|(_, name)| name.to_string()),
+        peer_version: versions.map(|(theirs, _)| theirs.to_string()),
+        own_version: versions.map(|(_, own)| own.to_string()),
+    });
 }
 
 /// The name other devices see: the chosen one, else the host name.

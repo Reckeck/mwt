@@ -35,10 +35,8 @@ use trade_core::sync::session::{
 use trade_core::sync::stamp::{device_tag, now_ms};
 
 use super::host::Host;
-use super::{
-    CLOCK_EVENT, Link, OFFER_EVENT, Order, PAIRING_EVENT, PLAN_EVENT, SYNCED_EVENT, set_phase,
-    set_progress, update_link,
-};
+use super::{Link, Order, set_phase, set_progress, update_link};
+use crate::ipc::events::{SyncClock, SyncOffer, SyncPairing, SyncPlanReady, VaultSynced};
 
 /// The largest place in the queue to take over the main role.
 pub(crate) const MAX_RANK: u32 = 5;
@@ -580,15 +578,12 @@ async fn session<H: Host>(
             return Err(failure(PeerSyncFailure::ClockSkew));
         }
         Skew::Warn(_) => {
-            app.emit(
-                CLOCK_EVENT,
-                SyncClockEvent {
-                    session_id: session_id.to_string(),
-                    peer_name: theirs.device_name.clone(),
-                    offset_ms: watch.offset(),
-                    unreliable: false,
-                },
-            );
+            app.emit_event::<SyncClock>(&SyncClockEvent {
+                session_id: session_id.to_string(),
+                peer_name: theirs.device_name.clone(),
+                offset_ms: watch.offset(),
+                unreliable: false,
+            });
         }
         Skew::Fine => {}
     }
@@ -722,13 +717,10 @@ async fn pair<H: Host>(
     asked: bool,
 ) -> Flow<()> {
     set_phase(app, &peer.session_id, SyncPhase::Offer);
-    app.emit(
-        OFFER_EVENT,
-        SyncOfferEvent {
-            session_id: peer.session_id.clone(),
-            peer_name: peer.name.clone(),
-        },
-    );
+    app.emit_event::<SyncOffer>(&SyncOfferEvent {
+        session_id: peer.session_id.clone(),
+        peer_name: peer.name.clone(),
+    });
     let code = wire.pairing_code.clone();
     let expires_ms =
         now_ms().saturating_add(u64::try_from(PAIRING_TIMEOUT.as_millis()).unwrap_or(u64::MAX));
@@ -738,14 +730,11 @@ async fn pair<H: Host>(
             link.view.pairing_code = Some(code.clone());
             link.view.pairing_expires_ms = Some(expires_ms);
         });
-        app.emit(
-            PAIRING_EVENT,
-            SyncPairingEvent {
-                session_id: peer.session_id.clone(),
-                peer_name: peer.name.clone(),
-                code: code.clone(),
-            },
-        );
+        app.emit_event::<SyncPairing>(&SyncPairingEvent {
+            session_id: peer.session_id.clone(),
+            peer_name: peer.name.clone(),
+            code: code.clone(),
+        });
     };
     let deadline = tokio::time::sleep(PAIRING_TIMEOUT);
     tokio::pin!(deadline);
@@ -931,15 +920,12 @@ fn clear_unreliable<H: Host>(app: &H, peer: &Peer, watch: &ClockWatch) {
         return;
     }
     update_link(app, &peer.session_id, |link| link.view.unreliable = false);
-    app.emit(
-        CLOCK_EVENT,
-        SyncClockEvent {
-            session_id: peer.session_id.clone(),
-            peer_name: peer.name.clone(),
-            offset_ms: watch.offset(),
-            unreliable: false,
-        },
-    );
+    app.emit_event::<SyncClock>(&SyncClockEvent {
+        session_id: peer.session_id.clone(),
+        peer_name: peer.name.clone(),
+        offset_ms: watch.offset(),
+        unreliable: false,
+    });
 }
 
 fn mark_unreliable<H: Host>(app: &H, peer: &Peer, watch: &ClockWatch) {
@@ -953,15 +939,12 @@ fn mark_unreliable<H: Host>(app: &H, peer: &Peer, watch: &ClockWatch) {
         return;
     }
     update_link(app, &peer.session_id, |link| link.view.unreliable = true);
-    app.emit(
-        CLOCK_EVENT,
-        SyncClockEvent {
-            session_id: peer.session_id.clone(),
-            peer_name: peer.name.clone(),
-            offset_ms: watch.offset(),
-            unreliable: true,
-        },
-    );
+    app.emit_event::<SyncClock>(&SyncClockEvent {
+        session_id: peer.session_id.clone(),
+        peer_name: peer.name.clone(),
+        offset_ms: watch.offset(),
+        unreliable: true,
+    });
 }
 
 async fn send_records<H: Host>(app: &H, peer: &Peer, wire: &mut Wire, keys: &[String]) -> Flow<()> {
@@ -1232,16 +1215,13 @@ async fn apply_shown<H: Host>(
                     after: after.clone(),
                 });
             });
-            app.emit(
-                PLAN_EVENT,
-                SyncPlanEvent {
-                    session_id: peer.session_id.clone(),
-                    peer_name: peer.name.clone(),
-                    reason,
-                    summary: summary.clone(),
-                    after: after.clone(),
-                },
-            );
+            app.emit_event::<SyncPlanReady>(&SyncPlanEvent {
+                session_id: peer.session_id.clone(),
+                peer_name: peer.name.clone(),
+                reason,
+                summary: summary.clone(),
+                after: after.clone(),
+            });
             let deadline = tokio::time::sleep(DECISION_TIMEOUT);
             tokio::pin!(deadline);
             // The other side closes a silent session: keep telling it the time.
@@ -1376,14 +1356,11 @@ async fn apply_shown<H: Host>(
     update_link(app, &peer.session_id, |link| link.applied_once = true);
     if let Some((batch, keys, collections, notices)) = applied {
         app.hub().last_activity = Some(super::lock_policy::Since::now());
-        app.emit(
-            SYNCED_EVENT,
-            VaultSyncedEvent {
-                session_id: peer.session_id.clone(),
-                batch,
-                collections,
-            },
-        );
+        app.emit_event::<VaultSynced>(&VaultSyncedEvent {
+            session_id: peer.session_id.clone(),
+            batch,
+            collections,
+        });
         let fresh_after = i64::try_from(now_ms()).unwrap_or(i64::MAX) - FRESH_NOTICE_MS;
         let fresh: Vec<_> = notices
             .into_iter()
