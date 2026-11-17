@@ -2,6 +2,7 @@
 //! then the pure functions on a bare document and the delegate pins.
 
 use super::loyalty::*;
+use crate::model::ids::StoreId;
 use crate::model::store::{AssetRef, LoyaltyInfo, StoreKind};
 use crate::model::vault::FxPoint;
 use crate::service::UnlockedVault;
@@ -184,10 +185,10 @@ fn doc_with_programmes(symbols: &[&str]) -> (crate::model::vault::VaultDoc, Vec<
 #[test]
 fn the_clash_is_decided_on_a_bare_document() {
     let (doc, ids) = doc_with_programmes(&["pts", " PTS ", "FREE"]);
-    assert!(loyalty_symbol_clash(&doc, &ids[0]));
-    assert!(loyalty_symbol_clash(&doc, &ids[1]));
-    assert!(!loyalty_symbol_clash(&doc, &ids[2]));
-    assert!(!loyalty_symbol_clash(&doc, "unknown"));
+    assert!(loyalty_symbol_clash(&doc, &StoreId::from(&ids[0])));
+    assert!(loyalty_symbol_clash(&doc, &StoreId::from(&ids[1])));
+    assert!(!loyalty_symbol_clash(&doc, &StoreId::from(&ids[2])));
+    assert!(!loyalty_symbol_clash(&doc, &StoreId::from("unknown")));
 }
 
 #[test]
@@ -208,17 +209,21 @@ fn the_settings_are_checked_on_a_bare_document() {
 #[test]
 fn the_points_adjustment_is_built_without_a_vault() {
     let (doc, ids) = doc_with_programmes(&["PTS"]);
-    let credit = plan_adjust_points(&doc, &ids[0], amount("5"), "c", None, None).unwrap();
+    let credit =
+        plan_adjust_points(&doc, &StoreId::from(&ids[0]), amount("5"), "c", None, None).unwrap();
     assert!(matches!(
         credit,
         crate::model::transaction::Transaction::Topup(_)
     ));
-    let spend = plan_adjust_points(&doc, &ids[0], amount("-5"), "c", None, None).unwrap();
+    let spend =
+        plan_adjust_points(&doc, &StoreId::from(&ids[0]), amount("-5"), "c", None, None).unwrap();
     assert!(matches!(
         spend,
         crate::model::transaction::Transaction::Payment(_)
     ));
-    assert!(plan_adjust_points(&doc, &ids[0], amount("0"), "c", None, None).is_err());
+    assert!(
+        plan_adjust_points(&doc, &StoreId::from(&ids[0]), amount("0"), "c", None, None).is_err()
+    );
 }
 
 #[test]
@@ -262,12 +267,16 @@ fn the_delegates_equal_the_scenarios() {
     let saved = vault.set_loyalty_info(&programme, info("PTS")).unwrap();
     assert_eq!(
         saved,
-        crate::usecases::household::loyalty::set_loyalty_info(&mut vault, &programme, info("PTS"))
-            .unwrap()
+        crate::usecases::household::loyalty::set_loyalty_info(
+            &mut vault,
+            &StoreId::from(&programme),
+            info("PTS")
+        )
+        .unwrap()
     );
     assert_eq!(
         vault.loyalty_symbol_clash(&programme),
-        loyalty_symbol_clash(&vault.doc, &programme)
+        loyalty_symbol_clash(&vault.doc, &StoreId::from(&programme))
     );
     let (from, to) = ("2026-01-01T00:00:00Z", "2026-12-31T00:00:00Z");
     assert_eq!(

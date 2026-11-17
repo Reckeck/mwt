@@ -12,11 +12,21 @@
 //! }
 //! ```
 //!
+//! A parameter whose type changes (a `&str` id becomes `&StoreId`) is converted by a `with` clause
+//! that lists the arguments after the first one, written out:
+//!
+//! ```ignore
+//! forward! {
+//!     pub fn symbol_clash(&self, id: &str) -> bool
+//!         => crate::household::loyalty::symbol_clash @doc with (&StoreId::from(id));
+//! }
+//! ```
+//!
 //! With the cargo feature `deprecated-forwards` every delegate is `#[deprecated]`.
 
 /// Expands each entry into a delegate method; `-> R` is optional. Without a marker the function
 /// receives the vault (`self`) first; `@books` passes `&self.books()` first, `@doc` passes
-/// `&self.doc` first.
+/// `&self.doc` first. `with (..)` replaces the parameters after it by the given expressions.
 #[allow(unused_macros)]
 macro_rules! forward {
     () => {};
@@ -24,7 +34,7 @@ macro_rules! forward {
     (
         $(#[$meta:meta])*
         $vis:vis fn $name:ident(&self $(, $($arg:ident)+ : $ty:ty)* $(,)?) $(-> $ret:ty)?
-            => $($target:ident)::+ $(@$books:ident)?;
+            => $($target:ident)::+ $(@$books:ident)? $(with ($($conv:expr),+ $(,)?))?;
         $($rest:tt)*
     ) => {
         $(#[$meta])*
@@ -33,7 +43,7 @@ macro_rules! forward {
             deprecated(note = "moved out of `UnlockedVault`; call the new function directly")
         )]
         $vis fn $name(&self $(, $crate::service::forward::forward!(@name $($arg)+): $ty)*) $(-> $ret)? {
-            $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?] $(, [$($arg)+])*)
+            $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?], [$($($conv),+)?] $(, [$($arg)+])*)
         }
         $crate::service::forward::forward!($($rest)*);
     };
@@ -41,7 +51,7 @@ macro_rules! forward {
     (
         $(#[$meta:meta])*
         $vis:vis fn $name:ident(&mut self $(, $($arg:ident)+ : $ty:ty)* $(,)?) $(-> $ret:ty)?
-            => $($target:ident)::+ $(@$books:ident)?;
+            => $($target:ident)::+ $(@$books:ident)? $(with ($($conv:expr),+ $(,)?))?;
         $($rest:tt)*
     ) => {
         $(#[$meta])*
@@ -50,7 +60,7 @@ macro_rules! forward {
             deprecated(note = "moved out of `UnlockedVault`; call the new function directly")
         )]
         $vis fn $name(&mut self $(, $crate::service::forward::forward!(@name $($arg)+): $ty)*) $(-> $ret)? {
-            $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?] $(, [$($arg)+])*)
+            $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?], [$($($conv),+)?] $(, [$($arg)+])*)
         }
         $crate::service::forward::forward!($($rest)*);
     };
@@ -61,14 +71,23 @@ macro_rules! forward {
     (@name $head:ident $($tail:ident)+) => {
         $crate::service::forward::forward!(@name $($tail)+)
     };
-    (@call [$($target:ident)::+], $this:ident, [] $(, [$($arg:ident)+])*) => {
-        $($target)::+($this $(, $crate::service::forward::forward!(@name $($arg)+))*)
+    // The first argument: the vault, `&books()` or `&doc`.
+    (@first $this:ident, []) => {
+        $this
     };
-    (@call [$($target:ident)::+], $this:ident, [books] $(, [$($arg:ident)+])*) => {
-        $($target)::+(&$this.books() $(, $crate::service::forward::forward!(@name $($arg)+))*)
+    (@first $this:ident, [books]) => {
+        &$this.books()
     };
-    (@call [$($target:ident)::+], $this:ident, [doc] $(, [$($arg:ident)+])*) => {
-        $($target)::+(&$this.doc $(, $crate::service::forward::forward!(@name $($arg)+))*)
+    (@first $this:ident, [doc]) => {
+        &$this.doc
+    };
+    // The parameters follow as they are named.
+    (@call [$($target:ident)::+], $this:ident, [$($first:ident)?], [] $(, [$($arg:ident)+])*) => {
+        $($target)::+($crate::service::forward::forward!(@first $this, [$($first)?]) $(, $crate::service::forward::forward!(@name $($arg)+))*)
+    };
+    // `with (..)`: the converted arguments, written out, replace the parameters.
+    (@call [$($target:ident)::+], $this:ident, [$($first:ident)?], [$($conv:expr),+] $(, [$($arg:ident)+])*) => {
+        $($target)::+($crate::service::forward::forward!(@first $this, [$($first)?]), $($conv),+)
     };
 }
 
@@ -128,6 +147,10 @@ mod tests {
         vault.seen.set(value);
     }
 
+    fn add_wide(vault: &Dummy, extra: &i128) -> i64 {
+        vault.base + *extra as i64
+    }
+
     fn add_to_books(books: &Books, extra: i64) -> i64 {
         books.base + extra
     }
@@ -144,6 +167,8 @@ mod tests {
             fn doc_forward(&self, extra: i64) -> i64 => read_doc @doc;
             /// A parameter bound with `mut`.
             fn drain_forward(&self, mut extra: i64) -> i64 => drain_vault;
+            /// A converted argument.
+            fn wide_forward(&self, extra: i64) -> i64 => add_wide with (&i128::from(extra));
             /// No return type.
             fn note_forward(&self, value: i64) => note_vault;
         }
@@ -155,6 +180,11 @@ mod tests {
         assert_eq!(vault.read_forward(5), 15);
         assert_eq!(vault.write_forward(5), 15);
         assert_eq!(vault.base, 15);
+    }
+
+    #[test]
+    fn with_passes_the_converted_arguments() {
+        assert_eq!(dummy(10).wide_forward(5), 15);
     }
 
     #[test]

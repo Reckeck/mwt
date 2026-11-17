@@ -4,6 +4,7 @@ pub use crate::household::loyalty::{CashbackReport, CashbackSource, LoyaltyBalan
 
 use crate::Amount;
 use crate::error::Result;
+use crate::model::ids::StoreId;
 use crate::model::store::{LoyaltyInfo, Store};
 use crate::model::transaction::Transaction;
 
@@ -16,7 +17,7 @@ impl UnlockedVault {
         /// The programme shares its symbol with another one. Computed for the
         /// view, never stored; the form asks to rename.
         pub fn loyalty_symbol_clash(&self, store_id: &str) -> bool
-            => crate::household::loyalty::loyalty_symbol_clash @doc;
+            => crate::household::loyalty::loyalty_symbol_clash @doc with (&StoreId::from(store_id));
         /// Cashback (income in the `cashback` category) and points credited to
         /// bonus programmes between two moments (RFC3339, inclusive), by card.
         pub fn cashback_report(&self, from: &str, to: &str) -> CashbackReport
@@ -24,7 +25,7 @@ impl UnlockedVault {
         /// Set a programme's points and price of a point. The price becomes the
         /// points' hand-set price, so the wallet counts in net worth.
         pub fn set_loyalty_info(&mut self, store_id: &str, info: LoyaltyInfo) -> Result<Store>
-            => crate::usecases::household::loyalty::set_loyalty_info;
+            => crate::usecases::household::loyalty::set_loyalty_info with (&StoreId::from(store_id), info);
         /// Create a bonus programme and set its points in one action, so a
         /// programme never exists without them.
         pub fn create_loyalty_program(&mut self, name: &str, color: &str, contact_id: Option<String>, info: LoyaltyInfo) -> Result<Store>
@@ -32,7 +33,7 @@ impl UnlockedVault {
         /// Credit (`delta` > 0) or spend points of a programme, optionally tied
         /// to the card whose purchase earned them.
         pub fn adjust_points(&mut self, store_id: &str, delta: Amount, comment: &str, source_store_id: Option<String>, timestamp: Option<String>) -> Result<Transaction>
-            => crate::usecases::household::loyalty::adjust_points;
+            => crate::usecases::household::loyalty::adjust_points with (&StoreId::from(store_id), delta, comment, source_store_id.map(StoreId::from), timestamp);
     }
     // forward:end
 }

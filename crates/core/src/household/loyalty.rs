@@ -89,8 +89,7 @@ fn symbol_taken_by_other(doc: &VaultDoc, store_id: Option<&str>, symbol: &str) -
 
 /// The programme shares its symbol with another one. Computed for the
 /// view, never stored; the form asks to rename.
-pub fn loyalty_symbol_clash(doc: &VaultDoc, store_id: impl Into<StoreId>) -> bool {
-    let store_id = store_id.into();
+pub fn loyalty_symbol_clash(doc: &VaultDoc, store_id: &StoreId) -> bool {
     find_store(doc, store_id.as_str())
         .and_then(|store| store.loyalty.as_ref())
         .is_some_and(|info| {
@@ -166,11 +165,10 @@ pub(crate) fn checked_loyalty_info(
 /// `now` stamps the hand-set price.
 pub fn plan_set_loyalty_info(
     doc: &VaultDoc,
-    store_id: impl Into<StoreId>,
+    store_id: &StoreId,
     info: LoyaltyInfo,
     now: &str,
 ) -> Result<LoyaltyUpdate> {
-    let store_id = store_id.into();
     let store = find_store(doc, store_id.as_str())
         .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
     if store.kind != StoreKind::Loyalty {
@@ -185,7 +183,7 @@ pub fn plan_set_loyalty_info(
         updated_at: now.to_string(),
     });
     Ok(LoyaltyUpdate {
-        store_id,
+        store_id: store_id.clone(),
         asset_key,
         info,
         price,
@@ -209,13 +207,12 @@ pub fn plan_create_loyalty_program(
 /// programme, optionally tied to the card whose purchase earned them.
 pub fn plan_adjust_points(
     doc: &VaultDoc,
-    store_id: impl Into<StoreId>,
+    store_id: &StoreId,
     delta: Amount,
     comment: &str,
-    source_store_id: Option<String>,
+    source_store_id: Option<StoreId>,
     timestamp: Option<String>,
 ) -> Result<Transaction> {
-    let store_id = store_id.into();
     let store = find_store(doc, store_id.as_str())
         .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
     let info = store
@@ -231,7 +228,9 @@ pub fn plan_adjust_points(
         meta.timestamp = raw;
     }
     let details = KindDetails {
-        source_store_id: source_store_id.filter(|id| !id.is_empty()),
+        source_store_id: source_store_id
+            .map(|id| id.to_string())
+            .filter(|id| !id.is_empty()),
         ..KindDetails::default()
     };
     Ok(if delta.is_positive() {
