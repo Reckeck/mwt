@@ -133,10 +133,11 @@ impl BiometricVault for Platform {
             rand::rng().fill_bytes(&mut salt);
             rand::rng().fill_bytes(&mut nonce);
             let key = wrap_key(&first, &salt)?;
-            let cipher = XChaCha20Poly1305::new(key.as_ref().into());
+            let cipher =
+                XChaCha20Poly1305::new_from_slice(key.as_ref()).map_err(|_| BioError::Failed)?;
             let ciphertext = cipher
                 .encrypt(
-                    XNonce::from_slice(&nonce),
+                    &XNonce::from(nonce),
                     Payload {
                         msg: secret,
                         aad: vault_id.as_bytes(),
@@ -166,11 +167,13 @@ impl BiometricVault for Platform {
         }
         let credential = opened.Credential().map_err(|_| BioError::Failed)?;
         let key = wrap_key(&sign(&credential)?, salt)?;
-        let cipher = XChaCha20Poly1305::new(key.as_ref().into());
+        let cipher =
+            XChaCha20Poly1305::new_from_slice(key.as_ref()).map_err(|_| BioError::Failed)?;
+        let nonce = XNonce::try_from(nonce).map_err(|_| BioError::Invalidated)?;
         // A signature that no longer opens the record means the key was recreated.
         cipher
             .decrypt(
-                XNonce::from_slice(nonce),
+                &nonce,
                 Payload {
                     msg: ciphertext,
                     aad: vault_id.as_bytes(),

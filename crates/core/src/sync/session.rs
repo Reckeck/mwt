@@ -14,7 +14,7 @@
 //!   with the same vault recognise each other, anyone else sees noise that
 //!   changes daily.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 use crate::error::{Error, Result};
@@ -210,9 +210,9 @@ pub struct Channel {
 }
 
 fn mac(key: &[u8], parts: &[&[u8]]) -> HmacSha256 {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(key).unwrap_or_else(|_| {
+    let mut mac = <HmacSha256 as KeyInit>::new_from_slice(key).unwrap_or_else(|_| {
         // HMAC takes keys of any length; this branch cannot be reached.
-        <HmacSha256 as Mac>::new_from_slice(&[0]).expect("hmac key")
+        <HmacSha256 as KeyInit>::new_from_slice(&[0]).expect("hmac key")
     });
     for part in parts {
         mac.update(part);
