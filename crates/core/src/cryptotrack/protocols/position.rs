@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 use crate::Amount;
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::{
-    CryptoAsset, CryptoDirection, CryptoLeg, CryptoPosition, TrackingRef, chain_slug,
+    CryptoAsset, CryptoDirection, CryptoLeg, CryptoPosition, TokenId, TrackingRef, chain_slug,
 };
 
 use super::fees::FeeReading;
@@ -211,6 +211,18 @@ pub struct ProtocolReview {
     pub read_at: String,
 }
 
+/// A token a position holds, as the adapter read it from the chain or from
+/// its own constants. Not stored with the position: the vault registers it as
+/// a trusted token (`service::cryptotrack::tokens`), so the legs of a
+/// position the user never traded do not fall into the airdrop quarantine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegToken {
+    pub token: TokenId,
+    pub symbol: Option<String>,
+    pub name: Option<String>,
+    pub decimals: Option<u8>,
+}
+
 /// One position as an adapter read it: quantities and facts, no money.
 ///
 /// Built with every field named (there is no `Default`), so a new adapter
@@ -237,6 +249,8 @@ pub struct PositionReading {
     /// capital — the money is already counted as the position
     /// (`service::cryptotrack::positions`).
     pub receipts: Vec<CryptoAsset>,
+    /// One entry per distinct token of [`PositionReading::legs`]; not stored.
+    pub tokens: Vec<LegToken>,
     /// The numbers are an approximation and the screen must say so — a
     /// Uniswap v4 pool behind a hook, for instance. It comes from the
     /// adapter together with the numbers and is never guessed later.
@@ -274,7 +288,6 @@ impl PositionReading {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::cryptotrack::TokenId;
 
     fn amount(text: &str) -> Amount {
         Amount::parse(text).expect("a test amount parses")
@@ -350,6 +363,7 @@ mod tests {
             approximate: false,
             opened_at: Some("2026-11-01T00:00:00Z".into()),
             closed_at: None,
+            tokens: Vec::new(),
             read_at: "2026-11-16T10:00:00Z".into(),
         };
         let stored = reading.stored();

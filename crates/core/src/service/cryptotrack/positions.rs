@@ -206,6 +206,16 @@ impl UnlockedVault {
                 out.closed += 1;
             }
         }
+        // Registration runs every pass, also when the positions themselves are
+        // unchanged, so records an older build stored are fixed on the next read.
+        let mut tokens_changed = false;
+        for token in readings
+            .iter()
+            .filter(|reading| reading.account_id == account_id)
+            .flat_map(|reading| &reading.tokens)
+        {
+            tokens_changed |= self.trust_adapter_token(token)?;
+        }
         for event in events.iter().filter(|event| event.account_id == account_id) {
             match self
                 .doc
@@ -224,7 +234,7 @@ impl UnlockedVault {
                 }
             }
         }
-        if out.is_unchanged() {
+        if out.is_unchanged() && !tokens_changed {
             return Ok(out);
         }
         self.doc

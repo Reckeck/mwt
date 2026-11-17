@@ -312,6 +312,7 @@ impl ProtocolAdapter for Lido {
                 approximate: false,
                 opened_at: None,
                 closed_at: None,
+                tokens: Vec::new(),
                 read_at: now_iso(),
             }))
         })

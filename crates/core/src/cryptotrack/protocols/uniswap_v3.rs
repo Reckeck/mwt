@@ -446,6 +446,7 @@ impl UniswapV3 {
             approximate: false,
             opened_at: None,
             closed_at: None,
+            tokens: Vec::new(),
             read_at: crate::model::vault::now_iso(),
         })
     }

@@ -1185,6 +1185,7 @@ mod tests {
                     approximate: false,
                     opened_at: None,
                     closed_at: None,
+                    tokens: Vec::new(),
                     read_at: "2026-11-16T10:00:00Z".into(),
                 }))
             })
@@ -2016,6 +2017,7 @@ mod tests {
             approximate: true,
             opened_at: None,
             closed_at: None,
+            tokens: Vec::new(),
             read_at: "2026-03-02T10:00:00Z".into(),
         };
         let stub = Stub::new(&host.vault, |address, _| one_page(address, 1)).holding((
@@ -2069,6 +2071,7 @@ mod tests {
             approximate: false,
             opened_at: None,
             closed_at: None,
+            tokens: Vec::new(),
             read_at: read_at.into(),
         }
     }
