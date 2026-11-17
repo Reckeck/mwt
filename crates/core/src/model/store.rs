@@ -643,9 +643,7 @@ pub struct ImportAccountRoute {
     pub store_id: Option<String>,
 }
 
-/// Deepest allowed node depth; a root is depth 0, so the tree has two levels:
-/// wallet → sub-account.
-pub const MAX_STORE_DEPTH: usize = 1;
+pub use crate::limits::MAX_STORE_DEPTH;
 
 /// A "store"/"platform" (a vault-level container) — a portfolio container.
 /// Important: a store is NOT an asset — it holds holdings (`Holding`).

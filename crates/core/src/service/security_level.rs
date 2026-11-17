@@ -47,8 +47,7 @@ use crate::sync::state::RecordState;
 use crate::vault_io::backups;
 use crate::vault_io::copies::{self, CopySeal, VaultCopy};
 
-/// A new level-2 PIN: at least this many digits, digits only.
-pub const MIN_PIN_DIGITS: usize = 6;
+pub use crate::limits::MIN_PIN_DIGITS;
 /// A level-3 password: at least this many characters (and not weak).
 pub const MIN_CRYPTO_PASSWORD: usize = 16;
 

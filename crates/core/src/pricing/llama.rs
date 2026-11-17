@@ -4,7 +4,7 @@
 //! The request names a coin and a moment, nothing else: the wallet address
 //! the token was found on is not an input of any function here, so it cannot
 //! reach a URL. Like every `fetch_*` this does not touch the document; the
-//! answer is applied by [`crate::cryptotrack::prices::apply_historic`].
+//! answer is applied by `cryptotrack::prices::apply_historic`.
 
 use std::collections::BTreeMap;
 
@@ -14,10 +14,10 @@ use rust_decimal::Decimal;
 
 use super::PricingService;
 use crate::Amount;
-use crate::cryptotrack::prices::{date_secs, date_ts};
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint};
+use crate::time::{date_secs, date_ts};
 
 pub const DEFILLAMA_COINS: &str = "https://coins.llama.fi";
 
