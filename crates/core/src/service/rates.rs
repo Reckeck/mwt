@@ -39,7 +39,7 @@ pub struct RateBook {
 impl RateBook {
     /// The book of a document: the caches parsed once, `curves` the dated
     /// valuations of its property assets. Pure: it reads nothing but its input.
-    pub fn build(doc: &VaultDoc, curves: HashMap<String, ValuationCurve>) -> Self {
+    pub(crate) fn build(doc: &VaultDoc, curves: HashMap<String, ValuationCurve>) -> Self {
         let mut stamps = RateIndex::default();
         let mut keys_by_symbol = HashMap::new();
         for holding in &doc.holdings {
