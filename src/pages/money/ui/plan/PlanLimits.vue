@@ -17,6 +17,8 @@ import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { ProgressBar, type ProgressTone } from '@/shared/ui/progress-bar'
 
+import { holdPlan } from '../../model/use-plan-ready'
+
 /**
  * The plan's limits (Money 2 · 9, 10): each one's spent of the limit and what
  * is left for the days ahead. Without any, the period's biggest category is
@@ -66,6 +68,8 @@ const top = computed<{ key: string; spending: BudgetSpending } | null>(() => {
 const topName = computed(() => (top.value ? categoryKeyLabel(top.value.key, categories.data.value, t) : ''))
 const loading = computed(() => budgets.isPending.value || statuses.isPending.value)
 const empty = computed(() => budgets.isSuccess.value && statuses.isSuccess.value && !rows.value.length)
+// The first limit's hint comes with the report.
+holdPlan(() => loading.value || report.isPending.value)
 
 const open = ref(false)
 const category = ref('')
