@@ -723,7 +723,7 @@ pub struct VaultDoc {
     #[serde(default)]
     #[ts(skip)]
     #[schemars(with = "serde_json::Value")]
-    pub sync: crate::sync::SyncState,
+    pub sync: super::sync_state::SyncState,
     /// Files and links of operations and goals (Full-New-Attach).
     #[serde(default)]
     pub attachments: Vec<crate::model::attachment::Attachment>,
@@ -835,7 +835,7 @@ impl Default for VaultDoc {
             attachments: Vec::new(),
             attachment_keys: Vec::new(),
             shared_events: Vec::new(),
-            sync: crate::sync::SyncState::default(),
+            sync: super::sync_state::SyncState::default(),
             crypto_accounts: Vec::new(),
             crypto_events: Vec::new(),
             crypto_overrides: Vec::new(),

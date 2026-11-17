@@ -2583,33 +2583,7 @@ pub struct TransferSendInput {
     pub password: String,
 }
 
-/// Why another device refused this one on purpose (`Bye` reasons).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub enum SyncCutReason {
-    /// It paused the exchange with this device ("Decline" there).
-    Paused,
-    /// It forgot this device.
-    Forgotten,
-}
-
-impl SyncCutReason {
-    /// The `Bye` reason on the wire.
-    pub fn wire(self) -> &'static str {
-        match self {
-            Self::Paused => "paused",
-            Self::Forgotten => "forgotten",
-        }
-    }
-
-    pub fn from_wire(reason: &str) -> Option<Self> {
-        match reason {
-            "paused" => Some(Self::Paused),
-            "forgotten" => Some(Self::Forgotten),
-            _ => None,
-        }
-    }
-}
+pub use crate::model::sync_state::SyncCutReason;
 
 /// A trusted device as the settings list shows it.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]

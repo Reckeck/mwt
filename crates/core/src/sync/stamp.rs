@@ -8,33 +8,11 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde::{Deserialize, Serialize};
-
 /// Characters of the device id kept in a stamp: enough to break ties, short
 /// enough that thousands of stamps do not bloat the vault.
 pub const DEVICE_TAG_LEN: usize = 8;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct Stamp {
-    /// Unix milliseconds.
-    #[serde(rename = "w")]
-    pub wall: u64,
-    #[serde(rename = "c")]
-    pub count: u32,
-    /// [`device_tag`] of the device that made the change.
-    #[serde(rename = "d")]
-    pub device: String,
-}
-
-impl Stamp {
-    pub fn new(wall: u64, count: u32, device: &str) -> Self {
-        Self {
-            wall,
-            count,
-            device: device.to_string(),
-        }
-    }
-}
+pub use crate::model::sync_state::Stamp;
 
 /// How far ahead of the wall clock a stamp may be and still move a clock, and
 /// the skew at which devices refuse to sync (`session::SKEW_REFUSE_MS` is this).
