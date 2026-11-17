@@ -90,7 +90,7 @@ mod tests {
     use super::*;
 
     fn amount(text: &str) -> Amount {
-        Amount::parse(text).expect("a test amount parses")
+        Amount::new(text.parse().expect("a test amount"))
     }
 
     #[test]
