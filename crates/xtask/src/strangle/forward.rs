@@ -37,7 +37,12 @@ pub fn run(root: &Path, args: &ForwardArgs) -> Result<()> {
     files.write()
 }
 
-fn forward(files: &mut FileSet, map: &Map, baseline: &Baseline, area: &str) -> Result<Vec<String>> {
+pub(super) fn forward(
+    files: &mut FileSet,
+    map: &Map,
+    baseline: &Baseline,
+    area: &str,
+) -> Result<Vec<String>> {
     let area = &map.areas[map.area_index(area)?];
     let methods = &baseline.area(&area.name)?.methods;
     let mut report = Vec::new();

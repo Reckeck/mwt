@@ -329,8 +329,11 @@ mod tests {
     use crate::strangle::area_fixture::{
         ORIGINAL, PURE, SCENARIO, SERVICE, TESTS, moved_files, moved_tree, original_tree,
     };
+    use crate::strangle::fileset::FileSet;
     use crate::strangle::fixture::TempTree;
+    use crate::strangle::forward::forward;
     use crate::strangle::map::MAP_FILE;
+    use crate::strangle::relocate::relocate;
 
     /// The baseline of the original tree, then the findings on `after`.
     fn found_in(after: &TempTree, changed: Option<&[String]>) -> Vec<String> {
@@ -665,5 +668,66 @@ files = ["vault.rs"]
             found.contains(&"deep: tests: test missing: deep_works".to_string()),
             "{found:?}"
         );
+    }
+
+    #[test]
+    fn a_stem_override_renames_the_new_home_only_and_the_shim_stays() {
+        const OLD: &str = "crates/core/src/service/reports.rs";
+        const NEW_PURE: &str = "crates/core/src/household/overview.rs";
+        let rename = |text: &str| {
+            text.replace(
+                "files = [\"loyalty.rs\"]",
+                "files = [\"reports.rs\"]\nstem = { \"reports.rs\" = \"overview\" }",
+            )
+        };
+        let before = TempTree::new(&[
+            (
+                MAP_FILE,
+                &rename(&std::fs::read_to_string(original_tree().root().join(MAP_FILE)).unwrap()),
+            ),
+            (
+                OLD,
+                &ORIGINAL.replace("service::loyalty", "service::reports"),
+            ),
+            (NEW_PURE, "//! placeholder\n"),
+            (
+                "crates/core/src/household/overview_tests.rs",
+                "//! placeholder\n",
+            ),
+            (
+                "crates/core/src/usecases/household/overview.rs",
+                "//! placeholder\n",
+            ),
+        ]);
+        let root = before.root();
+        let workspace = Workspace::load(root).unwrap();
+        let baseline = baseline::capture(root, &workspace).unwrap();
+        let mut files = FileSet::new(root);
+        relocate(&mut files, &workspace.map, "loyalty").unwrap();
+        files.write().unwrap();
+        let moved = std::collections::BTreeMap::from_iter(moved_files());
+        for (path, new_path) in [
+            (PURE, NEW_PURE),
+            (SCENARIO, "crates/core/src/usecases/household/overview.rs"),
+            (TESTS, "crates/core/src/household/overview_tests.rs"),
+        ] {
+            let text = moved[path].replace("loyalty", "overview");
+            std::fs::write(root.join(new_path), text).unwrap();
+        }
+        let mut files = FileSet::new(root);
+        forward(&mut files, &workspace.map, &baseline, "loyalty").unwrap();
+        files.write().unwrap();
+        let shim = std::fs::read_to_string(root.join(OLD)).unwrap();
+        assert!(shim.contains("crate::household::overview::Card"), "{shim}");
+        let workspace = Workspace::load(root).unwrap();
+        let found = findings(
+            root,
+            &workspace,
+            &baseline,
+            Some("loyalty"),
+            Some(&[]),
+            None,
+        );
+        assert_eq!(found.unwrap(), Vec::<String>::new());
     }
 }

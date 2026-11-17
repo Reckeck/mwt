@@ -11,7 +11,10 @@ use super::scaffold::stems;
 
 /// One file stem of an area, with every path it owns.
 pub struct Home {
+    /// The name of the new home (`overview`); it names the pure and scenario modules.
     pub stem: String,
+    /// The map entry's own name (`reports`): the old file under `service/`, whatever the stem.
+    source: String,
     pub group: String,
     pub context: String,
     service_dir: String,
@@ -19,9 +22,19 @@ pub struct Home {
 }
 
 impl Home {
-    /// `service/<stem>.rs`: the old file, then the shim.
+    /// `service/<source>.rs`: the old file, then the shim.
     pub fn shim(&self) -> String {
-        format!("{}/{}.rs", self.service_dir, self.stem)
+        format!("{}/{}.rs", self.service_dir, self.source)
+    }
+
+    /// The old module name under `service/` (`reports`).
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    /// Whether the stem renames the map entry.
+    pub fn is_renamed(&self) -> bool {
+        self.source != self.stem
     }
 
     /// `<group>/<stem>.rs`: the pure functions (and the relocated file).
@@ -40,7 +53,7 @@ impl Home {
     /// The test files that belong to the stem, in the service dir and in the group.
     pub fn test_files(&self) -> [String; 2] {
         [
-            format!("{}/{}_tests.rs", self.service_dir, self.stem),
+            format!("{}/{}_tests.rs", self.service_dir, self.source),
             format!("{}/{}/{}_tests.rs", self.core_dir, self.group, self.stem),
         ]
     }
@@ -57,14 +70,14 @@ impl Home {
         ]
     }
 
-    /// `service/<stem>/<child>.rs`: an out-of-line child module of the old file.
+    /// `service/<source>/<child>.rs`: an out-of-line child module of the old file.
     pub fn child_source(&self, child: &str) -> String {
-        format!("{}/{}/{child}.rs", self.service_dir, self.stem)
+        format!("{}/{}/{child}.rs", self.service_dir, self.source)
     }
 
-    /// `service/<stem>/mod.rs`: the stem as a directory module.
+    /// `service/<source>/mod.rs`: the entry as a directory module.
     pub fn directory_module(&self) -> String {
-        format!("{}/{}/mod.rs", self.service_dir, self.stem)
+        format!("{}/{}/mod.rs", self.service_dir, self.source)
     }
 
     /// `<group>/<stem>/<child>.rs`: where a child module lands next to the pure file.
@@ -76,7 +89,7 @@ impl Home {
     /// and of the pure and scenario modules.
     fn directories(&self) -> [String; 3] {
         [
-            format!("{}/{}/", self.service_dir, self.stem),
+            format!("{}/{}/", self.service_dir, self.source),
             format!("{}/{}/{}/", self.core_dir, self.group, self.stem),
             format!("{}/usecases/{}/{}/", self.core_dir, self.context, self.stem),
         ]
@@ -85,6 +98,11 @@ impl Home {
     /// `crate::<group>::<stem>`.
     pub fn pure_path(&self) -> String {
         format!("crate::{}::{}", self.group, self.stem)
+    }
+
+    /// `<group>::<stem>`: `pure_path` without its `crate::`.
+    pub fn pure_path_tail(&self) -> String {
+        format!("{}::{}", self.group, self.stem)
     }
 
     /// `crate::usecases::<context>::<stem>`.
@@ -105,6 +123,7 @@ pub fn homes(map: &Map, area: &Area) -> Vec<Home> {
     stems(area)
         .into_iter()
         .map(|stem| Home {
+            source: source_of(area, &stem),
             group: area.homes.get(&stem).unwrap_or(&area.group).clone(),
             context: area.context.clone(),
             service_dir: map.service_dir.clone(),
@@ -112,6 +131,22 @@ pub fn homes(map: &Map, area: &Area) -> Vec<Home> {
             stem,
         })
         .collect()
+}
+
+/// The old file name of a stem: the map entry it renames, without `.rs` or a trailing `/`.
+fn source_of(area: &Area, stem: &str) -> String {
+    area.stem
+        .iter()
+        .find(|(_, renamed)| renamed.as_str() == stem)
+        .map_or_else(
+            || stem.to_string(),
+            |(entry, _)| {
+                entry
+                    .trim_end_matches('/')
+                    .trim_end_matches(".rs")
+                    .to_string()
+            },
+        )
 }
 
 /// Every file of the area, sorted: the whole-file spans of the map (so the files under

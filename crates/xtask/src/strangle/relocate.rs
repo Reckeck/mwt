@@ -35,15 +35,20 @@ pub fn run(root: &Path, args: &RelocateArgs) -> Result<()> {
 }
 
 /// Moves every stem of the area; returns one report line per stem.
-fn relocate(files: &mut FileSet, map: &Map, area: &str) -> Result<Vec<String>> {
+pub(super) fn relocate(files: &mut FileSet, map: &Map, area: &str) -> Result<Vec<String>> {
     let area = &map.areas[map.area_index(area)?];
     let mut report = Vec::new();
     for home in homes(map, area) {
         let shim = home.shim();
         let source = files.read(&shim)?.to_string();
         if source.is_empty() && files.exists(&home.directory_module()) {
+            let renamed = if home.is_renamed() {
+                format!(" and cannot be renamed to `{}`", home.stem)
+            } else {
+                String::new()
+            };
             bail!(
-                "{} is a directory module: move it by hand (`mod.rs` and its children) or give the stem a `{shim}` file",
+                "{} is a directory module{renamed}: move it by hand (`mod.rs` and its children) or give the entry a `{shim}` file",
                 home.directory_module()
             );
         } else if source.is_empty() {
@@ -192,15 +197,15 @@ impl Rewriter<'_> {
         if !is_path_sep(tokens, last + 1) || count <= depth {
             return Ok(last + 1);
         }
-        let next_is_stem = is_ident(tokens.get(last + 3), &self.home.stem);
-        let text = match (count - depth, next_is_stem) {
-            (1, true) => format!("crate::{}", self.home.group),
-            (1, false) => "crate::service".to_string(),
-            (2, _) => "crate".to_string(),
+        let next_is_stem = is_ident(tokens.get(last + 3), self.home.source());
+        let (end, text) = match (count - depth, next_is_stem) {
+            (1, true) => (last + 3, self.home.pure_path()),
+            (1, false) => (last, "crate::service".to_string()),
+            (2, _) => (last, "crate".to_string()),
             _ => bail!("{}: `super` climbs above the crate", self.home.shim()),
         };
-        self.splice(&tokens[at], &tokens[last], text);
-        Ok(last + 1)
+        self.splice(&tokens[at], &tokens[end], text);
+        Ok(end + 1)
     }
 
     /// `crate::service::<stem>` at `at` becomes `crate::<group>::<stem>`.
@@ -208,9 +213,9 @@ impl Rewriter<'_> {
         if is_path_sep(tokens, at + 1)
             && is_ident(tokens.get(at + 3), "service")
             && is_path_sep(tokens, at + 4)
-            && is_ident(tokens.get(at + 6), &self.home.stem)
+            && is_ident(tokens.get(at + 6), self.home.source())
         {
-            self.splice(&tokens[at + 3], &tokens[at + 3], self.home.group.clone());
+            self.splice(&tokens[at + 3], &tokens[at + 6], self.home.pure_path_tail());
         }
         at + 1
     }
@@ -378,5 +383,29 @@ mod inner { use super::d; use crate::service::e; fn f() { crate::g; } }
         .unwrap();
         let error = relocated(&tree).unwrap_err();
         assert!(error.to_string().contains("directory module"), "{error}");
+    }
+
+    #[test]
+    fn a_renamed_directory_is_refused_as_a_directory_module() {
+        let tree = original_tree();
+        let map_path = tree.root().join(crate::strangle::map::MAP_FILE);
+        let map = std::fs::read_to_string(&map_path).unwrap().replace(
+            "files = [\"loyalty.rs\"]",
+            "files = [\"loyalty/\"]\nstem = { \"loyalty/\" = \"tracking\" }",
+        );
+        std::fs::write(&map_path, map).unwrap();
+        std::fs::remove_file(tree.root().join(SERVICE)).unwrap();
+        std::fs::create_dir_all(tree.root().join("crates/core/src/service/loyalty")).unwrap();
+        std::fs::write(
+            tree.root().join("crates/core/src/service/loyalty/mod.rs"),
+            "mod a;\n",
+        )
+        .unwrap();
+        let error = relocated(&tree).unwrap_err().to_string();
+        assert!(
+            error.contains("service/loyalty/mod.rs is a directory module"),
+            "{error}"
+        );
+        assert!(error.contains("cannot be renamed to `tracking`"), "{error}");
     }
 }
