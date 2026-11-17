@@ -7,31 +7,29 @@ use trade_core::model::enrichment::EnrichmentRecord;
 use trade_core::txinfo::TxInfoService;
 
 use crate::commands::app_settings::current_settings;
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 /// Look a transaction up and store what was found. `Ok(None)` when it has
 /// no hash or the explorer had nothing; the guard is released around the
 /// network call (AGENTS.md rule 3).
-pub async fn enrich(app: &AppHandle, tx_id: &str) -> Result<Option<EnrichmentRecord>, String> {
+pub async fn enrich(app: &AppHandle, tx_id: &str) -> Result<Option<EnrichmentRecord>, IpcError> {
     let state = app.state::<AppState>();
     crate::commands::sandbox::refuse(&state, "looking up a transaction online")?;
     let request = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
+        let guard = require_vault(&state)?;
         guard.as_ref().unwrap().enrichment_request(tx_id)
     };
     let Some((hash, network)) = request else {
         return Ok(None);
     };
-    let info = TxInfoService::default()
-        .inspect(&hash, network)
-        .await
-        .map_err(err_to_string)?;
+    let info = TxInfoService::default().inspect(&hash, network).await?;
     let record = {
-        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let mut guard = require_vault(&state)?;
         let vault = guard.as_mut().unwrap();
         let record = vault.apply_enrichment_result(tx_id, &info);
         if record.is_some() {
-            vault.persist().map_err(err_to_string)?;
+            vault.persist()?;
         }
         record
     };
@@ -56,8 +54,8 @@ pub fn enrich_in_background(app: &AppHandle, tx_id: String) {
 pub async fn get_enrichments(
     tx_id: Option<String>,
     state: State<'_, AppState>,
-) -> Result<Vec<EnrichmentRecord>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Vec<EnrichmentRecord>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().enrichments(tx_id.as_deref()))
 }
 
@@ -65,31 +63,34 @@ pub async fn get_enrichments(
 pub async fn apply_enrichment(
     id: String,
     state: State<'_, AppState>,
-) -> Result<EnrichmentRecord, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<EnrichmentRecord, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .apply_enrichment(&id)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
 pub async fn reject_enrichment(
     id: String,
     state: State<'_, AppState>,
-) -> Result<EnrichmentRecord, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<EnrichmentRecord, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .reject_enrichment(&id)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Look a transaction up again now. Refused without the user's consent.
 #[tauri::command]
-pub async fn re_enrich(tx_id: String, app: AppHandle) -> Result<Option<EnrichmentRecord>, String> {
+pub async fn re_enrich(
+    tx_id: String,
+    app: AppHandle,
+) -> Result<Option<EnrichmentRecord>, IpcError> {
     if current_settings(&app).enrichment_opt_in != Some(true) {
         return Err("INVALID_INPUT: looking transactions up is turned off".into());
     }

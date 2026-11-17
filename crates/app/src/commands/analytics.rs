@@ -17,21 +17,22 @@ use trade_core::service::{
 
 use crate::commands::app_settings::current_zone;
 use crate::commands::planning::with_vault_mut;
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 fn build_report(
     app: &AppHandle,
     state: &State<'_, AppState>,
     kind: ReportKind,
     filter: &ReportFilter,
-) -> Result<Report, String> {
+) -> Result<Report, IpcError> {
     let zone = current_zone(app);
-    let guard = require_vault(state).map_err(err_to_string)?;
+    let guard = require_vault(state)?;
     guard
         .as_ref()
         .unwrap()
         .report(kind, filter, now_secs(), &zone)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
@@ -40,7 +41,7 @@ pub async fn get_report(
     filter: ReportFilter,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Report, String> {
+) -> Result<Report, IpcError> {
     build_report(&app, &state, kind, &filter)
 }
 
@@ -51,14 +52,14 @@ pub async fn get_report_overview(
     filter: ReportFilter,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<ReportOverview, String> {
+) -> Result<ReportOverview, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     guard
         .as_ref()
         .unwrap()
         .report_overview(&filter, now_secs(), &zone)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// The capital checkup (plan C4): the light, the fund, loans and DTI, the
@@ -67,14 +68,14 @@ pub async fn get_report_overview(
 pub async fn capital_health(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<HealthReport, String> {
+) -> Result<HealthReport, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     guard
         .as_ref()
         .unwrap()
         .capital_health(now_secs(), &zone)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// The yearly return the freedom potential assumes; `None` = the key rate.
@@ -82,7 +83,7 @@ pub async fn capital_health(
 pub async fn health_settings_set(
     expected_return: Option<Amount>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| vault.set_freedom_rate(expected_return))
 }
 
@@ -94,7 +95,7 @@ pub async fn export_report_csv(
     filter: ReportFilter,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, IpcError> {
     let report = build_report(&app, &state, kind, &filter)?;
     let csv = report_csv(&report);
     let name = format!(
@@ -105,7 +106,7 @@ pub async fn export_report_csv(
             .unwrap_or_else(|| "report".into())
     );
     crate::platform_fs::save_bytes_dialog(&app, &name, "CSV", &["csv"], csv.as_bytes())
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// What each month of the filter's period left and what carried over.
@@ -114,14 +115,14 @@ pub async fn get_month_balance(
     filter: ReportFilter,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<MonthBalance, String> {
+) -> Result<MonthBalance, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     guard
         .as_ref()
         .unwrap()
         .month_balance(&filter, now_secs(), &zone)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Carry the unspent money over from `month` (`YYYY-MM`); `None` stops it.
@@ -129,7 +130,7 @@ pub async fn get_month_balance(
 pub async fn set_carry_over(
     month: Option<String>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| vault.set_carry_over(month.as_deref()))
 }
 
@@ -139,15 +140,15 @@ pub async fn get_calendar(
     month: Option<String>,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<CalendarMonth, String> {
+) -> Result<CalendarMonth, IpcError> {
     let zone = current_zone(&app);
     let month = month.unwrap_or_else(|| month_key(Calendar::new(&zone).date_of(now_secs())));
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     guard
         .as_ref()
         .unwrap()
         .calendar_month(&month, now_secs(), &zone)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// The dashboard «Spending» widget (plan H2): the period against the previous
@@ -157,9 +158,9 @@ pub async fn get_spending_overview(
     period: Option<DashPeriod>,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<SpendingOverview, String> {
+) -> Result<SpendingOverview, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     let period = period.unwrap_or(vault.doc.settings.dashboard_period);
     Ok(vault.spending_overview(period, now_secs(), &zone))
@@ -171,9 +172,9 @@ pub async fn get_spending_overview(
 pub async fn get_month_pace(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<MonthPace, String> {
+) -> Result<MonthPace, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().month_pace(now_secs(), &zone))
 }
 
@@ -184,9 +185,9 @@ pub async fn get_net_worth_trend(
     period: Option<DashPeriod>,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<NetWorthTrend, String> {
+) -> Result<NetWorthTrend, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     let period = period.unwrap_or(vault.doc.settings.dashboard_period);
     Ok(vault.net_worth_trend(period, now_secs(), &zone))
@@ -199,9 +200,9 @@ pub async fn get_dashboard_today(
     period: Option<DashPeriod>,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<DashboardToday, String> {
+) -> Result<DashboardToday, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     let period = period.unwrap_or(vault.doc.settings.dashboard_period);
     Ok(vault.dashboard_today(period, now_secs(), &zone))
@@ -214,14 +215,14 @@ pub async fn get_scenario_status(
     id: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<ScenarioStatus, String> {
+) -> Result<ScenarioStatus, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     guard
         .as_ref()
         .unwrap()
         .scenario_status(&id, now_secs(), &zone)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// The card of any entity (plan J1): its head and what links to it.
@@ -229,15 +230,15 @@ pub async fn get_scenario_status(
 pub async fn get_entity_card(
     target: EntityRef,
     state: State<'_, AppState>,
-) -> Result<EntityCard, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<EntityCard, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().entity_card(&target))
 }
 
 /// Everything the palette can find by name (plan J2); wallets come from the tree.
 #[tauri::command]
-pub async fn get_search_index(state: State<'_, AppState>) -> Result<Vec<SearchEntry>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn get_search_index(state: State<'_, AppState>) -> Result<Vec<SearchEntry>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().search_index())
 }
 
@@ -249,8 +250,8 @@ pub async fn search_transactions(
     categories: Vec<String>,
     limit: usize,
     state: State<'_, AppState>,
-) -> Result<Vec<Transaction>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Vec<Transaction>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard
         .as_ref()
         .unwrap()
@@ -262,9 +263,9 @@ pub async fn search_transactions(
 pub async fn get_pinned(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<PinnedView>, String> {
+) -> Result<Vec<PinnedView>, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().pinned(now_secs(), &zone))
 }
 
@@ -274,7 +275,7 @@ pub async fn set_pinned(
     pins: Vec<Pinned>,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<PinnedView>, String> {
+) -> Result<Vec<PinnedView>, IpcError> {
     let zone = current_zone(&app);
     with_vault_mut(&state, |vault| {
         vault.set_pinned(pins)?;

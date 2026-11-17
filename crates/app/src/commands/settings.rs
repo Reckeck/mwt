@@ -3,12 +3,13 @@ use tauri::State;
 use trade_core::ipc_contract::UpdateSettingsInput;
 use trade_core::model::vault::Settings;
 
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 /// Pretty-print the unlocked vault document as JSON.
 #[cfg(debug_assertions)]
-fn vault_json(state: &AppState) -> Result<String, String> {
-    let guard = require_vault(state).map_err(err_to_string)?;
+fn vault_json(state: &AppState) -> Result<String, IpcError> {
+    let guard = require_vault(state)?;
     let json = trade_core::storage::VaultFile::export_json(&guard.as_ref().unwrap().doc)
         .map_err(|err| format!("{}: {}", err.code(), err))?;
     Ok(json)
@@ -39,8 +40,8 @@ fn editor_command() -> String {
 }
 
 #[tauri::command]
-pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().settings_view())
 }
 
@@ -48,13 +49,13 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String
 pub async fn update_settings(
     input: UpdateSettingsInput,
     state: State<'_, AppState>,
-) -> Result<Settings, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Settings, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .update_settings(input)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// The decrypted document as pretty JSON, for the developer JSON editor.
@@ -65,7 +66,7 @@ pub async fn update_settings(
 #[tauri::command]
 pub async fn dev_dump_vault(
     state: State<'_, AppState>,
-) -> Result<trade_core::ipc_contract::DevDumpVaultOutput, String> {
+) -> Result<trade_core::ipc_contract::DevDumpVaultOutput, IpcError> {
     Ok(trade_core::ipc_contract::DevDumpVaultOutput {
         json: vault_json(&state)?,
     })
@@ -87,11 +88,11 @@ pub async fn dev_dump_vault(
 pub async fn dev_export_vault(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, IpcError> {
     let json = vault_json(&state)?;
 
     crate::platform_fs::save_bytes_dialog(&app, "vault.json", "JSON", &["json"], json.as_bytes())
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Validate `json` and, if it is a well-formed current `VaultDoc`, replace the
@@ -118,7 +119,7 @@ pub async fn dev_apply_vault_json(
     json: String,
     base: Option<String>,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, IpcError> {
     // An edit that does not fit the schema is a typo in the editor, not an old
     // file: report it as a parse error, not as an incompatible vault.
     let decode = |text: &str| {
@@ -135,17 +136,15 @@ pub async fn dev_apply_vault_json(
     // Both texts are checked before anything is written.
     let base = base.as_deref().map(decode).transpose()?;
 
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    trade_core::storage::VaultFile::backup(&vault.path).map_err(err_to_string)?;
+    trade_core::storage::VaultFile::backup(&vault.path)?;
     match base {
         Some(base) => vault.apply_document_edit(&base, decoded),
         None => vault.replace_doc(decoded),
-    }
-    .map_err(err_to_string)?;
+    }?;
 
-    trade_core::storage::VaultFile::export_json(&vault.doc)
-        .map_err(|err| format!("{}: {}", err.code(), err))
+    trade_core::storage::VaultFile::export_json(&vault.doc).map_err(IpcError::from)
 }
 
 /// JSON Schema of the vault document, for the raw JSON editor.
@@ -153,7 +152,7 @@ pub async fn dev_apply_vault_json(
 /// The schema is derived from `VaultDoc` in core, so the editor never carries
 /// its own copy of the document shape.
 #[tauri::command]
-pub async fn vault_schema() -> Result<serde_json::Value, String> {
+pub async fn vault_schema() -> Result<serde_json::Value, IpcError> {
     Ok(trade_core::model::vault::json_schema())
 }
 
@@ -164,7 +163,7 @@ pub async fn vault_schema() -> Result<serde_json::Value, String> {
 /// command returns immediately so the window stays responsive.
 #[cfg(debug_assertions)]
 #[tauri::command]
-pub async fn dev_open_vault_json_in_editor(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn dev_open_vault_json_in_editor(state: State<'_, AppState>) -> Result<String, IpcError> {
     let json = vault_json(&state)?;
     let path = editor_scratch_path();
     std::fs::write(&path, json).map_err(|err| format!("IO_ERROR: {err}"))?;
@@ -195,7 +194,7 @@ pub async fn dev_open_vault_json_in_editor(state: State<'_, AppState>) -> Result
 /// command set up, never for an arbitrary location on disk.
 #[cfg(debug_assertions)]
 #[tauri::command]
-pub async fn dev_reload_vault_json_from_editor() -> Result<String, String> {
+pub async fn dev_reload_vault_json_from_editor() -> Result<String, IpcError> {
     let path = editor_scratch_path();
-    std::fs::read_to_string(&path).map_err(|err| format!("IO_ERROR: {err}"))
+    std::fs::read_to_string(&path).map_err(|err| IpcError::from(format!("IO_ERROR: {err}")))
 }

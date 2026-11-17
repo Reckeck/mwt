@@ -8,7 +8,8 @@ use trade_core::model::datasource::DataSource;
 use trade_core::model::notify::NoticeRecord;
 use trade_core::service::{DataSourceDraft, DataSourceView};
 
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 /// Fetch a source's page and take its value out; the error text is what the
 /// source's status shows.
@@ -33,15 +34,15 @@ fn announce(app: &AppHandle, notices: Vec<NoticeRecord>) {
 }
 
 /// Fetch one source and record the result (value, failure or jump).
-async fn refresh_one(app: &AppHandle, source: &DataSource) -> Result<Vec<NoticeRecord>, String> {
+async fn refresh_one(app: &AppHandle, source: &DataSource) -> Result<Vec<NoticeRecord>, IpcError> {
     let fetched = fetch_value(app, source).await;
     let russian = crate::scheduler::russian(app);
     let state = app.state::<AppState>();
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
     vault
         .apply_source_fetch(&source.id, fetched, russian)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// The background job: every source whose interval has passed.
@@ -73,15 +74,19 @@ pub async fn refresh_due_sources(app: &AppHandle) {
 /// any `.await` (rule 3).
 fn allow_page_fetch(state: &AppState) -> Result<(), String> {
     crate::commands::sandbox::refuse(state, "fetching a data source")?;
-    drop(require_vault(state).map_err(err_to_string)?);
+    drop(require_vault(state).map_err(IpcError::from)?);
     Ok(())
 }
 
 async fn preview_page(state: &AppState, url: &str) -> Result<SourcePreview, String> {
     allow_page_fetch(state)?;
-    let body = state.pricing.fetch_page(url).await.map_err(err_to_string)?;
+    let body = state
+        .pricing
+        .fetch_page(url)
+        .await
+        .map_err(IpcError::from)?;
     datasource::preview(url, &body)
-        .map_err(|message| err_to_string(trade_core::Error::InvalidInput(message)))
+        .map_err(|message| IpcError::from(trade_core::Error::InvalidInput(message)).to_string())
 }
 
 async fn test_method(state: &AppState, draft: &DataSourceDraft) -> Result<Extracted, String> {
@@ -90,9 +95,9 @@ async fn test_method(state: &AppState, draft: &DataSourceDraft) -> Result<Extrac
         .pricing
         .fetch_page(&draft.url)
         .await
-        .map_err(err_to_string)?;
+        .map_err(IpcError::from)?;
     datasource::extract(&draft.method, draft.output, &draft.number, &body)
-        .map_err(|message| err_to_string(trade_core::Error::InvalidInput(message)))
+        .map_err(|message| IpcError::from(trade_core::Error::InvalidInput(message)).to_string())
 }
 
 /// The page at `url` for the picker: safe HTML, JSON text or file rows.
@@ -100,8 +105,8 @@ async fn test_method(state: &AppState, draft: &DataSourceDraft) -> Result<Extrac
 pub async fn datasource_preview(
     url: String,
     state: State<'_, AppState>,
-) -> Result<SourcePreview, String> {
-    preview_page(&state, &url).await
+) -> Result<SourcePreview, IpcError> {
+    preview_page(&state, &url).await.map_err(IpcError::from)
 }
 
 /// Run the form's method against the live page without saving anything.
@@ -109,14 +114,14 @@ pub async fn datasource_preview(
 pub async fn datasource_test(
     draft: DataSourceDraft,
     state: State<'_, AppState>,
-) -> Result<Extracted, String> {
-    test_method(&state, &draft).await
+) -> Result<Extracted, IpcError> {
+    test_method(&state, &draft).await.map_err(IpcError::from)
 }
 
 /// Every source with the places that use it.
 #[tauri::command]
-pub async fn datasources_list(state: State<'_, AppState>) -> Result<Vec<DataSourceView>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn datasources_list(state: State<'_, AppState>) -> Result<Vec<DataSourceView>, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().data_sources_list())
 }
 
@@ -126,14 +131,10 @@ pub async fn datasource_save(
     draft: DataSourceDraft,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<DataSourceView, String> {
+) -> Result<DataSourceView, IpcError> {
     let saved = {
-        let mut guard = require_vault(&state).map_err(err_to_string)?;
-        guard
-            .as_mut()
-            .unwrap()
-            .save_data_source(draft)
-            .map_err(err_to_string)?
+        let mut guard = require_vault(&state)?;
+        guard.as_mut().unwrap().save_data_source(draft)?
     };
     if saved.source.last.is_none()
         && let Ok(notices) = refresh_one(&app, &saved.source).await
@@ -143,7 +144,7 @@ pub async fn datasource_save(
         let _ = app.emit("sources-updated", ());
         let _ = app.emit("rates-updated", ());
     }
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     let view = guard
         .as_ref()
         .unwrap()
@@ -160,14 +161,10 @@ pub async fn datasource_delete(
     id: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     {
-        let mut guard = require_vault(&state).map_err(err_to_string)?;
-        guard
-            .as_mut()
-            .unwrap()
-            .delete_data_source(&id)
-            .map_err(err_to_string)?;
+        let mut guard = require_vault(&state)?;
+        guard.as_mut().unwrap().delete_data_source(&id)?;
     }
     let _ = app.emit("sources-updated", ());
     let _ = app.emit("rates-updated", ());
@@ -180,28 +177,28 @@ pub async fn datasource_refresh(
     id: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<DataSourceView, String> {
+) -> Result<DataSourceView, IpcError> {
     let source = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
+        let guard = require_vault(&state)?;
         guard
             .as_ref()
             .unwrap()
             .data_source(&id)
             .cloned()
             .ok_or_else(|| {
-                err_to_string(trade_core::Error::NotFound(format!("data source {id}")))
+                IpcError::from(trade_core::Error::NotFound(format!("data source {id}")))
             })?
     };
     let notices = refresh_one(&app, &source).await?;
     announce(&app, notices);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     guard
         .as_ref()
         .unwrap()
         .data_sources_list()
         .into_iter()
         .find(|view| view.source.id == id)
-        .ok_or_else(|| err_to_string(trade_core::Error::NotFound(format!("data source {id}"))))
+        .ok_or_else(|| IpcError::from(trade_core::Error::NotFound(format!("data source {id}"))))
 }
 
 /// Accept or drop a value that jumped more than tenfold.
@@ -211,15 +208,14 @@ pub async fn datasource_confirm(
     accept: bool,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let russian = crate::scheduler::russian(&app);
     let notices = {
-        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let mut guard = require_vault(&state)?;
         guard
             .as_mut()
             .unwrap()
-            .confirm_source_value(&id, accept, russian)
-            .map_err(err_to_string)?
+            .confirm_source_value(&id, accept, russian)?
     };
     announce(&app, notices);
     Ok(())
@@ -232,14 +228,13 @@ pub async fn set_inflation_source(
     source_id: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     {
-        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let mut guard = require_vault(&state)?;
         guard
             .as_mut()
             .unwrap()
-            .set_inflation_source(&currency, &source_id)
-            .map_err(err_to_string)?;
+            .set_inflation_source(&currency, &source_id)?;
     }
     let _ = app.emit("rates-updated", ());
     Ok(())
