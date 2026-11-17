@@ -177,12 +177,9 @@ function showMore() {
             {{ dayLabel(`${day.date}T12:00:00`) }}
           </span>
           <!-- No total until the summary brought the base code and rate: a USD sum under «₽» would be a lie. -->
-          <!-- The slot is always there, a line high: the total arriving with the summary moves nothing. -->
-          <span class="inline-block min-h-4 tabular-nums" :title="ratesReady ? (day.partial ? t('tx.dayTotalPartial') : t('tx.dayTotal')) : undefined">
-            <template v-if="ratesReady">
-              <Money :amount="day.totalBase" :currency="props.baseCurrency" :decimals="2" signed />
-              <template v-if="day.partial">*</template>
-            </template>
+          <span v-if="ratesReady" class="tabular-nums" :title="day.partial ? t('tx.dayTotalPartial') : t('tx.dayTotal')">
+            <Money :amount="day.totalBase" :currency="props.baseCurrency" :decimals="2" signed />
+            <template v-if="day.partial">*</template>
           </span>
         </h3>
         <div

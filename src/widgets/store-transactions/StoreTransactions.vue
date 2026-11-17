@@ -31,7 +31,11 @@ watch(
   },
 )
 
-/** The day totals are in the base currency: the summary has its rate. */
+/**
+ * The day totals are in the base currency: the summary has its rate. The list waits for it together with
+ * the rows, so the totals are in the first frame of the list (a cold cache, after a vault close, would
+ * otherwise bring them a frame later and move what is under them).
+ */
 const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioSummary>('get_summary') })
 const { query: txs, rows, total } = useTxPages(filter)
 
@@ -59,7 +63,7 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
       </div>
     </template>
     <SectionState
-      :loading="txs.isPending.value"
+      :loading="txs.isPending.value || summary.isPending.value"
       :error="txs.error.value"
       :empty="!rows.length"
       :empty-title="t('filter.empty')"
