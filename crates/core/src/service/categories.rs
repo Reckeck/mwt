@@ -216,23 +216,19 @@ impl UnlockedVault {
         category: &str,
     ) -> Result<CategorizationRule> {
         self.check_rule(pattern, category)?;
-        let order = self
-            .doc
-            .categorization_rules
-            .iter()
-            .map(|rule| rule.order + 1)
-            .max()
-            .unwrap_or(0);
-        let rule = CategorizationRule {
-            id: uuid::Uuid::new_v4().to_string(),
-            pattern: pattern.trim().to_string(),
-            category: category.to_string(),
-            active: true,
-            order,
-        };
-        self.doc.categorization_rules.push(rule.clone());
-        self.persist()?;
-        Ok(rule)
+        self.transact(|tx| {
+            let mut rules = tx.collection::<CategorizationRule>();
+            let order = rules.iter().map(|rule| rule.order + 1).max().unwrap_or(0);
+            let rule = CategorizationRule {
+                id: uuid::Uuid::new_v4().to_string(),
+                pattern: pattern.trim().to_string(),
+                category: category.to_string(),
+                active: true,
+                order,
+            };
+            rules.insert(rule.clone())?;
+            Ok(rule)
+        })
     }
 
     pub fn update_categorization_rule(
@@ -243,27 +239,25 @@ impl UnlockedVault {
         active: bool,
     ) -> Result<CategorizationRule> {
         self.check_rule(pattern, category)?;
-        let rule = self
-            .doc
-            .categorization_rules
-            .iter_mut()
-            .find(|rule| rule.id == id)
-            .ok_or_else(|| Error::Missing(format!("rule {id}")))?;
-        rule.pattern = pattern.trim().to_string();
-        rule.category = category.to_string();
-        rule.active = active;
-        let out = rule.clone();
-        self.persist()?;
-        Ok(out)
+        self.transact(|tx| {
+            tx.collection::<CategorizationRule>()
+                .update(id, |rule| {
+                    rule.pattern = pattern.trim().to_string();
+                    rule.category = category.to_string();
+                    rule.active = active;
+                    rule.clone()
+                })
+                .map_err(|_| Error::Missing(format!("rule {id}")))
+        })
     }
 
     pub fn delete_categorization_rule(&mut self, id: &str) -> Result<()> {
-        let before = self.doc.categorization_rules.len();
-        self.doc.categorization_rules.retain(|rule| rule.id != id);
-        if before == self.doc.categorization_rules.len() {
-            return Err(Error::Missing(format!("rule {id}")));
-        }
-        self.persist()
+        self.transact(|tx| {
+            tx.collection::<CategorizationRule>()
+                .remove(id)
+                .map(|_| ())
+                .map_err(|_| Error::Missing(format!("rule {id}")))
+        })
     }
 
     /// Put the rules in the given order; ids not listed keep their relative

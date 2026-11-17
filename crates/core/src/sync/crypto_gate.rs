@@ -186,7 +186,7 @@ mod tests {
             .as_object()
             .expect("object")
             .keys()
-            .filter(|name| name.starts_with("crypto_"))
+            .filter(|name| crate::kernel::record::level3_collections().any(|known| known == *name))
             .filter(|name| !crate::sync::registry::LOCAL.contains(&name.as_str()))
             .cloned()
             .collect();

@@ -564,7 +564,9 @@ impl UnlockedVault {
                 .iter_mut()
                 .find(|have| have.id == record.id)
             {
-                Some(have) if *have == record => {}
+                // `at` is the moment of reading, not a fact about the day: the
+                // same id and value is the same snapshot.
+                Some(have) if have.value_usd == record.value_usd => {}
                 Some(have) => {
                     *have = record;
                     changed = true;
@@ -1383,6 +1385,26 @@ mod tests {
             .expect("later");
         assert_eq!(next_day.len(), 2);
         assert_eq!(vault.doc.crypto_snapshots.len(), 4);
+    }
+
+    #[test]
+    fn a_second_reading_on_the_same_day_saves_nothing() {
+        let (_dir, mut vault) = followed();
+        let seen = batch(
+            vec![transfer(1, 5, native(), units("1000000000000000000"), true)],
+            Vec::new(),
+        );
+        vault
+            .crypto_apply_batch(&request(), &seen)
+            .expect("applied");
+        vault
+            .crypto_snapshot("2026-03-09T08:00:00Z")
+            .expect("first reading");
+        let revision = vault.session.revision();
+        vault
+            .crypto_snapshot("2026-03-09T21:00:00Z")
+            .expect("later reading");
+        assert_eq!(vault.session.revision(), revision, "only `at` differs");
     }
 
     #[test]

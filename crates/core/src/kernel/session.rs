@@ -4,7 +4,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::service::SaveHook;
+/// Told that the vault has unsaved changes (the app's writer thread).
+pub trait SaveHook: Send + Sync {
+    fn dirty(&self);
+}
 
 /// What the caller does after a change is marked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

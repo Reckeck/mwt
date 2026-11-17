@@ -23,14 +23,10 @@ use crate::error::{Error, Result};
 use crate::storage::{SnapshotFormat, VaultFile, encode};
 
 use crate::kernel::session::Commit;
+pub use crate::kernel::session::SaveHook;
 use crate::kernel::tx::Tx;
 
 use super::UnlockedVault;
-
-/// Told that the vault has unsaved changes (the app's writer thread).
-pub trait SaveHook: Send + Sync {
-    fn dirty(&self);
-}
 
 /// One snapshot of the document on its way to disk, sealed off the vault lock.
 pub struct FlushJob {
@@ -88,11 +84,19 @@ impl UnlockedVault {
         if !touched || self.sandbox {
             return Ok(out);
         }
-        match self.session.mark() {
-            Commit::Wake => self.session.wake(),
-            Commit::WriteNow | Commit::Nothing => self.write_now()?,
-        }
+        let commit = self.session.mark();
+        self.apply_commit(commit)?;
         Ok(out)
+    }
+
+    /// Do what a marked change asks. `Nothing` neither writes nor bumps.
+    fn apply_commit(&mut self, commit: Commit) -> Result<()> {
+        match commit {
+            Commit::Wake => self.session.wake(),
+            Commit::WriteNow => self.write_now()?,
+            Commit::Nothing => {}
+        }
+        Ok(())
     }
 
     /// Like [`Self::transact`], but a touched transaction is on disk when it
@@ -105,11 +109,18 @@ impl UnlockedVault {
         Ok(out)
     }
 
-    /// Run the closure over the document; report whether it touched it.
+    /// Run the closure over the document; report whether it touched it. The
+    /// log records it deleted on purpose are handed to the sync layer here,
+    /// so the next save writes their tombstones.
     fn run<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<(R, bool)> {
         let mut tx = Tx::new(&mut self.doc);
         let out = body(&mut tx)?;
-        Ok((out, tx.is_touched()))
+        let touched = tx.is_touched();
+        let forgotten = tx.take_forgotten_logs();
+        for key in forgotten {
+            self.sync_forget_log_record(&key)?;
+        }
+        Ok((out, touched))
     }
 
     /// Save the document: at once, or — once the app installed a hook — mark
@@ -275,6 +286,18 @@ mod tests {
         let done = job.write().unwrap();
         vault.finish_flush(&done);
         Some(done)
+    }
+
+    #[test]
+    fn commit_nothing_neither_writes_nor_bumps_the_revision() {
+        let (_dir, mut vault, wakes) = batched();
+        let before = std::fs::read(&vault.path).unwrap();
+        let revision = vault.session.revision();
+        vault.apply_commit(Commit::Nothing).unwrap();
+        assert_eq!(vault.session.revision(), revision);
+        assert!(!vault.has_unsaved_changes());
+        assert_eq!(wakes.0.load(Ordering::SeqCst), 0);
+        assert_eq!(std::fs::read(&vault.path).unwrap(), before);
     }
 
     #[test]

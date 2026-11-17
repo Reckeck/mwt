@@ -350,41 +350,40 @@ impl UnlockedVault {
             store_id: draft.store_id,
             repeats: draft.repeats,
         };
-        self.doc.price_alerts.push(alert.clone());
-        self.persist()?;
-        Ok(alert)
+        self.transact(|tx| {
+            tx.collection::<PriceAlert>().insert(alert.clone())?;
+            Ok(alert)
+        })
     }
 
     /// Edit an alert; an edited alert is armed again.
     pub fn update_price_alert(&mut self, id: &str, draft: PriceAlertDraft) -> Result<PriceAlert> {
         self.check_alert(&draft)?;
-        let alert = self
-            .doc
-            .price_alerts
-            .iter_mut()
-            .find(|alert| alert.id == id)
-            .ok_or_else(|| Error::Missing(format!("price alert {id}")))?;
-        alert.asset = draft.asset;
-        alert.condition = draft.condition;
-        alert.price = draft.price;
-        alert.currency = draft.currency.trim().to_lowercase();
-        alert.active = draft.active;
-        alert.triggered_at = None;
-        alert.triggered_for = None;
-        alert.store_id = draft.store_id;
-        alert.repeats = draft.repeats;
-        let out = alert.clone();
-        self.persist()?;
-        Ok(out)
+        self.transact(|tx| {
+            tx.collection::<PriceAlert>()
+                .update(id, |alert| {
+                    alert.asset = draft.asset;
+                    alert.condition = draft.condition;
+                    alert.price = draft.price;
+                    alert.currency = draft.currency.trim().to_lowercase();
+                    alert.active = draft.active;
+                    alert.triggered_at = None;
+                    alert.triggered_for = None;
+                    alert.store_id = draft.store_id;
+                    alert.repeats = draft.repeats;
+                    alert.clone()
+                })
+                .map_err(|_| Error::Missing(format!("price alert {id}")))
+        })
     }
 
     pub fn delete_price_alert(&mut self, id: &str) -> Result<()> {
-        let before = self.doc.price_alerts.len();
-        self.doc.price_alerts.retain(|alert| alert.id != id);
-        if self.doc.price_alerts.len() == before {
-            return Err(Error::Missing(format!("price alert {id}")));
-        }
-        self.persist()
+        self.transact(|tx| {
+            tx.collection::<PriceAlert>()
+                .remove(id)
+                .map(|_| ())
+                .map_err(|_| Error::Missing(format!("price alert {id}")))
+        })
     }
 
     /// Assets of armed alerts — what the scheduler refreshes prices for.
