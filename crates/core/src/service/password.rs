@@ -19,6 +19,10 @@
 //! 4. the copies: each is re-sealed into a temp file that is read back and
 //!    opened before it is renamed over the copy; a plain copy is deleted only
 //!    on request and only after step 2 proved the new file opens.
+//!
+//! Once step 2 has read the new file back, the key change has succeeded:
+//! steps 3 and 4 are best-effort and their failures go into
+//! [`RotationReport::failed`], not into an `Err`.
 
 use std::sync::Arc;
 
@@ -68,6 +72,26 @@ pub struct RotationReport {
     pub left: Vec<VaultCopy>,
     /// The new file went to the external copy in the same write.
     pub mirrored: bool,
+    /// Steps after the new key was written and verified that did not finish.
+    /// The key change itself succeeded; these are left for the user.
+    pub failed: Vec<RotationFailure>,
+}
+
+/// A best-effort step of a key change that failed after the change succeeded:
+/// its name and the reason, never a path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RotationFailure {
+    pub step: String,
+    pub reason: String,
+}
+
+impl RotationFailure {
+    pub(super) fn new(step: impl Into<String>, error: &Error) -> Self {
+        Self {
+            step: step.into(),
+            reason: error.to_string(),
+        }
+    }
 }
 
 /// The points of a key change a test can break.
@@ -218,6 +242,13 @@ impl UnlockedVault {
         Ok(())
     }
 
+    /// The salt of the session's key: it differs after every key change, so
+    /// a caller can tell that the key changed even when the call returned an
+    /// error after the new file was written.
+    pub fn key_salt(&self) -> Option<Vec<u8>> {
+        self.key.as_ref().map(|key| key.salt().to_vec())
+    }
+
     pub(super) fn session_key(&self) -> Result<Arc<SealKey>> {
         self.key
             .clone()
@@ -282,18 +313,22 @@ impl UnlockedVault {
         fault(RotateStep::VaultWritten)?;
         self.verify_on_disk(&new_key)?;
 
-        if staged {
-            device_secrets::finish_rekey(&self.path)?;
-        }
-        fault(RotateStep::SecretsFinished)?;
-
+        // The new key is written and verified: the change has succeeded. What
+        // follows is best-effort and its failures go into the report.
         let mut report = RotationReport {
             mirrored: self.has_mirror(),
             ..RotationReport::default()
         };
+        if staged && let Err(err) = device_secrets::finish_rekey(&self.path) {
+            report
+                .failed
+                .push(RotationFailure::new("device secrets", &err));
+        }
+        fault(RotateStep::SecretsFinished)?;
+
         let mut old_keys: Vec<SealKey> = Vec::new();
         for copy in found {
-            self.rotate_copy(
+            if let Err(err) = self.rotate_copy(
                 &copy,
                 &old_key,
                 old_password,
@@ -301,13 +336,23 @@ impl UnlockedVault {
                 &new_key,
                 policy,
                 &mut report,
-            )?;
+            ) {
+                report.failed.push(RotationFailure::new(
+                    format!("copy {}", copy.file.name),
+                    &err,
+                ));
+            }
             fault(RotateStep::CopyDone)?;
         }
-        report.left = copies::inventory(&self.path, &new_key)?
-            .into_iter()
-            .filter(|copy| copy.seal != CopySeal::CurrentKey)
-            .collect();
+        match copies::inventory(&self.path, &new_key) {
+            Ok(found_now) => {
+                report.left = found_now
+                    .into_iter()
+                    .filter(|copy| copy.seal != CopySeal::CurrentKey)
+                    .collect();
+            }
+            Err(err) => report.failed.push(RotationFailure::new("inventory", &err)),
+        }
         Ok(report)
     }
 
@@ -372,9 +417,11 @@ impl UnlockedVault {
                 std::fs::remove_file(backups::resolve(&self.path, name)?)?;
                 report.deleted.push(name.to_string());
             }
-            // Under a password this change does not know, or a disk error:
-            // the copy is as it was and the report lists it.
-            Err(_) => {}
+            // Under a password this change does not know: the copy is as it
+            // was and the report lists it under `left`.
+            Err(Error::Secret) => {}
+            // A disk error: the copy is as it was; the caller records it.
+            Err(err) => return Err(err),
         }
         Ok(())
     }
@@ -854,6 +901,107 @@ mod tests {
         ));
         assert!(vault.is_encrypted());
         assert_eq!(std::fs::read(&vault.path).unwrap(), before);
+    }
+
+    #[test]
+    fn a_failed_copy_cleanup_after_a_rekey_is_not_an_error() {
+        let (dir, mut vault) = plain_vault();
+        let path = vault.path.clone();
+        let backup = vault.create_backup().unwrap();
+        let copy = backups::resolve(&path, &backup.name).unwrap();
+        // The plain copy disappears after the inventory, before its delete.
+        let report = vault
+            .set_password_inner(
+                "pw",
+                CopyPolicy {
+                    plain: PlainCopies::Delete,
+                    reencrypt_old: false,
+                },
+                |at| {
+                    if at == RotateStep::SecretsFinished {
+                        std::fs::remove_file(&copy).unwrap();
+                    }
+                    Ok(())
+                },
+            )
+            .expect("the key changed: the call succeeds");
+        assert_eq!(report.failed.len(), 1, "{:?}", report.failed);
+        assert!(report.deleted.is_empty());
+        assert!(vault.is_encrypted());
+        drop(vault);
+        assert!(opens(&path, "pw"));
+        drop(dir);
+    }
+
+    #[test]
+    fn the_file_opens_under_the_new_password_after_a_failed_cleanup() {
+        let (dir, mut vault) = empty_vault();
+        let backup = vault.create_backup().unwrap();
+        let path = vault.path.clone();
+        let copy = backups::resolve(&path, &backup.name).unwrap();
+        let report = vault
+            .change_password_inner(
+                "pw",
+                "new",
+                CopyPolicy {
+                    plain: PlainCopies::Keep,
+                    reencrypt_old: true,
+                },
+                |at| {
+                    if at == RotateStep::SecretsFinished {
+                        std::fs::remove_file(&copy).unwrap();
+                    }
+                    Ok(())
+                },
+            )
+            .expect("the key changed: the call succeeds");
+        assert_eq!(report.failed.len(), 1, "{:?}", report.failed);
+        assert!(
+            !report.failed[0]
+                .reason
+                .contains(dir.path().to_str().unwrap())
+        );
+        drop(vault);
+        assert!(opens(&path, "new"));
+        assert!(!opens(&path, "pw"));
+    }
+
+    #[test]
+    fn a_failed_cleanup_after_the_raise_to_level_three_is_not_an_error() {
+        use crate::crypto::kdf_profile::{KDF_MEM_KIB_MIN, KdfParams};
+        use crate::service::security_level::RaiseStep;
+
+        let (dir, mut vault) = empty_vault();
+        // A copy from before a sync under a key nobody here knows.
+        let foreign = {
+            let other_dir = tempdir().unwrap();
+            let other =
+                UnlockedVault::create(other_dir.path().join("a.wallet"), "ancient").unwrap();
+            std::fs::read(&other.path).unwrap()
+        };
+        let presync = dir.path().join("test.wallet.presync.bak");
+        std::fs::write(&presync, foreign).unwrap();
+        let path = vault.path.clone();
+        let report = vault
+            .raise_inner(
+                "pw",
+                STRONG,
+                KdfParams::hardened(KDF_MEM_KIB_MIN, 1, 1),
+                |_| {},
+                |at| {
+                    // After the inventory and the verified write, before the copies.
+                    if at == RaiseStep::Persisted {
+                        std::fs::remove_file(&presync).unwrap();
+                    }
+                    Ok(())
+                },
+            )
+            .expect("the vault is at level 3: the call succeeds");
+        assert_eq!(report.failed.len(), 1, "{:?}", report.failed);
+        assert_eq!(vault.security_level(), SecurityLevel::Crypto);
+        drop(vault);
+        assert!(opens(&path, STRONG));
+        assert!(!opens(&path, "pw"));
     }
 
     #[derive(Default)]

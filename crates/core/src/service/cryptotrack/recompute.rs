@@ -224,12 +224,28 @@ fn day_of(time: &str) -> Option<NaiveDate> {
 
 impl UnlockedVault {
     /// Store a source's batch, fold everything again, reconcile with the
-    /// network and snapshot the value. Saves once.
+    /// network and snapshot the value. Saves once, and only if the batch
+    /// changed something (a pass that met nothing new writes nothing).
     pub fn crypto_apply_batch(
         &mut self,
         request: &CryptoBatch<'_>,
         batch: &SourceBatch,
     ) -> Result<CryptoApplied> {
+        let (out, changed) = self.crypto_apply_batch_unsaved(request, batch)?;
+        self.transact(|tx| {
+            tx.touch_if(changed);
+            Ok(out)
+        })
+    }
+
+    /// [`Self::crypto_apply_batch`] without the save: the caller owns it.
+    /// Returns what was applied and whether the document changed.
+    pub(super) fn crypto_apply_batch_unsaved(
+        &mut self,
+        request: &CryptoBatch<'_>,
+        batch: &SourceBatch,
+    ) -> Result<(CryptoApplied, bool)> {
+        let mut changed = false;
         let account = self
             .doc
             .crypto_accounts
@@ -282,7 +298,13 @@ impl UnlockedVault {
         }
         for (_, (contract, symbol, name, decimals)) in met {
             // Saved once with the rest of the batch, not once per token.
-            self.register_token_unsaved(&TokenId::new(chain, contract), symbol, name, decimals)?;
+            let (_, registered) = self.register_token_unsaved(
+                &TokenId::new(chain, contract),
+                symbol,
+                name,
+                decimals,
+            )?;
+            changed |= registered;
         }
 
         for event in made.events {
@@ -312,12 +334,14 @@ impl UnlockedVault {
                     engine::combine(&mut merged, event, arrival);
                     if *have != merged {
                         *have = merged;
+                        changed = true;
                     }
                     out.rewritten += 1;
                 }
                 None => {
                     self.doc.crypto_events.push(event);
                     out.added += 1;
+                    changed = true;
                 }
             }
         }
@@ -407,20 +431,29 @@ impl UnlockedVault {
                     .iter_mut()
                     .find(|have| have.id == event.id)
                 {
-                    Some(have) => *have = event,
-                    None => self.doc.crypto_events.push(event),
+                    Some(have) if *have == event => {}
+                    Some(have) => {
+                        *have = event;
+                        changed = true;
+                    }
+                    None => {
+                        self.doc.crypto_events.push(event);
+                        changed = true;
+                    }
                 }
             }
             sort_events(&mut self.doc.crypto_events);
         }
 
-        out.snapshots = self.crypto_take_snapshot(request.read_at);
+        let (snapshots, snapshots_changed) = self.crypto_take_snapshot(request.read_at);
+        out.snapshots = snapshots;
+        changed |= snapshots_changed;
         // The balances the capital is read from live in `doc.holdings`, and
         // `persist` does not re-derive them (spec E8): a batch that changed
         // what the module holds has to say so, or the wallet would show the
         // new operations with the old total.
-        self.crypto_sync_holdings()?;
-        Ok(out)
+        changed |= self.refold_holdings();
+        Ok((out, changed))
     }
 
     /// Whether this account already has an opening adjustment for an asset.
@@ -509,8 +542,9 @@ impl UnlockedVault {
     }
 
     /// Write the value of each account and of the module for the day of `at`,
-    /// replacing that day's snapshots. Does not save on its own.
-    fn crypto_take_snapshot(&mut self, at: &str) -> usize {
+    /// replacing that day's snapshots. Does not save on its own. Returns how
+    /// many it wrote and whether any of them differs from what was kept.
+    fn crypto_take_snapshot(&mut self, at: &str) -> (usize, bool) {
         let taken = {
             let ledger = self.crypto_fold();
             let prices = DocPrices {
@@ -522,6 +556,7 @@ impl UnlockedVault {
             inputs.with(|taking| engine::snapshot::take(&ledger, taking, at, &prices))
         };
         let count = taken.records.len();
+        let mut changed = false;
         for record in taken.records {
             match self
                 .doc
@@ -529,20 +564,30 @@ impl UnlockedVault {
                 .iter_mut()
                 .find(|have| have.id == record.id)
             {
-                Some(have) => *have = record,
-                None => self.doc.crypto_snapshots.push(record),
+                Some(have) if *have == record => {}
+                Some(have) => {
+                    *have = record;
+                    changed = true;
+                }
+                None => {
+                    self.doc.crypto_snapshots.push(record);
+                    changed = true;
+                }
             }
         }
         self.doc
             .crypto_snapshots
             .sort_by(|left, right| (&left.at, &left.id).cmp(&(&right.at, &right.id)));
-        count
+        (count, changed)
     }
 
-    /// Write the snapshots of `at` and save.
+    /// Write the snapshots of `at` and save, if any of them is new.
     pub fn crypto_snapshot(&mut self, at: &str) -> Result<Vec<CryptoSnapshot>> {
-        self.crypto_take_snapshot(at);
-        self.persist()?;
+        let (_, changed) = self.crypto_take_snapshot(at);
+        self.transact(|tx| {
+            tx.touch_if(changed);
+            Ok(())
+        })?;
         let day = engine::ids::day(at);
         Ok(self
             .doc
@@ -1041,11 +1086,8 @@ mod tests {
         }
     }
 
-    /// Saves one batch of `tokens` junk airdrops costs.
-    fn saves_for_a_batch_of(tokens: u64) -> usize {
-        let (_dir, mut vault) = followed();
-        let saves = std::sync::Arc::new(CountSaves(std::sync::atomic::AtomicUsize::new(0)));
-        vault.set_write_behind(Some(saves.clone()));
+    /// A batch of `tokens` junk airdrops, one fact each.
+    fn junk_batch(tokens: u64) -> SourceBatch {
         let facts = (1..=tokens)
             .map(|index| {
                 let junk = RawAsset::Token {
@@ -1058,11 +1100,51 @@ mod tests {
                 transfer(index, 5, junk, units("1000"), true)
             })
             .collect();
+        batch(facts, Vec::new())
+    }
+
+    /// A followed vault whose saves are counted.
+    fn counted_vault() -> (
+        tempfile::TempDir,
+        crate::service::UnlockedVault,
+        std::sync::Arc<CountSaves>,
+    ) {
+        let (dir, mut vault) = followed();
+        let saves = std::sync::Arc::new(CountSaves(std::sync::atomic::AtomicUsize::new(0)));
+        vault.set_write_behind(Some(saves.clone()));
+        (dir, vault, saves)
+    }
+
+    /// Saves one batch of `tokens` junk airdrops costs.
+    fn saves_for_a_batch_of(tokens: u64) -> usize {
+        let (_dir, mut vault, saves) = counted_vault();
         vault
-            .crypto_apply_batch(&request(), &batch(facts, Vec::new()))
+            .crypto_apply_batch(&request(), &junk_batch(tokens))
             .expect("applied");
         assert_eq!(vault.doc.crypto_tokens.len() as u64, tokens);
         saves.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[test]
+    fn a_pass_over_many_new_tokens_saves_once() {
+        assert_eq!(saves_for_a_batch_of(50), 1, "50 new tokens: one wake");
+    }
+
+    #[test]
+    fn an_unchanged_pass_does_not_save() {
+        let (_dir, mut vault, saves) = counted_vault();
+        let pass = junk_batch(50);
+        vault.crypto_apply_batch(&request(), &pass).expect("first");
+        let after_first = saves.0.load(std::sync::atomic::Ordering::SeqCst);
+        let revision = vault.session.revision();
+        vault.crypto_apply_batch(&request(), &pass).expect("second");
+        assert_eq!(after_first, 1);
+        assert_eq!(
+            saves.0.load(std::sync::atomic::Ordering::SeqCst),
+            after_first,
+            "the identical pass wakes the writer 0 more times"
+        );
+        assert_eq!(vault.session.revision(), revision, "and bumps nothing");
     }
 
     #[test]

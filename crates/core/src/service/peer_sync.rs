@@ -764,7 +764,7 @@ impl UnlockedVault {
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: None,
-            save: super::saving::SaveState::default(),
+            session: crate::kernel::session::Session::default(),
             device_keys: super::exchange_keys::DeviceKeys::default(),
         })
     }

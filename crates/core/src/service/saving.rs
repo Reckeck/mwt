@@ -22,24 +22,14 @@ use crate::crypto::SealKey;
 use crate::error::{Error, Result};
 use crate::storage::{SnapshotFormat, VaultFile, encode};
 
+use crate::kernel::session::Commit;
+use crate::kernel::tx::Tx;
+
 use super::UnlockedVault;
 
 /// Told that the vault has unsaved changes (the app's writer thread).
 pub trait SaveHook: Send + Sync {
     fn dirty(&self);
-}
-
-/// Batching state of an open vault.
-#[derive(Default)]
-pub(super) struct SaveState {
-    /// Changes not on disk yet.
-    dirty: bool,
-    /// Bumped by every change; a job snapshots it.
-    revision: u64,
-    /// The newest revision on disk, shared with the jobs in flight.
-    gate: Arc<Mutex<u64>>,
-    /// Batched mode: wake the writer instead of writing.
-    hook: Option<Arc<dyn SaveHook>>,
 }
 
 /// One snapshot of the document on its way to disk, sealed off the vault lock.
@@ -88,29 +78,61 @@ impl FlushJob {
 }
 
 impl UnlockedVault {
+    /// Run `body` over the document and commit if it touched it: at once, or
+    /// — once the app installed a hook — mark it dirty for the next batched
+    /// write. An untouched transaction writes nothing and bumps nothing; on
+    /// `Err` nothing is committed (and nothing rolled back). A sandbox never
+    /// writes.
+    pub fn transact<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<R> {
+        let (out, touched) = self.run(body)?;
+        if !touched || self.sandbox {
+            return Ok(out);
+        }
+        match self.session.mark() {
+            Commit::Wake => self.session.wake(),
+            Commit::WriteNow | Commit::Nothing => self.write_now()?,
+        }
+        Ok(out)
+    }
+
+    /// Like [`Self::transact`], but a touched transaction is on disk when it
+    /// returns, whatever is batched.
+    pub fn transact_now<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<R> {
+        let (out, touched) = self.run(body)?;
+        if touched && !self.sandbox {
+            self.write_now()?;
+        }
+        Ok(out)
+    }
+
+    /// Run the closure over the document; report whether it touched it.
+    fn run<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<(R, bool)> {
+        let mut tx = Tx::new(&mut self.doc);
+        let out = body(&mut tx)?;
+        Ok((out, tx.is_touched()))
+    }
+
     /// Save the document: at once, or — once the app installed a hook — mark
     /// it dirty for the next batched write. A sandbox never writes.
     pub fn persist(&mut self) -> Result<()> {
-        if self.sandbox {
-            return Ok(());
-        }
-        self.save.revision += 1;
-        self.save.dirty = true;
-        if let Some(hook) = &self.save.hook {
-            hook.dirty();
-            return Ok(());
-        }
-        self.persist_now()
+        self.transact(|tx| {
+            tx.touch();
+            Ok(())
+        })
     }
 
     /// Write the document now, whatever is batched: the file must be current
     /// before it is copied, re-keyed or closed.
     pub fn persist_now(&mut self) -> Result<()> {
-        if self.sandbox {
-            return Ok(());
-        }
-        self.save.revision += 1;
-        self.save.dirty = true;
+        self.transact_now(|tx| {
+            tx.touch();
+            Ok(())
+        })
+    }
+
+    /// Bump the revision and write the snapshot to disk.
+    fn write_now(&mut self) -> Result<()> {
+        self.session.touch();
         let Some(job) = self.prepare_flush()? else {
             return Ok(());
         };
@@ -121,7 +143,7 @@ impl UnlockedVault {
 
     /// Write batched changes, if any, before something reads the file itself.
     pub fn flush_pending(&mut self) -> Result<()> {
-        if self.save.dirty {
+        if self.session.is_dirty() {
             self.persist_now()
         } else {
             Ok(())
@@ -131,20 +153,20 @@ impl UnlockedVault {
     /// Batched mode: from now on `persist` wakes `hook` instead of writing.
     pub fn set_write_behind(&mut self, hook: Option<Arc<dyn SaveHook>>) {
         if !self.sandbox {
-            self.save.hook = hook;
+            self.session.set_hook(hook);
         }
     }
 
     /// Whether changes are waiting for the writer.
     pub fn has_unsaved_changes(&self) -> bool {
-        self.save.dirty
+        self.session.is_dirty()
     }
 
     /// Snapshot the dirty document for the writer (under the vault lock):
     /// stamps the changes for sync, encodes, and returns the job to seal off
     /// the lock. `None` when nothing is waiting.
     pub fn prepare_flush(&mut self) -> Result<Option<FlushJob>> {
-        if self.sandbox || !self.save.dirty {
+        if self.sandbox || !self.session.is_dirty() {
             return Ok(None);
         }
         let key = self
@@ -177,8 +199,8 @@ impl UnlockedVault {
             fmt: self.fmt,
             plaintext,
             key,
-            revision: self.save.revision,
-            gate: self.save.gate.clone(),
+            revision: self.session.revision(),
+            gate: self.session.gate(),
             mirror: self.mirror.clone(),
         }))
     }
@@ -186,8 +208,8 @@ impl UnlockedVault {
     /// Back under the vault lock after [`FlushJob::write`]: clean unless the
     /// document changed meanwhile (then the next batch carries it).
     pub fn finish_flush(&mut self, done: &Flushed) {
-        if done.path == self.path && done.revision == self.save.revision {
-            self.save.dirty = false;
+        if done.path == self.path && done.revision == self.session.revision() {
+            self.session.finish(done.revision);
         }
     }
 
@@ -201,7 +223,7 @@ impl Drop for UnlockedVault {
     /// Closing (lock, switch, exit) must not lose batched changes. The app
     /// flushes before it gets here; this is the last line, so it says so.
     fn drop(&mut self) {
-        if self.save.dirty
+        if self.session.is_dirty()
             && !self.sandbox
             && let Err(err) = self.persist_now()
         {
@@ -398,5 +420,32 @@ mod tests {
         };
         vault.update_settings(other).unwrap();
         assert_eq!(wakes.0.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn a_read_only_transaction_does_not_write() {
+        let (_dir, mut vault, wakes) = batched();
+        let before = std::fs::read(&vault.path).unwrap();
+        let revision = vault.session.revision();
+        let decimals = vault.transact(|tx| Ok(tx.doc().settings.display_decimals));
+        assert!(decimals.is_ok());
+        assert_eq!(vault.session.revision(), revision);
+        assert_eq!(wakes.0.load(Ordering::SeqCst), 0);
+        assert!(!vault.has_unsaved_changes());
+        assert_eq!(std::fs::read(&vault.path).unwrap(), before);
+    }
+
+    #[test]
+    fn an_error_in_the_closure_commits_nothing() {
+        let (_dir, mut vault, wakes) = batched();
+        let before = std::fs::read(&vault.path).unwrap();
+        let result: Result<()> = vault.transact(|tx| {
+            tx.doc_mut().settings.display_decimals = 3;
+            Err(Error::Secret)
+        });
+        assert!(result.is_err());
+        assert_eq!(wakes.0.load(Ordering::SeqCst), 0);
+        assert!(!vault.has_unsaved_changes());
+        assert_eq!(std::fs::read(&vault.path).unwrap(), before);
     }
 }

@@ -105,10 +105,10 @@ impl UnlockedVault {
     /// last step calls; idempotent, so calling it again writes nothing.
     pub fn crypto_archive_manual_wallets(&mut self) -> Result<CryptoArchiveReport> {
         let report = self.retire_manual_crypto_wallets();
-        if report.changed {
-            self.persist()?;
-        }
-        Ok(report)
+        self.transact(|tx| {
+            tx.touch_if(report.changed);
+            Ok(report)
+        })
     }
 
     /// The archiving as one step of a chain: it sets `Store::archived` on the
