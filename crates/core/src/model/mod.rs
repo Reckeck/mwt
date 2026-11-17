@@ -16,10 +16,13 @@ pub mod inflation;
 pub(crate) mod iso_date;
 pub mod notify;
 pub mod planning;
+pub mod registry;
 pub mod shared_event;
 pub mod store;
+pub mod sync_state;
 pub mod transaction;
 pub mod vault;
+pub mod workflow;
 
 pub use chain::{Chain, ChainInfo};
 pub use store::StoreKind;

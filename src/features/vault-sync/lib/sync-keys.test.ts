@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ALL_COLLECTIONS, KEYS_OF, keysOfBatch } from './sync-keys'
 
-const registry = readFileSync(resolve(process.cwd(), 'crates/core/src/sync/registry.rs'), 'utf8')
+const registry = readFileSync(resolve(process.cwd(), 'crates/core/src/model/registry.rs'), 'utf8')
 const names = new Set(
   [...registry.matchAll(/(?:records|single)\("([a-z_]+)"|name:\s*"([a-z_]+)"/g)].map((match) => match[1] ?? match[2]),
 )

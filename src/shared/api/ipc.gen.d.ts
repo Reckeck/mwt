@@ -1212,7 +1212,7 @@ type ClearExchangeKeyInput = { store_id: string, };
  */
 type CollectionChanges = { collection: string, added: number, updated: number, deleted: number, 
 /**
- * The first [`MAX_ITEMS`] changes, for the list under the summary.
+ * The first `MAX_ITEMS` of `sync::plan` changes, for the list under the summary.
  */
 items: Array<ChangeItem>, };
 

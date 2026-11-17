@@ -15,7 +15,6 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::Amount;
@@ -66,31 +65,7 @@ pub enum RunMode {
     DryRun,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum StepStatus {
-    Ok,
-    /// Switched off, or let nothing through.
-    Skipped,
-    /// Its operations went to the confirmation queue.
-    Queued,
-    /// Failed; the run went on by the "Error" way or stopped.
-    Error,
-    Stopped,
-    Waiting,
-}
-
-/// One node of a run, in words.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
-pub struct TraceStep {
-    pub node_id: String,
-    pub kind: String,
-    pub status: StepStatus,
-    pub text_ru: String,
-    pub text_en: String,
-    /// Output port → its value as text.
-    pub values: BTreeMap<String, String>,
-}
+pub use crate::model::workflow::{StepStatus, TraceStep};
 
 /// A run asleep to go on later.
 #[derive(Debug, Clone, PartialEq)]

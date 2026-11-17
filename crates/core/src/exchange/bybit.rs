@@ -570,8 +570,7 @@ pub fn accounts_in_use(balances: &[(String, Vec<CoinBalance>)]) -> [bool; 3] {
 
 pub const ACCOUNT_FUND: &str = "FUND";
 pub const ACCOUNT_UNIFIED: &str = "UNIFIED";
-/// Not a Bybit transfer account type: Earn products, as this app names them.
-pub const ACCOUNT_EARN: &str = "EARN";
+pub use crate::model::vault::ACCOUNT_EARN;
 
 /// A move between the user's own Bybit accounts (`/v5/asset/transfer/query-inter-transfer-list`).
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]

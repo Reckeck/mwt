@@ -1,0 +1,741 @@
+//! What a vault keeps about sync: change stamps, deletions, trusted devices
+//! and the batches it took in (for undo). Stored in [`crate::VaultDoc::sync`].
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use serde::{Deserialize, Serialize};
+
+/// Characters of the device id kept in a stamp: enough to break ties, short
+/// enough that thousands of stamps do not bloat the vault.
+pub const DEVICE_TAG_LEN: usize = 8;
+
+/// How far ahead of the wall clock a stamp may be and still move a clock, and
+/// the skew at which devices refuse to sync (`session::SKEW_REFUSE_MS` is this).
+/// A record stamped beyond it is stored as it is, but never drags a clock along.
+pub const MAX_FUTURE_MS: u64 = 24 * 3600 * 1000;
+
+/// The part of a device id a stamp carries.
+pub fn device_tag(device_id: &str) -> String {
+    device_id
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .take(DEVICE_TAG_LEN)
+        .collect()
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Stamp {
+    /// Unix milliseconds.
+    #[serde(rename = "w")]
+    pub wall: u64,
+    #[serde(rename = "c")]
+    pub count: u32,
+    /// [`device_tag`] of the device that made the change.
+    #[serde(rename = "d")]
+    pub device: String,
+}
+
+impl Stamp {
+    pub fn new(wall: u64, count: u32, device: &str) -> Self {
+        Self {
+            wall,
+            count,
+            device: device.to_string(),
+        }
+    }
+}
+
+/// Stamps of one record: when it was created and, for each field changed
+/// since, when that field last changed.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecordStamps {
+    #[serde(rename = "c")]
+    pub created: Stamp,
+    #[serde(rename = "f", default)]
+    pub fields: BTreeMap<String, Stamp>,
+}
+
+impl RecordStamps {
+    pub fn created(created: Stamp) -> Self {
+        Self {
+            created,
+            fields: BTreeMap::new(),
+        }
+    }
+
+    /// When `field` last changed.
+    pub fn field(&self, field: &str) -> &Stamp {
+        self.fields.get(field).unwrap_or(&self.created)
+    }
+
+    /// The latest change to the record.
+    pub fn latest(&self) -> &Stamp {
+        self.fields
+            .values()
+            .chain(std::iter::once(&self.created))
+            .max()
+            .unwrap_or(&self.created)
+    }
+}
+
+/// One record as sync sees it: its value (none once deleted), its stamps and
+/// the stamp of its deletion.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RecordState {
+    /// Kept as JSON text when stored or sent: every vault format (bincode
+    /// included) can carry a string, not all can carry free-form JSON.
+    #[serde(default, with = "json_text")]
+    pub value: Option<serde_json::Value>,
+    #[serde(default)]
+    pub stamps: Option<RecordStamps>,
+    #[serde(default)]
+    pub tombstone: Option<Stamp>,
+}
+
+impl RecordState {
+    /// The same state without the value: what undo compares against.
+    pub fn marks(&self) -> RecordState {
+        RecordState {
+            value: None,
+            stamps: self.stamps.clone(),
+            tombstone: self.tombstone.clone(),
+        }
+    }
+
+    /// Whether `other` carries the same stamps (the value is not compared:
+    /// a live record always has stamps, a deleted one never does).
+    pub fn same_marks(&self, other: &RecordState) -> bool {
+        self.stamps == other.stamps && self.tombstone == other.tombstone
+    }
+
+    /// The latest change this state knows of, deletion included.
+    pub fn latest(&self) -> Option<&Stamp> {
+        let changed = self.stamps.as_ref().map(RecordStamps::latest);
+        match (changed, self.tombstone.as_ref()) {
+            (Some(changed), Some(deleted)) => Some(changed.max(deleted)),
+            (changed, deleted) => changed.or(deleted),
+        }
+    }
+}
+
+mod json_text {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde_json::Value;
+
+    pub fn serialize<S: Serializer>(value: &Option<Value>, out: S) -> Result<S::Ok, S::Error> {
+        value.as_ref().map(Value::to_string).serialize(out)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(input: D) -> Result<Option<Value>, D::Error> {
+        Option::<String>::deserialize(input)?
+            .map(|text| serde_json::from_str(&text).map_err(serde::de::Error::custom))
+            .transpose()
+    }
+}
+
+/// A device allowed to sync this vault.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TrustedPeer {
+    pub device_id: String,
+    pub name: String,
+    /// Its static Noise key, hex.
+    pub public_key: String,
+    /// RFC3339.
+    pub paired_at: String,
+    /// RFC3339 of the last batch exchanged with it.
+    #[serde(default)]
+    pub last_synced_at: Option<String>,
+    /// Set by "Forget device" on any device; a revoked key is refused until it is paired again (a newer entry).
+    #[serde(default)]
+    pub revoked: Option<Stamp>,
+    /// When this entry last changed; the later entry wins between devices.
+    #[serde(default)]
+    pub stamp: Stamp,
+}
+
+/// One record a batch changed, for undo.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BatchEntry {
+    pub key: String,
+    /// The record before the batch.
+    pub before: RecordState,
+    /// The stamps the batch left (no value): undo touches the record only
+    /// while they are still the record's stamps.
+    pub after: RecordState,
+}
+
+/// What one incoming batch changed here.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SyncBatch {
+    pub id: String,
+    pub peer_device: String,
+    pub peer_name: String,
+    /// RFC3339.
+    pub applied_at: String,
+    pub summary: SyncSummary,
+    pub entries: Vec<BatchEntry>,
+    /// RFC3339 of the undo, once undone.
+    #[serde(default)]
+    pub undone_at: Option<String>,
+}
+
+/// Batches kept for undo: at most this many…
+pub const MAX_BATCHES: usize = 20;
+/// …and none older than this many days.
+pub const BATCH_DAYS: i64 = 7;
+/// Deletions older than this are forgotten once every trusted device has synced since.
+pub const TOMBSTONE_DAYS: u64 = 180;
+/// A forgotten (revoked) device still holds back compaction for this many days
+/// after its revocation: it may be paired again and bring old records with it.
+pub const REVOKED_GATE_DAYS: u64 = 365;
+
+/// How far a peer's manifest vouches for our deletions: the largest `counted`
+/// such that every deletion with `counted <= it` is in `theirs` with the same
+/// digest. `deletions` are `(counted, key, our digest)`. Never below `previous`.
+pub fn acked_through<'item>(
+    deletions: impl IntoIterator<Item = (u64, &'item str, u64)>,
+    theirs: &std::collections::BTreeMap<String, u64>,
+    previous: u64,
+) -> u64 {
+    let mut sorted: Vec<(u64, &str, u64)> = deletions.into_iter().collect();
+    sorted.sort_unstable();
+    let mut result = previous;
+    let mut finished: Option<u64> = None;
+    for (counted, key, digest) in sorted {
+        if let Some(done) = finished
+            && done != counted
+        {
+            result = result.max(done);
+        }
+        if theirs.get(key) != Some(&digest) {
+            return result;
+        }
+        finished = Some(counted);
+    }
+    if let Some(done) = finished {
+        result = result.max(done);
+    }
+    result
+}
+
+/// Sync bookkeeping of a vault.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SyncState {
+    /// `collection:key` → stamps. A record without an entry was last changed
+    /// before sync existed (stamp zero).
+    #[serde(default)]
+    pub stamps: BTreeMap<String, RecordStamps>,
+    /// `collection:key` → when it was deleted.
+    #[serde(default)]
+    pub tombstones: BTreeMap<String, Stamp>,
+    /// `collection:key` → local Unix ms when this device took the deletion in.
+    /// Bookkeeping like the rest: a deletion that arrives late is kept for the
+    /// full retention from then, not from when it was made. Never synced.
+    #[serde(default)]
+    pub tombstones_seen: BTreeMap<String, u64>,
+    /// `device id` → every local deletion with `counted <=` this value was seen in
+    /// that device's manifest. Device-local like `tombstones_seen`: never sent,
+    /// never taken from a received copy. Missing means 0: keep the deletions.
+    #[serde(default)]
+    pub tombstone_acks: BTreeMap<String, u64>,
+    /// `device id` -> the newest stamp of this device's own clock that was
+    /// already in the last applied exchange with that device (taken with the
+    /// manifest it started from), so an edit up to it was seen there. Local
+    /// like `tombstone_acks`: never sent, never taken from a received copy.
+    /// Missing means nothing is known: every edit counts as unseen. Never
+    /// goes down.
+    #[serde(default)]
+    pub seen_by: BTreeMap<String, Stamp>,
+    #[serde(default)]
+    pub peers: Vec<TrustedPeer>,
+    /// Newest last.
+    #[serde(default)]
+    pub batches: Vec<SyncBatch>,
+    /// Times this vault was handed to a new device from here, newest last.
+    #[serde(default)]
+    pub transfers: Vec<TransferRecord>,
+    /// The journal of taken batches, newest last (at most `MAX_JOURNAL`).
+    #[serde(default)]
+    pub journal: Vec<SyncJournalEntry>,
+    /// Device ids whose exchange the user paused ("Decline" on a list of
+    /// changes). Local bookkeeping: never synced, never part of `peers`.
+    #[serde(default)]
+    pub paused: BTreeSet<String>,
+    /// Devices that cut this one off on purpose (they paused it or forgot it),
+    /// as they told us. Local bookkeeping: never synced, never part of `peers`.
+    #[serde(default)]
+    pub cut_by: BTreeMap<String, CutBy>,
+}
+
+/// Why another device refused this one on purpose (`Bye` reasons).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncCutReason {
+    /// It paused the exchange with this device ("Decline" there).
+    Paused,
+    /// It forgot this device.
+    Forgotten,
+}
+
+impl SyncCutReason {
+    /// The `Bye` reason on the wire.
+    pub fn wire(self) -> &'static str {
+        match self {
+            Self::Paused => "paused",
+            Self::Forgotten => "forgotten",
+        }
+    }
+
+    pub fn from_wire(reason: &str) -> Option<Self> {
+        match reason {
+            "paused" => Some(Self::Paused),
+            "forgotten" => Some(Self::Forgotten),
+            _ => None,
+        }
+    }
+}
+
+/// Why and when another device refused this one on purpose.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CutBy {
+    pub reason: SyncCutReason,
+    /// RFC3339 of the first time it told us.
+    pub at: String,
+}
+
+/// The vault was handed to a new device from this one.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransferRecord {
+    pub id: String,
+    pub device_id: String,
+    pub device_name: String,
+    /// RFC3339.
+    pub at: String,
+}
+
+/// Transfers kept in the history.
+pub const MAX_TRANSFERS: usize = 50;
+
+impl SyncState {
+    /// Adopt the record metadata (stamps, deletions) and the trusted devices of
+    /// `remote`, keeping every other field of `self` as it is. The record
+    /// metadata describes the data that arrives with `remote`; everything else
+    /// (undo batches, journal, transfers, `tombstones_seen`, `paused`, `cut_by`)
+    /// is this device's own bookkeeping. The one place that knows which fields
+    /// are device-local: a pull of an external copy keeps the current state
+    /// here, a received file starts from [`SyncState::default`].
+    pub fn take_records_from(&mut self, remote: SyncState, now: u64) {
+        self.tombstones_seen
+            .retain(|key, _| remote.tombstones.contains_key(key));
+        for key in remote.tombstones.keys() {
+            self.tombstones_seen.entry(key.clone()).or_insert(now);
+        }
+        self.stamps = remote.stamps;
+        self.tombstones = remote.tombstones;
+        self.merge_peers(&remote.peers, now);
+    }
+
+    /// The latest stamp anywhere, to start the clock after it.
+    pub fn latest_stamp(&self) -> Option<&Stamp> {
+        self.latest_stamp_within(u64::MAX)
+    }
+
+    /// The latest stamp not beyond `limit` (ms): a poisoned stamp must not
+    /// hide the real latest one when the clock starts.
+    pub fn latest_stamp_within(&self, limit: u64) -> Option<&Stamp> {
+        self.stamps
+            .values()
+            .map(RecordStamps::latest)
+            .chain(self.tombstones.values())
+            .chain(self.peers.iter().map(|peer| &peer.stamp))
+            .filter(|stamp| stamp.wall <= limit)
+            .max()
+    }
+
+    /// The newest entry for a key: it decides whether the key is trusted.
+    fn latest_entry(&self, public_key: &str) -> Option<&TrustedPeer> {
+        self.peers
+            .iter()
+            .filter(|peer| peer.public_key == public_key)
+            .max_by(|left, right| left.stamp.cmp(&right.stamp))
+    }
+
+    /// A trusted peer by its key: the newest entry for the key, if not revoked.
+    pub fn trusted(&self, public_key: &str) -> Option<&TrustedPeer> {
+        self.latest_entry(public_key)
+            .filter(|peer| peer.revoked.is_none())
+    }
+
+    /// Whether this key was trusted once and then forgotten: its newest entry
+    /// is revoked. A later pairing makes a newer entry and lifts it.
+    pub fn is_revoked(&self, public_key: &str) -> bool {
+        self.latest_entry(public_key)
+            .is_some_and(|peer| peer.revoked.is_some())
+    }
+
+    /// Device ids whose newest entry is revoked (forgotten and not paired
+    /// again): discovery does not dial them.
+    pub fn revoked_device_ids(&self) -> Vec<String> {
+        let keys: std::collections::BTreeSet<&str> = self
+            .peers
+            .iter()
+            .map(|peer| peer.public_key.as_str())
+            .collect();
+        keys.into_iter()
+            .filter_map(|key| self.latest_entry(key))
+            .filter(|peer| peer.revoked.is_some())
+            .map(|peer| peer.device_id.clone())
+            .collect()
+    }
+
+    /// Take in another device's list: per device, the later entry wins, with
+    /// two limits. An entry stamped further ahead of `now` than a clock can be
+    /// is skipped. Revoke and trust are decided by stamp alone: a re-pairing
+    /// (a newer, live entry) lifts an older revocation, an older entry never
+    /// lifts a newer one. A live entry cannot swap the key of a live one.
+    pub fn merge_peers(&mut self, remote: &[TrustedPeer], now: u64) -> bool {
+        let limit = now.saturating_add(MAX_FUTURE_MS);
+        let mut changed = false;
+        for theirs in remote {
+            if theirs.stamp.wall > limit {
+                // Core has no logger; the device id is not a secret.
+                eprintln!(
+                    "sync: peer entry for device {} skipped: its stamp is too far ahead",
+                    theirs.device_id
+                );
+                continue;
+            }
+            let position = self
+                .peers
+                .iter()
+                .position(|mine| mine.device_id == theirs.device_id);
+            match position {
+                Some(index) => {
+                    let mine = &self.peers[index];
+                    let accept = theirs.stamp > mine.stamp
+                        && (theirs.revoked.is_some()
+                            || mine.revoked.is_some()
+                            || mine.public_key == theirs.public_key);
+                    if accept {
+                        // The sender's last sync time is its own bookkeeping.
+                        let synced = mine.last_synced_at.clone();
+                        self.peers[index] = theirs.clone();
+                        self.peers[index].last_synced_at = synced;
+                        changed = true;
+                    }
+                }
+                None => {
+                    if theirs.revoked.is_none() && self.is_revoked(&theirs.public_key) {
+                        continue;
+                    }
+                    let mut fresh = theirs.clone();
+                    fresh.last_synced_at = None;
+                    self.peers.push(fresh);
+                    changed = true;
+                }
+            }
+        }
+        changed
+    }
+}
+
+/// Whether `device_id` is this device (`own` is its id or the tag of it; an
+/// empty `own` matches nothing).
+pub fn is_own_device(own: &str, device_id: &str) -> bool {
+    let tag = device_tag(own);
+    !tag.is_empty() && tag == device_tag(device_id)
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeKind {
+    #[default]
+    Added,
+    Updated,
+    Deleted,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct ChangeItem {
+    pub kind: ChangeKind,
+    /// Readable name of the record (never its raw key); may be empty.
+    pub label: String,
+    /// The record's key inside its collection, for identity.
+    #[serde(default)]
+    pub key: String,
+    /// What an updated record changes, field by field.
+    #[serde(default)]
+    pub fields: Vec<FieldChange>,
+}
+
+/// One user-meaningful field of an updated record, as display-ready text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct FieldChange {
+    /// Dotted field name (`meta.comment`); the UI maps it to a label.
+    pub field: String,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    /// Set when the values are amounts of this currency or asset: the UI
+    /// shows them with `<Money>`.
+    #[serde(default)]
+    pub money_currency: Option<String>,
+}
+
+/// Changes to one collection (`transactions`, `stores`, …).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct CollectionChanges {
+    pub collection: String,
+    pub added: u32,
+    pub updated: u32,
+    pub deleted: u32,
+    /// The first `MAX_ITEMS` of `sync::plan` changes, for the list under the summary.
+    pub items: Vec<ChangeItem>,
+}
+
+/// A field edited on both devices where the other device's later edit won.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct OverwrittenField {
+    pub collection: String,
+    pub label: String,
+    pub field: String,
+    pub before: String,
+    pub after: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncSummary {
+    pub total: u32,
+    pub collections: Vec<CollectionChanges>,
+    pub overwritten: Vec<OverwrittenField>,
+    /// Records of an external copy where both sides lacked field stamps and
+    /// the values differed: there is no shared history to say who changed
+    /// what, so the pick is arbitrary (but the same on every run).
+    #[serde(default)]
+    pub unstamped_conflicts: u32,
+}
+
+/// How a batch ended.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncJournalOutcome {
+    #[default]
+    Applied,
+    Declined,
+    Failed,
+    /// The vault was handed to the device (a transfer): nothing to apply.
+    Sent,
+}
+
+/// How many records of one collection a batch touched.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncJournalCount {
+    pub collection: String,
+    pub count: u32,
+}
+
+/// One batch, as the journal tells it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+pub struct SyncJournalEntry {
+    pub id: String,
+    /// RFC3339.
+    pub at: String,
+    /// The device the batch came from.
+    pub peer_name: String,
+    pub counts: Vec<SyncJournalCount>,
+    /// The record's label when the batch changed exactly one.
+    #[serde(default)]
+    pub label: Option<String>,
+    pub outcome: SyncJournalOutcome,
+    /// The kept batch behind an applied line, for "Undo" while it is kept.
+    #[serde(default)]
+    pub batch_id: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const NOW: u64 = 1_000_000_000;
+
+    fn entry(device_id: &str, key: &str, wall: u64, revoked: bool) -> TrustedPeer {
+        let stamp = Stamp::new(wall, 0, "remote");
+        TrustedPeer {
+            device_id: device_id.into(),
+            name: device_id.into(),
+            public_key: key.into(),
+            revoked: revoked.then(|| stamp.clone()),
+            stamp,
+            ..TrustedPeer::default()
+        }
+    }
+
+    fn state_with(peers: Vec<TrustedPeer>) -> SyncState {
+        SyncState {
+            peers,
+            ..SyncState::default()
+        }
+    }
+
+    fn manifest(entries: &[(&str, u64)]) -> BTreeMap<String, u64> {
+        entries
+            .iter()
+            .map(|(key, digest)| ((*key).to_string(), *digest))
+            .collect()
+    }
+
+    #[test]
+    fn acked_through_stops_before_the_first_missing_deletion() {
+        let deletions = [(10, "a", 1), (20, "b", 2), (30, "c", 3)];
+        let theirs = manifest(&[("a", 1), ("c", 3)]);
+        assert_eq!(acked_through(deletions, &theirs, 0), 10);
+    }
+
+    #[test]
+    fn acked_through_treats_another_digest_as_missing() {
+        let deletions = [(10, "a", 1), (20, "b", 2)];
+        let theirs = manifest(&[("a", 1), ("b", 99)]);
+        assert_eq!(acked_through(deletions, &theirs, 0), 10);
+    }
+
+    #[test]
+    fn acked_through_credits_a_moment_only_when_all_its_deletions_are_there() {
+        let deletions = [(10, "a", 1), (10, "b", 2), (20, "c", 3)];
+        assert_eq!(
+            acked_through(deletions, &manifest(&[("a", 1), ("c", 3)]), 0),
+            0
+        );
+        assert_eq!(
+            acked_through(deletions, &manifest(&[("a", 1), ("b", 2)]), 0),
+            10
+        );
+        assert_eq!(
+            acked_through(deletions, &manifest(&[("a", 1), ("b", 2), ("c", 3)]), 0),
+            20
+        );
+    }
+
+    #[test]
+    fn acked_through_never_decreases() {
+        let deletions = [(10, "a", 1)];
+        assert_eq!(acked_through(deletions, &manifest(&[]), 50), 50);
+        assert_eq!(acked_through([], &manifest(&[]), 7), 7);
+    }
+
+    #[test]
+    fn a_merged_entry_keeps_the_local_last_sync_time() {
+        let mut mine = entry("dev", "kk", 10, false);
+        mine.last_synced_at = Some("2026-01-01T00:00:00Z".into());
+        let mut theirs = entry("dev", "kk", 20, false);
+        theirs.last_synced_at = Some("2026-02-02T00:00:00Z".into());
+        let mut state = state_with(vec![mine]);
+        assert!(state.merge_peers(&[theirs.clone()], NOW));
+        assert_eq!(
+            state.peers[0].last_synced_at.as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
+        let mut other = state_with(vec![]);
+        other.merge_peers(&[theirs], NOW);
+        assert_eq!(other.peers[0].last_synced_at, None);
+    }
+
+    #[test]
+    fn revoked_device_ids_lists_only_devices_whose_newest_entry_is_revoked() {
+        let state = state_with(vec![
+            entry("gone", "k1", 20, true),
+            entry("back", "k2", 10, true),
+            entry("back", "k2", 30, false),
+            entry("live", "k3", 10, false),
+        ]);
+        assert_eq!(state.revoked_device_ids(), vec!["gone".to_string()]);
+    }
+
+    #[test]
+    fn a_merged_list_never_lifts_a_revocation_with_an_older_entry() {
+        let mut state = state_with(vec![entry("dev", "kk", 20, true)]);
+        // An older, not revoked entry for the same device is refused.
+        assert!(!state.merge_peers(&[entry("dev", "kk", 10, false)], NOW));
+        assert!(state.is_revoked("kk"));
+        // A newer re-pairing lifts it.
+        assert!(state.merge_peers(&[entry("dev", "kk", 30, false)], NOW));
+        assert!(!state.is_revoked("kk"));
+        // A key change on a live entry is refused.
+        let mut live = state_with(vec![entry("dev", "kk", 10, false)]);
+        assert!(!live.merge_peers(&[entry("dev", "other", 20, false)], NOW));
+        assert_eq!(live.peers[0].public_key, "kk");
+    }
+
+    #[test]
+    fn a_newer_revocation_is_taken_and_a_newer_live_entry_for_a_live_one_too() {
+        let mut state = state_with(vec![entry("dev", "kk", 10, false)]);
+        assert!(state.merge_peers(&[entry("dev", "kk", 20, false)], NOW));
+        assert_eq!(state.peers[0].stamp.wall, 20);
+        assert!(state.merge_peers(&[entry("dev", "kk", 30, true)], NOW));
+        assert!(state.is_revoked("kk"));
+    }
+
+    #[test]
+    fn an_unknown_device_for_a_revoked_key_is_not_added_unless_revoked_itself() {
+        let mut state = state_with(vec![entry("dev", "kk", 10, true)]);
+        assert!(!state.merge_peers(&[entry("clone", "kk", 20, false)], NOW));
+        assert_eq!(state.peers.len(), 1);
+        assert!(state.merge_peers(&[entry("clone", "kk", 20, true)], NOW));
+        assert_eq!(state.peers.len(), 2);
+        assert!(state.merge_peers(&[entry("fresh", "new", 20, false)], NOW));
+        assert!(state.trusted("new").is_some());
+    }
+
+    #[test]
+    fn an_entry_stamped_far_in_the_future_is_skipped() {
+        let mut state = state_with(vec![entry("dev", "kk", 10, false)]);
+        let ahead = NOW + MAX_FUTURE_MS + 1;
+        assert!(!state.merge_peers(&[entry("dev", "kk", ahead, true)], NOW));
+        assert!(!state.merge_peers(&[entry("other", "oo", ahead, false)], NOW));
+        assert_eq!(state.peers.len(), 1);
+        assert!(state.trusted("kk").is_some());
+    }
+
+    #[test]
+    fn state_saved_without_tombstones_seen_still_loads() {
+        let state: SyncState = serde_json::from_str(r#"{"stamps":{},"tombstones":{}}"#).unwrap();
+        assert!(state.tombstones_seen.is_empty());
+        let bare: SyncState = serde_json::from_str("{}").unwrap();
+        assert_eq!(bare, SyncState::default());
+    }
+
+    #[test]
+    fn the_latest_stamp_includes_the_peers() {
+        let state = state_with(vec![entry("dev", "kk", 77, false)]);
+        assert_eq!(state.latest_stamp().map(|stamp| stamp.wall), Some(77));
+    }
+    #[test]
+    fn the_pause_round_trips_in_json_and_messagepack() {
+        let mut state = SyncState::default();
+        state.paused.insert("dev-a".into());
+        let json = serde_json::to_string(&state).unwrap();
+        assert_eq!(serde_json::from_str::<SyncState>(&json).unwrap(), state);
+        let pack = rmp_serde::to_vec_named(&state).unwrap();
+        assert_eq!(rmp_serde::from_slice::<SyncState>(&pack).unwrap(), state);
+        // A vault saved before the field existed opens with nobody paused.
+        let old: SyncState = serde_json::from_str(r#"{"peers":[]}"#).unwrap();
+        assert!(old.paused.is_empty());
+    }
+
+    #[test]
+    fn cut_by_round_trips_in_json_and_messagepack_and_old_vaults_open() {
+        let mut state = SyncState::default();
+        state.cut_by.insert(
+            "dev-a".into(),
+            CutBy {
+                reason: SyncCutReason::Paused,
+                at: "2026-11-02T10:00:00Z".into(),
+            },
+        );
+        let json = serde_json::to_string(&state).unwrap();
+        assert_eq!(serde_json::from_str::<SyncState>(&json).unwrap(), state);
+        let pack = rmp_serde::to_vec_named(&state).unwrap();
+        assert_eq!(rmp_serde::from_slice::<SyncState>(&pack).unwrap(), state);
+        // A vault saved before the field existed opens with nobody cut off.
+        let old: SyncState = serde_json::from_str(r#"{"peers":[]}"#).unwrap();
+        assert!(old.cut_by.is_empty());
+    }
+}

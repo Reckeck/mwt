@@ -4,7 +4,6 @@
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::fields::changed_fields;
@@ -14,73 +13,9 @@ use super::stamp::Stamp;
 use super::state::RecordState;
 use super::view::{comparable_record, label, split_key};
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub enum ChangeKind {
-    #[default]
-    Added,
-    Updated,
-    Deleted,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-pub struct ChangeItem {
-    pub kind: ChangeKind,
-    /// Readable name of the record (never its raw key); may be empty.
-    pub label: String,
-    /// The record's key inside its collection, for identity.
-    #[serde(default)]
-    pub key: String,
-    /// What an updated record changes, field by field.
-    #[serde(default)]
-    pub fields: Vec<FieldChange>,
-}
-
-/// One user-meaningful field of an updated record, as display-ready text.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-pub struct FieldChange {
-    /// Dotted field name (`meta.comment`); the UI maps it to a label.
-    pub field: String,
-    pub before: Option<String>,
-    pub after: Option<String>,
-    /// Set when the values are amounts of this currency or asset: the UI
-    /// shows them with `<Money>`.
-    #[serde(default)]
-    pub money_currency: Option<String>,
-}
-
-/// Changes to one collection (`transactions`, `stores`, …).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-pub struct CollectionChanges {
-    pub collection: String,
-    pub added: u32,
-    pub updated: u32,
-    pub deleted: u32,
-    /// The first [`MAX_ITEMS`] changes, for the list under the summary.
-    pub items: Vec<ChangeItem>,
-}
-
-/// A field edited on both devices where the other device's later edit won.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-pub struct OverwrittenField {
-    pub collection: String,
-    pub label: String,
-    pub field: String,
-    pub before: String,
-    pub after: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-pub struct SyncSummary {
-    pub total: u32,
-    pub collections: Vec<CollectionChanges>,
-    pub overwritten: Vec<OverwrittenField>,
-    /// Records of an external copy where both sides lacked field stamps and
-    /// the values differed: there is no shared history to say who changed
-    /// what, so the pick is arbitrary (but the same on every run).
-    #[serde(default)]
-    pub unstamped_conflicts: u32,
-}
+pub use crate::model::sync_state::{
+    ChangeItem, ChangeKind, CollectionChanges, FieldChange, OverwrittenField, SyncSummary,
+};
 
 impl SyncSummary {
     pub fn is_empty(&self) -> bool {

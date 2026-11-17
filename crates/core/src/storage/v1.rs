@@ -327,7 +327,7 @@ impl From<VaultDocV1> for VaultDocV2 {
             data_sources: Vec::new(),
             asset_price_sources: Vec::new(),
             deposit_rate_sources: Vec::new(),
-            sync: crate::sync::SyncState::default(),
+            sync: crate::model::sync_state::SyncState::default(),
             attachments: Vec::new(),
             attachment_keys: Vec::new(),
             shared_events: Vec::new(),

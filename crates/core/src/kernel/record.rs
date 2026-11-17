@@ -67,10 +67,10 @@ records! {
     crate::model::enrichment::EnrichmentRecord => enrichments, false;
     crate::model::planning::Envelope => envelopes, false;
     crate::model::contact::DebtTerms => debt_terms, false;
-    crate::workflow::Workflow => workflows, false;
-    crate::workflow::WorkflowRun => workflow_runs, false;
-    crate::workflow::QueuedActions => workflow_queue, false;
-    crate::workflow::model::WorkflowWait => workflow_waits, false;
+    crate::model::workflow::Workflow => workflows, false;
+    crate::model::workflow::WorkflowRun => workflow_runs, false;
+    crate::model::workflow::QueuedActions => workflow_queue, false;
+    crate::model::workflow::WorkflowWait => workflow_waits, false;
     crate::model::planning::CalcScenario => calc_scenarios, false;
     crate::model::planning::AssetClass => asset_classes, false;
     crate::model::vault::Valuation => valuations, false;
