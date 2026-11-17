@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use serde_json::Value;
 
+use super::number::scaled;
 use super::{Extracted, parse_number};
 use crate::Amount;
 use crate::model::datasource::{NumberFormat, SeriesPoint, SourceOutput};
@@ -36,7 +37,7 @@ fn number_of(value: &Value, format: &NumberFormat) -> Option<Amount> {
         Value::Number(number) => rust_decimal::Decimal::from_str(&number.to_string())
             .or_else(|_| rust_decimal::Decimal::from_scientific(&number.to_string()))
             .ok()
-            .map(|decimal| Amount::new(decimal) * format.multiplier),
+            .and_then(|decimal| scaled(Amount::new(decimal), format)),
         Value::String(text) => parse_number(text, format),
         _ => None,
     }
@@ -159,5 +160,21 @@ mod tests {
         .unwrap();
         assert_eq!(plain.series[1].label, "2");
         assert_eq!(plain.series[1].value, amount("2.5"));
+    }
+
+    #[test]
+    fn a_number_out_of_range_is_none() {
+        let format = NumberFormat {
+            multiplier: amount("10"),
+            ..NumberFormat::default()
+        };
+        let got = extract(
+            br#"{"v": 79228162514264337593543950335}"#,
+            "v",
+            SourceOutput::Number,
+            &format,
+        )
+        .unwrap();
+        assert_eq!(got.number, None);
     }
 }
