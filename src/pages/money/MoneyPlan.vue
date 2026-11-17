@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { FOCUS_QUERY_KEY } from '@/shared/lib/use-focus-row'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 
+import { providePlanReady } from './model/use-plan-ready'
 import { PlanGoals, PlanLimits, PlanNext } from './ui/plan'
 
 /**
@@ -20,6 +21,8 @@ import { PlanGoals, PlanLimits, PlanNext } from './ui/plan'
 const props = defineProps<{ filter: ReportFilter }>()
 
 const { t } = useI18n()
+/** Hidden, not unmounted, until every block has its first data: the blocks load and keep their tour anchors. */
+const ready = providePlanReady()
 const route = useRoute()
 /** A link to one goal or limit (`?focus=`) unfolds the lists, where its row is lit. */
 const focused = () => typeof route.query[FOCUS_QUERY_KEY] === 'string'
@@ -30,7 +33,7 @@ watch(focused, (now) => {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 gap-4">
+  <div :class="['grid grid-cols-1 gap-4', !ready && 'invisible']" :aria-busy="!ready">
     <div class="grid items-start gap-4 @3xl:grid-cols-2">
       <PlanLimits :filter="props.filter" />
       <PlanGoals :filter="props.filter" />
