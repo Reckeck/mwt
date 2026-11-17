@@ -39,9 +39,12 @@ mise, the artifacts end up in `target/` and the build starts from scratch.
 - **Vault lifecycle.** `auth::unlock_vault` → `VaultFile::open` (the AEAD check
   of the password = decryption, there is no verifier) → `UnlockedVault` is put into
   `AppState.vault: Mutex<Option<UnlockedVault>>`. Every mutation in
-  `UnlockedVault` (`service.rs`) ends with `persist()`: a full
-  re-encryption and an atomic write (tmp + fsync + rename). There is no separate "save"
-  from the frontend.
+  `UnlockedVault` (`service/`) goes through `transact`, which marks the change via
+  `persist()`. In the app the write-behind writer then writes it: a full
+  re-encryption and an atomic write (tmp + fsync + rename), batched per burst of
+  changes. What must be on disk now (new password, backup copy, re-key, closing the vault)
+  calls `persist_now`. Without a hook (tests, tools) `persist()` writes at once.
+  There is no separate "save" from the frontend. Layers: `docs/architecture.md`, "Layers and ports".
 - **Vault files on different OSes.** The working vault is always a local path:
   `PathBuf::from` is never applied to a string from the frontend, only
   `platform_fs::resolve_vault_to_open/resolve_new_vault` (Android hands out

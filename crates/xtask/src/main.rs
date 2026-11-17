@@ -1,6 +1,7 @@
 //! `cargo xtask`: the build and check engine (task graph, fail-fast, logs).
 
 mod annotate;
+mod arch;
 mod audit;
 mod build;
 mod bundle;

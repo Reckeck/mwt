@@ -1201,6 +1201,7 @@ pub struct VehicleMileageInput {
 #[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct VehicleServiceDoneInput {
     pub store_id: String,
+    #[ts(type = "LocalDate")]
     pub date: String,
     pub km: Option<u32>,
 }
@@ -1265,6 +1266,7 @@ pub struct EnsureFxInput {
     pub currencies: Vec<String>,
     /// `YYYY-MM-DD` (UTC); empty or absent means today.
     #[serde(default)]
+    #[ts(type = "LocalDate | null")]
     pub date: Option<String>,
 }
 
@@ -1720,6 +1722,41 @@ impl Comparison {
         let base = self.base.filter(|base| !base.is_zero())?;
         let hundred = Amount::new(rust_decimal::Decimal::ONE_HUNDRED);
         Some(((self.value - base) / base.abs() * hundred).round(2))
+    }
+}
+
+#[cfg(test)]
+mod wire_tests {
+    use super::*;
+
+    /// Money and calendar dates cross the wire as JSON strings, never numbers.
+    #[test]
+    fn wire_dates_and_amounts_are_strings() {
+        let points = AdjustPointsInput {
+            store_id: "s".into(),
+            delta: Amount::parse("-12.50").unwrap(),
+            comment: String::new(),
+            source_store_id: None,
+            timestamp: None,
+        };
+        let json = serde_json::to_value(&points).unwrap();
+        assert_eq!(json["delta"], serde_json::json!("-12.50"));
+
+        let service = VehicleServiceDoneInput {
+            store_id: "s".into(),
+            date: "2026-03-15".into(),
+            km: Some(1000),
+        };
+        let json = serde_json::to_value(&service).unwrap();
+        assert_eq!(json["date"], serde_json::json!("2026-03-15"));
+
+        let date = crate::time::LocalDate::from_ymd_opt(2026, 3, 15);
+        let mut holder = serde_json::Map::new();
+        holder.insert(
+            "date".into(),
+            crate::model::iso_date::serialize(&date, serde_json::value::Serializer).unwrap(),
+        );
+        assert_eq!(holder["date"], serde_json::json!("2026-03-15"));
     }
 }
 

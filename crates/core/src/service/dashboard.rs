@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 use super::FlowClass;
 use super::UnlockedVault;
 use crate::Amount;
-use crate::calendar::period::{PeriodWindow, period_window};
 use crate::calendar::{self, Calendar};
 use crate::ipc_contract::{BaseKind, Comparison};
 use crate::model::vault::DashPeriod;
+use crate::planning::period::{PeriodWindow, period_window};
 
 /// One day of the "Spending" week strip.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]

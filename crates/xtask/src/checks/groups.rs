@@ -12,7 +12,7 @@ pub const GROUPS: [(&str, &[&str]); 5] = [
     ("@frontend", &["@static", "@browser"]),
     (
         "@rust",
-        &["test", "gen-types", "clippy", "fmt", "ci-scripts"],
+        &["test", "gen-types", "clippy", "fmt", "ci-scripts", "arch"],
     ),
     (
         "@platforms",
@@ -177,7 +177,10 @@ mod tests {
     fn exclude_removes_from_the_selection_and_dependencies_come_back() {
         let known = names();
         let got = choose(&known, &[], &strings(&["@frontend", "@platforms"])).unwrap();
-        assert_eq!(got, ["test", "gen-types", "clippy", "ci-scripts", "fmt"]);
+        assert_eq!(
+            got,
+            ["test", "gen-types", "clippy", "ci-scripts", "arch", "fmt"]
+        );
         // gen-types needs test: excluding test alone does not drop it from the run.
         let picked = choose(&known, &strings(&["@rust"]), &strings(&["test"])).unwrap();
         assert!(!picked.contains(&"test".to_string()));

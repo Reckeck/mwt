@@ -11,7 +11,7 @@ use super::Calendar;
 /// A date written as `2026-03-08` or as an RFC3339 moment (its local day).
 pub fn parse_date(text: &str, cal: &Calendar) -> Option<NaiveDate> {
     let text = text.trim();
-    crate::pricing::history::unix_secs(text)
+    crate::time::unix_secs(text)
         .map(|secs| cal.date_of(secs))
         .or_else(|| NaiveDate::parse_from_str(text.get(..10).unwrap_or(text), "%Y-%m-%d").ok())
 }

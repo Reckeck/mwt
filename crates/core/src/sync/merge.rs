@@ -121,7 +121,9 @@ fn merge_core(
         (Some(_), None) => unchanged(&resolve_deletion(local, remote)),
         (None, Some(_)) => unchanged(&resolve_deletion(remote, local)),
         (None, None) => {
-            let tombstone = local.tombstone.clone().max(remote.tombstone.clone());
+            let limit = poison_limit();
+            let tombstone = demote_tombstone(&local.tombstone, limit)
+                .max(demote_tombstone(&remote.tombstone, limit));
             unchanged(&RecordState {
                 value: None,
                 stamps: None,
@@ -131,18 +133,54 @@ fn merge_core(
     }
 }
 
+/// A stamp beyond `limit` (ms) came from a wrong clock: it must not beat an
+/// edit made now, so it counts as wall 0 in a merge (device and count kept).
+/// Both sides get the same treatment, so the merge stays symmetric.
+fn demote_poisoned(mut stamps: RecordStamps, limit: u64) -> RecordStamps {
+    let demote = |stamp: &mut super::stamp::Stamp| {
+        if stamp.wall > limit {
+            stamp.wall = 0;
+        }
+    };
+    demote(&mut stamps.created);
+    stamps.fields.values_mut().for_each(demote);
+    stamps
+}
+
+/// The newest wall time (ms) a stamp may carry before it counts as poisoned.
+fn poison_limit() -> u64 {
+    super::stamp::now_ms().saturating_add(super::stamp::MAX_FUTURE_MS)
+}
+
+/// A tombstone beyond `limit` is capped to now (the T42 cap): the deletion
+/// still beats what was stamped before it, and the capped stamp is what the
+/// merge stores, so a record recreated afterwards is stamped past it and
+/// survives. Wall 0 would instead lose the deletion to any live copy.
+fn demote_tombstone(
+    tombstone: &Option<super::stamp::Stamp>,
+    limit: u64,
+) -> Option<super::stamp::Stamp> {
+    tombstone.clone().map(|mut stamp| {
+        if stamp.wall > limit {
+            stamp.wall = limit.saturating_sub(super::stamp::MAX_FUTURE_MS);
+        }
+        stamp
+    })
+}
+
 /// A live record against a side that has it deleted (or never had it).
 fn resolve_deletion(alive: &RecordState, other: &RecordState) -> RecordState {
+    let limit = poison_limit();
     let changed = alive
         .stamps
-        .as_ref()
-        .map(|stamps| stamps.latest().clone())
+        .clone()
+        .map(|stamps| demote_poisoned(stamps, limit).latest().clone())
         .unwrap_or_default();
-    match &other.tombstone {
-        Some(deleted) if *deleted > changed => RecordState {
+    match demote_tombstone(&other.tombstone, limit) {
+        Some(deleted) if deleted > changed => RecordState {
             value: None,
             stamps: None,
-            tombstone: Some(deleted.clone()),
+            tombstone: Some(deleted),
         },
         _ => RecordState {
             value: alive.value.clone(),
@@ -160,8 +198,9 @@ fn merge_fields(
     seen: Option<&super::stamp::Stamp>,
     external: bool,
 ) -> Merged {
-    let local_stamps = local.stamps.clone().unwrap_or_default();
-    let remote_stamps = remote.stamps.clone().unwrap_or_default();
+    let limit = poison_limit();
+    let local_stamps = demote_poisoned(local.stamps.clone().unwrap_or_default(), limit);
+    let remote_stamps = demote_poisoned(remote.stamps.clone().unwrap_or_default(), limit);
     let local_fields = split(coll, mine);
     let remote_fields = split(coll, theirs);
 
@@ -406,6 +445,25 @@ mod tests {
         let back = merge(coll, right, left).state;
         assert_eq!(there, back, "merge must not depend on the side");
         there
+    }
+
+    #[test]
+    fn a_poisoned_stamp_does_not_beat_an_edit_from_now() {
+        let coll = find("stores").expect("rule");
+        let now = super::super::stamp::now_ms();
+        let far = now + 30 * 24 * 3600 * 1000;
+        let poisoned = state(
+            json!({"id": "s", "name": "Old", "archived": false}),
+            at(far, "a"),
+            &[("name", at(far, "a"))],
+        );
+        let edited = state(
+            json!({"id": "s", "name": "New", "archived": false}),
+            at(far, "a"),
+            &[("name", at(now, "b"))],
+        );
+        let merged = both_ways(coll, &poisoned, &edited);
+        assert_eq!(merged.value.unwrap()["name"], "New");
     }
 
     #[test]

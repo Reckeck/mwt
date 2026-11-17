@@ -18,17 +18,7 @@ use crate::Amount;
 use crate::error::Result;
 use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint};
 use crate::model::vault::VaultDoc;
-
-/// The moment a day's price is stored under: midnight UTC.
-pub fn date_ts(date: NaiveDate) -> String {
-    format!("{}T00:00:00Z", date.format("%Y-%m-%d"))
-}
-
-/// Unix seconds of midnight UTC of `date`.
-pub fn date_secs(date: NaiveDate) -> i64 {
-    date.and_hms_opt(0, 0, 0)
-        .map_or(0, |moment| moment.and_utc().timestamp())
-}
+pub use crate::time::{date_secs, date_ts};
 
 /// What the cache knows about one price.
 #[derive(Debug, Clone, PartialEq, Default)]

@@ -71,7 +71,7 @@ impl<'a> Tx<'a> {
     }
 
     /// The emitted events, in emit order, for the commit to publish.
-    pub fn take_events(&mut self) -> Vec<DomainEvent> {
+    pub(crate) fn take_events(&mut self) -> Vec<DomainEvent> {
         std::mem::take(&mut self.events)
     }
 

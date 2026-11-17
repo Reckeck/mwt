@@ -29,14 +29,14 @@ pub fn months_back(date: NaiveDate, months: u32) -> NaiveDate {
     let index = date.year() * 12 + date.month0() as i32 - months as i32;
     let (year, month) = (index.div_euclid(12), index.rem_euclid(12) as u32 + 1);
     let first = NaiveDate::from_ymd_opt(year, month, 1).unwrap_or(date);
-    let day = date.day().min(super::days_in_month(first));
+    let day = date.day().min(crate::calendar::days_in_month(first));
     first.with_day(day).unwrap_or(first)
 }
 
 /// The current period from its first day to `today`, and the previous period
 /// of the same length up to the same date.
 pub fn period_window(period: DashPeriod, today: NaiveDate) -> PeriodWindow {
-    let first = super::first_of_month(today);
+    let first = crate::calendar::first_of_month(today);
     let start = match period {
         DashPeriod::Month => first,
         DashPeriod::Quarter => months_back(first, first.month0() % 3),
