@@ -87,6 +87,44 @@ What makes CI fast and what must not be broken:
   `Cargo.toml`), which gives the smallest and fastest binary.
 - No debug info in the checks (`CARGO_PROFILE_DEV_DEBUG=0`).
 
+### Measured run time
+
+Per job, in `ci.yml` on a PR with a warm lane cache (`deps` hit), from
+`gh run view <run> --json jobs`. The new run is PR #128, run 44116673963; the
+old one is PR #126 (run 44039661424, the `checks` part of `release.yml`; it had
+one `check-linux` job instead of the three Rust jobs).
+
+| Job | PR #126 | PR #128 |
+|---|---|---|
+| `images` | 0m32s | 0m30s |
+| `xtask` | 0m49s | 0m50s |
+| `deps` (Linux lane, a hit) | 0m37s | 0m35s |
+| `deps` (android lane, a hit) | 0m58s | 1m06s |
+| `check-linux` | 9m01s | removed |
+| `check-lint` | - | 4m36s |
+| `test` | - | 7m13s |
+| `test-convergence` | - | 5m18s |
+| `check-android` | 3m28s | 3m32s |
+| `clippy-windows` | 3m44s | 3m32s |
+| `frontend-static` | 1m10s | 1m34s |
+| `frontend-e2e` | 1m55s | 1m39s |
+| `frontend-layout` (slowest shard) | 6m30s | 6m29s |
+| `ci-ok` | 0m05s | 0m05s |
+| Run total (wall clock) | about 12 min | 26m29s |
+
+The PR #128 total is over 6 minutes and it is not the jobs: about 15 minutes
+of it is waiting for runners (`xtask` started 9 min after `images` finished,
+`test` 2.5 min after its `deps`), because several runs of the repository shared
+the runners. The work itself is images -> `xtask` -> `deps` (about 2.5 min on a
+hit) and then the longest job. The biggest job is `test` (7m13s, an earlier
+cold-ish run of it took 5m56s): it compiles the whole workspace and runs the
+2027 fast core tests in one process; `check-lint` and `test-convergence`
+(4m36s, 5m18s) and the frontend layout shards (about 6m20s) are shorter. So the
+critical path is `test`, and `check-android` and `clippy-windows` (3m32s each)
+are not on it. Getting under 6 minutes needs a second `test` shard (nextest or a
+split by crate), which is a separate decision; this is not a blocker of the
+change.
+
 ## Releasing a version
 
 Pre-releases are every push to `development`, a release is a merge into `main`;
@@ -164,6 +202,22 @@ a PR and is called from `release.yml` (`workflow_call`): a push to
 `development`/`main` is checked by exactly that call; there is no separate run
 of `ci.yml` on a push.
 
+Jobs of the checks (all start from the same `images` / `xtask` / `deps` steps):
+
+| Job | Runs | What it does |
+|---|---|---|
+| `changes` | always (after `xtask`; `xtask ci-changes`) | decides from the PR's changed files whether the platform lanes run (a narrow allowlist of skippable paths; `package.json` and `pnpm-lock.yaml` do not skip) |
+| `check-lint` | `ci-linux` | `bin/xtask check --exclude @frontend --exclude @platforms --exclude @tests`: fmt, clippy, gen-types, the other Rust tasks |
+| `test` | `ci-linux` | `bin/xtask check test`: the fast unit tests (2027 core tests) |
+| `test-convergence` | `ci-linux` | `bin/xtask check test-slow`: the slow convergence/perf tests (12 core tests) |
+| `frontend-static`, `frontend-e2e`, `frontend-layout` | `ci-node` | see below |
+| `check-android`, `clippy-windows` | skipped when `changes` says so | platform lanes |
+
+The three Rust jobs run in parallel and replace the former single `check-linux`.
+Rule: a new Rust task is covered by `check-lint` (by exclusion) or has to be put
+in `@tests` (`crates/xtask/src/checks/groups.rs`), then in a job (`test` or
+`test-convergence`); a test fails for a task that is in no group.
+
 - `xtask` and `xtask-windows` compile xtask once per run (cache of
   `.cache/xtask-target`) and upload it as the artifacts `xtask-linux` /
   `xtask-windows` (not `xtask`: `release.yml` calls `ci.yml` in the same run and
@@ -174,7 +228,7 @@ of `ci.yml` on a push.
   **Every workflow step is one line** (no `run: |` blocks); the rest of the logic is
   hidden xtask commands in `crates/xtask/src/ci/`: `ci-container-env [--cargo]` (mise
   shims and cargo on PATH, `mise trust`; it comes right after the xtask download),
-  `ci-ok` (the `RESULTS` of the lanes; needs no checkout), `ci-pnpm-install`
+  `ci-ok` (the `RESULTS` of the lanes; needs no checkout), `ci-changes` (`changes`: `EVENT`, `PR_NUMBER`, `GITHUB_REPOSITORY`; the skip allowlist), `ci-pnpm-install`
   (`release.yml` frontend), `cache-cleanup` (`cache-cleanup.yml`: `EVENT`, `PR_NUMBER`,
   `BRANCH`, `GH_REPO`; that workflow compiles xtask with `cargo xtask`). `deps-cook`
   installs cargo-chef itself when missing and ends with `sccache --show-stats`;
@@ -197,12 +251,11 @@ of `ci.yml` on a push.
   key with `fail-on-cache-miss` and never run `pnpm install`. They run no cargo,
   so they have no Rust lane cache and no sccache.
 - The web part runs in the light `ci-node` image (node, pnpm, Chrome, no Rust;
-  `deps-node` too): xtask comes as the prebuilt binary. `check-linux`
-  (`bin/xtask check --exclude @frontend --exclude @platforms`, in `ci-linux`),
-  `frontend-static` (`bin/xtask check @static`: lint, typecheck, vitest, static
+  `deps-node` too): xtask comes as the prebuilt binary. the Rust
+  jobs (table below), `frontend-static` (`bin/xtask check @static`: lint, typecheck, vitest, static
   checks) and `frontend-e2e` (`bin/xtask check @browser --exclude layout
   --exclude links`: e2e) run in parallel. A new task of `check` lands in
-  `check-linux` unless it is in `@frontend` or `@platforms`; a new `@static`
+`check-lint` unless it is in `@frontend`, `@platforms` or `@tests`; a new `@static`
   task lands in `frontend-static`, a new `@browser` one in `frontend-e2e`; the groups are one
   table (`crates/xtask/src/checks/groups.rs`: `@static`, `@browser`, `@frontend`,
   `@rust`, `@platforms`) and a test fails for a task that is in none.

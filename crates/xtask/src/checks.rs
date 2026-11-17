@@ -49,12 +49,16 @@ fn browser(task: Task, overlap: bool) -> Task {
     }
 }
 
-const QUIET_AFTER: [&str; 10] = [
+/// The module path of the slow peer-sync convergence tests: `test-slow` runs only them, `test` skips them.
+pub const SLOW_FILTER: &str = "service::peer_sync::convergence";
+
+const QUIET_AFTER: [&str; 11] = [
     "biome",
     "vue-tsc",
     "unit",
     "checks",
     "test",
+    "test-slow",
     "gen-types",
     "clippy",
     "platform:android",
@@ -115,10 +119,16 @@ fn clippy_workspace(root: &Path) -> Task {
 pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpts) -> Vec<Task> {
     let mut tasks = vec![
         Task::cmd(
+            "test-slow",
+            Class::Heavy,
+            &[],
+            Cmd::new("cargo").args(["test", "-p", "trade-core", "--lib", "--", SLOW_FILTER]),
+        ),
+        Task::cmd(
             "test",
             Class::Heavy,
             &[],
-            Cmd::new("cargo").args(["test", "--workspace"]),
+            Cmd::new("cargo").args(["test", "--workspace", "--", "--skip", SLOW_FILTER]),
         ),
         gen_types(root),
     ];
@@ -194,39 +204,35 @@ fn arch() -> Task {
 
 /// Regenerates ipc.gen.d.ts and fails when it differs from the committed file; the file is put back.
 fn gen_types(_root: &Path) -> Task {
-    Task::func(
-        "gen-types",
-        Class::Heavy,
-        &["test"],
-        |ctx: Ctx| async move {
-            let path = ctx.root.join(GEN_TYPES_FILE);
-            let before = std::fs::read(&path).ok();
-            let cmd = Cmd::new("cargo").args(["run", "-p", "trade-core", "--bin", "gen-types"]);
-            let end = ctx.exec(&cmd).await;
-            // A killed generator leaves its scratch directory behind.
-            let _ = std::fs::remove_dir_all(ctx.root.join("src/shared/api/.ts-tmp"));
-            let after = std::fs::read(&path).ok();
-            if after != before {
-                match &before {
-                    Some(bytes) => {
-                        let _ = std::fs::write(&path, bytes);
-                    }
-                    None => {
-                        let _ = std::fs::remove_file(&path);
-                    }
+    Task::func("gen-types", Class::Heavy, &[], |ctx: Ctx| async move {
+        let path = ctx.root.join(GEN_TYPES_FILE);
+        let before = std::fs::read(&path).ok();
+        let cmd = Cmd::new("cargo").args(["run", "-p", "trade-core", "--bin", "gen-types"]);
+        let end = ctx.exec(&cmd).await;
+        // A killed generator leaves its scratch directory behind.
+        let _ = std::fs::remove_dir_all(ctx.root.join("src/shared/api/.ts-tmp"));
+        let after = std::fs::read(&path).ok();
+        if after != before {
+            match &before {
+                Some(bytes) => {
+                    let _ = std::fs::write(&path, bytes);
+                }
+                None => {
+                    let _ = std::fs::remove_file(&path);
                 }
             }
-            match end {
-                Ok(ExecEnd::Done(0)) if after == before => Outcome::Ok,
-                Ok(ExecEnd::Done(0)) => {
-                    Outcome::Fail("ipc.gen.d.ts is out of date: run `mise run gen-types`".into())
-                }
-                Ok(ExecEnd::Done(code)) => Outcome::Fail(format!("gen-types exited with {code}")),
-                Ok(ExecEnd::Cancelled) => Outcome::Cancelled,
-                Err(error) => Outcome::Fail(format!("{error:#}")),
+        }
+        match end {
+            Ok(ExecEnd::Done(0)) if after == before => Outcome::Ok,
+            Ok(ExecEnd::Done(0)) => {
+                Outcome::Fail("ipc.gen.d.ts is out of date: run `mise run gen-types`".into())
             }
-        },
-    )
+            Ok(ExecEnd::Done(code)) => Outcome::Fail(format!("gen-types exited with {code}")),
+            Ok(ExecEnd::Cancelled) => Outcome::Cancelled,
+            Err(error) => Outcome::Fail(format!("{error:#}")),
+        }
+    })
+    .after(&["test"])
 }
 
 #[cfg(test)]

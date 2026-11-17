@@ -6,13 +6,22 @@ use crate::platforms;
 
 /// A group is `@name`; a member is a task name or another group. Every task of `check_tasks` must be
 /// in some group (a test fails otherwise), so a new task cannot be dropped from a CI selection.
-pub const GROUPS: [(&str, &[&str]); 5] = [
+pub const GROUPS: [(&str, &[&str]); 6] = [
     ("@static", &["biome", "vue-tsc", "unit", "checks"]),
     ("@browser", &["e2e", "layout", "links"]),
     ("@frontend", &["@static", "@browser"]),
+    ("@tests", &["test", "test-slow"]),
     (
         "@rust",
-        &["test", "gen-types", "clippy", "fmt", "ci-scripts", "arch"],
+        &[
+            "test",
+            "test-slow",
+            "gen-types",
+            "clippy",
+            "fmt",
+            "ci-scripts",
+            "arch",
+        ],
     ),
     (
         "@platforms",
@@ -80,7 +89,7 @@ fn unknown(item: &str, known: &[String]) -> String {
 ///
 /// `items` (names, `@groups`, platform names) are united; empty means every task. `exclude` is then
 /// taken away from that list. Dependencies of what remains are still pulled in later (`graph::select`),
-/// so excluding `test` does not drop it while `gen-types` is kept.
+/// so a task another one needs does not stay out. `gen-types` only runs after `test` and does not need it.
 pub fn choose(known: &[String], items: &[String], exclude: &[String]) -> Result<Vec<String>> {
     let mut wanted = Vec::new();
     for item in items {
@@ -179,17 +188,86 @@ mod tests {
         let got = choose(&known, &[], &strings(&["@frontend", "@platforms"])).unwrap();
         assert_eq!(
             got,
-            ["test", "gen-types", "clippy", "ci-scripts", "arch", "fmt"]
+            [
+                "test-slow",
+                "test",
+                "gen-types",
+                "clippy",
+                "ci-scripts",
+                "arch",
+                "fmt"
+            ]
         );
-        // gen-types needs test: excluding test alone does not drop it from the run.
-        let picked = choose(&known, &strings(&["@rust"]), &strings(&["test"])).unwrap();
-        assert!(!picked.contains(&"test".to_string()));
-        let tasks = select(
+        let got = choose(
+            &known,
+            &[],
+            &strings(&["@frontend", "@platforms", "@tests"]),
+        )
+        .unwrap();
+        assert_eq!(got, ["gen-types", "clippy", "ci-scripts", "arch", "fmt"]);
+    }
+
+    fn selected(items: &[&str]) -> Vec<String> {
+        let picked = choose(&names(), &strings(items), &[]).unwrap();
+        select(
             check_tasks(Path::new("."), false, &BrowserOpts::default()),
             &picked,
         )
-        .unwrap();
-        assert!(tasks.iter().any(|task| task.name == "test"));
+        .unwrap()
+        .iter()
+        .map(|task| task.name.clone())
+        .collect()
+    }
+
+    #[test]
+    fn gen_types_alone_and_test_slow_alone_select_only_themselves() {
+        assert_eq!(selected(&["gen-types"]), ["gen-types"]);
+        assert_eq!(selected(&["test-slow"]), ["test-slow"]);
+    }
+
+    #[test]
+    fn tests_group_holds_exactly_the_two_and_is_in_rust() {
+        assert_eq!(expand_group("@tests").unwrap(), ["test", "test-slow"]);
+        let rust = expand_group("@rust").unwrap();
+        assert!(rust.contains(&"test".to_string()) && rust.contains(&"test-slow".to_string()));
+    }
+
+    fn command_of(name: &str) -> String {
+        check_tasks(Path::new("."), false, &BrowserOpts::default())
+            .iter()
+            .find(|task| task.name == name)
+            .and_then(|task| task.description.clone())
+            .unwrap()
+    }
+
+    #[test]
+    fn the_two_test_commands_are_complementary() {
+        let filter = crate::checks::SLOW_FILTER;
+        assert_eq!(
+            command_of("test-slow"),
+            format!("cargo test -p trade-core --lib -- {filter}")
+        );
+        assert_eq!(
+            command_of("test"),
+            format!("cargo test --workspace -- --skip {filter}")
+        );
+    }
+
+    /// The filter is a module path: when the module is renamed, `test-slow` would run nothing.
+    #[test]
+    fn the_slow_filter_names_a_module_of_the_source_tree() {
+        let relative = crate::checks::SLOW_FILTER.replace("::", "/");
+        let (dir, prefix) = relative.rsplit_once('/').unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../core/src");
+        let found = std::fs::read_dir(root.join(dir))
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| entry.file_name().to_string_lossy().starts_with(prefix));
+        assert!(
+            found,
+            "no module `{}` under crates/core/src",
+            crate::checks::SLOW_FILTER
+        );
     }
 
     #[test]

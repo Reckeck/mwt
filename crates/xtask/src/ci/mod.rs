@@ -3,6 +3,7 @@
 
 pub mod build_images;
 pub mod cache_cleanup;
+pub mod changes;
 pub mod ci_ok;
 pub mod container_env;
 pub mod lint;

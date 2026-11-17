@@ -8,14 +8,20 @@
 #                   frontend jobs only restore it (and fail on a miss)
 #   deps            a lane's dependency cache (sccache dir), written ONLY here and only when
 #                   the lane has no cache for its key yet; everything else just reads it
-#   check-linux     bin/xtask check --exclude @frontend --exclude @platforms in ci-linux: fmt, clippy, tests, gen-types
+#   changes         decides from the PR's changed files whether the platform lanes (check-android, clippy-windows) run
+#   check-lint      bin/xtask check --exclude @frontend --exclude @platforms --exclude @tests in ci-linux: fmt, clippy, gen-types
+#   test            bin/xtask check test in ci-linux (parallel with check-lint)
+#   test-convergence bin/xtask check test-slow in ci-linux (parallel with check-lint)
 #   frontend-static bin/xtask check @static in ci-node: lint, typecheck, vitest, static checks
 #   frontend-e2e    bin/xtask check @browser --exclude layout --exclude links in ci-node: e2e
 #   frontend-layout bin/xtask check layout links (full by default) in ci-node, a matrix of 6 shards of their units
 #   check-android   bin/xtask check platform:android in ci-android (NDK in the image)
 #   clippy-windows  native clippy on windows-latest        } xtask's platform:windows/macos need
-#   clippy-macos    cargo xtask check platform:macos       } cargo-xwin / a Mac: left out of check-linux
+#   clippy-macos    cargo xtask check platform:macos       } cargo-xwin / a Mac: left out of check-lint
 #   ci-ok           the one job branch protection requires
+#
+# A new Rust task is covered by check-lint (it takes every task not excluded there) or has to be put
+# in @tests (crates/xtask/src/checks/groups.rs), then in a job (test or test-convergence).
 #
 # Cache keys, who writes and who reads: see `xtask lane-key` (crates/xtask/src/cache/lane_key.rs)
 # and the job comments below. A cache is visible to its own ref, the PR's base branch and the
@@ -62,6 +68,35 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+  # ---------------------------------------------------------------- changes
+  # Decides whether the platform lanes (check-android, clippy-windows) run. An allowlist of
+  # skippable paths: one changed file outside it, or any event but a PR (workflow_call from
+  # release.yml, workflow_dispatch, a push to main), means `platforms=true`. A skipped lane
+  # counts as ok in ci-ok.
+  changes:
+    needs: xtask
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      platforms: ${{ steps.decide.outputs.platforms }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      - name: Decide
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bin/xtask ci-changes
 
   # ------------------------------------------------------------------ xtask
   # xtask compiled once per platform; every job below downloads it into bin/ instead of running
@@ -357,7 +392,7 @@ jobs:
 
   # ------------------------------------------------------------------ checks
   # `deps` is skipped on main (no caches there); any other result than success/skipped stops the check.
-  check-linux:
+  check-lint:
     needs: [images, xtask, deps]
     if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
     runs-on: ubuntu-latest
@@ -399,7 +434,7 @@ jobs:
           path: .cache/sccache
           key: ${{ steps.key.outputs.key }}
       - name: xtask check
-        run: bin/xtask check --exclude @frontend --exclude @platforms
+        run: bin/xtask check --exclude @frontend --exclude @platforms --exclude @tests
       - name: sccache stats
         if: always()
         run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
@@ -407,7 +442,119 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: check-linux-logs
+          name: check-lint-logs
+          path: |
+            .cache/xtask/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  test:
+    needs: [images, xtask, deps]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    container:
+      image: ${{ needs.images.outputs.base }}/ci-linux:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      MISE_DATA_DIR: /opt/mise
+      MISE_YES: "1"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      CI_IMAGE_TAG: ${{ needs.images.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      - name: Toolchain from the image
+        run: bin/xtask ci-container-env --cargo
+      - name: Environment
+        run: bin/xtask ci-env
+      - name: Cache key
+        id: key
+        run: echo "key=$(bin/xtask lane-key check-linux)" >>"$GITHUB_OUTPUT"
+      - name: Dependencies (read-only lane cache)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+      - name: xtask check
+        run: bin/xtask check test
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
+      - name: Logs and screenshots of a failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-logs
+          path: |
+            .cache/xtask/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  test-convergence:
+    needs: [images, xtask, deps]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    container:
+      image: ${{ needs.images.outputs.base }}/ci-linux:${{ needs.images.outputs.tag }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      MISE_DATA_DIR: /opt/mise
+      MISE_YES: "1"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      CI_IMAGE_TAG: ${{ needs.images.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask-linux
+          path: bin
+      - name: Make xtask executable
+        run: chmod +x bin/xtask
+      - name: Toolchain from the image
+        run: bin/xtask ci-container-env --cargo
+      - name: Environment
+        run: bin/xtask ci-env
+      - name: Cache key
+        id: key
+        run: echo "key=$(bin/xtask lane-key check-linux)" >>"$GITHUB_OUTPUT"
+      - name: Dependencies (read-only lane cache)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/sccache
+          key: ${{ steps.key.outputs.key }}
+      - name: xtask check
+        run: bin/xtask check test-slow
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats | grep -E '^(Compile requests|Cache hits|Cache misses) ' || true
+      - name: Logs and screenshots of a failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-convergence-logs
           path: |
             .cache/xtask/
           retention-days: 7
@@ -577,8 +724,8 @@ jobs:
   # in the ci-android image the NDK and the Rust Android targets are on the host, which
   # is the path xtask takes first (platforms.rs: android()).
   check-android:
-    needs: [images, xtask, deps]
-    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    needs: [images, changes, xtask, deps]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') && needs.changes.outputs.platforms == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     container:
@@ -632,8 +779,8 @@ jobs:
           if-no-files-found: ignore
 
   clippy-windows:
-    needs: [images, xtask-windows, deps-native]
-    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask-windows.result == 'success' && (needs.deps-native.result == 'success' || needs.deps-native.result == 'skipped') }}
+    needs: [images, changes, xtask-windows, deps-native]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask-windows.result == 'success' && (needs.deps-native.result == 'success' || needs.deps-native.result == 'skipped') && needs.changes.outputs.platforms == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -729,7 +876,7 @@ jobs:
   # The required status check of the protected branches: green only if every lane is.
   ci-ok:
     if: always()
-    needs: [images, xtask, xtask-windows, deps-node, deps, deps-native, check-linux, frontend-static, frontend-e2e, frontend-layout, check-android, clippy-windows, clippy-macos]
+    needs: [images, changes, xtask, xtask-windows, deps-node, deps, deps-native, check-lint, test, test-convergence, frontend-static, frontend-e2e, frontend-layout, check-android, clippy-windows, clippy-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
