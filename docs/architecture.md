@@ -134,6 +134,23 @@ vaults.
 
 ## Layers and ports
 
+Modules of `crates/core/src` form groups, groups form layers; a module may use only
+a lower layer or its own group. The table lives in `crates/xtask/src/arch/layers.rs`.
+
+| Layer | Groups (modules) |
+|---|---|
+| 0 | base (`amount`, `error`, `time`, `calendar`, `calc`, `limits`, `app_dirs`, `routes`, `external_url`) |
+| 1 | `crypto` |
+| 2 | `model` |
+| 3 | vault (`storage`, `vault_io`, `jsonstore`, `kernel`), `sync`, net (`pricing`, `exchange`, `datasource`, `market`, `updates`) |
+| 4 | `money`, `planning`, `cryptotrack`, `workflow`, `txinfo`, `utilities_formula` |
+| 5 | use cases (`service`, `sandbox`, `appconfig`, `ipc_contract`) |
+| 6 | `testkit` (tests and the `testkit` feature only) |
+
+A new back edge fails `arch`; to allow one, write an entry with `until` and a reason in the PR
+(`crates/xtask/arch-allow.toml`). An entry that no longer matches an edge fails too.
+Today only `kernel -> service` and `workflow -> service` remain, until phase Ф5.
+
 The kernel (`crates/core/src/kernel/`) is the one place where a change of the open
 vault is committed. It grows by the strangler rule. What exists:
 
