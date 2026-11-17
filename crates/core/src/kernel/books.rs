@@ -54,8 +54,9 @@ impl<'vault> Books<'vault> {
     }
 
     /// The base currency code and its latest FX rate, computed on first use.
-    pub fn base_and_fx(&self) -> &(String, Amount) {
-        self.base_and_fx.get_or_init(|| self.vault.base_and_fx())
+    pub fn base_and_fx(&self) -> (&str, Amount) {
+        let (base, fx) = self.base_and_fx.get_or_init(|| self.vault.base_and_fx());
+        (base.as_str(), *fx)
     }
 
     /// Current USD price of one unit of the asset.
@@ -159,7 +160,8 @@ mod tests {
     fn books_base_and_fx_equals_vault() {
         let (_dir, vault) = open_vault();
         let books = vault.books();
-        assert_eq!(books.base_and_fx(), &vault.base_and_fx());
+        let (vault_base, vault_fx) = vault.base_and_fx();
+        assert_eq!(books.base_and_fx(), (vault_base.as_str(), vault_fx));
         assert_eq!(books.price_usd("fiat:usd"), vault.price_usd_for("fiat:usd"));
         let fx = vault.base_and_fx().1;
         assert_eq!(

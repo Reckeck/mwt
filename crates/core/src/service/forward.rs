@@ -23,7 +23,7 @@ macro_rules! forward {
     // Shared receiver.
     (
         $(#[$meta:meta])*
-        $vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)* $(,)?) $(-> $ret:ty)?
+        $vis:vis fn $name:ident(&self $(, $($arg:ident)+ : $ty:ty)* $(,)?) $(-> $ret:ty)?
             => $($target:ident)::+ $(@$books:ident)?;
         $($rest:tt)*
     ) => {
@@ -32,15 +32,15 @@ macro_rules! forward {
             feature = "deprecated-forwards",
             deprecated(note = "moved out of `UnlockedVault`; call the new function directly")
         )]
-        $vis fn $name(&self $(, $arg: $ty)*) $(-> $ret)? {
-            $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?] $(, $arg)*)
+        $vis fn $name(&self $(, $crate::service::forward::forward!(@name $($arg)+): $ty)*) $(-> $ret)? {
+            $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?] $(, [$($arg)+])*)
         }
         $crate::service::forward::forward!($($rest)*);
     };
     // Exclusive receiver.
     (
         $(#[$meta:meta])*
-        $vis:vis fn $name:ident(&mut self $(, $arg:ident : $ty:ty)* $(,)?) $(-> $ret:ty)?
+        $vis:vis fn $name:ident(&mut self $(, $($arg:ident)+ : $ty:ty)* $(,)?) $(-> $ret:ty)?
             => $($target:ident)::+ $(@$books:ident)?;
         $($rest:tt)*
     ) => {
@@ -49,19 +49,26 @@ macro_rules! forward {
             feature = "deprecated-forwards",
             deprecated(note = "moved out of `UnlockedVault`; call the new function directly")
         )]
-        $vis fn $name(&mut self $(, $arg: $ty)*) $(-> $ret)? {
-            $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?] $(, $arg)*)
+        $vis fn $name(&mut self $(, $crate::service::forward::forward!(@name $($arg)+): $ty)*) $(-> $ret)? {
+            $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?] $(, [$($arg)+])*)
         }
         $crate::service::forward::forward!($($rest)*);
     };
-    (@call [$($target:ident)::+], $this:ident, [] $(, $arg:ident)*) => {
-        $($target)::+($this $(, $arg)*)
+    // The name of a parameter written `name` or `mut name`: the delegate binds it without `mut`.
+    (@name $only:ident) => {
+        $only
     };
-    (@call [$($target:ident)::+], $this:ident, [books] $(, $arg:ident)*) => {
-        $($target)::+(&$this.books() $(, $arg)*)
+    (@name $head:ident $($tail:ident)+) => {
+        $crate::service::forward::forward!(@name $($tail)+)
     };
-    (@call [$($target:ident)::+], $this:ident, [doc] $(, $arg:ident)*) => {
-        $($target)::+(&$this.doc $(, $arg)*)
+    (@call [$($target:ident)::+], $this:ident, [] $(, [$($arg:ident)+])*) => {
+        $($target)::+($this $(, $crate::service::forward::forward!(@name $($arg)+))*)
+    };
+    (@call [$($target:ident)::+], $this:ident, [books] $(, [$($arg:ident)+])*) => {
+        $($target)::+(&$this.books() $(, $crate::service::forward::forward!(@name $($arg)+))*)
+    };
+    (@call [$($target:ident)::+], $this:ident, [doc] $(, [$($arg:ident)+])*) => {
+        $($target)::+(&$this.doc $(, $crate::service::forward::forward!(@name $($arg)+))*)
     };
 }
 
@@ -112,6 +119,11 @@ mod tests {
         doc.total + extra
     }
 
+    fn drain_vault(vault: &Dummy, mut extra: i64) -> i64 {
+        extra += vault.base;
+        extra
+    }
+
     fn note_vault(vault: &Dummy, value: i64) {
         vault.seen.set(value);
     }
@@ -130,6 +142,8 @@ mod tests {
             fn books_forward(&self, extra: i64) -> i64 => add_to_books @books;
             /// Doc-first.
             fn doc_forward(&self, extra: i64) -> i64 => read_doc @doc;
+            /// A parameter bound with `mut`.
+            fn drain_forward(&self, mut extra: i64) -> i64 => drain_vault;
             /// No return type.
             fn note_forward(&self, value: i64) => note_vault;
         }
@@ -141,6 +155,11 @@ mod tests {
         assert_eq!(vault.read_forward(5), 15);
         assert_eq!(vault.write_forward(5), 15);
         assert_eq!(vault.base, 15);
+    }
+
+    #[test]
+    fn a_mut_binding_is_accepted_and_left_out_of_the_delegate() {
+        assert_eq!(dummy(10).drain_forward(5), 15);
     }
 
     #[test]
