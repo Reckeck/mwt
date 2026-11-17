@@ -21,6 +21,9 @@
 //!    key, each through a temp file that is opened before the rename; what
 //!    cannot be re-sealed and is still cheaper is deleted, only now that step
 //!    4 proved the new vault opens from the disk.
+//!
+//! From step 4 on the raise has succeeded: failures of step 5 go into
+//! [`RaiseReport::failed`], not into an `Err`.
 
 use std::collections::BTreeSet;
 use std::io::Read;
@@ -30,7 +33,7 @@ use std::sync::Arc;
 use zeroize::Zeroizing;
 
 use super::UnlockedVault;
-use super::password::{CopyPolicy, PlainCopies, RotationReport};
+use super::password::{CopyPolicy, PlainCopies, RotationFailure, RotationReport};
 use crate::crypto::header::{VaultHeader, level_of_container};
 use crate::crypto::kdf_profile::{KdfParams, KdfProfile};
 use crate::crypto::{SealKey, device_secrets};
@@ -42,7 +45,7 @@ use crate::model::vault::VaultDoc;
 use crate::storage::VaultFile;
 use crate::sync::state::RecordState;
 use crate::vault_io::backups;
-use crate::vault_io::copies::{self, CopySeal};
+use crate::vault_io::copies::{self, CopySeal, VaultCopy};
 
 /// A new level-2 PIN: at least this many digits, digits only.
 pub const MIN_PIN_DIGITS: usize = 6;
@@ -176,6 +179,9 @@ pub struct RaiseReport {
     pub deleted: Vec<String>,
     /// The new file went to the external copy.
     pub mirrored: bool,
+    /// Steps after the level-3 file was written and verified that did not
+    /// finish. The raise itself succeeded.
+    pub failed: Vec<RotationFailure>,
 }
 
 /// The points of the raise a test can break.
@@ -363,7 +369,7 @@ impl UnlockedVault {
         };
         let mut old_keys: Vec<SealKey> = Vec::new();
         for copy in &found {
-            self.rotate_copy(
+            if let Err(err) = self.rotate_copy(
                 copy,
                 &old_key,
                 old_password.as_deref().map(String::as_str),
@@ -371,28 +377,56 @@ impl UnlockedVault {
                 &new_key,
                 policy,
                 &mut rotation,
-            )?;
+            ) {
+                rotation.failed.push(RotationFailure::new(
+                    format!("copy {}", copy.file.name),
+                    &err,
+                ));
+            }
             fault(RaiseStep::CopyDone)?;
         }
         // Whatever is still cheaper than level 3 goes: the new vault opened
         // from the disk above. A file whose header says nothing is left.
-        for copy in copies::inventory(&self.path, &new_key)? {
-            if copy.seal == CopySeal::CurrentKey {
-                continue;
-            }
-            let file = backups::resolve(&self.path, &copy.file.name)?;
-            if level_of_vault_file(&file).is_ok_and(|level| level != SecurityLevel::Crypto) {
-                std::fs::remove_file(&file)?;
-                rotation.deleted.push(copy.file.name.clone());
-            }
+        match copies::inventory(&self.path, &new_key) {
+            Ok(found_now) => self.remove_cheaper_copies(found_now, &mut rotation),
+            Err(err) => rotation
+                .failed
+                .push(RotationFailure::new("inventory", &err)),
         }
         self.after_raise();
         Ok(RaiseReport {
-            backup: backups::resolve(&self.path, &backup.name)?,
+            backup: backups::backup_dir(&self.path).join(&backup.name),
             resealed: rotation.reencrypted,
             deleted: rotation.deleted,
             mirrored: rotation.mirrored,
+            failed: rotation.failed,
         })
+    }
+
+    /// Delete the copies that are not under the new key and are cheaper than
+    /// level 3; a copy that cannot be deleted goes into `rotation.failed`.
+    fn remove_cheaper_copies(&self, found: Vec<VaultCopy>, rotation: &mut RotationReport) {
+        for copy in found {
+            if copy.seal == CopySeal::CurrentKey {
+                continue;
+            }
+            let removed = backups::resolve(&self.path, &copy.file.name).and_then(|file| {
+                if level_of_vault_file(&file).is_ok_and(|level| level != SecurityLevel::Crypto) {
+                    std::fs::remove_file(&file)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            });
+            match removed {
+                Ok(true) => rotation.deleted.push(copy.file.name.clone()),
+                Ok(false) => {}
+                Err(err) => rotation.failed.push(RotationFailure::new(
+                    format!("copy {}", copy.file.name),
+                    &err,
+                )),
+            }
+        }
     }
 
     /// What follows a successful raise: the module takes over the crypto, so

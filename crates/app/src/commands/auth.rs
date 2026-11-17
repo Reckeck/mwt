@@ -449,13 +449,51 @@ pub async fn change_password(
     if vault.security_level() == SecurityLevel::Pin {
         check_new_secret(SecurityLevel::Pin, &input.new_password).map_err(err_to_string)?;
     }
-    vault
-        .change_password(&input.current_password, &input.new_password)
-        .map_err(crate::commands::err_to_string)?;
-    // The bound password is stale now: quick unlock starts over.
-    crate::biometric::system_gate(&app_settings::config_dir(&app))
-        .disable(&vault.path.to_string_lossy());
-    Ok(())
+    let salt_before = vault.key_salt();
+    let outcome = vault.change_password(&input.current_password, &input.new_password);
+    let key_changed = vault.key_salt() != salt_before;
+    reset_binding_after(&outcome, key_changed, || {
+        crate::biometric::system_gate(&app_settings::config_dir(&app))
+            .disable(&vault.path.to_string_lossy());
+    });
+    outcome.map_err(crate::commands::err_to_string)
+}
+
+/// The bound password is stale as soon as the key changed, whatever the
+/// outcome of the steps after it: quick unlock starts over. A call that
+/// failed before the key changed leaves the binding as it is.
+fn reset_binding_after<T>(
+    outcome: &trade_core::Result<T>,
+    key_changed: bool,
+    reset: impl FnOnce(),
+) {
+    if outcome.is_ok() || key_changed {
+        reset();
+    }
+}
+
+#[cfg(test)]
+mod key_change_tests {
+    use super::*;
+
+    fn reset_called(outcome: trade_core::Result<()>, key_changed: bool) -> bool {
+        let mut called = false;
+        reset_binding_after(&outcome, key_changed, || called = true);
+        called
+    }
+
+    #[test]
+    fn the_biometric_binding_is_reset_after_a_key_change_even_when_the_tail_fails() {
+        let tail_failure = Err(trade_core::Error::Io("copy cleanup".into()));
+        assert!(reset_called(tail_failure, true));
+        assert!(reset_called(Ok(()), true));
+    }
+
+    #[test]
+    fn the_biometric_binding_stays_when_the_key_did_not_change() {
+        let early_failure = Err(trade_core::Error::Secret);
+        assert!(!reset_called(early_failure, false));
+    }
 }
 
 /// Give the open vault that has no password one. The file is rewritten
