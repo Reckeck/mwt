@@ -134,15 +134,16 @@
 //! account the user archived (`CryptoAccount::archived`) is not in the list:
 //! "watched but not counted" is what archiving it means.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashSet};
 
 use crate::Amount;
+use crate::cryptotrack::engine::position_value::held_by_account;
 use crate::cryptotrack::engine::{Ledger, math};
 use crate::cryptotrack::{chains, tokens};
 use crate::error::Result;
 use crate::ipc_contract::security::SecurityLevel;
 use crate::model::chain::Chain;
-use crate::model::cryptotrack::{CryptoAsset, CryptoDirection};
+use crate::model::cryptotrack::CryptoAsset;
 use crate::model::store::{AssetRef, Holding, StoreKind};
 use crate::pricing::history::unix_secs;
 use crate::service::price_info::PriceOrigin;
@@ -346,6 +347,11 @@ impl UnlockedVault {
 
     /// One pass over the fold: the holdings the engine's accounts contribute
     /// and everything that stays outside the capital.
+    ///
+    /// What each account holds comes from one pure function
+    /// (`engine::position_value::held_by_account`): wallet, ledger position,
+    /// the adapter legs no operation accounts for, minus the debt legs. A
+    /// debt over the collateral gives a negative quantity, kept as is.
     fn crypto_capital(&self) -> Capital {
         let mut out = Capital::default();
         // A vault that never followed an address pays nothing for this and
@@ -355,49 +361,22 @@ impl UnlockedVault {
         }
         let ledger = self.crypto_fold();
         let (_, fx) = self.base_and_fx();
-        // A protocol's receipt is the position, not a second holding: the
-        // money it stands for is already counted through `ledger.positions`
-        // (spec D0). The fold ignores a receipt it saw being handed over, but
-        // a node reports the balance anyway and the reconciliation writes it
-        // down, so the capital drops it here and the screen is told why.
-        let receipts = self.crypto_position_receipts();
-        for ((account_id, asset_key), owned) in owned_by_account(&ledger) {
-            if !owned.is_positive() {
+        let inputs = self.crypto_position_inputs();
+        self.add_receipts_left_out(&ledger, &inputs.receipts, &mut out);
+        for held in inputs.with(|taking| held_by_account(&ledger, taking)) {
+            let owned = held.net();
+            if owned.is_zero() || !self.crypto_account_counts(&held.account_id) {
                 continue;
             }
-            let Some(state) = ledger.state(&asset_key) else {
-                continue;
-            };
-            // An address watched without being counted stays out, as its own
-            // flag promises.
-            let followed = self
-                .doc
-                .crypto_accounts
-                .iter()
-                .find(|account| account.id == account_id);
-            if followed.is_none_or(|account| account.archived) {
-                continue;
-            }
-            let asset = self.crypto_asset_ref(&state.asset);
-            if receipts.contains(&asset_key) {
-                out.left_out.push(CryptoOutsideTotals {
-                    account_id: Some(account_id),
-                    store_id: None,
-                    asset_key,
-                    symbol: asset.symbol,
-                    quantity: Some(owned),
-                    reason: CryptoLeftOut::InPosition,
+            let asset_key = held.asset.key();
+            let asset = self.crypto_asset_ref(&held.asset);
+            let wallet =
+                self.doc.stores.iter().find(|store| {
+                    store.crypto_account_id.as_deref() == Some(held.account_id.as_str())
                 });
-                continue;
-            }
-            let wallet = self
-                .doc
-                .stores
-                .iter()
-                .find(|store| store.crypto_account_id.as_deref() == Some(account_id.as_str()));
             let Some(wallet) = wallet else {
                 out.left_out.push(CryptoOutsideTotals {
-                    account_id: Some(account_id),
+                    account_id: Some(held.account_id),
                     store_id: None,
                     asset_key,
                     symbol: asset.symbol,
@@ -408,114 +387,64 @@ impl UnlockedVault {
             };
             if self.price_quote_for(&asset.key()).info.origin == PriceOrigin::None {
                 out.left_out.push(CryptoOutsideTotals {
-                    account_id: Some(account_id),
+                    account_id: Some(held.account_id.clone()),
                     store_id: Some(wallet.id.clone()),
-                    asset_key,
+                    asset_key: asset_key.clone(),
                     symbol: asset.symbol.clone(),
                     quantity: Some(owned),
                     reason: CryptoLeftOut::NoPrice,
                 });
             }
+            // The engine's average is USD per unit and covers only the part
+            // whose cost is known; `None` means the cost is not known, and
+            // nothing downstream turns that into a zero. A debt has no cost,
+            // and neither has a quantity that only an adapter reported: the
+            // ledger's average would be invented for it.
+            let avg_cost = ledger
+                .state(&asset_key)
+                .filter(|_| owned.is_positive() && held.unfolded.is_zero())
+                .and_then(|state| state.average_usd())
+                .and_then(|usd| math::mul(usd, fx));
             out.holdings.push(Holding {
                 id: uuid::Uuid::new_v4().to_string(),
                 store_id: wallet.id.clone(),
                 asset,
                 quantity: owned,
-                // The engine's average is USD per unit and covers only the
-                // part whose cost is known; `None` means the cost is not
-                // known, and nothing downstream turns that into a zero.
-                avg_cost: state.average_usd().and_then(|usd| math::mul(usd, fx)),
+                avg_cost,
             });
         }
-        self.add_unfolded_positions(&ledger, &mut out);
         out.left_out.extend(self.crypto_quarantined());
         out
     }
 
-    /// What a protocol holds that no operation accounts for.
-    ///
-    /// The receipt of a position is dropped from the capital above, because
-    /// the money behind it is counted as the position itself — through
-    /// `ledger.positions`, which only `Stake` and `Unstake` operations fill.
-    /// An adapter that reads a balance without being able to say how it was
-    /// entered (Lido, and every position older than the logs a scan reaches)
-    /// produces no such operation, so without this the whole stake would
-    /// simply leave the capital the moment it was first read.
-    ///
-    /// What the adapter saw on chain stands in, asset by asset, and only for
-    /// an asset the fold has no position entry for: wherever operations exist
-    /// they stay the source of truth, so nothing is counted twice. A debt leg
-    /// (`CryptoDirection::Out`) is not a holding and is left to the position
-    /// screen.
-    fn add_unfolded_positions(&self, ledger: &Ledger, out: &mut Capital) {
-        let mut missing: BTreeMap<(String, String), (AssetRef, Amount)> = BTreeMap::new();
-        for record in &self.doc.crypto_positions {
-            // A stale twin of the old key counts the same money again.
-            if self.is_shadowed_legacy_position(record) {
+    /// A protocol's receipt is the position, not a second holding: the money
+    /// it stands for is already counted through the position's own value
+    /// (spec D0). A node reports the receipt's balance anyway and the
+    /// reconciliation writes it down, so the capital drops it and the screen
+    /// is told why.
+    fn add_receipts_left_out(
+        &self,
+        ledger: &Ledger,
+        receipts: &BTreeSet<String>,
+        out: &mut Capital,
+    ) {
+        for ((account_id, asset_key), quantity) in &ledger.balances {
+            if !receipts.contains(asset_key)
+                || !quantity.is_positive()
+                || !self.crypto_account_counts(account_id)
+            {
                 continue;
             }
-            let followed = self
-                .doc
-                .crypto_accounts
-                .iter()
-                .find(|account| account.id == record.account_id);
-            if followed.is_none_or(|account| account.archived) {
-                continue;
-            }
-            // No wallet shows this account yet: its receipt is already in
-            // `left_out` with that reason, and so is this.
-            let Some(wallet) = self.doc.stores.iter().find(|store| {
-                store.crypto_account_id.as_deref() == Some(record.account_id.as_str())
-            }) else {
+            let Some(state) = ledger.state(asset_key) else {
                 continue;
             };
-            for leg in &record.legs {
-                if leg.direction != CryptoDirection::In || !leg.amount.is_positive() {
-                    continue;
-                }
-                // A token nobody confirmed is outside every total, whoever sent
-                // it: a position adapter lists all the NFTs an address holds,
-                // including those a stranger dropped there.
-                if let CryptoAsset::Token(token) = &leg.asset
-                    && !tokens::counts_in_totals(&self.doc, token)
-                {
-                    continue;
-                }
-                let asset_key = leg.asset.key();
-                if ledger
-                    .positions
-                    .contains_key(&(record.account_id.clone(), asset_key.clone()))
-                {
-                    continue;
-                }
-                let asset = self.crypto_asset_ref(&leg.asset);
-                let slot = missing
-                    .entry((wallet.id.clone(), asset_key))
-                    .or_insert_with(|| (asset, Amount::ZERO));
-                slot.1 = math::add(slot.1, leg.amount).unwrap_or(slot.1);
-            }
-        }
-        for ((store_id, asset_key), (asset, quantity)) in missing {
-            // The price is looked up by the asset's own key; `asset_key` is
-            // the module's key (`ethereum|0x..`), which no price is stored by.
-            if self.price_quote_for(&asset.key()).info.origin == PriceOrigin::None {
-                out.left_out.push(CryptoOutsideTotals {
-                    account_id: None,
-                    store_id: Some(store_id.clone()),
-                    asset_key,
-                    symbol: asset.symbol.clone(),
-                    quantity: Some(quantity),
-                    reason: CryptoLeftOut::NoPrice,
-                });
-            }
-            out.holdings.push(Holding {
-                id: uuid::Uuid::new_v4().to_string(),
-                store_id,
-                asset,
-                quantity,
-                // The cost of what went in is only known through the
-                // operations, and there are none for this position.
-                avg_cost: None,
+            out.left_out.push(CryptoOutsideTotals {
+                account_id: Some(account_id.clone()),
+                store_id: None,
+                asset_key: asset_key.clone(),
+                symbol: self.crypto_asset_ref(&state.asset).symbol,
+                quantity: Some(*quantity),
+                reason: CryptoLeftOut::InPosition,
             });
         }
     }
@@ -584,17 +513,6 @@ impl UnlockedVault {
             }
         }
     }
-}
-
-/// Everything each account owns — in the wallet and inside protocols —
-/// by `(account, asset key)`.
-fn owned_by_account(ledger: &Ledger) -> BTreeMap<(String, String), Amount> {
-    let mut out: BTreeMap<(String, String), Amount> = BTreeMap::new();
-    for (key, quantity) in ledger.balances.iter().chain(ledger.positions.iter()) {
-        let slot = out.entry(key.clone()).or_insert(Amount::ZERO);
-        *slot = math::add(*slot, *quantity).unwrap_or(*slot);
-    }
-    out
 }
 
 /// The network's gas coin as an asset: the EVM table first (it is the one
@@ -1075,6 +993,57 @@ mod tests {
         assert_eq!(vault.net_worth().financial, amount("4000"));
     }
 
+    const USDC: &str = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+
+    /// One Aave position: 1 ETH of collateral and 1 000 USDC of debt.
+    fn aave_with_debt() -> CryptoPosition {
+        let mut record = position_of("cacc-1", eth(), "1");
+        record.protocol = "aave-v3".into();
+        record.legs.push(CryptoLeg {
+            direction: CryptoDirection::Out,
+            asset: CryptoAsset::Token(TokenId::new(Chain::Ethereum, USDC)),
+            amount: amount("1000"),
+            counterparty: None,
+        });
+        record
+    }
+
+    #[test]
+    fn an_aave_debt_lowers_the_capital() {
+        let (_dir, mut vault) = empty_vault();
+        quote(&mut vault, &eth_ref(), "3000");
+        let usdc = vault.crypto_asset_ref(&CryptoAsset::Token(TokenId::new(Chain::Ethereum, USDC)));
+        quote(&mut vault, &usdc, "1");
+        followed(&mut vault, "cacc-1", "Cold", ME);
+        vault.doc.crypto_positions.push(aave_with_debt());
+        vault.recompute_holdings();
+
+        assert_eq!(
+            vault.net_worth().financial,
+            amount("2000"),
+            "3 000 of collateral less 1 000 of debt (was 3 000)"
+        );
+    }
+
+    #[test]
+    fn an_unpriced_debt_is_listed_as_left_out() {
+        let (_dir, mut vault) = empty_vault();
+        quote(&mut vault, &eth_ref(), "3000");
+        let wallet = followed(&mut vault, "cacc-1", "Cold", ME);
+        vault.doc.crypto_positions.push(aave_with_debt());
+        vault.recompute_holdings();
+
+        let usdc_key = CryptoAsset::Token(TokenId::new(Chain::Ethereum, USDC)).key();
+        let left = vault.crypto_outside_totals();
+        let row = left
+            .iter()
+            .find(|row| row.asset_key == usdc_key)
+            .expect("the debt is named, not dropped");
+        assert_eq!(row.reason, CryptoLeftOut::NoPrice);
+        assert_eq!(row.quantity, Some(amount("-1000")));
+        assert_eq!(row.store_id.as_deref(), Some(wallet.as_str()));
+    }
+
     #[test]
     fn a_stale_old_key_twin_of_a_position_is_not_counted_twice() {
         let (_dir, mut vault) = empty_vault();
@@ -1092,7 +1061,7 @@ mod tests {
     }
 
     #[test]
-    fn a_quarantined_token_in_a_position_leg_stays_out_and_is_not_valued() {
+    fn an_unregistered_stranger_token_is_still_dropped() {
         let (_dir, mut vault) = empty_vault();
         let wallet = followed(&mut vault, "cacc-1", "Cold", ME);
         let token = TokenId::new(Chain::Ethereum, UNKNOWN);

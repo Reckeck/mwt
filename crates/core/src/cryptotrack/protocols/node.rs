@@ -635,4 +635,48 @@ mod tests {
             "the first, refused range is not the only request"
         );
     }
+
+    #[tokio::test]
+    async fn an_oversized_logs_answer_halves_the_span_and_completes() {
+        // The stub answers about 4 KB for any range wider than 2 500 blocks;
+        // the client accepts 2 KB, so the too-large answer shrinks the span.
+        let (url, seen) = stub::serve(|_method, params, _index| {
+            let filter = &params[0];
+            let block = |key: &str| {
+                u64::from_str_radix(
+                    filter[key]
+                        .as_str()
+                        .expect("block")
+                        .trim_start_matches("0x"),
+                    16,
+                )
+                .expect("a block")
+            };
+            if block("toBlock") - block("fromBlock") + 1 > 2_500 {
+                return json!(["x".repeat(4_000)]);
+            }
+            json!([{"blockNumber": filter["fromBlock"]}])
+        })
+        .await;
+        let client = RpcClient::new(crate::cryptotrack::rpc::RpcConfig {
+            allow_loopback_http: true,
+            max_retries: 0,
+            min_interval: std::time::Duration::ZERO,
+            subject_gap_min: std::time::Duration::ZERO,
+            subject_gap_max: std::time::Duration::ZERO,
+            max_response_bytes: 2_048,
+            ..crate::cryptotrack::rpc::RpcConfig::default()
+        })
+        .expect("a client");
+        let node = Node::new(&client, &request(&url)).expect("a node");
+        let logs = node
+            .logs(CONTRACT, vec![Value::Null], 1, 5_000)
+            .await
+            .expect("the ranges that fit");
+        assert_eq!(logs.len(), 2, "5 000 blocks in two ranges of 2 500");
+        assert!(
+            seen.lock().expect("the log").len() > 2,
+            "a larger range was tried first"
+        );
+    }
 }

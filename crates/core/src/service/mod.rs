@@ -5552,4 +5552,31 @@ mod persist_tests {
         let updated = vault.update_transaction(&id, edited).unwrap();
         assert_eq!(updated.meta().utility_item_id.as_deref(), Some("util-1"));
     }
+
+    #[test]
+    fn import_schedule_skips_an_archived_store() {
+        let (_dir, mut vault) = super::test_support::empty_vault();
+        let bybit = vault
+            .create_store_with(
+                "Bybit",
+                StoreKind::Exchange,
+                "",
+                "",
+                None,
+                StoreExtras {
+                    provider: Some(crate::model::store::ExchangeProvider::Bybit),
+                    ..StoreExtras::default()
+                },
+            )
+            .unwrap()
+            .id;
+        vault.raise_to_level3_for_tests();
+        vault
+            .store_device_key(&bybit, "KEYKEYKEY123", "SECRETSECRET456", true)
+            .unwrap();
+        vault.set_import_interval(&bybit, 900).unwrap();
+        assert_eq!(vault.import_schedule().len(), 1);
+        vault.archive_store(&bybit, true).unwrap();
+        assert!(vault.import_schedule().is_empty());
+    }
 }

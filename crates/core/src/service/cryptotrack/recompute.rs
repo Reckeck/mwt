@@ -518,7 +518,8 @@ impl UnlockedVault {
                 market: PriceIndex::of(&self.doc),
                 linked: BTreeMap::new(),
             };
-            engine::snapshot::take(&ledger, at, &prices)
+            let inputs = self.crypto_position_inputs();
+            inputs.with(|taking| engine::snapshot::take(&ledger, taking, at, &prices))
         };
         let count = taken.records.len();
         for record in taken.records {

@@ -8,6 +8,7 @@
 
 use super::super::UnlockedVault;
 use crate::Amount;
+use crate::cryptotrack::protocols::LegToken;
 use crate::cryptotrack::tokens::text::{has_look_alikes, sanitize_name, sanitize_symbol, skeleton};
 use crate::cryptotrack::tokens::{self, TokenStatus, known};
 use crate::error::{Error, Result};
@@ -77,6 +78,77 @@ impl UnlockedVault {
             }
         };
         Ok((tokens::status(&self.doc, token), changed))
+    }
+
+    /// Register a leg token of a position read by a built-in adapter as
+    /// trusted: a record without a verdict becomes `Confirmed` (unless the
+    /// built-in list already knows the contract), with the text and decimals
+    /// the adapter read. A record that carries a verdict is never changed, and
+    /// real text is never overwritten by an unknown symbol or decimals.
+    /// Returns whether the document changed; the caller saves.
+    pub(super) fn trust_adapter_token(&mut self, leg: &LegToken) -> Result<bool> {
+        let known = known::is_known(&leg.token);
+        let symbol = leg
+            .symbol
+            .as_deref()
+            .map(sanitize_symbol)
+            .filter(|text| !text.is_empty());
+        let name = leg
+            .name
+            .as_deref()
+            .map(sanitize_name)
+            .filter(|text| !text.is_empty());
+        let existing = self
+            .doc
+            .crypto_tokens
+            .iter_mut()
+            .find(|record| record.id() == leg.token);
+        let Some(record) = existing else {
+            // Nothing to record about a listed token the adapter said nothing of.
+            if known && symbol.is_none() && leg.decimals.is_none() {
+                return Ok(false);
+            }
+            // The text: the adapter's, else the built-in list's, else `?`
+            // (D-C5). Decimals the adapter did not read fall back to 18.
+            let mut record = CryptoToken::new(
+                leg.token.clone(),
+                symbol
+                    .as_deref()
+                    .or_else(|| known::symbol_of(&leg.token))
+                    .unwrap_or("?"),
+                leg.decimals.unwrap_or(18),
+            );
+            record.name = name.unwrap_or_default();
+            if !known {
+                record.verdict = Some(TokenVerdict::Confirmed);
+                record.verdict_at = Some(now_iso());
+            }
+            record.validate()?;
+            self.doc.crypto_tokens.push(record);
+            return Ok(true);
+        };
+        if record.verdict.is_some() {
+            return Ok(false);
+        }
+        let mut changed = false;
+        if let Some(symbol) = symbol.filter(|symbol| *symbol != record.symbol) {
+            record.symbol = symbol;
+            changed = true;
+        }
+        if let Some(name) = name.filter(|name| *name != record.name) {
+            record.name = name;
+            changed = true;
+        }
+        if let Some(decimals) = leg.decimals.filter(|decimals| *decimals != record.decimals) {
+            record.decimals = decimals;
+            changed = true;
+        }
+        if !known {
+            record.verdict = Some(TokenVerdict::Confirmed);
+            record.verdict_at = Some(now_iso());
+            changed = true;
+        }
+        Ok(changed)
     }
 
     /// The tokens met so far, each with its status, its basis and what is

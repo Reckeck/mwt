@@ -93,9 +93,10 @@ use crate::model::chain::Chain;
 use crate::model::cryptotrack::{CryptoAsset, CryptoDirection, CryptoLeg, CryptoTx, TokenId};
 
 use super::tick_math::principal;
+use super::uniswap_v3::{SYMBOL_SELECTOR, symbol_of};
 use super::{
-    AdapterFuture, Answer, AssetAmount, Discovery, FeeReading, Node, PositionKey, PositionKind,
-    PositionReading, PositionStatus, ProtocolAdapter, ProtocolRequest, U256,
+    AdapterFuture, Answer, AssetAmount, Discovery, FeeReading, LegToken, Node, PositionKey,
+    PositionKind, PositionReading, PositionStatus, ProtocolAdapter, ProtocolRequest, U256,
 };
 
 /// The protocol id a position of this protocol stores
@@ -626,6 +627,13 @@ impl UniswapV4 {
                 calls.push((currency.clone(), abi::calldata(SEL_DECIMALS, &[])?));
             }
         }
+        // The tickers ride the same batch, after everything that must
+        // answer: a refusal here costs a symbol and not the reading.
+        for currency in &stored.currencies {
+            if currency != ZERO_ADDRESS {
+                calls.push((currency.clone(), abi::calldata(SYMBOL_SELECTOR, &[])?));
+            }
+        }
         let mut answers = node.call_many(&calls).await?.into_iter();
         let mut next = |what: &str| {
             answers
@@ -649,6 +657,12 @@ impl UniswapV4 {
                     .map_err(|_| Error::Network("decimals() is a uint8".into()))?;
             }
         }
+        let mut symbols = [None, None];
+        for (side, currency) in stored.currencies.iter().enumerate() {
+            if currency != ZERO_ADDRESS {
+                symbols[side] = symbol_of(answers.next().flatten().as_ref());
+            }
+        }
         let sqrt_price = slot0.u256(0)?;
         if sqrt_price.is_zero() {
             return Err(Error::Network("the pool is not initialised".into()));
@@ -659,6 +673,7 @@ impl UniswapV4 {
             growth_last: [position.u256(1)?, position.u256(2)?],
             growth_inside: [inside.u256(0)?, inside.u256(1)?],
             decimals,
+            symbols,
         })
     }
 
@@ -729,6 +744,19 @@ impl UniswapV4 {
             approximate: stored.hooks != ZERO_ADDRESS,
             opened_at: None,
             closed_at: None,
+            // The native coin is not a token: only contracts are listed.
+            tokens: stored
+                .currencies
+                .iter()
+                .enumerate()
+                .filter(|(_, currency)| *currency != ZERO_ADDRESS)
+                .map(|(side, currency)| LegToken {
+                    token: TokenId::new(chain, currency),
+                    symbol: state.symbols[side].clone(),
+                    name: None,
+                    decimals: Some(state.decimals[side]),
+                })
+                .collect(),
             read_at: crate::model::vault::now_iso(),
         })
     }
@@ -903,6 +931,7 @@ struct PoolState {
     growth_last: [U256; 2],
     growth_inside: [U256; 2],
     decimals: [u8; 2],
+    symbols: [Option<String>; 2],
 }
 
 /// `liquidity * (inside - last) / 2^128`: the difference wraps modulo 2^256
@@ -1171,6 +1200,8 @@ mod tests {
         pool_id: &'static str,
         position: String,
         inside: String,
+        /// `None`: the token refuses `symbol()`.
+        symbol1: Option<String>,
     }
 
     impl Scenario {
@@ -1180,6 +1211,7 @@ mod tests {
                 pool_id: POOL_ID_HOOKLESS,
                 position: fixture!("getPositionInfo.open"),
                 inside: fixture!("getFeeGrowthInside.open"),
+                symbol1: Some(fixture!("symbol.token1")),
             }
         }
 
@@ -1203,6 +1235,7 @@ mod tests {
                         == format!("{}{lower}{upper}", self.pool_id))
                     .then(|| self.inside.clone()),
                     (TOKEN1, SEL_DECIMALS) => Some(fixture!("decimals.token1")),
+                    (TOKEN1, SYMBOL_SELECTOR) => self.symbol1.clone(),
                     _ => None,
                 }
             })
@@ -1300,6 +1333,7 @@ mod tests {
             SEL_GET_FEE_GROWTH_INSIDE
         );
         assert_eq!(selector("decimals()"), SEL_DECIMALS);
+        assert_eq!(selector("symbol()"), SYMBOL_SELECTOR);
         assert_eq!(
             format!(
                 "0x{}",
@@ -1571,6 +1605,64 @@ mod tests {
             .expect("the position");
         let bodies = seen.lock().expect("the log").len();
         assert_eq!(bodies, 2, "positions, then one batch on StateView");
+    }
+
+    #[tokio::test]
+    async fn the_native_coin_is_not_listed_and_the_token_is() {
+        let reading = read(Scenario::hookless())
+            .await
+            .expect("a read")
+            .expect("the position");
+        assert_eq!(
+            reading.tokens,
+            vec![LegToken {
+                token: TokenId::new(Chain::Ethereum, TOKEN1),
+                symbol: Some("WETH".into()),
+                name: None,
+                decimals: Some(6),
+            }],
+            "one token: the currency with no contract is the coin"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_token_that_refuses_symbol_or_answers_a_non_string_has_no_symbol() {
+        let mut refusing = Scenario::hookless();
+        refusing.symbol1 = None;
+        let reading = read(refusing).await.expect("a read").expect("the position");
+        assert_eq!(reading.tokens.len(), 1);
+        assert_eq!(reading.tokens[0].symbol, None);
+        assert_eq!(reading.tokens[0].decimals, Some(6));
+
+        let mut bare = Scenario::hookless();
+        bare.symbol1 = Some(format!("0x{}", word(7)));
+        let reading = read(bare).await.expect("a read").expect("the position");
+        assert_eq!(reading.tokens[0].symbol, None);
+    }
+
+    #[tokio::test]
+    async fn an_oversized_or_non_utf8_symbol_is_passed_on_for_the_registration_to_clip() {
+        let encode = |bytes: &[u8]| {
+            let mut text = format!("0x{}{}", word(32), word(bytes.len() as u128));
+            for chunk in bytes.chunks(32) {
+                text.push_str(&hex(chunk));
+                text.push_str(&"00".repeat(32 - chunk.len()));
+            }
+            text
+        };
+        let mut long = Scenario::hookless();
+        long.symbol1 = Some(encode(&[b'A'; 300]));
+        let reading = read(long).await.expect("a read").expect("the position");
+        assert_eq!(
+            reading.tokens[0].symbol.as_deref(),
+            Some("A".repeat(300).as_str())
+        );
+
+        let mut broken = Scenario::hookless();
+        broken.symbol1 = Some(encode(&[0xff, 0xfe, b'X']));
+        let reading = read(broken).await.expect("a read").expect("the position");
+        let symbol = reading.tokens[0].symbol.clone().expect("a lossy symbol");
+        assert!(symbol.ends_with('X'), "{symbol}");
     }
 
     // --- discovery ---------------------------------------------------------

@@ -71,8 +71,8 @@ pub use fees::{
 };
 pub use node::{Answer, Node};
 pub use position::{
-    AssetAmount, PositionKey, PositionKind, PositionReading, PositionStatus, ProtocolReview,
-    is_closed, kind_of, record_id_prefixes,
+    AssetAmount, LegToken, PositionKey, PositionKind, PositionReading, PositionStatus,
+    ProtocolReview, is_closed, kind_of, record_id_prefixes,
 };
 pub use wide::U256;
 
@@ -333,6 +333,7 @@ mod tests {
                     approximate: true,
                     opened_at: None,
                     closed_at: None,
+                    tokens: Vec::new(),
                     read_at: "2026-11-16T00:00:00Z".into(),
                 }))
             })

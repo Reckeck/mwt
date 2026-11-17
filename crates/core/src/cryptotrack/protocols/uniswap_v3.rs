@@ -48,8 +48,8 @@ use crate::model::cryptotrack::{CryptoAsset, CryptoDirection, CryptoLeg, CryptoT
 
 use super::tick_math::principal;
 use super::{
-    AdapterFuture, AssetAmount, FeeReading, Node, PositionKey, PositionKind, PositionReading,
-    PositionStatus, ProtocolAdapter, ProtocolRequest, U256,
+    AdapterFuture, Answer, AssetAmount, FeeReading, LegToken, Node, PositionKey, PositionKind,
+    PositionReading, PositionStatus, ProtocolAdapter, ProtocolRequest, U256,
 };
 
 /// The protocol id a position of this protocol stores
@@ -129,6 +129,41 @@ const SEL_TICKS: &str = "f30dba93";
 /// reproduced every selector of the facts document, so this one stands on the
 /// same evidence as the rest.
 const DECIMALS_SELECTOR: Option<&str> = Some("313ce567");
+
+/// ERC-20 `symbol()`: `keccak256("symbol()")[0..4] = 95d89b41`, recomputed
+/// the same way as [`DECIMALS_SELECTOR`] (the v4 adapter's test hashes the
+/// signature again). Shared with the v4 adapter: one home for the rule.
+pub(super) const SYMBOL_SELECTOR: &str = "95d89b41";
+
+/// The ticker a token answered to `symbol()`, if it answered a string.
+///
+/// A node's answer is untrusted: a refusal, a `bytes32` symbol (old tokens)
+/// or any other shape is `None` and never an error, so one odd token does
+/// not fail the reading. Non-UTF-8 bytes are replaced; clipping to a
+/// storable size happens at registration (`service::cryptotrack::tokens`).
+pub(super) fn symbol_of(answer: Option<&Answer>) -> Option<String> {
+    let answer = answer?;
+    let offset = usize::try_from(answer.u128(0).ok()?).ok()?;
+    if offset % 32 != 0 {
+        return None;
+    }
+    let start = offset / 32;
+    let length = usize::try_from(answer.u128(start).ok()?).ok()?;
+    if length > answer.len().saturating_mul(32) {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(length);
+    for chunk in 0..length.div_ceil(32) {
+        bytes.extend_from_slice(
+            answer
+                .word(start.checked_add(1)?.checked_add(chunk)?)
+                .ok()?,
+        );
+    }
+    bytes.truncate(length);
+    let symbol = String::from_utf8_lossy(&bytes).into_owned();
+    (!symbol.is_empty()).then_some(symbol)
+}
 
 /// Words of `NFPM.positions(tokenId)` (facts, return layout, offsets / 32).
 mod stored_word {
@@ -328,6 +363,9 @@ impl UniswapV3 {
         let at_token = |token: &str| -> Result<(String, String)> {
             Ok((token.to_string(), abi::calldata(decimals_selector, &[])?))
         };
+        let at_symbol = |token: &str| -> Result<(String, String)> {
+            Ok((token.to_string(), abi::calldata(SYMBOL_SELECTOR, &[])?))
+        };
         let calls = [
             at_pool(SEL_SLOT0, &[])?,
             at_pool(SEL_FEE_GROWTH_GLOBAL0, &[])?,
@@ -336,6 +374,8 @@ impl UniswapV3 {
             at_pool(SEL_TICKS, &[abi::int_word(stored.tick_upper)])?,
             at_token(&stored.token0)?,
             at_token(&stored.token1)?,
+            at_symbol(&stored.token0)?,
+            at_symbol(&stored.token1)?,
         ];
         let answers = node.call_many(&calls).await?;
         let mut answers = answers.into_iter();
@@ -352,6 +392,11 @@ impl UniswapV3 {
         let upper = next("ticks(upper)")?;
         let decimals0 = next("decimals() of token0")?;
         let decimals1 = next("decimals() of token1")?;
+        // A symbol is a courtesy: a refusal is no reason to fail the read.
+        let symbols = [
+            symbol_of(answers.next().flatten().as_ref()),
+            symbol_of(answers.next().flatten().as_ref()),
+        ];
         Ok(PoolState {
             sqrt_price: slot0.u256(0)?,
             tick: checked_tick(slot0.int(1)?)?,
@@ -360,6 +405,7 @@ impl UniswapV3 {
             lower_outside: [lower.u256(2)?, lower.u256(3)?],
             upper_outside: [upper.u256(2)?, upper.u256(3)?],
             decimals: [decimals_of(&decimals0)?, decimals_of(&decimals1)?],
+            symbols,
         })
     }
 
@@ -446,6 +492,14 @@ impl UniswapV3 {
             approximate: false,
             opened_at: None,
             closed_at: None,
+            tokens: (0..2)
+                .map(|side| LegToken {
+                    token: TokenId::new(chain, [&stored.token0, &stored.token1][side]),
+                    symbol: state.symbols[side].clone(),
+                    name: None,
+                    decimals: Some(state.decimals[side]),
+                })
+                .collect(),
             read_at: crate::model::vault::now_iso(),
         })
     }
@@ -509,6 +563,7 @@ struct PoolState {
     lower_outside: [U256; 2],
     upper_outside: [U256; 2],
     decimals: [u8; 2],
+    symbols: [Option<String>; 2],
 }
 
 fn checked_tick(tick: i64) -> Result<i64> {
@@ -717,6 +772,9 @@ mod tests {
         upper: String,
         decimals0: String,
         decimals1: String,
+        /// `None`: the token refuses `symbol()`.
+        symbol0: Option<String>,
+        symbol1: Option<String>,
     }
 
     impl Scenario {
@@ -730,7 +788,23 @@ mod tests {
                 upper: fixture!("ticks.upper"),
                 decimals0: fixture!("decimals.token0"),
                 decimals1: fixture!("decimals.token1"),
+                symbol0: Some(fixture!("symbol.token0")),
+                symbol1: Some(fixture!("symbol.token1")),
             }
+        }
+
+        /// A token that refuses `symbol()` (token0) and one that answers
+        /// something that is not a string (token1: a bare word).
+        fn with_odd_symbols(mut self) -> Self {
+            self.symbol0 = None;
+            self.symbol1 = Some(format!("0x{}", word(7)));
+            self
+        }
+
+        fn with_symbols(mut self, symbol0: &str, symbol1: &str) -> Self {
+            self.symbol0 = Some(symbol0.to_string());
+            self.symbol1 = Some(symbol1.to_string());
+            self
         }
 
         /// A token that answers nothing to `decimals()`: the scale of the
@@ -765,6 +839,8 @@ mod tests {
                         (!self.decimals0.is_empty()).then(|| self.decimals0.clone())
                     }
                     (TOKEN1, TEST_DECIMALS) => Some(self.decimals1.clone()),
+                    (TOKEN0, SYMBOL_SELECTOR) => self.symbol0.clone(),
+                    (TOKEN1, SYMBOL_SELECTOR) => self.symbol1.clone(),
                     _ => None,
                 }
             })
@@ -1173,6 +1249,99 @@ mod tests {
             Some(TEST_DECIMALS),
             "the shipped adapter reads what the tests read"
         );
+    }
+
+    /// An ABI `string` answer: offset, length, the bytes padded to words.
+    fn string_answer(bytes: &[u8]) -> String {
+        let mut text = format!("0x{}{}", word(32), word(bytes.len() as u128));
+        for chunk in bytes.chunks(32) {
+            text.push_str(&hex(chunk));
+            text.push_str(&"00".repeat(32 - chunk.len()));
+        }
+        text
+    }
+
+    #[tokio::test]
+    async fn both_tokens_are_listed_with_their_symbol_and_decimals() {
+        let (url, _) = node(Scenario::open().handler()).await;
+        let reading = adapter_for_tests()
+            .read_position(request(&url), &key())
+            .await
+            .expect("a read")
+            .expect("the position");
+        assert_eq!(
+            reading.tokens,
+            vec![
+                LegToken {
+                    token: TokenId::new(Chain::Ethereum, TOKEN0),
+                    symbol: Some("USDC".into()),
+                    name: None,
+                    decimals: Some(6),
+                },
+                LegToken {
+                    token: TokenId::new(Chain::Ethereum, TOKEN1),
+                    symbol: Some("WETH".into()),
+                    name: None,
+                    decimals: Some(18),
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_symbols_ride_the_one_multicall_batch() {
+        let (url, seen) = node(Scenario::open().handler()).await;
+        adapter_for_tests()
+            .read_position(request(&url), &key())
+            .await
+            .expect("a read")
+            .expect("the position");
+        assert_eq!(
+            seen.lock().expect("the log").len(),
+            3,
+            "positions, getPool, then one batch with the symbols inside"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_token_that_refuses_symbol_or_answers_a_non_string_has_no_symbol() {
+        let (url, _) = node(Scenario::open().with_odd_symbols().handler()).await;
+        let reading = adapter_for_tests()
+            .read_position(request(&url), &key())
+            .await
+            .expect("the read still succeeds")
+            .expect("the position");
+        assert_eq!(reading.tokens.len(), 2);
+        assert_eq!(reading.tokens[0].symbol, None);
+        assert_eq!(reading.tokens[1].symbol, None);
+        assert_eq!(reading.tokens[0].decimals, Some(6));
+    }
+
+    #[tokio::test]
+    async fn an_oversized_or_non_utf8_symbol_is_passed_on_for_the_registration_to_clip() {
+        let long = "A".repeat(300);
+        let (url, _) = node(
+            Scenario::open()
+                .with_symbols(
+                    &string_answer(long.as_bytes()),
+                    &string_answer(&[0xff, 0xfe, b'X']),
+                )
+                .handler(),
+        )
+        .await;
+        let reading = adapter_for_tests()
+            .read_position(request(&url), &key())
+            .await
+            .expect("a read")
+            .expect("the position");
+        assert_eq!(reading.tokens[0].symbol.as_deref(), Some(long.as_str()));
+        let second = reading.tokens[1].symbol.clone().expect("a lossy symbol");
+        assert!(second.ends_with('X'), "{second}");
+    }
+
+    #[test]
+    fn the_symbol_selector_is_the_one_of_erc20_symbol() {
+        assert_eq!(SYMBOL_SELECTOR, "95d89b41");
     }
 
     #[tokio::test]

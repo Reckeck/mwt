@@ -11,15 +11,26 @@
 //! ([`super::ids::snapshot`]), so a second snapshot of the same day replaces
 //! the first instead of leaving two values for one day in the history.
 //!
-//! Two rules keep a snapshot honest:
+//! Known step: snapshots written before this rule are not rewritten, so the
+//! first new snapshot may step against the old history (adapter-only
+//! positions and debts now count, receipts are dropped). There is no
+//! back-fill.
+//!
+//! Three rules keep a snapshot honest:
 //!
 //! * **The parts add up to the whole.** An account's value counts what its
 //!   wallet holds *and* what it has inside protocols, so the module's value
 //!   is the sum of the accounts' and the capital history cannot disagree with
 //!   the wallet pages.
+//! * **The quantities are the present capital's.** What an account holds,
+//!   net of debt, comes from `position_value::held_by_account`, the function
+//!   the present capital uses, so an adapter-only position counts, a debt
+//!   lowers the value, and a position receipt is not counted twice. The value
+//!   of an account may come out negative (debt over collateral) and is
+//!   written as is.
 //! * **What is not priced is named, not guessed.** An asset with no known
 //!   price contributes nothing and comes back in [`Snapshots::unpriced`]; a
-//!   negative holding (the history does not reach back far enough yet)
+//!   negative wallet part (the history does not reach back far enough yet)
 //!   contributes nothing either and comes back in
 //!   [`Snapshots::incomplete`] — nobody owes those coins, so they are not a
 //!   debt against the capital, but the gap must be visible.
@@ -27,9 +38,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Amount;
-use crate::model::cryptotrack::CryptoSnapshot;
+use crate::model::cryptotrack::{CryptoAsset, CryptoSnapshot};
 
 use super::basis::{Ledger, Prices};
+use super::position_value::{PositionInputs, held_by_account};
 use super::{ids, math};
 
 /// What [`take`] made.
@@ -45,43 +57,40 @@ pub struct Snapshots {
 }
 
 /// The value of each account and of the module at `at`.
-pub fn take<P: Prices>(ledger: &Ledger, at: &str, prices: &P) -> Snapshots {
+///
+/// The quantities come from [`held_by_account`], the same function the
+/// present capital uses; this module only prices them.
+pub fn take<P: Prices>(
+    ledger: &Ledger,
+    inputs: &PositionInputs<'_>,
+    at: &str,
+    prices: &P,
+) -> Snapshots {
     let mut out = Snapshots::default();
-    let mut by_account: BTreeMap<&str, Amount> = BTreeMap::new();
+    let mut by_account: BTreeMap<String, Amount> = ledger
+        .accounts()
+        .into_iter()
+        .map(|account_id| (account_id.to_owned(), Amount::ZERO))
+        .collect();
     let mut total = Amount::ZERO;
-    for account_id in ledger.accounts() {
-        by_account.insert(account_id, Amount::ZERO);
-    }
-    for (asset_key, state) in &ledger.assets {
-        let Some(price) = priced(prices, state, at, &mut out) else {
+    for held in held_by_account(ledger, inputs) {
+        let Some(price) = priced(prices, &held.asset, at, &mut out) else {
             continue;
         };
-        for account_id in ledger.accounts() {
-            let held = math::add(
-                ledger.balance(account_id, asset_key),
-                ledger.position(account_id, asset_key),
-            )
-            .unwrap_or(Amount::ZERO);
-            if !held.is_positive() {
-                if held.is_negative() {
-                    out.incomplete.insert(asset_key.clone());
-                }
-                continue;
-            }
-            let Some(worth) = math::mul(held, price) else {
-                out.unpriced.insert(asset_key.clone());
-                continue;
-            };
-            let slot = by_account.entry(account_id).or_insert(Amount::ZERO);
-            *slot = math::add(*slot, worth).unwrap_or(*slot);
-            total = math::add(total, worth).unwrap_or(total);
-        }
+        let Some(worth) = math::mul(held.net(), price) else {
+            out.unpriced.insert(held.asset.key());
+            continue;
+        };
+        let slot = by_account.entry(held.account_id).or_insert(Amount::ZERO);
+        *slot = math::add(*slot, worth).unwrap_or(*slot);
+        total = math::add(total, worth).unwrap_or(total);
     }
+    note_incomplete(ledger, at, prices, &mut out);
     for (account_id, value) in by_account {
         out.records.push(CryptoSnapshot {
-            id: ids::snapshot(Some(account_id), at),
+            id: ids::snapshot(Some(&account_id), at),
             at: at.to_owned(),
-            account_id: Some(account_id.to_owned()),
+            account_id: Some(account_id),
             value_usd: math::usd(value),
         });
     }
@@ -94,21 +103,39 @@ pub fn take<P: Prices>(ledger: &Ledger, at: &str, prices: &P) -> Snapshots {
     out
 }
 
+/// Name the priced assets whose wallet part is negative: the history does not
+/// reach back far enough. They add nothing to the value (the shared function
+/// clamps them), but the gap must be visible.
+fn note_incomplete<P: Prices>(ledger: &Ledger, at: &str, prices: &P, out: &mut Snapshots) {
+    for (asset_key, state) in &ledger.assets {
+        if prices.unit_usd(&state.asset, at, "").value.is_none() {
+            continue;
+        }
+        for account_id in ledger.accounts() {
+            let wallet = math::add(
+                ledger.balance(account_id, asset_key),
+                ledger.position(account_id, asset_key),
+            )
+            .unwrap_or(Amount::ZERO);
+            if wallet.is_negative() {
+                out.incomplete.insert(asset_key.clone());
+            }
+        }
+    }
+}
+
 /// The price of an asset for a snapshot, remembering what had none.
 fn priced<P: Prices>(
     prices: &P,
-    state: &super::basis::AssetState,
+    asset: &CryptoAsset,
     at: &str,
     out: &mut Snapshots,
 ) -> Option<Amount> {
-    let quote = prices.unit_usd(&state.asset, at, "");
-    match quote.value {
-        Some(price) => Some(price),
-        None => {
-            out.unpriced.insert(state.asset.key());
-            None
-        }
+    let quote = prices.unit_usd(asset, at, "");
+    if quote.value.is_none() {
+        out.unpriced.insert(asset.key());
     }
+    quote.value
 }
 
 #[cfg(test)]
@@ -118,7 +145,8 @@ mod tests {
     use crate::cryptotrack::engine::overrides;
     use crate::model::chain::Chain;
     use crate::model::cryptotrack::{
-        CryptoAsset, CryptoDirection, CryptoLeg, CryptoTx, CryptoTxKind, TokenId, TrackingRef,
+        CryptoAsset, CryptoDirection, CryptoLeg, CryptoPosition, CryptoTx, CryptoTxKind, TokenId,
+        TrackingRef,
     };
 
     const POOL: &str = "0x5555555555555555555555555555555555555555";
@@ -144,6 +172,41 @@ mod tests {
                 stale: false,
                 linked: false,
             }
+        }
+    }
+
+    fn always(_asset: &CryptoAsset) -> bool {
+        true
+    }
+
+    fn none() -> PositionInputs<'static> {
+        static RECEIPTS: BTreeSet<String> = BTreeSet::new();
+        PositionInputs {
+            positions: &[],
+            receipts: &RECEIPTS,
+            counts: &always,
+        }
+    }
+
+    fn aave_position(legs: Vec<CryptoLeg>) -> CryptoPosition {
+        CryptoPosition {
+            id: "p1".into(),
+            account_id: "acc-1".into(),
+            chain: Chain::Ethereum,
+            protocol: "aave-v3".into(),
+            name: String::new(),
+            legs,
+            receipts: Vec::new(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    fn leg(direction: CryptoDirection, asset: CryptoAsset, quantity: &str) -> CryptoLeg {
+        CryptoLeg {
+            direction,
+            asset,
+            amount: amount(quantity),
+            counterparty: None,
         }
     }
 
@@ -235,7 +298,7 @@ mod tests {
             ),
         ];
         let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
-        let taken = take(&ledger_of(&events), "2026-03-09T12:00:00Z", &book);
+        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
         assert_eq!(taken.records.len(), 3);
         let module = taken.records.last().expect("the module's own");
         assert_eq!(module.id, "csnap:2026-03-09:all");
@@ -275,7 +338,7 @@ mod tests {
             ),
         ];
         let book = Book::of(&[(usdc(), "1")]);
-        let taken = take(&ledger_of(&events), "2026-03-09T12:00:00Z", &book);
+        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
         let account = taken
             .records
             .iter()
@@ -308,7 +371,7 @@ mod tests {
             ),
         ];
         let book = Book::of(&[(eth(), "2000")]);
-        let taken = take(&ledger_of(&events), "2026-03-09T12:00:00Z", &book);
+        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
         assert_eq!(taken.records.last().unwrap().value_usd, amount("2000.00"));
         assert!(taken.unpriced.contains(&usdc().key()));
         assert_eq!(taken.unpriced.len(), 1);
@@ -326,7 +389,7 @@ mod tests {
             OTHER,
         )];
         let book = Book::of(&[(eth(), "2000")]);
-        let taken = take(&ledger_of(&events), "2026-03-09T12:00:00Z", &book);
+        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
         assert_eq!(taken.records.last().unwrap().value_usd, Amount::ZERO);
         assert!(taken.incomplete.contains(&eth().key()));
     }
@@ -343,7 +406,7 @@ mod tests {
             OTHER,
         )];
         let book = Book::of(&[(eth(), "3000.005")]);
-        let taken = take(&ledger_of(&events), "2026-03-09T12:00:00Z", &book);
+        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
         // 0.333333333333333333 * 3000.005 = 1000.0033333...
         assert_eq!(taken.records.last().unwrap().value_usd, amount("1000.00"));
     }
@@ -361,11 +424,135 @@ mod tests {
         )];
         let book = Book::of(&[(eth(), "2000")]);
         let ledger = ledger_of(&events);
-        let morning = take(&ledger, "2026-03-09T08:00:00Z", &book);
-        let evening = take(&ledger, "2026-03-09T20:00:00Z", &book);
+        let morning = take(&ledger, &none(), "2026-03-09T08:00:00Z", &book);
+        let evening = take(&ledger, &none(), "2026-03-09T20:00:00Z", &book);
         let ids: Vec<_> = morning.records.iter().map(|one| one.id.clone()).collect();
         let same: Vec<_> = evening.records.iter().map(|one| one.id.clone()).collect();
         assert_eq!(ids, same);
         assert_eq!(morning.records[0].value_usd, evening.records[0].value_usd);
+    }
+
+    #[test]
+    fn present_value_equals_the_snapshot() {
+        // Lido-style: an adapter-only position, no operation explains it.
+        let lido = CryptoPosition {
+            id: "p-lido".into(),
+            protocol: "lido".into(),
+            ..aave_position(vec![leg(CryptoDirection::In, eth(), "2")])
+        };
+        // Aave: 3 000 USDC supplied, 1 000 borrowed -> 2 000 net.
+        let aave = CryptoPosition {
+            id: "p-aave".into(),
+            ..aave_position(vec![
+                leg(CryptoDirection::In, usdc(), "3000"),
+                leg(CryptoDirection::Out, usdc(), "1000"),
+            ])
+        };
+        let positions = [&lido, &aave];
+        let receipts = BTreeSet::new();
+        let inputs = PositionInputs {
+            positions: &positions,
+            receipts: &receipts,
+            counts: &|_asset| true,
+        };
+        let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
+        let taken = take(&Ledger::default(), &inputs, "2026-03-09T12:00:00Z", &book);
+        // 2 ETH * 2 000 = 4 000, plus (3 000 - 1 000) USDC = 2 000.
+        assert_eq!(taken.records.last().unwrap().value_usd, amount("6000.00"));
+        assert_eq!(taken.records[0].value_usd, amount("6000.00"));
+    }
+
+    #[test]
+    fn a_receipt_in_the_wallet_is_not_in_the_snapshot() {
+        let events = vec![
+            event(
+                "ev-1",
+                "acc-1",
+                CryptoTxKind::Transfer,
+                CryptoDirection::In,
+                eth(),
+                "1",
+                OTHER,
+            ),
+            event(
+                "ev-2",
+                "acc-1",
+                CryptoTxKind::Transfer,
+                CryptoDirection::In,
+                usdc(),
+                "1000",
+                OTHER,
+            ),
+        ];
+        let receipts: BTreeSet<String> = [usdc().key()].into();
+        let inputs = PositionInputs {
+            positions: &[],
+            receipts: &receipts,
+            counts: &|_asset| true,
+        };
+        let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
+        let taken = take(&ledger_of(&events), &inputs, "2026-03-09T12:00:00Z", &book);
+        assert_eq!(taken.records.last().unwrap().value_usd, amount("2000.00"));
+    }
+
+    #[test]
+    fn the_old_wallet_only_snapshot_is_unchanged() {
+        let events = vec![
+            event(
+                "ev-1",
+                "acc-1",
+                CryptoTxKind::Transfer,
+                CryptoDirection::In,
+                eth(),
+                "1.5",
+                OTHER,
+            ),
+            event(
+                "ev-2",
+                "acc-2",
+                CryptoTxKind::Transfer,
+                CryptoDirection::In,
+                usdc(),
+                "250",
+                OTHER,
+            ),
+        ];
+        let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
+        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
+        let values: Vec<Amount> = taken.records.iter().map(|one| one.value_usd).collect();
+        assert_eq!(
+            values,
+            vec![amount("3000.00"), amount("250.00"), amount("3250.00")]
+        );
+    }
+
+    #[test]
+    fn a_negative_net_is_written_as_is_and_a_negative_wallet_part_is_incomplete() {
+        let events = vec![event(
+            "ev-1",
+            "acc-1",
+            CryptoTxKind::Transfer,
+            CryptoDirection::Out,
+            eth(),
+            "1",
+            OTHER,
+        )];
+        // The wallet holds -1 ETH, so the 0.2 ETH collateral nets to -0.8 ETH, clamped to 0
+        // per asset: it does not offset the 1 000 USDC of debt. The net is -1 000, written as is.
+        let aave = aave_position(vec![
+            leg(CryptoDirection::In, eth(), "0.2"),
+            leg(CryptoDirection::Out, usdc(), "1000"),
+        ]);
+        let positions = [&aave];
+        let receipts = BTreeSet::new();
+        let inputs = PositionInputs {
+            positions: &positions,
+            receipts: &receipts,
+            counts: &|_asset| true,
+        };
+        let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
+        let taken = take(&ledger_of(&events), &inputs, "2026-03-09T12:00:00Z", &book);
+        assert_eq!(taken.records.last().unwrap().value_usd, amount("-1000.00"));
+        assert!(taken.incomplete.contains(&eth().key()));
     }
 }

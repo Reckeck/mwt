@@ -45,8 +45,8 @@ use crate::model::cryptotrack::{CryptoAsset, CryptoDirection, CryptoLeg, CryptoT
 use crate::model::vault::now_iso;
 
 use super::{
-    AdapterFuture, FeeReading, Node, PositionKey, PositionKind, PositionReading, PositionStatus,
-    ProtocolAdapter, ProtocolRequest, U256,
+    AdapterFuture, FeeReading, LegToken, Node, PositionKey, PositionKind, PositionReading,
+    PositionStatus, ProtocolAdapter, ProtocolRequest, U256,
 };
 
 /// The protocol id a position of this protocol stores.
@@ -127,6 +127,21 @@ fn tokens_on(chain: Chain) -> impl Iterator<Item = &'static Token> {
 
 fn asset_of(token: &Token) -> CryptoAsset {
     CryptoAsset::Token(TokenId::new(token.chain, token.contract))
+}
+
+/// The token a leg of `token` is counted in, with its ticker and the
+/// constant decimals: no call is needed to know them.
+fn leg_token_of(token: &Token) -> LegToken {
+    let symbol = match token.form {
+        Form::Steth => "stETH",
+        Form::WstethWithRate | Form::WstethNoRate => "wstETH",
+    };
+    LegToken {
+        token: TokenId::new(token.chain, token.contract),
+        symbol: Some(symbol.to_string()),
+        name: None,
+        decimals: Some(DECIMALS),
+    }
 }
 
 /// stETH and wstETH on `chain` (see [`super::receipt_tokens`]). Both sit in
@@ -270,8 +285,13 @@ impl ProtocolAdapter for Lido {
             if balance.is_zero() {
                 return Ok(None);
             }
-            let (name, asset, amount) = match token.form {
-                Form::Steth => ("Lido stETH", asset_of(token), balance.to_amount(DECIMALS)?),
+            let (name, asset, amount, leg_token) = match token.form {
+                Form::Steth => (
+                    "Lido stETH",
+                    asset_of(token),
+                    balance.to_amount(DECIMALS)?,
+                    leg_token_of(token),
+                ),
                 Form::WstethWithRate => {
                     let rate = Self::rate(&node, token).await?;
                     // The leg is what the wstETH is worth in stETH, so the
@@ -284,13 +304,17 @@ impl ProtocolAdapter for Lido {
                         "Lido wstETH",
                         asset_of(steth),
                         scale_by_rate(balance, rate)?.to_amount(DECIMALS)?,
+                        leg_token_of(steth),
                     )
                 }
                 // No rate is readable here: the leg stays in wstETH, never
                 // converted with a guessed rate (see the module doc).
-                Form::WstethNoRate => {
-                    ("Lido wstETH", asset_of(token), balance.to_amount(DECIMALS)?)
-                }
+                Form::WstethNoRate => (
+                    "Lido wstETH",
+                    asset_of(token),
+                    balance.to_amount(DECIMALS)?,
+                    leg_token_of(token),
+                ),
             };
             Ok(Some(PositionReading {
                 key: key.clone(),
@@ -312,6 +336,7 @@ impl ProtocolAdapter for Lido {
                 approximate: false,
                 opened_at: None,
                 closed_at: None,
+                tokens: vec![leg_token],
                 read_at: now_iso(),
             }))
         })
@@ -475,6 +500,38 @@ mod tests {
         assert_eq!(reading.fees, FeeReading::none_earned());
         assert!(!reading.approximate);
         assert_eq!(reading.receipts, receipt_tokens(Chain::Ethereum));
+        assert_eq!(
+            reading.tokens,
+            vec![LegToken {
+                token: TokenId::new(Chain::Ethereum, STETH),
+                symbol: Some("stETH".into()),
+                name: None,
+                decimals: Some(18),
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_bridged_wsteth_position_names_wsteth_once() {
+        let (url, _) = node(vec![(WSTETH, two_wsteth())]).await;
+        let key = PositionKey::new(PROTOCOL, Chain::Ethereum, WSTETH);
+        let reading = adapter_under_test()
+            .read_position(request(Chain::Ethereum, &url), &key)
+            .await
+            .expect("a reading")
+            .expect("the position is there");
+        // On Ethereum the leg is priced as stETH, so stETH is the leg token.
+        assert_eq!(reading.tokens.len(), 1);
+        assert_eq!(reading.tokens[0].token.contract, STETH);
+        assert_eq!(reading.tokens[0].symbol.as_deref(), Some("stETH"));
+        assert_eq!(reading.tokens[0].decimals, Some(18));
+        let leg_tokens: Vec<_> = reading
+            .tokens
+            .iter()
+            .map(|transfer| CryptoAsset::Token(transfer.token.clone()))
+            .collect();
+        assert_eq!(leg_tokens, vec![reading.legs[0].asset.clone()]);
+        assert_eq!(leg_token_of(&TOKENS[3]).symbol.as_deref(), Some("wstETH"));
     }
 
     /// Hand calculation: 2 wstETH * 1.249306133740130361 = 2.498612267480260722 stETH.
