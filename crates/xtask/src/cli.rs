@@ -14,8 +14,22 @@ pub struct Cli {
     pub command: Command,
 }
 
+/// The commands that run without a checkout: no workspace root is looked up for them.
 #[derive(Subcommand)]
 pub enum Command {
+    /// The required status check: RESULTS (the needed jobs' results) must be success or skipped.
+    #[command(hide = true)]
+    CiOk,
+    /// Whether the platform lanes run (EVENT, PR_NUMBER, GITHUB_REPOSITORY, GH_TOKEN); writes `platforms=` to GITHUB_OUTPUT.
+    #[command(hide = true)]
+    CiChanges,
+    #[command(flatten)]
+    Rooted(RootedCommand),
+}
+
+/// The commands that run in the workspace root.
+#[derive(Subcommand)]
+pub enum RootedCommand {
     /// The gate: lint, typecheck, UI checks, browser checks, clippy, tests, platforms (or the part you name).
     Check(CheckArgs),
     /// Bundles for every platform (linux pacman flatpak android windows macos) into
@@ -99,12 +113,6 @@ pub enum Command {
         #[arg(long)]
         cargo: bool,
     },
-    /// The required status check: RESULTS (the needed jobs' results) must be success or skipped.
-    #[command(hide = true)]
-    CiOk,
-    /// Whether the platform lanes run (EVENT, PR_NUMBER, GITHUB_REPOSITORY, GH_TOKEN); writes `platforms=` to GITHUB_OUTPUT.
-    #[command(hide = true)]
-    CiChanges,
     /// `pnpm install` into the cached store `.cache/pnpm`.
     #[command(hide = true)]
     CiPnpmInstall,
