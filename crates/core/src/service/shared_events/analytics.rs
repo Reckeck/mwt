@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use crate::Amount;
 use crate::calendar::Calendar;
-use crate::model::shared_event::{ME, SettlementKind, SharedEvent};
+use crate::model::shared_event::{ME, SettlementKind};
 use crate::pricing::history::secs_or_now;
 
 use super::super::budget::Flow;
@@ -65,49 +65,53 @@ impl UnlockedVault {
     }
 
     /// One spending flow of mine in the event currency, valued in `currency`.
-    #[allow(clippy::too_many_arguments)]
     fn event_flow(
         &self,
         book: &RateBook,
         cal: &Calendar,
         currency: &str,
-        event: &SharedEvent,
-        at: &str,
-        category: String,
-        value_in_event: Amount,
-        tag: String,
+        extra: &SharedExtra,
     ) -> Flow {
-        let secs = secs_or_now(at);
-        let (value, missing) = match book.convert(value_in_event, &event.currency, currency, secs) {
-            Some(value) => (value, Vec::new()),
-            None => (Amount::ZERO, vec![event.currency.to_uppercase()]),
-        };
+        let (value, missing) =
+            match book.convert(extra.value, &extra.event_currency, currency, extra.secs) {
+                Some(value) => (value, Vec::new()),
+                None => (Amount::ZERO, vec![extra.event_currency.to_uppercase()]),
+            };
         Flow {
-            date: cal.date_of(secs),
-            class: self.event_spending_class(&category),
+            date: cal.date_of(extra.secs),
+            class: self.event_spending_class(&extra.category),
             value,
-            categories: vec![category],
+            categories: vec![extra.category.clone()],
             stores: Vec::new(),
-            tx_id: tag,
+            tx_id: extra.tag.clone(),
             missing,
         }
     }
 
     /// Spending that has no payment of mine behind it: my part of other
-    /// people's purchases and what I wrote off.
-    pub(crate) fn shared_extra_flows(
+    /// people's purchases and what I wrote off, over entries the caller already
+    /// collected (`Books` keeps them, so a request collects them once).
+    pub(crate) fn extra_flows_from(
         &self,
+        extras: &[SharedExtra],
         book: &RateBook,
         cal: &Calendar,
         currency: &str,
         from: i64,
         to: i64,
     ) -> Vec<Flow> {
+        extras
+            .iter()
+            .filter(|extra| extra.secs >= from && extra.secs < to)
+            .map(|extra| self.event_flow(book, cal, currency, extra))
+            .filter(|flow| flow.class != FlowClass::Ignored)
+            .collect()
+    }
+
+    /// Every extra spending entry of mine, in the event currency and not yet
+    /// valued: it does not depend on the currency, zone or period asked.
+    pub(crate) fn shared_extras(&self) -> Vec<SharedExtra> {
         let mut out = Vec::new();
-        let inside = |at: &str| {
-            let secs = secs_or_now(at);
-            secs >= from && secs < to
-        };
         for event in self
             .doc
             .shared_events
@@ -118,7 +122,7 @@ impl UnlockedVault {
             for line in computed
                 .purchases
                 .iter()
-                .filter(|line| line.buyer != ME && line.my_part.is_positive() && inside(&line.at))
+                .filter(|line| line.buyer != ME && line.my_part.is_positive())
             {
                 let category = event
                     .items
@@ -128,47 +132,45 @@ impl UnlockedVault {
                         || super::FALLBACK_CATEGORY.to_string(),
                         |item| super::item_category(event, item),
                     );
-                let flow = self.event_flow(
-                    book,
-                    cal,
-                    currency,
-                    event,
-                    &line.at,
+                out.push(SharedExtra {
+                    secs: secs_or_now(&line.at),
+                    event_currency: event.currency.clone(),
                     category,
-                    line.my_part,
-                    format!("shared:{}:{}", event.id, line.purchase_id),
-                );
-                if flow.class != FlowClass::Ignored {
-                    out.push(flow);
-                }
+                    value: line.my_part,
+                    tag: format!("shared:{}:{}", event.id, line.purchase_id),
+                });
             }
             for settlement in event
                 .settlements
                 .iter()
                 .filter(|settlement| settlement.kind == SettlementKind::WriteOff)
-                .filter(|settlement| inside(&settlement.at))
             {
                 let category = event
                     .category_id
                     .clone()
                     .unwrap_or_else(|| super::FALLBACK_CATEGORY.to_string());
-                let flow = self.event_flow(
-                    book,
-                    cal,
-                    currency,
-                    event,
-                    &settlement.at,
+                out.push(SharedExtra {
+                    secs: secs_or_now(&settlement.at),
+                    event_currency: event.currency.clone(),
                     category,
-                    settlement.amount,
-                    format!("shared:{}:{}", event.id, settlement.id),
-                );
-                if flow.class != FlowClass::Ignored {
-                    out.push(flow);
-                }
+                    value: settlement.amount,
+                    tag: format!("shared:{}:{}", event.id, settlement.id),
+                });
             }
         }
         out
     }
+}
+
+/// One extra spending entry of mine: a part of somebody else's purchase or a
+/// write-off, in the event currency.
+#[derive(Debug, Clone)]
+pub(crate) struct SharedExtra {
+    secs: i64,
+    event_currency: String,
+    category: String,
+    value: Amount,
+    tag: String,
 }
 
 #[cfg(test)]

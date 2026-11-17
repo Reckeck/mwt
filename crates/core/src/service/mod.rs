@@ -78,6 +78,7 @@ mod saving;
 mod scenarios;
 mod search;
 mod shared_events;
+pub(crate) use shared_events::SharedExtra;
 mod sync_ids;
 mod sync_journal;
 mod vehicle;
@@ -1687,6 +1688,16 @@ impl UnlockedVault {
         self.price_quote_for(asset_key).usd
     }
 
+    /// Base-currency price of one unit. The base's own fiat asset is exactly 1
+    /// (the `RateBook` identity, `L13`), rate or no rate; the rest goes through
+    /// the USD price and the base rate `fx`.
+    fn price_base_for(&self, asset_key: &str, fx: Amount) -> Amount {
+        if rates::is_fiat_of(asset_key, &self.base_and_fx().0) {
+            return Amount::new(rust_decimal::Decimal::ONE);
+        }
+        self.price_usd_for(asset_key) * fx
+    }
+
     /// Every store id a scope covers. An empty id list means the whole vault.
     pub fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String> {
         if scope.store_ids.is_empty() {
@@ -1740,7 +1751,8 @@ impl UnlockedVault {
                 };
                 let price_usd = quote.usd;
                 let value_usd = holding.quantity * price_usd;
-                let price_base = price_usd * fx;
+                let price_base = self.price_base_for(&holding.asset.key(), fx);
+                let value_base = holding.quantity * price_base;
                 let unrealized_base =
                     cost_basis::unrealized(holding.quantity, holding.avg_cost, price_base);
                 StorePosition {
@@ -1748,9 +1760,9 @@ impl UnlockedVault {
                     quantity: holding.quantity,
                     avg_cost: holding.avg_cost,
                     price_usd,
-                    price_base: price_usd * fx,
+                    price_base,
                     value_usd,
-                    value_base: value_usd * fx,
+                    value_base,
                     unrealized_base,
                     change_24h_pct: quote.change_24h_pct,
                     price_info: quote.info,
@@ -2263,8 +2275,17 @@ impl UnlockedVault {
         scope: Option<&HashSet<String>>,
         base_currency: &str,
     ) -> Vec<HistoryPoint> {
+        self.history_series_filtered_in(&self.rate_book(), scope, base_currency)
+    }
+
+    /// [`Self::history_series_filtered`] over a book the caller already built.
+    fn history_series_filtered_in(
+        &self,
+        book: &RateBook,
+        scope: Option<&HashSet<String>>,
+        base_currency: &str,
+    ) -> Vec<HistoryPoint> {
         let base = base_currency.to_lowercase();
-        let book = self.rate_book();
         let fx_now = self
             .per_usd(&base)
             .unwrap_or_else(|| Amount::new(rust_decimal::Decimal::ONE));

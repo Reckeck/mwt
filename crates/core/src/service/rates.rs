@@ -8,7 +8,7 @@ use crate::Amount;
 use crate::ipc_contract::CachedPrice;
 use crate::model::store::AssetRef;
 use crate::model::transaction::{Leg, Transaction};
-use crate::model::vault::{FxPoint, PricePoint};
+use crate::model::vault::{FxPoint, PricePoint, VaultDoc};
 use crate::pricing::history::{self, RateIndex, secs_or_now};
 
 use super::UnlockedVault;
@@ -32,9 +32,89 @@ pub struct RateBook {
     curves: HashMap<String, ValuationCurve>,
     /// Asset key by upper-case symbol, so a currency code can name a crypto asset.
     keys_by_symbol: HashMap<String, String>,
+    /// The base currency code, lower case; empty until [`RateBook::with_base`].
+    base: String,
 }
 
 impl RateBook {
+    /// The book of a document: the caches parsed once, `curves` the dated
+    /// valuations of its property assets. Pure: it reads nothing but its input.
+    pub(crate) fn build(doc: &VaultDoc, curves: HashMap<String, ValuationCurve>) -> Self {
+        let mut stamps = RateIndex::default();
+        let mut keys_by_symbol = HashMap::new();
+        for holding in &doc.holdings {
+            keys_by_symbol
+                .entry(holding.asset.symbol.to_uppercase())
+                .or_insert_with(|| holding.asset.key());
+        }
+        // A favourite coin the vault does not hold is still convertible once
+        // its quote is cached.
+        for (ticker, coingecko_id, _) in crate::exchange::well_known_coins() {
+            keys_by_symbol
+                .entry(ticker.to_string())
+                .or_insert_with(|| format!("coin:{coingecko_id}"));
+        }
+        for tx in &doc.transactions {
+            let secs = secs_or_now(&tx.meta().timestamp);
+            for leg in tx.legs() {
+                if let Some(price) = leg.price_usd {
+                    stamps.insert(&leg.asset.key(), secs, price);
+                }
+            }
+        }
+        stamps.sort();
+        Self {
+            fx: RateIndex::of_fx(&doc.fx_cache),
+            prices: RateIndex::of_prices(&doc.price_cache),
+            crypto: RateIndex::of_crypto(&doc.crypto_prices),
+            stamps,
+            curves,
+            manual: doc
+                .manual_prices
+                .iter()
+                .map(|price| {
+                    (
+                        price.asset_key.clone(),
+                        (price.unit_price, price.currency.clone()),
+                    )
+                })
+                .collect(),
+            keys_by_symbol,
+            base: String::new(),
+        }
+    }
+
+    /// The same book that knows the base currency, so the fiat asset of the
+    /// base is priced as exactly one of itself.
+    #[must_use]
+    pub fn with_base(mut self, base: &str) -> Self {
+        self.base = base.trim().to_lowercase();
+        self
+    }
+
+    /// The base currency code, lower case (empty before [`RateBook::with_base`]).
+    pub fn base(&self) -> &str {
+        &self.base
+    }
+
+    /// The dated valuations of the property assets, by asset key.
+    pub(crate) fn curves(&self) -> &HashMap<String, ValuationCurve> {
+        &self.curves
+    }
+
+    /// Price of one unit of `asset_key` in the base currency at `secs`: exactly
+    /// 1 for the base's own fiat asset, before any rate is consulted; else the
+    /// USD price through the base's rate. `None` with no base set or no rate.
+    pub fn price_in_base(&self, asset_key: &str, secs: i64) -> Option<Amount> {
+        if is_fiat_of(asset_key, &self.base) {
+            return Some(one());
+        }
+        let usd = self.price_at(asset_key, secs)?;
+        let rate = self
+            .fx_at(&self.base, secs)
+            .filter(|_| !self.base.is_empty())?;
+        usd.checked_mul(rate)
+    }
     /// Units of `currency` per USD at `secs`; USD itself is 1.
     pub fn fx_at(&self, currency: &str, secs: i64) -> Option<Amount> {
         let currency = currency.trim().to_lowercase();
@@ -140,6 +220,10 @@ impl RateBook {
     /// converted at the rate of the moment instead; a record without the
     /// label (older ones) is read as written.
     pub fn leg_price_in_base(&self, leg: &Leg, base: &str, secs: i64) -> Amount {
+        // The base currency is worth one of itself, whatever a rate says (L3).
+        if is_fiat_of(&leg.asset.key(), base) {
+            return one();
+        }
         if let Some(price_base) = leg.price_base {
             let foreign = leg
                 .price_base_currency
@@ -198,55 +282,30 @@ pub(crate) fn iso_of(secs: i64) -> String {
         .unwrap_or_default()
 }
 
+/// Whether `asset_key` is the fiat asset of currency `code` (any case, trimmed).
+pub(super) fn is_fiat_of(asset_key: &str, code: &str) -> bool {
+    let code = code.trim();
+    !code.is_empty()
+        && asset_key
+            .strip_prefix(FIAT_PREFIX)
+            .is_some_and(|fiat| fiat.eq_ignore_ascii_case(code))
+}
+
 fn one() -> Amount {
     Amount::new(rust_decimal::Decimal::ONE)
 }
 
 impl UnlockedVault {
+    /// The one place a book is built from the vault; counts builds in tests.
+    pub(crate) fn build_rate_book(&self) -> RateBook {
+        #[cfg(test)]
+        crate::kernel::books::BUILDS.with(|count| count.set(count.get() + 1));
+        RateBook::build(&self.doc, self.valuation_curves()).with_base(&self.base_and_fx().0)
+    }
+
     /// Parse the caches once for a batch of lookups.
     pub fn rate_book(&self) -> RateBook {
-        let mut stamps = RateIndex::default();
-        let mut keys_by_symbol = HashMap::new();
-        for holding in &self.doc.holdings {
-            keys_by_symbol
-                .entry(holding.asset.symbol.to_uppercase())
-                .or_insert_with(|| holding.asset.key());
-        }
-        // A favourite coin the vault does not hold is still convertible once
-        // its quote is cached.
-        for (ticker, coingecko_id, _) in crate::exchange::well_known_coins() {
-            keys_by_symbol
-                .entry(ticker.to_string())
-                .or_insert_with(|| format!("coin:{coingecko_id}"));
-        }
-        for tx in &self.doc.transactions {
-            let secs = secs_or_now(&tx.meta().timestamp);
-            for leg in tx.legs() {
-                if let Some(price) = leg.price_usd {
-                    stamps.insert(&leg.asset.key(), secs, price);
-                }
-            }
-        }
-        stamps.sort();
-        RateBook {
-            fx: RateIndex::of_fx(&self.doc.fx_cache),
-            prices: RateIndex::of_prices(&self.doc.price_cache),
-            crypto: RateIndex::of_crypto(&self.doc.crypto_prices),
-            stamps,
-            curves: self.valuation_curves(),
-            manual: self
-                .doc
-                .manual_prices
-                .iter()
-                .map(|price| {
-                    (
-                        price.asset_key.clone(),
-                        (price.unit_price, price.currency.clone()),
-                    )
-                })
-                .collect(),
-            keys_by_symbol,
-        }
+        self.build_rate_book()
     }
 
     /// Units of `currency` per USD at `ts` (RFC3339; empty = now).
@@ -839,5 +898,135 @@ mod tests {
         assert!(
             matches!(vault.resolve_input_price(&mut unknown), Err(crate::Error::FxMissing(code)) if code == "thb")
         );
+    }
+
+    /// A vault with a rate history, a quote and a hand-set price, as pinned.
+    fn priced_vault() -> (tempfile::TempDir, UnlockedVault) {
+        let (dir, mut vault) = empty_vault();
+        with_rub_history(&mut vault);
+        vault.apply_fx(&[fx("eur", "0.5", "2026-01-01T00:00:00Z")]);
+        vault.apply_prices(&[PricePoint {
+            asset_key: "coin:bitcoin".into(),
+            value_usd: amount("50000"),
+            ts: "2026-01-01T00:00:00Z".into(),
+            source: "test".into(),
+            change_24h_pct: None,
+        }]);
+        vault
+            .doc
+            .manual_prices
+            .push(crate::model::vault::ManualPrice {
+                asset_key: "asset:FLAT".into(),
+                unit_price: amount("100000"),
+                currency: "usd".into(),
+                updated_at: "2026-09-01T00:00:00Z".into(),
+            });
+        (dir, vault)
+    }
+
+    #[test]
+    fn lookups_of_a_fixed_vault_are_pinned() {
+        let (_dir, vault) = priced_vault();
+        let book = vault.rate_book();
+        let feb = secs_or_now("2026-02-01T00:00:00Z");
+        let jul = secs_or_now("2026-07-01T00:00:00Z");
+        assert_eq!(book.fx_at("usd", feb), Some(amount("1")));
+        assert_eq!(book.fx_at("rub", feb), Some(amount("80")));
+        assert_eq!(book.fx_at("rub", jul), Some(amount("100")));
+        assert_eq!(book.price_at("fiat:usd", feb), Some(amount("1")));
+        assert_eq!(book.price_at("fiat:rub", feb), Some(amount("0.0125")));
+        assert_eq!(book.price_at("fiat:eur", feb), Some(amount("2")));
+        assert_eq!(book.price_at("coin:bitcoin", feb), Some(amount("50000")));
+        assert_eq!(book.price_at("asset:FLAT", feb), Some(amount("100000")));
+        assert_eq!(
+            book.quote_at("fiat:rub", feb).map(|(price, _)| price),
+            Some(amount("0.0125"))
+        );
+        assert_eq!(
+            book.quote_at("coin:bitcoin", feb).map(|(price, _)| price),
+            Some(amount("50000"))
+        );
+        assert_eq!(
+            book.quote_at("asset:FLAT", feb),
+            Some((amount("100000"), None))
+        );
+    }
+
+    #[test]
+    fn build_equals_the_old_rate_book() {
+        let (_dir, vault) = priced_vault();
+        let built = RateBook::build(&vault.doc, vault.valuation_curves());
+        let book = vault.rate_book();
+        let feb = secs_or_now("2026-02-01T00:00:00Z");
+        for code in ["usd", "rub", "thb", "eur", "xyz"] {
+            assert_eq!(built.fx_at(code, feb), book.fx_at(code, feb), "{code}");
+        }
+        for key in [
+            "fiat:usd",
+            "fiat:rub",
+            "fiat:eur",
+            "coin:bitcoin",
+            "asset:FLAT",
+            "coin:none",
+        ] {
+            assert_eq!(built.price_at(key, feb), book.price_at(key, feb), "{key}");
+            assert_eq!(built.quote_at(key, feb), book.quote_at(key, feb), "{key}");
+            assert_eq!(
+                built.history_price(key, feb),
+                book.history_price(key, feb),
+                "{key}"
+            );
+        }
+        assert_eq!(
+            built.convert(amount("8000"), "rub", "eur", feb),
+            book.convert(amount("8000"), "rub", "eur", feb)
+        );
+    }
+
+    /// On the base: the stamp 0.0125 (80 per USD) times the July rate 100 gave
+    /// 1.25 per ruble instead of 1.
+    #[test]
+    fn a_base_currency_leg_is_priced_at_exactly_one() {
+        let (_dir, mut vault) = empty_vault();
+        with_rub_history(&mut vault);
+        let book = vault.rate_book();
+        let leg = Leg::in_coming("s", &rub(), amount("1"), &usd_price("0.0125"));
+        let jul = secs_or_now("2026-07-01T00:00:00Z");
+        assert_eq!(book.leg_price_in_base(&leg, "rub", jul), amount("1"));
+        assert_eq!(book.price_in_base("fiat:rub", jul), Some(amount("1")));
+        // Another currency keeps going through its rate.
+        let other = Leg::in_coming("s", &usd(), amount("1"), &usd_price("1"));
+        assert_eq!(book.leg_price_in_base(&other, "rub", jul), amount("100"));
+    }
+
+    /// On the base: no FX point for the base meant a USD price of 0, so the
+    /// cash was worth 0 instead of its quantity.
+    #[test]
+    fn base_currency_cash_is_valued_without_a_rate() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        vault.base_currency = "rub".into();
+        vault
+            .add_transaction(rub_income(&card, "10000", "2026-02-01T00:00:00Z"))
+            .unwrap();
+        assert_eq!(vault.net_worth().financial, amount("10000"));
+    }
+
+    /// The base figure is the quantity, but the USD side must not claim one
+    /// dollar per ruble when there is no rate to say otherwise.
+    #[test]
+    fn base_currency_cash_without_a_rate_is_not_one_usd_per_unit() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        vault.base_currency = "rub".into();
+        vault
+            .add_transaction(rub_income(&card, "10000", "2026-02-01T00:00:00Z"))
+            .unwrap();
+        let (_, fx) = vault.base_and_fx();
+        let positions = vault.store_positions(&card, fx);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].value_base, amount("10000"));
+        assert_eq!(positions[0].value_usd, Amount::ZERO);
+        assert_eq!(vault.price_usd_for("fiat:rub"), Amount::ZERO);
     }
 }

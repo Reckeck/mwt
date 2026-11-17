@@ -5,13 +5,14 @@
 //! valued in the budget currency at the rate of the day they happened (D20).
 //! Days, weeks and months are cut in the user's local zone (§7.6).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{Datelike, Duration, NaiveDate};
 
 use crate::Amount;
 use crate::calendar::{self, AUTOMATION_HOUR, Calendar, days_in_month, first_of_month};
 use crate::error::{Error, Result};
+use crate::kernel::books::Books;
 use crate::model::planning::{AutomationOutcome, Budget, BudgetPeriod, BudgetTarget, UtilityKind};
 use crate::model::store::{StoreKind, StoreScope};
 use crate::model::transaction::{Leg, LegRole, Transaction};
@@ -251,11 +252,44 @@ impl UnlockedVault {
         from: i64,
         to: i64,
     ) -> Vec<Flow> {
-        let book = self.rate_book();
-        // A payment made for a shared event counts for my part of it only.
-        let shared = self.shared_payment_ratios();
-        let mut flows: Vec<Flow> = self
-            .doc
+        self.flows_between_in(&self.books(), cal, currency, from, to)
+    }
+
+    /// [`Self::flows_between`] over the books of one request: the rates and
+    /// the shared-event figures are built once and shared.
+    pub(crate) fn flows_between_in(
+        &self,
+        books: &Books,
+        cal: &Calendar,
+        currency: &str,
+        from: i64,
+        to: i64,
+    ) -> Vec<Flow> {
+        let extras = books.shared_extras();
+        let mut flows = self.payment_flows(
+            books.rate_book(),
+            books.shared_ratios(),
+            cal,
+            currency,
+            from,
+            to,
+        );
+        flows.extend(self.extra_flows_from(extras, books.rate_book(), cal, currency, from, to));
+        flows
+    }
+
+    /// The flows of my own operations; a payment made for a shared event
+    /// counts for my part of it only (`shared` holds the ratios).
+    fn payment_flows(
+        &self,
+        book: &RateBook,
+        shared: &HashMap<String, Amount>,
+        cal: &Calendar,
+        currency: &str,
+        from: i64,
+        to: i64,
+    ) -> Vec<Flow> {
+        self.doc
             .transactions
             .iter()
             .filter_map(|tx| {
@@ -267,7 +301,7 @@ impl UnlockedVault {
                 if class == FlowClass::Ignored {
                     return None;
                 }
-                let (mut value, missing) = Self::flow_value(&book, tx, class, currency);
+                let (mut value, missing) = Self::flow_value(book, tx, class, currency);
                 if let Some(ratio) = shared.get(&tx.meta().id) {
                     value = value * *ratio;
                 }
@@ -281,9 +315,7 @@ impl UnlockedVault {
                     missing,
                 })
             })
-            .collect();
-        flows.extend(self.shared_extra_flows(&book, cal, currency, from, to));
-        flows
+            .collect()
     }
 
     /// Operations the budget could not value in its currency: a side had no
@@ -473,6 +505,16 @@ impl UnlockedVault {
     /// Income, mandatory spending, everyday spending and savings of a calendar
     /// month (`YYYY-MM`) in the budget currency (plan §7.3).
     pub fn month_summary(&self, month: &str, zone: &str) -> Result<MonthSummary> {
+        self.month_summary_in(&self.books(), month, zone)
+    }
+
+    /// [`Self::month_summary`] over the books of one request.
+    pub(crate) fn month_summary_in(
+        &self,
+        books: &Books,
+        month: &str,
+        zone: &str,
+    ) -> Result<MonthSummary> {
         let first = calendar::parse_month(month)
             .ok_or_else(|| Error::InvalidInput(format!("month {month}: expected YYYY-MM")))?;
         let cal = Calendar::new(zone);
@@ -484,7 +526,8 @@ impl UnlockedVault {
             complete: true,
             ..MonthSummary::default()
         };
-        for flow in self.flows_between(&cal, &currency, from, to) {
+        let flows = self.flows_between_in(books, &cal, &currency, from, to);
+        for flow in flows {
             out.complete &= flow.priced();
             match flow.class {
                 FlowClass::Income => out.income += flow.value,

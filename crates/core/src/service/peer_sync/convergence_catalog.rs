@@ -988,7 +988,13 @@ fn check_base_prices(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Viola
         let Some(leg) = tx.legs().into_iter().next() else {
             continue;
         };
-        let wanted = *usd_price * amount(&rate.to_string());
+        // L3: the reader's own fiat is worth exactly one of itself.
+        let own_fiat = crate::service::rates::is_fiat_of(&leg.asset.key(), &base);
+        let wanted = if own_fiat {
+            amount("1")
+        } else {
+            *usd_price * amount(&rate.to_string())
+        };
         let got = book.leg_price_in_base(&leg, &base, secs);
         if got != wanted {
             found(

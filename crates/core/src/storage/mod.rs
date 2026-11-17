@@ -362,8 +362,11 @@ impl VaultFile {
     /// Copy the file as it is before a migration rewrites it:
     /// `vault.wallet` → `vault.wallet.v1.bak`. An existing copy is kept, so
     /// the first, untouched file survives repeated opens. The copy is written
-    /// atomically; a leftover that is not a whole vault file (a short copy an
-    /// older build left) is made again.
+    /// atomically (`copy_atomically`: tmp + rename), so a new short copy cannot
+    /// appear; a leftover that does not parse (a short copy an older build
+    /// left) is made again. The container header holds no ciphertext length and
+    /// the AEAD tag needs the password, so wholeness is judged by the header
+    /// alone, never by comparing with the source: that file may have grown.
     pub fn backup_version(path: &Path, version: u32) -> Result<PathBuf> {
         let mut name = path.file_name().unwrap_or_default().to_os_string();
         name.push(format!(".v{version}.bak"));
