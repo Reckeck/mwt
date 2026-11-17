@@ -15,7 +15,7 @@ use crate::model::planning::RejectReason;
 use crate::model::store::AssetRef;
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::now_iso;
-use crate::planning::schedule::{fresh_moments, processed_dates};
+use crate::planning::schedule::{Processed, fresh_moments, processed_dates};
 use crate::pricing::history::{secs_or_now, unix_secs};
 use crate::time::{Clock, FixedClock, LocalDate};
 use crate::workflow::RunKey;
@@ -1807,10 +1807,31 @@ impl UnlockedVault {
     }
 
     /// Planned moments of automations already processed, by the operation
-    /// they made or by a run: `(workflow id, RFC3339 moment)`. Guards against
-    /// a second booking even when a schedule mark was rolled back (a sync).
-    pub(crate) fn automation_processed(&self) -> HashSet<(String, String)> {
-        let mut out = self.booked_moments();
+    /// they made or by a run: `(workflow id, stored planned date, RFC3339
+    /// moment)`. Guards against a second booking even when a schedule mark
+    /// was rolled back (a sync). Only records without a stored date (old
+    /// ones) are dated later by their moment.
+    pub(crate) fn automation_processed(&self) -> Vec<Processed> {
+        let mut out = Vec::new();
+        for tx in &self.doc.transactions {
+            match &tx.meta().origin {
+                TxOrigin::Automation {
+                    automation_id,
+                    planned_at,
+                } => out.push((automation_id.clone(), None, planned_at.clone())),
+                TxOrigin::Workflow {
+                    workflow_id,
+                    planned_at,
+                    planned_date,
+                    ..
+                } if planned_at.is_some() || planned_date.is_some() => out.push((
+                    workflow_id.clone(),
+                    *planned_date,
+                    planned_at.clone().unwrap_or_default(),
+                )),
+                _ => {}
+            }
+        }
         for run in &self.doc.workflow_runs {
             let planned = match &run.outcome {
                 RunOutcome::Rejected {
@@ -1819,8 +1840,12 @@ impl UnlockedVault {
                 } => Some(at.clone()),
                 _ => run.trigger.strip_prefix("schedule ").map(str::to_string),
             };
-            if let Some(at) = planned {
-                out.insert((run.workflow_id.clone(), at));
+            if planned.is_some() || run.planned_date.is_some() {
+                out.push((
+                    run.workflow_id.clone(),
+                    run.planned_date,
+                    planned.unwrap_or_default(),
+                ));
             }
         }
         out
@@ -1889,8 +1914,7 @@ impl UnlockedVault {
                 .map_or(start, |mark| mark.max(start));
             let (moments, _) =
                 schedule_moments_limited(&trigger.params, &cal, after, now, usize::MAX);
-            let mut done = processed_dates(&processed, &workflow.id, &cal);
-            done.extend(self.booked_planned_dates(&workflow.id));
+            let done = processed_dates(&processed, &workflow.id, &cal);
             let fresh = fresh_moments(&moments, &done, &cal);
             let overflow = fresh.len().saturating_sub(MAX_CATCH_UP);
             for moment in &fresh[..overflow] {
@@ -1938,22 +1962,6 @@ impl UnlockedVault {
             events.extend(report.events);
         }
         events
-    }
-
-    /// Local planned dates written on the operations an automation booked.
-    fn booked_planned_dates(&self, workflow_id: &str) -> HashSet<LocalDate> {
-        self.doc
-            .transactions
-            .iter()
-            .filter_map(|tx| match &tx.meta().origin {
-                TxOrigin::Workflow {
-                    workflow_id: maker,
-                    planned_date: Some(date),
-                    ..
-                } if maker == workflow_id => Some(*date),
-                _ => None,
-            })
-            .collect()
     }
 
     /// Record the local date a run was planned for on the operations it made.

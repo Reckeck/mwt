@@ -1928,6 +1928,36 @@ mod tests {
         assert_eq!(bookings(&vault), 3);
     }
 
+    /// Red before the fix: the moment's date in the new zone (the 16th) was
+    /// booked instead of the stored one (the 15th), so the 16th was lost.
+    #[test]
+    fn a_zone_moving_east_across_midnight_still_books_the_next_day() {
+        let (_dir, mut vault) = empty_vault();
+        let account = store(&mut vault, "Cash", StoreKind::Cash, None);
+        let mut funding = income(&account, "1000", "float");
+        at(&mut funding, "2026-01-01T00:00:00Z");
+        vault.add_transaction(funding).unwrap();
+        vault
+            .create_automation(AutomationDraft {
+                time: Some("23:30".into()),
+                starts_at: "2026-03-14T00:00:00Z".into(),
+                schedule: Schedule::EveryNDays { days: 1 },
+                ..monthly_draft("Late", 1, rent_draft(&account, "1"))
+            })
+            .unwrap();
+        // 23:30 Moscow on the 14th and 15th is 20:30Z.
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-15T21:00:00Z", "Europe/Moscow"),
+            2
+        );
+        // 20:30Z on the 15th is 03:30 on the 16th in Bangkok.
+        vault.doc.settings.schedule_timezone = Some("Asia/Bangkok".into());
+        assert_eq!(
+            pass_at(&mut vault, "2026-03-16T20:00:00Z", "Asia/Bangkok"),
+            1
+        );
+    }
+
     #[test]
     fn a_record_from_before_planned_date_falls_back_to_planned_at() {
         let (_dir, mut vault) = empty_vault();

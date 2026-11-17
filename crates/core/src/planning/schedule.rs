@@ -5,17 +5,21 @@ use std::collections::HashSet;
 use crate::calendar::Calendar;
 use crate::time::LocalDate;
 
-/// Local dates (in `cal`'s zone) already processed for one workflow, from
-/// `(workflow id, RFC3339 moment)` pairs. Unparsable moments are ignored.
+/// A processed planned moment: `(workflow id, stored local date, RFC3339 moment)`.
+pub type Processed = (String, Option<LocalDate>, String);
+
+/// Local dates already processed for one workflow. A stored date wins; only
+/// a record without one (an old record) is dated by its moment in `cal`'s
+/// zone. Unparsable moments are ignored.
 pub fn processed_dates(
-    processed: &HashSet<(String, String)>,
+    processed: &[Processed],
     workflow_id: &str,
     cal: &Calendar,
 ) -> HashSet<LocalDate> {
     processed
         .iter()
-        .filter(|(id, _)| id == workflow_id)
-        .filter_map(|(_, moment)| cal.date_of_iso(moment))
+        .filter(|(id, ..)| id == workflow_id)
+        .filter_map(|(_, date, moment)| date.or_else(|| cal.date_of_iso(moment)))
         .collect()
 }
 
@@ -38,8 +42,8 @@ mod tests {
     const HOUR: i64 = 3600;
     const DAY: i64 = 86_400;
 
-    fn processed_at(secs: i64) -> HashSet<(String, String)> {
-        HashSet::from([("wf".to_string(), iso(secs))])
+    fn processed_at(secs: i64) -> Vec<Processed> {
+        vec![("wf".to_string(), None, iso(secs))]
     }
 
     #[test]
@@ -60,9 +64,21 @@ mod tests {
     fn other_workflows_and_garbage_are_ignored() {
         let cal = Calendar::new("Europe/Berlin");
         let mut processed = processed_at(BANGKOK_9AM);
-        processed.insert(("other".to_string(), iso(BANGKOK_9AM + DAY)));
-        processed.insert(("wf".to_string(), "not a date".to_string()));
+        processed.push(("other".to_string(), None, iso(BANGKOK_9AM + DAY)));
+        processed.push(("wf".to_string(), None, "not a date".to_string()));
         assert_eq!(processed_dates(&processed, "wf", &cal).len(), 1);
+    }
+
+    #[test]
+    fn a_stored_date_beats_the_zone_of_its_moment() {
+        let moscow = Calendar::new("Europe/Moscow");
+        let day = moscow.date_of(BANGKOK_9AM);
+        let processed = vec![("wf".to_string(), Some(day), iso(BANGKOK_9AM + 20 * HOUR))];
+        let bangkok = Calendar::new("Asia/Bangkok");
+        assert_eq!(
+            processed_dates(&processed, "wf", &bangkok),
+            HashSet::from([day])
+        );
     }
 
     #[test]
