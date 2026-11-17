@@ -143,32 +143,38 @@ impl UnlockedVault {
                 (None, None) => {}
             }
         }
-        if changed {
-            self.persist()?;
-        }
-        Ok(())
+        self.transact(|tx| {
+            tx.touch_if(changed);
+            Ok(())
+        })
     }
 
-    fn crypto_set_cursor(&mut self, account_id: &str, cursor: Option<String>) {
+    /// Move the account's cursor; reports whether it moved (the same cursor
+    /// again is no change, and leaves `updated_at` alone).
+    fn crypto_set_cursor(&mut self, account_id: &str, cursor: Option<String>) -> bool {
         let id = cursor_id(account_id);
-        let updated_at = now_iso();
         match self
             .doc
             .crypto_cursors
             .iter_mut()
             .find(|record| record.id == id)
         {
+            Some(record) if record.cursor == cursor => false,
             Some(record) => {
                 record.cursor = cursor;
-                record.updated_at = updated_at;
+                record.updated_at = now_iso();
+                true
             }
-            None => self.doc.crypto_cursors.push(CryptoCursor {
-                id,
-                source: SOURCE_ID.to_string(),
-                account_id: account_id.to_string(),
-                cursor,
-                updated_at,
-            }),
+            None => {
+                self.doc.crypto_cursors.push(CryptoCursor {
+                    id,
+                    source: SOURCE_ID.to_string(),
+                    account_id: account_id.to_string(),
+                    cursor,
+                    updated_at: now_iso(),
+                });
+                true
+            }
         }
     }
 
@@ -200,8 +206,8 @@ impl UnlockedVault {
         } else {
             batch.next_cursor.clone()
         };
-        self.crypto_set_cursor(request.account_id, next.clone());
-        let stored = self.crypto_apply_batch(
+        let mut changed = self.crypto_set_cursor(request.account_id, next.clone());
+        let stored = self.crypto_apply_batch_unsaved(
             &CryptoBatch {
                 account_id: request.account_id,
                 read_at: request.read_at,
@@ -214,7 +220,10 @@ impl UnlockedVault {
             batch,
         );
         let applied = match stored {
-            Ok(applied) => applied,
+            Ok((applied, batch_changed)) => {
+                changed |= batch_changed;
+                applied
+            }
             Err(err) => {
                 let id = cursor_id(request.account_id);
                 self.doc.crypto_cursors.retain(|record| record.id != id);
@@ -238,9 +247,13 @@ impl UnlockedVault {
                 .stream
                 .next()
                 .map(|stream| Cursor::at(stream, None).encode());
-            self.crypto_set_cursor(request.account_id, next.clone());
-            self.persist()?;
+            changed |= self.crypto_set_cursor(request.account_id, next.clone());
         }
+        // One save for the whole pass: the batch and both cursor moves.
+        self.transact(|tx| {
+            tx.touch_if(changed);
+            Ok(())
+        })?;
         Ok(CryptoPagesApplied {
             added: applied.added,
             rewritten: applied.rewritten,
@@ -256,10 +269,11 @@ impl UnlockedVault {
         let id = cursor_id(account_id);
         let before = self.doc.crypto_cursors.len();
         self.doc.crypto_cursors.retain(|record| record.id != id);
-        if self.doc.crypto_cursors.len() != before {
-            self.persist()?;
-        }
-        Ok(())
+        let changed = self.doc.crypto_cursors.len() != before;
+        self.transact(|tx| {
+            tx.touch_if(changed);
+            Ok(())
+        })
     }
 
     /// Store the historic prices a pass fetched (spec D7, wave 0), saving
@@ -273,10 +287,10 @@ impl UnlockedVault {
             .iter()
             .filter(|point| !point.value_usd.is_zero() && !before.contains(point))
             .count();
-        if changed > 0 {
-            self.persist()?;
-        }
-        Ok(changed)
+        self.transact(|tx| {
+            tx.touch_if(changed > 0);
+            Ok(changed)
+        })
     }
 }
 

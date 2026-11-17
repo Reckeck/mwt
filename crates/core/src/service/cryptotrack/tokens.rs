@@ -27,10 +27,10 @@ impl UnlockedVault {
         decimals: u8,
     ) -> Result<TokenStatus> {
         let (status, changed) = self.register_token_unsaved(token, symbol, name, decimals)?;
-        if changed {
-            self.persist()?;
-        }
-        Ok(status)
+        self.transact(|tx| {
+            tx.touch_if(changed);
+            Ok(status)
+        })
     }
 
     /// [`Self::crypto_register_token`] without the save: the caller owns it

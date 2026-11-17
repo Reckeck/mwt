@@ -138,11 +138,17 @@ impl UnlockedVault {
                 .iter()
                 .position(|fix| fix.id == id)
         });
+        let mut changed = true;
         match slot {
             Some(index) => {
                 let fix = &mut self.doc.crypto_overrides[index];
-                fix.fiat_tx_id = Some(input.fiat_tx_id.clone());
-                fix.updated_at = now;
+                if fix.fiat_tx_id.as_deref() == Some(input.fiat_tx_id.as_str()) {
+                    // The same pointer again: nothing to write.
+                    changed = false;
+                } else {
+                    fix.fiat_tx_id = Some(input.fiat_tx_id.clone());
+                    fix.updated_at = now;
+                }
             }
             None => self.doc.crypto_overrides.push(CryptoOverride {
                 id: format!("cov:{}", input.event_id),
@@ -158,7 +164,10 @@ impl UnlockedVault {
                 updated_at: now,
             }),
         }
-        self.persist()
+        self.transact(|tx| {
+            tx.touch_if(changed);
+            Ok(())
+        })
     }
 
     /// Remove the pointer. Nothing to remove is not an error.
@@ -179,7 +188,10 @@ impl UnlockedVault {
             fix.fiat_tx_id = None;
             fix.updated_at = now_iso();
         }
-        self.persist()
+        self.transact(|tx| {
+            tx.touch();
+            Ok(())
+        })
     }
 
     /// The pointers of one operation or one fiat record, both ends resolved.

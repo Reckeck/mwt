@@ -261,8 +261,30 @@ impl UnlockedVault {
     /// own writers call after they changed an event, a verdict or an account,
     /// since nothing else re-derives the holdings for them.
     pub fn crypto_sync_holdings(&mut self) -> Result<()> {
+        let changed = self.refold_holdings();
+        self.transact(|tx| {
+            tx.touch_if(changed);
+            Ok(())
+        })
+    }
+
+    /// Fold the engine again into `doc.holdings` without saving. Reports
+    /// whether the positions differ from before: every fold gives the rows
+    /// fresh ids, which alone is no change worth a write.
+    pub(in crate::service) fn refold_holdings(&mut self) -> bool {
+        let before = std::mem::take(&mut self.doc.holdings);
         self.recompute_holdings();
-        self.persist()
+        let after = &self.doc.holdings;
+        let same = before.len() == after.len()
+            && after.iter().all(|row| {
+                before.iter().any(|old| {
+                    old.store_id == row.store_id
+                        && old.asset == row.asset
+                        && old.quantity == row.quantity
+                        && old.avg_cost == row.avg_cost
+                })
+            });
+        !same
     }
 
     /// What the module was worth at each cutoff of a report, for the months a
