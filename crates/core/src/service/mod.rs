@@ -96,7 +96,7 @@ mod reports;
 mod store_change;
 mod store_months;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 mod utilities;
 mod validate;
 mod valuation;

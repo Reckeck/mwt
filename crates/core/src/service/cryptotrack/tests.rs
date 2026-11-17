@@ -1,7 +1,6 @@
 //! What the crypto module's data does to the vault as a whole: it ties the
 //! vault to security level 3, and it must survive a save and a reopen.
 
-use super::super::test_support::empty_vault;
 use crate::error::Error;
 use crate::ipc_contract::security::SecurityLevel;
 use crate::model::chain::Chain;
@@ -22,7 +21,7 @@ fn account() -> CryptoAccount {
 
 #[test]
 fn an_empty_document_carries_no_crypto_data() {
-    let (_dir, vault) = empty_vault();
+    let vault = UnlockedVault::in_memory(VaultDoc::default());
     assert!(!doc_carries_crypto_data(&vault.doc));
     // The mark a wipe leaves behind is not the module's data: it is what
     // tells the other devices about the wipe, and a wiped vault must be
@@ -38,7 +37,7 @@ type Fill = fn(&mut VaultDoc, &VaultDoc);
 #[test]
 fn every_crypto_collection_ties_the_vault_to_level_three() {
     let full = crate::model::fixtures::full_doc();
-    let (_dir, vault) = empty_vault();
+    let vault = UnlockedVault::in_memory(VaultDoc::default());
     let cases: [(&str, Fill); 8] = [
         ("crypto_accounts", |doc, full| {
             doc.crypto_accounts = full.crypto_accounts.clone()

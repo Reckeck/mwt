@@ -2,6 +2,9 @@
 //! created, so a test that only needs a document is fast. Compiled under
 //! `cfg(any(test, feature = "testkit"))` only.
 
+#[cfg(test)]
+pub mod builders;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 

@@ -213,6 +213,25 @@ pub fn every_transaction() -> Vec<Transaction> {
     ]
 }
 
+/// The goal the full document carries.
+pub fn goal() -> Goal {
+    Goal {
+        id: "goal".into(),
+        name: "Car".into(),
+        active: true,
+        target_amount: amount("1000000"),
+        currency: "rub".into(),
+        starts_at: "2026-01-01T00:00:00Z".into(),
+        deadline: Some("2027-01-01T00:00:00Z".into()),
+        priority: 5,
+        monthly_commitment: Some(amount("50000")),
+        scope: StoreScope::store("bank", false),
+        created_at: "2026-01-01T00:00:00Z".into(),
+        scenario_id: None,
+        expected_return: None,
+    }
+}
+
 /// A vault document with every collection non-empty and every enum variant
 /// that carries data used at least once.
 pub fn full_doc() -> VaultDoc {
@@ -380,21 +399,7 @@ pub fn full_doc() -> VaultDoc {
             warn: true,
         })
         .collect();
-    doc.goals = vec![Goal {
-        id: "goal".into(),
-        name: "Car".into(),
-        active: true,
-        target_amount: amount("1000000"),
-        currency: "rub".into(),
-        starts_at: "2026-01-01T00:00:00Z".into(),
-        deadline: Some("2027-01-01T00:00:00Z".into()),
-        priority: 5,
-        monthly_commitment: Some(amount("50000")),
-        scope: StoreScope::store("bank", false),
-        created_at: "2026-01-01T00:00:00Z".into(),
-        scenario_id: None,
-        expected_return: None,
-    }];
+    doc.goals = vec![goal()];
     doc.reminders = vec![Reminder {
         id: "rem".into(),
         text: "Call the bank".into(),
