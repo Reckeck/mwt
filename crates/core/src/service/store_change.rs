@@ -920,6 +920,7 @@ mod merge_correction_tests {
     use super::*;
     use crate::Amount;
     use crate::model::transaction::{AdjustmentLine, AdjustmentTx, PriceStamp, TxMeta};
+    use crate::pricing::history::secs_or_now;
 
     fn rub() -> AssetRef {
         AssetRef::fiat("RUB", "RUB")
@@ -1035,6 +1036,30 @@ mod merge_correction_tests {
         assert_eq!(line_of(&vault, &source_fix).1, amount("1080"));
         assert_eq!(holding_of(&vault, &second, &rub()), sum);
         assert_eq!(sum, amount("1330"));
+        let balance_on = |stamp: &str| vault.balance_at(&second, &rub().key(), secs_or_now(stamp));
+        assert_eq!(balance_on("2026-03-01T00:00:00Z"), amount("1080"));
+        assert_eq!(balance_on("2026-03-10T00:00:00Z"), amount("1130"));
+    }
+
+    #[test]
+    fn two_cards_correcting_in_the_same_second_keep_their_deltas_and_the_sum() {
+        let (_dir, mut vault, first, second, _source_fix, _target_fix) = scenario();
+        let stamp = "2026-05-01T00:00:00Z";
+        let first_fix = correct(&mut vault, &first, "500", stamp);
+        let second_fix = correct(&mut vault, &second, "2000", stamp);
+        let delta = |vault: &UnlockedVault, id: &str| {
+            let (before, after) = line_of(vault, id);
+            after - before
+        };
+        let first_delta = delta(&vault, &first_fix);
+        let second_delta = delta(&vault, &second_fix);
+        let sum = holding_of(&vault, &first, &rub()) + holding_of(&vault, &second, &rub());
+
+        vault.apply_store_change(&merge(&first, &second)).unwrap();
+
+        assert_eq!(delta(&vault, &first_fix), first_delta);
+        assert_eq!(delta(&vault, &second_fix), second_delta);
+        assert_eq!(holding_of(&vault, &second, &rub()), sum);
     }
 
     #[test]

@@ -2906,7 +2906,7 @@
   "storeChange.wallet": "wallet",
   "storeChange.movedTransactions": "Operations to move: {count}",
   "storeChange.corrections": "Balance corrections that shift: {count}",
-  "storeChange.correctionLine": "{wallet}, {date}: counted {was}, now {now} because the other account held {held}",
+  "storeChange.correctionLine": "{wallet}, {date}: counted {was}, now {now} because {other} held {held}",
   "storeChange.conflicts": "Would not fit after the change: {count}. Fix or delete them, then try again.",
   "storeChange.confirm": "Type «{name}» to confirm",
   "storeChange.apply": "Apply",

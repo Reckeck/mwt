@@ -6,6 +6,7 @@ import en from '@/shared/config/i18n/locales/en.json'
 import ru from '@/shared/config/i18n/locales/ru.json'
 
 import StoreChangeCorrections from './StoreChangeCorrections.vue'
+import { lineKey } from './store-change.line-key'
 
 const shift: CorrectionShift = {
   tx_id: 'tx-1',
@@ -21,7 +22,10 @@ const shift: CorrectionShift = {
 const Money = { props: ['amount'], template: '<span class="money">{{ amount }}</span>' }
 
 function render(corrections: CorrectionShift[]) {
-  return mount(StoreChangeCorrections, { props: { corrections }, global: { stubs: { Money } } })
+  return mount(StoreChangeCorrections, {
+    props: { corrections, source: { id: 'card-1', name: 'Card 1' }, targetName: 'Card 2' },
+    global: { stubs: { Money } },
+  })
 }
 
 describe('StoreChangeCorrections', () => {
@@ -30,6 +34,20 @@ describe('StoreChangeCorrections', () => {
     const line = wrapper.find('li').text()
     expect(line).toContain('Card 1')
     expect(wrapper.findAll('.money').map((node) => node.text())).toEqual(['80', '1080', '1000'])
+  })
+
+  it('keys the shifted lines of one tx apart by asset and contract', () => {
+    const eur = { ...shift.asset, symbol: 'EUR' }
+    const usdOnChain = { ...shift.asset, contract: '0xabc' }
+    const shifts = [shift, { ...shift, asset: eur }, { ...shift, asset: usdOnChain }]
+    expect(new Set(shifts.map(lineKey)).size).toBe(shifts.length)
+  })
+
+  it('names the other wallet: the target for a source correction, the source otherwise', () => {
+    const wrapper = render([shift, { ...shift, tx_id: 'tx-2', from_store_id: 'card-2', from_store_name: 'Card 2' }])
+    const lines = wrapper.findAll('li').map((node) => node.text())
+    expect(lines[0]).toContain('Card 2')
+    expect(lines[1]).toContain('Card 1')
   })
 
   it('renders nothing when there are no corrections', () => {
