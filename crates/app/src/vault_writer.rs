@@ -8,13 +8,15 @@
 //! behind the disk. Closing paths (exit, lock, switching vaults, the window
 //! hidden) write at once through [`flush_now`].
 
+use crate::ipc::events::{AppEvent, VaultSaveFailed, VaultSaved};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use trade_core::ipc_contract::events::VaultSaveFailedPayload;
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use trade_core::service::{SaveHook, UnlockedVault};
 use trade_core::{Error, Result};
 
@@ -31,11 +33,6 @@ const BACKOFF: [Duration; 4] = [
     Duration::from_secs(5),
     Duration::from_secs(10),
 ];
-
-/// Event: a batched write failed (payload: the error text); retried by itself.
-pub const SAVE_FAILED_EVENT: &str = "vault-save-failed";
-/// Event: writing works again after a failure.
-pub const SAVED_EVENT: &str = "vault-saved";
 
 struct Wake(Mutex<Sender<()>>);
 
@@ -125,14 +122,17 @@ fn write_with_retries(app: &AppHandle, receiver: &Receiver<()>) {
         match write_batch(app) {
             Ok(()) => {
                 if failed {
-                    let _ = app.emit(SAVED_EVENT, ());
+                    let _ = VaultSaved::emit(app, &());
                 }
                 return;
             }
             Err(err) => {
                 if !failed {
                     eprintln!("vault: save failed, will retry: {err}");
-                    let _ = app.emit(SAVE_FAILED_EVENT, err.to_string());
+                    let _ = VaultSaveFailed::emit(
+                        app,
+                        &VaultSaveFailedPayload::Message(err.to_string()),
+                    );
                     failed = true;
                 }
                 std::thread::sleep(BACKOFF[attempt.min(BACKOFF.len() - 1)]);

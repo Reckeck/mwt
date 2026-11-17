@@ -35,14 +35,16 @@
 //!
 //! [`crypto_tracking_allowed`]: trade_core::appconfig::AppSettings::crypto_tracking_allowed
 
+use crate::ipc::events::{AppEvent, CryptoUpdated};
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use trade_core::ipc_contract::events::CryptoUpdatedPayload;
 
 use chrono::NaiveDate;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use trade_core::cryptotrack::prices;
 use trade_core::cryptotrack::protocols::{
     PositionReading, ProtocolRequest, ProtocolReview, Registry,
@@ -736,9 +738,11 @@ impl Host for AppHost {
     }
 
     fn updated(&self, account_id: &str) {
-        let _ = self.0.emit(
-            "crypto-updated",
-            serde_json::json!({ "account_id": account_id }),
+        let _ = CryptoUpdated::emit(
+            &self.0,
+            &CryptoUpdatedPayload {
+                account_id: account_id.to_string(),
+            },
         );
     }
 }

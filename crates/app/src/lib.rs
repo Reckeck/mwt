@@ -26,7 +26,9 @@ mod updates;
 mod vault_writer;
 
 use commands::{AppState, app_settings, sandbox};
+use ipc::events::AppEvent;
 use tauri::Manager;
+use trade_core::ipc_contract::events::VaultSaveFailedPayload;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -222,10 +224,12 @@ pub fn run() {
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
-                    let _ = tauri::Emitter::emit(
+                    let _ = ipc::events::VaultSaveFailed::emit(
                         app,
-                        vault_writer::SAVE_FAILED_EVENT,
-                        serde_json::json!({ "reason": err.to_string(), "exiting": true }),
+                        &VaultSaveFailedPayload::Exiting {
+                            reason: err.to_string(),
+                            exiting: true,
+                        },
                     );
                 }
             }

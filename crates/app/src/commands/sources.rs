@@ -2,7 +2,8 @@
 //! run of a method, the list, saving, refreshing and confirming a jump.
 //! Fetching happens without the vault lock (rule 3).
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use crate::ipc::events::{AppEvent, PricesUpdated, RatesUpdated, SourcesUpdated};
+use tauri::{AppHandle, Manager, State};
 use trade_core::datasource::{self, Extracted, SourcePreview};
 use trade_core::model::datasource::DataSource;
 use trade_core::model::notify::NoticeRecord;
@@ -29,9 +30,9 @@ async fn fetch_value(app: &AppHandle, source: &DataSource) -> Result<Extracted, 
 /// all follow a source.
 fn announce(app: &AppHandle, notices: Vec<NoticeRecord>) {
     crate::scheduler::record_and_deliver(app, notices);
-    let _ = app.emit("sources-updated", ());
-    let _ = app.emit("prices-updated", ());
-    let _ = app.emit("rates-updated", ());
+    let _ = SourcesUpdated::emit(app, &());
+    let _ = PricesUpdated::emit(app, &None);
+    let _ = RatesUpdated::emit(app, &());
 }
 
 /// Fetch one source and record the result (value, failure or jump).
@@ -142,8 +143,8 @@ pub async fn datasource_save(
     {
         announce(&app, notices);
     } else {
-        let _ = app.emit("sources-updated", ());
-        let _ = app.emit("rates-updated", ());
+        let _ = SourcesUpdated::emit(&app, &());
+        let _ = RatesUpdated::emit(&app, &());
     }
     let guard = require_vault(&state)?;
     let view = guard
@@ -167,8 +168,8 @@ pub async fn datasource_delete(
         let mut guard = require_vault(&state)?;
         guard.as_mut().unwrap().delete_data_source(&id)?;
     }
-    let _ = app.emit("sources-updated", ());
-    let _ = app.emit("rates-updated", ());
+    let _ = SourcesUpdated::emit(&app, &());
+    let _ = RatesUpdated::emit(&app, &());
     Ok(())
 }
 
@@ -237,7 +238,7 @@ pub async fn set_inflation_source(
             .unwrap()
             .set_inflation_source(&currency, &source_id)?;
     }
-    let _ = app.emit("rates-updated", ());
+    let _ = RatesUpdated::emit(&app, &());
     Ok(())
 }
 

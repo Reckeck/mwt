@@ -2,9 +2,10 @@
 //! screen, add an operation, refresh prices, lock, quit. Navigation goes through the
 //! `tray-navigate` event so the UI changes route without reloading the page.
 
+use crate::ipc::events::{AppEvent, RefreshPrices, ToggleLock, TrayNavigate};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 /// `(menu id, route name, Russian label, English label)` of the screens the tray opens.
 const SCREENS: [(&str, &str, &str, &str); 6] = [
@@ -152,14 +153,14 @@ pub fn create(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 "new_window" => open_new_window(),
                 "settings" => {
                     show_main(app);
-                    app.emit("tray-navigate", "settings").ok();
+                    TrayNavigate::emit(app, &"settings".to_string()).ok();
                 }
                 "refresh_prices" => {
-                    app.emit("refresh-prices", ()).ok();
+                    RefreshPrices::emit(app, &()).ok();
                 }
                 "lock" => {
                     show_main(app);
-                    app.emit("toggle-lock", ()).ok();
+                    ToggleLock::emit(app, &()).ok();
                 }
                 "quit" => app.exit(0),
                 _ => {
@@ -167,7 +168,7 @@ pub fn create(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                         SCREENS.iter().find(|(menu_id, ..)| *menu_id == id)
                     {
                         show_main(app);
-                        app.emit("tray-navigate", *route).ok();
+                        TrayNavigate::emit(app, &(*route).to_string()).ok();
                     }
                 }
             }

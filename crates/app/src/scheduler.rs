@@ -13,10 +13,18 @@
 //!
 //! The vault guard is never held across `.await` (AGENTS.md rule 3).
 
+use crate::ipc::events::{
+    AppEvent, AutomationCreated, AutomationRejected, AutomationSkipped, BybitImportPending,
+    Notification, PriceAlert, ReminderDue, RemindersChanged, WorkflowsRan,
+};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
+use trade_core::ipc_contract::events::{
+    AutomationCreatedPayload, AutomationSkippedPayload, BybitImportPendingPayload, EmptyPayload,
+    PriceAlertPayload, WorkflowsRanPayload,
+};
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 use trade_core::appconfig::{Locale, load_settings};
@@ -237,7 +245,7 @@ pub fn deliver(app: &AppHandle, records: Vec<NoticeRecord>, force: bool) {
                 })
             });
     for record in records {
-        let _ = app.emit("notification", &record);
+        let _ = Notification::emit(app, &record);
         if system {
             let _ = app
                 .notification()
@@ -377,7 +385,7 @@ fn merge_locked(app: &AppHandle) {
         crate::notify_store::save(app, &mut notify);
     }
     if applied {
-        let _ = app.emit("reminders-changed", serde_json::json!({}));
+        let _ = RemindersChanged::emit(app, &EmptyPayload {});
     }
 }
 
@@ -477,7 +485,7 @@ fn locked_tick(app: &AppHandle) {
 /// unless the user turned system notices off.
 fn show_locked(app: &AppHandle, records: Vec<NoticeRecord>, system: bool) {
     for record in records {
-        let _ = app.emit("notification", &record);
+        let _ = Notification::emit(app, &record);
         if system {
             let _ = app
                 .notification()
@@ -562,10 +570,13 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
     }
     // The screens re-read on this event, as they did when records were staged:
     // the event keeps its name so an older window still listens.
-    let _ = app.emit("automation-created", serde_json::json!({ "tx_ids": [] }));
-    let _ = app.emit(
-        "bybit-import-pending",
-        serde_json::json!({ "staged": 0, "recorded": recorded }),
+    let _ = AutomationCreated::emit(app, &AutomationCreatedPayload { tx_ids: vec![] });
+    let _ = BybitImportPending::emit(
+        app,
+        &BybitImportPendingPayload {
+            staged: 0,
+            recorded,
+        },
     );
     let ru = russian(app);
     record_and_deliver(
@@ -714,15 +725,20 @@ fn workflows_tick(app: &AppHandle) {
         (pass, news, interest)
     };
     if !pass.created.is_empty() || interest > 0 {
-        let _ = app.emit(
-            "automation-created",
-            serde_json::json!({ "tx_ids": pass.created }),
+        let _ = AutomationCreated::emit(
+            app,
+            &AutomationCreatedPayload {
+                tx_ids: pass.created.clone(),
+            },
         );
     }
     if !pass.runs.is_empty() {
-        let _ = app.emit(
-            "workflows-ran",
-            serde_json::json!({ "runs": pass.runs.len(), "queued": pass.queued }),
+        let _ = WorkflowsRan::emit(
+            app,
+            &WorkflowsRanPayload {
+                runs: Some(pass.runs.len()),
+                queued: Some(pass.queued),
+            },
         );
     }
     deliver(app, pass.notices, false);
@@ -772,10 +788,7 @@ fn automation_notices(app: &AppHandle, news: &AutomationNews, skipped: usize) {
         record_and_deliver(app, vec![record]);
     }
     if skipped > 0 {
-        let _ = app.emit(
-            "automation-skipped",
-            serde_json::json!({ "count": skipped }),
-        );
+        let _ = AutomationSkipped::emit(app, &AutomationSkippedPayload { count: skipped });
     }
     for (run_id, automation_id, name, planned_at, reason) in &news.rejected {
         let event = AutomationRejectedEvent {
@@ -785,7 +798,7 @@ fn automation_notices(app: &AppHandle, news: &AutomationNews, skipped: usize) {
             planned_at: planned_at.clone(),
             reason: reason.clone(),
         };
-        let _ = app.emit("automation-rejected", &event);
+        let _ = AutomationRejected::emit(app, &event);
         let date = planned_at.get(..10).unwrap_or_default();
         let (title, body) = rejected_text(ru, name, date, reason);
         let mut record = notice(
@@ -880,7 +893,12 @@ fn alerts_tick(app: &AppHandle, memory: &mut Memory) {
     let records = fired
         .into_iter()
         .map(|alert| {
-            let _ = app.emit("price-alert", serde_json::json!({ "alert_id": alert.id }));
+            let _ = PriceAlert::emit(
+                app,
+                &PriceAlertPayload {
+                    alert_id: alert.id.clone(),
+                },
+            );
             let word = match (alert.condition, ru) {
                 (AlertCondition::Above, true) => "выше",
                 (AlertCondition::Below, true) => "ниже",
@@ -931,13 +949,13 @@ fn reminders_tick(app: &AppHandle, _memory: &mut Memory) {
         (fresh, synced)
     };
     if synced {
-        let _ = app.emit("reminders-changed", serde_json::json!({}));
+        let _ = RemindersChanged::emit(app, &EmptyPayload {});
     }
     if fresh
         .iter()
         .any(|record| record.key.starts_with("reminder:"))
     {
-        let _ = app.emit("reminder-due", serde_json::json!({}));
+        let _ = ReminderDue::emit(app, &EmptyPayload {});
     }
     deliver(app, fresh, false);
 }

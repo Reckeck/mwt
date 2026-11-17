@@ -7,18 +7,17 @@
 //! The state mutex is held for short, synchronous sections only, never
 //! across an `.await` (AGENTS.md rule 3).
 
+use crate::ipc::events::AppEvent;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use trade_core::ipc_contract::{UpdatePhase, UpdateStatusDto};
 use trade_core::updates::{
     AppVersion, Channel, InstallKind, fetch_manifest, manifest_url, offer_from_manifest,
 };
 
 use crate::commands::app_settings::{config_dir, current_settings, save};
-
-pub const STATE_EVENT: &str = "update-state";
 
 #[derive(Default)]
 struct Inner {
@@ -137,7 +136,7 @@ fn set_phase(app: &AppHandle, phase: UpdatePhase) {
         .lock()
         .expect("update state")
         .phase = Some(phase);
-    let _ = app.emit(STATE_EVENT, status(app));
+    let _ = crate::ipc::events::UpdateState::emit(app, &status(app));
 }
 
 /// Whether an automatic check has anything to do right now.

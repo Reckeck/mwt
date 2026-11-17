@@ -1,4 +1,6 @@
-use tauri::{AppHandle, Emitter, Manager, State};
+use crate::ipc::events::{AppEvent, VaultChanged, VaultSaveFailed};
+use tauri::{AppHandle, Manager, State};
+use trade_core::ipc_contract::events::VaultSaveFailedPayload;
 
 use trade_core::ipc_contract::security::SecurityLevel;
 use trade_core::ipc_contract::{
@@ -73,7 +75,7 @@ pub fn lock_now(app: &AppHandle) {
     }
     let state = app.state::<AppState>();
     if let Ok(status) = status_of(&state) {
-        let _ = app.emit("vault-changed", status);
+        let _ = VaultChanged::emit(app, &status);
     }
 }
 
@@ -341,9 +343,8 @@ impl LockSteps for AppLockSteps<'_> {
     fn flush(&mut self) -> trade_core::Result<()> {
         // The guard is released inside `flush_now`, before the next steps.
         crate::vault_writer::flush_now(self.app).inspect_err(|err| {
-            let _ = self
-                .app
-                .emit(crate::vault_writer::SAVE_FAILED_EVENT, err.to_string());
+            let _ =
+                VaultSaveFailed::emit(self.app, &VaultSaveFailedPayload::Message(err.to_string()));
         })
     }
 

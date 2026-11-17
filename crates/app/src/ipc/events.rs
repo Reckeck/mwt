@@ -31,13 +31,6 @@ pub fn payload_ts<P: TS>() -> String {
     P::name(&ts_rs::Config::new())
 }
 
-/// The payload of an event whose JSON is still an inline `serde_json::json!`
-/// literal at its emit sites. Typed as `unknown` until the event gets its own
-/// payload struct (T21).
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(rename = "unknown")]
-pub struct InlineJson(#[ts(type = "unknown")] pub serde_json::Value);
-
 /// The payload of `vault-locked`: why the vault was locked and whether it
 /// closed (`false` when the flush failed and the vault stayed open).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -73,17 +66,17 @@ app_events! {
     "prices-updated" => PricesUpdated(Option<trade_core::ipc_contract::RefreshResult>),
     "rates-updated" => RatesUpdated(()),
     "sources-updated" => SourcesUpdated(()),
-    "bybit-import-pending" => BybitImportPending(InlineJson),
-    "crypto-updated" => CryptoUpdated(InlineJson),
-    "automation-created" => AutomationCreated(InlineJson),
+    "bybit-import-pending" => BybitImportPending(trade_core::ipc_contract::events::BybitImportPendingPayload),
+    "crypto-updated" => CryptoUpdated(trade_core::ipc_contract::events::CryptoUpdatedPayload),
+    "automation-created" => AutomationCreated(trade_core::ipc_contract::events::AutomationCreatedPayload),
     "automation-rejected" => AutomationRejected(trade_core::ipc_contract::AutomationRejectedEvent),
-    "automation-skipped" => AutomationSkipped(InlineJson),
-    "workflows-ran" => WorkflowsRan(InlineJson),
-    "price-alert" => PriceAlert(InlineJson),
-    "reminder-due" => ReminderDue(InlineJson),
-    "reminders-changed" => RemindersChanged(InlineJson),
+    "automation-skipped" => AutomationSkipped(trade_core::ipc_contract::events::AutomationSkippedPayload),
+    "workflows-ran" => WorkflowsRan(trade_core::ipc_contract::events::WorkflowsRanPayload),
+    "price-alert" => PriceAlert(trade_core::ipc_contract::events::PriceAlertPayload),
+    "reminder-due" => ReminderDue(trade_core::ipc_contract::events::EmptyPayload),
+    "reminders-changed" => RemindersChanged(trade_core::ipc_contract::events::EmptyPayload),
     "notification" => Notification(trade_core::model::notify::NoticeRecord),
-    "enrichment-ready" => EnrichmentReady(InlineJson),
+    "enrichment-ready" => EnrichmentReady(trade_core::ipc_contract::events::EnrichmentReadyPayload),
     "quick-add" => QuickAdd(()),
     "refresh-prices" => RefreshPrices(()),
     "toggle-lock" => ToggleLock(()),
@@ -91,7 +84,7 @@ app_events! {
     "vault-changed" => VaultChanged(trade_core::ipc_contract::VaultStatus),
     "vault-locked" => VaultLocked(VaultLockedPayload),
     // `SAVE_FAILED_EVENT`: a string, or `{ reason, exiting }` on exit.
-    "vault-save-failed" => VaultSaveFailed(InlineJson),
+    "vault-save-failed" => VaultSaveFailed(trade_core::ipc_contract::events::VaultSaveFailedPayload),
     // `SAVED_EVENT`
     "vault-saved" => VaultSaved(()),
     // `MIRROR_FAILED_EVENT`
@@ -175,12 +168,13 @@ mod tests {
     #[test]
     fn the_registry_names_match_the_constants() {
         assert_eq!(PricesUpdated::NAME, "prices-updated");
-        assert_eq!(crate::vault_writer::SAVED_EVENT, VaultSaved::NAME);
-        assert_eq!(
-            crate::vault_writer::SAVE_FAILED_EVENT,
-            VaultSaveFailed::NAME
-        );
-        assert_eq!(crate::updates::STATE_EVENT, UpdateState::NAME);
+        assert_eq!(VaultSaved::NAME, "vault-saved");
+        assert_eq!(VaultSaveFailed::NAME, "vault-save-failed");
+        assert_eq!(UpdateState::NAME, "update-state");
+        assert_eq!(VaultMirrorFailed::NAME, "vault-mirror-failed");
+        assert_eq!(TransferReceive::NAME, "transfer-receive");
+        assert_eq!(TransferSend::NAME, "transfer-send");
+        assert_eq!(TransferNearby::NAME, "transfer-nearby");
     }
 
     #[test]
@@ -191,19 +185,12 @@ mod tests {
 
     #[test]
     fn the_registry_pins_every_pub_event_constant() {
-        use crate::commands::security::raise::RAISE_PROGRESS_EVENT;
-        use crate::platform_fs::MIRROR_FAILED_EVENT;
-        use crate::sync::handover::{NEARBY_EVENT, RECEIVE_EVENT, SEND_EVENT};
         use crate::sync::{
             CLOCK_EVENT, ERROR_EVENT, OFFER_EVENT, PAIRING_EVENT, PLAN_EVENT, STATUS_EVENT,
             SYNCED_EVENT,
         };
 
         let pairs = [
-            (RAISE_PROGRESS_EVENT, SecurityRaiseProgress::NAME),
-            (RECEIVE_EVENT, TransferReceive::NAME),
-            (SEND_EVENT, TransferSend::NAME),
-            (NEARBY_EVENT, TransferNearby::NAME),
             (STATUS_EVENT, SyncStatusChanged::NAME),
             (OFFER_EVENT, SyncOffer::NAME),
             (PAIRING_EVENT, SyncPairing::NAME),
@@ -211,7 +198,6 @@ mod tests {
             (SYNCED_EVENT, VaultSynced::NAME),
             (ERROR_EVENT, SyncError::NAME),
             (CLOCK_EVENT, SyncClock::NAME),
-            (MIRROR_FAILED_EVENT, VaultMirrorFailed::NAME),
         ];
         for (constant, registered) in pairs {
             assert_eq!(constant, registered);
@@ -236,6 +222,6 @@ mod tests {
             "RefreshResult | null"
         );
         assert_eq!((find("rates-updated").payload_ts)(), "null");
-        assert_eq!((find("price-alert").payload_ts)(), "unknown");
+        assert_eq!((find("price-alert").payload_ts)(), "PriceAlertPayload");
     }
 }

@@ -1,4 +1,5 @@
-use tauri::{AppHandle, Emitter, State};
+use crate::ipc::events::{AppEvent, SecurityRaiseProgress};
+use tauri::{AppHandle, State};
 use trade_core::error::Error;
 use trade_core::ipc_contract::security::{
     PasswordStrengthReport, RaiseProgress, RaiseToCryptoInput, RaiseToCryptoReport, SecurityLevel,
@@ -9,9 +10,6 @@ use trade_core::service::security_level::password_strength;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-
-/// Event with the stage the raise is about to start.
-pub const RAISE_PROGRESS_EVENT: &str = "security-raise-progress";
 
 /// Move the open vault to level 3 (`UnlockedVault::raise_to_crypto`): backup,
 /// re-encryption at the hardened cost of this device (of a phone if the vault
@@ -39,7 +37,7 @@ pub async fn raise_to_crypto_level(
     let vault = guard.as_mut().ok_or("Vault is locked")?;
     let report =
         vault.raise_to_crypto(&input.current_password, &input.new_password, kdf, |stage| {
-            let _ = app.emit(RAISE_PROGRESS_EVENT, RaiseProgress { stage });
+            let _ = SecurityRaiseProgress::emit(&app, &RaiseProgress { stage });
         })?;
     Ok(RaiseToCryptoReport {
         level: SecurityLevel::Crypto,

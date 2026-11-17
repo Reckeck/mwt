@@ -4,6 +4,7 @@
 //! `transfer` do the rest. The received file goes to the app's vault folder;
 //! once it is unlocked there, the sending device is trusted for sync.
 
+use crate::ipc::events::{AppEvent, TransferReceive, TransferSend};
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -11,7 +12,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use trade_core::error::{Error, PeerSyncFailure, Result};
@@ -29,9 +30,6 @@ use crate::commands::AppState;
 pub const RECEIVE_SERVICE: &str = "_mwt-recv._tcp.local.";
 /// The port a receiving device listens on, so a firewall rule can name it.
 pub const RECEIVE_PORT: u16 = 53319;
-pub const RECEIVE_EVENT: &str = "transfer-receive";
-pub const SEND_EVENT: &str = "transfer-send";
-pub const NEARBY_EVENT: &str = "transfer-nearby";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct Receiving {
@@ -139,7 +137,7 @@ pub fn receive_view(app: &AppHandle) -> TransferReceiveView {
 }
 
 fn emit_receive(app: &AppHandle) {
-    let _ = app.emit(RECEIVE_EVENT, receive_view(app));
+    let _ = TransferReceive::emit(app, &receive_view(app));
 }
 
 fn update_receive(app: &AppHandle, generation: u64, edit: impl FnOnce(&mut TransferReceiveView)) {
@@ -500,7 +498,7 @@ fn nearby_list(state: &State) -> Vec<TransferNearby> {
 
 fn emit_nearby(app: &AppHandle) {
     let list = nearby_list(&state(app));
-    let _ = app.emit(NEARBY_EVENT, list);
+    let _ = crate::ipc::events::TransferNearby::emit(app, &list);
 }
 
 /// "Send to a new device" opened: look for receiving devices.
@@ -586,7 +584,7 @@ fn update_send(app: &AppHandle, generation: u64, edit: impl FnOnce(&mut Transfer
         };
         edit(&mut sending.view);
     }
-    let _ = app.emit(SEND_EVENT, send_view(app));
+    let _ = TransferSend::emit(app, &send_view(app));
 }
 
 /// "Send": the password is checked here, before anything leaves.
@@ -759,7 +757,7 @@ pub fn send_cancel(app: &AppHandle) {
     if let Some(task) = sending.and_then(|sending| sending.task) {
         task.abort();
     }
-    let _ = app.emit(SEND_EVENT, TransferSendView::default());
+    let _ = TransferSend::emit(app, &TransferSendView::default());
 }
 
 #[cfg(test)]

@@ -1,8 +1,9 @@
 //! Inflation and the key rate from the statistics offices: the background
 //! refresh, the "Refresh" button and the per-currency mode.
 
+use crate::ipc::events::{AppEvent, RatesUpdated};
 use chrono::{Datelike, Months, NaiveDate};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 use trade_core::model::inflation::{InflationMode, InflationSource};
 use trade_core::pricing::PricingService;
 use trade_core::service::{FetchedRates, InflationCurrency};
@@ -55,7 +56,7 @@ pub async fn refresh_rates_now(app: &AppHandle) -> Result<Vec<InflationCurrency>
         (fresh, vault.inflation_overview())
     };
     crate::scheduler::deliver(app, fresh, false);
-    let _ = app.emit("rates-updated", ());
+    let _ = RatesUpdated::emit(app, &());
     Ok(overview)
 }
 
@@ -87,7 +88,7 @@ pub async fn set_inflation_mode(
     vault.set_inflation_mode(&currency, mode)?;
     let overview = vault.inflation_overview();
     drop(guard);
-    let _ = app.emit("rates-updated", ());
+    let _ = RatesUpdated::emit(&app, &());
     Ok(overview)
 }
 
