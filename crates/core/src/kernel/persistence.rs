@@ -11,6 +11,7 @@ use crate::crypto::SealKey;
 use crate::error::Result;
 use crate::service::Flushed;
 use crate::storage::{SnapshotFormat, VaultFile};
+use crate::vault_io::VaultMirror;
 
 /// One encoded snapshot on its way to a store, still to be sealed.
 pub struct SealedWrite {
@@ -89,6 +90,37 @@ impl Persistence for SandboxStore {
     }
 }
 
+/// Decorator: after the inner store wrote, the sealed bytes go to the mirror.
+/// A job the inner store dropped (stale, or no store behind) is not pushed.
+pub struct Mirrored {
+    inner: Arc<dyn Persistence>,
+    mirror: Arc<dyn VaultMirror>,
+}
+
+impl Mirrored {
+    pub fn new(inner: Arc<dyn Persistence>, mirror: Arc<dyn VaultMirror>) -> Self {
+        Self { inner, mirror }
+    }
+}
+
+impl Persistence for Mirrored {
+    fn write(&self, job: SealedWrite) -> Result<Flushed> {
+        let done = self.inner.write(job)?;
+        if let Some(sealed) = &done.sealed {
+            self.mirror.push(sealed);
+        }
+        Ok(done)
+    }
+
+    fn writes(&self) -> bool {
+        self.inner.writes()
+    }
+
+    fn has_mirror(&self) -> bool {
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,5 +161,35 @@ mod tests {
         stale.gate = gate;
         assert_eq!(store.write(stale).unwrap().sealed, None);
         assert!(store.writes());
+    }
+
+    #[derive(Default)]
+    struct Recording(Mutex<Vec<Vec<u8>>>);
+
+    impl VaultMirror for Recording {
+        fn push(&self, sealed: &[u8]) {
+            self.0.lock().unwrap().push(sealed.to_vec());
+        }
+    }
+
+    #[test]
+    fn a_mirrored_store_pushes_after_the_inner_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("m.wallet");
+        let recording = Arc::new(Recording::default());
+        let store = Mirrored::new(Arc::new(FileStore), recording.clone());
+        let fresh = job(path.clone(), 2);
+        let gate = fresh.gate.clone();
+        let done = store.write(fresh).unwrap();
+        assert!(store.has_mirror());
+        assert!(store.writes());
+        let pushed = recording.0.lock().unwrap().clone();
+        assert_eq!(pushed, vec![done.sealed.unwrap()]);
+        assert_eq!(pushed[0], std::fs::read(&path).unwrap());
+        // A job the gate drops is not pushed.
+        let mut stale = job(path, 1);
+        stale.gate = gate;
+        assert_eq!(store.write(stale).unwrap().sealed, None);
+        assert_eq!(recording.0.lock().unwrap().len(), 1);
     }
 }

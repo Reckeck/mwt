@@ -32,7 +32,6 @@ use super::UnlockedVault;
 pub struct FlushJob {
     write: SealedWrite,
     store: Arc<dyn Persistence>,
-    mirror: Option<Arc<dyn crate::vault_io::VaultMirror>>,
 }
 
 impl std::fmt::Debug for FlushJob {
@@ -55,11 +54,7 @@ pub struct Flushed {
 impl FlushJob {
     /// Seal and write. Needs no vault lock; writes are serialised by the gate.
     pub fn write(self) -> Result<Flushed> {
-        let done = self.store.write(self.write)?;
-        if let (Some(sealed), Some(mirror)) = (&done.sealed, &self.mirror) {
-            mirror.push(sealed);
-        }
-        Ok(done)
+        self.store.write(self.write)
     }
 }
 
@@ -205,7 +200,6 @@ impl UnlockedVault {
                 gate: self.session.gate(),
             },
             store: self.session.store(),
-            mirror: self.mirror.clone(),
         }))
     }
 

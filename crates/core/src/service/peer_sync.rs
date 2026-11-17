@@ -758,7 +758,6 @@ impl UnlockedVault {
             _lock: crate::storage::VaultLock::detached(),
             // Nothing in the copy is ever written back.
             sandbox: true,
-            mirror: None,
             tracker: None,
             clock: self.clock.clone(),
             sync_tap: None,

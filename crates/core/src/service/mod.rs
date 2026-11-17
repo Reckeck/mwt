@@ -294,8 +294,6 @@ pub struct UnlockedVault {
     /// A sandbox copy: it runs every rule like the real vault but never
     /// writes the file (see [`Self::sandbox`]).
     sandbox: bool,
-    /// External copy written after every save (see [`crate::vault_io::mirror`]).
-    mirror: Option<std::sync::Arc<dyn crate::vault_io::VaultMirror>>,
     /// What the last save looked like, to stamp changes for sync.
     tracker: Option<crate::sync::track::Tracker>,
     /// This device's clock for sync stamps.
@@ -365,7 +363,6 @@ impl UnlockedVault {
             password: Zeroizing::new(password.to_string()),
             _lock: lock,
             sandbox: false,
-            mirror: None,
             tracker: None,
             clock: crate::sync::Clock::default(),
             sync_tap: None,
@@ -430,7 +427,6 @@ impl UnlockedVault {
             password: Zeroizing::new(password.to_string()),
             _lock: lock,
             sandbox: false,
-            mirror: None,
             tracker: None,
             clock: crate::sync::Clock::default(),
             sync_tap: None,
@@ -551,7 +547,6 @@ impl UnlockedVault {
             password: Zeroizing::new(String::new()),
             _lock: crate::storage::VaultLock::detached(),
             sandbox: true,
-            mirror: None,
             tracker: None,
             clock: self.clock.clone(),
             sync_tap: None,
@@ -566,13 +561,13 @@ impl UnlockedVault {
     /// never gets one: it writes nothing.
     pub fn set_mirror(&mut self, mirror: Option<std::sync::Arc<dyn crate::vault_io::VaultMirror>>) {
         if !self.sandbox {
-            self.mirror = mirror;
+            self.session.set_mirror(mirror);
         }
     }
 
     /// Whether saves are copied to an external document.
     pub fn has_mirror(&self) -> bool {
-        self.mirror.is_some()
+        self.session.has_mirror()
     }
 
     /// Replace the whole document with an externally supplied one and persist
