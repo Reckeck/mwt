@@ -808,6 +808,17 @@ impl UnlockedVault {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_far_deadline_with_a_return_does_not_panic() {
+        let huge = amount("1000000000000000000");
+        assert_eq!(
+            need_with_return(huge, huge * Amount::from(2), amount("0.5"), 1200),
+            Amount::ZERO
+        );
+        let _ = need_with_return(Amount::ZERO, huge, amount("0.5"), 1200);
+    }
+
     use crate::model::store::StoreKind;
     use crate::model::transaction::AccountRef;
     use crate::model::vault::PricePoint;

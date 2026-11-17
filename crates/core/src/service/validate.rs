@@ -147,9 +147,16 @@ impl UnlockedVault {
             if store.kind != StoreKind::Cash {
                 return Err(invalid("a banknote count is only for cash"));
             }
-            let total = notes.iter().fold(Amount::ZERO, |acc, note| {
-                acc + note.denomination * Amount::new(rust_decimal::Decimal::from(note.count))
-            });
+            let too_large = || invalid("the banknote total is too large");
+            let mut total = Amount::ZERO;
+            for note in notes {
+                let count = Amount::new(rust_decimal::Decimal::from(note.count));
+                let value = note.denomination.checked_mul(count).ok_or_else(too_large)?;
+                total = total.checked_add(value).ok_or_else(too_large)?;
+            }
+            if !total.within_input_bound() {
+                return Err(too_large());
+            }
             if total != amount {
                 return Err(invalid("the banknotes do not add up to the amount"));
             }
@@ -608,6 +615,20 @@ mod tests {
             |to: AccountRef| transfer_between(AccountRef::Store(store.clone()), to, usd(), "5");
         assert!(rejected(vault.add_transaction(send(to("other")))).contains("does not belong"));
         vault.add_transaction(send(to(&account_id))).unwrap();
+    }
+
+    #[test]
+    fn a_huge_banknote_total_is_rejected_not_a_panic() {
+        let (_dir, mut vault) = empty_vault();
+        let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
+        let Transaction::Topup(mut topup) = income(&cash, "300", "found") else {
+            unreachable!()
+        };
+        topup.details.cash_breakdown = Some(vec![CashNote {
+            denomination: amount("500000000000000000"),
+            count: u32::MAX,
+        }]);
+        assert!(rejected(vault.add_transaction(Transaction::Topup(topup))).contains("too large"));
     }
 
     /// V8: details only where they make sense, banknotes must add up.
