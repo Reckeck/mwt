@@ -40,7 +40,23 @@ macro_rules! domain_events {
     };
 }
 
+/// Why a vault was closed. Every close path of the app names one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockReason {
+    /// The user locked it.
+    Manual,
+    /// Idle, sleep or screen lock.
+    Autolock,
+    /// Leaving the sandbox.
+    SandboxLeave,
+    /// The same file is opened again while it is open.
+    Reopen,
+    /// Another vault is opened or created while one is open.
+    Replace,
+}
+
 domain_events! {
+    VaultLocked { reason: LockReason, closed: bool },
     Committed { revision: u64 },
     KeysChanged { keys: Vec<String> },
 }
@@ -152,5 +168,22 @@ mod tests {
         let seen = log.lock().unwrap().clone();
         assert_eq!(seen.len(), 1);
         assert!(seen[0].starts_with("kept:"));
+    }
+
+    #[test]
+    fn a_vault_locked_event_reaches_a_subscriber_with_its_reason() {
+        let bus = EventBus::new();
+        let log = Arc::new(Mutex::new(Vec::new()));
+        recorder(&bus, "lock", &log);
+        let locked = VaultLocked {
+            reason: LockReason::Autolock,
+            closed: false,
+        };
+        bus.publish(&locked.clone().into());
+        let seen = log.lock().unwrap().clone();
+        assert_eq!(
+            seen,
+            [format!("lock:{:?}", DomainEvent::VaultLocked(locked))]
+        );
     }
 }
