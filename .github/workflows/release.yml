@@ -34,7 +34,12 @@ on:
 
 # One run per branch at a time. A push to development cancels the older pre-release run (the
 # newer one supersedes it; runs never overlap, so the pre-release number N taken from the tags
-# stays unique). A release from main and a manual run are never cancelled half way: they wait.
+# stays unique). Only pushes to development are cancelled; a release from main and a manual run
+# are never cancelled half way: they wait.
+# Accepted window: a newer push can cut a dev pre-release while its publish job is uploading,
+# because a workflow-level cancel stops every job. The newer run supersedes that pre-release and
+# publish is rerun by the next push. Per-job groups (build cancellable, publish not) are not
+# used: two runs could interleave their publishes and break the uniqueness of N.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
