@@ -19,6 +19,16 @@ export function useTxContext(): TxContext {
 }
 
 /**
+ * True until the names a row shows have arrived (the same cached queries as the context's). A list that
+ * waits for this draws its rows once with their final text: a cold cache, after a vault close, would
+ * otherwise rename a wallet, a category or a contact under the amounts and add the clip badge a frame later.
+ */
+export function useTxContextPending() {
+  const queries = [useStoreTree(), useContacts(), useCategories(), useAllAttachments()]
+  return computed(() => queries.some((query) => query.isPending.value))
+}
+
+/**
  * One context for a whole list: its rows inject it instead of each building
  * its own maps and query observers (a page of rows did that a hundred times).
  */

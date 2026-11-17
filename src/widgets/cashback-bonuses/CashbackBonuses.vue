@@ -1,25 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { Money } from '@/entities/currency'
 import { Card } from '@/shared/ui/card'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
-import { call } from '@/shared/api/ipc'
+import { useCashbackReport } from '@/shared/api/queries'
 import { formatDate, formatQuantity } from '@/shared/lib/format'
 import { SectionState } from '@/shared/ui/section-state'
 
 /** Cashback and points of the month or the year, by card, and the programmes' balances. */
 const { t } = useI18n()
 const period = ref<'month' | 'year'>('month')
-const report = useQuery({
-  queryKey: computed(() => ['cashback', period.value]),
-  placeholderData: keepPreviousData,
-  queryFn: () => call<CashbackReport>('get_cashback_report', { period: period.value }),
-})
+const report = useCashbackReport(period)
 const data = computed(() => report.data.value ?? null)
 const total = computed(() => (data.value ? Number(data.value.cashback_base) + Number(data.value.points_base) : 0))
 const soon = (iso: string | null) => !!iso && new Date(iso).getTime() - Date.now() < 30 * 86_400_000

@@ -105,11 +105,32 @@ fn opened_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
     Some(app.path().app_cache_dir().ok()?.join("opened"))
 }
 
-/// Delete every decrypted attachment left on disk. Called when the vault
-/// locks, so a file that was opened never outlives the unlocked session.
+/// Delete every decrypted attachment left on disk. Called by `close_session`,
+/// at start and at exit, so a file that was opened never outlives the unlocked session.
 pub fn wipe_opened(app: &AppHandle) {
     if let Some(dir) = opened_dir(app) {
-        let _ = std::fs::remove_dir_all(dir);
+        wipe_dir(&dir);
+    }
+}
+
+/// Remove `dir` with everything in it; a missing one is fine.
+fn wipe_dir(dir: &std::path::Path) {
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[cfg(test)]
+mod wipe_tests {
+    use super::wipe_dir;
+
+    #[test]
+    fn wipe_removes_opened_files_and_tolerates_a_missing_dir() {
+        let temp = tempfile::tempdir().unwrap();
+        let opened = temp.path().join("opened");
+        std::fs::create_dir_all(opened.join("att-1")).unwrap();
+        std::fs::write(opened.join("att-1").join("file.pdf"), b"secret").unwrap();
+        wipe_dir(&opened);
+        assert!(!opened.exists());
+        wipe_dir(&opened);
     }
 }
 

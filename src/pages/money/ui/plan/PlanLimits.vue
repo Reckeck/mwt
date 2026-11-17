@@ -14,6 +14,7 @@ import { categoryKeyLabel } from '@/shared/lib/categories'
 import { pluralForm } from '@/shared/lib/format'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { Button } from '@/shared/ui/button'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { ProgressBar, type ProgressTone } from '@/shared/ui/progress-bar'
 
 /**
@@ -63,7 +64,8 @@ const top = computed<{ key: string; spending: BudgetSpending } | null>(() => {
   return { key: row.key, spending: { spent: row.total, average: row.average ?? null, currency: data.meta.currency, when: capital } }
 })
 const topName = computed(() => (top.value ? categoryKeyLabel(top.value.key, categories.data.value, t) : ''))
-const empty = computed(() => budgets.isSuccess.value && !rows.value.length)
+const loading = computed(() => budgets.isPending.value || statuses.isPending.value)
+const empty = computed(() => budgets.isSuccess.value && statuses.isSuccess.value && !rows.value.length)
 
 const open = ref(false)
 const category = ref('')
@@ -169,7 +171,9 @@ watch(
         </p>
       </li>
     </ul>
-    <div v-else-if="empty" class="grid justify-items-start gap-2 text-sm">
+    <!-- The rows' height is held while the query loads, so what is below does not jump when they come. -->
+    <Skeleton v-else-if="loading" class="h-28" />
+    <div v-else-if="empty" class="grid min-h-28 content-start justify-items-start gap-2 text-sm">
       <p>{{ t('money.plan.noLimits') }}</p>
       <p v-if="top" class="text-muted-foreground">
         <i18n-t keypath="money.plan.noLimitsHint">

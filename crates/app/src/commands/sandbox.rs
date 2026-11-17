@@ -93,6 +93,7 @@ pub fn leave(app: &AppHandle, state: &AppState) -> bool {
     }
     close_vault(state);
     erase_on_start(app);
+    crate::commands::attachments::wipe_opened(app);
     true
 }
 

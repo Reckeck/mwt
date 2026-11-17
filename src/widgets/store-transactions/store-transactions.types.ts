@@ -7,4 +7,6 @@ export interface StoreTransactionsProps {
    * list under them. The wallet page's operations tab.
    */
   bare?: boolean
+  /** The base currency when the page already has it: the day totals show its mark from the first frame, not after the summary. */
+  baseCurrency?: string
 }

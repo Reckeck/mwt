@@ -187,6 +187,7 @@ async function openOnce(page, view) {
   // The new route's own first frames are what the click asked for: a browser leaves shifts
   // within 500 ms of input out of CLS. Counted is what moves after that — data landing.
   await page.eval(`${APP}
+    if (window.__layout) window.__layout.navAt = performance.now()
     await gp.$router.push(${target})
     await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
     return true`)
@@ -212,6 +213,7 @@ export async function measureView(page, touch) {
   const problems = [...(await page.eval(OVERFLOW)), ...(await page.eval(NARROW_FIELDS)), ...(await page.eval(DAY_BAND_GAP)), ...(await page.eval(DUPLICATE_SECTIONS)), ...(await page.eval(SIBLING_OVERLAP))]
   const seen = await page.eval(READ_OBSERVERS)
   if (seen.cls > 0.01) problems.push(`layout shift ${seen.cls.toFixed(3)}: ${seen.shifts.slice(0, 3).join(', ')}`)
+  if (seen.cls > 0.01) problems.push(...seen.details.slice(0, 3).map((line) => `  ${line}`))
   const long = seen.long.filter((ms) => ms > 500)
   if (long.length) problems.push(`long task ${Math.max(...long)} ms`)
   if (touch) problems.push(...(await page.eval(TOUCH)))

@@ -1,6 +1,7 @@
 /** Commands: the user's own data sources (plan I2), as `service/datasources.rs` — without the network. */
 
 import { resolve } from './core'
+import { mockStatus } from './vault-data'
 import type { MockCommands } from './core'
 
 /** Currency → source id whose value is that currency's inflation; read by the rates mock. */
@@ -65,9 +66,17 @@ function sample(draft: DataSourceDraft): Extracted {
   return { number: '6.35', text: '6,35', series: [], warning: null }
 }
 
+/** The network commands need an open vault, as in Rust; the sandbox refusal comes first (dispatch). */
+function refuseWhileLocked(): Promise<never> | null {
+  if (mockStatus.value.unlocked) return null
+  return Promise.reject({ code: 'REQUIRES_UNLOCK', message: 'the vault is locked' })
+}
+
 export const sourcesCommands: MockCommands = {
   datasources_list: () => resolve(sources.map(view)),
   datasource_preview: ({ args }) => {
+    const locked = refuseWhileLocked()
+    if (locked) return locked
     const url = String(args?.url ?? '')
     if (!/^https:\/\//.test(url)) return Promise.reject({ code: 'INVALID_INPUT', message: 'https:// address expected' })
     if (url.endsWith('.json'))
@@ -90,7 +99,7 @@ export const sourcesCommands: MockCommands = {
       })
     return resolve<SourcePreview>({ kind: 'html', html: PAGE, json: null, rows: [] })
   },
-  datasource_test: ({ args }) => resolve(sample(args?.draft as DataSourceDraft)),
+  datasource_test: ({ args }) => refuseWhileLocked() ?? resolve(sample(args?.draft as DataSourceDraft)),
   datasource_save: ({ args }) => {
     const draft = args?.draft as DataSourceDraft
     const existing = draft.id ? find(draft.id) : null

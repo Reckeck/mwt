@@ -55,7 +55,8 @@ const archiveLabel = computed(() => (props.category.archived ? t('stores.unarchi
   >
     <span class="flex min-w-0 flex-1 flex-col text-left">
       <span class="truncate">{{ label }}</span>
-      <span class="flex flex-wrap gap-x-1 text-xs text-muted-foreground">
+      <!-- min-h-4: the line is reserved, so the sum arriving later does not grow the row's text. -->
+      <span class="flex min-h-4 flex-wrap gap-x-1 text-xs text-muted-foreground">
         <template v-if="total">
           <Money :amount="total" :currency="currency" :decimals="0" />
           <span v-if="showMonth">{{ t('categories.inMonth', { month: monthName }) }}</span>

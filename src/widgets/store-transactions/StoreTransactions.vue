@@ -13,6 +13,7 @@ import { Card } from '@/shared/ui/card'
 import { SectionState } from '@/shared/ui/section-state'
 import { call } from '@/shared/api/ipc'
 import { storeTxFilter, txFilterToQuery } from '@/shared/lib/tx-filter'
+import { useTxContextPending } from '@/shared/lib/tx-context'
 
 import { openTxDetails } from '@/shared/lib/tx-details'
 
@@ -31,9 +32,15 @@ watch(
   },
 )
 
-/** The day totals are in the base currency: the summary has its rate. */
+/**
+ * The day totals are in the base currency: the summary has its rate. The list waits for it together with
+ * the rows, so the totals are in the first frame of the list (a cold cache, after a vault close, would
+ * otherwise bring them a frame later and move what is under them).
+ */
 const summary = useQuery({ queryKey: ['summary'], queryFn: () => call<PortfolioSummary>('get_summary') })
 const { query: txs, rows, total } = useTxPages(filter)
+/** The names in the rows (wallets, categories, contacts, attachments) are final in the first frame too. */
+const namesPending = useTxContextPending()
 
 const openDetails = openTxDetails
 
@@ -59,7 +66,7 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
       </div>
     </template>
     <SectionState
-      :loading="txs.isPending.value"
+      :loading="txs.isPending.value || summary.isPending.value || namesPending"
       :error="txs.error.value"
       :empty="!rows.length"
       :empty-title="t('filter.empty')"
@@ -76,7 +83,7 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
           openable
           group-by-day
           :fx-per-usd="summary.data.value?.fx_per_usd"
-          :base-currency="summary.data.value?.base_currency"
+          :base-currency="props.baseCurrency || summary.data.value?.base_currency"
           @open="openDetails"
           :row-actions="rowMenu.actions"
           @more="txs.fetchNextPage()"

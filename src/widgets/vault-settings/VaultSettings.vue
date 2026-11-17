@@ -57,8 +57,11 @@ const externalCopy = computed(() => (link.data.value?.linked ? (link.data.value.
         {{ t('vaultPassword.setOpen') }}
       </Button>
     </SettingsSection>
-    <SettingsSection :title="t('vaultLink.title')" :description="t('vaultLink.hint')"><VaultLinkSection /></SettingsSection>
-    <SettingsSection :title="t('vaultBackups.title')"><VaultBackupsSection :grouped="peers.length > 0" /></SettingsSection>
+    <SettingsSection :title="t('vaultLink.title')" :description="t('vaultLink.hint')">
+      <div class="flex min-h-31 flex-col gap-4 sm:min-h-17"><VaultLinkSection /></div>
+    </SettingsSection>
+    <SettingsSection :title="t('vaultBackups.title')"><div class="flex min-h-22.5 flex-col gap-4 sm:min-h-16"><VaultBackupsSection :grouped="peers.length > 0" /></div>
+    </SettingsSection>
     <ChangePasswordDialog v-model:open="changeOpen" />
     <RemovePasswordDialog v-model:open="removeOpen" :external-copy="externalCopy" />
     <SetPasswordDialog v-model:open="setOpen" :external-copy="externalCopy !== null" />

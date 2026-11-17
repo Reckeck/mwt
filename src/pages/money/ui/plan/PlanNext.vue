@@ -8,6 +8,7 @@ import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
 import { formatDate } from '@/shared/lib/format'
 import { Badge } from '@/shared/ui/badge'
+import { Skeleton } from '@/shared/ui/skeleton'
 
 /** `Later this month` (Money 2 · 9, 10): what the automations and reminders bring before the month ends. */
 const { t } = useI18n()
@@ -22,12 +23,15 @@ const kindText = (kind: UpcomingKind) => t(`money.plan.kind.${KIND_LABEL[kind] ?
 </script>
 
 <template>
-  <section v-if="items.length" class="grid gap-3 rounded-xl border bg-card p-4 shadow-sm" data-tour="plan-next">
+  <section class="grid gap-3 rounded-xl border bg-card p-4 shadow-sm" data-tour="plan-next">
     <header class="flex items-baseline justify-between gap-2">
       <h2 class="heading-section">{{ t('money.plan.next') }}</h2>
       <RouterLink :to="{ name: 'automations' }" class="text-xs text-muted-foreground hover:text-foreground">{{ t('money.plan.fromAutomations') }}</RouterLink>
     </header>
-    <ul class="grid gap-2">
+    <!-- The block is always shown: loading and the empty line (also on an error) are one line tall, so nothing below jumps. -->
+    <Skeleton v-if="upcoming.isPending.value" class="h-5" />
+    <p v-else-if="!items.length" class="min-h-5 text-sm text-muted-foreground">{{ t('money.plan.nothingNext') }}</p>
+    <ul v-else class="grid gap-2">
       <li v-for="item in items" :key="`${item.kind}-${item.source_id}-${item.at}`" class="flex min-w-0 items-center gap-2 text-sm">
         <Badge variant="secondary" class="shrink-0">{{ kindText(item.kind) }}</Badge>
         <span class="min-w-0 truncate">

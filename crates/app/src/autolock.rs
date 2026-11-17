@@ -13,7 +13,7 @@
 //!   with `sync/lock_policy.rs`; here only the shared pieces (the "own window"
 //!   guard, the time-limited picker hold, the foreground flag).
 //!
-//! Locking flushes first (`commands::auth::lock_now`), drops the open vault and
+//! Locking flushes first (`commands::auth::close_session`), drops the open vault and
 //! deletes the decrypted attachments opened for other programs.
 // Each platform uses a different part (OS events on desktop, the background pieces on
 // Android, `OwnWindow` once the pickers hold it), and the tests cover all of them.
@@ -329,10 +329,9 @@ pub fn vault_open(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-/// Close the vault and delete what was decrypted for other programs.
+/// Close the vault; `close_session` also deletes what was decrypted for other programs.
 pub fn lock(app: &AppHandle, _reason: LockReason) {
     crate::commands::auth::lock_now(app);
-    crate::commands::attachments::wipe_opened(app);
 }
 
 /// Start the idle and sleep watch and, on desktop, the OS event listeners.
