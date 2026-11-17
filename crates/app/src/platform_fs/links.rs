@@ -300,7 +300,12 @@ pub fn take_in(
 }
 
 /// After `SYNC_CONFLICT`: make both sides `keep`.
-pub fn resolve_conflict(app: &AppHandle, vault: &Path, keep: ConflictSide) -> Result<()> {
+pub fn resolve_conflict(
+    app: &AppHandle,
+    vault: &Path,
+    keep: ConflictSide,
+    password: &str,
+) -> Result<()> {
     let link = get(app, vault).ok_or_else(|| Error::NotFound(key(vault)))?;
     match keep {
         ConflictSide::Local => {
@@ -311,10 +316,17 @@ pub fn resolve_conflict(app: &AppHandle, vault: &Path, keep: ConflictSide) -> Re
         }
         ConflictSide::Remote => {
             let remote = read_location(app, &link.location())?;
-            // No password here (the vault is not open): the header check only.
-            pull(app, vault, &remote, None)
+            let key = trial_key(&remote, password)?;
+            pull(app, vault, &remote, Some(&key))
         }
     }
+}
+
+/// Trial-open the external copy with the password: a header-valid but
+/// truncated or foreign copy fails here, before anything is replaced.
+fn trial_key(remote: &[u8], password: &str) -> Result<SealKey> {
+    let (_, _, key) = crypto::open_bytes_keyed(remote, password.as_bytes())?;
+    Ok(key)
 }
 
 /// Write the local vault to its copy, remembering the outcome. Compare and
@@ -445,6 +457,27 @@ mod tests {
             std::fs::read(path.with_extension("wallet.bak")).unwrap(),
             local
         );
+    }
+
+    #[test]
+    fn a_truncated_remote_copy_fails_the_trial_open_and_a_whole_one_passes() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, _) = pin_vault(dir.path());
+        let local = std::fs::read(&path).unwrap();
+        let truncated = &local[..local.len() - 8];
+        let backup = path.with_extension("wallet.bak");
+        std::fs::write(&backup, b"earlier backup").unwrap();
+        assert!(validate_vault_bytes(truncated).is_ok());
+        // The refused path of resolve_conflict(Remote): the trial open fails,
+        // so replace_local never runs.
+        let refused = trial_key(truncated, "482913")
+            .and_then(|key| replace_local(&path, truncated, Some(&key)));
+        assert!(refused.is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), local);
+        assert_eq!(std::fs::read(&backup).unwrap(), b"earlier backup");
+        assert!(trial_key(&local, "wrong-pin").is_err());
+        let key = trial_key(&local, "482913").unwrap();
+        assert!(replace_local(&path, &local, Some(&key)).is_ok());
     }
 
     #[test]

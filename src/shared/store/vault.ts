@@ -63,8 +63,8 @@ export const useVaultStore = defineStore('vault', {
       return await call<PickedVault | null>('pick_vault_file', { save })
     },
     /** After `SYNC_CONFLICT`: make the vault and its external copy equal. */
-    async resolveConflict(path: string, keep: ConflictSide) {
-      await call('resolve_vault_conflict', { input: { path, keep } })
+    async resolveConflict(path: string, keep: ConflictSide, password: string) {
+      await call('resolve_vault_conflict', { input: { path, keep, password } })
     },
     /** `path` is explicit: the unlock screen may target any vault, not just the
      *  default one, and `select_vault` cannot be used for a file that does not

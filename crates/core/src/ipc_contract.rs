@@ -2186,6 +2186,9 @@ pub enum ConflictSide {
 pub struct ResolveVaultConflictInput {
     pub path: String,
     pub keep: ConflictSide,
+    /// The vault's password: keeping the remote copy trial-opens it first.
+    #[serde(default)]
+    pub password: String,
 }
 
 /// Output of the dev dump vault command (DEV only).

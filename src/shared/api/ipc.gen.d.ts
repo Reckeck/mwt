@@ -6000,7 +6000,11 @@ type ReportOverview = { currency: string,
  */
 month: string, previous_month: string, year: number, flow: OverviewFlow, wealth: OverviewWealth, investments: OverviewInvestments, savings: OverviewYear, };
 
-type ResolveVaultConflictInput = { path: string, keep: ConflictSide, };
+type ResolveVaultConflictInput = { path: string, keep: ConflictSide, 
+/**
+ * The vault's password: keeping the remote copy trial-opens it first.
+ */
+password: string, };
 
 /**
  * Input to put a forgotten vault back into recents.

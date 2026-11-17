@@ -75,7 +75,7 @@ export function useUnlockVault() {
   async function resolveConflict(keep: ConflictSide) {
     busy.value = true
     try {
-      await vault.resolveConflict(path.value, keep)
+      await vault.resolveConflict(path.value, keep, password.value)
       conflict.value = false
     } catch (err) {
       error.value = vaultErrorMessage(err, t)

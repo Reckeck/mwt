@@ -98,5 +98,5 @@ pub async fn resolve_vault_conflict(
     app: AppHandle,
 ) -> Result<(), String> {
     let path = platform_fs::resolve_vault_to_open(&app, &input.path).map_err(err_to_string)?;
-    links::resolve_conflict(&app, &path, input.keep).map_err(err_to_string)
+    links::resolve_conflict(&app, &path, input.keep, &input.password).map_err(err_to_string)
 }
