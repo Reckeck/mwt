@@ -758,13 +758,12 @@ impl UnlockedVault {
             _lock: crate::storage::VaultLock::detached(),
             // Nothing in the copy is ever written back.
             sandbox: true,
-            mirror: None,
             tracker: None,
             clock: self.clock.clone(),
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: None,
-            session: crate::kernel::session::Session::default(),
+            session: crate::kernel::session::Session::sandboxed(),
             device_keys: super::exchange_keys::DeviceKeys::default(),
         })
     }

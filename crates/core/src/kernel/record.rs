@@ -126,6 +126,22 @@ mod tests {
     }
 
     #[test]
+    fn every_id_keyed_registry_collection_is_a_record_kind() {
+        for coll in registry::COLLECTIONS {
+            let is_record = matches!(coll.rule, Rule::Records | Rule::Log { .. });
+            if is_record && coll.key == ["id"] {
+                assert!(
+                    record_kinds()
+                        .iter()
+                        .any(|kind| kind.collection == coll.name),
+                    "{} is keyed by id in the sync registry but has no records! line",
+                    coll.name
+                );
+            }
+        }
+    }
+
+    #[test]
     fn level3_only_matches_the_crypto_prefix() {
         for kind in record_kinds() {
             assert_eq!(

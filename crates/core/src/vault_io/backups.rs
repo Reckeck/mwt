@@ -3,12 +3,13 @@
 //! the copies the user takes by hand (`vault.wallet.20261022-094000.bak`).
 //!
 //! The backup folder is the vault's own folder, and a backup is a file there
-//! named `<vault file name>.<anything>.bak`. [`resolve`] is the only way from
+//! named `<vault file name>.<slot>.bak` (see [`is_backup_name`]). [`resolve`] is the only way from
 //! a name the UI sends to a path: a name that points anywhere else is refused.
 
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
+use crate::vault_io::local::atomic_write;
 
 /// A backup file as the list shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,12 +36,45 @@ fn vault_name(vault: &Path) -> Result<String> {
         .ok_or_else(|| Error::InvalidInput("the vault has no file name".into()))
 }
 
-/// Whether `file` is a backup of the vault called `vault_name`.
+fn all_digits(text: &str) -> bool {
+    !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+/// `20261022-094000` or `20261022-094000-2`.
+fn is_stamp_slot(middle: &str) -> bool {
+    let mut parts = middle.splitn(3, '-');
+    let (Some(day), Some(time)) = (parts.next(), parts.next()) else {
+        return false;
+    };
+    let attempt_ok = parts.next().is_none_or(all_digits);
+    day.len() == 8 && all_digits(day) && time.len() == 6 && all_digits(time) && attempt_ok
+}
+
+/// Whether `file` is a backup of the vault called `vault_name`: the vault name,
+/// a dot, then only what the app writes: `bak`, `vN.bak`, `presync[.N].bak`,
+/// `<yyyymmdd-hhmmss>[-N].bak`. Another vault's copy (`family.wallet.old.wallet.….bak`)
+/// has more after the dot and is not a match.
 fn is_backup_name(vault_name: &str, file: &str) -> bool {
-    file.len() >= vault_name.len() + ".bak".len()
-        && file.starts_with(vault_name)
-        && file[vault_name.len()..].starts_with('.')
-        && file.ends_with(".bak")
+    let Some(tail) = file
+        .strip_prefix(vault_name)
+        .and_then(|rest| rest.strip_prefix('.'))
+    else {
+        return false;
+    };
+    if tail == "bak" {
+        return true;
+    }
+    let Some(middle) = tail.strip_suffix(".bak") else {
+        return false;
+    };
+    if let Some(version) = middle.strip_prefix('v') {
+        return all_digits(version);
+    }
+    match middle.strip_prefix("presync") {
+        Some("") => true,
+        Some(index) => index.strip_prefix('.').is_some_and(all_digits),
+        None => is_stamp_slot(middle),
+    }
 }
 
 fn rfc3339(time: std::time::SystemTime) -> String {
@@ -120,7 +154,8 @@ pub fn create(vault: &Path, stamp: &str) -> Result<BackupFile> {
         }
         target = dir.join(format!("{vault_file}.{stamp}-{attempt}.bak"));
     }
-    std::fs::copy(vault, &target).map_err(|err| Error::Io(err.to_string()))?;
+    let bytes = std::fs::read(vault).map_err(|err| Error::Io(err.to_string()))?;
+    atomic_write(&target, &bytes)?;
     let name = target
         .file_name()
         .map(|only| only.to_string_lossy().into_owned())
@@ -188,7 +223,7 @@ mod tests {
         ] {
             std::fs::write(dir.path().join(file), b"x").unwrap();
         }
-        std::fs::create_dir(dir.path().join("vault.wallet.dir.bak")).unwrap();
+        std::fs::create_dir(dir.path().join("vault.wallet.v7.bak")).unwrap();
         let mut names: Vec<_> = list(&vault)
             .unwrap()
             .into_iter()
@@ -203,6 +238,65 @@ mod tests {
                 "vault.wallet.v2.bak"
             ]
         );
+    }
+
+    #[test]
+    fn backup_names_accept_the_app_suffixes() {
+        for name in [
+            "vault.wallet.bak",
+            "vault.wallet.v2.bak",
+            "vault.wallet.v12.bak",
+            "vault.wallet.presync.bak",
+            "vault.wallet.presync.2.bak",
+            "vault.wallet.20261022-094000.bak",
+            "vault.wallet.20261022-094000-2.bak",
+        ] {
+            assert!(is_backup_name("vault.wallet", name), "{name} is a backup");
+        }
+    }
+
+    #[test]
+    fn backup_names_reject_everything_else() {
+        for name in [
+            "vault.wallet",
+            "vault.walletx.bak",
+            "vault.wallet.lock",
+            "vault.wallet..bak",
+            "vault.wallet.v.bak",
+            "vault.wallet.vx.bak",
+            "vault.wallet.junk.bak",
+            "vault.wallet.presync.x.bak",
+            "vault.wallet.2026-10-22.bak",
+            "vault.wallet.20261022-094000-x.bak",
+            "other.wallet.bak",
+        ] {
+            assert!(!is_backup_name("vault.wallet", name), "{name} is not");
+        }
+    }
+
+    #[test]
+    fn another_vaults_backup_is_not_mine() {
+        assert!(!is_backup_name(
+            "family.wallet",
+            "family.wallet.old.wallet.20261022-094000.bak"
+        ));
+        assert!(is_backup_name(
+            "family.wallet.old.wallet",
+            "family.wallet.old.wallet.20261022-094000.bak"
+        ));
+    }
+
+    #[test]
+    fn a_copy_leaves_no_temp_file() {
+        let (dir, vault) = setup();
+        create(&vault, "20261022-094000").unwrap();
+        let mut names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["vault.wallet", "vault.wallet.20261022-094000.bak"]);
     }
 
     #[test]
@@ -237,16 +331,16 @@ mod tests {
     fn resolve_refuses_a_path_outside_the_backup_folder() {
         let (dir, vault) = setup();
         let outside = tempfile::tempdir().unwrap();
-        let elsewhere = outside.path().join("vault.wallet.evil.bak");
+        let elsewhere = outside.path().join("vault.wallet.v9.bak");
         std::fs::write(&elsewhere, b"x").unwrap();
         std::fs::write(dir.path().join("other.wallet.bak"), b"x").unwrap();
-        std::fs::write(dir.path().join("vault.wallet.evil.bak"), b"x").unwrap();
+        std::fs::write(dir.path().join("vault.wallet.v9.bak"), b"x").unwrap();
         for name in [
             elsewhere.to_string_lossy().as_ref(),
-            "../vault.wallet.evil.bak",
-            "sub/vault.wallet.evil.bak",
-            "sub\\vault.wallet.evil.bak",
-            "./vault.wallet.evil.bak",
+            "../vault.wallet.v9.bak",
+            "sub/vault.wallet.v9.bak",
+            "sub\\vault.wallet.v9.bak",
+            "./vault.wallet.v9.bak",
             "vault.wallet",
             "other.wallet.bak",
             "..",
@@ -257,9 +351,9 @@ mod tests {
                 "{name:?} must be refused"
             );
         }
-        assert!(resolve(&vault, "vault.wallet.evil.bak").is_ok());
+        assert!(resolve(&vault, "vault.wallet.v9.bak").is_ok());
         assert!(matches!(
-            resolve(&vault, "vault.wallet.gone.bak"),
+            resolve(&vault, "vault.wallet.v6.bak"),
             Err(Error::NotFound(_))
         ));
     }
@@ -271,8 +365,8 @@ mod tests {
         let outside = tempfile::tempdir().unwrap();
         let target = outside.path().join("secret");
         std::fs::write(&target, b"x").unwrap();
-        std::os::unix::fs::symlink(&target, dir.path().join("vault.wallet.link.bak")).unwrap();
-        assert!(resolve(&vault, "vault.wallet.link.bak").is_err());
+        std::os::unix::fs::symlink(&target, dir.path().join("vault.wallet.v8.bak")).unwrap();
+        assert!(resolve(&vault, "vault.wallet.v8.bak").is_err());
         assert!(list(&vault).unwrap().is_empty());
     }
 }

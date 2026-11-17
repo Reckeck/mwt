@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::crypto;
+use crate::crypto::{self, SealKey};
 use crate::error::{Error, Result};
 use crate::storage::SnapshotFormat;
 use crate::vault_io::local::{atomic_write, ensure_wallet_ext};
@@ -17,6 +17,15 @@ use crate::vault_io::local::{atomic_write, ensure_wallet_ext};
 pub fn validate_vault_bytes(bytes: &[u8]) -> Result<SnapshotFormat> {
     let (header, _) = crypto::parse_file(bytes)?;
     header.payload_format().ok_or(Error::Unsupported)
+}
+
+/// Fully open `bytes` under `key` (decrypt, decode, upgrade the schema) and
+/// report the payload format. Nothing is written: a truncated or foreign copy
+/// that passes the header check is refused here, before anything is replaced.
+pub fn probe_open(bytes: &[u8], key: &SealKey) -> Result<SnapshotFormat> {
+    let (plaintext, fmt) = crypto::open_bytes_with(bytes, key)?;
+    crate::storage::decode_versioned(&plaintext, fmt)?;
+    Ok(fmt)
 }
 
 /// Write `bytes` into `dir` as `name` (with `.wallet`), never over another
@@ -110,6 +119,19 @@ mod tests {
         assert_eq!(std::fs::read(&two).unwrap(), second);
         // The copy opens with its password.
         assert!(crate::storage::VaultFile::open(&two, "b").is_ok());
+    }
+
+    #[test]
+    fn probe_open_refuses_a_truncated_copy_the_header_check_accepts() {
+        let bytes = sealed("a");
+        let (_, _, key) = crypto::open_bytes_keyed(&bytes, b"a").unwrap();
+        assert!(probe_open(&bytes, &key).is_ok());
+        let truncated = &bytes[..bytes.len() - 8];
+        assert!(validate_vault_bytes(truncated).is_ok());
+        assert!(probe_open(truncated, &key).is_err());
+        // Another vault's key does not open it either.
+        let (_, _, other) = crypto::open_bytes_keyed(&sealed("b"), b"b").unwrap();
+        assert!(probe_open(&bytes, &other).is_err());
     }
 
     #[test]

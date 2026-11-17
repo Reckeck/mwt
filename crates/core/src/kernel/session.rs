@@ -4,6 +4,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use super::persistence::{FileStore, Mirrored, Persistence, SandboxStore};
+
 /// Told that the vault has unsaved changes (the app's writer thread).
 pub trait SaveHook: Send + Sync {
     fn dirty(&self);
@@ -21,7 +23,6 @@ pub enum Commit {
 }
 
 /// Batching state of an open vault.
-#[derive(Default)]
 pub struct Session {
     /// Changes not on disk yet.
     dirty: bool,
@@ -31,9 +32,53 @@ pub struct Session {
     gate: Arc<Mutex<u64>>,
     /// Batched mode: wake the writer instead of writing.
     hook: Option<Arc<dyn SaveHook>>,
+    /// Where the sealed snapshots go (the plain store, or it with a mirror).
+    store: Arc<dyn Persistence>,
+    /// The store without a mirror, to go back to.
+    plain: Arc<dyn Persistence>,
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        Self::with_store(Arc::new(FileStore))
+    }
 }
 
 impl Session {
+    /// A session whose writes go nowhere: a sandbox copy.
+    pub fn sandboxed() -> Self {
+        Self::with_store(Arc::new(SandboxStore))
+    }
+
+    fn with_store(store: Arc<dyn Persistence>) -> Self {
+        Self {
+            dirty: false,
+            revision: 0,
+            gate: Arc::default(),
+            hook: None,
+            store: store.clone(),
+            plain: store,
+        }
+    }
+
+    /// The store a flush job writes through.
+    pub fn store(&self) -> Arc<dyn Persistence> {
+        self.store.clone()
+    }
+
+    /// Copy every later write to `mirror`; `None` goes back to the plain store.
+    pub fn set_mirror(&mut self, mirror: Option<Arc<dyn crate::vault_io::VaultMirror>>) {
+        self.store = match mirror {
+            Some(target) => Arc::new(Mirrored::new(self.plain.clone(), target)),
+            None => self.plain.clone(),
+        };
+    }
+
+    /// Whether writes are copied to an external document.
+    pub fn has_mirror(&self) -> bool {
+        self.store.has_mirror()
+    }
+
     /// Bump the revision and set dirty, with no word on how it gets written.
     pub fn touch(&mut self) {
         self.revision += 1;
@@ -85,6 +130,29 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct Nowhere;
+
+    impl crate::vault_io::VaultMirror for Nowhere {
+        fn push(&self, _sealed: &[u8]) {}
+    }
+
+    #[test]
+    fn has_mirror_follows_the_store() {
+        let mut session = Session::default();
+        assert!(!session.has_mirror());
+        session.set_mirror(Some(Arc::new(Nowhere)));
+        assert!(session.has_mirror());
+    }
+
+    #[test]
+    fn set_mirror_none_goes_back_to_the_plain_store() {
+        let mut session = Session::default();
+        session.set_mirror(Some(Arc::new(Nowhere)));
+        session.set_mirror(None);
+        assert!(!session.has_mirror());
+        assert!(session.store().writes());
+    }
 
     #[test]
     fn mark_bumps_and_says_write_now_without_a_hook() {

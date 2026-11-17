@@ -5,6 +5,7 @@
 pub mod collection;
 #[cfg(test)]
 mod golden_tests;
+pub mod persistence;
 pub mod record;
 pub mod session;
 pub mod tx;

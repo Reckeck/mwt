@@ -239,12 +239,12 @@ mod tests {
         .unwrap();
         std::fs::write(folder.join("v.wallet.v2.bak"), sealed(&older, b"{}")).unwrap();
         std::fs::write(folder.join("v.wallet.presync.bak"), sealed(&current, b"{}")).unwrap();
-        std::fs::write(folder.join("v.wallet.junk.bak"), b"not a vault").unwrap();
+        std::fs::write(folder.join("v.wallet.v3.bak"), b"not a vault").unwrap();
         // The session's salt with a changed byte: damaged, not "another key".
         let mut damaged = sealed(&current, b"{}");
         let last = damaged.len() - 1;
         damaged[last] ^= 1;
-        std::fs::write(folder.join("v.wallet.cut.bak"), damaged).unwrap();
+        std::fs::write(folder.join("v.wallet.20261022-094000.bak"), damaged).unwrap();
 
         let mut found: Vec<(String, CopyKind, CopySeal)> = inventory(&vault, &current)
             .unwrap()
@@ -255,17 +255,12 @@ mod tests {
         assert_eq!(
             found,
             [
+                (
+                    "v.wallet.20261022-094000.bak".into(),
+                    CopyKind::Other,
+                    CopySeal::Unreadable
+                ),
                 ("v.wallet.bak".into(), CopyKind::Slot, CopySeal::Plain),
-                (
-                    "v.wallet.cut.bak".into(),
-                    CopyKind::Other,
-                    CopySeal::Unreadable
-                ),
-                (
-                    "v.wallet.junk.bak".into(),
-                    CopyKind::Other,
-                    CopySeal::Unreadable
-                ),
                 (
                     "v.wallet.presync.bak".into(),
                     CopyKind::PreSync,
@@ -275,6 +270,11 @@ mod tests {
                     "v.wallet.v2.bak".into(),
                     CopyKind::Migration,
                     CopySeal::OtherKey
+                ),
+                (
+                    "v.wallet.v3.bak".into(),
+                    CopyKind::Migration,
+                    CopySeal::Unreadable
                 ),
             ]
         );

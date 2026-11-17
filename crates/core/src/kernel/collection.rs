@@ -86,10 +86,11 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+    use crate::kernel::session::SaveHook;
     use crate::model::VaultDoc;
     use crate::model::contact::Contact;
     use crate::model::vault::ImportRun;
-    use crate::service::{FlushJob, SaveHook, UnlockedVault};
+    use crate::service::{FlushJob, UnlockedVault};
 
     struct NoWake;
 
