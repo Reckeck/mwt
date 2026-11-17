@@ -549,6 +549,7 @@ fn client() -> RpcClient {
         subject_gap_max: Duration::ZERO,
         max_batch: 50,
         allow_loopback_http: true,
+        max_response_bytes: 16 * 1024 * 1024,
     })
     .unwrap()
 }

@@ -89,6 +89,7 @@ fn fast() -> RpcConfig {
         subject_gap_min: Duration::ZERO,
         subject_gap_max: Duration::ZERO,
         max_batch: 50,
+        max_response_bytes: 16 * 1024 * 1024,
         allow_loopback_http: true,
     }
 }
@@ -431,4 +432,79 @@ async fn get_json_spaces_subjects_but_not_repeats_of_one_subject() {
     client.get_json(&url, "/b", "0xaaaa").await.unwrap();
     assert!(start.elapsed() >= Duration::from_millis(60));
     assert!(start.elapsed() < Duration::from_secs(2));
+}
+
+fn capped(max_response_bytes: usize) -> RpcClient {
+    RpcClient::new(RpcConfig {
+        max_response_bytes,
+        ..fast()
+    })
+    .unwrap()
+}
+
+/// Valid JSON of exactly `len` bytes: a string inside an object.
+fn json_of_len(len: usize) -> String {
+    let filler = "x".repeat(len - r#"{"a":""}"#.len());
+    format!(r#"{{"a":"{filler}"}}"#)
+}
+
+#[test]
+fn the_default_cap_is_16_mib() {
+    assert_eq!(RpcConfig::default().max_response_bytes, 16 * 1024 * 1024);
+}
+
+#[tokio::test]
+async fn an_answer_over_the_cap_is_an_error_and_is_not_retried() {
+    let (url, seen) = stub(|_, _| (200, None, json_of_len(4096))).await;
+    let err = capped(1024)
+        .get_json(&url, "/x", "s")
+        .await
+        .expect_err("over the cap");
+    assert!(
+        matches!(&err, crate::error::Error::Network(text) if text.contains("larger than the limit")),
+        "{err:?}"
+    );
+    assert_eq!(seen.lock().unwrap().len(), 1, "no retry");
+}
+
+#[tokio::test]
+async fn a_call_answer_over_the_cap_gives_no_partial_value() {
+    let (url, seen) = stub(|_, _| (200, None, json_of_len(4096))).await;
+    let err = capped(1024)
+        .call(&url, "s", "eth_getLogs", json!([]))
+        .await
+        .expect_err("over the cap");
+    assert!(err.to_string().contains("larger than the limit"), "{err}");
+    assert_eq!(seen.lock().unwrap().len(), 1, "no retry");
+}
+
+#[tokio::test]
+async fn a_declared_length_over_the_cap_fails_before_the_body_is_read() {
+    // The head promises 1 MiB; the body never comes. Reading it would wait
+    // for the timeout and fail with another message.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut buf = [0u8; 4096];
+        let _ = stream.read(&mut buf).await;
+        let head =
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 1048576\r\n\r\n{";
+        stream.write_all(head.as_bytes()).await.unwrap();
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    });
+    let started = Instant::now();
+    let err = capped(1024)
+        .get_json(&url, "/x", "s")
+        .await
+        .expect_err("declared too large");
+    assert!(err.to_string().contains("larger than the limit"), "{err}");
+    assert!(started.elapsed() < Duration::from_millis(300));
+}
+
+#[tokio::test]
+async fn an_answer_just_under_the_cap_parses() {
+    let (url, _) = stub(|_, _| (200, None, json_of_len(1024))).await;
+    let value = capped(1024).get_json(&url, "/x", "s").await.unwrap();
+    assert_eq!(value["a"].as_str().unwrap().len(), 1024 - 8);
 }

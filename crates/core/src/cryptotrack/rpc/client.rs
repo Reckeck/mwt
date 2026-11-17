@@ -25,6 +25,11 @@ pub struct RpcConfig {
     pub subject_gap_max: Duration,
     /// Calls per HTTP request of one subject; longer lists are split.
     pub max_batch: usize,
+    /// Largest answer body accepted, in bytes. The largest answer the code
+    /// asks for is `eth_getLogs` over 10 000 blocks; public nodes cap that at
+    /// about 10 000 logs of about 0.5-0.7 KB of JSON, so 6-7 MB. 16 MiB leaves
+    /// a margin of about 2.5x without letting a hostile node fill memory.
+    pub max_response_bytes: usize,
     /// Accept `http://` to a loopback address (tests only).
     pub allow_loopback_http: bool,
 }
@@ -40,6 +45,7 @@ impl Default for RpcConfig {
             subject_gap_min: Duration::from_millis(400),
             subject_gap_max: Duration::from_millis(2500),
             max_batch: 50,
+            max_response_bytes: 16 * 1024 * 1024,
             allow_loopback_http: false,
         }
     }
@@ -264,12 +270,43 @@ impl RpcClient {
         if !status.is_success() {
             return Attempt::Fail(Error::Network(format!("HTTP {status}")));
         }
-        match response.json::<Value>().await {
-            Ok(value) => Attempt::Done(value),
-            Err(err) => Attempt::Fail(Error::Network(format!(
-                "bad JSON-RPC answer: {}",
-                err.without_url()
-            ))),
+        match self.read_capped(response).await {
+            Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
+                Ok(value) => Attempt::Done(value),
+                Err(err) => Attempt::Fail(Error::Network(format!("bad JSON-RPC answer: {err}"))),
+            },
+            Err(err) => Attempt::Fail(err),
+        }
+    }
+
+    /// Read the body in chunks, counting; over the cap is an error, never a
+    /// truncation. A declared `Content-Length` over the cap fails unread.
+    async fn read_capped(&self, mut response: reqwest::Response) -> Result<Vec<u8>> {
+        let cap = self.config.max_response_bytes;
+        let too_large = || Error::Network("RPC answer is larger than the limit".into());
+        if response
+            .content_length()
+            .is_some_and(|declared| declared > cap as u64)
+        {
+            return Err(too_large());
+        }
+        let mut body = Vec::new();
+        loop {
+            match response.chunk().await {
+                Ok(Some(chunk)) => {
+                    if body.len().saturating_add(chunk.len()) > cap {
+                        return Err(too_large());
+                    }
+                    body.extend_from_slice(&chunk);
+                }
+                Ok(None) => return Ok(body),
+                Err(err) => {
+                    return Err(Error::Network(format!(
+                        "bad JSON-RPC answer: {}",
+                        err.without_url()
+                    )));
+                }
+            }
         }
     }
 }
