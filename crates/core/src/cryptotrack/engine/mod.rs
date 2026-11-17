@@ -45,6 +45,7 @@ pub mod ids;
 pub mod math;
 pub mod normalize;
 pub mod overrides;
+pub mod position_value;
 pub mod reconcile;
 pub mod snapshot;
 
