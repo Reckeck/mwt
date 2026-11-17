@@ -1,0 +1,8 @@
+# `if: false` pauses the macOS jobs on purpose (see the comments at those jobs).
+paths:
+  .github/workflows/ci.yml:
+    ignore:
+      - 'constant expression "false" in condition'
+  .github/workflows/release.yml:
+    ignore:
+      - 'constant expression "false" in condition'
