@@ -3,7 +3,7 @@
 //! 1. the baseline's public methods are the `forward!` entries of the shims;
 //! 2. no `impl UnlockedVault` method with logic is left in the area's files;
 //! 3. no `persist()` call is left in the area's files;
-//! 4. the area's test names are the baseline's;
+//! 4. every baseline test name is still in the area (new tests are welcome, none may be dropped);
 //! 5. (`--diff <base>`) the changed files are inside the task's allowed set.
 //!
 //! `check <area>` runs every rule on that area. `check --all` runs rules 1-4 only on the areas that
@@ -268,10 +268,7 @@ fn no_persist(subject: &Subject) -> Result<Vec<String>> {
 fn test_names(subject: &Subject) -> Result<Vec<String>> {
     let now = baseline::test_names(subject.workspace, subject.area);
     let wanted: BTreeSet<String> = subject.baseline.tests.iter().cloned().collect();
-    Ok(difference("test missing", &wanted, &now)
-        .into_iter()
-        .chain(difference("test not in the baseline", &now, &wanted))
-        .collect())
+    Ok(difference("test missing", &wanted, &now))
 }
 
 /// Rule 5: every changed file is one of the allowed set.
@@ -456,13 +453,17 @@ mod tests {
     #[test]
     fn a_renamed_or_dropped_test_is_found() {
         let found = broken(TESTS, "fn clash_works", "fn clash_still_works");
-        assert_eq!(
-            found,
-            [
-                "loyalty: tests: test missing: clash_works",
-                "loyalty: tests: test not in the baseline: clash_still_works"
-            ]
+        assert_eq!(found, ["loyalty: tests: test missing: clash_works"]);
+    }
+
+    #[test]
+    fn an_added_test_is_not_a_finding() {
+        let found = broken(
+            TESTS,
+            "fn clash_works",
+            "fn a_new_test() {}\n\n#[test]\nfn clash_works",
         );
+        assert!(found.is_empty(), "{found:?}");
     }
 
     #[test]
