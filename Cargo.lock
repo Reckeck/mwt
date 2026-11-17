@@ -5974,6 +5974,7 @@ dependencies = [
  "tempfile",
  "time",
  "tokio",
+ "tracing",
  "trade-core",
  "ts-rs",
  "uuid",

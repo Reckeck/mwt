@@ -45,6 +45,7 @@ rand.workspace = true
 mdns-sd.workspace = true
 if-addrs = "0.15"
 rmp-serde.workspace = true
+tracing = "0.1"
 
 # Android-only: document pickers with a grant that survives a restart
 # (the external copy of a vault, `platform_fs`).
