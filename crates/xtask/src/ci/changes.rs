@@ -10,6 +10,14 @@ use crate::cache::capture_checked;
 
 /// Paths that cannot change a platform build. One changed file outside this list means the lanes run.
 const SKIPPABLE_PREFIXES: &[&str] = &["src/", "public/", "tests/", "docs/"];
+/// Paths that always run the lanes, checked before the `*.md` rule (`crates/app/README.md` builds).
+const ALWAYS_RUN_PREFIXES: &[&str] = &[
+    "crates/",
+    ".github/",
+    ".cargo/",
+    "scripts/ci/",
+    "packaging/",
+];
 const SKIPPABLE_FILES: &[&str] = &[
     "biome.json",
     "vite.config.ts",
@@ -18,6 +26,12 @@ const SKIPPABLE_FILES: &[&str] = &[
 ];
 
 fn is_skippable(path: &str) -> bool {
+    if ALWAYS_RUN_PREFIXES
+        .iter()
+        .any(|prefix| path.starts_with(prefix))
+    {
+        return false;
+    }
     SKIPPABLE_PREFIXES
         .iter()
         .any(|prefix| path.starts_with(prefix))
@@ -36,14 +50,22 @@ fn var(name: &str) -> String {
     std::env::var(name).unwrap_or_default()
 }
 
+/// The PR number a pull_request run needs; an unset or empty value is an error, not a bad URL.
+fn required_pr_number(value: Option<String>) -> Result<String> {
+    value
+        .filter(|number| !number.is_empty())
+        .context("PR_NUMBER is not set for a pull_request event")
+}
+
 pub fn run() -> Result<()> {
     let event = var("EVENT");
     let listed = if event == "pull_request" {
         let repo = std::env::var("GITHUB_REPOSITORY").context("GITHUB_REPOSITORY is not set")?;
+        let pr_number = required_pr_number(std::env::var("PR_NUMBER").ok())?;
         capture_checked(
             Command::new("gh")
                 .args(["api", "--paginate"])
-                .arg(format!("repos/{repo}/pulls/{}/files", var("PR_NUMBER")))
+                .arg(format!("repos/{repo}/pulls/{pr_number}/files"))
                 .args(["--jq", ".[] | .filename, (.previous_filename // empty)"]),
         )?
     } else {
@@ -91,6 +113,19 @@ mod tests {
             "pull_request",
             &["src/moved.rs", "crates/old.rs"]
         ));
+    }
+
+    #[test]
+    fn markdown_under_an_always_run_prefix_runs() {
+        assert!(platforms_needed("pull_request", &["crates/app/README.md"]));
+        assert!(platforms_needed("pull_request", &["packaging/NOTES.md"]));
+    }
+
+    #[test]
+    fn a_missing_pr_number_is_an_error() {
+        assert!(required_pr_number(None).is_err());
+        assert!(required_pr_number(Some(String::new())).is_err());
+        assert_eq!(required_pr_number(Some("7".into())).unwrap(), "7");
     }
 
     #[test]
