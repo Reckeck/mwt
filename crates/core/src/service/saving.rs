@@ -23,6 +23,7 @@ use crate::error::{Error, Result};
 use crate::storage::{SnapshotFormat, VaultFile, encode};
 
 use crate::kernel::session::Commit;
+use crate::kernel::tx::Tx;
 
 use super::UnlockedVault;
 
@@ -77,27 +78,60 @@ impl FlushJob {
 }
 
 impl UnlockedVault {
+    /// Run `body` over the document and commit if it touched it: at once, or
+    /// — once the app installed a hook — mark it dirty for the next batched
+    /// write. An untouched transaction writes nothing and bumps nothing; on
+    /// `Err` nothing is committed (and nothing rolled back). A sandbox never
+    /// writes.
+    pub fn transact<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<R> {
+        let (out, touched) = self.run(body)?;
+        if !touched || self.sandbox {
+            return Ok(out);
+        }
+        match self.session.mark() {
+            Commit::Wake => self.session.wake(),
+            Commit::WriteNow | Commit::Nothing => self.write_now()?,
+        }
+        Ok(out)
+    }
+
+    /// Like [`Self::transact`], but a touched transaction is on disk when it
+    /// returns, whatever is batched.
+    pub fn transact_now<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<R> {
+        let (out, touched) = self.run(body)?;
+        if touched && !self.sandbox {
+            self.write_now()?;
+        }
+        Ok(out)
+    }
+
+    /// Run the closure over the document; report whether it touched it.
+    fn run<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<(R, bool)> {
+        let mut tx = Tx::new(&mut self.doc);
+        let out = body(&mut tx)?;
+        Ok((out, tx.is_touched()))
+    }
+
     /// Save the document: at once, or — once the app installed a hook — mark
     /// it dirty for the next batched write. A sandbox never writes.
     pub fn persist(&mut self) -> Result<()> {
-        if self.sandbox {
-            return Ok(());
-        }
-        match self.session.mark() {
-            Commit::Wake => {
-                self.session.wake();
-                Ok(())
-            }
-            Commit::WriteNow | Commit::Nothing => self.persist_now(),
-        }
+        self.transact(|tx| {
+            tx.touch();
+            Ok(())
+        })
     }
 
     /// Write the document now, whatever is batched: the file must be current
     /// before it is copied, re-keyed or closed.
     pub fn persist_now(&mut self) -> Result<()> {
-        if self.sandbox {
-            return Ok(());
-        }
+        self.transact_now(|tx| {
+            tx.touch();
+            Ok(())
+        })
+    }
+
+    /// Bump the revision and write the snapshot to disk.
+    fn write_now(&mut self) -> Result<()> {
         self.session.touch();
         let Some(job) = self.prepare_flush()? else {
             return Ok(());
@@ -386,5 +420,32 @@ mod tests {
         };
         vault.update_settings(other).unwrap();
         assert_eq!(wakes.0.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn a_read_only_transaction_does_not_write() {
+        let (_dir, mut vault, wakes) = batched();
+        let before = std::fs::read(&vault.path).unwrap();
+        let revision = vault.session.revision();
+        let decimals = vault.transact(|tx| Ok(tx.doc().settings.display_decimals));
+        assert!(decimals.is_ok());
+        assert_eq!(vault.session.revision(), revision);
+        assert_eq!(wakes.0.load(Ordering::SeqCst), 0);
+        assert!(!vault.has_unsaved_changes());
+        assert_eq!(std::fs::read(&vault.path).unwrap(), before);
+    }
+
+    #[test]
+    fn an_error_in_the_closure_commits_nothing() {
+        let (_dir, mut vault, wakes) = batched();
+        let before = std::fs::read(&vault.path).unwrap();
+        let result: Result<()> = vault.transact(|tx| {
+            tx.doc_mut().settings.display_decimals = 3;
+            Err(Error::Secret)
+        });
+        assert!(result.is_err());
+        assert_eq!(wakes.0.load(Ordering::SeqCst), 0);
+        assert!(!vault.has_unsaved_changes());
+        assert_eq!(std::fs::read(&vault.path).unwrap(), before);
     }
 }
