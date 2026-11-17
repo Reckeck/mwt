@@ -31,6 +31,8 @@ mod ts_rs {
 mod ipc {
     pub struct IpcError;
     pub mod run {
+        pub trait VaultHost {}
+        impl VaultHost for crate::tauri::AppHandle {}
         pub struct Gate {
             pub sandbox_deny: bool,
         }
@@ -43,16 +45,16 @@ mod ipc {
             pub args: &'static [ArgMeta],
             pub ret: fn() -> String,
         }
-        pub async fn read<R>(
-            _host: crate::tauri::AppHandle,
+        pub async fn read<H: VaultHost, R>(
+            _host: H,
             _meta: &CommandMeta,
             _gate: Gate,
             _body: impl FnOnce(&crate::UnlockedVault) -> Result<R, crate::ipc::IpcError>,
         ) -> Result<R, crate::ipc::IpcError> {
             unimplemented!()
         }
-        pub async fn write<R>(
-            _host: crate::tauri::AppHandle,
+        pub async fn write<H: VaultHost, R>(
+            _host: H,
             _meta: &CommandMeta,
             _gate: Gate,
             _body: impl FnOnce(&mut crate::UnlockedVault) -> Result<R, crate::ipc::IpcError>,

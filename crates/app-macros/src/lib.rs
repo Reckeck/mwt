@@ -339,9 +339,20 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
     if signature.first.is_some() {
         call_args.push(quote! { #state });
     }
-    let handle_clone = signature
-        .handle
-        .then(|| quote! { let handle = app.clone(); });
+    let runner_name = format_ident!("__ipc_run_{}", name);
+    let (host_generics, host_type, handle_clone) = if signature.handle {
+        (
+            quote! {},
+            quote! { tauri::AppHandle },
+            quote! { let handle = host.clone(); },
+        )
+    } else {
+        (
+            quote! { <Host: crate::ipc::run::VaultHost> },
+            quote! { Host },
+            quote! {},
+        )
+    };
     if signature.handle {
         call_args.push(quote! { &handle });
     }
@@ -359,10 +370,19 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
             app: tauri::AppHandle,
             #( #names: #types ),*
         ) -> Result<#ok, crate::ipc::IpcError> {
+            #runner_name(app, #( #names ),*).await
+        }
+
+        /// The command body behind its gate, generic over the host so tests
+        /// run it without a Tauri runtime.
+        pub(crate) async fn #runner_name #host_generics(
+            host: #host_type,
+            #( #names: #types ),*
+        ) -> Result<#ok, crate::ipc::IpcError> {
             #body
             #handle_clone
             crate::ipc::run::#runner(
-                app,
+                host,
                 &#meta_name,
                 crate::ipc::run::Gate { sandbox_deny: #sandbox_deny },
                 move |#closure_param| body(#(#call_args),*).map_err(Into::into),
@@ -407,7 +427,9 @@ mod tests {
         assert!(out.contains(
             "pub async fn list (app : tauri :: AppHandle , id : String) -> Result < Vec < Store > , crate :: ipc :: IpcError >"
         ));
-        assert!(out.contains("crate :: ipc :: run :: read (app"));
+        assert!(out.contains("crate :: ipc :: run :: read (host"));
+        assert!(out.contains("pub (crate) async fn __ipc_run_list < Host : crate :: ipc :: run :: VaultHost > (host : Host , id : String)"));
+        assert!(out.contains("__ipc_run_list (app , id) . await"));
         assert!(out.contains("sandbox_deny : false"));
         assert!(out.contains("move | vault | body (vault , id) . map_err (Into :: into)"));
         assert!(out.contains("pub const __IPC_META_list : crate :: ipc :: run :: CommandMeta"));
@@ -420,7 +442,7 @@ mod tests {
             "write",
             "fn change(vault: &mut UnlockedVault) -> Result<()> { todo!() }",
         );
-        assert!(out.contains("crate :: ipc :: run :: write (app"));
+        assert!(out.contains("crate :: ipc :: run :: write (host"));
         assert!(out.contains("sandbox_deny : false"));
     }
 
@@ -430,7 +452,7 @@ mod tests {
             "write, sandbox = deny",
             "fn change(vault: &mut UnlockedVault) -> Result<()> { todo!() }",
         );
-        assert!(out.contains("crate :: ipc :: run :: write (app"));
+        assert!(out.contains("crate :: ipc :: run :: write (host"));
         assert!(out.contains("sandbox_deny : true"));
     }
 
@@ -440,8 +462,8 @@ mod tests {
             "locked_ok",
             "fn status(state: &AppState, app: &AppHandle, key: Key) -> Result<Status> { todo!() }",
         );
-        assert!(out.contains("crate :: ipc :: run :: locked_ok (app"));
-        assert!(out.contains("let handle = app . clone ()"));
+        assert!(out.contains("crate :: ipc :: run :: locked_ok (host"));
+        assert!(out.contains("let handle = host . clone ()"));
         assert!(out.contains("move | state | body (state , & handle , key)"));
         assert!(out.contains("pub async fn status (app : tauri :: AppHandle , key : Key)"));
     }

@@ -314,7 +314,7 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use super::*;
-    use crate::ipc::run::{self, Gate, VaultHost};
+    use crate::ipc::run::VaultHost;
 
     #[derive(Clone)]
     struct TestHost(Arc<AppState>);
@@ -331,29 +331,24 @@ mod tests {
 
     #[tokio::test]
     async fn a_pilot_read_command_refuses_a_locked_vault() {
-        let gate = Gate {
-            sandbox_deny: false,
-        };
-        let error = run::read(locked_host(), &__IPC_META_list_workflows, gate, |vault| {
-            Ok(vault.workflows())
-        })
-        .await
-        .unwrap_err();
+        let error = __ipc_run_list_workflows(locked_host()).await.unwrap_err();
         assert_eq!(error.code(), "REQUIRES_UNLOCK");
     }
 
     /// The pilot writes carry no sandbox gate (automations run on the demo
-    /// data), so this pins the gate `#[ipc(write, sandbox = deny)]` sets, on a
-    /// pilot command's metadata: the refusal comes before any vault is looked at.
+    /// data): in the sandbox the command reaches the vault check instead of
+    /// being refused with `SANDBOX`.
     #[tokio::test]
-    async fn a_pilot_write_command_refuses_in_the_sandbox() {
+    async fn a_pilot_write_command_has_no_sandbox_gate() {
         let host = locked_host();
         host.0.sandbox.store(true, Ordering::SeqCst);
-        let gate = Gate { sandbox_deny: true };
-        let error = run::write(host, &__IPC_META_save_workflow, gate, |_| Ok(()))
+        let input = DeleteWorkflowTestInput {
+            workflow_id: String::new(),
+            test_id: String::new(),
+        };
+        let error = __ipc_run_delete_workflow_test(host, input)
             .await
             .unwrap_err();
-        assert_eq!(error.code(), "SANDBOX");
-        assert!(error.to_string().contains("save_workflow"));
+        assert_eq!(error.code(), "REQUIRES_UNLOCK");
     }
 }
