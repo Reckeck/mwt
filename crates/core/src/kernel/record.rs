@@ -1,0 +1,140 @@
+//! Records: the kinds of `VaultDoc` that are a `Vec` of items with an `id`.
+//! [`records!`] is the one list of them; it generates the [`Record`] impls and
+//! the [`record_kinds`] table. It does not replace `sync::registry`, a test
+//! ties the two. `Single`, `Union` and the kinds keyed by something other
+//! than `id` stay with the sync registry only.
+
+use crate::VaultDoc;
+
+/// An item of a `Vec` field of [`VaultDoc`] that is found by its `id`.
+pub trait Record: Sized {
+    /// The `VaultDoc` field, and the name in the sync registry.
+    const COLLECTION: &'static str;
+
+    fn id(&self) -> &str;
+
+    fn slot(doc: &mut VaultDoc) -> &mut Vec<Self>;
+
+    fn slot_ref(doc: &VaultDoc) -> &Vec<Self>;
+}
+
+/// One line of the registry: the collection and whether only level 3 has it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecordKind {
+    pub collection: &'static str,
+    pub level3_only: bool,
+}
+
+macro_rules! records {
+    ($($item:ty => $field:ident, $level3_only:literal;)*) => {
+        $(
+            impl Record for $item {
+                const COLLECTION: &'static str = stringify!($field);
+
+                fn id(&self) -> &str {
+                    &self.id
+                }
+
+                fn slot(doc: &mut VaultDoc) -> &mut Vec<Self> {
+                    &mut doc.$field
+                }
+
+                fn slot_ref(doc: &VaultDoc) -> &Vec<Self> {
+                    &doc.$field
+                }
+            }
+        )*
+
+        const RECORD_KINDS: &[RecordKind] = &[
+            $(RecordKind {
+                collection: stringify!($field),
+                level3_only: $level3_only,
+            },)*
+        ];
+    };
+}
+
+records! {
+    crate::model::store::Store => stores, false;
+    crate::model::contact::Contact => contacts, false;
+    crate::model::planning::Budget => budgets, false;
+    crate::model::planning::Goal => goals, false;
+    crate::model::planning::Reminder => reminders, false;
+    crate::model::planning::PriceAlert => price_alerts, false;
+    crate::model::planning::CategorizationRule => categorization_rules, false;
+    crate::model::planning::UtilityItem => utility_items, false;
+    crate::model::planning::MeterReading => meter_readings, false;
+    crate::model::enrichment::EnrichmentRecord => enrichments, false;
+    crate::model::planning::Envelope => envelopes, false;
+    crate::model::contact::DebtTerms => debt_terms, false;
+    crate::workflow::Workflow => workflows, false;
+    crate::workflow::WorkflowRun => workflow_runs, false;
+    crate::workflow::QueuedActions => workflow_queue, false;
+    crate::workflow::model::WorkflowWait => workflow_waits, false;
+    crate::model::planning::CalcScenario => calc_scenarios, false;
+    crate::model::planning::AssetClass => asset_classes, false;
+    crate::model::vault::Valuation => valuations, false;
+    crate::model::datasource::DataSource => data_sources, false;
+    crate::model::attachment::Attachment => attachments, false;
+    crate::model::attachment::AttachmentKey => attachment_keys, false;
+    crate::model::shared_event::SharedEvent => shared_events, false;
+    crate::model::vault::ImportRun => import_runs, false;
+    crate::model::cryptotrack::CryptoAccount => crypto_accounts, true;
+    crate::model::cryptotrack::CryptoTx => crypto_events, true;
+    crate::model::cryptotrack::CryptoOverride => crypto_overrides, true;
+    crate::model::cryptotrack::CryptoPosition => crypto_positions, true;
+    crate::model::cryptotrack::CryptoSnapshot => crypto_snapshots, true;
+    crate::model::cryptotrack::CryptoWipe => crypto_wiped_at, true;
+}
+
+/// Every record kind with its level-3 flag.
+pub fn record_kinds() -> &'static [RecordKind] {
+    RECORD_KINDS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sync::registry::{self, Rule};
+
+    #[test]
+    fn every_record_kind_is_in_the_sync_registry() {
+        for kind in record_kinds() {
+            let coll = registry::find(kind.collection)
+                .unwrap_or_else(|| panic!("{} is not in the sync registry", kind.collection));
+            assert!(
+                matches!(coll.rule, Rule::Records | Rule::Log { .. }),
+                "{} is not a records or log collection",
+                kind.collection
+            );
+            assert_eq!(coll.key, ["id"], "{} is not keyed by id", kind.collection);
+        }
+    }
+
+    #[test]
+    fn level3_only_matches_the_crypto_prefix() {
+        for kind in record_kinds() {
+            assert_eq!(
+                kind.level3_only,
+                kind.collection.starts_with("crypto_"),
+                "{}",
+                kind.collection
+            );
+        }
+    }
+
+    #[test]
+    fn slots_point_at_the_named_field() {
+        let mut doc = VaultDoc::default();
+        let value = serde_json::to_value(&doc).expect("doc");
+        for kind in record_kinds() {
+            assert!(value.get(kind.collection).is_some(), "{}", kind.collection);
+        }
+        assert_eq!(
+            <crate::model::planning::Budget as Record>::COLLECTION,
+            "budgets"
+        );
+        assert!(<crate::model::planning::Budget as Record>::slot(&mut doc).is_empty());
+        assert!(<crate::model::planning::Budget as Record>::slot_ref(&doc).is_empty());
+    }
+}
