@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use super::events::{DomainEvent, EventBus};
+use super::events::{ChangeSink, Committed, DomainEvent, EventBus, KeysChanged, Subscription};
 use super::persistence::{FileStore, Mirrored, Persistence, SandboxStore};
 
 /// Told that the vault has unsaved changes (the app's writer thread).
@@ -32,7 +32,10 @@ pub struct Session {
     /// The newest revision on disk, shared with the jobs in flight.
     gate: Arc<Mutex<u64>>,
     /// Batched mode: wake the writer instead of writing.
-    hook: Option<Arc<dyn SaveHook>>,
+    /// It is a subscriber of the bus: it wakes on `Committed`.
+    hook: Option<Subscription>,
+    /// The sync tap, as a subscriber of `KeysChanged`.
+    sink: Option<Subscription>,
     /// Where the sealed snapshots go (the plain store, or it with a mirror).
     store: Arc<dyn Persistence>,
     /// The store without a mirror, to go back to.
@@ -59,6 +62,7 @@ impl Session {
             revision: 0,
             gate: Arc::default(),
             hook: None,
+            sink: None,
             store: store.clone(),
             plain: store,
             bus: EventBus::new(),
@@ -115,11 +119,20 @@ impl Session {
         }
     }
 
-    /// Wake the writer, if one is installed.
-    pub fn wake(&self) {
-        if let Some(hook) = &self.hook {
-            hook.dirty();
-        }
+    /// Tell the bus a marked change waits for the writer; the hook, if one is
+    /// installed, wakes on it.
+    pub fn announce_commit(&self) {
+        self.bus.publish(
+            &Committed {
+                revision: self.revision,
+            }
+            .into(),
+        );
+    }
+
+    /// Tell the bus the keys one save stamped.
+    pub fn announce_changes(&self, keys: Vec<String>) {
+        self.bus.publish(&KeysChanged { keys }.into());
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -135,8 +148,27 @@ impl Session {
         self.gate.clone()
     }
 
+    /// Replace the hook: it wakes once per `Committed` event (`None` stops).
     pub fn set_hook(&mut self, hook: Option<Arc<dyn SaveHook>>) {
-        self.hook = hook;
+        if let Some(old) = self.hook.take() {
+            old.unsubscribe();
+        }
+        self.hook = hook.map(|target| {
+            self.bus.subscribe(move |event| {
+                if matches!(event, DomainEvent::Committed(_)) {
+                    target.dirty();
+                }
+            })
+        });
+    }
+
+    /// Replace the change sink: it gets the keys of every `KeysChanged`
+    /// event (`None` stops).
+    pub fn set_change_sink<S: ChangeSink + ?Sized + 'static>(&mut self, sink: Option<Arc<S>>) {
+        if let Some(old) = self.sink.take() {
+            old.unsubscribe();
+        }
+        self.sink = sink.map(|target| self.bus.subscribe_changes(target));
     }
 
     /// Clean, unless the document changed after `written`.

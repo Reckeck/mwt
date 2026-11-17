@@ -78,7 +78,7 @@ impl UnlockedVault {
     /// Do what a marked change asks. `Nothing` neither writes nor bumps.
     fn apply_commit(&mut self, commit: Commit) -> Result<()> {
         match commit {
-            Commit::Wake => self.session.wake(),
+            Commit::Wake => self.session.announce_commit(),
             Commit::WriteNow => self.write_now()?,
             Commit::Nothing => {}
         }
@@ -181,10 +181,8 @@ impl UnlockedVault {
         // Everything stamped since the last push, by this save or by a sync
         // call in between.
         let changed: Vec<String> = std::mem::take(&mut self.announce).into_iter().collect();
-        if !changed.is_empty()
-            && let Some(tap) = &self.sync_tap
-        {
-            tap.changed(&changed);
+        if !changed.is_empty() && self.sync_tap.is_some() {
+            self.session.announce_changes(changed);
         }
         // Level 3: exchange keys go to the device file, and the document is
         // written without them (the in-memory index stays).
@@ -294,6 +292,15 @@ mod tests {
         assert!(!vault.has_unsaved_changes());
         assert_eq!(wakes.0.load(Ordering::SeqCst), 0);
         assert_eq!(std::fs::read(&vault.path).unwrap(), before);
+    }
+
+    #[test]
+    fn set_write_behind_still_wakes_once_per_commit() {
+        let (_dir, mut vault, wakes) = batched();
+        change(&mut vault, 3);
+        assert_eq!(wakes.0.load(Ordering::SeqCst), 1);
+        change(&mut vault, 4);
+        assert_eq!(wakes.0.load(Ordering::SeqCst), 2);
     }
 
     #[test]
@@ -471,14 +478,18 @@ mod tests {
     fn count_events(vault: &UnlockedVault) -> Arc<AtomicUsize> {
         let count = Arc::new(AtomicUsize::new(0));
         let seen = count.clone();
-        vault.session.bus().subscribe(move |_| {
-            seen.fetch_add(1, Ordering::SeqCst);
+        // The wake-up of a hooked commit is an event too; it is not the
+        // transaction's own.
+        vault.session.bus().subscribe(move |event| {
+            if !matches!(event, DomainEvent::Committed(_)) {
+                seen.fetch_add(1, Ordering::SeqCst);
+            }
         });
         count
     }
 
     fn event() -> DomainEvent {
-        crate::kernel::events::Committed { revision: 1 }.into()
+        crate::kernel::events::KeysChanged { keys: Vec::new() }.into()
     }
 
     #[test]

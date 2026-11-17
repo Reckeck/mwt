@@ -61,6 +61,12 @@ domain_events! {
     KeysChanged { keys: Vec<String> },
 }
 
+/// Told the keys of every local save, so a live session can send them on.
+/// Every `SyncTap` is one (the blanket adapter lives next to that trait).
+pub trait ChangeSink: Send + Sync {
+    fn changed(&self, keys: &[String]);
+}
+
 type Handler = Arc<dyn Fn(&DomainEvent) + Send + Sync>;
 
 #[derive(Default)]
@@ -100,6 +106,18 @@ impl EventBus {
             id,
             registry: Arc::downgrade(&self.registry),
         }
+    }
+
+    /// Pass the keys of every `KeysChanged` event to `sink`.
+    pub fn subscribe_changes<S: ChangeSink + ?Sized + 'static>(
+        &self,
+        sink: Arc<S>,
+    ) -> Subscription {
+        self.subscribe(move |event| {
+            if let DomainEvent::KeysChanged(KeysChanged { keys }) = event {
+                sink.changed(keys);
+            }
+        })
     }
 
     /// Call every subscriber with the event, in subscription order, here. The
