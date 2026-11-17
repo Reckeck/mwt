@@ -7,6 +7,20 @@ import type { MockCommands } from './core'
 import { mockDefaultPurpose, mockMarketBinding, mockPush, mockStores, mockTransactions, priceOf } from './demo'
 import { mockAncestors, mockMoveTargets, mockPlacementError, mockStore, mockSubtreeIds, mockTree } from './tree'
 
+/** One shifted correction of a merge, the shape of `CorrectionShift` (the real maths lives in `money/store_change.rs`). */
+function mockCorrectionShift(store: Store): CorrectionShift {
+  return {
+    tx_id: `${store.id}-correction`,
+    timestamp: '2025-03-01T00:00:00Z',
+    from_store_id: store.id,
+    from_store_name: store.name,
+    asset: { symbol: 'USD', name: 'US Dollar', coingecko_id: null, chain: null, contract: null, quote: 'usd' },
+    after_old: '80',
+    after_new: '1080',
+    other_balance: '1000',
+  }
+}
+
 /** Commands: the wallet tree: create, move, change, archive. */
 export const storeTreeCommands: MockCommands = {
   get_store_tree: (_call) => {
@@ -131,7 +145,7 @@ export const storeTreeCommands: MockCommands = {
       kept: [item(store, store.sub_type)],
       archived: [],
       conflicts: [],
-      corrections: [],
+      corrections: typeof input.change === 'object' && 'merge_into' in input.change ? [mockCorrectionShift(store)] : [],
       moved_transactions: typeof input.change === 'object' && 'merge_into' in input.change ? touching : 0,
       error: null,
     }
@@ -170,7 +184,7 @@ export const storeTreeCommands: MockCommands = {
       kept: [item(store, store.sub_type)],
       archived: [],
       conflicts: [],
-      corrections: [],
+      corrections: typeof input.change === 'object' && 'merge_into' in input.change ? [mockCorrectionShift(store)] : [],
       moved_transactions: typeof input.change === 'object' && 'merge_into' in input.change ? touching : 0,
       error: null,
     }
