@@ -43,6 +43,16 @@ fn prints(doc: &Value) -> HashMap<String, Print> {
         .collect()
 }
 
+/// The stamp of a change in this save: the save's tick, or one past the
+/// record's `floor` when that stamp lies ahead of the tick.
+fn stamp_for(base: &mut Option<Stamp>, clock: &mut Clock, floor: Option<&Stamp>) -> Stamp {
+    let tick = base.get_or_insert_with(|| clock.tick()).clone();
+    match floor {
+        Some(existing) => tick.max(clock.tick_after(existing)),
+        None => tick,
+    }
+}
+
 /// What the last save looked like, per record and field.
 #[derive(Debug, Clone, Default)]
 pub struct Tracker {
@@ -66,8 +76,8 @@ impl Tracker {
     /// keys that changed (to send to devices in a live session).
     pub fn stamp(&mut self, doc: &Value, state: &mut SyncState, clock: &mut Clock) -> Vec<String> {
         let now = prints(doc);
-        let mut stamp: Option<Stamp> = None;
-        let mut next = || stamp.get_or_insert_with(|| clock.tick()).clone();
+        // The tick of this save, taken once and only when something changed.
+        let mut base: Option<Stamp> = None;
         let mut changed = Vec::new();
 
         for (key, print) in &now {
@@ -78,8 +88,21 @@ impl Tracker {
             match self.prints.get(key) {
                 Some(old) if old == print => continue,
                 Some(old) if tracked && old.tag == print.tag => {
-                    let at = next();
                     let entry = state.stamps.entry(key.clone()).or_default();
+                    let floor = print
+                        .fields
+                        .iter()
+                        .filter(|(name, hash)| old.fields.get(*name) != Some(*hash))
+                        .map(|(name, _)| entry.field(name))
+                        .chain(
+                            old.fields
+                                .keys()
+                                .filter(|name| !print.fields.contains_key(*name))
+                                .map(|name| entry.field(name)),
+                        )
+                        .max()
+                        .cloned();
+                    let at = stamp_for(&mut base, clock, floor.as_ref());
                     for (name, hash) in &print.fields {
                         if old.fields.get(name) != Some(hash) {
                             entry.fields.insert(name.clone(), at.clone());
@@ -92,9 +115,8 @@ impl Tracker {
                     }
                 }
                 _ if tracked => {
-                    state
-                        .stamps
-                        .insert(key.clone(), RecordStamps::created(next()));
+                    let at = stamp_for(&mut base, clock, state.tombstones.get(key));
+                    state.stamps.insert(key.clone(), RecordStamps::created(at));
                     state.tombstones.remove(key);
                 }
                 _ => {}
@@ -111,8 +133,9 @@ impl Tracker {
             };
             match coll.rule {
                 Rule::Records | Rule::Single => {
-                    state.stamps.remove(key);
-                    state.tombstones.insert(key.clone(), next());
+                    let floor = state.stamps.remove(key).map(|old| old.latest().clone());
+                    let at = stamp_for(&mut base, clock, floor.as_ref());
+                    state.tombstones.insert(key.clone(), at);
                 }
                 Rule::Log { .. } => {
                     state.stamps.remove(key);
@@ -130,6 +153,7 @@ impl Tracker {
 mod tests {
     use serde_json::json;
 
+    use super::super::stamp::now_ms;
     use super::*;
 
     #[test]
@@ -159,6 +183,51 @@ mod tests {
         tracker.stamp(&doc, &mut state, &mut clock);
         assert!(!state.tombstones.contains_key("stores:a"));
         assert!(state.stamps["stores:a"].fields.is_empty());
+    }
+
+    fn stamped(doc: &Value, clock: &mut Clock, state: &mut SyncState, old: &Value) {
+        Tracker::capture(old).stamp(doc, state, clock);
+    }
+
+    #[test]
+    fn a_normal_edit_gets_the_current_tick() {
+        let old = json!({"stores": [{"id": "a", "name": "A"}]});
+        let new = json!({"stores": [{"id": "a", "name": "B"}]});
+        let mut state = SyncState::default();
+        state.stamps.insert(
+            "stores:a".into(),
+            RecordStamps::created(Stamp::new(1, 0, "x")),
+        );
+        let before = now_ms();
+        stamped(&new, &mut Clock::new("dev1"), &mut state, &old);
+        let at = state.stamps["stores:a"].field("name");
+        assert!(at.wall >= before && at.wall <= now_ms());
+    }
+
+    #[test]
+    fn an_edit_of_a_future_stamped_record_wins_the_merge() {
+        let future = Stamp::new(now_ms() + 3_600_000, 2, "zz");
+        let old = json!({"stores": [{"id": "a", "name": "A"}]});
+        let new = json!({"stores": [{"id": "a", "name": "B"}]});
+        let mut state = SyncState::default();
+        let mut stamps = RecordStamps::created(Stamp::new(1, 0, "x"));
+        stamps.fields.insert("name".into(), future.clone());
+        state.stamps.insert("stores:a".into(), stamps);
+        stamped(&new, &mut Clock::new("dev1"), &mut state, &old);
+        assert!(*state.stamps["stores:a"].field("name") > future);
+    }
+
+    #[test]
+    fn a_deletion_of_a_future_stamped_record_does_not_resurrect() {
+        let future = Stamp::new(now_ms() + 3_600_000, 2, "zz");
+        let old = json!({"stores": [{"id": "a", "name": "A"}]});
+        let new = json!({"stores": []});
+        let mut state = SyncState::default();
+        let mut stamps = RecordStamps::created(Stamp::new(1, 0, "x"));
+        stamps.fields.insert("name".into(), future.clone());
+        state.stamps.insert("stores:a".into(), stamps);
+        stamped(&new, &mut Clock::new("dev1"), &mut state, &old);
+        assert!(state.tombstones["stores:a"] > future);
     }
 
     #[test]

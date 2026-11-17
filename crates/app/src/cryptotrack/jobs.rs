@@ -56,6 +56,7 @@ use trade_core::error::{Error, Result};
 use trade_core::ipc_contract::cryptotrack::sync::{
     CryptoPages, CryptoSyncAccountStatus, CryptoSyncState, CryptoSyncStatus, CryptoSyncTarget,
 };
+use trade_core::kernel::events::EventBus;
 use trade_core::model::chain::Chain;
 use trade_core::model::cryptotrack::{CryptoAsset, CryptoPricePoint, CryptoTx};
 use trade_core::model::vault::now_iso;
@@ -65,6 +66,7 @@ use trade_core::service::UnlockedVault;
 use trade_core::sync::stamp::now_ms;
 
 use crate::commands::{AppState, lock_vault};
+use crate::state::on_vault_locked;
 
 /// A finished account is read again after this long.
 const REFRESH_EVERY: Duration = Duration::from_secs(15 * 60);
@@ -1028,6 +1030,15 @@ pub fn forget_live_positions() {
     TRACKER.clear_positions();
 }
 
+/// Forget the live positions on every `VaultLocked` (spec N6, D5).
+pub fn forget_positions_on_lock(bus: &EventBus) {
+    clear_on_lock(bus, &TRACKER);
+}
+
+fn clear_on_lock(bus: &EventBus, tracker: &'static Tracker) {
+    on_vault_locked(bus, move |_| tracker.clear_positions());
+}
+
 /// What the module is doing, for the screen.
 pub fn status(app: &AppHandle) -> Result<CryptoSyncStatus> {
     let host = AppHost(app.clone());
@@ -1049,8 +1060,10 @@ pub fn status(app: &AppHandle) -> Result<CryptoSyncStatus> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+
     use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
+    use trade_core::kernel::events::{LockReason, VaultLocked};
 
     use trade_core::Amount;
     use trade_core::cryptotrack::protocols::{
@@ -2039,6 +2052,31 @@ mod tests {
         let live = tracker.positions();
         assert_eq!(live, vec![reading]);
         assert!(live[0].approximate);
+    }
+
+    #[test]
+    fn the_attachment_wipe_and_the_live_positions_reset_are_subscribers() {
+        static READINGS: Tracker = Tracker::new();
+        let temp = tempfile::tempdir().unwrap();
+        let opened = temp.path().join("opened");
+        std::fs::create_dir_all(&opened).unwrap();
+        std::fs::write(opened.join("file.pdf"), b"secret").unwrap();
+        READINGS.remember_positions("cacc-1", vec![supply("2026-11-16T10:00:00Z")]);
+        let bus = EventBus::new();
+        crate::commands::attachments::wipe_dir_on_lock(&bus, Some(opened.clone()));
+        clear_on_lock(&bus, &READINGS);
+        // Nothing runs before the event.
+        assert!(opened.exists());
+        assert_eq!(READINGS.positions().len(), 1);
+        bus.publish(
+            &VaultLocked {
+                reason: LockReason::Manual,
+                closed: false,
+            }
+            .into(),
+        );
+        assert!(!opened.exists());
+        assert!(READINGS.positions().is_empty());
     }
 
     #[test]

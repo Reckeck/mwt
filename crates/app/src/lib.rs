@@ -17,6 +17,7 @@ mod platform_net;
 mod quick_add_socket;
 mod scheduler;
 mod shortcut;
+mod state;
 mod sync;
 #[cfg(desktop)]
 mod tray;
@@ -69,6 +70,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .manage(AppState::new())
+        .manage(state::LockBus::default())
         .manage(sync::SyncHub::default())
         .manage(sync::handover::Handover::default())
         .manage(updates::UpdateState::default())
@@ -508,6 +510,8 @@ pub fn run() {
         .setup(|app| {
             // Before any vault is opened: what a crashed run left of the sandbox goes.
             sandbox::erase_on_start(app.handle());
+            // Whatever must follow a lock listens on the lock bus, once.
+            state::register_lock_subscribers(app.handle());
             // Decrypted attachments a crashed run left for other programs go too.
             commands::attachments::wipe_opened(app.handle());
             // Resolve the default vault location once (`platform_fs::vaults_dir`).

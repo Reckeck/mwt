@@ -105,6 +105,17 @@ impl Clock {
         Stamp::new(self.wall, self.count, &self.device)
     }
 
+    /// The first stamp of this device above `existing`, whatever the wall
+    /// clock says. Does not move the clock, so one record stamped far ahead
+    /// does not drag the others along.
+    pub fn tick_after(&self, existing: &Stamp) -> Stamp {
+        Stamp::new(
+            existing.wall,
+            existing.count.saturating_add(1),
+            &self.device,
+        )
+    }
+
     /// Take in a stamp from elsewhere, so the next local change sorts after it.
     /// A stamp further ahead of the wall clock than [`MAX_FUTURE_MS`] is not
     /// followed: one device with a wrong date must not poison every other.
@@ -144,6 +155,14 @@ mod tests {
         assert!(first < same_ms && same_ms < behind);
         assert_eq!(behind.wall, 100);
         assert_eq!(first.device, "aaaaaaaa");
+    }
+
+    #[test]
+    fn tick_after_sorts_above_the_existing_stamp_without_moving_the_clock() {
+        let clock = Clock::new("a");
+        let existing = Stamp::new(900, 4, "zz");
+        assert!(clock.tick_after(&existing) > existing);
+        assert_eq!(clock.last(), Stamp::new(0, 0, "a"));
     }
 
     #[test]

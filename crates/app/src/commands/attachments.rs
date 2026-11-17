@@ -6,10 +6,12 @@ use trade_core::ipc_contract::{
     AddAttachmentFileInput, AddAttachmentLinkInput, AttachmentIdInput, ListAttachmentsInput,
     RenameAttachmentInput,
 };
+use trade_core::kernel::events::EventBus;
 use trade_core::model::attachment::{Attachment, AttachmentKind};
 use trade_core::service::NewFile;
 
 use crate::commands::{AppState, err_to_string, require_vault};
+use crate::state::on_vault_locked;
 
 #[tauri::command]
 pub async fn list_attachments(
@@ -105,7 +107,19 @@ fn opened_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
     Some(app.path().app_cache_dir().ok()?.join("opened"))
 }
 
-/// Delete every decrypted attachment left on disk. Called by `close_session`,
+/// Wipe the decrypted attachments on every `VaultLocked`, also when the flush
+/// failed and the vault stayed open (spec D1, D5).
+pub fn wipe_on_lock(bus: &EventBus, app: AppHandle) {
+    wipe_dir_on_lock(bus, opened_dir(&app));
+}
+
+pub(crate) fn wipe_dir_on_lock(bus: &EventBus, dir: Option<std::path::PathBuf>) {
+    if let Some(dir) = dir {
+        on_vault_locked(bus, move |_| wipe_dir(&dir));
+    }
+}
+
+/// Delete every decrypted attachment left on disk. Called on `VaultLocked`,
 /// at start and at exit, so a file that was opened never outlives the unlocked session.
 pub fn wipe_opened(app: &AppHandle) {
     if let Some(dir) = opened_dir(app) {

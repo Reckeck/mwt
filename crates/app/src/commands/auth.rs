@@ -5,10 +5,12 @@ use trade_core::ipc_contract::{
     ChangePasswordInput, CreateVaultInput, RemoveVaultPasswordInput, SetVaultPasswordInput,
     SetVaultPasswordResult, UnlockInput, VaultInfo, VaultStatus,
 };
+use trade_core::kernel::events::{LockReason, VaultLocked};
 use trade_core::service::security_level::{check_new_secret, level_of_vault_file};
 use trade_core::service::{CopyPolicy, UnlockedVault};
 
 use crate::commands::{AppState, app_settings, err_to_string, lock_vault, require_vault};
+use crate::state::LockBus;
 
 /// Vault identity for the unlock screen. The base currency is *not* part of the
 /// document any more — it is an app-level preference — so it is left out here.
@@ -63,7 +65,8 @@ pub(crate) fn status_of(state: &AppState) -> Result<VaultStatus, String> {
 /// sync notification): the window learns it from `vault-changed`.
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub fn lock_now(app: &AppHandle) {
-    if close_session(app).is_err() {
+    // Its callers are the background locks (idle, sleep, screen lock).
+    if close_session_for(app, LockReason::Autolock).is_err() {
         return;
     }
     let state = app.state::<AppState>();
@@ -78,13 +81,13 @@ pub async fn create_vault(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<VaultInfo, String> {
-    crate::commands::sandbox::leave(&app, &state);
+    leave_sandbox(&app, &state);
     // A new vault with a password is level 2: a PIN of six digits or more.
     if let Some(pin) = input.password.as_deref() {
         check_new_secret(SecurityLevel::Pin, pin).map_err(err_to_string)?;
     }
     let path = crate::platform_fs::resolve_new_vault(&app, &input.path).map_err(err_to_string)?;
-    close_open_vault(&app, &state)?;
+    close_open_vault(&app, &state, &path)?;
     // `None` = a vault without a password; an empty one is refused by the core.
     let mut vault = UnlockedVault::create_with(path.clone(), input.password.as_deref())
         .map_err(crate::commands::err_to_string)?;
@@ -144,7 +147,7 @@ pub(crate) async fn unlock_with(
     state: &AppState,
     typed: bool,
 ) -> Result<VaultInfo, String> {
-    crate::commands::sandbox::leave(app, state);
+    leave_sandbox(app, state);
     let path =
         crate::platform_fs::resolve_vault_to_open(app, &input.path).map_err(err_to_string)?;
     let pin_key = pin_guarded(&path);
@@ -155,7 +158,7 @@ pub(crate) async fn unlock_with(
             return Err(err_to_string(trade_core::Error::PinRetryLater { secs }));
         }
     }
-    close_open_vault(app, state)?;
+    close_open_vault(app, state, &path)?;
     // A linked vault first takes in what changed in its external copy.
     let open_sync =
         crate::platform_fs::links::sync_before_open(app, &path).map_err(err_to_string)?;
@@ -240,14 +243,32 @@ pub async fn lock_vault_cmd(app: AppHandle) -> Result<(), String> {
     close_session(&app).map_err(err_to_string)
 }
 
-/// The single way a vault is closed: flush, snapshot, stop sync, drop, forget live
-/// positions, then delete decrypted attachments. Locking the sandbox is leaving it:
-/// the demo data goes, nothing is flushed. T14 replaces it with the VaultLocked event.
+/// The single way a vault is closed: flush, snapshot, stop sync, drop, then
+/// publish `VaultLocked`, which the wipe of decrypted attachments and the reset
+/// of the live positions follow. Locking the sandbox is leaving it: the demo
+/// data goes, nothing is flushed.
 pub fn close_session(app: &AppHandle) -> trade_core::Result<()> {
-    if crate::commands::sandbox::leave(app, &app.state::<AppState>()) {
+    close_session_for(app, LockReason::Manual)
+}
+
+fn close_session_for(app: &AppHandle, reason: LockReason) -> trade_core::Result<()> {
+    if leave_sandbox(app, &app.state::<AppState>()) {
         return Ok(());
     }
-    close_in_order(&mut AppLockSteps { app })
+    close_in_order(&mut AppLockSteps { app }, reason)
+}
+
+/// Leave the sandbox if it is open, announcing it. Whether it was open.
+fn leave_sandbox(app: &AppHandle, state: &AppState) -> bool {
+    let left = crate::commands::sandbox::leave(app, state);
+    announce_sandbox_leave(left, &mut AppLockSteps { app })
+}
+
+fn announce_sandbox_leave(left: bool, steps: &mut impl LockSteps) -> bool {
+    if left {
+        steps.publish(LockReason::SandboxLeave, true);
+    }
+    left
 }
 
 /// The steps of locking, so the order can be tested without Tauri.
@@ -260,42 +281,60 @@ trait LockSteps {
     fn stop_sync(&mut self);
     /// Drop the unlocked vault.
     fn close(&mut self);
-    /// Delete the decrypted attachments opened for other programs.
-    fn wipe_files(&mut self);
+    /// Tell the app the lock happened (`VaultLocked`); `closed` is false when
+    /// the vault stayed open.
+    fn publish(&mut self, reason: LockReason, closed: bool);
 }
 
 /// Flush first: if the changes cannot be written, nothing is stopped and the
-/// vault stays open with sync and the scheduler running.
-fn close_in_order(steps: &mut impl LockSteps) -> trade_core::Result<()> {
-    if let Err(err) = steps.flush() {
-        // The vault stays open, but files decrypted for other programs must not linger.
-        steps.wipe_files();
-        return Err(err);
+/// vault stays open with sync and the scheduler running. The lock is published
+/// last either way: files decrypted for other programs must not linger.
+fn close_in_order(steps: &mut impl LockSteps, reason: LockReason) -> trade_core::Result<()> {
+    let flushed = steps.flush();
+    let closed = flushed.is_ok();
+    if closed {
+        steps.snapshot();
+        steps.stop_sync();
+        steps.close();
     }
-    steps.snapshot();
-    steps.stop_sync();
-    steps.close();
-    steps.wipe_files();
-    Ok(())
+    steps.publish(reason, closed);
+    flushed
 }
 
-/// Close the open vault, if any, before another is stored.
-fn close_open_vault(app: &AppHandle, state: &AppState) -> Result<(), String> {
-    let open = state.vault.lock().is_ok_and(|guard| guard.is_some());
-    close_if_open(open, &mut AppLockSteps { app })
+/// Close the open vault, if any, before the one at `target` is stored.
+fn close_open_vault(
+    app: &AppHandle,
+    state: &AppState,
+    target: &std::path::Path,
+) -> Result<(), String> {
+    let open = state
+        .vault
+        .lock()
+        .ok()
+        .and_then(|guard| guard.as_ref().map(|vault| vault.path.clone()));
+    close_if_open(open.as_deref(), target, &mut AppLockSteps { app })
         .map(drop)
         .map_err(err_to_string)
 }
 
 /// Opening a vault while one is open here (the same file or another): close the
-/// open one first (flush, stop sync, drop, wipe). Otherwise its lock file (ours, so the new vault would not
+/// open one first (flush, stop sync, drop, publish). Otherwise its lock file (ours, so the new vault would not
 /// own it) is deleted when it drops, and its deferred writer could write over
 /// the new vault. Whether one was open.
-fn close_if_open(open: bool, steps: &mut impl LockSteps) -> trade_core::Result<bool> {
-    if !open {
+fn close_if_open(
+    open: Option<&std::path::Path>,
+    target: &std::path::Path,
+    steps: &mut impl LockSteps,
+) -> trade_core::Result<bool> {
+    let Some(open) = open else {
         return Ok(false);
-    }
-    close_in_order(steps)?;
+    };
+    let reason = if open == target {
+        LockReason::Reopen
+    } else {
+        LockReason::Replace
+    };
+    close_in_order(steps, reason)?;
     Ok(true)
 }
 
@@ -326,12 +365,13 @@ impl LockSteps for AppLockSteps<'_> {
         if let Ok(mut guard) = lock_vault(&state) {
             *guard = None;
         }
-        // The amounts the adapters read must not outlive the vault.
-        crate::cryptotrack::jobs::forget_live_positions();
     }
 
-    fn wipe_files(&mut self) {
-        crate::commands::attachments::wipe_opened(self.app);
+    fn publish(&mut self, reason: LockReason, closed: bool) {
+        self.app
+            .state::<LockBus>()
+            .0
+            .publish(&VaultLocked { reason, closed }.into());
     }
 }
 
@@ -340,13 +380,22 @@ mod lock_order_tests {
     use super::*;
 
     struct Recorder {
-        calls: Vec<&'static str>,
+        calls: Vec<String>,
         flush_fails: bool,
+    }
+
+    impl Recorder {
+        fn new(flush_fails: bool) -> Self {
+            Self {
+                calls: vec![],
+                flush_fails,
+            }
+        }
     }
 
     impl LockSteps for Recorder {
         fn flush(&mut self) -> trade_core::Result<()> {
-            self.calls.push("flush");
+            self.calls.push("flush".into());
             if self.flush_fails {
                 Err(trade_core::Error::Crypto("disk full".into()))
             } else {
@@ -354,63 +403,95 @@ mod lock_order_tests {
             }
         }
         fn snapshot(&mut self) {
-            self.calls.push("snapshot");
+            self.calls.push("snapshot".into());
         }
         fn stop_sync(&mut self) {
-            self.calls.push("stop_sync");
+            self.calls.push("stop_sync".into());
         }
         fn close(&mut self) {
-            self.calls.push("close");
+            self.calls.push("close".into());
         }
-        fn wipe_files(&mut self) {
-            self.calls.push("wipe_files");
+        fn publish(&mut self, reason: LockReason, closed: bool) {
+            self.calls.push(format!("publish:{reason:?}:{closed}"));
         }
     }
 
+    const CLOSED_IN_ORDER: [&str; 4] = ["flush", "snapshot", "stop_sync", "close"];
+
+    fn order_with(publish: &str) -> Vec<String> {
+        CLOSED_IN_ORDER
+            .iter()
+            .map(|step| (*step).to_string())
+            .chain([publish.to_string()])
+            .collect()
+    }
+
     #[test]
-    fn lock_flushes_before_snapshot_sync_stop_and_close() {
-        let mut steps = Recorder {
-            calls: vec![],
-            flush_fails: false,
-        };
-        close_in_order(&mut steps).unwrap();
-        assert_eq!(
-            steps.calls,
-            ["flush", "snapshot", "stop_sync", "close", "wipe_files"]
-        );
+    fn lock_flushes_before_snapshot_sync_stop_and_close_and_publishes_last() {
+        let mut steps = Recorder::new(false);
+        close_in_order(&mut steps, LockReason::Manual).unwrap();
+        assert_eq!(steps.calls, order_with("publish:Manual:true"));
     }
 
     #[test]
     fn unlocking_while_a_vault_is_open_closes_it_first() {
-        let mut steps = Recorder {
-            calls: vec![],
-            flush_fails: false,
-        };
-        assert!(close_if_open(true, &mut steps).unwrap());
-        assert_eq!(
-            steps.calls,
-            ["flush", "snapshot", "stop_sync", "close", "wipe_files"]
-        );
+        let mut steps = Recorder::new(false);
+        let path = std::path::Path::new("/vaults/a.vault");
+        assert!(close_if_open(Some(path), path, &mut steps).unwrap());
+        assert_eq!(steps.calls, order_with("publish:Reopen:true"));
     }
 
     #[test]
     fn unlocking_with_nothing_open_closes_nothing() {
-        let mut steps = Recorder {
-            calls: vec![],
-            flush_fails: false,
-        };
-        assert!(!close_if_open(false, &mut steps).unwrap());
+        let mut steps = Recorder::new(false);
+        let path = std::path::Path::new("/vaults/a.vault");
+        assert!(!close_if_open(None, path, &mut steps).unwrap());
         assert!(steps.calls.is_empty());
     }
 
     #[test]
     fn a_failed_flush_leaves_sync_and_the_vault_running() {
-        let mut steps = Recorder {
-            calls: vec![],
-            flush_fails: true,
-        };
-        assert!(close_in_order(&mut steps).is_err());
-        assert_eq!(steps.calls, ["flush", "wipe_files"]);
+        let mut steps = Recorder::new(true);
+        assert!(close_in_order(&mut steps, LockReason::Manual).is_err());
+        assert_eq!(steps.calls, ["flush", "publish:Manual:false"]);
+    }
+
+    #[test]
+    fn a_failed_flush_still_publishes_with_closed_false() {
+        let mut steps = Recorder::new(true);
+        assert!(close_in_order(&mut steps, LockReason::Autolock).is_err());
+        assert_eq!(steps.calls.last().unwrap(), "publish:Autolock:false");
+    }
+
+    #[test]
+    fn a_lock_publishes_vault_locked_on_every_close_path() {
+        let published = |steps: Recorder| steps.calls.last().cloned().unwrap();
+
+        let mut manual = Recorder::new(false);
+        close_in_order(&mut manual, LockReason::Manual).unwrap();
+        assert_eq!(published(manual), "publish:Manual:true");
+
+        let mut autolock = Recorder::new(false);
+        close_in_order(&mut autolock, LockReason::Autolock).unwrap();
+        assert_eq!(published(autolock), "publish:Autolock:true");
+
+        let mut sandbox = Recorder::new(false);
+        assert!(announce_sandbox_leave(true, &mut sandbox));
+        assert_eq!(sandbox.calls, ["publish:SandboxLeave:true"]);
+
+        let mut not_sandbox = Recorder::new(false);
+        assert!(!announce_sandbox_leave(false, &mut not_sandbox));
+        assert!(not_sandbox.calls.is_empty());
+
+        let open = std::path::Path::new("/vaults/a.vault");
+        let mut reopen = Recorder::new(false);
+        close_if_open(Some(open), open, &mut reopen).unwrap();
+        assert_eq!(published(reopen), "publish:Reopen:true");
+
+        let other = std::path::Path::new("/vaults/b.vault");
+        let mut replace = Recorder::new(false);
+        close_if_open(Some(open), other, &mut replace).unwrap();
+        assert_eq!(published(replace), "publish:Replace:true");
     }
 }
 

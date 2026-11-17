@@ -46,6 +46,12 @@ pub trait SyncTap: Send + Sync {
     fn changed(&self, keys: &[String]);
 }
 
+impl<T: SyncTap + ?Sized> crate::kernel::events::ChangeSink for T {
+    fn changed(&self, keys: &[String]) {
+        SyncTap::changed(self, keys);
+    }
+}
+
 /// The device a batch came from.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PeerRef {
@@ -207,7 +213,8 @@ impl UnlockedVault {
     /// Report every later save's changed keys to `tap` (`None` stops).
     pub fn set_sync_tap(&mut self, tap: Option<Arc<dyn SyncTap>>) {
         if !self.sandbox {
-            self.sync_tap = tap;
+            self.sync_tap = tap.clone();
+            self.session.set_change_sink(tap);
         }
     }
 
@@ -1806,6 +1813,46 @@ mod tests {
             "the edit was stamped by the sync call and never announced: {sent:?}"
         );
         drop(right);
+    }
+
+    #[test]
+    fn set_sync_tap_still_receives_the_changed_keys() {
+        let (_dir, mut left, right) = two_devices();
+        let tap = Arc::new(Announced::default());
+        left.set_sync_tap(Some(tap.clone()));
+        left.set_write_behind(Some(Arc::new(NoWake)));
+        left.start_tracking().unwrap();
+        let cash = cash_id(&left);
+        let stamped_before = left.doc.sync.stamps.clone();
+        left.doc.stores[0].name = "Renamed for the tap".into();
+        left.persist().unwrap();
+        assert!(
+            tap.0.lock().unwrap().is_empty(),
+            "persist announces nothing"
+        );
+        drop(left.prepare_flush().unwrap().expect("dirty"));
+        let mut expected: Vec<String> = left
+            .doc
+            .sync
+            .stamps
+            .iter()
+            .filter(|(key, stamp)| stamped_before.get(*key) != Some(*stamp))
+            .map(|(key, _)| key.clone())
+            .collect();
+        expected.sort();
+        let mut sent = tap.0.lock().unwrap().clone();
+        sent.sort();
+        assert!(sent.iter().any(|key| key.contains(&cash)));
+        assert_eq!(sent, expected, "the tap got exactly the changed keys");
+        drop(right);
+    }
+
+    #[test]
+    fn a_sync_tap_is_a_change_sink() {
+        use crate::kernel::events::ChangeSink;
+        let tap = Announced::default();
+        ChangeSink::changed(&tap, &["a:1".to_string()]);
+        assert_eq!(tap.0.lock().unwrap().clone(), vec!["a:1".to_string()]);
     }
 
     fn fx_point(currency: &str, ts: &str) -> crate::model::vault::FxPoint {
