@@ -445,6 +445,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_subkey_differs_from_the_vault_key() {
+        let key = SealKey::fresh_with(b"pw", KdfParams::hardened(64 * 1024, 3, 1)).unwrap();
+        assert_ne!(&key.derive_subkey(b"info")[..], &key.key[..]);
+    }
+
+    #[test]
     fn a_blob_opens_only_with_its_key_and_id() {
         let key = random_blob_key();
         let sealed = seal_blob(&key, b"a1", b"receipt").unwrap();

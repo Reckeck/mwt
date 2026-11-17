@@ -306,12 +306,6 @@ mod tests {
     }
 
     #[test]
-    fn the_file_key_differs_from_the_vault_key() {
-        let key = level3_key("pw");
-        assert_ne!(&file_key(&key)[..], &key.derive_subkey(b"other")[..]);
-    }
-
-    #[test]
     fn secrets_round_trip_through_the_file() {
         let dir = tempfile::tempdir().expect("dir");
         let vault = dir.path().join("v.wallet");
