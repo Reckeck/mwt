@@ -37,13 +37,14 @@ use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use rand::RngCore;
 use zeroize::Zeroizing;
 
+use self::format::SnapshotFormat;
 use crate::VAULT_MAGIC;
 use crate::crypto::header::VaultHeader;
 use crate::crypto::kdf_profile::KdfParams;
 use crate::error::{Error, Result};
-use crate::storage::SnapshotFormat;
 
 pub mod device_secrets;
+pub mod format;
 pub mod header;
 pub mod kdf_profile;
 

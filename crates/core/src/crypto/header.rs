@@ -2,12 +2,12 @@
 //! used as AEAD associated data, so any tampering is detected even if the
 //! payload section is untouched.
 
+use super::format::SnapshotFormat;
 use crate::VAULT_MAGIC;
 use crate::crypto::kdf_profile::KdfParams;
 use crate::crypto::{NONCE_LEN, SALT_LEN};
 use crate::error::{Error, Result};
 use crate::ipc_contract::security::SecurityLevel;
-use crate::storage::SnapshotFormat;
 
 /// Fixed header length excluding the 8-byte magic prefix.
 /// 4(version)+1(kdf)+4(mem)+4(iters)+1(par)+16(salt)+24(nonce)+1(fmt) = 55

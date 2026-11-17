@@ -46,59 +46,7 @@ pub mod v3;
 
 pub use crate::vault_io::local::{VAULT_EXT, VaultLock, backup_path, ensure_wallet_ext};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SnapshotFormat {
-    Json,
-    /// Legacy bincode (v1 release builds); read-only.
-    Bin,
-    /// MessagePack with field names (release builds from payload v2).
-    Pack,
-}
-
-impl SnapshotFormat {
-    pub fn from_u8(raw: u8) -> Option<Self> {
-        match raw {
-            crypto::header::VaultHeader::FMT_JSON => Some(SnapshotFormat::Json),
-            crypto::header::VaultHeader::FMT_BIN => Some(SnapshotFormat::Bin),
-            crypto::header::VaultHeader::FMT_PACK => Some(SnapshotFormat::Pack),
-            _ => None,
-        }
-    }
-
-    pub fn as_u8(self) -> u8 {
-        match self {
-            SnapshotFormat::Json => crypto::header::VaultHeader::FMT_JSON,
-            SnapshotFormat::Bin => crypto::header::VaultHeader::FMT_BIN,
-            SnapshotFormat::Pack => crypto::header::VaultHeader::FMT_PACK,
-        }
-    }
-
-    /// The concrete format for this build profile (dev vs prod).
-    pub fn for_profile() -> Self {
-        if cfg!(debug_assertions) {
-            SnapshotFormat::Json
-        } else {
-            SnapshotFormat::Pack
-        }
-    }
-
-    /// The format a document read in `self` is written back in: bincode is
-    /// never written again.
-    pub fn for_writing(self) -> Self {
-        match self {
-            SnapshotFormat::Bin => SnapshotFormat::Pack,
-            other => other,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            SnapshotFormat::Json => "json",
-            SnapshotFormat::Bin => "bin",
-            SnapshotFormat::Pack => "pack",
-        }
-    }
-}
+pub use crate::crypto::format::SnapshotFormat;
 
 /// Encode a snapshot into the raw payload bytes for a given format.
 pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
