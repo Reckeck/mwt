@@ -82,9 +82,10 @@ pub const GROUPS: &[Group] = &[
         layer: 4,
         modules: &["utilities_formula"],
     },
+    // Scenarios and the service shim sit above the pure areas they call (core-strangler OD1).
     Group {
         name: "usecases",
-        layer: 5,
+        layer: 6,
         modules: &[
             "service",
             "sandbox",
@@ -106,7 +107,7 @@ pub const GROUPS: &[Group] = &[
     // Test support on top of everything: compiled only under `cfg(test)` or the `testkit` feature.
     Group {
         name: "testkit",
-        layer: 6,
+        layer: 7,
         modules: &["testkit"],
     },
 ];
@@ -140,6 +141,13 @@ mod tests {
     fn household_may_not_use_service() {
         assert!(!is_legal("household", "service"));
         assert!(!is_legal("reports", "service"));
+    }
+
+    #[test]
+    fn scenarios_and_the_service_shim_may_use_household_and_reports() {
+        assert!(is_legal("usecases", "household"));
+        assert!(is_legal("service", "household"));
+        assert!(is_legal("usecases", "reports"));
     }
 
     #[test]
