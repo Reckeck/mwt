@@ -27,6 +27,7 @@ macro_rules! ipc_commands {
         [ $( $(#[$attr:meta])* $cmd:ident ),* $(,)? ]
     ) => {
         /// The command names of this context, for the registration test.
+        #[allow(dead_code, reason = "composed in lib.rs by T16, which removes this allow")]
         pub const $names: &[&str] = &[
             $( $(#[$attr])* stringify!($cmd), )*
         ];
@@ -48,6 +49,7 @@ macro_rules! ipc_commands {
     };
     (@collect ($d:tt) $list:ident, ($($module:ident)::+), [$($done:tt)*], []) => {
         // `$d` is a literal `$`, so the generated macro can declare its own variables.
+        #[allow(unused_macros, reason = "composed in lib.rs by T16, which removes this allow")]
         macro_rules! $list {
             (
                 [ $d($d next:ident)::+ $d(, $d($d rest:tt)*)? ]
@@ -60,6 +62,7 @@ macro_rules! ipc_commands {
                 )
             };
         }
+        #[allow(unused_imports, reason = "composed in lib.rs by T16, which removes this allow")]
         pub(crate) use $list;
     };
 }

@@ -8,6 +8,7 @@ use trade_core::service::{
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 #[tauri::command]
 pub async fn list_contacts(state: State<'_, AppState>) -> Result<Vec<Contact>, IpcError> {
@@ -124,3 +125,5 @@ pub async fn set_debt_terms(
         .set_debt_terms(input)
         .map_err(IpcError::from)
 }
+
+ipc_commands!(contacts_commands, CONTACTS_NAMES, commands::contacts: [list_contacts, create_contact, update_contact, archive_contact, delete_contact, get_contact_turnover, get_contact_balances, list_contact_summaries, list_debt_terms, set_debt_terms]);

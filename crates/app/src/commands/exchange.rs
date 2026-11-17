@@ -29,6 +29,7 @@ use trade_core::vault_io::device_secrets::DeviceKey;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Look up a transaction hash and suggest form fields.
 ///
@@ -689,3 +690,5 @@ mod tests {
         assert!(hints_from(&info).is_empty());
     }
 }
+
+ipc_commands!(exchange_commands, EXCHANGE_NAMES, commands::exchange: [inspect_tx, bybit_executions, exchange_key_status, set_exchange_key, set_exchange_targets, set_import_interval, get_terminal_state, update_terminal_state, save_terminal_drawings, clear_exchange_key, import_bybit_history, get_import_settings, preview_bybit_import, set_import_settings, list_import_runs, list_imported_transactions, create_bybit_accounts, bybit_balances, list_pending_imports, confirm_pending_imports, discard_pending_imports]);

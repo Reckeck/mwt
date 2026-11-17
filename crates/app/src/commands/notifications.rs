@@ -11,6 +11,7 @@ use trade_core::service::{notice, notice_title};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Every notice shown so far, newest first.
 #[tauri::command]
@@ -129,3 +130,5 @@ pub async fn notification_storage(state: State<'_, AppState>) -> Result<String, 
         .unwrap_or(false);
     Ok(if persistent { "keyring" } else { "memory" }.into())
 }
+
+ipc_commands!(notifications_commands, NOTIFICATIONS_NAMES, commands::notifications: [list_notifications, mark_notifications_read, send_test_notification, notification_permission, get_autostart, set_autostart, notification_storage]);
