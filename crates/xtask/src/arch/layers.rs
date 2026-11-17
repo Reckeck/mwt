@@ -23,6 +23,7 @@ pub const GROUPS: &[Group] = &[
             "app_dirs",
             "routes",
             "external_url",
+            "secret",
             "lib",
         ],
     },

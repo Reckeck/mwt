@@ -32,6 +32,7 @@ mod flatten_tests;
 pub mod peer_sync;
 #[cfg(test)]
 mod peer_sync_tests;
+pub mod repair;
 pub mod sync_ids;
 #[cfg(test)]
 mod sync_ids_tests;

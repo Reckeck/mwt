@@ -109,6 +109,39 @@ files = [
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 
+# Stubs that later tasks name but no area lists; paths are under crates/core/src.
+[[extra_stub]]
+task = "T50"
+path = "secret.rs"
+
+[[extra_stub]]
+task = "T45"
+path = "usecases/react.rs"
+
+[[extra_stub]]
+task = "T46"
+path = "cryptotrack/ports.rs"
+
+[[extra_stub]]
+task = "T47"
+path = "cryptotrack/service/"
+
+[[extra_stub]]
+task = "T52"
+path = "workflow/host.rs"
+
+[[extra_stub]]
+task = "T52"
+path = "workflow/effect.rs"
+
+[[extra_stub]]
+task = "T53"
+path = "workflow/service/"
+
+[[extra_stub]]
+task = "T36"
+path = "sync/repair/"
+
 [[area]]
 name = "loyalty"
 task = "T26"

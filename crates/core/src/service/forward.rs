@@ -14,15 +14,16 @@
 //!
 //! With the cargo feature `deprecated-forwards` every delegate is `#[deprecated]`.
 
-/// Expands each entry into a delegate method. Without `@books` the function receives the vault
-/// (`self`) first; with `@books` it receives `&self.books()` first.
+/// Expands each entry into a delegate method; `-> R` is optional. Without a marker the function
+/// receives the vault (`self`) first; `@books` passes `&self.books()` first, `@doc` passes
+/// `&self.doc` first.
 #[allow(unused_macros)]
 macro_rules! forward {
     () => {};
     // Shared receiver.
     (
         $(#[$meta:meta])*
-        $vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)* $(,)?) -> $ret:ty
+        $vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)* $(,)?) $(-> $ret:ty)?
             => $($target:ident)::+ $(@$books:ident)?;
         $($rest:tt)*
     ) => {
@@ -31,7 +32,7 @@ macro_rules! forward {
             feature = "deprecated-forwards",
             deprecated(note = "moved out of `UnlockedVault`; call the new function directly")
         )]
-        $vis fn $name(&self $(, $arg: $ty)*) -> $ret {
+        $vis fn $name(&self $(, $arg: $ty)*) $(-> $ret)? {
             $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?] $(, $arg)*)
         }
         $crate::service::forward::forward!($($rest)*);
@@ -39,7 +40,7 @@ macro_rules! forward {
     // Exclusive receiver.
     (
         $(#[$meta:meta])*
-        $vis:vis fn $name:ident(&mut self $(, $arg:ident : $ty:ty)* $(,)?) -> $ret:ty
+        $vis:vis fn $name:ident(&mut self $(, $arg:ident : $ty:ty)* $(,)?) $(-> $ret:ty)?
             => $($target:ident)::+ $(@$books:ident)?;
         $($rest:tt)*
     ) => {
@@ -48,7 +49,7 @@ macro_rules! forward {
             feature = "deprecated-forwards",
             deprecated(note = "moved out of `UnlockedVault`; call the new function directly")
         )]
-        $vis fn $name(&mut self $(, $arg: $ty)*) -> $ret {
+        $vis fn $name(&mut self $(, $arg: $ty)*) $(-> $ret)? {
             $crate::service::forward::forward!(@call [$($target)::+], self, [$($books)?] $(, $arg)*)
         }
         $crate::service::forward::forward!($($rest)*);
@@ -58,6 +59,9 @@ macro_rules! forward {
     };
     (@call [$($target:ident)::+], $this:ident, [books] $(, $arg:ident)*) => {
         $($target)::+(&$this.books() $(, $arg)*)
+    };
+    (@call [$($target:ident)::+], $this:ident, [doc] $(, $arg:ident)*) => {
+        $($target)::+(&$this.doc $(, $arg)*)
     };
 }
 
@@ -69,10 +73,24 @@ pub(crate) use forward;
 mod tests {
     struct Dummy {
         base: i64,
+        doc: Doc,
+        seen: std::cell::Cell<i64>,
     }
 
     struct Books {
         base: i64,
+    }
+
+    struct Doc {
+        total: i64,
+    }
+
+    fn dummy(base: i64) -> Dummy {
+        Dummy {
+            base,
+            doc: Doc { total: base * 2 },
+            seen: std::cell::Cell::new(0),
+        }
     }
 
     impl Dummy {
@@ -90,6 +108,14 @@ mod tests {
         vault.base
     }
 
+    fn read_doc(doc: &Doc, extra: i64) -> i64 {
+        doc.total + extra
+    }
+
+    fn note_vault(vault: &Dummy, value: i64) {
+        vault.seen.set(value);
+    }
+
     fn add_to_books(books: &Books, extra: i64) -> i64 {
         books.base + extra
     }
@@ -102,12 +128,16 @@ mod tests {
             fn write_forward(&mut self, extra: i64) -> i64 => bump_vault;
             /// Books-first.
             fn books_forward(&self, extra: i64) -> i64 => add_to_books @books;
+            /// Doc-first.
+            fn doc_forward(&self, extra: i64) -> i64 => read_doc @doc;
+            /// No return type.
+            fn note_forward(&self, value: i64) => note_vault;
         }
     }
 
     #[test]
     fn vault_first_delegate_returns_what_the_function_returns() {
-        let mut vault = Dummy { base: 10 };
+        let mut vault = dummy(10);
         assert_eq!(vault.read_forward(5), 15);
         assert_eq!(vault.write_forward(5), 15);
         assert_eq!(vault.base, 15);
@@ -115,8 +145,20 @@ mod tests {
 
     #[test]
     fn books_delegate_returns_what_the_function_returns() {
-        let vault = Dummy { base: 10 };
+        let vault = dummy(10);
         assert_eq!(vault.books_forward(7), 17);
+    }
+
+    #[test]
+    fn doc_first_delegate_passes_the_doc() {
+        assert_eq!(dummy(10).doc_forward(5), 25);
+    }
+
+    #[test]
+    fn delegate_without_a_return_type_returns_unit() {
+        let vault = dummy(1);
+        vault.note_forward(9);
+        assert_eq!(vault.seen.get(), 9);
     }
 
     /// Feature on: the delegate is deprecated, so the expected lint fires (an unfulfilled
@@ -125,13 +167,13 @@ mod tests {
     #[test]
     #[expect(deprecated)]
     fn delegate_is_deprecated_when_the_feature_is_on() {
-        assert_eq!(Dummy { base: 1 }.read_forward(1), 2);
+        assert_eq!(dummy(1).read_forward(1), 2);
     }
 
     /// Feature off: the same call raises no deprecation (`-D warnings` would fail otherwise).
     #[cfg(not(feature = "deprecated-forwards"))]
     #[test]
     fn delegate_is_not_deprecated_by_default() {
-        assert_eq!(Dummy { base: 1 }.read_forward(1), 2);
+        assert_eq!(dummy(1).read_forward(1), 2);
     }
 }

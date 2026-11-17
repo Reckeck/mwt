@@ -26,6 +26,7 @@ pub mod pricing;
 pub mod reports;
 pub mod routes;
 pub mod sandbox;
+pub mod secret;
 pub mod service;
 pub mod storage;
 pub mod sync;
