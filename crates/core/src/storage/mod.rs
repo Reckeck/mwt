@@ -1211,6 +1211,121 @@ mod tests {
         },
     }
 
+    /// What the two committed v3 files (`fixtures/v3.json.bin`,
+    /// `fixtures/v3.bincode.bin`) hold once migrated, written out by hand and
+    /// not built from today's structs, so a change to them that alters how an
+    /// old file reads shows up here. Fields the files leave empty come from
+    /// `VaultDoc::default()` (empty collections); everything else is spelled
+    /// out, including the values a default would also give.
+    fn the_committed_v3_file_as_v4() -> VaultDoc {
+        use crate::model::category::{Category, CategoryGroup};
+        use crate::model::notify::NotificationSettings;
+        use crate::model::planning::EmergencyFund;
+        use crate::model::store::StoreScope;
+        use crate::model::vault::{DailyBudgetMode, DashPeriod, ManualPrice, Settings, TxProperty};
+
+        VaultDoc {
+            version: 4,
+            id: "3f6c1f0e-0000-4000-8000-000000000003".into(),
+            created_at: "2026-01-15T08:00:00Z".into(),
+            settings: Settings {
+                display_decimals: 2,
+                dashboard_widgets: Vec::new(),
+                fx_refresh_interval_sec: 300,
+                minimize_to_tray: true,
+                savings_rate: Amount::parse("0.15").unwrap(),
+                daily_budget_mode: DailyBudgetMode::UntilIncome,
+                budget_currency: "thb".into(),
+                notifications: NotificationSettings {
+                    system: true,
+                    hide_details_when_locked: false,
+                    default_time: "09:30".into(),
+                    categories: Vec::new(),
+                },
+                budget_configured: true,
+                onboarding_skipped: vec!["tour".into()],
+                inflation_mode: Default::default(),
+                inflation_source: Default::default(),
+                inflation_manual: Default::default(),
+                inflation_adopted: false,
+                manual_income: Some(Amount::parse("50000").unwrap()),
+                manual_expenses: None,
+                categories_rev: 1,
+                freedom_rate: None,
+                carry_since: Some("2026-01".into()),
+                pinned: Vec::new(),
+                dashboard_period: DashPeriod::Quarter,
+                onboarding_checklist_hidden: false,
+                crypto: None,
+                schedule_timezone: Some("Asia/Bangkok".into()),
+                crypto_raise_pending: false,
+            },
+            categories: vec![
+                Category {
+                    key: "salary".into(),
+                    name: None,
+                    group: CategoryGroup::Income,
+                    archived: false,
+                    essential: None,
+                    passive: Some(true),
+                },
+                Category {
+                    key: "groceries".into(),
+                    name: Some("Food".into()),
+                    group: CategoryGroup::Daily,
+                    archived: false,
+                    essential: Some(true),
+                    passive: None,
+                },
+            ],
+            manual_prices: vec![ManualPrice {
+                asset_key: "property:flat".into(),
+                unit_price: Amount::parse("4500000").unwrap(),
+                currency: "thb".into(),
+                updated_at: "2026-03-01T00:00:00Z".into(),
+            }],
+            discarded_imports: vec!["bybit-1".into()],
+            emergency_fund: EmergencyFund {
+                scope: StoreScope {
+                    store_ids: Vec::new(),
+                    include_children: false,
+                },
+                target_months: 6,
+                avg_months: 6,
+            },
+            tx_properties: vec![TxProperty {
+                tx_id: "tx-1".into(),
+                property_id: "flat".into(),
+            }],
+            ..VaultDoc::default()
+        }
+    }
+
+    /// A v3 file as it was written then: the bytes are committed, produced
+    /// once and never by a test, so this reads old bytes with the code as it
+    /// is today. Migrating it yields the literal above.
+    fn assert_a_committed_v3_file_migrates(bytes: &[u8], fmt: SnapshotFormat) {
+        let decoded = decode_versioned(bytes, fmt).expect("the committed v3 file reads");
+        assert_eq!(decoded.from_version, 3);
+        assert_eq!(decoded.doc, the_committed_v3_file_as_v4());
+    }
+
+    #[test]
+    fn a_v3_file_in_json_opens_and_migrates() {
+        assert_a_committed_v3_file_migrates(
+            include_bytes!("fixtures/v3.json.bin"),
+            SnapshotFormat::Json,
+        );
+    }
+
+    #[test]
+    fn a_v3_file_in_bincode_opens_and_migrates() {
+        assert_a_committed_v3_file_migrates(
+            include_bytes!("fixtures/v3.bincode.bin"),
+            SnapshotFormat::Bin,
+        );
+    }
+
     /// v2 carries field names: a field missing from an older v2 file takes its
     /// default instead of breaking the read (the reason bincode was dropped).
     #[test]
