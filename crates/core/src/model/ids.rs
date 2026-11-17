@@ -28,11 +28,11 @@ macro_rules! id_types {
             type OptionInnerType = Self;
 
             fn name(_cfg: &::ts_rs::Config) -> ::std::string::String {
-                stringify!($name).into()
+                "string".into()
             }
 
             fn ident(_cfg: &::ts_rs::Config) -> ::std::string::String {
-                stringify!($name).into()
+                "string".into()
             }
 
             fn decl(_cfg: &::ts_rs::Config) -> ::std::string::String {
@@ -116,5 +116,17 @@ mod tests {
     #[test]
     fn exports_as_ts_string() {
         assert_eq!(StoreId::inline(&ts_rs::Config::default()), "string");
+    }
+
+    #[derive(TS)]
+    #[allow(dead_code)]
+    struct Holder {
+        store_id: StoreId,
+    }
+
+    #[test]
+    fn exported_struct_field_is_a_plain_string() {
+        let decl = Holder::decl(&ts_rs::Config::default());
+        assert!(decl.contains("store_id: string"), "{decl}");
     }
 }
