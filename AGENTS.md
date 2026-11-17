@@ -208,6 +208,11 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
     leaks, "Back", touch targets). Details:
     `ui-design-system/references/stable-layout.md`.
 
+18. **Core follows the layer table.** Modules of `crates/core` depend only as
+    `docs/architecture.md` ("Layers and ports") says; a back edge fails
+    `cargo xtask check arch`. An allowance needs an entry in
+    `crates/xtask/arch-allow.toml` with `until` and `reason`.
+
 ## Conventions
 
 - **FSD layers.** The structure and import rules are described in the "Code
