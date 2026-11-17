@@ -261,9 +261,11 @@ impl UnlockedVault {
     /// own writers call after they changed an event, a verdict or an account,
     /// since nothing else re-derives the holdings for them.
     pub fn crypto_sync_holdings(&mut self) -> Result<()> {
-        let changed = self.refold_holdings();
+        // Unconditional: callers rely on this save for their own edits, which
+        // the refold comparison knows nothing about.
+        self.refold_holdings();
         self.transact(|tx| {
-            tx.touch_if(changed);
+            tx.touch();
             Ok(())
         })
     }

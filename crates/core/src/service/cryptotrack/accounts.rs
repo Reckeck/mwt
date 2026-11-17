@@ -895,4 +895,30 @@ mod tests {
         );
         assert_eq!(vault.doc.crypto_events.len(), 1, "the operations stay");
     }
+
+    #[test]
+    fn an_account_note_survives_a_reopen_when_holdings_do_not_change() {
+        let (_dir, mut vault) = empty_vault();
+        let made = vault
+            .crypto_connect_address(&connect(ADDRESS, "Main"))
+            .unwrap();
+        vault
+            .crypto_update_account(&UpdateAccountInput {
+                account_id: made.account_id.clone(),
+                name: None,
+                note: Some("kept".into()),
+                archived: None,
+            })
+            .unwrap();
+        let path = vault.path.clone();
+        drop(vault);
+        let reopened = UnlockedVault::open(path, "pw").unwrap();
+        let account = reopened
+            .doc
+            .crypto_accounts
+            .iter()
+            .find(|account| account.id == made.account_id)
+            .expect("the account is stored");
+        assert_eq!(account.note, "kept");
+    }
 }
