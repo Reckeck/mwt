@@ -19,6 +19,7 @@ use crate::commands::app_settings::current_settings;
 use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, sandbox};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// The endpoints of every network, with the presets to fall back to. Below
 /// protection level 3 they are the presets and `editable` is false.
@@ -69,3 +70,5 @@ pub async fn crypto_test_network(
         .await
         .map_err(IpcError::from)
 }
+
+ipc_commands!(cryptotrack_network_commands, CRYPTOTRACK_NETWORK_NAMES, commands::cryptotrack::network: [crypto_network_settings, crypto_set_network_settings, crypto_test_network]);

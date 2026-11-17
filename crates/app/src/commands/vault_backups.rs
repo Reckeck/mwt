@@ -7,6 +7,7 @@ use trade_core::ipc_contract::{RestoreVaultBackupInput, VaultBackup};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Backups of the open vault, newest first.
 #[tauri::command]
@@ -47,3 +48,5 @@ pub async fn reveal_vault_folder(state: State<'_, AppState>) -> Result<(), IpcEr
     };
     state.opener.reveal_path(&path)
 }
+
+ipc_commands!(vault_backups_commands, VAULT_BACKUPS_NAMES, commands::vault_backups: [list_vault_backups, create_vault_backup, restore_vault_backup, reveal_vault_folder]);

@@ -18,6 +18,7 @@ use trade_core::ipc_contract::cryptotrack::wipe::{
 use crate::commands::AppState;
 use crate::commands::app_settings;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::commands::ipc_commands;
 
 /// What a wipe would remove: the records per collection, the wallets that lose
 /// their link to the module and are archived, what the capital loses and the
@@ -54,3 +55,5 @@ pub async fn crypto_wipe_module(
     }
     Ok(report)
 }
+
+ipc_commands!(cryptotrack_wipe_commands, CRYPTOTRACK_WIPE_NAMES, commands::cryptotrack::wipe: [crypto_wipe_preview, crypto_wipe_module]);

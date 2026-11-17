@@ -6,6 +6,7 @@ use trade_core::ipc_contract::security::ExchangeKeyState;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// `missing` / `not_verified` / `read_only` / `level_required` for the key
 /// serving a store. The hint and sub-accounts stay in `exchange_key_status`.
@@ -19,3 +20,5 @@ pub async fn read_exchange_key_state(
     let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().exchange_key_state(&input.store_id))
 }
+
+ipc_commands!(security_keys_commands, SECURITY_KEYS_NAMES, commands::security::keys: [read_exchange_key_state]);

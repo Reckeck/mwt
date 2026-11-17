@@ -10,6 +10,7 @@ use trade_core::service::{FlowSummary, FxTable, TxLoss};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 #[tauri::command]
 pub async fn get_tx_loss(id: String, state: State<'_, AppState>) -> Result<TxLoss, IpcError> {
@@ -72,3 +73,5 @@ pub async fn get_fx_table(app: AppHandle, state: State<'_, AppState>) -> Result<
     let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().fx_table(&favorites))
 }
+
+ipc_commands!(losses_commands, LOSSES_NAMES, commands::losses: [get_tx_loss, get_tx_losses, list_flows, link_transactions, unlink_transaction, get_fx_table]);

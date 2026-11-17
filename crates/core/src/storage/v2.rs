@@ -386,25 +386,80 @@ mod tests {
     use super::*;
     use crate::Amount;
     use crate::model::store::AssetRef;
-    use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, TxMeta};
+    use crate::model::transaction::{
+        ConvertSide, ConvertTx, KindDetails, PaymentTx, PriceStamp, TopupTx, TransferTx, TxMeta,
+    };
 
-    fn spec_with(schedule: Schedule) -> AutomationSpec {
-        let bill = PaymentTx {
-            meta: TxMeta {
-                id: "bill".into(),
-                timestamp: "2026-01-01T00:00:00Z".into(),
-                comment: "rent".into(),
-                categories: vec!["rent_mortgage".into()],
-                ..TxMeta::default()
-            },
-            store_id: "store".into(),
-            asset: AssetRef::fiat("USD", "US Dollar"),
+    fn meta() -> TxMeta {
+        TxMeta {
+            id: "bill".into(),
+            timestamp: "2026-01-01T00:00:00Z".into(),
+            comment: "rent".into(),
+            categories: vec!["rent_mortgage".into()],
+            ..TxMeta::default()
+        }
+    }
+
+    fn usd() -> AssetRef {
+        AssetRef::fiat("USD", "US Dollar")
+    }
+
+    fn side(store: &str) -> ConvertSide {
+        ConvertSide {
+            account: AccountRef::Store(store.into()),
+            asset: usd(),
             amount: Amount::parse("10").unwrap(),
-            fee: None,
-            to: None,
-            details: KindDetails::default(),
             price: PriceStamp::default(),
-        };
+        }
+    }
+
+    /// One template per `TransactionDraft` variant.
+    fn drafts() -> Vec<TransactionDraft> {
+        let amount = Amount::parse("10").unwrap();
+        vec![
+            TransactionDraft::Topup(TopupTx {
+                meta: meta(),
+                store_id: "store".into(),
+                asset: usd(),
+                amount,
+                fee: None,
+                from: None,
+                details: KindDetails::default(),
+                price: PriceStamp::default(),
+            }),
+            TransactionDraft::Payment(PaymentTx {
+                meta: meta(),
+                store_id: "store".into(),
+                asset: usd(),
+                amount,
+                fee: None,
+                to: None,
+                details: KindDetails::default(),
+                price: PriceStamp::default(),
+            }),
+            TransactionDraft::Transfer(TransferTx {
+                meta: meta(),
+                from: AccountRef::Store("store".into()),
+                to: AccountRef::Store("other".into()),
+                asset: usd(),
+                amount,
+                fee: None,
+                network: None,
+                tx_hash: None,
+                debt: None,
+                price: PriceStamp::default(),
+            }),
+            TransactionDraft::Convert(ConvertTx {
+                meta: meta(),
+                from: side("store"),
+                to: side("other"),
+                fee: None,
+                rate_override: None,
+            }),
+        ]
+    }
+
+    fn spec_with(schedule: Schedule, template: TransactionDraft) -> AutomationSpec {
         AutomationSpec {
             time: None,
             asks: false,
@@ -412,7 +467,7 @@ mod tests {
             preset: None,
             schedule,
             starts_at: "2026-01-01T00:00:00Z".into(),
-            template: TransactionDraft::Payment(bill),
+            template,
             amount_mode: AmountMode::Fixed,
             workday_shift: WorkdayShift::None,
             property_id: None,
@@ -424,14 +479,17 @@ mod tests {
         for schedule in [
             Schedule::Monthly { day: 5 },
             Schedule::Weekly { weekday: 2 },
+            Schedule::EveryNDays { days: 3 },
         ] {
-            let spec = spec_with(schedule);
-            let live = crate::workflow::automation::automation_graph(&spec);
-            assert_eq!(frozen_graph(&spec), serde_json::to_string(&live).unwrap());
-            assert_eq!(
-                start_mark(&spec),
-                crate::workflow::automation::start_mark(&spec)
-            );
+            for template in drafts() {
+                let spec = spec_with(schedule, template);
+                let live = crate::workflow::automation::automation_graph(&spec);
+                assert_eq!(frozen_graph(&spec), serde_json::to_string(&live).unwrap());
+                assert_eq!(
+                    start_mark(&spec),
+                    crate::workflow::automation::start_mark(&spec)
+                );
+            }
         }
     }
 }

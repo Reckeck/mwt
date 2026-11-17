@@ -10,6 +10,7 @@ use trade_core::pricing::AssetSearchHit;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 use crate::ipc::opener::UrlKind;
 
 /// Search crypto assets for the UI comboboxes.
@@ -302,3 +303,5 @@ mod tests {
         assert_eq!(kept.len(), 1);
     }
 }
+
+ipc_commands!(pricing_commands, PRICING_NAMES, commands::pricing: [search_assets, get_cached_price, convert_amount, refresh_all, ensure_fx, open_explorer, get_candles]);

@@ -13,6 +13,7 @@ use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
 use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Pure calculator preview (converter / position). Needs no vault state —
 /// the whole computation happens in `trade_core::calc`.
@@ -98,3 +99,5 @@ pub async fn calc_scenario_prefill(
         vault.scenario_prefill(&source, &currency, now_secs(), &zone)
     })
 }
+
+ipc_commands!(calc_commands, CALC_NAMES, commands::calc: [calc_preview, calc_invest_simulate, calc_invest_solve, calc_invest_compare, calc_invest_safe_withdrawal, calc_scenarios_list, calc_scenario_save, calc_scenario_delete, calc_scenario_restore, calc_scenario_prefill]);

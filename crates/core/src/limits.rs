@@ -1,5 +1,5 @@
-//! Limits the lowest modules (errors, model, service) all rely on. They live
-//! here so that `error` does not reach up into `service` or `model`.
+//! Limits that `error`, `model` and `service` all rely on. They live in base
+//! so that `error` does not reach up into `service` or `model`.
 
 /// A new level-2 PIN: at least this many digits, digits only.
 pub const MIN_PIN_DIGITS: usize = 6;

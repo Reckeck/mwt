@@ -8,6 +8,7 @@ use trade_core::ipc_contract::{
 };
 
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 use crate::sync::handover;
 
 /// "Receive a vault": visible nearby by this device's name for five minutes.
@@ -63,3 +64,5 @@ pub async fn transfer_send_cancel(app: AppHandle) -> Result<(), IpcError> {
     handover::send_cancel(&app);
     Ok(())
 }
+
+ipc_commands!(transfer_commands, TRANSFER_NAMES, commands::transfer: [transfer_receive_start, transfer_receive_stop, transfer_receive_decide, transfer_browse_start, transfer_browse_stop, transfer_send, transfer_send_code, transfer_send_cancel]);

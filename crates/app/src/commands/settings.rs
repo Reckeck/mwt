@@ -5,6 +5,7 @@ use trade_core::model::vault::Settings;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Pretty-print the unlocked vault document as JSON.
 #[cfg(debug_assertions)]
@@ -198,3 +199,5 @@ pub async fn dev_reload_vault_json_from_editor() -> Result<String, IpcError> {
     let path = editor_scratch_path();
     std::fs::read_to_string(&path).map_err(|err| IpcError::from(format!("IO_ERROR: {err}")))
 }
+
+ipc_commands!(settings_commands, SETTINGS_NAMES, commands::settings: [get_settings, update_settings, #[cfg(debug_assertions)] dev_dump_vault, #[cfg(debug_assertions)] dev_export_vault, #[cfg(debug_assertions)] dev_apply_vault_json, vault_schema, #[cfg(debug_assertions)] dev_open_vault_json_in_editor, #[cfg(debug_assertions)] dev_reload_vault_json_from_editor]);

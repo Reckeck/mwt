@@ -3,6 +3,7 @@
 //! `async` on purpose: a sync command runs on the Android UI thread, and the
 //! plugin call it makes waits for that thread, so it would deadlock.
 
+use crate::ipc::commands::ipc_commands;
 use tauri::AppHandle;
 
 /// Light icons on a dark theme, dark ones on a light theme.
@@ -34,3 +35,5 @@ pub async fn move_to_back(app: AppHandle) -> Result<(), String> {
         Ok(())
     }
 }
+
+ipc_commands!(mobile_commands, MOBILE_NAMES, commands::mobile: [set_system_bars, move_to_back]);

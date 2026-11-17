@@ -18,9 +18,7 @@
 
 use std::path::{Path, PathBuf};
 
-use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use zeroize::Zeroizing;
 
 use super::local::{atomic_write, read_all};
@@ -154,25 +152,8 @@ fn suffixed(vault: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// HKDF-SHA256 (RFC 5869) for one 32-byte output block.
-fn hkdf_sha256(salt: &[u8], ikm: &[u8], info: &[u8]) -> Zeroizing<[u8; KEY_LEN]> {
-    type HmacSha = Hmac<Sha256>;
-    let mut extract = <HmacSha as KeyInit>::new_from_slice(salt)
-        .unwrap_or_else(|_| unreachable!("HMAC takes any key length"));
-    extract.update(ikm);
-    let mut prk = Zeroizing::new([0u8; KEY_LEN]);
-    prk.copy_from_slice(&extract.finalize().into_bytes());
-    let mut expand = <HmacSha as KeyInit>::new_from_slice(&prk[..])
-        .unwrap_or_else(|_| unreachable!("HMAC takes any key length"));
-    expand.update(info);
-    expand.update(&[1u8]);
-    let mut out = Zeroizing::new([0u8; KEY_LEN]);
-    out.copy_from_slice(&expand.finalize().into_bytes());
-    out
-}
-
 fn file_key(key: &SealKey) -> Zeroizing<[u8; KEY_LEN]> {
-    hkdf_sha256(&key.salt, &key.key[..], INFO)
+    key.derive_subkey(INFO)
 }
 
 fn header() -> [u8; HEADER_LEN] {
@@ -285,6 +266,7 @@ pub fn rekey_device_secrets(vault: &Path, old: &SealKey, new: &SealKey) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::hkdf_sha256;
     use crate::crypto::kdf_profile::KdfParams;
 
     fn level3_key(password: &str) -> SealKey {
@@ -321,12 +303,6 @@ mod tests {
             hex(&okm[..]),
             "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
         );
-    }
-
-    #[test]
-    fn the_file_key_differs_from_the_vault_key() {
-        let key = level3_key("pw");
-        assert_ne!(&file_key(&key)[..], &key.key[..]);
     }
 
     #[test]

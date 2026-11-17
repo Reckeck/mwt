@@ -14,6 +14,7 @@ use crate::commands::app_settings::current_zone;
 use crate::commands::enrichment::enrich_in_background;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// The operations list: every filter field is optional, `None` = everything.
 #[tauri::command]
@@ -214,3 +215,5 @@ pub async fn transaction_kinds_for_store_kind(
 ) -> Result<TransactionKinds, IpcError> {
     Ok(TransactionKinds::for_store_kind(kind))
 }
+
+ipc_commands!(transactions_commands, TRANSACTIONS_NAMES, commands::transactions: [list_transactions, export_transactions_csv, list_transactions_page, get_tx_graph, add_transaction, preview_transaction, update_transaction, add_linked_transactions, get_adjustment_draft, tx_property_links, delete_transaction, transaction_kinds_for_store_kind]);

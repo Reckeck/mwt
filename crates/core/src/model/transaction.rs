@@ -93,7 +93,7 @@ pub enum TxOrigin {
         /// in `TxMeta`, so v1 bincode files (read by position) keep reading.
         #[serde(default)]
         estimated: bool,
-        /// The occasion this run was for ([`crate::workflow::RunKey`]), the
+        /// The occasion this run was for (`crate::workflow::RunKey`), the
         /// same on every device: two runs of one key are one booking. `None`
         /// for an operation from before the key (it goes by `planned_at`).
         #[serde(default)]

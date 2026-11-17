@@ -11,6 +11,7 @@ use trade_core::service::{CopyPolicy, UnlockedVault};
 
 use crate::commands::{AppState, app_settings, lock_vault, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 use crate::state::LockBus;
 
 /// Vault identity for the unlock screen. The base currency is *not* part of the
@@ -368,6 +369,8 @@ impl LockSteps for AppLockSteps<'_> {
             .publish(&VaultLocked { reason, closed }.into());
     }
 }
+
+ipc_commands!(auth_commands, AUTH_NAMES, commands::auth: [vault_status, create_vault, unlock_vault, lock_vault_cmd, flush_vault, exit_without_saving, change_password, set_vault_password, remove_vault_password]);
 
 #[cfg(test)]
 mod lock_order_tests {

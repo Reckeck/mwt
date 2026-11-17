@@ -4,6 +4,7 @@ use trade_core::ipc_contract::security::AutolockSettings;
 
 use crate::commands::app_settings;
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Save this device's autolock. The range is 5-60 minutes; the lock can only
 /// be turned off while the device holds no exchange keys.
@@ -41,3 +42,5 @@ pub async fn autolock_hold_for_picker() -> Result<(), IpcError> {
     crate::autolock::hold_for_system_picker();
     Ok(())
 }
+
+ipc_commands!(security_autolock_commands, SECURITY_AUTOLOCK_NAMES, commands::security::autolock: [set_autolock, autolock_activity, autolock_hold_for_picker]);

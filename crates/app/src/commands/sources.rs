@@ -10,6 +10,7 @@ use trade_core::service::{DataSourceDraft, DataSourceView};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Fetch a source's page and take its value out; the error text is what the
 /// source's status shows.
@@ -271,3 +272,5 @@ mod tests {
         assert!(err.starts_with("REQUIRES_UNLOCK"), "{err}");
     }
 }
+
+ipc_commands!(sources_commands, SOURCES_NAMES, commands::sources: [datasource_preview, datasource_test, datasources_list, datasource_save, datasource_delete, datasource_refresh, datasource_confirm, set_inflation_source]);
