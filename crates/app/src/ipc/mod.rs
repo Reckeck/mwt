@@ -15,3 +15,5 @@ pub mod opener;
 pub mod run;
 
 pub use error::IpcError;
+#[expect(unused_imports, reason = "first user is the pilot module (T10)")]
+pub use mwt_app_macros::ipc;
