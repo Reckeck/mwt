@@ -1,6 +1,8 @@
 //! The typed IPC layer: the error type commands return and, later, the
 //! run-time helpers around it.
 
+#[cfg(test)]
+mod client_gen;
 pub(crate) mod commands;
 mod error;
 #[cfg_attr(
@@ -11,7 +13,10 @@ pub(crate) mod events;
 #[expect(dead_code, reason = "trial: no command takes the extractor yet")]
 mod extract;
 pub mod opener;
-#[expect(dead_code, reason = "first caller is the #[ipc] expansion (T9, T10)")]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "first caller is the #[ipc] expansion (T9, T10)")
+)]
 pub mod run;
 
 pub use error::IpcError;
