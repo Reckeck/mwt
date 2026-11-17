@@ -4,7 +4,6 @@
 //! sync command marked `#[tauri::command(async)]` (runs on the async runtime,
 //! off the main thread, but blocks a worker); it does not compile in an
 //! `async fn` command: the guard is not `Send`.
-#![allow(dead_code, reason = "trial: no command takes the extractor yet")]
 
 use std::ops::Deref;
 use std::sync::MutexGuard;
@@ -12,10 +11,9 @@ use std::sync::MutexGuard;
 use tauri::Manager;
 use tauri::Runtime;
 use tauri::ipc::{CommandArg, CommandItem, InvokeError};
-use trade_core::error::Error;
 use trade_core::service::UnlockedVault;
 
-use crate::commands::AppState;
+use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 
 /// The unlocked vault, locked for the length of the command.
@@ -23,14 +21,7 @@ pub struct Unlocked<'guard>(MutexGuard<'guard, Option<UnlockedVault>>);
 
 impl<'guard> Unlocked<'guard> {
     fn open(state: &'guard AppState) -> Result<Self, IpcError> {
-        let guard = state
-            .vault
-            .lock()
-            .map_err(|_| Error::Crypto("lock poisoned".into()))?;
-        if guard.is_none() {
-            return Err(Error::RequiresUnlock.into());
-        }
-        Ok(Self(guard))
+        Ok(Self(require_vault(state)?))
     }
 }
 
@@ -55,6 +46,8 @@ impl<'guard, R: Runtime> CommandArg<'guard, R> for Unlocked<'guard> {
 
 #[cfg(test)]
 mod tests {
+    use trade_core::error::Error;
+
     use super::*;
     use crate::commands::AppState;
 

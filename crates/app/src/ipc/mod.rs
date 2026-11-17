@@ -15,11 +15,8 @@ mod error;
     not(test),
     expect(dead_code, reason = "first callers are the emit sites (T21)")
 )]
-#[cfg_attr(
-    test,
-    allow(dead_code, reason = "`emit` has no test caller: no mock app")
-)]
 pub(crate) mod events;
+#[expect(dead_code, reason = "trial: no command takes the extractor yet")]
 mod extract;
 pub mod opener;
 #[expect(dead_code, reason = "first caller is the #[ipc] expansion (T9, T10)")]

@@ -194,6 +194,9 @@ mod tests {
         assert!(!dirty.expect("runs"));
     }
 
+    /// Pins that `write` adds no dirty mark of its own: marking belongs to the
+    /// body's vault calls, so an error body that touches nothing leaves the
+    /// vault clean.
     #[tokio::test]
     async fn write_marks_nothing_on_an_error() {
         let (host, _dir) = unlocked_host();

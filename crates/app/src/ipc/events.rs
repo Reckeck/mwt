@@ -174,6 +174,43 @@ mod tests {
     }
 
     #[test]
+    fn the_registry_pins_every_pub_event_constant() {
+        use crate::commands::security::raise::RAISE_PROGRESS_EVENT;
+        use crate::sync::handover::{NEARBY_EVENT, RECEIVE_EVENT, SEND_EVENT};
+        use crate::sync::{
+            CLOCK_EVENT, ERROR_EVENT, OFFER_EVENT, PAIRING_EVENT, PLAN_EVENT, STATUS_EVENT,
+            SYNCED_EVENT,
+        };
+
+        let pairs = [
+            (RAISE_PROGRESS_EVENT, SecurityRaiseProgress::NAME),
+            (RECEIVE_EVENT, TransferReceive::NAME),
+            (SEND_EVENT, TransferSend::NAME),
+            (NEARBY_EVENT, TransferNearby::NAME),
+            (STATUS_EVENT, SyncStatusChanged::NAME),
+            (OFFER_EVENT, SyncOffer::NAME),
+            (PAIRING_EVENT, SyncPairing::NAME),
+            (PLAN_EVENT, SyncPlanReady::NAME),
+            (SYNCED_EVENT, VaultSynced::NAME),
+            (ERROR_EVENT, SyncError::NAME),
+            (CLOCK_EVENT, SyncClock::NAME),
+        ];
+        for (constant, registered) in pairs {
+            assert_eq!(constant, registered);
+        }
+    }
+
+    /// Never called: it compiles only if typed `emit` accepts a real handle.
+    fn emits_typed<R: Runtime>(app: &tauri::AppHandle<R>) {
+        let _ = PricesUpdated::emit(app, &None);
+    }
+
+    #[test]
+    fn typed_emit_compiles_with_a_real_app_handle() {
+        let _ = emits_typed::<tauri::Wry>;
+    }
+
+    #[test]
     fn the_table_carries_the_payload_type() {
         let find = |name: &str| EVENTS.iter().find(|event| event.name == name).unwrap();
         assert_eq!(
