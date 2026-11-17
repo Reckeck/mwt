@@ -1,0 +1,56 @@
+# Item lists of the T7 carve of `service/mod.rs` (spec D1, OD4). Each [[carve]] is the `from`/`to`/`items`
+# description `cargo xtask strangle carve <items.toml>` takes (one table per run, in this order); the
+# ranges are the `// -- ...` sections of mod.rs they were cut from.
+
+[[carve]]
+# // -- stores
+from = "mod.rs"
+to = "stores.rs"
+items = [
+    "find_store", "ancestors_of", "depth", "root_of", "subtree_height", "ensure_unique_name",
+    "validate_placement", "create_store", "check_store_extras", "check_sub_account",
+    "ensure_cash_wallet", "create_store_with", "create_bank_with_card", "update_store", "move_store",
+    "store_move_targets", "archive_store", "delete_store",
+    "StoreMoveTargets", "default_sub_extras", "opening_topup", "flatten_tree",
+]
+
+[[carve]]
+# // -- transactions
+from = "mod.rs"
+to = "transactions.rs"
+items = [
+    "transactions", "complete_transaction", "prepare_transaction", "prepare_transaction_at",
+    "add_transaction", "add_transaction_for", "add_linked_transactions", "update_transaction",
+    "update_transaction_unsynced", "update_transaction_for", "update_transaction_inner",
+    "delete_transaction",
+]
+
+[[carve]]
+# // -- holdings recomputation, // -- analytics
+from = "mod.rs"
+to = "portfolio.rs"
+items = [
+    "recompute_holdings", "base_and_fx", "base_fx_as_of", "price_usd_for", "price_base_for",
+    "resolve_scope", "scoped_txs", "store_positions_of", "store_positions", "merged_positions",
+    "children_of", "subtree_ids", "store_tree", "tree_node", "tree_balances", "store_overview",
+    "store_history", "store_pnl", "prices_as_of", "change_24h_of", "portfolio_summary",
+    "history_series", "history_series_filtered", "history_series_filtered_in", "realized_pnl",
+    "realized_pnl_filtered",
+    "AssetStat", "NamedValue", "StoreValue", "StorePosition", "StoreChildRow", "StoreCrumb",
+    "StoreOverview", "StoreTreeNode", "AssetBalance", "TreeCtx", "TOP_ASSETS", "position_key",
+    "movement_of", "sort_tree", "find_tree_node", "PortfolioSummary", "HistoryPoint", "PnlLeg",
+    "RealizedPnl",
+]
+
+[[carve]]
+# // -- exchange keys, // -- bybit import staging, // -- exchange profile and terminal
+from = "mod.rs"
+to = "exchange_import.rs"
+items = [
+    "exchange_key_status", "set_exchange_key", "set_exchange_targets", "stage_imports",
+    "pending_imports", "import_target", "bybit_key_for", "bybit_account_store",
+    "ensure_bybit_accounts", "ensure_bybit_accounts_for", "unified_account_of", "bybit_reconcile",
+    "exchange_profile_mut", "set_import_interval", "import_schedule", "terminal_state",
+    "update_terminal_state", "save_terminal_drawings", "transaction_for_import",
+    "confirm_pending_imports", "discard_pending_imports", "asset_for_import",
+]
