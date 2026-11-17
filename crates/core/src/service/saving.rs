@@ -105,11 +105,18 @@ impl UnlockedVault {
         Ok(out)
     }
 
-    /// Run the closure over the document; report whether it touched it.
+    /// Run the closure over the document; report whether it touched it. The
+    /// log records it deleted on purpose are handed to the sync layer here,
+    /// so the next save writes their tombstones.
     fn run<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<(R, bool)> {
         let mut tx = Tx::new(&mut self.doc);
         let out = body(&mut tx)?;
-        Ok((out, tx.is_touched()))
+        let touched = tx.is_touched();
+        let forgotten = tx.take_forgotten_logs();
+        for key in forgotten {
+            self.sync_forget_log_record(&key)?;
+        }
+        Ok((out, touched))
     }
 
     /// Save the document: at once, or — once the app installed a hook — mark

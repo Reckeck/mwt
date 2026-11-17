@@ -1,6 +1,8 @@
 //! One transaction over the open document: the closure reads and changes it
 //! through a `Tx`, and the vault commits only if the closure touched it.
 
+use crate::kernel::collection::Collection;
+use crate::kernel::record::Record;
 use crate::model::VaultDoc;
 
 /// A borrowed document plus the "touched" mark that decides whether the
@@ -8,6 +10,9 @@ use crate::model::VaultDoc;
 pub struct Tx<'a> {
     doc: &'a mut VaultDoc,
     touched: bool,
+    /// Sync keys of records deleted on purpose from a capped log; the commit
+    /// hands them to `sync_forget_log_record`.
+    forgotten_logs: Vec<String>,
 }
 
 impl<'a> Tx<'a> {
@@ -15,6 +20,7 @@ impl<'a> Tx<'a> {
         Self {
             doc,
             touched: false,
+            forgotten_logs: Vec::new(),
         }
     }
 
@@ -37,6 +43,21 @@ impl<'a> Tx<'a> {
     /// Mark the transaction touched when `changed` is true.
     pub fn touch_if(&mut self, changed: bool) {
         self.touched |= changed;
+    }
+
+    /// The records of one kind, read and changed through [`Collection`].
+    pub fn collection<T: Record>(&mut self) -> Collection<'_, 'a, T> {
+        Collection::new(self)
+    }
+
+    /// Remember the sync key of a record deleted from a capped log.
+    pub(crate) fn forget_log_record(&mut self, key: String) {
+        self.forgotten_logs.push(key);
+    }
+
+    /// The keys to hand to `sync_forget_log_record` at the commit.
+    pub(crate) fn take_forgotten_logs(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.forgotten_logs)
     }
 
     pub(crate) fn is_touched(&self) -> bool {
