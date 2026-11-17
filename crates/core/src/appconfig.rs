@@ -293,10 +293,30 @@ pub const DEFAULT_DISPLAY_DECIMALS: u32 = 8;
 /// Reference annual inflation the user starts with, percent. Rough recent
 /// figures; the settings screen says so and lets the user change them.
 pub fn default_inflation() -> BTreeMap<String, Amount> {
-    [("rub", "8"), ("usd", "3"), ("eur", "2.5"), ("thb", "1")]
-        .into_iter()
-        .filter_map(|(code, rate)| Some((code.to_string(), Amount::parse(rate).ok()?)))
-        .collect()
+    let (rates, dropped) =
+        parse_inflation(&[("rub", "8"), ("usd", "3"), ("eur", "2.5"), ("thb", "1")]);
+    for (code, rate) in dropped {
+        eprintln!("appconfig: default inflation for {code} dropped, {rate:?} is not a valid rate");
+    }
+    rates
+}
+
+/// Parses `(code, rate)` pairs; returns the accepted rates and the pairs
+/// that were dropped, so the caller can report them.
+fn parse_inflation<'pair>(
+    pairs: &[(&'pair str, &'pair str)],
+) -> (BTreeMap<String, Amount>, Vec<(&'pair str, &'pair str)>) {
+    let mut rates = BTreeMap::new();
+    let mut dropped = Vec::new();
+    for &(code, rate) in pairs {
+        match Amount::parse(rate) {
+            Ok(amount) => {
+                rates.insert(code.to_string(), amount);
+            }
+            Err(_) => dropped.push((code, rate)),
+        }
+    }
+    (rates, dropped)
 }
 
 fn chosen_before_the_field() -> bool {
@@ -888,6 +908,19 @@ fn merge_catalog(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unparsable_default_rate_is_dropped_and_reported() {
+        let (rates, dropped) = parse_inflation(&[("rub", "8"), ("xxx", "not-a-rate")]);
+        assert_eq!(dropped, [("xxx", "not-a-rate")]);
+        assert_eq!(rates.keys().collect::<Vec<_>>(), ["rub"]);
+    }
+
+    #[test]
+    fn the_four_default_inflation_codes_survive() {
+        let codes: Vec<String> = default_inflation().into_keys().collect();
+        assert_eq!(codes, ["eur", "rub", "thb", "usd"]);
+    }
 
     #[test]
     fn five_wrong_pins_are_free_then_the_wait_grows() {
