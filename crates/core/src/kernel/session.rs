@@ -56,7 +56,8 @@ impl Session {
         Self::with_store(Arc::new(SandboxStore))
     }
 
-    fn with_store(store: Arc<dyn Persistence>) -> Self {
+    /// A session whose snapshots go to `store` (the test kit's in-memory one).
+    pub(crate) fn with_store(store: Arc<dyn Persistence>) -> Self {
         Self {
             dirty: false,
             revision: 0,
