@@ -6,7 +6,7 @@ import { call } from '@/shared/api/ipc'
 
 import { emptyForm } from '../transaction-form.model'
 import { applyPlan } from '../lib/form/apply-plan'
-import type { TxFormState } from './use-tx-form-state'
+import { applyPropsLinks, type TxFormState } from './use-tx-form-state'
 
 /**
  * Which kinds the wallet offers and which one the form is on: the wallet's
@@ -54,8 +54,10 @@ export function useTxKind(state: TxFormState) {
         if (props.initial.to && props.initial.to !== props.storeId) form.to = { store: props.initial.to }
       } else if (!offered.value.includes(form.kind)) {
         // Repeat of a kind this wallet does not offer: the wallet's normal new form, not a switched copy.
-        if (props.prefill) Object.assign(form, emptyForm(props.storeId, data.default))
-        else form.kind = data.default
+        if (props.prefill) {
+          Object.assign(form, emptyForm(props.storeId, data.default))
+          applyPropsLinks(form, props)
+        } else form.kind = data.default
       }
     },
     { immediate: true },
