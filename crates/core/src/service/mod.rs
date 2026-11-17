@@ -5516,7 +5516,7 @@ mod persist_tests {
 
     #[test]
     fn import_schedule_skips_an_archived_store() {
-        let (_dir, mut vault) = setup();
+        let (_dir, mut vault) = super::test_support::empty_vault();
         let bybit = vault
             .create_store_with(
                 "Bybit",
