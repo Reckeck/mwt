@@ -169,6 +169,15 @@ mod tests {
     }
 
     #[test]
+    fn a_pilot_command_file_is_green_for_t13_and_red_for_an_area_task() {
+        let file = changed(&["crates/app/src/commands/planning.rs"]);
+        let owner = findings(&real_workspace(), &file, Some("T13"));
+        assert!(owner.is_empty(), "{owner:?}");
+        let other = findings(&real_workspace(), &file, Some("T26"));
+        assert_eq!(other.len(), 1, "{other:?}");
+    }
+
+    #[test]
     fn a_diff_inside_one_area_is_green() {
         let found = findings(
             &real_workspace(),

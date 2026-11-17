@@ -36,6 +36,7 @@ files = ["crates/core/src/service/forward.rs", "crates/core/src/service/mod.rs"]
 task = "T6"
 files = [
     "crates/core/src/lib.rs",
+    "crates/core/src/ipc_contract.rs",
     "crates/core/src/usecases/mod.rs",
     "crates/core/src/cryptotrack/mod.rs",
     "crates/core/src/household/mod.rs",
@@ -62,6 +63,47 @@ files = ["crates/core/src/service/mod.rs"]
 [[foundation]]
 task = "T8"
 files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
+task = "T9"
+files = ["crates/core/src/kernel/events.rs"]
+
+[[foundation]]
+task = "T13"
+files = ["crates/app/src/commands/planning.rs", "crates/app/src/lib.rs"]
+
+[[foundation]]
+task = "T54"
+files = [
+    "crates/app/src/commands/shared_events.rs", "crates/app/src/commands/contacts.rs",
+    "crates/app/src/commands/attachments.rs", "crates/app/src/commands/losses.rs",
+    "crates/app/src/commands/categories.rs",
+]
+
+[[foundation]]
+task = "T55"
+files = [
+    "crates/app/src/commands/stores.rs", "crates/app/src/commands/transactions.rs",
+    "crates/app/src/commands/transactions_bulk.rs", "crates/app/src/commands/rates.rs",
+    "crates/app/src/commands/pricing.rs", "crates/app/src/commands/portfolio.rs",
+    "crates/app/src/commands/enrichment.rs",
+]
+
+[[foundation]]
+task = "T56"
+files = [
+    "crates/app/src/commands/planning.rs", "crates/app/src/commands/analytics.rs",
+    "crates/app/src/commands/notifications.rs", "crates/app/src/commands/sources.rs",
+    "crates/app/src/commands/calc.rs",
+]
+
+[[foundation]]
+task = "T57"
+files = [
+    "crates/app/src/commands/workflows.rs", "crates/app/src/commands/exchange.rs",
+    "crates/app/src/commands/sync.rs", "crates/app/src/commands/cryptotrack/",
+    "crates/app/src/sync/",
+]
 
 [[foundation]]
 task = "T60"
