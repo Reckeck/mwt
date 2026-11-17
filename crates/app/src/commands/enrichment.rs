@@ -9,6 +9,7 @@ use trade_core::txinfo::TxInfoService;
 use crate::commands::app_settings::current_settings;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Look a transaction up and store what was found. `Ok(None)` when it has
 /// no hash or the explorer had nothing; the guard is released around the
@@ -96,3 +97,5 @@ pub async fn re_enrich(
     }
     enrich(&app, &tx_id).await
 }
+
+ipc_commands!(enrichment_commands, ENRICHMENT_NAMES, commands::enrichment: [get_enrichments, apply_enrichment, reject_enrichment, re_enrich]);

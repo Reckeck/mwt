@@ -17,6 +17,7 @@ use trade_core::ipc_contract::cryptotrack::accounts::{
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::commands::ipc_commands;
 
 /// The accounts the module follows, with the wallet that shows each and the
 /// tokens of it that wait in quarantine.
@@ -58,3 +59,5 @@ pub async fn crypto_forget_account(
         vault.crypto_forget_account(&input.account_id)
     })
 }
+
+ipc_commands!(cryptotrack_accounts_commands, CRYPTOTRACK_ACCOUNTS_NAMES, commands::cryptotrack::accounts: [crypto_list_accounts, crypto_connect_address, crypto_update_account, crypto_forget_account]);

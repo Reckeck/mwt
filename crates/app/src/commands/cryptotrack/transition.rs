@@ -12,6 +12,7 @@ use trade_core::ipc_contract::cryptotrack::transition::{
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::commands::ipc_commands;
 
 /// What entering the module would change: the hand-kept crypto wallets the
 /// move archives and how much capital leaves the totals with them. This is
@@ -35,3 +36,5 @@ pub async fn crypto_archive_manual_wallets(
 ) -> Result<CryptoArchiveReport, String> {
     with_vault_mut(&state, |vault| vault.crypto_archive_manual_wallets())
 }
+
+ipc_commands!(cryptotrack_transition_commands, CRYPTOTRACK_TRANSITION_NAMES, commands::cryptotrack::transition: [crypto_transition_plan, crypto_archive_manual_wallets]);

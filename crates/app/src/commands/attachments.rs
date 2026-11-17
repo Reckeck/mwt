@@ -12,6 +12,7 @@ use trade_core::service::NewFile;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 use crate::ipc::opener::UrlKind;
 use crate::state::on_vault_locked;
 
@@ -216,3 +217,5 @@ pub async fn save_attachment_as(
         &bytes,
     )?)
 }
+
+ipc_commands!(attachments_commands, ATTACHMENTS_NAMES, commands::attachments: [list_attachments, add_attachment_link, add_attachment_file, open_attachment, remove_attachment, restore_attachment, rename_attachment, save_attachment_as]);

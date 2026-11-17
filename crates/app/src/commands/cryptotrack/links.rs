@@ -15,6 +15,7 @@ use trade_core::ipc_contract::cryptotrack::links::{
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::commands::ipc_commands;
 
 /// The crypto operations that look like the same movement of money as a fiat
 /// record: close in time, and matching in value at the rate of that day. Read
@@ -57,3 +58,5 @@ pub async fn crypto_link_pairs(
 ) -> Result<Vec<CryptoPair>, String> {
     with_vault(&state, |vault| Ok(vault.crypto_pairs(&input)))
 }
+
+ipc_commands!(cryptotrack_links_commands, CRYPTOTRACK_LINKS_NAMES, commands::cryptotrack::links: [crypto_link_candidates, crypto_link_operation, crypto_unlink_operation, crypto_link_pairs]);
