@@ -97,7 +97,7 @@ fn stubs(map: &Map) -> BTreeSet<Stub<'_>> {
     found
 }
 
-fn stems(area: &Area) -> BTreeSet<String> {
+pub(super) fn stems(area: &Area) -> BTreeSet<String> {
     if area.files.is_empty() {
         let name = area.name.strip_prefix("mod_").unwrap_or(&area.name);
         return BTreeSet::from([name.to_string()]);

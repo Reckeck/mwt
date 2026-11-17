@@ -2,11 +2,17 @@
 //! area out of `impl UnlockedVault` (facts today; more subcommands later). One `syn` scanner
 //! (`scan`), one area map (`map`, `strangle.toml`), one set of numbers per subcommand.
 
+mod baseline;
 mod carve;
+mod check;
 mod fileset;
+mod forward;
+mod home;
 mod map;
+mod relocate;
 mod scaffold;
 mod scan;
+mod signature;
 mod source;
 mod stats;
 mod widen;
@@ -35,6 +41,12 @@ pub enum StrangleCommand {
     Widen,
     /// Moves the items named in a TOML file out of a service file into a new one.
     Carve(carve::CarveArgs),
+    /// Moves an area's files into their stubs and leaves the shim with `pub use`.
+    Relocate(relocate::RelocateArgs),
+    /// Regenerates the `forward!` block of an area's shims from its new functions.
+    Forward(forward::ForwardArgs),
+    /// Holds an area against `baseline.json`: parity, logic, `persist()`, tests, allowed files.
+    Check(check::CheckArgs),
 }
 
 pub fn run(root: &Path, args: &StrangleArgs) -> Result<()> {
@@ -43,6 +55,9 @@ pub fn run(root: &Path, args: &StrangleArgs) -> Result<()> {
         StrangleCommand::Scaffold(scaffold_args) => scaffold::run(root, scaffold_args),
         StrangleCommand::Widen => widen::run(root, &Workspace::load(root)?),
         StrangleCommand::Carve(carve_args) => carve::run(root, carve_args),
+        StrangleCommand::Relocate(relocate_args) => relocate::run(root, relocate_args),
+        StrangleCommand::Forward(forward_args) => forward::run(root, forward_args),
+        StrangleCommand::Check(check_args) => check::run(root, check_args),
     }
 }
 
@@ -200,5 +215,156 @@ fn two(vault: V) { vault.beta_pub(); }
         let workspace = Workspace::build(&root, Map::parse(MAP).unwrap()).unwrap();
         std::fs::remove_dir_all(&root).unwrap();
         workspace
+    }
+}
+
+#[cfg(test)]
+pub mod area_fixture {
+    //! One area `loyalty` before the move (`ORIGINAL`) and after it (`moved_files`), written to a
+    //! temp dir, for `relocate`, `forward`, `baseline` and `check`.
+
+    use super::fixture::TempTree;
+    use super::map::MAP_FILE;
+
+    const MAP: &str = r#"
+service_dir = "crates/core/src/service"
+command_dir = "crates/app/src"
+scan_dirs = ["crates/core/src"]
+
+[[area]]
+name = "loyalty"
+task = "T26"
+group = "household"
+context = "household"
+files = ["loyalty.rs"]
+"#;
+
+    pub const SERVICE: &str = "crates/core/src/service/loyalty.rs";
+    pub const PURE: &str = "crates/core/src/household/loyalty.rs";
+    pub const SCENARIO: &str = "crates/core/src/usecases/household/loyalty.rs";
+    pub const TESTS: &str = "crates/core/src/household/loyalty_tests.rs";
+
+    pub const ORIGINAL: &str = "//! Loyalty.
+use super::*;
+
+/// A loyalty card.
+pub struct Card {
+    pub id: String,
+}
+
+pub(crate) struct Hidden;
+
+impl UnlockedVault {
+    /// Sets the info.
+    pub fn set_info(&mut self, id: &str, info: Info) -> Result<Store> {
+        self.persist();
+        Ok(Store)
+    }
+
+    pub fn clash(&self, id: &str) -> bool {
+        let rates = self.rate_book();
+        rates.contains(id)
+    }
+
+    pub(crate) fn helper(&self) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::golden;
+
+    #[test]
+    fn sets_info() {
+        let card = crate::service::loyalty::Card { id: String::new() };
+    }
+
+    #[test]
+    fn clash_works() {}
+}
+";
+
+    /// The tree before `relocate`: the old file and the empty stubs.
+    pub fn original_tree() -> TempTree {
+        TempTree::new(&[
+            (MAP_FILE, MAP),
+            (SERVICE, ORIGINAL),
+            (PURE, "//! placeholder, filled by T26\n"),
+            (TESTS, "//! placeholder, filled by T26\n"),
+            (SCENARIO, "//! placeholder, filled by T26\n"),
+        ])
+    }
+
+    /// The area after the recipe: a shim with its forward block, a query, a scenario, the tests.
+    pub fn moved_files() -> Vec<(&'static str, String)> {
+        vec![
+            (MAP_FILE, MAP.to_string()),
+            (
+                SERVICE,
+                "//! Shim.
+
+pub use crate::household::loyalty::Card;
+
+// forward:begin
+forward! {
+    /// Sets the info.
+    pub fn set_info(&mut self, id: &str, info: Info) -> Result<Store>
+        => crate::usecases::household::loyalty::set_info;
+    pub fn clash(&self, id: &str) -> bool
+        => crate::household::loyalty::clash @books;
+}
+// forward:end
+"
+                .to_string(),
+            ),
+            (
+                PURE,
+                "//! Pure part.
+pub struct Card {
+    pub id: String,
+}
+
+/// Is there a clash.
+pub fn clash(books: &Books<'_>, id: &str) -> bool {
+    books.rate_book().contains(id)
+}
+"
+                .to_string(),
+            ),
+            (
+                SCENARIO,
+                "//! Scenarios.
+/// Sets the info.
+pub fn set_info(vault: &mut UnlockedVault, id: &str, info: Info) -> Result<Store> {
+    vault.transact(|tx| apply(tx, id, info))
+}
+"
+                .to_string(),
+            ),
+            (
+                TESTS,
+                "#[test]
+fn sets_info() {}
+
+#[test]
+fn clash_works() {}
+"
+                .to_string(),
+            ),
+        ]
+    }
+
+    /// The moved area on disk, with `edit` applied to the text of each file by path.
+    pub fn moved_tree(edit: impl Fn(&str, String) -> String) -> TempTree {
+        let files = moved_files();
+        let edited: Vec<(&str, String)> = files
+            .into_iter()
+            .map(|(path, text)| (path, edit(path, text)))
+            .collect();
+        let borrowed: Vec<(&str, &str)> = edited
+            .iter()
+            .map(|(path, text)| (*path, text.as_str()))
+            .collect();
+        TempTree::new(&borrowed)
     }
 }

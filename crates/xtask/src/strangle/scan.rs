@@ -44,6 +44,12 @@ pub struct ModDecl {
     pub in_test: bool,
 }
 
+/// A function marked `#[test]` (or `#[tokio::test]` and the like).
+#[derive(Debug, Clone)]
+pub struct TestFn {
+    pub name: String,
+}
+
 #[derive(Debug, Default)]
 pub struct FileFacts {
     /// Newlines, as `wc -l` counts them.
@@ -52,6 +58,7 @@ pub struct FileFacts {
     pub first_test_line: Option<usize>,
     pub mods: Vec<ModDecl>,
     pub methods: Vec<Method>,
+    pub tests: Vec<TestFn>,
     pub calls: Vec<Call>,
     /// Per `#[tauri::command]` function: the method names its body calls, in source order.
     pub commands: Vec<Vec<String>>,
@@ -96,6 +103,14 @@ impl Scanner {
         }
     }
 
+    fn note_test_fn(&mut self, attrs: &[Attribute], name: &Ident) {
+        if attrs.iter().any(is_test_marker) {
+            self.facts.tests.push(TestFn {
+                name: name.to_string(),
+            });
+        }
+    }
+
     fn note_call(&mut self, name: String, line: usize, on_vault: bool) {
         self.facts.calls.push(Call {
             name,
@@ -125,6 +140,7 @@ impl<'ast> Visit<'ast> for Scanner {
     }
 
     fn visit_item_fn(&mut self, node: &'ast ItemFn) {
+        self.note_test_fn(&node.attrs, &node.sig.ident);
         let command = is_tauri_command(&node.attrs);
         self.with_test(test_attr_line(&node.attrs).is_some(), |this| {
             if command {
@@ -147,6 +163,7 @@ impl<'ast> Visit<'ast> for Scanner {
     }
 
     fn visit_impl_item_fn(&mut self, node: &'ast ImplItemFn) {
+        self.note_test_fn(&node.attrs, &node.sig.ident);
         let test = test_attr_line(&node.attrs).is_some();
         if self.in_vault_impl {
             let mutating = node.sig.receiver().is_some_and(|receiver| {
@@ -230,7 +247,7 @@ fn test_attr_line(attrs: &[Attribute]) -> Option<usize> {
         .map(|attr| attr.pound_token.span.start().line)
 }
 
-fn is_test_attr(attr: &Attribute) -> bool {
+pub(super) fn is_test_attr(attr: &Attribute) -> bool {
     if attr.path().is_ident("cfg") {
         let Meta::List(list) = &attr.meta else {
             return false;
@@ -238,6 +255,11 @@ fn is_test_attr(attr: &Attribute) -> bool {
         let names = idents_of(list.tokens.clone());
         return names.iter().any(|name| name == "test") && !names.iter().any(|name| name == "not");
     }
+    is_test_marker(attr)
+}
+
+/// `#[test]`, `#[tokio::test]`: the attribute whose last path segment is `test`.
+fn is_test_marker(attr: &Attribute) -> bool {
     attr.path()
         .segments
         .last()
