@@ -256,8 +256,10 @@ mod tests {
         })
     }
 
-    /// The commands the flat list held on the day of the switch (the spec's 402 counted
-    /// list lines; the list held 400 entries).
+    /// The number of distinct command names the flat list held on the day of the switch: 400.
+    /// The spec's 402 counted `#[tauri::command]` attributes: `get_autostart` and
+    /// `set_autostart` each carry one per platform (desktop and mobile twins), so two names
+    /// are counted twice.
     const COMMAND_COUNT: usize = 400;
 
     #[test]
