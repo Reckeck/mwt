@@ -9,10 +9,10 @@ use serde::{Deserialize, Serialize};
 use super::FlowClass;
 use super::UnlockedVault;
 use crate::Amount;
-use crate::calendar::period::{PeriodWindow, months_back, period_window};
 use crate::calendar::{self, Calendar};
 use crate::ipc_contract::{BaseKind, Comparison};
 use crate::model::vault::DashPeriod;
+use crate::planning::period::{PeriodWindow, months_back, period_window};
 
 /// How many growing categories "This month" names.
 const TOP_GROWTH: usize = 3;

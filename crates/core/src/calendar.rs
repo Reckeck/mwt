@@ -5,7 +5,6 @@
 //! means UTC.
 
 pub mod for_month;
-pub mod period;
 pub mod workdays;
 
 use chrono::{Datelike, Duration, LocalResult, NaiveDate, NaiveDateTime, TimeZone, Utc};
