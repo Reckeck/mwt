@@ -26,18 +26,13 @@ use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
+use crate::ipc::ipc;
 
 /// Most runs one listing returns by default.
 const DEFAULT_RUNS: u32 = 100;
 
-fn with_vault<T>(
-    state: &State<'_, AppState>,
-    read: impl FnOnce(&UnlockedVault) -> trade_core::Result<T>,
-) -> Result<T, IpcError> {
-    let guard = require_vault(state)?;
-    read(guard.as_ref().unwrap()).map_err(IpcError::from)
-}
-
+/// The write step of the commands that also emit or deliver after it (they
+/// stay plain commands until the emit sites move, T21).
 fn with_vault_mut<T>(
     state: &State<'_, AppState>,
     write: impl FnOnce(&mut UnlockedVault) -> trade_core::Result<T>,
@@ -58,92 +53,81 @@ pub async fn validate_workflow(input: ValidateWorkflowInput) -> Result<Vec<Graph
     Ok(validate(&graph))
 }
 
-#[tauri::command]
-pub async fn list_workflows(state: State<'_, AppState>) -> Result<Vec<Workflow>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.workflows()))
+#[ipc(read)]
+pub fn list_workflows(vault: &UnlockedVault) -> trade_core::Result<Vec<Workflow>> {
+    Ok(vault.workflows())
 }
 
-#[tauri::command]
-pub async fn get_workflow(id: String, state: State<'_, AppState>) -> Result<Workflow, IpcError> {
-    with_vault(&state, |vault| vault.workflow(&id))
+#[ipc(read)]
+pub fn get_workflow(vault: &UnlockedVault, id: String) -> trade_core::Result<Workflow> {
+    vault.workflow(&id)
 }
 
-#[tauri::command]
-pub async fn save_workflow(
+#[ipc(write)]
+pub fn save_workflow(
+    vault: &mut UnlockedVault,
     input: SaveWorkflowInput,
-    state: State<'_, AppState>,
-) -> Result<SavedWorkflow, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.save_workflow(
-            input.id.as_deref().filter(|id| !id.is_empty()),
-            input.workflow,
-            now_secs(),
-        )
-    })
+) -> trade_core::Result<SavedWorkflow> {
+    vault.save_workflow(
+        input.id.as_deref().filter(|id| !id.is_empty()),
+        input.workflow,
+        now_secs(),
+    )
 }
 
 /// Keep the editor's unsaved edits aside, to come back to them.
-#[tauri::command]
-pub async fn save_workflow_draft(
+#[ipc(write)]
+pub fn save_workflow_draft(
+    vault: &mut UnlockedVault,
     input: SaveWorkflowDraftInput,
-    state: State<'_, AppState>,
-) -> Result<Workflow, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.save_workflow_draft(&input.id, &input.graph, now_secs())
-    })
+) -> trade_core::Result<Workflow> {
+    vault.save_workflow_draft(&input.id, &input.graph, now_secs())
 }
 
-#[tauri::command]
-pub async fn discard_workflow_draft(
+#[ipc(write)]
+pub fn discard_workflow_draft(
+    vault: &mut UnlockedVault,
     id: String,
-    state: State<'_, AppState>,
-) -> Result<Workflow, IpcError> {
-    with_vault_mut(&state, |vault| vault.discard_workflow_draft(&id))
+) -> trade_core::Result<Workflow> {
+    vault.discard_workflow_draft(&id)
 }
 
-#[tauri::command]
-pub async fn set_workflow_active(
+#[ipc(write)]
+pub fn set_workflow_active(
+    vault: &mut UnlockedVault,
     input: SetWorkflowActiveInput,
-    state: State<'_, AppState>,
-) -> Result<Workflow, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.set_workflow_active(&input.id, input.active, now_secs())
-    })
+) -> trade_core::Result<Workflow> {
+    vault.set_workflow_active(&input.id, input.active, now_secs())
 }
 
-#[tauri::command]
-pub async fn delete_workflow(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.delete_workflow(&id))
+#[ipc(write)]
+pub fn delete_workflow(vault: &mut UnlockedVault, id: String) -> trade_core::Result<()> {
+    vault.delete_workflow(&id)
 }
 
-#[tauri::command]
-pub async fn restore_workflow_version(
+#[ipc(write)]
+pub fn restore_workflow_version(
+    vault: &mut UnlockedVault,
     input: RestoreWorkflowVersionInput,
-    state: State<'_, AppState>,
-) -> Result<SavedWorkflow, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.restore_workflow_version(&input.id, &input.saved_at, now_secs())
-    })
+) -> trade_core::Result<SavedWorkflow> {
+    vault.restore_workflow_version(&input.id, &input.saved_at, now_secs())
 }
 
 /// Emulate on a copy of the vault: nothing is written.
-#[tauri::command]
-pub async fn dry_run_workflow(
+#[ipc(read)]
+pub fn dry_run_workflow(
+    vault: &UnlockedVault,
+    app: &AppHandle,
     input: DryRunWorkflowInput,
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<RunReport, IpcError> {
-    let zone = current_zone(&app);
-    with_vault(&state, |vault| {
-        vault.dry_run_workflow(
-            &input.graph,
-            input.workflow_id.as_deref(),
-            input.trigger_node.as_deref(),
-            input.answers.unwrap_or_default(),
-            now_secs(),
-            &zone,
-        )
-    })
+) -> trade_core::Result<RunReport> {
+    vault.dry_run_workflow(
+        &input.graph,
+        input.workflow_id.as_deref(),
+        input.trigger_node.as_deref(),
+        input.answers.unwrap_or_default(),
+        now_secs(),
+        &current_zone(app),
+    )
 }
 
 /// Run for real now; its notices are shown like any other.
@@ -169,22 +153,18 @@ pub async fn run_workflow_now(
     Ok(report)
 }
 
-#[tauri::command]
-pub async fn list_workflow_runs(
+#[ipc(read)]
+pub fn list_workflow_runs(
+    vault: &UnlockedVault,
     input: ListWorkflowRunsInput,
-    state: State<'_, AppState>,
-) -> Result<Vec<WorkflowRun>, IpcError> {
+) -> trade_core::Result<Vec<WorkflowRun>> {
     let limit = input.limit.unwrap_or(DEFAULT_RUNS) as usize;
-    with_vault(&state, |vault| {
-        Ok(vault.workflow_runs(input.workflow_id.as_deref(), limit))
-    })
+    Ok(vault.workflow_runs(input.workflow_id.as_deref(), limit))
 }
 
-#[tauri::command]
-pub async fn list_workflow_queue(
-    state: State<'_, AppState>,
-) -> Result<Vec<QueuedActions>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.workflow_queue()))
+#[ipc(read)]
+pub fn list_workflow_queue(vault: &UnlockedVault) -> trade_core::Result<Vec<QueuedActions>> {
+    Ok(vault.workflow_queue())
 }
 
 #[tauri::command]
@@ -199,20 +179,15 @@ pub async fn confirm_workflow_queued(
     Ok(saved)
 }
 
-#[tauri::command]
-pub async fn discard_workflow_queued(
-    id: String,
-    state: State<'_, AppState>,
-) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.discard_queued(&id))
+#[ipc(write)]
+pub fn discard_workflow_queued(vault: &mut UnlockedVault, id: String) -> trade_core::Result<()> {
+    vault.discard_queued(&id)
 }
 
 /// Runs asleep: timers and questions waiting for an answer.
-#[tauri::command]
-pub async fn list_workflow_waits(
-    state: State<'_, AppState>,
-) -> Result<Vec<WorkflowWait>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.workflow_waits()))
+#[ipc(read)]
+pub fn list_workflow_waits(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowWait>> {
+    Ok(vault.workflow_waits())
 }
 
 /// Answer a "Wait for confirmation" question; the run goes on at once.
@@ -239,113 +214,141 @@ pub async fn answer_workflow_wait(
     Ok(report)
 }
 
-#[tauri::command]
-pub async fn list_workflow_vars(state: State<'_, AppState>) -> Result<Vec<WorkflowVar>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.workflow_vars()))
+#[ipc(read)]
+pub fn list_workflow_vars(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowVar>> {
+    Ok(vault.workflow_vars())
 }
 
-#[tauri::command]
-pub async fn set_workflow_var(
+#[ipc(write)]
+pub fn set_workflow_var(
+    vault: &mut UnlockedVault,
     input: SetWorkflowVarInput,
-    state: State<'_, AppState>,
-) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.set_workflow_var(input.scope, &input.name, &input.value)
-    })
+) -> trade_core::Result<()> {
+    vault.set_workflow_var(input.scope, &input.name, &input.value)
 }
 
-#[tauri::command]
-pub async fn delete_workflow_var(
+#[ipc(write)]
+pub fn delete_workflow_var(
+    vault: &mut UnlockedVault,
     input: DeleteWorkflowVarInput,
-    state: State<'_, AppState>,
-) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.delete_workflow_var(&input.scope, &input.name)
-    })
+) -> trade_core::Result<()> {
+    vault.delete_workflow_var(&input.scope, &input.name)
 }
 
 /// The workflow as a file's text.
-#[tauri::command]
-pub async fn export_workflow(id: String, state: State<'_, AppState>) -> Result<String, IpcError> {
-    with_vault(&state, |vault| vault.export_workflow(&id))
+#[ipc(read)]
+pub fn export_workflow(vault: &UnlockedVault, id: String) -> trade_core::Result<String> {
+    vault.export_workflow(&id)
 }
 
 /// Add a workflow from a file's text, switched off.
-#[tauri::command]
-pub async fn import_workflow(
+#[ipc(write)]
+pub fn import_workflow(
+    vault: &mut UnlockedVault,
     input: ImportWorkflowInput,
-    state: State<'_, AppState>,
-) -> Result<SavedWorkflow, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.import_workflow(&input.json, &input.stores, now_secs())
-    })
+) -> trade_core::Result<SavedWorkflow> {
+    vault.import_workflow(&input.json, &input.stores, now_secs())
 }
 
 /// What a workflow file holds and which of its wallets are missing here.
-#[tauri::command]
-pub async fn preview_workflow_import(
+#[ipc(read)]
+pub fn preview_workflow_import(
+    vault: &UnlockedVault,
     json: String,
-    state: State<'_, AppState>,
-) -> Result<WorkflowImportPreview, IpcError> {
-    with_vault(&state, |vault| vault.preview_workflow_import(&json))
+) -> trade_core::Result<WorkflowImportPreview> {
+    vault.preview_workflow_import(&json)
 }
 
 /// The gallery of ready-made workflows with defaults from the vault.
-#[tauri::command]
-pub async fn workflow_templates(
-    state: State<'_, AppState>,
-) -> Result<Vec<WorkflowTemplateInfo>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.workflow_templates()))
+#[ipc(read)]
+pub fn workflow_templates(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowTemplateInfo>> {
+    Ok(vault.workflow_templates())
 }
 
 /// Build a template's workflow from its form and save it switched on.
-#[tauri::command]
-pub async fn workflow_from_template(
+#[ipc(write)]
+pub fn workflow_from_template(
+    vault: &mut UnlockedVault,
+    app: &AppHandle,
     input: WorkflowFromTemplateInput,
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<SavedWorkflow, IpcError> {
-    let locale = if crate::scheduler::russian(&app) {
+) -> trade_core::Result<SavedWorkflow> {
+    let locale = if crate::scheduler::russian(app) {
         "ru"
     } else {
         "en"
     };
-    with_vault_mut(&state, |vault| {
-        vault.workflow_from_template(&input.template_id, &input.params, locale, now_secs())
-    })
+    vault.workflow_from_template(&input.template_id, &input.params, locale, now_secs())
 }
 
-#[tauri::command]
-pub async fn save_workflow_test(
+#[ipc(write)]
+pub fn save_workflow_test(
+    vault: &mut UnlockedVault,
     input: SaveWorkflowTestInput,
-    state: State<'_, AppState>,
-) -> Result<Workflow, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.save_workflow_test(&input.workflow_id, input.test)
-    })
+) -> trade_core::Result<Workflow> {
+    vault.save_workflow_test(&input.workflow_id, input.test)
 }
 
-#[tauri::command]
-pub async fn delete_workflow_test(
+#[ipc(write)]
+pub fn delete_workflow_test(
+    vault: &mut UnlockedVault,
     input: DeleteWorkflowTestInput,
-    state: State<'_, AppState>,
-) -> Result<Workflow, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.delete_workflow_test(&input.workflow_id, &input.test_id)
-    })
+) -> trade_core::Result<Workflow> {
+    vault.delete_workflow_test(&input.workflow_id, &input.test_id)
 }
 
 /// Every test of a workflow by emulation; nothing is written.
-#[tauri::command]
-pub async fn run_workflow_tests(
+#[ipc(read)]
+pub fn run_workflow_tests(
+    vault: &UnlockedVault,
+    app: &AppHandle,
     id: String,
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<Vec<WorkflowTestResult>, IpcError> {
-    let zone = current_zone(&app);
-    with_vault(&state, |vault| {
-        vault.run_workflow_tests(&id, now_secs(), &zone)
-    })
+) -> trade_core::Result<Vec<WorkflowTestResult>> {
+    vault.run_workflow_tests(&id, now_secs(), &current_zone(app))
 }
 
 ipc_commands!(workflows_commands, WORKFLOWS_NAMES, commands::workflows: [workflow_node_catalog, validate_workflow, list_workflows, get_workflow, save_workflow, save_workflow_draft, discard_workflow_draft, set_workflow_active, delete_workflow, restore_workflow_version, dry_run_workflow, run_workflow_now, list_workflow_runs, list_workflow_queue, confirm_workflow_queued, discard_workflow_queued, list_workflow_waits, answer_workflow_wait, list_workflow_vars, set_workflow_var, delete_workflow_var, export_workflow, import_workflow, preview_workflow_import, workflow_templates, workflow_from_template, save_workflow_test, delete_workflow_test, run_workflow_tests]);
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    use super::*;
+    use crate::ipc::run::VaultHost;
+
+    #[derive(Clone)]
+    struct TestHost(Arc<AppState>);
+
+    impl VaultHost for TestHost {
+        fn app_state(&self) -> &AppState {
+            &self.0
+        }
+    }
+
+    fn locked_host() -> TestHost {
+        TestHost(Arc::new(AppState::new()))
+    }
+
+    #[tokio::test]
+    async fn a_pilot_read_command_refuses_a_locked_vault() {
+        let error = __ipc_run_list_workflows(locked_host()).await.unwrap_err();
+        assert_eq!(error.code(), "REQUIRES_UNLOCK");
+    }
+
+    /// The pilot writes carry no sandbox gate (automations run on the demo
+    /// data): in the sandbox the command reaches the vault check instead of
+    /// being refused with `SANDBOX`.
+    #[tokio::test]
+    async fn a_pilot_write_command_has_no_sandbox_gate() {
+        let host = locked_host();
+        host.0.sandbox.store(true, Ordering::SeqCst);
+        let input = DeleteWorkflowTestInput {
+            workflow_id: String::new(),
+            test_id: String::new(),
+        };
+        let error = __ipc_run_delete_workflow_test(host, input)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "REQUIRES_UNLOCK");
+    }
+}

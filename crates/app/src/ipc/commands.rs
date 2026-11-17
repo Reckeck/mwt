@@ -187,12 +187,13 @@ mod tests {
             .collect()
     }
 
-    /// The names of the `#[tauri::command]` functions in one source text.
+    /// The names of the `#[tauri::command]` and `#[ipc]` functions in one source text.
     fn command_fns(source: &str) -> Vec<String> {
         let lines: Vec<&str> = source.lines().collect();
         let mut names = Vec::new();
         for (index, line) in lines.iter().enumerate() {
-            if !line.trim_start().starts_with("#[tauri::command") {
+            let attribute = line.trim_start();
+            if !(attribute.starts_with("#[tauri::command") || attribute.starts_with("#[ipc")) {
                 continue;
             }
             let declaration = lines[index..]
@@ -232,21 +233,33 @@ mod tests {
                 .lines()
                 .filter(|line| line.starts_with("ipc_commands!("))
             {
-                let list = line
-                    .trim_start_matches("ipc_commands!(")
-                    .split(',')
-                    .next()
-                    .expect("a declaration names its list macro");
-                assert!(
-                    lib.contains(&format!("{list},")) || lib.contains(&format!("{list}!(")),
-                    "lib.rs does not compose `{list}`"
-                );
+                let mut fields = line.trim_start_matches("ipc_commands!(").split(',');
+                let list = fields.next().expect("a declaration names its list macro");
+                let module = fields
+                    .nth(1)
+                    .and_then(|field| field.split_once(": ["))
+                    .map(|(module, _)| module.trim())
+                    .expect("a declaration names its module");
+                let path = format!("{module}::{list}");
+                assert!(composes(lib, &path), "lib.rs does not compose `{path}`");
             }
         }
     }
 
-    /// The commands the flat list held on the day of the switch (the spec's 402 counted
-    /// list lines; the list held 400 entries).
+    /// Whether `lib` names the full `path` as a whole path, not as the tail of a longer one.
+    fn composes(lib: &str, path: &str) -> bool {
+        lib.match_indices(path).any(|(start, _)| {
+            let before = lib[..start].chars().next_back();
+            let after = lib[start + path.len()..].chars().next();
+            let in_path = |symbol: char| symbol.is_alphanumeric() || symbol == '_' || symbol == ':';
+            !before.is_some_and(in_path) && !after.is_some_and(in_path)
+        })
+    }
+
+    /// The number of distinct command names the flat list held on the day of the switch: 400.
+    /// The spec's 402 counted `#[tauri::command]` attributes: `get_autostart` and
+    /// `set_autostart` each carry one per platform (desktop and mobile twins), so two names
+    /// are counted twice.
     const COMMAND_COUNT: usize = 400;
 
     #[test]

@@ -15,3 +15,4 @@ pub mod opener;
 pub mod run;
 
 pub use error::IpcError;
+pub use mwt_app_macros::ipc;
