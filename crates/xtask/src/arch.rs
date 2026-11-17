@@ -23,6 +23,8 @@ const CORE_SRC: &str = "crates/core/src";
 const ALLOW_FILE: &str = "crates/xtask/arch-allow.toml";
 /// Flipped by core-edges T15: until then a stale allowlist entry only warns.
 const STALE_IS_ERROR: bool = false;
+/// Layer of the modules gated by the `testkit` feature (see `layers::GROUPS`).
+const TESTKIT: &str = "testkit";
 
 /// A back edge: the same data as an edge, the ones the layer table does not allow.
 pub type Violation = Edge;
@@ -174,12 +176,8 @@ fn child_dir(file: &Path) -> PathBuf {
     }
 }
 
-/// The `.rs` files that count, found under `dir`; `skipped` holds files declared under `#[cfg(test)]`.
-fn collect_files(
-    dir: &Path,
-    skipped: &mut BTreeSet<PathBuf>,
-    files: &mut Vec<PathBuf>,
-) -> Result<()> {
+/// The `.rs` files that count, found under `dir`; `skipped` holds the files of cfg-gated modules.
+fn collect_files(dir: &Path, skipped: &mut Files, files: &mut Vec<PathBuf>) -> Result<()> {
     let mut entries = fs::read_dir(dir)
         .with_context(|| format!("read {}", dir.display()))?
         .collect::<std::io::Result<Vec<_>>>()?;
@@ -193,7 +191,7 @@ fn collect_files(
                 subdirs.push(path);
             }
         } else if name.ends_with(".rs") && !is_test_file(&name) {
-            declare_test_modules(&path, skipped)?;
+            declare_gated_modules(&path, skipped)?;
             files.push(path);
         }
     }
@@ -203,13 +201,30 @@ fn collect_files(
     Ok(())
 }
 
-/// Marks the files of the modules this file declares under `#[cfg(test)]`.
-fn declare_test_modules(file: &Path, skipped: &mut BTreeSet<PathBuf>) -> Result<()> {
+/// Files of modules declared under a cfg gate: `#[cfg(test)]` ones are skipped, ones gated by the
+/// `testkit` feature are test support and are checked as the `testkit` layer.
+#[derive(Default)]
+struct Files {
+    test: BTreeSet<PathBuf>,
+    testkit: BTreeSet<PathBuf>,
+}
+
+fn module_files(dir: &Path, name: &str) -> [PathBuf; 2] {
+    [
+        dir.join(format!("{name}.rs")),
+        dir.join(name).join("mod.rs"),
+    ]
+}
+
+/// Marks the files of the modules this file declares under `#[cfg(test)]` or the testkit gate.
+fn declare_gated_modules(file: &Path, gated: &mut Files) -> Result<()> {
     let text = fs::read_to_string(file).with_context(|| format!("read {}", file.display()))?;
     let dir = child_dir(file);
     for name in scan::test_modules(&text) {
-        skipped.insert(dir.join(format!("{name}.rs")));
-        skipped.insert(dir.join(&name).join("mod.rs"));
+        gated.test.extend(module_files(&dir, &name));
+    }
+    for name in scan::testkit_modules(&text) {
+        gated.testkit.extend(module_files(&dir, &name));
     }
     Ok(())
 }
@@ -217,16 +232,21 @@ fn declare_test_modules(file: &Path, skipped: &mut BTreeSet<PathBuf>) -> Result<
 /// Every non-test `crate::` path under `root` (`crates/core/src`), in file order.
 pub fn scan(root: &Path) -> Result<Vec<Edge>> {
     let modules = module_names(root)?;
-    let mut skipped = BTreeSet::new();
+    let mut gated = Files::default();
     let mut files = Vec::new();
-    collect_files(root, &mut skipped, &mut files)?;
+    collect_files(root, &mut gated, &mut files)?;
     let mut edges = Vec::new();
-    for file in files.iter().filter(|file| !skipped.contains(*file)) {
+    for file in files.iter().filter(|file| !gated.test.contains(*file)) {
         let relative = file.strip_prefix(root).unwrap_or(file);
         let text = fs::read_to_string(file).with_context(|| format!("read {}", file.display()))?;
+        let from_module = if gated.testkit.contains(file) {
+            TESTKIT.to_string()
+        } else {
+            module_of(relative)
+        };
         edges.extend(scan::read_edges(
             &relative.to_string_lossy().replace('\\', "/"),
-            &module_of(relative),
+            &from_module,
             &text,
             &modules,
         ));
@@ -282,6 +302,17 @@ mod tests {
         assert!(!layers::is_legal("error", "service"));
         assert!(!layers::is_legal("planning", "money"));
         assert!(!layers::is_legal("sync", "storage"));
+    }
+
+    #[test]
+    fn modules_gated_by_the_testkit_feature_are_checked_as_the_testkit_layer() {
+        let edges = scan(&repo_root().join(CORE_SRC)).unwrap();
+        let fixtures: Vec<&Edge> = edges
+            .iter()
+            .filter(|edge| edge.from_file == "model/fixtures.rs")
+            .collect();
+        assert!(!fixtures.is_empty());
+        assert!(fixtures.iter().all(|edge| edge.from_module == TESTKIT));
     }
 
     #[test]

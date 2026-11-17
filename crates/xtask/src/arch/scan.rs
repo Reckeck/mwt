@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 use super::Edge;
 
 const CFG_TEST: &str = "#[cfg(test)]";
+const CFG_TESTKIT: &str = "#[cfg(any(test, feature = \"testkit\"))]";
 const CRATE_PATH: &str = "crate::";
 
 /// Root items of `lib.rs` that are not modules, with the module they count as.
@@ -74,9 +75,19 @@ fn declared_module(following: &[&str]) -> Option<String> {
 
 /// Modules the text declares as `#[cfg(test)] mod name;`.
 pub fn test_modules(text: &str) -> Vec<String> {
+    modules_under(text, CFG_TEST)
+}
+
+/// Modules the text declares as `#[cfg(any(test, feature = "testkit"))] mod name;`: test support
+/// that other crates can compile, checked as the `testkit` layer.
+pub fn testkit_modules(text: &str) -> Vec<String> {
+    modules_under(text, CFG_TESTKIT)
+}
+
+fn modules_under(text: &str, attribute: &str) -> Vec<String> {
     let lines: Vec<&str> = text.lines().collect();
     (0..lines.len())
-        .filter(|&index| lines[index].trim() == CFG_TEST)
+        .filter(|&index| lines[index].trim() == attribute)
         .filter_map(|index| declared_module(&lines[index + 1..]))
         .collect()
 }
@@ -285,6 +296,13 @@ mod tests {
         let text = "#[cfg(test)]\nmod fixtures;\nmod real;\nuse crate::service::X;\n";
         assert_eq!(test_modules(text), vec!["fixtures".to_string()]);
         assert_eq!(pairs(text), vec![(4, "service".to_string())]);
+    }
+
+    #[test]
+    fn a_module_declared_under_the_testkit_feature_is_listed_apart() {
+        let text = "#[cfg(any(test, feature = \"testkit\"))]\npub mod fixtures;\n#[cfg(test)]\nmod tests;\n";
+        assert_eq!(testkit_modules(text), vec!["fixtures".to_string()]);
+        assert_eq!(test_modules(text), vec!["tests".to_string()]);
     }
 
     #[test]
