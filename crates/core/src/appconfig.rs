@@ -917,6 +917,14 @@ mod tests {
     }
 
     #[test]
+    fn a_default_rate_above_the_input_bound_is_dropped_and_reported() {
+        let too_big = "1000000000000000001";
+        let (rates, dropped) = parse_inflation(&[("rub", "8"), ("xxx", too_big)]);
+        assert_eq!(dropped, [("xxx", too_big)]);
+        assert_eq!(rates.keys().collect::<Vec<_>>(), ["rub"]);
+    }
+
+    #[test]
     fn the_four_default_inflation_codes_survive() {
         let codes: Vec<String> = default_inflation().into_keys().collect();
         assert_eq!(codes, ["eur", "rub", "thb", "usd"]);
