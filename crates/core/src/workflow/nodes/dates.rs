@@ -2,7 +2,7 @@
 //! two, the start or end of a period, working days and writing a date out.
 //! Days are cut in the user's zone; a date leaves as an RFC3339 moment.
 
-use chrono::{Datelike, Duration, Months, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
+use chrono::{Datelike, Days, Months, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 
 use crate::Amount;
 use crate::calendar::Calendar;
@@ -36,6 +36,14 @@ const WEEKDAYS_RU: [&str; 7] = [
     "суббота",
     "воскресенье",
 ];
+
+const DATE_OUT_OF_RANGE: &str = "the date is out of range";
+
+/// A date moved by a span; a span or result beyond the calendar is an error.
+fn shift_by(local: NaiveDateTime, span: Option<TimeDelta>) -> Result<NaiveDateTime, String> {
+    span.and_then(|span| local.checked_add_signed(span))
+        .ok_or_else(|| DATE_OUT_OF_RANGE.to_string())
+}
 
 fn number(value: i64) -> WfValue {
     WfValue::Number(Amount::new(value.into()))
@@ -220,25 +228,32 @@ impl Executor<'_> {
             "date.add" => {
                 let local = self.local_input(node, "date")?;
                 let shifted = if let WfValue::Duration(secs) = self.input(node, "duration")? {
-                    local + Duration::seconds(secs)
+                    shift_by(local, TimeDelta::try_seconds(secs))?
                 } else {
                     let amount = self.whole(node, "amount")?.unwrap_or(0);
                     let unit = self.text_param(node, "unit");
                     match unit.as_str() {
-                        "minutes" => local + Duration::minutes(amount),
-                        "hours" => local + Duration::hours(amount),
-                        "weeks" => local + Duration::weeks(amount),
+                        "minutes" => shift_by(local, TimeDelta::try_minutes(amount))?,
+                        "hours" => shift_by(local, TimeDelta::try_hours(amount))?,
+                        "weeks" => shift_by(local, TimeDelta::try_weeks(amount))?,
                         "months" | "years" => {
-                            let months = if unit == "years" { amount * 12 } else { amount };
-                            let count = Months::new(months.unsigned_abs() as u32);
-                            if months >= 0 {
+                            let months = if unit == "years" {
+                                amount.checked_mul(12)
+                            } else {
+                                Some(amount)
+                            };
+                            let count = months
+                                .and_then(|months| u32::try_from(months.unsigned_abs()).ok())
+                                .map(Months::new)
+                                .ok_or(DATE_OUT_OF_RANGE)?;
+                            if amount >= 0 {
                                 local.checked_add_months(count)
                             } else {
                                 local.checked_sub_months(count)
                             }
-                            .ok_or("the date is out of range")?
+                            .ok_or(DATE_OUT_OF_RANGE)?
                         }
-                        _ => local + Duration::days(amount),
+                        _ => shift_by(local, TimeDelta::try_days(amount))?,
                     }
                 };
                 Ok(single("date", self.date_value(shifted)))
@@ -258,9 +273,9 @@ impl Executor<'_> {
                 let day = local.date();
                 let date = match self.text_param(node, "which").as_str() {
                     "day_start" => day,
-                    "week_start" => {
-                        day - Duration::days(day.weekday().num_days_from_monday().into())
-                    }
+                    "week_start" => day
+                        .checked_sub_days(Days::new(day.weekday().num_days_from_monday().into()))
+                        .unwrap_or(day),
                     "month_end" => clamped_date(day.year(), day.month(), 31).unwrap_or(day),
                     "next_month_start" => clamped_date(day.year(), day.month(), 1)
                         .and_then(|first| first.checked_add_months(Months::new(1)))
@@ -321,5 +336,67 @@ mod tests {
         assert_eq!(format_date(moment, "ДД МММ, ДН"), "25 ноября, среда");
         assert_eq!(format_date(moment, "YYYY-MM-DD"), "2026-11-25");
         assert_eq!(format_date(moment, ""), "25.11.2026");
+    }
+
+    fn outcome_of(params: serde_json::Value) -> crate::workflow::RunOutcome {
+        let dir = tempfile::tempdir().unwrap();
+        let vault =
+            crate::service::UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+        let graph = serde_json::json!({
+            "version": 1,
+            "nodes": [
+                { "id": "t", "kind": "trigger.manual", "params": {} },
+                { "id": "n", "kind": "date.add", "params": params },
+                { "id": "e", "kind": "action.emit", "params": { "name": "shifted" } },
+            ],
+            "edges": [
+                {
+                    "id": "t.out>e.in", "from": "t", "from_port": "out",
+                    "to": "e", "to_port": "in",
+                },
+                {
+                    "id": "n.date>e.payload", "from": "n", "from_port": "date",
+                    "to": "e", "to_port": "payload",
+                },
+            ],
+        })
+        .to_string();
+        let now = crate::calendar::now_secs() + 5;
+        vault
+            .dry_run_workflow(
+                &graph,
+                None,
+                None,
+                std::collections::BTreeMap::new(),
+                now,
+                "UTC",
+            )
+            .unwrap()
+            .run
+            .outcome
+    }
+
+    #[test]
+    fn date_add_past_the_calendar_is_an_error_not_a_panic() {
+        use crate::workflow::RunOutcome;
+        use serde_json::json;
+        let cases = [
+            ("days", json!(100_000_000)),
+            ("minutes", json!(1_000_000_000_000_000_000_i64)),
+            ("weeks", json!(1_000_000_000_000_000_000_i64)),
+            ("years", json!(1_000_000_000_000_000_000_i64)),
+            ("months", json!(1_000_000_000_000_000_000_i64)),
+        ];
+        for (unit, amount) in cases {
+            let outcome = outcome_of(json!({ "unit": unit, "amount": amount }));
+            assert!(
+                matches!(&outcome, RunOutcome::Failed { message } if message.contains("the date is out of range")),
+                "{unit}: {outcome:?}"
+            );
+        }
+        assert_eq!(
+            outcome_of(json!({ "unit": "days", "amount": 3 })),
+            RunOutcome::Done
+        );
     }
 }
