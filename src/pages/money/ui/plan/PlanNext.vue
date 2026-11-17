@@ -10,6 +10,8 @@ import { formatDate } from '@/shared/lib/format'
 import { Badge } from '@/shared/ui/badge'
 import { Skeleton } from '@/shared/ui/skeleton'
 
+import { holdPlan } from '../../model/use-plan-ready'
+
 /** `Later this month` (Money 2 · 9, 10): what the automations and reminders bring before the month ends. */
 const { t } = useI18n()
 
@@ -17,6 +19,7 @@ const now = new Date()
 const days = Math.max(1, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1)
 const upcoming = useQuery({ queryKey: ['upcoming', days], queryFn: () => call<UpcomingItem[]>('get_upcoming', { days }) })
 const items = computed(() => (upcoming.data.value ?? []).slice(0, 6))
+holdPlan(() => upcoming.isPending.value)
 
 const KIND_LABEL: Partial<Record<UpcomingKind, string>> = { automation: 'automation', reminder: 'reminder' }
 const kindText = (kind: UpcomingKind) => t(`money.plan.kind.${KIND_LABEL[kind] ?? 'other'}`)
