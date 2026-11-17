@@ -131,6 +131,20 @@ fn merge_core(
     }
 }
 
+/// A stamp beyond `limit` (ms) came from a wrong clock: it must not beat an
+/// edit made now, so it counts as wall 0 in a merge (device and count kept).
+/// Both sides get the same treatment, so the merge stays symmetric.
+fn demote_poisoned(mut stamps: RecordStamps, limit: u64) -> RecordStamps {
+    let demote = |stamp: &mut super::stamp::Stamp| {
+        if stamp.wall > limit {
+            stamp.wall = 0;
+        }
+    };
+    demote(&mut stamps.created);
+    stamps.fields.values_mut().for_each(demote);
+    stamps
+}
+
 /// A live record against a side that has it deleted (or never had it).
 fn resolve_deletion(alive: &RecordState, other: &RecordState) -> RecordState {
     let changed = alive
@@ -160,8 +174,9 @@ fn merge_fields(
     seen: Option<&super::stamp::Stamp>,
     external: bool,
 ) -> Merged {
-    let local_stamps = local.stamps.clone().unwrap_or_default();
-    let remote_stamps = remote.stamps.clone().unwrap_or_default();
+    let limit = super::stamp::now_ms().saturating_add(super::stamp::MAX_FUTURE_MS);
+    let local_stamps = demote_poisoned(local.stamps.clone().unwrap_or_default(), limit);
+    let remote_stamps = demote_poisoned(remote.stamps.clone().unwrap_or_default(), limit);
     let local_fields = split(coll, mine);
     let remote_fields = split(coll, theirs);
 
@@ -406,6 +421,25 @@ mod tests {
         let back = merge(coll, right, left).state;
         assert_eq!(there, back, "merge must not depend on the side");
         there
+    }
+
+    #[test]
+    fn a_poisoned_stamp_does_not_beat_an_edit_from_now() {
+        let coll = find("stores").expect("rule");
+        let now = super::super::stamp::now_ms();
+        let far = now + 30 * 24 * 3600 * 1000;
+        let poisoned = state(
+            json!({"id": "s", "name": "Old", "archived": false}),
+            at(far, "a"),
+            &[("name", at(far, "a"))],
+        );
+        let edited = state(
+            json!({"id": "s", "name": "New", "archived": false}),
+            at(far, "a"),
+            &[("name", at(now, "b"))],
+        );
+        let merged = both_ways(coll, &poisoned, &edited);
+        assert_eq!(merged.value.unwrap()["name"], "New");
     }
 
     #[test]

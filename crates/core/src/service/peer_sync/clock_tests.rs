@@ -108,3 +108,36 @@ fn a_newer_revocation_beats_an_older_trust_from_a_third_device() {
     assert!(third.sync_state().is_revoked("cc"));
     assert!(third.sync_state().trusted("cc").is_none());
 }
+
+#[test]
+fn an_edit_of_a_record_poisoned_beyond_the_limit_is_stamped_now() {
+    let (_dir, mut left, mut right) = two_devices();
+    let key = poisoned_contact(&mut left);
+    exchange(&mut left, &mut right);
+    let id = key.trim_start_matches("contacts:").to_string();
+    let draft = ContactDraft {
+        name: "Edited on the right".into(),
+        kind: ContactKind::Person,
+        ..ContactDraft::default()
+    };
+    right.update_contact(&id, draft).unwrap();
+    // The poisoned stamp is thirty days ahead: the edit is stamped now (the
+    // old rule gave one past it, which peers skip when they follow a clock).
+    let stamp = right.doc.sync.stamps[&key].field("name").clone();
+    assert!(stamp.wall <= limit(), "the edit followed a poisoned stamp");
+    assert_eq!(stamp.device, "bbbbbbbb");
+    exchange(&mut left, &mut right);
+    // The poisoned stamp on the left must not beat the edit from now.
+    let name_of = |vault: &UnlockedVault| {
+        vault
+            .doc
+            .contacts
+            .iter()
+            .find(|contact| contact.id == id)
+            .unwrap()
+            .name
+            .clone()
+    };
+    assert_eq!(name_of(&left), "Edited on the right");
+    assert_eq!(name_of(&right), "Edited on the right");
+}
