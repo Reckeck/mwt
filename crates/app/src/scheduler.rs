@@ -491,6 +491,35 @@ fn show_locked(app: &AppHandle, records: Vec<NoticeRecord>, system: bool) {
 
 // -- 1. Bybit import -------------------------------------------------------------
 
+/// Bybit is polled only with the user's tracking consent (spec D-7.17).
+fn bybit_may_poll(consent: bool) -> bool {
+    consent
+}
+
+/// The keys whose poll is due. Without consent the schedule is never asked
+/// for, so the vault stays unlocked-for-nobody and nothing is due. Archived
+/// stores are already dropped by `import_schedule`.
+fn due_bybit_keys<T>(
+    consent: bool,
+    schedule: impl FnOnce() -> Vec<(u32, T)>,
+    store_id: impl Fn(&T) -> &str,
+    last_bybit: &HashMap<String, Instant>,
+) -> Vec<T> {
+    if !bybit_may_poll(consent) {
+        return Vec::new();
+    }
+    schedule()
+        .into_iter()
+        .filter(|(interval, key)| {
+            let interval = Duration::from_secs(u64::from(*interval));
+            last_bybit
+                .get(store_id(key))
+                .is_none_or(|previous| previous.elapsed() >= interval)
+        })
+        .map(|(_, key)| key)
+        .collect()
+}
+
 /// Poll each exchange on its own interval (`ExchangeProfile.import_interval_sec`,
 /// `0` disables it) and record any new fills as operations of the crypto
 /// module. A vault that keeps no crypto hides its exchanges, so they are not
@@ -501,27 +530,22 @@ fn show_locked(app: &AppHandle, records: Vec<NoticeRecord>, system: bool) {
 /// confirm, and the queue an older build staged is put through by the same
 /// conversion inside the sync.
 fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
-    let due: Vec<trade_core::crypto::device_secrets::DeviceKey> = {
-        let state = app.state::<AppState>();
-        let Ok(guard) = state.vault.lock() else {
-            return;
-        };
-        let Some(vault) = guard.as_ref().filter(|vault| vault.crypto_enabled()) else {
-            return;
-        };
-        vault
-            .import_schedule()
-            .into_iter()
-            .filter(|(interval, key)| {
-                let interval = Duration::from_secs(u64::from(*interval));
-                memory
-                    .last_bybit
-                    .get(&key.keys.store_id)
-                    .is_none_or(|previous| previous.elapsed() >= interval)
-            })
-            .map(|(_, key)| key)
-            .collect()
-    };
+    let consent = crate::commands::app_settings::current_settings(app).crypto_tracking_allowed();
+    let due = due_bybit_keys(
+        consent,
+        || {
+            let state = app.state::<AppState>();
+            let Ok(guard) = state.vault.lock() else {
+                return Vec::new();
+            };
+            guard
+                .as_ref()
+                .map(|vault| vault.import_schedule())
+                .unwrap_or_default()
+        },
+        |key| key.keys.store_id.as_str(),
+        &memory.last_bybit,
+    );
     if due.is_empty() {
         return;
     }
@@ -943,6 +967,37 @@ mod tests {
                 "visible={visible} role={role:?} focused={focused}"
             );
         }
+    }
+
+    #[test]
+    fn bybit_polls_only_with_consent() {
+        use super::{bybit_may_poll, due_bybit_keys};
+        use std::collections::HashMap;
+        assert!(!bybit_may_poll(false));
+        assert!(bybit_may_poll(true));
+
+        let last = HashMap::new();
+        let mut asked = false;
+        let due = due_bybit_keys(
+            false,
+            || {
+                asked = true;
+                vec![(60, "store".to_string())]
+            },
+            |id| id.as_str(),
+            &last,
+        );
+        assert!(due.is_empty());
+        assert!(!asked, "the vault is not asked without consent");
+        assert!(last.is_empty());
+
+        let due = due_bybit_keys(
+            true,
+            || vec![(60, "store".to_string())],
+            |id| id.as_str(),
+            &last,
+        );
+        assert_eq!(due, vec!["store".to_string()]);
     }
 
     #[test]
