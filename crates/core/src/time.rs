@@ -17,7 +17,7 @@ pub fn secs_or_now(iso: &str) -> i64 {
     unix_secs(iso).unwrap_or_else(|| time::OffsetDateTime::now_utc().unix_timestamp())
 }
 
-/// The moment a day's price is stored under: midnight UTC.
+/// RFC3339 midnight UTC of `date`, the key daily prices use.
 pub fn date_ts(date: NaiveDate) -> String {
     format!("{}T00:00:00Z", date.format("%Y-%m-%d"))
 }
