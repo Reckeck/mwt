@@ -1155,6 +1155,34 @@ mod tests {
         FIXTURE.get_or_init(|| as_v3(&crate::model::fixtures::full_doc()))
     }
 
+    /// The v3 struct names the v3 fields itself: serialized, it carries every
+    /// top-level field of the live document except the crypto collections, so
+    /// a field added to the live document later does not become part of v3.
+    #[test]
+    fn the_v3_struct_lists_no_crypto_collection() {
+        let live = serde_json::to_value(crate::model::fixtures::full_doc()).unwrap();
+        let (v3_json, _) = as_v3_fixture();
+        let v3: super::v3::VaultDocV3 = serde_json::from_value(v3_json.clone()).unwrap();
+        let listed = serde_json::to_value(&v3).unwrap();
+        let listed = listed.as_object().unwrap();
+        for name in listed.keys() {
+            assert!(
+                !name.starts_with("crypto_"),
+                "{name} is a crypto collection"
+            );
+        }
+        let expected: Vec<&String> = live
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|name| !name.starts_with("crypto_"))
+            .collect();
+        assert_eq!(listed.len(), expected.len());
+        for name in expected {
+            assert!(listed.contains_key(name), "{name} is missing from v3");
+        }
+    }
+
     migration_cases! {
         version: 3,
         formats: [
