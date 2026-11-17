@@ -94,6 +94,28 @@ impl RotationFailure {
     }
 }
 
+impl RotationReport {
+    /// Write every failed step to stderr as a warning: the key change
+    /// succeeded, so nobody else would see them. `operation` names the call.
+    pub fn warn_failed(&self, operation: &str) {
+        warn_failures(operation, &self.failed, |line| eprintln!("{line}"));
+    }
+}
+
+/// One warning line per failed step (step and reason, never a path) to `sink`.
+pub(super) fn warn_failures(
+    operation: &str,
+    failures: &[RotationFailure],
+    mut sink: impl FnMut(&str),
+) {
+    for failure in failures {
+        sink(&format!(
+            "warning: {operation}: step \"{}\" failed after the key changed: {}",
+            failure.step, failure.reason
+        ));
+    }
+}
+
 /// The points of a key change a test can break.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RotateStep {
@@ -131,6 +153,7 @@ impl UnlockedVault {
                 reencrypt_old: false,
             },
         )?;
+        report.warn_failed("set_password");
         Ok(u32::try_from(report.deleted.len()).unwrap_or(u32::MAX))
     }
 
@@ -931,6 +954,36 @@ mod tests {
         drop(vault);
         assert!(opens(&path, "pw"));
         drop(dir);
+    }
+
+    #[test]
+    fn a_failed_cleanup_step_is_logged_as_a_warning() {
+        let (_dir, mut vault) = plain_vault();
+        let path = vault.path.clone();
+        let backup = vault.create_backup().unwrap();
+        let copy = backups::resolve(&path, &backup.name).unwrap();
+        let report = vault
+            .set_password_inner(
+                "pw",
+                CopyPolicy {
+                    plain: PlainCopies::Delete,
+                    reencrypt_old: false,
+                },
+                |at| {
+                    if at == RotateStep::SecretsFinished {
+                        std::fs::remove_file(&copy).unwrap();
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+        let mut lines = Vec::new();
+        warn_failures("set_password", &report.failed, |line| {
+            lines.push(line.to_owned());
+        });
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].starts_with("warning: set_password: step \"copy "));
+        assert!(lines[0].contains(&report.failed[0].reason));
     }
 
     #[test]

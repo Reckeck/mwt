@@ -5,8 +5,8 @@ use trade_core::ipc_contract::{
     ChangePasswordInput, CreateVaultInput, RemoveVaultPasswordInput, SetVaultPasswordInput,
     SetVaultPasswordResult, UnlockInput, VaultInfo, VaultStatus,
 };
-use trade_core::service::UnlockedVault;
 use trade_core::service::security_level::{check_new_secret, level_of_vault_file};
+use trade_core::service::{CopyPolicy, UnlockedVault};
 
 use crate::commands::{AppState, app_settings, err_to_string, lock_vault, require_vault};
 
@@ -450,7 +450,13 @@ pub async fn change_password(
         check_new_secret(SecurityLevel::Pin, &input.new_password).map_err(err_to_string)?;
     }
     let salt_before = vault.key_salt();
-    let outcome = vault.change_password(&input.current_password, &input.new_password);
+    let outcome = vault
+        .change_password_with(
+            &input.current_password,
+            &input.new_password,
+            CopyPolicy::default(),
+        )
+        .map(|report| report.warn_failed("change_password"));
     let key_changed = vault.key_salt() != salt_before;
     reset_binding_after(&outcome, key_changed, || {
         crate::biometric::system_gate(&app_settings::config_dir(&app))

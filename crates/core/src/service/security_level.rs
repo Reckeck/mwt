@@ -33,7 +33,7 @@ use std::sync::Arc;
 use zeroize::Zeroizing;
 
 use super::UnlockedVault;
-use super::password::{CopyPolicy, PlainCopies, RotationFailure, RotationReport};
+use super::password::{CopyPolicy, PlainCopies, RotationFailure, RotationReport, warn_failures};
 use crate::crypto::header::{VaultHeader, level_of_container};
 use crate::crypto::kdf_profile::{KdfParams, KdfProfile};
 use crate::crypto::{SealKey, device_secrets};
@@ -393,6 +393,9 @@ impl UnlockedVault {
                 .failed
                 .push(RotationFailure::new("inventory", &err)),
         }
+        warn_failures("raise_to_crypto", &rotation.failed, |line| {
+            eprintln!("{line}");
+        });
         self.after_raise();
         Ok(RaiseReport {
             backup: backups::backup_dir(&self.path).join(&backup.name),
