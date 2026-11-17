@@ -155,28 +155,28 @@ name = "mod_stores"
 task = "B4"
 group = "money"
 context = "money"
-regions = [{ file = "mod.rs", from = "// -- stores", to = "// -- transactions" }]
+files = ["stores.rs"]
 
 [[area]]
 name = "mod_transactions"
 task = "B5"
 group = "money"
 context = "money"
-regions = [{ file = "mod.rs", from = "// -- transactions", to = "// -- holdings recomputation" }]
+files = ["transactions.rs"]
 
 [[area]]
 name = "mod_portfolio"
 task = "B6"
 group = "money"
 context = "money"
-regions = [{ file = "mod.rs", from = "// -- holdings recomputation", to = "// -- exchange keys" }]
+files = ["portfolio.rs"]
 
 [[area]]
 name = "mod_exchange_import"
 task = "E7"
 group = "cryptotrack"
 context = "cryptotrack"
-regions = [{ file = "mod.rs", from = "// -- exchange keys", to = "// -- helpers" }]
+files = ["exchange_import.rs"]
 
 [[area]]
 name = "household"
@@ -240,9 +240,8 @@ group = "vault"
 context = "vault"
 files = [
     "password.rs", "security_level.rs", "security_level_tests.rs", "backups.rs",
-    "exchange_keys.rs", "saving.rs",
+    "exchange_keys.rs", "saving.rs", "mod.rs",
 ]
-regions = [{ file = "mod.rs", from = "impl UnlockedVault {", to = "// -- stores" }]
 
 [[area]]
 name = "misc"

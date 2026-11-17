@@ -155,6 +155,7 @@ pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpt
         vitest("checks", Class::Light, "checks"),
         ci_scripts(),
         arch(),
+        strangle(),
         Task::cmd(
             "fmt",
             Class::Light,
@@ -198,6 +199,24 @@ fn arch() -> Task {
             count => Outcome::Fail(format!(
                 "{count} back edge(s) or stale allowlist entries, see the log"
             )),
+        }
+    })
+}
+
+/// `strangle check --all`: the moved areas against `baseline.json`. Runs this very binary, so no
+/// second cargo build is started.
+fn strangle() -> Task {
+    Task::func("strangle", Class::Light, &[], |ctx: Ctx| async move {
+        let program = match std::env::current_exe() {
+            Ok(path) => path.display().to_string(),
+            Err(error) => return Outcome::Fail(format!("{error:#}")),
+        };
+        let cmd = Cmd::new(&program).args(["strangle", "check", "--all"]);
+        match ctx.exec(&cmd).await {
+            Ok(ExecEnd::Done(0)) => Outcome::Ok,
+            Ok(ExecEnd::Done(code)) => Outcome::Fail(format!("strangle check exited with {code}")),
+            Ok(ExecEnd::Cancelled) => Outcome::Cancelled,
+            Err(error) => Outcome::Fail(format!("{error:#}")),
         }
     })
 }

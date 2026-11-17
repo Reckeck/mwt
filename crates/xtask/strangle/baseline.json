@@ -1,0 +1,3263 @@
+{
+  "areas": {
+    "cryptotrack": {
+      "methods": [
+        {
+          "name": "adopt_legacy_bybit",
+          "signature": "pub fn adopt_legacy_bybit(&mut self) -> Result<LegacyAdoption>"
+        },
+        {
+          "name": "crypto_apply_batch",
+          "signature": "pub fn crypto_apply_batch(&mut self, request: &CryptoBatch<'_>, batch: &SourceBatch) -> Result<CryptoApplied>"
+        },
+        {
+          "name": "crypto_apply_pages",
+          "signature": "pub fn crypto_apply_pages(&mut self, request: &CryptoPages<'_>, batch: &SourceBatch) -> Result<CryptoPagesApplied>"
+        },
+        {
+          "name": "crypto_apply_positions",
+          "signature": "pub fn crypto_apply_positions(&mut self, account_id: &str, readings: &[PositionReading], events: &[CryptoTx], reviewed: &[ProtocolReview]) -> Result<CryptoPositionsApplied>"
+        },
+        {
+          "name": "crypto_apply_prices",
+          "signature": "pub fn crypto_apply_prices(&mut self, fresh: &[CryptoPricePoint]) -> Result<usize>"
+        },
+        {
+          "name": "crypto_archive_manual_wallets",
+          "signature": "pub fn crypto_archive_manual_wallets(&mut self) -> Result<CryptoArchiveReport>"
+        },
+        {
+          "name": "crypto_clear_token_verdict",
+          "signature": "pub fn crypto_clear_token_verdict(&mut self, token: &TokenId) -> Result<TokenStatus>"
+        },
+        {
+          "name": "crypto_confirm_token",
+          "signature": "pub fn crypto_confirm_token(&mut self, token: &TokenId) -> Result<TokenStatus>"
+        },
+        {
+          "name": "crypto_connect_address",
+          "signature": "pub fn crypto_connect_address(&mut self, input: &ConnectAddressInput) -> Result<ConnectAddressResult>"
+        },
+        {
+          "name": "crypto_explorer_settings",
+          "signature": "pub fn crypto_explorer_settings(&self) -> ExplorerSettings"
+        },
+        {
+          "name": "crypto_forget_account",
+          "signature": "pub fn crypto_forget_account(&mut self, account_id: &str) -> Result<()>"
+        },
+        {
+          "name": "crypto_link_candidates",
+          "signature": "pub fn crypto_link_candidates(&self, input: &CryptoLinkCandidatesInput) -> Vec<CryptoLinkOption>"
+        },
+        {
+          "name": "crypto_link_fiat",
+          "signature": "pub fn crypto_link_fiat(&mut self, input: &CryptoLinkInput) -> Result<()>"
+        },
+        {
+          "name": "crypto_list_accounts",
+          "signature": "pub fn crypto_list_accounts(&self) -> Vec<CryptoAccountView>"
+        },
+        {
+          "name": "crypto_list_operations",
+          "signature": "pub fn crypto_list_operations(&self, input: &CryptoListOperationsInput) -> CryptoOpsPage"
+        },
+        {
+          "name": "crypto_list_positions",
+          "signature": "pub fn crypto_list_positions(&self, live: &[PositionReading], at: &str) -> Vec<PositionView>"
+        },
+        {
+          "name": "crypto_network_for_request",
+          "signature": "pub fn crypto_network_for_request(&self, chain: Chain) -> NetworkRequest"
+        },
+        {
+          "name": "crypto_network_settings",
+          "signature": "pub fn crypto_network_settings(&self) -> NetworkSettings"
+        },
+        {
+          "name": "crypto_operation_detail",
+          "signature": "pub fn crypto_operation_detail(&self, input: &CryptoOperationDetailInput) -> Result<CryptoOperationDetail>"
+        },
+        {
+          "name": "crypto_outside_totals",
+          "signature": "pub fn crypto_outside_totals(&self) -> Vec<CryptoOutsideTotals>"
+        },
+        {
+          "name": "crypto_pairs",
+          "signature": "pub fn crypto_pairs(&self, input: &CryptoPairsInput) -> Vec<CryptoPair>"
+        },
+        {
+          "name": "crypto_register_token",
+          "signature": "pub fn crypto_register_token(&mut self, token: &TokenId, symbol: &str, name: &str, decimals: u8) -> Result<TokenStatus>"
+        },
+        {
+          "name": "crypto_reject_token",
+          "signature": "pub fn crypto_reject_token(&mut self, token: &TokenId) -> Result<TokenStatus>"
+        },
+        {
+          "name": "crypto_relations",
+          "signature": "pub fn crypto_relations(&self, input: &CryptoRelationsInput) -> Result<CryptoRelations>"
+        },
+        {
+          "name": "crypto_remember_protocols",
+          "signature": "pub fn crypto_remember_protocols(&mut self, account_id: &str, memory: &[(String, Option<String>)]) -> Result<()>"
+        },
+        {
+          "name": "crypto_reset_cursor",
+          "signature": "pub fn crypto_reset_cursor(&mut self, account_id: &str) -> Result<()>"
+        },
+        {
+          "name": "crypto_set_network_settings",
+          "signature": "pub fn crypto_set_network_settings(&mut self, input: &SetNetworkSettingsInput) -> Result<()>"
+        },
+        {
+          "name": "crypto_set_override",
+          "signature": "pub fn crypto_set_override(&mut self, input: &CryptoSetOverrideInput) -> Result<CryptoSetOverrideResult>"
+        },
+        {
+          "name": "crypto_set_token_basis",
+          "signature": "pub fn crypto_set_token_basis(&mut self, token: &TokenId, basis_usd: Option<Amount>) -> Result<()>"
+        },
+        {
+          "name": "crypto_snapshot",
+          "signature": "pub fn crypto_snapshot(&mut self, at: &str) -> Result<Vec<CryptoSnapshot>>"
+        },
+        {
+          "name": "crypto_sync_holdings",
+          "signature": "pub fn crypto_sync_holdings(&mut self) -> Result<()>"
+        },
+        {
+          "name": "crypto_sync_targets",
+          "signature": "pub fn crypto_sync_targets(&self) -> Vec<CryptoSyncTarget>"
+        },
+        {
+          "name": "crypto_test_target",
+          "signature": "pub fn crypto_test_target(&self, input: &TestNetworkInput) -> Result<(String, Option<BlockscoutKey>)>"
+        },
+        {
+          "name": "crypto_tokens",
+          "signature": "pub fn crypto_tokens(&self) -> Vec<TokenView>"
+        },
+        {
+          "name": "crypto_totals",
+          "signature": "pub fn crypto_totals(&self, at: &str) -> CryptoTotals"
+        },
+        {
+          "name": "crypto_transition_plan",
+          "signature": "pub fn crypto_transition_plan(&self) -> CryptoTransitionPlan"
+        },
+        {
+          "name": "crypto_unlink_fiat",
+          "signature": "pub fn crypto_unlink_fiat(&mut self, input: &CryptoUnlinkInput) -> Result<()>"
+        },
+        {
+          "name": "crypto_update_account",
+          "signature": "pub fn crypto_update_account(&mut self, input: &UpdateAccountInput) -> Result<()>"
+        },
+        {
+          "name": "crypto_wipe_module",
+          "signature": "pub fn crypto_wipe_module(&mut self, confirm: &str) -> Result<CryptoWipeReport>"
+        },
+        {
+          "name": "crypto_wipe_preview",
+          "signature": "pub fn crypto_wipe_preview(&self) -> CryptoWipePreview"
+        },
+        {
+          "name": "exchange_is_engine_driven",
+          "signature": "pub fn exchange_is_engine_driven(&self, store_id: &str) -> bool"
+        },
+        {
+          "name": "import_runs",
+          "signature": "pub fn import_runs(&self, store_id: &str) -> Vec<ImportRun>"
+        },
+        {
+          "name": "import_settings",
+          "signature": "pub fn import_settings(&self, store_id: &str) -> Result<ImportSettings>"
+        },
+        {
+          "name": "imported_transactions",
+          "signature": "pub fn imported_transactions(&self, store_id: &str, limit: usize, offset: usize) -> ImportedTransactions"
+        },
+        {
+          "name": "preview_exchange_sync",
+          "signature": "pub fn preview_exchange_sync(&self, imports: Vec<PendingImport>, settings: &ImportSettings) -> ImportPreview"
+        },
+        {
+          "name": "reconcile_exchange",
+          "signature": "pub fn reconcile_exchange(&mut self, store_id: &str, balances: &[(String, Vec<CoinBalance>)], now: i64) -> Result<Vec<String>>"
+        },
+        {
+          "name": "record_import_error",
+          "signature": "pub fn record_import_error(&mut self, store_id: &str, source: ImportSource, error: &str, now: i64) -> Result<ImportRun>"
+        },
+        {
+          "name": "set_import_settings",
+          "signature": "pub fn set_import_settings(&mut self, store_id: &str, mut settings: ImportSettings) -> Result<ImportSettings>"
+        },
+        {
+          "name": "sync_exchange",
+          "signature": "pub fn sync_exchange(&mut self, store_id: &str, imports: Vec<PendingImport>, source: ImportSource, now: i64) -> Result<ImportRun>"
+        }
+      ],
+      "tests": [
+        "a_bad_address_a_second_connect_and_a_taken_name_leave_nothing_behind",
+        "a_bad_address_changes_nothing",
+        "a_bad_stored_explorer_falls_back_to_the_preset",
+        "a_batch_leaves_the_capital_already_counted",
+        "a_batch_saves_once_however_many_new_tokens_it_met",
+        "a_booked_record_can_go_into_a_chosen_sub_account",
+        "a_chain_outside_the_evm_table_keeps_the_older_template",
+        "a_chain_paid_in_another_currency_is_converted_at_the_rate_of_the_day",
+        "a_closed_position_is_frozen_and_adds_nothing_to_the_value",
+        "a_closed_position_is_not_rewritten_by_the_next_pass",
+        "a_closed_position_opens_again_when_the_protocol_reports_it",
+        "a_closed_record_of_the_old_key_stays_closed_under_the_new_one",
+        "a_coin_on_an_exchange_shows_the_exchange_and_never_the_word_fiat",
+        "a_contract_rule_classifies_what_arrives_tomorrow_and_can_be_removed",
+        "a_correction_changes_the_attributes_and_nothing_else",
+        "a_correction_survives_a_resync_and_the_balance_still_matches",
+        "a_counterparty_is_named_by_address_and_remembered_when_chosen",
+        "a_cut_group_still_reports_how_many_there_are",
+        "a_debt_position_is_the_collateral_minus_the_loan_and_has_no_loss",
+        "a_declared_basis_is_used_for_what_was_held_before_the_start_date",
+        "a_failed_sync_is_kept_with_its_reason",
+        "a_finished_archiving_is_not_repeated_by_the_next_open",
+        "a_finished_raise_leaves_no_mark",
+        "a_hash_that_is_not_hex_never_reaches_a_url",
+        "a_hidden_operation_leaves_the_list_until_asked_for",
+        "a_history_without_the_module_is_the_series_it_always_was",
+        "a_hostile_name_is_cleaned_before_it_is_stored",
+        "a_key_does_not_survive_a_change_of_the_instance_it_was_issued_for",
+        "a_known_list_token_stays_known",
+        "a_known_token_the_adapter_gave_no_symbol_for_keeps_the_list_symbol",
+        "a_level_3_vault_without_the_mark_keeps_its_hand_kept_wallets",
+        "a_linked_fiat_operation_sets_the_cost_basis_above_the_market",
+        "a_missing_target_is_a_calm_empty_end_not_an_error",
+        "a_month_change_that_does_not_fit_says_nothing_instead_of_panicking",
+        "a_month_with_no_reading_keeps_the_capital_it_had",
+        "a_new_account_with_events_shows_its_capital_at_once",
+        "a_node_of_another_chain_is_called_wrong_network",
+        "a_pass_over_many_new_tokens_saves_once",
+        "a_past_point_does_not_count_an_archived_hand_kept_wallet_twice",
+        "a_pointer_at_a_fiat_record_is_not_a_correction",
+        "a_pointer_changes_no_amount_no_total_and_no_chain",
+        "a_pointer_is_visible_from_both_sides_and_can_be_removed",
+        "a_pool_shows_the_loss_against_holding_and_never_sums_it_twice",
+        "a_pool_without_a_stored_history_shows_a_dash_for_the_loss_against_holding",
+        "a_pools_uncollected_fees_are_absent_without_a_reading_of_this_device",
+        "a_position_is_not_counted_twice_against_the_receipt_token_on_the_wallet",
+        "a_position_of_one_account_does_not_take_the_others_history",
+        "a_position_read_without_a_single_operation_still_counts_in_the_capital",
+        "a_position_survives_a_save_and_a_reopen",
+        "a_position_that_is_not_an_address_has_no_link",
+        "a_position_the_protocol_no_longer_reports_is_closed_and_keeps_its_row",
+        "a_position_the_review_found_but_could_not_read_is_not_closed",
+        "a_position_whose_token_has_no_price_shows_a_dash_and_not_a_zero",
+        "a_position_without_a_history_learns_its_receipt_from_the_adapter_and_the_table",
+        "a_position_without_a_single_stored_operation_shows_a_dash_and_not_a_zero",
+        "a_preview_follows_unsaved_settings_and_keeps_nothing",
+        "a_priced_leg_of_an_unfolded_position_is_not_left_out_for_want_of_a_price",
+        "a_protocol_that_was_not_reviewed_leaves_its_positions_alone",
+        "a_quantity_only_an_adapter_reported_has_no_invented_cost",
+        "a_quarantined_token_is_outside_the_totals_until_it_is_confirmed",
+        "a_quarantined_token_stays_out_even_when_something_quoted_it",
+        "a_raise_that_never_reached_level_3_leaves_no_mark",
+        "a_reading_of_another_account_is_not_stored",
+        "a_record_is_never_in_the_ledger_and_in_the_module_at_once",
+        "a_record_of_the_old_key_is_renamed_once_its_account_is_applied",
+        "a_refresh_skips_a_list_that_brings_nothing_new",
+        "a_refused_address_is_not_even_tried",
+        "a_rejected_token_stays_rejected_after_a_position_pass",
+        "a_report_scoped_to_another_wallet_leaves_the_module_out",
+        "a_retired_wallet_yields_the_coins_the_engine_never_met",
+        "a_review_closes_only_its_own_account_and_network",
+        "a_row_carries_no_address_and_the_detail_only_an_https_one",
+        "a_scam_usdc_with_a_foreign_contract_stays_out_of_the_totals",
+        "a_second_pass_changes_nothing",
+        "a_second_reading_on_the_same_day_saves_nothing",
+        "a_second_run_changes_no_total_whatever_order_the_batches_came_in",
+        "a_secret_in_the_name_or_the_note_is_refused_like_one_in_the_address",
+        "a_seed_phrase_or_a_key_is_refused_and_leaves_no_trace_in_the_vault",
+        "a_stablecoin_without_a_price_is_worth_a_dollar",
+        "a_stale_old_key_twin_of_a_position_is_not_counted_twice",
+        "a_supply_reports_what_it_cost_what_it_accrued_and_its_rate",
+        "a_swap_for_eth_value_keeps_both_legs_over_three_batches",
+        "a_sync_records_at_once_and_never_what_was_settled",
+        "a_token_nothing_can_price_keeps_its_coins_and_says_it_is_not_valued",
+        "a_token_send_keeps_its_gas_when_the_lists_come_in_two_batches",
+        "a_token_to_eth_swap_keeps_the_token_leg_when_the_internal_list_follows",
+        "a_transaction_straddling_the_batch_boundary_keeps_every_leg",
+        "a_transfer_between_the_users_own_addresses_leaves_the_capital_alone",
+        "a_users_explorer_overrides_the_preset",
+        "a_vault_without_the_module_is_wiped_without_risking_anything",
+        "a_vault_without_the_module_keeps_its_capital_byte_for_byte",
+        "a_vault_written_before_the_field_opens_in_json_and_pack",
+        "a_wallet_on_the_engine_is_not_corrected_into_the_ledger",
+        "a_wallet_still_in_use_keeps_its_own_coins",
+        "a_wallet_the_engine_drives_is_not_archivable",
+        "a_wipe_needs_the_word_and_changes_nothing_without_it",
+        "a_wipe_unlinks_and_archives_the_wallets_and_lifts_the_ban",
+        "an_aave_debt_lowers_the_capital",
+        "an_account_no_wallet_shows_is_nobodys_capital_and_says_so",
+        "an_account_note_survives_a_reopen_when_holdings_do_not_change",
+        "an_adapters_memory_is_kept_per_account_and_protocol_and_leaves_the_cursor_alone",
+        "an_archived_account_is_out_of_the_history_as_it_is_out_of_the_present",
+        "an_archived_account_is_watched_and_not_counted",
+        "an_archived_hand_kept_wallet_is_not_counted_twice",
+        "an_empty_document_carries_no_crypto_data",
+        "an_error_never_echoes_the_address",
+        "an_event_registered_token_text_is_not_overwritten_by_an_unknown_symbol",
+        "an_evm_address_in_another_case_is_one_token_and_solana_keeps_case",
+        "an_exchange_fill_links_the_history_page_and_keeps_the_exec_id_aside",
+        "an_explorer_of_the_users_own_choosing_builds_the_link",
+        "an_offline_device_does_not_bring_the_module_back",
+        "an_old_key_record_written_back_by_an_older_build_is_not_counted_twice",
+        "an_old_queue_loses_not_one_operation",
+        "an_open_finishes_an_archiving_the_raise_did_not_reach",
+        "an_unchanged_pass_does_not_save",
+        "an_unknown_account_is_not_found",
+        "an_unknown_account_is_refused",
+        "an_unknown_account_is_refused_without_touching_the_cursors",
+        "an_unknown_category_contact_or_operation_is_refused",
+        "an_unpriced_debt_is_listed_as_left_out",
+        "an_unregistered_stranger_token_is_still_dropped",
+        "applying_a_reading_stores_the_legs_and_nothing_derived",
+        "below_level_3_the_presets_are_shown_and_saving_is_refused",
+        "below_level_three_nothing_is_retired",
+        "candidates_are_the_operations_close_in_time_and_write_nothing",
+        "closing_one_accounts_position_leaves_the_others_open",
+        "connecting_makes_the_wallet_and_its_account_together",
+        "converting_twice_writes_the_same_records",
+        "crypto_data_refuses_a_downgrade",
+        "crypto_engine_volume",
+        "crypto_events_volume",
+        "deciding_on_an_unmet_token_is_refused",
+        "declaring_an_exchange_ties_both_sides_by_one_chain_and_can_be_undone",
+        "empty_polls_keep_one_run_and_write_nothing",
+        "every_chain_builds_a_tx_and_an_address_link_on_its_preset",
+        "every_crypto_collection_ties_the_vault_to_level_three",
+        "every_row_filter_lists_what_it_counted",
+        "fiat_records_come_from_the_pointers_and_nothing_is_written",
+        "forgetting_an_account_takes_its_positions_and_their_receipts_with_it",
+        "hidden_operations_and_foreign_accounts_are_not_counted",
+        "imported_operations_carry_the_import_mark_and_a_known_coin_id",
+        "insecure_or_script_explorers_are_rejected",
+        "it_names_own_addresses_exchangers_and_protocols",
+        "no_command_creates_or_deletes_an_operation",
+        "only_followed_evm_accounts_are_read",
+        "only_https_and_localhost_are_accepted",
+        "position_tokens_are_registered_and_count",
+        "prices_are_stored_once_and_a_repeat_changes_nothing",
+        "reading_the_same_batches_again_does_not_grow_the_operation",
+        "registration_runs_when_the_position_itself_is_unchanged",
+        "rejecting_a_known_token_wins_over_the_list",
+        "saved_endpoints_are_used_and_an_empty_one_goes_back_to_the_preset",
+        "taking_back_a_recognition_returns_the_token_to_quarantine_and_out_of_the_capital",
+        "ten_thousand_operations_page_quickly",
+        "the_approximate_flag_comes_from_the_adapter_and_from_nowhere_else",
+        "the_basis_is_an_attribute_that_can_be_set_and_cleared",
+        "the_batch_order_does_not_change_the_operation",
+        "the_capital_equals_the_snapshot_with_a_lido_stake_and_an_aave_debt",
+        "the_cost_pool_costs_what_the_fills_cost",
+        "the_crypto_section_survives_a_save_and_a_reopen",
+        "the_cursor_is_stored_with_the_events_and_a_finished_read_is_a_refresh_next_time",
+        "the_device_secrets_file_goes_with_the_module",
+        "the_exchange_being_connected_is_not_retired",
+        "the_filter_narrows_by_kind_token_address_and_protocol",
+        "the_key_is_optional_kept_hidden_and_never_leaves_the_device_file",
+        "the_list_is_newest_first_and_a_page_is_capped",
+        "the_live_balance_is_set_once_everything_is_booked",
+        "the_module_adds_its_wallet_and_moves_no_other_total",
+        "the_modules_own_entries_are_listed_marked_and_cannot_be_corrected",
+        "the_modules_own_sync_puts_the_balances_into_the_holdings",
+        "the_month_line_needs_a_snapshot_a_month_old_and_otherwise_says_nothing",
+        "the_move_archives_what_it_named_and_leaves_the_engines_wallet",
+        "the_plan_counts_only_the_crypto_kept_by_hand",
+        "the_pointer_only_lives_in_a_gated_collection",
+        "the_price_index_answers_what_the_cache_lookup_answers",
+        "the_quarantine_lists_what_arrived_and_when_and_leaves_the_decided_out",
+        "the_settings_leave_out_kinds_coins_dates_and_accounts",
+        "the_snapshots_of_a_day_are_written_once_and_rewritten_in_place",
+        "the_starting_amount_and_the_operations_give_the_network_balance",
+        "the_stored_key_is_only_offered_to_the_instance_that_issued_it",
+        "the_sub_accounts_follow_their_exchange",
+        "the_users_decision_survives_receiving_the_events_again",
+        "the_wipe_leaves_a_backup_that_still_holds_the_module",
+        "three_months_of_readings_are_three_points_of_the_history",
+        "two_accounts_in_one_reserve_are_two_records_with_their_own_legs",
+        "two_devices_convert_the_same_file_to_the_same_records",
+        "two_devices_hold_the_same_bytes_for_the_same_facts",
+        "two_huge_transfers_of_a_junk_token_do_not_take_the_list_down",
+        "what_looks_like_a_secret_is_told_from_an_address",
+        "without_a_backup_that_opens_nothing_is_wiped",
+        "without_consent_the_test_makes_no_call_and_with_it_the_key_goes_in_the_header",
+        "without_the_module_an_archived_crypto_wallet_still_counts"
+      ]
+    },
+    "household": {
+      "methods": [
+        {
+          "name": "add_attachment_file",
+          "signature": "pub fn add_attachment_file(&mut self, owner: EntityRef, file: NewFile<'_>) -> Result<Attachment>"
+        },
+        {
+          "name": "add_attachment_link",
+          "signature": "pub fn add_attachment_link(&mut self, owner: EntityRef, url: &str, title: &str) -> Result<Attachment>"
+        },
+        {
+          "name": "add_meter_reading",
+          "signature": "pub fn add_meter_reading(&mut self, item_id: &str, value: Amount, period: &str, day: Option<u8>, zone: Option<&str>) -> Result<MeterReading>"
+        },
+        {
+          "name": "add_shared_item",
+          "signature": "pub fn add_shared_item(&mut self, event_id: &str, draft: SharedItemDraft) -> Result<SharedEventView>"
+        },
+        {
+          "name": "add_shared_participant",
+          "signature": "pub fn add_shared_participant(&mut self, event_id: &str, draft: SharedParticipantDraft) -> Result<SharedEventView>"
+        },
+        {
+          "name": "add_shared_purchase",
+          "signature": "pub fn add_shared_purchase(&mut self, event_id: &str, draft: SharedPurchaseDraft) -> Result<SharedEventView>"
+        },
+        {
+          "name": "archive_contact",
+          "signature": "pub fn archive_contact(&mut self, id: &str, archived: bool) -> Result<()>"
+        },
+        {
+          "name": "archive_shared_event",
+          "signature": "pub fn archive_shared_event(&mut self, id: &str, archived: bool) -> Result<()>"
+        },
+        {
+          "name": "attach_payment_to_shared_event",
+          "signature": "pub fn attach_payment_to_shared_event(&mut self, input: AttachPaymentInput) -> Result<SharedEventView>"
+        },
+        {
+          "name": "attachments_dir",
+          "signature": "pub fn attachments_dir(&self) -> PathBuf"
+        },
+        {
+          "name": "contact_balances",
+          "signature": "pub fn contact_balances(&self) -> Vec<ContactBalance>"
+        },
+        {
+          "name": "contact_shared_events",
+          "signature": "pub fn contact_shared_events(&self, contact_id: &str) -> Vec<ContactEventBalance>"
+        },
+        {
+          "name": "contact_summaries",
+          "signature": "pub fn contact_summaries(&self) -> Result<Vec<ContactSummary>>"
+        },
+        {
+          "name": "contact_turnover",
+          "signature": "pub fn contact_turnover(&self, contact_id: &str, account_id: Option<&str>) -> Result<ContactTurnover>"
+        },
+        {
+          "name": "create_contact",
+          "signature": "pub fn create_contact(&mut self, draft: ContactDraft) -> Result<Contact>"
+        },
+        {
+          "name": "create_shared_event",
+          "signature": "pub fn create_shared_event(&mut self, draft: SharedEventDraft) -> Result<SharedEventView>"
+        },
+        {
+          "name": "create_utility_item",
+          "signature": "pub fn create_utility_item(&mut self, mut draft: UtilityDraft) -> Result<UtilityItem>"
+        },
+        {
+          "name": "debt_load",
+          "signature": "pub fn debt_load(&self, now: i64, zone: &str) -> Result<DebtLoad>"
+        },
+        {
+          "name": "debt_terms",
+          "signature": "pub fn debt_terms(&self, contact_id: Option<&str>) -> Vec<crate::model::contact::DebtTerms>"
+        },
+        {
+          "name": "delete_contact",
+          "signature": "pub fn delete_contact(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_meter_reading",
+          "signature": "pub fn delete_meter_reading(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_shared_event",
+          "signature": "pub fn delete_shared_event(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_shared_item",
+          "signature": "pub fn delete_shared_item(&mut self, event_id: &str, item_id: &str) -> Result<SharedEventView>"
+        },
+        {
+          "name": "delete_shared_purchase",
+          "signature": "pub fn delete_shared_purchase(&mut self, event_id: &str, purchase_id: &str) -> Result<SharedEventView>"
+        },
+        {
+          "name": "delete_shared_settlement",
+          "signature": "pub fn delete_shared_settlement(&mut self, event_id: &str, settlement_id: &str) -> Result<SharedEventView>"
+        },
+        {
+          "name": "delete_utility_item",
+          "signature": "pub fn delete_utility_item(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "list_attachments",
+          "signature": "pub fn list_attachments(&self, owner: Option<&EntityRef>) -> Vec<Attachment>"
+        },
+        {
+          "name": "list_shared_events",
+          "signature": "pub fn list_shared_events(&self, include_archived: bool) -> Vec<SharedEventSummary>"
+        },
+        {
+          "name": "make_shared_participant_contact",
+          "signature": "pub fn make_shared_participant_contact(&mut self, event_id: &str, participant_id: &str) -> Result<Contact>"
+        },
+        {
+          "name": "meter_trend",
+          "signature": "pub fn meter_trend(&self, item_id: &str, zone: &str) -> Result<UtilityTrend>"
+        },
+        {
+          "name": "pay_utility_bill",
+          "signature": "pub fn pay_utility_bill(&mut self, input: PayUtilityBillInput, zone: &str) -> Result<Vec<Transaction>>"
+        },
+        {
+          "name": "property_of_tx",
+          "signature": "pub fn property_of_tx(&self, tx_id: &str) -> Option<&str>"
+        },
+        {
+          "name": "property_summary",
+          "signature": "pub fn property_summary(&self, store_id: &str, zone: &str) -> Result<PropertySummary>"
+        },
+        {
+          "name": "read_attachment",
+          "signature": "pub fn read_attachment(&self, id: &str) -> Result<(Attachment, Vec<u8>)>"
+        },
+        {
+          "name": "reassign_shared",
+          "signature": "pub fn reassign_shared(&mut self, input: SharedRemainderInput) -> Result<SharedEventView>"
+        },
+        {
+          "name": "remove_attachment",
+          "signature": "pub fn remove_attachment(&mut self, id: &str) -> Result<Attachment>"
+        },
+        {
+          "name": "remove_shared_participant",
+          "signature": "pub fn remove_shared_participant(&mut self, event_id: &str, participant_id: &str) -> Result<SharedEventView>"
+        },
+        {
+          "name": "rename_attachment",
+          "signature": "pub fn rename_attachment(&mut self, id: &str, title: &str) -> Result<Attachment>"
+        },
+        {
+          "name": "restore_attachment",
+          "signature": "pub fn restore_attachment(&mut self, id: &str) -> Result<Attachment>"
+        },
+        {
+          "name": "set_debt_terms",
+          "signature": "pub fn set_debt_terms(&mut self, draft: DebtTermsDraft) -> Result<Option<crate::model::contact::DebtTerms>>"
+        },
+        {
+          "name": "set_shared_due",
+          "signature": "pub fn set_shared_due(&mut self, input: SetSharedDueInput) -> Result<Option<DebtTerms>>"
+        },
+        {
+          "name": "set_shared_item_split",
+          "signature": "pub fn set_shared_item_split(&mut self, input: SetSharedItemSplitInput) -> Result<SharedEventView>"
+        },
+        {
+          "name": "set_shared_share_override",
+          "signature": "pub fn set_shared_share_override(&mut self, input: SetShareOverrideInput) -> Result<SharedEventView>"
+        },
+        {
+          "name": "settle_shared",
+          "signature": "pub fn settle_shared(&mut self, input: SettleSharedInput) -> Result<SharedEventView>"
+        },
+        {
+          "name": "shared_event_share_text",
+          "signature": "pub fn shared_event_share_text(&self, event_id: &str, locale: &str) -> Result<String>"
+        },
+        {
+          "name": "shared_event_view",
+          "signature": "pub fn shared_event_view(&self, id: &str) -> Result<SharedEventView>"
+        },
+        {
+          "name": "shared_tx_links",
+          "signature": "pub fn shared_tx_links(&self) -> Vec<SharedTxLink>"
+        },
+        {
+          "name": "transactions_with_attachments",
+          "signature": "pub fn transactions_with_attachments(&self) -> Vec<String>"
+        },
+        {
+          "name": "tx_property_links",
+          "signature": "pub fn tx_property_links(&self) -> Vec<TxProperty>"
+        },
+        {
+          "name": "update_contact",
+          "signature": "pub fn update_contact(&mut self, id: &str, draft: ContactDraft) -> Result<Contact>"
+        },
+        {
+          "name": "update_meter_reading",
+          "signature": "pub fn update_meter_reading(&mut self, id: &str, value: Amount, period: &str, day: Option<u8>) -> Result<MeterReading>"
+        },
+        {
+          "name": "update_shared_event",
+          "signature": "pub fn update_shared_event(&mut self, id: &str, draft: SharedEventDraft) -> Result<SharedEventView>"
+        },
+        {
+          "name": "update_shared_item",
+          "signature": "pub fn update_shared_item(&mut self, event_id: &str, item_id: &str, draft: SharedItemDraft) -> Result<SharedEventView>"
+        },
+        {
+          "name": "update_shared_participant",
+          "signature": "pub fn update_shared_participant(&mut self, event_id: &str, participant_id: &str, draft: SharedParticipantDraft) -> Result<SharedEventView>"
+        },
+        {
+          "name": "update_shared_purchase",
+          "signature": "pub fn update_shared_purchase(&mut self, event_id: &str, purchase_id: &str, draft: SharedPurchaseDraft) -> Result<SharedEventView>"
+        },
+        {
+          "name": "update_utility_item",
+          "signature": "pub fn update_utility_item(&mut self, id: &str, mut draft: UtilityDraft) -> Result<UtilityItem>"
+        },
+        {
+          "name": "utility_bill",
+          "signature": "pub fn utility_bill(&self, property_id: &str, period: &str, zone: &str) -> Result<UtilityBill>"
+        },
+        {
+          "name": "utility_items",
+          "signature": "pub fn utility_items(&self) -> Vec<UtilityItem>"
+        },
+        {
+          "name": "utility_payment_draft",
+          "signature": "pub fn utility_payment_draft(&self, item_id: &str, period: &str, zone: &str) -> Result<UtilityPaymentDraft>"
+        },
+        {
+          "name": "write_off_shared",
+          "signature": "pub fn write_off_shared(&mut self, input: SharedRemainderInput) -> Result<SharedEventView>"
+        }
+      ],
+      "tests": [
+        "a_big_step_never_makes_a_share_negative",
+        "a_calculator_for_others_adds_no_spending_and_no_debts",
+        "a_calculator_for_others_touches_no_wallet_and_no_contact",
+        "a_car_costs_its_expenses_and_its_wear",
+        "a_card_with_a_debt_is_costly_whatever_its_rate",
+        "a_deleted_operation_takes_its_files_on_the_next_open",
+        "a_failing_line_leaves_the_vault_untouched",
+        "a_file_is_sealed_next_to_the_vault_and_opens_back",
+        "a_guest_organizer_without_details_has_no_requisites_line",
+        "a_guest_settles_without_an_operation_only",
+        "a_guest_with_details_becomes_a_contact_with_them",
+        "a_hand_set_total_moves_the_rest_to_the_others",
+        "a_link_follows_the_operation",
+        "a_loan_is_classed_by_its_rate",
+        "a_meter_bills_by_its_own_formula",
+        "a_meter_bills_consumption_times_tariff",
+        "a_meter_from_an_older_app_still_reads",
+        "a_month_without_a_reading_bills_the_last_unpaid_one",
+        "a_move_mid_month_bills_each_flat_from_its_own_readings",
+        "a_new_password_keeps_the_files_readable",
+        "a_paid_6000_with_my_share_1500_is_1500_of_my_expense",
+        "a_partial_return_leaves_the_rest_and_too_much_is_refused",
+        "a_participant_with_operations_keeps_their_contact_and_a_lone_sharer_stays",
+        "a_payment_that_found_another_place_is_not_linked_twice",
+        "a_person_with_money_in_the_event_cannot_be_removed",
+        "a_purchase_in_another_currency_gets_a_rate_from_the_cache_or_by_hand",
+        "a_purchase_taken_out_by_hand_leaves_nothing_to_bring_back",
+        "a_reading_below_the_previous_one_is_flagged_not_rewritten",
+        "a_reading_can_be_corrected_within_the_meter_rules",
+        "a_reading_without_a_day_does_not_block_a_later_one",
+        "a_refused_payment_leaves_the_event_untouched",
+        "a_renamed_file_is_found_by_its_new_name",
+        "a_rest_put_on_the_others_changes_the_shares_and_keeps_the_sum",
+        "a_second_reading_the_same_day_corrects_the_first",
+        "a_set_off_changes_the_balance_without_an_operation",
+        "a_settlement_can_be_taken_back_with_its_operation",
+        "a_split_names_only_people_of_the_event",
+        "a_term_can_be_set_for_a_contact_debt",
+        "a_two_rate_meter_reads_and_bills_per_zone",
+        "a_utility_needs_a_property_and_the_summary_adds_it_up",
+        "a_whole_bill_is_paid_at_once_and_linked_to_its_items",
+        "a_write_off_is_my_expense_in_the_category_of_the_event",
+        "a_wrong_formula_is_not_saved",
+        "an_automation_links_what_it_books",
+        "an_event_is_created_renamed_and_deleted",
+        "an_existing_payment_is_adopted_and_only_unlinked_on_delete",
+        "an_item_can_be_narrowed_to_some_people",
+        "an_old_vault_without_shared_events_opens_keeps_its_data_and_reads_again",
+        "bought_and_even_closes_without_any_settlement",
+        "budgets_see_my_part_not_the_whole_payment",
+        "cancelled_items_and_unbought_plans_stay_out",
+        "dates_are_checked",
+        "dates_read_naturally",
+        "debt_terms_are_set_replaced_and_cleared",
+        "debts_add_up_per_contact_and_count_in_net_worth",
+        "debts_appear_at_once_in_contact_cards_and_go_out_when_returned",
+        "deleting_a_linked_payment_in_the_ledger_removes_the_purchase",
+        "deleting_a_settlement_operation_reopens_the_debt",
+        "deleting_the_event_keeps_every_real_operation",
+        "deleting_the_event_turns_its_transfers_into_ordinary_debt_transfers",
+        "dti_takes_terms_or_recent_repayments_against_income",
+        "editing_a_purchase_follows_into_the_payment",
+        "editing_an_archived_event_reopens_it",
+        "editing_the_amount_and_date_of_a_linked_operation_follows_into_the_event",
+        "english_text_and_the_organizers_requisites_from_their_contact",
+        "equal_split_rounds_to_the_step_and_the_buyer_takes_the_leftover",
+        "event_debts_are_dated_and_event_transfers_are_never_counted_twice",
+        "five_hundred_events_keep_the_contact_balances_fast",
+        "fixed_totals_are_checked_when_set_and_flagged_when_they_stop_fitting",
+        "items_are_planned_cancelled_and_deleted",
+        "links_are_web_addresses_with_a_caption",
+        "money_back_and_write_offs_close_the_event",
+        "money_groups_thousands_and_keeps_cents",
+        "my_purchase_makes_a_payment_and_deleting_it_gives_the_money_back",
+        "nothing_bought_is_planning_and_has_no_debts",
+        "only_a_live_property_takes_a_link",
+        "only_operations_and_goals_that_exist_take_files",
+        "paid_6000_with_my_share_1500_is_an_expense_of_1500",
+        "participants_are_contacts_or_guests",
+        "passing_a_rest_on_never_lands_on_an_organizer_who_is_out",
+        "putting_the_rest_on_the_others_shifts_their_shares",
+        "readings_of_one_month_keep_their_order_by_day",
+        "removal_waits_for_undo_until_the_next_open",
+        "rent_into_the_property_itself_is_refused",
+        "rounding_works_on_the_total_of_a_person_not_on_each_item",
+        "someone_else_organizes_and_i_owe_them_my_share",
+        "someone_elses_purchase_leaves_my_wallets_alone",
+        "summary_converts_debts_both_ways_and_skips_internal_moves",
+        "summary_flags_a_debt_currency_without_a_rate",
+        "summary_of_a_contact_without_operations_is_empty",
+        "the_bill_estimates_an_unread_meter_and_compares_with_its_average",
+        "the_event_refuses_what_it_cannot_follow",
+        "the_first_rent_payment_carries_the_deposit",
+        "the_list_is_ordered_by_the_event_date",
+        "the_only_sharer_of_an_item_is_found",
+        "the_organizer_cannot_settle_with_themselves",
+        "the_preview_prices_the_typed_readings",
+        "the_skewers_board_adds_up_to_the_cent",
+        "the_skewers_count_my_share_of_every_purchase_and_nothing_twice",
+        "the_skewers_text_has_purchases_shares_and_who_pays_whom",
+        "the_summary_counts_rent_and_its_yield",
+        "the_trend_forecasts_and_flags_a_spike",
+        "totals_compare_the_plan_with_what_was_bought",
+        "totals_that_do_not_fit_are_ignored_and_flagged",
+        "turnover_counts_sent_and_received_but_not_internal_moves",
+        "two_currencies_are_settled_at_the_rate_stored_on_the_purchase",
+        "undoing_the_deletion_of_a_payment_brings_its_purchase_back",
+        "undoing_the_deletion_of_a_settlement_operation_settles_again",
+        "used_contacts_are_archived_and_used_accounts_deactivated",
+        "when_i_do_not_take_part_my_share_and_debts_are_nothing",
+        "when_someone_else_organizes_one_repay_settles_my_share",
+        "writing_off_the_rest_closes_the_debt_and_is_my_position",
+        "zones_are_compared_apart"
+      ]
+    },
+    "leaves": {
+      "methods": [
+        {
+          "name": "archive_category",
+          "signature": "pub fn archive_category(&mut self, key: &str, archived: bool) -> Result<()>"
+        },
+        {
+          "name": "categorization_rules",
+          "signature": "pub fn categorization_rules(&self) -> Vec<CategorizationRule>"
+        },
+        {
+          "name": "create_categorization_rule",
+          "signature": "pub fn create_categorization_rule(&mut self, pattern: &str, category: &str) -> Result<CategorizationRule>"
+        },
+        {
+          "name": "create_category",
+          "signature": "pub fn create_category(&mut self, key: Option<&str>, name: &str, group: CategoryGroup) -> Result<Category>"
+        },
+        {
+          "name": "create_envelope",
+          "signature": "pub fn create_envelope(&mut self, draft: EnvelopeDraft) -> Result<Envelope>"
+        },
+        {
+          "name": "delete_categorization_rule",
+          "signature": "pub fn delete_categorization_rule(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_category",
+          "signature": "pub fn delete_category(&mut self, key: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_envelope",
+          "signature": "pub fn delete_envelope(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "earmarked",
+          "signature": "pub fn earmarked(&self, store_id: &str, asset_key: &str) -> Amount"
+        },
+        {
+          "name": "entity_card",
+          "signature": "pub fn entity_card(&self, target: &EntityRef) -> EntityCard"
+        },
+        {
+          "name": "envelopes",
+          "signature": "pub fn envelopes(&self, store_id: Option<&str>) -> Vec<EnvelopeView>"
+        },
+        {
+          "name": "free_balance",
+          "signature": "pub fn free_balance(&self, store_id: &str, asset: &AssetRef) -> Amount"
+        },
+        {
+          "name": "fund_envelope",
+          "signature": "pub fn fund_envelope(&mut self, id: &str, amount: Amount) -> Result<Envelope>"
+        },
+        {
+          "name": "fund_goal",
+          "signature": "pub fn fund_goal(&mut self, goal_id: &str, store_id: &str, amount: Amount) -> Result<Amount>"
+        },
+        {
+          "name": "fx_table",
+          "signature": "pub fn fx_table(&self, favorites: &[String]) -> FxTable"
+        },
+        {
+          "name": "link_transactions",
+          "signature": "pub fn link_transactions(&mut self, ids: &[String], flow_id: Option<&str>) -> Result<String>"
+        },
+        {
+          "name": "list_flows",
+          "signature": "pub fn list_flows(&self, from: Option<&str>, to: Option<&str>, store_ids: &[String]) -> Vec<FlowSummary>"
+        },
+        {
+          "name": "list_transactions",
+          "signature": "pub fn list_transactions(&self, filter: &TxFilter, zone: &str) -> Result<Vec<Transaction>>"
+        },
+        {
+          "name": "list_transactions_page",
+          "signature": "pub fn list_transactions_page(&self, filter: &TxFilter, offset: u32, limit: u32, zone: &str) -> Result<TxPage>"
+        },
+        {
+          "name": "month_balance",
+          "signature": "pub fn month_balance(&self, filter: &ReportFilter, now: i64, zone: &str) -> Result<MonthBalance>"
+        },
+        {
+          "name": "move_between_envelopes",
+          "signature": "pub fn move_between_envelopes(&mut self, from: &str, to: &str, amount: Amount) -> Result<()>"
+        },
+        {
+          "name": "pinned",
+          "signature": "pub fn pinned(&self, now: i64, zone: &str) -> Vec<PinnedView>"
+        },
+        {
+          "name": "relations",
+          "signature": "pub fn relations(&self, target: &EntityRef) -> Vec<RelationGroup>"
+        },
+        {
+          "name": "reorder_categorization_rules",
+          "signature": "pub fn reorder_categorization_rules(&mut self, ids: &[String]) -> Result<()>"
+        },
+        {
+          "name": "search_index",
+          "signature": "pub fn search_index(&self) -> Vec<SearchEntry>"
+        },
+        {
+          "name": "search_transactions",
+          "signature": "pub fn search_transactions(&self, query: &str, categories: &[String], limit: usize) -> Vec<Transaction>"
+        },
+        {
+          "name": "set_carry_over",
+          "signature": "pub fn set_carry_over(&mut self, month: Option<&str>) -> Result<()>"
+        },
+        {
+          "name": "set_pinned",
+          "signature": "pub fn set_pinned(&mut self, pins: Vec<Pinned>) -> Result<()>"
+        },
+        {
+          "name": "store_months",
+          "signature": "pub fn store_months(&self, store_id: &str, include_children: bool, months: u32, now: i64, zone: &str) -> Vec<StoreMonthRow>"
+        },
+        {
+          "name": "transactions_csv",
+          "signature": "pub fn transactions_csv(&self, filter: &TxFilter, zone: &str) -> Result<String>"
+        },
+        {
+          "name": "tx_graph",
+          "signature": "pub fn tx_graph(&self, filter: &TxFilter, collapsed: &[String], zone: &str) -> Result<TxGraph>"
+        },
+        {
+          "name": "tx_loss",
+          "signature": "pub fn tx_loss(&self, id: &str) -> Result<TxLoss>"
+        },
+        {
+          "name": "tx_losses",
+          "signature": "pub fn tx_losses(&self) -> BTreeMap<String, TxLoss>"
+        },
+        {
+          "name": "unlink_transaction",
+          "signature": "pub fn unlink_transaction(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "update_categorization_rule",
+          "signature": "pub fn update_categorization_rule(&mut self, id: &str, pattern: &str, category: &str, active: bool) -> Result<CategorizationRule>"
+        },
+        {
+          "name": "update_category",
+          "signature": "pub fn update_category(&mut self, key: &str, name: Option<&str>, group: CategoryGroup, essential: Option<bool>, passive: Option<bool>) -> Result<Category>"
+        },
+        {
+          "name": "update_envelope",
+          "signature": "pub fn update_envelope(&mut self, id: &str, draft: EnvelopeDraft) -> Result<Envelope>"
+        },
+        {
+          "name": "vehicle_service_done",
+          "signature": "pub fn vehicle_service_done(&mut self, store_id: &str, date: NaiveDate, km: Option<u32>) -> Result<Store>"
+        },
+        {
+          "name": "vehicle_update_mileage",
+          "signature": "pub fn vehicle_update_mileage(&mut self, store_id: &str, km: u32, today: NaiveDate) -> Result<Store>"
+        }
+      ],
+      "tests": [
+        "a_bad_month_is_refused",
+        "a_bank_holds_only_fiat",
+        "a_bound_store_only_takes_envelopes_of_its_asset",
+        "a_category_lists_its_rules_and_operations",
+        "a_convert_at_a_worse_rate_than_the_market_loses_the_spread",
+        "a_goal_over_every_wallet_is_not_listed_on_each",
+        "a_huge_banknote_total_is_rejected_not_a_panic",
+        "a_kind_must_fit_the_store",
+        "a_link_to_nothing_is_a_missing_card",
+        "a_new_vault_has_the_default_categories",
+        "a_page_is_a_slice_of_the_full_list",
+        "a_rub_usdt_thb_chain_adds_up_its_links",
+        "a_wallet_lists_its_goals_and_operations",
+        "a_wallet_the_crypto_module_reads_takes_no_hand_made_entry",
+        "allocated_is_the_sum_of_moves",
+        "an_internal_convert_still_counts_its_spread",
+        "an_old_property_without_a_car_reads_and_a_house_is_a_home",
+        "an_operation_leads_to_the_workflow_that_made_it_and_its_flow",
+        "an_unpriced_favorite_has_no_row",
+        "categories_must_fit_the_verb",
+        "collapsing_folds_a_sub_account_into_its_parent",
+        "contact_accounts_are_checked",
+        "crypto_favorites_join_the_rates_table",
+        "csv_has_a_line_per_leg_of_what_the_filter_keeps",
+        "dates_are_checked",
+        "day_bounds_follow_the_zone",
+        "debt_direction_must_match_the_sides",
+        "envelopes_never_earmark_more_than_the_store_has",
+        "filter_covers_several_wallets",
+        "filters_by_scope_kind_period_and_text",
+        "filters_by_the_main_category",
+        "filters_by_value_origin_and_debt",
+        "flow_links_the_next_operation_of_a_chain",
+        "funding_a_goal_takes_only_what_is_free",
+        "futures_fields_are_checked",
+        "graph_chains_lanes_and_links_transfers",
+        "graph_refuses_more_than_the_cap",
+        "groups_are_capped_but_count_everything",
+        "hide_internal_drops_moves_inside_one_wallet",
+        "kind_details_are_checked",
+        "mileage_is_read_with_its_date",
+        "numbers_compare_without_spaces_and_commas",
+        "only_a_car_has_a_mileage",
+        "operations_are_found_by_comment_amount_and_wallet",
+        "pins_are_deduplicated_and_valued",
+        "realized_keeps_operations_that_closed_a_position",
+        "renaming_keeps_transactions_and_deleting_needs_it_unused",
+        "rules_fill_empty_categories_in_order",
+        "service_done_moves_the_next_one_by_the_intervals",
+        "slugs_are_ascii_keys",
+        "store_months_split_inflow_and_outflow_by_month",
+        "system_categories_cannot_be_changed",
+        "the_carry_starts_where_it_was_turned_on_even_before_the_period",
+        "the_last_month_goes_day_by_day_and_ends_at_its_total",
+        "the_preview_of_a_convert_shows_the_overpay_over_the_market",
+        "the_rates_table_is_against_the_base",
+        "transfers_need_a_store_and_two_sides",
+        "with_fee_keeps_only_operations_with_a_fee",
+        "without_carry_each_month_stands_alone"
+      ]
+    },
+    "loyalty": {
+      "methods": [
+        {
+          "name": "adjust_points",
+          "signature": "pub fn adjust_points(&mut self, store_id: &str, delta: Amount, comment: &str, source_store_id: Option<String>, timestamp: Option<String>) -> Result<Transaction>"
+        },
+        {
+          "name": "cashback_report",
+          "signature": "pub fn cashback_report(&self, from: &str, to: &str) -> CashbackReport"
+        },
+        {
+          "name": "create_loyalty_program",
+          "signature": "pub fn create_loyalty_program(&mut self, name: &str, color: &str, contact_id: Option<String>, info: LoyaltyInfo) -> Result<Store>"
+        },
+        {
+          "name": "loyalty_symbol_clash",
+          "signature": "pub fn loyalty_symbol_clash(&self, store_id: &str) -> bool"
+        },
+        {
+          "name": "set_loyalty_info",
+          "signature": "pub fn set_loyalty_info(&mut self, store_id: &str, info: LoyaltyInfo) -> Result<Store>"
+        }
+      ],
+      "tests": [
+        "a_new_clash_is_still_refused",
+        "a_programme_is_created_with_its_points_or_not_at_all",
+        "a_programme_that_already_clashes_can_still_be_saved",
+        "points_are_valued_by_the_programme_and_reported_by_card",
+        "programmes_keep_their_points_apart",
+        "programmes_saved_before_the_login_field_still_open",
+        "the_clash_is_computed_for_the_view"
+      ]
+    },
+    "misc": {
+      "methods": [
+        {
+          "name": "apply_document_edit",
+          "signature": "pub fn apply_document_edit(&mut self, base: &VaultDoc, edited: VaultDoc) -> Result<()>"
+        },
+        {
+          "name": "has_live_peers",
+          "signature": "pub fn has_live_peers(&self) -> bool"
+        }
+      ],
+      "tests": []
+    },
+    "mod_exchange_import": {
+      "methods": [
+        {
+          "name": "bybit_key_for",
+          "signature": "pub fn bybit_key_for(&self, store_id: &str) -> Option<&crate::model::vault::ExchangeKeys>"
+        },
+        {
+          "name": "bybit_reconcile",
+          "signature": "pub fn bybit_reconcile(&self, store_id: &str, balances: &[(String, Vec<crate::exchange::CoinBalance>)]) -> Vec<crate::ipc_contract::ExchangeAccountBalance>"
+        },
+        {
+          "name": "confirm_pending_imports",
+          "signature": "pub fn confirm_pending_imports(&mut self, exec_ids: &[String]) -> Result<u32>"
+        },
+        {
+          "name": "discard_pending_imports",
+          "signature": "pub fn discard_pending_imports(&mut self, exec_ids: &[String]) -> Result<u32>"
+        },
+        {
+          "name": "ensure_bybit_accounts",
+          "signature": "pub fn ensure_bybit_accounts(&mut self, store_id: &str, names: [&str; 3]) -> Result<[String; 3]>"
+        },
+        {
+          "name": "ensure_bybit_accounts_for",
+          "signature": "pub fn ensure_bybit_accounts_for(&mut self, store_id: &str, names: [&str; 3], wanted: [bool; 3]) -> Result<[Option<String>; 3]>"
+        },
+        {
+          "name": "exchange_key_status",
+          "signature": "pub fn exchange_key_status(&self, store_id: &str) -> crate::ipc_contract::ExchangeKeyStatus"
+        },
+        {
+          "name": "import_schedule",
+          "signature": "pub fn import_schedule(&self) -> Vec<(u32, crate::vault_io::device_secrets::DeviceKey)>"
+        },
+        {
+          "name": "pending_imports",
+          "signature": "pub fn pending_imports(&self) -> Vec<PendingImport>"
+        },
+        {
+          "name": "save_terminal_drawings",
+          "signature": "pub fn save_terminal_drawings(&mut self, store_id: &str, symbol: &str, json: &str) -> Result<()>"
+        },
+        {
+          "name": "set_exchange_key",
+          "signature": "pub fn set_exchange_key(&mut self, store_id: &str, api_key: &str, api_secret: &str) -> Result<crate::ipc_contract::ExchangeKeyStatus>"
+        },
+        {
+          "name": "set_exchange_targets",
+          "signature": "pub fn set_exchange_targets(&mut self, store_id: &str, spot_store_id: Option<String>, futures_store_id: Option<String>) -> Result<crate::ipc_contract::ExchangeKeyStatus>"
+        },
+        {
+          "name": "set_import_interval",
+          "signature": "pub fn set_import_interval(&mut self, store_id: &str, interval_sec: u32) -> Result<()>"
+        },
+        {
+          "name": "stage_imports",
+          "signature": "pub fn stage_imports(&mut self, imports: Vec<PendingImport>) -> Result<u32>"
+        },
+        {
+          "name": "terminal_state",
+          "signature": "pub fn terminal_state(&self, store_id: &str) -> Result<TerminalState>"
+        },
+        {
+          "name": "unified_account_of",
+          "signature": "pub fn unified_account_of(&self, store_id: &str) -> Option<String>"
+        },
+        {
+          "name": "update_terminal_state",
+          "signature": "pub fn update_terminal_state(&mut self, store_id: &str, patch: TerminalPatch) -> Result<TerminalState>"
+        }
+      ],
+      "tests": []
+    },
+    "mod_portfolio": {
+      "methods": [
+        {
+          "name": "history_series",
+          "signature": "pub fn history_series(&self, base_currency: &str) -> Vec<HistoryPoint>"
+        },
+        {
+          "name": "portfolio_summary",
+          "signature": "pub fn portfolio_summary(&self) -> PortfolioSummary"
+        },
+        {
+          "name": "prices_as_of",
+          "signature": "pub fn prices_as_of(&self) -> Option<String>"
+        },
+        {
+          "name": "realized_pnl",
+          "signature": "pub fn realized_pnl(&self) -> RealizedPnl"
+        },
+        {
+          "name": "resolve_scope",
+          "signature": "pub fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String>"
+        },
+        {
+          "name": "store_history",
+          "signature": "pub fn store_history(&self, store_id: &str, include_children: bool, base_currency: &str) -> Vec<HistoryPoint>"
+        },
+        {
+          "name": "store_overview",
+          "signature": "pub fn store_overview(&self, store_id: &str, include_children: bool) -> Result<StoreOverview>"
+        },
+        {
+          "name": "store_pnl",
+          "signature": "pub fn store_pnl(&self, store_id: &str, include_children: bool) -> RealizedPnl"
+        },
+        {
+          "name": "store_tree",
+          "signature": "pub fn store_tree(&self) -> Vec<StoreTreeNode>"
+        }
+      ],
+      "tests": []
+    },
+    "mod_stores": {
+      "methods": [
+        {
+          "name": "archive_store",
+          "signature": "pub fn archive_store(&mut self, id: &str, archived: bool) -> Result<()>"
+        },
+        {
+          "name": "create_bank_with_card",
+          "signature": "pub fn create_bank_with_card(&mut self, name: &str, color: &str, note: &str, mut extras: StoreExtras, card: FirstCard) -> Result<Store>"
+        },
+        {
+          "name": "create_store",
+          "signature": "pub fn create_store(&mut self, name: &str, kind: StoreKind, color: &str, note: &str, parent_id: Option<String>) -> Result<Store>"
+        },
+        {
+          "name": "create_store_with",
+          "signature": "pub fn create_store_with(&mut self, name: &str, kind: StoreKind, color: &str, note: &str, parent_id: Option<String>, extras: StoreExtras) -> Result<Store>"
+        },
+        {
+          "name": "delete_store",
+          "signature": "pub fn delete_store(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "depth",
+          "signature": "pub fn depth(&self, id: &str) -> usize"
+        },
+        {
+          "name": "ensure_cash_wallet",
+          "signature": "pub fn ensure_cash_wallet(&mut self, name: &str) -> Result<bool>"
+        },
+        {
+          "name": "move_store",
+          "signature": "pub fn move_store(&mut self, id: &str, parent_id: Option<&str>) -> Result<Store>"
+        },
+        {
+          "name": "root_of",
+          "signature": "pub fn root_of(&self, id: &str) -> String"
+        },
+        {
+          "name": "store_move_targets",
+          "signature": "pub fn store_move_targets(&self, id: &str) -> Result<StoreMoveTargets>"
+        },
+        {
+          "name": "update_store",
+          "signature": "pub fn update_store(&mut self, id: &str, name: &str, color: &str, note: &str, extras: StoreExtras) -> Result<Store>"
+        }
+      ],
+      "tests": []
+    },
+    "mod_transactions": {
+      "methods": [
+        {
+          "name": "add_linked_transactions",
+          "signature": "pub fn add_linked_transactions(&mut self, txs: Vec<Transaction>, flow_id: Option<&str>) -> Result<Vec<Transaction>>"
+        },
+        {
+          "name": "add_transaction",
+          "signature": "pub fn add_transaction(&mut self, tx: Transaction) -> Result<Transaction>"
+        },
+        {
+          "name": "add_transaction_for",
+          "signature": "pub fn add_transaction_for(&mut self, mut tx: Transaction, property_id: Option<&str>) -> Result<Transaction>"
+        },
+        {
+          "name": "delete_transaction",
+          "signature": "pub fn delete_transaction(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "transactions",
+          "signature": "pub fn transactions(&self, scope: &StoreScope) -> Vec<Transaction>"
+        },
+        {
+          "name": "update_transaction",
+          "signature": "pub fn update_transaction(&mut self, id: &str, tx: Transaction) -> Result<Transaction>"
+        },
+        {
+          "name": "update_transaction_for",
+          "signature": "pub fn update_transaction_for(&mut self, id: &str, tx: Transaction, property_id: Option<&str>) -> Result<Transaction>"
+        }
+      ],
+      "tests": []
+    },
+    "money_core": {
+      "methods": [
+        {
+          "name": "add_valuation",
+          "signature": "pub fn add_valuation(&mut self, input: ValuationInput) -> Result<Valuation>"
+        },
+        {
+          "name": "adjustment_draft",
+          "signature": "pub fn adjustment_draft(&self, input: &AdjustmentDraftInput) -> Result<AdjustmentDraft>"
+        },
+        {
+          "name": "apply_fx",
+          "signature": "pub fn apply_fx(&mut self, fresh: &[FxPoint])"
+        },
+        {
+          "name": "apply_prices",
+          "signature": "pub fn apply_prices(&mut self, fresh: &[PricePoint])"
+        },
+        {
+          "name": "apply_store_change",
+          "signature": "pub fn apply_store_change(&mut self, input: &StoreChangeInput) -> Result<StoreChangePlan>"
+        },
+        {
+          "name": "balances_at",
+          "signature": "pub fn balances_at(&self, store_id: &str, at: &str, exclude: Option<&str>) -> Vec<(AssetRef, Amount)>"
+        },
+        {
+          "name": "cached_quote",
+          "signature": "pub fn cached_quote(&self, asset: &AssetRef, ts: &str) -> CachedPrice"
+        },
+        {
+          "name": "classify_flow",
+          "signature": "pub fn classify_flow(&self, tx: &Transaction) -> FlowClass"
+        },
+        {
+          "name": "clear_manual_price",
+          "signature": "pub fn clear_manual_price(&mut self, asset_key: &str) -> Result<()>"
+        },
+        {
+          "name": "convert_at",
+          "signature": "pub fn convert_at(&self, amount: Amount, from: &str, to: &str, ts: &str) -> Option<Amount>"
+        },
+        {
+          "name": "delete_transactions",
+          "signature": "pub fn delete_transactions(&mut self, ids: &[String]) -> Result<Vec<DeletedTransaction>>"
+        },
+        {
+          "name": "delete_valuation",
+          "signature": "pub fn delete_valuation(&mut self, id: &str) -> Result<Valuation>"
+        },
+        {
+          "name": "favorite_asset",
+          "signature": "pub fn favorite_asset(&self, code: &str) -> Option<AssetRef>"
+        },
+        {
+          "name": "fx_at",
+          "signature": "pub fn fx_at(&self, currency: &str, ts: &str) -> Option<Amount>"
+        },
+        {
+          "name": "fx_currencies_in_use",
+          "signature": "pub fn fx_currencies_in_use(&self) -> HashSet<String>"
+        },
+        {
+          "name": "fx_missing_on",
+          "signature": "pub fn fx_missing_on(&self, currencies: &[String], date: chrono::NaiveDate) -> Vec<String>"
+        },
+        {
+          "name": "is_crypto_code",
+          "signature": "pub fn is_crypto_code(&self, code: &str) -> bool"
+        },
+        {
+          "name": "move_transactions",
+          "signature": "pub fn move_transactions(&mut self, changes: Vec<TxStore>) -> Result<Vec<TxStore>>"
+        },
+        {
+          "name": "net_worth",
+          "signature": "pub fn net_worth(&self) -> NetWorth"
+        },
+        {
+          "name": "plan_store_change",
+          "signature": "pub fn plan_store_change(&mut self, input: &StoreChangeInput) -> StoreChangePlan"
+        },
+        {
+          "name": "preview_transaction",
+          "signature": "pub fn preview_transaction(&self, mut tx: Transaction, replaces: Option<&str>) -> TxPreview"
+        },
+        {
+          "name": "price_at",
+          "signature": "pub fn price_at(&self, asset_key: &str, ts: &str) -> Option<Amount>"
+        },
+        {
+          "name": "property_values",
+          "signature": "pub fn property_values(&self, store_id: &str, zone: &str) -> Result<Vec<PropertyValue>>"
+        },
+        {
+          "name": "rate_book",
+          "signature": "pub fn rate_book(&self) -> RateBook"
+        },
+        {
+          "name": "rebase_automation_input",
+          "signature": "pub fn rebase_automation_input(&self, input: UpdateAutomationInput) -> Result<UpdateAutomationInput>"
+        },
+        {
+          "name": "rebase_budget_input",
+          "signature": "pub fn rebase_budget_input(&self, input: UpdateBudgetInput) -> Result<UpdateBudgetInput>"
+        },
+        {
+          "name": "rebase_category_input",
+          "signature": "pub fn rebase_category_input(&self, mut input: UpdateCategoryInput) -> Result<UpdateCategoryInput>"
+        },
+        {
+          "name": "rebase_contact_input",
+          "signature": "pub fn rebase_contact_input(&self, input: UpdateContactInput) -> Result<UpdateContactInput>"
+        },
+        {
+          "name": "rebase_envelope_input",
+          "signature": "pub fn rebase_envelope_input(&self, input: UpdateEnvelopeInput) -> Result<UpdateEnvelopeInput>"
+        },
+        {
+          "name": "rebase_goal_input",
+          "signature": "pub fn rebase_goal_input(&self, input: UpdateGoalInput) -> Result<UpdateGoalInput>"
+        },
+        {
+          "name": "rebase_price_alert_input",
+          "signature": "pub fn rebase_price_alert_input(&self, input: UpdatePriceAlertInput) -> Result<UpdatePriceAlertInput>"
+        },
+        {
+          "name": "rebase_reminder_input",
+          "signature": "pub fn rebase_reminder_input(&self, input: UpdateReminderInput) -> Result<UpdateReminderInput>"
+        },
+        {
+          "name": "rebase_store_input",
+          "signature": "pub fn rebase_store_input(&self, mut input: UpdateStoreInput) -> Result<UpdateStoreInput>"
+        },
+        {
+          "name": "rebase_transaction",
+          "signature": "pub fn rebase_transaction(&self, id: &str, base: Option<&crate::model::transaction::Transaction>, edited: crate::model::transaction::Transaction) -> Result<crate::model::transaction::Transaction>"
+        },
+        {
+          "name": "rebase_utility_input",
+          "signature": "pub fn rebase_utility_input(&self, input: UpdateUtilityInput) -> Result<UpdateUtilityInput>"
+        },
+        {
+          "name": "resolve_input_price",
+          "signature": "pub fn resolve_input_price(&self, input: &mut crate::ipc_contract::TransactionInput) -> crate::Result<()>"
+        },
+        {
+          "name": "restamp_missing",
+          "signature": "pub fn restamp_missing(&mut self) -> usize"
+        },
+        {
+          "name": "restore_transactions",
+          "signature": "pub fn restore_transactions(&mut self, items: Vec<DeletedTransaction>) -> Result<()>"
+        },
+        {
+          "name": "set_manual_price",
+          "signature": "pub fn set_manual_price(&mut self, asset_key: &str, unit_price: Amount, currency: &str) -> Result<ManualPrice>"
+        },
+        {
+          "name": "set_revalue_rule",
+          "signature": "pub fn set_revalue_rule(&mut self, store_id: &str, rule: Option<RevalueRule>, zone: &str) -> Result<()>"
+        },
+        {
+          "name": "set_transaction_categories",
+          "signature": "pub fn set_transaction_categories(&mut self, changes: Vec<TxCategories>) -> Result<Vec<TxCategories>>"
+        }
+      ],
+      "tests": [
+        "a_back_dated_correction_sees_the_balance_of_its_moment",
+        "a_bank_becomes_a_crypto_wallet_and_its_deposit_is_split_off",
+        "a_base_currency_leg_is_priced_at_exactly_one",
+        "a_base_price_of_another_currency_is_read_through_usd",
+        "a_base_price_with_the_readers_label_is_kept_as_is",
+        "a_base_price_without_a_label_reads_as_before",
+        "a_card_moves_to_another_bank_and_a_token_account_to_a_crypto_wallet",
+        "a_correction_follows_changes_to_the_history_before_it",
+        "a_correction_is_neither_income_nor_spending_nor_a_sale",
+        "a_correction_keeps_to_the_rules_of_the_account",
+        "a_correction_of_the_source_is_shifted_by_the_targets_balance",
+        "a_correction_of_the_target_is_shifted_by_the_sources_balance",
+        "a_correction_sets_the_balance_and_remembers_what_was_there",
+        "a_fiat_holding_has_value",
+        "a_hand_set_price_holds_for_the_whole_history",
+        "a_huge_value_with_a_growth_rule_saturates",
+        "a_labelled_base_price_with_no_usd_price_or_rate_is_kept",
+        "a_liability_store_books_no_profit",
+        "a_loan_is_a_negative_balance_and_a_liability",
+        "a_price_in_any_currency_becomes_usd_at_the_moment_rate",
+        "a_price_typed_in_the_base_currency_is_labelled_with_it",
+        "a_purchase_is_signed_with_the_currency_of_its_label",
+        "a_purchase_without_a_label_is_signed_with_the_readers_base",
+        "a_sale_shows_the_book_value_and_the_gain",
+        "a_sub_account_becomes_a_wallet_and_a_one_asset_wallet_an_account",
+        "a_valuation_keeps_the_old_price_as_the_start",
+        "a_wallet_holding_tokens_cannot_become_a_bank",
+        "a_zero_shift_is_not_listed",
+        "an_unknown_id_deletes_nothing",
+        "base_currency_cash_is_valued_without_a_rate",
+        "base_currency_cash_without_a_rate_is_not_one_usd_per_unit",
+        "build_equals_the_old_rate_book",
+        "categories_are_set_and_given_back",
+        "convert_crosses_through_usd_at_the_date",
+        "convert_of_a_huge_amount_is_none_not_a_panic",
+        "convert_reaches_a_well_known_coin_not_held",
+        "corrections_at_the_same_moment_settle",
+        "corrections_in_a_row_are_recalculated_in_order",
+        "delete_and_restore_round_trip",
+        "depreciation_needs_a_floor",
+        "derivatives_never_count_in_value",
+        "edit_shows_the_net_change",
+        "estimates_liquidation_of_an_opened_position",
+        "favorite_asset_prefers_the_held_identity",
+        "fees_do_not_fake_a_profit",
+        "flows_are_classified_for_the_budget",
+        "fx_missing_on_checks_the_calendar_day",
+        "fx_missing_on_skips_crypto_codes",
+        "invalid_draft_reports_the_error",
+        "leg_price_in_base_uses_the_rate_of_the_moment",
+        "lookups_of_a_fixed_vault_are_pinned",
+        "loyalty_prices_stay_as_they_were",
+        "merge_keeps_every_delta_and_the_sum",
+        "merging_moves_every_operation_and_drops_the_account",
+        "new_objects_get_the_rule_of_their_type",
+        "old_objects_keep_their_value_and_history",
+        "patch_update_keeps_remote_field_contact",
+        "patch_update_keeps_remote_field_goal",
+        "patch_update_keeps_remote_field_store",
+        "patch_update_keeps_remote_field_transaction",
+        "payments_move_but_transfers_do_not",
+        "points_join_by_straight_lines",
+        "re_saving_a_correction_keeps_its_assets_even_when_they_match",
+        "re_saving_an_operation_unchanged_does_not_move_the_balance",
+        "restamp_fills_only_what_is_missing",
+        "retype_maps_one_asset_accounts_between_kinds",
+        "same_second_corrections_follow_the_rebase_order",
+        "saving_stamps_the_rate_of_that_day_and_keeps_a_typed_price",
+        "shows_before_and_after_without_writing",
+        "the_draft_lists_what_the_account_holds",
+        "the_floor_stops_depreciation",
+        "the_plan_shows_what_apply_does",
+        "the_quote_carries_the_moment_of_its_rate",
+        "the_rule_runs_after_the_last_point",
+        "three_way_edit_wins_when_both_sides_changed_a_field",
+        "three_way_keeps_current_for_an_unchanged_field",
+        "three_way_recurses_into_nested_objects",
+        "three_way_takes_a_changed_field",
+        "two_cards_correcting_in_the_same_second_keep_their_deltas_and_the_sum",
+        "untracked_currencies_do_not_grow_history",
+        "update_without_base_overwrites_like_before",
+        "warns_about_going_negative"
+      ]
+    },
+    "money_rest": {
+      "methods": [
+        {
+          "name": "adopt_flat_inflation",
+          "signature": "pub fn adopt_flat_inflation(&mut self, local: &BTreeMap<String, Amount>) -> Result<bool>"
+        },
+        {
+          "name": "apply_enrichment",
+          "signature": "pub fn apply_enrichment(&mut self, id: &str) -> Result<EnrichmentRecord>"
+        },
+        {
+          "name": "apply_enrichment_result",
+          "signature": "pub fn apply_enrichment_result(&mut self, tx_id: &str, info: &TxInfo) -> Option<EnrichmentRecord>"
+        },
+        {
+          "name": "apply_inflation",
+          "signature": "pub fn apply_inflation(&mut self, fresh: &[InflationReading]) -> Vec<InflationNews>"
+        },
+        {
+          "name": "apply_key_rates",
+          "signature": "pub fn apply_key_rates(&mut self, fresh: &[KeyRatePoint])"
+        },
+        {
+          "name": "apply_rates",
+          "signature": "pub fn apply_rates(&mut self, fetched: &FetchedRates, ru: bool) -> Result<Vec<NoticeRecord>>"
+        },
+        {
+          "name": "asset_holdings",
+          "signature": "pub fn asset_holdings(&self, asset: &AssetRef) -> AssetHoldings"
+        },
+        {
+          "name": "deposit_report",
+          "signature": "pub fn deposit_report(&self, store_id: &str, today: NaiveDate) -> Result<DepositReport>"
+        },
+        {
+          "name": "effective_inflation",
+          "signature": "pub fn effective_inflation(&self) -> BTreeMap<String, Amount>"
+        },
+        {
+          "name": "enrichment_request",
+          "signature": "pub fn enrichment_request(&self, tx_id: &str) -> Option<(String, Option<Chain>)>"
+        },
+        {
+          "name": "enrichments",
+          "signature": "pub fn enrichments(&self, tx_id: Option<&str>) -> Vec<EnrichmentRecord>"
+        },
+        {
+          "name": "flat_inflation",
+          "signature": "pub fn flat_inflation(&self) -> BTreeMap<String, Amount>"
+        },
+        {
+          "name": "inflation_mode",
+          "signature": "pub fn inflation_mode(&self, currency: &str) -> InflationMode"
+        },
+        {
+          "name": "inflation_on",
+          "signature": "pub fn inflation_on(&self, currency: &str, month: &str) -> Option<Amount>"
+        },
+        {
+          "name": "inflation_overview",
+          "signature": "pub fn inflation_overview(&self) -> Vec<InflationCurrency>"
+        },
+        {
+          "name": "inflation_series",
+          "signature": "pub fn inflation_series(&self, currency: &str) -> Vec<InflationReading>"
+        },
+        {
+          "name": "interest_tax",
+          "signature": "pub fn interest_tax(&self, year: i32) -> InterestTaxReport"
+        },
+        {
+          "name": "investments",
+          "signature": "pub fn investments(&self, store_ids: &[String]) -> Investments"
+        },
+        {
+          "name": "key_rate_on",
+          "signature": "pub fn key_rate_on(&self, day: NaiveDate) -> Option<Amount>"
+        },
+        {
+          "name": "post_due_interest",
+          "signature": "pub fn post_due_interest(&mut self, today: NaiveDate) -> Result<u32>"
+        },
+        {
+          "name": "reject_enrichment",
+          "signature": "pub fn reject_enrichment(&mut self, id: &str) -> Result<EnrichmentRecord>"
+        },
+        {
+          "name": "set_deposit_terms",
+          "signature": "pub fn set_deposit_terms(&mut self, store_id: &str, terms: Option<DepositTerms>) -> Result<Store>"
+        },
+        {
+          "name": "set_inflation_mode",
+          "signature": "pub fn set_inflation_mode(&mut self, currency: &str, mode: Option<InflationMode>) -> Result<()>"
+        },
+        {
+          "name": "set_inflation_source",
+          "signature": "pub fn set_inflation_source(&mut self, currency: &str, source_id: &str) -> Result<()>"
+        }
+      ],
+      "tests": [
+        "a_cached_quote_reports_its_provider",
+        "a_constant_series_matches_the_flat_rate",
+        "a_manual_price_reports_manual_origin",
+        "a_new_finding_replaces_the_pending_one_and_nothing_found_records_nothing",
+        "a_saved_table_keeps_only_what_differs_or_was_already_set",
+        "adoption_survives_a_reopen_and_does_not_write_twice",
+        "an_unquoted_stablecoin_is_peg_valued",
+        "apply_reports_only_new_months",
+        "applying_merges_the_fee_and_passes_validation",
+        "asset_holdings_flag_peg_valued_stablecoins",
+        "asset_holdings_join_the_same_ticker_across_wallets",
+        "asset_holdings_keep_other_chains_apart",
+        "asset_holdings_leave_derivatives_out",
+        "auto_reads_the_series_and_falls_back_to_the_flat_rate",
+        "coefficients_follow_the_months",
+        "interest_follows_the_rate_history_day_by_day",
+        "interest_tax_uses_the_highest_key_rate_of_the_year",
+        "investments_join_coins_and_leave_cash_out",
+        "last_month_is_posted_once",
+        "mode_is_inferred_until_chosen",
+        "old_device_rates_are_adopted_once_and_never_overwrite",
+        "only_a_stamp_reports_stamp_origin",
+        "pds_cofinancing_follows_the_bracket_and_the_cap",
+        "rates_notices_only_for_news",
+        "rejecting_leaves_the_transaction_alone",
+        "terms_belong_to_savings_only",
+        "the_24h_change_falls_back_to_history",
+        "the_flat_table_is_the_shipped_one_under_the_vaults_own_rates"
+      ]
+    },
+    "planning": {
+      "methods": [
+        {
+          "name": "alert_assets",
+          "signature": "pub fn alert_assets(&self) -> Vec<AssetRef>"
+        },
+        {
+          "name": "apply_source_fetch",
+          "signature": "pub fn apply_source_fetch(&mut self, id: &str, fetched: std::result::Result<Extracted, String>, ru: bool) -> Result<Vec<NoticeRecord>>"
+        },
+        {
+          "name": "asset_classes",
+          "signature": "pub fn asset_classes(&self) -> AssetClassesView"
+        },
+        {
+          "name": "assign_asset_class",
+          "signature": "pub fn assign_asset_class(&mut self, target: AssetClassTarget, class_id: Option<String>) -> Result<AssetClassesView>"
+        },
+        {
+          "name": "automation",
+          "signature": "pub fn automation(&self, id: &str) -> Result<Automation>"
+        },
+        {
+          "name": "automation_card",
+          "signature": "pub fn automation_card(&self, id: &str, now: i64, zone: &str) -> Result<AutomationCard>"
+        },
+        {
+          "name": "automation_journal",
+          "signature": "pub fn automation_journal(&self, limit: usize) -> Vec<JournalEntry>"
+        },
+        {
+          "name": "automation_runs",
+          "signature": "pub fn automation_runs(&self, automation_id: Option<&str>) -> Vec<AutomationRun>"
+        },
+        {
+          "name": "automations",
+          "signature": "pub fn automations(&self) -> Vec<Automation>"
+        },
+        {
+          "name": "avg_month",
+          "signature": "pub fn avg_month(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg>"
+        },
+        {
+          "name": "budget_currency",
+          "signature": "pub fn budget_currency(&self) -> String"
+        },
+        {
+          "name": "budget_status",
+          "signature": "pub fn budget_status(&self, now: i64, zone: &str) -> Vec<BudgetStatus>"
+        },
+        {
+          "name": "budgets",
+          "signature": "pub fn budgets(&self) -> Vec<Budget>"
+        },
+        {
+          "name": "calc_scenarios",
+          "signature": "pub fn calc_scenarios(&self) -> Vec<CalcScenario>"
+        },
+        {
+          "name": "capital_health",
+          "signature": "pub fn capital_health(&self, now: i64, zone: &str) -> Result<HealthReport>"
+        },
+        {
+          "name": "check_alerts",
+          "signature": "pub fn check_alerts(&mut self, now: i64) -> Result<Vec<PriceAlert>>"
+        },
+        {
+          "name": "confirm_estimated_amount",
+          "signature": "pub fn confirm_estimated_amount(&mut self, tx_id: &str, amount: Amount) -> Result<Transaction>"
+        },
+        {
+          "name": "confirm_source_value",
+          "signature": "pub fn confirm_source_value(&mut self, id: &str, accept: bool, ru: bool) -> Result<Vec<NoticeRecord>>"
+        },
+        {
+          "name": "create_automation",
+          "signature": "pub fn create_automation(&mut self, draft: AutomationDraft) -> Result<Automation>"
+        },
+        {
+          "name": "create_budget",
+          "signature": "pub fn create_budget(&mut self, draft: BudgetDraft) -> Result<Budget>"
+        },
+        {
+          "name": "create_goal",
+          "signature": "pub fn create_goal(&mut self, draft: GoalDraft) -> Result<Goal>"
+        },
+        {
+          "name": "create_price_alert",
+          "signature": "pub fn create_price_alert(&mut self, draft: PriceAlertDraft) -> Result<PriceAlert>"
+        },
+        {
+          "name": "create_reminder",
+          "signature": "pub fn create_reminder(&mut self, text: &str, due_at: &str, repeat: Option<ReminderRepeat>) -> Result<Reminder>"
+        },
+        {
+          "name": "create_reminder_paying",
+          "signature": "pub fn create_reminder_paying(&mut self, text: &str, due_at: &str, repeat: Option<ReminderRepeat>, pay: Option<ReminderPay>) -> Result<Reminder>"
+        },
+        {
+          "name": "daily_budget",
+          "signature": "pub fn daily_budget(&self, now: i64, zone: &str) -> DailyBudget"
+        },
+        {
+          "name": "data_source",
+          "signature": "pub fn data_source(&self, id: &str) -> Option<&DataSource>"
+        },
+        {
+          "name": "data_sources_list",
+          "signature": "pub fn data_sources_list(&self) -> Vec<DataSourceView>"
+        },
+        {
+          "name": "delete_automation",
+          "signature": "pub fn delete_automation(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_budget",
+          "signature": "pub fn delete_budget(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_calc_scenario",
+          "signature": "pub fn delete_calc_scenario(&mut self, id: &str) -> Result<CalcScenarioDeleted>"
+        },
+        {
+          "name": "delete_data_source",
+          "signature": "pub fn delete_data_source(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_goal",
+          "signature": "pub fn delete_goal(&mut self, id: &str, now: i64) -> Result<GoalDeleted>"
+        },
+        {
+          "name": "delete_price_alert",
+          "signature": "pub fn delete_price_alert(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_reminder",
+          "signature": "pub fn delete_reminder(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "detach_automation",
+          "signature": "pub fn detach_automation(&mut self, id: &str) -> Result<Workflow>"
+        },
+        {
+          "name": "due_data_sources",
+          "signature": "pub fn due_data_sources(&self, now: chrono::DateTime<chrono::Utc>) -> Vec<DataSource>"
+        },
+        {
+          "name": "due_notices",
+          "signature": "pub fn due_notices(&mut self, now: i64, zone: &str, ru: bool) -> Result<Vec<NoticeRecord>>"
+        },
+        {
+          "name": "due_reminders",
+          "signature": "pub fn due_reminders(&self, now: i64) -> Vec<Reminder>"
+        },
+        {
+          "name": "emergency_fund",
+          "signature": "pub fn emergency_fund(&self) -> EmergencyFund"
+        },
+        {
+          "name": "emergency_fund_status",
+          "signature": "pub fn emergency_fund_status(&self, now: i64, zone: &str) -> EmergencyStatus"
+        },
+        {
+          "name": "emergency_fund_toggle",
+          "signature": "pub fn emergency_fund_toggle(&mut self, store_id: &str, on: bool) -> Result<EmergencyFund>"
+        },
+        {
+          "name": "finish_reminder_series",
+          "signature": "pub fn finish_reminder_series(&mut self, id: &str) -> Result<Reminder>"
+        },
+        {
+          "name": "free_surplus_avg",
+          "signature": "pub fn free_surplus_avg(&self, now: i64, zone: &str) -> Option<Amount>"
+        },
+        {
+          "name": "goal_calendar",
+          "signature": "pub fn goal_calendar(&self, year: i32, now: i64, zone: &str) -> Result<GoalCalendar>"
+        },
+        {
+          "name": "goal_from_scenario",
+          "signature": "pub fn goal_from_scenario(&self, id: &str, now: i64, zone: &str) -> Result<GoalInput>"
+        },
+        {
+          "name": "goal_progress",
+          "signature": "pub fn goal_progress(&self, now: i64, zone: &str) -> Vec<GoalProgress>"
+        },
+        {
+          "name": "goals",
+          "signature": "pub fn goals(&self) -> Vec<Goal>"
+        },
+        {
+          "name": "income_basis",
+          "signature": "pub fn income_basis(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg>"
+        },
+        {
+          "name": "is_passive_category",
+          "signature": "pub fn is_passive_category(&self, key: &str) -> bool"
+        },
+        {
+          "name": "lifestyle_creep",
+          "signature": "pub fn lifestyle_creep(&self, now: i64, zone: &str) -> Option<Insight>"
+        },
+        {
+          "name": "log_notices",
+          "signature": "pub fn log_notices(&mut self, records: Vec<NoticeRecord>) -> Result<Vec<NoticeRecord>>"
+        },
+        {
+          "name": "manual_month",
+          "signature": "pub fn manual_month(&self) -> Option<MonthAvg>"
+        },
+        {
+          "name": "mark_notifications_read",
+          "signature": "pub fn mark_notifications_read(&mut self, keys: Option<&[String]>) -> Result<()>"
+        },
+        {
+          "name": "month_summary",
+          "signature": "pub fn month_summary(&self, month: &str, zone: &str) -> Result<MonthSummary>"
+        },
+        {
+          "name": "my_automations",
+          "signature": "pub fn my_automations(&self, now: i64, zone: &str) -> Vec<MineItem>"
+        },
+        {
+          "name": "notices_enabled",
+          "signature": "pub fn notices_enabled(&self, category: NoticeCategory) -> bool"
+        },
+        {
+          "name": "notifications",
+          "signature": "pub fn notifications(&self) -> Vec<NoticeRecord>"
+        },
+        {
+          "name": "passive_income",
+          "signature": "pub fn passive_income(&self, now: i64, zone: &str, expected_pct: Option<Amount>) -> Result<PassiveIncome>"
+        },
+        {
+          "name": "price_alerts",
+          "signature": "pub fn price_alerts(&self) -> Vec<PriceAlert>"
+        },
+        {
+          "name": "record_notice",
+          "signature": "pub fn record_notice(&mut self, record: NoticeRecord) -> Result<bool>"
+        },
+        {
+          "name": "recurring_check",
+          "signature": "pub fn recurring_check(&self, tx: &Transaction) -> RecurringCheck"
+        },
+        {
+          "name": "reminders",
+          "signature": "pub fn reminders(&self) -> Vec<Reminder>"
+        },
+        {
+          "name": "reminders_in",
+          "signature": "pub fn reminders_in(&self, now: i64, zone: &str, ru: bool) -> Vec<Reminder>"
+        },
+        {
+          "name": "restore_calc_scenario",
+          "signature": "pub fn restore_calc_scenario(&mut self, deleted: CalcScenarioDeleted) -> Result<CalcScenario>"
+        },
+        {
+          "name": "restore_goal",
+          "signature": "pub fn restore_goal(&mut self, deleted: GoalDeleted, now: i64) -> Result<Goal>"
+        },
+        {
+          "name": "retry_automation_run",
+          "signature": "pub fn retry_automation_run(&mut self, run_id: &str, now: i64, zone: &str) -> Result<Transaction>"
+        },
+        {
+          "name": "run_automation",
+          "signature": "pub fn run_automation(&mut self, id: &str, now: i64) -> Result<Transaction>"
+        },
+        {
+          "name": "save_calc_scenario",
+          "signature": "pub fn save_calc_scenario(&mut self, draft: CalcScenarioDraft) -> Result<CalcScenario>"
+        },
+        {
+          "name": "save_data_source",
+          "signature": "pub fn save_data_source(&mut self, draft: DataSourceDraft) -> Result<DataSourceView>"
+        },
+        {
+          "name": "savings_series",
+          "signature": "pub fn savings_series(&self, now: i64, zone: &str) -> Result<Vec<SavingsMonth>>"
+        },
+        {
+          "name": "scenario_prefill",
+          "signature": "pub fn scenario_prefill(&self, source: &ScenarioSource, currency: &str, now: i64, zone: &str) -> Result<ScenarioPrefill>"
+        },
+        {
+          "name": "scope_in_budget",
+          "signature": "pub fn scope_in_budget(&self, scope: &StoreScope) -> bool"
+        },
+        {
+          "name": "set_asset_classes",
+          "signature": "pub fn set_asset_classes(&mut self, classes: Vec<AssetClass>) -> Result<AssetClassesView>"
+        },
+        {
+          "name": "set_emergency_fund",
+          "signature": "pub fn set_emergency_fund(&mut self, fund: EmergencyFund) -> Result<EmergencyFund>"
+        },
+        {
+          "name": "set_freedom_rate",
+          "signature": "pub fn set_freedom_rate(&mut self, rate: Option<Amount>) -> Result<()>"
+        },
+        {
+          "name": "set_my_automation_active",
+          "signature": "pub fn set_my_automation_active(&mut self, kind: MineKind, id: &str, active: bool, now: i64) -> Result<()>"
+        },
+        {
+          "name": "set_reminder_done",
+          "signature": "pub fn set_reminder_done(&mut self, id: &str, done: bool) -> Result<Reminder>"
+        },
+        {
+          "name": "simulate_automations",
+          "signature": "pub fn simulate_automations(&self, automation_id: Option<&str>, days: u32, now: i64, zone: &str) -> Result<AutomationSimulation>"
+        },
+        {
+          "name": "skip_automation_run",
+          "signature": "pub fn skip_automation_run(&mut self, run_id: &str) -> Result<AutomationRun>"
+        },
+        {
+          "name": "snooze_reminder",
+          "signature": "pub fn snooze_reminder(&mut self, id: &str, until: &str) -> Result<Reminder>"
+        },
+        {
+          "name": "source_uses",
+          "signature": "pub fn source_uses(&self, id: &str) -> Vec<SourceUse>"
+        },
+        {
+          "name": "sync_auto_reminders",
+          "signature": "pub fn sync_auto_reminders(&mut self, now: i64, zone: &str, ru: bool) -> crate::Result<bool>"
+        },
+        {
+          "name": "topup_advice",
+          "signature": "pub fn topup_advice(&self, amount: Option<Amount>, now: i64, zone: &str) -> TopupAdvice"
+        },
+        {
+          "name": "unread_notifications",
+          "signature": "pub fn unread_notifications(&self) -> u32"
+        },
+        {
+          "name": "upcoming",
+          "signature": "pub fn upcoming(&self, days: u32, now: i64, zone: &str) -> Vec<UpcomingItem>"
+        },
+        {
+          "name": "update_automation",
+          "signature": "pub fn update_automation(&mut self, id: &str, draft: AutomationDraft) -> Result<Automation>"
+        },
+        {
+          "name": "update_automation_at",
+          "signature": "pub fn update_automation_at(&mut self, id: &str, draft: AutomationDraft, edited_at: i64) -> Result<Automation>"
+        },
+        {
+          "name": "update_budget",
+          "signature": "pub fn update_budget(&mut self, id: &str, draft: BudgetDraft) -> Result<Budget>"
+        },
+        {
+          "name": "update_goal",
+          "signature": "pub fn update_goal(&mut self, id: &str, draft: GoalDraft) -> Result<Goal>"
+        },
+        {
+          "name": "update_price_alert",
+          "signature": "pub fn update_price_alert(&mut self, id: &str, draft: PriceAlertDraft) -> Result<PriceAlert>"
+        },
+        {
+          "name": "update_reminder",
+          "signature": "pub fn update_reminder(&mut self, id: &str, text: &str, due_at: &str, repeat: Option<ReminderRepeat>) -> Result<Reminder>"
+        },
+        {
+          "name": "update_reminder_paying",
+          "signature": "pub fn update_reminder_paying(&mut self, id: &str, text: &str, due_at: &str, repeat: Option<ReminderRepeat>, pay: Option<ReminderPay>) -> Result<Reminder>"
+        }
+      ],
+      "tests": [
+        "a_booking_carries_the_planned_local_date",
+        "a_car_is_reminded_of_its_insurance_and_service_whichever_comes_first",
+        "a_changed_payment_day_moves_it_but_done_is_not_undone",
+        "a_day_moved_later_does_not_book_the_new_day_back",
+        "a_deleted_automatic_reminder_does_not_come_back",
+        "a_draft_is_checked",
+        "a_due_reminder_is_told_once_and_survives_in_the_log",
+        "a_far_deadline_with_a_return_does_not_panic",
+        "a_fired_alert_remembers_its_threshold_and_an_edit_clears_both",
+        "a_firing_without_a_threshold_counts_as_fired",
+        "a_flat_or_falling_trend_has_no_forecast",
+        "a_future_start_is_accepted_but_a_future_entry_is_not",
+        "a_goal_shows_what_its_scenario_planned_by_now",
+        "a_goal_with_an_unknown_scenario_is_refused",
+        "a_jump_waits_for_confirmation",
+        "a_loan_gets_a_monthly_reminder_ahead_of_its_payment_day",
+        "a_loan_payment_is_mandatory_and_exchange_to_card_tops_up_the_budget",
+        "a_missing_fund_is_yellow_not_red",
+        "a_monthly_reminder_moves_on_when_done_and_keeps_its_day",
+        "a_new_purpose_or_the_archive_takes_the_account_out",
+        "a_notice_of_an_automatic_reminder_uses_the_language_of_the_device",
+        "a_notice_shows_money_rounded_and_grouped",
+        "a_payment_made_closes_the_month",
+        "a_pinned_zone_changed_by_sync_does_not_book_a_date_twice",
+        "a_price_source_writes_custom_points_in_usd",
+        "a_record_from_before_planned_date_falls_back_to_planned_at",
+        "a_reminder_is_read_in_the_language_of_the_reader",
+        "a_reminder_keeps_what_pay_fills_in_and_drops_an_empty_button",
+        "a_repeat_fires_at_its_time_and_asks_before_booking",
+        "a_repeating_alert_rearms_after_the_price_crosses_back",
+        "a_rub_limit_with_a_usd_base_and_a_thb_budget_use_the_day_rate",
+        "a_run_made_days_after_its_plan_is_dated_when_it_ran",
+        "a_salary_that_differs_is_booked_approximately_and_corrected",
+        "a_second_sync_with_nothing_new_changes_nothing",
+        "a_snoozed_reminder_waits_until_its_snooze_ends",
+        "a_start_mark_is_not_a_processed_date",
+        "a_switched_off_category_makes_no_reminders_and_taxes_need_a_reason",
+        "a_switched_off_kind_is_silent_and_an_old_reminder_is_not_announced",
+        "a_template_that_breaks_the_rules_is_refused",
+        "a_time_moved_later_does_not_book_the_date_again",
+        "a_zone_change_does_not_book_a_date_twice",
+        "a_zone_moving_east_across_midnight_still_books_the_next_day",
+        "advice_defaults_to_last_month_savings",
+        "an_alert_belongs_to_an_exchange_only",
+        "an_alert_fires_once",
+        "an_archived_loan_loses_its_reminder_and_a_muted_one_never_returns",
+        "an_automation_is_edited_in_its_form_until_made_an_ordinary_workflow",
+        "an_emulation_from_today_runs_a_year_ahead",
+        "an_emulation_reports_the_runs_and_writes_nothing",
+        "an_exchange_cannot_have_an_amount_that_differs",
+        "an_income_made_by_an_automation_carries_its_for_month",
+        "an_out_of_range_fetch_is_recorded_and_not_due",
+        "asset_basket_beats_store_basket",
+        "avg_month_takes_finished_months_with_flows_only",
+        "calendar_compares_planned_and_put_aside_by_month",
+        "capped_basket_above_target_gets_nothing",
+        "card_follows_the_salary_and_the_journal_shows_the_asked_share",
+        "catch_up_creates_at_most_24_and_skips_the_rest",
+        "changed_data_rewrites_the_text_in_the_callers_language",
+        "coverage_surplus_interest_and_goal_overlap",
+        "credit_card_checks_the_limit_and_without_one_passes",
+        "creep_compares_with_the_same_months_a_year_back",
+        "creep_without_a_year_takes_the_months_before",
+        "crypto_goal_contributed_stays_while_saved_follows_the_rate",
+        "dearer_payment_is_seen",
+        "deficits_share_the_amount",
+        "deleting_a_goal_frees_its_envelopes_and_stops_its_saver_until_undone",
+        "deleting_a_scenario_unlinks_its_goals_and_undo_links_them_back",
+        "deposits_count_incoming_operations_since_the_start",
+        "dst_gap_books_the_date_once",
+        "dst_overlap_books_the_date_once",
+        "dti_boundaries_are_strict",
+        "each_object_gets_the_tax_of_its_type",
+        "empty_portfolio_follows_the_targets",
+        "essential_follows_the_defaults_until_the_user_says_otherwise",
+        "expected_return_lowers_the_need_and_dates_the_forecast",
+        "first_payment_is_new",
+        "fund_accounts_stay_outside",
+        "fund_boundaries_and_gap",
+        "goal_from_scenario_aims_at_the_final_amount_over_the_term",
+        "golden_g6_a_monthly_automation_fires_once_per_planned_date",
+        "golden_g7_catch_up_books_the_newest_and_skips_the_older",
+        "golden_g8_net_worth_and_the_daily_budget_after_the_rent",
+        "hand_entered_month_stands_in_for_a_short_history",
+        "healthy_facts_are_green_without_reasons",
+        "hints_do_not_change_the_colour",
+        "incoming_money_and_a_contact_source_are_not_checked",
+        "inflation_in_source_mode_reads_the_source",
+        "mandatory_spending_is_fixed_plus_essential_everyday",
+        "mine_lists_everything_that_fires_the_soonest_first",
+        "month_mode_carries_what_was_left_and_resets_next_month",
+        "month_summary_counts_income_fixed_and_daily_but_not_internal_or_debts",
+        "need_per_month_and_both_realism_reasons",
+        "need_with_return_is_an_annuity_and_linear_at_zero",
+        "net_worth_splits_financial_by_basket",
+        "no_history_is_no_data_but_a_costly_card_is_still_red",
+        "old_or_other_payee_does_not_count",
+        "old_vaults_get_the_new_categories_once",
+        "opening_the_list_in_another_language_leaves_the_stored_text_alone",
+        "passive_follows_the_defaults_until_the_user_says_otherwise",
+        "passive_income_and_the_freedom_index",
+        "planned_balance_follows_the_simulation_and_stops_at_the_end",
+        "planned_income_counts_until_the_salary_arrives_and_savings_rate_applies",
+        "prefill_takes_wallet_value_deposit_terms_and_a_share_of_income",
+        "prefill_without_history_or_deposits_gives_only_the_value",
+        "preset_until_saved",
+        "reminders_come_due_and_can_be_done",
+        "removing_a_basket_drops_its_assignments",
+        "retry_checks_the_current_balance_and_skip_dismisses",
+        "salary_before_rent_covers_it_and_rent_before_salary_is_rejected",
+        "same_amount_did_not_grow",
+        "saving_a_manual_figure_fixes_the_budget_currency",
+        "savings_below_plan_is_yellow_and_sorted_after_red",
+        "scenarios_are_saved_updated_and_checked",
+        "shares_must_add_up_to_hundred",
+        "spending_off_budget_stores_does_not_touch_the_daily_budget",
+        "switching_off_the_last_account_leaves_no_fund",
+        "the_31st_runs_on_the_last_day_of_february",
+        "the_budget_currency_is_not_touched_without_a_manual_figure",
+        "the_checkup_reads_the_vault_and_notices_only_changes",
+        "the_clock_form_and_the_wrapper_give_the_same_pass",
+        "the_day_is_cut_at_local_midnight",
+        "the_fee_counts_toward_the_required_amount",
+        "the_fingerprint_follows_asset_condition_price_and_currency",
+        "the_form_lists_the_next_three_dates_moved_off_days_off",
+        "the_fund_takes_only_live_savings_accounts",
+        "the_list_hides_a_stale_firing_but_the_record_keeps_it",
+        "the_log_keeps_the_newest_and_never_repeats_a_key",
+        "the_planned_moment_is_nine_in_the_local_zone",
+        "the_same_price_written_with_another_scale_has_one_fingerprint",
+        "three_failures_in_a_row_break_a_source",
+        "two_goals_on_one_account_split_it_and_never_exceed_their_target",
+        "unassigned_holdings_have_no_basket",
+        "until_income_mode_without_salary_spreads_to_month_end",
+        "upcoming_flags_a_payment_the_balance_will_not_cover"
+      ]
+    },
+    "reports": {
+      "methods": [
+        {
+          "name": "apply_locked_deliveries",
+          "signature": "pub fn apply_locked_deliveries(&mut self, records: Vec<NoticeRecord>, fired_alerts: &[(String, String)]) -> crate::Result<()>"
+        },
+        {
+          "name": "apply_locked_deliveries_seen",
+          "signature": "pub fn apply_locked_deliveries_seen(&mut self, records: Vec<NoticeRecord>, fired_alerts: &[(String, String)], seen: &HashMap<String, AlertBase>) -> crate::Result<()>"
+        },
+        {
+          "name": "calendar_month",
+          "signature": "pub fn calendar_month(&self, month: &str, now: i64, zone: &str) -> Result<CalendarMonth>"
+        },
+        {
+          "name": "dashboard_today",
+          "signature": "pub fn dashboard_today(&self, period: DashPeriod, now: i64, zone: &str) -> DashboardToday"
+        },
+        {
+          "name": "month_pace",
+          "signature": "pub fn month_pace(&self, now: i64, zone: &str) -> MonthPace"
+        },
+        {
+          "name": "net_worth_trend",
+          "signature": "pub fn net_worth_trend(&self, period: DashPeriod, now: i64, zone: &str) -> NetWorthTrend"
+        },
+        {
+          "name": "notification_snapshot",
+          "signature": "pub fn notification_snapshot(&self, now: i64, zone: &str, ru: bool) -> NotificationSnapshot"
+        },
+        {
+          "name": "report",
+          "signature": "pub fn report(&self, kind: ReportKind, filter: &ReportFilter, now: i64, zone: &str) -> Result<Report>"
+        },
+        {
+          "name": "report_overview",
+          "signature": "pub fn report_overview(&self, filter: &ReportFilter, now: i64, zone: &str) -> Result<ReportOverview>"
+        },
+        {
+          "name": "scenario_status",
+          "signature": "pub fn scenario_status(&self, id: &str, now: i64, zone: &str) -> Result<ScenarioStatus>"
+        },
+        {
+          "name": "spending_overview",
+          "signature": "pub fn spending_overview(&self, period: DashPeriod, now: i64, zone: &str) -> SpendingOverview"
+        }
+      ],
+      "tests": [
+        "a_locked_client_snapshot_fires_nothing",
+        "a_locked_firing_does_not_override_a_newer_threshold",
+        "a_new_vault_has_no_base_and_no_growth",
+        "a_new_vault_has_nothing_to_compare_with",
+        "a_scenario_shows_its_plan_to_date_against_its_wallets",
+        "a_snapshot_holds_every_repeat_and_reminds_once_without_the_vault",
+        "an_empty_vault_has_no_data_on_any_card",
+        "an_empty_vault_has_no_pnl_or_networth_data",
+        "an_old_snapshot_without_role_still_fires",
+        "cashflow_leaves_internal_moves_out",
+        "categories_compare_with_the_previous_period_and_keep_ties_stable",
+        "categories_name_the_spending_left_out_without_a_rate",
+        "csv_has_a_bom_semicolons_and_quotes_what_needs_it",
+        "every_report_carries_its_insights_in_the_meta",
+        "hidden_details_and_an_alert_checked_in_another_currency",
+        "months_since_counts_whole_months_from_the_start",
+        "net_worth_counts_loans_and_debts",
+        "networth_splits_out_what_sits_in_crypto_wallets_and_exchanges",
+        "overspending_names_the_gap_and_the_share_of_income",
+        "pnl_real_terms_round_once_per_month",
+        "portfolio_shares_add_up_to_a_hundred",
+        "rates_and_prices_carry_their_change",
+        "real_terms_restate_old_months_in_todays_money",
+        "spending_compares_to_the_same_date_of_last_month",
+        "the_calendar_cuts_days_in_the_local_zone",
+        "the_calendar_keeps_a_running_balance_and_the_days_notices",
+        "the_capital_trend_starts_from_the_value_before_the_period",
+        "the_current_networth_point_equals_the_summary_net_worth",
+        "the_month_pace_compares_with_the_same_date_and_names_growth",
+        "the_overview_compares_the_month_with_the_one_before",
+        "the_strip_keeps_three_todos_due_first",
+        "the_year_report_follows_the_wallet_scope",
+        "unpaid_utilities_past_the_pay_day_and_todays_reminder_are_things_to_do",
+        "wealth_within_a_percent_reads_as_flat",
+        "where_lists_spending_moves_and_what_is_left",
+        "year_average_skips_empty_months_and_names_the_best_and_worst"
+      ]
+    },
+    "sync": {
+      "methods": [
+        {
+          "name": "adopt_received_copy",
+          "signature": "pub fn adopt_received_copy(&mut self) -> Result<()>"
+        },
+        {
+          "name": "allow_merging",
+          "signature": "pub fn allow_merging(&mut self, target: MergeTarget, id: &str) -> Result<()>"
+        },
+        {
+          "name": "has_sync_backup",
+          "signature": "pub fn has_sync_backup(&self) -> bool"
+        },
+        {
+          "name": "merge_external_copy",
+          "signature": "pub fn merge_external_copy(&mut self, remote: &[u8], password: &str, name: &str) -> Result<ExternalMerge>"
+        },
+        {
+          "name": "merge_from",
+          "signature": "pub fn merge_from(&mut self, other: &mut UnlockedVault, name: &str) -> Result<Option<AppliedBatch>>"
+        },
+        {
+          "name": "probe_external",
+          "signature": "pub fn probe_external(&self, remote: &[u8]) -> Result<crate::storage::SnapshotFormat>"
+        },
+        {
+          "name": "set_device",
+          "signature": "pub fn set_device(&mut self, device_id: &str)"
+        },
+        {
+          "name": "set_sync_tap",
+          "signature": "pub fn set_sync_tap(&mut self, tap: Option<Arc<dyn SyncTap>>)"
+        },
+        {
+          "name": "sync_ack_tombstones",
+          "signature": "pub fn sync_ack_tombstones(&mut self, device_id: &str, theirs: &Manifest) -> Result<()>"
+        },
+        {
+          "name": "sync_apply",
+          "signature": "pub fn sync_apply(&mut self, incoming: &BTreeMap<String, RecordState>, peer: &PeerRef) -> Result<Option<AppliedBatch>>"
+        },
+        {
+          "name": "sync_backup",
+          "signature": "pub fn sync_backup(&mut self) -> Result<PathBuf>"
+        },
+        {
+          "name": "sync_batch_collections",
+          "signature": "pub fn sync_batch_collections(&self, batch_id: &str) -> Vec<String>"
+        },
+        {
+          "name": "sync_batch_keys",
+          "signature": "pub fn sync_batch_keys(&self, batch_id: &str) -> Vec<String>"
+        },
+        {
+          "name": "sync_batch_notices",
+          "signature": "pub fn sync_batch_notices(&self, batch_id: &str) -> Vec<crate::model::notify::NoticeRecord>"
+        },
+        {
+          "name": "sync_clear_cut",
+          "signature": "pub fn sync_clear_cut(&mut self, device_id: &str) -> Result<bool>"
+        },
+        {
+          "name": "sync_cut_by",
+          "signature": "pub fn sync_cut_by(&mut self, device_id: &str, reason: SyncCutReason) -> Result<bool>"
+        },
+        {
+          "name": "sync_cut_reason",
+          "signature": "pub fn sync_cut_reason(&self, device_id: &str) -> Option<SyncCutReason>"
+        },
+        {
+          "name": "sync_diff",
+          "signature": "pub fn sync_diff(&self, mine: &Manifest, theirs: &Manifest) -> (Vec<String>, Vec<String>)"
+        },
+        {
+          "name": "sync_forget_peer",
+          "signature": "pub fn sync_forget_peer(&mut self, device_id: &str) -> Result<()>"
+        },
+        {
+          "name": "sync_history",
+          "signature": "pub fn sync_history(&self) -> Vec<AppliedBatch>"
+        },
+        {
+          "name": "sync_is_paused",
+          "signature": "pub fn sync_is_paused(&self, device_id: &str) -> bool"
+        },
+        {
+          "name": "sync_journal",
+          "signature": "pub fn sync_journal(&self) -> Vec<SyncJournalEntry>"
+        },
+        {
+          "name": "sync_journal_record",
+          "signature": "pub fn sync_journal_record(&mut self, peer_name: &str, summary: &SyncSummary, outcome: SyncJournalOutcome) -> Result<()>"
+        },
+        {
+          "name": "sync_manifest",
+          "signature": "pub fn sync_manifest(&mut self, union_since_ms: Option<u64>) -> Result<Manifest>"
+        },
+        {
+          "name": "sync_manifest_for",
+          "signature": "pub fn sync_manifest_for(&mut self, union_since_ms: Option<u64>, peer: SecurityLevel) -> Result<(Manifest, usize)>"
+        },
+        {
+          "name": "sync_manifest_marked",
+          "signature": "pub fn sync_manifest_marked(&mut self, union_since_ms: Option<u64>) -> Result<(Manifest, Stamp)>"
+        },
+        {
+          "name": "sync_manifest_marked_for",
+          "signature": "pub fn sync_manifest_marked_for(&mut self, union_since_ms: Option<u64>, peer: SecurityLevel) -> Result<(Manifest, Stamp, usize)>"
+        },
+        {
+          "name": "sync_mark_synced",
+          "signature": "pub fn sync_mark_synced(&mut self, device_id: &str, mark: Option<&Stamp>) -> Result<()>"
+        },
+        {
+          "name": "sync_merge_peers",
+          "signature": "pub fn sync_merge_peers(&mut self, remote: &[TrustedPeer]) -> Result<bool>"
+        },
+        {
+          "name": "sync_pause_peer",
+          "signature": "pub fn sync_pause_peer(&mut self, device_id: &str) -> Result<()>"
+        },
+        {
+          "name": "sync_peers_to_send",
+          "signature": "pub fn sync_peers_to_send(&mut self) -> Result<Vec<TrustedPeer>>"
+        },
+        {
+          "name": "sync_preview",
+          "signature": "pub fn sync_preview(&mut self, incoming: &BTreeMap<String, RecordState>) -> Result<SyncSummary>"
+        },
+        {
+          "name": "sync_preview_after",
+          "signature": "pub fn sync_preview_after(&mut self, incoming: &BTreeMap<String, RecordState>) -> Result<Option<AfterApply>>"
+        },
+        {
+          "name": "sync_preview_from",
+          "signature": "pub fn sync_preview_from(&mut self, incoming: &BTreeMap<String, RecordState>, device_id: &str) -> Result<SyncSummary>"
+        },
+        {
+          "name": "sync_record_transfer",
+          "signature": "pub fn sync_record_transfer(&mut self, device_id: &str, device_name: &str, public_key: &str, ru: bool) -> Result<crate::model::notify::NoticeRecord>"
+        },
+        {
+          "name": "sync_records",
+          "signature": "pub fn sync_records(&mut self, keys: &[String]) -> Result<BTreeMap<String, RecordState>>"
+        },
+        {
+          "name": "sync_records_for",
+          "signature": "pub fn sync_records_for(&mut self, keys: &[String], peer: SecurityLevel) -> Result<BTreeMap<String, RecordState>>"
+        },
+        {
+          "name": "sync_restore_backup",
+          "signature": "pub fn sync_restore_backup(&mut self) -> Result<()>"
+        },
+        {
+          "name": "sync_resume_peer",
+          "signature": "pub fn sync_resume_peer(&mut self, device_id: &str) -> Result<()>"
+        },
+        {
+          "name": "sync_state",
+          "signature": "pub fn sync_state(&self) -> &crate::sync::SyncState"
+        },
+        {
+          "name": "sync_trust_peer",
+          "signature": "pub fn sync_trust_peer(&mut self, device_id: &str, name: &str, public_key: &str) -> Result<()>"
+        },
+        {
+          "name": "sync_undo",
+          "signature": "pub fn sync_undo(&mut self, batch_id: &str) -> Result<UndoReport>"
+        },
+        {
+          "name": "take_external_copy",
+          "signature": "pub fn take_external_copy(&mut self, remote: &[u8], password: &str) -> Result<ExternalMerge>"
+        }
+      ],
+      "tests": [
+        "a_batch_lists_the_notices_it_added",
+        "a_batch_of_only_bad_records_ends_without_an_error",
+        "a_batch_with_nothing_restored_stays_undoable",
+        "a_booked_run_key_does_not_run_again",
+        "a_cache_point_of_a_currency_in_use_still_syncs",
+        "a_category_deleted_while_an_operation_uses_it_comes_back_on_both_devices",
+        "a_compacted_deletion_takes_its_seen_time_with_it",
+        "a_compacted_tombstone_from_a_peer_makes_no_batch",
+        "a_contact_deleted_while_an_operation_names_it_comes_back",
+        "a_correction_from_a_stripped_relay_is_withdrawn_when_the_real_move_arrives",
+        "a_currency_changed_after_a_purchase_goes_back_on_both_devices",
+        "a_cycle_from_two_concurrent_moves_is_cut_the_same_on_both_devices",
+        "a_declined_batch_is_saved_in_the_journal",
+        "a_declined_session_does_not_ack_tombstones",
+        "a_dedupe_deletion_is_in_the_batch_collections_but_not_in_the_summary",
+        "a_deleted_budget_does_not_bring_its_notices_back",
+        "a_deleted_data_source_is_pruned_from_the_inflation_maps",
+        "a_deleted_envelope_stays_deleted",
+        "a_deletion_in_the_pulled_copy_stays_deleted",
+        "a_deletion_reaches_the_other_device",
+        "a_deletion_that_arrives_late_survives_the_compaction_of_the_same_apply",
+        "a_device_forgotten_over_a_year_ago_no_longer_holds_compaction",
+        "a_device_setting_changed_in_the_editor_is_applied",
+        "a_device_switch_change_stamps_nothing",
+        "a_device_without_the_previous_value_keeps_the_reference_and_invents_nothing",
+        "a_device_without_the_value_leaves_the_purchase_alone_and_reports_it",
+        "a_different_cursor_does_not_post_twice",
+        "a_double_run_from_an_old_peer_converges",
+        "a_firing_on_the_old_threshold_does_not_silence_the_raised_one",
+        "a_forgotten_device_repaired_within_a_year_does_not_bring_deletions_back",
+        "a_form_that_kept_a_currency_does_not_overwrite_another_devices_value",
+        "a_future_stamp_does_not_poison_the_clock",
+        "a_goal_envelope_deleted_on_one_device_and_topped_up_on_the_other_end_equal",
+        "a_goal_envelope_made_again_after_it_was_deleted_reaches_the_other_device",
+        "a_guest_made_a_contact_on_two_devices_is_one_contact_on_both",
+        "a_hostile_sender_loses_only_the_crypto_records",
+        "a_kept_reminder_survives_too",
+        "a_late_updating_device_does_not_bring_back_a_deleted_builtin_category",
+        "a_later_item_edit_keeps_a_purchase_it_never_saw",
+        "a_level_three_pair_still_exchanges_the_module",
+        "a_level_three_receiver_drops_nothing",
+        "a_level_two_device_gets_everything_but_the_crypto_records",
+        "a_link_to_a_class_another_device_removed_is_dropped",
+        "a_linked_property_of_the_kept_copy_wins",
+        "a_lost_change_of_kind_is_listed_as_overwritten",
+        "a_merged_older_revocation_does_not_beat_a_newer_trust",
+        "a_money_edit_recomputes_holdings_and_pins_identity",
+        "a_new_store_from_a_peer_gets_a_default_terminal",
+        "a_new_vault_gets_a_cash_wallet_with_the_fixed_id",
+        "a_newer_revocation_beats_an_older_trust_from_a_third_device",
+        "a_newer_trust_beats_an_older_revoke",
+        "a_notice_that_was_only_read_is_not_listed_again",
+        "a_pair_with_the_earlier_dedupe_converges_to_one_record",
+        "a_participant_removed_while_a_purchase_names_them_comes_back",
+        "a_pause_survives_a_reopen_and_is_never_a_peer_field",
+        "a_payment_deleted_beside_its_attachment_comes_back_with_its_balance",
+        "a_payment_revived_by_a_later_edit_stays_in_its_event",
+        "a_peer_over_the_network_neither_counts_nor_lists_unstamped_values",
+        "a_peer_that_adopted_first_does_not_cancel_this_devices_adoption",
+        "a_peer_that_never_thins_does_not_grow_this_side",
+        "a_plain_edit_does_not_clear_the_mark",
+        "a_plain_key_is_kept_as_it_is",
+        "a_poisoned_own_revocation_is_restamped_before_sending",
+        "a_poisoned_vault_reopens_with_a_bounded_clock",
+        "a_pull_from_a_copy_with_a_foreign_sync_state_keeps_the_local_one",
+        "a_pull_from_another_vault_is_unmergeable",
+        "a_pulled_edit_keeps_its_remote_stamp",
+        "a_purchase_beside_a_currency_change_is_flagged_for_a_rate_on_every_device",
+        "a_purchase_made_after_the_item_was_removed_brings_the_item_back",
+        "a_queue_entry_for_a_booked_import_does_not_come_back",
+        "a_queue_entry_for_a_discarded_import_does_not_come_back",
+        "a_rate_set_on_one_device_reaches_the_other",
+        "a_reading_deleted_on_one_device_and_corrected_on_the_other_end_equal",
+        "a_reading_made_again_after_it_was_deleted_reaches_the_other_device",
+        "a_reading_moved_to_another_day_takes_the_id_of_that_day",
+        "a_real_old_edit_stays_after_later_moves",
+        "a_received_copy_drops_the_senders_bookkeeping",
+        "a_recent_tombstone_from_a_peer_is_still_taken",
+        "a_record_cut_by_the_cap_is_not_counted_or_requested_again",
+        "a_record_deleted_in_the_editor_gets_a_tombstone_and_only_it",
+        "a_record_differing_only_in_before_is_no_change",
+        "a_record_that_arrives_while_editing_survives_the_save",
+        "a_record_that_does_not_fit_the_schema_changes_nothing",
+        "a_record_that_does_not_parse_is_skipped_and_the_rest_applies",
+        "a_record_under_a_foreign_key_is_refused",
+        "a_relayed_value_of_a_new_device_is_no_correction",
+        "a_removed_attachment_is_pruned_with_its_file",
+        "a_removed_participant_and_a_removed_item_propagate",
+        "a_removed_purchase_and_an_edit_of_another_both_stay",
+        "a_rename_then_a_local_delete_never_brings_the_old_name_back",
+        "a_repeated_session_with_equal_health_makes_no_batch",
+        "a_report_with_only_unrestored_ids_tells_the_user_and_has_its_own_key",
+        "a_revocation_after_a_future_record_reaches_the_other_device",
+        "a_revocation_of_this_device_stays_in_the_list_it_passes_on",
+        "a_saved_object_does_not_overwrite_a_category_it_did_not_change",
+        "a_schedule_moment_runs_once_across_two_devices",
+        "a_second_open_changes_nothing",
+        "a_second_pass_changes_and_stamps_nothing",
+        "a_second_pass_restores_nothing_more",
+        "a_setting_changed_by_the_editor_does_not_undo_a_peers_other_setting",
+        "a_settings_record_from_an_older_build_leaves_layout_and_pins_alone",
+        "a_settlement_never_names_a_transfer_that_is_gone",
+        "a_settlement_without_the_organizer_field_is_only_flagged",
+        "a_single_change_keeps_its_label_and_many_keep_counts",
+        "a_skipped_record_is_journaled_once_not_every_session",
+        "a_sub_account_deleted_while_an_operation_uses_it_comes_back",
+        "a_sync_tap_is_a_change_sink",
+        "a_tombstone_is_compacted_only_after_every_peer_has_it",
+        "a_transaction_label_has_what_where_when_and_how_much",
+        "a_transaction_trigger_on_two_devices_asks_once",
+        "a_truly_pending_import_survives_the_rule",
+        "a_valuation_deleted_on_one_device_and_replaced_on_the_other_end_equal",
+        "a_valuation_made_again_after_it_was_deleted_reaches_the_other_device",
+        "a_vault_from_before_sync_opens_and_starts_stamping",
+        "a_wait_resumed_on_two_devices_posts_once",
+        "a_whole_notification_object_from_an_older_build_merges",
+        "a_young_tombstone_stays_even_when_everyone_has_it",
+        "allow_merging_clears_the_mark_and_the_next_dedupe_folds",
+        "ambiguous_currencies_change_nothing_and_name_the_purchases",
+        "an_account_under_a_deleted_parent_becomes_a_wallet",
+        "an_account_under_an_account_is_cut",
+        "an_ack_never_goes_down",
+        "an_answer_whose_result_is_booked_does_nothing",
+        "an_attachment_of_a_gone_owner_is_pruned",
+        "an_attachment_of_an_owner_that_may_return_is_kept",
+        "an_automation_run_on_both_devices_books_once",
+        "an_edit_equal_to_its_base_stamps_nothing",
+        "an_edit_just_before_a_sync_call_is_pushed_in_the_same_session",
+        "an_edit_made_in_the_poisoned_window_survives_after_it",
+        "an_edit_of_a_record_poisoned_beyond_the_limit_is_stamped_now",
+        "an_edit_of_one_purchase_and_a_new_one_elsewhere_both_stay",
+        "an_edit_the_peer_already_saw_is_not_an_overwrite",
+        "an_edit_the_peer_has_not_seen_is_an_overwrite",
+        "an_envelope_topped_up_after_its_goal_was_deleted_is_deleted_again",
+        "an_exchange_key_stays_on_its_device_but_imports_travel",
+        "an_exchange_terminal_edited_in_the_editor_is_applied_and_one_left_alone_is_kept",
+        "an_fx_refresh_on_each_copy_asks_nothing",
+        "an_item_removed_after_a_purchase_took_it_along",
+        "an_old_device_can_read_a_correction",
+        "an_old_peer_without_acks_does_not_resurrect_a_deletion",
+        "an_old_random_debt_record_and_a_new_one_merge_into_the_deterministic_one",
+        "an_old_random_guest_contact_folds_into_the_deterministic_one",
+        "an_old_reminder_is_not_duplicated_after_the_update",
+        "an_old_vault_without_the_field_opens",
+        "an_older_revoked_entry_under_another_device_id_does_not_revoke_a_new_trust",
+        "an_older_trust_does_not_lift_a_newer_revoke",
+        "an_ordinary_delete_of_a_linked_payment_is_not_undone",
+        "an_organizer_changed_after_a_settlement_goes_back_on_both_devices",
+        "an_orphan_file_is_deleted_and_other_files_are_not",
+        "an_own_entry_already_in_the_peer_list_does_not_hold_compaction",
+        "attaching_a_payment_beside_its_deletion_leaves_no_phantom_purchase",
+        "backdated_operation_does_not_overwrite_after",
+        "caches_thinned_apart_converge_to_one_thinned_set",
+        "colons_and_pipes_are_replaced_and_hashed",
+        "concurrent_participants_both_kept",
+        "concurrent_purchases_both_kept",
+        "concurrent_settlements_are_both_kept",
+        "concurrent_top_ups_add_up",
+        "convergence_quick_fixed_seed",
+        "corrections_of_two_assets_both_kept",
+        "currency_change_beside_a_purchase_keeps_the_rates_valid",
+        "cut_by_is_saved_once_survives_a_reopen_and_is_never_a_peer_field",
+        "dashboard_layout_period_and_pins_never_travel",
+        "debt_terms_cleared_on_one_device_and_edited_on_the_other_end_equal",
+        "debt_terms_created_again_after_they_were_cleared_reach_the_other_device",
+        "dedupe_hands_the_losers_attachment_and_links_to_the_winner",
+        "dedupe_keeps_done_and_mute_of_a_reminder",
+        "dedupe_keeps_the_later_edit_of_either_copy",
+        "dedupe_leaves_unstamped_imports_and_automations",
+        "deleted_guest_contact_stays_deleted_once_its_participant_goes",
+        "deleted_store_is_pruned_from_emergency_scope",
+        "deleting_a_guest_contact_leaves_no_dangling_participant",
+        "deleting_a_poisoned_record_sticks",
+        "device_settings_never_travel",
+        "devices_in_different_zones_compute_the_same_run_key",
+        "different_fields_of_one_record_both_survive",
+        "different_unstamped_values_are_counted_and_the_loser_is_listed",
+        "digests_agree_with_different_terminals",
+        "edits_on_both_devices_end_up_on_both",
+        "emergency_accounts_added_on_two_devices_both_kept",
+        "equal_unstamped_copies_have_no_conflict",
+        "every_collection_label_is_not_a_raw_key",
+        "folding_duplicates_is_recorded_in_the_batch_and_undone_with_it",
+        "forgetting_a_device_lifts_its_pause",
+        "forgetting_a_device_reaches_the_others",
+        "forgetting_the_newest_entry_still_revokes_the_key",
+        "handing_the_vault_over_needs_its_password_and_leaves_a_trace",
+        "health_last_with_an_empty_slot_converges",
+        "inflation_modes_of_two_currencies_both_kept",
+        "json_editor_edits_are_stamped_and_keep_the_bookkeeping",
+        "keys_that_clean_alike_do_not_collide",
+        "marks_from_an_old_peer_do_not_erase_another_trigger",
+        "marks_of_two_triggers_both_survive_a_merge",
+        "merge_keeps_an_edit_made_only_locally_and_one_made_only_remotely",
+        "merge_keeps_the_local_bookkeeping_and_leaves_the_remote_one",
+        "merge_refuses_another_vault",
+        "merge_with_a_wrong_password_is_unmergeable",
+        "merging_a_peer_list_leaves_the_pause_alone",
+        "mileage_and_insurance_edited_on_two_devices_both_kept",
+        "move_beside_delete_keeps_the_account_tree_valid",
+        "needs_rate_is_computed_for_the_purchase_view_by_the_repair_rule",
+        "new_automatic_reminders_get_the_same_id_on_every_device",
+        "notifications_saved_by_an_older_build_load_intact",
+        "old_lines_head_stamp_is_a_floor",
+        "old_peer_allocated_edit_becomes_one_correction",
+        "old_peer_value_without_moves_keeps_the_journal",
+        "one_answer_gives_one_set_of_transfers",
+        "one_foreign_currency_with_rate_one_stays_a_violation",
+        "one_operation_attached_twice_to_one_event_is_one_link",
+        "one_operation_linked_to_two_events_keeps_the_earliest_link_on_both",
+        "one_workflow_run_with_several_operations_for_one_moment_keeps_them_all",
+        "open_stamps_carry_this_device",
+        "opening_again_does_not_grow_the_run_list",
+        "opening_entry_is_shared_by_two_devices",
+        "overspent_envelope_after_a_merge_is_reported",
+        "pairing_after_a_merged_future_revocation_still_sorts_newer",
+        "pairing_or_forgetting_a_device_clears_what_it_told_us",
+        "parallel_purchases_to_one_item_both_survive",
+        "preview_does_not_touch_the_vault",
+        "preview_lists_changed_fields",
+        "preview_shows_balances_after",
+        "random_edits_and_cut_sessions_converge",
+        "random_edits_with_no_item_tolerated_stay_green",
+        "rates_of_different_currencies_set_in_parallel_both_stay",
+        "recomputing_before_stamps_nothing",
+        "recreating_over_a_poisoned_tombstone_survives",
+        "replacing_without_a_base_still_rolls_back_what_arrived_meanwhile",
+        "repoint_tx_moves_every_known_reference",
+        "restoring_after_the_only_peer_was_forgotten_replaces_as_before",
+        "restoring_with_peers_brings_back_a_deleted_record_to_the_peer",
+        "restoring_with_peers_returns_the_copys_records_and_deletes_nothing",
+        "revalue_and_car_edited_on_two_devices_both_kept",
+        "scaled_shares_give_the_same_result_on_two_devices_and_a_second_pass_changes_nothing",
+        "seen_by_only_grows_and_is_not_taken_from_a_received_copy",
+        "separately_created_devices_converge",
+        "set_sync_tap_still_receives_the_changed_keys",
+        "shares_are_scaled_proportionally_and_the_remainder_goes_to_the_largest",
+        "shares_that_add_up_or_are_all_zero_are_left_alone",
+        "simultaneous_corrections_end_with_the_same_before_everywhere",
+        "stamps_of_an_older_vault_without_purchase_entries_still_converge",
+        "switches_of_two_categories_saved_on_two_devices_both_survive",
+        "terminal_change_stamps_nothing",
+        "terminal_state_is_not_synced",
+        "the_backup_restores_the_vault_as_before_the_sync",
+        "the_cash_wallet_still_cannot_be_merged_away_by_the_user",
+        "the_copy_survives_the_next_batch_after_undo",
+        "the_first_device_that_runs_a_schedule_writes_its_zone",
+        "the_id_does_not_depend_on_the_device",
+        "the_journal_is_a_ring_and_lists_newest_first",
+        "the_last_participant_removed_while_another_is_added",
+        "the_later_edit_of_one_field_wins_and_is_reported",
+        "the_oracle_knows_a_restored_payment_is_named_by_money",
+        "the_other_device_honours_the_mark_too",
+        "the_queue_rule_is_idempotent_and_undone_with_its_batch",
+        "the_restore_is_told_to_the_user",
+        "the_same_moment_run_on_two_devices_keeps_the_earlier_run_whole",
+        "the_same_text_split_differently_does_not_collide",
+        "the_scheme_prefixes_tell_the_records_apart",
+        "the_scrub_removes_old_secret_labels_and_is_idempotent",
+        "the_sub_accounts_of_the_loser_move_under_the_winner_with_free_names",
+        "the_terminal_is_a_device_field_of_stores",
+        "the_transaction_cursor_is_not_synced",
+        "the_two_device_switches_never_travel",
+        "the_wallet_named_cash_beats_an_old_random_one_on_both_devices",
+        "thinned_cache_points_are_not_requested_again",
+        "three_devices_never_produce_a_false_correction",
+        "trusting_a_forgotten_device_again_clears_the_revocation",
+        "trusting_again_lifts_a_pause",
+        "two_concurrent_debt_terms_of_one_contact_make_one_record",
+        "two_concurrent_goal_top_ups_make_one_envelope_with_both",
+        "two_devices_repairing_independently_do_not_make_a_new_violation",
+        "two_devices_switching_off_one_workflow_leave_one_run_record",
+        "two_devices_that_adopted_different_values_settle_on_one",
+        "two_devices_that_scale_the_same_shares_alone_meet_without_ping_pong",
+        "two_devices_trim_a_log_to_the_same_records",
+        "two_devices_with_twelve_hours_of_clock_skew_converge",
+        "two_health_snapshots_do_not_mix_fields",
+        "two_loans_on_the_same_day_keep_two_reminders",
+        "two_readings_of_one_meter_and_day_make_one_record",
+        "two_runs_on_one_device_for_one_moment_are_both_kept",
+        "two_valuations_of_one_day_make_one_record",
+        "two_vaults_made_apart_end_with_one_cash_wallet_holding_both_operations",
+        "undo_after_dedupe_restores_both_copies",
+        "undo_does_not_move_a_schedule_mark_back",
+        "undo_leaves_records_changed_since",
+        "undo_lists_a_union_entry_as_skipped",
+        "undo_of_a_batch_keeps_the_local_terminal",
+        "undo_of_a_batch_with_thinned_away_points_does_not_panic",
+        "undo_of_an_added_log_record_does_not_come_back",
+        "undo_puts_records_back_and_the_undo_travels",
+        "undoing_a_sync_that_added_a_purchase_removes_only_that_purchase",
+        "undoing_an_operation_here_does_not_move_a_schedule_mark_back",
+        "undoing_the_batch_brings_the_removed_link_back",
+        "undoing_the_batch_brings_the_two_wallets_back",
+        "undoing_the_batch_removes_the_restore_again",
+        "undoing_the_batch_undoes_the_repair",
+        "when_the_local_value_wins_nothing_is_overwritten_or_counted",
+        "without_a_record_of_the_peer_every_edit_still_counts"
+      ]
+    },
+    "vault_side": {
+      "methods": [
+        {
+          "name": "adopt_device_secrets",
+          "signature": "pub fn adopt_device_secrets(&mut self) -> Result<bool>"
+        },
+        {
+          "name": "base_currency",
+          "signature": "pub fn base_currency(&self) -> &str"
+        },
+        {
+          "name": "change_password",
+          "signature": "pub fn change_password(&mut self, current_password: &str, new_password: &str) -> Result<()>"
+        },
+        {
+          "name": "change_password_with",
+          "signature": "pub fn change_password_with(&mut self, current_password: &str, new_password: &str, policy: CopyPolicy) -> Result<RotationReport>"
+        },
+        {
+          "name": "check_exchange_key_input",
+          "signature": "pub fn check_exchange_key_input(&self, store_id: &str, api_key: &str, api_secret: &str) -> Result<()>"
+        },
+        {
+          "name": "check_password",
+          "signature": "pub fn check_password(&self, candidate: &str) -> Result<()>"
+        },
+        {
+          "name": "clear_device_key",
+          "signature": "pub fn clear_device_key(&mut self, store_id: &str) -> Result<()>"
+        },
+        {
+          "name": "create",
+          "signature": "pub fn create(path: PathBuf, password: &str) -> Result<Self>"
+        },
+        {
+          "name": "create_backup",
+          "signature": "pub fn create_backup(&mut self) -> Result<BackupFile>"
+        },
+        {
+          "name": "create_with",
+          "signature": "pub fn create_with(path: PathBuf, password: Option<&str>) -> Result<Self>"
+        },
+        {
+          "name": "create_with_kdf",
+          "signature": "pub fn create_with_kdf(path: PathBuf, password: &str, kdf: crate::crypto::kdf_profile::KdfParams) -> Result<Self>"
+        },
+        {
+          "name": "crypto_enabled",
+          "signature": "pub fn crypto_enabled(&self) -> bool"
+        },
+        {
+          "name": "device_key",
+          "signature": "pub fn device_key(&self, store_id: &str) -> Result<Option<DeviceKey>>"
+        },
+        {
+          "name": "exchange_key_state",
+          "signature": "pub fn exchange_key_state(&self, store_id: &str) -> ExchangeKeyState"
+        },
+        {
+          "name": "finish_flush",
+          "signature": "pub fn finish_flush(&mut self, done: &Flushed)"
+        },
+        {
+          "name": "first_device_key",
+          "signature": "pub fn first_device_key(&self) -> Result<Option<DeviceKey>>"
+        },
+        {
+          "name": "flush_pending",
+          "signature": "pub fn flush_pending(&mut self) -> Result<()>"
+        },
+        {
+          "name": "has_device_keys",
+          "signature": "pub fn has_device_keys(&self) -> bool"
+        },
+        {
+          "name": "has_mirror",
+          "signature": "pub fn has_mirror(&self) -> bool"
+        },
+        {
+          "name": "has_unsaved_changes",
+          "signature": "pub fn has_unsaved_changes(&self) -> bool"
+        },
+        {
+          "name": "is_encrypted",
+          "signature": "pub fn is_encrypted(&self) -> bool"
+        },
+        {
+          "name": "is_file",
+          "signature": "pub fn is_file(&self, path: &Path) -> bool"
+        },
+        {
+          "name": "key_salt",
+          "signature": "pub fn key_salt(&self) -> Option<Vec<u8>>"
+        },
+        {
+          "name": "list_backups",
+          "signature": "pub fn list_backups(&self) -> Result<Vec<BackupFile>>"
+        },
+        {
+          "name": "list_vault_copies",
+          "signature": "pub fn list_vault_copies(&self) -> Result<Vec<VaultCopy>>"
+        },
+        {
+          "name": "mark_device_key_verified",
+          "signature": "pub fn mark_device_key_verified(&mut self, store_id: &str) -> Result<()>"
+        },
+        {
+          "name": "min_allowed_level",
+          "signature": "pub fn min_allowed_level(&self) -> SecurityLevel"
+        },
+        {
+          "name": "open",
+          "signature": "pub fn open(path: PathBuf, password: &str) -> Result<Self>"
+        },
+        {
+          "name": "open_as",
+          "signature": "pub fn open_as(path: PathBuf, password: &str, device_id: Option<&str>) -> Result<Self>"
+        },
+        {
+          "name": "persist",
+          "signature": "pub fn persist(&mut self) -> Result<()>"
+        },
+        {
+          "name": "persist_now",
+          "signature": "pub fn persist_now(&mut self) -> Result<()>"
+        },
+        {
+          "name": "prepare_flush",
+          "signature": "pub fn prepare_flush(&mut self) -> Result<Option<FlushJob>>"
+        },
+        {
+          "name": "raise_profile",
+          "signature": "pub fn raise_profile(&self) -> KdfProfile"
+        },
+        {
+          "name": "raise_to_crypto",
+          "signature": "pub fn raise_to_crypto(&mut self, current_password: &str, new_password: &str, kdf: KdfParams, on_stage: impl FnMut(RaiseStage)) -> Result<RaiseReport>"
+        },
+        {
+          "name": "remove_password",
+          "signature": "pub fn remove_password(&mut self, current_password: &str) -> Result<()>"
+        },
+        {
+          "name": "replace_doc",
+          "signature": "pub fn replace_doc(&mut self, mut doc: VaultDoc) -> Result<()>"
+        },
+        {
+          "name": "request_key",
+          "signature": "pub fn request_key(&self, store_id: Option<&str>) -> Result<Option<DeviceKey>>"
+        },
+        {
+          "name": "restore_backup",
+          "signature": "pub fn restore_backup(&mut self, name: &str) -> Result<BackupFile>"
+        },
+        {
+          "name": "sandbox",
+          "signature": "pub fn sandbox(&self) -> UnlockedVault"
+        },
+        {
+          "name": "security_level",
+          "signature": "pub fn security_level(&self) -> SecurityLevel"
+        },
+        {
+          "name": "set_base_currency",
+          "signature": "pub fn set_base_currency(&mut self, base: &str)"
+        },
+        {
+          "name": "set_mirror",
+          "signature": "pub fn set_mirror(&mut self, mirror: Option<std::sync::Arc<dyn crate::vault_io::VaultMirror>>)"
+        },
+        {
+          "name": "set_notice_language",
+          "signature": "pub fn set_notice_language(&mut self, ru: bool)"
+        },
+        {
+          "name": "set_password",
+          "signature": "pub fn set_password(&mut self, new_password: &str, delete_plain_copies: bool) -> Result<u32>"
+        },
+        {
+          "name": "set_password_with",
+          "signature": "pub fn set_password_with(&mut self, new_password: &str, policy: CopyPolicy) -> Result<RotationReport>"
+        },
+        {
+          "name": "set_write_behind",
+          "signature": "pub fn set_write_behind(&mut self, hook: Option<Arc<dyn SaveHook>>)"
+        },
+        {
+          "name": "settings_view",
+          "signature": "pub fn settings_view(&self) -> Settings"
+        },
+        {
+          "name": "store_device_key",
+          "signature": "pub fn store_device_key(&mut self, store_id: &str, api_key: &str, api_secret: &str, verified: bool) -> Result<()>"
+        },
+        {
+          "name": "switch_format",
+          "signature": "pub fn switch_format(&mut self, fmt: SnapshotFormat) -> Result<()>"
+        },
+        {
+          "name": "sync_admit",
+          "signature": "pub fn sync_admit(&self, incoming: std::collections::BTreeMap<String, RecordState>) -> (std::collections::BTreeMap<String, RecordState>, usize)"
+        },
+        {
+          "name": "sync_check_level",
+          "signature": "pub fn sync_check_level(&self, incoming: &std::collections::BTreeMap<String, RecordState>) -> Result<()>"
+        },
+        {
+          "name": "transact",
+          "signature": "pub fn transact<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<R>"
+        },
+        {
+          "name": "transact_now",
+          "signature": "pub fn transact_now<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<R>"
+        },
+        {
+          "name": "try_open",
+          "signature": "pub fn try_open(path: PathBuf, password: &str) -> Result<Self>"
+        },
+        {
+          "name": "update_settings",
+          "signature": "pub fn update_settings(&mut self, input: crate::ipc_contract::UpdateSettingsInput) -> Result<Settings>"
+        }
+      ],
+      "tests": [
+        "a_backup_has_no_key",
+        "a_backup_taken_now_is_listed_and_restores_the_older_state",
+        "a_backup_under_another_password_is_refused_untouched",
+        "a_bank_comes_with_its_card_and_the_opening_balance_on_it",
+        "a_bound_sub_account_refuses_other_assets",
+        "a_burst_of_changes_reaches_the_file_in_one_write",
+        "a_change_during_the_write_waits_for_the_next_batch",
+        "a_change_killed_at_any_step_leaves_files_that_open",
+        "a_cheaper_container_is_told_apart",
+        "a_committed_transaction_delivers_its_events_after_commit",
+        "a_copy_that_the_current_state_cannot_open_is_not_offered",
+        "a_crash_at_any_step_from_plain_leaves_the_vault_opening_with_its_data",
+        "a_crash_at_any_step_leaves_one_level_and_the_data",
+        "a_damaged_device_file_is_a_secret_error_not_a_panic",
+        "a_damaged_plain_file_is_refused_not_misread",
+        "a_failed_cleanup_after_the_raise_is_logged_as_a_warning",
+        "a_failed_cleanup_after_the_raise_to_level_three_is_not_an_error",
+        "a_failed_cleanup_step_is_logged_as_a_warning",
+        "a_failed_copy_cleanup_after_a_rekey_is_not_an_error",
+        "a_failed_write_keeps_the_changes_for_the_next_try",
+        "a_futures_account_keeps_its_margin_coin_and_nothing_else_does",
+        "a_hardened_vault_keeps_its_cost_and_its_device_keys",
+        "a_key_lives_in_the_device_file_not_in_the_vault",
+        "a_linked_vault_raises_with_the_phone_profile",
+        "a_mirror_gets_exactly_the_saved_file",
+        "a_new_password_gets_a_new_salt_and_is_on_disk_at_once",
+        "a_new_pin_takes_six_digits_or_more",
+        "a_new_vault_drops_a_stale_device_file_of_the_same_name",
+        "a_pair_converts_both_ways",
+        "a_password_can_be_set_and_removed_back_and_forth",
+        "a_plain_vault_goes_straight_to_level_three_and_keeps_no_plain_copy",
+        "a_read_only_transaction_does_not_write",
+        "a_rekey_keeps_the_keys_under_the_new_vault_key",
+        "a_replaced_doc_keeps_the_device_keys",
+        "a_restore_outside_the_backup_folder_changes_nothing",
+        "a_sandbox_never_writes_even_when_batched",
+        "a_secrets_file_keeps_a_plain_vault_from_taking_a_pin",
+        "a_settings_patch_that_changes_nothing_writes_nothing",
+        "a_store_cannot_become_its_own_parent",
+        "a_stored_crypto_field_survives_both_formats",
+        "a_third_level_is_rejected",
+        "a_top_level_wallet_never_becomes_a_sub_account",
+        "a_trade_moves_both_sides_of_one_record",
+        "a_trade_of_an_asset_for_itself_is_rejected",
+        "a_transfer_moves_quantities_between_stores",
+        "a_transfer_to_the_same_store_is_rejected",
+        "a_vault_already_at_three_is_not_raised",
+        "a_vault_with_crypto_data_does_not_go_below_level_three",
+        "a_vault_without_a_password_has_none_to_change",
+        "a_vault_without_a_password_is_written_and_read_in_the_clear",
+        "a_wrong_pin_or_a_weak_password_changes_nothing",
+        "a_zero_or_negative_amount_is_rejected",
+        "after_an_interruption_the_backup_opens_with_the_old_pin",
+        "an_empty_password_is_refused_everywhere",
+        "an_error_in_the_closure_commits_nothing",
+        "an_old_four_digit_password_still_opens_at_level_two",
+        "an_old_level3_file_with_keys_moves_them_on_open",
+        "an_old_vault_with_an_exchange_keeps_crypto",
+        "an_old_vault_with_keys_moves_them_to_the_device_file",
+        "an_old_vault_without_crypto_records_reads_no_crypto",
+        "an_older_job_never_overwrites_a_newer_write",
+        "an_opening_balance_is_one_service_topup_or_nothing",
+        "an_opening_balance_keeps_its_date",
+        "an_untouched_or_failed_transaction_drops_its_events",
+        "an_unverified_key_is_marked_once_the_check_passes",
+        "archiving_cascades_and_restoring_needs_the_parent",
+        "average_cost_is_consistent_with_pnl",
+        "below_level_3_a_key_is_refused_and_the_state_says_so",
+        "bybit_accounts_are_created_once",
+        "bybit_accounts_follow_what_the_exchange_holds",
+        "bybit_imports_are_routed_by_account",
+        "categories_are_normalized_and_must_exist",
+        "category_hint_separates_perps_from_spot",
+        "change_password_rejects_a_wrong_current_one",
+        "change_password_rekeys_the_file",
+        "change_password_reseals_the_pre_sync_backups",
+        "closing_a_vault_writes_what_was_batched",
+        "commit_nothing_neither_writes_nor_bumps_the_revision",
+        "confirmed_fills_reject_a_missing_exec_id",
+        "confirming_a_buy_creates_a_balanced_trade",
+        "confirming_selectively_leaves_the_rest_staged",
+        "copies_under_the_old_password_follow_it_on_request",
+        "crypto_data_is_not_taken_in_below_level_three",
+        "dev_format_is_json",
+        "discarding_creates_nothing_and_drops_the_fill",
+        "each_exchange_keeps_its_own_terminal",
+        "editing_a_transaction_keeps_its_utility_link",
+        "editing_keeps_the_id_and_origin",
+        "every_settings_field_survives_a_restart",
+        "extras_only_where_they_apply",
+        "fees_reduce_the_holdings",
+        "futures_fills_open_and_close_positions_on_the_sub_account",
+        "history_and_pnl_follow_the_scope",
+        "history_counts_an_asset_held_twice_once",
+        "history_is_newest_first",
+        "import_schedule_skips_an_archived_store",
+        "imported_fill_maps_legs_and_metadata",
+        "kept_plain_copies_are_reported",
+        "legacy_sub_account_types_stay_valid_but_are_no_longer_offered",
+        "linked_operations_share_a_chain_and_fail_together",
+        "manual_income_is_cleared_by_zero_and_never_negative",
+        "names_are_unique_among_siblings_only",
+        "no_plain_copy_survives_a_change_that_deletes_them",
+        "old_copies_stay_unless_asked",
+        "on_chain_hashes_are_shape_checked",
+        "ordinary_records_sync_at_any_level",
+        "payment_reduces_the_balance",
+        "plain_copies_are_sealed_under_the_new_password_on_request",
+        "portfolio_summary_splits_by_store",
+        "prices_as_of_is_the_freshest_point",
+        "property_is_bought_at_its_unit_price",
+        "removing_the_password_deletes_the_copies_sealed_under_it",
+        "removing_with_a_wrong_password_changes_nothing",
+        "renaming_into_a_sibling_name_is_rejected",
+        "replace_doc_rederives_holdings_and_pins_identity",
+        "retargets_and_removals_reach_the_device_file",
+        "saves_reuse_the_unlock_key_instead_of_running_the_kdf",
+        "saving_the_budget_marks_it_configured",
+        "set_write_behind_still_wakes_once_per_commit",
+        "setting_a_password_deletes_only_this_vaults_plain_copies_on_request",
+        "setting_a_password_keeps_plain_copies_unless_asked",
+        "setting_a_password_keeps_the_copy_from_before_a_sync_readable",
+        "settings_survive_a_json_editor_replace",
+        "settings_without_the_crypto_field_still_load",
+        "skipped_checklist_steps_are_kept_once",
+        "spending_from_an_untracked_crypto_balance_is_not_profit",
+        "staging_creates_no_transactions",
+        "staging_is_idempotent_per_exec_id",
+        "staging_skips_fills_for_unknown_stores",
+        "store_history_isolates_store",
+        "store_overview_matches_global_slice",
+        "store_overview_sums_unrealized_and_reports_prices_as_of",
+        "store_pnl_filters_by_store",
+        "store_tree_balances_merge_sub_accounts_by_ticker",
+        "store_tree_lists_top_assets_and_last_activity",
+        "stores_join_the_budget_by_kind_and_inherit_it",
+        "sub_accounts_move_only_between_wallets_of_their_kind",
+        "sub_accounts_need_an_allowed_type_and_a_binding",
+        "summary_uses_the_latest_base_rate",
+        "the_copies_are_listed_with_their_seal",
+        "the_crypto_answer_follows_the_module_and_cannot_be_set",
+        "the_crypto_password_is_graded_weak_medium_strong",
+        "the_file_opens_under_the_new_password_after_a_failed_cleanup",
+        "the_json_export_has_no_key",
+        "the_mirror_gets_the_file_under_the_new_key_at_once",
+        "the_old_encrypted_format_still_reads",
+        "the_password_does_not_come_off_while_keys_are_on_the_device",
+        "the_raise_reaches_level_three_and_leaves_no_cheaper_copy",
+        "the_sync_records_have_no_key",
+        "the_vault_has_one_cash_wallet_that_stays",
+        "tree_totals_roll_up",
+        "unknown_and_archived_stores_are_rejected",
+        "unusable_fills_are_rejected_at_the_boundary"
+      ]
+    },
+    "workflow": {
+      "methods": [
+        {
+          "name": "answer_workflow_wait",
+          "signature": "pub fn answer_workflow_wait(&mut self, id: &str, yes: bool, now: i64, zone: &str) -> Result<RunReport>"
+        },
+        {
+          "name": "confirm_queued",
+          "signature": "pub fn confirm_queued(&mut self, id: &str) -> Result<Vec<Transaction>>"
+        },
+        {
+          "name": "delete_workflow",
+          "signature": "pub fn delete_workflow(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "delete_workflow_test",
+          "signature": "pub fn delete_workflow_test(&mut self, workflow_id: &str, test_id: &str) -> Result<Workflow>"
+        },
+        {
+          "name": "delete_workflow_var",
+          "signature": "pub fn delete_workflow_var(&mut self, scope: &VarScope, name: &str) -> Result<()>"
+        },
+        {
+          "name": "discard_queued",
+          "signature": "pub fn discard_queued(&mut self, id: &str) -> Result<()>"
+        },
+        {
+          "name": "discard_workflow_draft",
+          "signature": "pub fn discard_workflow_draft(&mut self, id: &str) -> Result<Workflow>"
+        },
+        {
+          "name": "dry_run_workflow",
+          "signature": "pub fn dry_run_workflow(&self, graph_json: &str, workflow_id: Option<&str>, trigger_node: Option<&str>, answers: BTreeMap<String, bool>, now: i64, zone: &str) -> Result<RunReport>"
+        },
+        {
+          "name": "export_workflow",
+          "signature": "pub fn export_workflow(&self, id: &str) -> Result<String>"
+        },
+        {
+          "name": "import_workflow",
+          "signature": "pub fn import_workflow(&mut self, json: &str, stores: &HashMap<String, String>, now: i64) -> Result<SavedWorkflow>"
+        },
+        {
+          "name": "preview_workflow_import",
+          "signature": "pub fn preview_workflow_import(&self, json: &str) -> Result<WorkflowImportPreview>"
+        },
+        {
+          "name": "restore_workflow_version",
+          "signature": "pub fn restore_workflow_version(&mut self, id: &str, saved_at: &str, now: i64) -> Result<SavedWorkflow>"
+        },
+        {
+          "name": "retry_workflow_run",
+          "signature": "pub fn retry_workflow_run(&mut self, run_id: &str, now: i64, zone: &str) -> Result<WorkflowPass>"
+        },
+        {
+          "name": "run_due_workflows",
+          "signature": "pub fn run_due_workflows(&mut self, now: i64, zone: &str) -> Result<WorkflowPass>"
+        },
+        {
+          "name": "run_due_workflows_at",
+          "signature": "pub fn run_due_workflows_at(&mut self, clock: &dyn Clock, zone: &str) -> Result<WorkflowPass>"
+        },
+        {
+          "name": "run_workflow_now",
+          "signature": "pub fn run_workflow_now(&mut self, id: &str, trigger_node: Option<&str>, now: i64, zone: &str) -> Result<RunReport>"
+        },
+        {
+          "name": "run_workflow_tests",
+          "signature": "pub fn run_workflow_tests(&self, workflow_id: &str, now: i64, zone: &str) -> Result<Vec<WorkflowTestResult>>"
+        },
+        {
+          "name": "save_workflow",
+          "signature": "pub fn save_workflow(&mut self, id: Option<&str>, draft: WorkflowDraft, now: i64) -> Result<SavedWorkflow>"
+        },
+        {
+          "name": "save_workflow_draft",
+          "signature": "pub fn save_workflow_draft(&mut self, id: &str, graph_json: &str, now: i64) -> Result<Workflow>"
+        },
+        {
+          "name": "save_workflow_test",
+          "signature": "pub fn save_workflow_test(&mut self, workflow_id: &str, mut test: WorkflowTest) -> Result<Workflow>"
+        },
+        {
+          "name": "set_workflow_active",
+          "signature": "pub fn set_workflow_active(&mut self, id: &str, active: bool, now: i64) -> Result<Workflow>"
+        },
+        {
+          "name": "set_workflow_var",
+          "signature": "pub fn set_workflow_var(&mut self, scope: VarScope, name: &str, value: &str) -> Result<()>"
+        },
+        {
+          "name": "skip_workflow_run",
+          "signature": "pub fn skip_workflow_run(&mut self, run_id: &str) -> Result<WorkflowRun>"
+        },
+        {
+          "name": "workflow",
+          "signature": "pub fn workflow(&self, id: &str) -> Result<Workflow>"
+        },
+        {
+          "name": "workflow_from_template",
+          "signature": "pub fn workflow_from_template(&mut self, id: &str, params: &BTreeMap<String, String>, locale: &str, now: i64) -> Result<SavedWorkflow>"
+        },
+        {
+          "name": "workflow_queue",
+          "signature": "pub fn workflow_queue(&self) -> Vec<QueuedActions>"
+        },
+        {
+          "name": "workflow_runs",
+          "signature": "pub fn workflow_runs(&self, workflow_id: Option<&str>, limit: usize) -> Vec<WorkflowRun>"
+        },
+        {
+          "name": "workflow_templates",
+          "signature": "pub fn workflow_templates(&self) -> Vec<WorkflowTemplateInfo>"
+        },
+        {
+          "name": "workflow_vars",
+          "signature": "pub fn workflow_vars(&self) -> Vec<WorkflowVar>"
+        },
+        {
+          "name": "workflow_waits",
+          "signature": "pub fn workflow_waits(&self) -> Vec<WorkflowWait>"
+        },
+        {
+          "name": "workflows",
+          "signature": "pub fn workflows(&self) -> Vec<Workflow>"
+        }
+      ],
+      "tests": [
+        "a_balance_threshold_fires_on_crossing_only",
+        "a_called_workflow_answers_and_shares_the_run",
+        "a_cap_with_no_price_or_rate_rejects_the_run",
+        "a_cap_without_a_label_is_read_in_the_base_of_the_runner",
+        "a_cleared_rejected_run_does_not_come_back_from_the_other_device",
+        "a_counter_lives_between_runs",
+        "a_draft_and_a_workflow_from_before_the_label_still_read",
+        "a_draft_waits_aside_and_saving_takes_it_in",
+        "a_draft_with_an_empty_required_field_saves_inactive",
+        "a_failed_action_rolls_the_run_back_unless_it_has_an_error_way",
+        "a_failing_branch_is_undone_and_its_sibling_goes_on",
+        "a_failing_helper_rolls_back_the_whole_run",
+        "a_failure_on_the_main_line_still_undoes_the_whole_run",
+        "a_flow_wire_that_repeats_a_data_wire_is_pointed_out",
+        "a_graph_with_errors_is_not_switched_on_and_versions_are_kept",
+        "a_missing_or_unknown_account_is_refused",
+        "a_nested_fork_catches_its_own_failure",
+        "a_payday_on_a_day_off_moves_back_to_the_working_day_before",
+        "a_preview_finds_the_missing_wallet_and_counts_steps",
+        "a_question_of_a_switched_off_workflow_cannot_be_answered",
+        "a_question_pauses_the_run_until_the_answer",
+        "a_question_without_text_is_left_for_the_app_to_word",
+        "a_queue_in_turn_undoes_everything_on_a_failure",
+        "a_queue_stands_after_a_trigger_and_does_not_sleep",
+        "a_queue_takes_the_firings_of_a_pass_in_one_run",
+        "a_refused_run_waits_for_retry_or_skip",
+        "a_rejected_retry_does_not_post_twice",
+        "a_rejected_retry_leaves_a_tombstone",
+        "a_salary_lands_on_the_friday_before_with_the_average_amount",
+        "a_salary_sends_ten_percent_to_savings_once",
+        "a_schedule_fires_once_per_planned_moment",
+        "a_sleeping_run_goes_on_along_the_graph_it_fell_asleep_on",
+        "a_source_trigger_fires_on_a_new_value_and_on_crossing",
+        "a_stale_rejected_is_cleared_not_retried",
+        "a_swap_for_an_unknown_wallet_is_refused",
+        "a_variable_read_after_a_write_is_fresh",
+        "a_wait_from_an_older_app_still_reads",
+        "a_wait_of_a_switched_off_workflow_is_journalled_as_dropped",
+        "a_wait_sleeps_in_the_vault_and_goes_on_later",
+        "a_while_loop_sees_the_variable_it_changes",
+        "a_workday_check_sends_the_salary_on_holidays_another_way",
+        "a_workflow_calling_itself_stops_at_the_depth_limit",
+        "a_workflow_travels_as_a_file",
+        "a_write_apart_from_the_flow_runs_at_the_end",
+        "activating_with_an_empty_required_field_is_refused",
+        "an_action_runs_after_the_action_it_takes_data_from_without_a_flow_wire",
+        "an_action_waiting_on_a_branch_that_did_not_run_does_not_run",
+        "an_emulated_wait_moves_the_clock_for_what_follows",
+        "an_emulation_asks_and_then_follows_the_answer",
+        "an_emulation_shows_the_operations_and_keeps_nothing",
+        "an_emulation_shows_the_workflows_its_events_start",
+        "an_event_runs_another_workflow",
+        "an_export_names_the_wallets_the_graph_mentions",
+        "an_import_swaps_a_missing_wallet_for_one_the_user_picks",
+        "an_independent_queue_keeps_the_firings_that_went_through",
+        "an_old_confirm_wire_from_next_becomes_yes",
+        "an_old_file_without_wallets_still_imports",
+        "an_older_graph_keeps_switched_off_what_data_order_would_wake",
+        "an_outflow_in_the_currency_of_the_cap_needs_no_rate",
+        "an_unanswered_question_with_a_deadline_counts_as_no",
+        "answering_no_goes_the_no_way",
+        "data_order_reaches_through_pure_data_nodes",
+        "defaults_come_from_the_vault",
+        "for_each_goes_through_the_accounts",
+        "free_nodes_run_after_the_last_wait",
+        "loops_repeat_count_and_break",
+        "no_cap_means_no_price_check",
+        "opening_a_vault_turns_off_workflows_missing_a_required_field",
+        "pay_yourself_first_listens_only_to_its_source_wallet",
+        "reading_an_action_that_runs_later_is_a_warning",
+        "round_up_collects_the_change_of_a_spend",
+        "run_now_from_a_schedule_takes_its_latest_moment_and_says_by_hand",
+        "tests_compare_an_emulation_with_what_is_expected",
+        "text_and_conversion_nodes_read_what_people_write",
+        "the_cap_counts_in_its_own_currency",
+        "the_cap_currency_is_the_authors_base_unless_chosen",
+        "the_cap_stops_a_run_that_moves_too_much",
+        "the_inflation_node_reads_the_groups_flat_rates",
+        "the_payday_template_runs_as_emulation",
+        "the_question_notice_follows_the_notice_language",
+        "without_a_queue_every_firing_is_its_own_run"
+      ]
+    }
+  }
+}
