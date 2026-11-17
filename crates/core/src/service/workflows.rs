@@ -436,7 +436,7 @@ impl UnlockedVault {
         Ok(saved)
     }
 
-    fn wf_state_mut(&mut self, workflow_id: &str) -> &mut WorkflowState {
+    pub(crate) fn wf_state_mut(&mut self, workflow_id: &str) -> &mut WorkflowState {
         let index = match self
             .doc
             .workflow_state
@@ -650,7 +650,7 @@ impl UnlockedVault {
             .ok_or_else(|| Error::Missing(format!("workflow {id}")))
     }
 
-    fn check_draft(draft: &WorkflowDraft) -> Result<(Graph, Vec<GraphIssue>)> {
+    pub(crate) fn check_draft(draft: &WorkflowDraft) -> Result<(Graph, Vec<GraphIssue>)> {
         if draft.name.trim().is_empty() {
             return Err(Error::InvalidInput("name the workflow".into()));
         }
@@ -673,7 +673,7 @@ impl UnlockedVault {
 
     /// The currency a saved cap is in: the one chosen, else the base of the
     /// device that saves it. No cap, no currency.
-    fn cap_currency(&self, draft: &WorkflowDraft) -> Option<String> {
+    pub(crate) fn cap_currency(&self, draft: &WorkflowDraft) -> Option<String> {
         draft.max_amount?;
         let chosen = draft
             .max_amount_currency
@@ -756,7 +756,7 @@ impl UnlockedVault {
 
     /// Start watching from now: schedules count from this moment, operations
     /// from the next one added.
-    fn arm_workflow(&mut self, workflow_id: &str, graph: &Graph, now: i64) {
+    pub(crate) fn arm_workflow(&mut self, workflow_id: &str, graph: &Graph, now: i64) {
         let stamp = crate::calendar::iso(now);
         let (index, cursor) = (
             self.doc.transactions.len(),
@@ -1212,14 +1212,20 @@ impl UnlockedVault {
 
     // -- running -------------------------------------------------------------------
 
-    fn context(&self, workflow: &Workflow, trigger: &Node, now: i64, zone: &str) -> RunContext {
+    pub(crate) fn context(
+        &self,
+        workflow: &Workflow,
+        trigger: &Node,
+        now: i64,
+        zone: &str,
+    ) -> RunContext {
         let mut ctx = RunContext::new(&workflow.id, &workflow.name, &trigger.id, now, zone);
         ctx.set_cap(workflow);
         ctx
     }
 
     /// Keep what a live run left: its journal entry, queue, wait and notices.
-    fn keep_run(&mut self, report: &RunReport, pass: &mut WorkflowPass) {
+    pub(crate) fn keep_run(&mut self, report: &RunReport, pass: &mut WorkflowPass) {
         self.doc.workflow_runs.push(report.run.clone());
         let overflow = self
             .doc
@@ -1265,7 +1271,7 @@ impl UnlockedVault {
 
     /// A run that never happened, in the journal with its reason, so nothing
     /// is lost without a trace.
-    fn keep_dropped(
+    pub(crate) fn keep_dropped(
         &mut self,
         workflow_id: &str,
         trigger: &str,
@@ -1316,7 +1322,7 @@ impl UnlockedVault {
         pass.runs.push(run);
     }
 
-    fn runs_last_hour(&self, workflow_id: &str, now: i64) -> usize {
+    pub(crate) fn runs_last_hour(&self, workflow_id: &str, now: i64) -> usize {
         self.doc
             .workflow_runs
             .iter()
@@ -1398,20 +1404,20 @@ impl UnlockedVault {
     /// Take a run out of the journal as a deletion that reaches the other
     /// devices (a tombstone). The change tracker treats a missing entry of a
     /// capped log as a trim, so the deletion is written here.
-    fn forget_run(&mut self, run_id: &str) -> Result<()> {
+    pub(crate) fn forget_run(&mut self, run_id: &str) -> Result<()> {
         self.doc.workflow_runs.retain(|stored| stored.id != run_id);
         self.sync_forget_log_record(&format!("workflow_runs:{run_id}"))
     }
 
     /// Whether an operation already books `moment` of `workflow_id`.
-    fn moment_booked(&self, workflow_id: &str, moment: &str) -> bool {
+    pub(crate) fn moment_booked(&self, workflow_id: &str, moment: &str) -> bool {
         self.booked_moments()
             .iter()
             .any(|(id, _, booked)| id == workflow_id && booked == moment)
     }
 
     /// Whether an operation already carries the run key `key`.
-    fn run_key_booked(&self, key: &str) -> bool {
+    pub(crate) fn run_key_booked(&self, key: &str) -> bool {
         self.doc.transactions.iter().any(|tx| {
             matches!(&tx.meta().origin, TxOrigin::Workflow { run_key: Some(known), .. } if known == key)
         })
@@ -1419,7 +1425,7 @@ impl UnlockedVault {
 
     /// Whether an operation from before run keys books `moment` of
     /// `workflow_id` (it names the moment but no key).
-    fn legacy_moment_booked(&self, workflow_id: &str, moment: &str) -> bool {
+    pub(crate) fn legacy_moment_booked(&self, workflow_id: &str, moment: &str) -> bool {
         self.doc
             .transactions
             .iter()
@@ -1439,7 +1445,7 @@ impl UnlockedVault {
     }
 
     /// Whether a run of this firing's key already happened here.
-    fn already_run(&self, ctx: &RunContext) -> bool {
+    pub(crate) fn already_run(&self, ctx: &RunContext) -> bool {
         ctx.run_key
             .as_deref()
             .is_some_and(|key| self.run_key_booked(key))
@@ -1448,7 +1454,7 @@ impl UnlockedVault {
     /// A wait id this vault has neither got nor deleted: a wait that was
     /// resumed (its removal left a tombstone) is not asked again, and one
     /// that is already here is not doubled.
-    fn wait_is_new(&self, wait_id: &str) -> bool {
+    pub(crate) fn wait_is_new(&self, wait_id: &str) -> bool {
         self.doc
             .workflow_waits
             .iter()
@@ -1462,7 +1468,7 @@ impl UnlockedVault {
 
     /// The zone schedule moments are computed in: the group's, shared by every
     /// device. The first device that gets here writes its own zone.
-    fn schedule_zone(&mut self, device_zone: &str) -> String {
+    pub(crate) fn schedule_zone(&mut self, device_zone: &str) -> String {
         self.doc
             .settings
             .schedule_timezone
@@ -1492,7 +1498,7 @@ impl UnlockedVault {
     }
 
     /// Run one trigger for real and keep the result. Returns the events sent.
-    fn fire(
+    pub(crate) fn fire(
         &mut self,
         workflow: &Workflow,
         graph: &Graph,
@@ -1521,7 +1527,7 @@ impl UnlockedVault {
 
     /// Several firings of one trigger in a pass: with a "Queue" in the
     /// workflow, one run that hands them on one by one; otherwise a run each.
-    fn fire_all(
+    pub(crate) fn fire_all(
         &mut self,
         workflow: &Workflow,
         graph: &Graph,
@@ -1548,7 +1554,7 @@ impl UnlockedVault {
 
     /// An example batch for "Queue" when run by hand or emulated: the
     /// latest firings of an operation trigger (up to 3, oldest first).
-    fn sample_batch(
+    pub(crate) fn sample_batch(
         &self,
         graph: &Graph,
         trigger: &Node,
@@ -1661,7 +1667,7 @@ impl UnlockedVault {
 
     /// What a trigger would hand on now: for an operation trigger the latest
     /// matching operation, for thresholds the current value.
-    fn sample_trigger_values(
+    pub(crate) fn sample_trigger_values(
         &self,
         trigger: &Node,
         now: i64,
@@ -1700,7 +1706,10 @@ impl UnlockedVault {
     }
 
     /// What a source trigger hands on: the source's latest value.
-    fn source_trigger_values(&self, trigger: &Node) -> Option<BTreeMap<String, WfValue>> {
+    pub(crate) fn source_trigger_values(
+        &self,
+        trigger: &Node,
+    ) -> Option<BTreeMap<String, WfValue>> {
         let id = trigger.params.get("source")?.as_str()?;
         let last = self.data_source(id)?.last.as_ref()?;
         Some(BTreeMap::from([
@@ -1716,7 +1725,7 @@ impl UnlockedVault {
     }
 
     /// The watched value of a threshold trigger and which side of it it is on.
-    fn threshold_value(&self, trigger: &Node, now: i64) -> Option<(WfValue, bool)> {
+    pub(crate) fn threshold_value(&self, trigger: &Node, now: i64) -> Option<(WfValue, bool)> {
         let params = &trigger.params;
         let threshold = params
             .get("value")
@@ -1748,7 +1757,7 @@ impl UnlockedVault {
     }
 
     /// Run the workflows listening for events, as deep as `MAX_EVENT_DEPTH`.
-    fn run_events(
+    pub(crate) fn run_events(
         &mut self,
         mut events: Vec<EmittedEvent>,
         now: i64,
@@ -1798,7 +1807,7 @@ impl UnlockedVault {
         }
     }
 
-    fn active_workflows(&self) -> Vec<Workflow> {
+    pub(crate) fn active_workflows(&self) -> Vec<Workflow> {
         self.doc
             .workflows
             .iter()
@@ -1836,7 +1845,7 @@ impl UnlockedVault {
     /// Planned moments operations were booked for, as `(workflow id, stored
     /// planned date, RFC3339 moment)`: the same marker the scheduled run
     /// itself goes by. The one place that reads the origin of an operation.
-    fn booked_moments(&self) -> Vec<Processed> {
+    pub(crate) fn booked_moments(&self) -> Vec<Processed> {
         let mut out = Vec::new();
         for tx in &self.doc.transactions {
             match &tx.meta().origin {
@@ -1866,7 +1875,7 @@ impl UnlockedVault {
     /// older ones are kept in the journal as skipped. Automations are not
     /// held to the hourly limit of workflows: a catch-up after a month away
     /// is expected to book many at once.
-    fn fire_due_automations(
+    pub(crate) fn fire_due_automations(
         &mut self,
         now: i64,
         zone: &str,
@@ -1949,7 +1958,7 @@ impl UnlockedVault {
     }
 
     /// Record the local date a run was planned for on the operations it made.
-    fn stamp_planned_date(&mut self, created: &[String], date: LocalDate) {
+    pub(crate) fn stamp_planned_date(&mut self, created: &[String], date: LocalDate) {
         for tx in &mut self.doc.transactions {
             if !created.contains(&tx.meta().id) {
                 continue;
@@ -1961,7 +1970,10 @@ impl UnlockedVault {
     }
 
     /// Operations added since a workflow last looked, and where it is now.
-    fn new_transactions(&self, workflow_id: &str) -> (Vec<Transaction>, usize, Option<String>) {
+    pub(crate) fn new_transactions(
+        &self,
+        workflow_id: &str,
+    ) -> (Vec<Transaction>, usize, Option<String>) {
         let len = self.doc.transactions.len();
         let last = self.doc.transactions.last().map(|tx| tx.meta().id.clone());
         let Some(state) = self

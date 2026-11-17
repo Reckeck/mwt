@@ -223,7 +223,7 @@ impl UnlockedVault {
     }
 
     /// The wallet's name when a wallet follows the account, else the account's own.
-    fn relation_account_name(&self, account_id: &str, fallback: &str) -> String {
+    pub(crate) fn relation_account_name(&self, account_id: &str, fallback: &str) -> String {
         self.doc
             .stores
             .iter()

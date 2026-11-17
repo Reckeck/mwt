@@ -23,7 +23,7 @@ impl UnlockedVault {
     /// - `shared_events[].items[].purchases[].tx_id`;
     /// - `shared_events[].settlements[].tx_id`;
     /// - `import_runs[].reconcile_tx_id`.
-    pub(in crate::service) fn repoint_tx(&mut self, old: &str, new: &str) -> bool {
+    pub(crate) fn repoint_tx(&mut self, old: &str, new: &str) -> bool {
         if old == new {
             return false;
         }
@@ -67,7 +67,7 @@ impl UnlockedVault {
     /// [`Self::repoint_tx`] for every pair, as one tracked edit of this
     /// device: the records it changed are stamped (so the other devices get
     /// them) and recorded in the batch for its undo.
-    pub(super) fn repoint_removed_copies(
+    pub(crate) fn repoint_removed_copies(
         &mut self,
         pairs: &[(String, String)],
         batch_id: &str,

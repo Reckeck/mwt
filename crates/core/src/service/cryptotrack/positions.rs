@@ -79,7 +79,7 @@ use super::super::UnlockedVault;
 /// What takes part in a position's value: the stored positions of the
 /// followed, live accounts (no shadowed twins) and the receipts, owned so a
 /// caller can hand them to the pure function (`engine::position_value`).
-pub(in crate::service) struct CryptoPositionInputs<'doc> {
+pub(crate) struct CryptoPositionInputs<'doc> {
     doc: &'doc VaultDoc,
     positions: Vec<&'doc CryptoPosition>,
     /// Asset keys the module holds only as the receipt of a position.
@@ -260,7 +260,7 @@ impl UnlockedVault {
     /// had overwritten comes back with that account's next pass.
     ///
     /// Returns how many records it touched.
-    fn migrate_legacy_position_records(&mut self, account_id: &str) -> usize {
+    pub(crate) fn migrate_legacy_position_records(&mut self, account_id: &str) -> usize {
         let wanted: Vec<(String, String)> = self
             .doc
             .crypto_positions
@@ -290,7 +290,7 @@ impl UnlockedVault {
 
     /// Whether `record` is keyed the old way and the current key holds the
     /// same position of the same account.
-    pub(super) fn is_shadowed_legacy_position(&self, record: &CryptoPosition) -> bool {
+    pub(crate) fn is_shadowed_legacy_position(&self, record: &CryptoPosition) -> bool {
         if !is_legacy_keyed(record) {
             return false;
         }
@@ -303,7 +303,7 @@ impl UnlockedVault {
 
     /// Whether the capital counts what this account holds: it is followed
     /// and not archived. An address watched without being counted stays out.
-    pub(in crate::service) fn crypto_account_counts(&self, account_id: &str) -> bool {
+    pub(crate) fn crypto_account_counts(&self, account_id: &str) -> bool {
         self.doc
             .crypto_accounts
             .iter()
@@ -315,7 +315,7 @@ impl UnlockedVault {
     /// capital and the snapshots: positions of followed, live accounts, no
     /// stale twin of an old key, plus the receipts. Token trust is
     /// `tokens::counts_in_totals`.
-    pub(in crate::service) fn crypto_position_inputs(&self) -> CryptoPositionInputs<'_> {
+    pub(crate) fn crypto_position_inputs(&self) -> CryptoPositionInputs<'_> {
         CryptoPositionInputs {
             doc: &self.doc,
             positions: self
@@ -377,7 +377,7 @@ impl UnlockedVault {
     ///   ([`crate::cryptotrack::protocols::receipt_tokens`]), for a protocol
     ///   the account holds a position in. A position read without any history
     ///   behind it still names its receipt that way.
-    pub(in crate::service) fn crypto_position_receipts(&self) -> BTreeSet<String> {
+    pub(crate) fn crypto_position_receipts(&self) -> BTreeSet<String> {
         let mut out = BTreeSet::new();
         for event in &self.doc.crypto_events {
             let receipt_side = match event.kind {
@@ -410,7 +410,7 @@ impl UnlockedVault {
 
     /// One stored position, with the device's own reading of it when there is
     /// one.
-    fn position_view(
+    pub(crate) fn position_view(
         &self,
         record: &CryptoPosition,
         reading: Option<&PositionReading>,
@@ -517,7 +517,7 @@ impl UnlockedVault {
         }
     }
 
-    fn position_asset_view(&self, leg: &CryptoLeg) -> PositionAssetView {
+    pub(crate) fn position_asset_view(&self, leg: &CryptoLeg) -> PositionAssetView {
         let asset_ref = self.crypto_asset_ref(&leg.asset);
         PositionAssetView {
             asset_key: leg.asset.key(),
@@ -533,7 +533,7 @@ impl UnlockedVault {
     /// What the legs are worth now: a supply adds, a debt takes away.
     /// `None` as soon as one price is unknown — a partial sum would read as a
     /// smaller position rather than as a gap.
-    fn legs_value_usd(&self, legs: &[CryptoLeg]) -> Option<Amount> {
+    pub(crate) fn legs_value_usd(&self, legs: &[CryptoLeg]) -> Option<Amount> {
         let mut total = Amount::ZERO;
         for leg in legs {
             let price = self.price_now_usd(&leg.asset)?;
@@ -549,7 +549,7 @@ impl UnlockedVault {
     /// USD for one unit now, by the same order of sources every other
     /// position of the app is valued at; `None`, never zero, when nothing
     /// knows it.
-    fn price_now_usd(&self, asset: &CryptoAsset) -> Option<Amount> {
+    pub(crate) fn price_now_usd(&self, asset: &CryptoAsset) -> Option<Amount> {
         // A token that is quarantined or rejected has no price here, whatever
         // its symbol says: the dollar peg would otherwise price a stranger's
         // "USDC" at 1 USD and put it into the position's value.
@@ -575,13 +575,13 @@ impl UnlockedVault {
 
     /// USD for one unit on the day of `time`, out of the module's own price
     /// history (spec E4).
-    fn price_then_usd(&self, asset: &CryptoAsset, time: &str) -> Option<Amount> {
+    pub(crate) fn price_then_usd(&self, asset: &CryptoAsset, time: &str) -> Option<Amount> {
         let date = NaiveDate::parse_from_str(&ids::day(time), "%Y-%m-%d").ok()?;
         prices::lookup(&self.doc, asset, date).value
     }
 
     /// What the position's own operations say about it.
-    fn position_history(&self, key: &PositionKey, account_id: &str) -> PositionHistory {
+    pub(crate) fn position_history(&self, key: &PositionKey, account_id: &str) -> PositionHistory {
         let tracking = key.tracking();
         let mut out = PositionHistory::default();
         let mut invested = Some(Amount::ZERO);
@@ -658,7 +658,7 @@ impl UnlockedVault {
 
 /// What the stored operations of one position add up to.
 #[derive(Debug, Default)]
-struct PositionHistory {
+pub(crate) struct PositionHistory {
     /// Capital still in, at the prices of the days it moved: what went in
     /// minus what came back out. This is the figure of the net identity —
     /// the change of value is measured against it.

@@ -860,7 +860,7 @@ impl UnlockedVault {
     // -- valuing the past -----------------------------------------------------------
 
     /// What every store held at each cutoff (ascending), from the legs.
-    fn positions_at(&self, cutoffs: &[i64]) -> Vec<Positions> {
+    pub(crate) fn positions_at(&self, cutoffs: &[i64]) -> Vec<Positions> {
         let mut legs: Vec<(i64, Leg)> = self
             .doc
             .transactions
@@ -908,7 +908,7 @@ impl UnlockedVault {
             .unwrap_or(Amount::ZERO)
     }
 
-    fn networth_points(&self, ctx: &Ctx) -> Vec<NetworthPoint> {
+    pub(crate) fn networth_points(&self, ctx: &Ctx) -> Vec<NetworthPoint> {
         let book = self.rate_book();
         let kinds: HashMap<&str, StoreKind> = self
             .doc
@@ -1052,7 +1052,7 @@ impl UnlockedVault {
 
     // -- wallets ----------------------------------------------------------------------
 
-    fn stores_report(&self, ctx: &Ctx) -> StoresReport {
+    pub(crate) fn stores_report(&self, ctx: &Ctx) -> StoresReport {
         let book = self.rate_book();
         let (start, end) = (ctx.start(), ctx.end().min(ctx.now));
         let snapshots = self.positions_at(&[start - 1, end]);
@@ -1195,7 +1195,7 @@ impl UnlockedVault {
 
     // -- portfolio ----------------------------------------------------------------------
 
-    fn portfolio_report(&self, ctx: &Ctx) -> PortfolioReport {
+    pub(crate) fn portfolio_report(&self, ctx: &Ctx) -> PortfolioReport {
         let book = self.rate_book();
         let first = ctx.months[0];
         let last = (ctx
@@ -1319,7 +1319,7 @@ impl UnlockedVault {
 
     // -- inflation ------------------------------------------------------------------------
 
-    fn inflation_report(&self, ctx: &Ctx) -> InflationReport {
+    pub(crate) fn inflation_report(&self, ctx: &Ctx) -> InflationReport {
         let nominal_ctx = Ctx {
             real: false,
             scope: ctx.scope.clone(),

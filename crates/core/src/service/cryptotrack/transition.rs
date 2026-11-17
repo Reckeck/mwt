@@ -118,7 +118,7 @@ impl UnlockedVault {
     ///
     /// Below level 3 it does nothing: the module cannot follow an address
     /// there, so there is nothing to hand the wallets over to.
-    pub(in crate::service) fn retire_manual_crypto_wallets(&mut self) -> CryptoArchiveReport {
+    pub(crate) fn retire_manual_crypto_wallets(&mut self) -> CryptoArchiveReport {
         let mut out = CryptoArchiveReport::default();
         if self.security_level() != SecurityLevel::Crypto {
             return out;
@@ -178,7 +178,7 @@ impl UnlockedVault {
     /// **A family goes together.** Records anywhere under an exchange retire
     /// the exchange and every account in it, so a spot sub-account with the
     /// fills does not leave an empty futures one behind in the totals.
-    fn manual_crypto_wallets(&self, fx: Amount) -> Vec<CryptoRetiredWallet> {
+    pub(crate) fn manual_crypto_wallets(&self, fx: Amount) -> Vec<CryptoRetiredWallet> {
         let mut families: BTreeSet<String> = BTreeSet::new();
         for store in &self.doc.stores {
             if store.archived || !matches!(store.kind, StoreKind::Crypto | StoreKind::Exchange) {
@@ -214,7 +214,7 @@ impl UnlockedVault {
     /// Whether anything is written down in this wallet: a holding or an
     /// operation that names it. An empty wallet is not a record of the past,
     /// whatever its kind.
-    fn wallet_has_records(&self, store_id: &str) -> bool {
+    pub(crate) fn wallet_has_records(&self, store_id: &str) -> bool {
         self.doc
             .holdings
             .iter()
@@ -230,7 +230,7 @@ impl UnlockedVault {
     /// provider it talks to (`ExchangeProvider::supported`). Whether a key is
     /// set today says nothing — a key lives on one device and arrives only
     /// after the move — so the provider is the whole answer here.
-    fn exchange_the_module_reads(&self, store_id: &str) -> bool {
+    pub(crate) fn exchange_the_module_reads(&self, store_id: &str) -> bool {
         let root = self.root_of(store_id);
         self.find_store(&root).is_some_and(|store| {
             store.kind == StoreKind::Exchange
@@ -244,7 +244,7 @@ impl UnlockedVault {
     /// Whether the module reads this wallet instead of the user keeping it by
     /// hand: the wallet (or one it sits in) shows a followed address, or it is
     /// an exchange the module reads through its key.
-    fn engine_drives(&self, store_id: &str) -> bool {
+    pub(crate) fn engine_drives(&self, store_id: &str) -> bool {
         if self.exchange_is_engine_driven(store_id) {
             return true;
         }
@@ -264,7 +264,7 @@ impl UnlockedVault {
     /// What a wallet's own holdings are worth in the base currency, counted the
     /// way `service::worth` counts them: a derivative is notional and not the
     /// user's money, so it is left out here as it is left out there.
-    fn wallet_value_base(&self, store_id: &str, fx: Amount) -> Amount {
+    pub(crate) fn wallet_value_base(&self, store_id: &str, fx: Amount) -> Amount {
         let mut total = Amount::ZERO;
         for holding in &self.doc.holdings {
             if holding.store_id != store_id || holding.asset.is_derivative() {

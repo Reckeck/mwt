@@ -71,17 +71,17 @@ impl UnlockedVault {
     }
 
     /// Keys live in the device file (level 3, a real vault).
-    pub(super) fn keys_on_device(&self) -> bool {
+    pub(crate) fn keys_on_device(&self) -> bool {
         !self.sandbox && self.security_level() == SecurityLevel::Crypto
     }
 
-    fn device_seal_key(&self) -> Result<std::sync::Arc<SealKey>> {
+    pub(crate) fn device_seal_key(&self) -> Result<std::sync::Arc<SealKey>> {
         self.key
             .clone()
             .ok_or_else(|| Error::Crypto("the vault has no key".into()))
     }
 
-    fn key_targets(&self) -> Vec<Target> {
+    pub(crate) fn key_targets(&self) -> Vec<Target> {
         self.doc
             .exchanges
             .bybit
@@ -96,12 +96,12 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn load_device_secrets(&self) -> Result<DeviceSecrets> {
+    pub(crate) fn load_device_secrets(&self) -> Result<DeviceSecrets> {
         device_secrets::load(&self.path, &*self.device_seal_key()?)
     }
 
     /// The whole device file for one request (the caller drops it soon).
-    pub(super) fn device_secrets_for_request(&self) -> Result<DeviceSecrets> {
+    pub(crate) fn device_secrets_for_request(&self) -> Result<DeviceSecrets> {
         if self.device_keys.unreadable {
             return Err(Error::Secret);
         }
@@ -109,7 +109,7 @@ impl UnlockedVault {
     }
 
     /// The index and the masks from the file.
-    fn index_from(&mut self, secrets: &DeviceSecrets) {
+    pub(crate) fn index_from(&mut self, secrets: &DeviceSecrets) {
         self.doc.exchanges.bybit = secrets
             .bybit
             .iter()
@@ -173,7 +173,7 @@ impl UnlockedVault {
     /// Before a save at level 3: a key dropped from the index (its store
     /// deleted, merged, the key cleared) or new sub-account targets reach the
     /// file. Nothing to do when the index is as written.
-    pub(super) fn flush_device_keys(&mut self) -> Result<()> {
+    pub(crate) fn flush_device_keys(&mut self) -> Result<()> {
         if !self.keys_on_device() || self.device_keys.unreadable {
             return Ok(());
         }
@@ -201,7 +201,7 @@ impl UnlockedVault {
     }
 
     /// The mask of the key stored for exactly this store.
-    pub(super) fn exchange_key_hint(&self, keys: &ExchangeKeys) -> String {
+    pub(crate) fn exchange_key_hint(&self, keys: &ExchangeKeys) -> String {
         if self.keys_on_device() {
             self.device_keys
                 .meta

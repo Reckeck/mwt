@@ -200,7 +200,7 @@ impl UnlockedVault {
     /// labels are dates gives a month per row; a number gives the latest
     /// value of each month it was fetched in. They are derived each time,
     /// not stored, so fixing the source fixes the history.
-    fn source_inflation(&self, currency: &str) -> Vec<InflationReading> {
+    pub(crate) fn source_inflation(&self, currency: &str) -> Vec<InflationReading> {
         let Some(source) = self
             .doc
             .settings
@@ -316,7 +316,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn inflation_currencies(&self) -> BTreeSet<String> {
+    pub(crate) fn inflation_currencies(&self) -> BTreeSet<String> {
         self.flat_inflation()
             .into_keys()
             .chain(self.doc.settings.inflation_source.keys().cloned())

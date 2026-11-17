@@ -78,7 +78,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn check_envelope_draft(&self, draft: &EnvelopeDraft) -> Result<()> {
+    pub(crate) fn check_envelope_draft(&self, draft: &EnvelopeDraft) -> Result<()> {
         if draft.name.trim().is_empty() {
             return Err(Error::InvalidInput("an envelope needs a name".into()));
         }
@@ -101,7 +101,11 @@ impl UnlockedVault {
         self.create_envelope_as(draft, uuid::Uuid::new_v4().to_string())
     }
 
-    fn create_envelope_as(&mut self, draft: EnvelopeDraft, id: String) -> Result<Envelope> {
+    pub(crate) fn create_envelope_as(
+        &mut self,
+        draft: EnvelopeDraft,
+        id: String,
+    ) -> Result<Envelope> {
         self.check_envelope_draft(&draft)?;
         let envelope = Envelope {
             id,
@@ -291,7 +295,7 @@ impl UnlockedVault {
 
     /// Change what an envelope holds by `delta` as an entry of its journal
     /// (the only way to touch `allocated`).
-    fn shift_envelope(&mut self, id: &str, delta: Amount) -> Result<Envelope> {
+    pub(crate) fn shift_envelope(&mut self, id: &str, delta: Amount) -> Result<Envelope> {
         let at = now_iso();
         let envelope = self.envelope_mut(id)?;
         envelope.record_move(delta, &at);
@@ -309,7 +313,7 @@ impl UnlockedVault {
         changed
     }
 
-    fn envelope_mut(&mut self, id: &str) -> Result<&mut Envelope> {
+    pub(crate) fn envelope_mut(&mut self, id: &str) -> Result<&mut Envelope> {
         self.doc
             .envelopes
             .iter_mut()

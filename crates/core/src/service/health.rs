@@ -224,7 +224,11 @@ fn percent(part: Amount, whole: Amount) -> Option<Amount> {
 impl UnlockedVault {
     /// Average income and spending (`fixed + daily`) of the given months;
     /// `None` when any of them had no flow at all.
-    fn months_average(&self, months: &[NaiveDate], zone: &str) -> Option<(Amount, Amount)> {
+    pub(crate) fn months_average(
+        &self,
+        months: &[NaiveDate],
+        zone: &str,
+    ) -> Option<(Amount, Amount)> {
         let mut income = Amount::ZERO;
         let mut spent = Amount::ZERO;
         for month in months {

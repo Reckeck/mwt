@@ -64,14 +64,14 @@ pub struct NetWorthTrend {
 }
 
 #[derive(Default)]
-struct PaceTotals {
+pub(crate) struct PaceTotals {
     income: Amount,
     spent: Amount,
     by_category: BTreeMap<String, Amount>,
 }
 
 impl UnlockedVault {
-    fn pace_totals(
+    pub(crate) fn pace_totals(
         &self,
         cal: &Calendar,
         currency: &str,

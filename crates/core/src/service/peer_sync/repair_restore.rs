@@ -42,10 +42,7 @@ impl UnlockedVault {
     /// made on this device leaves no such entry, and an older entry would hold
     /// a value from before later edits (restoring it with a fresh stamp would
     /// beat the right value everywhere), so then there is nothing to restore.
-    pub(in crate::service) fn deleted_value<Record: DeserializeOwned>(
-        &self,
-        key: &str,
-    ) -> Option<Record> {
+    pub(crate) fn deleted_value<Record: DeserializeOwned>(&self, key: &str) -> Option<Record> {
         let tombstone = self.doc.sync.tombstones.get(key)?;
         self.doc
             .sync
@@ -63,7 +60,11 @@ impl UnlockedVault {
     /// stamp of the field `participants.<id>` (a removal stamps the field of
     /// the entry that went) is the one the event has now. A local removal
     /// restamps the field, so it matches no entry.
-    fn removed_participant(&self, event_id: &str, participant_id: &str) -> Option<Participant> {
+    pub(crate) fn removed_participant(
+        &self,
+        event_id: &str,
+        participant_id: &str,
+    ) -> Option<Participant> {
         let key = format!("shared_events:{event_id}");
         let field = format!("participants.{participant_id}");
         let current = self.doc.sync.stamps.get(&key)?.fields.get(&field)?;
@@ -94,7 +95,7 @@ impl UnlockedVault {
             })
     }
 
-    pub(super) fn repair_restored_records(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_restored_records(&mut self, report: &mut RepairReport) {
         // First: a purchase that comes back names its buyer, looked at next.
         self.restore_removed_with_payment();
         self.restore_participants(report);
@@ -111,7 +112,7 @@ impl UnlockedVault {
     /// or the item is gone. Every device does this from the same record, so
     /// they arrive at the same event. Once a payment is gone for good (its
     /// tombstone is too) the record has nothing left to wait for.
-    pub(in crate::service) fn restore_removed_with_payment(&mut self) {
+    pub(crate) fn restore_removed_with_payment(&mut self) {
         let alive: BTreeSet<String> = self
             .doc
             .transactions
@@ -157,7 +158,7 @@ impl UnlockedVault {
     /// reference: the payment comes back as it was. A payment that was never
     /// here (no tombstone) is not touched; one with no value to restore goes
     /// to `unrestored` and the purchase stays as it is.
-    fn restore_referenced_transactions(&mut self, report: &mut RepairReport) {
+    pub(crate) fn restore_referenced_transactions(&mut self, report: &mut RepairReport) {
         let named: BTreeSet<String> = self
             .doc
             .shared_events
@@ -198,7 +199,7 @@ impl UnlockedVault {
 
     /// Every participant id an event names with money or a split (the
     /// owner included).
-    fn named_participants(event: &crate::model::shared_event::SharedEvent) -> Vec<&str> {
+    pub(crate) fn named_participants(event: &crate::model::shared_event::SharedEvent) -> Vec<&str> {
         let mut named: Vec<&str> = vec![event.organizer.as_str()];
         for settlement in &event.settlements {
             named.push(&settlement.participant_id);
@@ -226,7 +227,7 @@ impl UnlockedVault {
 
     /// Whether a live record of the event still names the participant.
     #[cfg(test)]
-    pub(super) fn event_names_participant(&self, event_id: &str, participant_id: &str) -> bool {
+    pub(crate) fn event_names_participant(&self, event_id: &str, participant_id: &str) -> bool {
         self.doc
             .shared_events
             .iter()
@@ -234,7 +235,7 @@ impl UnlockedVault {
             .any(|event| Self::named_participants(event).contains(&participant_id))
     }
 
-    fn missing_participants(&self) -> BTreeMap<String, BTreeSet<String>> {
+    pub(crate) fn missing_participants(&self) -> BTreeMap<String, BTreeSet<String>> {
         let mut out: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for event in &self.doc.shared_events {
             let people: BTreeSet<&str> = event
@@ -254,7 +255,7 @@ impl UnlockedVault {
         out
     }
 
-    fn restore_participants(&mut self, report: &mut RepairReport) {
+    pub(crate) fn restore_participants(&mut self, report: &mut RepairReport) {
         for (event_id, ids) in self.missing_participants() {
             for id in ids {
                 let person = self.removed_participant(&event_id, &id);
@@ -278,7 +279,7 @@ impl UnlockedVault {
     // -- stores, categories, contacts -------------------------------------------
 
     /// The ids that money names: stores, categories, contacts.
-    fn money_names(&self) -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>) {
+    pub(crate) fn money_names(&self) -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>) {
         let doc = &self.doc;
         let mut stores = BTreeSet::new();
         let mut categories = BTreeSet::new();
@@ -312,7 +313,7 @@ impl UnlockedVault {
     /// (`stores:<id>`, `categories:<key>`, `contacts:<id>`, and
     /// `transactions:<id>` for a payment a shared event names).
     #[cfg(test)]
-    pub(super) fn money_names_record(&self, key: &str) -> bool {
+    pub(crate) fn money_names_record(&self, key: &str) -> bool {
         let (stores, categories, contacts) = self.money_names();
         match key.split_once(':') {
             Some(("stores", id)) => stores.contains(id),
@@ -328,7 +329,7 @@ impl UnlockedVault {
         }
     }
 
-    fn restore_referenced_records(&mut self, report: &mut RepairReport) {
+    pub(crate) fn restore_referenced_records(&mut self, report: &mut RepairReport) {
         let (named_stores, named_categories, named_contacts) = self.money_names();
         let doc = &self.doc;
         let lost_stores: BTreeSet<String> = named_stores

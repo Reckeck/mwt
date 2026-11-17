@@ -132,7 +132,7 @@ impl UnlockedVault {
         self.doc.data_sources.iter().find(|source| source.id == id)
     }
 
-    fn data_source_mut(&mut self, id: &str) -> Result<&mut DataSource> {
+    pub(crate) fn data_source_mut(&mut self, id: &str) -> Result<&mut DataSource> {
         self.doc
             .data_sources
             .iter_mut()
@@ -284,7 +284,7 @@ impl UnlockedVault {
         }
     }
 
-    fn clear_source_uses(&mut self, id: &str) {
+    pub(crate) fn clear_source_uses(&mut self, id: &str) {
         let currencies: Vec<String> = self
             .doc
             .settings
@@ -309,7 +309,7 @@ impl UnlockedVault {
 
     /// One source per currency, asset and deposit: a new use takes the place
     /// over from another source.
-    fn set_source_uses(&mut self, id: &str, uses: &[SourceUse]) {
+    pub(crate) fn set_source_uses(&mut self, id: &str, uses: &[SourceUse]) {
         self.clear_source_uses(id);
         for usage in uses {
             match usage {
@@ -443,7 +443,7 @@ impl UnlockedVault {
 
     /// Send the latest number to the prices it sets and compare it with the
     /// deposits it follows.
-    fn spread_source_value(&mut self, id: &str, ru: bool) -> Vec<NoticeRecord> {
+    pub(crate) fn spread_source_value(&mut self, id: &str, ru: bool) -> Vec<NoticeRecord> {
         let Some(source) = self.data_source(id).cloned() else {
             return Vec::new();
         };

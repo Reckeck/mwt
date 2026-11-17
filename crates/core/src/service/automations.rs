@@ -224,7 +224,7 @@ pub use crate::model::planning::describe_reject;
 impl UnlockedVault {
     // -- views --------------------------------------------------------------
 
-    fn automation_of(&self, workflow: &Workflow) -> Option<Automation> {
+    pub(crate) fn automation_of(&self, workflow: &Workflow) -> Option<Automation> {
         let spec = workflow.automation.as_ref()?;
         let estimate = (spec.amount_mode == AmountMode::Varies)
             .then(|| self.wf_recent_average(&workflow.id, graph_of::ESTIMATE_OF))
@@ -319,7 +319,7 @@ impl UnlockedVault {
 
     /// Reject a draft that could never run: a bad schedule, or a template
     /// that fails the transaction rules on its own.
-    fn check_automation(&self, draft: &AutomationDraft) -> Result<()> {
+    pub(crate) fn check_automation(&self, draft: &AutomationDraft) -> Result<()> {
         if draft.name.trim().is_empty() {
             return Err(Error::InvalidInput("name the automation".into()));
         }
@@ -493,7 +493,7 @@ impl UnlockedVault {
         out
     }
 
-    fn automation_run_of(&self, run: &WorkflowRun) -> Option<AutomationRun> {
+    pub(crate) fn automation_run_of(&self, run: &WorkflowRun) -> Option<AutomationRun> {
         let planned_at = match &run.outcome {
             RunOutcome::Rejected {
                 planned_at: Some(at),
@@ -717,7 +717,11 @@ impl UnlockedVault {
 
     /// Validate and append without persisting.
     /// `now` is the caller's clock, ahead of the wall clock in a simulation.
-    fn insert_transaction(&mut self, mut tx: Transaction, now: i64) -> Result<Transaction> {
+    pub(crate) fn insert_transaction(
+        &mut self,
+        mut tx: Transaction,
+        now: i64,
+    ) -> Result<Transaction> {
         self.prepare_transaction_at(&mut tx, now * 1000)?;
         self.doc.transactions.push(tx.clone());
         Ok(tx)
@@ -820,7 +824,7 @@ impl UnlockedVault {
     }
 
     /// Drop the «approximate» mark of an operation; persisted when it changed.
-    fn clear_estimated(&mut self, tx_id: &str) -> Result<Transaction> {
+    pub(crate) fn clear_estimated(&mut self, tx_id: &str) -> Result<Transaction> {
         let tx = self
             .doc
             .transactions
@@ -842,7 +846,7 @@ impl UnlockedVault {
     }
 
     /// Funds check, then write; a shortfall is an `INSUFFICIENT_FUNDS` error.
-    fn create_checked(&mut self, tx: Transaction, now: i64) -> Result<Transaction> {
+    pub(crate) fn create_checked(&mut self, tx: Transaction, now: i64) -> Result<Transaction> {
         if let Some(reason) = self.funds_shortfall(&tx, now) {
             return Err(match reason {
                 RejectReason::Invalid { message } => Error::InvalidInput(message),

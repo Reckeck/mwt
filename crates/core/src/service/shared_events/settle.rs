@@ -47,7 +47,7 @@ fn check_settling_person(event: &SharedEvent, computed: &Split, id: &str) -> Res
 impl UnlockedVault {
     /// The debt transfer for money of mine moving between me and the other
     /// side of the settlement.
-    fn settlement_transfer(
+    pub(crate) fn settlement_transfer(
         &self,
         event: &SharedEvent,
         settlement: &Settlement,
@@ -160,7 +160,7 @@ impl UnlockedVault {
     }
 
     /// The rest of what someone owes the organizer, checked, and how much of it to move.
-    fn open_rest(
+    pub(crate) fn open_rest(
         event: &SharedEvent,
         participant_id: &str,
         amount: Option<Amount>,

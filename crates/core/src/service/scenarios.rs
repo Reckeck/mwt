@@ -100,7 +100,7 @@ impl UnlockedVault {
             .find(|scenario| scenario.id == id)
     }
 
-    fn check_scenario_source(&self, source: &ScenarioSource) -> Result<()> {
+    pub(crate) fn check_scenario_source(&self, source: &ScenarioSource) -> Result<()> {
         if !INCOME_MONTHS.contains(&source.income_months) {
             return Err(Error::InvalidInput(
                 "income period is 3, 6 or 12 months".into(),

@@ -186,7 +186,7 @@ impl UnlockedVault {
     /// The month's balance day by day from the same flows as its row, counted back
     /// from its `total` so the last real day ends exactly there. Ahead, the
     /// calendar's day allowance is spent each day (when it is in the same currency).
-    fn balance_days(&self, ctx: &Ctx, row: &MonthBalanceRow) -> Result<BalanceDays> {
+    pub(crate) fn balance_days(&self, ctx: &Ctx, row: &MonthBalanceRow) -> Result<BalanceDays> {
         let first = calendar::parse_month(&row.month)
             .ok_or_else(|| Error::InvalidInput(format!("month {}: expected YYYY-MM", row.month)))?;
         let (from, to) = ctx.cal.month_bounds(first);

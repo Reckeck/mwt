@@ -108,7 +108,7 @@ fn other_side(event: &CryptoTx) -> &str {
 }
 
 impl UnlockedVault {
-    fn crypto_symbol(&self, asset: &CryptoAsset) -> String {
+    pub(crate) fn crypto_symbol(&self, asset: &CryptoAsset) -> String {
         match asset {
             CryptoAsset::Native { chain } => native_symbol(*chain).to_string(),
             // A coin on an exchange is `Token(Fiat, "<TICKER>")`.
@@ -124,7 +124,7 @@ impl UnlockedVault {
         }
     }
 
-    fn crypto_account_name(&self, account_id: &str) -> String {
+    pub(crate) fn crypto_account_name(&self, account_id: &str) -> String {
         if let Some(store) = self
             .doc
             .stores
@@ -142,7 +142,7 @@ impl UnlockedVault {
     }
 
     /// The contact whose saved crypto address is `address` on `chain`.
-    fn crypto_contact_by_address(&self, chain: Chain, address: &str) -> Option<&str> {
+    pub(crate) fn crypto_contact_by_address(&self, chain: Chain, address: &str) -> Option<&str> {
         let wanted = normalize_address(chain, address);
         if wanted.is_empty() {
             return None;
@@ -162,7 +162,7 @@ impl UnlockedVault {
             .map(|contact| contact.id.as_str())
     }
 
-    fn crypto_signed_value(&self, event: &CryptoTx) -> Option<Amount> {
+    pub(crate) fn crypto_signed_value(&self, event: &CryptoTx) -> Option<Amount> {
         let day = day_of(&event.time)?;
         // Quantities and prices come from a chain, where a token may carry
         // 1e24 units: `Amount`'s own operators panic on overflow and the
@@ -180,7 +180,7 @@ impl UnlockedVault {
         (!event.legs.is_empty()).then_some(total)
     }
 
-    fn crypto_row(
+    pub(crate) fn crypto_row(
         &self,
         event: &CryptoTx,
         fix: Option<&CryptoOverride>,
@@ -353,7 +353,7 @@ impl UnlockedVault {
         }
     }
 
-    fn crypto_matches(
+    pub(crate) fn crypto_matches(
         &self,
         filter: &CryptoOpFilter,
         event: &CryptoTx,
@@ -403,7 +403,7 @@ impl UnlockedVault {
     }
 
     /// The fiat outflows near an incoming operation, best guesses first.
-    fn crypto_candidates(&self, event: &CryptoTx) -> Vec<CryptoLinkCandidate> {
+    pub(crate) fn crypto_candidates(&self, event: &CryptoTx) -> Vec<CryptoLinkCandidate> {
         let Some(incoming) = event
             .legs
             .iter()
@@ -514,7 +514,7 @@ impl UnlockedVault {
 
     /// The banner: the newest unlinked incoming operation that a fiat one
     /// matches by date and by sum. Only a suggestion: nothing is linked here.
-    fn crypto_exchange_suggestion(
+    pub(crate) fn crypto_exchange_suggestion(
         &self,
         newest_first: &[(&CryptoTx, Option<&CryptoOverride>)],
     ) -> Option<CryptoExchangeSuggestion> {
@@ -618,7 +618,7 @@ impl UnlockedVault {
         })
     }
 
-    fn crypto_event_ref(&self, id: &str) -> Result<&CryptoTx> {
+    pub(crate) fn crypto_event_ref(&self, id: &str) -> Result<&CryptoTx> {
         self.doc
             .crypto_events
             .iter()
@@ -626,7 +626,7 @@ impl UnlockedVault {
             .ok_or_else(|| Error::NotFound(format!("operation {id}")))
     }
 
-    fn crypto_chain_members(&self, flow: &str, this: &str) -> Vec<CryptoChainMember> {
+    pub(crate) fn crypto_chain_members(&self, flow: &str, this: &str) -> Vec<CryptoChainMember> {
         let mut out = Vec::new();
         for tx in &self.doc.transactions {
             if tx.meta().flow_id.as_deref() != Some(flow) {
@@ -834,7 +834,7 @@ impl UnlockedVault {
     /// Set, change or remove the rule of one contract; the rule is a record of
     /// `crypto_overrides` under [`overrides::rule_event_id`]. A rule left with
     /// nothing in it is removed. Returns how many operations it reaches.
-    fn crypto_write_rule(
+    pub(crate) fn crypto_write_rule(
         &mut self,
         key: &str,
         input: &CryptoSetOverrideInput,
@@ -897,7 +897,11 @@ impl UnlockedVault {
 
     /// Put the fiat operation `tx_id` and a crypto one into one chain: the
     /// crypto one's own, else the fiat one's, else a new one.
-    fn crypto_join_chain(&mut self, tx_id: &str, current: Option<&str>) -> Result<String> {
+    pub(crate) fn crypto_join_chain(
+        &mut self,
+        tx_id: &str,
+        current: Option<&str>,
+    ) -> Result<String> {
         let tx = self
             .doc
             .transactions
@@ -914,7 +918,7 @@ impl UnlockedVault {
 
     /// After a crypto operation left chain `flow`: a chain that is left with
     /// one fiat operation and nothing else was made by this link, so it goes.
-    fn crypto_release_chain(&mut self, flow: &str, leaving: &str) {
+    pub(crate) fn crypto_release_chain(&mut self, flow: &str, leaving: &str) {
         let coins = self
             .doc
             .crypto_overrides
@@ -941,7 +945,7 @@ impl UnlockedVault {
 
     /// «Through whom» also teaches the contact the address, so the next
     /// operation with it is named on its own.
-    fn crypto_remember_address(&mut self, contact_id: &str, event: &CryptoTx) {
+    pub(crate) fn crypto_remember_address(&mut self, contact_id: &str, event: &CryptoTx) {
         let address = normalize_address(event.chain, other_side(event));
         if address.is_empty() || event.chain == Chain::Fiat {
             return;

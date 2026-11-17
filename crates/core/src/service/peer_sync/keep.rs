@@ -54,7 +54,7 @@ pub(super) fn reminder_identity(reminder: &Reminder) -> Option<String> {
 impl UnlockedVault {
     /// Mark the records of `keys` (`transactions:<id>`, `reminders:<id>`)
     /// that the dedupe could remove again. Others are left as they are.
-    pub(super) fn mark_kept(&mut self, keys: &[String]) {
+    pub(crate) fn mark_kept(&mut self, keys: &[String]) {
         let wanted: HashSet<&str> = keys.iter().map(String::as_str).collect();
         for tx in &mut self.doc.transactions {
             let meta = tx.meta_mut();

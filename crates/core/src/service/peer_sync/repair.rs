@@ -34,10 +34,7 @@ impl UnlockedVault {
     /// Check the rules and fix what breaks them. `batch_id` is the sync batch
     /// whose merge is being settled (the repair is recorded in it for undo);
     /// `None` when a vault opens (the change is only stamped).
-    pub(in crate::service) fn repair_invariants(
-        &mut self,
-        batch_id: Option<&str>,
-    ) -> Result<RepairReport> {
+    pub(crate) fn repair_invariants(&mut self, batch_id: Option<&str>) -> Result<RepairReport> {
         let before = self.doc_value()?;
         let mut report = RepairReport::default();
         self.repair_restored_records(&mut report);
@@ -115,7 +112,7 @@ impl UnlockedVault {
 
     /// The notice of a repair, added to the (synced) log under a key that the
     /// repair itself decides, so every device that makes it shows it once.
-    fn announce_repair(&mut self, report: &RepairReport) {
+    pub(crate) fn announce_repair(&mut self, report: &RepairReport) {
         let Some(body) = report.notice_body(self.notice_ru) else {
             return;
         };
@@ -156,7 +153,7 @@ impl UnlockedVault {
     /// the more recent decision of the user stands. An account under a missing,
     /// nested or foreign-kind parent is cut itself. A cut account becomes an
     /// archived wallet of its own kind, as when an account is split off.
-    fn repair_account_tree(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_account_tree(&mut self, report: &mut RepairReport) {
         while let Some(cycle) = self.account_cycle() {
             let victim = cycle
                 .into_iter()
@@ -183,7 +180,7 @@ impl UnlockedVault {
     }
 
     /// The members of one cycle of parent links (smallest start id first), if any.
-    fn account_cycle(&self) -> Option<Vec<String>> {
+    pub(crate) fn account_cycle(&self) -> Option<Vec<String>> {
         let mut ids: Vec<&str> = self
             .doc
             .stores
@@ -216,7 +213,7 @@ impl UnlockedVault {
         None
     }
 
-    fn parent_link_stamp(&self, id: &str) -> Stamp {
+    pub(crate) fn parent_link_stamp(&self, id: &str) -> Stamp {
         self.doc
             .sync
             .stamps
@@ -227,7 +224,7 @@ impl UnlockedVault {
 
     /// The fields of `detach` (a wallet of its own, no account type or
     /// binding), archived, with a name free among the wallets.
-    fn cut_to_wallet(&mut self, id: &str, report: &mut RepairReport) {
+    pub(crate) fn cut_to_wallet(&mut self, id: &str, report: &mut RepairReport) {
         let Some(node) = self.find_store(id).cloned() else {
             return;
         };
@@ -249,7 +246,7 @@ impl UnlockedVault {
     /// An envelope whose goal is gone is deleted again (the earmark only: the
     /// money never left the account). A top-up on another device resurrects the
     /// envelope after the goal went; this puts the deletion back.
-    fn repair_goal_envelopes(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_goal_envelopes(&mut self, report: &mut RepairReport) {
         let goals: HashSet<&str> = self.doc.goals.iter().map(|goal| goal.id.as_str()).collect();
         let mut gone: Vec<(String, String)> = self
             .doc

@@ -10,7 +10,7 @@ use super::UnlockedVault;
 
 impl UnlockedVault {
     /// The car's own info, created empty on first use.
-    fn car_mut(&mut self, store_id: &str) -> Result<&mut CarInfo> {
+    pub(crate) fn car_mut(&mut self, store_id: &str) -> Result<&mut CarInfo> {
         let store = self
             .doc
             .stores
@@ -30,7 +30,7 @@ impl UnlockedVault {
         Ok(info.car.get_or_insert_with(CarInfo::default))
     }
 
-    fn saved_store(&self, store_id: &str) -> Result<Store> {
+    pub(crate) fn saved_store(&self, store_id: &str) -> Result<Store> {
         self.find_store(store_id)
             .cloned()
             .ok_or_else(|| Error::Missing(format!("store {store_id}")))

@@ -143,7 +143,7 @@ impl UnlockedVault {
 
     /// How much the property's value fell between `from` and `now`, in the
     /// base currency; zero without a value curve or when it grew.
-    fn property_wear(&self, store_id: &str, from: i64, now: i64) -> Amount {
+    pub(crate) fn property_wear(&self, store_id: &str, from: i64, now: i64) -> Amount {
         let (base, _) = self.base_and_fx();
         let book = self.rate_book();
         let mut lost = Amount::ZERO;

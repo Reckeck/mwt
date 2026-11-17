@@ -185,7 +185,7 @@ fn optional(raw: &str, check: fn(&str) -> Result<String>) -> Result<Option<Strin
 
 impl UnlockedVault {
     /// The secrets of the networks, or none below level 3 (the presets then).
-    fn network_secrets(&self) -> Result<DeviceSecrets> {
+    pub(crate) fn network_secrets(&self) -> Result<DeviceSecrets> {
         if !self.keys_on_device() {
             return Ok(DeviceSecrets::default());
         }

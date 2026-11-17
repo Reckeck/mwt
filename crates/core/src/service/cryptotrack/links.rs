@@ -81,7 +81,7 @@ impl UnlockedVault {
         options
     }
 
-    fn crypto_row_of(&self, event_id: &str) -> Option<CryptoOpRow> {
+    pub(crate) fn crypto_row_of(&self, event_id: &str) -> Option<CryptoOpRow> {
         self.crypto_operation_detail(&CryptoOperationDetailInput {
             id: event_id.to_string(),
             with_candidates: false,
@@ -90,7 +90,7 @@ impl UnlockedVault {
         .map(|detail| detail.row)
     }
 
-    fn value_fits(&self, input: &CryptoLinkCandidatesInput, row: &CryptoOpRow) -> bool {
+    pub(crate) fn value_fits(&self, input: &CryptoLinkCandidatesInput, row: &CryptoOpRow) -> bool {
         let (Some(amount), Some(currency), Some(value)) =
             (input.amount, input.currency.as_deref(), row.value_usd)
         else {
@@ -219,7 +219,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn pair_fiat(&self, id: &str) -> Option<CryptoPairFiat> {
+    pub(crate) fn pair_fiat(&self, id: &str) -> Option<CryptoPairFiat> {
         let tx = self.doc.transactions.iter().find(|tx| tx.meta().id == id)?;
         let legs = tx.legs();
         let leg = legs

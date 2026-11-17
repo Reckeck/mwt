@@ -208,7 +208,7 @@ impl UnlockedVault {
 
     /// What each account holds of the tokens left out of the totals until the
     /// user decides: quarantined, not rejected, and met in an event.
-    fn crypto_quarantine_by_account(&self) -> BTreeMap<String, Vec<QuarantinedHolding>> {
+    pub(crate) fn crypto_quarantine_by_account(&self) -> BTreeMap<String, Vec<QuarantinedHolding>> {
         let left_out: Vec<String> = self
             .crypto_outside_totals()
             .into_iter()
@@ -330,7 +330,7 @@ impl UnlockedVault {
         })
     }
 
-    fn bind_store_to_account(&mut self, store: &Store, account_id: &str) {
+    pub(crate) fn bind_store_to_account(&mut self, store: &Store, account_id: &str) {
         if let Some(own) = self.doc.stores.iter_mut().find(|own| own.id == store.id) {
             own.crypto_account_id = Some(account_id.to_string());
         }

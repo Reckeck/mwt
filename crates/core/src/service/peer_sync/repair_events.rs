@@ -45,7 +45,7 @@ impl UnlockedVault {
     /// deterministic contact exists and the other one carries the guest's name
     /// and is used by nobody else: the other contact folds into the
     /// deterministic one.
-    pub(super) fn repair_guest_contacts(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_guest_contacts(&mut self, report: &mut RepairReport) {
         let mut uses: BTreeMap<&str, usize> = BTreeMap::new();
         for person in self
             .doc
@@ -85,7 +85,7 @@ impl UnlockedVault {
 
     /// What the loser changed later than the winner moves into the winner; the
     /// accounts of both stay (an operation may name an account by its id).
-    fn fold_contact(&mut self, loser: &str, winner: &str) {
+    pub(crate) fn fold_contact(&mut self, loser: &str, winner: &str) {
         let stamps_of = |id: &str| -> RecordStamps {
             self.doc
                 .sync
@@ -133,7 +133,7 @@ impl UnlockedVault {
     }
 
     /// Every reference to the contact `old` points to `new`, field by field.
-    fn repoint_contact(&mut self, old: &str, new: &str) {
+    pub(crate) fn repoint_contact(&mut self, old: &str, new: &str) {
         let swap = |field: &mut Option<String>| {
             if field.as_deref() == Some(old) {
                 *field = Some(new.to_string());
@@ -166,7 +166,7 @@ impl UnlockedVault {
 
     // -- 123b and R6: one link per operation -----------------------------------
 
-    pub(super) fn repair_event_links(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_event_links(&mut self, report: &mut RepairReport) {
         let collection = registry::find("shared_events");
         let mut links: Vec<Link> = Vec::new();
         for event in &self.doc.shared_events {
@@ -250,7 +250,7 @@ impl UnlockedVault {
 
     // -- R7: currency and organizer ---------------------------------------------
 
-    pub(super) fn repair_event_money(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_event_money(&mut self, report: &mut RepairReport) {
         for event in &mut self.doc.shared_events {
             let auto: Vec<(&str, &str)> = event
                 .items

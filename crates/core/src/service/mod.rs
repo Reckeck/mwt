@@ -349,7 +349,7 @@ impl UnlockedVault {
         Self::create_keyed(path, password, key)
     }
 
-    fn create_keyed(path: PathBuf, password: &str, key: SealKey) -> Result<Self> {
+    pub(crate) fn create_keyed(path: PathBuf, password: &str, key: SealKey) -> Result<Self> {
         VaultFile::create_keyed(&path, &key)?;
         // A secrets file left by a vault that once had this name is not ours.
         crate::vault_io::device_secrets::remove(&path)?;
@@ -552,7 +552,7 @@ impl UnlockedVault {
 
     /// Refresh the stored copy of [`Self::crypto_enabled`]. Only in memory:
     /// the next write stores it, and every device works it out the same way.
-    fn answer_crypto(&mut self) {
+    pub(crate) fn answer_crypto(&mut self) {
         self.doc.settings.crypto = Some(self.crypto_enabled());
     }
 
@@ -819,7 +819,7 @@ impl UnlockedVault {
     }
 
     /// Levels below `id`: 0 for a leaf.
-    fn subtree_height(&self, id: &str) -> usize {
+    pub(crate) fn subtree_height(&self, id: &str) -> usize {
         let mut seen = HashSet::from([id.to_string()]);
         let mut level = vec![id.to_string()];
         let mut height = 0;
@@ -840,7 +840,7 @@ impl UnlockedVault {
 
     /// R5: names are unique among siblings (roots among roots), ignoring case
     /// and surrounding spaces. `node` is skipped so a rename to itself passes.
-    fn ensure_unique_name(
+    pub(crate) fn ensure_unique_name(
         &self,
         node: Option<&str>,
         parent: Option<&str>,
@@ -860,7 +860,7 @@ impl UnlockedVault {
 
     /// Whether `node` (an existing store, or `None` for a new one) may sit
     /// under `parent` with `name`. Rules R1–R6.
-    fn validate_placement(
+    pub(crate) fn validate_placement(
         &self,
         node: Option<&str>,
         parent: Option<&str>,
@@ -928,7 +928,7 @@ impl UnlockedVault {
 
     /// Which extras a wallet of this kind and level may carry, shared by
     /// create and update.
-    fn check_store_extras(
+    pub(crate) fn check_store_extras(
         &self,
         kind: StoreKind,
         sub_type: Option<SubType>,
@@ -978,7 +978,7 @@ impl UnlockedVault {
 
     /// A sub-account's type must be offered by its wallet kind and its
     /// binding must have the shape the type expects.
-    fn check_sub_account(
+    pub(crate) fn check_sub_account(
         kind: StoreKind,
         sub_type: Option<SubType>,
         binding: Option<&Binding>,
@@ -1398,7 +1398,7 @@ impl UnlockedVault {
 
     /// Fill what the user does not type: the purchase price of property
     /// (its unit price is in the base currency at the time of buying).
-    fn complete_transaction(&self, tx: &mut Transaction) {
+    pub(crate) fn complete_transaction(&self, tx: &mut Transaction) {
         if let Transaction::Topup(inner) = tx
             && let Some(unit_price) = inner.details.unit_price
             && inner.price.is_empty()
@@ -1538,7 +1538,7 @@ impl UnlockedVault {
 
     /// `follow_events`: an operation a shared event owns drags the event's
     /// purchase or settlement along (or is refused).
-    fn update_transaction_inner(
+    pub(crate) fn update_transaction_inner(
         &mut self,
         id: &str,
         mut tx: Transaction,
@@ -1598,7 +1598,7 @@ impl UnlockedVault {
 
     // -- holdings recomputation ---------------------------------------------
 
-    fn recompute_holdings(&mut self) {
+    pub(crate) fn recompute_holdings(&mut self) {
         // A correction keeps the real balance; its difference follows history.
         self.rebase_adjustments();
         let mut cost_book = CostBook::default();
@@ -1678,7 +1678,7 @@ impl UnlockedVault {
     /// The cache keeps history sorted oldest first, so the first match used to
     /// be the oldest rate ever seen. With no rate at all the factor is 1; the
     /// summary reports that through `base_fx_as_of: None`.
-    fn base_and_fx(&self) -> (String, Amount) {
+    pub(crate) fn base_and_fx(&self) -> (String, Amount) {
         let base = self.base_currency.to_ascii_lowercase();
         let base = if base.is_empty() {
             crate::appconfig::DEFAULT_BASE_CURRENCY.to_string()
@@ -1712,14 +1712,14 @@ impl UnlockedVault {
     /// A dollar stablecoin with no price yet is still worth a dollar, not
     /// nothing: exchange balances are mostly in them. See [`Self::price_quote_for`],
     /// which also says where the price came from.
-    fn price_usd_for(&self, asset_key: &str) -> Amount {
+    pub(crate) fn price_usd_for(&self, asset_key: &str) -> Amount {
         self.price_quote_for(asset_key).usd
     }
 
     /// Base-currency price of one unit. The base's own fiat asset is exactly 1
     /// (the `RateBook` identity, `L13`), rate or no rate; the rest goes through
     /// the USD price and the base rate `fx`.
-    fn price_base_for(&self, asset_key: &str, fx: Amount) -> Amount {
+    pub(crate) fn price_base_for(&self, asset_key: &str, fx: Amount) -> Amount {
         if rates::is_fiat_of(asset_key, &self.base_and_fx().0) {
             return Amount::new(rust_decimal::Decimal::ONE);
         }
@@ -1747,7 +1747,7 @@ impl UnlockedVault {
     }
 
     /// Transactions with at least one leg on a store in `ids`.
-    fn scoped_txs(&self, ids: &HashSet<String>) -> Vec<Transaction> {
+    pub(crate) fn scoped_txs(&self, ids: &HashSet<String>) -> Vec<Transaction> {
         self.doc
             .transactions
             .iter()
@@ -1758,7 +1758,7 @@ impl UnlockedVault {
 
     /// A store's positions, sorted by value descending. `derivatives` picks
     /// the open futures positions instead of the holdings that have value.
-    fn store_positions_of(
+    pub(crate) fn store_positions_of(
         &self,
         store_id: &str,
         fx: Amount,
@@ -1801,13 +1801,13 @@ impl UnlockedVault {
         out
     }
 
-    fn store_positions(&self, store_id: &str, fx: Amount) -> Vec<StorePosition> {
+    pub(crate) fn store_positions(&self, store_id: &str, fx: Amount) -> Vec<StorePosition> {
         self.store_positions_of(store_id, fx, false)
     }
 
     /// One row per asset across several stores. The average cost is weighted
     /// by quantity and only kept when every store knows its own.
-    fn merged_positions(&self, ids: &[String], fx: Amount) -> Vec<StorePosition> {
+    pub(crate) fn merged_positions(&self, ids: &[String], fx: Amount) -> Vec<StorePosition> {
         let mut merged: Vec<StorePosition> = Vec::new();
         let mut cost_known: HashMap<String, bool> = HashMap::new();
         for id in ids {
@@ -1843,7 +1843,7 @@ impl UnlockedVault {
     }
 
     /// Direct children of a store.
-    fn children_of(&self, parent_id: &str) -> Vec<&Store> {
+    pub(crate) fn children_of(&self, parent_id: &str) -> Vec<&Store> {
         self.doc
             .stores
             .iter()
@@ -1852,7 +1852,7 @@ impl UnlockedVault {
     }
 
     /// Every descendant id of `root_id`, without `root_id` itself.
-    fn subtree_ids(&self, root_id: &str) -> Vec<String> {
+    pub(crate) fn subtree_ids(&self, root_id: &str) -> Vec<String> {
         let mut result = Vec::new();
         let mut seen = HashSet::from([root_id.to_string()]);
         let mut queue = vec![root_id.to_string()];
@@ -1934,7 +1934,7 @@ impl UnlockedVault {
         out
     }
 
-    fn tree_node(
+    pub(crate) fn tree_node(
         &self,
         store: &Store,
         depth: usize,
@@ -2008,7 +2008,7 @@ impl UnlockedVault {
     /// What a wallet holds per currency, its sub-accounts merged in by ticker,
     /// biggest value first. Property counts in its own currency (a flat bought
     /// in roubles shows roubles), as long as that currency has a rate.
-    fn tree_balances(
+    pub(crate) fn tree_balances(
         &self,
         store: &Store,
         own_usd: Amount,
@@ -2182,7 +2182,7 @@ impl UnlockedVault {
     }
 
     /// The latest cached 24-hour change of an asset's price.
-    fn change_24h_of(&self, asset_key: &str) -> Option<Amount> {
+    pub(crate) fn change_24h_of(&self, asset_key: &str) -> Option<Amount> {
         self.doc
             .price_cache
             .iter()
@@ -2298,7 +2298,7 @@ impl UnlockedVault {
     /// Shared history replay. `scope` restricts both the event axis and the
     /// valuation to legs booked on those stores (`None` covers the whole
     /// vault).
-    fn history_series_filtered(
+    pub(crate) fn history_series_filtered(
         &self,
         scope: Option<&HashSet<String>>,
         base_currency: &str,
@@ -2307,7 +2307,7 @@ impl UnlockedVault {
     }
 
     /// [`Self::history_series_filtered`] over a book the caller already built.
-    fn history_series_filtered_in(
+    pub(crate) fn history_series_filtered_in(
         &self,
         book: &RateBook,
         scope: Option<&HashSet<String>>,
@@ -2564,7 +2564,7 @@ impl UnlockedVault {
     /// Where a fill of this category is booked: the sub-account picked for
     /// spot or futures on the exchange key, else the wallet's live sub-account
     /// bound to that market, else the key's own store.
-    fn import_target(&self, imp: &PendingImport) -> String {
+    pub(crate) fn import_target(&self, imp: &PendingImport) -> String {
         if imp.kind == crate::model::vault::ImportKind::EarnIncome {
             return self
                 .bybit_account_store(&imp.store_id, crate::exchange::bybit::ACCOUNT_EARN)
@@ -2622,7 +2622,7 @@ impl UnlockedVault {
     /// The live sub-account of an exchange wallet that stands for a Bybit
     /// account type: `FUND` → Funding, `UNIFIED` (and the legacy `SPOT`,
     /// `CONTRACT`) → Unified, `EARN`/`INVESTMENT` → Earn.
-    fn bybit_account_store(&self, root_id: &str, account: &str) -> Option<String> {
+    pub(crate) fn bybit_account_store(&self, root_id: &str, account: &str) -> Option<String> {
         use crate::model::store::MarketKind;
         // The import settings may send an account to a wallet of the user's choice.
         if let Some(Some(target)) = self.import_route(root_id, account) {
@@ -2767,7 +2767,7 @@ impl UnlockedVault {
 
     // -- exchange profile and terminal ------------------------------------------
 
-    fn exchange_profile_mut(&mut self, store_id: &str) -> Result<&mut ExchangeProfile> {
+    pub(crate) fn exchange_profile_mut(&mut self, store_id: &str) -> Result<&mut ExchangeProfile> {
         self.doc
             .stores
             .iter_mut()
@@ -2893,7 +2893,7 @@ impl UnlockedVault {
 
     /// The transaction a staged fill becomes: a spot trade, or a futures
     /// open/close for linear and inverse contracts.
-    fn transaction_for_import(&self, imp: &PendingImport) -> Transaction {
+    pub(crate) fn transaction_for_import(&self, imp: &PendingImport) -> Transaction {
         use crate::model::vault::ImportKind;
         let mut meta = TxMeta::new(&imp.comment);
         meta.categories = self.import_categories(imp, "trading");
@@ -3094,7 +3094,7 @@ impl UnlockedVault {
     /// imported fill lands in the same bucket as manual entries. Unknown
     /// symbols stay chain-less (`None`) rather than being guessed at — the
     /// user can bind a chain later.
-    fn asset_for_import(&self, symbol: &str) -> AssetRef {
+    pub(crate) fn asset_for_import(&self, symbol: &str) -> AssetRef {
         let upper = symbol.trim().to_ascii_uppercase();
         match self
             .doc
@@ -3125,7 +3125,7 @@ impl UnlockedVault {
 
     // -- helpers ------------------------------------------------------------
 
-    fn ensure_store(&self, id: &str) -> Result<()> {
+    pub(crate) fn ensure_store(&self, id: &str) -> Result<()> {
         match self.doc.stores.iter().find(|store| store.id == id) {
             Some(store) if store.archived => Err(Error::Archived(id.into())),
             Some(_) => Ok(()),
@@ -3307,7 +3307,7 @@ pub struct StoreMoveTargets {
 }
 
 /// Lookups shared by every node while building the tree.
-struct TreeCtx<'doc> {
+pub(crate) struct TreeCtx<'doc> {
     fx: Amount,
     own_usd: HashMap<&'doc str, Amount>,
     tx_count: HashMap<String, u32>,

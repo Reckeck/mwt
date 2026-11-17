@@ -54,7 +54,7 @@ impl UnlockedVault {
         ratios
     }
 
-    fn event_spending_class(&self, category: &str) -> FlowClass {
+    pub(crate) fn event_spending_class(&self, category: &str) -> FlowClass {
         let group = self
             .doc
             .categories
@@ -65,7 +65,7 @@ impl UnlockedVault {
     }
 
     /// One spending flow of mine in the event currency, valued in `currency`.
-    fn event_flow(
+    pub(crate) fn event_flow(
         &self,
         book: &RateBook,
         cal: &Calendar,

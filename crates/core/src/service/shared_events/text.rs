@@ -23,7 +23,7 @@ const MONTHS_EN: [&str; 12] = [
 ];
 
 /// What the text says, in one language.
-struct Words {
+pub(crate) struct Words {
     months: [&'static str; 12],
     me_subject: &'static str,
     me_object: &'static str,
@@ -154,7 +154,11 @@ fn account_text(account: &ContactAccount) -> String {
 }
 
 impl UnlockedVault {
-    fn organizer_requisites(&self, event: &SharedEvent, words: &Words) -> Option<String> {
+    pub(crate) fn organizer_requisites(
+        &self,
+        event: &SharedEvent,
+        words: &Words,
+    ) -> Option<String> {
         let organizer = event
             .participants
             .iter()
@@ -198,7 +202,12 @@ impl UnlockedVault {
         Ok(self.compose_share_text(event, &computed, locale))
     }
 
-    fn compose_share_text(&self, event: &SharedEvent, computed: &Split, locale: &str) -> String {
+    pub(crate) fn compose_share_text(
+        &self,
+        event: &SharedEvent,
+        computed: &Split,
+        locale: &str,
+    ) -> String {
         let english = locale.trim().eq_ignore_ascii_case("en");
         let words = words(english);
         let year = chrono::Utc::now().year();

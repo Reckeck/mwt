@@ -254,7 +254,7 @@ impl UnlockedVault {
     }
 
     /// Stores that belong to at least one active goal.
-    fn goal_store_ids(&self) -> HashSet<String> {
+    pub(crate) fn goal_store_ids(&self) -> HashSet<String> {
         self.doc
             .goals
             .iter()
@@ -263,7 +263,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    pub(super) fn category_group(&self, tx: &Transaction) -> Option<CategoryGroup> {
+    pub(crate) fn category_group(&self, tx: &Transaction) -> Option<CategoryGroup> {
         tx.meta().categories.iter().find_map(|key| {
             self.doc
                 .categories
@@ -273,14 +273,14 @@ impl UnlockedVault {
         })
     }
 
-    fn store_in_budget(&self, id: &str) -> bool {
+    pub(crate) fn store_in_budget(&self, id: &str) -> bool {
         self.doc
             .stores
             .iter()
             .any(|store| store.id == id && store.in_budget())
     }
 
-    fn store_kind(&self, id: &str) -> Option<StoreKind> {
+    pub(crate) fn store_kind(&self, id: &str) -> Option<StoreKind> {
         self.doc
             .stores
             .iter()
@@ -289,7 +289,7 @@ impl UnlockedVault {
     }
 
     /// A spending flow by its category, `Daily` when it has none.
-    pub(super) fn spending(group: Option<CategoryGroup>) -> FlowClass {
+    pub(crate) fn spending(group: Option<CategoryGroup>) -> FlowClass {
         match group {
             Some(CategoryGroup::Fixed) => FlowClass::Fixed,
             Some(CategoryGroup::Savings) => FlowClass::Savings,
@@ -300,7 +300,7 @@ impl UnlockedVault {
 
     /// A move between two sides, at least one of them the user's: across the
     /// budget boundary, to a loan, to a goal, or out to someone.
-    fn classify_move(
+    pub(crate) fn classify_move(
         &self,
         from: &AccountRef,
         to: &AccountRef,

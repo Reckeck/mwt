@@ -32,7 +32,7 @@ pub struct TxStore {
 }
 
 impl UnlockedVault {
-    fn tx_index(&self, id: &str) -> Result<usize> {
+    pub(crate) fn tx_index(&self, id: &str) -> Result<usize> {
         self.doc
             .transactions
             .iter()
@@ -41,7 +41,10 @@ impl UnlockedVault {
     }
 
     /// Run `change` on the document; on an error nothing of it stays.
-    fn all_or_nothing<T>(&mut self, change: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+    pub(crate) fn all_or_nothing<T>(
+        &mut self,
+        change: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
         let backup = self.doc.clone();
         match change(self) {
             Ok(out) => {

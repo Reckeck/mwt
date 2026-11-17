@@ -240,7 +240,7 @@ impl UnlockedVault {
 
     /// [`Self::crypto_apply_batch`] without the save: the caller owns it.
     /// Returns what was applied and whether the document changed.
-    pub(super) fn crypto_apply_batch_unsaved(
+    pub(crate) fn crypto_apply_batch_unsaved(
         &mut self,
         request: &CryptoBatch<'_>,
         batch: &SourceBatch,
@@ -457,13 +457,13 @@ impl UnlockedVault {
     }
 
     /// Whether this account already has an opening adjustment for an asset.
-    fn crypto_has_opening(&self, account_id: &str, asset_key: &str) -> bool {
+    pub(crate) fn crypto_has_opening(&self, account_id: &str, asset_key: &str) -> bool {
         let id = engine::ids::opening(account_id, asset_key);
         self.doc.crypto_events.iter().any(|event| event.id == id)
     }
 
     /// Fold every operation of the module, with the corrections on top.
-    pub(super) fn crypto_fold(&self) -> Ledger {
+    pub(crate) fn crypto_fold(&self) -> Ledger {
         let own: BTreeSet<String> = self
             .doc
             .crypto_accounts
@@ -541,7 +541,7 @@ impl UnlockedVault {
     /// Write the value of each account and of the module for the day of `at`,
     /// replacing that day's snapshots. Does not save on its own. Returns how
     /// many it wrote and whether any of them differs from what was kept.
-    fn crypto_take_snapshot(&mut self, at: &str) -> (usize, bool) {
+    pub(crate) fn crypto_take_snapshot(&mut self, at: &str) -> (usize, bool) {
         let taken = {
             let ledger = self.crypto_fold();
             let prices = DocPrices {
@@ -607,7 +607,7 @@ impl UnlockedVault {
     /// incoming leg, and fiat legs that paid for it. Anything else keeps the
     /// market price and the "imprecise" mark, because a wrong cost basis is
     /// worse than an honest market guess.
-    fn crypto_linked_prices(&self) -> BTreeMap<String, Amount> {
+    pub(crate) fn crypto_linked_prices(&self) -> BTreeMap<String, Amount> {
         let mut flows: BTreeMap<&str, Vec<&CryptoTx>> = BTreeMap::new();
         for correction in &self.doc.crypto_overrides {
             let Some(flow_id) = correction.flow_id.as_deref() else {
@@ -645,7 +645,7 @@ impl UnlockedVault {
     }
 
     /// What the fiat side of a chain paid, in USD.
-    fn crypto_flow_paid_usd(&self, flow_id: &str, when: &str) -> Option<Amount> {
+    pub(crate) fn crypto_flow_paid_usd(&self, flow_id: &str, when: &str) -> Option<Amount> {
         let mut paid = Amount::ZERO;
         let mut seen = false;
         for transaction in &self.doc.transactions {

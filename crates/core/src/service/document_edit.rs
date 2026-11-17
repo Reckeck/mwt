@@ -30,7 +30,7 @@ impl UnlockedVault {
 
     /// Write the records of `copy` over the current ones by value and delete
     /// nothing: the restore of a backup in a group of devices.
-    pub(super) fn apply_records_of(&mut self, copy: &VaultDoc) -> Result<()> {
+    pub(crate) fn apply_records_of(&mut self, copy: &VaultDoc) -> Result<()> {
         let copy = to_value(copy)?;
         self.merge_edit(&json!({}), &copy)
     }
@@ -44,7 +44,7 @@ impl UnlockedVault {
             .any(|peer| peer.revoked.is_none())
     }
 
-    fn merge_edit(&mut self, base: &Value, edited: &Value) -> Result<()> {
+    pub(crate) fn merge_edit(&mut self, base: &Value, edited: &Value) -> Result<()> {
         self.track_changes()?;
         let mut value = self.doc_value()?;
         let base_records = view::records(base);

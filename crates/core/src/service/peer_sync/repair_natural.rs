@@ -118,7 +118,7 @@ fn zone_key(zone: &Option<String>) -> String {
 impl UnlockedVault {
     /// One record per natural key (debt terms, readings, valuations, goal
     /// envelopes). The ids of the records folded away go to the report.
-    pub(super) fn repair_natural_keys(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_natural_keys(&mut self, report: &mut RepairReport) {
         let stamps = &self.doc.sync.stamps;
         let mut merged = Vec::new();
         merged.extend(fold_duplicates(

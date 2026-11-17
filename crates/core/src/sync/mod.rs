@@ -29,3 +29,12 @@ pub use state::{BatchEntry, RecordStamps, RecordState, SyncBatch, SyncState, Tru
 
 #[cfg(test)]
 mod flatten_tests;
+pub mod peer_sync;
+#[cfg(test)]
+mod peer_sync_tests;
+pub mod sync_ids;
+#[cfg(test)]
+mod sync_ids_tests;
+pub mod sync_journal;
+#[cfg(test)]
+mod sync_journal_tests;

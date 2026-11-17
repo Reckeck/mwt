@@ -237,13 +237,13 @@ impl UnlockedVault {
         }
     }
 
-    fn in_scope(&self, ctx: &Ctx, tx: &Transaction) -> bool {
+    pub(crate) fn in_scope(&self, ctx: &Ctx, tx: &Transaction) -> bool {
         ctx.scope
             .as_ref()
             .is_none_or(|ids| tx.legs().iter().any(|leg| ids.contains(&leg.store_id)))
     }
 
-    fn value_of(
+    pub(crate) fn value_of(
         &self,
         book: &RateBook,
         currency: &str,
@@ -254,13 +254,13 @@ impl UnlockedVault {
         book.convert(qty.abs(), unit, currency, secs)
     }
 
-    fn store_label(&self, id: &str) -> String {
+    pub(crate) fn store_label(&self, id: &str) -> String {
         self.find_store(id)
             .map(|store| store.name.clone())
             .unwrap_or_default()
     }
 
-    fn account_name(&self, account: &AccountRef) -> String {
+    pub(crate) fn account_name(&self, account: &AccountRef) -> String {
         match account {
             AccountRef::Store(id) => self.store_label(id),
             AccountRef::Contact { contact_id, .. } => self

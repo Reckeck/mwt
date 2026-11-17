@@ -111,7 +111,7 @@ impl UnlockedVault {
     /// [`Self::crypto_wipe_module`] with the backup step handed in, so a test
     /// can watch what a failed backup leaves behind: the answer must be
     /// "everything, untouched".
-    fn wipe_inner(
+    pub(crate) fn wipe_inner(
         &mut self,
         confirm: &str,
         backup: impl FnOnce(&mut Self) -> Result<String>,
@@ -168,7 +168,7 @@ impl UnlockedVault {
     ///
     /// A copy that cannot be opened, or that does not hold the module's data,
     /// is no backup at all: the wipe stops and the document is still whole.
-    fn backup_before_wipe(&mut self) -> Result<String> {
+    pub(crate) fn backup_before_wipe(&mut self) -> Result<String> {
         let backup = self.create_backup()?;
         let path = backups::resolve(&self.path, &backup.name)?;
         let (saved, _) = VaultFile::open(&path, &self.password)?;
@@ -183,7 +183,7 @@ impl UnlockedVault {
     /// Everything the wipe does to the document itself, and nothing else: no
     /// file is touched and no mark is left, so the preview can run it on a
     /// copy in memory to see what the capital becomes.
-    fn wipe_crypto_document(&mut self) -> CryptoWipeCounts {
+    pub(crate) fn wipe_crypto_document(&mut self) -> CryptoWipeCounts {
         let counts = self.crypto_counts();
         self.doc.crypto_accounts.clear();
         self.doc.crypto_events.clear();
@@ -218,7 +218,7 @@ impl UnlockedVault {
     }
 
     /// The wallets the module leads today.
-    fn crypto_engine_wallets(&self) -> Vec<CryptoWipedWallet> {
+    pub(crate) fn crypto_engine_wallets(&self) -> Vec<CryptoWipedWallet> {
         self.doc
             .stores
             .iter()
@@ -237,18 +237,18 @@ impl UnlockedVault {
     /// hand that the move archived yield their coins to the module
     /// (`super::transition`), and once the module is gone they count again.
     /// Only running the wipe on a copy answers that.
-    fn crypto_wipe_value_delta(&self) -> Amount {
+    pub(crate) fn crypto_wipe_value_delta(&self) -> Amount {
         let before = self.net_worth().net;
         let mut copy = self.sandbox();
         copy.wipe_crypto_document();
         copy.net_worth().net - before
     }
 
-    fn crypto_counts(&self) -> CryptoWipeCounts {
+    pub(crate) fn crypto_counts(&self) -> CryptoWipeCounts {
         self.crypto_counts_of(&self.doc)
     }
 
-    fn crypto_counts_of(&self, doc: &crate::model::vault::VaultDoc) -> CryptoWipeCounts {
+    pub(crate) fn crypto_counts_of(&self, doc: &crate::model::vault::VaultDoc) -> CryptoWipeCounts {
         let count = |len: usize| u32::try_from(len).unwrap_or(u32::MAX);
         CryptoWipeCounts {
             accounts: count(doc.crypto_accounts.len()),
@@ -263,13 +263,13 @@ impl UnlockedVault {
     }
 
     /// Whether this device keeps a secrets file next to the vault.
-    fn device_secrets_present(&self) -> bool {
+    pub(crate) fn device_secrets_present(&self) -> bool {
         !self.sandbox && device_secrets::secrets_path(&self.path).exists()
     }
 
     /// RFC 3339 of the newest backup next to the vault, if the folder can be
     /// read at all.
-    fn newest_backup_at(&self) -> Option<String> {
+    pub(crate) fn newest_backup_at(&self) -> Option<String> {
         self.list_backups()
             .ok()?
             .into_iter()

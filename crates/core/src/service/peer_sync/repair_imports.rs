@@ -11,7 +11,7 @@ use super::UnlockedVault;
 use super::repair_report::RepairReport;
 
 impl UnlockedVault {
-    pub(super) fn repair_pending_imports(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_pending_imports(&mut self, report: &mut RepairReport) {
         if self.doc.pending_imports.is_empty() {
             return;
         }

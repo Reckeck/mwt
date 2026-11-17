@@ -186,7 +186,7 @@ pub struct RaiseReport {
 
 /// The points of the raise a test can break.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RaiseStep {
+pub(crate) enum RaiseStep {
     BackedUp,
     Reencrypted,
     Adopted,
@@ -208,7 +208,7 @@ impl UnlockedVault {
     }
 
     /// Refuse a change that would leave the vault below its lowest level.
-    pub(super) fn check_not_below_min(&self, target: SecurityLevel) -> Result<()> {
+    pub(crate) fn check_not_below_min(&self, target: SecurityLevel) -> Result<()> {
         if level_rank(target) < level_rank(self.min_allowed_level()) {
             return Err(Error::SecurityDowngradeRefused);
         }
@@ -280,7 +280,7 @@ impl UnlockedVault {
         self.raise_inner(current_password, new_password, kdf, on_stage, |_| Ok(()))
     }
 
-    pub(super) fn raise_inner(
+    pub(crate) fn raise_inner(
         &mut self,
         current_password: &str,
         new_password: &str,
@@ -302,7 +302,7 @@ impl UnlockedVault {
 
     /// [`Self::raise_inner`] with the warnings about failed cleanup steps
     /// going to `sink`.
-    pub(super) fn raise_warning_to(
+    pub(crate) fn raise_warning_to(
         &mut self,
         current_password: &str,
         new_password: &str,
@@ -429,7 +429,11 @@ impl UnlockedVault {
 
     /// Delete the copies that are not under the new key and are cheaper than
     /// level 3; a copy that cannot be deleted goes into `rotation.failed`.
-    fn remove_cheaper_copies(&self, found: Vec<VaultCopy>, rotation: &mut RotationReport) {
+    pub(crate) fn remove_cheaper_copies(
+        &self,
+        found: Vec<VaultCopy>,
+        rotation: &mut RotationReport,
+    ) {
         for copy in found {
             if copy.seal == CopySeal::CurrentKey {
                 continue;
@@ -463,7 +467,7 @@ impl UnlockedVault {
     /// same idempotent step in the open chain (`UnlockedVault::open_as`)
     /// finishes the job: that is what the spec means by a crash between the
     /// re-encryption and the archiving repairing itself.
-    fn after_raise(&mut self) {
+    pub(crate) fn after_raise(&mut self) {
         self.retire_manual_crypto_wallets();
         self.doc.settings.crypto_raise_pending = false;
         let _ = self.persist_now();
@@ -477,7 +481,7 @@ impl UnlockedVault {
     /// the crypto module existed (stage 1, for the exchange keys) or has
     /// finished its raise: the wallets it keeps by hand are the user's, were
     /// never shown the transition wizard, and are not touched here.
-    pub(super) fn finish_cut_short_raise(&mut self) -> bool {
+    pub(crate) fn finish_cut_short_raise(&mut self) -> bool {
         if !self.doc.settings.crypto_raise_pending {
             return false;
         }
