@@ -80,7 +80,10 @@ describe('useAdjustment moment', () => {
   })
 
   it('is dated by the core, and not validated, until the date is touched; then both change together', async () => {
-    vi.mocked(call).mockImplementation(async () => ({ lines: [] }) as never)
+    vi.mocked(call).mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_adjustment_draft') return { lines: [] } as never
+      throw new Error(`unmocked ${cmd}`)
+    })
     const { api } = mountAdjustment(null)
     await settle()
     expect(api.form.errors.value.timestamp).toBeNull()
