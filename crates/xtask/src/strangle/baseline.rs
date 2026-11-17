@@ -165,4 +165,23 @@ mod tests {
         baseline.write(tree.root()).unwrap();
         assert_eq!(Baseline::load(tree.root()).unwrap(), baseline);
     }
+
+    #[test]
+    fn a_cfg_test_method_in_a_production_impl_is_not_a_production_method() {
+        let file: syn::File = syn::parse_str(
+            "impl UnlockedVault {\n\
+             pub fn live(&self) {}\n\
+             #[cfg(test)]\n\
+             pub fn only_in_tests(&self) {}\n\
+             #[cfg(any(test, feature = \"x\"))]\n\
+             pub fn also_test(&self) {}\n\
+             }",
+        )
+        .unwrap();
+        let names: Vec<String> = production_methods(&file)
+            .iter()
+            .map(|method| method.sig.ident.to_string())
+            .collect();
+        assert_eq!(names, ["live"]);
+    }
 }
