@@ -73,13 +73,16 @@ fn print_only(plan: &Plan) -> Option<i32> {
 async fn run() -> Result<i32> {
     let cli = Cli::parse();
     // No checkout in that job: no workspace root either.
-    if matches!(cli.command, Command::CiOk) {
-        ci::ci_ok::run()?;
-        return Ok(0);
-    }
-    if matches!(cli.command, Command::CiChanges) {
-        ci::changes::run()?;
-        return Ok(0);
+    match cli.command {
+        Command::CiOk => {
+            ci::ci_ok::run()?;
+            return Ok(0);
+        }
+        Command::CiChanges => {
+            ci::changes::run()?;
+            return Ok(0);
+        }
+        _ => {}
     }
     let root = lock::find_root()?;
     let mut built = None;
@@ -201,13 +204,8 @@ async fn run() -> Result<i32> {
             ci::container_env::run(*cargo)?;
             return Ok(0);
         }
-        Command::CiOk => {
-            ci::ci_ok::run()?;
-            return Ok(0);
-        }
-        Command::CiChanges => {
-            ci::changes::run()?;
-            return Ok(0);
+        Command::CiOk | Command::CiChanges => {
+            unreachable!("dispatched above, before the workspace root lookup")
         }
         Command::CiPnpmInstall => {
             ci::pnpm_install::run()?;
