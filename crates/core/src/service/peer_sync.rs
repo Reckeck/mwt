@@ -743,6 +743,17 @@ impl UnlockedVault {
         }
     }
 
+    /// Whether an external copy fully opens under this open vault's key (no
+    /// KDF runs): a truncated, foreign or cheaper copy is refused. Nothing is
+    /// written.
+    pub fn probe_external(&self, remote: &[u8]) -> Result<crate::storage::SnapshotFormat> {
+        let key = self
+            .key
+            .as_deref()
+            .ok_or_else(|| Error::Crypto("the vault has no open key".into()))?;
+        crate::vault_io::import::probe_open(remote, key)
+    }
+
     /// Read another copy of this vault (its sealed bytes) without locking,
     /// writing or syncing anything. Only for reading records out of it.
     fn open_copy(&self, remote: &[u8], password: &str) -> Result<UnlockedVault> {

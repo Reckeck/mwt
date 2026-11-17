@@ -135,6 +135,17 @@ mod tests {
     }
 
     #[test]
+    fn probe_external_uses_the_open_vaults_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v.wallet");
+        let vault = crate::service::UnlockedVault::create(path.clone(), "a").unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(vault.probe_external(&bytes).is_ok());
+        assert!(vault.probe_external(&bytes[..bytes.len() - 8]).is_err());
+        assert!(vault.probe_external(&sealed("b")).is_err());
+    }
+
+    #[test]
     fn names_cannot_escape_the_directory() {
         assert_eq!(safe_file_name("../../etc/passwd"), "_.._etc_passwd");
         assert_eq!(safe_file_name("a/b\\c:d"), "a_b_c_d");

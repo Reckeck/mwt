@@ -275,7 +275,10 @@ pub fn take_in(
             let target = get(app, &path).map_or_else(String::new, |link| shown(&link.location()));
             return Err(Error::SyncConflict(target));
         }
-        match pull(app, &path, &remote, Some(&local_key(&path, password)?)) {
+        let pulled = vault
+            .probe_external(&remote)
+            .and_then(|_| pull(app, &path, &remote, None));
+        match pulled {
             Ok(()) => return Ok(TakeIn::Reopen),
             // A copy that is cheaper, does not open under this vault's key or
             // is damaged does not replace it: this vault opens as it is, the
@@ -347,12 +350,6 @@ pub fn push_replacing(app: &AppHandle, vault: &Path, link: &VaultLink, bytes: &[
         Ok(()) => mark_synced(app, vault, bytes),
         Err(err) => mark_failed(app, vault, &err.to_string()),
     }
-}
-
-/// The key of the local vault file, derived from the open vault's password.
-fn local_key(vault: &Path, password: &str) -> Result<SealKey> {
-    let (_, _, key) = crypto::open_bytes_keyed(&std::fs::read(vault)?, password.as_bytes())?;
-    Ok(key)
 }
 
 /// Replace the local vault with the external copy; the local file stays as
