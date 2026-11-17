@@ -17,6 +17,7 @@ pub mod ipc_contract;
 pub mod jsonstore;
 pub mod market;
 pub mod model;
+pub mod money;
 pub mod planning;
 pub mod pricing;
 pub mod routes;
