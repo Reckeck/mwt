@@ -1375,6 +1375,7 @@ fn a_second_pass_changes_nothing() {
         .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
         .expect("the first pass");
     let tokens = vault.doc.crypto_tokens.clone();
+    let document = vault.doc.clone();
     assert!(
         !vault
             .trust_adapter_token(&foo_leg_token())
@@ -1386,6 +1387,7 @@ fn a_second_pass_changes_nothing() {
         .expect("the second pass");
     assert!(again.is_unchanged());
     assert_eq!(vault.doc.crypto_tokens, tokens);
+    assert_eq!(vault.doc, document, "the second pass wrote nothing");
 }
 
 #[test]

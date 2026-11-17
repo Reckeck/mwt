@@ -38,6 +38,10 @@ pub struct Held {
     pub unfolded: Amount,
     /// The debt legs of the account's positions; never negative.
     pub debt: Amount,
+    /// The wallet part (ledger balance and position) is negative: the history
+    /// does not reach back far enough. It adds nothing to `held`, but the gap
+    /// must be visible.
+    pub short: bool,
 }
 
 impl Held {
@@ -119,7 +123,8 @@ pub fn held_by_account(ledger: &Ledger, inputs: &PositionInputs<'_>) -> Vec<Held
         } else {
             Amount::ZERO
         };
-        if held.is_zero() && slot.debt.is_zero() {
+        let short = wallet.is_negative();
+        if held.is_zero() && slot.debt.is_zero() && !short {
             continue;
         }
         out.push(Held {
@@ -128,6 +133,7 @@ pub fn held_by_account(ledger: &Ledger, inputs: &PositionInputs<'_>) -> Vec<Held
             held,
             unfolded: slot.unfolded,
             debt: slot.debt,
+            short,
         });
     }
     out

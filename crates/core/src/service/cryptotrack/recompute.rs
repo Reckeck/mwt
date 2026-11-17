@@ -476,10 +476,7 @@ impl UnlockedVault {
             linked: self.crypto_linked_prices(),
         };
         let views = engine::overrides::apply(&self.doc.crypto_events, &self.doc.crypto_overrides);
-        let counts = |asset: &CryptoAsset| match asset {
-            CryptoAsset::Native { .. } => true,
-            CryptoAsset::Token(token) => tokens::counts_in_totals(&self.doc, token),
-        };
+        let counts = |asset: &CryptoAsset| super::tokens::counts_asset(&self.doc, asset);
         engine::fold(
             &views,
             &Inputs {
@@ -553,7 +550,10 @@ impl UnlockedVault {
                 linked: BTreeMap::new(),
             };
             let inputs = self.crypto_position_inputs();
-            inputs.with(|taking| engine::snapshot::take(&ledger, taking, at, &prices))
+            let counts_account = |account_id: &str| self.crypto_account_counts(account_id);
+            inputs.with(|taking| {
+                engine::snapshot::take(&ledger, taking, &counts_account, at, &prices)
+            })
         };
         let count = taken.records.len();
         let mut changed = false;
