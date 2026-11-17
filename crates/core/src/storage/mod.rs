@@ -32,8 +32,8 @@ use serde::de::DeserializeOwned;
 use crate::crypto;
 use crate::crypto::SealKey;
 use crate::crypto::kdf_profile::KdfParams;
+use crate::crypto::level::RaiseStage;
 use crate::error::{Error, Result};
-use crate::ipc_contract::security::RaiseStage;
 use crate::model::vault::VaultDoc;
 use crate::vault_io::local::{
     create_synced, read_back, reencrypt_tmp_path, replace_with, still_the_written_file,
@@ -1154,7 +1154,7 @@ mod tests {
             // A document with no crypto data does not force level 3.
             assert_eq!(
                 vault.min_allowed_level(),
-                crate::ipc_contract::security::SecurityLevel::Ledger
+                crate::crypto::level::SecurityLevel::Ledger
             );
         },
     }
@@ -1488,10 +1488,7 @@ mod tests {
             assert_eq!(reopened.kdf(), TEST_KDF);
             assert_eq!(entries(dir.path()), 1, "no temp file left");
             let level = crypto::header::level_of_container(&std::fs::read(&path).unwrap());
-            assert_eq!(
-                level.unwrap(),
-                crate::ipc_contract::security::SecurityLevel::Crypto
-            );
+            assert_eq!(level.unwrap(), crate::crypto::level::SecurityLevel::Crypto);
         }
     }
 

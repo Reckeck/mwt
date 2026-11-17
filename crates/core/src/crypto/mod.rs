@@ -47,6 +47,7 @@ pub mod device_secrets;
 pub mod format;
 pub mod header;
 pub mod kdf_profile;
+pub mod level;
 
 pub use crate::vault_io::local::{atomic_write, read_all};
 

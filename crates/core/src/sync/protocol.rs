@@ -4,8 +4,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::state::{RecordState, TrustedPeer};
+use crate::crypto::level::SecurityLevel;
 use crate::error::{Error, Result};
-use crate::ipc_contract::security::SecurityLevel;
 
 /// Bumped on an incompatible change; devices on different versions refuse
 /// to sync and ask to update instead.
