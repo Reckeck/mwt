@@ -1082,7 +1082,7 @@ mod tests {
         let root = json.as_object_mut().unwrap();
         let crypto: Vec<String> = root
             .keys()
-            .filter(|name| name.starts_with("crypto_"))
+            .filter(|name| crate::kernel::record::level3_collections().any(|known| known == *name))
             .cloned()
             .collect();
         // The fixture fills every crypto collection, so this also checks the

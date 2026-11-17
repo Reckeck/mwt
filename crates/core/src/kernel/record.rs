@@ -92,6 +92,20 @@ pub fn record_kinds() -> &'static [RecordKind] {
     RECORD_KINDS
 }
 
+/// The crypto fields of `VaultDoc` that are not records: a token is keyed by
+/// chain and contract, the prices are a union, the cursors stay on the device.
+const LEVEL3_NON_RECORDS: &[&str] = &["crypto_tokens", "crypto_prices", "crypto_cursors"];
+
+/// Every `VaultDoc` field of the crypto module: the level-3 records and the
+/// crypto fields that are not records. One home for "what is level 3".
+pub fn level3_collections() -> impl Iterator<Item = &'static str> {
+    record_kinds()
+        .iter()
+        .filter(|kind| kind.level3_only)
+        .map(|kind| kind.collection)
+        .chain(LEVEL3_NON_RECORDS.iter().copied())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,6 +135,22 @@ mod tests {
                 kind.collection
             );
         }
+    }
+
+    #[test]
+    fn level3_collections_are_the_crypto_fields_of_the_document() {
+        let doc = serde_json::to_value(VaultDoc::default()).expect("doc");
+        let mut from_doc: Vec<&str> = doc
+            .as_object()
+            .expect("object")
+            .keys()
+            .map(String::as_str)
+            .filter(|name| name.starts_with("crypto_"))
+            .collect();
+        let mut listed: Vec<&str> = level3_collections().collect();
+        from_doc.sort_unstable();
+        listed.sort_unstable();
+        assert_eq!(listed, from_doc);
     }
 
     #[test]
