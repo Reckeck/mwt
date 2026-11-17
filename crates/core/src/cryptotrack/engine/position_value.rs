@@ -11,7 +11,9 @@
 //! 2. `debt` = the `Out` legs of the stored positions. The ledger models no
 //!    debt, so it is never read from there.
 //! 3. [`Held::net`] = `held - debt`; it may be negative and is kept as is.
-//! 4. A receipt and a token that does not count contribute nothing.
+//! 4. A token that does not count contributes nothing; a receipt contributes
+//!    no wallet or ledger quantity, but its adapter legs and debt stay (a
+//!    Lido stake is held as stETH legs, and stETH is a receipt).
 //!
 //! Which accounts and records take part is the caller's decision, passed in
 //! through [`PositionInputs`]; this module does not know the vault.
@@ -31,6 +33,9 @@ pub struct Held {
     pub asset: CryptoAsset,
     /// Wallet, ledger position and unfolded adapter legs; never negative.
     pub held: Amount,
+    /// The part of `held` that comes from adapter legs, whose cost no
+    /// operation records.
+    pub unfolded: Amount,
     /// The debt legs of the account's positions; never negative.
     pub debt: Amount,
 }
@@ -98,10 +103,17 @@ pub fn held_by_account(ledger: &Ledger, inputs: &PositionInputs<'_>) -> Vec<Held
         let Some(asset) = assets.get(&key) else {
             continue;
         };
-        if inputs.receipts.contains(&key) || !(inputs.counts)(asset) {
+        if !(inputs.counts)(asset) {
             continue;
         }
-        let gross = math::add(slot.wallet, slot.unfolded).unwrap_or(slot.wallet);
+        // A receipt's wallet balance is the position it stands for, already
+        // counted through the legs; only that part is dropped.
+        let wallet = if inputs.receipts.contains(&key) {
+            Amount::ZERO
+        } else {
+            slot.wallet
+        };
+        let gross = math::add(wallet, slot.unfolded).unwrap_or(wallet);
         let held = if gross.is_positive() {
             gross
         } else {
@@ -114,6 +126,7 @@ pub fn held_by_account(ledger: &Ledger, inputs: &PositionInputs<'_>) -> Vec<Held
             account_id,
             asset: asset.clone(),
             held,
+            unfolded: slot.unfolded,
             debt: slot.debt,
         });
     }
@@ -240,19 +253,40 @@ mod tests {
     }
 
     #[test]
-    fn receipts_and_uncounted_tokens_are_dropped() {
+    fn receipt_wallet_and_uncounted_tokens_are_dropped() {
+        let mut ledger = Ledger::default();
+        ledger.assets.insert(eth().key(), AssetState::new(eth()));
+        ledger
+            .balances
+            .insert((ME.into(), eth().key()), amount("7"));
+        let receipts: BTreeSet<String> = [eth().key()].into();
+        let rows = run(&ledger, &[], &receipts, &|_| true);
+        assert!(rows.is_empty());
         let aave = position(vec![
             leg(CryptoDirection::In, eth(), "1"),
             leg(CryptoDirection::In, usdc(), "10"),
         ]);
-        let receipts: BTreeSet<String> = [eth().key()].into();
-        let rows = run(&Ledger::default(), &[aave.clone()], &receipts, &|_| true);
-        assert!(rows.iter().all(|row| row.asset != eth()));
         let rows = run(&Ledger::default(), &[aave], &BTreeSet::new(), &|asset| {
             *asset != usdc()
         });
         assert!(rows.iter().all(|row| row.asset != usdc()));
         assert_eq!(find(&rows, &eth()).held, amount("1"));
+    }
+
+    #[test]
+    fn a_receipt_keeps_its_adapter_legs() {
+        let lido = position(vec![leg(CryptoDirection::In, eth(), "2")]);
+        let receipts: BTreeSet<String> = [eth().key()].into();
+        let mut ledger = Ledger::default();
+        ledger.assets.insert(eth().key(), AssetState::new(eth()));
+        ledger
+            .balances
+            .insert((ME.into(), eth().key()), amount("7"));
+        let rows = run(&ledger, &[lido], &receipts, &|_| true);
+        let row = find(&rows, &eth());
+        assert_eq!(row.held, amount("2"));
+        assert_eq!(row.unfolded, amount("2"));
+        assert_eq!(value(&rows, "2000", "1"), amount("4000"));
     }
 
     #[test]

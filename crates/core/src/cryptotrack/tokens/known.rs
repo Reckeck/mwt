@@ -155,6 +155,14 @@ pub fn is_known(token: &TokenId) -> bool {
         .any(|(chain, contract, _)| TokenId::new(*chain, contract) == *token)
 }
 
+/// The built-in list's symbol for this exact contract, when it is listed.
+pub fn symbol_of(token: &TokenId) -> Option<&'static str> {
+    KNOWN
+        .iter()
+        .find(|(chain, contract, _)| TokenId::new(*chain, contract) == *token)
+        .map(|(_, _, symbol)| *symbol)
+}
+
 /// Whether a symbol belongs to some known token (used only to warn that an
 /// unknown contract imitates one; never to identify anything).
 pub fn symbol_is_known(skeleton: &str) -> bool {

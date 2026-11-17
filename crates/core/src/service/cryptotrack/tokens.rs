@@ -108,10 +108,14 @@ impl UnlockedVault {
             if known && symbol.is_none() && leg.decimals.is_none() {
                 return Ok(false);
             }
-            // Decimals the adapter did not read fall back to the common 18.
+            // The text: the adapter's, else the built-in list's, else `?`
+            // (D-C5). Decimals the adapter did not read fall back to 18.
             let mut record = CryptoToken::new(
                 leg.token.clone(),
-                symbol.as_deref().unwrap_or("?"),
+                symbol
+                    .as_deref()
+                    .or_else(|| known::symbol_of(&leg.token))
+                    .unwrap_or("?"),
                 leg.decimals.unwrap_or(18),
             );
             record.name = name.unwrap_or_default();

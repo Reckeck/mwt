@@ -397,10 +397,12 @@ impl UnlockedVault {
             }
             // The engine's average is USD per unit and covers only the part
             // whose cost is known; `None` means the cost is not known, and
-            // nothing downstream turns that into a zero. A debt has no cost.
+            // nothing downstream turns that into a zero. A debt has no cost,
+            // and neither has a quantity that only an adapter reported: the
+            // ledger's average would be invented for it.
             let avg_cost = ledger
                 .state(&asset_key)
-                .filter(|_| owned.is_positive())
+                .filter(|_| owned.is_positive() && held.unfolded.is_zero())
                 .and_then(|state| state.average_usd())
                 .and_then(|usd| math::mul(usd, fx));
             out.holdings.push(Holding {

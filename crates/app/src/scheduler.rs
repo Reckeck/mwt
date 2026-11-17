@@ -522,8 +522,8 @@ fn due_bybit_keys<T>(
 
 /// Poll each exchange on its own interval (`ExchangeProfile.import_interval_sec`,
 /// `0` disables it) and record any new fills as operations of the crypto
-/// module. A vault that keeps no crypto hides its exchanges, so they are not
-/// polled either.
+/// module. Nothing is polled until the user has consented to the module
+/// (`bybit_may_poll`).
 ///
 /// Since spec E7 nothing waits for the user: a record becomes an operation at
 /// once, so the notice says what was recorded instead of what there is to

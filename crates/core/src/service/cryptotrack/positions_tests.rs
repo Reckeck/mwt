@@ -788,7 +788,8 @@ fn a_position_read_without_a_single_operation_still_counts_in_the_capital() {
         1
     );
 
-    // A debt leg is not a holding: it is the position's own figure.
+    // A debt leg is subtracted from what the account holds of its asset:
+    // 1000 supplied, 400 USDC borrowed, 600 left.
     let borrowed = PositionReading {
         receipts: vec![token(AUSDC)],
         ..reading(
@@ -796,7 +797,7 @@ fn a_position_read_without_a_single_operation_still_counts_in_the_capital() {
             PositionKind::Lending,
             vec![
                 leg(CryptoDirection::In, token(USDC), "1000"),
-                leg(CryptoDirection::Out, token(AUSDC), "400"),
+                leg(CryptoDirection::Out, token(USDC), "400"),
             ],
             FeeReading::none_earned(),
         )
@@ -804,14 +805,14 @@ fn a_position_read_without_a_single_operation_still_counts_in_the_capital() {
     vault
         .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&borrowed), &[], &[])
         .expect("the reading is stored");
-    let symbols: Vec<String> = vault
+    let held: Vec<(String, Amount)> = vault
         .doc
         .holdings
         .iter()
         .filter(|holding| holding.store_id == wallet)
-        .map(|holding| holding.asset.symbol.clone())
+        .map(|holding| (holding.asset.symbol.clone(), holding.quantity))
         .collect();
-    assert_eq!(symbols, vec!["USDC".to_string()]);
+    assert_eq!(held, vec![("USDC".to_string(), amount("600"))]);
 }
 
 #[test]
@@ -1445,4 +1446,121 @@ fn a_known_list_token_stays_known() {
         crate::cryptotrack::tokens::status(&vault.doc, &usdc),
         TokenStatus::Known
     );
+}
+
+#[test]
+fn a_known_token_the_adapter_gave_no_symbol_for_keeps_the_list_symbol() {
+    let (_dir, mut vault, _wallet) = followed();
+    let mut live = supply_reading();
+    live.tokens = vec![LegToken {
+        token: TokenId::new(Chain::Ethereum, USDC),
+        symbol: None,
+        name: None,
+        decimals: Some(6),
+    }];
+    vault
+        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
+        .expect("the pass");
+    let usdc = TokenId::new(Chain::Ethereum, USDC);
+    assert_eq!(record_of(&vault, &usdc).symbol, "USDC");
+    assert!(
+        vault
+            .doc
+            .crypto_tokens
+            .iter()
+            .all(|record| record.symbol != "?"),
+        "no record shows a question mark"
+    );
+}
+
+// -- the capital and the snapshot take the same quantities ----------------------
+
+const STETH: &str = "0xae7ab96520de3a18e5e111b5eaab095312d7fe84";
+
+#[test]
+fn the_capital_equals_the_snapshot_with_a_lido_stake_and_an_aave_debt() {
+    // Lido: 2 stETH as a leg, and stETH is a receipt: 2 * 2000 = 4000.
+    // Aave: 1 ETH supplied (2000), 1000 USDC borrowed (-1000).
+    // 4000 + 2000 - 1000 = 5000, the same in the capital and in the snapshot.
+    let (_dir, mut vault, _wallet) = followed();
+    known(&mut vault, USDC, "USDC");
+    known(&mut vault, STETH, "stETH");
+    for (asset, usd) in [
+        (token(USDC), "1"),
+        (token(STETH), "2000"),
+        (ether(), "2000"),
+    ] {
+        priced_then(&mut vault, &asset, usd);
+        priced_now(&mut vault, &asset, usd);
+    }
+    let lido = PositionReading {
+        receipts: vec![token(STETH)],
+        ..reading(
+            &PositionKey::new("lido", Chain::Ethereum, STETH),
+            PositionKind::Staking,
+            vec![leg(CryptoDirection::In, token(STETH), "2")],
+            FeeReading::none_earned(),
+        )
+    };
+    let aave = reading(
+        &PositionKey::new("aave-v3", Chain::Ethereum, "eth-usdc"),
+        PositionKind::Lending,
+        vec![
+            leg(CryptoDirection::In, ether(), "1"),
+            leg(CryptoDirection::Out, token(USDC), "1000"),
+        ],
+        FeeReading::none_earned(),
+    );
+    vault
+        .crypto_apply_positions(ACCOUNT, &[lido, aave], &[], &[])
+        .expect("the readings are stored");
+
+    let snapshots = vault
+        .crypto_snapshot("2026-03-10T10:00:00Z")
+        .expect("the snapshot is written");
+    let module = snapshots
+        .iter()
+        .find(|record| record.account_id.is_none())
+        .expect("the record of the whole module");
+    assert_eq!(module.value_usd, amount("5000"));
+    assert_eq!(vault.net_worth().financial, module.value_usd);
+}
+
+#[test]
+fn a_quantity_only_an_adapter_reported_has_no_invented_cost() {
+    // 1 ETH arrived at 2000; a protocol reports 5 more ETH with no operation
+    // behind them. The ledger's average covers the 1 ETH only, so the six are
+    // shown without a cost rather than six at 2000.
+    let (_dir, mut vault, wallet) = followed();
+    priced_then(&mut vault, &ether(), "2000");
+    priced_now(&mut vault, &ether(), "2000");
+    let came_in = arrival("ev-in", 2, ether(), "1");
+    vault
+        .crypto_apply_positions(ACCOUNT, &[], &[came_in], &[])
+        .expect("the arrival is stored");
+    let before = vault
+        .doc
+        .holdings
+        .iter()
+        .find(|holding| holding.store_id == wallet)
+        .expect("the wallet holds the ether");
+    assert!(before.avg_cost.is_some(), "the wallet part has a cost");
+
+    let live = reading(
+        &PositionKey::new("uniswap-v3", Chain::Ethereum, "pool"),
+        PositionKind::Lending,
+        vec![leg(CryptoDirection::In, ether(), "5")],
+        FeeReading::none_earned(),
+    );
+    vault
+        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
+        .expect("the reading is stored");
+    let after = vault
+        .doc
+        .holdings
+        .iter()
+        .find(|holding| holding.store_id == wallet)
+        .expect("the wallet holds the ether");
+    assert_eq!(after.quantity, amount("6"));
+    assert_eq!(after.avg_cost, None);
 }
