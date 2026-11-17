@@ -56,6 +56,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use chrono::NaiveDate;
 
 use crate::Amount;
+use crate::cryptotrack::engine::position_value::PositionInputs;
 use crate::cryptotrack::engine::{ids, math};
 use crate::cryptotrack::prices;
 use crate::cryptotrack::protocols::{
@@ -69,10 +70,36 @@ use crate::ipc_contract::cryptotrack::positions::{PositionAssetView, PositionVie
 use crate::model::cryptotrack::{
     CryptoAsset, CryptoDirection, CryptoLeg, CryptoPosition, CryptoTx, CryptoTxKind,
 };
+use crate::model::vault::VaultDoc;
 use crate::pricing::history::unix_secs;
 use crate::service::price_info::PriceOrigin;
 
 use super::super::UnlockedVault;
+
+/// What takes part in a position's value: the stored positions of the
+/// followed, live accounts (no shadowed twins) and the receipts, owned so a
+/// caller can hand them to the pure function (`engine::position_value`).
+pub(in crate::service) struct CryptoPositionInputs<'doc> {
+    doc: &'doc VaultDoc,
+    positions: Vec<&'doc CryptoPosition>,
+    /// Asset keys the module holds only as the receipt of a position.
+    pub receipts: BTreeSet<String>,
+}
+
+impl CryptoPositionInputs<'_> {
+    /// Run `run` with the borrowed form the pure function takes.
+    pub fn with<R>(&self, run: impl FnOnce(&PositionInputs<'_>) -> R) -> R {
+        let counts = |asset: &CryptoAsset| match asset {
+            CryptoAsset::Native { .. } => true,
+            CryptoAsset::Token(token) => tokens::counts_in_totals(self.doc, token),
+        };
+        run(&PositionInputs {
+            positions: &self.positions,
+            receipts: &self.receipts,
+            counts: &counts,
+        })
+    }
+}
 
 /// Whether a re-read position says what the stored one already says: the
 /// legs, the name and the receipts, whatever the moment of the reading.
@@ -265,6 +292,34 @@ impl UnlockedVault {
             .crypto_positions
             .iter()
             .any(|have| have.id == current)
+    }
+
+    /// Whether the capital counts what this account holds: it is followed
+    /// and not archived. An address watched without being counted stays out.
+    pub(in crate::service) fn crypto_account_counts(&self, account_id: &str) -> bool {
+        self.doc
+            .crypto_accounts
+            .iter()
+            .find(|account| account.id == account_id)
+            .is_some_and(|account| !account.archived)
+    }
+
+    /// What takes part in a position's value, built once for the present
+    /// capital and the snapshots: positions of followed, live accounts, no
+    /// stale twin of an old key, plus the receipts. Token trust is
+    /// `tokens::counts_in_totals`.
+    pub(in crate::service) fn crypto_position_inputs(&self) -> CryptoPositionInputs<'_> {
+        CryptoPositionInputs {
+            doc: &self.doc,
+            positions: self
+                .doc
+                .crypto_positions
+                .iter()
+                .filter(|record| self.crypto_account_counts(&record.account_id))
+                .filter(|record| !self.is_shadowed_legacy_position(record))
+                .collect(),
+            receipts: self.crypto_position_receipts(),
+        }
     }
 
     /// Every stored position with its money, newest reading first.
