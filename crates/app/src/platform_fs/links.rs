@@ -276,14 +276,14 @@ pub fn take_in(
         }
         match pull(app, &path, &remote, Some(&local_key(&path, password)?)) {
             Ok(()) => return Ok(TakeIn::Reopen),
-            // A copy protected more cheaply than this vault does not replace
-            // it: this vault opens as it is, the copy waits for the user.
-            Err(err @ Error::SecurityDowngradeRefused) => {
+            // A copy that is cheaper, does not open under this vault's key or
+            // is damaged does not replace it: this vault opens as it is, the
+            // copy waits for the user.
+            Err(err) => {
                 mark_remote_changed(app, &path);
                 mark_failed(app, &path, &err.to_string());
                 return Ok(TakeIn::Done);
             }
-            Err(err) => return Err(err),
         }
     }
     // The copy's bytes are now part of this vault: the next push compares
@@ -421,6 +421,17 @@ mod tests {
         assert!(replace_local(&path, truncated, Some(&key)).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), local);
         assert!(!path.with_extension("wallet.bak").exists());
+    }
+
+    #[test]
+    fn a_refused_copy_leaves_the_vault_openable() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, key) = pin_vault(dir.path());
+        let local = std::fs::read(&path).unwrap();
+        let truncated = &local[..local.len() - 8];
+        // take_in turns this refusal into Done, so the local vault opens.
+        assert!(replace_local(&path, truncated, Some(&key)).is_err());
+        assert!(crypto::open_bytes_keyed(&std::fs::read(&path).unwrap(), b"482913").is_ok());
     }
 
     #[test]
