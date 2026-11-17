@@ -126,10 +126,7 @@ pub enum Error {
     PinRetryLater { secs: u32 },
 
     /// A new level-2 PIN must be at least six digits and digits only.
-    #[error(
-        "the PIN must be at least {} digits",
-        crate::service::security_level::MIN_PIN_DIGITS
-    )]
+    #[error("the PIN must be at least {} digits", crate::limits::MIN_PIN_DIGITS)]
     PinFormat,
 
     /// A level-3 password must be at least 16 characters and not weak.
@@ -149,7 +146,7 @@ pub enum Error {
 pub enum StoreTreeViolation {
     #[error("a store cannot be nested inside itself or its own sub-accounts")]
     Cycle,
-    #[error("the tree is limited to {} levels", crate::model::store::MAX_STORE_DEPTH + 1)]
+    #[error("the tree is limited to {} levels", crate::limits::MAX_STORE_DEPTH + 1)]
     TooDeep,
     #[error("a sub-account cannot be added to an archived store")]
     ParentArchived,
