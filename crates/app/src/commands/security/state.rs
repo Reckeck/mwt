@@ -4,6 +4,7 @@ use trade_core::service::security_level::level_of_vault_file;
 
 use crate::commands::{AppState, app_settings, lock_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// The protection of the open vault, or, while it is locked, of the vault
 /// file the lock screen shows (then the lowest level is what the file has:
@@ -44,3 +45,5 @@ pub async fn security_state(
             .then(|| u32::try_from(wait).unwrap_or(u32::MAX)),
     })
 }
+
+ipc_commands!(security_state_commands, SECURITY_STATE_NAMES, commands::security::state: [security_state]);

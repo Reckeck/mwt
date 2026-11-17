@@ -17,6 +17,7 @@ use trade_core::service::{
 use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// What every wallet kind allows (sub-account types, limits, exchanges).
 /// Pure: needs no vault.
@@ -330,3 +331,5 @@ pub async fn property_set_revalue(
         .set_revalue_rule(&store_id, rule, &zone)
         .map_err(IpcError::from)
 }
+
+ipc_commands!(stores_commands, STORES_NAMES, commands::stores: [get_wallet_catalog, list_stores, create_store, update_store, get_store_tree, move_store, store_move_targets, archive_store, delete_store, get_store_overview, list_envelopes, create_envelope, update_envelope, fund_envelope, fund_goal, move_between_envelopes, delete_envelope, plan_store_change, apply_store_change, vehicle_update_mileage, vehicle_service_done, property_set_revalue]);

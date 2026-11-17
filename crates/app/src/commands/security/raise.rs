@@ -8,6 +8,7 @@ use trade_core::service::security_level::password_strength;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Event with the stage the raise is about to start.
 pub const RAISE_PROGRESS_EVENT: &str = "security-raise-progress";
@@ -54,3 +55,5 @@ pub async fn validate_password_strength(
 ) -> Result<PasswordStrengthReport, IpcError> {
     Ok(password_strength(&input.password))
 }
+
+ipc_commands!(security_raise_commands, SECURITY_RAISE_NAMES, commands::security::raise: [raise_to_crypto_level, validate_password_strength]);

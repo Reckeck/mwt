@@ -19,6 +19,7 @@ use trade_core::ipc_contract::CurrencyCatalogOutput;
 
 use crate::commands::{AppState, lock_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// App config directory. Panics only if the platform refuses to name it, which
 /// would leave the app with nowhere to keep either this or the recent vaults.
@@ -231,3 +232,5 @@ pub fn device_id(app: &AppHandle) -> String {
     }
     settings.device_id
 }
+
+ipc_commands!(app_settings_commands, APP_SETTINGS_NAMES, commands::app_settings: [app_platform, get_app_settings, update_app_settings, get_shortcut_support, set_quick_add_shortcut, get_supported_currencies]);

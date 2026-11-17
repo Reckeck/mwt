@@ -7,6 +7,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::commands::{AppState, lock_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 use trade_core::ipc_contract::{
     DeleteVaultFileInput, DeleteVaultFileOutput, ExportVaultCopyInput, PickedVault, RecentVault,
     RelocateRecentVaultInput, RestoreRecentVaultInput, SelectVaultInput, VaultStorage,
@@ -328,6 +329,8 @@ pub async fn export_vault_copy(
 pub async fn pick_vault_file(app: AppHandle, save: bool) -> Result<Option<PickedVault>, IpcError> {
     crate::platform_fs::pick_vault(&app, save).map_err(IpcError::from)
 }
+
+ipc_commands!(vault_recents_commands, VAULT_RECENTS_NAMES, commands::vault_recents: [recent_vaults, forget_recent_vault, restore_recent_vault, relocate_recent_vault, delete_vault_file, export_vault_copy, pick_vault_file]);
 
 #[cfg(test)]
 mod tests {
