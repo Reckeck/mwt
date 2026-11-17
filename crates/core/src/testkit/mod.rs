@@ -109,6 +109,7 @@ mod tests {
         let before = std::fs::read_dir(dir.path()).unwrap().count();
         let store = Arc::new(InMemoryPersistence::default());
         let mut vault = UnlockedVault::with_persistence(VaultDoc::default(), store.clone());
+        vault.path = dir.path().join("vault.bin");
         assert_eq!(store.write_count(), 0, "building the vault writes nothing");
         let wallet = vault
             .create_store("Bank", StoreKind::Bank, "#000", "", None)
