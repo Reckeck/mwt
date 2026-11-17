@@ -1,9 +1,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
-import { call } from '@/shared/api/ipc'
-import { useStoreTree } from '@/shared/api/queries'
+import { useCashbackReport, useStoreTree } from '@/shared/api/queries'
 import { currencySymbol, formatDate, formatQuantity, pluralForm } from '@/shared/lib/format'
 import { composeSums, type SumPart } from '@/shared/lib/money-parts'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
@@ -16,11 +14,7 @@ const MONTH_MS = 30 * 86_400_000
 export function useProgramRows() {
   const { t, locale } = useI18n()
   const tree = useStoreTree()
-  const report = useQuery({
-    queryKey: ['cashback', 'year'],
-    placeholderData: keepPreviousData,
-    queryFn: () => call<CashbackReport>('get_cashback_report', { period: 'year' }),
-  })
+  const report = useCashbackReport('year')
 
   const nodes = computed(() => flattenStoreTree(tree.data.value ?? []))
   const names = computed(() => new Map(nodes.value.map((node) => [node.store.id, node.store.name])))
@@ -67,8 +61,5 @@ export function useProgramRows() {
   const total = computed(() => rows.value.reduce((sum, row) => sum + Number(row.valueBase), 0))
   const baseCurrency = computed(() => report.data.value?.base_currency ?? 'usd')
 
-  /** The tree and the report both shape the figures and the order of the rows, so both gate the first paint. */
-  const loading = computed(() => tree.isPending.value || report.isPending.value)
-
-  return { tree, rows, total, baseCurrency, loading }
+  return { tree, rows, total, baseCurrency }
 }

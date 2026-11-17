@@ -1,4 +1,4 @@
-import { type MaybeRefOrGetter, toRef } from 'vue'
+import { computed, type MaybeRefOrGetter, toRef, toValue } from 'vue'
 import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { STORE_TREE_QUERY_KEY } from '@/shared/lib/store-tree'
@@ -16,6 +16,14 @@ export const useStoreTree = (enabled: MaybeRefOrGetter<boolean> = true) =>
     queryKey: STORE_TREE_QUERY_KEY,
     queryFn: () => call<StoreTreeNode[]>('get_store_tree'),
     enabled: toRef(enabled),
+  })
+
+/** Cashback and points of a month or a year (`get_cashback_report`); the bonuses page and its widgets read one entry per period. */
+export const useCashbackReport = (period: MaybeRefOrGetter<'month' | 'year'>) =>
+  useQuery({
+    queryKey: computed(() => ['cashback', toValue(period)]),
+    placeholderData: keepPreviousData,
+    queryFn: () => call<CashbackReport>('get_cashback_report', { period: toValue(period) }),
   })
 
 export const useContacts = (enabled: MaybeRefOrGetter<boolean> = true) =>
