@@ -304,7 +304,10 @@ mod tests {
             .insert((ME.into(), eth().key()), amount("-3"));
         let rows = run(&ledger, &[], &BTreeSet::new(), &|_| true);
         let short_row = find(&rows, &eth());
-        assert!(short_row.short, "a negative wallet part is flagged as a gap");
+        assert!(
+            short_row.short,
+            "a negative wallet part is flagged as a gap"
+        );
         assert_eq!(short_row.held, Amount::ZERO);
         assert_eq!(short_row.debt, Amount::ZERO);
         let aave = position(vec![leg(CryptoDirection::Out, eth(), "1")]);
