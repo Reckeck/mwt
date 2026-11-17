@@ -119,17 +119,20 @@ export function useTxPricing(state: TxFormState) {
 
   // The price belongs to the asset it was set for: another asset clears it, unless the price was
   // changed after the previous snapshot (a fill sets asset and price in one tick).
+  // `previousPrice` is the price as of the last flush, so a price typed after an asset change
+  // counts as changed in the next one; `priceSnapshot` is the price as of the last asset change.
   let priceSnapshot = form.price
-  watch(
-    () => pricedAssetKey(form),
-    () => {
-      if (form.price === priceSnapshot) {
-        form.price = ''
-        form.priceCurrency = ''
-      }
-      priceSnapshot = form.price
-    },
-  )
+  let previousPrice = form.price
+  let previousKey = pricedAssetKey(form)
+  watch([() => pricedAssetKey(form), () => form.price], ([key, price]) => {
+    if (key !== previousKey && price === previousPrice) {
+      form.price = ''
+      form.priceCurrency = ''
+    }
+    if (key !== previousKey) priceSnapshot = form.price
+    previousKey = key
+    previousPrice = form.price
+  })
 
   // Moving an operation to another date re-prices it there, unless the price
   // was changed by hand in this edit.

@@ -35,6 +35,17 @@ describe('useTxPricing: asset change', () => {
     expect(form.price).toBe('90')
   })
 
+  it('clears a price typed for the current asset on the next asset change', async () => {
+    const form = setup(true)
+    form.asset = asset('USD')
+    await nextTick()
+    form.price = '90'
+    await nextTick()
+    form.asset = asset('EUR')
+    await nextTick()
+    expect([form.price, form.priceCurrency]).toEqual(['', ''])
+  })
+
   it('clears on a new form too', async () => {
     const form = setup(false)
     form.asset = asset('USD')
