@@ -81,18 +81,49 @@ pub fn test_modules(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// The text before the first top-level `#[cfg(test)]` that opens test code
-/// (a `mod name;` declaration does not: the module lives in another file).
-fn non_test_part(text: &str) -> &str {
-    let lines: Vec<&str> = text.lines().collect();
-    let mut offset = 0;
+/// Index of the last line of the item that starts at `lines[0]`: it ends at a `;` outside braces
+/// or at the brace that closes its first `{`.
+fn item_end(lines: &[&str]) -> usize {
+    let mut depth = 0usize;
     for (index, line) in lines.iter().enumerate() {
-        if line.trim_end() == CFG_TEST && declared_module(&lines[index + 1..]).is_none() {
-            return &text[..offset];
+        for ch in line.chars() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return index;
+                    }
+                }
+                ';' if depth == 0 => return index,
+                _ => {}
+            }
         }
-        offset += line.len() + 1;
     }
-    text
+    lines.len().saturating_sub(1)
+}
+
+/// The text without the items under a top-level `#[cfg(test)]` (a `mod name;` declaration is kept:
+/// the module lives in another file). Skipped lines become empty, so line numbers stay.
+fn non_test_part(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut kept = Vec::with_capacity(lines.len());
+    let mut index = 0;
+    while index < lines.len() {
+        let line = lines[index];
+        if line.trim_end() == CFG_TEST && declared_module(&lines[index + 1..]).is_none() {
+            let end = index + 1 + item_end(&lines[index + 1..]);
+            kept.extend(std::iter::repeat_n(
+                "",
+                end.min(lines.len() - 1) + 1 - index,
+            ));
+            index = end + 1;
+        } else {
+            kept.push(line);
+            index += 1;
+        }
+    }
+    kept.join("\n")
 }
 
 fn is_ident_char(ch: char) -> bool {
@@ -158,7 +189,7 @@ pub fn read_edges(
     text: &str,
     modules: &BTreeSet<String>,
 ) -> Vec<Edge> {
-    let cleaned = strip_comments(non_test_part(text));
+    let cleaned = non_test_part(&strip_comments(text));
     name_offsets(&cleaned)
         .into_iter()
         .filter_map(|offset| {
@@ -241,6 +272,12 @@ mod tests {
     fn code_after_cfg_test_is_skipped() {
         let text = "use crate::amount::Amount;\n#[cfg(test)]\nmod tests {\n    use crate::service::X;\n}\n";
         assert_eq!(pairs(text), vec![(1, "amount".to_string())]);
+    }
+
+    #[test]
+    fn production_code_after_a_cfg_test_helper_is_read() {
+        let text = "#[cfg(test)]\nfn helper() {}\nuse crate::service::X;\n";
+        assert_eq!(pairs(text), vec![(3, "service".to_string())]);
     }
 
     #[test]
