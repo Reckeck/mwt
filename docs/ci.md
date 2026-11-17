@@ -251,11 +251,11 @@ in `@tests` (`crates/xtask/src/checks/groups.rs`), then in a job (`test` or
   key with `fail-on-cache-miss` and never run `pnpm install`. They run no cargo,
   so they have no Rust lane cache and no sccache.
 - The web part runs in the light `ci-node` image (node, pnpm, Chrome, no Rust;
-  `deps-node` too): xtask comes as the prebuilt binary. the Rust
-  jobs (table below), `frontend-static` (`bin/xtask check @static`: lint, typecheck, vitest, static
+  `deps-node` too): xtask comes as the prebuilt binary. The Rust
+  jobs (table above), `frontend-static` (`bin/xtask check @static`: lint, typecheck, vitest, static
   checks) and `frontend-e2e` (`bin/xtask check @browser --exclude layout
   --exclude links`: e2e) run in parallel. A new task of `check` lands in
-`check-lint` unless it is in `@frontend`, `@platforms` or `@tests`; a new `@static`
+  `check-lint` unless it is in `@frontend`, `@platforms` or `@tests`; a new `@static`
   task lands in `frontend-static`, a new `@browser` one in `frontend-e2e`; the groups are one
   table (`crates/xtask/src/checks/groups.rs`: `@static`, `@browser`, `@frontend`,
   `@rust`, `@platforms`) and a test fails for a task that is in none.
