@@ -164,23 +164,27 @@ fn check_area(subject: &Subject) -> Result<Vec<String>> {
     Ok(findings)
 }
 
+/// The token that marks a binding `mut`, with its trailing space.
+const BINDING_MUT: &str = "mut ";
+
 /// The signature without `mut` on parameter bindings (`mut name: T`): the delegate leaves the
 /// binding out, so both sides are compared without it. `&mut T` and `&mut self` stay.
 fn without_binding_mut(signature: &str) -> String {
     let mut text = String::with_capacity(signature.len());
     let mut rest = signature;
-    while let Some(at) = rest.find("mut ") {
+    while let Some(at) = rest.find(BINDING_MUT) {
         let (before, after) = rest.split_at(at);
         text.push_str(before);
-        let name_len = after[4..]
+        let name_len = after[BINDING_MUT.len()..]
             .find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
             .unwrap_or(0);
         let starts_param = text.ends_with('(') || text.ends_with(", ");
-        let is_binding = starts_param && name_len > 0 && after[4 + name_len..].starts_with(':');
+        let is_binding =
+            starts_param && name_len > 0 && after[BINDING_MUT.len() + name_len..].starts_with(':');
         if !is_binding {
-            text.push_str("mut ");
+            text.push_str(BINDING_MUT);
         }
-        rest = &after[4..];
+        rest = &after[BINDING_MUT.len()..];
     }
     text.push_str(rest);
     text
