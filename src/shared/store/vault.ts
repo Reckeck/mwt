@@ -132,10 +132,10 @@ export const useVaultStore = defineStore('vault', {
     async lock() {
       await call('lock_vault_cmd')
       this.locked = true
-      const status = await call<VaultStatus>('vault_status')
-      this.status = status
       localStorage.setItem('trade-app:unlocked', 'false')
+      // Before the refresh: a failing `vault_status` must not leave the vault's data behind.
       emitVaultClosed('locked')
+      this.status = await call<VaultStatus>('vault_status')
     },
     /** `Open the sandbox`: the demo vault opens in place of the unlock screen. Not remembered as the last vault. */
     async openSandbox() {

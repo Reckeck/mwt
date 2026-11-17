@@ -87,10 +87,23 @@ test('relocking the same vault refetches on the first render, nothing stale', as
 
   const lockedAt = await app.page.eval<number>(`${VAULT} const at = Date.now(); await vault.lock(); return at`)
   await app.waitFor(`${VAULT} return vault.locked === true`, 'the vault to lock')
-  // The cache is dropped with the lock: not a row of the old session is left to show.
+  // The cache is dropped with the lock: not a row of the old session is left to show (the unlock screen's own
+  // biometric-state query is fetched anew and carries no vault data).
   expect(
-    await app.page.eval<number>(`${cached} return queries.filter((query) => query.state.data !== undefined).length`),
+    await app.page.eval<number>(
+      `${cached} return queries.filter((query) => query.state.data !== undefined && query.queryKey[0] !== 'biometric-state').length`,
+    ),
   ).toBe(0)
+
+  // The network commands refuse while locked.
+  for (const command of ['datasource_preview', 'datasource_test']) {
+    const code = await app.page.eval<string | null>(
+      `${URL_OF}
+       const { call } = await import(urlOf('shared/api/ipc.ts'))
+       try { await call('${command}', { url: 'https://example.org/x', draft: {} }); return null } catch (err) { return err.code ?? String(err) }`,
+    )
+    expect(code).toBe('REQUIRES_UNLOCK')
+  }
 
   await app.page.eval(`${VAULT} await vault.unlock('/tmp/mock.wallet', 'secret'); return true`)
   await app.waitFor(`${VAULT} return vault.locked === false`, 'the vault to unlock')

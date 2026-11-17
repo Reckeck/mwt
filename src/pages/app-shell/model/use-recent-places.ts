@@ -2,7 +2,7 @@ import { type Ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { type RecentPlace, clearRecentPlaces, places } from '@/shared/lib/recent-places-state'
+import { type RecentPlace, clearRecentPlaces, recentPlaces, setRecentPlaces } from '@/shared/lib/recent-places-state'
 
 import { placeTitle } from '../lib/place-title'
 
@@ -23,13 +23,15 @@ export function useRecordPlaces(title: Ref<string>): void {
     ([path, name]) => {
       if (!name || route.name === 'dashboard') return
       const fresh = { path, title: placeTitle(route, name, t), at: new Date().toISOString() }
-      places.value = [fresh, ...places.value.filter((place) => placeKey(place.path) !== route.path)].slice(0, LIMIT)
+      setRecentPlaces(
+        [fresh, ...recentPlaces.value.filter((place) => placeKey(place.path) !== route.path)].slice(0, LIMIT),
+      )
     },
     { immediate: true },
   )
 }
 
 /** The places, newest first. */
-export function useRecentPlaces(): Readonly<Ref<RecentPlace[]>> {
-  return places
+export function useRecentPlaces(): Readonly<Ref<readonly RecentPlace[]>> {
+  return recentPlaces
 }
