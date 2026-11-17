@@ -989,7 +989,7 @@ fn check_base_prices(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Viola
             continue;
         };
         // L3: the reader's own fiat is worth exactly one of itself.
-        let own_fiat = leg.asset.key() == format!("fiat:{base}");
+        let own_fiat = crate::service::rates::is_fiat_of(&leg.asset.key(), &base);
         let wanted = if own_fiat {
             amount("1")
         } else {
