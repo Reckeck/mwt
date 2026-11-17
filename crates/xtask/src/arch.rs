@@ -285,6 +285,12 @@ mod tests {
     }
 
     #[test]
+    fn testkit_sits_on_top_and_nothing_below_may_use_it() {
+        assert!(layers::is_legal("testkit", "service"));
+        assert!(!layers::is_legal("service", "testkit"));
+    }
+
+    #[test]
     fn an_allowed_edge_passes() {
         let edges = [
             edge("model/vault.rs", 405, "model", "exchange"),
