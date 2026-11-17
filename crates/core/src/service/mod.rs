@@ -2263,8 +2263,17 @@ impl UnlockedVault {
         scope: Option<&HashSet<String>>,
         base_currency: &str,
     ) -> Vec<HistoryPoint> {
+        self.history_series_filtered_in(&self.rate_book(), scope, base_currency)
+    }
+
+    /// [`Self::history_series_filtered`] over a book the caller already built.
+    fn history_series_filtered_in(
+        &self,
+        book: &RateBook,
+        scope: Option<&HashSet<String>>,
+        base_currency: &str,
+    ) -> Vec<HistoryPoint> {
         let base = base_currency.to_lowercase();
-        let book = self.rate_book();
         let fx_now = self
             .per_usd(&base)
             .unwrap_or_else(|| Amount::new(rust_decimal::Decimal::ONE));

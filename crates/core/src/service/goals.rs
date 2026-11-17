@@ -14,7 +14,7 @@ use crate::model::transaction::LegRole;
 use crate::model::vault::now_iso;
 use crate::pricing::history::secs_or_now;
 
-use super::UnlockedVault;
+use super::{RateBook, UnlockedVault};
 
 /// How many non-empty past months the free surplus averages (plan §7.4).
 pub const SURPLUS_MONTHS: usize = 6;
@@ -406,8 +406,7 @@ impl UnlockedVault {
     }
 
     /// Planned monthly contribution in USD: target over the goal's months.
-    fn planned_usd(&self, goal: &Goal, cal: &Calendar, now: i64) -> Amount {
-        let book = self.rate_book();
+    fn planned_usd(&self, book: &RateBook, goal: &Goal, cal: &Calendar, now: i64) -> Amount {
         let target = book
             .convert(goal.target_amount, &goal.currency, "usd", now)
             .unwrap_or(goal.target_amount);
@@ -427,8 +426,12 @@ impl UnlockedVault {
     /// proportion to their planned monthly contribution. No goal gets more
     /// than its target; the excess goes to the next goal by importance.
     /// Returns `(allocated, scope value)` per goal id.
-    fn goal_allocations(&self, cal: &Calendar, now: i64) -> HashMap<String, (Amount, Amount)> {
-        let book = self.rate_book();
+    fn goal_allocations(
+        &self,
+        book: &RateBook,
+        cal: &Calendar,
+        now: i64,
+    ) -> HashMap<String, (Amount, Amount)> {
         let values = self.store_values_usd();
         let goals: Vec<Goal> = self
             .goals()
@@ -441,7 +444,7 @@ impl UnlockedVault {
             .collect();
         let weights: HashMap<String, Amount> = goals
             .iter()
-            .map(|goal| (goal.id.clone(), self.planned_usd(goal, cal, now)))
+            .map(|goal| (goal.id.clone(), self.planned_usd(book, goal, cal, now)))
             .collect();
         let mut stores: HashSet<&String> = HashSet::new();
         for scope in scopes.values() {
@@ -515,8 +518,14 @@ impl UnlockedVault {
     /// Net money put into `scope` within `[from, to)`, valued in `currency` on
     /// the day it moved. Moves inside the scope cancel out; fees are losses,
     /// not withdrawals, and do not count.
-    fn contributions(&self, scope: &HashSet<String>, currency: &str, from: i64, to: i64) -> Amount {
-        let book = self.rate_book();
+    fn contributions(
+        &self,
+        book: &RateBook,
+        scope: &HashSet<String>,
+        currency: &str,
+        from: i64,
+        to: i64,
+    ) -> Amount {
         let mut total = Amount::ZERO;
         for tx in &self.doc.transactions {
             let secs = secs_or_now(&tx.meta().timestamp);
@@ -527,7 +536,7 @@ impl UnlockedVault {
                 if leg.role != LegRole::Principal || !scope.contains(&leg.store_id) {
                     continue;
                 }
-                let Some(value) = Self::leg_value_in(&book, &leg, currency, secs) else {
+                let Some(value) = Self::leg_value_in(book, &leg, currency, secs) else {
                     continue;
                 };
                 if leg.amount.is_negative() {
@@ -561,12 +570,19 @@ impl UnlockedVault {
     /// Average of `income − fixed − daily` over the last non-empty months
     /// before the current one, in the budget currency; `None` without any.
     pub fn free_surplus_avg(&self, now: i64, zone: &str) -> Option<Amount> {
+        self.free_surplus_avg_in(&self.rate_book(), now, zone)
+    }
+
+    /// [`Self::free_surplus_avg`] over a book the caller already built.
+    fn free_surplus_avg_in(&self, book: &RateBook, now: i64, zone: &str) -> Option<Amount> {
         let cal = Calendar::new(zone);
         let mut month = first_of_month(cal.date_of(now));
         let mut found: Vec<Amount> = Vec::new();
         for _ in 0..24 {
             month = first_of_month(month - Duration::days(1));
-            let summary = self.month_summary(&calendar::month_key(month), zone).ok()?;
+            let summary = self
+                .month_summary_in(book, &calendar::month_key(month), zone)
+                .ok()?;
             if summary.income.is_zero() && summary.fixed.is_zero() && summary.daily.is_zero() {
                 continue;
             }
@@ -591,8 +607,14 @@ impl UnlockedVault {
     // -- progress -------------------------------------------------------------
 
     /// Daily USD values of a scope over the last [`FORECAST_DAYS`] days.
-    fn daily_values(&self, scope: &HashSet<String>, cal: &Calendar, now: i64) -> Vec<(f64, f64)> {
-        let series = self.history_series_filtered(Some(scope), "usd");
+    fn daily_values(
+        &self,
+        book: &RateBook,
+        scope: &HashSet<String>,
+        cal: &Calendar,
+        now: i64,
+    ) -> Vec<(f64, f64)> {
+        let series = self.history_series_filtered_in(book, Some(scope), "usd");
         let today = cal.date_of(now);
         (0..=FORECAST_DAYS)
             .map(|offset| {
@@ -612,6 +634,7 @@ impl UnlockedVault {
     /// The scenario's balance for the months passed since the goal started.
     fn planned_now(
         &self,
+        book: &RateBook,
         goal: &Goal,
         start: NaiveDate,
         today: NaiveDate,
@@ -620,16 +643,16 @@ impl UnlockedVault {
         let scenario = self.find_calc_scenario(goal.scenario_id.as_deref()?)?;
         let elapsed = months_between(start, today).saturating_sub(1);
         let planned = super::planned_balance(&scenario.input, elapsed).ok()?;
-        self.rate_book()
-            .convert(planned, &scenario.input.currency, &goal.currency, now)
+        book.convert(planned, &scenario.input.currency, &goal.currency, now)
             .map(|value| value.round(2))
     }
 
     pub fn goal_progress(&self, now: i64, zone: &str) -> Vec<GoalProgress> {
         let cal = Calendar::new(zone);
-        let book = self.rate_book();
+        let books = self.books();
+        let book = books.rate_book();
         let today = cal.date_of(now);
-        let allocations = self.goal_allocations(&cal, now);
+        let allocations = self.goal_allocations(book, &cal, now);
         let mut out: Vec<GoalProgress> = self
             .goals()
             .into_iter()
@@ -650,7 +673,7 @@ impl UnlockedVault {
                             .unwrap_or(Amount::ZERO)
                     });
                 let contributed =
-                    self.contributions(&scope, &goal.currency, i64::MIN, i64::MAX) * share;
+                    self.contributions(book, &scope, &goal.currency, i64::MIN, i64::MAX) * share;
                 let start = cal.date_of_iso(&goal.starts_at).unwrap_or(today);
                 let deadline = goal
                     .deadline
@@ -670,7 +693,7 @@ impl UnlockedVault {
                 });
                 let pct = (saved / goal.target_amount * hundred()).round(1);
 
-                let points = self.daily_values(&scope, &cal, now);
+                let points = self.daily_values(book, &scope, &cal, now);
                 let per_day_usd = slope(&points) * share.to_f64();
                 let accumulating = per_day_usd > 0.0;
                 let forecast = if left_to_save.is_zero() {
@@ -700,7 +723,7 @@ impl UnlockedVault {
                 {
                     issues.push(RealismIssue::OverCommitment { need, commitment });
                 }
-                let planned_now = self.planned_now(&goal, start, today, now);
+                let planned_now = self.planned_now(book, &goal, start, today, now);
                 let deposits = self.deposits(&scope, secs_or_now(&goal.starts_at));
                 GoalProgress {
                     goal,
@@ -723,7 +746,7 @@ impl UnlockedVault {
 
         // All goals together against what is usually left over.
         let currency = self.budget_currency();
-        if let Some(surplus) = self.free_surplus_avg(now, zone) {
+        if let Some(surplus) = self.free_surplus_avg_in(book, now, zone) {
             let need_total = out
                 .iter()
                 .filter_map(|progress| {
@@ -751,7 +774,8 @@ impl UnlockedVault {
     /// budget currency.
     pub fn goal_calendar(&self, year: i32, now: i64, zone: &str) -> Result<GoalCalendar> {
         let cal = Calendar::new(zone);
-        let book = self.rate_book();
+        let books = self.books();
+        let book = books.rate_book();
         let currency = self.budget_currency();
         let first = NaiveDate::from_ymd_opt(year, 1, 1)
             .ok_or_else(|| Error::InvalidInput(format!("year {year}")))?;
@@ -787,7 +811,7 @@ impl UnlockedVault {
                     / amount_of(months_total);
             }
             let (from, to) = cal.month_bounds(month);
-            let saved = self.contributions(&scope, &currency, from, to);
+            let saved = self.contributions(book, &scope, &currency, from, to);
             months.push(GoalCalendarMonth {
                 month: calendar::month_key(month),
                 need,

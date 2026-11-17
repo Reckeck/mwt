@@ -92,6 +92,16 @@ impl RateBook {
         self
     }
 
+    /// The base currency code, lower case (empty before [`RateBook::with_base`]).
+    pub fn base(&self) -> &str {
+        &self.base
+    }
+
+    /// The dated valuations of the property assets, by asset key.
+    pub(crate) fn curves(&self) -> &HashMap<String, ValuationCurve> {
+        &self.curves
+    }
+
     /// Price of one unit of `asset_key` in the base currency at `secs`: exactly
     /// 1 for the base's own fiat asset, before any rate is consulted; else the
     /// USD price through the base's rate. `None` with no base set or no rate.
@@ -286,9 +296,16 @@ fn one() -> Amount {
 }
 
 impl UnlockedVault {
+    /// The one place a book is built from the vault; counts builds in tests.
+    pub(crate) fn build_rate_book(&self) -> RateBook {
+        #[cfg(test)]
+        crate::kernel::books::BUILDS.with(|count| count.set(count.get() + 1));
+        RateBook::build(&self.doc, self.valuation_curves()).with_base(&self.base_and_fx().0)
+    }
+
     /// Parse the caches once for a batch of lookups.
     pub fn rate_book(&self) -> RateBook {
-        RateBook::build(&self.doc, self.valuation_curves()).with_base(&self.base_and_fx().0)
+        self.build_rate_book()
     }
 
     /// Units of `currency` per USD at `ts` (RFC3339; empty = now).

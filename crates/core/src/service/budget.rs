@@ -251,7 +251,18 @@ impl UnlockedVault {
         from: i64,
         to: i64,
     ) -> Vec<Flow> {
-        let book = self.rate_book();
+        self.flows_between_in(&self.rate_book(), cal, currency, from, to)
+    }
+
+    /// [`Self::flows_between`] over a book the caller already built.
+    pub(crate) fn flows_between_in(
+        &self,
+        book: &RateBook,
+        cal: &Calendar,
+        currency: &str,
+        from: i64,
+        to: i64,
+    ) -> Vec<Flow> {
         // A payment made for a shared event counts for my part of it only.
         let shared = self.shared_payment_ratios();
         let mut flows: Vec<Flow> = self
@@ -267,7 +278,7 @@ impl UnlockedVault {
                 if class == FlowClass::Ignored {
                     return None;
                 }
-                let (mut value, missing) = Self::flow_value(&book, tx, class, currency);
+                let (mut value, missing) = Self::flow_value(book, tx, class, currency);
                 if let Some(ratio) = shared.get(&tx.meta().id) {
                     value = value * *ratio;
                 }
@@ -282,7 +293,7 @@ impl UnlockedVault {
                 })
             })
             .collect();
-        flows.extend(self.shared_extra_flows(&book, cal, currency, from, to));
+        flows.extend(self.shared_extra_flows(book, cal, currency, from, to));
         flows
     }
 
@@ -473,6 +484,16 @@ impl UnlockedVault {
     /// Income, mandatory spending, everyday spending and savings of a calendar
     /// month (`YYYY-MM`) in the budget currency (plan §7.3).
     pub fn month_summary(&self, month: &str, zone: &str) -> Result<MonthSummary> {
+        self.month_summary_in(&self.rate_book(), month, zone)
+    }
+
+    /// [`Self::month_summary`] over a book the caller already built.
+    pub(crate) fn month_summary_in(
+        &self,
+        book: &RateBook,
+        month: &str,
+        zone: &str,
+    ) -> Result<MonthSummary> {
         let first = calendar::parse_month(month)
             .ok_or_else(|| Error::InvalidInput(format!("month {month}: expected YYYY-MM")))?;
         let cal = Calendar::new(zone);
@@ -484,7 +505,7 @@ impl UnlockedVault {
             complete: true,
             ..MonthSummary::default()
         };
-        for flow in self.flows_between(&cal, &currency, from, to) {
+        for flow in self.flows_between_in(book, &cal, &currency, from, to) {
             out.complete &= flow.priced();
             match flow.class {
                 FlowClass::Income => out.income += flow.value,
