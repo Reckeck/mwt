@@ -8,6 +8,7 @@
 #                   frontend jobs only restore it (and fail on a miss)
 #   deps            a lane's dependency cache (sccache dir), written ONLY here and only when
 #                   the lane has no cache for its key yet; everything else just reads it
+#   changes         decides from the PR's changed files whether the platform lanes (check-android, clippy-windows) run
 #   check-lint      bin/xtask check --exclude @frontend --exclude @platforms --exclude @tests in ci-linux: fmt, clippy, gen-types
 #   test            bin/xtask check test in ci-linux (parallel with check-lint)
 #   test-convergence bin/xtask check test-slow in ci-linux (parallel with check-lint)
@@ -18,6 +19,9 @@
 #   clippy-windows  native clippy on windows-latest        } xtask's platform:windows/macos need
 #   clippy-macos    cargo xtask check platform:macos       } cargo-xwin / a Mac: left out of check-lint
 #   ci-ok           the one job branch protection requires
+#
+# A new Rust task is covered by check-lint (it takes every task not excluded there) or has to be put
+# in @tests (crates/xtask/src/checks/groups.rs), then in a job (test or test-convergence).
 #
 # Cache keys, who writes and who reads: see `xtask lane-key` (crates/xtask/src/cache/lane_key.rs)
 # and the job comments below. A cache is visible to its own ref, the PR's base branch and the
