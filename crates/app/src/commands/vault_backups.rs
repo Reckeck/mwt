@@ -3,7 +3,6 @@
 //! `UnlockedVault`; these are the IPC wrappers.
 
 use tauri::State;
-use trade_core::error::Error;
 use trade_core::ipc_contract::{RestoreVaultBackupInput, VaultBackup};
 
 use crate::commands::{AppState, require_vault};
@@ -46,14 +45,5 @@ pub async fn reveal_vault_folder(state: State<'_, AppState>) -> Result<(), IpcEr
         let guard = require_vault(&state)?;
         guard.as_ref().unwrap().path.clone()
     };
-    #[cfg(desktop)]
-    {
-        tauri_plugin_opener::reveal_item_in_dir(&path)
-            .map_err(|err| IpcError::from(Error::Io(err.to_string())))
-    }
-    #[cfg(mobile)]
-    {
-        let _ = path;
-        Err(IpcError::from(Error::Unsupported))
-    }
+    state.opener.reveal_path(&path)
 }

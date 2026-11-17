@@ -35,14 +35,14 @@ pub mod vault_recents;
 pub mod workflows;
 
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
 
 use trade_core::error::Error;
 use trade_core::pricing::PricingService;
 use trade_core::service::UnlockedVault;
 
-use crate::ipc::opener::{ExternalOpener, SystemOpener};
+use crate::ipc::opener::Opener;
 
 /// Global application state managed by Tauri.
 pub struct AppState {
@@ -54,7 +54,7 @@ pub struct AppState {
     /// The open vault is the sandbox (see `commands::sandbox`).
     pub sandbox: AtomicBool,
     /// The only way to open a link or a file in the system.
-    pub opener: Arc<dyn ExternalOpener>,
+    pub opener: Opener,
 }
 
 impl AppState {
@@ -65,7 +65,7 @@ impl AppState {
             vault_path: Mutex::new(PathBuf::new()),
             notify: Mutex::new(crate::notify_store::NotifyMemory::default()),
             sandbox: AtomicBool::new(false),
-            opener: Arc::new(SystemOpener),
+            opener: Opener::system(),
         }
     }
 }
