@@ -7,8 +7,9 @@
 //! 5. (`--diff <base>`) the changed files are inside the task's allowed set.
 //!
 //! `check <area>` runs every rule on that area. `check --all` runs rules 1-4 only on the areas that
-//! have moved (a shim with the forward markers, `stubs = true`) and rule 5 once, against the union
-//! of the allowed sets of all areas: it is the CI gate, so an area that has not moved is not red.
+//! have moved (a shim with the forward markers, `stubs = true`) and rule 5 once, per task (module
+//! `scope`: the diff must fit one task, or the one named by `--task`): it is the CI gate, so an
+//! area that has not moved is not red.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -24,6 +25,7 @@ use super::baseline::{self, AreaBaseline, Baseline, production_methods};
 use super::forward::forwarded_entries;
 use super::home::{allowed_files, area_files, homes};
 use super::map::Area;
+use super::scope;
 
 #[derive(Args)]
 pub struct CheckArgs {
@@ -36,6 +38,9 @@ pub struct CheckArgs {
     /// Also fail when a file outside the allowed set changed since this revision (`git diff`).
     #[arg(long, value_name = "BASE", conflicts_with = "write_baseline")]
     pub diff: Option<String>,
+    /// With `--all --diff`: the task the changed files must belong to (else: any single task).
+    #[arg(long, requires = "all")]
+    pub task: Option<String>,
     /// Write `baseline.json` from the tree as it is now (once, before the areas move).
     #[arg(long, conflicts_with_all = ["area", "all"])]
     pub write_baseline: bool,
@@ -66,6 +71,7 @@ pub fn run(root: &Path, args: &CheckArgs) -> Result<()> {
         &baseline,
         args.area.as_deref(),
         changed.as_deref(),
+        args.task.as_deref(),
     )?;
     if findings.is_empty() {
         println!("check: ok");
@@ -85,6 +91,7 @@ fn findings(
     baseline: &Baseline,
     only: Option<&str>,
     changed: Option<&[String]>,
+    task: Option<&str>,
 ) -> Result<Vec<String>> {
     let areas: Vec<&Area> = match only {
         Some(name) => vec![&workspace.map.areas[workspace.map.area_index(name)?]],
@@ -106,15 +113,16 @@ fn findings(
         found.extend(check_area(&subject)?);
     }
     if let Some(changed) = changed {
-        let (label, scope) = match only {
-            Some(name) => (name, areas),
-            None => ("all", workspace.map.areas.iter().collect()),
-        };
-        let allowed: BTreeSet<String> = scope
-            .iter()
-            .flat_map(|area| allowed_files(workspace, area))
-            .collect();
-        found.extend(outside_allowed(label, changed, &allowed));
+        match only {
+            Some(name) => {
+                let allowed: BTreeSet<String> = areas
+                    .iter()
+                    .flat_map(|area| allowed_files(workspace, area))
+                    .collect();
+                found.extend(outside_allowed(name, changed, &allowed));
+            }
+            None => found.extend(scope::findings(workspace, changed, task)),
+        }
     }
     Ok(found)
 }
@@ -336,6 +344,7 @@ mod tests {
             &baseline,
             Some("loyalty"),
             changed,
+            None,
         )
         .unwrap()
     }
@@ -564,7 +573,7 @@ files = ["vault.rs"]
         changed: Option<&[String]>,
     ) -> Vec<String> {
         let workspace = Workspace::load(tree.root()).unwrap();
-        findings(tree.root(), &workspace, baseline, None, changed).unwrap()
+        findings(tree.root(), &workspace, baseline, None, changed, None).unwrap()
     }
 
     #[test]
@@ -576,24 +585,67 @@ files = ["vault.rs"]
             all_findings(&tree, &baseline, Some(&[])),
             Vec::<String>::new()
         );
+        // Files outside `service/`, the group dirs and `usecases/` are left to the task's own list.
         let changed = [
             PURE.to_string(),
-            PENDING.to_string(),
-            VAULT.to_string(),
             "Cargo.lock".to_string(),
             "README.md".to_string(),
         ];
         assert_eq!(
             all_findings(&tree, &baseline, Some(&changed)),
-            [
-                "all: files: Cargo.lock is outside the allowed set",
-                "all: files: README.md is outside the allowed set"
-            ]
+            Vec::<String>::new()
+        );
+        let changed = [
+            PURE.to_string(),
+            "crates/core/src/service/stray.rs".to_string(),
+        ];
+        assert_eq!(
+            all_findings(&tree, &baseline, Some(&changed)),
+            ["all: files: crates/core/src/service/stray.rs is outside the allowed set"]
         );
         // Named on its own, the unmoved area is red.
         let workspace = Workspace::load(tree.root()).unwrap();
-        let named = findings(tree.root(), &workspace, &baseline, Some("pending"), None).unwrap();
+        let named = findings(
+            tree.root(),
+            &workspace,
+            &baseline,
+            Some("pending"),
+            None,
+            None,
+        )
+        .unwrap();
         assert!(!named.is_empty());
+    }
+
+    #[test]
+    fn files_of_two_areas_in_one_diff_are_red_and_each_alone_is_green() {
+        let baseline = baseline_of(&many_areas(false, DEEP_WITH_TEST));
+        let tree = many_areas(true, "");
+        let both = [PURE.to_string(), PENDING.to_string()];
+        let found = all_findings(&tree, &baseline, Some(&both));
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(
+            found[0].starts_with("all: files: no single task allows every changed file"),
+            "{found:?}"
+        );
+        for alone in [PURE, PENDING] {
+            let one = [alone.to_string()];
+            assert!(all_findings(&tree, &baseline, Some(&one)).is_empty());
+        }
+        let workspace = Workspace::load(tree.root()).unwrap();
+        let named = findings(
+            tree.root(),
+            &workspace,
+            &baseline,
+            None,
+            Some(&both),
+            Some("T26"),
+        )
+        .unwrap();
+        assert_eq!(
+            named,
+            ["all: files: crates/core/src/service/pending.rs is outside the allowed set"]
+        );
     }
 
     #[test]
@@ -608,7 +660,7 @@ files = ["vault.rs"]
             "impl UnlockedVault {\n    pub fn d(&self) -> u8 {\n        1\n    }\n}\n",
         );
         let workspace = Workspace::load(tree.root()).unwrap();
-        let found = findings(tree.root(), &workspace, &baseline, Some("deep"), None).unwrap();
+        let found = findings(tree.root(), &workspace, &baseline, Some("deep"), None, None).unwrap();
         assert!(
             found.contains(&"deep: tests: test missing: deep_works".to_string()),
             "{found:?}"

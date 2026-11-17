@@ -18,8 +18,24 @@ pub struct Map {
     pub command_dir: String,
     /// Every directory the scanner reads (the service and command dirs lie inside them).
     pub scan_dirs: Vec<String>,
+    /// Files every area task may change besides its own (spec D5, e.g. `bin/gen_types.rs`), by
+    /// path from the workspace root.
+    #[serde(default)]
+    pub grants: Vec<String>,
+    /// The foundation tasks (no area) and the files they own in the shared tree.
+    #[serde(default, rename = "foundation")]
+    pub foundations: Vec<Foundation>,
     #[serde(rename = "area")]
     pub areas: Vec<Area>,
+}
+
+/// A task that owns no area but changes shared files (spec D5).
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Foundation {
+    pub task: String,
+    /// Paths from the workspace root; a trailing `/` takes the whole directory.
+    pub files: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,6 +57,10 @@ pub struct Area {
     /// File stem to group, for the files whose home differs from `group`.
     #[serde(default)]
     pub homes: BTreeMap<String, String>,
+    /// The stem of a file entry when it is not the entry's own name (`"cryptotrack/" = "tracking"`:
+    /// a stem must not repeat its group or context).
+    #[serde(default)]
+    pub stem: BTreeMap<String, String>,
     /// Whether `scaffold` makes stubs for the area (the phase-6 areas have none).
     #[serde(default = "yes")]
     pub stubs: bool,

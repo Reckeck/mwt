@@ -266,6 +266,7 @@ fn is_test_marker(attr: &Attribute) -> bool {
         .is_some_and(|segment| segment.ident == "test")
 }
 
+/// `#[tauri::command]`, or `#[ipc(..)]` (core-ipc: the attribute expands to `tauri::command`).
 fn is_tauri_command(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| {
         let names: Vec<String> = attr
@@ -274,7 +275,7 @@ fn is_tauri_command(attrs: &[Attribute]) -> bool {
             .iter()
             .map(|segment| segment.ident.to_string())
             .collect();
-        names == ["tauri", "command"]
+        names == ["tauri", "command"] || names.last().is_some_and(|last| last == "ipc")
     })
 }
 
@@ -561,6 +562,20 @@ mod tests {
         ";
         let facts = scan_source(source).unwrap();
         assert_eq!(facts.commands, [["first", "second", "third"]]);
+    }
+
+    #[test]
+    fn an_ipc_attribute_marks_a_command_like_tauri_command() {
+        let source = r"
+            #[ipc(write)]
+            fn save(vault: Vault) { vault.persisted(); }
+            #[crate::ipc]
+            fn read(vault: Vault) { vault.peek(); }
+            #[other(write)]
+            fn plain(vault: Vault) { vault.skipped(); }
+        ";
+        let facts = scan_source(source).unwrap();
+        assert_eq!(facts.commands, [["persisted"], ["peek"]]);
     }
 
     #[test]

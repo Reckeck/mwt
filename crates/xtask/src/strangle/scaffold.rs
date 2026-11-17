@@ -104,9 +104,18 @@ pub(super) fn stems(area: &Area) -> BTreeSet<String> {
     }
     area.files
         .iter()
-        .map(|entry| entry.trim_end_matches('/').trim_end_matches(".rs"))
+        .map(|entry| {
+            area.stem.get(entry).map_or_else(
+                || {
+                    entry
+                        .trim_end_matches('/')
+                        .trim_end_matches(".rs")
+                        .to_string()
+                },
+                Clone::clone,
+            )
+        })
         .filter(|stem| !stem.ends_with("_tests"))
-        .map(str::to_string)
         .collect()
 }
 
@@ -219,6 +228,22 @@ stubs = false
 
     fn scaffold(tree: &TempTree, check: bool) -> Result<()> {
         run(tree.root(), &ScaffoldArgs { check })
+    }
+
+    #[test]
+    fn no_stub_of_the_real_map_is_named_like_its_group_or_context() {
+        let map = Map::parse(include_str!("../../strangle.toml")).unwrap();
+        for stub in stubs(&map) {
+            assert_ne!(stub.name, stub.group, "{} in {}", stub.name, stub.task);
+            assert_ne!(stub.name, stub.context, "{} in {}", stub.name, stub.task);
+        }
+    }
+
+    #[test]
+    fn a_stem_entry_of_the_map_renames_a_directory_entry() {
+        let map = Map::parse(include_str!("../../strangle.toml")).unwrap();
+        let area = &map.areas[map.area_index("cryptotrack").unwrap()];
+        assert!(stems(area).contains("tracking"));
     }
 
     #[test]

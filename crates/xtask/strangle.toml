@@ -12,6 +12,30 @@ service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
 scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src"]
 
+# Files every area task may change besides its own (spec D5).
+grants = ["crates/core/src/bin/gen_types.rs"]
+
+# The foundation tasks that change files inside `service/`, the group dirs or `usecases/`.
+[[foundation]]
+task = "T5"
+files = ["crates/core/src/service/forward.rs", "crates/core/src/service/mod.rs"]
+
+[[foundation]]
+task = "T6"
+files = ["crates/core/src/"]
+
+[[foundation]]
+task = "T7"
+files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
+task = "T8"
+files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
+task = "T60"
+files = ["crates/core/src/service/mod.rs"]
+
 [[area]]
 name = "loyalty"
 task = "T26"
@@ -111,6 +135,7 @@ files = [
     "reports.rs", "where_went.rs", "insights.rs", "dashboard.rs", "dashboard_today.rs",
     "dashboard_tiles.rs", "notify_snapshot.rs",
 ]
+stem = { "reports.rs" = "overview" }
 
 [[area]]
 name = "cryptotrack"
@@ -118,6 +143,7 @@ task = "T32"
 group = "cryptotrack"
 context = "cryptotrack"
 files = ["cryptotrack/", "exchange_sync.rs"]
+stem = { "cryptotrack/" = "tracking" }
 
 [[area]]
 name = "workflow"

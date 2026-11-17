@@ -10,6 +10,7 @@ use anyhow::{Context, Result, bail};
 use clap::Args;
 use syn::{FnArg, Item, ItemFn, Pat, Type, Visibility};
 
+use super::baseline::{Baseline, BaselineMethod};
 use super::fileset::FileSet;
 use super::home::{Home, homes};
 use super::map::Map;
@@ -28,15 +29,17 @@ pub struct ForwardArgs {
 
 pub fn run(root: &Path, args: &ForwardArgs) -> Result<()> {
     let map = Map::load(root)?;
+    let baseline = Baseline::load(root)?;
     let mut files = FileSet::new(root);
-    for line in forward(&mut files, &map, &args.area)? {
+    for line in forward(&mut files, &map, &baseline, &args.area)? {
         println!("forward: {line}");
     }
     files.write()
 }
 
-fn forward(files: &mut FileSet, map: &Map, area: &str) -> Result<Vec<String>> {
+fn forward(files: &mut FileSet, map: &Map, baseline: &Baseline, area: &str) -> Result<Vec<String>> {
     let area = &map.areas[map.area_index(area)?];
+    let methods = &baseline.area(&area.name)?.methods;
     let mut report = Vec::new();
     for home in homes(map, area) {
         let shim = home.shim();
@@ -44,7 +47,7 @@ fn forward(files: &mut FileSet, map: &Map, area: &str) -> Result<Vec<String>> {
         if text.is_empty() {
             continue;
         }
-        let entries = entries_of(files, &home)?;
+        let (entries, skipped) = entries_of(files, &home, methods)?;
         let block = if entries.is_empty() {
             String::new()
         } else {
@@ -55,6 +58,11 @@ fn forward(files: &mut FileSet, map: &Map, area: &str) -> Result<Vec<String>> {
         })?;
         files.set(&shim, updated)?;
         report.push(format!("{shim}: {} delegate(s)", entries.len()));
+        report.extend(
+            skipped
+                .iter()
+                .map(|name| format!("{shim}: {name}: not forwarded (not a baseline method)")),
+        );
     }
     if report.is_empty() {
         bail!("{}: no shim file to forward from", area.name);
@@ -62,9 +70,16 @@ fn forward(files: &mut FileSet, map: &Map, area: &str) -> Result<Vec<String>> {
     Ok(report)
 }
 
-/// One text per forwarded function of the stem: the pure file first, then the scenarios.
-fn entries_of(files: &mut FileSet, home: &Home) -> Result<Vec<String>> {
+/// One text per forwarded function of the stem (the pure file first, then the scenarios), and the
+/// names of the receiver-shaped public functions that are not baseline methods (spec D3: one entry
+/// per old method).
+fn entries_of(
+    files: &mut FileSet,
+    home: &Home,
+    methods: &[BaselineMethod],
+) -> Result<(Vec<String>, Vec<String>)> {
     let mut entries = Vec::new();
+    let mut skipped = Vec::new();
     for (path, module) in [
         (home.pure_file(), home.pure_path()),
         (home.scenario_file(), home.scenario_path()),
@@ -73,14 +88,19 @@ fn entries_of(files: &mut FileSet, home: &Home) -> Result<Vec<String>> {
         let file = syn::parse_file(&source).with_context(|| format!("parse {path}"))?;
         let index = LineIndex::new(&source);
         for item in &file.items {
-            if let Item::Fn(node) = item
-                && let Some(entry) = entry_of(&source, &index, node, &module)
-            {
+            let Item::Fn(node) = item else { continue };
+            let Some(entry) = entry_of(&source, &index, node, &module) else {
+                continue;
+            };
+            let name = node.sig.ident.to_string();
+            if methods.iter().any(|method| method.name == name) {
                 entries.push(entry);
+            } else {
+                skipped.push(name);
             }
         }
     }
-    Ok(entries)
+    Ok((entries, skipped))
 }
 
 /// How the first parameter of a function maps to the delegate.
@@ -199,17 +219,40 @@ fn entry_from(parts: &[&str]) -> Option<ForwardEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strangle::area_fixture::{PURE, SCENARIO, SERVICE, moved_tree};
+    use crate::strangle::Workspace;
+    use crate::strangle::area_fixture::{PURE, SCENARIO, SERVICE, moved_tree, original_tree};
+    use crate::strangle::baseline::{self, BaselineMethod};
     use crate::strangle::fixture::TempTree;
 
     const SHIM_WITH_EMPTY_REGION: &str = "//! Shim.\n\npub use crate::household::loyalty::Card;\n\n// forward:begin\n// forward:end\n";
 
-    fn forwarded(tree: &TempTree) -> Result<String> {
+    /// The baseline of the original loyalty area, plus these extra method names.
+    fn baseline_with(extra: &[&str]) -> Baseline {
+        let original = original_tree();
+        let workspace = Workspace::load(original.root()).unwrap();
+        let mut baseline = baseline::capture(original.root(), &workspace).unwrap();
+        baseline
+            .areas
+            .get_mut("loyalty")
+            .unwrap()
+            .methods
+            .extend(extra.iter().map(|name| BaselineMethod {
+                name: (*name).to_string(),
+                signature: String::new(),
+            }));
+        baseline
+    }
+
+    fn forwarded_with(tree: &TempTree, baseline: &Baseline) -> Result<String> {
         let map = Map::load(tree.root())?;
         let mut files = FileSet::new(tree.root());
-        forward(&mut files, &map, "loyalty")?;
+        forward(&mut files, &map, baseline, "loyalty")?;
         files.write()?;
         Ok(std::fs::read_to_string(tree.root().join(SERVICE))?)
+    }
+
+    fn forwarded(tree: &TempTree) -> Result<String> {
+        forwarded_with(tree, &baseline_with(&[]))
     }
 
     fn tree_with_empty_region() -> TempTree {
@@ -263,12 +306,14 @@ pub fn wrong_name(other: &VaultDoc) {}
 pub fn wrong_mut(doc: &mut VaultDoc) {}
 fn private(doc: &VaultDoc) {}
 pub fn no_params() {}
+pub fn plan_x(books: &Books<'_>) {}
 #[test]
 pub fn a_test(doc: &VaultDoc) {}
 ";
         std::fs::write(tree.root().join(PURE), source).unwrap();
         std::fs::write(tree.root().join(SCENARIO), "").unwrap();
-        let shim = forwarded(&tree).unwrap();
+        let baseline = baseline_with(&["shared", "exclusive", "reader", "doc_reader"]);
+        let shim = forwarded_with(&tree, &baseline).unwrap();
         for wanted in [
             "pub fn shared(&self, a: u8) -> u8\n        => crate::household::loyalty::shared;",
             "pub fn exclusive(&mut self)\n        => crate::household::loyalty::exclusive;",
@@ -277,9 +322,35 @@ pub fn a_test(doc: &VaultDoc) {}
         ] {
             assert!(shim.contains(wanted), "{wanted}\n{shim}");
         }
-        for skipped in ["wrong_name", "wrong_mut", "private", "no_params", "a_test"] {
+        for skipped in [
+            "wrong_name",
+            "wrong_mut",
+            "private",
+            "no_params",
+            "a_test",
+            "plan_x",
+        ] {
             assert!(!shim.contains(skipped), "{skipped}");
         }
+    }
+
+    #[test]
+    fn a_public_function_that_is_not_a_baseline_method_is_reported_not_forwarded() {
+        let tree = tree_with_empty_region();
+        std::fs::write(
+            tree.root().join(PURE),
+            "pub fn clash(books: &Books<'_>, id: &str) -> bool { true }\npub fn plan_x(books: &Books<'_>) {}\n",
+        )
+        .unwrap();
+        let map = Map::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        let report = forward(&mut files, &map, &baseline_with(&[]), "loyalty").unwrap();
+        assert!(
+            report
+                .iter()
+                .any(|line| line.ends_with("plan_x: not forwarded (not a baseline method)")),
+            "{report:?}"
+        );
     }
 
     #[test]

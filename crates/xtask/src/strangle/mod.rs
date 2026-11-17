@@ -14,6 +14,7 @@ mod relocate;
 mod rewire;
 mod scaffold;
 mod scan;
+mod scope;
 mod signature;
 mod source;
 mod stats;

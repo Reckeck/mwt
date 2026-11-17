@@ -140,14 +140,15 @@ pub fn area_files(workspace: &Workspace, area: &Area) -> Vec<String> {
     files.into_iter().collect()
 }
 
-/// The files a task of the area may change (spec D5): the area files, its `ipc_contract` stub, and
-/// the shared files its regions cut from.
+/// The files a task of the area may change (spec D5): the area files, its `ipc_contract` stub,
+/// the shared files its regions cut from, and the grants of every area task.
 pub fn allowed_files(workspace: &Workspace, area: &Area) -> BTreeSet<String> {
     let map = &workspace.map;
     let mut allowed: BTreeSet<String> = area_files(workspace, area).into_iter().collect();
     if area.ipc_contract {
         allowed.insert(format!("{}/ipc_contract/{}.rs", core_dir(map), area.name));
     }
+    allowed.extend(map.grants.iter().cloned());
     allowed.extend(
         area.regions
             .iter()
