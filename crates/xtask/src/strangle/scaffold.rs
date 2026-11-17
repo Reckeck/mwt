@@ -129,17 +129,7 @@ pub(super) fn stems(area: &Area) -> BTreeSet<String> {
     }
     area.files
         .iter()
-        .map(|entry| {
-            area.stem.get(entry).map_or_else(
-                || {
-                    entry
-                        .trim_end_matches('/')
-                        .trim_end_matches(".rs")
-                        .to_string()
-                },
-                Clone::clone,
-            )
-        })
+        .map(|entry| area.stem_of(entry))
         .filter(|stem| !stem.ends_with("_tests"))
         .collect()
 }

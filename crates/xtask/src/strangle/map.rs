@@ -134,6 +134,7 @@ impl Map {
             if !seen.insert(&area.name) {
                 bail!("strangle.toml: area `{}` is listed twice", area.name);
             }
+            area.check_stems_distinct()?;
         }
         Ok(map)
     }
@@ -158,6 +159,36 @@ impl Map {
             }
         }
         Ok(Layout::new(spans))
+    }
+}
+
+/// A file entry without its `.rs` or trailing `/`: the name the entry stands for.
+pub fn entry_name(entry: &str) -> &str {
+    entry.trim_end_matches('/').trim_end_matches(".rs")
+}
+
+impl Area {
+    /// The stem of a file entry: its rename in `stem`, else its own name.
+    pub fn stem_of(&self, entry: &str) -> String {
+        self.stem
+            .get(entry)
+            .map_or_else(|| entry_name(entry).to_string(), Clone::clone)
+    }
+
+    fn check_stems_distinct(&self) -> Result<()> {
+        let mut owners: BTreeMap<String, &str> = BTreeMap::new();
+        for entry in &self.files {
+            let first = owners.insert(self.stem_of(entry), entry);
+            // `a.rs` with `b.rs` is one module: the file and the directory of its children.
+            if let Some(first) = first.filter(|first| entry_name(first) != entry_name(entry)) {
+                bail!(
+                    "strangle.toml: area `{}`: entries `{first}` and `{entry}` both resolve to stem `{}`",
+                    self.name,
+                    self.stem_of(entry)
+                );
+            }
+        }
+        Ok(())
     }
 }
 
@@ -260,6 +291,18 @@ regions = [{ file = "mod.rs", from = "// -- first", to = "// -- second" }]
 
     fn names(items: &[&str]) -> Vec<String> {
         items.iter().map(|item| (*item).to_string()).collect()
+    }
+
+    #[test]
+    fn two_entries_with_one_stem_are_rejected() {
+        let text = SMALL
+            .replace(r#"["a.rs", "dir/"]"#, r#"["a.rs", "b.rs"]"#)
+            .replace("regions = [", "stem = { \"b.rs\" = \"a\" }\nregions = [");
+        let message = Map::parse(&text).unwrap_err().to_string();
+        assert!(
+            message.contains("`a.rs`") && message.contains("`b.rs`"),
+            "{message}"
+        );
     }
 
     #[test]

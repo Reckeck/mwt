@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::Workspace;
-use super::map::{Area, Map};
+use super::map::{Area, Map, entry_name};
 use super::scaffold::stems;
 
 /// One file stem of an area, with every path it owns.
@@ -140,12 +140,7 @@ fn source_of(area: &Area, stem: &str) -> String {
         .find(|(_, renamed)| renamed.as_str() == stem)
         .map_or_else(
             || stem.to_string(),
-            |(entry, _)| {
-                entry
-                    .trim_end_matches('/')
-                    .trim_end_matches(".rs")
-                    .to_string()
-            },
+            |(entry, _)| entry_name(entry).to_string(),
         )
 }
 
