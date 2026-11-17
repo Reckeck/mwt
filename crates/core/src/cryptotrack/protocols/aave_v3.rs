@@ -74,7 +74,7 @@ use crate::model::cryptotrack::{
 };
 
 use super::{
-    AdapterFuture, Answer, FeeReading, Node, PositionKey, PositionKind, PositionReading,
+    AdapterFuture, Answer, FeeReading, LegToken, Node, PositionKey, PositionKind, PositionReading,
     PositionStatus, ProtocolAdapter, ProtocolRequest, U256,
 };
 
@@ -530,7 +530,12 @@ impl AaveV3 {
             approximate: !exact,
             opened_at: None,
             closed_at: None,
-            tokens: Vec::new(),
+            tokens: vec![LegToken {
+                token: TokenId::new(request.chain, &asset_address),
+                symbol: symbol.clone(),
+                name: None,
+                decimals: Some(decimals),
+            }],
             read_at: crate::model::vault::now_iso(),
         }))
     }
@@ -963,6 +968,55 @@ mod tests {
             !reading.approximate,
             "the index math reproduces the contract's balances"
         );
+    }
+
+    #[tokio::test]
+    async fn the_underlying_is_one_leg_token_with_the_reserve_symbol() {
+        let (url, _) = node(weth_node(USER_DATA, SCALED)).await;
+        let adapter = AaveV3 {
+            client: stub::client(),
+        };
+        let key = PositionKey::new(PROTOCOL, Chain::Ethereum, WETH);
+        let reading = adapter
+            .read_position(request(&url), &key)
+            .await
+            .expect("a reading")
+            .expect("the position is there");
+        assert_eq!(
+            reading.tokens,
+            vec![LegToken {
+                token: TokenId::new(Chain::Ethereum, WETH),
+                symbol: Some("WETH".into()),
+                name: None,
+                decimals: Some(18),
+            }],
+            "supply and debt legs share one token, listed once"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_reserve_list_without_the_asset_gives_no_symbol_and_still_reads() {
+        let inner = weth_node(USER_DATA, SCALED);
+        let market = market(Chain::Ethereum).expect("a market");
+        let (url, _) = node(move |to, selector, calldata| {
+            if to == market.data_provider && selector == SEL_ALL_RESERVES {
+                return None;
+            }
+            inner(to, selector, calldata)
+        })
+        .await;
+        let adapter = AaveV3 {
+            client: stub::client(),
+        };
+        let key = PositionKey::new(PROTOCOL, Chain::Ethereum, WETH);
+        let reading = adapter
+            .read_position(request(&url), &key)
+            .await
+            .expect("a reading")
+            .expect("the position is there");
+        assert_eq!(reading.tokens.len(), 1);
+        assert_eq!(reading.tokens[0].symbol, None);
+        assert_eq!(reading.tokens[0].decimals, Some(18));
     }
 
     #[tokio::test]
