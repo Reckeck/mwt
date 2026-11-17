@@ -1619,7 +1619,7 @@ mod tests {
                 token: TokenId::new(Chain::Ethereum, TOKEN1),
                 symbol: Some("WETH".into()),
                 name: None,
-                decimals: Some(18),
+                decimals: Some(6),
             }],
             "one token: the currency with no contract is the coin"
         );
@@ -1632,7 +1632,7 @@ mod tests {
         let reading = read(refusing).await.expect("a read").expect("the position");
         assert_eq!(reading.tokens.len(), 1);
         assert_eq!(reading.tokens[0].symbol, None);
-        assert_eq!(reading.tokens[0].decimals, Some(18));
+        assert_eq!(reading.tokens[0].decimals, Some(6));
 
         let mut bare = Scenario::hookless();
         bare.symbol1 = Some(format!("0x{}", word(7)));
