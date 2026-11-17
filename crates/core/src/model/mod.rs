@@ -16,6 +16,7 @@ pub mod inflation;
 pub(crate) mod iso_date;
 pub mod notify;
 pub mod planning;
+pub mod registry;
 pub mod shared_event;
 pub mod store;
 pub mod sync_state;

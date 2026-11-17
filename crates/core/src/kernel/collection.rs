@@ -8,7 +8,7 @@
 use crate::error::{Error, Result};
 use crate::kernel::record::Record;
 use crate::kernel::tx::Tx;
-use crate::sync::registry::{self, Rule};
+use crate::model::registry::{self, Rule};
 
 /// A view of the `T` records of the document held by a [`Tx`].
 pub struct Collection<'tx, 'doc, T: Record> {
