@@ -67,5 +67,8 @@ export function useProgramRows() {
   const total = computed(() => rows.value.reduce((sum, row) => sum + Number(row.valueBase), 0))
   const baseCurrency = computed(() => report.data.value?.base_currency ?? 'usd')
 
-  return { tree, rows, total, baseCurrency }
+  /** The tree and the report both shape the figures and the order of the rows, so both gate the first paint. */
+  const loading = computed(() => tree.isPending.value || report.isPending.value)
+
+  return { tree, rows, total, baseCurrency, loading }
 }

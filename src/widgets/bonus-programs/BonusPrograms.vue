@@ -30,7 +30,7 @@ const route = useRoute()
 const router = useRouter()
 const phone = useIsPhone()
 
-const { tree, rows, total, baseCurrency } = useProgramRows()
+const { tree, rows, total, baseCurrency, loading } = useProgramRows()
 
 /** `?program=<id>`: an old wallet link to a programme; its row is marked and scrolled to. */
 const highlighted = computed(() => (typeof route.query.program === 'string' ? route.query.program : ''))
@@ -89,7 +89,7 @@ function openSettings(store: Store) {
   </Teleport>
 
   <section class="grid grid-cols-1 gap-4">
-    <SectionState :loading="tree.isPending.value" :error="tree.error.value" skeleton="list" :rows="2" @retry="tree.refetch()">
+    <SectionState :loading="loading" :error="tree.error.value" skeleton="list" :rows="2" @retry="tree.refetch()">
       <EmptyState v-if="!rows.length" :icon="Gift" :title="t('bonuses.emptyTitle')" :description="t('bonuses.emptyHint')">
         <Button size="sm" @click="createOpen = true"><Plus class="size-4" />{{ t('bonuses.addShort') }}</Button>
       </EmptyState>
