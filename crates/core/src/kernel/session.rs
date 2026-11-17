@@ -4,6 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use super::events::{DomainEvent, EventBus};
 use super::persistence::{FileStore, Mirrored, Persistence, SandboxStore};
 
 /// Told that the vault has unsaved changes (the app's writer thread).
@@ -36,6 +37,8 @@ pub struct Session {
     store: Arc<dyn Persistence>,
     /// The store without a mirror, to go back to.
     plain: Arc<dyn Persistence>,
+    /// Subscribers of the events a committed transaction emits.
+    bus: EventBus,
 }
 
 impl Default for Session {
@@ -58,6 +61,23 @@ impl Session {
             hook: None,
             store: store.clone(),
             plain: store,
+            bus: EventBus::new(),
+        }
+    }
+
+    /// The vault's own bus.
+    pub fn bus(&self) -> &EventBus {
+        &self.bus
+    }
+
+    /// Publish the events of a finished transaction: only a touched one that
+    /// returned `Ok` calls this; an untouched one drops them.
+    pub fn deliver(&self, touched: bool, events: Vec<DomainEvent>) {
+        if !touched {
+            return;
+        }
+        for event in &events {
+            self.bus.publish(event);
         }
     }
 

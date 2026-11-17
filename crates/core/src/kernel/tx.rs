@@ -2,6 +2,7 @@
 //! through a `Tx`, and the vault commits only if the closure touched it.
 
 use crate::kernel::collection::Collection;
+use crate::kernel::events::DomainEvent;
 use crate::kernel::record::Record;
 use crate::model::VaultDoc;
 
@@ -13,6 +14,9 @@ pub struct Tx<'a> {
     /// Sync keys of records deleted on purpose from a capped log; the commit
     /// hands them to `sync_forget_log_record`.
     forgotten_logs: Vec<String>,
+    /// Events to publish after the commit; dropped when the transaction
+    /// fails or stays untouched.
+    events: Vec<DomainEvent>,
 }
 
 impl<'a> Tx<'a> {
@@ -21,6 +25,7 @@ impl<'a> Tx<'a> {
             doc,
             touched: false,
             forgotten_logs: Vec::new(),
+            events: Vec::new(),
         }
     }
 
@@ -45,6 +50,11 @@ impl<'a> Tx<'a> {
         self.touched |= changed;
     }
 
+    /// Keep an event for the commit to publish.
+    pub fn emit(&mut self, event: DomainEvent) {
+        self.events.push(event);
+    }
+
     /// The records of one kind, read and changed through [`Collection`].
     pub fn collection<T: Record>(&mut self) -> Collection<'_, 'a, T> {
         Collection::new(self)
@@ -58,6 +68,11 @@ impl<'a> Tx<'a> {
     /// The keys to hand to `sync_forget_log_record` at the commit.
     pub(crate) fn take_forgotten_logs(&mut self) -> Vec<String> {
         std::mem::take(&mut self.forgotten_logs)
+    }
+
+    /// The emitted events, in emit order, for the commit to publish.
+    pub fn take_events(&mut self) -> Vec<DomainEvent> {
+        std::mem::take(&mut self.events)
     }
 
     pub(crate) fn is_touched(&self) -> bool {

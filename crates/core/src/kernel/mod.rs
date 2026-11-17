@@ -4,6 +4,7 @@
 
 pub mod books;
 pub mod collection;
+pub mod events;
 #[cfg(test)]
 mod golden_tests;
 pub mod persistence;

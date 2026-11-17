@@ -21,6 +21,7 @@ use zeroize::Zeroizing;
 use crate::error::{Error, Result};
 use crate::storage::encode;
 
+use crate::kernel::events::DomainEvent;
 use crate::kernel::persistence::{Persistence, SealedWrite};
 use crate::kernel::session::Commit;
 pub use crate::kernel::session::SaveHook;
@@ -65,12 +66,12 @@ impl UnlockedVault {
     /// `Err` nothing is committed (and nothing rolled back). A sandbox never
     /// writes.
     pub fn transact<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<R> {
-        let (out, touched) = self.run(body)?;
-        if !touched || self.sandbox {
-            return Ok(out);
+        let (out, touched, events) = self.run(body)?;
+        if touched && !self.sandbox {
+            let commit = self.session.mark();
+            self.apply_commit(commit)?;
         }
-        let commit = self.session.mark();
-        self.apply_commit(commit)?;
+        self.session.deliver(touched, events);
         Ok(out)
     }
 
@@ -87,25 +88,32 @@ impl UnlockedVault {
     /// Like [`Self::transact`], but a touched transaction is on disk when it
     /// returns, whatever is batched.
     pub fn transact_now<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<R> {
-        let (out, touched) = self.run(body)?;
+        let (out, touched, events) = self.run(body)?;
         if touched && !self.sandbox {
             self.write_now()?;
         }
+        self.session.deliver(touched, events);
         Ok(out)
     }
 
-    /// Run the closure over the document; report whether it touched it. The
-    /// log records it deleted on purpose are handed to the sync layer here,
-    /// so the next save writes their tombstones.
-    fn run<R>(&mut self, body: impl FnOnce(&mut Tx<'_>) -> Result<R>) -> Result<(R, bool)> {
+    /// Run the closure over the document; report whether it touched it and
+    /// the events it emitted (the caller delivers them once the commit
+    /// succeeded; an `Err` drops them). The log records it deleted on purpose
+    /// are handed to the sync layer here, so the next save writes their
+    /// tombstones.
+    fn run<R>(
+        &mut self,
+        body: impl FnOnce(&mut Tx<'_>) -> Result<R>,
+    ) -> Result<(R, bool, Vec<DomainEvent>)> {
         let mut tx = Tx::new(&mut self.doc);
         let out = body(&mut tx)?;
         let touched = tx.is_touched();
+        let events = tx.take_events();
         let forgotten = tx.take_forgotten_logs();
         for key in forgotten {
             self.sync_forget_log_record(&key)?;
         }
-        Ok((out, touched))
+        Ok((out, touched, events))
     }
 
     /// Save the document: at once, or — once the app installed a hook — mark
@@ -458,5 +466,64 @@ mod tests {
         assert_eq!(wakes.0.load(Ordering::SeqCst), 0);
         assert!(!vault.has_unsaved_changes());
         assert_eq!(std::fs::read(&vault.path).unwrap(), before);
+    }
+
+    fn count_events(vault: &UnlockedVault) -> Arc<AtomicUsize> {
+        let count = Arc::new(AtomicUsize::new(0));
+        let seen = count.clone();
+        vault.session.bus().subscribe(move |_| {
+            seen.fetch_add(1, Ordering::SeqCst);
+        });
+        count
+    }
+
+    fn event() -> DomainEvent {
+        crate::kernel::events::Committed { revision: 1 }.into()
+    }
+
+    #[test]
+    fn a_committed_transaction_delivers_its_events_after_commit() {
+        for now in [false, true] {
+            let (_dir, mut vault, _) = batched();
+            let count = count_events(&vault);
+            let during = count.clone();
+            let body = move |tx: &mut Tx<'_>| {
+                tx.touch();
+                tx.emit(event());
+                assert_eq!(during.load(Ordering::SeqCst), 0);
+                Ok(())
+            };
+            if now {
+                vault.transact_now(body).unwrap();
+            } else {
+                vault.transact(body).unwrap();
+            }
+            assert_eq!(count.load(Ordering::SeqCst), 1);
+        }
+    }
+
+    #[test]
+    fn an_untouched_or_failed_transaction_drops_its_events() {
+        let (_dir, mut vault, _) = batched();
+        let count = count_events(&vault);
+        vault
+            .transact(|tx| {
+                tx.emit(event());
+                Ok(())
+            })
+            .unwrap();
+        let failed: Result<()> = vault.transact(|tx| {
+            tx.touch();
+            tx.emit(event());
+            Err(Error::Secret)
+        });
+        assert!(failed.is_err());
+        let failed_now: Result<()> = vault.transact_now(|tx| {
+            tx.touch();
+            tx.emit(event());
+            Err(Error::Secret)
+        });
+        assert!(failed_now.is_err());
+        assert_eq!(count.load(Ordering::SeqCst), 0);
     }
 }
