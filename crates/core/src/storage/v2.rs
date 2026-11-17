@@ -11,14 +11,21 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
+use serde_json::{Map, Value, json};
 
 use crate::model::planning::{
     AmountMode, AutomationOutcome, AutomationPreset, AutomationSpec, RejectReason, Schedule,
-    TransactionDraft, WorkdayShift,
+    TransactionDraft, WorkdayShift, describe_reject,
 };
+use crate::model::transaction::AccountRef;
 use crate::model::vault::VaultDoc;
-use crate::workflow::exec::{StepStatus, TraceStep};
-use crate::workflow::model::{RunOutcome, Workflow, WorkflowRun, WorkflowState};
+use crate::model::workflow::{
+    MAX_WORKFLOW_RUNS, RunOutcome, StepStatus, TraceStep, Workflow, WorkflowRun, WorkflowState,
+};
+
+/// Node ids of the automation graph, as v2 files carry them.
+const TRIGGER: &str = "t";
+const ACTION: &str = "tx";
 
 /// An automation as v1 and v2 stored it.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -79,14 +86,14 @@ impl From<VaultDocV2> for VaultDoc {
                 workday_shift: WorkdayShift::None,
                 property_id: None,
             };
-            let graph = crate::workflow::automation::automation_graph(&spec);
+            let graph = frozen_graph(&spec);
             let mark = automation
                 .last_planned_at
                 .clone()
-                .unwrap_or_else(|| crate::workflow::automation::start_mark(&spec));
+                .unwrap_or_else(|| start_mark(&spec));
             doc.workflow_state.push(WorkflowState {
                 workflow_id: automation.id.clone(),
-                marks: BTreeMap::from([(crate::workflow::automation::schedule_key(), mark)]),
+                marks: BTreeMap::from([(format!("schedule:{TRIGGER}"), mark)]),
                 tx_cursor: doc.transactions.last().map(|tx| tx.meta().id.clone()),
                 tx_index: doc.transactions.len(),
             });
@@ -95,7 +102,7 @@ impl From<VaultDocV2> for VaultDoc {
                 name: automation.name,
                 description: String::new(),
                 active: automation.active,
-                graph: serde_json::to_string(&graph).unwrap_or_default(),
+                graph,
                 created_at: automation.created_at.clone(),
                 updated_at: automation.created_at,
                 react_to_workflows: false,
@@ -110,13 +117,155 @@ impl From<VaultDocV2> for VaultDoc {
         let mut runs: Vec<WorkflowRun> = old.automation_runs.into_iter().map(run_of).collect();
         runs.extend(std::mem::take(&mut doc.workflow_runs));
         runs.sort_by(|left, right| left.started_at.cmp(&right.started_at));
-        let overflow = runs
-            .len()
-            .saturating_sub(crate::workflow::model::MAX_WORKFLOW_RUNS);
+        let overflow = runs.len().saturating_sub(MAX_WORKFLOW_RUNS);
         runs.drain(..overflow);
         doc.workflow_runs = runs;
         doc
     }
+}
+
+/// The mark the schedule starts from: nothing planned before the start.
+fn start_mark(spec: &AutomationSpec) -> String {
+    crate::pricing::history::unix_secs(&spec.starts_at).map_or_else(
+        || spec.starts_at.clone(),
+        |secs| crate::calendar::iso(secs - 1),
+    )
+}
+
+/// The graph JSON the v2 → v3 step stores, as the builder made it at v3
+/// (graph version 3) for an automation of fixed amount, without a question
+/// or a month offset: "on schedule" → "Create transaction". A copy, so a later
+/// change of the live builder cannot change what a v2 file migrates to.
+fn frozen_graph(spec: &AutomationSpec) -> String {
+    let graph = json!({
+        "version": 3,
+        "nodes": [
+            frozen_node(TRIGGER, "trigger.schedule", frozen_schedule_params(spec), 0.0),
+            frozen_node(ACTION, "action.transaction", frozen_action_params(spec), 2.0),
+        ],
+        "edges": [
+            frozen_edge(TRIGGER, "at", ACTION, "date"),
+            frozen_edge(TRIGGER, "out", ACTION, "in"),
+        ],
+        "comments": [],
+    });
+    serde_json::to_string(&graph).unwrap_or_default()
+}
+
+fn frozen_node(id: &str, kind: &str, params: Map<String, Value>, column: f64) -> Value {
+    json!({
+        "id": id,
+        "kind": kind,
+        "params": params,
+        "position": { "x": column * 280.0, "y": 0.0 },
+        "disabled": false,
+        "label": "",
+    })
+}
+
+fn frozen_edge(from: &str, from_port: &str, to: &str, to_port: &str) -> Value {
+    json!({
+        "id": format!("{from}.{from_port}>{to}.{to_port}"),
+        "from": from,
+        "from_port": from_port,
+        "to": to,
+        "to_port": to_port,
+    })
+}
+
+/// "On schedule" parameters; the migrated spec has no time and no shift.
+fn frozen_schedule_params(spec: &AutomationSpec) -> Map<String, Value> {
+    let time = "09:00";
+    let mut params = match spec.schedule {
+        Schedule::Monthly { day } => json!({ "every": "month", "day": day, "time": time }),
+        Schedule::Weekly { weekday } => {
+            json!({ "every": "week", "weekday": weekday, "time": time })
+        }
+        Schedule::EveryNDays { days } => json!({
+            "every": "day",
+            "interval": days.max(1).to_string(),
+            "anchor": spec.starts_at.get(..10).unwrap_or(&spec.starts_at),
+            "time": time,
+        }),
+    }
+    .as_object()
+    .cloned()
+    .unwrap_or_default();
+    params.insert("workday".into(), json!("none"));
+    params
+}
+
+fn frozen_account(account: &AccountRef) -> Value {
+    serde_json::to_value(account).unwrap_or(Value::Null)
+}
+
+/// "Create transaction" parameters of a template, fixed amount.
+fn frozen_action_params(spec: &AutomationSpec) -> Map<String, Value> {
+    let template = &spec.template;
+    let (kind, from, to, asset, meta, amount) = match template {
+        TransactionDraft::Topup(inner) => (
+            "topup",
+            frozen_account(&AccountRef::Store(inner.store_id.clone())),
+            inner.from.as_ref().map_or(Value::Null, frozen_account),
+            &inner.asset,
+            &inner.meta,
+            inner.amount,
+        ),
+        TransactionDraft::Payment(inner) => (
+            "payment",
+            frozen_account(&AccountRef::Store(inner.store_id.clone())),
+            inner.to.as_ref().map_or(Value::Null, frozen_account),
+            &inner.asset,
+            &inner.meta,
+            inner.amount,
+        ),
+        TransactionDraft::Transfer(inner) => (
+            "transfer",
+            frozen_account(&inner.from),
+            frozen_account(&inner.to),
+            &inner.asset,
+            &inner.meta,
+            inner.amount,
+        ),
+        TransactionDraft::Convert(inner) => (
+            "convert",
+            frozen_account(&inner.from.account),
+            frozen_account(&inner.to.account),
+            &inner.from.asset,
+            &inner.meta,
+            inner.from.amount,
+        ),
+    };
+    let mut params = Map::new();
+    params.insert("tx_kind".into(), json!(kind));
+    params.insert("account".into(), from);
+    params.insert("to".into(), to);
+    params.insert(
+        "asset".into(),
+        serde_json::to_value(asset).unwrap_or(Value::Null),
+    );
+    params.insert("amount".into(), json!(amount.to_string()));
+    if let TransactionDraft::Convert(inner) = template {
+        params.insert(
+            "to_asset".into(),
+            serde_json::to_value(&inner.to.asset).unwrap_or(Value::Null),
+        );
+        params.insert("to_amount".into(), json!(inner.to.amount.to_string()));
+    }
+    params.insert(
+        "category".into(),
+        meta.categories
+            .first()
+            .map_or(Value::Null, |key| json!(key)),
+    );
+    params.insert("comment".into(), json!(meta.comment));
+    params.insert(
+        "template".into(),
+        json!(serde_json::to_string(template).unwrap_or_default()),
+    );
+    params.insert("estimated".into(), json!(false));
+    params.insert("on_shortfall".into(), json!("reject"));
+    params
 }
 
 fn run_of(run: AutomationRunV2) -> WorkflowRun {
@@ -125,7 +274,7 @@ fn run_of(run: AutomationRunV2) -> WorkflowRun {
         AutomationOutcome::Rejected { reason } => (
             RunOutcome::Rejected {
                 reason,
-                trigger_node: crate::workflow::automation::TRIGGER.into(),
+                trigger_node: TRIGGER.into(),
                 planned_at: Some(run.planned_at.clone()),
             },
             Vec::new(),
@@ -144,7 +293,7 @@ fn run_of(run: AutomationRunV2) -> WorkflowRun {
             reason: RejectReason::Invalid { message },
             ..
         } => message.clone(),
-        RunOutcome::Rejected { reason, .. } => crate::service::describe_reject(reason),
+        RunOutcome::Rejected { reason, .. } => describe_reject(reason),
         _ => String::new(),
     };
     WorkflowRun {
@@ -156,7 +305,7 @@ fn run_of(run: AutomationRunV2) -> WorkflowRun {
         created,
         queued: 0,
         trace: vec![TraceStep {
-            node_id: crate::workflow::automation::ACTION.into(),
+            node_id: ACTION.into(),
             kind: "action.transaction".into(),
             status,
             text_ru: text.clone(),
@@ -173,4 +322,59 @@ fn run_of(run: AutomationRunV2) -> WorkflowRun {
 impl super::chain::Legacy for VaultDocV2 {
     type Next = super::v3::VaultDocV3;
     const VERSION: u32 = 2;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Amount;
+    use crate::model::store::AssetRef;
+    use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, TxMeta};
+
+    fn spec_with(schedule: Schedule) -> AutomationSpec {
+        let bill = PaymentTx {
+            meta: TxMeta {
+                id: "bill".into(),
+                timestamp: "2026-01-01T00:00:00Z".into(),
+                comment: "rent".into(),
+                categories: vec!["rent_mortgage".into()],
+                ..TxMeta::default()
+            },
+            store_id: "store".into(),
+            asset: AssetRef::fiat("USD", "US Dollar"),
+            amount: Amount::parse("10").unwrap(),
+            fee: None,
+            to: None,
+            details: KindDetails::default(),
+            price: PriceStamp::default(),
+        };
+        AutomationSpec {
+            time: None,
+            asks: false,
+            for_month_offset: None,
+            preset: None,
+            schedule,
+            starts_at: "2026-01-01T00:00:00Z".into(),
+            template: TransactionDraft::Payment(bill),
+            amount_mode: AmountMode::Fixed,
+            workday_shift: WorkdayShift::None,
+            property_id: None,
+        }
+    }
+
+    #[test]
+    fn v2_automation_graph_matches_the_live_builder() {
+        for schedule in [
+            Schedule::Monthly { day: 5 },
+            Schedule::Weekly { weekday: 2 },
+        ] {
+            let spec = spec_with(schedule);
+            let live = crate::workflow::automation::automation_graph(&spec);
+            assert_eq!(frozen_graph(&spec), serde_json::to_string(&live).unwrap());
+            assert_eq!(
+                start_mark(&spec),
+                crate::workflow::automation::start_mark(&spec)
+            );
+        }
+    }
 }

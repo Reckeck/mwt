@@ -843,3 +843,24 @@ pub struct Envelope {
     pub goal_id: Option<String>,
     pub created_at: String,
 }
+
+/// Human text of a rejection, for errors and logs; the UI words its own.
+pub fn describe_reject(reason: &RejectReason) -> String {
+    match reason {
+        RejectReason::InsufficientFunds {
+            store_id,
+            asset,
+            required,
+            available,
+        } => format!(
+            "store {store_id}: {available} {sym} of {required} {sym}",
+            sym = asset.symbol
+        ),
+        RejectReason::CreditLimitExceeded {
+            store_id,
+            limit,
+            required,
+        } => format!("store {store_id}: credit limit {limit}, needed {required}"),
+        RejectReason::Invalid { message } => message.clone(),
+    }
+}
