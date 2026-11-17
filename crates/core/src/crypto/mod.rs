@@ -34,7 +34,9 @@
 use argon2::{Algorithm, Argon2, Block, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
+use hmac::{Hmac, Mac};
 use rand::RngCore;
+use sha2::Sha256;
 use zeroize::Zeroizing;
 
 use self::format::SnapshotFormat;
@@ -118,11 +120,28 @@ pub(crate) fn random_header(
     (header, salt, nonce)
 }
 
+/// HKDF-SHA256 (RFC 5869) for one 32-byte output block.
+pub(crate) fn hkdf_sha256(salt: &[u8], ikm: &[u8], info: &[u8]) -> Zeroizing<[u8; KEY_LEN]> {
+    type HmacSha = Hmac<Sha256>;
+    let mut extract = <HmacSha as KeyInit>::new_from_slice(salt)
+        .unwrap_or_else(|_| unreachable!("HMAC takes any key length"));
+    extract.update(ikm);
+    let mut prk = Zeroizing::new([0u8; KEY_LEN]);
+    prk.copy_from_slice(&extract.finalize().into_bytes());
+    let mut expand = <HmacSha as KeyInit>::new_from_slice(&prk[..])
+        .unwrap_or_else(|_| unreachable!("HMAC takes any key length"));
+    expand.update(info);
+    expand.update(&[1u8]);
+    let mut out = Zeroizing::new([0u8; KEY_LEN]);
+    out.copy_from_slice(&expand.finalize().into_bytes());
+    out
+}
+
 /// The key of an open vault and the salt it was derived with. Zeroed on drop;
 /// never written, logged or sent anywhere.
 pub struct SealKey {
-    pub(crate) salt: [u8; SALT_LEN],
-    pub(crate) key: Zeroizing<[u8; KEY_LEN]>,
+    salt: [u8; SALT_LEN],
+    key: Zeroizing<[u8; KEY_LEN]>,
     /// The cost the key was derived at: every save writes it into the header.
     kdf: KdfParams,
     /// A vault without a password: saves are written in the clear.
@@ -181,6 +200,12 @@ impl SealKey {
 
     pub fn salt(&self) -> &[u8; SALT_LEN] {
         &self.salt
+    }
+
+    /// A key for another file, derived from this one with HKDF-SHA256 and
+    /// `info`, so the vault key itself is never reused.
+    pub(crate) fn derive_subkey(&self, info: &[u8]) -> Zeroizing<[u8; KEY_LEN]> {
+        hkdf_sha256(&self.salt, &self.key[..], info)
     }
 }
 
