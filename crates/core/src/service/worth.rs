@@ -192,7 +192,7 @@ impl UnlockedVault {
             .iter()
             .filter(|holding| !holding.asset.is_derivative())
         {
-            let value = holding.quantity * self.price_usd_for(&holding.asset.key()) * fx;
+            let value = holding.quantity * self.price_base_for(&holding.asset.key(), fx);
             match kinds.get(holding.store_id.as_str()) {
                 Some(StoreKind::Property | StoreKind::Loyalty) => out.non_financial += value,
                 Some(StoreKind::Liability) => {
@@ -231,7 +231,7 @@ impl UnlockedVault {
             }
         }
         for balance in self.contact_balances() {
-            let price = self.price_usd_for(&balance.asset.key()) * fx;
+            let price = self.price_base_for(&balance.asset.key(), fx);
             out.receivables += balance.receivable.max(Amount::ZERO) * price;
             out.payables += balance.payable.max(Amount::ZERO) * price;
         }

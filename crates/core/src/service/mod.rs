@@ -1688,6 +1688,16 @@ impl UnlockedVault {
         self.price_quote_for(asset_key).usd
     }
 
+    /// Base-currency price of one unit. The base's own fiat asset is exactly 1
+    /// (the `RateBook` identity, `L13`), rate or no rate; the rest goes through
+    /// the USD price and the base rate `fx`.
+    fn price_base_for(&self, asset_key: &str, fx: Amount) -> Amount {
+        if rates::is_fiat_of(asset_key, &self.base_and_fx().0) {
+            return Amount::new(rust_decimal::Decimal::ONE);
+        }
+        self.price_usd_for(asset_key) * fx
+    }
+
     /// Every store id a scope covers. An empty id list means the whole vault.
     pub fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String> {
         if scope.store_ids.is_empty() {
@@ -1741,7 +1751,8 @@ impl UnlockedVault {
                 };
                 let price_usd = quote.usd;
                 let value_usd = holding.quantity * price_usd;
-                let price_base = price_usd * fx;
+                let price_base = self.price_base_for(&holding.asset.key(), fx);
+                let value_base = holding.quantity * price_base;
                 let unrealized_base =
                     cost_basis::unrealized(holding.quantity, holding.avg_cost, price_base);
                 StorePosition {
@@ -1749,9 +1760,9 @@ impl UnlockedVault {
                     quantity: holding.quantity,
                     avg_cost: holding.avg_cost,
                     price_usd,
-                    price_base: price_usd * fx,
+                    price_base,
                     value_usd,
-                    value_base: value_usd * fx,
+                    value_base,
                     unrealized_base,
                     change_24h_pct: quote.change_24h_pct,
                     price_info: quote.info,

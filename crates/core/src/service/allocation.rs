@@ -286,7 +286,7 @@ impl UnlockedVault {
         for holding in self.doc.holdings.iter().filter(|holding| {
             !holding.asset.is_derivative() && investable.contains(holding.store_id.as_str())
         }) {
-            let value = holding.quantity * self.price_usd_for(&holding.asset.key()) * fx;
+            let value = holding.quantity * self.price_base_for(&holding.asset.key(), fx);
             match slot_of(holding) {
                 Slot::Fund => emergency += value,
                 Slot::Class(Some(id)) => *by_class.entry(id).or_default() += value,

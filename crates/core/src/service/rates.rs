@@ -283,7 +283,7 @@ pub(crate) fn iso_of(secs: i64) -> String {
 }
 
 /// Whether `asset_key` is the fiat asset of currency `code` (any case, trimmed).
-fn is_fiat_of(asset_key: &str, code: &str) -> bool {
+pub(super) fn is_fiat_of(asset_key: &str, code: &str) -> bool {
     let code = code.trim();
     !code.is_empty()
         && asset_key
@@ -1010,5 +1010,23 @@ mod tests {
             .add_transaction(rub_income(&card, "10000", "2026-02-01T00:00:00Z"))
             .unwrap();
         assert_eq!(vault.net_worth().financial, amount("10000"));
+    }
+
+    /// The base figure is the quantity, but the USD side must not claim one
+    /// dollar per ruble when there is no rate to say otherwise.
+    #[test]
+    fn base_currency_cash_without_a_rate_is_not_one_usd_per_unit() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        vault.base_currency = "rub".into();
+        vault
+            .add_transaction(rub_income(&card, "10000", "2026-02-01T00:00:00Z"))
+            .unwrap();
+        let (_, fx) = vault.base_and_fx();
+        let positions = vault.store_positions(&card, fx);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].value_base, amount("10000"));
+        assert_eq!(positions[0].value_usd, Amount::ZERO);
+        assert_eq!(vault.price_usd_for("fiat:rub"), Amount::ZERO);
     }
 }
