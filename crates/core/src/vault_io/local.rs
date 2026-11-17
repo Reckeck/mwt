@@ -203,6 +203,19 @@ pub struct VaultLock {
 /// same file twice (two open file descriptions of one file exclude each other).
 static HELD: Mutex<BTreeMap<PathBuf, Weak<File>>> = Mutex::new(BTreeMap::new());
 
+/// The key of a lock file in [`HELD`]: its directory made canonical, so two
+/// spellings of one path share a lock. The raw path when that fails.
+fn held_key(lock_file: &Path) -> PathBuf {
+    let Some(name) = lock_file.file_name() else {
+        return lock_file.to_path_buf();
+    };
+    let parent = match lock_file.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir,
+        _ => Path::new("."),
+    };
+    std::fs::canonicalize(parent).map_or_else(|_| lock_file.to_path_buf(), |dir| dir.join(name))
+}
+
 impl VaultLock {
     /// A lock that holds nothing: for a sandbox copy of a vault that never
     /// touches the file.
@@ -214,8 +227,9 @@ impl VaultLock {
         let mut name = vault.file_name().unwrap_or_default().to_os_string();
         name.push(".lock");
         let path = vault.with_file_name(name);
+        let key = held_key(&path);
         let mut held = HELD.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(shared) = held.get(&path).and_then(Weak::upgrade) {
+        if let Some(shared) = held.get(&key).and_then(Weak::upgrade) {
             return Ok(Self {
                 _held: Some(shared),
             });
@@ -234,7 +248,8 @@ impl VaultLock {
             Err(TryLockError::Error(err)) => return Err(Error::Io(err.to_string())),
         }
         let file = Arc::new(file);
-        held.insert(path, Arc::downgrade(&file));
+        held.retain(|_, weak| weak.strong_count() > 0);
+        held.insert(key, Arc::downgrade(&file));
         Ok(Self { _held: Some(file) })
     }
 }
@@ -400,6 +415,17 @@ pub(crate) mod tests {
             "the second handle still holds the shared lock"
         );
         drop(second);
+    }
+
+    #[test]
+    fn another_spelling_of_the_path_reuses_the_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = dir.path().join("v.wallet");
+        let respelled = dir.path().join(".").join("v.wallet");
+        let first = VaultLock::acquire(&vault).unwrap();
+        let second = VaultLock::acquire(&respelled);
+        assert!(second.is_ok(), "one vault, one lock: {second:?}");
+        drop(first);
     }
 
     #[test]
