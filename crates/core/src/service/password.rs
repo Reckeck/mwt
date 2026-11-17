@@ -803,7 +803,7 @@ mod tests {
             drop(other_dir);
             bytes
         };
-        std::fs::write(dir.path().join("test.wallet.old.bak"), plain).unwrap();
+        std::fs::write(dir.path().join("test.wallet.v9.bak"), plain).unwrap();
         let report = vault
             .change_password_with(
                 "pw",
@@ -814,7 +814,7 @@ mod tests {
                 },
             )
             .unwrap();
-        assert_eq!(report.deleted, vec!["test.wallet.old.bak".to_string()]);
+        assert_eq!(report.deleted, vec!["test.wallet.v9.bak".to_string()]);
         assert!(
             copy_names(dir.path())
                 .iter()
@@ -839,7 +839,7 @@ mod tests {
             drop(other);
             bytes
         };
-        std::fs::write(dir.path().join("test.wallet.ancient.bak"), ancient).unwrap();
+        std::fs::write(dir.path().join("test.wallet.v8.bak"), ancient).unwrap();
         let seals: Vec<_> = vault
             .list_vault_copies()
             .unwrap()
@@ -866,12 +866,9 @@ mod tests {
             assert!(report.reencrypted.contains(name));
         }
         assert_eq!(report.left.len(), 1);
-        assert_eq!(report.left[0].file.name, "test.wallet.ancient.bak");
+        assert_eq!(report.left[0].file.name, "test.wallet.v8.bak");
         assert_eq!(report.left[0].seal, CopySeal::OtherKey);
-        assert!(opens(
-            &dir.path().join("test.wallet.ancient.bak"),
-            "ancient"
-        ));
+        assert!(opens(&dir.path().join("test.wallet.v8.bak"), "ancient"));
     }
 
     #[test]

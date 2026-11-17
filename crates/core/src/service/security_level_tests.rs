@@ -110,7 +110,7 @@ fn the_raise_reaches_level_three_and_leaves_no_cheaper_copy() {
     vault.sync_backup().unwrap();
     let stranger = tempfile::tempdir().unwrap();
     let other = UnlockedVault::create(stranger.path().join("o.wallet"), "9999").unwrap();
-    std::fs::copy(&other.path, dir.path().join("test.wallet.old.bak")).unwrap();
+    std::fs::copy(&other.path, dir.path().join("test.wallet.v9.bak")).unwrap();
 
     let mirror = Arc::new(RecordingMirror::default());
     vault.set_mirror(Some(mirror.clone()));
@@ -132,7 +132,7 @@ fn the_raise_reaches_level_three_and_leaves_no_cheaper_copy() {
     assert!(report.mirrored);
     let on_disk = std::fs::read(&vault.path).unwrap();
     assert_eq!(mirror.0.lock().unwrap().last(), Some(&on_disk));
-    assert_eq!(report.deleted, ["test.wallet.old.bak"]);
+    assert_eq!(report.deleted, ["test.wallet.v9.bak"]);
     // The wizard's backup was re-sealed: the old PIN opens nothing now.
     assert!(opens(&report.backup, STRONG));
     for copy in copies_of(dir.path()) {

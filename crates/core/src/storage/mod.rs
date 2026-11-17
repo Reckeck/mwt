@@ -361,13 +361,16 @@ impl VaultFile {
 
     /// Copy the file as it is before a migration rewrites it:
     /// `vault.wallet` → `vault.wallet.v1.bak`. An existing copy is kept, so
-    /// the first, untouched file survives repeated opens.
+    /// the first, untouched file survives repeated opens. The copy is written
+    /// atomically; a leftover that is not a whole vault file (a short copy an
+    /// older build left) is made again.
     pub fn backup_version(path: &Path, version: u32) -> Result<PathBuf> {
         let mut name = path.file_name().unwrap_or_default().to_os_string();
         name.push(format!(".v{version}.bak"));
         let target = path.with_file_name(name);
-        if !target.exists() {
-            std::fs::copy(path, &target).map_err(|err| Error::Io(err.to_string()))?;
+        let kept = std::fs::read(&target).is_ok_and(|bytes| crypto::parse_file(&bytes).is_ok());
+        if !kept {
+            copy_atomically(path, &target)?;
         }
         Ok(target)
     }
@@ -418,7 +421,7 @@ impl VaultFile {
             return Ok(backup_path(path));
         }
         let target = backup_path(path);
-        std::fs::copy(path, &target).map_err(|err| Error::Io(err.to_string()))?;
+        copy_atomically(path, &target)?;
         Ok(target)
     }
 
@@ -446,6 +449,13 @@ pub fn probe(path: &Path) -> Result<SnapshotFormat> {
     let bytes = crypto::read_all(path)?;
     let (header, _) = crypto::parse_file(&bytes)?;
     header.payload_format().ok_or(Error::Unsupported)
+}
+
+/// Copy `from` to `to` through the atomic write: `to` is either absent, the
+/// old file or the whole new one, never a short one.
+fn copy_atomically(from: &Path, to: &Path) -> Result<()> {
+    let bytes = std::fs::read(from).map_err(|err| Error::Io(err.to_string()))?;
+    crate::vault_io::local::atomic_write(to, &bytes)
 }
 
 #[cfg(test)]
@@ -553,6 +563,38 @@ mod tests {
         let (out, _) = VaultFile::open(&bak, "pw").unwrap();
         assert_eq!(out.transactions.len(), doc.transactions.len());
         assert_eq!(out.id, doc.id);
+    }
+
+    #[test]
+    fn a_whole_version_copy_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v.wallet");
+        VaultFile::create(&path, "pw").unwrap();
+        let first = VaultFile::backup_version(&path, 3).unwrap();
+        let kept = std::fs::read(&first).unwrap();
+        VaultFile::save(&path, "pw", &sample_doc(), SnapshotFormat::Json).unwrap();
+        VaultFile::backup_version(&path, 3).unwrap();
+        assert_eq!(std::fs::read(&first).unwrap(), kept);
+    }
+
+    #[test]
+    fn a_partial_pre_migration_copy_is_remade() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v.wallet");
+        VaultFile::create(&path, "pw").unwrap();
+        let target = dir.path().join("v.wallet.v3.bak");
+        std::fs::write(&target, b"short").unwrap();
+        VaultFile::backup_version(&path, 3).unwrap();
+        assert_eq!(
+            std::fs::read(&target).unwrap(),
+            std::fs::read(&path).unwrap()
+        );
+        let leftovers = std::fs::read_dir(dir.path())
+            .unwrap()
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".tmp."))
+            .count();
+        assert_eq!(leftovers, 0);
     }
 
     #[test]
