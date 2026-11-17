@@ -111,7 +111,7 @@ fn update<T>(app: &AppHandle, change: impl FnOnce(&mut Links) -> T) -> T {
     if links != before
         && let Ok(json) = serde_json::to_string_pretty(&links)
     {
-        let _ = trade_core::crypto::atomic_write(&file, json.as_bytes());
+        let _ = trade_core::vault_io::local::atomic_write(&file, json.as_bytes());
     }
     out
 }
@@ -382,7 +382,7 @@ fn replace_local(vault: &Path, remote: &[u8], key: Option<&SealKey>) -> Result<(
     }
     refuse_cheaper(&std::fs::read(vault)?, remote)?;
     VaultFile::backup(vault)?;
-    crypto::atomic_write(vault, remote)?;
+    trade_core::vault_io::local::atomic_write(vault, remote)?;
     Ok(())
 }
 

@@ -105,7 +105,7 @@ pub fn delete_in_app_folder(
         removed.push(name);
     }
     // The device secrets (exchange keys) belong to this vault only.
-    crate::crypto::device_secrets::remove(&real)?;
+    crate::vault_io::device_secrets::remove(&real)?;
     // A raise to the crypto level that crashed midway leaves a sealed copy.
     crate::vault_io::local::sweep_reencrypt_leftovers(&real);
     Ok(DeletedVault {

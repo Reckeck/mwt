@@ -43,13 +43,10 @@ use crate::crypto::header::VaultHeader;
 use crate::crypto::kdf_profile::KdfParams;
 use crate::error::{Error, Result};
 
-pub mod device_secrets;
 pub mod format;
 pub mod header;
 pub mod kdf_profile;
 pub mod level;
-
-pub use crate::vault_io::local::{atomic_write, read_all};
 
 pub const NONCE_LEN: usize = 24;
 pub const TAG_LEN: usize = 16;
@@ -124,8 +121,8 @@ pub(crate) fn random_header(
 /// The key of an open vault and the salt it was derived with. Zeroed on drop;
 /// never written, logged or sent anywhere.
 pub struct SealKey {
-    salt: [u8; SALT_LEN],
-    key: Zeroizing<[u8; KEY_LEN]>,
+    pub(crate) salt: [u8; SALT_LEN],
+    pub(crate) key: Zeroizing<[u8; KEY_LEN]>,
     /// The cost the key was derived at: every save writes it into the header.
     kdf: KdfParams,
     /// A vault without a password: saves are written in the clear.
@@ -380,7 +377,7 @@ pub fn random_blob_key() -> Zeroizing<[u8; KEY_LEN]> {
 
 /// Seal a blob: `nonce ‖ ciphertext`, bound to `aad` (the blob's id), so a
 /// file cannot be swapped for another one sealed with the same key.
-pub fn seal_blob(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn seal_blob(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
     let mut nonce = [0u8; NONCE_LEN];
     rand::thread_rng().fill_bytes(&mut nonce);
     let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
@@ -400,7 +397,7 @@ pub fn seal_blob(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Result<Ve
 }
 
 /// Open what [`seal_blob`] wrote; a changed byte or another id is an error.
-pub fn open_blob(key: &[u8; KEY_LEN], aad: &[u8], sealed: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn open_blob(key: &[u8; KEY_LEN], aad: &[u8], sealed: &[u8]) -> Result<Vec<u8>> {
     if sealed.len() < NONCE_LEN + TAG_LEN {
         return Err(Error::Crypto("sealed file is cut short".into()));
     }

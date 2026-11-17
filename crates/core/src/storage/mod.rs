@@ -180,7 +180,7 @@ impl VaultFile {
     /// [`Self::open_versioned`], also handing back the derived key: the
     /// session saves with it instead of running the KDF again.
     pub fn open_keyed(path: &Path, password: &str) -> Result<(Decoded, SnapshotFormat, SealKey)> {
-        let bytes = crypto::read_all(path)?;
+        let bytes = crate::vault_io::local::read_all(path)?;
         let (plaintext, fmt, key) = crypto::open_bytes_keyed(&bytes, password.as_bytes())?;
         let decoded = decode_versioned(&plaintext, fmt)?;
         Ok((decoded, fmt, key))
@@ -207,7 +207,7 @@ impl VaultFile {
         fmt: SnapshotFormat,
     ) -> Result<Vec<u8>> {
         let file = crypto::seal_with(key, fmt, plaintext)?;
-        crypto::atomic_write(path, &file)?;
+        crate::vault_io::local::atomic_write(path, &file)?;
         Ok(file)
     }
 
@@ -390,14 +390,14 @@ impl VaultFile {
         let plaintext = encode(doc, fmt)?;
         let (header, _, _) = crypto::random_header(fmt);
         let file = crypto::seal(&header, password.as_bytes(), &plaintext)?;
-        crypto::atomic_write(path, &file)?;
+        crate::vault_io::local::atomic_write(path, &file)?;
         Ok(file)
     }
 }
 
 /// Magic + version of the file for quick format probing (UI detection).
 pub fn probe(path: &Path) -> Result<SnapshotFormat> {
-    let bytes = crypto::read_all(path)?;
+    let bytes = crate::vault_io::local::read_all(path)?;
     let (header, _) = crypto::parse_file(&bytes)?;
     header.payload_format().ok_or(Error::Unsupported)
 }
@@ -753,7 +753,7 @@ mod tests {
         let path = dir.join(name);
         let (header, _, _) = crypto::random_header(fmt);
         let file = crypto::seal(&header, b"pw", &encode_as(payload, fmt)).expect("seal");
-        crypto::atomic_write(&path, &file).expect("write the vault");
+        crate::vault_io::local::atomic_write(&path, &file).expect("write the vault");
         (path, file)
     }
 

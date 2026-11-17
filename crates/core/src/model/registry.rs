@@ -199,7 +199,7 @@ const ID: &[&str] = &["id"];
 /// Fields of `VaultDoc` that never sync: identity and schema (checked
 /// instead), holdings (derived from transactions, re-derived after a merge)
 /// the sync bookkeeping itself, and exchange API keys: they live in the
-/// device secrets file (`crypto::device_secrets`) and never leave the device;
+/// device secrets file (`vault_io::device_secrets`) and never leave the device;
 /// the field is only an in-memory index of them, never written.
 pub const LOCAL: &[&str] = &[
     "version",

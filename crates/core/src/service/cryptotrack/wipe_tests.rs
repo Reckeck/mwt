@@ -213,7 +213,7 @@ fn a_vault_without_the_module_is_wiped_without_risking_anything() {
 #[test]
 fn the_device_secrets_file_goes_with_the_module() {
     let (_dir, mut vault, _wallet) = followed();
-    let secrets_file = crate::crypto::device_secrets::secrets_path(&vault.path);
+    let secrets_file = crate::vault_io::device_secrets::secrets_path(&vault.path);
     // The file itself is what the wipe removes; what is sealed inside it is
     // the key module's business and never this one's.
     std::fs::write(&secrets_file, b"sealed bytes").expect("the device keeps a file");

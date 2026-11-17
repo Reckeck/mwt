@@ -56,7 +56,6 @@
 //! for the word.
 
 use crate::Amount;
-use crate::crypto::device_secrets;
 use crate::error::{Error, Result};
 use crate::ipc_contract::cryptotrack::wipe::{
     CryptoWipeCounts, CryptoWipePreview, CryptoWipeReport, CryptoWipedWallet,
@@ -67,6 +66,7 @@ use crate::model::vault::now_iso;
 use crate::service::security_level::level_rank;
 use crate::storage::VaultFile;
 use crate::vault_io::backups;
+use crate::vault_io::device_secrets;
 
 use super::super::UnlockedVault;
 

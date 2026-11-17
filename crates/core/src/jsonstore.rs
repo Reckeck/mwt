@@ -13,7 +13,7 @@
 //! store that the next start reads as a first run.
 //!
 //! Nothing here is secret: a store that needs encryption belongs in the vault
-//! or in `crypto::device_secrets`, not in this module.
+//! or in `vault_io::device_secrets`, not in this module.
 
 use std::path::{Path, PathBuf};
 

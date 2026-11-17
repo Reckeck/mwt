@@ -30,12 +30,13 @@ use zeroize::Zeroizing;
 
 use super::UnlockedVault;
 use super::security_level;
-use crate::crypto::{self, SealKey, device_secrets};
+use crate::crypto::{self, SealKey};
 use crate::error::{Error, Result};
 use crate::ipc_contract::security::SecurityLevel;
 use crate::storage::{SnapshotFormat, VaultFile, decode_versioned};
 use crate::vault_io::backups;
 use crate::vault_io::copies::{self, CopyKind, CopySeal, VaultCopy};
+use crate::vault_io::device_secrets;
 
 /// What a new password does with the vault's copies that are not encrypted.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -314,7 +315,7 @@ impl UnlockedVault {
     /// vault: read back, no KDF (the key's salt and cost must be the
     /// header's, so the password that made the key opens it too).
     pub(super) fn verify_on_disk(&self, key: &SealKey) -> Result<()> {
-        let bytes = Zeroizing::new(crypto::read_all(&self.path)?);
+        let bytes = Zeroizing::new(crate::vault_io::local::read_all(&self.path)?);
         let (payload, fmt) = crypto::open_bytes_with(&bytes, key)?;
         let decoded = decode_versioned(&Zeroizing::new(payload), fmt)?;
         if decoded.doc.id != self.doc.id {

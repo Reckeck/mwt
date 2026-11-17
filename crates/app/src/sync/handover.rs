@@ -442,7 +442,7 @@ fn save(app: &AppHandle, received: super::transfer::Received) -> Result<PathBuf>
         path = first.with_file_name(format!("{stem} ({index}).wallet"));
         index += 1;
     }
-    trade_core::crypto::atomic_write(&path, &received.bytes)?;
+    trade_core::vault_io::local::atomic_write(&path, &received.bytes)?;
     crate::commands::vault_recents::add_recent(app, &path.to_string_lossy());
     // The new device syncs with the one it came from.
     let dir = crate::commands::app_settings::config_dir(app);

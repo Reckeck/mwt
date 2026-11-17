@@ -186,7 +186,7 @@ pub fn has_device_keys(app: &AppHandle) -> bool {
     let Ok(path) = state.vault_path.lock() else {
         return false;
     };
-    trade_core::crypto::device_secrets::secrets_path(&path).exists()
+    trade_core::vault_io::device_secrets::secrets_path(&path).exists()
 }
 
 /// Windows the app opened itself (the file picker, the biometric prompt) take

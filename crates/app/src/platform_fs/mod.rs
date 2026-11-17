@@ -169,7 +169,7 @@ pub fn read_location(app: &AppHandle, location: &VaultLocation) -> Result<Vec<u8
 /// a document is truncated and rewritten (the platform offers nothing else).
 pub fn write_location(app: &AppHandle, location: &VaultLocation, bytes: &[u8]) -> Result<()> {
     if let VaultLocation::Path(path) = location {
-        return trade_core::crypto::atomic_write(path, bytes);
+        return trade_core::vault_io::local::atomic_write(path, bytes);
     }
     let mut options = OpenOptions::new();
     options.read(false).write(true).truncate(true);
