@@ -23,14 +23,10 @@ use crate::error::{Error, Result};
 use crate::storage::{SnapshotFormat, VaultFile, encode};
 
 use crate::kernel::session::Commit;
+pub use crate::kernel::session::SaveHook;
 use crate::kernel::tx::Tx;
 
 use super::UnlockedVault;
-
-/// Told that the vault has unsaved changes (the app's writer thread).
-pub trait SaveHook: Send + Sync {
-    fn dirty(&self);
-}
 
 /// One snapshot of the document on its way to disk, sealed off the vault lock.
 pub struct FlushJob {
