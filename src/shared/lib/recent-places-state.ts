@@ -16,7 +16,7 @@ const places = ref<RecentPlace[]>([])
 export const recentPlaces: Readonly<Ref<readonly RecentPlace[]>> = readonly(places)
 
 export function setRecentPlaces(next: RecentPlace[]): void {
-  places.value = next
+  places.value = [...next]
 }
 
 export function clearRecentPlaces(): void {

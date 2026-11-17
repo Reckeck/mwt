@@ -10,6 +10,7 @@ import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
 import { formatDate } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 
@@ -32,6 +33,7 @@ const remainder = computed<GoalRemainder | null>(() => {
   if (!data || !(Number(data.left) > 0)) return null
   return { amount: data.left, currency: data.meta.currency, month: (props.filter.from ?? new Date().toISOString()).slice(0, 7) }
 })
+const loading = computed(() => progress.isPending.value)
 const empty = computed(() => progress.isSuccess.value && !rows.value.length)
 
 const open = ref(false)
@@ -63,6 +65,8 @@ const open = ref(false)
         </p>
       </li>
     </ul>
+    <!-- The rows' height is held while the query loads, so what is below does not jump when they come. -->
+    <Skeleton v-else-if="loading" class="h-12" />
     <div v-else-if="empty" class="grid justify-items-start gap-2 text-sm">
       <p>{{ t('money.plan.noGoals') }}</p>
       <p v-if="remainder" class="text-muted-foreground">

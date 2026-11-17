@@ -3,8 +3,8 @@ export interface WalletFigure {
   amount: string
   /** Lowercase code of `amount`. */
   currency: string
-  /** Set when the sum is in the wallet's own currency: the base sum and one base unit in it. */
-  base: { amount: string; rate: number } | null
+  /** Set when the sum is in the wallet's own currency: the base sum, its currency (not the settings', which load later and swap the mark) and one base unit in it. */
+  base: { amount: string; rate: number; currency: string } | null
   /** «BTC, USDT»: what a wallet of several currencies holds, biggest first. */
   assets: string[]
 }
@@ -25,7 +25,7 @@ export function walletFigure(positions: StorePosition[], total: string, base: st
     return {
       amount: only.quantity,
       currency: only.asset.symbol.toLowerCase(),
-      base: { amount: only.value_base, rate: price ? 1 / price : 0 },
+      base: { amount: only.value_base, rate: price ? 1 / price : 0, currency: base },
       assets,
     }
   }

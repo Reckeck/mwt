@@ -115,7 +115,7 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
           <Money glance :amount="props.figure.amount" :currency="props.figure.currency" :decimals="2" />
         </span>
         <span v-if="props.figure.base" class="text-caption text-muted-foreground">
-          ≈ <Money glance :amount="props.figure.base.amount" :decimals="2" />
+          ≈ <Money glance :amount="props.figure.base.amount" :currency="props.figure.base.currency" :decimals="2" />
         </span>
         <!-- Only from two real snapshots a month apart; with no such pair the line is not drawn at all. -->
         <span v-if="addressCard.month_change" class="text-caption text-muted-foreground" data-crypto-month-change>
@@ -131,7 +131,7 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
           <Money glance :amount="props.figure.amount" :currency="props.figure.currency" :decimals="2" />
         </span>
         <span class="truncate text-caption text-muted-foreground">
-          <template v-if="props.figure.base">≈ <Money glance :amount="props.figure.base.amount" :decimals="2" /> · </template>
+          <template v-if="props.figure.base">≈ <Money glance :amount="props.figure.base.amount" :currency="props.figure.base.currency" :decimals="2" /> · </template>
           {{ subtitle }}
           <template v-if="unvalued">
             · {{ t('wallet.valueUnset') }} ·
