@@ -14,6 +14,8 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 
+import { holdPlan } from '../../model/use-plan-ready'
+
 /**
  * The plan's goals (Money 2 · 9, 10): saved of the target and when it comes at
  * this pace. Without any, the month's remainder is offered as the first one.
@@ -35,6 +37,8 @@ const remainder = computed<GoalRemainder | null>(() => {
 })
 const loading = computed(() => progress.isPending.value)
 const empty = computed(() => progress.isSuccess.value && !rows.value.length)
+// The first goal's hint comes with the report.
+holdPlan(() => loading.value || where.isPending.value)
 
 const open = ref(false)
 </script>
