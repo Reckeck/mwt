@@ -86,8 +86,10 @@ mod tests {
     use crate::time::Clock;
 
     fn topup(store_id: &str) -> Transaction {
+        let mut meta = TxMeta::new("salary");
+        meta.categories = vec!["salary".into()];
         Transaction::Topup(TopupTx {
-            meta: TxMeta::new("salary"),
+            meta,
             store_id: store_id.into(),
             asset: AssetRef::fiat("USD", "US Dollar"),
             amount: Amount::parse("10").unwrap(),
@@ -109,7 +111,7 @@ mod tests {
         let mut vault = UnlockedVault::with_persistence(VaultDoc::default(), store.clone());
         assert_eq!(store.write_count(), 0, "building the vault writes nothing");
         let wallet = vault
-            .create_store("Bank", StoreKind::Cash, "#000", "", None)
+            .create_store("Bank", StoreKind::Bank, "#000", "", None)
             .unwrap();
         let writes = store.write_count();
         let added = vault.add_transaction(topup(&wallet.id)).unwrap();
