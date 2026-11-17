@@ -53,3 +53,32 @@ describe('useTxPricing: asset change', () => {
     expect([form.price, form.priceCurrency]).toEqual(['', ''])
   })
 })
+
+describe('useTxPricing: date change', () => {
+  it('clears the untouched price of an edited operation', async () => {
+    const form = setup(true)
+    form.timestamp = '2020-01-02T03:04'
+    await nextTick()
+    expect(form.price).toBe('')
+  })
+
+  it('keeps a price typed by hand', async () => {
+    const form = setup(true)
+    form.price = '90'
+    await nextTick()
+    form.timestamp = '2020-01-02T03:04'
+    await nextTick()
+    expect(form.price).toBe('90')
+  })
+
+  it('keeps a price typed after an asset change cleared the old one', async () => {
+    const form = setup(true)
+    form.asset = asset('USD')
+    await nextTick()
+    form.price = '90'
+    await nextTick()
+    form.timestamp = '2020-01-02T03:04'
+    await nextTick()
+    expect(form.price).toBe('90')
+  })
+})
