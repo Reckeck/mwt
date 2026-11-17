@@ -27,7 +27,7 @@ macro_rules! ipc_commands {
         [ $( $(#[$attr:meta])* $cmd:ident ),* $(,)? ]
     ) => {
         /// The command names of this context, for the registration test.
-        #[allow(dead_code, reason = "composed in lib.rs by T16, which removes this allow")]
+        #[cfg_attr(not(test), allow(dead_code, reason = "read by the registration guard test"))]
         pub const $names: &[&str] = &[
             $( $(#[$attr])* stringify!($cmd), )*
         ];
@@ -49,7 +49,6 @@ macro_rules! ipc_commands {
     };
     (@collect ($d:tt) $list:ident, ($($module:ident)::+), [$($done:tt)*], []) => {
         // `$d` is a literal `$`, so the generated macro can declare its own variables.
-        #[allow(unused_macros, reason = "composed in lib.rs by T16, which removes this allow")]
         macro_rules! $list {
             (
                 [ $d($d next:ident)::+ $d(, $d($d rest:tt)*)? ]
@@ -62,7 +61,6 @@ macro_rules! ipc_commands {
                 )
             };
         }
-        #[allow(unused_imports, reason = "composed in lib.rs by T16, which removes this allow")]
         pub(crate) use $list;
     };
 }
@@ -110,5 +108,156 @@ mod tests {
     fn names_follow_the_list_and_honour_cfg() {
         assert_eq!(first::FIRST_NAMES, ["alpha", "beta"]);
         assert_eq!(second::SECOND_NAMES, ["gamma"]);
+    }
+
+    /// Every context's name list: the one place the guard tests need to
+    /// know the contexts, next to the chain in `lib.rs`.
+    fn registered_names() -> Vec<&'static str> {
+        let contexts: &[&[&str]] = &[
+            crate::commands::analytics::ANALYTICS_NAMES,
+            crate::commands::app_settings::APP_SETTINGS_NAMES,
+            crate::commands::attachments::ATTACHMENTS_NAMES,
+            crate::commands::auth::AUTH_NAMES,
+            crate::commands::calc::CALC_NAMES,
+            crate::commands::categories::CATEGORIES_NAMES,
+            crate::commands::contacts::CONTACTS_NAMES,
+            crate::commands::cryptotrack::accounts::CRYPTOTRACK_ACCOUNTS_NAMES,
+            crate::commands::cryptotrack::links::CRYPTOTRACK_LINKS_NAMES,
+            crate::commands::cryptotrack::network::CRYPTOTRACK_NETWORK_NAMES,
+            crate::commands::cryptotrack::operations::CRYPTOTRACK_OPERATIONS_NAMES,
+            crate::commands::cryptotrack::positions::CRYPTOTRACK_POSITIONS_NAMES,
+            crate::commands::cryptotrack::relations::CRYPTOTRACK_RELATIONS_NAMES,
+            crate::commands::cryptotrack::sync::CRYPTOTRACK_SYNC_NAMES,
+            crate::commands::cryptotrack::tokens::CRYPTOTRACK_TOKENS_NAMES,
+            crate::commands::cryptotrack::transition::CRYPTOTRACK_TRANSITION_NAMES,
+            crate::commands::cryptotrack::wipe::CRYPTOTRACK_WIPE_NAMES,
+            crate::commands::enrichment::ENRICHMENT_NAMES,
+            crate::commands::exchange::EXCHANGE_NAMES,
+            crate::commands::losses::LOSSES_NAMES,
+            crate::commands::mobile::MOBILE_NAMES,
+            crate::commands::notifications::NOTIFICATIONS_NAMES,
+            crate::commands::planning::PLANNING_NAMES,
+            crate::commands::portfolio::PORTFOLIO_NAMES,
+            crate::commands::pricing::PRICING_NAMES,
+            crate::commands::rates::RATES_NAMES,
+            crate::commands::sandbox::SANDBOX_NAMES,
+            crate::commands::security::autolock::SECURITY_AUTOLOCK_NAMES,
+            crate::commands::security::biometric::SECURITY_BIOMETRIC_NAMES,
+            crate::commands::security::keys::SECURITY_KEYS_NAMES,
+            crate::commands::security::raise::SECURITY_RAISE_NAMES,
+            crate::commands::security::state::SECURITY_STATE_NAMES,
+            crate::commands::settings::SETTINGS_NAMES,
+            crate::commands::shared_events::SHARED_EVENTS_NAMES,
+            crate::commands::sources::SOURCES_NAMES,
+            crate::commands::stores::STORES_NAMES,
+            crate::commands::sync::SYNC_NAMES,
+            crate::commands::transactions_bulk::TRANSACTIONS_BULK_NAMES,
+            crate::commands::transactions::TRANSACTIONS_NAMES,
+            crate::commands::transfer::TRANSFER_NAMES,
+            crate::commands::updates::UPDATES_NAMES,
+            crate::commands::vault_backups::VAULT_BACKUPS_NAMES,
+            crate::commands::vault_link::VAULT_LINK_NAMES,
+            crate::commands::vault_recents::VAULT_RECENTS_NAMES,
+            crate::commands::workflows::WORKFLOWS_NAMES,
+        ];
+        contexts
+            .iter()
+            .flat_map(|names| names.iter().copied())
+            .collect()
+    }
+
+    fn source_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("read the commands directory") {
+            let path = entry.expect("read a directory entry").path();
+            if path.is_dir() {
+                source_files(&path, files);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                files.push(path);
+            }
+        }
+    }
+
+    fn command_sources() -> Vec<String> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/commands");
+        let mut files = Vec::new();
+        source_files(&root, &mut files);
+        files
+            .iter()
+            .map(|file| std::fs::read_to_string(file).expect("read a command file"))
+            .collect()
+    }
+
+    /// The names of the `#[tauri::command]` functions in one source text.
+    fn command_fns(source: &str) -> Vec<String> {
+        let lines: Vec<&str> = source.lines().collect();
+        let mut names = Vec::new();
+        for (index, line) in lines.iter().enumerate() {
+            if !line.trim_start().starts_with("#[tauri::command") {
+                continue;
+            }
+            let declaration = lines[index..]
+                .iter()
+                .find_map(|candidate| candidate.split_once("fn ").map(|(_, rest)| rest))
+                .expect("a command attribute is followed by a function");
+            let name: String = declaration
+                .chars()
+                .take_while(|character| character.is_alphanumeric() || *character == '_')
+                .collect();
+            names.push(name);
+        }
+        names
+    }
+
+    #[test]
+    fn every_tauri_command_is_registered() {
+        let registered: std::collections::BTreeSet<String> =
+            registered_names().into_iter().map(String::from).collect();
+        let defined: std::collections::BTreeSet<String> = command_sources()
+            .iter()
+            .flat_map(|source| command_fns(source))
+            .collect();
+        let missing: Vec<_> = defined.difference(&registered).collect();
+        let extra: Vec<_> = registered.difference(&defined).collect();
+        assert!(
+            missing.is_empty() && extra.is_empty(),
+            "commands without a list entry: {missing:?}; list entries without a command: {extra:?}"
+        );
+    }
+
+    #[test]
+    fn every_context_list_is_composed_in_lib() {
+        let lib = include_str!("../lib.rs");
+        for source in command_sources() {
+            for line in source
+                .lines()
+                .filter(|line| line.starts_with("ipc_commands!("))
+            {
+                let list = line
+                    .trim_start_matches("ipc_commands!(")
+                    .split(',')
+                    .next()
+                    .expect("a declaration names its list macro");
+                assert!(
+                    lib.contains(&format!("{list},")) || lib.contains(&format!("{list}!(")),
+                    "lib.rs does not compose `{list}`"
+                );
+            }
+        }
+    }
+
+    /// The commands the flat list held on the day of the switch (the spec's 402 counted
+    /// list lines; the list held 400 entries).
+    const COMMAND_COUNT: usize = 400;
+
+    #[test]
+    fn the_command_count_is_unchanged() {
+        let names = registered_names();
+        let unique: std::collections::BTreeSet<_> = names.iter().collect();
+        assert_eq!(
+            names.len(),
+            COMMAND_COUNT,
+            "the number of commands changed: whoever adds or removes one updates COMMAND_COUNT"
+        );
+        assert_eq!(unique.len(), names.len(), "a command is listed twice");
     }
 }

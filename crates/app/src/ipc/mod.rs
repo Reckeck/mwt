@@ -1,14 +1,6 @@
 //! The typed IPC layer: the error type commands return and, later, the
 //! run-time helpers around it.
 
-#[cfg_attr(
-    not(test),
-    expect(
-        unused_macros,
-        unused_imports,
-        reason = "first callers are the context declarations (T12-T15)"
-    )
-)]
 pub(crate) mod commands;
 mod error;
 #[cfg_attr(
