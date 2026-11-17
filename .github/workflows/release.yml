@@ -339,12 +339,12 @@ jobs:
           if-no-files-found: error
 
   # macOS: a universal .dmg and the .app tarball, signed ad hoc (Apple signing is not set up:
-  # add APPLE_* secrets and pass them to the build step, see build-macos.sh). Paused like clippy-macos in ci.yml; to switch it on remove `if: false` and add
+  # add APPLE_* secrets and pass them to the build step, see build-macos.sh). Paused like clippy-macos in ci.yml; to switch it on set the repo variable MACOS_ENABLED=true and add
   # `build-macos` to the `needs` and to the `if` of `publish` (it accepts `skipped` today), and pass
   # `macos` as `--macos` of `xtask check-release-files`.
   build-macos:
     needs: [version, frontend]
-    if: false
+    if: vars.MACOS_ENABLED == 'true'
     runs-on: macos-latest
     timeout-minutes: 120
     permissions:

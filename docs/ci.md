@@ -23,6 +23,8 @@ only a mirror without CI.
 | `dependabot-merge.yml` | Sunday, manually | merges green Dependabot updates |
 | `cache-cleanup.yml` | PR closed, branch deleted | deletes the branch's caches |
 
+The macOS jobs (`clippy-macos` in `ci.yml`, `build-macos` in `release.yml`) are paused: set the repo variable `MACOS_ENABLED=true` to turn them back on.
+
 Feature branches and hotfixes get only checks (through a PR); builds and
 releases belong only to `development` and `main`, and only after the checks are
 green. The `vX.Y.Z` tags are created by the `publish` job together with the
@@ -320,8 +322,8 @@ version, images ──► frontend ──► build (linux | android | windows) �
   with the reason in the Job Summary and the plain PR `main` → `development` left open.
 - `version` is skipped on a push that creates a branch (`github.event.created`): the first
   `release-start` creates `main` from `development`, and that push must not release anything.
-- `build-macos` is written but turned off (`if: false`, like `clippy-macos`): to
-  turn it on, remove `if: false`, add it to `needs` and to the `publish`
+- `build-macos` is written but paused by `if: vars.MACOS_ENABLED == 'true'` (like `clippy-macos`): to
+  turn it on, set the repo variable `MACOS_ENABLED=true`, add it to `needs` and to the `publish`
   condition, and pass `--macos` to `xtask check-release-files`.
 
 The release files (`<v>` is the version, decision 12 of the plan):
