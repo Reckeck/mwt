@@ -144,6 +144,7 @@ pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpt
         // onboarding, routes, forms, ui, fsd (tests/checks)
         vitest("checks", Class::Light, "checks"),
         ci_scripts(),
+        arch(),
         Task::cmd(
             "fmt",
             Class::Light,
@@ -168,6 +169,25 @@ fn ci_scripts() -> Task {
                 "{} problem(s) in the CI scripts, see the log",
                 problems.len()
             ))
+        }
+    })
+}
+
+/// The module graph of `crates/core/src` against the layer table (`crate::arch`).
+fn arch() -> Task {
+    Task::func("arch", Class::Light, &[], |ctx: Ctx| async move {
+        let report = match crate::arch::check(&ctx.root) {
+            Ok(report) => report,
+            Err(error) => return Outcome::Fail(format!("{error:#}")),
+        };
+        for line in report.lines() {
+            ctx.note(&line);
+        }
+        match report.failures() {
+            0 => Outcome::Ok,
+            count => Outcome::Fail(format!(
+                "{count} back edge(s) or stale allowlist entries, see the log"
+            )),
         }
     })
 }
