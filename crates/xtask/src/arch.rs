@@ -21,8 +21,6 @@ pub struct Edge {
 
 const CORE_SRC: &str = "crates/core/src";
 const ALLOW_FILE: &str = "crates/xtask/arch-allow.toml";
-/// Flipped by core-edges T15: until then a stale allowlist entry only warns.
-const STALE_IS_ERROR: bool = false;
 /// Layer of the modules gated by the `testkit` feature (see `layers::GROUPS`).
 const TESTKIT: &str = "testkit";
 
@@ -36,6 +34,8 @@ pub struct AllowEntry {
     pub to: String,
     /// The task or phase that removes the edge.
     pub until: String,
+    /// Why the edge stays until then.
+    pub reason: String,
 }
 
 #[derive(Deserialize)]
@@ -59,21 +59,15 @@ impl AllowEntry {
 pub struct Report {
     pub violations: Vec<Violation>,
     pub stale: Vec<AllowEntry>,
-    stale_is_error: bool,
 }
 
 impl Report {
     /// How many findings fail the check.
     pub fn failures(&self) -> usize {
-        self.violations.len()
-            + if self.stale_is_error {
-                self.stale.len()
-            } else {
-                0
-            }
+        self.violations.len() + self.stale.len()
     }
 
-    /// The log lines: every violation as `file:line`, every stale entry as a warning or an error.
+    /// The log lines: every violation as `file:line`, every stale entry as an error.
     pub fn lines(&self) -> Vec<String> {
         let mut lines: Vec<String> = self
             .violations
@@ -85,14 +79,9 @@ impl Report {
                 )
             })
             .collect();
-        let label = if self.stale_is_error {
-            "error"
-        } else {
-            "warning"
-        };
         lines.extend(self.stale.iter().map(|entry| {
             format!(
-                "{label}: {ALLOW_FILE}: stale entry {} -> {} (until {}): no such edge any more, delete it",
+                "error: {ALLOW_FILE}: stale entry {} -> {} (until {}): no such edge any more, delete it",
                 entry.from, entry.to, entry.until
             )
         }));
@@ -101,7 +90,7 @@ impl Report {
 }
 
 /// Sorts the edges into back edges and allowed ones; entries that matched no back edge are stale.
-fn evaluate(edges: &[Edge], allow: &[AllowEntry], stale_is_error: bool) -> Report {
+fn evaluate(edges: &[Edge], allow: &[AllowEntry]) -> Report {
     let back_edges: Vec<&Edge> = edges
         .iter()
         .filter(|edge| !layers::is_legal(&edge.from_module, &edge.to_module))
@@ -116,11 +105,7 @@ fn evaluate(edges: &[Edge], allow: &[AllowEntry], stale_is_error: bool) -> Repor
         .filter(|entry| !back_edges.iter().any(|edge| entry.covers(edge)))
         .cloned()
         .collect();
-    Report {
-        violations,
-        stale,
-        stale_is_error,
-    }
+    Report { violations, stale }
 }
 
 /// Scans the core crate under the repository `root` and holds it against the layer table and the allowlist.
@@ -128,7 +113,7 @@ pub fn check(root: &Path) -> Result<Report> {
     let edges = scan(&root.join(CORE_SRC))?;
     let path = root.join(ALLOW_FILE);
     let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    Ok(evaluate(&edges, &parse_allowlist(&text)?, STALE_IS_ERROR))
+    Ok(evaluate(&edges, &parse_allowlist(&text)?))
 }
 
 /// Directories outside the layer table: binaries are adapters, `tests` is test code.
@@ -136,8 +121,11 @@ fn is_skipped_dir(name: &str) -> bool {
     matches!(name, "bin" | "tests")
 }
 
+/// Test files by name: `tests.rs`, `*_tests.rs`, `test_*.rs`.
 fn is_test_file(name: &str) -> bool {
-    name.contains("test")
+    name == "tests.rs"
+        || name.ends_with("_tests.rs")
+        || (name.starts_with("test_") && name.ends_with(".rs"))
 }
 
 /// The top-level module a file belongs to: `model/vault.rs` and `model.rs` are `model`.
@@ -196,6 +184,9 @@ fn collect_files(dir: &Path, skipped: &mut Files, files: &mut Vec<PathBuf>) -> R
         }
     }
     for subdir in subdirs {
+        if skipped.test_dirs.contains(&subdir) {
+            continue;
+        }
         collect_files(&subdir, skipped, files)?;
     }
     Ok(())
@@ -206,6 +197,7 @@ fn collect_files(dir: &Path, skipped: &mut Files, files: &mut Vec<PathBuf>) -> R
 #[derive(Default)]
 struct Files {
     test: BTreeSet<PathBuf>,
+    test_dirs: BTreeSet<PathBuf>,
     testkit: BTreeSet<PathBuf>,
 }
 
@@ -222,6 +214,7 @@ fn declare_gated_modules(file: &Path, gated: &mut Files) -> Result<()> {
     let dir = child_dir(file);
     for name in scan::test_modules(&text) {
         gated.test.extend(module_files(&dir, &name));
+        gated.test_dirs.insert(dir.join(&name));
     }
     for name in scan::testkit_modules(&text) {
         gated.testkit.extend(module_files(&dir, &name));
@@ -272,6 +265,7 @@ mod tests {
             from: from.to_string(),
             to: to.to_string(),
             until: "T9".to_string(),
+            reason: "test".to_string(),
         }
     }
 
@@ -316,6 +310,46 @@ mod tests {
     }
 
     #[test]
+    fn a_downward_import_is_not_reported() {
+        let edges = [edge("service/x.rs", 1, "service", "model")];
+        let report = evaluate(&edges, &[]);
+        assert!(report.violations.is_empty());
+        assert_eq!(report.failures(), 0);
+    }
+
+    #[test]
+    fn is_test_file_matches_only_test_names() {
+        for name in ["tests.rs", "vault_tests.rs", "test_vault.rs"] {
+            assert!(is_test_file(name), "{name}");
+        }
+        for name in ["latest.rs", "attestation.rs", "contest.rs", "testkit.rs"] {
+            assert!(!is_test_file(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_cfg_test_module_declaration_skips_its_subdirectory() {
+        let root = std::env::temp_dir().join(format!("xtask-arch-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("model/fixtures")).unwrap();
+        fs::write(root.join("lib.rs"), "").unwrap();
+        fs::write(
+            root.join("model/mod.rs"),
+            "#[cfg(test)]\nmod fixtures;\nuse crate::service::A;\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("model/fixtures/helper.rs"),
+            "use crate::service::B;\n",
+        )
+        .unwrap();
+        let edges = scan(&root).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        let files: Vec<&str> = edges.iter().map(|edge| edge.from_file.as_str()).collect();
+        assert_eq!(files, vec!["model/mod.rs"]);
+    }
+
+    #[test]
     fn testkit_sits_on_top_and_nothing_below_may_use_it() {
         assert!(layers::is_legal("testkit", "service"));
         assert!(!layers::is_legal("service", "testkit"));
@@ -327,7 +361,7 @@ mod tests {
             edge("model/vault.rs", 405, "model", "exchange"),
             edge("model/vault.rs", 456, "model", "exchange"),
         ];
-        let report = evaluate(&edges, &[entry("model/vault.rs", "exchange")], false);
+        let report = evaluate(&edges, &[entry("model/vault.rs", "exchange")]);
         assert!(report.violations.is_empty() && report.stale.is_empty());
         assert_eq!(report.failures(), 0);
     }
@@ -335,28 +369,29 @@ mod tests {
     #[test]
     fn a_violation_outside_the_list_fails_with_file_and_line() {
         let edges = [edge("error.rs", 131, "error", "service")];
-        let report = evaluate(&edges, &[entry("model/vault.rs", "exchange")], false);
+        let report = evaluate(&edges, &[]);
         assert_eq!(report.violations, edges);
         assert!(report.lines()[0].contains("crates/core/src/error.rs:131"));
         assert_eq!(report.failures(), 1);
     }
 
     #[test]
-    fn a_stale_entry_warns_and_later_fails() {
+    fn a_stale_entry_fails() {
         let allow = [entry("model/vault.rs", "exchange")];
-        let warns = evaluate(&[], &allow, false);
-        assert_eq!(warns.stale, allow);
-        assert_eq!(warns.failures(), 0);
-        assert!(warns.lines()[0].starts_with("warning:"));
-        let fails = evaluate(&[], &allow, true);
-        assert_eq!(fails.failures(), 1);
-        assert!(fails.lines()[0].starts_with("error:"));
+        let report = evaluate(&[], &allow);
+        assert_eq!(report.stale, allow);
+        assert_eq!(report.failures(), 1);
+        assert!(report.lines()[0].starts_with("error:"));
     }
 
     #[test]
     fn the_allowlist_file_parses() {
         let text = fs::read_to_string(repo_root().join(ALLOW_FILE)).unwrap();
         let entries = parse_allowlist(&text).unwrap();
-        assert!(entries.iter().all(|item| !item.until.is_empty()));
+        assert!(
+            entries
+                .iter()
+                .all(|item| !item.until.is_empty() && !item.reason.is_empty())
+        );
     }
 }

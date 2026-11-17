@@ -565,6 +565,15 @@ mod tests {
         }
     }
 
+    /// The value at a dotted path (`a.b`) of the serialized `Settings`, if any.
+    fn setting_at<'a>(
+        settings: &'a serde_json::Value,
+        name: &str,
+    ) -> Option<&'a serde_json::Value> {
+        name.split('.')
+            .try_fold(settings, |node, step| node.get(step))
+    }
+
     fn settings_keys() -> Vec<String> {
         let settings =
             serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
@@ -589,9 +598,7 @@ mod tests {
             serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
         for (name, _) in SETTINGS_SCOPE {
             assert!(
-                name.split('.')
-                    .try_fold(&settings, |node, step| node.get(step))
-                    .is_some(),
+                setting_at(&settings, name).is_some(),
                 "SETTINGS_SCOPE names {name}, which is not a field of Settings"
             );
         }
@@ -814,9 +821,7 @@ mod tests {
             serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
         for name in DEVICE_SETTINGS {
             assert!(
-                name.split('.')
-                    .try_fold(&settings, |node, step| node.get(step))
-                    .is_some(),
+                setting_at(&settings, name).is_some(),
                 "Settings.{name} is gone"
             );
         }
