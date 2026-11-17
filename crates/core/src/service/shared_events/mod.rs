@@ -20,6 +20,7 @@ use crate::model::vault::now_iso;
 use super::UnlockedVault;
 
 mod analytics;
+pub(crate) use analytics::SharedExtra;
 mod ledger;
 mod purchases;
 mod settle;

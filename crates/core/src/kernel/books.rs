@@ -4,6 +4,10 @@
 //! it on, instead of building the book again for every step.
 
 use std::cell::OnceCell;
+use std::collections::HashMap;
+
+use crate::Amount;
+use crate::service::SharedExtra;
 
 use crate::service::RateBook;
 use crate::service::UnlockedVault;
@@ -18,6 +22,8 @@ thread_local! {
 pub struct Books<'vault> {
     vault: &'vault UnlockedVault,
     rate_book: OnceCell<RateBook>,
+    shared_ratios: OnceCell<HashMap<String, Amount>>,
+    shared_extras: OnceCell<Vec<SharedExtra>>,
 }
 
 impl<'vault> Books<'vault> {
@@ -25,12 +31,29 @@ impl<'vault> Books<'vault> {
         Self {
             vault,
             rate_book: OnceCell::new(),
+            shared_ratios: OnceCell::new(),
+            shared_extras: OnceCell::new(),
         }
     }
 
     /// The rates at a moment, built on first use.
     pub fn rate_book(&self) -> &RateBook {
         self.rate_book.get_or_init(|| self.vault.build_rate_book())
+    }
+
+    /// For each payment of mine linked to a shared event: the share of it
+    /// that is my own expense, computed on first use.
+    pub fn shared_ratios(&self) -> &HashMap<String, Amount> {
+        self.shared_ratios
+            .get_or_init(|| self.vault.shared_payment_ratios())
+    }
+
+    /// The spending entries without a payment of mine behind them (my part of
+    /// other people's purchases, write-offs), collected on first use. They are
+    /// not valued yet: the currency and period are asked per use.
+    pub(crate) fn shared_extras(&self) -> &[SharedExtra] {
+        self.shared_extras
+            .get_or_init(|| self.vault.shared_extras())
     }
 
     /// The base currency code, lower case.
