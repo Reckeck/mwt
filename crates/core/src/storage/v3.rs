@@ -36,14 +36,15 @@ use crate::model::planning::{
 };
 use crate::model::shared_event::SharedEvent;
 use crate::model::store::{Holding, Store};
+use crate::model::sync_state::SyncState;
 use crate::model::transaction::Transaction;
 use crate::model::vault::{
     Exchanges, FxPoint, ImportRun, ManualPrice, PendingImport, PricePoint, Settings, TxProperty,
     Valuation, VaultDoc,
 };
-use crate::sync::SyncState;
-use crate::workflow::model::WorkflowWait;
-use crate::workflow::{QueuedActions, Workflow, WorkflowRun, WorkflowState, WorkflowVar};
+use crate::model::workflow::{
+    QueuedActions, Workflow, WorkflowRun, WorkflowState, WorkflowVar, WorkflowWait,
+};
 
 /// The v3 document: the top-level fields of a v3 file, without the crypto
 /// module's collections.
