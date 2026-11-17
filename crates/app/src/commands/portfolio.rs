@@ -13,11 +13,12 @@ use trade_core::service::{
 };
 
 use crate::commands::app_settings::current_zone;
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
 
 #[tauri::command]
-pub async fn get_summary(state: State<'_, AppState>) -> Result<PortfolioSummary, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn get_summary(state: State<'_, AppState>) -> Result<PortfolioSummary, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().portfolio_summary())
 }
 
@@ -25,8 +26,8 @@ pub async fn get_summary(state: State<'_, AppState>) -> Result<PortfolioSummary,
 pub async fn get_history(
     base_currency: Option<String>,
     state: State<'_, AppState>,
-) -> Result<Vec<HistoryPoint>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Vec<HistoryPoint>, IpcError> {
+    let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     let base = base_currency.unwrap_or_else(|| vault.base_currency().to_string());
     Ok(vault.history_series(&base))
@@ -37,8 +38,8 @@ pub async fn get_history(
 pub async fn get_asset_holdings(
     asset: AssetRef,
     state: State<'_, AppState>,
-) -> Result<AssetHoldings, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<AssetHoldings, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().asset_holdings(&asset))
 }
 
@@ -47,8 +48,8 @@ pub async fn get_asset_holdings(
 pub async fn get_investments(
     store_ids: Option<Vec<String>>,
     state: State<'_, AppState>,
-) -> Result<Investments, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Investments, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard
         .as_ref()
         .unwrap()
@@ -63,9 +64,9 @@ pub async fn get_store_months(
     include_children: Option<bool>,
     months: Option<u32>,
     state: State<'_, AppState>,
-) -> Result<Vec<StoreMonthRow>, String> {
+) -> Result<Vec<StoreMonthRow>, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().store_months(
         &store_id,
         include_children.unwrap_or(true),
@@ -76,8 +77,8 @@ pub async fn get_store_months(
 }
 
 #[tauri::command]
-pub async fn get_realized_pnl(state: State<'_, AppState>) -> Result<RealizedPnl, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn get_realized_pnl(state: State<'_, AppState>) -> Result<RealizedPnl, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().realized_pnl())
 }
 
@@ -89,8 +90,8 @@ pub async fn get_store_history(
     include_children: Option<bool>,
     base_currency: Option<String>,
     state: State<'_, AppState>,
-) -> Result<Vec<HistoryPoint>, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Vec<HistoryPoint>, IpcError> {
+    let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     let base = base_currency.unwrap_or_else(|| vault.base_currency().to_string());
     Ok(vault.store_history(&store_id, include_children.unwrap_or(true), &base))
@@ -102,8 +103,8 @@ pub async fn get_store_pnl(
     store_id: String,
     include_children: Option<bool>,
     state: State<'_, AppState>,
-) -> Result<RealizedPnl, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<RealizedPnl, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard
         .as_ref()
         .unwrap()
@@ -112,8 +113,8 @@ pub async fn get_store_pnl(
 
 /// Assets, debts and what people owe, in the base currency.
 #[tauri::command]
-pub async fn get_net_worth(state: State<'_, AppState>) -> Result<NetWorth, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn get_net_worth(state: State<'_, AppState>) -> Result<NetWorth, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().net_worth())
 }
 
@@ -122,32 +123,32 @@ pub async fn get_net_worth(state: State<'_, AppState>) -> Result<NetWorth, Strin
 pub async fn set_manual_price(
     input: SetManualPriceInput,
     state: State<'_, AppState>,
-) -> Result<ManualPrice, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<ManualPrice, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .set_manual_price(&input.asset_key, input.unit_price, &input.currency)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 #[tauri::command]
 pub async fn clear_manual_price(
     asset_key: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<(), IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .clear_manual_price(&asset_key)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Portfolio baskets with target shares; the preset until saved (plan F).
 #[tauri::command]
-pub async fn asset_classes_get(state: State<'_, AppState>) -> Result<AssetClassesView, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+pub async fn asset_classes_get(state: State<'_, AppState>) -> Result<AssetClassesView, IpcError> {
+    let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().asset_classes())
 }
 
@@ -156,13 +157,13 @@ pub async fn asset_classes_get(state: State<'_, AppState>) -> Result<AssetClasse
 pub async fn asset_classes_set(
     classes: Vec<AssetClass>,
     state: State<'_, AppState>,
-) -> Result<AssetClassesView, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<AssetClassesView, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .set_asset_classes(classes)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Put an asset or a store in a basket, or take it out with `None`.
@@ -171,13 +172,13 @@ pub async fn asset_class_assign(
     target: AssetClassTarget,
     class_id: Option<String>,
     state: State<'_, AppState>,
-) -> Result<AssetClassesView, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<AssetClassesView, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .assign_asset_class(target, class_id)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Where the free money should go to bring the shares back to target.
@@ -186,9 +187,9 @@ pub async fn topup_advice(
     app: AppHandle,
     amount: Option<Amount>,
     state: State<'_, AppState>,
-) -> Result<TopupAdvice, String> {
+) -> Result<TopupAdvice, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     Ok(guard
         .as_ref()
         .unwrap()
@@ -202,14 +203,14 @@ pub async fn property_valuations(
     store_id: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<PropertyValue>, String> {
+) -> Result<Vec<PropertyValue>, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state).map_err(err_to_string)?;
+    let guard = require_vault(&state)?;
     guard
         .as_ref()
         .unwrap()
         .property_values(&store_id, &zone)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// A dated valuation of a property asset; one on the same day replaces it.
@@ -217,13 +218,13 @@ pub async fn property_valuations(
 pub async fn property_valuation_add(
     input: ValuationInput,
     state: State<'_, AppState>,
-) -> Result<Valuation, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Valuation, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .add_valuation(input)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
 
 /// Remove a valuation; the removed one comes back for "Undo".
@@ -231,11 +232,11 @@ pub async fn property_valuation_add(
 pub async fn property_valuation_delete(
     id: String,
     state: State<'_, AppState>,
-) -> Result<Valuation, String> {
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<Valuation, IpcError> {
+    let mut guard = require_vault(&state)?;
     guard
         .as_mut()
         .unwrap()
         .delete_valuation(&id)
-        .map_err(err_to_string)
+        .map_err(IpcError::from)
 }
