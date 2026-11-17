@@ -20,6 +20,7 @@ pub mod shared_event;
 pub mod store;
 pub mod transaction;
 pub mod vault;
+pub mod workflow;
 
 pub use chain::{Chain, ChainInfo};
 pub use store::StoreKind;

@@ -666,18 +666,18 @@ pub struct VaultDoc {
     /// Node workflows: their graphs, runs, variables, the operations waiting
     /// for confirmation and what their triggers last saw.
     #[serde(default)]
-    pub workflows: Vec<crate::workflow::Workflow>,
+    pub workflows: Vec<crate::model::workflow::Workflow>,
     #[serde(default)]
-    pub workflow_runs: Vec<crate::workflow::WorkflowRun>,
+    pub workflow_runs: Vec<crate::model::workflow::WorkflowRun>,
     #[serde(default)]
-    pub workflow_vars: Vec<crate::workflow::WorkflowVar>,
+    pub workflow_vars: Vec<crate::model::workflow::WorkflowVar>,
     #[serde(default)]
-    pub workflow_queue: Vec<crate::workflow::QueuedActions>,
+    pub workflow_queue: Vec<crate::model::workflow::QueuedActions>,
     #[serde(default)]
-    pub workflow_state: Vec<crate::workflow::WorkflowState>,
+    pub workflow_state: Vec<crate::model::workflow::WorkflowState>,
     /// Runs asleep at a "Wait" node.
     #[serde(default)]
-    pub workflow_waits: Vec<crate::workflow::model::WorkflowWait>,
+    pub workflow_waits: Vec<crate::model::workflow::WorkflowWait>,
     /// Syncs with exchanges, newest last.
     #[serde(default)]
     pub import_runs: Vec<ImportRun>,
