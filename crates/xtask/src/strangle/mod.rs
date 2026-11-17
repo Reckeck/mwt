@@ -3,6 +3,7 @@
 //! (`scan`), one area map (`map`, `strangle.toml`), one set of numbers per subcommand.
 
 mod baseline;
+mod callers;
 mod carve;
 mod check;
 mod fileset;
@@ -10,6 +11,7 @@ mod forward;
 mod home;
 mod map;
 mod relocate;
+mod rewire;
 mod scaffold;
 mod scan;
 mod signature;
@@ -47,6 +49,10 @@ pub enum StrangleCommand {
     Forward(forward::ForwardArgs),
     /// Holds an area against `baseline.json`: parity, logic, `persist()`, tests, allowed files.
     Check(check::CheckArgs),
+    /// Lists every remaining call of an area's delegates and of `Books::vault()`.
+    Callers(callers::CallersArgs),
+    /// Best effort: replaces delegate calls on a proven `UnlockedVault` receiver by the new function.
+    Rewire(rewire::RewireArgs),
 }
 
 pub fn run(root: &Path, args: &StrangleArgs) -> Result<()> {
@@ -58,6 +64,8 @@ pub fn run(root: &Path, args: &StrangleArgs) -> Result<()> {
         StrangleCommand::Relocate(relocate_args) => relocate::run(root, relocate_args),
         StrangleCommand::Forward(forward_args) => forward::run(root, forward_args),
         StrangleCommand::Check(check_args) => check::run(root, check_args),
+        StrangleCommand::Callers(callers_args) => callers::run(root, callers_args),
+        StrangleCommand::Rewire(rewire_args) => rewire::run(root, rewire_args),
     }
 }
 

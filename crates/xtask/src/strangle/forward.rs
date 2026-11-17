@@ -84,13 +84,13 @@ fn entries_of(files: &mut FileSet, home: &Home) -> Result<Vec<String>> {
 }
 
 /// How the first parameter of a function maps to the delegate.
-struct Receiver {
-    text: &'static str,
+pub(super) struct Receiver {
+    pub(super) text: &'static str,
     /// The marker after the path (`@books`, `@doc`); none when the vault goes first.
-    marker: Option<&'static str>,
+    pub(super) marker: Option<&'static str>,
 }
 
-fn receiver_of(first: &FnArg) -> Option<Receiver> {
+pub(super) fn receiver_of(first: &FnArg) -> Option<Receiver> {
     let FnArg::Typed(typed) = first else {
         return None;
     };

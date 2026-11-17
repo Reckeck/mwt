@@ -68,7 +68,7 @@ impl Home {
 }
 
 /// The directory that holds `service/`: the core crate's `src`.
-fn core_dir(map: &Map) -> String {
+pub(super) fn core_dir(map: &Map) -> String {
     Path::new(&map.service_dir)
         .parent()
         .map_or_else(String::new, |dir| dir.to_string_lossy().into_owned())
