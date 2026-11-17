@@ -34,9 +34,9 @@ use zeroize::Zeroizing;
 
 use super::UnlockedVault;
 use super::password::{CopyPolicy, PlainCopies, RotationFailure, RotationReport, warn_failures};
+use crate::crypto::SealKey;
 use crate::crypto::header::{VaultHeader, level_of_container};
 use crate::crypto::kdf_profile::{KdfParams, KdfProfile};
-use crate::crypto::{SealKey, device_secrets};
 use crate::error::{Error, Result};
 use crate::ipc_contract::security::{
     PasswordStrength, PasswordStrengthReport, RaiseStage, SecurityLevel,
@@ -46,6 +46,7 @@ use crate::storage::VaultFile;
 use crate::sync::state::RecordState;
 use crate::vault_io::backups;
 use crate::vault_io::copies::{self, CopySeal, VaultCopy};
+use crate::vault_io::device_secrets;
 
 pub use crate::limits::MIN_PIN_DIGITS;
 /// A level-3 password: at least this many characters (and not weak).

@@ -8,7 +8,6 @@
 use tauri::State;
 
 use trade_core::calendar::now_secs;
-use trade_core::crypto::device_secrets::DeviceKey;
 use trade_core::error::Error;
 use trade_core::exchange::bybit::KeyCheck;
 use trade_core::exchange::{BybitClient, Category};
@@ -26,6 +25,7 @@ use trade_core::model::store::{ImportSettings, TerminalState};
 use trade_core::model::vault::{ImportRun, ImportSource, PendingImport};
 use trade_core::service::ImportedTransactions;
 use trade_core::txinfo::{TxInfo, TxInfoService};
+use trade_core::vault_io::device_secrets::DeviceKey;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;

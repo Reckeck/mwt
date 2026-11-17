@@ -56,7 +56,7 @@
 //! ## Secrets
 //!
 //! The key and the secret live only in
-//! [`crate::crypto::device_secrets::DeviceSecrets`] and, for the length of a
+//! [`crate::vault_io::device_secrets::DeviceSecrets`] and, for the length of a
 //! pass, inside the transport ([`BybitApi`]). They are in no request type, no
 //! `Debug`, no cursor, no event and no error message.
 

@@ -181,7 +181,7 @@ pub fn save(app: &AppHandle, memory: &mut NotifyMemory) {
     }
     let mut bytes = nonce.to_vec();
     bytes.extend_from_slice(&sealed);
-    let _ = trade_core::crypto::atomic_write(&path, &bytes);
+    let _ = trade_core::vault_io::local::atomic_write(&path, &bytes);
 }
 
 #[cfg(test)]

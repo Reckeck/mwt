@@ -3,7 +3,7 @@
 //! What the user may set per network: their own RPC node, their own
 //! Blockscout instance, their own explorer, and an optional Blockscout key
 //! (decision R8 of 2026-11-12). All of it lives in the device secrets file
-//! (`crypto::device_secrets`), so none of it is in the vault document, in a
+//! (`vault_io::device_secrets`), so none of it is in the vault document, in a
 //! backup, in a sync batch or in the JSON editor. Empty means the preset of
 //! `cryptotrack::chains`.
 //!
@@ -27,7 +27,6 @@ use reqwest::Url;
 use serde_json::{Value, json};
 
 use super::super::UnlockedVault;
-use crate::crypto::device_secrets::{self, BlockscoutKey, DeviceSecrets, NetworkEndpoints};
 use crate::cryptotrack::chains::{self, EvmChain};
 use crate::cryptotrack::rpc::{RpcClient, RpcConfig};
 use crate::cryptotrack::tracking::{ExplorerSettings, normalize_explorer};
@@ -37,6 +36,7 @@ use crate::ipc_contract::cryptotrack::network::{
     NetworkView, SetNetworkSettingsInput, TestNetworkInput,
 };
 use crate::model::chain::Chain;
+use crate::vault_io::device_secrets::{self, BlockscoutKey, DeviceSecrets, NetworkEndpoints};
 
 /// What a reader of a network uses; `None` is the preset.
 #[derive(Debug, Default)]

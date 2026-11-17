@@ -43,7 +43,6 @@ use std::time::{Duration, Instant};
 
 use chrono::NaiveDate;
 use tauri::{AppHandle, Emitter, Manager};
-use trade_core::crypto::device_secrets::BlockscoutKey;
 use trade_core::cryptotrack::prices;
 use trade_core::cryptotrack::protocols::{
     PositionReading, ProtocolRequest, ProtocolReview, Registry,
@@ -64,6 +63,7 @@ use trade_core::pricing::PricingService;
 use trade_core::service::NetworkRequest;
 use trade_core::service::UnlockedVault;
 use trade_core::sync::stamp::now_ms;
+use trade_core::vault_io::device_secrets::BlockscoutKey;
 
 use crate::commands::{AppState, lock_vault};
 use crate::state::on_vault_locked;

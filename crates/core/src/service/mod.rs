@@ -351,7 +351,7 @@ impl UnlockedVault {
     fn create_keyed(path: PathBuf, password: &str, key: SealKey) -> Result<Self> {
         VaultFile::create_keyed(&path, &key)?;
         // A secrets file left by a vault that once had this name is not ours.
-        crate::crypto::device_secrets::remove(&path)?;
+        crate::vault_io::device_secrets::remove(&path)?;
         let lock = crate::storage::VaultLock::acquire(&path)?;
         let doc = VaultDoc::default();
         let fmt = SnapshotFormat::for_profile();
@@ -2792,7 +2792,7 @@ impl UnlockedVault {
     /// Exchanges with a key on this device whose background import is on,
     /// with their interval. Empty below level 3 (a stored key is not used
     /// there) and when the device file does not open. The keys zeroize on drop.
-    pub fn import_schedule(&self) -> Vec<(u32, crate::crypto::device_secrets::DeviceKey)> {
+    pub fn import_schedule(&self) -> Vec<(u32, crate::vault_io::device_secrets::DeviceKey)> {
         if !self.keys_on_device() || self.doc.exchanges.bybit.is_empty() {
             return Vec::new();
         }

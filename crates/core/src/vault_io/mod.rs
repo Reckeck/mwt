@@ -11,6 +11,7 @@
 pub mod backups;
 pub mod copies;
 pub mod delete;
+pub mod device_secrets;
 pub mod import;
 pub mod local;
 pub mod location;

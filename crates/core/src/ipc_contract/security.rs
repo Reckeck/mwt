@@ -4,15 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// How the vault is protected. Never stored: it follows from the container,
-/// no encryption is `Ledger`, the old `kdf_id` is `Pin`, the new one `Crypto`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub enum SecurityLevel {
-    Ledger,
-    Pin,
-    Crypto,
-}
+pub use crate::crypto::level::{RaiseStage, SecurityLevel};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
@@ -57,14 +49,6 @@ pub struct RaiseToCryptoReport {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 pub struct RaiseProgress {
     pub stage: RaiseStage,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-#[serde(rename_all = "snake_case")]
-pub enum RaiseStage {
-    Backup,
-    Reencrypt,
-    Verify,
 }
 
 #[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]

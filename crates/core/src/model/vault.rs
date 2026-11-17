@@ -477,7 +477,7 @@ pub struct VaultDoc {
     pub price_cache: Vec<PricePoint>,
     pub fx_cache: Vec<FxPoint>,
     /// Exchange credentials, added in payload v1. Since H2 the keys live in
-    /// the device file `<vault>.secrets` (`crypto::device_secrets`): at level
+    /// the device file `<vault>.secrets` (`vault_io::device_secrets`): at level
     /// 3 this is an in-memory index of which stores have a key and where
     /// their fills land, with empty `api_key`/`api_secret`, and it is left
     /// out of every save, so the stored field stays empty. Keys found here

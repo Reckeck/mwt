@@ -590,7 +590,7 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
 /// included. Each sync, failed ones included, lands in the wallet's history.
 async fn poll_bybit_once(
     app: &AppHandle,
-    keys: Vec<trade_core::crypto::device_secrets::DeviceKey>,
+    keys: Vec<trade_core::vault_io::device_secrets::DeviceKey>,
 ) -> Result<u32, String> {
     let state = app.state::<AppState>();
     let mut recorded_total = 0u32;

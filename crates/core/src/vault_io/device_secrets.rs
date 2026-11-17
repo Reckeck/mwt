@@ -23,7 +23,8 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use super::{KEY_LEN, SealKey, atomic_write, open_blob, read_all, seal_blob};
+use super::local::{atomic_write, read_all};
+use crate::crypto::{KEY_LEN, SealKey, open_blob, seal_blob};
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
 use crate::model::vault::ExchangeKeys;

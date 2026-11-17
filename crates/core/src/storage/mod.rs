@@ -32,8 +32,8 @@ use serde::de::DeserializeOwned;
 use crate::crypto;
 use crate::crypto::SealKey;
 use crate::crypto::kdf_profile::KdfParams;
+use crate::crypto::level::RaiseStage;
 use crate::error::{Error, Result};
-use crate::ipc_contract::security::RaiseStage;
 use crate::model::vault::VaultDoc;
 use crate::vault_io::local::{
     create_synced, read_back, reencrypt_tmp_path, replace_with, still_the_written_file,
@@ -46,59 +46,7 @@ pub mod v3;
 
 pub use crate::vault_io::local::{VAULT_EXT, VaultLock, backup_path, ensure_wallet_ext};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SnapshotFormat {
-    Json,
-    /// Legacy bincode (v1 release builds); read-only.
-    Bin,
-    /// MessagePack with field names (release builds from payload v2).
-    Pack,
-}
-
-impl SnapshotFormat {
-    pub fn from_u8(raw: u8) -> Option<Self> {
-        match raw {
-            crypto::header::VaultHeader::FMT_JSON => Some(SnapshotFormat::Json),
-            crypto::header::VaultHeader::FMT_BIN => Some(SnapshotFormat::Bin),
-            crypto::header::VaultHeader::FMT_PACK => Some(SnapshotFormat::Pack),
-            _ => None,
-        }
-    }
-
-    pub fn as_u8(self) -> u8 {
-        match self {
-            SnapshotFormat::Json => crypto::header::VaultHeader::FMT_JSON,
-            SnapshotFormat::Bin => crypto::header::VaultHeader::FMT_BIN,
-            SnapshotFormat::Pack => crypto::header::VaultHeader::FMT_PACK,
-        }
-    }
-
-    /// The concrete format for this build profile (dev vs prod).
-    pub fn for_profile() -> Self {
-        if cfg!(debug_assertions) {
-            SnapshotFormat::Json
-        } else {
-            SnapshotFormat::Pack
-        }
-    }
-
-    /// The format a document read in `self` is written back in: bincode is
-    /// never written again.
-    pub fn for_writing(self) -> Self {
-        match self {
-            SnapshotFormat::Bin => SnapshotFormat::Pack,
-            other => other,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            SnapshotFormat::Json => "json",
-            SnapshotFormat::Bin => "bin",
-            SnapshotFormat::Pack => "pack",
-        }
-    }
-}
+pub use crate::crypto::format::SnapshotFormat;
 
 /// Encode a snapshot into the raw payload bytes for a given format.
 pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
@@ -232,7 +180,7 @@ impl VaultFile {
     /// [`Self::open_versioned`], also handing back the derived key: the
     /// session saves with it instead of running the KDF again.
     pub fn open_keyed(path: &Path, password: &str) -> Result<(Decoded, SnapshotFormat, SealKey)> {
-        let bytes = crypto::read_all(path)?;
+        let bytes = crate::vault_io::local::read_all(path)?;
         let (plaintext, fmt, key) = crypto::open_bytes_keyed(&bytes, password.as_bytes())?;
         let decoded = decode_versioned(&plaintext, fmt)?;
         Ok((decoded, fmt, key))
@@ -259,7 +207,7 @@ impl VaultFile {
         fmt: SnapshotFormat,
     ) -> Result<Vec<u8>> {
         let file = crypto::seal_with(key, fmt, plaintext)?;
-        crypto::atomic_write(path, &file)?;
+        crate::vault_io::local::atomic_write(path, &file)?;
         Ok(file)
     }
 
@@ -442,14 +390,14 @@ impl VaultFile {
         let plaintext = encode(doc, fmt)?;
         let (header, _, _) = crypto::random_header(fmt);
         let file = crypto::seal(&header, password.as_bytes(), &plaintext)?;
-        crypto::atomic_write(path, &file)?;
+        crate::vault_io::local::atomic_write(path, &file)?;
         Ok(file)
     }
 }
 
 /// Magic + version of the file for quick format probing (UI detection).
 pub fn probe(path: &Path) -> Result<SnapshotFormat> {
-    let bytes = crypto::read_all(path)?;
+    let bytes = crate::vault_io::local::read_all(path)?;
     let (header, _) = crypto::parse_file(&bytes)?;
     header.payload_format().ok_or(Error::Unsupported)
 }
@@ -805,7 +753,7 @@ mod tests {
         let path = dir.join(name);
         let (header, _, _) = crypto::random_header(fmt);
         let file = crypto::seal(&header, b"pw", &encode_as(payload, fmt)).expect("seal");
-        crypto::atomic_write(&path, &file).expect("write the vault");
+        crate::vault_io::local::atomic_write(&path, &file).expect("write the vault");
         (path, file)
     }
 
@@ -1206,7 +1154,7 @@ mod tests {
             // A document with no crypto data does not force level 3.
             assert_eq!(
                 vault.min_allowed_level(),
-                crate::ipc_contract::security::SecurityLevel::Ledger
+                crate::crypto::level::SecurityLevel::Ledger
             );
         },
     }
@@ -1540,10 +1488,7 @@ mod tests {
             assert_eq!(reopened.kdf(), TEST_KDF);
             assert_eq!(entries(dir.path()), 1, "no temp file left");
             let level = crypto::header::level_of_container(&std::fs::read(&path).unwrap());
-            assert_eq!(
-                level.unwrap(),
-                crate::ipc_contract::security::SecurityLevel::Crypto
-            );
+            assert_eq!(level.unwrap(), crate::crypto::level::SecurityLevel::Crypto);
         }
     }
 

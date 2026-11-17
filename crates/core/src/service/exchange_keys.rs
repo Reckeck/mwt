@@ -1,7 +1,7 @@
 //! Exchange API keys on this device (H2).
 //!
 //! At security level 3 the keys live only in the device secrets file
-//! (`crypto::device_secrets`), never in the vault document: `doc.exchanges`
+//! (`vault_io::device_secrets`), never in the vault document: `doc.exchanges`
 //! is an in-memory index of them (store, sub-account targets, no key and no
 //! secret) that saving takes out of the document, so the vault file, its
 //! mirror, backups, transfers and sync never carry a key. A key is read from
@@ -15,12 +15,12 @@ use std::collections::BTreeMap;
 
 use super::UnlockedVault;
 use crate::crypto::SealKey;
-use crate::crypto::device_secrets::{self, DeviceKey, DeviceSecrets};
 use crate::crypto::header::VaultHeader;
 use crate::error::{Error, Result};
 use crate::ipc_contract::security::{ExchangeKeyState, SecurityLevel};
 use crate::model::store::StoreKind;
 use crate::model::vault::ExchangeKeys;
+use crate::vault_io::device_secrets::{self, DeviceKey, DeviceSecrets};
 
 /// `(store_id, spot_store_id, futures_store_id)` of one key.
 type Target = (String, Option<String>, Option<String>);
