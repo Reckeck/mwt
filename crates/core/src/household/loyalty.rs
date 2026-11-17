@@ -16,7 +16,6 @@ use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, TopupTx, Tra
 use crate::model::vault::{ManualPrice, VaultDoc};
 use crate::money::tree::find_store;
 use crate::pricing::history::secs_or_now;
-use crate::service::RateBook;
 
 /// Income category of cashback.
 pub const CASHBACK_CATEGORY: &str = "cashback";
@@ -266,7 +265,11 @@ pub fn cashback_report(books: &Books<'_>, from: &str, to: &str) -> CashbackRepor
     let rates = CashbackRates {
         base,
         fx,
-        book: books.rate_book(),
+        value_in_base: &|key, quantity, secs| {
+            let book = books.rate_book();
+            let usd = book.price_at(key, secs).unwrap_or(Amount::ZERO) * quantity;
+            book.convert(usd, "usd", base, secs).unwrap_or(Amount::ZERO)
+        },
         price_usd: &|key| books.price_usd(key),
     };
     cashback_over(books.doc(), &rates, from, to)
@@ -276,7 +279,8 @@ pub fn cashback_report(books: &Books<'_>, from: &str, to: &str) -> CashbackRepor
 pub(crate) struct CashbackRates<'rates> {
     pub base: &'rates str,
     pub fx: Amount,
-    pub book: &'rates RateBook,
+    /// The value of `quantity` of the asset `key` in `base` at `secs`, zero when unpriced.
+    pub value_in_base: &'rates dyn Fn(&str, Amount, i64) -> Amount,
     pub price_usd: &'rates dyn Fn(&str) -> Amount,
 }
 
@@ -290,7 +294,7 @@ pub(crate) fn cashback_over(
     let CashbackRates {
         base,
         fx,
-        book,
+        value_in_base,
         price_usd,
     } = *rates;
     let kinds: BTreeMap<&str, StoreKind> = doc
@@ -317,11 +321,7 @@ pub(crate) fn cashback_over(
             continue;
         }
         let secs = secs_or_now(stamp);
-        let usd = book
-            .price_at(&topup.asset.key(), secs)
-            .unwrap_or(Amount::ZERO)
-            * topup.amount;
-        let value = book.convert(usd, "usd", base, secs).unwrap_or(Amount::ZERO);
+        let value = value_in_base(&topup.asset.key(), topup.amount, secs);
         // Cashback credited to the card itself names that card.
         let source = topup
             .details

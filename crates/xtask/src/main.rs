@@ -36,7 +36,7 @@ use anyhow::Result;
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
-use cli::{Cli, Command, GraphArgs};
+use cli::{Cli, Command, GraphArgs, RootedCommand};
 use graph::{Opts, Task};
 use output::Output;
 
@@ -73,7 +73,7 @@ fn print_only(plan: &Plan) -> Option<i32> {
 async fn run() -> Result<i32> {
     let cli = Cli::parse();
     // No checkout in that job: no workspace root either.
-    match cli.command {
+    let command = match cli.command {
         Command::CiOk => {
             ci::ci_ok::run()?;
             return Ok(0);
@@ -82,12 +82,12 @@ async fn run() -> Result<i32> {
             ci::changes::run()?;
             return Ok(0);
         }
-        _ => {}
-    }
+        Command::Rooted(command) => command,
+    };
     let root = lock::find_root()?;
     let mut built = None;
-    let plan = match &cli.command {
-        Command::Check(args) => {
+    let plan = match &command {
+        RootedCommand::Check(args) => {
             let browser = checks::BrowserOpts {
                 quick: args.quick,
                 shard: args.shard.clone(),
@@ -102,7 +102,7 @@ async fn run() -> Result<i32> {
                 graph: args.graph.clone(),
             }
         }
-        Command::Version(args) => {
+        RootedCommand::Version(args) => {
             version::run(
                 &root,
                 &version::Args {
@@ -113,42 +113,42 @@ async fn run() -> Result<i32> {
             )?;
             return Ok(0);
         }
-        Command::Changelog => {
+        RootedCommand::Changelog => {
             release::run_changelog(&root)?;
             return Ok(0);
         }
-        Command::Bump { level } => {
+        RootedCommand::Bump { level } => {
             release::run_bump(&root, level)?;
             return Ok(0);
         }
-        Command::ReleaseStart(args) => {
+        RootedCommand::ReleaseStart(args) => {
             release::start::run(&root, args)?;
             return Ok(0);
         }
-        Command::Audit => {
+        RootedCommand::Audit => {
             return audit::run(&root);
         }
-        Command::Strangle(args) => {
+        RootedCommand::Strangle(args) => {
             strangle::run(&root, args)?;
             return Ok(0);
         }
-        Command::Publish(args) => {
+        RootedCommand::Publish(args) => {
             publish::run_publish(&root, args)?;
             return Ok(0);
         }
-        Command::PrunePrereleases(args) => {
+        RootedCommand::PrunePrereleases(args) => {
             publish::run_prune(args)?;
             return Ok(0);
         }
-        Command::Backmerge(args) => {
+        RootedCommand::Backmerge(args) => {
             publish::run_backmerge(&root, args)?;
             return Ok(0);
         }
-        Command::PublishAur(args) => {
+        RootedCommand::PublishAur(args) => {
             publish::run_aur(&root, args)?;
             return Ok(0);
         }
-        Command::TauriConfig(args) => {
+        RootedCommand::TauriConfig(args) => {
             let path = tauri_config::write(
                 &root,
                 &args.out,
@@ -163,63 +163,60 @@ async fn run() -> Result<i32> {
             println!("{}", path.display());
             return Ok(0);
         }
-        Command::Bundle(args) => {
+        RootedCommand::Bundle(args) => {
             bundle::run(&root, args)?;
             return Ok(0);
         }
-        Command::ImageTag => {
+        RootedCommand::ImageTag => {
             println!("{}", images::tag(&root)?);
             return Ok(0);
         }
-        Command::ReleasePlan => {
+        RootedCommand::ReleasePlan => {
             return ci::release_plan::run();
         }
-        Command::CheckReleaseFiles {
+        RootedCommand::CheckReleaseFiles {
             dir,
             version,
             macos,
         } => {
             return ci::release_files::run(dir, version, *macos);
         }
-        Command::CiImages { force } => {
+        RootedCommand::CiImages { force } => {
             return ci::build_images::run(&root, *force);
         }
-        Command::LaneKey { lane } => {
+        RootedCommand::LaneKey { lane } => {
             println!("{}", cache::lane_key::run(&root, lane)?);
             return Ok(0);
         }
-        Command::DepsCook { lane } => {
+        RootedCommand::DepsCook { lane } => {
             cache::deps_cook::run(&root, lane)?;
             return Ok(0);
         }
-        Command::DepsPrune { prefix, keep } => {
+        RootedCommand::DepsPrune { prefix, keep } => {
             cache::deps_prune::run(prefix, keep)?;
             return Ok(0);
         }
-        Command::CiEnv => {
+        RootedCommand::CiEnv => {
             cache::ci_env::run()?;
             return Ok(0);
         }
-        Command::CiContainerEnv { cargo } => {
+        RootedCommand::CiContainerEnv { cargo } => {
             ci::container_env::run(*cargo)?;
             return Ok(0);
         }
-        Command::CiOk | Command::CiChanges => {
-            unreachable!("dispatched above, before the workspace root lookup")
-        }
-        Command::CiPnpmInstall => {
+        RootedCommand::CiPnpmInstall => {
             ci::pnpm_install::run()?;
             return Ok(0);
         }
-        Command::CacheCleanup => {
+        RootedCommand::CacheCleanup => {
             ci::cache_cleanup::run()?;
             return Ok(0);
         }
-        Command::InstallChef => {
+        RootedCommand::InstallChef => {
             cache::install_chef::run()?;
             return Ok(0);
         }
-        Command::Build(args) => {
+        RootedCommand::Build(args) => {
             let channel = args.channel.publishing("build")?;
             let version = match &args.version {
                 Some(version) => version.clone(),
@@ -257,7 +254,7 @@ async fn run() -> Result<i32> {
             built = Some(env);
             plan
         }
-        Command::SelftestSleep { .. } => Plan {
+        RootedCommand::SelftestSleep { .. } => Plan {
             tasks: Vec::new(),
             heavy: 1,
             graph: GraphArgs::default(),
@@ -275,8 +272,8 @@ async fn run() -> Result<i32> {
     let sink = guard.sink.clone();
     let cancel = CancellationToken::new();
     let interrupted = runner::watch_signals(cancel.clone());
-    let (code, finished) = match cli.command {
-        Command::SelftestSleep { seconds, code } => {
+    let (code, finished) = match command {
+        RootedCommand::SelftestSleep { seconds, code } => {
             (runner::selftest(&sink, &cancel, seconds, code).await, None)
         }
         _ => {

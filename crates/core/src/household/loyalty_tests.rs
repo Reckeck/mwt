@@ -2,6 +2,7 @@
 //! then the pure functions on a bare document and the delegate pins.
 
 use super::loyalty::*;
+use crate::Amount;
 use crate::model::ids::StoreId;
 use crate::model::store::{AssetRef, LoyaltyInfo, StoreKind};
 use crate::model::vault::FxPoint;
@@ -244,7 +245,11 @@ fn the_cashback_is_reported_on_a_bare_document() {
     let rates = CashbackRates {
         base: "rub",
         fx: amount("1"),
-        book: &book,
+        value_in_base: &|key, quantity, secs| {
+            let usd = book.price_at(key, secs).unwrap_or(Amount::ZERO) * quantity;
+            book.convert(usd, "usd", "rub", secs)
+                .unwrap_or(Amount::ZERO)
+        },
         price_usd: &|_| amount("1"),
     };
     let report = cashback_over(&doc, &rates, "2026-03-01T00:00:00Z", "2026-03-31T23:59:59Z");

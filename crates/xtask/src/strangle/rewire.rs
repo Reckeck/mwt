@@ -13,14 +13,13 @@ use anyhow::{Context, Result, bail};
 use clap::Args;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
-use syn::{Expr, ExprMethodCall, FnArg, ImplItemFn, ItemFn, ItemImpl, Pat, Type, Visibility};
+use syn::{Expr, ExprMethodCall, FnArg, ImplItemFn, ItemFn, ItemImpl, Pat, Type};
 
 use super::baseline::Baseline;
 use super::fileset::FileSet;
-use super::forward::receiver_of;
+use super::forward::delegate_target;
 use super::home::{core_dir, homes};
 use super::map::Map;
-use super::scan::is_test_attr;
 use super::source::{LineIndex, Splice, apply, is_vault_impl};
 
 #[derive(Args)]
@@ -56,7 +55,8 @@ struct Report {
 struct Target {
     /// `crate::<module>::<name>`.
     path: String,
-    /// `@books`: the function takes `&recv.books()`; none: it takes the vault itself.
+    /// `@books`: the function takes `&recv.books()`; `@doc`: not rewritten, listed as skipped;
+    /// none: it takes the vault itself.
     marker: Option<&'static str>,
 }
 
@@ -96,6 +96,7 @@ fn targets_of(
     area: &super::map::Area,
     baseline: &Baseline,
 ) -> Result<BTreeMap<String, Target>> {
+    let methods = &baseline.area(&area.name)?.methods;
     let mut targets = BTreeMap::new();
     for home in homes(map, area) {
         for (path, module) in [
@@ -104,37 +105,24 @@ fn targets_of(
         ] {
             let source = files.read(&path)?.to_string();
             let file = syn::parse_file(&source).with_context(|| format!("parse {path}"))?;
-            for node in file.items.iter().filter_map(public_fn) {
-                let Some(receiver) = node.sig.inputs.first().and_then(receiver_of) else {
+            for node in file.items.iter().filter_map(fn_item) {
+                let Some(receiver) = delegate_target(node, methods) else {
                     continue;
                 };
                 let name = node.sig.ident.to_string();
-                if receiver.marker != Some("@doc")
-                    && baseline
-                        .area(&area.name)?
-                        .methods
-                        .iter()
-                        .any(|method| method.name == name)
-                {
-                    targets.entry(name.clone()).or_insert(Target {
-                        path: format!("{module}::{name}"),
-                        marker: receiver.marker,
-                    });
-                }
+                targets.entry(name.clone()).or_insert(Target {
+                    path: format!("{module}::{name}"),
+                    marker: receiver.marker,
+                });
             }
         }
     }
     Ok(targets)
 }
 
-fn public_fn(item: &syn::Item) -> Option<&ItemFn> {
+fn fn_item(item: &syn::Item) -> Option<&ItemFn> {
     match item {
-        syn::Item::Fn(node)
-            if matches!(node.vis, Visibility::Public(_))
-                && !node.attrs.iter().any(is_test_attr) =>
-        {
-            Some(node)
-        }
+        syn::Item::Fn(node) => Some(node),
         _ => None,
     }
 }
@@ -261,7 +249,12 @@ impl<'ast> Visit<'ast> for Rewriter<'_> {
             return visit::visit_expr_method_call(self, node);
         };
         let line = node.method.span().start().line;
-        if self.is_vault_receiver(&node.receiver) {
+        if target.marker == Some("@doc") {
+            self.skipped.push(format!(
+                "{line}: {name}(): `@doc` target is not rewritten (no `&VaultDoc` accessor)"
+            ));
+            visit::visit_expr_method_call(self, node);
+        } else if self.is_vault_receiver(&node.receiver) {
             let span = node.span();
             self.splices.push(Splice {
                 start: self.index.offset(span.start()),
@@ -349,6 +342,38 @@ impl Other {
         );
         assert!(text.contains("other.set_info(\"b\", info);"), "{text}");
         assert!(text.contains("self.set_info(\"d\", info);"), "{text}");
+    }
+
+    #[test]
+    fn a_doc_target_is_listed_as_skipped_not_rewritten() {
+        let original = original_tree();
+        let workspace = crate::strangle::Workspace::load(original.root()).unwrap();
+        let mut baseline = crate::strangle::baseline::capture(original.root(), &workspace).unwrap();
+        baseline.areas.get_mut("loyalty").unwrap().methods.push(
+            crate::strangle::baseline::BaselineMethod {
+                name: "peek".into(),
+                signature: String::new(),
+            },
+        );
+        let tree = moved_tree(|path, text| {
+            if path.ends_with("household/loyalty.rs") {
+                format!("{text}\npub fn peek(doc: &VaultDoc) -> usize {{ 0 }}\n")
+            } else {
+                text
+            }
+        });
+        let source = "fn command(vault: &UnlockedVault) {\n    vault.peek();\n}\n";
+        std::fs::write(tree.root().join(USER), source).unwrap();
+        let map = Map::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        let args = RewireArgs {
+            area: "loyalty".into(),
+            files: vec![USER.into()],
+        };
+        let report = rewire(tree.root(), &mut files, &map, &baseline, &args).unwrap();
+        assert_eq!(report.replaced, 0);
+        assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
+        assert!(report.skipped[0].contains("peek(): `@doc` target is not rewritten"));
     }
 
     #[test]

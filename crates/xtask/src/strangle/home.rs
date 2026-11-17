@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::Workspace;
-use super::map::{Area, Map};
+use super::map::{Area, Map, entry_name};
 use super::scaffold::stems;
 
 /// One file stem of an area, with every path it owns.
@@ -140,12 +140,7 @@ fn source_of(area: &Area, stem: &str) -> String {
         .find(|(_, renamed)| renamed.as_str() == stem)
         .map_or_else(
             || stem.to_string(),
-            |(entry, _)| {
-                entry
-                    .trim_end_matches('/')
-                    .trim_end_matches(".rs")
-                    .to_string()
-            },
+            |(entry, _)| entry_name(entry).to_string(),
         )
 }
 
@@ -195,11 +190,12 @@ pub fn allowed_files(workspace: &Workspace, area: &Area) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::strangle::fixture::FIX_MAP;
 
     #[test]
     fn the_leaves_stems_resolve_to_their_target_structure_groups() {
-        let map = Map::parse(include_str!("../../strangle.toml")).unwrap();
-        let leaves = &map.areas[map.area_index("leaves").unwrap()];
+        let map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
+        let leaves = &map.areas[map.area_index("leaves").expect(FIX_MAP)];
         let groups: std::collections::BTreeMap<String, String> = homes(&map, leaves)
             .into_iter()
             .map(|home| (home.stem, home.group))
@@ -216,7 +212,7 @@ mod tests {
             ("losses", "household"),
             ("relations", "household"),
         ] {
-            assert_eq!(groups[stem], group, "{stem}");
+            assert_eq!(groups[stem], group, "{FIX_MAP}: {stem}");
         }
     }
 }

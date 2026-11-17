@@ -203,15 +203,45 @@ fn arch() -> Task {
     })
 }
 
-/// `strangle check --all`: the moved areas against `baseline.json`. Runs this very binary, so no
-/// second cargo build is started.
+const DEFAULT_BASE_REF: &str = "origin/development";
+
+/// The revision the CI gate diffs against: `origin/<GITHUB_BASE_REF>` on a PR, else `origin/development`.
+fn diff_base(github_base_ref: Option<&str>) -> String {
+    match github_base_ref.filter(|name| !name.is_empty()) {
+        Some(name) => format!("origin/{name}"),
+        None => DEFAULT_BASE_REF.to_string(),
+    }
+}
+
+/// Arguments of `strangle check`: `--all`, plus `--diff <base>` when the base exists.
+fn strangle_args(base: Option<&str>) -> Vec<String> {
+    let mut args: Vec<String> = ["strangle", "check", "--all"].map(String::from).into();
+    if let Some(base) = base {
+        args.extend(["--diff".to_string(), base.to_string()]);
+    }
+    args
+}
+
+/// `strangle check --all --diff <base>`: the moved areas against `baseline.json` and the changed
+/// files against the task scope. Without the base ref locally it runs `--all` alone and says so.
+/// Runs this very binary, so no second cargo build is started.
 fn strangle() -> Task {
     Task::func("strangle", Class::Light, &[], |ctx: Ctx| async move {
         let program = match std::env::current_exe() {
             Ok(path) => path.display().to_string(),
             Err(error) => return Outcome::Fail(format!("{error:#}")),
         };
-        let cmd = Cmd::new(&program).args(["strangle", "check", "--all"]);
+        let base = diff_base(std::env::var("GITHUB_BASE_REF").ok().as_deref());
+        let known = ctx
+            .capture("git", &["rev-parse", "--verify", "--quiet", &base])
+            .await
+            .is_some();
+        if !known {
+            ctx.note(&format!(
+                "base ref {base} not found locally: running --all without --diff"
+            ));
+        }
+        let cmd = Cmd::new(&program).args(strangle_args(known.then_some(base.as_str())));
         match ctx.exec(&cmd).await {
             Ok(ExecEnd::Done(0)) => Outcome::Ok,
             Ok(ExecEnd::Done(code)) => Outcome::Fail(format!("strangle check exited with {code}")),
@@ -256,7 +286,7 @@ fn gen_types(_root: &Path) -> Task {
 
 #[cfg(test)]
 mod tests {
-    use super::{BrowserOpts, browser_cmd, parse_shard};
+    use super::{BrowserOpts, browser_cmd, diff_base, parse_shard, strangle_args};
 
     fn opts(quick: bool, shard: Option<&str>, jobs: Option<usize>) -> BrowserOpts {
         BrowserOpts {
@@ -292,5 +322,25 @@ mod tests {
         for bad in ["0/6", "7/6", "3", "a/b", "1/0", "/"] {
             assert!(parse_shard(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn strangle_diffs_against_origin_development_by_default() {
+        assert_eq!(diff_base(None), "origin/development");
+        assert_eq!(diff_base(Some("")), "origin/development");
+        assert_eq!(
+            strangle_args(Some(&diff_base(None))),
+            ["strangle", "check", "--all", "--diff", "origin/development"]
+        );
+    }
+
+    #[test]
+    fn strangle_base_follows_github_base_ref() {
+        assert_eq!(diff_base(Some("main")), "origin/main");
+    }
+
+    #[test]
+    fn strangle_without_a_base_checks_all_only() {
+        assert_eq!(strangle_args(None), ["strangle", "check", "--all"]);
     }
 }

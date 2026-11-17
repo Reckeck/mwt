@@ -134,6 +134,7 @@ impl Map {
             if !seen.insert(&area.name) {
                 bail!("strangle.toml: area `{}` is listed twice", area.name);
             }
+            area.check_stems_distinct()?;
         }
         Ok(map)
     }
@@ -158,6 +159,36 @@ impl Map {
             }
         }
         Ok(Layout::new(spans))
+    }
+}
+
+/// A file entry without its `.rs` or trailing `/`: the name the entry stands for.
+pub fn entry_name(entry: &str) -> &str {
+    entry.trim_end_matches('/').trim_end_matches(".rs")
+}
+
+impl Area {
+    /// The stem of a file entry: its rename in `stem`, else its own name.
+    pub fn stem_of(&self, entry: &str) -> String {
+        self.stem
+            .get(entry)
+            .map_or_else(|| entry_name(entry).to_string(), Clone::clone)
+    }
+
+    fn check_stems_distinct(&self) -> Result<()> {
+        let mut owners: BTreeMap<String, &str> = BTreeMap::new();
+        for entry in &self.files {
+            let first = owners.insert(self.stem_of(entry), entry);
+            // `a.rs` with `b.rs` is one module: the file and the directory of its children.
+            if let Some(first) = first.filter(|first| entry_name(first) != entry_name(entry)) {
+                bail!(
+                    "strangle.toml: area `{}`: entries `{first}` and `{entry}` both resolve to stem `{}`",
+                    self.name,
+                    self.stem_of(entry)
+                );
+            }
+        }
+        Ok(())
     }
 }
 
@@ -243,6 +274,7 @@ impl Layout {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::strangle::fixture::FIX_MAP;
 
     const SMALL: &str = r#"
 service_dir = "svc"
@@ -263,13 +295,29 @@ regions = [{ file = "mod.rs", from = "// -- first", to = "// -- second" }]
     }
 
     #[test]
+    fn two_entries_with_one_stem_are_rejected() {
+        let text = SMALL
+            .replace(r#"["a.rs", "dir/"]"#, r#"["a.rs", "b.rs"]"#)
+            .replace("regions = [", "stem = { \"b.rs\" = \"a\" }\nregions = [");
+        let message = Map::parse(&text).unwrap_err().to_string();
+        assert!(
+            message.contains("`a.rs`") && message.contains("`b.rs`"),
+            "{message}"
+        );
+    }
+
+    #[test]
     fn the_shipped_map_parses_and_names_are_unique() {
-        let map = Map::parse(include_str!("../../strangle.toml")).unwrap();
-        assert!(map.areas.iter().any(|area| area.name == "loyalty"));
+        let map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
+        assert!(
+            map.areas.iter().any(|area| area.name == "loyalty"),
+            "{FIX_MAP}"
+        );
         assert!(
             map.areas
                 .iter()
-                .all(|area| !area.task.is_empty() && !area.group.is_empty())
+                .all(|area| !area.task.is_empty() && !area.group.is_empty()),
+            "{FIX_MAP}: an area has no task or group"
         );
     }
 

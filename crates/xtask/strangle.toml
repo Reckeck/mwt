@@ -62,7 +62,7 @@ files = ["crates/core/src/service/mod.rs"]
 
 [[foundation]]
 task = "T8"
-files = ["crates/core/src/service/mod.rs"]
+files = ["crates/core/src/service/mod.rs", "crates/core/src/money/tree.rs"]
 
 [[foundation]]
 task = "T9"

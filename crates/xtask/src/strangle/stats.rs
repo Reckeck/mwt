@@ -313,7 +313,7 @@ pub fn detail(stat: &AreaStats) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strangle::fixture;
+    use crate::strangle::fixture::{self, FIX_MAP};
 
     #[test]
     fn counts_follow_the_area_map_on_a_fixture_tree() {
@@ -380,25 +380,29 @@ mod tests {
     #[test]
     fn the_real_tree_is_close_to_the_numbers_of_the_spec() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let workspace = Workspace::load(&root).unwrap();
+        let workspace = Workspace::load(&root).expect(FIX_MAP);
         let report = compute(&workspace);
         assert!(
             (1..=496 + 25).contains(&report.totals.pub_methods),
-            "{}",
+            "{FIX_MAP}: {}",
             report.totals.pub_methods
         );
         assert!(
             (402..=402 + 25).contains(&report.totals.commands),
-            "{}",
+            "{FIX_MAP}: {}",
             report.totals.commands
         );
-        assert_eq!(report.totals.unmapped_pub_methods, 0);
+        assert_eq!(
+            report.totals.unmapped_pub_methods, 0,
+            "{FIX_MAP}: a pub method is not mapped"
+        );
         // A moved area (loyalty) leaves a shim with no commands of its own: look at the tree as a whole.
         assert!(
             report
                 .areas
                 .iter()
-                .any(|area| area.lines > 0 && area.commands_any >= 4)
+                .any(|area| area.lines > 0 && area.commands_any >= 4),
+            "{FIX_MAP}: no area has lines and commands"
         );
     }
 }

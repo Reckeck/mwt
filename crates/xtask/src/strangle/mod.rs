@@ -1,6 +1,16 @@
 //! `cargo xtask strangle`: the helper of the core-strangler phase. The mechanical part of moving an
-//! area out of `impl UnlockedVault` (facts today; more subcommands later). One `syn` scanner
-//! (`scan`), one area map (`map`, `strangle.toml`), one set of numbers per subcommand.
+//! area out of `impl UnlockedVault`. One `syn` scanner (`scan`), one area map (`map`,
+//! `strangle.toml`), one set of numbers per subcommand. Subcommands:
+//!
+//! - `stats`: facts of one area or all (files, lines, methods, `persist()`, commands, calls, untested).
+//! - `scaffold`: creates every module-group, area and scenario stub of the layout.
+//! - `widen`: makes non-`pub` `impl UnlockedVault` methods in `service/` `pub(crate)`.
+//! - `carve`: moves items named in a TOML file out of a service file into a new one.
+//! - `relocate`: moves an area's files into their stubs and leaves the shim with `pub use`.
+//! - `forward`: regenerates the `forward!` block of an area's shims.
+//! - `check`: holds an area against `baseline.json` (parity, logic, `persist()`, tests, files).
+//! - `callers`: lists the remaining calls of an area's delegates and of `Books::vault()`.
+//! - `rewire`: best effort replacement of delegate calls by the new function.
 
 mod baseline;
 mod callers;
@@ -121,6 +131,10 @@ pub mod fixture {
     //! A small service tree, written to a temp dir, scanned, and removed again.
 
     use super::*;
+
+    /// Prefix of every live-tree assertion message: the map is the file to fix.
+    pub const FIX_MAP: &str =
+        "the live tree and crates/xtask/strangle.toml disagree; fix strangle.toml";
 
     const MAP: &str = r#"
 service_dir = "crates/svc"
