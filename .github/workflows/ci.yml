@@ -65,6 +65,44 @@ jobs:
       contents: read
       packages: write
 
+  # ---------------------------------------------------------------- changes
+  # Decides whether the platform lanes (check-android, clippy-windows) run. An allowlist of
+  # skippable paths: one changed file outside it, or any event but a PR (workflow_call from
+  # release.yml, workflow_dispatch, a push to main), means `platforms=true`. A skipped lane
+  # counts as ok in ci-ok.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      platforms: ${{ steps.decide.outputs.platforms }}
+    steps:
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          platforms=true
+          if [ "$EVENT" = pull_request ]; then
+            files=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+              --jq '.[] | .filename, (.previous_filename // empty)')
+            platforms=false
+            while IFS= read -r file; do
+              case "$file" in
+                src/* | public/* | tests/* | docs/* | *.md | biome.json \
+                  | vite.config.ts | vitest.config.ts | tsconfig*.json | steiger.config.ts) ;;
+                *) platforms=true ;;
+              esac
+            done <<< "$files"
+            # An empty file list is not "only frontend": run the lanes.
+            [ -n "$files" ] || platforms=true
+          fi
+          echo "platforms=${platforms}" >> "$GITHUB_OUTPUT"
+          echo "platforms=${platforms}"
+
   # ------------------------------------------------------------------ xtask
   # xtask compiled once per platform; every job below downloads it into bin/ instead of running
   # `cargo xtask`. The Linux binary is built in ci-linux (ubuntu 22.04, as ci-node and ci-android
@@ -691,8 +729,8 @@ jobs:
   # in the ci-android image the NDK and the Rust Android targets are on the host, which
   # is the path xtask takes first (platforms.rs: android()).
   check-android:
-    needs: [images, xtask, deps]
-    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') }}
+    needs: [images, changes, xtask, deps]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask.result == 'success' && (needs.deps.result == 'success' || needs.deps.result == 'skipped') && needs.changes.outputs.platforms == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     container:
@@ -746,8 +784,8 @@ jobs:
           if-no-files-found: ignore
 
   clippy-windows:
-    needs: [images, xtask-windows, deps-native]
-    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask-windows.result == 'success' && (needs.deps-native.result == 'success' || needs.deps-native.result == 'skipped') }}
+    needs: [images, changes, xtask-windows, deps-native]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.xtask-windows.result == 'success' && (needs.deps-native.result == 'success' || needs.deps-native.result == 'skipped') && needs.changes.outputs.platforms == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -843,7 +881,7 @@ jobs:
   # The required status check of the protected branches: green only if every lane is.
   ci-ok:
     if: always()
-    needs: [images, xtask, xtask-windows, deps-node, deps, deps-native, check-lint, test, test-convergence, frontend-static, frontend-e2e, frontend-layout, check-android, clippy-windows, clippy-macos]
+    needs: [images, changes, xtask, xtask-windows, deps-node, deps, deps-native, check-lint, test, test-convergence, frontend-static, frontend-e2e, frontend-layout, check-android, clippy-windows, clippy-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
