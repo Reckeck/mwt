@@ -224,7 +224,8 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: "1"
       NO_STRIP: "true"
       GRADLE_OPTS: -Dorg.gradle.daemon=false
-      ANDROID_TARGETS: aarch64 armv7 x86_64
+      # The channel decides the ABI set: prod ships every ABI, dev builds only aarch64 to save CI time.
+      ANDROID_TARGETS: ${{ needs.version.outputs.channel == 'prod' && 'aarch64 armv7 x86_64' || 'aarch64' }}
       CONTAINER_ENGINE: docker
       SCCACHE_PIN: 0.19.0
       # xtask mounts ~/.cache/sccache/containers into the build image; the native Windows build uses .cache\sccache.
