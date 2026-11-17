@@ -33,7 +33,7 @@
 
 use argon2::{Algorithm, Argon2, Block, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
-use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
+use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use rand::RngCore;
 use zeroize::Zeroizing;
 
@@ -251,14 +251,19 @@ pub fn seal(header: &VaultHeader, password: &[u8], plaintext: &[u8]) -> Result<V
     encrypt(header, &key, plaintext)
 }
 
+/// The vault cipher for a 32-byte key.
+fn cipher_for(key: &[u8]) -> Result<XChaCha20Poly1305> {
+    XChaCha20Poly1305::new_from_slice(key).map_err(|_| Error::Crypto("invalid key length".into()))
+}
+
 fn encrypt(header: &VaultHeader, key: &[u8; KEY_LEN], plaintext: &[u8]) -> Result<Vec<u8>> {
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let cipher = cipher_for(key)?;
 
     let aad = header.bytes();
-    let nonce = XNonce::from_slice(&header.nonce);
+    let nonce = XNonce::from(header.nonce);
     let ct = cipher
         .encrypt(
-            nonce,
+            &nonce,
             Payload {
                 msg: plaintext,
                 aad: &aad,
@@ -330,11 +335,11 @@ fn open_plain(header: &VaultHeader, ct: &[u8]) -> Result<(Vec<u8>, SnapshotForma
 }
 
 fn decrypt(header: &VaultHeader, ct: &[u8], key: &SealKey) -> Result<(Vec<u8>, SnapshotFormat)> {
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&*key.key));
+    let cipher = cipher_for(&*key.key)?;
     let aad = header.bytes();
-    let nonce = XNonce::from_slice(&header.nonce);
+    let nonce = XNonce::from(header.nonce);
     let pt = cipher
-        .decrypt(nonce, Payload { msg: ct, aad: &aad })
+        .decrypt(&nonce, Payload { msg: ct, aad: &aad })
         .map_err(|_| Error::Secret)?;
     let fmt = SnapshotFormat::from_u8(header.payload_fmt).ok_or(Error::Unsupported)?;
     Ok((pt, fmt))
@@ -380,10 +385,10 @@ pub fn random_blob_key() -> Zeroizing<[u8; KEY_LEN]> {
 pub(crate) fn seal_blob(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
     let mut nonce = [0u8; NONCE_LEN];
     rand::thread_rng().fill_bytes(&mut nonce);
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let cipher = cipher_for(key)?;
     let ct = cipher
         .encrypt(
-            XNonce::from_slice(&nonce),
+            &XNonce::from(nonce),
             Payload {
                 msg: plaintext,
                 aad,
@@ -402,9 +407,11 @@ pub(crate) fn open_blob(key: &[u8; KEY_LEN], aad: &[u8], sealed: &[u8]) -> Resul
         return Err(Error::Crypto("sealed file is cut short".into()));
     }
     let (nonce, ct) = sealed.split_at(NONCE_LEN);
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let nonce =
+        XNonce::try_from(nonce).map_err(|_| Error::Crypto("sealed file is cut short".into()))?;
+    let cipher = cipher_for(key)?;
     cipher
-        .decrypt(XNonce::from_slice(nonce), Payload { msg: ct, aad })
+        .decrypt(&nonce, Payload { msg: ct, aad })
         .map_err(|_| Error::Crypto("sealed file does not open".into()))
 }
 

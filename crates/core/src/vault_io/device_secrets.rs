@@ -18,7 +18,7 @@
 
 use std::path::{Path, PathBuf};
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use zeroize::Zeroizing;
@@ -157,12 +157,12 @@ fn suffixed(vault: &Path, suffix: &str) -> PathBuf {
 /// HKDF-SHA256 (RFC 5869) for one 32-byte output block.
 fn hkdf_sha256(salt: &[u8], ikm: &[u8], info: &[u8]) -> Zeroizing<[u8; KEY_LEN]> {
     type HmacSha = Hmac<Sha256>;
-    let mut extract = <HmacSha as Mac>::new_from_slice(salt)
+    let mut extract = <HmacSha as KeyInit>::new_from_slice(salt)
         .unwrap_or_else(|_| unreachable!("HMAC takes any key length"));
     extract.update(ikm);
     let mut prk = Zeroizing::new([0u8; KEY_LEN]);
     prk.copy_from_slice(&extract.finalize().into_bytes());
-    let mut expand = <HmacSha as Mac>::new_from_slice(&prk[..])
+    let mut expand = <HmacSha as KeyInit>::new_from_slice(&prk[..])
         .unwrap_or_else(|_| unreachable!("HMAC takes any key length"));
     expand.update(info);
     expand.update(&[1u8]);

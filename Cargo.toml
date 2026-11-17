@@ -28,11 +28,11 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 chrono-tz = "0.10"
 zeroize = { version = "1", features = ["derive"] }
 argon2 = { version = "0.5", features = ["std"] }
-chacha20poly1305 = "0.10"
+chacha20poly1305 = "0.11"
 rand = "0.8"
 aes = "0.9"
-hmac = "0.12"
-sha2 = "0.10"
+hmac = "0.13"
+sha2 = "0.11"
 blake2 = "0.11"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
 tokio = { version = "1", features = ["full"] }

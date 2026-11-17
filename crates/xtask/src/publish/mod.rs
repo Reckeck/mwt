@@ -199,7 +199,11 @@ fn release_files(dir: &Path) -> Result<Vec<(String, Vec<u8>)>> {
 }
 
 fn checksum_line(name: &str, bytes: &[u8]) -> String {
-    format!("{:x}  {name}\n", Sha256::digest(bytes))
+    let hex: String = Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    format!("{hex}  {name}\n")
 }
 
 /// The most commits a pre-release lists; the compare link has the rest.

@@ -134,7 +134,10 @@ pub fn load(app: &AppHandle) -> NotifyMemory {
     let Ok(cipher) = XChaCha20Poly1305::new_from_slice(&key) else {
         return memory;
     };
-    let Ok(plain) = cipher.decrypt(XNonce::from_slice(nonce), sealed) else {
+    let Ok(nonce) = XNonce::try_from(nonce) else {
+        return memory;
+    };
+    let Ok(plain) = cipher.decrypt(&nonce, sealed) else {
         return memory;
     };
     match serde_json::from_slice::<Stored>(&plain) {
@@ -173,7 +176,7 @@ pub fn save(app: &AppHandle, memory: &mut NotifyMemory) {
         return;
     };
     let nonce: [u8; NONCE_LEN] = rand::random();
-    let Ok(sealed) = cipher.encrypt(XNonce::from_slice(&nonce), plain.as_slice()) else {
+    let Ok(sealed) = cipher.encrypt(&XNonce::from(nonce), plain.as_slice()) else {
         return;
     };
     if let Some(dir) = path.parent() {

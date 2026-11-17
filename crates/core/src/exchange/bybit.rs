@@ -13,7 +13,7 @@
 
 use std::time::Duration;
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::de::DeserializeOwned;
@@ -344,7 +344,7 @@ impl BybitClient {
     ) -> Result<HeaderMap> {
         let payload = Self::signing_payload(api_key, recv_window, timestamp_ms, query);
 
-        let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(api_secret.as_bytes())
+        let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(api_secret.as_bytes())
             .map_err(|_| Error::InvalidInput("invalid api secret".into()))?;
         mac.update(payload.as_bytes());
         let signature = hex_encode(&mac.finalize().into_bytes());

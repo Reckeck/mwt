@@ -5,6 +5,7 @@ import { RouterLink } from 'vue-router'
 import { AlarmClock, ExternalLink, Pencil, Pin, Repeat, Trash2, Wallet } from 'lucide-vue-next'
 
 import { ActionMenu } from '@/shared/ui/action-menu'
+import type { UiAction } from '@/shared/ui/context-menu'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
@@ -36,7 +37,7 @@ function confirmRemove() {
  * sub-menus, so the snoozes are flat rows); one already ticked off is only
  * edited or deleted.
  */
-const menu = computed(() => [
+const menu = computed<UiAction[]>(() => [
   ...SNOOZES.map((choice) => ({
     id: `snooze-${choice}`,
     label: t(`reminder.snooze.${choice}`),
