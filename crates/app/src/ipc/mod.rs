@@ -11,6 +11,15 @@
 )]
 pub(crate) mod commands;
 mod error;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "first callers are the emit sites (T21)")
+)]
+#[cfg_attr(
+    test,
+    allow(dead_code, reason = "`emit` has no test caller: no mock app")
+)]
+pub(crate) mod events;
 mod extract;
 pub mod opener;
 #[expect(dead_code, reason = "first caller is the #[ipc] expansion (T9, T10)")]
