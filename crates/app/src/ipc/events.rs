@@ -62,7 +62,7 @@ macro_rules! app_events {
 }
 
 app_events! {
-    "prices-updated" => PricesUpdated(trade_core::ipc_contract::RefreshResult),
+    "prices-updated" => PricesUpdated(Option<trade_core::ipc_contract::RefreshResult>),
     "rates-updated" => RatesUpdated(()),
     "sources-updated" => SourcesUpdated(()),
     "bybit-import-pending" => BybitImportPending(InlineJson),
@@ -176,7 +176,10 @@ mod tests {
     #[test]
     fn the_table_carries_the_payload_type() {
         let find = |name: &str| EVENTS.iter().find(|event| event.name == name).unwrap();
-        assert_eq!((find("prices-updated").payload_ts)(), "RefreshResult");
+        assert_eq!(
+            (find("prices-updated").payload_ts)(),
+            "RefreshResult | null"
+        );
         assert_eq!((find("rates-updated").payload_ts)(), "null");
         assert_eq!((find("price-alert").payload_ts)(), "unknown");
     }
