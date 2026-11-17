@@ -56,7 +56,8 @@ impl Session {
         Self::with_store(Arc::new(SandboxStore))
     }
 
-    fn with_store(store: Arc<dyn Persistence>) -> Self {
+    /// A session whose snapshots go to `store` (the test kit's in-memory one).
+    pub(crate) fn with_store(store: Arc<dyn Persistence>) -> Self {
         Self {
             dirty: false,
             revision: 0,
@@ -76,7 +77,7 @@ impl Session {
 
     /// Publish the events of a finished transaction: only a touched one that
     /// returned `Ok` calls this; an untouched one drops them.
-    pub fn deliver(&self, touched: bool, events: Vec<DomainEvent>) {
+    pub(crate) fn deliver(&self, touched: bool, events: Vec<DomainEvent>) {
         if !touched {
             return;
         }

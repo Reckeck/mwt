@@ -292,11 +292,13 @@ mod tests {
 #[cfg(test)]
 mod vault_tests {
     use super::super::test_support::*;
+    use crate::model::VaultDoc;
     use crate::model::category::CategoryGroup;
+    use crate::service::UnlockedVault;
 
     #[test]
     fn a_new_vault_has_the_default_categories() {
-        let (_dir, vault) = empty_vault();
+        let vault = UnlockedVault::in_memory(VaultDoc::default());
         let group = |key: &str| {
             vault
                 .doc

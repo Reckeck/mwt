@@ -492,13 +492,41 @@ mod tests {
         crate::kernel::events::KeysChanged { keys: Vec::new() }.into()
     }
 
+    /// What a subscriber of the transaction's own event could see the moment
+    /// it was called: the newest revision announced as committed (the wake-up
+    /// of a batched commit) and the decimals already on disk.
+    #[derive(Default)]
+    struct Seen {
+        announced: Option<u64>,
+        delivered_with: Option<(Option<u64>, u32)>,
+    }
+
+    fn watch_delivery(vault: &UnlockedVault) -> Arc<std::sync::Mutex<Seen>> {
+        let seen = Arc::new(std::sync::Mutex::new(Seen::default()));
+        let record = seen.clone();
+        let path = vault.path.clone();
+        vault.session.bus().subscribe(move |event| {
+            let mut state = record.lock().unwrap();
+            match event {
+                DomainEvent::Committed(committed) => state.announced = Some(committed.revision),
+                _ => state.delivered_with = Some((state.announced, decimals_on_disk(&path))),
+            }
+        });
+        seen
+    }
+
     #[test]
     fn a_committed_transaction_delivers_its_events_after_commit() {
         for now in [false, true] {
             let (_dir, mut vault, _) = batched();
             let count = count_events(&vault);
+            let seen = watch_delivery(&vault);
+            let before = vault.session.revision();
+            let old_decimals = decimals_on_disk(&vault.path);
+            let new_decimals = old_decimals + 1;
             let during = count.clone();
             let body = move |tx: &mut Tx<'_>| {
+                tx.doc_mut().settings.display_decimals = new_decimals;
                 tx.touch();
                 tx.emit(event());
                 assert_eq!(during.load(Ordering::SeqCst), 0);
@@ -510,6 +538,16 @@ mod tests {
                 vault.transact(body).unwrap();
             }
             assert_eq!(count.load(Ordering::SeqCst), 1);
+            let (announced, on_disk) = seen.lock().unwrap().delivered_with.unwrap();
+            if now {
+                // The file was written before the subscriber ran.
+                assert_eq!(on_disk, new_decimals);
+            } else {
+                // The revision was bumped and announced (dirty, writer woken)
+                // before the subscriber ran; the file waits for the writer.
+                assert_eq!(announced, Some(before + 1));
+                assert_eq!(on_disk, old_decimals);
+            }
         }
     }
 

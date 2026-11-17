@@ -26,6 +26,8 @@ pub mod sandbox;
 pub mod service;
 pub mod storage;
 pub mod sync;
+#[cfg(any(test, feature = "testkit"))]
+pub mod testkit;
 pub mod time;
 pub mod txinfo;
 pub mod updates;
