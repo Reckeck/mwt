@@ -2,7 +2,7 @@
 //! a fruit ("Juicy Orange", «Swift Mango»). Other devices see it in the
 //! list of devices nearby and while pairing; the user can change it.
 
-use rand::Rng;
+use rand::{Rng, RngExt};
 
 #[derive(Debug, Clone, Copy)]
 enum Gender {
@@ -90,8 +90,8 @@ const EN_FRUITS: &[&str] = &[
 /// A new name in Russian (`ru`) or English.
 pub fn generate(ru: bool, rng: &mut impl Rng) -> String {
     if ru {
-        let (masculine, feminine, neuter) = RU_ADJECTIVES[rng.gen_range(0..RU_ADJECTIVES.len())];
-        let (fruit, gender) = RU_FRUITS[rng.gen_range(0..RU_FRUITS.len())];
+        let (masculine, feminine, neuter) = RU_ADJECTIVES[rng.random_range(0..RU_ADJECTIVES.len())];
+        let (fruit, gender) = RU_FRUITS[rng.random_range(0..RU_FRUITS.len())];
         let adjective = match gender {
             Gender::Masculine => masculine,
             Gender::Feminine => feminine,
@@ -99,8 +99,8 @@ pub fn generate(ru: bool, rng: &mut impl Rng) -> String {
         };
         format!("{adjective} {fruit}")
     } else {
-        let adjective = EN_ADJECTIVES[rng.gen_range(0..EN_ADJECTIVES.len())];
-        let fruit = EN_FRUITS[rng.gen_range(0..EN_FRUITS.len())];
+        let adjective = EN_ADJECTIVES[rng.random_range(0..EN_ADJECTIVES.len())];
+        let fruit = EN_FRUITS[rng.random_range(0..EN_FRUITS.len())];
         format!("{adjective} {fruit}")
     }
 }

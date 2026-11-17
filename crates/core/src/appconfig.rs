@@ -483,7 +483,7 @@ impl AppSettings {
         {
             return false;
         }
-        self.device_name = Some(crate::sync::alias::generate(ru, &mut rand::thread_rng()));
+        self.device_name = Some(crate::sync::alias::generate(ru, &mut rand::rng()));
         true
     }
 
