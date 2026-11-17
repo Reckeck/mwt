@@ -24,7 +24,7 @@ use crate::model::planning::Reminder;
 use crate::model::transaction::Transaction;
 use crate::service::UnlockedVault;
 
-use super::catalog::{NodeDef, node_def};
+use super::catalog::{NodeDef, ParamKind, node_def};
 use super::graph::{Graph, Node};
 use super::model::{QueuedActions, RunOutcome, WaitKind, WorkflowRun, WorkflowWait};
 use super::types::{PortType, WfValue};
@@ -1133,6 +1133,17 @@ impl Executor<'_> {
         if let Some(edge) = self.graph.edge_into(&node.id, name) {
             let (from, port) = (edge.from.clone(), edge.from_port.clone());
             return self.output_of(&from, &port);
+        }
+        if node_def(&node.kind)
+            .and_then(|def| def.param(name))
+            .is_some_and(|param| {
+                matches!(
+                    param.kind,
+                    ParamKind::Number | ParamKind::Day | ParamKind::Weekday
+                )
+            })
+        {
+            self.number_param(node, name)?;
         }
         Ok(self.param(node, name))
     }

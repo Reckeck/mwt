@@ -443,9 +443,16 @@ struct Run {
     depleted_at: Option<u32>,
 }
 
-/// `balance` in money of today; a quotient beyond a decimal saturates.
+/// `balance` in money of today; a quotient beyond a decimal saturates to the
+/// bound of its sign.
 fn deflate(balance: Decimal, deflator: Decimal) -> Decimal {
-    balance.checked_div(deflator).unwrap_or(Decimal::MAX)
+    balance.checked_div(deflator).unwrap_or_else(|| {
+        if balance.is_sign_negative() == deflator.is_sign_negative() {
+            Decimal::MAX
+        } else {
+            Decimal::MIN
+        }
+    })
 }
 
 impl Run {
@@ -825,6 +832,14 @@ mod tests {
 
     fn amt(raw: &str) -> Amount {
         Amount::parse(raw).unwrap()
+    }
+
+    #[test]
+    fn deflating_past_a_decimal_saturates_by_sign() {
+        let tiny = Decimal::new(1, 28);
+        assert_eq!(deflate(Decimal::MAX, tiny), Decimal::MAX);
+        assert_eq!(deflate(Decimal::MIN, tiny), Decimal::MIN);
+        assert_eq!(deflate(Decimal::MAX, -tiny), Decimal::MIN);
     }
 
     fn assert_amt(actual: Amount, expected: &str) {

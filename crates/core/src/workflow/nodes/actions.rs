@@ -38,6 +38,9 @@ const MAX_WAIT_HOURS: i64 = 876_000;
 /// Whole seconds in a wait of `hours`; a wait beyond the limit is an error.
 fn wait_seconds(hours: Amount) -> Result<i64, String> {
     let hours = hours.into_inner();
+    if hours < Decimal::ZERO {
+        return Err("the wait cannot be negative".into());
+    }
     if hours > Decimal::from(MAX_WAIT_HOURS) {
         return Err("the wait is too long".into());
     }
@@ -569,7 +572,8 @@ impl Executor<'_> {
                         ),
                     ));
                 }
-                let hours = json_number(&self.raw_param(node, "timeout_hours"))
+                let hours = self
+                    .number_param(node, "timeout_hours")?
                     .unwrap_or(Amount::ZERO)
                     .max(Amount::ZERO);
                 let resume_at = if hours.is_zero() {
@@ -619,10 +623,7 @@ impl Executor<'_> {
                 ))
             }
             "action.wait" => {
-                let hours = self
-                    .number_input(node, "hours")?
-                    .unwrap_or(Amount::ZERO)
-                    .max(Amount::ZERO);
+                let hours = self.number_input(node, "hours")?.unwrap_or(Amount::ZERO);
                 let wait = wait_seconds(hours)?;
                 let resume_at = crate::calendar::iso(now + wait);
                 if self.ctx.mode == RunMode::DryRun {
@@ -848,5 +849,28 @@ mod tests {
             outcome_of("action.wait", json!({ "hours": "24" })),
             RunOutcome::Done
         ));
+    }
+
+    #[test]
+    fn a_wait_beyond_the_number_bound_is_an_error_not_zero() {
+        assert!(
+            failure(
+                "action.wait",
+                json!({ "hours": 10_000_000_000_000_000_000_u64 })
+            )
+            .contains("out of range")
+        );
+        assert!(
+            failure(
+                "action.confirm",
+                json!({ "timeout_hours": 10_000_000_000_000_000_000_u64 })
+            )
+            .contains("out of range")
+        );
+    }
+
+    #[test]
+    fn a_negative_wait_is_an_error() {
+        assert!(super::wait_seconds(crate::Amount::parse("-1").unwrap()).is_err());
     }
 }

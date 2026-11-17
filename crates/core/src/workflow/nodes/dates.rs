@@ -399,4 +399,16 @@ mod tests {
             RunOutcome::Done
         );
     }
+
+    #[test]
+    fn date_add_of_a_number_beyond_the_bound_is_an_error_not_zero() {
+        use crate::workflow::RunOutcome;
+        use serde_json::json;
+        let outcome =
+            outcome_of(json!({ "unit": "days", "amount": 10_000_000_000_000_000_000_u64 }));
+        assert!(
+            matches!(&outcome, RunOutcome::Failed { message } if message.contains("out of range")),
+            "{outcome:?}"
+        );
+    }
 }

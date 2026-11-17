@@ -35,6 +35,23 @@ pub(crate) fn json_number(value: &Value) -> Option<Amount> {
     }
 }
 
+/// Like `json_number`, but a valid number beyond the input bound is an
+/// error, not an absent value: callers must not read it as zero.
+pub(crate) fn json_number_checked(value: &Value) -> Result<Option<Amount>, String> {
+    let text = match value {
+        Value::Number(number) => number.to_string(),
+        Value::String(text) => text.trim().replace(',', "."),
+        _ => return Ok(None),
+    };
+    match Amount::parse(&text) {
+        Ok(amount) => Ok(Some(amount)),
+        Err(_) if rust_decimal::Decimal::from_str_exact(&text).is_ok() => {
+            Err("number out of range".to_string())
+        }
+        Err(_) => Ok(None),
+    }
+}
+
 pub(crate) fn json_text(value: &Value) -> String {
     match value {
         Value::Null => String::new(),
@@ -83,6 +100,12 @@ impl Executor<'_> {
             Value::String(symbol) if !symbol.trim().is_empty() => Some(self.vault.wf_asset(symbol)),
             _ => None,
         }
+    }
+
+    /// A number field: absent is `None`, a number beyond the bound is an error.
+    pub(crate) fn number_param(&self, node: &Node, name: &str) -> Result<Option<Amount>, String> {
+        json_number_checked(&self.raw_param(node, name))
+            .map_err(|message| format!("«{name}»: {message}"))
     }
 
     /// A field's value as a typed value, by the kind of its editor.
