@@ -146,6 +146,7 @@ jobs:
       contents: read
       packages: write # images.yml
       actions: write # deps deletes the lane's older caches
+      pull-requests: read # changes lists the PR files; a called workflow gets no more than this grants
 
   # ------------------------------------------------------------------ frontend
   # `vite build` once for every platform: dist/ goes to the builds as an artifact, and their Tauri
