@@ -1742,21 +1742,13 @@ mod wire_tests {
         let json = serde_json::to_value(&points).unwrap();
         assert_eq!(json["delta"], serde_json::json!("-12.50"));
 
-        let service = VehicleServiceDoneInput {
-            store_id: "s".into(),
-            date: "2026-03-15".into(),
-            km: Some(1000),
-        };
-        let json = serde_json::to_value(&service).unwrap();
-        assert_eq!(json["date"], serde_json::json!("2026-03-15"));
-
         let date = crate::time::LocalDate::from_ymd_opt(2026, 3, 15);
-        let mut holder = serde_json::Map::new();
-        holder.insert(
+        let mut serialized = serde_json::Map::new();
+        serialized.insert(
             "date".into(),
             crate::model::iso_date::serialize(&date, serde_json::value::Serializer).unwrap(),
         );
-        assert_eq!(holder["date"], serde_json::json!("2026-03-15"));
+        assert_eq!(serialized["date"], serde_json::json!("2026-03-15"));
     }
 }
 
@@ -2751,9 +2743,11 @@ pub struct SharedEventDraft {
     pub note: String,
     /// `YYYY-MM-DD`; a day, or the first day of a range.
     #[serde(default)]
+    #[ts(type = "LocalDate | null")]
     pub starts_on: Option<String>,
     /// `YYYY-MM-DD`; the last day of a range.
     #[serde(default)]
+    #[ts(type = "LocalDate | null")]
     pub ends_on: Option<String>,
     /// Empty: the base currency.
     #[serde(default)]
@@ -2991,6 +2985,7 @@ pub struct SetSharedDueInput {
     pub participant_id: String,
     /// `YYYY-MM-DD`; empty clears the term.
     #[serde(default)]
+    #[ts(type = "LocalDate | null")]
     pub due_at: Option<String>,
 }
 

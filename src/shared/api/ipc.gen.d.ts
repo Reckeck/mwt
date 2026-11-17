@@ -6304,7 +6304,7 @@ type SetSharedDueInput = { event_id: string, participant_id: string,
 /**
  * `YYYY-MM-DD`; empty clears the term.
  */
-due_at: string | null, };
+due_at: LocalDate | null, };
 
 type SetSharedItemSplitInput = { event_id: string, item_id: string, split: ItemSplit, };
 
@@ -6535,11 +6535,11 @@ type SharedEventDraft = { title: string, note: string,
 /**
  * `YYYY-MM-DD`; a day, or the first day of a range.
  */
-starts_on: string | null, 
+starts_on: LocalDate | null, 
 /**
  * `YYYY-MM-DD`; the last day of a range.
  */
-ends_on: string | null, 
+ends_on: LocalDate | null, 
 /**
  * Empty: the base currency.
  */
