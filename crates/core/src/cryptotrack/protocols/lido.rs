@@ -528,7 +528,7 @@ mod tests {
         let leg_tokens: Vec<_> = reading
             .tokens
             .iter()
-            .map(|t| CryptoAsset::Token(t.token.clone()))
+            .map(|transfer| CryptoAsset::Token(transfer.token.clone()))
             .collect();
         assert_eq!(leg_tokens, vec![reading.legs[0].asset.clone()]);
         assert_eq!(leg_token_of(&TOKENS[3]).symbol.as_deref(), Some("wstETH"));
