@@ -13,7 +13,7 @@
 //! offline. The PAKE key is bound to the Noise handshake hash, so a
 //! confirmation cannot be carried over to another connection.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use spake2::{Ed25519Group, Identity, Password, Spake2};
@@ -148,9 +148,9 @@ impl CodeAttempt {
 }
 
 fn keyed(key: &[u8]) -> HmacSha256 {
-    <HmacSha256 as Mac>::new_from_slice(key).unwrap_or_else(|_| {
+    <HmacSha256 as KeyInit>::new_from_slice(key).unwrap_or_else(|_| {
         // HMAC takes keys of any length; this branch cannot be reached.
-        <HmacSha256 as Mac>::new_from_slice(&[0]).expect("hmac key")
+        <HmacSha256 as KeyInit>::new_from_slice(&[0]).expect("hmac key")
     })
 }
 
