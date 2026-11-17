@@ -247,10 +247,11 @@ pub enum TakeIn {
 }
 
 /// Finish [`sync_before_open`] on the opened vault. The copy is read with the
-/// same password; a copy that does not open with it or is another vault
-/// falls back to the old behaviour (a pull replaces the file, a conflict is
-/// reported for the user to resolve). `<vault>.bak` keeps the file as it was.
-/// Afterwards the result goes back to the copy.
+/// same password and merged into the opened vault. An external copy that does
+/// not open under this vault's key (another vault, damaged, or cheaper) is
+/// refused and left for the user: this vault opens as it is. A merge conflict
+/// is reported for the user to resolve. `<vault>.bak` keeps the file as it
+/// was. Afterwards the result goes back to the copy.
 pub fn take_in(
     app: &AppHandle,
     vault: &mut UnlockedVault,
