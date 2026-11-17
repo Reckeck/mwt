@@ -35,12 +35,14 @@ pub mod vault_recents;
 pub mod workflows;
 
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 use trade_core::error::Error;
 use trade_core::pricing::PricingService;
 use trade_core::service::UnlockedVault;
+
+use crate::ipc::opener::{ExternalOpener, SystemOpener};
 
 /// Global application state managed by Tauri.
 pub struct AppState {
@@ -51,6 +53,8 @@ pub struct AppState {
     pub notify: Mutex<crate::notify_store::NotifyMemory>,
     /// The open vault is the sandbox (see `commands::sandbox`).
     pub sandbox: AtomicBool,
+    /// The only way to open a link or a file in the system.
+    pub opener: Arc<dyn ExternalOpener>,
 }
 
 impl AppState {
@@ -61,6 +65,7 @@ impl AppState {
             vault_path: Mutex::new(PathBuf::new()),
             notify: Mutex::new(crate::notify_store::NotifyMemory::default()),
             sandbox: AtomicBool::new(false),
+            opener: Arc::new(SystemOpener),
         }
     }
 }
@@ -72,6 +77,7 @@ impl Default for AppState {
 }
 
 /// Map a core error into a Tauri-compatible error string (code-prefixed).
+#[cfg(test)]
 pub fn err_to_string(err: Error) -> String {
     format!("{}: {}", err.code(), err)
 }

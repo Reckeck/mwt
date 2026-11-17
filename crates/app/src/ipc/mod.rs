@@ -2,5 +2,6 @@
 //! run-time helpers around it.
 
 mod error;
+pub mod opener;
 
 pub use error::IpcError;

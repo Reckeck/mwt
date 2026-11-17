@@ -8,19 +8,17 @@ use trade_core::model::cryptotrack::{CryptoToken, TokenId};
 use trade_core::model::store::AssetRef;
 use trade_core::pricing::AssetSearchHit;
 
-use crate::commands::{AppState, err_to_string, require_vault};
+use crate::commands::{AppState, require_vault};
+use crate::ipc::IpcError;
+use crate::ipc::opener::UrlKind;
 
 /// Search crypto assets for the UI comboboxes.
 #[tauri::command]
 pub async fn search_assets(
     query: String,
     state: State<'_, AppState>,
-) -> Result<Vec<AssetSearchHit>, String> {
-    state
-        .pricing
-        .search_assets(&query, 25)
-        .await
-        .map_err(crate::commands::err_to_string)
+) -> Result<Vec<AssetSearchHit>, IpcError> {
+    Ok(state.pricing.search_assets(&query, 25).await?)
 }
 
 /// Cached USD quote of an asset nearest a moment (now when `at` is empty).
@@ -31,8 +29,8 @@ pub async fn search_assets(
 pub async fn get_cached_price(
     input: AssetPriceInput,
     state: State<'_, AppState>,
-) -> Result<CachedPrice, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<CachedPrice, IpcError> {
+    let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     if input.symbol.trim().is_empty() {
         return Ok(CachedPrice::default());
@@ -45,8 +43,8 @@ pub async fn get_cached_price(
 pub async fn convert_amount(
     input: ConvertAmountInput,
     state: State<'_, AppState>,
-) -> Result<ConvertedAmount, String> {
-    let guard = require_vault(&state).map_err(err_to_string)?;
+) -> Result<ConvertedAmount, IpcError> {
+    let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     Ok(ConvertedAmount {
         amount: vault.convert_at(
@@ -64,10 +62,10 @@ pub async fn convert_amount(
 pub async fn refresh_all(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<RefreshResult, String> {
+) -> Result<RefreshResult, IpcError> {
     let favorites = crate::commands::app_settings::current_settings(&app).favorite_currencies;
     let assets = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
+        let guard = require_vault(&state)?;
         let vault = guard.as_ref().unwrap();
         let mut seen = std::collections::HashSet::new();
         let held = vault
@@ -91,18 +89,14 @@ pub async fn refresh_all(
         without_module_tokens(wanted, &vault.doc.crypto_tokens, module_allowed)
     };
 
-    let prices = state
-        .pricing
-        .fetch_prices(&assets)
-        .await
-        .map_err(crate::commands::err_to_string)?;
+    let prices = state.pricing.fetch_prices(&assets).await?;
     // The latest table first; when that provider is down, the dated sources
     // (ECB, ЦБ РФ, walking back a few days) still cover the tracked currencies.
     let fx = match state.pricing.fetch_fx().await {
         Ok(fx) => fx,
         Err(err) => {
             let tracked: Vec<String> = {
-                let guard = require_vault(&state).map_err(err_to_string)?;
+                let guard = require_vault(&state)?;
                 guard
                     .as_ref()
                     .unwrap()
@@ -113,13 +107,13 @@ pub async fn refresh_all(
             let today = chrono::Utc::now().date_naive();
             let fallback = state.pricing.fetch_fx_on(&tracked, today, today).await;
             if fallback.is_empty() {
-                return Err(err_to_string(err));
+                return Err(err.into());
             }
             fallback
         }
     };
 
-    let mut guard = require_vault(&state).map_err(err_to_string)?;
+    let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
     vault.apply_prices(&prices);
     vault.apply_fx(&fx);
@@ -172,7 +166,7 @@ pub async fn ensure_fx(
     input: EnsureFxInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<EnsureFxOutput, String> {
+) -> Result<EnsureFxOutput, IpcError> {
     let today = chrono::Utc::now().date_naive();
     let date = match input
         .date
@@ -186,7 +180,7 @@ pub async fn ensure_fx(
         None => today,
     };
     let wanted = {
-        let guard = require_vault(&state).map_err(err_to_string)?;
+        let guard = require_vault(&state)?;
         guard
             .as_ref()
             .unwrap()
@@ -201,7 +195,7 @@ pub async fn ensure_fx(
         .filter(|code| !points.iter().any(|point| &point.currency == code))
         .collect();
     if !points.is_empty() {
-        let mut guard = require_vault(&state).map_err(err_to_string)?;
+        let mut guard = require_vault(&state)?;
         let vault = guard.as_mut().unwrap();
         vault.apply_fx(&points);
         let restamped = vault.restamp_missing();
@@ -227,17 +221,14 @@ pub async fn ensure_fx(
 /// `file:` or a program's own scheme straight to the system. Neither the
 /// refusal nor the failure repeats the link, which may carry a key.
 #[tauri::command]
-pub async fn open_explorer(_app: AppHandle, url: String) -> Result<(), String> {
-    trade_core::external_url::check_external_url(&url).map_err(err_to_string)?;
-    tauri_plugin_opener::open_url(&url, None::<&str>)
-        .map_err(|_| "failed to open the link".to_string())?;
-    Ok(())
+pub async fn open_explorer(state: State<'_, AppState>, url: String) -> Result<(), IpcError> {
+    state.opener.open_url(&url, UrlKind::Explorer)
 }
 
 /// Fetch OHLCV candles from Binance public API for charting.
 /// No vault access required — pure public data.
 #[tauri::command]
-pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, String> {
+pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, IpcError> {
     use reqwest::Client;
     use trade_core::market::fetch_candles;
 
@@ -249,9 +240,7 @@ pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, Str
     let interval_min = input.interval_min;
 
     let client = Client::new();
-    let candles = fetch_candles(&symbol, interval_min, limit, &client)
-        .await
-        .map_err(crate::commands::err_to_string)?;
+    let candles = fetch_candles(&symbol, interval_min, limit, &client).await?;
 
     let candles = candles
         .into_iter()
