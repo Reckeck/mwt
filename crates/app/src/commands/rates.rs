@@ -9,6 +9,7 @@ use trade_core::service::{FetchedRates, InflationCurrency};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Months of inflation asked for: the chart's two years plus a spare.
 const INFLATION_MONTHS_BACK: u32 = 25;
@@ -89,3 +90,5 @@ pub async fn set_inflation_mode(
     let _ = app.emit("rates-updated", ());
     Ok(overview)
 }
+
+ipc_commands!(rates_commands, RATES_NAMES, commands::rates: [refresh_rates, get_inflation_overview, set_inflation_mode]);

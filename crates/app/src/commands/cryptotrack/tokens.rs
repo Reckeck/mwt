@@ -11,6 +11,7 @@ use trade_core::model::cryptotrack::TokenId;
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::commands::ipc_commands;
 
 /// The known and the quarantined tokens of the followed accounts.
 #[tauri::command]
@@ -63,3 +64,5 @@ pub async fn crypto_set_token_basis(
         vault.crypto_set_token_basis(&token, input.basis_usd)
     })
 }
+
+ipc_commands!(cryptotrack_tokens_commands, CRYPTOTRACK_TOKENS_NAMES, commands::cryptotrack::tokens: [crypto_list_tokens, crypto_confirm_token, crypto_reject_token, crypto_clear_token_verdict, crypto_set_token_basis]);

@@ -3,6 +3,7 @@
 use tauri::AppHandle;
 use trade_core::ipc_contract::UpdateStatusDto;
 
+use crate::ipc::commands::ipc_commands;
 use crate::updates;
 
 #[tauri::command]
@@ -26,3 +27,5 @@ pub async fn update_restart_now(app: AppHandle) -> Result<(), String> {
     }
     Ok(())
 }
+
+ipc_commands!(updates_commands, UPDATES_NAMES, commands::updates: [update_status, update_check_now, update_restart_now]);

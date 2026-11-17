@@ -29,6 +29,7 @@ use trade_core::workflow::Workflow;
 use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Run `read` against the open vault. `E` is `IpcError`, or `String` for a
 /// command not yet converted (the shim goes with T24).
@@ -740,3 +741,5 @@ pub async fn get_utility_payment_draft(
         vault.utility_payment_draft(&item_id, &period, &zone)
     })
 }
+
+ipc_commands!(planning_commands, PLANNING_NAMES, commands::planning: [list_automations, create_automation, update_automation, delete_automation, run_automation, simulate_automations, list_automation_runs, retry_automation_run, skip_automation_run, confirm_estimated_amount, detach_automation, list_budgets, create_budget, update_budget, delete_budget, get_budget_status, get_daily_budget, get_month_summary, list_goals, create_goal, update_goal, delete_goal, restore_goal, get_goal_progress, get_goal_calendar, goal_from_scenario, emergency_fund_get, emergency_fund_set, emergency_fund_toggle, list_reminders, create_reminder, update_reminder, delete_reminder, set_reminder_done, finish_reminder_series, snooze_reminder, list_price_alerts, create_price_alert, update_price_alert, delete_price_alert, get_upcoming, list_my_automations, set_my_automation_active, get_automation_card, preview_automation_dates, list_automation_journal, set_loyalty_info, create_loyalty_program, adjust_points, get_cashback_report, set_deposit_terms, get_deposit_report, get_interest_tax, list_utility_items, create_utility_item, update_utility_item, delete_utility_item, add_meter_reading, delete_meter_reading, update_meter_reading, get_utility_bill, pay_utility_bill, preview_utility_formula, get_meter_trend, get_property_summary, get_utility_payment_draft]);

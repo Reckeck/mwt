@@ -19,6 +19,7 @@ use crate::commands::app_settings::current_zone;
 use crate::commands::planning::with_vault_mut;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 fn build_report(
     app: &AppHandle,
@@ -282,3 +283,5 @@ pub async fn set_pinned(
         Ok(vault.pinned(now_secs(), &zone))
     })
 }
+
+ipc_commands!(analytics_commands, ANALYTICS_NAMES, commands::analytics: [get_report, get_report_overview, capital_health, health_settings_set, export_report_csv, get_month_balance, set_carry_over, get_calendar, get_spending_overview, get_month_pace, get_net_worth_trend, get_dashboard_today, get_scenario_status, get_entity_card, get_search_index, search_transactions, get_pinned, set_pinned]);

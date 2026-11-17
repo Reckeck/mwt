@@ -10,6 +10,7 @@ use trade_core::model::vault::now_iso;
 use crate::commands::app_settings::{config_dir, current_settings, save};
 use crate::cryptotrack::jobs;
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// What each account's last read did, and what the module is reading now.
 #[tauri::command]
@@ -48,3 +49,5 @@ pub async fn crypto_set_tracking_consent(app: AppHandle, consent: bool) -> Resul
     }
     Ok(())
 }
+
+ipc_commands!(cryptotrack_sync_commands, CRYPTOTRACK_SYNC_NAMES, commands::cryptotrack::sync: [crypto_sync_status, crypto_sync_now, crypto_set_tracking_consent]);

@@ -8,6 +8,7 @@ use trade_core::model::planning::CategorizationRule;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 #[tauri::command]
 pub async fn list_categories(state: State<'_, AppState>) -> Result<Vec<Category>, IpcError> {
@@ -130,3 +131,5 @@ pub async fn reorder_categorization_rules(
         .reorder_categorization_rules(&ids)
         .map_err(IpcError::from)
 }
+
+ipc_commands!(categories_commands, CATEGORIES_NAMES, commands::categories: [list_categories, create_category, update_category, archive_category, delete_category, list_categorization_rules, create_categorization_rule, update_categorization_rule, delete_categorization_rule, reorder_categorization_rules]);

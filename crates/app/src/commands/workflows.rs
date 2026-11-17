@@ -25,6 +25,7 @@ use trade_core::workflow::{
 use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Most runs one listing returns by default.
 const DEFAULT_RUNS: u32 = 100;
@@ -346,3 +347,5 @@ pub async fn run_workflow_tests(
         vault.run_workflow_tests(&id, now_secs(), &zone)
     })
 }
+
+ipc_commands!(workflows_commands, WORKFLOWS_NAMES, commands::workflows: [workflow_node_catalog, validate_workflow, list_workflows, get_workflow, save_workflow, save_workflow_draft, discard_workflow_draft, set_workflow_active, delete_workflow, restore_workflow_version, dry_run_workflow, run_workflow_now, list_workflow_runs, list_workflow_queue, confirm_workflow_queued, discard_workflow_queued, list_workflow_waits, answer_workflow_wait, list_workflow_vars, set_workflow_var, delete_workflow_var, export_workflow, import_workflow, preview_workflow_import, workflow_templates, workflow_from_template, save_workflow_test, delete_workflow_test, run_workflow_tests]);

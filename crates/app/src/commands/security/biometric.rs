@@ -14,6 +14,7 @@ use trade_core::service::security_level::level_of_vault_file;
 use crate::biometric::{BioError, system_gate};
 use crate::commands::{AppState, app_settings, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// Quick unlock exists only for level 3; below it the state is `Unavailable`.
 pub(crate) fn state_of(app: &AppHandle, path: &Path) -> BiometricState {
@@ -112,3 +113,5 @@ pub async fn biometric_unlock(
     }
     opened
 }
+
+ipc_commands!(security_biometric_commands, SECURITY_BIOMETRIC_NAMES, commands::security::biometric: [biometric_state, biometric_enable, biometric_disable, biometric_unlock]);

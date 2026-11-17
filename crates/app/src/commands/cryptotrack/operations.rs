@@ -18,6 +18,7 @@ use trade_core::ipc_contract::cryptotrack::operations::{
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::commands::ipc_commands;
 
 /// The operations of the followed accounts, one page of the filtered list.
 #[tauri::command]
@@ -49,3 +50,5 @@ pub async fn crypto_set_override(
 ) -> Result<CryptoSetOverrideResult, String> {
     with_vault_mut(&state, |vault| vault.crypto_set_override(&input))
 }
+
+ipc_commands!(cryptotrack_operations_commands, CRYPTOTRACK_OPERATIONS_NAMES, commands::cryptotrack::operations: [crypto_list_operations, crypto_operation_detail, crypto_set_override]);

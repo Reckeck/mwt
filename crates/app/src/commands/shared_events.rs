@@ -17,6 +17,7 @@ use trade_core::service::{ContactEventBalance, SharedEventSummary, SharedEventVi
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// The events, newest first; archived ones only on request.
 #[tauri::command]
@@ -371,3 +372,5 @@ pub async fn list_shared_tx_links(
     let guard = require_vault(&state)?;
     Ok(guard.as_ref().unwrap().shared_tx_links())
 }
+
+ipc_commands!(shared_events_commands, SHARED_EVENTS_NAMES, commands::shared_events: [list_shared_events, get_shared_event, create_shared_event, update_shared_event, delete_shared_event, archive_shared_event, add_shared_participant, update_shared_participant, remove_shared_participant, make_shared_participant_contact, add_shared_item, update_shared_item, delete_shared_item, set_shared_item_split, add_shared_purchase, update_shared_purchase, delete_shared_purchase, attach_payment_to_shared_event, set_shared_share_override, settle_shared, write_off_shared, reassign_shared, delete_shared_settlement, set_shared_due, get_shared_event_share_text, get_contact_shared_events, list_shared_tx_links]);

@@ -18,6 +18,7 @@ use trade_core::sandbox::SandboxDir;
 use crate::commands::auth::info_of;
 use crate::commands::{AppState, app_settings, lock_vault};
 use crate::ipc::IpcError;
+use crate::ipc::commands::ipc_commands;
 
 /// The sandbox folder in this app's cache directory (one per channel: the
 /// release and the dev build have their own).
@@ -173,6 +174,8 @@ pub async fn close_sandbox(app: AppHandle, state: State<'_, AppState>) -> Result
 pub async fn is_sandbox(state: State<'_, AppState>) -> Result<bool, IpcError> {
     Ok(is_active(&state))
 }
+
+ipc_commands!(sandbox_commands, SANDBOX_NAMES, commands::sandbox: [open_sandbox, reset_sandbox, close_sandbox, is_sandbox]);
 
 #[cfg(test)]
 mod tests {
