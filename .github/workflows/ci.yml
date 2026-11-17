@@ -291,7 +291,7 @@ jobs:
       matrix:
         include:
           - { lane: clippy-windows, os: windows-latest, xtask: bin/xtask.exe }
-          # Paused for now, like the clippy-macos job: { lane: clippy-macos, os: macos-latest, xtask: cargo xtask }
+          # Paused with the clippy-macos job: to switch it on, set MACOS_ENABLED=true AND restore this entry: { lane: clippy-macos, os: macos-latest, xtask: cargo xtask }
     permissions:
       contents: read
       actions: write
@@ -680,8 +680,9 @@ jobs:
 
   clippy-macos:
     needs: [images, deps-native]
-    # Paused for now: restore the condition of clippy-windows and the deps-native matrix entry.
-    if: false
+    # Paused unless the repo variable MACOS_ENABLED is `true`; setting it is not enough: also restore the
+    # deps-native matrix entry for clippy-macos (see that job).
+    if: vars.MACOS_ENABLED == 'true'
     runs-on: macos-latest
     timeout-minutes: 60
     permissions:

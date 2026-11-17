@@ -59,10 +59,13 @@ pub struct Snapshots {
 /// The value of each account and of the module at `at`.
 ///
 /// The quantities come from [`held_by_account`], the same function the
-/// present capital uses; this module only prices them.
+/// present capital uses; this module only prices them. An account for which
+/// `counts_account` is false (archived) keeps its own record, but is left out
+/// of the module's value, as it is of the present capital.
 pub fn take<P: Prices>(
     ledger: &Ledger,
     inputs: &PositionInputs<'_>,
+    counts_account: &dyn Fn(&str) -> bool,
     at: &str,
     prices: &P,
 ) -> Snapshots {
@@ -81,11 +84,15 @@ pub fn take<P: Prices>(
             out.unpriced.insert(held.asset.key());
             continue;
         };
+        if held.short {
+            out.incomplete.insert(held.asset.key());
+        }
+        if counts_account(&held.account_id) {
+            total = math::add(total, worth).unwrap_or(total);
+        }
         let slot = by_account.entry(held.account_id).or_insert(Amount::ZERO);
         *slot = math::add(*slot, worth).unwrap_or(*slot);
-        total = math::add(total, worth).unwrap_or(total);
     }
-    note_incomplete(ledger, at, prices, &mut out);
     for (account_id, value) in by_account {
         out.records.push(CryptoSnapshot {
             id: ids::snapshot(Some(&account_id), at),
@@ -101,27 +108,6 @@ pub fn take<P: Prices>(
         value_usd: math::usd(total),
     });
     out
-}
-
-/// Name the priced assets whose wallet part is negative: the history does not
-/// reach back far enough. They add nothing to the value (the shared function
-/// clamps them), but the gap must be visible.
-fn note_incomplete<P: Prices>(ledger: &Ledger, at: &str, prices: &P, out: &mut Snapshots) {
-    for (asset_key, state) in &ledger.assets {
-        if prices.unit_usd(&state.asset, at, "").value.is_none() {
-            continue;
-        }
-        for account_id in ledger.accounts() {
-            let wallet = math::add(
-                ledger.balance(account_id, asset_key),
-                ledger.position(account_id, asset_key),
-            )
-            .unwrap_or(Amount::ZERO);
-            if wallet.is_negative() {
-                out.incomplete.insert(asset_key.clone());
-            }
-        }
-    }
 }
 
 /// The price of an asset for a snapshot, remembering what had none.
@@ -298,7 +284,13 @@ mod tests {
             ),
         ];
         let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
-        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
+        let taken = take(
+            &ledger_of(&events),
+            &none(),
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
         assert_eq!(taken.records.len(), 3);
         let module = taken.records.last().expect("the module's own");
         assert_eq!(module.id, "csnap:2026-03-09:all");
@@ -338,7 +330,13 @@ mod tests {
             ),
         ];
         let book = Book::of(&[(usdc(), "1")]);
-        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
+        let taken = take(
+            &ledger_of(&events),
+            &none(),
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
         let account = taken
             .records
             .iter()
@@ -371,7 +369,13 @@ mod tests {
             ),
         ];
         let book = Book::of(&[(eth(), "2000")]);
-        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
+        let taken = take(
+            &ledger_of(&events),
+            &none(),
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
         assert_eq!(taken.records.last().unwrap().value_usd, amount("2000.00"));
         assert!(taken.unpriced.contains(&usdc().key()));
         assert_eq!(taken.unpriced.len(), 1);
@@ -389,7 +393,13 @@ mod tests {
             OTHER,
         )];
         let book = Book::of(&[(eth(), "2000")]);
-        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
+        let taken = take(
+            &ledger_of(&events),
+            &none(),
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
         assert_eq!(taken.records.last().unwrap().value_usd, Amount::ZERO);
         assert!(taken.incomplete.contains(&eth().key()));
     }
@@ -406,7 +416,13 @@ mod tests {
             OTHER,
         )];
         let book = Book::of(&[(eth(), "3000.005")]);
-        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
+        let taken = take(
+            &ledger_of(&events),
+            &none(),
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
         // 0.333333333333333333 * 3000.005 = 1000.0033333...
         assert_eq!(taken.records.last().unwrap().value_usd, amount("1000.00"));
     }
@@ -424,8 +440,20 @@ mod tests {
         )];
         let book = Book::of(&[(eth(), "2000")]);
         let ledger = ledger_of(&events);
-        let morning = take(&ledger, &none(), "2026-03-09T08:00:00Z", &book);
-        let evening = take(&ledger, &none(), "2026-03-09T20:00:00Z", &book);
+        let morning = take(
+            &ledger,
+            &none(),
+            &|_account| true,
+            "2026-03-09T08:00:00Z",
+            &book,
+        );
+        let evening = take(
+            &ledger,
+            &none(),
+            &|_account| true,
+            "2026-03-09T20:00:00Z",
+            &book,
+        );
         let ids: Vec<_> = morning.records.iter().map(|one| one.id.clone()).collect();
         let same: Vec<_> = evening.records.iter().map(|one| one.id.clone()).collect();
         assert_eq!(ids, same);
@@ -456,7 +484,13 @@ mod tests {
             counts: &|_asset| true,
         };
         let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
-        let taken = take(&Ledger::default(), &inputs, "2026-03-09T12:00:00Z", &book);
+        let taken = take(
+            &Ledger::default(),
+            &inputs,
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
         // 2 ETH * 2 000 = 4 000, plus (3 000 - 1 000) USDC = 2 000.
         assert_eq!(taken.records.last().unwrap().value_usd, amount("6000.00"));
         assert_eq!(taken.records[0].value_usd, amount("6000.00"));
@@ -491,7 +525,13 @@ mod tests {
             counts: &|_asset| true,
         };
         let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
-        let taken = take(&ledger_of(&events), &inputs, "2026-03-09T12:00:00Z", &book);
+        let taken = take(
+            &ledger_of(&events),
+            &inputs,
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
         assert_eq!(taken.records.last().unwrap().value_usd, amount("2000.00"));
     }
 
@@ -518,7 +558,13 @@ mod tests {
             ),
         ];
         let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
-        let taken = take(&ledger_of(&events), &none(), "2026-03-09T12:00:00Z", &book);
+        let taken = take(
+            &ledger_of(&events),
+            &none(),
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
         let values: Vec<Amount> = taken.records.iter().map(|one| one.value_usd).collect();
         assert_eq!(
             values,
@@ -551,8 +597,80 @@ mod tests {
             counts: &|_asset| true,
         };
         let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
-        let taken = take(&ledger_of(&events), &inputs, "2026-03-09T12:00:00Z", &book);
+        let taken = take(
+            &ledger_of(&events),
+            &inputs,
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
         assert_eq!(taken.records.last().unwrap().value_usd, amount("-1000.00"));
         assert!(taken.incomplete.contains(&eth().key()));
+    }
+
+    #[test]
+    fn an_archived_account_keeps_its_record_but_not_the_total() {
+        let events = vec![
+            event(
+                "ev-1",
+                "acc-1",
+                CryptoTxKind::Transfer,
+                CryptoDirection::In,
+                eth(),
+                "1.5",
+                OTHER,
+            ),
+            event(
+                "ev-2",
+                "acc-2",
+                CryptoTxKind::Transfer,
+                CryptoDirection::In,
+                usdc(),
+                "250",
+                OTHER,
+            ),
+        ];
+        let book = Book::of(&[(eth(), "2000"), (usdc(), "1")]);
+        let live = |account_id: &str| account_id != "acc-2";
+        let taken = take(
+            &ledger_of(&events),
+            &none(),
+            &live,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
+        let values: Vec<Amount> = taken.records.iter().map(|one| one.value_usd).collect();
+        assert_eq!(
+            values,
+            vec![amount("3000.00"), amount("250.00"), amount("3000.00")]
+        );
+    }
+
+    #[test]
+    fn a_receipt_asset_is_not_flagged_incomplete() {
+        let events = vec![event(
+            "ev-1",
+            "acc-1",
+            CryptoTxKind::Transfer,
+            CryptoDirection::Out,
+            usdc(),
+            "5",
+            OTHER,
+        )];
+        let receipts: BTreeSet<String> = [usdc().key()].into();
+        let inputs = PositionInputs {
+            positions: &[],
+            receipts: &receipts,
+            counts: &|_asset| true,
+        };
+        let book = Book::of(&[(usdc(), "1")]);
+        let taken = take(
+            &ledger_of(&events),
+            &inputs,
+            &|_account| true,
+            "2026-03-09T12:00:00Z",
+            &book,
+        );
+        assert!(taken.incomplete.is_empty());
     }
 }

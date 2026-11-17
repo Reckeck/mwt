@@ -92,7 +92,7 @@ const engineAccountId = computed(() => (isEngineDriven(props.store) ? props.stor
     <template #history>
       <!-- A wallet the engine drives reads its operations from the network: its own list, read-only (spec E10). -->
       <CryptoOperations v-if="engineAccountId" :account-ids="[engineAccountId]" bare />
-      <StoreTransactions v-else :store-id="props.storeId" :include-children="props.includeChildren" :base-currency="props.base" bare />
+      <StoreTransactions v-else :store-id="props.storeId" :include-children="props.includeChildren" bare />
     </template>
     <template #terminal>
       <ExchangeTerminal :store-id="props.storeId" />

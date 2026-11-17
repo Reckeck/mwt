@@ -13,8 +13,18 @@ use crate::cryptotrack::tokens::text::{has_look_alikes, sanitize_name, sanitize_
 use crate::cryptotrack::tokens::{self, TokenStatus, known};
 use crate::error::{Error, Result};
 use crate::ipc_contract::cryptotrack::tokens::{TokenView, TokenWarning};
-use crate::model::cryptotrack::{CryptoToken, TokenId, TokenVerdict};
-use crate::model::vault::now_iso;
+use crate::model::cryptotrack::{CryptoAsset, CryptoToken, TokenId, TokenVerdict};
+use crate::model::vault::{VaultDoc, now_iso};
+
+/// Whether an asset takes part in the totals: the native coin always, a token
+/// when `cryptotrack::tokens::counts_in_totals` says so. The one home of this
+/// rule for the present capital, the fold and the snapshots.
+pub(super) fn counts_asset(doc: &VaultDoc, asset: &CryptoAsset) -> bool {
+    match asset {
+        CryptoAsset::Native { .. } => true,
+        CryptoAsset::Token(token) => tokens::counts_in_totals(doc, token),
+    }
+}
 
 impl UnlockedVault {
     /// Note a token met in an event. A new contract starts in quarantine

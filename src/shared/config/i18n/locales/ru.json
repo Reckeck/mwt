@@ -5130,6 +5130,7 @@
   "money.plan.next": "Дальше в этом месяце",
   "money.plan.fromAutomations": "из Автоматизаций",
   "money.plan.nothingNext": "До конца месяца ничего не запланировано",
+  "money.plan.nextFailed": "Не удалось загрузить план",
   "money.plan.kind.automation": "Схема",
   "money.plan.kind.reminder": "Напоминание",
   "money.plan.kind.other": "Платёж",

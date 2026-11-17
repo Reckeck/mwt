@@ -89,10 +89,7 @@ pub(in crate::service) struct CryptoPositionInputs<'doc> {
 impl CryptoPositionInputs<'_> {
     /// Run `run` with the borrowed form the pure function takes.
     pub fn with<R>(&self, run: impl FnOnce(&PositionInputs<'_>) -> R) -> R {
-        let counts = |asset: &CryptoAsset| match asset {
-            CryptoAsset::Native { .. } => true,
-            CryptoAsset::Token(token) => tokens::counts_in_totals(self.doc, token),
-        };
+        let counts = |asset: &CryptoAsset| super::tokens::counts_asset(self.doc, asset);
         run(&PositionInputs {
             positions: &self.positions,
             receipts: &self.receipts,

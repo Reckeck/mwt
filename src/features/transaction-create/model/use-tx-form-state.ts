@@ -28,6 +28,15 @@ function repeatForm(source: Transaction, storeId: string) {
   })
 }
 
+/** Continuing a chain: the new operation joins its flow, and the property it was opened from. */
+export function applyPropsLinks(
+  form: { flowId: string; propertyId: string },
+  props: Pick<TransactionFormProps, 'flowId' | 'propertyId' | 'transaction'>,
+) {
+  if (props.flowId && !props.transaction) form.flowId = props.flowId
+  if (props.propertyId) form.propertyId = props.propertyId
+}
+
 /** The form's data and what it reads about the wallet it is opened on. */
 export function useTxFormState(props: TransactionFormProps) {
   const editing = computed(() => props.transaction !== null && !props.template)
@@ -54,9 +63,7 @@ export function useTxFormState(props: TransactionFormProps) {
         ? repeatForm(props.prefill, props.storeId)
         : emptyForm(props.storeId, 'payment'),
   )
-  // Continuing a chain: the new operation joins it.
-  if (props.flowId && !props.transaction) form.flowId = props.flowId
-  if (props.propertyId) form.propertyId = props.propertyId
+  applyPropsLinks(form, props)
   if (props.initial && !props.transaction) {
     if (props.initial.amount) form.amount = props.initial.amount
     if (props.initial.comment) form.comment = props.initial.comment
