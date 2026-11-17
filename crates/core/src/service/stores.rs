@@ -67,42 +67,22 @@ pub(crate) fn flatten_tree(nodes: Vec<StoreTreeNode>) -> Vec<StoreTreeNode> {
 
 impl UnlockedVault {
     pub(crate) fn find_store(&self, id: &str) -> Option<&Store> {
-        self.doc.stores.iter().find(|store| store.id == id)
+        crate::money::tree::find_store(&self.doc, id)
     }
 
-    /// Parent chain from the root down to `id`'s parent. Stops at a missing
-    /// parent or at a cycle left behind by a hand-edited vault.
+    /// Parent chain from the root down to `id`'s parent (see [`crate::money::tree::ancestors_of`]).
     pub(crate) fn ancestors_of(&self, id: &str) -> Vec<&Store> {
-        let mut chain = Vec::new();
-        let mut seen = HashSet::from([id.to_string()]);
-        let mut parent = self
-            .find_store(id)
-            .and_then(|store| store.parent_id.as_deref());
-        while let Some(parent_id) = parent {
-            if !seen.insert(parent_id.to_string()) {
-                break;
-            }
-            let Some(store) = self.find_store(parent_id) else {
-                break;
-            };
-            chain.push(store);
-            parent = store.parent_id.as_deref();
-        }
-        chain.reverse();
-        chain
+        crate::money::tree::ancestors_of(&self.doc, id)
     }
 
     /// 0 for a top-level wallet.
     pub fn depth(&self, id: &str) -> usize {
-        self.ancestors_of(id).len()
+        crate::money::tree::depth(&self.doc, id)
     }
 
     /// Top-level wallet that `id` belongs to (itself for a root).
     pub fn root_of(&self, id: &str) -> String {
-        self.ancestors_of(id)
-            .first()
-            .map(|store| store.id.clone())
-            .unwrap_or_else(|| id.to_string())
+        crate::money::tree::root_of(&self.doc, id)
     }
 
     /// Levels below `id`: 0 for a leaf.

@@ -409,22 +409,7 @@ impl UnlockedVault {
 
     /// Every store id a scope covers. An empty id list means the whole vault.
     pub fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String> {
-        if scope.store_ids.is_empty() {
-            return self
-                .doc
-                .stores
-                .iter()
-                .map(|store| store.id.clone())
-                .collect();
-        }
-        let mut out = HashSet::new();
-        for id in &scope.store_ids {
-            out.insert(id.clone());
-            if scope.include_children {
-                out.extend(self.subtree_ids(id));
-            }
-        }
-        out
+        crate::money::tree::resolve_scope(&self.doc, scope)
     }
 
     /// Transactions with at least one leg on a store in `ids`.
@@ -525,27 +510,12 @@ impl UnlockedVault {
 
     /// Direct children of a store.
     pub(crate) fn children_of(&self, parent_id: &str) -> Vec<&Store> {
-        self.doc
-            .stores
-            .iter()
-            .filter(|child| child.parent_id.as_deref() == Some(parent_id))
-            .collect()
+        crate::money::tree::children_of(&self.doc, parent_id)
     }
 
     /// Every descendant id of `root_id`, without `root_id` itself.
     pub(crate) fn subtree_ids(&self, root_id: &str) -> Vec<String> {
-        let mut result = Vec::new();
-        let mut seen = HashSet::from([root_id.to_string()]);
-        let mut queue = vec![root_id.to_string()];
-        while let Some(id) = queue.pop() {
-            for child in self.children_of(&id) {
-                if seen.insert(child.id.clone()) {
-                    result.push(child.id.clone());
-                    queue.push(child.id.clone());
-                }
-            }
-        }
-        result
+        crate::money::tree::subtree_ids(&self.doc, root_id)
     }
 
     /// The whole wallet tree with own and rolled-up values. Roots (and

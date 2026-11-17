@@ -61,6 +61,7 @@ mod stores_tests;
 pub mod transactions;
 #[cfg(test)]
 mod transactions_tests;
+pub mod tree;
 pub mod validate;
 #[cfg(test)]
 mod validate_tests;
