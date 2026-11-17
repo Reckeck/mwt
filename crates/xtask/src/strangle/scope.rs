@@ -1,7 +1,7 @@
 //! Rule 5 of `strangle check --all`: the changed files belong to one task (spec D5). A file is
 //! allowed for the tasks whose area files, regions, `ipc_contract` stub, grants or foundation files
 //! name it; the diff passes when one task allows every file it changes in `service/`, the group
-//! dirs and `usecases/`. Other files are left to the task's own `files:` list.
+//! dirs and `usecases/`, and in the `guarded` paths. Other files are left to the task's own `files:` list.
 
 use std::collections::BTreeSet;
 
@@ -64,6 +64,7 @@ impl<'run> Owners<'run> {
                 .flat_map(|area| area.homes.values())
                 .map(|group| format!("{core}/{group}/")),
         );
+        scope.extend(map.guarded.iter().cloned());
         Self {
             areas: map
                 .areas
@@ -131,6 +132,40 @@ mod tests {
                 .any(|line| line.contains("no single task allows every changed file")),
             "{found:?}"
         );
+    }
+
+    #[test]
+    fn a_guarded_file_in_an_area_diff_is_red() {
+        let found = findings(
+            &real_workspace(),
+            &changed(&[
+                "crates/core/src/service/loyalty.rs",
+                "crates/core/src/lib.rs",
+                "Cargo.lock",
+                "README.md",
+            ]),
+            None,
+        );
+        assert!(
+            found.iter().any(|line| line.contains("no single task")),
+            "{found:?}"
+        );
+        let named = findings(
+            &real_workspace(),
+            &changed(&["crates/core/src/lib.rs", "crates/app/src/main.rs"]),
+            Some("T26"),
+        );
+        assert_eq!(named.len(), 2, "{named:?}");
+    }
+
+    #[test]
+    fn a_guarded_file_is_green_for_its_foundation_task() {
+        let found = findings(
+            &real_workspace(),
+            &changed(&["crates/core/src/lib.rs", "Cargo.lock", "README.md"]),
+            Some("T6"),
+        );
+        assert!(found.is_empty(), "{found:?}");
     }
 
     #[test]

@@ -22,6 +22,10 @@ pub struct Map {
     /// path from the workspace root.
     #[serde(default)]
     pub grants: Vec<String>,
+    /// Shared files and directories (a trailing `/` takes the whole directory) that only a
+    /// foundation task or a grant may change (spec D5, rule 5).
+    #[serde(default)]
+    pub guarded: Vec<String>,
     /// The foundation tasks (no area) and the files they own in the shared tree.
     #[serde(default, rename = "foundation")]
     pub foundations: Vec<Foundation>,

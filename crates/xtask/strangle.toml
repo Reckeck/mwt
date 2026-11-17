@@ -15,6 +15,17 @@ scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src"]
 # Files every area task may change besides its own (spec D5).
 grants = ["crates/core/src/bin/gen_types.rs"]
 
+# Shared files no area task may change: only a foundation task that lists them (or a grant) may.
+guarded = [
+    "crates/core/src/lib.rs",
+    "crates/core/src/ipc_contract.rs",
+    "crates/core/src/kernel/events.rs",
+    "crates/core/src/service/golden_tests.rs",
+    "crates/core/src/service/test_support.rs",
+    "crates/core/src/kernel/golden_tests.rs",
+    "crates/app/src/",
+]
+
 # The foundation tasks that change files inside `service/`, the group dirs or `usecases/`.
 [[foundation]]
 task = "T5"
