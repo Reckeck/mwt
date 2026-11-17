@@ -266,7 +266,6 @@ pub fn rekey_device_secrets(vault: &Path, old: &SealKey, new: &SealKey) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::hkdf_sha256;
     use crate::crypto::kdf_profile::KdfParams;
 
     fn level3_key(password: &str) -> SealKey {
@@ -287,22 +286,6 @@ mod tests {
             }],
             crypto_networks: Vec::new(),
         }
-    }
-
-    fn hex(bytes: &[u8]) -> String {
-        bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-    }
-
-    #[test]
-    fn hkdf_matches_rfc5869_case_one() {
-        let ikm = [0x0bu8; 22];
-        let salt: Vec<u8> = (0x00u8..=0x0c).collect();
-        let info: Vec<u8> = (0xf0u8..=0xf9).collect();
-        let okm = hkdf_sha256(&salt, &ikm, &info);
-        assert_eq!(
-            hex(&okm[..]),
-            "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
-        );
     }
 
     #[test]

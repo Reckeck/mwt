@@ -121,7 +121,7 @@ pub(crate) fn random_header(
 }
 
 /// HKDF-SHA256 (RFC 5869) for one 32-byte output block.
-pub(crate) fn hkdf_sha256(salt: &[u8], ikm: &[u8], info: &[u8]) -> Zeroizing<[u8; KEY_LEN]> {
+fn hkdf_sha256(salt: &[u8], ikm: &[u8], info: &[u8]) -> Zeroizing<[u8; KEY_LEN]> {
     type HmacSha = Hmac<Sha256>;
     let mut extract = <HmacSha as KeyInit>::new_from_slice(salt)
         .unwrap_or_else(|_| unreachable!("HMAC takes any key length"));
@@ -443,6 +443,22 @@ pub(crate) fn open_blob(key: &[u8; KEY_LEN], aad: &[u8], sealed: &[u8]) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    }
+
+    #[test]
+    fn hkdf_matches_rfc5869_case_one() {
+        let ikm = [0x0bu8; 22];
+        let salt: Vec<u8> = (0x00u8..=0x0c).collect();
+        let info: Vec<u8> = (0xf0u8..=0xf9).collect();
+        let okm = hkdf_sha256(&salt, &ikm, &info);
+        assert_eq!(
+            hex(&okm[..]),
+            "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
+        );
+    }
 
     #[test]
     fn a_subkey_differs_from_the_vault_key() {
