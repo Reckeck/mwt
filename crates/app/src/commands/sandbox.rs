@@ -16,7 +16,8 @@ use trade_core::ipc_contract::VaultInfo;
 use trade_core::sandbox::SandboxDir;
 
 use crate::commands::auth::info_of;
-use crate::commands::{AppState, app_settings, err_to_string, lock_vault};
+use crate::commands::{AppState, app_settings, lock_vault};
+use crate::ipc::IpcError;
 
 /// The sandbox folder in this app's cache directory (one per channel: the
 /// release and the dev build have their own).
@@ -40,9 +41,9 @@ pub fn is_active(state: &AppState) -> bool {
 }
 
 /// For what is switched off in the sandbox: `Err(SANDBOX)` while it is open.
-pub fn refuse(state: &AppState, what: &str) -> Result<(), String> {
+pub fn refuse(state: &AppState, what: &str) -> Result<(), IpcError> {
     if is_active(state) {
-        return Err(err_to_string(Error::Sandbox(format!(
+        return Err(IpcError::from(Error::Sandbox(format!(
             "{what} is off in the sandbox"
         ))));
     }
@@ -50,7 +51,7 @@ pub fn refuse(state: &AppState, what: &str) -> Result<(), String> {
 }
 
 /// [`refuse`] for a command that has the app handle, not the state.
-pub fn refuse_app(app: &AppHandle, what: &str) -> Result<(), String> {
+pub fn refuse_app(app: &AppHandle, what: &str) -> Result<(), IpcError> {
     refuse(&app.state::<AppState>(), what)
 }
 
@@ -98,19 +99,19 @@ pub fn leave(app: &AppHandle, state: &AppState) -> bool {
 }
 
 /// A fresh sandbox vault in place of whatever sandbox was open.
-fn open_fresh(app: &AppHandle, state: &AppState) -> Result<VaultInfo, String> {
-    let sandbox = dir(app).map_err(err_to_string)?;
+fn open_fresh(app: &AppHandle, state: &AppState) -> Result<VaultInfo, IpcError> {
+    let sandbox = dir(app)?;
     let info = {
-        let mut guard = lock_vault(state).map_err(err_to_string)?;
+        let mut guard = lock_vault(state)?;
         // Opening replaces the sandbox, never a real vault: that one stays.
         if guard.is_some() && !is_active(state) {
-            return Err(err_to_string(Error::Sandbox(
+            return Err(IpcError::from(Error::Sandbox(
                 "lock the vault before opening the sandbox".into(),
             )));
         }
         // The old sandbox vault closes first: its file is erased and written again.
         *guard = None;
-        let mut vault = sandbox.create(today()).map_err(err_to_string)?;
+        let mut vault = sandbox.create(today())?;
         crate::vault_writer::install(&mut vault);
         let info = info_of(&vault);
         *guard = Some(vault);
@@ -125,7 +126,10 @@ fn open_fresh(app: &AppHandle, state: &AppState) -> Result<VaultInfo, String> {
 /// "Open the sandbox": a new vault with twelve months of demo data. The
 /// real vault must be locked. Not in the recent vaults, not the last opened.
 #[tauri::command]
-pub async fn open_sandbox(app: AppHandle, state: State<'_, AppState>) -> Result<VaultInfo, String> {
+pub async fn open_sandbox(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<VaultInfo, IpcError> {
     open_fresh(&app, &state)
 }
 
@@ -135,16 +139,16 @@ pub async fn open_sandbox(app: AppHandle, state: State<'_, AppState>) -> Result<
 pub async fn reset_sandbox(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<VaultInfo, String> {
-    let sandbox = dir(&app).map_err(err_to_string)?;
+) -> Result<VaultInfo, IpcError> {
+    let sandbox = dir(&app)?;
     {
-        let guard = lock_vault(&state).map_err(err_to_string)?;
+        let guard = lock_vault(&state)?;
         let inside = is_active(&state)
             && guard
                 .as_ref()
                 .is_some_and(|vault| sandbox.contains(&vault.path).is_ok());
         if !inside {
-            return Err(err_to_string(Error::Sandbox(
+            return Err(IpcError::from(Error::Sandbox(
                 "the sandbox is not open".into(),
             )));
         }
@@ -154,11 +158,11 @@ pub async fn reset_sandbox(
 
 /// "Exit": back to the unlock screen, the demo data erased.
 #[tauri::command]
-pub async fn close_sandbox(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn close_sandbox(app: AppHandle, state: State<'_, AppState>) -> Result<(), IpcError> {
     if crate::commands::auth::leave_sandbox(&app, &state) {
         Ok(())
     } else {
-        Err(err_to_string(Error::Sandbox(
+        Err(IpcError::from(Error::Sandbox(
             "the sandbox is not open".into(),
         )))
     }
@@ -166,7 +170,7 @@ pub async fn close_sandbox(app: AppHandle, state: State<'_, AppState>) -> Result
 
 /// Whether the open vault is the sandbox.
 #[tauri::command]
-pub async fn is_sandbox(state: State<'_, AppState>) -> Result<bool, String> {
+pub async fn is_sandbox(state: State<'_, AppState>) -> Result<bool, IpcError> {
     Ok(is_active(&state))
 }
 
@@ -188,7 +192,7 @@ mod tests {
         let state = AppState::new();
         assert!(refuse(&state, "sync").is_ok());
         state.sandbox.store(true, Ordering::SeqCst);
-        let message = refuse(&state, "sync").unwrap_err();
+        let message = refuse(&state, "sync").unwrap_err().to_string();
         assert!(message.starts_with("SANDBOX: "), "{message}");
     }
 
@@ -222,7 +226,7 @@ mod tests {
             "restoring a backup",
             "an external copy",
         ] {
-            let message = refuse(&state, what).unwrap_err();
+            let message = refuse(&state, what).unwrap_err().to_string();
             assert!(
                 message.starts_with("SANDBOX: ") && message.contains(what),
                 "{message}"

@@ -2,7 +2,8 @@ use tauri::{AppHandle, State};
 use trade_core::ipc_contract::security::{SecurityLevel, SecurityState};
 use trade_core::service::security_level::level_of_vault_file;
 
-use crate::commands::{AppState, app_settings, err_to_string, lock_vault};
+use crate::commands::{AppState, app_settings, lock_vault};
+use crate::ipc::IpcError;
 
 /// The protection of the open vault, or, while it is locked, of the vault
 /// file the lock screen shows (then the lowest level is what the file has:
@@ -11,17 +12,14 @@ use crate::commands::{AppState, app_settings, err_to_string, lock_vault};
 pub async fn security_state(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<SecurityState, String> {
-    let open = lock_vault(&state)
-        .map_err(err_to_string)?
-        .as_ref()
-        .map(|vault| {
-            (
-                vault.path.clone(),
-                vault.security_level(),
-                vault.min_allowed_level(),
-            )
-        });
+) -> Result<SecurityState, IpcError> {
+    let open = lock_vault(&state)?.as_ref().map(|vault| {
+        (
+            vault.path.clone(),
+            vault.security_level(),
+            vault.min_allowed_level(),
+        )
+    });
     let (path, level, min_allowed_level) = match open {
         Some(found) => found,
         None => {
