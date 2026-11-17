@@ -292,11 +292,11 @@ impl UnlockedVault {
         groups.into_iter().flatten().collect()
     }
 
-    fn tx_by_id(&self, id: &str) -> Option<&Transaction> {
+    pub(crate) fn tx_by_id(&self, id: &str) -> Option<&Transaction> {
         self.doc.transactions.iter().find(|tx| tx.meta().id == id)
     }
 
-    fn store_item(&self, id: &str) -> Option<RelationItem> {
+    pub(crate) fn store_item(&self, id: &str) -> Option<RelationItem> {
         self.find_store(id).map(|store| {
             let mut item = RelationItem::named(EntityKind::Store, &store.id, &store.name);
             item.archived = store.archived;
@@ -305,7 +305,10 @@ impl UnlockedVault {
     }
 
     /// Workflows split by whether they are automations (built by the form).
-    fn workflows_where(&self, used: impl Fn(&Workflow) -> bool) -> [Option<RelationGroup>; 2] {
+    pub(crate) fn workflows_where(
+        &self,
+        used: impl Fn(&Workflow) -> bool,
+    ) -> [Option<RelationGroup>; 2] {
         let (automations, workflows): (Vec<_>, Vec<_>) = self
             .doc
             .workflows
@@ -334,11 +337,11 @@ impl UnlockedVault {
     }
 
     /// An explicit scope (not «every wallet») that covers `store_id`.
-    fn scope_covers(&self, scope: &StoreScope, store_id: &str) -> bool {
+    pub(crate) fn scope_covers(&self, scope: &StoreScope, store_id: &str) -> bool {
         !scope.store_ids.is_empty() && self.resolve_scope(scope).contains(store_id)
     }
 
-    fn reminders_of(&self, id: &str) -> Option<RelationGroup> {
+    pub(crate) fn reminders_of(&self, id: &str) -> Option<RelationGroup> {
         let items = self
             .doc
             .reminders
@@ -361,7 +364,7 @@ impl UnlockedVault {
         group(RelationKind::Reminders, items)
     }
 
-    fn store_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn store_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
         let Some(store) = self.find_store(id) else {
             return Vec::new();
         };
@@ -443,7 +446,7 @@ impl UnlockedVault {
         ]
     }
 
-    fn tx_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn tx_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
         let Some(tx) = self.tx_by_id(id) else {
             return Vec::new();
         };
@@ -508,7 +511,7 @@ impl UnlockedVault {
         ]
     }
 
-    fn category_item(&self, key: &str) -> Option<RelationItem> {
+    pub(crate) fn category_item(&self, key: &str) -> Option<RelationItem> {
         self.doc
             .categories
             .iter()
@@ -524,7 +527,7 @@ impl UnlockedVault {
             })
     }
 
-    fn contact_item(&self, id: &str) -> Option<RelationItem> {
+    pub(crate) fn contact_item(&self, id: &str) -> Option<RelationItem> {
         self.doc
             .contacts
             .iter()
@@ -536,7 +539,7 @@ impl UnlockedVault {
             })
     }
 
-    fn category_relations(&self, key: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn category_relations(&self, key: &str) -> Vec<Option<RelationGroup>> {
         let budgets = self
             .doc
             .budgets
@@ -577,7 +580,7 @@ impl UnlockedVault {
         ]
     }
 
-    fn contact_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn contact_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
         let stores = self
             .doc
             .stores
@@ -602,7 +605,7 @@ impl UnlockedVault {
         ]
     }
 
-    fn goal_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn goal_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
         let Some(goal) = self.doc.goals.iter().find(|goal| goal.id == id) else {
             return Vec::new();
         };
@@ -635,7 +638,7 @@ impl UnlockedVault {
         ]
     }
 
-    fn scenario_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn scenario_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
         let Some(scenario) = self.find_calc_scenario(id) else {
             return Vec::new();
         };
@@ -662,7 +665,7 @@ impl UnlockedVault {
         ]
     }
 
-    fn budget_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn budget_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
         let Some(budget) = self.doc.budgets.iter().find(|budget| budget.id == id) else {
             return Vec::new();
         };
@@ -683,7 +686,7 @@ impl UnlockedVault {
         }
     }
 
-    fn workflow_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn workflow_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
         let Some(workflow) = self.doc.workflows.iter().find(|workflow| workflow.id == id) else {
             return Vec::new();
         };
@@ -719,7 +722,7 @@ impl UnlockedVault {
         ]
     }
 
-    fn reminder_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn reminder_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
         let Some(source) = self
             .doc
             .reminders
@@ -746,7 +749,7 @@ impl UnlockedVault {
         ]
     }
 
-    fn alert_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn alert_relations(&self, id: &str) -> Vec<Option<RelationGroup>> {
         let Some(alert) = self.doc.price_alerts.iter().find(|alert| alert.id == id) else {
             return Vec::new();
         };
@@ -767,7 +770,7 @@ impl UnlockedVault {
         ]
     }
 
-    fn asset_relations(&self, key: &str) -> Vec<Option<RelationGroup>> {
+    pub(crate) fn asset_relations(&self, key: &str) -> Vec<Option<RelationGroup>> {
         let stores = self
             .doc
             .holdings

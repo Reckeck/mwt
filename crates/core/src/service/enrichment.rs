@@ -44,7 +44,7 @@ impl UnlockedVault {
 
     /// The asset a fee symbol names: one the transaction or the vault already
     /// knows, else the network's own coin.
-    fn fee_asset(&self, tx_id: &str, symbol: &str, chain: Option<Chain>) -> AssetRef {
+    pub(crate) fn fee_asset(&self, tx_id: &str, symbol: &str, chain: Option<Chain>) -> AssetRef {
         let symbol = symbol.trim().to_uppercase();
         let known = self
             .doc
@@ -123,7 +123,7 @@ impl UnlockedVault {
         Some(record)
     }
 
-    fn pending_record(&self, id: &str) -> Result<EnrichmentRecord> {
+    pub(crate) fn pending_record(&self, id: &str) -> Result<EnrichmentRecord> {
         let record = self
             .doc
             .enrichments
@@ -139,7 +139,7 @@ impl UnlockedVault {
         Ok(record)
     }
 
-    fn set_enrichment_status(&mut self, id: &str, status: EnrichmentStatus) {
+    pub(crate) fn set_enrichment_status(&mut self, id: &str, status: EnrichmentStatus) {
         if let Some(record) = self
             .doc
             .enrichments
@@ -194,7 +194,7 @@ impl UnlockedVault {
         Ok(self.pending_or_any(id))
     }
 
-    fn pending_or_any(&self, id: &str) -> EnrichmentRecord {
+    pub(crate) fn pending_or_any(&self, id: &str) -> EnrichmentRecord {
         self.doc
             .enrichments
             .iter()

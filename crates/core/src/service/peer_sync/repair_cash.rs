@@ -18,7 +18,7 @@ use crate::service::store_change::replace_id;
 
 impl UnlockedVault {
     /// Merge the root Cash wallets into one; the ids of the merged-away go to the report.
-    pub(super) fn repair_cash_wallets(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_cash_wallets(&mut self, report: &mut RepairReport) {
         let mut roots: Vec<String> = self
             .doc
             .stores
@@ -46,7 +46,7 @@ impl UnlockedVault {
         }
     }
 
-    fn merge_cash_into(&mut self, loser: &str, winner: &str) -> Option<()> {
+    pub(crate) fn merge_cash_into(&mut self, loser: &str, winner: &str) -> Option<()> {
         let mut children: Vec<String> = self
             .children_of(loser)
             .into_iter()

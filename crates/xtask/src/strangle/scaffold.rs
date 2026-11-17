@@ -8,7 +8,7 @@ use anyhow::{Result, bail};
 use clap::Args;
 
 use super::fileset::FileSet;
-use super::map::{Area, Map};
+use super::map::{Area, ExtraStub, Map};
 
 #[derive(Args)]
 pub struct ScaffoldArgs {
@@ -77,7 +77,32 @@ fn plan(map: &Map, files: &mut FileSet) -> Result<()> {
             &format!("//! placeholder, filled by {}\n", area.task),
         )?;
     }
+    for extra in &map.extra_stubs {
+        extra_stub(files, &lib, &core, extra)?;
+    }
     Ok(())
+}
+
+/// `path` of an extra stub, created with its placeholder and declared in its parent module.
+fn extra_stub(files: &mut FileSet, lib: &str, core: &str, extra: &ExtraStub) -> Result<()> {
+    let placeholder = format!("//! placeholder, filled by {}\n", extra.task);
+    let is_dir = extra.path.ends_with('/');
+    let trimmed = extra.path.trim_end_matches('/');
+    let (parent, name) = trimmed.rsplit_once('/').unwrap_or(("", trimmed));
+    let name = name.trim_end_matches(".rs");
+    let (file, dir) = if parent.is_empty() {
+        (lib.to_string(), core.to_string())
+    } else {
+        let module = Module::existing(core, parent);
+        (module.file, module.dir)
+    };
+    files.declare(&file, name, &[format!("pub mod {name};")])?;
+    let target = if is_dir {
+        format!("{dir}/{name}/mod.rs")
+    } else {
+        format!("{dir}/{name}.rs")
+    };
+    files.create_if_missing(&target, &placeholder)
 }
 
 /// The area files of the map, once each: a file entry gives its stem, a region-only area its name
@@ -181,6 +206,14 @@ service_dir = "crates/core/service"
 command_dir = "crates/app"
 scan_dirs = ["crates/core"]
 
+[[extra_stub]]
+task = "T9"
+path = "secret.rs"
+
+[[extra_stub]]
+task = "T8"
+path = "money/service/"
+
 [[area]]
 name = "alpha"
 task = "T1"
@@ -271,11 +304,11 @@ stubs = false
         assert_eq!(read(&tree, "crates/core/money/alpha.rs"), "// real code\n");
         assert_eq!(
             read(&tree, "crates/core/money/mod.rs"),
-            "//! money\n\npub mod alpha;\n#[cfg(test)]\nmod alpha_tests;\npub mod dir;\n#[cfg(test)]\nmod dir_tests;\npub mod stores;\n#[cfg(test)]\nmod stores_tests;\n"
+            "//! money\n\npub mod alpha;\n#[cfg(test)]\nmod alpha_tests;\npub mod dir;\n#[cfg(test)]\nmod dir_tests;\npub mod stores;\n#[cfg(test)]\nmod stores_tests;\npub mod service;\n"
         );
         assert_eq!(
             read(&tree, "crates/core/lib.rs"),
-            "pub mod error;\npub mod money;\npub mod usecases;\npub mod planning;\n\npub use error::Error;\n"
+            "pub mod error;\npub mod money;\npub mod usecases;\npub mod planning;\npub mod secret;\n\npub use error::Error;\n"
         );
         assert_eq!(
             read(&tree, "crates/core/ipc_contract.rs"),
@@ -285,6 +318,22 @@ stubs = false
             read(&tree, "crates/core/money/stores.rs"),
             "//! placeholder, filled by T2\n"
         );
+    }
+
+    #[test]
+    fn extra_stubs_are_created_and_declared_in_their_parent() {
+        let tree = tree();
+        scaffold(&tree, false).unwrap();
+        assert_eq!(
+            read(&tree, "crates/core/secret.rs"),
+            "//! placeholder, filled by T9\n"
+        );
+        assert_eq!(
+            read(&tree, "crates/core/money/service/mod.rs"),
+            "//! placeholder, filled by T8\n"
+        );
+        assert!(read(&tree, "crates/core/lib.rs").contains("pub mod secret;\n"));
+        assert!(read(&tree, "crates/core/money/mod.rs").contains("pub mod service;\n"));
     }
 
     #[test]

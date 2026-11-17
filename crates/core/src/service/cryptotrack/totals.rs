@@ -185,7 +185,7 @@ pub struct CryptoOutsideTotals {
 /// The module's own capital history: what it was worth at the cutoffs of a
 /// report, and which replayed wallets that record speaks for.
 #[derive(Debug, Default)]
-pub(in crate::service) struct CryptoHistory {
+pub(crate) struct CryptoHistory {
     /// USD at each cutoff, in the order they were given. `None` is a month the
     /// module has no record of — a gap in tracking, never a zero.
     values_usd: Vec<Option<Amount>>,
@@ -214,7 +214,7 @@ impl CryptoHistory {
 
 /// The engine's balances as holdings, and what had to be left out.
 #[derive(Debug, Default)]
-struct Capital {
+pub(crate) struct Capital {
     holdings: Vec<Holding>,
     left_out: Vec<CryptoOutsideTotals>,
 }
@@ -222,7 +222,7 @@ struct Capital {
 impl UnlockedVault {
     /// Put the engine's balances into `doc.holdings`, replacing what they
     /// supersede. Called at the end of `recompute_holdings`; saves nothing.
-    pub(in crate::service) fn apply_crypto_holdings(&mut self) {
+    pub(crate) fn apply_crypto_holdings(&mut self) {
         // A vault without the module keeps `doc.holdings` exactly as the
         // transactions left it: nothing here speaks for it, so a wallet
         // archived long ago counts as it always did. The module is there once
@@ -274,7 +274,7 @@ impl UnlockedVault {
     /// Fold the engine again into `doc.holdings` without saving. Reports
     /// whether the positions differ from before: every fold gives the rows
     /// fresh ids, which alone is no change worth a write.
-    pub(in crate::service) fn refold_holdings(&mut self) -> bool {
+    pub(crate) fn refold_holdings(&mut self) -> bool {
         let before = std::mem::take(&mut self.doc.holdings);
         self.recompute_holdings();
         let after = &self.doc.holdings;
@@ -293,7 +293,7 @@ impl UnlockedVault {
     /// What the module was worth at each cutoff of a report, for the months a
     /// replay of the transactions cannot reach (see the header). `in_scope` is
     /// the report's own wallet filter.
-    pub(in crate::service) fn crypto_history(
+    pub(crate) fn crypto_history(
         &self,
         cutoffs: &[i64],
         in_scope: impl Fn(&str) -> bool,
@@ -356,7 +356,7 @@ impl UnlockedVault {
     /// The hand-kept wallets the user retired when the module took over: an
     /// archived crypto wallet no followed address drives. They do not hold the
     /// coins any more, the address does (see the header).
-    fn crypto_retired_wallets(&self) -> HashSet<String> {
+    pub(crate) fn crypto_retired_wallets(&self) -> HashSet<String> {
         self.doc
             .stores
             .iter()
@@ -376,7 +376,7 @@ impl UnlockedVault {
     /// (`engine::position_value::held_by_account`): wallet, ledger position,
     /// the adapter legs no operation accounts for, minus the debt legs. A
     /// debt over the collateral gives a negative quantity, kept as is.
-    fn crypto_capital(&self) -> Capital {
+    pub(crate) fn crypto_capital(&self) -> Capital {
         let mut out = Capital::default();
         // A vault that never followed an address pays nothing for this and
         // keeps `doc.holdings` exactly as the transactions left it.
@@ -446,7 +446,7 @@ impl UnlockedVault {
     /// (spec D0). A node reports the receipt's balance anyway and the
     /// reconciliation writes it down, so the capital drops it and the screen
     /// is told why.
-    fn add_receipts_left_out(
+    pub(crate) fn add_receipts_left_out(
         &self,
         ledger: &Ledger,
         receipts: &BTreeSet<String>,
@@ -475,7 +475,7 @@ impl UnlockedVault {
 
     /// Tokens the module met and refuses to fold (spec E2), named so a total
     /// can say what it left out.
-    fn crypto_quarantined(&self) -> Vec<CryptoOutsideTotals> {
+    pub(crate) fn crypto_quarantined(&self) -> Vec<CryptoOutsideTotals> {
         let met: BTreeSet<String> = self
             .doc
             .crypto_events
@@ -510,7 +510,7 @@ impl UnlockedVault {
     /// [`AssetRef`] a hand-kept wallet would carry, so one coin is one row
     /// and one price everywhere, and the ordinary price refresh (it reads
     /// `doc.holdings`) quotes it like any other coin.
-    pub(in crate::service) fn crypto_asset_ref(&self, asset: &CryptoAsset) -> AssetRef {
+    pub(crate) fn crypto_asset_ref(&self, asset: &CryptoAsset) -> AssetRef {
         match asset {
             CryptoAsset::Native { chain } => native_ref(*chain),
             CryptoAsset::Token(token) => {

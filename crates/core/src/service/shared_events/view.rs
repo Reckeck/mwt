@@ -189,7 +189,7 @@ fn name_of(event: &SharedEvent, id: &str) -> String {
 }
 
 impl UnlockedVault {
-    pub(super) fn find_shared_event(&self, id: &str) -> Result<&SharedEvent> {
+    pub(crate) fn find_shared_event(&self, id: &str) -> Result<&SharedEvent> {
         self.doc
             .shared_events
             .iter()
@@ -197,7 +197,7 @@ impl UnlockedVault {
             .ok_or_else(|| Error::Missing(format!("shared event {id}")))
     }
 
-    pub(super) fn find_shared_event_mut(&mut self, id: &str) -> Result<&mut SharedEvent> {
+    pub(crate) fn find_shared_event_mut(&mut self, id: &str) -> Result<&mut SharedEvent> {
         self.doc
             .shared_events
             .iter_mut()
@@ -205,14 +205,18 @@ impl UnlockedVault {
             .ok_or_else(|| Error::Missing(format!("shared event {id}")))
     }
 
-    fn tx_exists(&self, tx_id: &str) -> bool {
+    pub(crate) fn tx_exists(&self, tx_id: &str) -> bool {
         self.doc
             .transactions
             .iter()
             .any(|tx: &Transaction| tx.meta().id == tx_id)
     }
 
-    fn contact_term(&self, event: &SharedEvent, participant: &Participant) -> Option<String> {
+    pub(crate) fn contact_term(
+        &self,
+        event: &SharedEvent,
+        participant: &Participant,
+    ) -> Option<String> {
         let contact_id = participant.contact_id.as_deref()?;
         let asset = event.currency.to_uppercase();
         self.doc
@@ -229,7 +233,7 @@ impl UnlockedVault {
         Ok(self.build_view(event, &computed))
     }
 
-    fn build_view(&self, event: &SharedEvent, computed: &Split) -> SharedEventView {
+    pub(crate) fn build_view(&self, event: &SharedEvent, computed: &Split) -> SharedEventView {
         let people = computed
             .people
             .iter()

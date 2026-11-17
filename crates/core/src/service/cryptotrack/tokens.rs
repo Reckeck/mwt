@@ -48,7 +48,7 @@ impl UnlockedVault {
     /// and saves once for however many tokens it noted (a batch can meet
     /// hundreds of junk tokens, and each save is a full encryption under the
     /// vault's lock). Returns the status and whether the document changed.
-    pub(super) fn register_token_unsaved(
+    pub(crate) fn register_token_unsaved(
         &mut self,
         token: &TokenId,
         symbol: &str,
@@ -96,7 +96,7 @@ impl UnlockedVault {
     /// the adapter read. A record that carries a verdict is never changed, and
     /// real text is never overwritten by an unknown symbol or decimals.
     /// Returns whether the document changed; the caller saves.
-    pub(super) fn trust_adapter_token(&mut self, leg: &LegToken) -> Result<bool> {
+    pub(crate) fn trust_adapter_token(&mut self, leg: &LegToken) -> Result<bool> {
         let known = known::is_known(&leg.token);
         let symbol = leg
             .symbol
@@ -194,7 +194,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn record_mut(&mut self, token: &TokenId) -> Result<&mut CryptoToken> {
+    pub(crate) fn record_mut(&mut self, token: &TokenId) -> Result<&mut CryptoToken> {
         self.doc
             .crypto_tokens
             .iter_mut()
@@ -202,7 +202,11 @@ impl UnlockedVault {
             .ok_or_else(|| Error::NotFound(format!("token {}", token.key())))
     }
 
-    fn decide(&mut self, token: &TokenId, verdict: Option<TokenVerdict>) -> Result<TokenStatus> {
+    pub(crate) fn decide(
+        &mut self,
+        token: &TokenId,
+        verdict: Option<TokenVerdict>,
+    ) -> Result<TokenStatus> {
         let at = verdict.map(|_| now_iso());
         let record = self.record_mut(token)?;
         // The date moves only with a real change: deciding the same thing again keeps the first date.

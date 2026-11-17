@@ -105,7 +105,7 @@ fn clean_details(details: Option<GuestDetails>) -> Result<Option<GuestDetails>> 
 }
 
 impl UnlockedVault {
-    fn check_shared_category(&self, category: Option<&str>) -> Result<Option<String>> {
+    pub(crate) fn check_shared_category(&self, category: Option<&str>) -> Result<Option<String>> {
         let Some(key) = category.map(str::trim).filter(|key| !key.is_empty()) else {
             return Ok(None);
         };
@@ -117,7 +117,7 @@ impl UnlockedVault {
     }
 
     /// A participant from a draft, checked against the people already there.
-    fn build_participant(
+    pub(crate) fn build_participant(
         &self,
         draft: &SharedParticipantDraft,
         others: &[Participant],
@@ -168,7 +168,7 @@ impl UnlockedVault {
         })
     }
 
-    fn check_organizer(organizer: &str, participants: &[Participant]) -> Result<String> {
+    pub(crate) fn check_organizer(organizer: &str, participants: &[Participant]) -> Result<String> {
         let organizer = organizer.trim();
         if organizer.is_empty() || organizer == ME {
             return Ok(ME.to_string());
@@ -180,7 +180,7 @@ impl UnlockedVault {
         }
     }
 
-    fn shared_currency(&self, raw: &str) -> String {
+    pub(crate) fn shared_currency(&self, raw: &str) -> String {
         let code = raw.trim().to_lowercase();
         if code.is_empty() {
             self.base_and_fx().0
@@ -316,7 +316,7 @@ impl UnlockedVault {
 
     /// Save after a change to the event: an archived event that was edited is
     /// open again.
-    pub(super) fn persist_event(&mut self, id: &str) -> Result<()> {
+    pub(crate) fn persist_event(&mut self, id: &str) -> Result<()> {
         if let Some(event) = self
             .doc
             .shared_events
@@ -621,7 +621,10 @@ impl UnlockedVault {
 
     // -- items ----------------------------------------------------------------
 
-    fn clean_item(&self, draft: &SharedItemDraft) -> Result<(String, String, Option<String>)> {
+    pub(crate) fn clean_item(
+        &self,
+        draft: &SharedItemDraft,
+    ) -> Result<(String, String, Option<String>)> {
         let title = draft.title.trim().to_string();
         if title.is_empty() {
             return Err(Error::InvalidInput("an item needs a title".into()));
@@ -637,7 +640,7 @@ impl UnlockedVault {
         ))
     }
 
-    fn check_plan(draft: &SharedItemDraft) -> Result<()> {
+    pub(crate) fn check_plan(draft: &SharedItemDraft) -> Result<()> {
         if let Some(plan) = &draft.plan
             && (!plan.qty.is_positive() || plan.price.is_negative())
         {

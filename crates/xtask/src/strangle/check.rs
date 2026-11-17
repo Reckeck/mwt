@@ -164,6 +164,28 @@ fn check_area(subject: &Subject) -> Result<Vec<String>> {
     Ok(findings)
 }
 
+/// The signature without `mut` on parameter bindings (`mut name: T`): the delegate leaves the
+/// binding out, so both sides are compared without it. `&mut T` and `&mut self` stay.
+fn without_binding_mut(signature: &str) -> String {
+    let mut text = String::with_capacity(signature.len());
+    let mut rest = signature;
+    while let Some(at) = rest.find("mut ") {
+        let (before, after) = rest.split_at(at);
+        text.push_str(before);
+        let name_len = after[4..]
+            .find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+            .unwrap_or(0);
+        let starts_param = text.ends_with('(') || text.ends_with(", ");
+        let is_binding = starts_param && name_len > 0 && after[4 + name_len..].starts_with(':');
+        if !is_binding {
+            text.push_str("mut ");
+        }
+        rest = &after[4..];
+    }
+    text.push_str(rest);
+    text
+}
+
 /// Rule 1: the baseline methods and the forward entries are the same set, with the same signatures.
 fn parity(subject: &Subject) -> Result<Vec<String>> {
     let mut forwarded = BTreeMap::new();
@@ -184,7 +206,8 @@ fn parity(subject: &Subject) -> Result<Vec<String>> {
     let (wanted_names, forwarded_names) = (names(&wanted), names(&forwarded));
     let differing = wanted.iter().filter_map(|(name, old)| {
         let new = forwarded.get(name)?;
-        (old != new).then(|| format!("signature differs: {name}: {old} vs {new}"))
+        (without_binding_mut(old) != without_binding_mut(new))
+            .then(|| format!("signature differs: {name}: {old} vs {new}"))
     });
     Ok(difference("not forwarded", &wanted_names, &forwarded_names)
         .into_iter()
@@ -483,6 +506,14 @@ mod tests {
                 .iter()
                 .any(|line| line.contains("not forwarded: clash")),
             "{found:?}"
+        );
+    }
+
+    #[test]
+    fn binding_mut_is_ignored_but_reference_mut_is_not() {
+        assert_eq!(
+            without_binding_mut("pub fn f(&mut self, mut rows: Vec<T>, other: &mut U)"),
+            "pub fn f(&mut self, rows: Vec<T>, other: &mut U)"
         );
     }
 

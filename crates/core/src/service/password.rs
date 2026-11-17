@@ -124,7 +124,7 @@ pub(super) fn warn_failures(
 
 /// The points of a key change a test can break.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RotateStep {
+pub(crate) enum RotateStep {
     SecretsStaged,
     VaultWritten,
     SecretsFinished,
@@ -165,7 +165,7 @@ impl UnlockedVault {
 
     /// The body of [`Self::set_password`]: the failed cleanup steps go to
     /// `sink` as warnings, and `fault` is the test hook of the rotation.
-    fn set_password_warning_to(
+    pub(crate) fn set_password_warning_to(
         &mut self,
         new_password: &str,
         policy: CopyPolicy,
@@ -187,7 +187,7 @@ impl UnlockedVault {
         self.set_password_inner(new_password, policy, |_| Ok(()))
     }
 
-    fn set_password_inner(
+    pub(crate) fn set_password_inner(
         &mut self,
         new_password: &str,
         policy: CopyPolicy,
@@ -225,7 +225,7 @@ impl UnlockedVault {
         self.change_password_inner(current_password, new_password, policy, |_| Ok(()))
     }
 
-    pub(super) fn change_password_inner(
+    pub(crate) fn change_password_inner(
         &mut self,
         current_password: &str,
         new_password: &str,
@@ -292,7 +292,7 @@ impl UnlockedVault {
         self.key.as_ref().map(|key| key.salt().to_vec())
     }
 
-    pub(super) fn session_key(&self) -> Result<Arc<SealKey>> {
+    pub(crate) fn session_key(&self) -> Result<Arc<SealKey>> {
         self.key
             .clone()
             .ok_or_else(|| Error::Crypto("the vault has no key".into()))
@@ -300,7 +300,7 @@ impl UnlockedVault {
 
     /// Switch to `key` and write the file under it now; on a failed write the
     /// old key and password stay, matching the unchanged file.
-    fn rekey(&mut self, key: Arc<SealKey>, password: &str) -> Result<()> {
+    pub(crate) fn rekey(&mut self, key: Arc<SealKey>, password: &str) -> Result<()> {
         let old_key = self.key.replace(key);
         let old_password = std::mem::replace(&mut self.password, Zeroizing::new(password.into()));
         if let Err(err) = self.persist_now() {
@@ -314,7 +314,7 @@ impl UnlockedVault {
     /// The vault file as it is on the disk opens with `key` and holds this
     /// vault: read back, no KDF (the key's salt and cost must be the
     /// header's, so the password that made the key opens it too).
-    pub(super) fn verify_on_disk(&self, key: &SealKey) -> Result<()> {
+    pub(crate) fn verify_on_disk(&self, key: &SealKey) -> Result<()> {
         let bytes = Zeroizing::new(crate::vault_io::local::read_all(&self.path)?);
         let (payload, fmt) = crypto::open_bytes_with(&bytes, key)?;
         let decoded = decode_versioned(&Zeroizing::new(payload), fmt)?;
@@ -329,7 +329,7 @@ impl UnlockedVault {
     /// Move the vault, its device secrets and its copies onto `new_key` (see
     /// the module docs for the steps). `old_password` opens copies under
     /// another salt of the old password (change only).
-    fn rotate(
+    pub(crate) fn rotate(
         &mut self,
         new_key: SealKey,
         new_password: &str,
@@ -400,7 +400,7 @@ impl UnlockedVault {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn rotate_copy(
+    pub(crate) fn rotate_copy(
         &self,
         copy: &VaultCopy,
         old_key: &SealKey,

@@ -43,13 +43,13 @@ pub struct SpendingOverview {
     pub allowance: Option<Amount>,
 }
 
-struct Totals {
+pub(crate) struct Totals {
     spent: Amount,
     daily: Amount,
 }
 
 impl UnlockedVault {
-    fn spending_totals(
+    pub(crate) fn spending_totals(
         &self,
         cal: &Calendar,
         currency: &str,

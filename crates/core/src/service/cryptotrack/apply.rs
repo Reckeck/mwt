@@ -79,7 +79,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn crypto_cursor_of(&self, account_id: &str) -> Option<&CryptoCursor> {
+    pub(crate) fn crypto_cursor_of(&self, account_id: &str) -> Option<&CryptoCursor> {
         let id = cursor_id(account_id);
         self.doc
             .crypto_cursors
@@ -88,7 +88,7 @@ impl UnlockedVault {
     }
 
     /// What the protocol adapters left for themselves, by protocol id.
-    fn crypto_protocol_memory(&self, account_id: &str) -> BTreeMap<String, String> {
+    pub(crate) fn crypto_protocol_memory(&self, account_id: &str) -> BTreeMap<String, String> {
         let prefix = memory_id(account_id, "");
         self.doc
             .crypto_cursors
@@ -151,7 +151,7 @@ impl UnlockedVault {
 
     /// Move the account's cursor; reports whether it moved (the same cursor
     /// again is no change, and leaves `updated_at` alone).
-    fn crypto_set_cursor(&mut self, account_id: &str, cursor: Option<String>) -> bool {
+    pub(crate) fn crypto_set_cursor(&mut self, account_id: &str, cursor: Option<String>) -> bool {
         let id = cursor_id(account_id);
         match self
             .doc

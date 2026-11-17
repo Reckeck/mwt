@@ -201,7 +201,7 @@ impl UnlockedVault {
         Ok(out)
     }
 
-    fn check_owner(&self, owner: &EntityRef) -> Result<()> {
+    pub(crate) fn check_owner(&self, owner: &EntityRef) -> Result<()> {
         if !matches!(owner.kind, EntityKind::Tx | EntityKind::Goal) {
             return Err(Error::InvalidInput(
                 "files are kept only with operations and goals".into(),
@@ -213,7 +213,7 @@ impl UnlockedVault {
         Ok(())
     }
 
-    pub(super) fn owner_exists(&self, owner: &EntityRef) -> bool {
+    pub(crate) fn owner_exists(&self, owner: &EntityRef) -> bool {
         match owner.kind {
             EntityKind::Tx => self
                 .doc
@@ -225,7 +225,7 @@ impl UnlockedVault {
         }
     }
 
-    fn find_attachment(&self, id: &str) -> Result<&Attachment> {
+    pub(crate) fn find_attachment(&self, id: &str) -> Result<&Attachment> {
         self.doc
             .attachments
             .iter()
@@ -233,7 +233,7 @@ impl UnlockedVault {
             .ok_or_else(|| Error::Missing(format!("attachment {id}")))
     }
 
-    fn find_attachment_mut(&mut self, id: &str) -> Result<&mut Attachment> {
+    pub(crate) fn find_attachment_mut(&mut self, id: &str) -> Result<&mut Attachment> {
         self.doc
             .attachments
             .iter_mut()
@@ -241,7 +241,7 @@ impl UnlockedVault {
             .ok_or_else(|| Error::Missing(format!("attachment {id}")))
     }
 
-    fn attachment_key(&self, id: &str) -> Result<Zeroizing<[u8; KEY_LEN]>> {
+    pub(crate) fn attachment_key(&self, id: &str) -> Result<Zeroizing<[u8; KEY_LEN]>> {
         let raw = self
             .doc
             .attachment_keys

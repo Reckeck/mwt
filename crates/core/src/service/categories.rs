@@ -32,7 +32,7 @@ const SYSTEM_CATEGORY: &str = "system categories are set by the app and cannot b
 impl UnlockedVault {
     /// The app's own categories (group `Service`) back reports, exchanges and
     /// imports: they are never renamed, regrouped, archived or deleted.
-    fn ensure_editable(&self, key: &str) -> Result<()> {
+    pub(crate) fn ensure_editable(&self, key: &str) -> Result<()> {
         let system = self
             .doc
             .categories
@@ -44,7 +44,7 @@ impl UnlockedVault {
         Ok(())
     }
 
-    fn find_category_mut(&mut self, key: &str) -> Result<&mut Category> {
+    pub(crate) fn find_category_mut(&mut self, key: &str) -> Result<&mut Category> {
         self.doc
             .categories
             .iter_mut()
@@ -132,7 +132,7 @@ impl UnlockedVault {
         self.persist()
     }
 
-    fn category_in_use(&self, key: &str) -> bool {
+    pub(crate) fn category_in_use(&self, key: &str) -> bool {
         let in_draft = |draft: &TransactionDraft| {
             let meta = match draft {
                 TransactionDraft::Topup(tx) => &tx.meta,
@@ -185,7 +185,7 @@ impl UnlockedVault {
 
     // -- categorization rules ----------------------------------------------
 
-    fn check_rule(&self, pattern: &str, category: &str) -> Result<()> {
+    pub(crate) fn check_rule(&self, pattern: &str, category: &str) -> Result<()> {
         if pattern.trim().is_empty() {
             return Err(Error::InvalidInput(
                 "a rule needs some text to look for".into(),

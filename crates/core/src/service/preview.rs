@@ -204,7 +204,7 @@ impl UnlockedVault {
     }
 
     /// `None` when the asset has no price yet: there is nothing to compare with.
-    fn sale_preview(&self, tx: &Transaction) -> Option<SalePreview> {
+    pub(crate) fn sale_preview(&self, tx: &Transaction) -> Option<SalePreview> {
         let Transaction::AssetSell(sell) = tx else {
             return None;
         };
@@ -250,7 +250,7 @@ impl UnlockedVault {
     }
 
     /// Current quantity of one asset in one store (zero when not held).
-    fn position(&self, store_id: &str, asset_key: &str) -> Amount {
+    pub(crate) fn position(&self, store_id: &str, asset_key: &str) -> Amount {
         self.doc
             .holdings
             .iter()

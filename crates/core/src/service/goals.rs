@@ -205,7 +205,7 @@ impl UnlockedVault {
         out
     }
 
-    fn check_goal(&self, draft: &GoalDraft) -> Result<()> {
+    pub(crate) fn check_goal(&self, draft: &GoalDraft) -> Result<()> {
         if draft.name.trim().is_empty() {
             return Err(Error::InvalidInput("name the goal".into()));
         }
@@ -357,7 +357,7 @@ impl UnlockedVault {
     /// Active workflows that move money into the goal's wallet (what
     /// "Set aside 10% of every salary" makes), unless another goal saves
     /// there too: a wallet's salary or a shared one keeps working.
-    fn goal_savers(&self, goal: &Goal) -> Vec<String> {
+    pub(crate) fn goal_savers(&self, goal: &Goal) -> Vec<String> {
         let others: HashSet<&String> = self
             .doc
             .goals
@@ -407,7 +407,13 @@ impl UnlockedVault {
     }
 
     /// Planned monthly contribution in USD: target over the goal's months.
-    fn planned_usd(&self, book: &RateBook, goal: &Goal, cal: &Calendar, now: i64) -> Amount {
+    pub(crate) fn planned_usd(
+        &self,
+        book: &RateBook,
+        goal: &Goal,
+        cal: &Calendar,
+        now: i64,
+    ) -> Amount {
         let target = book
             .convert(goal.target_amount, &goal.currency, "usd", now)
             .unwrap_or(goal.target_amount);
@@ -427,7 +433,7 @@ impl UnlockedVault {
     /// proportion to their planned monthly contribution. No goal gets more
     /// than its target; the excess goes to the next goal by importance.
     /// Returns `(allocated, scope value)` per goal id.
-    fn goal_allocations(
+    pub(crate) fn goal_allocations(
         &self,
         book: &RateBook,
         cal: &Calendar,
@@ -519,7 +525,7 @@ impl UnlockedVault {
     /// Net money put into `scope` within `[from, to)`, valued in `currency` on
     /// the day it moved. Moves inside the scope cancel out; fees are losses,
     /// not withdrawals, and do not count.
-    fn contributions(
+    pub(crate) fn contributions(
         &self,
         book: &RateBook,
         scope: &HashSet<String>,
@@ -551,7 +557,7 @@ impl UnlockedVault {
     }
 
     /// Operations from `from` on with money coming into `scope`.
-    fn deposits(&self, scope: &HashSet<String>, from: i64) -> u32 {
+    pub(crate) fn deposits(&self, scope: &HashSet<String>, from: i64) -> u32 {
         let count = self
             .doc
             .transactions
@@ -575,7 +581,12 @@ impl UnlockedVault {
     }
 
     /// [`Self::free_surplus_avg`] over the books of one request.
-    fn free_surplus_avg_in(&self, books: &Books, now: i64, zone: &str) -> Option<Amount> {
+    pub(crate) fn free_surplus_avg_in(
+        &self,
+        books: &Books,
+        now: i64,
+        zone: &str,
+    ) -> Option<Amount> {
         let cal = Calendar::new(zone);
         let mut month = first_of_month(cal.date_of(now));
         let mut found: Vec<Amount> = Vec::new();
@@ -608,7 +619,7 @@ impl UnlockedVault {
     // -- progress -------------------------------------------------------------
 
     /// Daily USD values of a scope over the last [`FORECAST_DAYS`] days.
-    fn daily_values(
+    pub(crate) fn daily_values(
         &self,
         book: &RateBook,
         scope: &HashSet<String>,
@@ -633,7 +644,7 @@ impl UnlockedVault {
 
     /// Progress of every active goal (plan §7.4, D23).
     /// The scenario's balance for the months passed since the goal started.
-    fn planned_now(
+    pub(crate) fn planned_now(
         &self,
         book: &RateBook,
         goal: &Goal,

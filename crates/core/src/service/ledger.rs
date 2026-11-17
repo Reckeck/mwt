@@ -351,7 +351,7 @@ impl UnlockedVault {
         })
     }
 
-    fn filtered(&self, filter: &TxFilter, zone: &str) -> Result<Vec<&Transaction>> {
+    pub(crate) fn filtered(&self, filter: &TxFilter, zone: &str) -> Result<Vec<&Transaction>> {
         let cal = Calendar::new(zone);
         let from = parse_day(filter.from.as_deref())?;
         let to = parse_day(filter.to.as_deref())?;
@@ -445,7 +445,7 @@ impl UnlockedVault {
     }
 
     /// Everything a search can match, lowercased.
-    fn search_text(&self, tx: &Transaction) -> String {
+    pub(crate) fn search_text(&self, tx: &Transaction) -> String {
         let meta = tx.meta();
         let mut parts: Vec<String> = vec![meta.comment.clone()];
         parts.extend(meta.categories.iter().cloned());

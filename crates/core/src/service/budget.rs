@@ -168,7 +168,7 @@ fn amount_of_days(days: u32) -> Amount {
 impl UnlockedVault {
     /// Whether everyday spending under these categories is mandatory: the
     /// first known category decides, as it decides the flow's group.
-    fn is_essential_spending(&self, categories: &[String]) -> bool {
+    pub(crate) fn is_essential_spending(&self, categories: &[String]) -> bool {
         categories
             .iter()
             .find_map(|key| {
@@ -211,7 +211,7 @@ impl UnlockedVault {
     /// and money entering the budget, the money (and fees) that went out for
     /// everything else. Also the currencies of the sides without a rate,
     /// which count as zero.
-    fn flow_value(
+    pub(crate) fn flow_value(
         book: &RateBook,
         tx: &Transaction,
         class: FlowClass,
@@ -280,7 +280,7 @@ impl UnlockedVault {
 
     /// The flows of my own operations; a payment made for a shared event
     /// counts for my part of it only (`shared` holds the ratios).
-    fn payment_flows(
+    pub(crate) fn payment_flows(
         &self,
         book: &RateBook,
         shared: &HashMap<String, Amount>,
@@ -335,7 +335,7 @@ impl UnlockedVault {
         self.doc.budgets.clone()
     }
 
-    fn check_budget(&self, draft: &BudgetDraft) -> Result<()> {
+    pub(crate) fn check_budget(&self, draft: &BudgetDraft) -> Result<()> {
         if !draft.limit.is_positive() {
             return Err(Error::InvalidInput("the limit must be positive".into()));
         }
@@ -435,7 +435,7 @@ impl UnlockedVault {
     // -- limits -------------------------------------------------------------
 
     /// `[start, end)` dates of the period containing `today`; weeks start on Monday.
-    fn period_dates(period: BudgetPeriod, today: NaiveDate) -> (NaiveDate, NaiveDate) {
+    pub(crate) fn period_dates(period: BudgetPeriod, today: NaiveDate) -> (NaiveDate, NaiveDate) {
         match period {
             BudgetPeriod::Day => (today, today + Duration::days(1)),
             BudgetPeriod::Week => {
@@ -841,7 +841,7 @@ impl UnlockedVault {
     }
 
     /// Current value of the budget stores in `currency`.
-    fn budget_balance(&self, currency: &str, now: i64) -> Amount {
+    pub(crate) fn budget_balance(&self, currency: &str, now: i64) -> Amount {
         let book = self.rate_book();
         let ids: HashSet<&str> = self
             .doc
@@ -866,7 +866,7 @@ impl UnlockedVault {
     }
 
     /// The first planned income date after `today` from active automations.
-    fn next_income_date(&self, cal: &Calendar, today: NaiveDate) -> Option<NaiveDate> {
+    pub(crate) fn next_income_date(&self, cal: &Calendar, today: NaiveDate) -> Option<NaiveDate> {
         let horizon = today + Duration::days(366);
         self.automations()
             .iter()
@@ -890,7 +890,7 @@ impl UnlockedVault {
 
     /// Mandatory payments planned on `[today, end)`: fixed automations, rent
     /// and loan payments by their due day.
-    fn fixed_due_between(
+    pub(crate) fn fixed_due_between(
         &self,
         cal: &Calendar,
         today: NaiveDate,

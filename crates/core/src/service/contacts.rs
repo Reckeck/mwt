@@ -73,7 +73,7 @@ pub struct ContactDraft {
 }
 
 impl UnlockedVault {
-    fn find_contact_mut(&mut self, id: &str) -> Result<&mut Contact> {
+    pub(crate) fn find_contact_mut(&mut self, id: &str) -> Result<&mut Contact> {
         self.doc
             .contacts
             .iter_mut()
@@ -82,7 +82,7 @@ impl UnlockedVault {
     }
 
     /// Whether any transaction or store points at the contact (or one account of it).
-    fn contact_in_use(&self, contact_id: &str, account_id: Option<&str>) -> bool {
+    pub(crate) fn contact_in_use(&self, contact_id: &str, account_id: Option<&str>) -> bool {
         let named_by_tx = self.doc.transactions.iter().any(|tx| {
             if account_id.is_none() && tx.meta().contact_id.as_deref() == Some(contact_id) {
                 return true;
@@ -116,7 +116,7 @@ impl UnlockedVault {
         named_by_tx || named_by_store || named_by_event
     }
 
-    pub(super) fn clean_accounts(accounts: Vec<ContactAccount>) -> Result<Vec<ContactAccount>> {
+    pub(crate) fn clean_accounts(accounts: Vec<ContactAccount>) -> Result<Vec<ContactAccount>> {
         accounts
             .into_iter()
             .map(|mut account| {
@@ -219,7 +219,7 @@ impl UnlockedVault {
     }
 
     /// Whether the transaction involves the contact (and, if given, that account of it).
-    fn involves(tx: &Transaction, contact_id: &str, account_id: Option<&str>) -> bool {
+    pub(crate) fn involves(tx: &Transaction, contact_id: &str, account_id: Option<&str>) -> bool {
         let by_account = tx.accounts().into_iter().any(|account| match account {
             AccountRef::Contact {
                 contact_id: id,

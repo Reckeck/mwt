@@ -108,7 +108,7 @@ impl UnlockedVault {
     }
 
     /// Another programme already uses `symbol` (already normalized).
-    fn symbol_taken_by_other(&self, store_id: Option<&str>, symbol: &str) -> bool {
+    pub(crate) fn symbol_taken_by_other(&self, store_id: Option<&str>, symbol: &str) -> bool {
         self.doc.stores.iter().any(|other| {
             Some(other.id.as_str()) != store_id
                 && other
@@ -130,7 +130,7 @@ impl UnlockedVault {
 
     /// Normalize and check a programme's settings; `store_id` is the programme
     /// itself, `None` while it is being created.
-    fn checked_loyalty_info(
+    pub(crate) fn checked_loyalty_info(
         &self,
         store_id: Option<&str>,
         mut info: LoyaltyInfo,

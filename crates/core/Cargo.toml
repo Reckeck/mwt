@@ -12,6 +12,8 @@ workspace = true
 [features]
 # Test kit (`crate::testkit`); becomes its own crate later.
 testkit = []
+# Marks every `forward!` delegate `#[deprecated]` so the remaining callers can be listed (`cargo clippy --features deprecated-forwards`).
+deprecated-forwards = []
 
 [dependencies]
 serde.workspace = true

@@ -338,7 +338,7 @@ impl UnlockedVault {
     /// confirmed: it was already in the user's ledger, and silently dropping
     /// it would lose money the user can see. A verdict the user has given
     /// already is never overwritten — rejecting a coin must stick.
-    fn bybit_register_coin(&mut self, symbol: &str) {
+    pub(crate) fn bybit_register_coin(&mut self, symbol: &str) {
         let symbol = symbol.trim().to_ascii_uppercase();
         if symbol.is_empty() {
             return;

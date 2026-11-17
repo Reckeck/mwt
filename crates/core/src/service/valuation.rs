@@ -176,7 +176,7 @@ fn check_rule(rule: &RevalueRule) -> Result<()> {
 impl UnlockedVault {
     /// Whether any curve exists at all: the fast path keeps vaults without
     /// valuations and rules exactly as they were.
-    fn has_curves(&self) -> bool {
+    pub(crate) fn has_curves(&self) -> bool {
         !self.doc.valuations.is_empty()
             || self.doc.stores.iter().any(|store| {
                 store
@@ -223,7 +223,7 @@ impl UnlockedVault {
         self.curve_in(store, asset_key)
     }
 
-    fn property_of(&self, asset_key: &str) -> Option<&Store> {
+    pub(crate) fn property_of(&self, asset_key: &str) -> Option<&Store> {
         self.doc.holdings.iter().find_map(|holding| {
             (holding.asset.key() == asset_key)
                 .then(|| self.find_store(&holding.store_id))
@@ -232,7 +232,7 @@ impl UnlockedVault {
         })
     }
 
-    fn curve_in(&self, store: &Store, asset_key: &str) -> Option<ValuationCurve> {
+    pub(crate) fn curve_in(&self, store: &Store, asset_key: &str) -> Option<ValuationCurve> {
         let info = store.property.as_ref();
         let rule = info.and_then(|info| info.revalue.as_ref());
         let mut dated: Vec<&Valuation> = self
@@ -309,7 +309,7 @@ impl UnlockedVault {
     }
 
     /// `amount` of `from` in `to` at the latest rates.
-    fn latest_convert(&self, amount: Amount, from: &str, to: &str) -> Option<Amount> {
+    pub(crate) fn latest_convert(&self, amount: Amount, from: &str, to: &str) -> Option<Amount> {
         let (from, to) = (from.trim().to_lowercase(), to.trim().to_lowercase());
         if from == to {
             return Some(amount);
@@ -320,7 +320,7 @@ impl UnlockedVault {
 
     /// The first point of a curve: the old hand-set price at the purchase,
     /// else the purchase itself. `(secs, price, currency, kind)`.
-    fn base_point(
+    pub(crate) fn base_point(
         &self,
         asset_key: &str,
         purchase: Option<&PropertyPurchase>,
@@ -487,7 +487,7 @@ impl UnlockedVault {
 
     /// What one unit of money of `date` is worth today: the monthly series
     /// when the currency follows it, else the flat rate compounded monthly.
-    fn inflation_since(&self, currency: &str, date: &str, zone: &str) -> Option<Amount> {
+    pub(crate) fn inflation_since(&self, currency: &str, date: &str, zone: &str) -> Option<Amount> {
         let from = NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d").ok()?;
         let today = calendar::Calendar::new(zone).date_of(secs_or_now(""));
         if from > today {
@@ -502,7 +502,7 @@ impl UnlockedVault {
         Some(monthly.pow_int(u32::try_from(months.max(0)).unwrap_or(0)))
     }
 
-    fn property_store(&self, store_id: &str) -> Result<&Store> {
+    pub(crate) fn property_store(&self, store_id: &str) -> Result<&Store> {
         self.find_store(store_id)
             .filter(|store| store.kind == StoreKind::Property)
             .ok_or_else(|| Error::NotFound(format!("property {store_id}")))

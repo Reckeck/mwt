@@ -106,7 +106,7 @@ fn ser_err(err: serde_json::Error) -> Error {
 
 impl UnlockedVault {
     /// The document without the sync bookkeeping, serialized.
-    pub(super) fn doc_value(&mut self) -> Result<Value> {
+    pub(crate) fn doc_value(&mut self) -> Result<Value> {
         let sync = std::mem::take(&mut self.doc.sync);
         let value = serde_json::to_value(&self.doc);
         self.doc.sync = sync;
@@ -114,7 +114,7 @@ impl UnlockedVault {
     }
 
     /// Start stamping changes from the document as it is now.
-    pub(super) fn start_tracking(&mut self) -> Result<()> {
+    pub(crate) fn start_tracking(&mut self) -> Result<()> {
         if self.sandbox {
             return Ok(());
         }
@@ -132,7 +132,7 @@ impl UnlockedVault {
     /// Our own peer entries (a revocation or trust made while the clock was
     /// poisoned) stamped beyond the limit would be skipped by every peer.
     /// Give them a fresh bounded stamp. True when something changed.
-    fn restamp_poisoned_peers(&mut self) -> bool {
+    pub(crate) fn restamp_poisoned_peers(&mut self) -> bool {
         let now = crate::sync::stamp::now_ms();
         let limit = now.saturating_add(crate::sync::stamp::MAX_FUTURE_MS);
         let mine = self.clock.device().to_string();
@@ -165,7 +165,7 @@ impl UnlockedVault {
     }
 
     /// Stamp what changed since the last save; the changed keys.
-    pub(super) fn track_changes(&mut self) -> Result<Vec<String>> {
+    pub(crate) fn track_changes(&mut self) -> Result<Vec<String>> {
         if self.sandbox {
             return Ok(Vec::new());
         }
@@ -193,7 +193,7 @@ impl UnlockedVault {
     /// A deletion in a capped log (the change tracker reads a missing
     /// entry there as a trim): drops its stamps, leaves a tombstone, and
     /// offers the key to a live session.
-    pub(super) fn sync_forget_log_record(&mut self, key: &str) -> Result<()> {
+    pub(crate) fn sync_forget_log_record(&mut self, key: &str) -> Result<()> {
         if self.sandbox {
             return Ok(());
         }
@@ -223,7 +223,7 @@ impl UnlockedVault {
         &self.doc.sync
     }
 
-    fn state_of(&self, records: &BTreeMap<String, Value>, key: &str) -> RecordState {
+    pub(crate) fn state_of(&self, records: &BTreeMap<String, Value>, key: &str) -> RecordState {
         let union = split_key(key).is_some_and(|(coll, _)| matches!(coll.rule, Rule::Union { .. }));
         let value = records.get(key).cloned();
         if union {
@@ -249,7 +249,7 @@ impl UnlockedVault {
 
     /// A record as the digest sees it: what the devices share, not what
     /// stays on one (a flow's cursor).
-    fn shared_state(mut state: RecordState, key: &str) -> RecordState {
+    pub(crate) fn shared_state(mut state: RecordState, key: &str) -> RecordState {
         if let (Some((coll, _)), Some(value)) = (split_key(key), state.value.as_mut()) {
             *value = view::shareable(coll, value);
         }
@@ -340,7 +340,7 @@ impl UnlockedVault {
     /// is not in use are thinned to one point right after a merge (the rule
     /// of `thin_rate_caches`), so asking for or offering them only repeats
     /// the same list in every session. Other keys always qualify.
-    fn wants_cache_key(&self, key: &str, keeps_fx: &impl Fn(&str) -> bool) -> bool {
+    pub(crate) fn wants_cache_key(&self, key: &str, keeps_fx: &impl Fn(&str) -> bool) -> bool {
         match key.strip_prefix("fx_cache:") {
             Some(point) => keeps_fx(point.split_once('|').map_or(point, |(code, _)| code)),
             None => true,
@@ -392,7 +392,7 @@ impl UnlockedVault {
     /// Refuse records filed under a key they do not carry, or under a
     /// collection that does not sync: a broken or hostile peer must not be
     /// able to overwrite one record with another.
-    fn check_incoming(incoming: &BTreeMap<String, RecordState>) -> Result<()> {
+    pub(crate) fn check_incoming(incoming: &BTreeMap<String, RecordState>) -> Result<()> {
         for (key, state) in incoming {
             let Some((coll, inner)) = split_key(key) else {
                 return Err(Error::InvalidInput(format!("sync: unknown record {key}")));
@@ -513,7 +513,7 @@ impl UnlockedVault {
     /// [`Self::sync_apply`]; `carry` off is the earlier dedupe (the copy
     /// made later goes with its edits), which the tests keep as the other
     /// side of a pair of different versions.
-    fn apply_batch(
+    pub(crate) fn apply_batch(
         &mut self,
         incoming: &BTreeMap<String, RecordState>,
         peer: &PeerRef,
@@ -525,7 +525,7 @@ impl UnlockedVault {
     /// [`Self::apply_batch`]; `external` is the records of an external copy
     /// (`merge_from`): fields without a stamp on either side are reported.
     /// Which value is picked does not depend on it.
-    fn apply_batch_from(
+    pub(crate) fn apply_batch_from(
         &mut self,
         incoming: &BTreeMap<String, RecordState>,
         peer: &PeerRef,
@@ -704,7 +704,7 @@ impl UnlockedVault {
     /// `incoming` without the deletions that were already compacted: tombstone
     /// only, older than `TOMBSTONE_DAYS`, for a key with no value and no
     /// tombstone here.
-    fn without_compacted(
+    pub(crate) fn without_compacted(
         &self,
         incoming: &BTreeMap<String, RecordState>,
         records: &BTreeMap<String, Value>,
@@ -738,7 +738,10 @@ impl UnlockedVault {
     /// here and whatever that device made *after* the wipe still arrives.
     /// Silently: a peer handing over its old records is the normal course of
     /// a wipe, not a fault to report.
-    fn after_wipe(&self, incoming: BTreeMap<String, RecordState>) -> BTreeMap<String, RecordState> {
+    pub(crate) fn after_wipe(
+        &self,
+        incoming: BTreeMap<String, RecordState>,
+    ) -> BTreeMap<String, RecordState> {
         let wipes = self
             .doc
             .crypto_wiped_at
@@ -763,7 +766,7 @@ impl UnlockedVault {
 
     /// Read another copy of this vault (its sealed bytes) without locking,
     /// writing or syncing anything. Only for reading records out of it.
-    fn open_copy(&self, remote: &[u8], password: &str) -> Result<UnlockedVault> {
+    pub(crate) fn open_copy(&self, remote: &[u8], password: &str) -> Result<UnlockedVault> {
         let (plaintext, fmt, _key) = crate::crypto::open_bytes_keyed(remote, password.as_bytes())?;
         let decoded = crate::storage::decode_versioned(&plaintext, fmt)?;
         Ok(UnlockedVault {
@@ -1066,7 +1069,7 @@ impl UnlockedVault {
         Ok(report)
     }
 
-    fn prune_batches(&mut self) {
+    pub(crate) fn prune_batches(&mut self) {
         let cutoff = crate::sync::stamp::now_ms().saturating_sub(day_ms(BATCH_DAYS as u64));
         self.doc.sync.batches.retain(|batch| {
             u64::try_from(crate::model::vault::iso_to_millis(&batch.applied_at)).unwrap_or(0)
@@ -1082,7 +1085,7 @@ impl UnlockedVault {
     /// Counting devices are the trusted ones and those forgotten less than
     /// `REVOKED_GATE_DAYS` ago; each must have acked the deletion (its manifest
     /// held it, see `sync_ack_tombstones`). No ack yet means keep.
-    fn compact_tombstones(&mut self) {
+    pub(crate) fn compact_tombstones(&mut self) {
         let now = crate::sync::stamp::now_ms();
         let cutoff = now.saturating_sub(day_ms(TOMBSTONE_DAYS));
         let revoked_cutoff = now.saturating_sub(day_ms(REVOKED_GATE_DAYS));
@@ -1115,7 +1118,7 @@ impl UnlockedVault {
             .retain(|key, _| tombstones.contains_key(key));
     }
 
-    fn created_of(&self, key: &str) -> Stamp {
+    pub(crate) fn created_of(&self, key: &str) -> Stamp {
         self.doc
             .sync
             .stamps
@@ -1137,7 +1140,7 @@ impl UnlockedVault {
     ///
     /// Removals and carried fields are saved in the batch `batch_id`, so its
     /// undo puts them back. `carry` off is the earlier rule (tests only).
-    fn dedupe_generated(&mut self, batch_id: &str, carry: bool) -> Result<()> {
+    pub(crate) fn dedupe_generated(&mut self, batch_id: &str, carry: bool) -> Result<()> {
         struct Winner {
             rank: (Stamp, String),
             run_id: Option<String>,
@@ -1256,7 +1259,7 @@ impl UnlockedVault {
     /// beside them. Everything is recorded in the batch for undo and offered
     /// to a live session; the change tracker is rebased so none of it is
     /// stamped a second time.
-    fn remove_duplicates(
+    pub(crate) fn remove_duplicates(
         &mut self,
         removals: Vec<(String, Option<String>)>,
         batch_id: &str,
@@ -1576,7 +1579,7 @@ impl UnlockedVault {
 
     // -- backups --------------------------------------------------------------
 
-    fn presync_path(&self, index: usize) -> PathBuf {
+    pub(crate) fn presync_path(&self, index: usize) -> PathBuf {
         let mut name = self.path.file_name().unwrap_or_default().to_os_string();
         if index == 0 {
             name.push(".presync.bak");
@@ -1607,7 +1610,7 @@ impl UnlockedVault {
     }
 
     /// Delete every pre-sync backup (a missing file is fine).
-    pub(super) fn remove_sync_backups(&self) {
+    pub(crate) fn remove_sync_backups(&self) {
         for index in 0..PRESYNC_BACKUPS {
             let _ = std::fs::remove_file(self.presync_path(index));
         }

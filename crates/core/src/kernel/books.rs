@@ -7,6 +7,7 @@ use std::cell::OnceCell;
 use std::collections::HashMap;
 
 use crate::Amount;
+use crate::model::vault::VaultDoc;
 use crate::service::SharedExtra;
 
 use crate::service::RateBook;
@@ -24,6 +25,7 @@ pub struct Books<'vault> {
     rate_book: OnceCell<RateBook>,
     shared_ratios: OnceCell<HashMap<String, Amount>>,
     shared_extras: OnceCell<Vec<SharedExtra>>,
+    base_and_fx: OnceCell<(String, Amount)>,
 }
 
 impl<'vault> Books<'vault> {
@@ -33,7 +35,38 @@ impl<'vault> Books<'vault> {
             rate_book: OnceCell::new(),
             shared_ratios: OnceCell::new(),
             shared_extras: OnceCell::new(),
+            base_and_fx: OnceCell::new(),
         }
+    }
+
+    /// The open vault this context reads.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "first caller arrives with the pilot")
+    )]
+    pub(crate) fn vault(&self) -> &'vault UnlockedVault {
+        self.vault
+    }
+
+    /// The vault document.
+    pub fn doc(&self) -> &'vault VaultDoc {
+        &self.vault.doc
+    }
+
+    /// The base currency code and its latest FX rate, computed on first use.
+    pub fn base_and_fx(&self) -> (&str, Amount) {
+        let (base, fx) = self.base_and_fx.get_or_init(|| self.vault.base_and_fx());
+        (base.as_str(), *fx)
+    }
+
+    /// Current USD price of one unit of the asset.
+    pub fn price_usd(&self, asset_key: &str) -> Amount {
+        self.vault.price_usd_for(asset_key)
+    }
+
+    /// Base-currency price of one unit of the asset.
+    pub fn price_base(&self, asset_key: &str) -> Amount {
+        self.vault.price_base_for(asset_key, self.base_and_fx().1)
     }
 
     /// The rates at a moment, built on first use.
@@ -121,5 +154,21 @@ mod tests {
             books.rate_book().price_at("coin:bitcoin", 1_700_000_000),
             fresh.price_at("coin:bitcoin", 1_700_000_000)
         );
+    }
+
+    #[test]
+    fn books_base_and_fx_equals_vault() {
+        let (_dir, vault) = open_vault();
+        let books = vault.books();
+        let (vault_base, vault_fx) = vault.base_and_fx();
+        assert_eq!(books.base_and_fx(), (vault_base.as_str(), vault_fx));
+        assert_eq!(books.price_usd("fiat:usd"), vault.price_usd_for("fiat:usd"));
+        let fx = vault.base_and_fx().1;
+        assert_eq!(
+            books.price_base("coin:bitcoin"),
+            vault.price_base_for("coin:bitcoin", fx)
+        );
+        assert!(std::ptr::eq(books.vault(), &vault));
+        assert!(std::ptr::eq(books.doc(), &vault.doc));
     }
 }

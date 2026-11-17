@@ -136,7 +136,7 @@ impl UnlockedVault {
         PriceQuote::default()
     }
 
-    fn fiat_quote(&self, code: &str) -> PriceQuote {
+    pub(crate) fn fiat_quote(&self, code: &str) -> PriceQuote {
         let code = code.to_lowercase();
         if code == "usd" {
             return PriceQuote {
@@ -169,7 +169,7 @@ impl UnlockedVault {
     }
 
     /// The change against the newest cached price at least a day older.
-    fn change_from_history(
+    pub(crate) fn change_from_history(
         &self,
         asset_key: &str,
         now_usd: Amount,

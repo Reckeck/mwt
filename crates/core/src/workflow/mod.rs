@@ -13,14 +13,23 @@ pub mod automation;
 pub mod catalog;
 mod catalog_capital;
 mod catalog_more;
+pub mod effect;
 pub mod exec;
 pub mod graph;
+pub mod host;
 pub mod model;
 pub mod nodes;
 pub mod run_key;
+pub mod service;
 pub mod templates;
 pub mod types;
 pub mod validate;
+pub mod workflow_templates;
+#[cfg(test)]
+mod workflow_templates_tests;
+pub mod workflows;
+#[cfg(test)]
+mod workflows_tests;
 
 pub use catalog::{NodeDef, ParamDef, ParamKind, PortDef, catalog, node_def};
 pub use exec::{RunContext, RunMode, RunReport, TraceStep};

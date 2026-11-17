@@ -402,7 +402,7 @@ impl UnlockedVault {
         out
     }
 
-    fn flow_summary(
+    pub(crate) fn flow_summary(
         &self,
         book: &RateBook,
         currency: &str,
@@ -465,7 +465,7 @@ impl UnlockedVault {
     /// Every cached currency against the base, latest rates (plan F3b, "Rates"),
     /// plus a row per crypto favourite that has a cached price.
     /// The rate `ts` minus a day or earlier: the newest such point of `code`.
-    fn fx_rate_before(&self, code: &str, limit: i64) -> Option<Amount> {
+    pub(crate) fn fx_rate_before(&self, code: &str, limit: i64) -> Option<Amount> {
         if code == "usd" {
             return Some(Amount::new(rust_decimal::Decimal::ONE));
         }
@@ -482,7 +482,7 @@ impl UnlockedVault {
     }
 
     /// How much one unit of `code` gained in `base` against a day before `ts`.
-    fn fx_change_pct(&self, code: &str, base: &str, ts: &str) -> Option<Amount> {
+    pub(crate) fn fx_change_pct(&self, code: &str, base: &str, ts: &str) -> Option<Amount> {
         const DAY_SECS: i64 = 20 * 3600;
         let limit = crate::pricing::history::unix_secs(ts)? - DAY_SECS;
         let now_code = self.per_usd(code)?;
@@ -554,7 +554,7 @@ impl UnlockedVault {
     }
 
     /// Rows for the crypto favourites, from the latest cached quote.
-    fn crypto_fx_rows(
+    pub(crate) fn crypto_fx_rows(
         &self,
         favorites: &[String],
         base: &str,

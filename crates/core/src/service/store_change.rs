@@ -184,7 +184,7 @@ impl UnlockedVault {
 
     /// Apply the change to `self.doc` and report on it. On an error the
     /// document may be half-changed: callers restore their copy.
-    fn change_in_memory(&mut self, input: &StoreChangeInput) -> StoreChangePlan {
+    pub(crate) fn change_in_memory(&mut self, input: &StoreChangeInput) -> StoreChangePlan {
         let mut plan = StoreChangePlan {
             store_id: input.store_id.clone(),
             ..StoreChangePlan::default()
@@ -206,7 +206,7 @@ impl UnlockedVault {
         plan
     }
 
-    fn store_mut(&mut self, id: &str) -> Result<&mut Store> {
+    pub(crate) fn store_mut(&mut self, id: &str) -> Result<&mut Store> {
         self.doc
             .stores
             .iter_mut()
@@ -215,12 +215,7 @@ impl UnlockedVault {
     }
 
     /// A name free among the wallets (or among the children of `parent`).
-    pub(in crate::service) fn free_name(
-        &self,
-        node: &str,
-        parent: Option<&str>,
-        wanted: &str,
-    ) -> String {
+    pub(crate) fn free_name(&self, node: &str, parent: Option<&str>, wanted: &str) -> String {
         if self.ensure_unique_name(Some(node), parent, wanted).is_ok() {
             return wanted.to_string();
         }
@@ -231,7 +226,7 @@ impl UnlockedVault {
     }
 
     /// Give a wallet the fields of its new kind and drop the old kind's.
-    fn set_root_kind(&mut self, id: &str, kind: StoreKind) -> Result<()> {
+    pub(crate) fn set_root_kind(&mut self, id: &str, kind: StoreKind) -> Result<()> {
         let leaving_exchange = {
             let store = self.store_mut(id)?;
             let old = store.kind;
@@ -256,7 +251,7 @@ impl UnlockedVault {
     }
 
     /// Exchange keys stop booking fills on an account that is no longer an exchange's.
-    fn forget_import_target(&mut self, id: &str) {
+    pub(crate) fn forget_import_target(&mut self, id: &str) {
         for keys in &mut self.doc.exchanges.bybit {
             if keys.spot_store_id.as_deref() == Some(id) {
                 keys.spot_store_id = None;
@@ -267,7 +262,7 @@ impl UnlockedVault {
         }
     }
 
-    fn change_kind(
+    pub(crate) fn change_kind(
         &mut self,
         id: &str,
         kind: StoreKind,
@@ -332,7 +327,7 @@ impl UnlockedVault {
         Ok(affected)
     }
 
-    fn move_to(
+    pub(crate) fn move_to(
         &mut self,
         id: &str,
         parent_id: &str,
@@ -409,7 +404,11 @@ impl UnlockedVault {
 
     /// The type and binding a wallet takes as an account of a `kind` wallet:
     /// the asset it holds, which has to be one.
-    fn root_as_account(&self, store: &Store, kind: StoreKind) -> Result<(SubType, Binding)> {
+    pub(crate) fn root_as_account(
+        &self,
+        store: &Store,
+        kind: StoreKind,
+    ) -> Result<(SubType, Binding)> {
         let held: Vec<&AssetRef> = self
             .doc
             .holdings
@@ -442,7 +441,11 @@ impl UnlockedVault {
         }
     }
 
-    fn detach(&mut self, id: &str, plan: &mut StoreChangePlan) -> Result<HashSet<String>> {
+    pub(crate) fn detach(
+        &mut self,
+        id: &str,
+        plan: &mut StoreChangePlan,
+    ) -> Result<HashSet<String>> {
         let store = self
             .find_store(id)
             .cloned()
@@ -480,7 +483,7 @@ impl UnlockedVault {
         Ok(HashSet::from([id.to_string()]))
     }
 
-    fn merge_into(
+    pub(crate) fn merge_into(
         &mut self,
         id: &str,
         target_id: &str,
@@ -548,7 +551,7 @@ impl UnlockedVault {
     }
 
     /// Set the counted balance of every shifted correction line.
-    fn write_shifted_corrections(&mut self, shifts: &[CorrectionShift]) {
+    pub(crate) fn write_shifted_corrections(&mut self, shifts: &[CorrectionShift]) {
         for shift in shifts {
             let line = self
                 .doc
@@ -571,7 +574,7 @@ impl UnlockedVault {
     /// The operations on `stores` that break the rules of the account they are
     /// on now: what the kind accepts, what the account may hold, both sides on
     /// one account.
-    fn conflicts_on(&self, stores: &HashSet<String>) -> Vec<StoreChangeConflict> {
+    pub(crate) fn conflicts_on(&self, stores: &HashSet<String>) -> Vec<StoreChangeConflict> {
         self.doc
             .transactions
             .iter()
@@ -588,7 +591,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn store_rule_violation(&self, tx: &Transaction) -> Option<String> {
+    pub(crate) fn store_rule_violation(&self, tx: &Transaction) -> Option<String> {
         for id in Self::store_sides(tx) {
             let store = self.find_store(id)?;
             if !allowed_kinds(store.kind).contains(&tx.kind()) {

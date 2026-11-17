@@ -202,7 +202,13 @@ impl UnlockedVault {
     }
 
     /// Interest booked into a store in `[from, to)`, in `currency`.
-    fn interest_since(&self, store_id: &str, currency: &str, from: i64, to: i64) -> Amount {
+    pub(crate) fn interest_since(
+        &self,
+        store_id: &str,
+        currency: &str,
+        from: i64,
+        to: i64,
+    ) -> Amount {
         let book = self.rate_book();
         self.doc
             .transactions
@@ -225,7 +231,7 @@ impl UnlockedVault {
     }
 
     /// Active goals with an explicit scope that includes the store.
-    fn goals_counting(&self, store_id: &str) -> Vec<String> {
+    pub(crate) fn goals_counting(&self, store_id: &str) -> Vec<String> {
         self.doc
             .goals
             .iter()

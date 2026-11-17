@@ -37,7 +37,7 @@ enum When {
 
 /// One reminder the data asks for.
 #[derive(Debug, Clone)]
-struct Spec {
+pub(crate) struct Spec {
     source: ReminderSource,
     category: NoticeCategory,
     text: String,
@@ -47,7 +47,7 @@ struct Spec {
 /// The text of the automatic reminders in the reader's language and in the
 /// other one, by source. The stored text is in the language of the device that
 /// wrote it, so a text equal to either rendering is still the generated one.
-struct Renderings {
+pub(crate) struct Renderings {
     mine: HashMap<ReminderSource, String>,
     other: HashMap<ReminderSource, String>,
 }
@@ -120,7 +120,7 @@ fn date_text(date: NaiveDate) -> String {
 
 impl UnlockedVault {
     /// Everything the data asks to be reminded of, in the user's language.
-    fn auto_specs(&self, today: NaiveDate, ru: bool) -> Vec<Spec> {
+    pub(crate) fn auto_specs(&self, today: NaiveDate, ru: bool) -> Vec<Spec> {
         use ReminderSourceKind::*;
         let mut out = Vec::new();
         let mut push = |kind: ReminderSourceKind, id: &str, text: String, when: When| {
@@ -478,7 +478,7 @@ impl UnlockedVault {
     }
 
     /// Both renderings of every automatic reminder's text, by source.
-    fn auto_renderings(&self, today: NaiveDate, ru: bool) -> Renderings {
+    pub(crate) fn auto_renderings(&self, today: NaiveDate, ru: bool) -> Renderings {
         let by_source = |ru: bool| -> HashMap<ReminderSource, String> {
             self.auto_specs(today, ru)
                 .into_iter()
@@ -637,7 +637,7 @@ impl UnlockedVault {
 
     /// A monthly reminder whose payment is already booked for its month moves
     /// on to the next month by itself.
-    fn close_paid_reminders(&mut self, now: i64, cal: &Calendar) -> bool {
+    pub(crate) fn close_paid_reminders(&mut self, now: i64, cal: &Calendar) -> bool {
         use ReminderSourceKind::*;
         let lead_of = |vault: &Self, kind| {
             i64::from(
@@ -681,7 +681,7 @@ impl UnlockedVault {
     }
 
     /// Whether what a monthly reminder asks for is already done in `[start, end)`.
-    fn month_is_paid(&self, source: &ReminderSource, start: i64, end: i64) -> bool {
+    pub(crate) fn month_is_paid(&self, source: &ReminderSource, start: i64, end: i64) -> bool {
         use ReminderSourceKind::*;
         let in_month = |tx: &Transaction| {
             let secs = secs_or_now(&tx.meta().timestamp);

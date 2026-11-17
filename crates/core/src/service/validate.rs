@@ -96,7 +96,7 @@ impl UnlockedVault {
     /// hides the actions of such a wallet; this makes the rule hold for every
     /// other way in — a transfer from another wallet, an automation, a bulk
     /// edit, a balance adjustment.
-    fn refuse_engine_wallet(store: &Store) -> Result<()> {
+    pub(crate) fn refuse_engine_wallet(store: &Store) -> Result<()> {
         if store.crypto_account_id.is_some() {
             return Err(invalid(
                 "this wallet is read by the crypto module and takes no hand-made operations",
@@ -106,7 +106,7 @@ impl UnlockedVault {
     }
 
     /// V7: a contact side names an existing contact, and an active account of it.
-    fn check_account(&self, account: &AccountRef) -> Result<()> {
+    pub(crate) fn check_account(&self, account: &AccountRef) -> Result<()> {
         match account {
             AccountRef::Store(id) => self.live_store(id).map(|_| ()),
             AccountRef::Contact {
@@ -142,7 +142,11 @@ impl UnlockedVault {
     }
 
     /// V8: details only for the store kinds they make sense for.
-    fn check_details(store: &Store, details: &KindDetails, amount: Amount) -> Result<()> {
+    pub(crate) fn check_details(
+        store: &Store,
+        details: &KindDetails,
+        amount: Amount,
+    ) -> Result<()> {
         if let Some(notes) = &details.cash_breakdown {
             if store.kind != StoreKind::Cash {
                 return Err(invalid("a banknote count is only for cash"));
@@ -182,7 +186,7 @@ impl UnlockedVault {
 
     /// A correction: at least one asset, each once, each one the account may
     /// hold; a real balance below zero only on a loan or a credit card.
-    fn check_adjustment(&self, tx: &AdjustmentTx) -> Result<()> {
+    pub(crate) fn check_adjustment(&self, tx: &AdjustmentTx) -> Result<()> {
         let store = self.live_store(&tx.store_id)?;
         if tx.lines.is_empty() {
             return Err(invalid("a correction needs at least one asset"));
@@ -410,7 +414,7 @@ impl UnlockedVault {
     }
 
     /// V5, V10, V11, V12 — the shared fields.
-    fn check_meta(&self, tx: &Transaction, now_ms: i64) -> Result<()> {
+    pub(crate) fn check_meta(&self, tx: &Transaction, now_ms: i64) -> Result<()> {
         let meta = tx.meta();
         let kind = tx.kind();
 
@@ -476,7 +480,7 @@ impl UnlockedVault {
     /// Shape-check every on-chain hash a transaction claims. A hash whose
     /// network differs from the assets it moved would open the explorer on
     /// somebody else's transaction, so both are refused.
-    fn check_on_chain_refs(&self, tx: &Transaction) -> Result<()> {
+    pub(crate) fn check_on_chain_refs(&self, tx: &Transaction) -> Result<()> {
         let chains = tx.asset_chains();
         for (network, hash) in tx.on_chain_refs() {
             let Some(hash) = hash.filter(|raw| !raw.is_empty()) else {

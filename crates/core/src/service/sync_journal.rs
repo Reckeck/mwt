@@ -8,7 +8,7 @@ use crate::sync::journal::{SyncJournalEntry, SyncJournalOutcome, push};
 
 impl UnlockedVault {
     /// Add a line without saving (the caller saves right after).
-    pub(super) fn journal_push(
+    pub(crate) fn journal_push(
         &mut self,
         peer_name: &str,
         summary: &SyncSummary,
@@ -36,7 +36,7 @@ impl UnlockedVault {
     /// One-time cleanup on open: batches and journal lines written before
     /// secret collections were hidden keep no label or value of them.
     /// `true` when something changed (the caller saves only then).
-    pub(super) fn scrub_sync_secrets(&mut self) -> bool {
+    pub(crate) fn scrub_sync_secrets(&mut self) -> bool {
         let mut changed = false;
         for batch in &mut self.doc.sync.batches {
             changed |= batch.summary.scrub_secrets();

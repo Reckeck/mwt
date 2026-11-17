@@ -40,7 +40,7 @@ impl UnlockedVault {
     /// Keys of `plan` whose record the typed document refuses, `base` being
     /// the document before the batch. Empty when the failure is not down to
     /// a single record.
-    pub(super) fn unparsable_keys(base: &Value, plan: &SyncPlan) -> Vec<String> {
+    pub(crate) fn unparsable_keys(base: &Value, plan: &SyncPlan) -> Vec<String> {
         let changes: Vec<(&String, &PlannedChange)> = plan.changes.iter().collect();
         bad_of(base, &changes)
     }
@@ -49,7 +49,7 @@ impl UnlockedVault {
     /// there: the peer offers them again every session, and the journal must
     /// not fill with one line per session. True when a line was added (the
     /// caller saves).
-    pub(super) fn journal_skipped(&mut self, peer_name: &str, summary: &SyncSummary) -> bool {
+    pub(crate) fn journal_skipped(&mut self, peer_name: &str, summary: &SyncSummary) -> bool {
         let line = SyncJournalEntry::of(peer_name, summary, SyncJournalOutcome::Failed);
         let known = self.doc.sync.journal.iter().any(|entry| {
             entry.outcome == line.outcome

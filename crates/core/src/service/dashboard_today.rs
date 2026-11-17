@@ -111,7 +111,12 @@ fn months_since(start: &str, today: NaiveDate) -> u32 {
 
 impl UnlockedVault {
     /// Value of the wallets of `scope` in `currency`.
-    fn scope_value_in(&self, scope: &StoreScope, currency: &str, now: i64) -> Option<Amount> {
+    pub(crate) fn scope_value_in(
+        &self,
+        scope: &StoreScope,
+        currency: &str,
+        now: i64,
+    ) -> Option<Amount> {
         let values = self.store_values_usd();
         let usd = self
             .resolve_scope(scope)
@@ -159,7 +164,12 @@ impl UnlockedVault {
     }
 
     /// Everything waiting for the user, the earliest first; utility sums in `currency`.
-    fn all_today_todos(&self, now: i64, zone: &str, currency: Option<&str>) -> Vec<TodayTodo> {
+    pub(crate) fn all_today_todos(
+        &self,
+        now: i64,
+        zone: &str,
+        currency: Option<&str>,
+    ) -> Vec<TodayTodo> {
         let today = Calendar::new(zone).date_of(now);
         let horizon = today + Duration::days(i64::from(TODAY_HORIZON_DAYS));
         let within = |date: &str| {
@@ -257,7 +267,12 @@ impl UnlockedVault {
 
     /// Properties whose pay day has passed this month with nothing paid for some
     /// utility: the unpaid sum, in `currency` when every item converts to it.
-    fn overdue_utilities(&self, now: i64, zone: &str, currency: Option<&str>) -> Vec<TodayTodo> {
+    pub(crate) fn overdue_utilities(
+        &self,
+        now: i64,
+        zone: &str,
+        currency: Option<&str>,
+    ) -> Vec<TodayTodo> {
         let today = Calendar::new(zone).date_of(now);
         let rates = self.rate_book();
         let mut todos = Vec::new();

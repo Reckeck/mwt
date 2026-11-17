@@ -76,7 +76,7 @@ impl UnlockedVault {
     }
 
     /// Do what a marked change asks. `Nothing` neither writes nor bumps.
-    fn apply_commit(&mut self, commit: Commit) -> Result<()> {
+    pub(crate) fn apply_commit(&mut self, commit: Commit) -> Result<()> {
         match commit {
             Commit::Wake => self.session.announce_commit(),
             Commit::WriteNow => self.write_now()?,
@@ -101,7 +101,7 @@ impl UnlockedVault {
     /// succeeded; an `Err` drops them). The log records it deleted on purpose
     /// are handed to the sync layer here, so the next save writes their
     /// tombstones.
-    fn run<R>(
+    pub(crate) fn run<R>(
         &mut self,
         body: impl FnOnce(&mut Tx<'_>) -> Result<R>,
     ) -> Result<(R, bool, Vec<DomainEvent>)> {
@@ -135,7 +135,7 @@ impl UnlockedVault {
     }
 
     /// Bump the revision and write the snapshot to disk.
-    fn write_now(&mut self) -> Result<()> {
+    pub(crate) fn write_now(&mut self) -> Result<()> {
         self.session.touch();
         let Some(job) = self.prepare_flush()? else {
             return Ok(());

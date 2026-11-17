@@ -340,7 +340,7 @@ fn asked_money(graph: &Graph, memo: &str) -> CardMoney {
 impl UnlockedVault {
     /// A run that asked "yes" and was answered: the answer is a run of its own,
     /// so the question no longer belongs in the lists.
-    fn answered_question(&self, run: &WorkflowRun) -> bool {
+    pub(crate) fn answered_question(&self, run: &WorkflowRun) -> bool {
         matches!(run.outcome, RunOutcome::Asking { .. })
             && !self
                 .doc
@@ -349,7 +349,7 @@ impl UnlockedVault {
                 .any(|wait| wait.run_id == run.id)
     }
 
-    fn journal_entry(&self, workflow: &Workflow, run: &WorkflowRun) -> JournalEntry {
+    pub(crate) fn journal_entry(&self, workflow: &Workflow, run: &WorkflowRun) -> JournalEntry {
         let (status, note) = match &run.outcome {
             RunOutcome::Done => (JournalStatus::Done, String::new()),
             RunOutcome::Asking { question, .. } => (JournalStatus::Asking, question.clone()),
@@ -547,7 +547,7 @@ impl UnlockedVault {
 
     /// A scheme on an income fires when that income comes: "When" and
     /// "Next time" follow the soonest repeat that books its category.
-    fn follow_income(
+    pub(crate) fn follow_income(
         &self,
         card: &mut AutomationCard,
         category: &str,

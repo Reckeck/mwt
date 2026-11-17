@@ -113,7 +113,8 @@ fn public_methods(root: &Path, workspace: &Workspace, area: &Area) -> Result<Vec
     Ok(found)
 }
 
-/// The methods of the top-level `impl UnlockedVault` blocks that are not test code.
+/// The methods of the top-level `impl UnlockedVault` blocks that are not test code (an impl or a
+/// method behind `cfg(test)`, `cfg(any(test, ...))`: the way `strangle stats` counts them).
 pub fn production_methods(file: &syn::File) -> Vec<&ImplItemFn> {
     file.items
         .iter()
@@ -122,6 +123,7 @@ pub fn production_methods(file: &syn::File) -> Vec<&ImplItemFn> {
             _ => None,
         })
         .flat_map(source::vault_methods_of)
+        .filter(|method| !method.attrs.iter().any(is_test_attr))
         .collect()
 }
 

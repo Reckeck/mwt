@@ -214,7 +214,7 @@ impl UnlockedVault {
         Ok(self.asset_classes())
     }
 
-    fn fund_store_ids(&self) -> HashSet<String> {
+    pub(crate) fn fund_store_ids(&self) -> HashSet<String> {
         self.doc
             .emergency_fund
             .scope
@@ -265,7 +265,7 @@ impl UnlockedVault {
     /// Value of each basket, unclassified and fund parts, in the base
     /// currency. Only money and investments count: no property, points,
     /// loans or credit cards.
-    fn class_values(&self) -> (HashMap<String, Amount>, Amount, Amount) {
+    pub(crate) fn class_values(&self) -> (HashMap<String, Amount>, Amount, Amount) {
         let (_, fx) = self.base_and_fx();
         let investable: HashSet<&str> = self
             .doc
@@ -344,7 +344,12 @@ impl UnlockedVault {
     }
 
     /// Last month's `savings_fact` in `currency`, never below zero.
-    fn last_month_savings(&self, now: i64, zone: &str, currency: &str) -> (Amount, String) {
+    pub(crate) fn last_month_savings(
+        &self,
+        now: i64,
+        zone: &str,
+        currency: &str,
+    ) -> (Amount, String) {
         let cal = Calendar::new(zone);
         let today = cal.date_of(now);
         let first = today - Duration::days(i64::from(chrono::Datelike::day(&today)) - 1);

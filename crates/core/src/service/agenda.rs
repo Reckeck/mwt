@@ -115,7 +115,7 @@ impl UnlockedVault {
         out
     }
 
-    fn check_reminder(text: &str, due_at: &str) -> Result<()> {
+    pub(crate) fn check_reminder(text: &str, due_at: &str) -> Result<()> {
         if text.trim().is_empty() {
             return Err(Error::InvalidInput("write what to remind about".into()));
         }
@@ -191,7 +191,7 @@ impl UnlockedVault {
     }
 
     /// An empty button is no button; a wallet must exist.
-    fn clean_pay(&self, pay: Option<ReminderPay>) -> Result<Option<ReminderPay>> {
+    pub(crate) fn clean_pay(&self, pay: Option<ReminderPay>) -> Result<Option<ReminderPay>> {
         let Some(pay) = pay else { return Ok(None) };
         let pick = |value: Option<String>| {
             value
@@ -210,7 +210,7 @@ impl UnlockedVault {
         Ok((pay.store_id.is_some() || pay.category.is_some()).then_some(pay))
     }
 
-    fn clean_repeat(repeat: ReminderRepeat) -> ReminderRepeat {
+    pub(crate) fn clean_repeat(repeat: ReminderRepeat) -> ReminderRepeat {
         ReminderRepeat {
             every: repeat.every.clamp(1, 999),
             ..repeat
@@ -278,7 +278,7 @@ impl UnlockedVault {
         self.persist()
     }
 
-    fn find_reminder_mut(&mut self, id: &str) -> Result<&mut Reminder> {
+    pub(crate) fn find_reminder_mut(&mut self, id: &str) -> Result<&mut Reminder> {
         self.doc
             .reminders
             .iter_mut()
@@ -313,7 +313,7 @@ impl UnlockedVault {
             .collect()
     }
 
-    fn check_alert(&self, draft: &PriceAlertDraft) -> Result<()> {
+    pub(crate) fn check_alert(&self, draft: &PriceAlertDraft) -> Result<()> {
         if draft.asset.symbol.trim().is_empty() {
             return Err(Error::InvalidInput("choose an asset".into()));
         }
@@ -442,7 +442,7 @@ impl UnlockedVault {
     // -- upcoming -------------------------------------------------------------
 
     /// A forecast balance, seeded from the real one on first use.
-    fn forecast_balance(
+    pub(crate) fn forecast_balance(
         &self,
         balances: &mut HashMap<(String, String), Amount>,
         store_id: &str,

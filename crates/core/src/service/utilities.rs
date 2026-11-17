@@ -116,7 +116,7 @@ pub struct UtilityPaymentDraft {
 
 /// The meter at the start and at the end of one month.
 #[derive(Debug, Clone, PartialEq)]
-struct MonthReadings {
+pub(crate) struct MonthReadings {
     /// `None` for the first and only reading of a meter: nothing was used yet.
     start: Option<Amount>,
     end: Amount,
@@ -598,7 +598,7 @@ impl UnlockedVault {
         out
     }
 
-    fn check_utility(&self, draft: &UtilityDraft) -> Result<()> {
+    pub(crate) fn check_utility(&self, draft: &UtilityDraft) -> Result<()> {
         if draft.name.trim().is_empty() {
             return Err(Error::InvalidInput("name the bill".into()));
         }
@@ -746,7 +746,7 @@ impl UnlockedVault {
         self.persist()
     }
 
-    fn utility_item(&self, id: &str) -> Result<&UtilityItem> {
+    pub(crate) fn utility_item(&self, id: &str) -> Result<&UtilityItem> {
         self.doc
             .utility_items
             .iter()
@@ -804,7 +804,7 @@ impl UnlockedVault {
     }
 
     /// Validate and store a reading without writing the file.
-    fn insert_reading(
+    pub(crate) fn insert_reading(
         &mut self,
         item_id: &str,
         value: Amount,
@@ -901,7 +901,7 @@ impl UnlockedVault {
     }
 
     /// Readings of an item, oldest first.
-    fn readings_of(&self, item_id: &str) -> Vec<MeterReading> {
+    pub(crate) fn readings_of(&self, item_id: &str) -> Vec<MeterReading> {
         let mut out: Vec<MeterReading> = self
             .doc
             .meter_readings
@@ -914,7 +914,7 @@ impl UnlockedVault {
     }
 
     /// Readings of one zone of an item (`None` = a one-rate meter), oldest first.
-    fn readings_in(&self, item_id: &str, zone: Option<&str>) -> Vec<MeterReading> {
+    pub(crate) fn readings_in(&self, item_id: &str, zone: Option<&str>) -> Vec<MeterReading> {
         let mut out = self.readings_of(item_id);
         out.retain(|reading| reading.zone.as_deref() == zone);
         out
@@ -923,7 +923,7 @@ impl UnlockedVault {
     /// Where the meter stood at the start and at the end of each month with a
     /// reading. A multi-rate meter counts a month once every zone is read in
     /// it, the totals summing the zones.
-    fn monthly_readings(&self, item_id: &str) -> BTreeMap<String, MonthReadings> {
+    pub(crate) fn monthly_readings(&self, item_id: &str) -> BTreeMap<String, MonthReadings> {
         let zones = self.utility_item(item_id).map(zones_of).unwrap_or_default();
         if zones.is_empty() {
             return self.zone_months(item_id, None);
@@ -972,7 +972,11 @@ impl UnlockedVault {
     /// One zone's months. A month starts from the last reading before it; the
     /// very first month of a meter starts from its own first reading, so a
     /// flat moved into on the 15th counts from the 15th.
-    fn zone_months(&self, item_id: &str, zone: Option<&str>) -> BTreeMap<String, MonthReadings> {
+    pub(crate) fn zone_months(
+        &self,
+        item_id: &str,
+        zone: Option<&str>,
+    ) -> BTreeMap<String, MonthReadings> {
         let mut out: BTreeMap<String, MonthReadings> = BTreeMap::new();
         let mut previous: Option<&MeterReading> = None;
         let readings = self.readings_in(item_id, zone);
@@ -1000,7 +1004,7 @@ impl UnlockedVault {
     /// The month a meter is billed for in `period`: its own readings, else the
     /// latest month read before it that has a consumption and no payment from
     /// then on — a meter read in September is paid in October, once.
-    fn billable_month(
+    pub(crate) fn billable_month(
         &self,
         item_id: &str,
         period: &str,
@@ -1045,7 +1049,11 @@ impl UnlockedVault {
     }
 
     /// The item's payments by period, in its currency.
-    fn paid_by_month(&self, item: &UtilityItem, cal: &Calendar) -> BTreeMap<String, Amount> {
+    pub(crate) fn paid_by_month(
+        &self,
+        item: &UtilityItem,
+        cal: &Calendar,
+    ) -> BTreeMap<String, Amount> {
         let book = self.rate_book();
         let mut out: BTreeMap<String, Amount> = BTreeMap::new();
         for payment in self.item_payments(item) {
@@ -1068,7 +1076,7 @@ impl UnlockedVault {
     }
 
     /// The item's payment transactions by period.
-    fn payments_by_month(
+    pub(crate) fn payments_by_month(
         &self,
         item: &UtilityItem,
         cal: &Calendar,
@@ -1404,7 +1412,12 @@ impl UnlockedVault {
 
     /// The average of the last six months before `period` that had a bill,
     /// summing the given lines' items month by month.
-    fn bill_average(&self, lines: &[&UtilityBillLine], period: &str, zone: &str) -> Option<Amount> {
+    pub(crate) fn bill_average(
+        &self,
+        lines: &[&UtilityBillLine],
+        period: &str,
+        zone: &str,
+    ) -> Option<Amount> {
         let mut by_month: BTreeMap<String, Amount> = BTreeMap::new();
         for line in lines {
             let Ok(trend) = self.meter_trend(&line.item.id, zone) else {
@@ -1433,7 +1446,7 @@ impl UnlockedVault {
 
     /// A multi-rate meter's zones on the bill: the month's readings when it is
     /// read, else each zone's last reading before it as the base.
-    fn zone_lines(
+    pub(crate) fn zone_lines(
         &self,
         item: &UtilityItem,
         period: &str,

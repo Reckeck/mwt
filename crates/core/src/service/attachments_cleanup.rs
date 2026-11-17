@@ -18,7 +18,7 @@ impl UnlockedVault {
     /// Drop the attachments the user removed and those whose owner is gone
     /// for good, files included. Runs when the vault is opened: no "Undo" of
     /// the last session can be waiting any more. Returns whether anything went.
-    pub(super) fn prune_attachments(&mut self) -> bool {
+    pub(crate) fn prune_attachments(&mut self) -> bool {
         let gone: Vec<String> = self
             .doc
             .attachments
@@ -52,7 +52,7 @@ impl UnlockedVault {
     /// and this one holds its last live value (the rule that restores a
     /// deleted record that money uses reads the same history). An owner this
     /// device deleted itself, or one nobody ever knew, does not come back.
-    fn owner_may_return(&self, owner: &EntityRef) -> bool {
+    pub(crate) fn owner_may_return(&self, owner: &EntityRef) -> bool {
         let collection = match owner.kind {
             EntityKind::Tx => "transactions",
             EntityKind::Goal => "goals",
@@ -66,7 +66,7 @@ impl UnlockedVault {
     /// Only plain files named exactly like an attachment id (a canonical
     /// UUID) directly inside `<vault>.files/` are touched; a symlink, a
     /// directory, another name or a path outside never is.
-    pub(super) fn sweep_orphan_attachment_files(&self) {
+    pub(crate) fn sweep_orphan_attachment_files(&self) {
         if self.sandbox {
             return;
         }

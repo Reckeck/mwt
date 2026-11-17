@@ -219,7 +219,7 @@ impl UnlockedVault {
     }
 
     /// Balance of one asset at the end of each day of `[from, to]`.
-    fn daily_balances(
+    pub(crate) fn daily_balances(
         &self,
         store_id: &str,
         symbol: &str,
@@ -255,7 +255,7 @@ impl UnlockedVault {
     }
 
     /// Interest earned on `[from, to]` by the day, at each day's rate.
-    fn interest_between(
+    pub(crate) fn interest_between(
         &self,
         store: &Store,
         terms: &DepositTerms,
@@ -281,7 +281,12 @@ impl UnlockedVault {
     }
 
     /// `balance` after `days` at `rate` percent, compounded by `capitalization`.
-    fn grow(balance: Amount, rate: Amount, days: i64, capitalization: Capitalization) -> Amount {
+    pub(crate) fn grow(
+        balance: Amount,
+        rate: Amount,
+        days: i64,
+        capitalization: Capitalization,
+    ) -> Amount {
         let yearly = rate.to_f64() / 100.0;
         let principal = balance.to_f64();
         let years = days as f64 / 365.0;
@@ -294,7 +299,7 @@ impl UnlockedVault {
     }
 
     /// Interest booked this year on a store (`deposit_interest` top-ups).
-    fn posted_interest(&self, store_id: &str, symbol: &str, year: i32) -> Amount {
+    pub(crate) fn posted_interest(&self, store_id: &str, symbol: &str, year: i32) -> Amount {
         self.doc
             .transactions
             .iter()
@@ -385,7 +390,7 @@ impl UnlockedVault {
         })
     }
 
-    fn pds_report(
+    pub(crate) fn pds_report(
         &self,
         store: &Store,
         symbol: &str,

@@ -29,6 +29,9 @@ pub struct Map {
     /// The foundation tasks (no area) and the files they own in the shared tree.
     #[serde(default, rename = "foundation")]
     pub foundations: Vec<Foundation>,
+    /// Stubs that later tasks name but no area lists (`secret.rs`, `cryptotrack/service/`).
+    #[serde(default, rename = "extra_stub")]
+    pub extra_stubs: Vec<ExtraStub>,
     #[serde(rename = "area")]
     pub areas: Vec<Area>,
 }
@@ -40,6 +43,17 @@ pub struct Foundation {
     pub task: String,
     /// Paths from the workspace root; a trailing `/` takes the whole directory.
     pub files: Vec<String>,
+}
+
+/// A module `scaffold` creates besides the area stubs.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExtraStub {
+    /// The plan task that fills it.
+    pub task: String,
+    /// Path under the core `src/`: `secret.rs` is a file, `cryptotrack/service/` a directory
+    /// module (`mod.rs`). It is declared in its parent module (`lib.rs` at the top).
+    pub path: String,
 }
 
 #[derive(Debug, Deserialize)]

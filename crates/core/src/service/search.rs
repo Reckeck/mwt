@@ -322,7 +322,7 @@ impl UnlockedVault {
 
     /// Spending (or income, for an income category) of the current month in
     /// the budget currency.
-    fn category_month_spent(&self, key: &str, now: i64, zone: &str) -> (Amount, String) {
+    pub(crate) fn category_month_spent(&self, key: &str, now: i64, zone: &str) -> (Amount, String) {
         let cal = Calendar::new(zone);
         let (from, to) = cal.month_bounds(cal.date_of(now));
         let currency = self.budget_currency();

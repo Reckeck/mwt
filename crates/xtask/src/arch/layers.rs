@@ -23,6 +23,7 @@ pub const GROUPS: &[Group] = &[
             "app_dirs",
             "routes",
             "external_url",
+            "secret",
             "lib",
         ],
     },
@@ -84,7 +85,15 @@ pub const GROUPS: &[Group] = &[
     Group {
         name: "usecases",
         layer: 5,
-        modules: &["service", "sandbox", "appconfig", "ipc_contract"],
+        modules: &[
+            "service",
+            "sandbox",
+            "appconfig",
+            "ipc_contract",
+            "usecases",
+            "household",
+            "reports",
+        ],
     },
     // Test support on top of everything: compiled only under `cfg(test)` or the `testkit` feature.
     Group {

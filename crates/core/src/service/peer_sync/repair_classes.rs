@@ -13,7 +13,7 @@ use crate::model::planning::AssetClass;
 
 impl UnlockedVault {
     /// Links to a class that is gone point at nothing.
-    pub(super) fn repair_class_links(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_class_links(&mut self, report: &mut RepairReport) {
         let known: std::collections::HashSet<String> = self
             .effective_classes()
             .into_iter()
@@ -38,7 +38,7 @@ impl UnlockedVault {
     }
 
     /// Shares that do not add up to 100 are scaled to 100.
-    pub(super) fn repair_shares(&mut self, report: &mut RepairReport) {
+    pub(crate) fn repair_shares(&mut self, report: &mut RepairReport) {
         let Some(scaled) = scaled_shares(&self.doc.asset_classes) else {
             return;
         };

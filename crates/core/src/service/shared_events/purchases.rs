@@ -15,7 +15,7 @@ use super::split;
 use super::view::SharedEventView;
 
 /// A purchase draft, checked and completed.
-struct Prepared {
+pub(crate) struct Prepared {
     buyer: String,
     qty: Amount,
     amount: Amount,
@@ -93,7 +93,7 @@ fn find_purchase(event: &SharedEvent, purchase_id: &str) -> Result<(usize, usize
 }
 
 impl UnlockedVault {
-    fn prepare_purchase(
+    pub(crate) fn prepare_purchase(
         &self,
         event: &SharedEvent,
         draft: &SharedPurchaseDraft,
@@ -179,7 +179,7 @@ impl UnlockedVault {
     /// The item a purchase goes to; a new one is made when none is named.
     /// Returns its index. Works on a copy of the event, so nothing is kept if
     /// the purchase is refused later.
-    fn resolve_purchase_item(
+    pub(crate) fn resolve_purchase_item(
         event: &mut SharedEvent,
         item_id: Option<&str>,
         new_title: Option<&str>,
@@ -220,7 +220,7 @@ impl UnlockedVault {
     }
 
     /// My payment for a purchase.
-    fn shared_payment(
+    pub(crate) fn shared_payment(
         event: &SharedEvent,
         item: &EventItem,
         purchase: &Purchase,
@@ -245,7 +245,7 @@ impl UnlockedVault {
     }
 
     /// Remove a transaction without saving; the caller saves.
-    pub(super) fn drop_shared_tx(&mut self, tx_id: &str) {
+    pub(crate) fn drop_shared_tx(&mut self, tx_id: &str) {
         self.doc.transactions.retain(|tx| tx.meta().id != tx_id);
         self.set_property_link(tx_id, None);
     }

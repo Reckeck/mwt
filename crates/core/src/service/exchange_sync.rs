@@ -165,7 +165,11 @@ impl UnlockedVault {
     }
 
     /// [`Self::import_route`] by the given settings (saved or not yet).
-    fn route_in(&self, settings: &ImportSettings, account: &str) -> Option<Option<String>> {
+    pub(crate) fn route_in(
+        &self,
+        settings: &ImportSettings,
+        account: &str,
+    ) -> Option<Option<String>> {
         let key = account_key(account);
         settings
             .accounts
@@ -179,12 +183,12 @@ impl UnlockedVault {
             })
     }
 
-    fn account_skipped(&self, settings: &ImportSettings, account: Option<&str>) -> bool {
+    pub(crate) fn account_skipped(&self, settings: &ImportSettings, account: Option<&str>) -> bool {
         account.is_some_and(|account| matches!(self.route_in(settings, account), Some(None)))
     }
 
     /// Whether the settings let a staged record in.
-    fn import_wanted(&self, imp: &PendingImport, settings: &ImportSettings) -> bool {
+    pub(crate) fn import_wanted(&self, imp: &PendingImport, settings: &ImportSettings) -> bool {
         use crate::exchange::bybit::{ACCOUNT_EARN, ACCOUNT_UNIFIED};
         let (kind_on, accounts) = match imp.kind {
             ImportKind::Fill => (settings.trades, vec![Some(ACCOUNT_UNIFIED)]),
@@ -401,7 +405,7 @@ impl UnlockedVault {
     /// An empty run replaces the wallet's previous one if that was empty too,
     /// so the history shows «checked at …» without a row per poll. Not saved
     /// by itself: it reaches the file with the next real change.
-    fn note_empty_run(&mut self, run: ImportRun) {
+    pub(crate) fn note_empty_run(&mut self, run: ImportRun) {
         let last = self
             .doc
             .import_runs
@@ -416,7 +420,7 @@ impl UnlockedVault {
         }
     }
 
-    fn keep_import_run(&mut self, run: ImportRun) {
+    pub(crate) fn keep_import_run(&mut self, run: ImportRun) {
         self.doc.import_runs.push(run);
         let overflow = self.doc.import_runs.len().saturating_sub(MAX_IMPORT_RUNS);
         self.doc.import_runs.drain(..overflow);
@@ -561,7 +565,7 @@ impl UnlockedVault {
     }
 
     /// The identity a store already holds a coin under, else the import's.
-    fn held_asset(&self, store_id: &str, coin: &str) -> crate::model::store::AssetRef {
+    pub(crate) fn held_asset(&self, store_id: &str, coin: &str) -> crate::model::store::AssetRef {
         self.doc
             .holdings
             .iter()

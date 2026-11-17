@@ -44,7 +44,7 @@ impl UnlockedVault {
 
     /// Balance of every asset of one store up to `limit` seconds (inclusive),
     /// leaving out the transactions `skip` picks. Zero balances are dropped.
-    fn balances_where(
+    pub(crate) fn balances_where(
         &self,
         store_id: &str,
         limit: i64,

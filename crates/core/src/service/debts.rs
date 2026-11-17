@@ -179,7 +179,7 @@ impl UnlockedVault {
     }
 
     /// `[from, to)` of the last `months` finished calendar months before `now`.
-    fn finished_months(&self, cal: &Calendar, now: i64, months: u32) -> (i64, i64) {
+    pub(crate) fn finished_months(&self, cal: &Calendar, now: i64, months: u32) -> (i64, i64) {
         let first = calendar::first_of_month(cal.date_of(now));
         let mut start = first;
         for _ in 0..months {
@@ -190,7 +190,7 @@ impl UnlockedVault {
 
     /// What came into a debt store in `[from, to)` — its repayments — in
     /// `currency`.
-    fn repaid_into(&self, store: &Store, currency: &str, from: i64, to: i64) -> Amount {
+    pub(crate) fn repaid_into(&self, store: &Store, currency: &str, from: i64, to: i64) -> Amount {
         let book = self.rate_book();
         self.doc
             .transactions
