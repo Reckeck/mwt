@@ -19,4 +19,10 @@ allow = [
     { from = "reports/where_went.rs", to = "service", until = "Ф5", reason = "where_went reads the rate book and flow classes from service until rates and budget flows move to their groups" },
     { from = "reports/notify_snapshot.rs", to = "service", until = "Ф5", reason = "the notification snapshot reads the agenda, category_of and the notice texts from service until stream D moves notifications and agenda (T43)" },
     { from = "reports/insights.rs", to = "usecases", until = "Ф5", reason = "insights read loss_report (household) and lifestyle_creep (planning) until those queries move to a lower layer" },
+    { from = "reports/dashboard.rs", to = "ipc_contract", until = "Ф5", reason = "dashboard figures carry Comparison and BaseKind from ipc_contract until the comparison type moves to a lower layer" },
+    { from = "reports/dashboard_tiles.rs", to = "ipc_contract", until = "Ф5", reason = "dashboard figures carry Comparison and BaseKind from ipc_contract until the comparison type moves to a lower layer" },
+    { from = "reports/dashboard_today.rs", to = "ipc_contract", until = "Ф5", reason = "dashboard figures carry Comparison and BaseKind from ipc_contract until the comparison type moves to a lower layer" },
+    { from = "reports/dashboard.rs", to = "service", until = "Ф5", reason = "reads FlowClass from service until budget flows move to their groups" },
+    { from = "reports/dashboard_tiles.rs", to = "service", until = "Ф5", reason = "reads FlowClass from service until budget flows move to their groups" },
+    { from = "reports/dashboard_today.rs", to = "service", until = "Ф5", reason = "reads UpcomingKind from service until stream D moves the agenda (T43)" },
 ]
