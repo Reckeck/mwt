@@ -1,76 +1,7 @@
-
 #![allow(dead_code)]
 use mwt_app_macros::ipc;
 
-mod tauri {
-    pub use mwt_app_macros::passthrough as command;
-    #[derive(Clone)]
-    pub struct AppHandle;
-}
-mod ts_rs {
-    pub struct Config;
-    impl Config {
-        pub fn new() -> Self {
-            Config
-        }
-    }
-    pub trait TS {
-        fn name(config: &Config) -> String;
-    }
-    impl TS for String {
-        fn name(_: &Config) -> String {
-            "string".into()
-        }
-    }
-    impl TS for () {
-        fn name(_: &Config) -> String {
-            "null".into()
-        }
-    }
-}
-mod ipc {
-    pub struct IpcError;
-    pub mod run {
-        pub struct Gate {
-            pub sandbox_deny: bool,
-        }
-        pub struct ArgMeta {
-            pub name: &'static str,
-            pub ts: fn() -> String,
-        }
-        pub struct CommandMeta {
-            pub name: &'static str,
-            pub args: &'static [ArgMeta],
-            pub ret: fn() -> String,
-        }
-        pub async fn read<R>(
-            _host: crate::tauri::AppHandle,
-            _meta: &CommandMeta,
-            _gate: Gate,
-            _body: impl FnOnce(&crate::UnlockedVault) -> Result<R, crate::ipc::IpcError>,
-        ) -> Result<R, crate::ipc::IpcError> {
-            unimplemented!()
-        }
-        pub async fn write<R>(
-            _host: crate::tauri::AppHandle,
-            _meta: &CommandMeta,
-            _gate: Gate,
-            _body: impl FnOnce(&mut crate::UnlockedVault) -> Result<R, crate::ipc::IpcError>,
-        ) -> Result<R, crate::ipc::IpcError> {
-            unimplemented!()
-        }
-        pub async fn locked_ok<R>(
-            _host: crate::tauri::AppHandle,
-            _meta: &CommandMeta,
-            _gate: Gate,
-            _body: impl FnOnce(&crate::AppState) -> Result<R, crate::ipc::IpcError>,
-        ) -> Result<R, crate::ipc::IpcError> {
-            unimplemented!()
-        }
-    }
-}
-pub struct UnlockedVault;
-pub struct AppState;
+include!("../stub/ipc_stub.rs");
 
 #[ipc(locked_ok)]
 fn status(_state: &AppState, app: &tauri::AppHandle, key: String) -> Result<String, ipc::IpcError> {
