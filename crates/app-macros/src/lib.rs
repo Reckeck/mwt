@@ -19,52 +19,73 @@
 //! fn vault_status(state: &AppState) -> Result<VaultStatus> { .. }
 //! ```
 //!
+//! A well-formed command compiles (the hidden prelude stubs `tauri` and `crate::ipc`):
+//!
+//! ```
+//! # use mwt_app_macros::ipc;
+//! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
+//! #[ipc(read)]
+//! fn list(_vault: &UnlockedVault, id: String) -> Result<String, ipc::IpcError> { Ok(id) }
+//! # fn main() { assert_eq!(__IPC_META_list.name, "list"); }
+//! ```
+//!
 //! A fifth flag is refused:
 //!
 //! ```compile_fail
 //! # use mwt_app_macros::ipc;
+//! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(read, write, sandbox = deny, locked_ok, read)]
-//! fn list(vault: &UnlockedVault) -> Result<()> { Ok(()) }
+//! fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! # fn main() {}
 //! ```
 //!
 //! `read` and `write` together are refused:
 //!
 //! ```compile_fail
 //! # use mwt_app_macros::ipc;
+//! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(read, write)]
-//! fn list(vault: &UnlockedVault) -> Result<()> { Ok(()) }
+//! fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! # fn main() {}
 //! ```
 //!
 //! So is no mode at all without `locked_ok`:
 //!
 //! ```compile_fail
 //! # use mwt_app_macros::ipc;
+//! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(sandbox = deny)]
-//! fn list(vault: &UnlockedVault) -> Result<()> { Ok(()) }
+//! fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! # fn main() {}
 //! ```
 //!
 //! A reference of the wrong kind (`&` with `write`):
 //!
 //! ```compile_fail
 //! # use mwt_app_macros::ipc;
+//! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(write)]
-//! fn change(vault: &UnlockedVault) -> Result<()> { Ok(()) }
+//! fn change(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! # fn main() {}
 //! ```
 //!
 //! An unknown flag:
 //!
 //! ```compile_fail
 //! # use mwt_app_macros::ipc;
+//! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(read, fast)]
-//! fn list(vault: &UnlockedVault) -> Result<()> { Ok(()) }
+//! fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! # fn main() {}
 //! ```
 //!
 //! An `async` body (commands with an `.await` are not `#[ipc]` commands):
 //!
 //! ```compile_fail
 //! # use mwt_app_macros::ipc;
+//! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(read)]
-//! async fn list(vault: &UnlockedVault) -> Result<()> { Ok(()) }
+//! async fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
 //! ```
 
 use proc_macro::TokenStream as CompilerTokens;
