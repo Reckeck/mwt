@@ -113,7 +113,7 @@ pub fn compute(workspace: &Workspace) -> Report {
     pass.commands(workspace, &owners, &mut totals);
     pass.untested(workspace);
     for (index, stat) in pass.stats.iter_mut().enumerate() {
-        stat.prod_lines = (stat.prod_lines + 5) / 10 * 10;
+        stat.prod_lines = ((stat.prod_lines + 5) / 10 * 10).min(stat.lines);
         stat.areas_out = pass.areas_out[index].len();
         stat.areas_in = pass.areas_in[index].len();
     }
@@ -348,6 +348,22 @@ mod tests {
         // alpha.rs is 14 lines with tests from line 10; alpha_tests.rs is all test.
         assert_eq!(alpha.lines, 14 + 3);
         assert_eq!(alpha.prod_lines, 10);
+    }
+
+    #[test]
+    fn prod_lines_never_exceed_lines_on_a_shim_with_a_forward_block() {
+        let mut shim = String::from("//! Shim.\n\nforward! {\n");
+        for index in 0..35 {
+            shim.push_str(&format!("    // entry {index}\n"));
+        }
+        shim.push_str("}\n");
+        assert_eq!(shim.matches('\n').count(), 39);
+        let map = "service_dir = \"crates/svc\"\ncommand_dir = \"crates/app\"\nscan_dirs = [\"crates/svc\"]\n\n[[area]]\nname = \"loyalty\"\ntask = \"T1\"\ngroup = \"g\"\ncontext = \"c\"\nfiles = [\"loyalty.rs\"]\n";
+        let tree = fixture::TempTree::new(&[("crates/svc/loyalty.rs", &shim)]);
+        let workspace = Workspace::build(tree.root(), Map::parse(map).unwrap()).unwrap();
+        let loyalty = &compute(&workspace).areas[0];
+        assert_eq!(loyalty.lines, 39);
+        assert!(loyalty.prod_lines <= loyalty.lines, "{loyalty:?}");
     }
 
     #[test]
