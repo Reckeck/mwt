@@ -40,6 +40,7 @@ use crate::vault_io::local::{
 };
 
 pub mod chain;
+pub mod legacy_v4;
 pub mod v1;
 pub mod v2;
 pub mod v3;

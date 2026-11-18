@@ -1,0 +1,458 @@
+//! The v4 vault document, frozen.
+//!
+//! FROZEN: the types below never change once committed; the only planned additions are the
+//! conversion and tests (T3) and the stream-owned copies named at the end (T17). It is deleted together with the one-time
+//! transition from payload v4 (container 1) to payload v1 (container 2); until then it is the only
+//! place that still reads a v4 file.
+//!
+//! [`VaultDocV4`] is a copy of the live `VaultDoc` as it was written by the last build that
+//! produced v4. Types the format reset changes are copied here (`SettingsV4` with `crypto`,
+//! `WorkflowWaitV4` with `queue_mode`, `ExchangesV4`/`ExchangeKeysV4`, `PendingImportV4`); every
+//! other nested type is reused from the live model, because the reset leaves it alone.
+//! Parsing only: nothing here is written back.
+//!
+//! The D4 defaulted fields that sit inside the vault document are frozen here too, as they were
+//! (`CategoryV4`: `essential`/`passive` default to `None`), so later tasks may drop those defaults
+//! from the live types without touching this file. Three D4 sites have no copy because no vault
+//! payload holds them: the notification snapshot is a separate device file, `sync_ids` is an empty
+//! placeholder, and the planning and shared-event defaults (`SharedEvent` and the planning types
+//! are reused from the live model) belong to streams C and D, whose files are edited only by T17;
+//! if T17 changes the shape of those live types, that is the one case where it adds a copy.
+
+use serde::Deserialize;
+
+use crate::Amount;
+use crate::model::category::CategoryGroup;
+use crate::model::contact::Contact;
+use crate::model::enrichment::EnrichmentRecord;
+use crate::model::planning::{
+    Budget, CategorizationRule, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
+};
+use crate::model::store::{Holding, Store};
+use crate::model::transaction::Transaction;
+use crate::model::vault::{
+    DailyBudgetMode, DashPeriod, DashboardWidgetCfg, FxPoint, ImportKind, ImportRun, ManualPrice,
+    PricePoint, TxProperty, Valuation, default_fx_interval, default_minimize_to_tray,
+};
+use crate::model::workflow::WaitKind;
+
+/// The full plaintext document of a v4 vault.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct VaultDocV4 {
+    pub version: u32,
+    pub id: String,
+    pub created_at: String,
+    pub settings: SettingsV4,
+    pub stores: Vec<Store>,
+    pub holdings: Vec<Holding>,
+    pub transactions: Vec<Transaction>,
+    pub categories: Vec<CategoryV4>,
+    pub price_cache: Vec<PricePoint>,
+    pub fx_cache: Vec<FxPoint>,
+    /// Exchange credentials, added in payload v1. Since H2 the keys live in
+    /// the device file `<vault>.secrets` (`vault_io::device_secrets`): at level
+    /// 3 this is an in-memory index of which stores have a key and where
+    /// their fills land, with empty `api_key`/`api_secret`, and it is left
+    /// out of every save, so the stored field stays empty. Keys found here
+    /// in an older file move to the device file at the first level-3 open;
+    /// below level 3 they are kept as they were and not used.
+    #[serde(default)]
+    pub exchanges: ExchangesV4,
+    /// Staged Bybit fills awaiting user confirmation (D2.4).
+    #[serde(default)]
+    pub pending_imports: Vec<PendingImportV4>,
+    pub contacts: Vec<Contact>,
+    pub budgets: Vec<Budget>,
+    pub goals: Vec<Goal>,
+    pub reminders: Vec<Reminder>,
+    pub price_alerts: Vec<PriceAlert>,
+    pub categorization_rules: Vec<CategorizationRule>,
+    pub utility_items: Vec<UtilityItem>,
+    pub meter_readings: Vec<MeterReading>,
+    pub enrichments: Vec<EnrichmentRecord>,
+    pub manual_prices: Vec<ManualPrice>,
+    /// Virtual envelopes: earmarked parts of a store's balance.
+    #[serde(default)]
+    pub envelopes: Vec<crate::model::planning::Envelope>,
+    /// Due dates and notes of debts with contacts.
+    #[serde(default)]
+    pub debt_terms: Vec<crate::model::contact::DebtTerms>,
+    /// Bank of Russia key rate history, for the deposit-interest tax limit.
+    #[serde(default)]
+    pub key_rates: Vec<crate::model::deposit::KeyRatePoint>,
+    /// Notices already shown, newest last (payload v2).
+    #[serde(default)]
+    pub notification_log: Vec<crate::model::notify::NoticeRecord>,
+    /// Node workflows: their graphs, runs, variables, the operations waiting
+    /// for confirmation and what their triggers last saw.
+    #[serde(default)]
+    pub workflows: Vec<crate::model::workflow::Workflow>,
+    #[serde(default)]
+    pub workflow_runs: Vec<crate::model::workflow::WorkflowRun>,
+    #[serde(default)]
+    pub workflow_vars: Vec<crate::model::workflow::WorkflowVar>,
+    #[serde(default)]
+    pub workflow_queue: Vec<crate::model::workflow::QueuedActions>,
+    #[serde(default)]
+    pub workflow_state: Vec<crate::model::workflow::WorkflowState>,
+    /// Runs asleep at a "Wait" node.
+    #[serde(default)]
+    pub workflow_waits: Vec<WorkflowWaitV4>,
+    /// Syncs with exchanges, newest last.
+    #[serde(default)]
+    pub import_runs: Vec<ImportRun>,
+    /// Exchange ids the user discarded: a later sync does not stage them again.
+    #[serde(default)]
+    pub discarded_imports: Vec<String>,
+    /// Saved investment calculator scenarios (plan A).
+    #[serde(default)]
+    pub calc_scenarios: Vec<crate::model::planning::CalcScenario>,
+    /// Inflation by currency and month, fetched in the background (plan I1).
+    #[serde(default)]
+    pub inflation_points: Vec<crate::model::inflation::InflationReading>,
+    /// The emergency fund; an empty store list means none (plan C1).
+    #[serde(default)]
+    pub emergency_fund: crate::model::planning::EmergencyFund,
+    /// The last monthly checkup notice, so the next one comes only on a change.
+    #[serde(default)]
+    pub health_last: Option<crate::model::planning::HealthSnapshot>,
+    /// Portfolio baskets with target shares (plan F); empty = the preset.
+    #[serde(default)]
+    pub asset_classes: Vec<crate::model::planning::AssetClass>,
+    /// Assets placed in a basket by hand, by `AssetRef::key()`.
+    #[serde(default)]
+    pub asset_class_of: Vec<crate::model::planning::AssetClassLink>,
+    /// Dated valuations of property (plan G3).
+    #[serde(default)]
+    pub valuations: Vec<Valuation>,
+    /// Operations linked to a property (plan G4).
+    #[serde(default)]
+    pub tx_properties: Vec<TxProperty>,
+    /// The user's own data sources (plan I2).
+    #[serde(default)]
+    pub data_sources: Vec<crate::model::datasource::DataSource>,
+    /// Assets priced by a data source, by `AssetRef::key()`.
+    #[serde(default)]
+    pub asset_price_sources: Vec<crate::model::datasource::AssetPriceSource>,
+    /// Deposits whose rate a data source follows.
+    #[serde(default)]
+    pub deposit_rate_sources: Vec<crate::model::datasource::DepositRateSource>,
+    /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
+    /// devices, batches kept for undo (docs/sync.md). Managed by the vault
+    /// itself; the JSON editor's copy is ignored on save.
+    #[serde(default)]
+    pub sync: crate::model::sync_state::SyncState,
+    /// Files and links of operations and goals (Full-New-Attach).
+    #[serde(default)]
+    pub attachments: Vec<crate::model::attachment::Attachment>,
+    /// The keys the attachments' files are sealed with.
+    #[serde(default)]
+    pub attachment_keys: Vec<crate::model::attachment::AttachmentKey>,
+    /// Shared events: things bought together and split between people.
+    #[serde(default)]
+    pub shared_events: Vec<crate::model::shared_event::SharedEvent>,
+    // -- the crypto module (stage 2, decision P1 of 2026-11-10) ------------
+    //
+    // Sibling top-level fields instead of one nested object: a sync stamp, a
+    // tombstone and an undo copy are per record, so editing one operation
+    // sends one record and the 16 MiB message limit is never reached.
+    // Nothing derived is stored (balances, average prices): it is computed
+    // from the events. Each field serializes even when empty, so
+    // `every_vault_field_has_a_sync_rule` sees it.
+    /// Addresses the crypto module follows.
+    #[serde(default)]
+    pub crypto_accounts: Vec<crate::model::cryptotrack::CryptoAccount>,
+    /// Operations the module read from its sources.
+    #[serde(default)]
+    pub crypto_events: Vec<crate::model::cryptotrack::CryptoTx>,
+    /// The user's corrections over what a source reported.
+    #[serde(default)]
+    pub crypto_overrides: Vec<crate::model::cryptotrack::CryptoOverride>,
+    /// Tokens the module has met, with what it takes to show and price them.
+    #[serde(default)]
+    pub crypto_tokens: Vec<crate::model::cryptotrack::CryptoToken>,
+    /// Holdings inside protocols (the DeFi stage fills them).
+    #[serde(default)]
+    pub crypto_positions: Vec<crate::model::cryptotrack::CryptoPosition>,
+    /// The module's value over time, so its history survives a refetch.
+    #[serde(default)]
+    pub crypto_snapshots: Vec<crate::model::cryptotrack::CryptoSnapshot>,
+    /// How far each source has read each account: this device's own progress,
+    /// never synced (`sync::registry::LOCAL`).
+    #[serde(default)]
+    pub crypto_cursors: Vec<crate::model::cryptotrack::CryptoCursor>,
+    /// Cached token prices; a cache, so it unions silently between devices.
+    #[serde(default)]
+    pub crypto_prices: Vec<crate::model::cryptotrack::CryptoPricePoint>,
+    /// Wipes of the module, so the other devices learn about one through an
+    /// ordinary sync instead of sending the data back.
+    #[serde(default)]
+    pub crypto_wiped_at: Vec<crate::model::cryptotrack::CryptoWipe>,
+}
+
+/// Vault-scoped settings of v4; carries the derived `crypto` flag that the reset drops.
+/// Vault-scoped settings.
+///
+/// The preferences that describe the *user* rather than this particular vault
+/// (theme, language, base currency, favourite currencies) live outside the
+/// encrypted doc — see [`crate::appconfig::AppSettings`].
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct SettingsV4 {
+    /// Decimal places used to render balances.
+    pub display_decimals: u32,
+    #[serde(default)]
+    pub dashboard_widgets: Vec<DashboardWidgetCfg>,
+    #[serde(default = "default_fx_interval")]
+    pub fx_refresh_interval_sec: u32,
+    #[serde(default = "default_minimize_to_tray")]
+    pub minimize_to_tray: bool,
+    /// Share of income planned for savings, 0..1 (plan D16).
+    pub savings_rate: Amount,
+    pub daily_budget_mode: DailyBudgetMode,
+    /// Currency of budgets and month totals; empty = the base currency.
+    pub budget_currency: String,
+    /// What to be told about and how far ahead.
+    #[serde(default)]
+    pub notifications: crate::model::notify::NotificationSettings,
+    /// The budget settings were saved at least once: the checklist step
+    /// "Savings rate" is done even when 10 % was the right answer.
+    #[serde(default)]
+    pub budget_configured: bool,
+    /// Checklist steps the user said they do not need.
+    #[serde(default)]
+    pub onboarding_skipped: Vec<String>,
+    /// Where each currency's inflation comes from; a currency missing here
+    /// reads as [`crate::service::inflation`] decides.
+    #[serde(default)]
+    pub inflation_mode: std::collections::BTreeMap<String, crate::model::inflation::InflationMode>,
+    /// The data source of each currency in `InflationMode::Source`.
+    #[serde(default)]
+    pub inflation_source: std::collections::BTreeMap<String, String>,
+    /// Flat annual inflation, percent, by lowercase currency code, where the
+    /// group differs from the shipped table (`default_inflation`); read through
+    /// `UnlockedVault::flat_inflation`. Group data: every device sees one table.
+    #[serde(default)]
+    pub inflation_manual: std::collections::BTreeMap<String, Amount>,
+    /// The device-local rates of the app config were copied into
+    /// `inflation_manual` once (`UnlockedVault::adopt_flat_inflation`).
+    #[serde(default)]
+    pub inflation_adopted: bool,
+    /// The user's usual monthly income in the budget currency, used until
+    /// three months of history exist (plan B).
+    #[serde(default)]
+    pub manual_income: Option<Amount>,
+    /// The user's usual monthly spending, same rule.
+    #[serde(default)]
+    pub manual_expenses: Option<Amount>,
+    /// The last batch of built-in categories this vault has received
+    /// ([`crate::model::category::CATEGORY_ADDITIONS`]): each batch is added
+    /// once, so a category the user deleted does not come back.
+    #[serde(default)]
+    pub categories_rev: u32,
+    /// Yearly return the freedom index potential assumes, percent; `None`
+    /// takes the key rate (plan C3).
+    #[serde(default)]
+    pub freedom_rate: Option<Amount>,
+    /// `YYYY-MM` the unspent money of each month is carried from into the
+    /// next; `None` = every month stands alone (redesign «month's balance»).
+    #[serde(default)]
+    pub carry_since: Option<String>,
+    /// The sidebar's «Pinned» block, in its order (plan J2).
+    #[serde(default)]
+    pub pinned: Vec<crate::model::entity_ref::Pinned>,
+    /// The period every dashboard widget measures unless it has its own.
+    #[serde(default)]
+    pub dashboard_period: DashPeriod,
+    /// The user hid the "Where to start" checklist (plan H3; it lived in localStorage).
+    #[serde(default)]
+    pub onboarding_checklist_hidden: bool,
+    /// Whether the vault holds crypto. Derived since spec E14 (the crypto module has data, or a
+    /// hand-made crypto wallet remains): [`crate::UnlockedVault::open`] refreshes this copy, nobody
+    /// sets it. The field stays in the file for compatibility with old and new builds.
+    #[serde(default)]
+    pub crypto: Option<bool>,
+    /// The IANA zone schedule moments are computed in, the same on every
+    /// device so they agree on which moment it is. `None` until the first
+    /// device that runs a schedule writes its own zone.
+    #[serde(default)]
+    pub schedule_timezone: Option<String>,
+    /// The raise to level 3 re-encrypted this vault and has not yet archived
+    /// the hand-kept crypto wallets (spec E11). The raise sets it before the
+    /// re-encryption, so it is on disk in the very first level-3 file, and
+    /// clears it when the archiving is done. An open that finds it set
+    /// finishes the archiving; a level-3 vault without it is never archived
+    /// by an open. The device's own: a peer's mark says nothing about a raise
+    /// that was cut short here (`sync::registry::SETTINGS_SCOPE`).
+    #[serde(default)]
+    pub crypto_raise_pending: bool,
+}
+
+/// A category of v4: `essential` and `passive` carry the `#[serde(default)]` that D4 may drop live.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize)]
+pub struct CategoryV4 {
+    pub key: String,
+    pub name: Option<String>,
+    pub group: CategoryGroup,
+    pub archived: bool,
+    #[serde(default)]
+    pub essential: Option<bool>,
+    #[serde(default)]
+    pub passive: Option<bool>,
+}
+
+/// Exchange credentials of v4.
+#[derive(Clone, PartialEq, Eq, Deserialize)]
+pub struct ExchangeKeysV4 {
+    pub store_id: String,
+    pub api_key: String,
+    pub api_secret: String,
+    /// Sub-account spot fills are booked on; `None` = `store_id`.
+    pub spot_store_id: Option<String>,
+    /// Sub-account futures fills are booked on; `None` = `store_id`.
+    pub futures_store_id: Option<String>,
+}
+
+impl std::fmt::Debug for ExchangeKeysV4 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExchangeKeysV4")
+            .field("store_id", &self.store_id)
+            .field("api_key", &"<redacted>")
+            .field("api_secret", &"<redacted>")
+            .finish()
+    }
+}
+
+impl Drop for ExchangeKeysV4 {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.store_id.zeroize();
+        self.api_key.zeroize();
+        self.api_secret.zeroize();
+    }
+}
+
+/// Exchange credentials of v4 grouped by exchange name.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+pub struct ExchangesV4 {
+    #[serde(default)]
+    pub bybit: Vec<ExchangeKeysV4>,
+}
+
+/// A staged Bybit fill of v4: the legacy queue the transition turns into crypto events.
+/// A staged Bybit fill awaiting user confirmation before becoming a trade.
+///
+/// Fills land here first and never touch `transactions` until the user
+/// confirms them, so a background import can never silently rewrite history.
+/// Deduplication key is Bybit's `execId`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct PendingImportV4 {
+    /// Bybit's execution ID (`execId`) — the deduplication key.
+    pub exec_id: String,
+    /// Store the fill belongs to.
+    pub store_id: String,
+    /// Product category: `spot` | `linear` | `inverse`.
+    pub category: String,
+    /// Pair symbol as Bybit reports it (e.g. `BTCUSDT`).
+    pub symbol: String,
+    /// `"buy"` or `"sell"`.
+    pub side: String,
+    /// Asset received.
+    pub asset_bought: String,
+    pub qty_bought: Amount,
+    /// Asset given up.
+    pub asset_sold: String,
+    pub qty_sold: Amount,
+    /// Fill price of one unit of the base asset.
+    pub price: Amount,
+    pub fee: Amount,
+    /// Fee denom; empty when Bybit reported none.
+    pub fee_asset: String,
+    /// ISO-8601 UTC.
+    pub occurred_at: String,
+    /// Provenance note shown in the staging UI.
+    pub comment: String,
+    pub is_maker: Option<bool>,
+    /// Size this fill closed, for futures; `Some(>0)` means it reduced a position.
+    pub closed_size: Option<Amount>,
+    /// Realized PnL of a closing futures fill. Bybit's execution list does not
+    /// carry it, so the import leaves it empty; the user can fill it in.
+    pub closed_pnl: Option<Amount>,
+    #[serde(default)]
+    pub kind: ImportKind,
+    /// Transfer: Bybit account types, e.g. `FUND` → `UNIFIED`.
+    #[serde(default)]
+    pub from_account: Option<String>,
+    #[serde(default)]
+    pub to_account: Option<String>,
+}
+
+/// A run asleep at a "Wait" node, v4; `queue_mode` is unused and dropped by the reset.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct WorkflowWaitV4 {
+    pub id: String,
+    pub workflow_id: String,
+    pub run_id: String,
+    pub node_id: String,
+    /// RFC3339; empty for a question without a deadline.
+    pub resume_at: String,
+    /// Node outputs computed before the wait, as JSON.
+    pub memo: String,
+    pub queue_mode: bool,
+    pub trigger: String,
+    #[serde(default)]
+    pub kind: WaitKind,
+    #[serde(default)]
+    pub question: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub graph: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crypto::format::SnapshotFormat;
+    use crate::storage::fixtures_gen::V4_PASSWORD;
+
+    const FIXTURES: [(&str, SnapshotFormat, &[u8]); 2] = [
+        (
+            "v4.json.wallet",
+            SnapshotFormat::Json,
+            include_bytes!("fixtures/v4.json.wallet"),
+        ),
+        (
+            "v4.pack.wallet",
+            SnapshotFormat::Pack,
+            include_bytes!("fixtures/v4.pack.wallet"),
+        ),
+    ];
+
+    /// The fixture's payload parsed as the frozen document, in its own format.
+    fn parse_fixture(name: &str, fmt: SnapshotFormat, bytes: &[u8]) -> VaultDocV4 {
+        let (payload, read, _key) =
+            crate::crypto::open_bytes_keyed(bytes, V4_PASSWORD.as_bytes()).unwrap();
+        assert_eq!(read, fmt, "{name}");
+        match fmt {
+            SnapshotFormat::Json => serde_json::from_slice(&payload).unwrap(),
+            _ => rmp_serde::from_slice(&payload).unwrap(),
+        }
+    }
+
+    #[test]
+    fn both_fixtures_parse_into_the_frozen_document() {
+        for (name, fmt, bytes) in FIXTURES {
+            let doc = parse_fixture(name, fmt, bytes);
+            assert_eq!(doc.version, 4, "{name}");
+            assert_eq!(doc.settings.crypto, Some(true), "{name}");
+            assert!(
+                doc.exchanges
+                    .bybit
+                    .iter()
+                    .any(|keys| !keys.api_secret.is_empty()),
+                "{name}"
+            );
+            assert!(!doc.pending_imports.is_empty(), "{name}");
+        }
+    }
+}
