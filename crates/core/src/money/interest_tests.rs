@@ -16,11 +16,10 @@ fn date(raw: &str) -> NaiveDate {
     day_of(raw).unwrap()
 }
 
-/// A ruble savings account with 100 000 ₽ from the 1st of January 2026.
-fn savings(vault: &mut UnlockedVault, sub_type: SubType) -> String {
+/// A ruble savings account with no money in it.
+fn empty_savings(vault: &mut UnlockedVault, sub_type: SubType) -> String {
     let bank = store(vault, "Bank", StoreKind::Bank, None);
-    let rub = AssetRef::fiat("RUB", "RUB");
-    let account = vault
+    vault
         .create_store_with(
             "Savings",
             StoreKind::Bank,
@@ -29,13 +28,24 @@ fn savings(vault: &mut UnlockedVault, sub_type: SubType) -> String {
             Some(bank),
             StoreExtras {
                 sub_type: Some(sub_type),
-                binding: Some(Binding::Asset(rub.clone())),
+                binding: Some(Binding::Asset(AssetRef::fiat("RUB", "RUB"))),
                 ..StoreExtras::default()
             },
         )
         .unwrap()
-        .id;
-    let mut seed = income_of(&account, rub, "100000", "0.01", "salary");
+        .id
+}
+
+/// A ruble savings account with 100 000 ₽ from the 1st of January 2026.
+fn savings(vault: &mut UnlockedVault, sub_type: SubType) -> String {
+    let account = empty_savings(vault, sub_type);
+    let mut seed = income_of(
+        &account,
+        AssetRef::fiat("RUB", "RUB"),
+        "100000",
+        "0.01",
+        "salary",
+    );
     seed.meta_mut().timestamp = "2026-01-01T00:00:00Z".into();
     vault.add_transaction(seed).unwrap();
     account
@@ -174,4 +184,28 @@ fn interest_tax_uses_the_highest_key_rate_of_the_year() {
     assert_eq!(tax.limit, Some(amount_str("210000")));
     assert_eq!(tax.taxable, amount_str("40000"));
     assert_eq!(tax.tax, amount_str("5200"));
+}
+
+/// L14: 01:00 of the 10th in UTC+3 is still the 9th in UTC. The user's day is
+/// the 10th, so the deposit earns from the 10th, not from the 9th.
+#[test]
+fn a_deposit_at_one_in_the_morning_in_utc_plus_three_accrues_no_extra_day() {
+    let (_dir, mut vault) = empty_vault();
+    vault.doc.settings.schedule_timezone = Some("Europe/Moscow".into());
+    let account = empty_savings(&mut vault, SubType::Savings);
+    vault
+        .set_deposit_terms(&account, Some(terms(&[("2026-01-01", "18.25")])))
+        .unwrap();
+    let mut deposit = income_of(
+        &account,
+        AssetRef::fiat("RUB", "RUB"),
+        "100000",
+        "0.01",
+        "salary",
+    );
+    deposit.meta_mut().timestamp = "2026-01-09T22:00:00Z".into();
+    vault.add_transaction(deposit).unwrap();
+    let report = vault.deposit_report(&account, date("2026-01-10")).unwrap();
+    // 100 000 × 18.25 % / 365 = 50 ₽ a day, for the 10th only.
+    assert_eq!(report.accrued_year, amount_str("50"));
 }

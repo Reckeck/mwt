@@ -15,6 +15,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use rust_decimal::Decimal;
 
 use crate::Amount;
+use crate::calendar::Calendar;
 use crate::error::{Error, Result};
 use crate::kernel::books::Books;
 use crate::model::deposit::{Capitalization, DepositTerms, IncomeBracket, KeyRatePoint};
@@ -50,6 +51,26 @@ fn amount(raw: i64) -> Amount {
 
 pub(crate) fn day_of(raw: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(raw.get(..10)?, "%Y-%m-%d").ok()
+}
+
+/// The calendar of the user's day: the vault's zone (`schedule_timezone`,
+/// the same on every device), UTC until a device wrote one.
+fn calendar_of(doc: &VaultDoc) -> Calendar {
+    Calendar::new(
+        doc.settings
+            .schedule_timezone
+            .as_deref()
+            .unwrap_or_default(),
+    )
+}
+
+/// The day a transaction falls on for the user. A moment is cut at the local
+/// midnight, so a deposit at 01:00 in UTC+3 belongs to that day and not to
+/// the UTC day before; a bare date keeps the day it names (`L14`).
+fn tx_day(calendar: &Calendar, timestamp: &str) -> Option<NaiveDate> {
+    calendar
+        .date_of_iso(timestamp)
+        .or_else(|| day_of(timestamp))
 }
 
 fn days_in_year(year: i32) -> i64 {
@@ -222,8 +243,9 @@ pub(crate) fn daily_balances(
 ) -> Vec<(NaiveDate, Amount)> {
     let mut opening = Amount::ZERO;
     let mut moves: BTreeMap<NaiveDate, Amount> = BTreeMap::new();
+    let calendar = calendar_of(doc);
     for tx in &doc.transactions {
-        let Some(day) = day_of(&tx.meta().timestamp) else {
+        let Some(day) = tx_day(&calendar, &tx.meta().timestamp) else {
             continue;
         };
         for leg in tx.legs() {
@@ -294,6 +316,7 @@ pub(crate) fn grow(
 
 /// Interest booked this year on a store (`deposit_interest` top-ups).
 pub(crate) fn posted_interest(doc: &VaultDoc, store_id: &str, symbol: &str, year: i32) -> Amount {
+    let calendar = calendar_of(doc);
     doc.transactions
         .iter()
         .filter(|tx| {
@@ -302,7 +325,7 @@ pub(crate) fn posted_interest(doc: &VaultDoc, store_id: &str, symbol: &str, year
                 .iter()
                 .any(|key| key == INTEREST_CATEGORY)
         })
-        .filter(|tx| day_of(&tx.meta().timestamp).is_some_and(|day| day.year() == year))
+        .filter(|tx| tx_day(&calendar, &tx.meta().timestamp).is_some_and(|day| day.year() == year))
         .flat_map(Transaction::legs)
         .filter(|leg| {
             leg.store_id == store_id
@@ -399,6 +422,7 @@ pub(crate) fn pds_report(
     today: NaiveDate,
 ) -> PdsReport {
     let year = today.year();
+    let calendar = calendar_of(doc);
     let contributions = doc
         .transactions
         .iter()
@@ -408,7 +432,7 @@ pub(crate) fn pds_report(
                 .iter()
                 .any(|key| key == INTEREST_CATEGORY || key == "income_other")
         })
-        .filter(|tx| day_of(&tx.meta().timestamp).is_some_and(|day| day.year() == year))
+        .filter(|tx| tx_day(&calendar, &tx.meta().timestamp).is_some_and(|day| day.year() == year))
         .flat_map(Transaction::legs)
         .filter(|leg| {
             leg.store_id == store.id
@@ -492,6 +516,7 @@ pub fn interest_tax(books: &Books<'_>, year: i32) -> InterestTaxReport {
         .max();
     let limit = max_key_rate.map(|rate| (amount(TAX_FREE_PRINCIPAL) * rate / amount(100)).round(2));
     let book = books.rate_book();
+    let calendar = calendar_of(doc);
     let bank_stores: std::collections::HashSet<&str> = doc
         .stores
         .iter()
@@ -507,7 +532,7 @@ pub fn interest_tax(books: &Books<'_>, year: i32) -> InterestTaxReport {
                 .iter()
                 .any(|key| key == INTEREST_CATEGORY)
         })
-        .filter(|tx| day_of(&tx.meta().timestamp).is_some_and(|day| day.year() == year))
+        .filter(|tx| tx_day(&calendar, &tx.meta().timestamp).is_some_and(|day| day.year() == year))
         .flat_map(|tx| {
             let secs = secs_or_now(&tx.meta().timestamp);
             tx.legs().into_iter().map(move |leg| (secs, leg))
