@@ -163,6 +163,20 @@ mod tests {
     }
 
     #[test]
+    fn client_commands_cover_every_ipc_command_of_the_pilot() {
+        let source = include_str!("../commands/workflows.rs");
+        let declared = source
+            .lines()
+            .filter(|line| line.trim_start().starts_with("#[ipc("))
+            .count();
+        assert_eq!(
+            declared,
+            CLIENT_COMMANDS.len(),
+            "CLIENT_COMMANDS is out of step with the #[ipc] commands of commands/workflows.rs"
+        );
+    }
+
+    #[test]
     fn client_gen_is_current() {
         let generated = render_client(CLIENT_COMMANDS);
         let path = client_path();
