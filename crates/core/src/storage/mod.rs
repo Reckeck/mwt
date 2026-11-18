@@ -44,6 +44,9 @@ pub mod v1;
 pub mod v2;
 pub mod v3;
 
+#[cfg(test)]
+mod fixtures_gen;
+
 pub use crate::vault_io::local::{VAULT_EXT, VaultLock, backup_path, ensure_wallet_ext};
 
 pub use crate::crypto::format::SnapshotFormat;
@@ -1680,5 +1683,108 @@ mod tests {
         // stores are not equal to the input; none of them goes.
         let kept: Vec<_> = decoded.doc.stores.iter().map(|store| &store.id).collect();
         assert!(doc.stores.iter().all(|store| kept.contains(&&store.id)));
+    }
+
+    // -- the committed v4 fixtures (vault reset) -----------------------------
+
+    use super::fixtures_gen::{V4_PASSWORD, V4_VERSION};
+
+    const V4_FIXTURES: [(&str, SnapshotFormat, &[u8]); 2] = [
+        (
+            "v4.json.wallet",
+            SnapshotFormat::Json,
+            include_bytes!("fixtures/v4.json.wallet"),
+        ),
+        (
+            "v4.pack.wallet",
+            SnapshotFormat::Pack,
+            include_bytes!("fixtures/v4.pack.wallet"),
+        ),
+    ];
+
+    /// The document the fixtures hold, as written by the generator.
+    fn v4_expected() -> Json {
+        serde_json::from_str(include_str!("fixtures/v4.expected.json")).unwrap()
+    }
+
+    /// Opens the committed fixture with the password written in the generator.
+    fn open_v4_fixture(name: &str, bytes: &[u8]) -> (Decoded, SnapshotFormat) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(name);
+        std::fs::write(&path, bytes).unwrap();
+        VaultFile::open_versioned(&path, V4_PASSWORD).unwrap()
+    }
+
+    #[test]
+    fn v4_fixture_opens_in_both_formats_and_equals_the_expected_document() {
+        let expected = v4_expected();
+        for (name, fmt, bytes) in V4_FIXTURES {
+            let (decoded, read) = open_v4_fixture(name, bytes);
+            assert_eq!(read, fmt, "{name}");
+            assert_eq!(decoded.from_version, V4_VERSION, "{name}");
+            assert_eq!(
+                serde_json::to_value(&decoded.doc).unwrap(),
+                expected,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn v4_fixture_is_refused_with_another_password() {
+        for (name, _, bytes) in V4_FIXTURES {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join(name);
+            std::fs::write(&path, bytes).unwrap();
+            assert!(matches!(
+                VaultFile::open(&path, "wrong"),
+                Err(Error::Secret)
+            ));
+        }
+    }
+
+    #[test]
+    fn v4_fixture_fills_every_collection() {
+        let doc = v4_expected();
+        let fields = doc.as_object().unwrap();
+        for (field, value) in fields {
+            let empty = match value {
+                Json::Array(items) => items.is_empty(),
+                Json::Object(entries) => entries.is_empty(),
+                Json::Null => true,
+                _ => false,
+            };
+            assert!(!empty, "the fixture leaves `{field}` empty");
+        }
+        for (field, value) in fields["sync"].as_object().unwrap() {
+            let must_be_filled = [
+                "stamps",
+                "tombstones",
+                "tombstones_seen",
+                "peers",
+                "batches",
+            ];
+            assert!(
+                !must_be_filled.contains(&field.as_str())
+                    || !value.as_object().map_or_else(
+                        || value.as_array().is_some_and(Vec::is_empty),
+                        |entries| entries.is_empty()
+                    ),
+                "the fixture's sync leaves `{field}` empty"
+            );
+        }
+    }
+
+    #[test]
+    fn v4_fixture_carries_what_the_reset_has_to_transition() {
+        let (decoded, _) = open_v4_fixture(V4_FIXTURES[0].0, V4_FIXTURES[0].2);
+        let doc = decoded.doc;
+        assert_eq!(doc.settings.crypto, Some(true));
+        let keys = &doc.exchanges.bybit;
+        assert!(!keys.is_empty() && keys.iter().all(|key| !key.api_secret.is_empty()));
+        assert!(!doc.pending_imports.is_empty());
+        assert!(!doc.sync.tombstones.is_empty());
+        let graph: Json = serde_json::from_str(&doc.workflows[0].graph).unwrap();
+        assert_eq!(graph["version"], 2);
     }
 }

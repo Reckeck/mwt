@@ -1,0 +1,2561 @@
+{
+  "version": 4,
+  "id": "b42bdc6f-8247-4493-bcbd-8626f6fed8d0",
+  "created_at": "2026-11-18T22:01:05.581860612Z",
+  "settings": {
+    "display_decimals": 8,
+    "dashboard_widgets": [],
+    "fx_refresh_interval_sec": 300,
+    "minimize_to_tray": true,
+    "savings_rate": "0.10",
+    "daily_budget_mode": "month",
+    "budget_currency": "thb",
+    "notifications": {
+      "system": false,
+      "hide_details_when_locked": true,
+      "default_time": "09:30",
+      "categories": [
+        {
+          "category": "tax",
+          "enabled": false,
+          "lead_days": 30,
+          "auto_reminders": false
+        }
+      ]
+    },
+    "budget_configured": false,
+    "onboarding_skipped": [],
+    "inflation_mode": {},
+    "inflation_source": {},
+    "inflation_manual": {},
+    "inflation_adopted": false,
+    "manual_income": null,
+    "manual_expenses": null,
+    "categories_rev": 1,
+    "freedom_rate": null,
+    "carry_since": null,
+    "pinned": [],
+    "dashboard_period": "month",
+    "onboarding_checklist_hidden": false,
+    "crypto": true,
+    "schedule_timezone": null,
+    "crypto_raise_pending": false
+  },
+  "stores": [
+    {
+      "id": "acefec02-2aec-474d-91a4-87dab06cb469",
+      "name": "Card",
+      "kind": "liability",
+      "color": "#000",
+      "archived": false,
+      "note": "",
+      "parent_id": null,
+      "sub_type": null,
+      "binding": "any",
+      "purpose": "investment",
+      "contact_id": "contact",
+      "liability": {
+        "kind": "credit_card",
+        "rate": "24.9",
+        "limit": "100000",
+        "due_day": 25,
+        "monthly_payment": "5000"
+      },
+      "custody": null,
+      "property": null,
+      "secured_by": null,
+      "exchange": null,
+      "margin": null,
+      "loyalty": null,
+      "deposit": null,
+      "asset_class": null,
+      "crypto_account_id": null
+    },
+    {
+      "id": "7f0408c6-c165-4663-bd8e-a9e992b81190",
+      "name": "Spot",
+      "kind": "exchange",
+      "color": "#111",
+      "archived": false,
+      "note": "",
+      "parent_id": "acefec02-2aec-474d-91a4-87dab06cb469",
+      "sub_type": null,
+      "binding": "any",
+      "purpose": "investment",
+      "contact_id": null,
+      "liability": null,
+      "custody": null,
+      "property": null,
+      "secured_by": null,
+      "exchange": null,
+      "margin": null,
+      "loyalty": null,
+      "deposit": null,
+      "asset_class": null,
+      "crypto_account_id": null
+    },
+    {
+      "id": "772ab662-d0ad-4d46-b5e5-a54944f44ac9",
+      "name": "Flat",
+      "kind": "property",
+      "color": "#222",
+      "archived": false,
+      "note": "",
+      "parent_id": null,
+      "sub_type": null,
+      "binding": "any",
+      "purpose": "investment",
+      "contact_id": null,
+      "liability": null,
+      "custody": null,
+      "property": null,
+      "secured_by": null,
+      "exchange": null,
+      "margin": null,
+      "loyalty": null,
+      "deposit": null,
+      "asset_class": null,
+      "crypto_account_id": null
+    }
+  ],
+  "holdings": [
+    {
+      "id": "holding-1",
+      "store_id": "acefec02-2aec-474d-91a4-87dab06cb469",
+      "asset": {
+        "symbol": "USD",
+        "name": "US Dollar",
+        "coingecko_id": null,
+        "chain": "fiat",
+        "contract": null,
+        "quote": "USD"
+      },
+      "quantity": "1500",
+      "avg_cost": null
+    }
+  ],
+  "transactions": [
+    {
+      "topup": {
+        "meta": {
+          "id": "770a0752-0c18-48f2-a4d0-8b8f3001f90e",
+          "timestamp": "2026-11-18T22:01:05.582378863Z",
+          "comment": "salary",
+          "categories": [],
+          "flow_id": "flow",
+          "contact_id": "contact",
+          "origin": {
+            "automation": {
+              "automation_id": "auto",
+              "planned_at": "2026-01-01T09:00:00Z"
+            }
+          },
+          "utility_item_id": null,
+          "keep": false
+        },
+        "store_id": "bank",
+        "asset": {
+          "symbol": "USD",
+          "name": "US Dollar",
+          "coingecko_id": null,
+          "chain": "fiat",
+          "contract": null,
+          "quote": "USD"
+        },
+        "amount": "1000",
+        "fee": {
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "amount": "0.5",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "from": {
+          "contact": {
+            "contact_id": "contact",
+            "account_id": "acc"
+          }
+        },
+        "details": {
+          "cash_breakdown": [
+            {
+              "denomination": "100",
+              "count": 10
+            }
+          ],
+          "unit_price": "1",
+          "network": "ethereum",
+          "tx_hash": "0xabc",
+          "source_store_id": "card",
+          "for_month": "2026-09"
+        },
+        "price": {
+          "price_usd": "1",
+          "price_base": "90",
+          "price_base_currency": null,
+          "fx_override": null
+        }
+      }
+    },
+    {
+      "payment": {
+        "meta": {
+          "id": "06d6072b-23d0-457e-a630-fe8d567c4c54",
+          "timestamp": "2026-11-18T22:01:05.582391237Z",
+          "comment": "rent",
+          "categories": [],
+          "flow_id": "flow",
+          "contact_id": "contact",
+          "origin": {
+            "automation": {
+              "automation_id": "auto",
+              "planned_at": "2026-01-01T09:00:00Z"
+            }
+          },
+          "utility_item_id": null,
+          "keep": false
+        },
+        "store_id": "bank",
+        "asset": {
+          "symbol": "USD",
+          "name": "US Dollar",
+          "coingecko_id": null,
+          "chain": "fiat",
+          "contract": null,
+          "quote": "USD"
+        },
+        "amount": "500",
+        "fee": null,
+        "to": {
+          "raw": "landlord"
+        },
+        "details": {
+          "cash_breakdown": null,
+          "unit_price": null,
+          "network": null,
+          "tx_hash": null,
+          "source_store_id": null,
+          "for_month": null
+        },
+        "price": {
+          "price_usd": null,
+          "price_base": null,
+          "price_base_currency": null,
+          "fx_override": null
+        }
+      }
+    },
+    {
+      "transfer": {
+        "meta": {
+          "id": "072b9cfe-e448-4d97-9884-bd0c38cd8a6e",
+          "timestamp": "2026-11-18T22:01:05.582398551Z",
+          "comment": "lend",
+          "categories": [],
+          "flow_id": "flow",
+          "contact_id": "contact",
+          "origin": {
+            "automation": {
+              "automation_id": "auto",
+              "planned_at": "2026-01-01T09:00:00Z"
+            }
+          },
+          "utility_item_id": null,
+          "keep": false
+        },
+        "from": {
+          "store": "bank"
+        },
+        "to": {
+          "contact": {
+            "contact_id": "contact",
+            "account_id": null
+          }
+        },
+        "asset": {
+          "symbol": "USD",
+          "name": "US Dollar",
+          "coingecko_id": null,
+          "chain": "fiat",
+          "contract": null,
+          "quote": "USD"
+        },
+        "amount": "50",
+        "fee": {
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "amount": "0.5",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "network": "tron",
+        "tx_hash": "hash",
+        "debt": "lend",
+        "price": {
+          "price_usd": "1",
+          "price_base": "90",
+          "price_base_currency": null,
+          "fx_override": null
+        }
+      }
+    },
+    {
+      "convert": {
+        "meta": {
+          "id": "4512a5bf-446c-4932-9ef7-a2409558d21c",
+          "timestamp": "2026-11-18T22:01:05.582404923Z",
+          "comment": "fx",
+          "categories": [],
+          "flow_id": "flow",
+          "contact_id": "contact",
+          "origin": {
+            "automation": {
+              "automation_id": "auto",
+              "planned_at": "2026-01-01T09:00:00Z"
+            }
+          },
+          "utility_item_id": null,
+          "keep": false
+        },
+        "from": {
+          "account": {
+            "store": "bank"
+          },
+          "asset": {
+            "symbol": "RUB",
+            "name": "Ruble",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "RUB"
+          },
+          "amount": "9000",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "to": {
+          "account": {
+            "store": "usd"
+          },
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "amount": "100",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "fee": {
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "amount": "0.5",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "rate_override": "90"
+      }
+    },
+    {
+      "trade_spot": {
+        "meta": {
+          "id": "ca7b87a5-533b-4340-9029-59f70442dba6",
+          "timestamp": "2026-11-18T22:01:05.582410133Z",
+          "comment": "dip",
+          "categories": [],
+          "flow_id": "flow",
+          "contact_id": "contact",
+          "origin": {
+            "automation": {
+              "automation_id": "auto",
+              "planned_at": "2026-01-01T09:00:00Z"
+            }
+          },
+          "utility_item_id": null,
+          "keep": false
+        },
+        "store_id": "ex",
+        "sold": {
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "qty": "1000",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "bought": {
+          "asset": {
+            "symbol": "BTC",
+            "name": "Bitcoin",
+            "coingecko_id": "bitcoin",
+            "chain": "bitcoin",
+            "contract": null,
+            "quote": "BTC"
+          },
+          "qty": "0.01",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "fee": {
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "amount": "0.5",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "liquidity": "maker",
+        "order_id": "ord"
+      }
+    },
+    {
+      "trade_futures": {
+        "meta": {
+          "id": "f23770e4-5293-43a6-8826-c0e95c8be253",
+          "timestamp": "2026-11-18T22:01:05.582422546Z",
+          "comment": "perp",
+          "categories": [],
+          "flow_id": "flow",
+          "contact_id": "contact",
+          "origin": {
+            "automation": {
+              "automation_id": "auto",
+              "planned_at": "2026-01-01T09:00:00Z"
+            }
+          },
+          "utility_item_id": null,
+          "keep": false
+        },
+        "store_id": "ex",
+        "contract": {
+          "symbol": "BTCUSDT",
+          "name": "BTCUSDT",
+          "coingecko_id": null,
+          "chain": null,
+          "contract": "perp:bybit",
+          "quote": "BTCUSDT"
+        },
+        "settle": {
+          "symbol": "USDT",
+          "name": "Tether",
+          "coingecko_id": null,
+          "chain": "fiat",
+          "contract": null,
+          "quote": "USDT"
+        },
+        "direction": "short",
+        "action": "close",
+        "quantity": "0.1",
+        "fill_price": "60000",
+        "leverage": "5",
+        "fee": {
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "amount": "0.5",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "closed_pnl": "-12.5",
+        "order_id": null,
+        "category": "inverse",
+        "price": {
+          "price_usd": "1",
+          "price_base": "90",
+          "price_base_currency": null,
+          "fx_override": null
+        }
+      }
+    },
+    {
+      "defi": {
+        "meta": {
+          "id": "38554182-5e4c-479b-9725-d83c418223b3",
+          "timestamp": "2026-11-18T22:01:05.5824512Z",
+          "comment": "stake",
+          "categories": [],
+          "flow_id": "flow",
+          "contact_id": "contact",
+          "origin": {
+            "automation": {
+              "automation_id": "auto",
+              "planned_at": "2026-01-01T09:00:00Z"
+            }
+          },
+          "utility_item_id": null,
+          "keep": false
+        },
+        "store_id": "hot",
+        "action": "add_liquidity",
+        "asset": {
+          "symbol": "USD",
+          "name": "US Dollar",
+          "coingecko_id": null,
+          "chain": "fiat",
+          "contract": null,
+          "quote": "USD"
+        },
+        "amount": "10",
+        "protocol": "uni",
+        "pool_id": "pool",
+        "network": "base",
+        "tx_hash": null,
+        "fee": null,
+        "price": {
+          "price_usd": "1",
+          "price_base": "90",
+          "price_base_currency": null,
+          "fx_override": null
+        }
+      }
+    },
+    {
+      "asset_sell": {
+        "meta": {
+          "id": "7b7422c1-a7f9-41ee-9aa2-937697fa930b",
+          "timestamp": "2026-11-18T22:01:05.582454877Z",
+          "comment": "car",
+          "categories": [],
+          "flow_id": "flow",
+          "contact_id": "contact",
+          "origin": {
+            "automation": {
+              "automation_id": "auto",
+              "planned_at": "2026-01-01T09:00:00Z"
+            }
+          },
+          "utility_item_id": null,
+          "keep": false
+        },
+        "store_id": "things",
+        "asset": {
+          "symbol": "CAR",
+          "name": "Car",
+          "coingecko_id": null,
+          "chain": "fiat",
+          "contract": null,
+          "quote": "CAR"
+        },
+        "unit_price": "15000",
+        "quantity": "1",
+        "currency": {
+          "symbol": "USD",
+          "name": "US Dollar",
+          "coingecko_id": null,
+          "chain": "fiat",
+          "contract": null,
+          "quote": "USD"
+        },
+        "proceeds_to": "bank",
+        "fee": {
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "amount": "0.5",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "price": {
+          "price_usd": "1",
+          "price_base": "90",
+          "price_base_currency": null,
+          "fx_override": null
+        }
+      }
+    },
+    {
+      "adjustment": {
+        "meta": {
+          "id": "d1388555-3e6c-4e6c-a36a-e4ebe07a11d4",
+          "timestamp": "2026-11-18T22:01:05.582459436Z",
+          "comment": "counted",
+          "categories": [],
+          "flow_id": "flow",
+          "contact_id": "contact",
+          "origin": {
+            "automation": {
+              "automation_id": "auto",
+              "planned_at": "2026-01-01T09:00:00Z"
+            }
+          },
+          "utility_item_id": null,
+          "keep": false
+        },
+        "store_id": "bank",
+        "lines": [
+          {
+            "asset": {
+              "symbol": "USD",
+              "name": "US Dollar",
+              "coingecko_id": null,
+              "chain": "fiat",
+              "contract": null,
+              "quote": "USD"
+            },
+            "before": "100",
+            "after": "95.5",
+            "price": {
+              "price_usd": "1",
+              "price_base": "90",
+              "price_base_currency": null,
+              "fx_override": null
+            }
+          }
+        ],
+        "fee": null
+      }
+    }
+  ],
+  "categories": [
+    {
+      "key": "salary",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "advance",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "bonus",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "freelance",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "side_job",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "gift_received",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "cashback",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "deposit_interest",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "dividends",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "coupons",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "staking",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "rent_income",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "income_other",
+      "name": null,
+      "group": "income",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "rent_mortgage",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "utilities",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "internet",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "mobile",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "loan_payment",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "loan_interest",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "installments",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "taxes",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "insurance",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "subscriptions",
+      "name": null,
+      "group": "fixed",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "groceries",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "food_delivery",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "transport",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "taxi",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "fuel",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "medicine",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "pharmacy",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "therapy",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "sport",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "education",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "clothing",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "beauty",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "household_chemicals",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "pets",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "family_help",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "gifts",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "repair",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "household",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "entertainment",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "travel",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "other",
+      "name": null,
+      "group": "daily",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "savings",
+      "name": null,
+      "group": "savings",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "trading",
+      "name": null,
+      "group": "service",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "fee",
+      "name": null,
+      "group": "service",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "transfer",
+      "name": null,
+      "group": "service",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "exchange",
+      "name": null,
+      "group": "service",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "opening_balance",
+      "name": null,
+      "group": "service",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "exchange_import",
+      "name": null,
+      "group": "service",
+      "archived": false,
+      "essential": null,
+      "passive": null
+    },
+    {
+      "key": "custom",
+      "name": "Custom",
+      "group": "savings",
+      "archived": true,
+      "essential": false,
+      "passive": true
+    }
+  ],
+  "price_cache": [
+    {
+      "asset_key": "crypto:btc",
+      "value_usd": "65000",
+      "ts": "2026-10-01T00:00:00Z",
+      "source": "coingecko",
+      "change_24h_pct": "1.5"
+    }
+  ],
+  "fx_cache": [
+    {
+      "currency": "rub",
+      "per_usd": "92.5",
+      "ts": "2026-10-01T00:00:00Z",
+      "source": "cbr"
+    }
+  ],
+  "exchanges": {
+    "bybit": [
+      {
+        "store_id": "bybit",
+        "api_key": "TESTKEY0123456789",
+        "api_secret": "test-secret-not-real",
+        "spot_store_id": "bybit-spot",
+        "futures_store_id": null
+      }
+    ]
+  },
+  "pending_imports": [
+    {
+      "exec_id": "exec-1",
+      "store_id": "bybit",
+      "category": "linear",
+      "symbol": "BTCUSDT",
+      "side": "buy",
+      "asset_bought": "BTC",
+      "qty_bought": "0.01",
+      "asset_sold": "USDT",
+      "qty_sold": "650",
+      "price": "65000",
+      "fee": "0.39",
+      "fee_asset": "USDT",
+      "occurred_at": "2026-10-01T12:00:00Z",
+      "comment": "Bybit fill",
+      "is_maker": false,
+      "closed_size": null,
+      "closed_pnl": null,
+      "kind": "fill",
+      "from_account": null,
+      "to_account": null
+    },
+    {
+      "exec_id": "exec-2",
+      "store_id": "bybit",
+      "category": "spot",
+      "symbol": "ETHUSDT",
+      "side": "sell",
+      "asset_bought": "USDT",
+      "qty_bought": "1800",
+      "asset_sold": "ETH",
+      "qty_sold": "0.5",
+      "price": "3600",
+      "fee": "0",
+      "fee_asset": "",
+      "occurred_at": "2026-10-02T12:00:00Z",
+      "comment": "",
+      "is_maker": true,
+      "closed_size": "0.5",
+      "closed_pnl": "12.5",
+      "kind": "transfer",
+      "from_account": "FUND",
+      "to_account": "UNIFIED"
+    }
+  ],
+  "contacts": [
+    {
+      "id": "contact",
+      "name": "skycapital",
+      "kind": "exchanger",
+      "accounts": [
+        {
+          "id": "acc",
+          "group": "Bank",
+          "label": "Main",
+          "kind": "crypto_address",
+          "value": "T123",
+          "currency": "usdt",
+          "network": "tron",
+          "active": true
+        }
+      ],
+      "note": "note",
+      "archived": false,
+      "created_at": "2026-01-01T00:00:00Z",
+      "group": "P2P"
+    }
+  ],
+  "budgets": [
+    {
+      "id": "budget-0",
+      "active": true,
+      "target": "total",
+      "period": "day",
+      "limit": "1500",
+      "currency": "rub",
+      "warn": true
+    },
+    {
+      "id": "budget-1",
+      "active": true,
+      "target": {
+        "category": "groceries"
+      },
+      "period": "week",
+      "limit": "1500",
+      "currency": "rub",
+      "warn": true
+    },
+    {
+      "id": "budget-2",
+      "active": true,
+      "target": {
+        "store": {
+          "store_ids": [
+            "bank"
+          ],
+          "include_children": true
+        }
+      },
+      "period": "month",
+      "limit": "1500",
+      "currency": "rub",
+      "warn": true
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal",
+      "name": "Car",
+      "active": true,
+      "target_amount": "1000000",
+      "currency": "rub",
+      "starts_at": "2026-01-01T00:00:00Z",
+      "deadline": "2027-01-01T00:00:00Z",
+      "priority": 5,
+      "monthly_commitment": "50000",
+      "scope": {
+        "store_ids": [
+          "bank"
+        ],
+        "include_children": false
+      },
+      "created_at": "2026-01-01T00:00:00Z",
+      "scenario_id": null,
+      "expected_return": null
+    }
+  ],
+  "reminders": [
+    {
+      "id": "rem",
+      "text": "Call the bank",
+      "due_at": "2026-03-01T09:00:00Z",
+      "done": false,
+      "repeat": {
+        "every": 1,
+        "unit": "month"
+      },
+      "source": {
+        "kind": "loan_payment",
+        "id": "loan"
+      },
+      "muted": true,
+      "user_edited": true,
+      "snoozed_until": "2026-03-01T10:00:00Z",
+      "source_key": "m25|1|09:30",
+      "pay": null,
+      "keep": false
+    }
+  ],
+  "price_alerts": [
+    {
+      "id": "alert",
+      "asset": {
+        "symbol": "USD",
+        "name": "US Dollar",
+        "coingecko_id": null,
+        "chain": "fiat",
+        "contract": null,
+        "quote": "USD"
+      },
+      "condition": "below",
+      "price": "0.9",
+      "currency": "eur",
+      "active": true,
+      "triggered_at": null,
+      "triggered_for": null,
+      "store_id": null,
+      "repeats": false
+    }
+  ],
+  "categorization_rules": [
+    {
+      "id": "rule",
+      "pattern": "такси",
+      "category": "taxi",
+      "active": true,
+      "order": 0
+    }
+  ],
+  "utility_items": [
+    {
+      "id": "util-0",
+      "name": "Power",
+      "active": true,
+      "kind": {
+        "metered": {
+          "unit": "kWh",
+          "tariff": "6.5",
+          "formula": "расход_день * 6.5 + расход_ночь * 3",
+          "zones": [
+            "день",
+            "ночь"
+          ]
+        }
+      },
+      "currency": "rub",
+      "property_id": "flat",
+      "store_id": "bank",
+      "category": "utilities"
+    },
+    {
+      "id": "util-1",
+      "name": "Power",
+      "active": true,
+      "kind": {
+        "static": {
+          "amount": "700"
+        }
+      },
+      "currency": "rub",
+      "property_id": "flat",
+      "store_id": "bank",
+      "category": "utilities"
+    },
+    {
+      "id": "util-2",
+      "name": "Power",
+      "active": true,
+      "kind": {
+        "housing": {
+          "amount": "30000",
+          "deposit": "30000",
+          "due_day": 5,
+          "automation_id": "auto-0"
+        }
+      },
+      "currency": "rub",
+      "property_id": "flat",
+      "store_id": "bank",
+      "category": "utilities"
+    }
+  ],
+  "meter_readings": [
+    {
+      "id": "reading",
+      "item_id": "util-0",
+      "value": "1234.5",
+      "period": "2026-01",
+      "recorded_at": "2026-01-31T00:00:00Z",
+      "day": 15,
+      "zone": "день"
+    }
+  ],
+  "enrichments": [
+    {
+      "id": "enr-0",
+      "tx_id": "tx",
+      "source": {
+        "explorer": "bitcoin"
+      },
+      "found": {
+        "fee": {
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "amount": "0.5",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "confirmed": true,
+        "block_time": "2026-01-01T00:00:00Z",
+        "from_address": "a",
+        "to_address": "b",
+        "token_name": "Tether",
+        "token_decimals": 6,
+        "contract": "0x1"
+      },
+      "status": "pending",
+      "created_at": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "enr-1",
+      "tx_id": "tx",
+      "source": "token_list",
+      "found": {
+        "fee": {
+          "asset": {
+            "symbol": "USD",
+            "name": "US Dollar",
+            "coingecko_id": null,
+            "chain": "fiat",
+            "contract": null,
+            "quote": "USD"
+          },
+          "amount": "0.5",
+          "price": {
+            "price_usd": "1",
+            "price_base": "90",
+            "price_base_currency": null,
+            "fx_override": null
+          }
+        },
+        "confirmed": true,
+        "block_time": "2026-01-01T00:00:00Z",
+        "from_address": "a",
+        "to_address": "b",
+        "token_name": "Tether",
+        "token_decimals": 6,
+        "contract": "0x1"
+      },
+      "status": "pending",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "manual_prices": [
+    {
+      "asset_key": "asset:FLAT",
+      "unit_price": "9000000",
+      "currency": "rub",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "envelopes": [
+    {
+      "id": "env-1",
+      "store_id": "bank",
+      "name": "Holiday",
+      "asset": {
+        "symbol": "USD",
+        "name": "US Dollar",
+        "coingecko_id": null,
+        "chain": "fiat",
+        "contract": null,
+        "quote": "USD"
+      },
+      "allocated": "300",
+      "moves": [
+        {
+          "id": "open:env-1",
+          "delta": "300",
+          "at": "2026-02-01T00:00:00Z"
+        }
+      ],
+      "target": "1000",
+      "goal_id": "goal",
+      "created_at": "2026-02-01T00:00:00Z"
+    }
+  ],
+  "debt_terms": [
+    {
+      "id": "debt-1",
+      "contact_id": "contact",
+      "asset": "USD",
+      "due_at": "2026-12-31",
+      "note": "lent",
+      "created_at": "2026-02-01T00:00:00Z"
+    }
+  ],
+  "key_rates": [
+    {
+      "date": "2026-09-12",
+      "rate": "16.5"
+    }
+  ],
+  "notification_log": [
+    {
+      "key": "reminder:rem:2026-03-01T09:00:00Z",
+      "category": "reminder",
+      "title": "Reminder",
+      "body": "Call the bank",
+      "link": "/automations",
+      "at": "2026-03-01T09:00:00Z",
+      "delivered_at": "2026-03-01T09:00:10Z",
+      "read": true
+    }
+  ],
+  "workflows": [
+    {
+      "id": "auto-0",
+      "name": "Rent",
+      "description": "",
+      "active": true,
+      "graph": "{\"comments\":[],\"edges\":[{\"from\":\"t\",\"from_port\":\"at\",\"id\":\"t.at>tx.date\",\"to\":\"tx\",\"to_port\":\"date\"},{\"from\":\"t\",\"from_port\":\"out\",\"id\":\"t.out>tx.in\",\"to\":\"tx\",\"to_port\":\"in\"},{\"from\":\"avg\",\"from_port\":\"amount\",\"id\":\"avg.amount>tx.amount\",\"to\":\"tx\",\"to_port\":\"amount\"}],\"nodes\":[{\"disabled\":false,\"id\":\"t\",\"kind\":\"trigger.schedule\",\"label\":\"\",\"params\":{\"day\":31,\"every\":\"month\",\"time\":\"09:00\",\"workday\":\"back\"},\"position\":{\"x\":0.0,\"y\":0.0}},{\"disabled\":false,\"id\":\"tx\",\"kind\":\"action.transaction\",\"label\":\"\",\"params\":{\"account\":{\"store\":\"bank\"},\"amount\":\"1000\",\"asset\":{\"chain\":\"fiat\",\"coingecko_id\":null,\"contract\":null,\"name\":\"US Dollar\",\"quote\":\"USD\",\"symbol\":\"USD\"},\"category\":null,\"comment\":\"salary\",\"estimated\":true,\"on_shortfall\":\"reject\",\"template\":\"{\\\"topup\\\":{\\\"meta\\\":{\\\"id\\\":\\\"55a8c732-3280-4170-a310-2b8353e4e47b\\\",\\\"timestamp\\\":\\\"2026-11-18T22:01:05.582468393Z\\\",\\\"comment\\\":\\\"salary\\\",\\\"categories\\\":[],\\\"flow_id\\\":\\\"flow\\\",\\\"contact_id\\\":\\\"contact\\\",\\\"origin\\\":{\\\"automation\\\":{\\\"automation_id\\\":\\\"auto\\\",\\\"planned_at\\\":\\\"2026-01-01T09:00:00Z\\\"}},\\\"utility_item_id\\\":null,\\\"keep\\\":false},\\\"store_id\\\":\\\"bank\\\",\\\"asset\\\":{\\\"symbol\\\":\\\"USD\\\",\\\"name\\\":\\\"US Dollar\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"USD\\\"},\\\"amount\\\":\\\"1000\\\",\\\"fee\\\":{\\\"asset\\\":{\\\"symbol\\\":\\\"USD\\\",\\\"name\\\":\\\"US Dollar\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"USD\\\"},\\\"amount\\\":\\\"0.5\\\",\\\"price\\\":{\\\"price_usd\\\":\\\"1\\\",\\\"price_base\\\":\\\"90\\\",\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}},\\\"from\\\":{\\\"contact\\\":{\\\"contact_id\\\":\\\"contact\\\",\\\"account_id\\\":\\\"acc\\\"}},\\\"details\\\":{\\\"cash_breakdown\\\":[{\\\"denomination\\\":\\\"100\\\",\\\"count\\\":10}],\\\"unit_price\\\":\\\"1\\\",\\\"network\\\":\\\"ethereum\\\",\\\"tx_hash\\\":\\\"0xabc\\\",\\\"source_store_id\\\":\\\"card\\\",\\\"for_month\\\":\\\"2026-09\\\"},\\\"price\\\":{\\\"price_usd\\\":\\\"1\\\",\\\"price_base\\\":\\\"90\\\",\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}}}\",\"to\":{\"contact\":{\"account_id\":\"acc\",\"contact_id\":\"contact\"}},\"tx_kind\":\"topup\"},\"position\":{\"x\":560.0,\"y\":0.0}},{\"disabled\":false,\"id\":\"avg\",\"kind\":\"data.recent_average\",\"label\":\"\",\"params\":{\"count\":\"3\",\"fallback\":\"1000\"},\"position\":{\"x\":280.0,\"y\":160.0}}],\"version\":2}",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z",
+      "react_to_workflows": false,
+      "max_amount": null,
+      "max_amount_currency": null,
+      "versions": [],
+      "tests": [],
+      "draft": null,
+      "automation": {
+        "preset": "salary",
+        "schedule": {
+          "monthly": {
+            "day": 31
+          }
+        },
+        "starts_at": "2026-01-01T09:00:00Z",
+        "template": {
+          "topup": {
+            "meta": {
+              "id": "55a8c732-3280-4170-a310-2b8353e4e47b",
+              "timestamp": "2026-11-18T22:01:05.582468393Z",
+              "comment": "salary",
+              "categories": [],
+              "flow_id": "flow",
+              "contact_id": "contact",
+              "origin": {
+                "automation": {
+                  "automation_id": "auto",
+                  "planned_at": "2026-01-01T09:00:00Z"
+                }
+              },
+              "utility_item_id": null,
+              "keep": false
+            },
+            "store_id": "bank",
+            "asset": {
+              "symbol": "USD",
+              "name": "US Dollar",
+              "coingecko_id": null,
+              "chain": "fiat",
+              "contract": null,
+              "quote": "USD"
+            },
+            "amount": "1000",
+            "fee": {
+              "asset": {
+                "symbol": "USD",
+                "name": "US Dollar",
+                "coingecko_id": null,
+                "chain": "fiat",
+                "contract": null,
+                "quote": "USD"
+              },
+              "amount": "0.5",
+              "price": {
+                "price_usd": "1",
+                "price_base": "90",
+                "price_base_currency": null,
+                "fx_override": null
+              }
+            },
+            "from": {
+              "contact": {
+                "contact_id": "contact",
+                "account_id": "acc"
+              }
+            },
+            "details": {
+              "cash_breakdown": [
+                {
+                  "denomination": "100",
+                  "count": 10
+                }
+              ],
+              "unit_price": "1",
+              "network": "ethereum",
+              "tx_hash": "0xabc",
+              "source_store_id": "card",
+              "for_month": "2026-09"
+            },
+            "price": {
+              "price_usd": "1",
+              "price_base": "90",
+              "price_base_currency": null,
+              "fx_override": null
+            }
+          }
+        },
+        "amount_mode": "varies",
+        "workday_shift": "back",
+        "property_id": null,
+        "time": null,
+        "asks": false,
+        "for_month_offset": null
+      }
+    },
+    {
+      "id": "auto-1",
+      "name": "Rent",
+      "description": "",
+      "active": true,
+      "graph": "{\"version\":3,\"nodes\":[{\"id\":\"t\",\"kind\":\"trigger.schedule\",\"params\":{\"every\":\"week\",\"time\":\"09:00\",\"weekday\":0,\"workday\":\"none\"},\"position\":{\"x\":0.0,\"y\":0.0},\"disabled\":false,\"label\":\"\"},{\"id\":\"tx\",\"kind\":\"action.transaction\",\"params\":{\"account\":{\"store\":\"bank\"},\"amount\":\"500\",\"asset\":{\"chain\":\"fiat\",\"coingecko_id\":null,\"contract\":null,\"name\":\"US Dollar\",\"quote\":\"USD\",\"symbol\":\"USD\"},\"category\":null,\"comment\":\"rent\",\"estimated\":true,\"on_shortfall\":\"reject\",\"template\":\"{\\\"payment\\\":{\\\"meta\\\":{\\\"id\\\":\\\"aa251cae-b3ed-416d-b462-d4445ebb5731\\\",\\\"timestamp\\\":\\\"2026-11-18T22:01:05.582473212Z\\\",\\\"comment\\\":\\\"rent\\\",\\\"categories\\\":[],\\\"flow_id\\\":\\\"flow\\\",\\\"contact_id\\\":\\\"contact\\\",\\\"origin\\\":{\\\"automation\\\":{\\\"automation_id\\\":\\\"auto\\\",\\\"planned_at\\\":\\\"2026-01-01T09:00:00Z\\\"}},\\\"utility_item_id\\\":null,\\\"keep\\\":false},\\\"store_id\\\":\\\"bank\\\",\\\"asset\\\":{\\\"symbol\\\":\\\"USD\\\",\\\"name\\\":\\\"US Dollar\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"USD\\\"},\\\"amount\\\":\\\"500\\\",\\\"fee\\\":null,\\\"to\\\":{\\\"raw\\\":\\\"landlord\\\"},\\\"details\\\":{\\\"cash_breakdown\\\":null,\\\"unit_price\\\":null,\\\"network\\\":null,\\\"tx_hash\\\":null,\\\"source_store_id\\\":null,\\\"for_month\\\":null},\\\"price\\\":{\\\"price_usd\\\":null,\\\"price_base\\\":null,\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}}}\",\"to\":{\"raw\":\"landlord\"},\"tx_kind\":\"payment\"},\"position\":{\"x\":560.0,\"y\":0.0},\"disabled\":false,\"label\":\"\"},{\"id\":\"avg\",\"kind\":\"data.recent_average\",\"params\":{\"count\":\"3\",\"fallback\":\"500\"},\"position\":{\"x\":280.0,\"y\":160.0},\"disabled\":false,\"label\":\"\"}],\"edges\":[{\"id\":\"t.at>tx.date\",\"from\":\"t\",\"from_port\":\"at\",\"to\":\"tx\",\"to_port\":\"date\"},{\"id\":\"t.out>tx.in\",\"from\":\"t\",\"from_port\":\"out\",\"to\":\"tx\",\"to_port\":\"in\"},{\"id\":\"avg.amount>tx.amount\",\"from\":\"avg\",\"from_port\":\"amount\",\"to\":\"tx\",\"to_port\":\"amount\"}],\"comments\":[]}",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z",
+      "react_to_workflows": false,
+      "max_amount": null,
+      "max_amount_currency": null,
+      "versions": [],
+      "tests": [],
+      "draft": null,
+      "automation": {
+        "preset": null,
+        "schedule": {
+          "weekly": {
+            "weekday": 0
+          }
+        },
+        "starts_at": "2026-01-01T09:00:00Z",
+        "template": {
+          "payment": {
+            "meta": {
+              "id": "aa251cae-b3ed-416d-b462-d4445ebb5731",
+              "timestamp": "2026-11-18T22:01:05.582473212Z",
+              "comment": "rent",
+              "categories": [],
+              "flow_id": "flow",
+              "contact_id": "contact",
+              "origin": {
+                "automation": {
+                  "automation_id": "auto",
+                  "planned_at": "2026-01-01T09:00:00Z"
+                }
+              },
+              "utility_item_id": null,
+              "keep": false
+            },
+            "store_id": "bank",
+            "asset": {
+              "symbol": "USD",
+              "name": "US Dollar",
+              "coingecko_id": null,
+              "chain": "fiat",
+              "contract": null,
+              "quote": "USD"
+            },
+            "amount": "500",
+            "fee": null,
+            "to": {
+              "raw": "landlord"
+            },
+            "details": {
+              "cash_breakdown": null,
+              "unit_price": null,
+              "network": null,
+              "tx_hash": null,
+              "source_store_id": null,
+              "for_month": null
+            },
+            "price": {
+              "price_usd": null,
+              "price_base": null,
+              "price_base_currency": null,
+              "fx_override": null
+            }
+          }
+        },
+        "amount_mode": "varies",
+        "workday_shift": "none",
+        "property_id": null,
+        "time": null,
+        "asks": false,
+        "for_month_offset": null
+      }
+    },
+    {
+      "id": "auto-2",
+      "name": "Rent",
+      "description": "",
+      "active": true,
+      "graph": "{\"version\":3,\"nodes\":[{\"id\":\"t\",\"kind\":\"trigger.schedule\",\"params\":{\"anchor\":\"2026-01-01\",\"every\":\"day\",\"interval\":\"14\",\"time\":\"09:00\",\"workday\":\"forward\"},\"position\":{\"x\":0.0,\"y\":0.0},\"disabled\":false,\"label\":\"\"},{\"id\":\"tx\",\"kind\":\"action.transaction\",\"params\":{\"account\":{\"store\":\"bank\"},\"amount\":\"50\",\"asset\":{\"chain\":\"fiat\",\"coingecko_id\":null,\"contract\":null,\"name\":\"US Dollar\",\"quote\":\"USD\",\"symbol\":\"USD\"},\"category\":null,\"comment\":\"lend\",\"estimated\":true,\"on_shortfall\":\"reject\",\"template\":\"{\\\"transfer\\\":{\\\"meta\\\":{\\\"id\\\":\\\"ba7bbf84-156d-4177-a914-c015de787239\\\",\\\"timestamp\\\":\\\"2026-11-18T22:01:05.582476378Z\\\",\\\"comment\\\":\\\"lend\\\",\\\"categories\\\":[],\\\"flow_id\\\":\\\"flow\\\",\\\"contact_id\\\":\\\"contact\\\",\\\"origin\\\":{\\\"automation\\\":{\\\"automation_id\\\":\\\"auto\\\",\\\"planned_at\\\":\\\"2026-01-01T09:00:00Z\\\"}},\\\"utility_item_id\\\":null,\\\"keep\\\":false},\\\"from\\\":{\\\"store\\\":\\\"bank\\\"},\\\"to\\\":{\\\"contact\\\":{\\\"contact_id\\\":\\\"contact\\\",\\\"account_id\\\":null}},\\\"asset\\\":{\\\"symbol\\\":\\\"USD\\\",\\\"name\\\":\\\"US Dollar\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"USD\\\"},\\\"amount\\\":\\\"50\\\",\\\"fee\\\":{\\\"asset\\\":{\\\"symbol\\\":\\\"USD\\\",\\\"name\\\":\\\"US Dollar\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"USD\\\"},\\\"amount\\\":\\\"0.5\\\",\\\"price\\\":{\\\"price_usd\\\":\\\"1\\\",\\\"price_base\\\":\\\"90\\\",\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}},\\\"network\\\":\\\"tron\\\",\\\"tx_hash\\\":\\\"hash\\\",\\\"debt\\\":\\\"lend\\\",\\\"price\\\":{\\\"price_usd\\\":\\\"1\\\",\\\"price_base\\\":\\\"90\\\",\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}}}\",\"to\":{\"contact\":{\"account_id\":null,\"contact_id\":\"contact\"}},\"tx_kind\":\"transfer\"},\"position\":{\"x\":560.0,\"y\":0.0},\"disabled\":false,\"label\":\"\"},{\"id\":\"avg\",\"kind\":\"data.recent_average\",\"params\":{\"count\":\"3\",\"fallback\":\"50\"},\"position\":{\"x\":280.0,\"y\":160.0},\"disabled\":false,\"label\":\"\"}],\"edges\":[{\"id\":\"t.at>tx.date\",\"from\":\"t\",\"from_port\":\"at\",\"to\":\"tx\",\"to_port\":\"date\"},{\"id\":\"t.out>tx.in\",\"from\":\"t\",\"from_port\":\"out\",\"to\":\"tx\",\"to_port\":\"in\"},{\"id\":\"avg.amount>tx.amount\",\"from\":\"avg\",\"from_port\":\"amount\",\"to\":\"tx\",\"to_port\":\"amount\"}],\"comments\":[]}",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z",
+      "react_to_workflows": false,
+      "max_amount": null,
+      "max_amount_currency": null,
+      "versions": [],
+      "tests": [],
+      "draft": null,
+      "automation": {
+        "preset": null,
+        "schedule": {
+          "every_n_days": {
+            "days": 14
+          }
+        },
+        "starts_at": "2026-01-01T09:00:00Z",
+        "template": {
+          "transfer": {
+            "meta": {
+              "id": "ba7bbf84-156d-4177-a914-c015de787239",
+              "timestamp": "2026-11-18T22:01:05.582476378Z",
+              "comment": "lend",
+              "categories": [],
+              "flow_id": "flow",
+              "contact_id": "contact",
+              "origin": {
+                "automation": {
+                  "automation_id": "auto",
+                  "planned_at": "2026-01-01T09:00:00Z"
+                }
+              },
+              "utility_item_id": null,
+              "keep": false
+            },
+            "from": {
+              "store": "bank"
+            },
+            "to": {
+              "contact": {
+                "contact_id": "contact",
+                "account_id": null
+              }
+            },
+            "asset": {
+              "symbol": "USD",
+              "name": "US Dollar",
+              "coingecko_id": null,
+              "chain": "fiat",
+              "contract": null,
+              "quote": "USD"
+            },
+            "amount": "50",
+            "fee": {
+              "asset": {
+                "symbol": "USD",
+                "name": "US Dollar",
+                "coingecko_id": null,
+                "chain": "fiat",
+                "contract": null,
+                "quote": "USD"
+              },
+              "amount": "0.5",
+              "price": {
+                "price_usd": "1",
+                "price_base": "90",
+                "price_base_currency": null,
+                "fx_override": null
+              }
+            },
+            "network": "tron",
+            "tx_hash": "hash",
+            "debt": "lend",
+            "price": {
+              "price_usd": "1",
+              "price_base": "90",
+              "price_base_currency": null,
+              "fx_override": null
+            }
+          }
+        },
+        "amount_mode": "varies",
+        "workday_shift": "forward",
+        "property_id": null,
+        "time": null,
+        "asks": false,
+        "for_month_offset": null
+      }
+    },
+    {
+      "id": "auto-3",
+      "name": "Rent",
+      "description": "",
+      "active": true,
+      "graph": "{\"version\":3,\"nodes\":[{\"id\":\"t\",\"kind\":\"trigger.schedule\",\"params\":{\"day\":31,\"every\":\"month\",\"time\":\"09:00\",\"workday\":\"back\"},\"position\":{\"x\":0.0,\"y\":0.0},\"disabled\":false,\"label\":\"\"},{\"id\":\"tx\",\"kind\":\"action.transaction\",\"params\":{\"account\":{\"store\":\"bank\"},\"amount\":\"9000\",\"asset\":{\"chain\":\"fiat\",\"coingecko_id\":null,\"contract\":null,\"name\":\"Ruble\",\"quote\":\"RUB\",\"symbol\":\"RUB\"},\"category\":null,\"comment\":\"fx\",\"estimated\":false,\"on_shortfall\":\"reject\",\"template\":\"{\\\"convert\\\":{\\\"meta\\\":{\\\"id\\\":\\\"a4317aa4-35a5-483d-9a0d-284d52b9fe00\\\",\\\"timestamp\\\":\\\"2026-11-18T22:01:05.582480536Z\\\",\\\"comment\\\":\\\"fx\\\",\\\"categories\\\":[],\\\"flow_id\\\":\\\"flow\\\",\\\"contact_id\\\":\\\"contact\\\",\\\"origin\\\":{\\\"automation\\\":{\\\"automation_id\\\":\\\"auto\\\",\\\"planned_at\\\":\\\"2026-01-01T09:00:00Z\\\"}},\\\"utility_item_id\\\":null,\\\"keep\\\":false},\\\"from\\\":{\\\"account\\\":{\\\"store\\\":\\\"bank\\\"},\\\"asset\\\":{\\\"symbol\\\":\\\"RUB\\\",\\\"name\\\":\\\"Ruble\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"RUB\\\"},\\\"amount\\\":\\\"9000\\\",\\\"price\\\":{\\\"price_usd\\\":\\\"1\\\",\\\"price_base\\\":\\\"90\\\",\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}},\\\"to\\\":{\\\"account\\\":{\\\"store\\\":\\\"usd\\\"},\\\"asset\\\":{\\\"symbol\\\":\\\"USD\\\",\\\"name\\\":\\\"US Dollar\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"USD\\\"},\\\"amount\\\":\\\"100\\\",\\\"price\\\":{\\\"price_usd\\\":\\\"1\\\",\\\"price_base\\\":\\\"90\\\",\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}},\\\"fee\\\":{\\\"asset\\\":{\\\"symbol\\\":\\\"USD\\\",\\\"name\\\":\\\"US Dollar\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"USD\\\"},\\\"amount\\\":\\\"0.5\\\",\\\"price\\\":{\\\"price_usd\\\":\\\"1\\\",\\\"price_base\\\":\\\"90\\\",\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}},\\\"rate_override\\\":\\\"90\\\"}}\",\"to\":{\"store\":\"usd\"},\"to_amount\":\"100\",\"to_asset\":{\"chain\":\"fiat\",\"coingecko_id\":null,\"contract\":null,\"name\":\"US Dollar\",\"quote\":\"USD\",\"symbol\":\"USD\"},\"tx_kind\":\"convert\"},\"position\":{\"x\":560.0,\"y\":0.0},\"disabled\":false,\"label\":\"\"}],\"edges\":[{\"id\":\"t.at>tx.date\",\"from\":\"t\",\"from_port\":\"at\",\"to\":\"tx\",\"to_port\":\"date\"},{\"id\":\"t.out>tx.in\",\"from\":\"t\",\"from_port\":\"out\",\"to\":\"tx\",\"to_port\":\"in\"}],\"comments\":[]}",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z",
+      "react_to_workflows": false,
+      "max_amount": null,
+      "max_amount_currency": null,
+      "versions": [],
+      "tests": [],
+      "draft": null,
+      "automation": {
+        "preset": null,
+        "schedule": {
+          "monthly": {
+            "day": 31
+          }
+        },
+        "starts_at": "2026-01-01T09:00:00Z",
+        "template": {
+          "convert": {
+            "meta": {
+              "id": "a4317aa4-35a5-483d-9a0d-284d52b9fe00",
+              "timestamp": "2026-11-18T22:01:05.582480536Z",
+              "comment": "fx",
+              "categories": [],
+              "flow_id": "flow",
+              "contact_id": "contact",
+              "origin": {
+                "automation": {
+                  "automation_id": "auto",
+                  "planned_at": "2026-01-01T09:00:00Z"
+                }
+              },
+              "utility_item_id": null,
+              "keep": false
+            },
+            "from": {
+              "account": {
+                "store": "bank"
+              },
+              "asset": {
+                "symbol": "RUB",
+                "name": "Ruble",
+                "coingecko_id": null,
+                "chain": "fiat",
+                "contract": null,
+                "quote": "RUB"
+              },
+              "amount": "9000",
+              "price": {
+                "price_usd": "1",
+                "price_base": "90",
+                "price_base_currency": null,
+                "fx_override": null
+              }
+            },
+            "to": {
+              "account": {
+                "store": "usd"
+              },
+              "asset": {
+                "symbol": "USD",
+                "name": "US Dollar",
+                "coingecko_id": null,
+                "chain": "fiat",
+                "contract": null,
+                "quote": "USD"
+              },
+              "amount": "100",
+              "price": {
+                "price_usd": "1",
+                "price_base": "90",
+                "price_base_currency": null,
+                "fx_override": null
+              }
+            },
+            "fee": {
+              "asset": {
+                "symbol": "USD",
+                "name": "US Dollar",
+                "coingecko_id": null,
+                "chain": "fiat",
+                "contract": null,
+                "quote": "USD"
+              },
+              "amount": "0.5",
+              "price": {
+                "price_usd": "1",
+                "price_base": "90",
+                "price_base_currency": null,
+                "fx_override": null
+              }
+            },
+            "rate_override": "90"
+          }
+        },
+        "amount_mode": "fixed",
+        "workday_shift": "back",
+        "property_id": null,
+        "time": null,
+        "asks": false,
+        "for_month_offset": null
+      }
+    }
+  ],
+  "workflow_runs": [
+    {
+      "id": "run-0",
+      "workflow_id": "auto-0",
+      "trigger": "schedule 2026-01-15T09:00:00Z",
+      "started_at": "2026-01-15T09:00:05Z",
+      "outcome": "done",
+      "created": [
+        "tx"
+      ],
+      "queued": 0,
+      "trace": [],
+      "dry_run": false,
+      "planned_date": null
+    },
+    {
+      "id": "run-1",
+      "workflow_id": "auto-0",
+      "trigger": "schedule 2026-01-15T09:00:00Z",
+      "started_at": "2026-01-15T09:00:05Z",
+      "outcome": {
+        "rejected": {
+          "reason": {
+            "insufficient_funds": {
+              "store_id": "bank",
+              "asset": {
+                "symbol": "USD",
+                "name": "US Dollar",
+                "coingecko_id": null,
+                "chain": "fiat",
+                "contract": null,
+                "quote": "USD"
+              },
+              "required": "25000",
+              "available": "8000"
+            }
+          },
+          "trigger_node": "t",
+          "planned_at": "2026-01-15T09:00:00Z"
+        }
+      },
+      "created": [],
+      "queued": 0,
+      "trace": [],
+      "dry_run": false,
+      "planned_date": null
+    },
+    {
+      "id": "run-2",
+      "workflow_id": "auto-0",
+      "trigger": "schedule 2026-01-15T09:00:00Z",
+      "started_at": "2026-01-15T09:00:05Z",
+      "outcome": {
+        "rejected": {
+          "reason": {
+            "credit_limit_exceeded": {
+              "store_id": "card",
+              "limit": "1000",
+              "required": "1200"
+            }
+          },
+          "trigger_node": "t",
+          "planned_at": null
+        }
+      },
+      "created": [],
+      "queued": 0,
+      "trace": [],
+      "dry_run": false,
+      "planned_date": null
+    },
+    {
+      "id": "run-3",
+      "workflow_id": "auto-0",
+      "trigger": "schedule 2026-01-15T09:00:00Z",
+      "started_at": "2026-01-15T09:00:05Z",
+      "outcome": {
+        "rejected": {
+          "reason": {
+            "invalid": {
+              "message": "archived"
+            }
+          },
+          "trigger_node": "t",
+          "planned_at": "2026-01-15T09:00:00Z"
+        }
+      },
+      "created": [],
+      "queued": 0,
+      "trace": [],
+      "dry_run": false,
+      "planned_date": null
+    },
+    {
+      "id": "run-4",
+      "workflow_id": "auto-0",
+      "trigger": "schedule 2026-01-15T09:00:00Z",
+      "started_at": "2026-01-15T09:00:05Z",
+      "outcome": {
+        "dropped": {
+          "reason": "skipped"
+        }
+      },
+      "created": [],
+      "queued": 0,
+      "trace": [],
+      "dry_run": false,
+      "planned_date": null
+    }
+  ],
+  "workflow_vars": [
+    {
+      "scope": "global",
+      "name": "counter",
+      "value": "{\"Number\":\"3\"}",
+      "updated_at": "2026-04-01T00:00:00Z"
+    }
+  ],
+  "workflow_queue": [
+    {
+      "id": "queue-1",
+      "workflow_id": "auto-0",
+      "run_id": "run-0",
+      "created_at": "2026-04-01T00:00:00Z",
+      "summary": "one payment",
+      "transactions": [
+        {
+          "topup": {
+            "meta": {
+              "id": "21910a74-92e5-4177-99f6-79f261d5768b",
+              "timestamp": "2026-11-18T22:01:05.584912551Z",
+              "comment": "salary",
+              "categories": [],
+              "flow_id": "flow",
+              "contact_id": "contact",
+              "origin": {
+                "automation": {
+                  "automation_id": "auto",
+                  "planned_at": "2026-01-01T09:00:00Z"
+                }
+              },
+              "utility_item_id": null,
+              "keep": false
+            },
+            "store_id": "bank",
+            "asset": {
+              "symbol": "USD",
+              "name": "US Dollar",
+              "coingecko_id": null,
+              "chain": "fiat",
+              "contract": null,
+              "quote": "USD"
+            },
+            "amount": "1000",
+            "fee": {
+              "asset": {
+                "symbol": "USD",
+                "name": "US Dollar",
+                "coingecko_id": null,
+                "chain": "fiat",
+                "contract": null,
+                "quote": "USD"
+              },
+              "amount": "0.5",
+              "price": {
+                "price_usd": "1",
+                "price_base": "90",
+                "price_base_currency": null,
+                "fx_override": null
+              }
+            },
+            "from": {
+              "contact": {
+                "contact_id": "contact",
+                "account_id": "acc"
+              }
+            },
+            "details": {
+              "cash_breakdown": [
+                {
+                  "denomination": "100",
+                  "count": 10
+                }
+              ],
+              "unit_price": "1",
+              "network": "ethereum",
+              "tx_hash": "0xabc",
+              "source_store_id": "card",
+              "for_month": "2026-09"
+            },
+            "price": {
+              "price_usd": "1",
+              "price_base": "90",
+              "price_base_currency": null,
+              "fx_override": null
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "workflow_state": [
+    {
+      "workflow_id": "auto-0",
+      "marks": {
+        "t": "2026-04-01T09:00:00Z"
+      },
+      "tx_cursor": "tx-1",
+      "tx_index": 4
+    }
+  ],
+  "workflow_waits": [
+    {
+      "id": "wait-1",
+      "workflow_id": "auto-0",
+      "run_id": "run-0",
+      "node_id": "t",
+      "resume_at": "2026-04-02T09:00:00Z",
+      "memo": "{}",
+      "queue_mode": true,
+      "trigger": "schedule 2026-04-01T09:00:00Z",
+      "kind": "confirm",
+      "question": "Pay the rent?",
+      "created_at": "2026-04-01T09:00:00Z",
+      "graph": "{\"comments\":[],\"edges\":[{\"from\":\"t\",\"from_port\":\"at\",\"id\":\"t.at>tx.date\",\"to\":\"tx\",\"to_port\":\"date\"},{\"from\":\"t\",\"from_port\":\"out\",\"id\":\"t.out>tx.in\",\"to\":\"tx\",\"to_port\":\"in\"},{\"from\":\"avg\",\"from_port\":\"amount\",\"id\":\"avg.amount>tx.amount\",\"to\":\"tx\",\"to_port\":\"amount\"}],\"nodes\":[{\"disabled\":false,\"id\":\"t\",\"kind\":\"trigger.schedule\",\"label\":\"\",\"params\":{\"day\":31,\"every\":\"month\",\"time\":\"09:00\",\"workday\":\"back\"},\"position\":{\"x\":0.0,\"y\":0.0}},{\"disabled\":false,\"id\":\"tx\",\"kind\":\"action.transaction\",\"label\":\"\",\"params\":{\"account\":{\"store\":\"bank\"},\"amount\":\"1000\",\"asset\":{\"chain\":\"fiat\",\"coingecko_id\":null,\"contract\":null,\"name\":\"US Dollar\",\"quote\":\"USD\",\"symbol\":\"USD\"},\"category\":null,\"comment\":\"salary\",\"estimated\":true,\"on_shortfall\":\"reject\",\"template\":\"{\\\"topup\\\":{\\\"meta\\\":{\\\"id\\\":\\\"55a8c732-3280-4170-a310-2b8353e4e47b\\\",\\\"timestamp\\\":\\\"2026-11-18T22:01:05.582468393Z\\\",\\\"comment\\\":\\\"salary\\\",\\\"categories\\\":[],\\\"flow_id\\\":\\\"flow\\\",\\\"contact_id\\\":\\\"contact\\\",\\\"origin\\\":{\\\"automation\\\":{\\\"automation_id\\\":\\\"auto\\\",\\\"planned_at\\\":\\\"2026-01-01T09:00:00Z\\\"}},\\\"utility_item_id\\\":null,\\\"keep\\\":false},\\\"store_id\\\":\\\"bank\\\",\\\"asset\\\":{\\\"symbol\\\":\\\"USD\\\",\\\"name\\\":\\\"US Dollar\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"USD\\\"},\\\"amount\\\":\\\"1000\\\",\\\"fee\\\":{\\\"asset\\\":{\\\"symbol\\\":\\\"USD\\\",\\\"name\\\":\\\"US Dollar\\\",\\\"coingecko_id\\\":null,\\\"chain\\\":\\\"fiat\\\",\\\"contract\\\":null,\\\"quote\\\":\\\"USD\\\"},\\\"amount\\\":\\\"0.5\\\",\\\"price\\\":{\\\"price_usd\\\":\\\"1\\\",\\\"price_base\\\":\\\"90\\\",\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}},\\\"from\\\":{\\\"contact\\\":{\\\"contact_id\\\":\\\"contact\\\",\\\"account_id\\\":\\\"acc\\\"}},\\\"details\\\":{\\\"cash_breakdown\\\":[{\\\"denomination\\\":\\\"100\\\",\\\"count\\\":10}],\\\"unit_price\\\":\\\"1\\\",\\\"network\\\":\\\"ethereum\\\",\\\"tx_hash\\\":\\\"0xabc\\\",\\\"source_store_id\\\":\\\"card\\\",\\\"for_month\\\":\\\"2026-09\\\"},\\\"price\\\":{\\\"price_usd\\\":\\\"1\\\",\\\"price_base\\\":\\\"90\\\",\\\"price_base_currency\\\":null,\\\"fx_override\\\":null}}}\",\"to\":{\"contact\":{\"account_id\":\"acc\",\"contact_id\":\"contact\"}},\"tx_kind\":\"topup\"},\"position\":{\"x\":560.0,\"y\":0.0}},{\"disabled\":false,\"id\":\"avg\",\"kind\":\"data.recent_average\",\"label\":\"\",\"params\":{\"count\":\"3\",\"fallback\":\"1000\"},\"position\":{\"x\":280.0,\"y\":160.0}}],\"version\":2}"
+    }
+  ],
+  "import_runs": [
+    {
+      "id": "run-1",
+      "store_id": "bybit",
+      "at": "2026-10-01T12:05:00Z",
+      "source": "manual",
+      "fetched": 10,
+      "staged": 2,
+      "known": 6,
+      "filtered": 2,
+      "confirmed": 0,
+      "trades": 1,
+      "transfers": 1,
+      "reconcile_tx_id": null,
+      "error": null
+    }
+  ],
+  "discarded_imports": [
+    "exec-old-1",
+    "exec-old-2"
+  ],
+  "calc_scenarios": [
+    {
+      "id": "calc-1",
+      "name": "Deposit",
+      "input": {
+        "currency": "rub",
+        "start": "",
+        "initial": "0",
+        "rate_pct": "0",
+        "term_months": 12,
+        "capitalization": "monthly",
+        "stages": [],
+        "indexation_pct": "0",
+        "inflation_pct": "0",
+        "tax": {
+          "pct": "0",
+          "mode": "yearly"
+        },
+        "withdrawal": null
+      },
+      "source": null,
+      "prefilled_at": null,
+      "created_at": "2026-03-01T00:00:00Z",
+      "updated_at": "2026-03-02T00:00:00Z"
+    }
+  ],
+  "inflation_points": [
+    {
+      "currency": "rub",
+      "month": "2026-09",
+      "yoy_pct": "8.1",
+      "source": "cbr"
+    }
+  ],
+  "emergency_fund": {
+    "scope": {
+      "store_ids": [
+        "reserve"
+      ],
+      "include_children": false
+    },
+    "target_months": 3,
+    "avg_months": 12
+  },
+  "health_last": {
+    "month": "2026-03",
+    "color": "yellow",
+    "reasons": [
+      "fund_below_three"
+    ]
+  },
+  "asset_classes": [
+    {
+      "id": "local",
+      "name": "Local",
+      "target_pct": "100",
+      "cap": false
+    }
+  ],
+  "asset_class_of": [
+    {
+      "asset_key": "fiat:usd",
+      "class_id": "local"
+    }
+  ],
+  "valuations": [
+    {
+      "id": "val1",
+      "store_id": "flat",
+      "asset_key": "asset:FLAT",
+      "date": "2025-06-01",
+      "unit_price": "9000000",
+      "currency": "rub"
+    }
+  ],
+  "tx_properties": [
+    {
+      "tx_id": "tx1",
+      "property_id": "flat"
+    }
+  ],
+  "data_sources": [
+    {
+      "id": "src-1",
+      "name": "Key rate",
+      "url": "https://example.invalid/rate",
+      "method": {
+        "kind": "json",
+        "path": "rate"
+      },
+      "output": "number",
+      "number": {
+        "decimal_comma": true,
+        "multiplier": "1",
+        "strip": ""
+      },
+      "interval": "day",
+      "last": {
+        "at": "2026-10-01T00:00:00Z",
+        "number": "16.5",
+        "text": null,
+        "series": []
+      },
+      "history": [],
+      "pending": null,
+      "failures": 0,
+      "status": "ok",
+      "error": null,
+      "checked_at": "2026-10-01T00:00:00Z",
+      "created_at": "2026-09-01T00:00:00Z"
+    }
+  ],
+  "asset_price_sources": [
+    {
+      "asset_key": "asset:FLAT",
+      "source_id": "src-1",
+      "currency": "rub"
+    }
+  ],
+  "deposit_rate_sources": [
+    {
+      "store_id": "bank",
+      "source_id": "src-1"
+    }
+  ],
+  "sync": {
+    "stamps": {
+      "stores:x": {
+        "c": {
+          "w": 1700000000000,
+          "c": 2,
+          "d": "devaaaaa"
+        },
+        "f": {
+          "name": {
+            "w": 1700000000000,
+            "c": 2,
+            "d": "devaaaaa"
+          }
+        }
+      }
+    },
+    "tombstones": {
+      "contacts:gone": {
+        "w": 1700000000000,
+        "c": 2,
+        "d": "devaaaaa"
+      }
+    },
+    "tombstones_seen": {
+      "contacts:gone": 1700000500000
+    },
+    "tombstone_acks": {},
+    "seen_by": {},
+    "peers": [
+      {
+        "device_id": "dev-b",
+        "name": "Phone",
+        "public_key": "abababababababababababababababababababababababababababababababab",
+        "paired_at": "2026-10-01T00:00:00Z",
+        "last_synced_at": "2026-10-02T00:00:00Z",
+        "revoked": null,
+        "stamp": {
+          "w": 1700000000000,
+          "c": 2,
+          "d": "devaaaaa"
+        }
+      }
+    ],
+    "batches": [
+      {
+        "id": "b1",
+        "peer_device": "dev-b",
+        "peer_name": "Phone",
+        "applied_at": "2026-10-02T00:00:00Z",
+        "summary": {
+          "total": 0,
+          "collections": [],
+          "overwritten": [],
+          "unstamped_conflicts": 0
+        },
+        "entries": [
+          {
+            "key": "stores:x",
+            "before": {
+              "value": "{\"id\":\"x\",\"n\":1.5,\"tags\":[null,true]}",
+              "stamps": null,
+              "tombstone": null
+            },
+            "after": {
+              "value": null,
+              "stamps": null,
+              "tombstone": {
+                "w": 1700000000000,
+                "c": 2,
+                "d": "devaaaaa"
+              }
+            }
+          }
+        ],
+        "undone_at": null
+      }
+    ],
+    "transfers": [],
+    "journal": [],
+    "paused": [],
+    "cut_by": {}
+  },
+  "attachments": [
+    {
+      "id": "att-1",
+      "owner": {
+        "kind": "tx",
+        "id": "tx-1"
+      },
+      "kind": "file",
+      "title": "receipt.pdf",
+      "url": null,
+      "mime": "application/pdf",
+      "size": 2048,
+      "sha256": "abababababababababababababababababababababababababababababababab",
+      "created_at": "2026-05-01T00:00:00Z",
+      "removed_at": null
+    }
+  ],
+  "attachment_keys": [
+    {
+      "id": "att-1",
+      "key": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+    }
+  ],
+  "shared_events": [
+    {
+      "id": "event-1",
+      "title": "Trip",
+      "created_at": "2026-06-01T00:00:00Z",
+      "note": "",
+      "archived": false,
+      "starts_on": "2026-06-10",
+      "ends_on": null,
+      "currency": "usd",
+      "rounding_step": "1",
+      "category_id": null,
+      "organizer": "me",
+      "i_participate": true,
+      "participants": [
+        {
+          "id": "guest",
+          "name": "Guest",
+          "contact_id": null,
+          "details": null
+        }
+      ],
+      "items": [],
+      "settlements": [],
+      "adjustments": []
+    }
+  ],
+  "crypto_accounts": [
+    {
+      "id": "cacc-1",
+      "name": "Cold EVM",
+      "chain": "ethereum",
+      "address": "0xabcd00000000000000000000000000000000ef01",
+      "source": "etherscan",
+      "archived": false,
+      "note": "cold",
+      "created_at": "2026-11-01T00:00:00Z"
+    }
+  ],
+  "crypto_events": [
+    {
+      "id": "cev-1",
+      "chain": "ethereum",
+      "account_id": "cacc-1",
+      "time": "2026-11-02T10:00:00Z",
+      "block": 21000000,
+      "from": "0xabcd",
+      "to": "0xbeef",
+      "legs": [
+        {
+          "direction": "out",
+          "asset": {
+            "native": {
+              "chain": "ethereum"
+            }
+          },
+          "amount": "0.5",
+          "counterparty": "0xbeef"
+        },
+        {
+          "direction": "in",
+          "asset": {
+            "token": {
+              "chain": "ethereum",
+              "contract": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+            }
+          },
+          "amount": "1800.25",
+          "counterparty": null
+        }
+      ],
+      "gas": {
+        "asset": {
+          "native": {
+            "chain": "ethereum"
+          }
+        },
+        "amount": "0.0021"
+      },
+      "protocol": "uniswap-v3",
+      "method": "exactInputSingle",
+      "kind": "swap",
+      "raw": "{\"hash\":\"0xdead\"}",
+      "tracking": {
+        "chain_tx": {
+          "chain": "ethereum",
+          "hash": "0xdead"
+        }
+      }
+    }
+  ],
+  "crypto_overrides": [
+    {
+      "id": "covr-1",
+      "event_id": "cev-1",
+      "kind": "transfer",
+      "comment": "to the exchange",
+      "categories": [
+        "savings"
+      ],
+      "flow_id": "flow",
+      "contact_id": null,
+      "not_exchange": false,
+      "hidden": false,
+      "fiat_tx_id": "tx-1",
+      "updated_at": "2026-11-03T00:00:00Z"
+    }
+  ],
+  "crypto_tokens": [
+    {
+      "chain": "ethereum",
+      "contract": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6,
+      "coingecko_id": "usd-coin",
+      "hidden": false,
+      "basis_usd": "0.99",
+      "verdict": "confirmed",
+      "verdict_at": null
+    }
+  ],
+  "crypto_positions": [
+    {
+      "id": "cpos-1",
+      "account_id": "cacc-1",
+      "chain": "ethereum",
+      "protocol": "aave-v3",
+      "name": "USDC supply",
+      "legs": [
+        {
+          "direction": "in",
+          "asset": {
+            "token": {
+              "chain": "ethereum",
+              "contract": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+            }
+          },
+          "amount": "1000",
+          "counterparty": null
+        }
+      ],
+      "receipts": [
+        {
+          "token": {
+            "chain": "ethereum",
+            "contract": "0x98c23e9d8f34fefb1b7bd6a91b7ff122d4aa2f93"
+          }
+        }
+      ],
+      "updated_at": "2026-11-03T00:00:00Z"
+    }
+  ],
+  "crypto_snapshots": [
+    {
+      "id": "csnap-1",
+      "at": "2026-11-03T00:00:00Z",
+      "account_id": "cacc-1",
+      "value_usd": "2800.75"
+    }
+  ],
+  "crypto_cursors": [
+    {
+      "id": "etherscan|cacc-1",
+      "source": "etherscan",
+      "account_id": "cacc-1",
+      "cursor": "21000000",
+      "updated_at": "2026-11-03T00:00:00Z"
+    }
+  ],
+  "crypto_prices": [
+    {
+      "token_key": "ethereum|0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "value_usd": "1.0001",
+      "ts": "2026-11-03T00:00:00Z",
+      "source": "coingecko"
+    }
+  ],
+  "crypto_wiped_at": [
+    {
+      "id": "cwipe-1",
+      "at": "2026-10-01T00:00:00Z",
+      "device_id": "devaaaaa"
+    }
+  ]
+}
