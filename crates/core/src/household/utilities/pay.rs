@@ -28,6 +28,7 @@ pub fn plan_pay_utility_bill(
     bill: &UtilityBill,
     prepare: &dyn Fn(&mut Transaction) -> Result<()>,
     name: ReadingNamer<'_>,
+    now: &str,
 ) -> Result<BillPlan> {
     let timestamp = input
         .timestamp
@@ -74,6 +75,7 @@ pub fn plan_pay_utility_bill(
                     zone,
                 },
                 name,
+                now,
             )?;
             stored.retain(|known| known.id != reading.id);
             stored.push(reading.clone());

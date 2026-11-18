@@ -348,7 +348,97 @@ fn deleting_a_contact_unlinks_its_debt_terms_in_one_transaction() {
         .unwrap();
     let before = vault.doc.debt_terms.len();
     assert_eq!(before, 1);
+    let commits = std::sync::Arc::new(Commits::default());
+    vault.set_write_behind(Some(commits.clone()));
     vault.delete_contact(&friend.id).unwrap();
     assert!(vault.doc.contacts.is_empty());
     assert!(vault.doc.debt_terms.is_empty());
+    assert_eq!(
+        commits.0.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "the contact and its terms go in one commit"
+    );
+}
+
+/// Counts the commits a vault marks once it batches its writes.
+#[derive(Default)]
+struct Commits(std::sync::atomic::AtomicUsize);
+
+impl crate::kernel::session::SaveHook for Commits {
+    fn dirty(&self) {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// A value as JSON with every id and timestamp blanked, so twin vaults compare.
+fn without_ids<T: serde::Serialize>(value: &T) -> serde_json::Value {
+    fn blank(node: &mut serde_json::Value) {
+        match node {
+            serde_json::Value::Object(fields) => {
+                for (key, child) in fields.iter_mut() {
+                    if key == "id" || key.ends_with("_id") || key.ends_with("_at") {
+                        *child = serde_json::Value::Null;
+                    } else {
+                        blank(child);
+                    }
+                }
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(blank),
+            _ => {}
+        }
+    }
+    let mut json = serde_json::to_value(value).unwrap();
+    blank(&mut json);
+    json
+}
+
+fn draft(name: &str) -> ContactDraft {
+    ContactDraft {
+        name: name.into(),
+        ..ContactDraft::default()
+    }
+}
+
+#[test]
+fn the_delegates_equal_the_scenarios() {
+    use crate::usecases::household::contacts as scenario;
+    let (_dir_a, mut by_method) = empty_vault();
+    let (_dir_b, mut by_scenario) = empty_vault();
+
+    let method = by_method.create_contact(draft(" Ann ")).unwrap();
+    let planned = scenario::create_contact(&mut by_scenario, draft(" Ann ")).unwrap();
+    assert_eq!(without_ids(&method), without_ids(&planned));
+
+    let method = by_method.update_contact(&method.id, draft("Anna")).unwrap();
+    let planned = scenario::update_contact(&mut by_scenario, &planned.id, draft("Anna")).unwrap();
+    assert_eq!(without_ids(&method), without_ids(&planned));
+
+    by_method.archive_contact(&method.id, true).unwrap();
+    scenario::archive_contact(&mut by_scenario, &planned.id, true).unwrap();
+    assert_eq!(
+        without_ids(&by_method.doc.contacts),
+        without_ids(&by_scenario.doc.contacts)
+    );
+
+    let terms = |contact_id: &str| DebtTermsDraft {
+        contact_id: contact_id.into(),
+        asset: "usd".into(),
+        due_at: Some("2026-12-31".into()),
+        note: "back".into(),
+    };
+    let by_delegate = by_method.set_debt_terms(terms(&method.id)).unwrap();
+    let by_usecase = scenario::set_debt_terms(&mut by_scenario, terms(&planned.id)).unwrap();
+    assert_eq!(without_ids(&by_delegate), without_ids(&by_usecase));
+    assert_eq!(
+        by_method.doc.debt_terms.len(),
+        by_scenario.doc.debt_terms.len()
+    );
+
+    by_method.delete_contact(&method.id).unwrap();
+    scenario::delete_contact(&mut by_scenario, &planned.id).unwrap();
+    assert!(by_method.doc.contacts.is_empty() && by_scenario.doc.contacts.is_empty());
+    assert_eq!(
+        by_method.doc.debt_terms.len(),
+        by_scenario.doc.debt_terms.len()
+    );
 }

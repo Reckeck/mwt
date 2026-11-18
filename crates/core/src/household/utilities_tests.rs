@@ -915,7 +915,15 @@ fn a_bare_document_refuses_what_has_no_item_or_reading() {
         day: None,
         zone: None,
     };
-    assert!(plan_add_reading(&doc, input, &|_, _, _| String::new()).is_err());
+    assert!(
+        plan_add_reading(
+            &doc,
+            input,
+            &|_, _, _| String::new(),
+            "2026-01-01T00:00:00Z"
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -999,4 +1007,77 @@ fn a_reading_is_added_corrected_and_deleted_through_the_delegates() {
     assert!(vault.delete_meter_reading(&first.id).is_err());
     vault.delete_meter_reading(&moved.id).unwrap();
     assert!(vault.doc.meter_readings.is_empty());
+}
+
+/// Counts the commits a vault marks once it batches its writes.
+#[derive(Default)]
+struct Commits(std::sync::atomic::AtomicUsize);
+
+impl crate::kernel::session::SaveHook for Commits {
+    fn dirty(&self) {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[test]
+fn paying_a_bill_is_one_commit() {
+    let (_dir, mut vault) = empty_vault();
+    let (flat, meter, _internet, card) = flat_with_bills(&mut vault);
+    let commits = std::sync::Arc::new(Commits::default());
+    vault.set_write_behind(Some(commits.clone()));
+    let paid = vault
+        .pay_utility_bill(
+            PayUtilityBillInput {
+                property_id: flat,
+                period: "2026-03".into(),
+                store_id: card,
+                timestamp: Some("2026-03-10T12:00:00Z".into()),
+                lines: vec![PayUtilityLine {
+                    item_id: meter.id.clone(),
+                    amount: amount("500"),
+                    reading: Some(amount("1200")),
+                    reading_day: None,
+                    zone_readings: Vec::new(),
+                }],
+            },
+            "UTC",
+        )
+        .unwrap();
+    assert_eq!(paid.len(), 1);
+    assert_eq!(vault.doc.meter_readings.len(), 1);
+    assert_eq!(
+        commits.0.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "the readings, the payments and the holdings are one write"
+    );
+}
+
+#[test]
+fn a_planned_reading_is_stamped_with_the_given_time() {
+    let (_dir, mut vault) = empty_vault();
+    let item = metered(&mut vault);
+    let input = ReadingInput {
+        item_id: &item.id,
+        value: amount("10"),
+        period: "2026-01",
+        day: None,
+        zone: None,
+    };
+    let reading = plan_add_reading(
+        &vault.doc,
+        input,
+        &|_, _, _| "reading".to_string(),
+        "2001-02-03T04:05:06Z",
+    )
+    .unwrap();
+    assert_eq!(reading.recorded_at, "2001-02-03T04:05:06Z");
+}
+
+#[test]
+fn a_bill_is_due_on_the_given_day() {
+    let (_dir, mut vault) = empty_vault();
+    let item = metered(&mut vault);
+    let now = crate::time::unix_secs("2026-03-17T08:00:00Z").unwrap();
+    let bill = utility_bill(&vault.books(), &item.property_id, "2026-03", "UTC", now).unwrap();
+    assert!(bill.due_at.starts_with("2026-03-17"), "{}", bill.due_at);
 }

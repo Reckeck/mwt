@@ -6,23 +6,26 @@ use crate::error::{Error, Result};
 use crate::kernel::books::Books;
 use crate::model::planning::UtilityItem;
 use crate::model::store::{PropertyCategory, Store, StoreKind};
-use crate::model::vault::now_iso;
 use crate::money::tree::find_store;
-use crate::pricing::history::secs_or_now;
 
 use crate::household::property_links::property_year;
 
 use super::trend::meter_trend;
 use super::types::PropertySummary;
 
-/// The property summary: value, debt, equity and monthly costs.
-pub fn property_summary(books: &Books<'_>, store_id: &str, zone: &str) -> Result<PropertySummary> {
+/// The property summary: value, debt, equity and monthly costs, priced at
+/// `now` (unix seconds).
+pub fn property_summary(
+    books: &Books<'_>,
+    store_id: &str,
+    zone: &str,
+    now: i64,
+) -> Result<PropertySummary> {
     let doc = books.doc();
     let store = find_store(doc, store_id)
         .filter(|store| store.kind == StoreKind::Property)
         .ok_or_else(|| Error::Missing(format!("property {store_id}")))?;
     let (base, fx) = books.base_and_fx();
-    let now = secs_or_now(&now_iso());
     let book = books.rate_book();
     let value_usd = doc
         .holdings

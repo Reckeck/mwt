@@ -5,7 +5,7 @@ pub use crate::household::contacts::{
 };
 
 use crate::error::Result;
-use crate::model::contact::{Contact, ContactAccount, DebtTerms};
+use crate::model::contact::{Contact, ContactAccount};
 
 use super::UnlockedVault;
 use super::forward::forward;
@@ -40,11 +40,11 @@ impl UnlockedVault {
         /// shared events stood at then.
         pub(crate) fn contact_balances_until(&self, secs: i64) -> Vec<ContactBalance>
             => crate::usecases::household::contacts::contact_balances_until;
-        pub fn debt_terms(&self, contact_id: Option<&str>) -> Vec<DebtTerms>
+        pub fn debt_terms(&self, contact_id: Option<&str>) -> Vec<crate::model::contact::DebtTerms>
             => crate::household::contacts::debt_terms @doc;
         /// Set (or replace) the terms of one contact's debt in one asset; an
         /// empty date and note removes them.
-        pub fn set_debt_terms(&mut self, draft: DebtTermsDraft) -> Result<Option<DebtTerms>>
+        pub fn set_debt_terms(&mut self, draft: DebtTermsDraft) -> Result<Option<crate::model::contact::DebtTerms>>
             => crate::usecases::household::contacts::set_debt_terms;
     }
     // forward:end

@@ -4,17 +4,60 @@
 //! vault.
 
 use crate::Amount;
+use crate::calendar;
 use crate::error::Result;
 use crate::household::utilities::{
-    BillPlan, PayUtilityBillInput, ReadingInput, UtilityDraft, plan_add_reading,
-    plan_create_utility, plan_delete_utility, plan_pay_utility_bill, plan_update_reading,
-    plan_update_utility, require_reading, utility_bill,
+    BillPlan, PayUtilityBillInput, PropertySummary, ReadingInput, UtilityBill, UtilityDraft,
+    UtilityPaymentDraft, plan_add_reading, plan_create_utility, plan_delete_utility,
+    plan_pay_utility_bill, plan_update_reading, plan_update_utility, require_reading,
+    utility_bill as bill_of, utility_payment_draft as draft_of,
 };
 use crate::kernel::tx::Tx;
 use crate::model::planning::{MeterReading, UtilityItem};
 use crate::model::transaction::Transaction;
+use crate::model::vault::now_iso;
 use crate::service::UnlockedVault;
 use crate::service::sync_ids::reading_id;
+
+/// The property summary: value, debt, equity and monthly costs.
+pub fn property_summary(
+    vault: &UnlockedVault,
+    store_id: &str,
+    zone: &str,
+) -> Result<PropertySummary> {
+    crate::household::utilities::property_summary(
+        &vault.books(),
+        store_id,
+        zone,
+        calendar::now_secs(),
+    )
+}
+
+/// The "Pay" for one month of an item, dated by today.
+pub fn utility_payment_draft(
+    vault: &UnlockedVault,
+    item_id: &str,
+    period: &str,
+    zone: &str,
+) -> Result<UtilityPaymentDraft> {
+    draft_of(&vault.books(), item_id, period, zone, calendar::now_secs())
+}
+
+/// The month's bill of a property, due today when the month is this one.
+pub fn utility_bill(
+    vault: &UnlockedVault,
+    property_id: &str,
+    period: &str,
+    zone: &str,
+) -> Result<UtilityBill> {
+    bill_of(
+        &vault.books(),
+        property_id,
+        period,
+        zone,
+        calendar::now_secs(),
+    )
+}
 
 fn automation_known(vault: &UnlockedVault) -> impl Fn(&str) -> bool + '_ {
     |id| vault.automation(id).is_ok()
@@ -72,7 +115,7 @@ pub fn add_meter_reading(
         day,
         zone,
     };
-    let reading = plan_add_reading(&vault.doc, input, &reading_id)?;
+    let reading = plan_add_reading(&vault.doc, input, &reading_id, &now_iso())?;
     vault.transact(|tx| {
         store_reading(tx, reading.clone())?;
         Ok(reading)
@@ -88,7 +131,7 @@ pub fn update_meter_reading(
     period: &str,
     day: Option<u8>,
 ) -> Result<MeterReading> {
-    let moved = plan_update_reading(&vault.doc, id, value, period, day, &reading_id)?;
+    let moved = plan_update_reading(&vault.doc, id, value, period, day, &reading_id, &now_iso())?;
     vault.transact(|tx| {
         // The id follows the day: a reading moved to another day is the
         // record of that day (the old one is deleted).
@@ -111,17 +154,26 @@ pub fn pay_utility_bill(
     input: PayUtilityBillInput,
     zone: &str,
 ) -> Result<Vec<Transaction>> {
-    let bill = utility_bill(&vault.books(), &input.property_id, &input.period, zone)?;
+    let bill = bill_of(
+        &vault.books(),
+        &input.property_id,
+        &input.period,
+        zone,
+        calendar::now_secs(),
+    )?;
     let plan = plan_pay_utility_bill(
         &vault.doc,
         &input,
         &bill,
         &|tx| vault.prepare_transaction(tx),
         &reading_id,
+        &now_iso(),
     )?;
     let saved = plan.payments.clone();
-    vault.transact(|tx| write_bill(tx, plan))?;
-    // The holdings follow the payments; the ledger derives them from the vault.
+    // The holdings follow the payments and the ledger derives them from the whole
+    // vault, so the plan is applied and the holdings recomputed before the one
+    // commit. `write_bill` emits no events, so none is dropped by `run`.
+    vault.run(|tx| write_bill(tx, plan))?;
     vault.recompute_holdings();
     vault.transact(|tx| {
         tx.touch();

@@ -38,11 +38,13 @@ fn is_metered(item: &UtilityItem) -> bool {
 /// The "Pay" for one month of an item (plan §7.5): metered —
 /// consumption × tariff; fixed — what was paid last time, else the set
 /// amount; rent — the monthly amount plus the deposit with the first one.
+/// `now` (unix seconds) decides which day of the month the payment is dated.
 pub fn utility_payment_draft(
     books: &Books<'_>,
     item_id: &str,
     period: &str,
     zone: &str,
+    now: i64,
 ) -> Result<UtilityPaymentDraft> {
     let item = utility_item(books.doc(), item_id)?.clone();
     let month = calendar::parse_month(period)
@@ -94,9 +96,7 @@ pub fn utility_payment_draft(
     meta.utility_item_id = Some(item.id.clone());
     // Dated today when the month is this one, else inside that month.
     let last_day = calendar::next_month(month) - chrono::Duration::days(1);
-    let day = cal
-        .date_of(calendar::now_secs())
-        .clamp(first_of_month(month), last_day);
+    let day = cal.date_of(now).clamp(first_of_month(month), last_day);
     meta.timestamp = calendar::iso(cal.at_local(day, 12));
     Ok(UtilityPaymentDraft {
         item_id: item.id.clone(),
@@ -118,11 +118,13 @@ pub fn utility_payment_draft(
 
 /// The month's bill of a property: every active item with its suggested
 /// amount, meters with their previous reading (plan: "everything is paid on one day").
+/// `now` (unix seconds) is today for the due day.
 pub fn utility_bill(
     books: &Books<'_>,
     property_id: &str,
     period: &str,
     zone: &str,
+    now: i64,
 ) -> Result<UtilityBill> {
     let doc = books.doc();
     let property = doc
@@ -189,7 +191,7 @@ pub fn utility_bill(
             }
         }
         if !unread
-            && let Ok(draft) = utility_payment_draft(books, &item.id, &period, zone)
+            && let Ok(draft) = utility_payment_draft(books, &item.id, &period, zone, now)
             && let Transaction::Payment(payment) = &draft.transaction
         {
             line.amount = Some(payment.amount);
@@ -218,7 +220,7 @@ pub fn utility_bill(
         .filter(|mean| mean.is_positive() && total.is_positive())
         .map(|mean| ((total - mean) / mean * hundred()).round(0));
     let last_day = calendar::next_month(month) - chrono::Duration::days(1);
-    let today = cal.date_of(calendar::now_secs());
+    let today = cal.date_of(now);
     let day = match pay_day {
         Some(day) => {
             let wanted =

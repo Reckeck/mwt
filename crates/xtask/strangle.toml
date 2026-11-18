@@ -123,6 +123,11 @@ task = "B"
 files = ["crates/core/src/service/mod.rs"]
 
 [[foundation]]
+# `sync_ids` becomes `pub(crate)` for the household scenarios that mint deterministic ids.
+task = "C"
+files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 

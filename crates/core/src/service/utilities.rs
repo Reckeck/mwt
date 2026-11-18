@@ -21,7 +21,7 @@ impl UnlockedVault {
     forward! {
         /// The property summary: value, debt, equity and monthly costs.
         pub fn property_summary(&self, store_id: &str, zone: &str) -> Result<PropertySummary>
-            => crate::household::utilities::property_summary @books;
+            => crate::usecases::household::utilities::property_summary;
         pub fn utility_items(&self) -> Vec<UtilityItem>
             => crate::household::utilities::utility_items @doc;
         pub fn create_utility_item(&mut self, draft: UtilityDraft) -> Result<UtilityItem>
@@ -50,11 +50,11 @@ impl UnlockedVault {
         /// consumption × tariff; fixed — what was paid last time, else the set
         /// amount; rent — the monthly amount plus the deposit with the first one.
         pub fn utility_payment_draft(&self, item_id: &str, period: &str, zone: &str) -> Result<UtilityPaymentDraft>
-            => crate::household::utilities::utility_payment_draft @books;
+            => crate::usecases::household::utilities::utility_payment_draft;
         /// The month's bill of a property: every active item with its suggested
         /// amount, meters with their previous reading (plan: "everything is paid on one day").
         pub fn utility_bill(&self, property_id: &str, period: &str, zone: &str) -> Result<UtilityBill>
-            => crate::household::utilities::utility_bill @books;
+            => crate::usecases::household::utilities::utility_bill;
         /// Pay a month's bill in one go: record the meter readings, then one
         /// payment per line, linked to its item. All or nothing — a line that
         /// fails leaves the vault as it was.

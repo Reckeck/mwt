@@ -6,7 +6,6 @@ use crate::calendar;
 use crate::error::{Error, Result};
 use crate::model::VaultDoc;
 use crate::model::planning::{MeterReading, UtilityItem, UtilityKind};
-use crate::model::vault::now_iso;
 use crate::utilities_formula;
 
 use super::month::{readings_in, zones_of};
@@ -33,12 +32,14 @@ pub struct ReadingMove {
 }
 
 /// Validate a reading against `stored` and build the record. A reading made
-/// on the day of a stored one has its id and replaces it. Writes nothing.
+/// on the day of a stored one has its id and replaces it. `now` (ISO) is its
+/// `recorded_at`. Writes nothing.
 pub fn plan_reading(
     items: &[UtilityItem],
     stored: &[MeterReading],
     input: ReadingInput<'_>,
     name: ReadingNamer<'_>,
+    now: &str,
 ) -> Result<MeterReading> {
     let ReadingInput {
         item_id,
@@ -93,7 +94,7 @@ pub fn plan_reading(
         item_id: item_id.to_string(),
         value,
         period,
-        recorded_at: now_iso(),
+        recorded_at: now.to_string(),
         day,
         zone: zone.clone(),
     };
@@ -129,8 +130,9 @@ pub fn plan_add_reading(
     doc: &VaultDoc,
     input: ReadingInput<'_>,
     name: ReadingNamer<'_>,
+    now: &str,
 ) -> Result<MeterReading> {
-    plan_reading(&doc.utility_items, &doc.meter_readings, input, name)
+    plan_reading(&doc.utility_items, &doc.meter_readings, input, name, now)
 }
 
 /// A correction: its value and, if moved, its month and day. The same rules
@@ -142,6 +144,7 @@ pub fn plan_update_reading(
     period: &str,
     day: Option<u8>,
     name: ReadingNamer<'_>,
+    now: &str,
 ) -> Result<ReadingMove> {
     let old = doc
         .meter_readings
@@ -163,7 +166,7 @@ pub fn plan_update_reading(
     };
     Ok(ReadingMove {
         old_id: id.to_string(),
-        reading: plan_reading(&doc.utility_items, &others, input, name)?,
+        reading: plan_reading(&doc.utility_items, &others, input, name, now)?,
     })
 }
 
