@@ -63,6 +63,8 @@ impl From<&str> for IpcError {
 #[cfg(test)]
 mod tests {
 
+    use trade_core::error::{PeerSyncFailure, StoreTreeViolation, WalletRule};
+
     use super::*;
 
     fn wire(error: &IpcError) -> String {
@@ -85,6 +87,18 @@ mod tests {
                 "SANDBOX: sandbox: blocked",
             ),
             (Error::RequiresUnlock, "REQUIRES_UNLOCK: vault is locked"),
+            (
+                Error::WalletRule(WalletRule::CashSingleton),
+                "CASH_SINGLETON: there is only one cash wallet",
+            ),
+            (
+                Error::StoreTree(StoreTreeViolation::Cycle),
+                "STORE_CYCLE: a store cannot be nested inside itself or its own sub-accounts",
+            ),
+            (
+                Error::PeerSync(PeerSyncFailure::Channel),
+                "SYNC_CHANNEL: device sync: Channel",
+            ),
         ]
     }
 
