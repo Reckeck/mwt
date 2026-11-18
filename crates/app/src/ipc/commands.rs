@@ -188,7 +188,7 @@ pub(crate) mod tests {
     }
 
     /// The names of the `#[tauri::command]` and `#[ipc]` functions in one source text.
-    pub(crate) fn command_fns(source: &str) -> Vec<String> {
+    fn command_fns(source: &str) -> Vec<String> {
         attributed_fns(source, &["#[tauri::command", "#[ipc"])
     }
 
