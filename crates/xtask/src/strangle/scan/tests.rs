@@ -227,3 +227,22 @@ fn json_bodies_are_parsed_as_expressions_and_their_vault_calls_found() {
     }
     assert!(facts.unscanned.is_empty());
 }
+
+#[test]
+fn json_path_calls_are_not_mistaken_for_keys() {
+    let source = "fn f(vault: V) {\n    let v = json!({\"k\": [a::b(vault.foo())]});\n}\n";
+    let facts = scan_source(source).unwrap();
+    assert!(
+        facts
+            .calls
+            .iter()
+            .any(|call| call.name == "foo" && call.on_vault)
+    );
+    assert!(facts.unscanned.is_empty());
+}
+
+#[test]
+fn json_body_with_a_self_call_it_cannot_parse_is_unscanned() {
+    let source = "fn f() {\n    let v = json!({\"a\": Self::foo(), \"b\": @});\n}\n";
+    assert_eq!(scan_source(source).unwrap().unscanned, [2]);
+}

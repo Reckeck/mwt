@@ -1,7 +1,7 @@
 //! The `syn` visitor behind `scan_source`: one pass over a file that fills its `FileFacts`.
 
 use anyhow::{Context, Result};
-use proc_macro2::{Delimiter, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Spacing, TokenStream, TokenTree};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
@@ -225,7 +225,11 @@ fn collect_json_values(tokens: TokenStream, values: &mut Vec<Expr>) -> bool {
 }
 
 fn collect_json_value(mut parts: Vec<TokenTree>, values: &mut Vec<Expr>) -> bool {
-    let keyed = matches!(parts.get(1), Some(TokenTree::Punct(punct)) if punct.as_char() == ':');
+    let keyed = matches!(
+        parts.first(),
+        Some(TokenTree::Literal(_) | TokenTree::Ident(_))
+    ) && matches!(parts.get(1), Some(TokenTree::Punct(punct))
+            if punct.as_char() == ':' && punct.spacing() == Spacing::Alone);
     if keyed {
         parts.drain(..2);
     }
@@ -243,7 +247,7 @@ fn collect_json_value(mut parts: Vec<TokenTree>, values: &mut Vec<Expr>) -> bool
     }
 }
 
-/// Whether the tokens hold `.name(..)`, groups included.
+/// Whether the tokens hold `.name(..)` or `Self::name(..)`, groups included.
 fn has_method_call(tokens: TokenStream) -> bool {
     let trees: Vec<TokenTree> = tokens.into_iter().collect();
     trees.iter().enumerate().any(|(index, tree)| match tree {
@@ -252,6 +256,12 @@ fn has_method_call(tokens: TokenStream) -> bool {
             (trees.get(index + 1), trees.get(index + 2)),
             (Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)))
                 if call.delimiter() == Delimiter::Parenthesis
+        ),
+        TokenTree::Ident(ident) if ident == "Self" => matches!(
+            (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3), trees.get(index + 4)),
+            (Some(TokenTree::Punct(first)), Some(TokenTree::Punct(second)), Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)))
+                if first.as_char() == ':' && second.as_char() == ':'
+                    && call.delimiter() == Delimiter::Parenthesis
         ),
         _ => false,
     })
