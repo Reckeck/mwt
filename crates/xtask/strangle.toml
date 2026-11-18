@@ -113,6 +113,16 @@ task = "A"
 files = ["crates/core/src/service/mod.rs"]
 
 [[foundation]]
+# Merge of stream B (#160): the `iso_of` re-export in the rates shim lost its last user (service/losses.rs moved).
+task = "A"
+files = ["crates/core/src/service/rates.rs"]
+
+[[foundation]]
+# `sync_ids` becomes `pub(crate)` for the money scenarios that mint deterministic ids.
+task = "B"
+files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 
