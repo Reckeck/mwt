@@ -96,27 +96,27 @@ Events are fully covered: every event is declared once in `app_events!`.
 The event registry is `app_events!` in `crates/app/src/ipc/events.rs`: one line per event with its name and
 payload type. It generates a typed `emit` (a wrong payload does not compile) and the `EVENTS` table (name and
 payload TS type) that `events.gen.ts` is written from. Names and payload types are read there; the table
-below keeps only the hand-written part, **when an event fires** and what the frontend does about it. Never
+below has no payload column (read payloads in `EVENTS` or `src/shared/api/events.gen.ts`); it keeps only the hand-written part, **when an event fires** and what the frontend does about it. Never
 call `app.emit("..")` with a literal: add the event to `app_events!`.
 
-| Event | Payload | When |
-|---|---|---|
-| `prices-updated` | `RefreshResult` | after `refresh_all` (the button, the tray, the "price refresh interval" timer in the scheduler while the window is on screen) and `ensure_fx` (if anything was found); screens refresh the "price" keys from `use-cache-events`, not from the command response |
-| `rates-updated` | — | after `refresh_rates` (the "Refresh" button in the inflation settings and the scheduler's daily `rates_tick`) and `set_inflation_mode`; the frontend refreshes `inflation-overview`, `report`, `interest-tax` (`use-cache-events`) |
-| `sources-updated` | — | after `datasource_*` and the background `sources_tick`; the frontend refreshes `data-sources` (`prices-updated` and `rates-updated` are sent together with it) |
-| `bybit-import-pending` | `{ staged: 0, recorded: number }` | background Bybit polling recorded new operations. Since spec E7 they go straight into the crypto module, so `staged` is always 0; the event keeps its name so an older window still listens |
-| `crypto-updated` | `{ account_id }` | a background read stored something new for the account; the frontend drops every `['crypto']` query and the ledger keys the capital is computed from |
-| `automation-created` | `{ tx_ids: string[] }` | the scheduler created automation transactions |
-| `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | a run was not created: not enough funds, a credit card limit or the transaction failed validation (D26); a toast with "Retry / Skip" + a system notification |
-| `automation-skipped` | `{ count }` | after a long break, old dates beyond 24 are recorded as skipped |
-| — (notification) | key `automation-estimated:<tx_id>` | an automation with a varying amount recorded the transaction approximately: "check the amount" |
-| `workflows-ran` | `{ runs, queued }` | the scheduler ran schemes (nodes); `queued` — transactions that went to the confirmation queue. Created transactions also arrive through `automation-created` |
-| `price-alert` | `{ alert_id }` | a price alert fired (once) |
-| `reminder-due` | `{}` | reminder time has come — refresh their list |
-| `reminders-changed` | `{}` | sync created or moved auto-reminders |
-| `notification` | `NoticeRecord { key, category, title, body, link?, at, delivered_at, read }` | a notification was shown (a reminder, an alert, insufficient funds, a budget, an automation, a Bybit import): the bell and a toast. `link` is a route name or `wallet:<id>`. Each `key` is shown once for all time — the journal is in the vault |
-| `enrichment-ready` | `{ tx_id }` | the explorer returned data by the transaction hash; the finding awaits "Apply / Dismiss" |
-| `vault-mirror-failed` | `string` (reason) | the vault copy to an external file was not written (`platform_fs::mirror_sink`); the vault is intact, the status is `vault_link_status` |
+| Event | When |
+|---|---|
+| `prices-updated` | after `refresh_all` (the button, the tray, the "price refresh interval" timer in the scheduler while the window is on screen) and `ensure_fx` (if anything was found); screens refresh the "price" keys from `use-cache-events`, not from the command response |
+| `rates-updated` | after `refresh_rates` (the "Refresh" button in the inflation settings and the scheduler's daily `rates_tick`) and `set_inflation_mode`; the frontend refreshes `inflation-overview`, `report`, `interest-tax` (`use-cache-events`) |
+| `sources-updated` | after `datasource_*` and the background `sources_tick`; the frontend refreshes `data-sources` (`prices-updated` and `rates-updated` are sent together with it) |
+| `bybit-import-pending` | background Bybit polling recorded new operations. Since spec E7 they go straight into the crypto module, so `staged` is always 0; the event keeps its name so an older window still listens |
+| `crypto-updated` | a background read stored something new for the account; the frontend drops every `['crypto']` query and the ledger keys the capital is computed from |
+| `automation-created` | the scheduler created automation transactions |
+| `automation-rejected` | a run was not created: not enough funds, a credit card limit or the transaction failed validation (D26); a toast with "Retry / Skip" + a system notification |
+| `automation-skipped` | after a long break, old dates beyond 24 are recorded as skipped |
+| — (notification) | an automation with a varying amount recorded the transaction approximately: "check the amount" |
+| `workflows-ran` | the scheduler ran schemes (nodes); `queued` — transactions that went to the confirmation queue. Created transactions also arrive through `automation-created` |
+| `price-alert` | a price alert fired (once) |
+| `reminder-due` | reminder time has come — refresh their list |
+| `reminders-changed` | sync created or moved auto-reminders |
+| `notification` | a notification was shown (a reminder, an alert, insufficient funds, a budget, an automation, a Bybit import): the bell and a toast. `link` is a route name or `wallet:<id>`. Each `key` is shown once for all time — the journal is in the vault |
+| `enrichment-ready` | the explorer returned data by the transaction hash; the finding awaits "Apply / Dismiss" |
+| `vault-mirror-failed` | the vault copy to an external file was not written (`platform_fs::mirror_sink`); the vault is intact, the status is `vault_link_status` |
 | `sync-status` | `SyncStatus` | the device sync state changed: role, connections, phases, progress (`docs/sync.md`) |
 | `sync-offer` | `SyncOfferEvent { session_id, peer_name }` | a device with the same vault, not yet paired, is nearby: a "Pair" banner |
 | `sync-pairing` | `SyncPairingEvent { session_id, peer_name, code }` | show a 6-digit code; it is the same on the second device |
