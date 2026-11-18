@@ -329,6 +329,12 @@ fn parse_signature(function: &ItemFn, mode: Mode) -> Result<Signature, Error> {
     for param in params {
         let (name, ty) = param_ident(param)?;
         if !is_reference_to(ty, "AppHandle", false) {
+            if name == "app" {
+                return Err(Error::new_spanned(
+                    name,
+                    "`app` is reserved by #[ipc] for the &AppHandle",
+                ));
+            }
             arguments.push(Argument {
                 name: name.clone(),
                 ty: ty.clone(),
@@ -650,6 +656,12 @@ mod tests {
     fn a_misnamed_app_handle_is_refused() {
         let item = "fn status(state: &AppState, handle: &AppHandle) -> Result<()> { todo!() }";
         assert!(error_of("locked_ok", item).contains("must be named `app`"));
+    }
+
+    #[test]
+    fn an_app_argument_that_is_not_the_app_handle_is_refused() {
+        let item = "fn list(vault: &UnlockedVault, app: String) -> Result<()> { todo!() }";
+        assert!(error_of("read", item).contains("`app` is reserved by #[ipc] for the &AppHandle"));
     }
 
     #[test]
