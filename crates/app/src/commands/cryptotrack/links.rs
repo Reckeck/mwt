@@ -15,6 +15,7 @@ use trade_core::ipc_contract::cryptotrack::links::{
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// The crypto operations that look like the same movement of money as a fiat
@@ -24,7 +25,7 @@ use crate::ipc::commands::ipc_commands;
 pub async fn crypto_link_candidates(
     input: CryptoLinkCandidatesInput,
     state: State<'_, AppState>,
-) -> Result<Vec<CryptoLinkOption>, String> {
+) -> Result<Vec<CryptoLinkOption>, IpcError> {
     with_vault(&state, |vault| Ok(vault.crypto_link_candidates(&input)))
 }
 
@@ -35,7 +36,7 @@ pub async fn crypto_link_candidates(
 pub async fn crypto_link_operation(
     input: CryptoLinkInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| vault.crypto_link_fiat(&input))
 }
 
@@ -45,7 +46,7 @@ pub async fn crypto_link_operation(
 pub async fn crypto_unlink_operation(
     input: CryptoUnlinkInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| vault.crypto_unlink_fiat(&input))
 }
 
@@ -55,7 +56,7 @@ pub async fn crypto_unlink_operation(
 pub async fn crypto_link_pairs(
     input: CryptoPairsInput,
     state: State<'_, AppState>,
-) -> Result<Vec<CryptoPair>, String> {
+) -> Result<Vec<CryptoPair>, IpcError> {
     with_vault(&state, |vault| Ok(vault.crypto_pairs(&input)))
 }
 

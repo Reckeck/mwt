@@ -18,6 +18,7 @@ use trade_core::ipc_contract::cryptotrack::operations::{
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// The operations of the followed accounts, one page of the filtered list.
@@ -25,7 +26,7 @@ use crate::ipc::commands::ipc_commands;
 pub async fn crypto_list_operations(
     input: CryptoListOperationsInput,
     state: State<'_, AppState>,
-) -> Result<CryptoOpsPage, String> {
+) -> Result<CryptoOpsPage, IpcError> {
     with_vault(&state, |vault| Ok(vault.crypto_list_operations(&input)))
 }
 
@@ -35,7 +36,7 @@ pub async fn crypto_list_operations(
 pub async fn crypto_operation_detail(
     input: CryptoOperationDetailInput,
     state: State<'_, AppState>,
-) -> Result<CryptoOperationDetail, String> {
+) -> Result<CryptoOperationDetail, IpcError> {
     with_vault(&state, |vault| vault.crypto_operation_detail(&input))
 }
 
@@ -47,7 +48,7 @@ pub async fn crypto_operation_detail(
 pub async fn crypto_set_override(
     input: CryptoSetOverrideInput,
     state: State<'_, AppState>,
-) -> Result<CryptoSetOverrideResult, String> {
+) -> Result<CryptoSetOverrideResult, IpcError> {
     with_vault_mut(&state, |vault| vault.crypto_set_override(&input))
 }
 

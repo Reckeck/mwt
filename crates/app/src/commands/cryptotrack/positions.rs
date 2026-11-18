@@ -17,6 +17,7 @@ use trade_core::model::vault::now_iso;
 use crate::commands::AppState;
 use crate::commands::planning::with_vault;
 use crate::cryptotrack::jobs;
+use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// The positions of the followed accounts, open ones first. Read only.
@@ -27,7 +28,7 @@ use crate::ipc::commands::ipc_commands;
 #[tauri::command]
 pub async fn crypto_list_positions(
     state: State<'_, AppState>,
-) -> Result<Vec<PositionView>, String> {
+) -> Result<Vec<PositionView>, IpcError> {
     let live = jobs::live_positions();
     let at = now_iso();
     with_vault(&state, |vault| Ok(vault.crypto_list_positions(&live, &at)))
