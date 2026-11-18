@@ -80,6 +80,12 @@ use syn::{
 /// How many flags `#[ipc(..)]` takes at most.
 const MAX_FLAGS: usize = 4;
 
+/// Identifiers the expansion declares itself; no command argument may use them.
+const HOST: &str = "__ipc_host";
+const BODY: &str = "__ipc_body";
+const HANDLE: &str = "__ipc_handle";
+const RESERVED: [&str; 3] = [HOST, BODY, HANDLE];
+
 /// Marks a sync `fn` as an IPC command. See the crate docs.
 #[proc_macro_attribute]
 pub fn ipc(args: CompilerTokens, item: CompilerTokens) -> CompilerTokens {
@@ -255,7 +261,22 @@ fn parse_signature(function: &ItemFn, mode: Mode) -> Result<Signature, Error> {
                 "#[ipc] arguments must be plain names: Tauri names the JS keys from them",
             ));
         };
-        if is_reference_to(&typed.ty, "AppHandle", false) && pattern.ident == "app" {
+        if RESERVED.iter().any(|reserved| pattern.ident == reserved) {
+            return Err(Error::new_spanned(
+                &pattern.ident,
+                format!(
+                    "`{}` is reserved by #[ipc]; rename this argument",
+                    pattern.ident
+                ),
+            ));
+        }
+        if is_reference_to(&typed.ty, "AppHandle", false) {
+            if pattern.ident != "app" {
+                return Err(Error::new_spanned(
+                    &pattern.ident,
+                    "a `&AppHandle` parameter of an #[ipc] command must be named `app`",
+                ));
+            }
             handle = true;
         } else {
             arguments.push(Argument {
@@ -325,7 +346,7 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
     let mut body = function.clone();
     body.attrs.clear();
     body.vis = syn::Visibility::Inherited;
-    body.sig.ident = format_ident!("body");
+    body.sig.ident = format_ident!("{}", BODY);
 
     let state = format_ident!(
         "{}",
@@ -340,11 +361,14 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
         call_args.push(quote! { #state });
     }
     let runner_name = format_ident!("__ipc_run_{}", name);
+    let host_name = format_ident!("{}", HOST);
+    let handle_name = format_ident!("{}", HANDLE);
+    let body_name = &body.sig.ident;
     let (host_generics, host_type, handle_clone) = if signature.handle {
         (
             quote! {},
             quote! { tauri::AppHandle },
-            quote! { let handle = host.clone(); },
+            quote! { let #handle_name = #host_name.clone(); },
         )
     } else {
         (
@@ -354,7 +378,7 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
         )
     };
     if signature.handle {
-        call_args.push(quote! { &handle });
+        call_args.push(quote! { &#handle_name });
     }
     call_args.extend(names.iter().map(|arg| quote! { #arg }));
     let closure_param = if signature.first.is_some() {
@@ -376,16 +400,16 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
         /// The command body behind its gate, generic over the host so tests
         /// run it without a Tauri runtime.
         pub(crate) async fn #runner_name #host_generics(
-            host: #host_type,
+            #host_name: #host_type,
             #( #names: #types ),*
         ) -> Result<#ok, crate::ipc::IpcError> {
             #body
             #handle_clone
             crate::ipc::run::#runner(
-                host,
+                #host_name,
                 &#meta_name,
                 crate::ipc::run::Gate { sandbox_deny: #sandbox_deny },
-                move |#closure_param| body(#(#call_args),*).map_err(Into::into),
+                move |#closure_param| #body_name(#(#call_args),*).map_err(Into::into),
             )
             .await
         }
@@ -427,11 +451,11 @@ mod tests {
         assert!(out.contains(
             "pub async fn list (app : tauri :: AppHandle , id : String) -> Result < Vec < Store > , crate :: ipc :: IpcError >"
         ));
-        assert!(out.contains("crate :: ipc :: run :: read (host"));
-        assert!(out.contains("pub (crate) async fn __ipc_run_list < Host : crate :: ipc :: run :: VaultHost > (host : Host , id : String)"));
+        assert!(out.contains("crate :: ipc :: run :: read (__ipc_host"));
+        assert!(out.contains("pub (crate) async fn __ipc_run_list < Host : crate :: ipc :: run :: VaultHost > (__ipc_host : Host , id : String)"));
         assert!(out.contains("__ipc_run_list (app , id) . await"));
         assert!(out.contains("sandbox_deny : false"));
-        assert!(out.contains("move | vault | body (vault , id) . map_err (Into :: into)"));
+        assert!(out.contains("move | vault | __ipc_body (vault , id) . map_err (Into :: into)"));
         assert!(out.contains("pub const __IPC_META_list : crate :: ipc :: run :: CommandMeta"));
         assert!(out.contains("name : stringify ! (id)"));
     }
@@ -442,7 +466,7 @@ mod tests {
             "write",
             "fn change(vault: &mut UnlockedVault) -> Result<()> { todo!() }",
         );
-        assert!(out.contains("crate :: ipc :: run :: write (host"));
+        assert!(out.contains("crate :: ipc :: run :: write (__ipc_host"));
         assert!(out.contains("sandbox_deny : false"));
     }
 
@@ -452,7 +476,7 @@ mod tests {
             "write, sandbox = deny",
             "fn change(vault: &mut UnlockedVault) -> Result<()> { todo!() }",
         );
-        assert!(out.contains("crate :: ipc :: run :: write (host"));
+        assert!(out.contains("crate :: ipc :: run :: write (__ipc_host"));
         assert!(out.contains("sandbox_deny : true"));
     }
 
@@ -462,16 +486,16 @@ mod tests {
             "locked_ok",
             "fn status(state: &AppState, app: &AppHandle, key: Key) -> Result<Status> { todo!() }",
         );
-        assert!(out.contains("crate :: ipc :: run :: locked_ok (host"));
-        assert!(out.contains("let handle = host . clone ()"));
-        assert!(out.contains("move | state | body (state , & handle , key)"));
+        assert!(out.contains("crate :: ipc :: run :: locked_ok (__ipc_host"));
+        assert!(out.contains("let __ipc_handle = __ipc_host . clone ()"));
+        assert!(out.contains("move | state | __ipc_body (state , & __ipc_handle , key)"));
         assert!(out.contains("pub async fn status (app : tauri :: AppHandle , key : Key)"));
     }
 
     #[test]
     fn locked_ok_may_take_no_state() {
         let out = expanded("locked_ok", "fn ping() -> Result<()> { todo!() }");
-        assert!(out.contains("move | _ | body () . map_err"));
+        assert!(out.contains("move | _ | __ipc_body () . map_err"));
     }
 
     #[test]
@@ -511,6 +535,22 @@ mod tests {
             error_of("read, write, sandbox = deny, locked_ok, read", READ_ITEM)
                 .contains("at most four")
         );
+    }
+
+    #[test]
+    fn a_misnamed_app_handle_is_refused() {
+        let item = "fn status(state: &AppState, handle: &AppHandle) -> Result<()> { todo!() }";
+        assert!(error_of("locked_ok", item).contains("must be named `app`"));
+    }
+
+    #[test]
+    fn reserved_argument_names_are_refused() {
+        for reserved in RESERVED {
+            let item = format!(
+                "fn list(vault: &UnlockedVault, {reserved}: u8) -> Result<()> {{ todo!() }}"
+            );
+            assert!(error_of("read", &item).contains("is reserved by #[ipc]"));
+        }
     }
 
     #[test]

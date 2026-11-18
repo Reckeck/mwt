@@ -1,0 +1,5 @@
+error: a `&AppHandle` parameter of an #[ipc] command must be named `app`
+ --> tests/fail/app_handle_not_named_app.rs:4:29
+  |
+4 | fn status(state: &AppState, handle: &AppHandle) -> Result<(), ()> {
+  |                             ^^^^^^
