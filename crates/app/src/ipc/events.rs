@@ -77,13 +77,13 @@ app_events! {
     "tray-navigate" => TrayNavigate(String),
     "vault-changed" => VaultChanged(trade_core::ipc_contract::VaultStatus),
     "vault-locked" => VaultLocked(VaultLockedPayload),
-    // `SAVE_FAILED_EVENT`: a string, or `{ reason, exiting }` on exit.
+    // Fires when persisting the vault fails; `exiting` is set when the app is closing.
     "vault-save-failed" => VaultSaveFailed(trade_core::ipc_contract::events::VaultSaveFailedPayload),
-    // `SAVED_EVENT`
+    // Fires after the vault is written to disk.
     "vault-saved" => VaultSaved(()),
-    // `MIRROR_FAILED_EVENT`
+    // Fires when mirroring the vault to its backup location fails.
     "vault-mirror-failed" => VaultMirrorFailed(String),
-    // `STATE_EVENT`
+    // Fires when the updater state changes.
     "update-state" => UpdateState(trade_core::ipc_contract::UpdateStatusDto),
     "security-raise-progress" => SecurityRaiseProgress(trade_core::ipc_contract::security::RaiseProgress),
     "sync-status" => SyncStatusChanged(trade_core::ipc_contract::SyncStatus),
