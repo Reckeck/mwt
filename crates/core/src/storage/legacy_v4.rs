@@ -1,8 +1,9 @@
 //! The v4 vault document, frozen.
 //!
-//! FROZEN: the types below never change once committed; the only planned additions are the
-//! conversion and tests (T3) and the stream-owned copies named at the end (T17). It is deleted together with the one-time
-//! transition from payload v4 (container 1) to payload v1 (container 2); until then it is the only
+//! FROZEN: the types below never change once committed; the only additions are the conversion to
+//! the live document with what the shims did on open ([`transition`]: the Bybit queue in
+//! [`adopt_bybit`], the graph steps of versions 1-3 in `graph`) and the stream-owned copies named at
+//! the end (T17). It is deleted together with the one-time transition from payload v4 (container 1) to payload v1 (container 2); until then it is the only
 //! place that still reads a v4 file.
 //!
 //! [`VaultDocV4`] is a copy of the live `VaultDoc` as it was written by the last build that
@@ -19,10 +20,15 @@
 //! are reused from the live model) belong to streams C and D, whose files are edited only by T17;
 //! if T17 changes the shape of those live types, that is the one case where it adds a copy.
 
+mod adopt;
+mod graph;
+
 use serde::Deserialize;
 
+pub use adopt::{LegacyAdoption, adopt_bybit};
+
 use crate::Amount;
-use crate::model::category::CategoryGroup;
+use crate::model::category::{Category, CategoryGroup};
 use crate::model::contact::Contact;
 use crate::model::enrichment::EnrichmentRecord;
 use crate::model::planning::{
@@ -31,10 +37,11 @@ use crate::model::planning::{
 use crate::model::store::{Holding, Store};
 use crate::model::transaction::Transaction;
 use crate::model::vault::{
-    DailyBudgetMode, DashPeriod, DashboardWidgetCfg, FxPoint, ImportKind, ImportRun, ManualPrice,
-    PricePoint, TxProperty, Valuation, default_fx_interval, default_minimize_to_tray,
+    DailyBudgetMode, DashPeriod, DashboardWidgetCfg, ExchangeKeys, Exchanges, FxPoint, ImportKind,
+    ImportRun, ManualPrice, PendingImport, PricePoint, Settings, TxProperty, Valuation, VaultDoc,
+    default_fx_interval, default_minimize_to_tray,
 };
-use crate::model::workflow::WaitKind;
+use crate::model::workflow::{WaitKind, Workflow, WorkflowWait};
 
 /// The full plaintext document of a v4 vault.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -409,6 +416,325 @@ pub struct WorkflowWaitV4 {
     pub graph: String,
 }
 
+// -- conversion to the live document ----------------------------------------------------------
+
+/// What the transition hands on besides the document.
+#[derive(Debug)]
+pub struct Carry {
+    /// The `exchanges.bybit` entries that hold a secret; they reach the device secrets once.
+    pub exchange_keys: Vec<ExchangeKeys>,
+    /// What the conversion of the old Bybit queue did.
+    pub adoption: LegacyAdoption,
+}
+
+/// The live document of a v4 file, with the work the shims used to do on open done once: the old
+/// Bybit queue is converted into operations of the crypto module and every workflow graph is
+/// brought to the live version. The holdings are not refolded here.
+pub fn transition(mut doc: VaultDocV4) -> (VaultDoc, Carry) {
+    let exchange_keys = doc
+        .exchanges
+        .bybit
+        .iter()
+        .filter(|keys| !keys.api_secret.is_empty())
+        .map(ExchangeKeys::from)
+        .collect();
+    let adoption = adopt_bybit(&mut doc);
+    (
+        VaultDoc::from(doc),
+        Carry {
+            exchange_keys,
+            adoption,
+        },
+    )
+}
+
+impl From<VaultDocV4> for VaultDoc {
+    /// Field by field, so a field added to either side fails to compile here. The exchange keys
+    /// and the queue are carried as they are; the graphs are brought to the live version.
+    fn from(old: VaultDocV4) -> Self {
+        // Exhaustive on purpose: no `..`.
+        let VaultDocV4 {
+            version,
+            id,
+            created_at,
+            settings,
+            stores,
+            holdings,
+            transactions,
+            categories,
+            price_cache,
+            fx_cache,
+            exchanges,
+            pending_imports,
+            contacts,
+            budgets,
+            goals,
+            reminders,
+            price_alerts,
+            categorization_rules,
+            utility_items,
+            meter_readings,
+            enrichments,
+            manual_prices,
+            envelopes,
+            debt_terms,
+            key_rates,
+            notification_log,
+            workflows,
+            workflow_runs,
+            workflow_vars,
+            workflow_queue,
+            workflow_state,
+            workflow_waits,
+            import_runs,
+            discarded_imports,
+            calc_scenarios,
+            inflation_points,
+            emergency_fund,
+            health_last,
+            asset_classes,
+            asset_class_of,
+            valuations,
+            tx_properties,
+            data_sources,
+            asset_price_sources,
+            deposit_rate_sources,
+            sync,
+            attachments,
+            attachment_keys,
+            shared_events,
+            crypto_accounts,
+            crypto_events,
+            crypto_overrides,
+            crypto_tokens,
+            crypto_positions,
+            crypto_snapshots,
+            crypto_cursors,
+            crypto_prices,
+            crypto_wiped_at,
+        } = old;
+        Self {
+            version,
+            id,
+            created_at,
+            settings: settings.into(),
+            stores,
+            holdings,
+            transactions,
+            categories: categories.into_iter().map(Category::from).collect(),
+            price_cache,
+            fx_cache,
+            exchanges: Exchanges::from(exchanges),
+            pending_imports: pending_imports
+                .into_iter()
+                .map(PendingImport::from)
+                .collect(),
+            contacts,
+            budgets,
+            goals,
+            reminders,
+            price_alerts,
+            categorization_rules,
+            utility_items,
+            meter_readings,
+            enrichments,
+            manual_prices,
+            envelopes,
+            debt_terms,
+            key_rates,
+            notification_log,
+            workflows: workflows.into_iter().map(migrated_workflow).collect(),
+            workflow_runs,
+            workflow_vars,
+            workflow_queue,
+            workflow_state,
+            workflow_waits: workflow_waits.into_iter().map(WorkflowWait::from).collect(),
+            import_runs,
+            discarded_imports,
+            calc_scenarios,
+            inflation_points,
+            emergency_fund,
+            health_last,
+            asset_classes,
+            asset_class_of,
+            valuations,
+            tx_properties,
+            data_sources,
+            asset_price_sources,
+            deposit_rate_sources,
+            attachments,
+            attachment_keys,
+            shared_events,
+            sync,
+            crypto_accounts,
+            crypto_events,
+            crypto_overrides,
+            crypto_tokens,
+            crypto_positions,
+            crypto_snapshots,
+            crypto_cursors,
+            crypto_prices,
+            crypto_wiped_at,
+        }
+    }
+}
+
+/// A workflow with its graph, its earlier versions and its unsaved draft brought to the live version.
+fn migrated_workflow(mut workflow: Workflow) -> Workflow {
+    migrate_graph(&mut workflow.graph);
+    for version in workflow.versions.iter_mut().chain(workflow.draft.as_mut()) {
+        migrate_graph(&mut version.graph);
+    }
+    workflow
+}
+
+fn migrate_graph(json: &mut String) {
+    if let Some(migrated) = graph::migrate_graph_json(json) {
+        *json = migrated;
+    }
+}
+
+impl From<SettingsV4> for Settings {
+    fn from(old: SettingsV4) -> Self {
+        // Exhaustive on purpose: no `..`.
+        let SettingsV4 {
+            display_decimals,
+            dashboard_widgets,
+            fx_refresh_interval_sec,
+            minimize_to_tray,
+            savings_rate,
+            daily_budget_mode,
+            budget_currency,
+            notifications,
+            budget_configured,
+            onboarding_skipped,
+            inflation_mode,
+            inflation_source,
+            inflation_manual,
+            inflation_adopted,
+            manual_income,
+            manual_expenses,
+            categories_rev,
+            freedom_rate,
+            carry_since,
+            pinned,
+            dashboard_period,
+            onboarding_checklist_hidden,
+            crypto,
+            schedule_timezone,
+            crypto_raise_pending,
+        } = old;
+        Self {
+            display_decimals,
+            dashboard_widgets,
+            fx_refresh_interval_sec,
+            minimize_to_tray,
+            savings_rate,
+            daily_budget_mode,
+            budget_currency,
+            notifications,
+            budget_configured,
+            onboarding_skipped,
+            inflation_mode,
+            inflation_source,
+            inflation_manual,
+            inflation_adopted,
+            manual_income,
+            manual_expenses,
+            categories_rev,
+            freedom_rate,
+            carry_since,
+            pinned,
+            dashboard_period,
+            onboarding_checklist_hidden,
+            crypto,
+            schedule_timezone,
+            crypto_raise_pending,
+        }
+    }
+}
+
+impl From<CategoryV4> for Category {
+    fn from(old: CategoryV4) -> Self {
+        Self {
+            key: old.key,
+            name: old.name,
+            group: old.group,
+            archived: old.archived,
+            essential: old.essential,
+            passive: old.passive,
+        }
+    }
+}
+
+impl From<&ExchangeKeysV4> for ExchangeKeys {
+    fn from(old: &ExchangeKeysV4) -> Self {
+        Self {
+            store_id: old.store_id.clone(),
+            api_key: old.api_key.clone(),
+            api_secret: old.api_secret.clone(),
+            spot_store_id: old.spot_store_id.clone(),
+            futures_store_id: old.futures_store_id.clone(),
+        }
+    }
+}
+
+impl From<ExchangesV4> for Exchanges {
+    fn from(old: ExchangesV4) -> Self {
+        Self {
+            bybit: old.bybit.iter().map(ExchangeKeys::from).collect(),
+        }
+    }
+}
+
+impl From<PendingImportV4> for PendingImport {
+    fn from(old: PendingImportV4) -> Self {
+        Self {
+            exec_id: old.exec_id,
+            store_id: old.store_id,
+            category: old.category,
+            symbol: old.symbol,
+            side: old.side,
+            asset_bought: old.asset_bought,
+            qty_bought: old.qty_bought,
+            asset_sold: old.asset_sold,
+            qty_sold: old.qty_sold,
+            price: old.price,
+            fee: old.fee,
+            fee_asset: old.fee_asset,
+            occurred_at: old.occurred_at,
+            comment: old.comment,
+            is_maker: old.is_maker,
+            closed_size: old.closed_size,
+            closed_pnl: old.closed_pnl,
+            kind: old.kind,
+            from_account: old.from_account,
+            to_account: old.to_account,
+        }
+    }
+}
+
+impl From<WorkflowWaitV4> for WorkflowWait {
+    fn from(old: WorkflowWaitV4) -> Self {
+        let mut graph = old.graph;
+        migrate_graph(&mut graph);
+        Self {
+            id: old.id,
+            workflow_id: old.workflow_id,
+            run_id: old.run_id,
+            node_id: old.node_id,
+            resume_at: old.resume_at,
+            memo: old.memo,
+            queue_mode: old.queue_mode,
+            trigger: old.trigger,
+            kind: old.kind,
+            question: old.question,
+            created_at: old.created_at,
+            graph,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -453,6 +779,123 @@ mod tests {
                 "{name}"
             );
             assert!(!doc.pending_imports.is_empty(), "{name}");
+        }
+    }
+
+    /// Fields the reset drops from the live document; both sides are compared without them.
+    /// Empty until a later task removes a live field the frozen document still carries.
+    const DROPPED: [&str; 0] = [];
+
+    /// The expected document, with the graph strings brought to the live version as the
+    /// conversion does (the graph steps themselves are tested in `graph`).
+    fn expected_converted() -> serde_json::Value {
+        let mut expected: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/v4.expected.json")).unwrap();
+        let migrate = |holder: &mut serde_json::Value| {
+            let graph = holder["graph"].as_str().unwrap().to_owned();
+            if let Some(migrated) = graph::migrate_graph_json(&graph) {
+                holder["graph"] = migrated.into();
+            }
+        };
+        for workflow in expected["workflows"].as_array_mut().unwrap() {
+            migrate(workflow);
+            for version in workflow["versions"].as_array_mut().unwrap() {
+                migrate(version);
+            }
+            if workflow["draft"].is_object() {
+                migrate(&mut workflow["draft"]);
+            }
+        }
+        for wait in expected["workflow_waits"].as_array_mut().unwrap() {
+            if wait["graph"].as_str().is_some_and(|text| !text.is_empty()) {
+                migrate(wait);
+            }
+        }
+        expected
+    }
+
+    fn without_dropped(mut doc: serde_json::Value) -> serde_json::Value {
+        for pointer in DROPPED {
+            if let Some((parent, field)) = pointer.rsplit_once('/')
+                && let Some(object) = doc
+                    .pointer_mut(parent)
+                    .and_then(|node| node.as_object_mut())
+            {
+                object.remove(field);
+            }
+        }
+        doc
+    }
+
+    #[test]
+    fn converting_the_fixtures_gives_the_expected_document() {
+        for (name, fmt, bytes) in FIXTURES {
+            let live = VaultDoc::from(parse_fixture(name, fmt, bytes));
+            assert_eq!(
+                without_dropped(serde_json::to_value(&live).unwrap()),
+                without_dropped(expected_converted()),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_converted_fixture_carries_graphs_of_the_live_version() {
+        let (name, fmt, bytes) = FIXTURES[0];
+        let live = VaultDoc::from(parse_fixture(name, fmt, bytes));
+        assert!(!live.workflows.is_empty());
+        for workflow in &live.workflows {
+            let graph: serde_json::Value = serde_json::from_str(&workflow.graph).unwrap();
+            assert_eq!(graph["version"], crate::workflow::graph::GRAPH_VERSION);
+        }
+    }
+
+    #[test]
+    fn exchange_keys_are_carried_as_they_are() {
+        let (name, fmt, bytes) = FIXTURES[0];
+        let old = parse_fixture(name, fmt, bytes);
+        let secrets: Vec<(String, String, String)> = old
+            .exchanges
+            .bybit
+            .iter()
+            .map(|keys| {
+                (
+                    keys.store_id.clone(),
+                    keys.api_key.clone(),
+                    keys.api_secret.clone(),
+                )
+            })
+            .collect();
+        assert!(!secrets.is_empty());
+        let (live, carry) = transition(old);
+        let carried = |keys: &[ExchangeKeys]| -> Vec<(String, String, String)> {
+            keys.iter()
+                .map(|key| {
+                    (
+                        key.store_id.clone(),
+                        key.api_key.clone(),
+                        key.api_secret.clone(),
+                    )
+                })
+                .collect()
+        };
+        assert_eq!(carried(&live.exchanges.bybit), secrets);
+        assert_eq!(carried(&carry.exchange_keys), secrets);
+    }
+
+    #[test]
+    fn the_transition_accounts_for_every_queue_entry() {
+        for (name, fmt, bytes) in FIXTURES {
+            let old = parse_fixture(name, fmt, bytes);
+            let queued = u32::try_from(old.pending_imports.len()).unwrap();
+            let (live, carry) = transition(old);
+            let adoption = carry.adoption;
+            assert_eq!(
+                adoption.converted + adoption.known + adoption.kept,
+                queued,
+                "{name}"
+            );
+            assert_eq!(live.pending_imports.len() as u32, adoption.kept, "{name}");
         }
     }
 }
