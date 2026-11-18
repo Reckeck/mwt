@@ -95,7 +95,7 @@ mod rates;
 mod rebase;
 mod recurring;
 mod relations;
-mod reports;
+pub(crate) mod reports;
 mod store_change;
 mod store_months;
 mod stores;
@@ -107,7 +107,7 @@ mod validate;
 mod valuation;
 mod workflow_templates;
 mod workflows;
-mod worth;
+pub(crate) mod worth;
 pub use portfolio::{
     AssetBalance, AssetStat, HistoryPoint, NamedValue, PnlLeg, PortfolioSummary, RealizedPnl,
     StoreChildRow, StoreCrumb, StoreOverview, StorePosition, StoreTreeNode, StoreValue,
