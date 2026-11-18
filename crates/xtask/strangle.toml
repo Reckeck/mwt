@@ -170,6 +170,11 @@ files = [
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 
+[[foundation]]
+# reports no longer call real_coefficients through the vault; the shim method becomes test-only
+task = "A"
+files = ["crates/core/src/service/inflation.rs"]
+
 # Stubs that later tasks name but no area lists; paths are under crates/core/src.
 [[extra_stub]]
 task = "T50"

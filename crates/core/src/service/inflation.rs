@@ -8,6 +8,7 @@ pub use crate::usecases::money::inflation::{inflation_notice, key_rate_notice};
 
 use std::collections::BTreeMap;
 
+#[cfg(test)]
 use chrono::NaiveDate;
 
 use crate::Amount;
@@ -54,6 +55,7 @@ impl UnlockedVault {
             => crate::money::inflation::effective_inflation @doc;
         /// Monthly coefficients from `from` to `today` by the series, or `None`
         /// when the currency follows no series.
+        #[cfg(test)]
         pub(crate) fn real_coefficients(&self, currency: &str, from: NaiveDate, today: NaiveDate) -> Option<BTreeMap<NaiveDate, Amount>>
             => crate::money::inflation::real_coefficients @doc;
         /// Merge fetched readings: a revised month replaces the old value. Returns
