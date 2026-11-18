@@ -21,7 +21,8 @@ use crate::pricing::history::secs_or_now;
 
 use crate::kernel::books::Books;
 use crate::service::budget::Flow;
-use crate::service::{FlowClass, RateBook, UnlockedVault, UpcomingItem};
+use crate::service::{FlowClass, RateBook, UpcomingItem};
+use crate::usecases::planning::budget::leg_value_in;
 
 /// Longest range a report covers.
 pub const MAX_REPORT_MONTHS: usize = 120;
@@ -244,8 +245,9 @@ pub struct PnlReport {
     #[serde(default)]
     pub has_data: bool,
     /// Realized results left out because no rate converts them to the report
-    /// currency; the screen marks them.
-    #[serde(default)]
+    /// currency. Core-side only: it does not cross the wire.
+    #[serde(skip)]
+    #[ts(skip)]
     pub unpriced: u32,
 }
 
@@ -607,7 +609,7 @@ pub(crate) fn report_ctx(
         .first()
         .and_then(|first| {
             let earliest = previous_period_start(*first, months.len());
-            books.vault().real_coefficients(&currency, earliest, today)
+            crate::money::inflation::real_coefficients(books.doc(), &currency, earliest, today)
         })
         .unwrap_or_default();
     Ok(Ctx {
@@ -1174,8 +1176,7 @@ pub(crate) fn stores_report(books: &Books, ctx: &Ctx) -> StoresReport {
             else {
                 continue;
             };
-            let value = UnlockedVault::leg_value_in(book, &leg, &ctx.currency, secs)
-                .unwrap_or(Amount::ZERO);
+            let value = leg_value_in(book, &leg, &ctx.currency, secs).unwrap_or(Amount::ZERO);
             if leg.amount.is_negative() {
                 row.outflow += value;
             } else {
@@ -1241,8 +1242,7 @@ pub(crate) fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
             if leg.role != LegRole::Fee || !ctx.in_scope(&leg.store_id) {
                 continue;
             }
-            let value = UnlockedVault::leg_value_in(book, &leg, &ctx.currency, secs)
-                .unwrap_or(Amount::ZERO);
+            let value = leg_value_in(book, &leg, &ctx.currency, secs).unwrap_or(Amount::ZERO);
             rows[index].fees += value;
             has_data = true;
         }

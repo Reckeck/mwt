@@ -5417,12 +5417,7 @@ type PnlReport = { meta: ReportMeta, rows: Array<PnlRow>, total_realized: Amount
 /**
  * A sale or a fee fell in the period (there is a row for every month).
  */
-has_data: boolean, 
-/**
- * Realized results left out because no rate converts them to the report
- * currency; the screen marks them.
- */
-unpriced: number, };
+has_data: boolean, };
 
 type PnlRow = { month: string, realized: Amount, fees: Amount, };
 
