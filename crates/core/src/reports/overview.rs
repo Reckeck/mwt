@@ -244,10 +244,8 @@ pub struct PnlReport {
     #[serde(default)]
     pub has_data: bool,
     /// Realized results left out because no rate converts them to the report
-    /// currency. Not on the wire yet: the screen learns of it with the next
-    /// contract change (`ipc.gen.d.ts` stays as it is in this wave).
-    #[serde(skip)]
-    #[ts(skip)]
+    /// currency; the screen marks them.
+    #[serde(default)]
     pub unpriced: u32,
 }
 
@@ -426,6 +424,15 @@ pub(crate) struct Ctx {
     pub(crate) scope: Option<HashSet<String>>,
 }
 
+/// Where the period before one of `span` months starting at `first` begins.
+fn previous_period_start(first: NaiveDate, span: usize) -> NaiveDate {
+    let mut start = first;
+    for _ in 0..span {
+        start = first_of_month(start - Duration::days(1));
+    }
+    start
+}
+
 impl Ctx {
     pub(crate) fn meta(&self) -> ReportMeta {
         ReportMeta {
@@ -439,6 +446,12 @@ impl Ctx {
             inflation_rate: self.rate,
             insights: Vec::new(),
         }
+    }
+
+    /// First month of the previous period of the same length, the one the
+    /// categories report compares with.
+    pub(crate) fn previous_start(&self) -> NaiveDate {
+        previous_period_start(self.months[0], self.months.len())
     }
 
     pub(crate) fn start(&self) -> i64 {
@@ -593,10 +606,7 @@ pub(crate) fn report_ctx(
     let coefficients = months
         .first()
         .and_then(|first| {
-            let mut earliest = *first;
-            for _ in 0..months.len() {
-                earliest = first_of_month(earliest - Duration::days(1));
-            }
+            let earliest = previous_period_start(*first, months.len());
             books.vault().real_coefficients(&currency, earliest, today)
         })
         .unwrap_or_default();
@@ -794,10 +804,7 @@ pub(crate) fn year_report(books: &Books, ctx: &Ctx) -> YearReport {
 
 pub(crate) fn categories_report(books: &Books, ctx: &Ctx) -> CategoriesReport {
     let span = ctx.months.len();
-    let mut previous_start = ctx.months[0];
-    for _ in 0..span {
-        previous_start = first_of_month(previous_start - Duration::days(1));
-    }
+    let previous_start = ctx.previous_start();
     let flows = report_flows(books, ctx, ctx.cal.start_of(previous_start), ctx.end());
     let group_of = |class: FlowClass| match class {
         FlowClass::Income => Some(CategoryGroup::Income),

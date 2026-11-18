@@ -4,6 +4,7 @@ use super::overview::*;
 use std::collections::BTreeMap;
 
 use crate::Amount;
+use crate::kernel::books::Books;
 use crate::model::category::CategoryGroup;
 use crate::model::store::AssetRef;
 use crate::model::store::{LiabilityKind, LiabilityTerms};
@@ -778,4 +779,125 @@ fn real_terms_cash_flow_and_categories_round_after_summing() {
         panic!()
     };
     assert_eq!(categories.groups[0].rows[0].cells[0], amount("0.92"));
+}
+
+// -- the pure queries over `&Books`, without a tempdir vault ---------------------------
+
+/// An in-memory vault with one card, a salary and a grocery spend in 2026-02.
+fn memory_vault() -> UnlockedVault {
+    let mut vault = UnlockedVault::in_memory(crate::model::vault::VaultDoc::default());
+    vault.set_base_currency("usd");
+    quote_usd(&mut vault);
+    let card = store(&mut vault, "Card", StoreKind::Bank, None);
+    vault
+        .add_transaction(earn(&card, "1000", "2026-02-01T10:00:00Z"))
+        .unwrap();
+    vault
+        .add_transaction(spend(&card, "100", "groceries", "2026-02-10T10:00:00Z"))
+        .unwrap();
+    vault
+}
+
+fn feb_ctx(books: &Books) -> Ctx {
+    report_ctx(books, &range("2026-02", "2026-02"), secs(NOW), "UTC").unwrap()
+}
+
+#[test]
+fn report_over_books_dispatches_by_kind() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let filter = range("2026-02", "2026-02");
+    let Ok(Report::Cashflow(cashflow)) =
+        report(&books, ReportKind::Cashflow, &filter, secs(NOW), "UTC")
+    else {
+        panic!()
+    };
+    assert_eq!(cashflow.meta.months, vec!["2026-02".to_string()]);
+}
+
+#[test]
+fn report_ctx_over_books_reads_the_range_and_refuses_a_bad_one() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let ctx = feb_ctx(&books);
+    assert_eq!(ctx.months.len(), 1);
+    assert_eq!(ctx.currency, "usd");
+    let wrong = range("2026-03", "2026-02");
+    assert!(report_ctx(&books, &wrong, secs(NOW), "UTC").is_err());
+}
+
+#[test]
+fn cashflow_report_over_books_sums_the_month() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let report = cashflow_report(&books, &feb_ctx(&books));
+    assert_eq!(report.total.income, amount("1000"));
+    assert_eq!(report.total.daily, amount("100"));
+}
+
+#[test]
+fn year_report_over_books_has_a_row_per_month() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let ctx = report_ctx(&books, &range("2026-01", "2026-12"), secs(NOW), "UTC").unwrap();
+    assert_eq!(year_report(&books, &ctx).rows.len(), 12);
+}
+
+#[test]
+fn categories_report_over_books_lists_the_spend() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let report = categories_report(&books, &feb_ctx(&books));
+    assert!(report.groups.iter().any(|group| !group.rows.is_empty()));
+    assert_eq!(report.unpriced.count, 0);
+}
+
+#[test]
+fn networth_report_over_books_has_points() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let report = networth_report(&books, &feb_ctx(&books));
+    assert!(!report.points.is_empty());
+}
+
+#[test]
+fn stores_report_over_books_lists_the_card() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let report = stores_report(&books, &feb_ctx(&books));
+    assert_eq!(report.rows.len(), 1);
+}
+
+#[test]
+fn pnl_report_over_books_has_no_data_without_sales() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let report = pnl_report(&books, &feb_ctx(&books));
+    assert!(!report.has_data);
+    assert_eq!(report.unpriced, 0);
+}
+
+#[test]
+fn portfolio_report_over_books_runs_on_a_vault_without_holdings() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let report = portfolio_report(&books, &feb_ctx(&books));
+    assert_eq!(report.meta.currency, "usd");
+}
+
+#[test]
+fn inflation_report_over_books_runs_without_a_series() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let report = inflation_report(&books, &feb_ctx(&books));
+    assert_eq!(report.meta.currency, "usd");
+}
+
+#[test]
+fn calendar_month_over_books_has_a_day_per_date_and_refuses_junk() {
+    let vault = memory_vault();
+    let books = vault.books();
+    let month = calendar_month(&books, "2026-02", secs(NOW), "UTC").unwrap();
+    assert_eq!(month.days.len(), 28);
+    assert!(calendar_month(&books, "February", secs(NOW), "UTC").is_err());
 }
