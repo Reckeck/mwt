@@ -14,7 +14,7 @@ use super::baseline::{Baseline, BaselineMethod};
 use super::fileset::FileSet;
 use super::home::{DOC_MARKER, Home, homes};
 use super::map::Map;
-use super::scan::is_test_attr;
+use super::scan::{VAULT_TYPE, is_test_attr};
 use super::signature::{Parts, doc_lines};
 use super::source::LineIndex;
 
@@ -132,8 +132,8 @@ pub(super) fn receiver_of(first: &FnArg) -> Option<Receiver> {
         target.as_str(),
         reference.mutability.is_some(),
     ) {
-        ("vault", "UnlockedVault", true) => ("&mut self", None),
-        ("vault", "UnlockedVault", false) => ("&self", None),
+        ("vault", VAULT_TYPE, true) => ("&mut self", None),
+        ("vault", VAULT_TYPE, false) => ("&self", None),
         ("books", "Books", false) => ("&self", Some("@books")),
         ("doc", "VaultDoc", false) => ("&self", Some(DOC_MARKER)),
         _ => return None,
@@ -271,11 +271,27 @@ fn typed_param(text: &str, public: &[(String, String)]) -> Option<Typed> {
 fn replace_region(text: &str, block: &str) -> Option<String> {
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
     let (begin, end) = region_lines(&lines)?;
+    let indent = &lines[begin][..lines[begin].len() - lines[begin].trim_start().len()];
     Some(format!(
-        "{}{block}{}",
+        "{}{}{}",
         lines[..=begin].concat(),
+        indented(block, indent),
         lines[end..].concat()
     ))
+}
+
+/// Every non-blank line of the block prefixed with the indent of the begin marker.
+fn indented(block: &str, indent: &str) -> String {
+    block
+        .split_inclusive('\n')
+        .map(|line| {
+            if line.trim().is_empty() {
+                line.to_string()
+            } else {
+                format!("{indent}{line}")
+            }
+        })
+        .collect()
 }
 
 /// Indices of the begin and end marker lines.
@@ -396,6 +412,26 @@ forward! {
 // forward:end
 "
         );
+    }
+
+    #[test]
+    fn the_block_is_indented_to_the_begin_marker() {
+        let tree = moved_tree(|path, text| {
+            if path == SERVICE {
+                "impl Shim {\n    // forward:begin\n    // forward:end\n}\n".to_string()
+            } else {
+                text
+            }
+        });
+        let first = forwarded(&tree).unwrap();
+        assert!(
+            first.contains(
+                "    // forward:begin\n    forward! {\n        /// Is there a clash.\n        pub fn clash(&self, id: &str) -> bool\n            => crate::household::loyalty::clash @books;"
+            ),
+            "{first}"
+        );
+        assert!(first.contains("    }\n    // forward:end\n}\n"), "{first}");
+        assert_eq!(forwarded(&tree).unwrap(), first);
     }
 
     #[test]

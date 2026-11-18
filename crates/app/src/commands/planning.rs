@@ -6,6 +6,7 @@ use tauri::{AppHandle, State};
 
 use trade_core::Amount;
 use trade_core::calendar::now_secs;
+use trade_core::household::loyalty::cashback_report;
 use trade_core::ipc_contract::{
     AdjustPointsInput, AutomationInput, BudgetInput, ConfirmEstimatedInput,
     CreateLoyaltyProgramInput, GoalInput, MeterReadingInput, PriceAlertInput, ReminderInput,
@@ -13,10 +14,12 @@ use trade_core::ipc_contract::{
     UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput,
     UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
+use trade_core::model::ids::StoreId;
 use trade_core::model::planning::{
     Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, PriceAlert, Reminder,
     UtilityItem,
 };
+use trade_core::model::store::Store;
 use trade_core::model::transaction::Transaction;
 use trade_core::service::{
     AutomationSimulation, BudgetStatus, CashbackReport, DailyBudget, DepositReport,
@@ -24,12 +27,14 @@ use trade_core::service::{
     PayUtilityBillInput, PropertySummary, UnlockedVault, UpcomingItem, UtilityBill,
     UtilityPaymentDraft, UtilityTrend,
 };
+use trade_core::usecases::household::loyalty;
 use trade_core::workflow::Workflow;
 
 use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
+use crate::ipc::ipc;
 
 /// Run `read` against the open vault. `E` is `IpcError`, or `String` for a
 /// command not yet converted (the shim goes with T24).
@@ -547,59 +552,62 @@ pub async fn get_interest_tax(
 
 // -- bonuses and cashback -----------------------------------------------------------
 
-#[tauri::command]
-pub async fn set_loyalty_info(
+#[ipc(write)]
+pub fn set_loyalty_info(
+    vault: &mut UnlockedVault,
     input: SetLoyaltyInfoInput,
-    state: State<'_, AppState>,
-) -> Result<trade_core::model::store::Store, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.set_loyalty_info(&input.store_id, input.info)
-    })
+) -> trade_core::Result<Store> {
+    loyalty::set_loyalty_info(vault, &StoreId::from(input.store_id), input.info)
 }
 
-#[tauri::command]
-pub async fn create_loyalty_program(
+#[ipc(write)]
+pub fn create_loyalty_program(
+    vault: &mut UnlockedVault,
     input: CreateLoyaltyProgramInput,
-    state: State<'_, AppState>,
-) -> Result<trade_core::model::store::Store, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.create_loyalty_program(&input.name, &input.color, input.contact_id, input.info)
-    })
+) -> trade_core::Result<Store> {
+    loyalty::create_loyalty_program(
+        vault,
+        &input.name,
+        &input.color,
+        input.contact_id,
+        input.info,
+    )
 }
 
-#[tauri::command]
-pub async fn adjust_points(
+#[ipc(write)]
+pub fn adjust_points(
+    vault: &mut UnlockedVault,
     input: AdjustPointsInput,
-    state: State<'_, AppState>,
-) -> Result<Transaction, IpcError> {
-    with_vault_mut(&state, |vault| {
-        vault.adjust_points(
-            &input.store_id,
-            input.delta,
-            &input.comment,
-            input.source_store_id,
-            input.timestamp,
-        )
-    })
+) -> trade_core::Result<Transaction> {
+    loyalty::adjust_points(
+        vault,
+        &StoreId::from(input.store_id),
+        input.delta,
+        &input.comment,
+        input.source_store_id.map(StoreId::from),
+        input.timestamp,
+    )
 }
 
 /// Cashback and bonus points of this month (`period = "month"`) or this year.
-#[tauri::command]
-pub async fn get_cashback_report(
+#[ipc(read)]
+pub fn get_cashback_report(
+    vault: &UnlockedVault,
+    app: &AppHandle,
     period: Option<String>,
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<CashbackReport, IpcError> {
+) -> trade_core::Result<CashbackReport> {
     use chrono::Datelike;
-    let today = trade_core::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
+    let today = trade_core::calendar::Calendar::new(&current_zone(app)).date_of(now_secs());
     let from = if period.as_deref() == Some("year") {
         format!("{}-01-01T00:00:00Z", today.year())
     } else {
         format!("{}-01T00:00:00Z", today.format("%Y-%m"))
     };
-    with_vault(&state, |vault| {
-        Ok(vault.cashback_report(&from, "9999-12-31T23:59:59Z"))
-    })
+    Ok(cashback_report(
+        &vault.books(),
+        &from,
+        "9999-12-31T23:59:59Z",
+    ))
 }
 
 // -- utilities (plan §7.5) ---------------------------------------------------------

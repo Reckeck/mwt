@@ -10,6 +10,7 @@ use clap::Args;
 
 use super::Workspace;
 use super::baseline::Baseline;
+use super::home::allowed_files;
 
 /// The method whose calls are counted until `Books::vault()` is deleted.
 const BOOKS_VAULT: &str = "vault";
@@ -18,34 +19,63 @@ const BOOKS_VAULT: &str = "vault";
 pub struct CallersArgs {
     /// One area of `strangle.toml`; every area when absent.
     pub area: Option<String>,
+    /// List each macro body that is not scanned instead of only counting them.
+    #[arg(long)]
+    pub notes: bool,
 }
 
 pub fn run(root: &Path, args: &CallersArgs) -> Result<()> {
     let workspace = Workspace::load(root)?;
     let baseline = Baseline::load(root)?;
-    let (stdout, stderr) = report(&workspace, &baseline, args.area.as_deref())?;
+    let (stdout, stderr) = report(&workspace, &baseline, args.area.as_deref(), args.notes)?;
     for line in stdout {
         println!("{line}");
     }
-    if let Some(note) = stderr {
+    for note in stderr {
         eprintln!("{note}");
     }
     Ok(())
 }
 
-/// The two streams of the command: stdout is only `file:line:` callers; the macro notes are one
-/// count for stderr (the list is in `strangle stats`).
+/// The two streams of the command: stdout is only `file:line:` callers; the macro notes go to
+/// stderr, as one count or (`notes`) one line each. With an area only the notes of the area's own
+/// files count; without one, the whole tree.
 fn report(
     workspace: &Workspace,
     baseline: &Baseline,
     area: Option<&str>,
-) -> Result<(Vec<String>, Option<String>)> {
+    notes: bool,
+) -> Result<(Vec<String>, Vec<String>)> {
     let stdout = callers(workspace, baseline, area)?;
-    let unscanned = workspace.corpus.unscanned_notes().len();
-    let stderr = (unscanned > 0).then(|| {
-        format!("{unscanned} macro bodies not scanned (see `strangle stats` for the list)")
-    });
+    let unscanned = unscanned_in_scope(workspace, area)?;
+    let stderr = if notes {
+        unscanned
+    } else if unscanned.is_empty() {
+        Vec::new()
+    } else {
+        vec![format!(
+            "{} macro bodies not scanned (list them with `--notes`)",
+            unscanned.len()
+        )]
+    };
     Ok((stdout, stderr))
+}
+
+fn unscanned_in_scope(workspace: &Workspace, area: Option<&str>) -> Result<Vec<String>> {
+    let notes = workspace.corpus.unscanned_notes();
+    let Some(name) = area else {
+        return Ok(notes);
+    };
+    let index = workspace.map.area_index(name)?;
+    let files = allowed_files(workspace, &workspace.map.areas[index]);
+    Ok(notes
+        .into_iter()
+        .filter(|note| {
+            note.split(':')
+                .next()
+                .is_some_and(|path| files.contains(path))
+        })
+        .collect())
 }
 
 /// One `path:line: name()` entry per call, sorted.
@@ -86,7 +116,7 @@ fn delegate_names<'baseline>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strangle::area_fixture::original_tree;
+    use crate::strangle::area_fixture::{SERVICE, original_tree};
 
     #[test]
     fn calls_of_delegates_and_of_books_vault_are_listed_with_their_line() {
@@ -117,11 +147,16 @@ mod tests {
         let baseline = crate::strangle::baseline::capture(tree.root(), &workspace).unwrap();
         std::fs::write(
             tree.root().join("crates/core/src/user.rs"),
-            "fn user(vault: &mut UnlockedVault) {\n    odd!(=> vault.hidden());\n    vault.set_info(\"a\", info);\n}\n",
+            "fn user(vault: &mut UnlockedVault) {\n    vault.set_info(\"a\", info);\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tree.root().join(SERVICE),
+            "fn inside(vault: &mut UnlockedVault) {\n    odd!(=> vault.hidden());\n}\n",
         )
         .unwrap();
         let workspace = Workspace::load(tree.root()).unwrap();
-        let (stdout, stderr) = report(&workspace, &baseline, Some("loyalty")).unwrap();
+        let (stdout, stderr) = report(&workspace, &baseline, Some("loyalty"), false).unwrap();
         assert!(!stdout.is_empty());
         for line in &stdout {
             let (location, _) = line.split_once(": ").unwrap();
@@ -132,6 +167,31 @@ mod tests {
             );
             assert!(!line.contains("macro"), "{line}");
         }
-        assert!(stderr.unwrap().contains("macro bodies not scanned"));
+        assert!(stderr[0].contains("macro bodies not scanned"));
+    }
+
+    #[test]
+    fn unscanned_notes_of_an_area_cover_only_its_files_and_notes_lists_them() {
+        let tree = original_tree();
+        let workspace = Workspace::load(tree.root()).unwrap();
+        let baseline = crate::strangle::baseline::capture(tree.root(), &workspace).unwrap();
+        std::fs::write(
+            tree.root().join("crates/core/src/user.rs"),
+            "fn user(vault: &mut UnlockedVault) {\n    odd!(=> vault.hidden());\n}\n",
+        )
+        .unwrap();
+        let workspace = Workspace::load(tree.root()).unwrap();
+        let (_, scoped) = report(&workspace, &baseline, Some("loyalty"), false).unwrap();
+        assert!(scoped.is_empty(), "{scoped:?}");
+        let (_, whole) = report(&workspace, &baseline, None, false).unwrap();
+        assert!(
+            whole[0].starts_with("1 macro bodies not scanned"),
+            "{whole:?}"
+        );
+        let (_, listed) = report(&workspace, &baseline, None, true).unwrap();
+        assert_eq!(
+            listed,
+            ["crates/core/src/user.rs:2: macro body not scanned"]
+        );
     }
 }

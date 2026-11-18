@@ -207,7 +207,8 @@ fn lines_of(text: &str) -> String {
 fn result_line(end: &TaskEnd) -> String {
     let took = fmt_secs(end.took);
     match end.status {
-        Status::Ok => format!("OK     {} {took}", end.name),
+        Status::Ok if end.reason.is_empty() => format!("OK     {} {took}", end.name),
+        Status::Ok => format!("OK     {} {took}: {}", end.name, end.reason),
         Status::Skip => format!("SKIP   {}: {}", end.name, end.reason),
         Status::Fail => format!("FAIL   {} {took}: {}", end.log_hint, end.reason),
         Status::Cancelled => format!("CANCELLED {} {took}", end.name),
@@ -244,7 +245,8 @@ fn github_text(end: &TaskEnd, verbosity: Verbosity) -> String {
     }
     let took = fmt_secs(end.took);
     let header = match end.status {
-        Status::Ok => format!("OK {} {took}", end.name),
+        Status::Ok if end.reason.is_empty() => format!("OK {} {took}", end.name),
+        Status::Ok => format!("OK {} {took}: {}", end.name, end.reason),
         Status::Skip => format!("SKIP {}: {}", end.name, end.reason),
         Status::Fail => format!("FAIL {} {took}: {}", end.name, end.reason),
         Status::Cancelled => format!("CANCELLED {} {took}", end.name),
@@ -280,7 +282,11 @@ mod tests {
             name: "biome",
             status,
             took: Duration::from_millis(2500),
-            reason: "exited with 1",
+            reason: if status == Status::Fail {
+                "exited with 1"
+            } else {
+                ""
+            },
             root,
             log,
             log_hint: "biome (.cache/xtask/biome.log)",
@@ -292,7 +298,13 @@ mod tests {
         let log = Path::new("/nonexistent.log");
         let root = Path::new("/");
         assert_eq!(
-            plain_text(&end(Status::Ok, log, root), "[ 1.0s] "),
+            plain_text(
+                &TaskEnd {
+                    reason: "",
+                    ..end(Status::Ok, log, root)
+                },
+                "[ 1.0s] "
+            ),
             "[ 1.0s] OK     biome 2.5s\n"
         );
         let fail = plain_text(&end(Status::Fail, log, root), "[ 1.0s] ");
@@ -300,6 +312,24 @@ mod tests {
             fail.starts_with("[ 1.0s] FAIL   biome (.cache/xtask/biome.log) 2.5s: exited with 1\n")
         );
         assert!(fail.contains("---- tail of the log ----"));
+    }
+
+    #[test]
+    fn ok_note_is_shown_in_plain_and_github_output() {
+        let log = Path::new("/nonexistent.log");
+        let root = Path::new("/");
+        let noted = TaskEnd {
+            reason: "base ref missing",
+            ..end(Status::Ok, log, root)
+        };
+        assert_eq!(
+            plain_text(&noted, "[ 1.0s] "),
+            "[ 1.0s] OK     biome 2.5s: base ref missing\n"
+        );
+        assert!(
+            github_text(&noted, Verbosity::Normal)
+                .starts_with("::group::OK biome 2.5s: base ref missing\n")
+        );
     }
 
     #[test]

@@ -202,3 +202,20 @@ fn macros_that_cannot_hold_a_vault_call_are_not_unscanned() {
         "macro_rules! m {\n    () => {};\n}\nfn f() {\n    let v = json!({ \"a\": 1 });\n}\n";
     assert!(scan_source(source).unwrap().unscanned.is_empty());
 }
+
+#[test]
+fn json_bodies_are_parsed_as_expressions_and_their_vault_calls_found() {
+    let source =
+        "fn f(vault: V) {\n    let v = json!({\"k\": vault.foo(), \"l\": [vault.bar(), 1]});\n}\n";
+    let facts = scan_source(source).unwrap();
+    for name in ["foo", "bar"] {
+        assert!(
+            facts
+                .calls
+                .iter()
+                .any(|call| call.name == name && call.on_vault),
+            "{name}"
+        );
+    }
+    assert!(facts.unscanned.is_empty());
+}

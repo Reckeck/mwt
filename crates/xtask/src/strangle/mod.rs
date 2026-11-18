@@ -16,6 +16,7 @@ mod baseline;
 mod callers;
 mod carve;
 mod check;
+mod fields;
 mod fileset;
 mod forward;
 mod home;

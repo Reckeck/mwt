@@ -241,14 +241,10 @@ fn strangle() -> Task {
             .capture("git", &["rev-parse", "--verify", "--quiet", &base])
             .await
             .is_some();
-        if !known {
-            let notice = missing_base_notice(&base);
-            ctx.note(&notice);
-            eprintln!("strangle: {notice}");
-        }
+        let notice = (!known).then(|| missing_base_notice(&base));
         let cmd = Cmd::new(&program).args(strangle_args(known.then_some(base.as_str())));
         match ctx.exec(&cmd).await {
-            Ok(ExecEnd::Done(0)) => Outcome::Ok,
+            Ok(ExecEnd::Done(0)) => notice.map_or(Outcome::Ok, Outcome::OkNote),
             Ok(ExecEnd::Done(code)) => Outcome::Fail(format!("strangle check exited with {code}")),
             Ok(ExecEnd::Cancelled) => Outcome::Cancelled,
             Err(error) => Outcome::Fail(format!("{error:#}")),

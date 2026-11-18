@@ -51,7 +51,7 @@ impl Home {
     /// `usecases/<context>/<stem>.rs`: the scenarios.
     pub fn scenario_file(&self) -> String {
         format!(
-            "{}/usecases/{}/{}.rs",
+            "{}/{USECASES}/{}/{}.rs",
             self.core_dir, self.context, self.stem
         )
     }
@@ -97,7 +97,10 @@ impl Home {
         [
             format!("{}/{}/", self.service_dir, self.source),
             format!("{}/{}/{}/", self.core_dir, self.group, self.stem),
-            format!("{}/usecases/{}/{}/", self.core_dir, self.context, self.stem),
+            format!(
+                "{}/{USECASES}/{}/{}/",
+                self.core_dir, self.context, self.stem
+            ),
         ]
     }
 
@@ -113,7 +116,7 @@ impl Home {
 
     /// `crate::usecases::<context>::<stem>`.
     pub fn scenario_path(&self) -> String {
-        format!("crate::usecases::{}::{}", self.context, self.stem)
+        format!("crate::{USECASES}::{}::{}", self.context, self.stem)
     }
 }
 
