@@ -69,12 +69,13 @@
 
 use proc_macro::TokenStream as CompilerTokens;
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
+use quote::{ToTokens, format_ident, quote};
+use std::iter::Peekable;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::{
-    Error, Expr, FnArg, GenericArgument, ItemFn, Meta, Pat, PathArguments, ReturnType, Token, Type,
-    TypeReference, parse2,
+    Attribute, Error, Expr, FnArg, GenericArgument, ItemFn, Meta, Pat, PathArguments, ReturnType,
+    Token, Type, TypeReference, parse2,
 };
 
 /// How many flags `#[ipc(..)]` takes at most.
@@ -118,12 +119,71 @@ impl Mode {
             Self::LockedOk => format_ident!("locked_ok"),
         }
     }
+
+    /// The name the gate's closure gives the first body parameter.
+    fn body_param(self) -> Ident {
+        match self {
+            Self::LockedOk => format_ident!("state"),
+            Self::Read | Self::Write => format_ident!("vault"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 struct Flags {
     mode: Mode,
     sandbox_deny: bool,
+}
+
+/// Which flags `#[ipc(..)]` has named so far.
+#[derive(Default)]
+struct Seen {
+    read: bool,
+    write: bool,
+    locked_ok: bool,
+    sandbox_deny: bool,
+}
+
+impl Seen {
+    /// Marks `meta` as seen; unknown and repeated flags are errors.
+    fn record(&mut self, meta: &Meta) -> Result<(), Error> {
+        let seen = match meta {
+            Meta::Path(path) if path.is_ident("read") => &mut self.read,
+            Meta::Path(path) if path.is_ident("write") => &mut self.write,
+            Meta::Path(path) if path.is_ident("locked_ok") => &mut self.locked_ok,
+            Meta::NameValue(pair) if pair.path.is_ident("sandbox") && is_deny(&pair.value) => {
+                &mut self.sandbox_deny
+            }
+            _ => {
+                return Err(Error::new_spanned(
+                    meta,
+                    "unknown #[ipc] flag; expected read, write, sandbox = deny or locked_ok",
+                ));
+            }
+        };
+        if *seen {
+            return Err(Error::new_spanned(meta, "duplicate #[ipc] flag"));
+        }
+        *seen = true;
+        Ok(())
+    }
+
+    /// The one mode the flags name.
+    fn mode(&self, metas: &Punctuated<Meta, Token![,]>) -> Result<Mode, Error> {
+        match (self.read, self.write, self.locked_ok) {
+            (true, false, false) => Ok(Mode::Read),
+            (false, true, false) => Ok(Mode::Write),
+            (false, false, true) => Ok(Mode::LockedOk),
+            (false, false, false) => Err(Error::new(
+                proc_macro2::Span::call_site(),
+                "#[ipc] needs read, write or locked_ok",
+            )),
+            _ => Err(Error::new_spanned(
+                metas,
+                "#[ipc] takes exactly one of read, write; locked_ok replaces both",
+            )),
+        }
+    }
 }
 
 /// Reads the mode and the sandbox gate from the attribute arguments.
@@ -138,48 +198,14 @@ fn parse_flags(args: TokenStream) -> Result<Flags, Error> {
             "#[ipc] takes at most four flags: read | write, sandbox = deny, locked_ok",
         ));
     }
-    let mut read = false;
-    let mut write = false;
-    let mut locked_ok = false;
-    let mut sandbox_deny = false;
+    let mut seen = Seen::default();
     for meta in &metas {
-        let seen = match meta {
-            Meta::Path(path) if path.is_ident("read") => &mut read,
-            Meta::Path(path) if path.is_ident("write") => &mut write,
-            Meta::Path(path) if path.is_ident("locked_ok") => &mut locked_ok,
-            Meta::NameValue(pair) if pair.path.is_ident("sandbox") && is_deny(&pair.value) => {
-                &mut sandbox_deny
-            }
-            _ => {
-                return Err(Error::new_spanned(
-                    meta,
-                    "unknown #[ipc] flag; expected read, write, sandbox = deny or locked_ok",
-                ));
-            }
-        };
-        if *seen {
-            return Err(Error::new_spanned(meta, "duplicate #[ipc] flag"));
-        }
-        *seen = true;
+        seen.record(meta)?;
     }
-    let mode = match (read, write, locked_ok) {
-        (true, false, false) => Mode::Read,
-        (false, true, false) => Mode::Write,
-        (false, false, true) => Mode::LockedOk,
-        (false, false, false) => {
-            return Err(Error::new(
-                proc_macro2::Span::call_site(),
-                "#[ipc] needs read, write or locked_ok",
-            ));
-        }
-        _ => {
-            return Err(Error::new_spanned(
-                metas,
-                "#[ipc] takes exactly one of read, write; locked_ok replaces both",
-            ));
-        }
-    };
-    Ok(Flags { mode, sandbox_deny })
+    Ok(Flags {
+        mode: seen.mode(&metas)?,
+        sandbox_deny: seen.sandbox_deny,
+    })
 }
 
 fn is_deny(value: &Expr) -> bool {
@@ -214,75 +240,85 @@ struct Signature {
     arguments: Vec<Argument>,
 }
 
-fn parse_signature(function: &ItemFn, mode: Mode) -> Result<Signature, Error> {
-    let mut params = function.sig.inputs.iter().peekable();
-    let mut first = None;
-    if let Some(FnArg::Typed(param)) = params.peek() {
-        let ty = &*param.ty;
-        let wanted = match mode {
-            Mode::Read => Some(is_reference_to(ty, "UnlockedVault", false)),
-            Mode::Write => Some(is_reference_to(ty, "UnlockedVault", true)),
-            Mode::LockedOk => is_reference_to(ty, "AppState", false).then_some(true),
-        };
-        match wanted {
-            Some(true) => {
-                first = Some(ty.clone());
-                params.next();
-            }
-            Some(false) => {
-                let expected = if mode == Mode::Write {
-                    "&mut UnlockedVault"
-                } else {
-                    "&UnlockedVault"
-                };
-                return Err(Error::new_spanned(
-                    ty,
-                    format!("the first parameter of this #[ipc] command must be `{expected}`"),
-                ));
-            }
-            None => {}
-        }
-    }
-    if first.is_none() && mode != Mode::LockedOk {
+/// Takes the leading vault/state parameter off `params` when `mode` wants one.
+fn take_first<'a>(
+    params: &mut Peekable<impl Iterator<Item = &'a FnArg>>,
+    function: &ItemFn,
+    mode: Mode,
+) -> Result<Option<Type>, Error> {
+    let first = match params.peek() {
+        Some(FnArg::Typed(param)) => first_matches(&param.ty, mode)?.then(|| (*param.ty).clone()),
+        _ => None,
+    };
+    if first.is_some() {
+        params.next();
+    } else if mode != Mode::LockedOk {
         return Err(Error::new_spanned(
             &function.sig,
             "the first parameter of a read or write #[ipc] command must be the vault",
         ));
     }
+    Ok(first)
+}
+
+/// Whether `ty` is the first parameter `mode` wants; a wrong vault kind is an error.
+fn first_matches(ty: &Type, mode: Mode) -> Result<bool, Error> {
+    let (expected, mutable) = match mode {
+        Mode::Read => ("&UnlockedVault", false),
+        Mode::Write => ("&mut UnlockedVault", true),
+        Mode::LockedOk => return Ok(is_reference_to(ty, "AppState", false)),
+    };
+    if is_reference_to(ty, "UnlockedVault", mutable) {
+        return Ok(true);
+    }
+    Err(Error::new_spanned(
+        ty,
+        format!("the first parameter of this #[ipc] command must be `{expected}`"),
+    ))
+}
+
+/// The plain name of a command parameter, checked against the reserved ones.
+fn param_ident(param: &FnArg) -> Result<(&Ident, &Type), Error> {
+    let FnArg::Typed(typed) = param else {
+        return Err(Error::new_spanned(param, "#[ipc] commands take no `self`"));
+    };
+    let Pat::Ident(pattern) = &*typed.pat else {
+        return Err(Error::new_spanned(
+            &typed.pat,
+            "#[ipc] arguments must be plain names: Tauri names the JS keys from them",
+        ));
+    };
+    if RESERVED.iter().any(|reserved| pattern.ident == reserved) {
+        return Err(Error::new_spanned(
+            &pattern.ident,
+            format!(
+                "`{}` is reserved by #[ipc]; rename this argument",
+                pattern.ident
+            ),
+        ));
+    }
+    Ok((&pattern.ident, &typed.ty))
+}
+
+fn parse_signature(function: &ItemFn, mode: Mode) -> Result<Signature, Error> {
+    let mut params = function.sig.inputs.iter().peekable();
+    let first = take_first(&mut params, function, mode)?;
     let mut handle = false;
     let mut arguments = Vec::new();
     for param in params {
-        let FnArg::Typed(typed) = param else {
-            return Err(Error::new_spanned(param, "#[ipc] commands take no `self`"));
-        };
-        let Pat::Ident(pattern) = &*typed.pat else {
-            return Err(Error::new_spanned(
-                &typed.pat,
-                "#[ipc] arguments must be plain names: Tauri names the JS keys from them",
-            ));
-        };
-        if RESERVED.iter().any(|reserved| pattern.ident == reserved) {
-            return Err(Error::new_spanned(
-                &pattern.ident,
-                format!(
-                    "`{}` is reserved by #[ipc]; rename this argument",
-                    pattern.ident
-                ),
-            ));
-        }
-        if is_reference_to(&typed.ty, "AppHandle", false) {
-            if pattern.ident != "app" {
-                return Err(Error::new_spanned(
-                    &pattern.ident,
-                    "a `&AppHandle` parameter of an #[ipc] command must be named `app`",
-                ));
-            }
+        let (name, ty) = param_ident(param)?;
+        if !is_reference_to(ty, "AppHandle", false) {
+            arguments.push(Argument {
+                name: name.clone(),
+                ty: ty.clone(),
+            });
+        } else if name == "app" {
             handle = true;
         } else {
-            arguments.push(Argument {
-                name: pattern.ident.clone(),
-                ty: (*typed.ty).clone(),
-            });
+            return Err(Error::new_spanned(
+                name,
+                "a `&AppHandle` parameter of an #[ipc] command must be named `app`",
+            ));
         }
     }
     Ok(Signature {
@@ -319,52 +355,84 @@ fn ts_printer(ty: &Type) -> TokenStream {
     quote! { || <#ty as ts_rs::TS>::name(&ts_rs::Config::new()) }
 }
 
-/// Builds the command from the attribute arguments and the body `fn`.
-fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
-    let flags = parse_flags(args)?;
-    let function: ItemFn = parse2(item)?;
-    if let Some(token) = function.sig.asyncness {
-        return Err(Error::new(
-            token.span(),
-            "an #[ipc] body is a plain sync fn; a command with `.await` stays a plain #[tauri::command]",
-        ));
+/// What the three generated items share.
+struct Command<'a> {
+    name: &'a Ident,
+    ok: Type,
+    signature: Signature,
+}
+
+impl Command<'_> {
+    fn names(&self) -> Vec<&Ident> {
+        self.signature
+            .arguments
+            .iter()
+            .map(|arg| &arg.name)
+            .collect()
     }
-    let signature = parse_signature(&function, flags.mode)?;
-    let ok = ok_type(&function)?;
 
-    let name = &function.sig.ident;
-    let meta_name = format_ident!("__IPC_META_{}", name);
-    let attrs = &function.attrs;
-    let runner = flags.mode.runner();
-    let sandbox_deny = flags.sandbox_deny;
+    fn types(&self) -> Vec<&Type> {
+        self.signature.arguments.iter().map(|arg| &arg.ty).collect()
+    }
+}
 
-    let names: Vec<&Ident> = signature.arguments.iter().map(|arg| &arg.name).collect();
-    let types: Vec<&Type> = signature.arguments.iter().map(|arg| &arg.ty).collect();
-    let printers: Vec<TokenStream> = types.iter().map(|ty| ts_printer(ty)).collect();
-    let ret_printer = ts_printer(&ok);
+/// The `#[tauri::command]` entry: forwards to the runner with the app handle.
+fn command_item(command: &Command, attrs: &[Attribute]) -> TokenStream {
+    let (name, ok) = (command.name, &command.ok);
+    let (names, types) = (command.names(), command.types());
+    let runner_name = format_ident!("__ipc_run_{}", name);
+    quote! {
+        #(#attrs)*
+        #[tauri::command]
+        pub async fn #name(
+            app: tauri::AppHandle,
+            #( #names: #types ),*
+        ) -> Result<#ok, crate::ipc::IpcError> {
+            #runner_name(app, #( #names ),*).await
+        }
+    }
+}
 
+/// The body `fn` renamed to `__ipc_body`, private and without attributes.
+fn body_fn(function: &ItemFn) -> ItemFn {
     let mut body = function.clone();
     body.attrs.clear();
     body.vis = syn::Visibility::Inherited;
     body.sig.ident = format_ident!("{}", BODY);
+    body
+}
 
-    let state = format_ident!(
-        "{}",
-        if flags.mode == Mode::LockedOk {
-            "state"
-        } else {
-            "vault"
-        }
-    );
+/// The arguments the gate's closure passes to the body.
+fn call_args(command: &Command, mode: Mode) -> Vec<TokenStream> {
+    let signature = &command.signature;
+    let state = mode.body_param();
     let mut call_args = Vec::new();
     if signature.first.is_some() {
         call_args.push(quote! { #state });
     }
+    if signature.handle {
+        let handle_name = format_ident!("{}", HANDLE);
+        call_args.push(quote! { &#handle_name });
+    }
+    call_args.extend(command.names().into_iter().map(|arg| quote! { #arg }));
+    call_args
+}
+
+/// The runner: the body behind its gate, generic over the host so tests run
+/// it without a Tauri runtime.
+fn runner_item(command: &Command, function: &ItemFn, flags: Flags) -> TokenStream {
+    let (name, ok) = (command.name, &command.ok);
+    let (names, types) = (command.names(), command.types());
     let runner_name = format_ident!("__ipc_run_{}", name);
+    let meta_name = format_ident!("__IPC_META_{}", name);
     let host_name = format_ident!("{}", HOST);
     let handle_name = format_ident!("{}", HANDLE);
+    let body = body_fn(function);
     let body_name = &body.sig.ident;
-    let (host_generics, host_type, handle_clone) = if signature.handle {
+    let runner = flags.mode.runner();
+    let sandbox_deny = flags.sandbox_deny;
+    let call_args = call_args(command, flags.mode);
+    let (host_generics, host_type, handle_clone) = if command.signature.handle {
         (
             quote! {},
             quote! { tauri::AppHandle },
@@ -377,26 +445,12 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
             quote! {},
         )
     };
-    if signature.handle {
-        call_args.push(quote! { &#handle_name });
-    }
-    call_args.extend(names.iter().map(|arg| quote! { #arg }));
-    let closure_param = if signature.first.is_some() {
-        quote! { #state }
+    let closure_param = if command.signature.first.is_some() {
+        flags.mode.body_param().into_token_stream()
     } else {
         quote! { _ }
     };
-
-    Ok(quote! {
-        #(#attrs)*
-        #[tauri::command]
-        pub async fn #name(
-            app: tauri::AppHandle,
-            #( #names: #types ),*
-        ) -> Result<#ok, crate::ipc::IpcError> {
-            #runner_name(app, #( #names ),*).await
-        }
-
+    quote! {
         /// The command body behind its gate, generic over the host so tests
         /// run it without a Tauri runtime.
         pub(crate) async fn #runner_name #host_generics(
@@ -413,7 +467,17 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
             )
             .await
         }
+    }
+}
 
+/// The `CommandMeta` constant the TS generator reads.
+fn meta_item(command: &Command) -> TokenStream {
+    let name = command.name;
+    let meta_name = format_ident!("__IPC_META_{}", name);
+    let names = command.names();
+    let printers: Vec<TokenStream> = command.types().into_iter().map(ts_printer).collect();
+    let ret_printer = ts_printer(&command.ok);
+    quote! {
         #[allow(non_upper_case_globals)]
         pub const #meta_name: crate::ipc::run::CommandMeta = crate::ipc::run::CommandMeta {
             name: stringify!(#name),
@@ -422,7 +486,28 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
             ],
             ret: #ret_printer,
         };
-    })
+    }
+}
+
+/// Builds the command from the attribute arguments and the body `fn`.
+fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
+    let flags = parse_flags(args)?;
+    let function: ItemFn = parse2(item)?;
+    if let Some(token) = function.sig.asyncness {
+        return Err(Error::new(
+            token.span(),
+            "an #[ipc] body is a plain sync fn; a command with `.await` stays a plain #[tauri::command]",
+        ));
+    }
+    let command = Command {
+        name: &function.sig.ident,
+        ok: ok_type(&function)?,
+        signature: parse_signature(&function, flags.mode)?,
+    };
+    let command_tokens = command_item(&command, &function.attrs);
+    let runner_tokens = runner_item(&command, &function, flags);
+    let meta_tokens = meta_item(&command);
+    Ok(quote! { #command_tokens #runner_tokens #meta_tokens })
 }
 
 #[cfg(test)]
