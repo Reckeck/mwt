@@ -66,7 +66,7 @@ mod goals;
 mod health;
 mod inflation;
 mod insights;
-mod interest;
+pub(crate) mod interest;
 mod ledger;
 mod losses;
 mod loyalty;
