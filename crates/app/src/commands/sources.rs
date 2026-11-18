@@ -14,17 +14,18 @@ use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// Fetch a source's page and take its value out; the error text is what the
-/// source's status shows.
-async fn fetch_value(app: &AppHandle, source: &DataSource) -> Result<Extracted, IpcError> {
+/// source's status shows. The core's `apply_source_fetch` takes that text as a
+/// `String`, so the sandbox refusal is the only error stringified here.
+async fn fetch_value(app: &AppHandle, source: &DataSource) -> Result<Extracted, String> {
     let state = app.state::<AppState>();
-    crate::commands::sandbox::refuse(&state, "fetching a data source")?;
+    crate::commands::sandbox::refuse(&state, "fetching a data source")
+        .map_err(|error| error.to_string())?;
     let body = state
         .pricing
         .fetch_page(&source.url)
         .await
-        .map_err(|err| IpcError::Message(err.to_string()))?;
+        .map_err(|err| err.to_string())?;
     datasource::extract(&source.method, source.output, &source.number, &body)
-        .map_err(IpcError::Message)
 }
 
 /// Tell the window that values changed: sources, prices and inflation may
@@ -39,9 +40,7 @@ fn announce(app: &AppHandle, notices: Vec<NoticeRecord>) {
 /// Fetch one source and record the result (value, failure or jump).
 async fn refresh_one(app: &AppHandle, source: &DataSource) -> Result<Vec<NoticeRecord>, IpcError> {
     // The core records a failed fetch as the text the status shows.
-    let fetched = fetch_value(app, source)
-        .await
-        .map_err(|error| error.to_string());
+    let fetched = fetch_value(app, source).await;
     let russian = crate::scheduler::russian(app);
     let state = app.state::<AppState>();
     let mut guard = require_vault(&state)?;
