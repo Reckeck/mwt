@@ -16,6 +16,7 @@ use crate::model::vault::Valuation;
 
 use super::UnlockedVault;
 use super::forward::forward;
+use super::sync_ids::valuation_id;
 
 impl UnlockedVault {
     // forward:begin
@@ -42,4 +43,19 @@ impl UnlockedVault {
             => crate::usecases::money::valuation::set_revalue_rule with (store_id => &StoreId::from(store_id));
     }
     // forward:end
+}
+
+impl UnlockedVault {
+    /// The record of a planned valuation, under its deterministic sync id
+    /// (the id rule lives with the sync ids, which this shim may reach).
+    pub(crate) fn valuation_record(input: ValuationInput) -> Valuation {
+        Valuation {
+            id: valuation_id(&input.asset_key, &input.date),
+            store_id: input.store_id,
+            asset_key: input.asset_key,
+            date: input.date,
+            unit_price: input.unit_price,
+            currency: input.currency,
+        }
+    }
 }

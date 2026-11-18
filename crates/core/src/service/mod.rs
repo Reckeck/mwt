@@ -80,7 +80,7 @@ mod scenarios;
 mod search;
 mod shared_events;
 pub(crate) use shared_events::SharedExtra;
-pub(crate) mod sync_ids;
+mod sync_ids;
 mod sync_journal;
 mod vehicle;
 mod where_went;
