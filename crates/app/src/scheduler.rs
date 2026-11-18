@@ -597,6 +597,17 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
     );
 }
 
+/// A key the exchange refused (not read-only, or rejected) skips the pass;
+/// every other failure aborts it.
+fn key_refused(err: &IpcError) -> bool {
+    matches!(
+        err,
+        IpcError::Core(
+            trade_core::Error::ExchangeKeyNotReadOnly | trade_core::Error::ExchangeKeyRejected(_)
+        )
+    )
+}
+
 /// One polling pass over the given keys (decrypted for this pass only).
 /// Returns how many operations the pass recorded, the queue of an older build
 /// included. Each sync, failed ones included, lands in the wallet's history.
@@ -619,14 +630,7 @@ async fn poll_bybit_once(
         .await
         {
             Ok(run) => run,
-            Err(err)
-                if matches!(
-                    err.code(),
-                    "EXCHANGE_KEY_NOT_READ_ONLY" | "EXCHANGE_KEY_REJECTED"
-                ) =>
-            {
-                continue;
-            }
+            Err(err) if key_refused(&err) => continue,
             Err(err) => return Err(err),
         };
         recorded_total += run.confirmed;
@@ -965,6 +969,21 @@ fn reminders_tick(app: &AppHandle, _memory: &mut Memory) {
 #[cfg(test)]
 mod tests {
     use super::pick;
+
+    #[test]
+    fn refused_keys_skip_the_pass_and_other_errors_abort_it() {
+        use super::key_refused;
+        use crate::ipc::IpcError;
+        use trade_core::Error;
+        assert!(key_refused(&IpcError::Core(Error::ExchangeKeyNotReadOnly)));
+        assert!(key_refused(&IpcError::Core(Error::ExchangeKeyRejected(
+            "10003".into()
+        ))));
+        assert!(!key_refused(&IpcError::Message(
+            "EXCHANGE_KEY_REJECTED".into()
+        )));
+        assert!(!key_refused(&IpcError::Core(Error::VaultBusy("x".into()))));
+    }
 
     #[test]
     fn prices_refresh_when_visible_or_a_main_serves_a_focused_device() {
