@@ -1,376 +1,44 @@
-//! Categories (with their budget groups) and the rules that pick one
-//! automatically (plan D14, §7.1, §8.1).
+//! Shim of the `categories` area: moved to `crate::money::categories` (spec core-strangler, D1).
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::model::category::{Category, CategoryGroup};
-use crate::model::planning::{BudgetTarget, CategorizationRule, TransactionDraft};
+use crate::model::planning::CategorizationRule;
 
 use super::UnlockedVault;
-
-/// A key derived from a label: lowercase ASCII letters, digits and `_`.
-/// Cyrillic and other scripts have no ASCII form, so they fall back to a
-/// random suffix rather than an empty key.
-fn slug(label: &str) -> String {
-    let mut out = String::new();
-    for character in label.trim().to_lowercase().chars() {
-        if character.is_ascii_alphanumeric() {
-            out.push(character);
-        } else if !out.ends_with('_') && !out.is_empty() {
-            out.push('_');
-        }
-    }
-    let out = out.trim_end_matches('_').to_string();
-    if out.is_empty() {
-        format!("cat_{}", &uuid::Uuid::new_v4().simple().to_string()[..8])
-    } else {
-        out
-    }
-}
-
-const SYSTEM_CATEGORY: &str = "system categories are set by the app and cannot be changed";
+use super::forward::forward;
 
 impl UnlockedVault {
-    /// The app's own categories (group `Service`) back reports, exchanges and
-    /// imports: they are never renamed, regrouped, archived or deleted.
-    pub(crate) fn ensure_editable(&self, key: &str) -> Result<()> {
-        let system = self
-            .doc
-            .categories
-            .iter()
-            .any(|category| category.key == key && category.group == CategoryGroup::Service);
-        if system {
-            return Err(Error::InvalidInput(SYSTEM_CATEGORY.into()));
-        }
-        Ok(())
+    // forward:begin
+    forward! {
+        /// Rules in the order they are tried.
+        pub fn categorization_rules(&self) -> Vec<CategorizationRule>
+            => crate::money::categories::categorization_rules @doc;
+        /// Add a category. The key is taken from `key` or derived from the name,
+        /// made unique, and never changes afterwards.
+        pub fn create_category(&mut self, key: Option<&str>, name: &str, group: CategoryGroup) -> Result<Category>
+            => crate::usecases::household::categories::create_category;
+        /// Rename or regroup. Transactions store the key, so they follow along.
+        /// An empty name restores the built-in label; `essential: None` and
+        /// `passive: None` keep the flags as they are.
+        pub fn update_category(&mut self, key: &str, name: Option<&str>, group: CategoryGroup, essential: Option<bool>, passive: Option<bool>) -> Result<Category>
+            => crate::usecases::household::categories::update_category;
+        pub fn archive_category(&mut self, key: &str, archived: bool) -> Result<()>
+            => crate::usecases::household::categories::archive_category;
+        /// Only an unused category can be deleted; otherwise archive it. The
+        /// automations are the planning area's: read through the vault (OD6).
+        pub fn delete_category(&mut self, key: &str) -> Result<()>
+            => crate::usecases::household::categories::delete_category;
+        /// Add a rule at the end of the list.
+        pub fn create_categorization_rule(&mut self, pattern: &str, category: &str) -> Result<CategorizationRule>
+            => crate::usecases::household::categories::create_categorization_rule;
+        pub fn update_categorization_rule(&mut self, id: &str, pattern: &str, category: &str, active: bool) -> Result<CategorizationRule>
+            => crate::usecases::household::categories::update_categorization_rule;
+        pub fn delete_categorization_rule(&mut self, id: &str) -> Result<()>
+            => crate::usecases::household::categories::delete_categorization_rule;
+        /// Put the rules in the given order; ids not listed keep their relative
+        /// order after the listed ones.
+        pub fn reorder_categorization_rules(&mut self, ids: &[String]) -> Result<()>
+            => crate::usecases::household::categories::reorder_categorization_rules;
     }
-
-    pub(crate) fn find_category_mut(&mut self, key: &str) -> Result<&mut Category> {
-        self.doc
-            .categories
-            .iter_mut()
-            .find(|category| category.key == key)
-            .ok_or_else(|| Error::Missing(format!("category {key}")))
-    }
-
-    /// Add a category. The key is taken from `key` or derived from the name,
-    /// made unique, and never changes afterwards.
-    pub fn create_category(
-        &mut self,
-        key: Option<&str>,
-        name: &str,
-        group: CategoryGroup,
-    ) -> Result<Category> {
-        let name = name.trim();
-        if name.is_empty() {
-            return Err(Error::InvalidInput("a category needs a name".into()));
-        }
-        if group == CategoryGroup::Service {
-            return Err(Error::InvalidInput(SYSTEM_CATEGORY.into()));
-        }
-        let wanted = key.map(slug).unwrap_or_else(|| slug(name));
-        let mut candidate = wanted.clone();
-        let mut counter = 2;
-        while self
-            .doc
-            .categories
-            .iter()
-            .any(|category| category.key == candidate)
-        {
-            candidate = format!("{wanted}_{counter}");
-            counter += 1;
-        }
-        let category = Category {
-            key: candidate,
-            name: Some(name.to_string()),
-            group,
-            archived: false,
-            essential: None,
-            passive: None,
-        };
-        self.doc.categories.push(category.clone());
-        self.persist()?;
-        Ok(category)
-    }
-
-    /// Rename or regroup. Transactions store the key, so they follow along.
-    /// An empty name restores the built-in label; `essential: None` and
-    /// `passive: None` keep the flags as they are.
-    pub fn update_category(
-        &mut self,
-        key: &str,
-        name: Option<&str>,
-        group: CategoryGroup,
-        essential: Option<bool>,
-        passive: Option<bool>,
-    ) -> Result<Category> {
-        self.find_category_mut(key)?;
-        self.ensure_editable(key)?;
-        if group == CategoryGroup::Service {
-            return Err(Error::InvalidInput(SYSTEM_CATEGORY.into()));
-        }
-        let category = self.find_category_mut(key)?;
-        if essential.is_some() {
-            category.essential = essential;
-        }
-        if passive.is_some() {
-            category.passive = passive;
-        }
-        category.name = name
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-            .map(str::to_string);
-        category.group = group;
-        let out = category.clone();
-        self.persist()?;
-        Ok(out)
-    }
-
-    pub fn archive_category(&mut self, key: &str, archived: bool) -> Result<()> {
-        self.find_category_mut(key)?;
-        self.ensure_editable(key)?;
-        self.find_category_mut(key)?.archived = archived;
-        self.persist()
-    }
-
-    pub(crate) fn category_in_use(&self, key: &str) -> bool {
-        let in_draft = |draft: &TransactionDraft| {
-            let meta = match draft {
-                TransactionDraft::Topup(tx) => &tx.meta,
-                TransactionDraft::Payment(tx) => &tx.meta,
-                TransactionDraft::Transfer(tx) => &tx.meta,
-                TransactionDraft::Convert(tx) => &tx.meta,
-            };
-            meta.categories.iter().any(|used| used == key)
-        };
-        self.doc
-            .transactions
-            .iter()
-            .any(|tx| tx.meta().categories.iter().any(|used| used == key))
-            || self
-                .doc
-                .categorization_rules
-                .iter()
-                .any(|rule| rule.category == key)
-            || self
-                .doc
-                .budgets
-                .iter()
-                .any(|budget| matches!(&budget.target, BudgetTarget::Category(used) if used == key))
-            || self
-                .doc
-                .utility_items
-                .iter()
-                .any(|item| item.category == key)
-            || self
-                .automations()
-                .iter()
-                .any(|automation| in_draft(&automation.template))
-    }
-
-    /// Only an unused category can be deleted; otherwise archive it.
-    pub fn delete_category(&mut self, key: &str) -> Result<()> {
-        self.ensure_editable(key)?;
-        if self.category_in_use(key) {
-            return Err(Error::InvalidInput(
-                "the category is in use; archive it instead".into(),
-            ));
-        }
-        let before = self.doc.categories.len();
-        self.doc.categories.retain(|category| category.key != key);
-        if before == self.doc.categories.len() {
-            return Err(Error::Missing(format!("category {key}")));
-        }
-        self.persist()
-    }
-
-    // -- categorization rules ----------------------------------------------
-
-    pub(crate) fn check_rule(&self, pattern: &str, category: &str) -> Result<()> {
-        if pattern.trim().is_empty() {
-            return Err(Error::InvalidInput(
-                "a rule needs some text to look for".into(),
-            ));
-        }
-        if !self
-            .doc
-            .categories
-            .iter()
-            .any(|known| known.key == category)
-        {
-            return Err(Error::Missing(format!("category {category}")));
-        }
-        Ok(())
-    }
-
-    /// Rules in the order they are tried.
-    pub fn categorization_rules(&self) -> Vec<CategorizationRule> {
-        let mut out = self.doc.categorization_rules.clone();
-        out.sort_by_key(|rule| rule.order);
-        out
-    }
-
-    /// Add a rule at the end of the list.
-    pub fn create_categorization_rule(
-        &mut self,
-        pattern: &str,
-        category: &str,
-    ) -> Result<CategorizationRule> {
-        self.check_rule(pattern, category)?;
-        self.transact(|tx| {
-            let mut rules = tx.collection::<CategorizationRule>();
-            let order = rules.iter().map(|rule| rule.order + 1).max().unwrap_or(0);
-            let rule = CategorizationRule {
-                id: uuid::Uuid::new_v4().to_string(),
-                pattern: pattern.trim().to_string(),
-                category: category.to_string(),
-                active: true,
-                order,
-            };
-            rules.insert(rule.clone())?;
-            Ok(rule)
-        })
-    }
-
-    pub fn update_categorization_rule(
-        &mut self,
-        id: &str,
-        pattern: &str,
-        category: &str,
-        active: bool,
-    ) -> Result<CategorizationRule> {
-        self.check_rule(pattern, category)?;
-        self.transact(|tx| {
-            tx.collection::<CategorizationRule>()
-                .update(id, |rule| {
-                    rule.pattern = pattern.trim().to_string();
-                    rule.category = category.to_string();
-                    rule.active = active;
-                    rule.clone()
-                })
-                .map_err(|_| Error::Missing(format!("rule {id}")))
-        })
-    }
-
-    pub fn delete_categorization_rule(&mut self, id: &str) -> Result<()> {
-        self.transact(|tx| {
-            tx.collection::<CategorizationRule>()
-                .remove(id)
-                .map(|_| ())
-                .map_err(|_| Error::Missing(format!("rule {id}")))
-        })
-    }
-
-    /// Put the rules in the given order; ids not listed keep their relative
-    /// order after the listed ones.
-    pub fn reorder_categorization_rules(&mut self, ids: &[String]) -> Result<()> {
-        let mut rules = self.categorization_rules();
-        rules.sort_by_key(|rule| {
-            ids.iter()
-                .position(|id| id == &rule.id)
-                .unwrap_or(usize::MAX)
-        });
-        for (index, rule) in rules.iter_mut().enumerate() {
-            rule.order = index as u32;
-        }
-        self.doc.categorization_rules = rules;
-        self.persist()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::slug;
-
-    #[test]
-    fn slugs_are_ascii_keys() {
-        assert_eq!(slug("Coffee & Tea"), "coffee_tea");
-        assert_eq!(slug("  Rent 2024 "), "rent_2024");
-        assert!(slug("Кофе").starts_with("cat_"));
-    }
-}
-
-#[cfg(test)]
-mod vault_tests {
-    use super::super::test_support::*;
-    use crate::model::VaultDoc;
-    use crate::model::category::CategoryGroup;
-    use crate::service::UnlockedVault;
-
-    #[test]
-    fn a_new_vault_has_the_default_categories() {
-        let vault = UnlockedVault::in_memory(VaultDoc::default());
-        let group = |key: &str| {
-            vault
-                .doc
-                .categories
-                .iter()
-                .find(|category| category.key == key)
-                .map(|category| category.group)
-        };
-        assert_eq!(group("salary"), Some(CategoryGroup::Income));
-        assert_eq!(group("rent_mortgage"), Some(CategoryGroup::Fixed));
-        assert_eq!(group("taxi"), Some(CategoryGroup::Daily));
-        assert_eq!(group("savings"), Some(CategoryGroup::Savings));
-        assert_eq!(group("trading"), Some(CategoryGroup::Service));
-    }
-
-    #[test]
-    fn renaming_keeps_transactions_and_deleting_needs_it_unused() {
-        let (_dir, mut vault) = setup();
-        let store = vault.doc.stores[1].id.clone();
-        let coffee = vault
-            .create_category(None, "Coffee", CategoryGroup::Daily)
-            .unwrap();
-        assert_eq!(coffee.key, "coffee");
-        let again = vault
-            .create_category(None, "coffee", CategoryGroup::Daily)
-            .unwrap();
-        assert_eq!(again.key, "coffee_2");
-
-        let mut tx = payment(&store, "3", "latte");
-        tx.meta_mut().categories = vec!["coffee".into()];
-        vault.add_transaction(tx).unwrap();
-        vault
-            .update_category("coffee", Some("Кофе"), CategoryGroup::Fixed, None, None)
-            .unwrap();
-        assert_eq!(vault.doc.transactions[0].meta().categories, vec!["coffee"]);
-
-        assert!(vault.delete_category("coffee").is_err());
-        vault.delete_category("coffee_2").unwrap();
-        // an empty name returns to the built-in label
-        let reset = vault
-            .update_category("taxi", Some("  "), CategoryGroup::Daily, None, None)
-            .unwrap();
-        assert_eq!(reset.name, None);
-    }
-
-    #[test]
-    fn system_categories_cannot_be_changed() {
-        let (_dir, mut vault) = setup();
-        assert!(
-            vault
-                .update_category("trading", Some("Mine"), CategoryGroup::Service, None, None)
-                .is_err()
-        );
-        assert!(vault.archive_category("fee", true).is_err());
-        assert!(vault.delete_category("exchange").is_err());
-        assert!(
-            vault
-                .create_category(None, "Sneaky", CategoryGroup::Service)
-                .is_err()
-        );
-        // a user's category cannot be moved into the service group either
-        assert!(
-            vault
-                .update_category("taxi", None, CategoryGroup::Service, None, None)
-                .is_err()
-        );
-        assert!(
-            vault
-                .doc
-                .categories
-                .iter()
-                .any(|category| category.key == "trading" && !category.archived)
-        );
-    }
+    // forward:end
 }

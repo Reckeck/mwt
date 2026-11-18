@@ -95,7 +95,7 @@ mod rates;
 mod rebase;
 mod recurring;
 mod relations;
-mod reports;
+pub(crate) mod reports;
 mod store_change;
 mod store_months;
 mod stores;
