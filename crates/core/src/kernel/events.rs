@@ -60,9 +60,9 @@ domain_events! {
     Committed { revision: u64 },
     KeysChanged { keys: Vec<String> },
     AutomationDeleted { id: String },
-    AutomationRetried { id: String },
+    AutomationRetried { id: String, zone: String },
     GoalPaused { id: String },
-    GoalResumed { id: String },
+    GoalResumed { id: String, workflow_ids: Vec<String> },
 }
 
 /// Told the keys of every local save, so a live session can send them on.
@@ -217,16 +217,28 @@ mod tests {
             DomainEvent::AutomationDeleted(AutomationDeleted { id: id() })
         );
         assert_eq!(
-            DomainEvent::from(AutomationRetried { id: id() }),
-            DomainEvent::AutomationRetried(AutomationRetried { id: id() })
+            DomainEvent::from(AutomationRetried {
+                id: id(),
+                zone: "UTC".into()
+            }),
+            DomainEvent::AutomationRetried(AutomationRetried {
+                id: id(),
+                zone: "UTC".into()
+            })
         );
         assert_eq!(
             DomainEvent::from(GoalPaused { id: id() }),
             DomainEvent::GoalPaused(GoalPaused { id: id() })
         );
         assert_eq!(
-            DomainEvent::from(GoalResumed { id: id() }),
-            DomainEvent::GoalResumed(GoalResumed { id: id() })
+            DomainEvent::from(GoalResumed {
+                id: id(),
+                workflow_ids: vec![]
+            }),
+            DomainEvent::GoalResumed(GoalResumed {
+                id: id(),
+                workflow_ids: vec![]
+            })
         );
     }
 }

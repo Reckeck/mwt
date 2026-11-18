@@ -4,9 +4,11 @@ use crate::error::{Error, Result};
 use crate::kernel::events::{
     AutomationDeleted, AutomationRetried, DomainEvent, GoalPaused, GoalResumed,
 };
+use crate::model::planning::{Schedule, TransactionDraft};
 use crate::model::store::{StoreKind, StoreScope};
+use crate::model::transaction::{PaymentTx, Transaction};
 use crate::service::test_support::*;
-use crate::service::{GoalDraft, UnlockedVault};
+use crate::service::{AutomationDraft, GoalDraft, UnlockedVault};
 
 use super::react::{Reaction, react, run};
 
@@ -60,9 +62,41 @@ fn a_paused_goal_stops_its_saver_and_a_resumed_one_starts_it_again() {
     let paused = react(&mut vault, vec![GoalPaused { id: goal.clone() }.into()]);
     assert!(paused.is_empty(), "{paused:?}");
     assert!(!active(&vault, &saver));
-    let resumed = react(&mut vault, vec![GoalResumed { id: goal }.into()]);
+    let resumed = react(
+        &mut vault,
+        vec![
+            GoalResumed {
+                id: goal,
+                workflow_ids: vec![saver.clone()],
+            }
+            .into(),
+        ],
+    );
     assert!(resumed.is_empty(), "{resumed:?}");
     assert!(active(&vault, &saver));
+}
+
+#[test]
+fn a_saver_switched_off_by_hand_stays_off_after_pause_and_resume() {
+    let (_dir, mut vault, goal, saver) = saving_vault();
+    vault
+        .set_workflow_active(&saver, false, 1_767_312_000)
+        .unwrap();
+    let paused = react(&mut vault, vec![GoalPaused { id: goal.clone() }.into()]);
+    assert!(paused.is_empty(), "{paused:?}");
+    // The pause stopped nothing, so the resume names nothing.
+    let resumed = react(
+        &mut vault,
+        vec![
+            GoalResumed {
+                id: goal,
+                workflow_ids: vec![],
+            }
+            .into(),
+        ],
+    );
+    assert!(resumed.is_empty(), "{resumed:?}");
+    assert!(!active(&vault, &saver));
 }
 
 #[test]
@@ -81,7 +115,13 @@ fn a_retry_of_an_unknown_run_is_reported() {
     let (_dir, mut vault) = empty_vault();
     let failures = react(
         &mut vault,
-        vec![AutomationRetried { id: "run".into() }.into()],
+        vec![
+            AutomationRetried {
+                id: "run".into(),
+                zone: "UTC".into(),
+            }
+            .into(),
+        ],
     );
     assert_eq!(failures.len(), 1);
     assert!(matches!(failures[0].error, Error::Missing(_)));
@@ -135,4 +175,49 @@ fn reactions_run_in_registration_order_and_a_failure_does_not_stop_the_rest() {
         vault.doc.settings.schedule_timezone.as_deref(),
         Some("first+second")
     );
+}
+
+#[test]
+fn a_retry_with_the_event_zone_books_the_refused_run_without_a_vault_zone() {
+    let (_dir, mut vault) = empty_vault();
+    let card = store(&mut vault, "Card", StoreKind::Bank, None);
+    let Transaction::Payment(rent) = payment(&card, "800", "rent") else {
+        unreachable!()
+    };
+    vault
+        .create_automation(AutomationDraft {
+            time: None,
+            asks: false,
+            for_month_offset: None,
+            name: "Rent".into(),
+            active: true,
+            preset: None,
+            schedule: Schedule::Monthly { day: 5 },
+            starts_at: "2026-01-01T00:00:00Z".into(),
+            template: TransactionDraft::Payment(PaymentTx { ..rent }),
+            amount_mode: Default::default(),
+            workday_shift: Default::default(),
+            property_id: None,
+        })
+        .unwrap();
+    let pass = vault
+        .run_due_workflows(secs("2026-02-20T12:00:00Z"), "UTC")
+        .unwrap();
+    let refused = pass.runs[0].id.clone();
+    vault
+        .add_transaction(income(&card, "5000", "salary"))
+        .unwrap();
+    vault.doc.settings.schedule_timezone = None;
+    let failures = react(
+        &mut vault,
+        vec![
+            AutomationRetried {
+                id: refused.clone(),
+                zone: "UTC".into(),
+            }
+            .into(),
+        ],
+    );
+    assert!(failures.is_empty(), "{failures:?}");
+    assert!(vault.doc.workflow_runs.iter().all(|run| run.id != refused));
 }

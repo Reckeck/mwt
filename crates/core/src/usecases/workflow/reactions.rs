@@ -1,7 +1,6 @@
 //! Workflow reactions to automation and goal events. Each calls the workflow
-//! service the way the direct call does today; the event carries the id only.
-
-use std::collections::HashSet;
+//! service the way the direct call does today; the event carries what the
+//! direct call gets besides the vault (the device zone, the stopped ids).
 
 use crate::calendar::now_secs;
 use crate::error::Result;
@@ -22,14 +21,8 @@ pub fn on_automation_retried(vault: &mut UnlockedVault, event: &DomainEvent) -> 
     let DomainEvent::AutomationRetried(retried) = event else {
         return Ok(());
     };
-    let zone = vault
-        .doc
-        .settings
-        .schedule_timezone
-        .clone()
-        .unwrap_or_else(|| "UTC".into());
     vault
-        .retry_workflow_run(&retried.id, now_secs(), &zone)
+        .retry_workflow_run(&retried.id, now_secs(), &retried.zone)
         .map(drop)
 }
 
@@ -45,14 +38,18 @@ pub fn on_goal_paused(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<
     Ok(())
 }
 
-/// A goal was resumed: the stopped workflows that save into it start again.
+/// A goal was resumed: the workflows its pause stopped (the event names them,
+/// like `GoalDeleted.workflow_ids`) start again; one switched off by hand
+/// before the pause stays off.
 pub fn on_goal_resumed(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<()> {
     let DomainEvent::GoalResumed(resumed) = event else {
         return Ok(());
     };
-    let goal = goal_of(vault, &resumed.id)?;
-    for workflow in stopped_savers(vault, &goal) {
-        vault.set_workflow_active(&workflow, true, now_secs())?;
+    for workflow in &resumed.workflow_ids {
+        // A workflow deleted since then has nothing to switch back on.
+        if vault.workflow(workflow).is_ok() {
+            vault.set_workflow_active(workflow, true, now_secs())?;
+        }
     }
     Ok(())
 }
@@ -65,38 +62,4 @@ fn goal_of(vault: &UnlockedVault, id: &str) -> Result<Goal> {
         .find(|goal| goal.id == id)
         .cloned()
         .ok_or_else(|| crate::error::Error::Missing(format!("goal {id}")))
-}
-
-/// Stopped workflows that pay into a wallet of the goal no other goal uses:
-/// the mirror of `goal_savers`, which sees active workflows only.
-fn stopped_savers(vault: &UnlockedVault, goal: &Goal) -> Vec<String> {
-    let others: HashSet<&String> = vault
-        .doc
-        .goals
-        .iter()
-        .filter(|other| other.id != goal.id)
-        .flat_map(|other| &other.scope.store_ids)
-        .collect();
-    vault
-        .doc
-        .workflows
-        .iter()
-        .filter(|workflow| !workflow.active && workflow.automation.is_none())
-        .filter(|workflow| {
-            crate::workflow::Graph::parse(&workflow.graph).is_ok_and(|graph| {
-                graph.nodes.iter().any(|node| {
-                    node.kind == "action.transaction"
-                        && node
-                            .params
-                            .get("to")
-                            .and_then(|to| to.as_str())
-                            .is_some_and(|to| {
-                                goal.scope.store_ids.iter().any(|store| store == to)
-                                    && !others.contains(&to.to_string())
-                            })
-                })
-            })
-        })
-        .map(|workflow| workflow.id.clone())
-        .collect()
 }

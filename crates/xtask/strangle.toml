@@ -39,6 +39,11 @@ task = "E"
 files = ["crates/core/src/usecases/mod.rs", "crates/core/src/usecases/workflow/mod.rs"]
 
 [[foundation]]
+# Stream E adds what the workflow reactions need to two planning event payloads (zone, workflow_ids); nothing emits them until T44.
+task = "E"
+files = ["crates/core/src/kernel/events.rs"]
+
+[[foundation]]
 # The module wiring `scaffold` writes; the area stubs belong to their area tasks.
 task = "T6"
 files = [
