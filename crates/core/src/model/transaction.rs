@@ -90,7 +90,7 @@ pub enum TxOrigin {
         planned_date: Option<crate::time::LocalDate>,
         /// Booked with an approximate amount (a salary that differs every
         /// time); cleared when the user puts in the real one. Lives here, not
-        /// in `TxMeta`, so positional readers keep reading.
+        /// in `TxMeta`.
         #[serde(default)]
         estimated: bool,
         /// The occasion this run was for (`crate::workflow::RunKey`), the
