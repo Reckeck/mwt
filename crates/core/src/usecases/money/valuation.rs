@@ -8,10 +8,23 @@ use crate::model::store::RevalueRule;
 use crate::model::vault::Valuation;
 use crate::money::valuation::{ValuationInput, plan_revalue_rule, plan_valuation};
 use crate::service::UnlockedVault;
+use crate::service::sync_ids::valuation_id;
+
+/// The record of a planned valuation, under its deterministic sync id.
+fn valuation_record(input: ValuationInput) -> Valuation {
+    Valuation {
+        id: valuation_id(&input.asset_key, &input.date),
+        store_id: input.store_id,
+        asset_key: input.asset_key,
+        date: input.date,
+        unit_price: input.unit_price,
+        currency: input.currency,
+    }
+}
 
 /// Add a dated valuation; one on the same day replaces it.
 pub fn add_valuation(vault: &mut UnlockedVault, input: ValuationInput) -> Result<Valuation> {
-    let valuation = UnlockedVault::valuation_record(plan_valuation(&vault.doc, input)?);
+    let valuation = valuation_record(plan_valuation(&vault.doc, input)?);
     vault.transact(|tx| {
         let valuations = &mut tx.doc_mut().valuations;
         valuations
@@ -47,7 +60,7 @@ pub fn set_revalue_rule(
     vault.transact(|tx| {
         let doc = tx.doc_mut();
         doc.valuations
-            .extend(starts.into_iter().map(UnlockedVault::valuation_record));
+            .extend(starts.into_iter().map(valuation_record));
         let found = doc
             .stores
             .iter_mut()

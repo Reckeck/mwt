@@ -8,8 +8,7 @@ pub(crate) use crate::money::rates::{is_fiat_of, iso_of};
 use std::collections::HashSet;
 
 use crate::Amount;
-use crate::error::Result;
-use crate::ipc_contract::{CachedPrice, TransactionInput};
+use crate::ipc_contract::CachedPrice;
 use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
 use crate::model::vault::{FxPoint, PricePoint};
@@ -60,7 +59,7 @@ impl UnlockedVault {
         /// Turn a price typed in any currency into the USD price the ledger keeps,
         /// at the rate of the transaction's moment. Fails with `FX_MISSING` when
         /// the currency has no rate at all.
-        pub fn resolve_input_price(&self, input: &mut TransactionInput) -> Result<()>
+        pub fn resolve_input_price(&self, input: &mut crate::ipc_contract::TransactionInput) -> crate::Result<()>
             => crate::usecases::money::rates::resolve_input_price;
         /// The held spot coin with this ticker.
         pub(crate) fn held_coin(&self, code: &str) -> Option<&AssetRef>
