@@ -8,6 +8,8 @@ use serde::Serialize;
 use tauri::{Emitter, Runtime};
 use ts_rs::TS;
 
+pub use trade_core::ipc_contract::events::VaultLockedPayload;
+
 /// One event of the registry, as the generators see it.
 pub struct EventMeta {
     pub name: &'static str,
@@ -29,14 +31,6 @@ pub trait AppEvent {
 /// The TypeScript name of a payload type, for the [`EVENTS`] table.
 pub fn payload_ts<P: TS>() -> String {
     P::name(&ts_rs::Config::new())
-}
-
-/// The payload of `vault-locked`: why the vault was locked and whether it
-/// closed (`false` when the flush failed and the vault stayed open).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-pub struct VaultLockedPayload {
-    pub reason: String,
-    pub closed: bool,
 }
 
 /// Declares the events: `"name" => Marker(PayloadType)`.
@@ -83,13 +77,13 @@ app_events! {
     "tray-navigate" => TrayNavigate(String),
     "vault-changed" => VaultChanged(trade_core::ipc_contract::VaultStatus),
     "vault-locked" => VaultLocked(VaultLockedPayload),
-    // `SAVE_FAILED_EVENT`: a string, or `{ reason, exiting }` on exit.
+    // Fires when persisting the vault fails; `exiting` is set when the app is closing.
     "vault-save-failed" => VaultSaveFailed(trade_core::ipc_contract::events::VaultSaveFailedPayload),
-    // `SAVED_EVENT`
+    // Fires after the vault is written to disk.
     "vault-saved" => VaultSaved(()),
-    // `MIRROR_FAILED_EVENT`
+    // Fires when mirroring the vault to its backup location fails.
     "vault-mirror-failed" => VaultMirrorFailed(String),
-    // `STATE_EVENT`
+    // Fires when the updater state changes.
     "update-state" => UpdateState(trade_core::ipc_contract::UpdateStatusDto),
     "security-raise-progress" => SecurityRaiseProgress(trade_core::ipc_contract::security::RaiseProgress),
     "sync-status" => SyncStatusChanged(trade_core::ipc_contract::SyncStatus),
@@ -178,30 +172,9 @@ mod tests {
     }
 
     #[test]
-    fn vault_changed_still_fires() {
+    fn vault_changed_and_vault_locked_are_registered() {
         assert_eq!(VaultChanged::NAME, "vault-changed");
         assert_eq!(VaultLocked::NAME, "vault-locked");
-    }
-
-    #[test]
-    fn the_registry_pins_every_pub_event_constant() {
-        use crate::sync::{
-            CLOCK_EVENT, ERROR_EVENT, OFFER_EVENT, PAIRING_EVENT, PLAN_EVENT, STATUS_EVENT,
-            SYNCED_EVENT,
-        };
-
-        let pairs = [
-            (STATUS_EVENT, SyncStatusChanged::NAME),
-            (OFFER_EVENT, SyncOffer::NAME),
-            (PAIRING_EVENT, SyncPairing::NAME),
-            (PLAN_EVENT, SyncPlanReady::NAME),
-            (SYNCED_EVENT, VaultSynced::NAME),
-            (ERROR_EVENT, SyncError::NAME),
-            (CLOCK_EVENT, SyncClock::NAME),
-        ];
-        for (constant, registered) in pairs {
-            assert_eq!(constant, registered);
-        }
     }
 
     /// Never called: it compiles only if typed `emit` accepts a real handle.

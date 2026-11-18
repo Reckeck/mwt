@@ -5,6 +5,8 @@
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::kernel::events::LockReason;
+
 /// Payload of `bybit-import-pending`: how many records the poll recorded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct BybitImportPendingPayload {
@@ -58,6 +60,37 @@ pub struct EnrichmentReadyPayload {
     pub tx_id: String,
 }
 
+/// Payload of `vault-locked`: why the vault was locked and whether it
+/// closed (`false` when the flush failed and the vault stayed open).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct VaultLockedPayload {
+    pub reason: VaultLockedReason,
+    pub closed: bool,
+}
+
+/// Why the vault was locked, as the `vault-locked` event names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum VaultLockedReason {
+    Manual,
+    Autolock,
+    SandboxLeave,
+    Reopen,
+    Replace,
+}
+
+impl From<LockReason> for VaultLockedReason {
+    fn from(reason: LockReason) -> Self {
+        match reason {
+            LockReason::Manual => Self::Manual,
+            LockReason::Autolock => Self::Autolock,
+            LockReason::SandboxLeave => Self::SandboxLeave,
+            LockReason::Reopen => Self::Reopen,
+            LockReason::Replace => Self::Replace,
+        }
+    }
+}
+
 /// Payload of `vault-save-failed`: the message, or the reason with
 /// `exiting` when the app was closing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -75,6 +108,20 @@ mod tests {
 
     fn as_json<P: Serialize>(payload: &P) -> serde_json::Value {
         serde_json::to_value(payload).unwrap()
+    }
+
+    #[test]
+    fn each_lock_reason_keeps_its_wire_string() {
+        let wire = [
+            (LockReason::Manual, "manual"),
+            (LockReason::Autolock, "autolock"),
+            (LockReason::SandboxLeave, "sandbox-leave"),
+            (LockReason::Reopen, "reopen"),
+            (LockReason::Replace, "replace"),
+        ];
+        for (reason, name) in wire {
+            assert_eq!(as_json(&VaultLockedReason::from(reason)), json!(name));
+        }
     }
 
     #[test]

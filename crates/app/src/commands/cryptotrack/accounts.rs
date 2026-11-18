@@ -17,6 +17,7 @@ use trade_core::ipc_contract::cryptotrack::accounts::{
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// The accounts the module follows, with the wallet that shows each and the
@@ -24,7 +25,7 @@ use crate::ipc::commands::ipc_commands;
 #[tauri::command]
 pub async fn crypto_list_accounts(
     state: State<'_, AppState>,
-) -> Result<Vec<CryptoAccountView>, String> {
+) -> Result<Vec<CryptoAccountView>, IpcError> {
     with_vault(&state, |vault| Ok(vault.crypto_list_accounts()))
 }
 
@@ -35,7 +36,7 @@ pub async fn crypto_list_accounts(
 pub async fn crypto_connect_address(
     input: ConnectAddressInput,
     state: State<'_, AppState>,
-) -> Result<ConnectAddressResult, String> {
+) -> Result<ConnectAddressResult, IpcError> {
     with_vault_mut(&state, |vault| vault.crypto_connect_address(&input))
 }
 
@@ -44,7 +45,7 @@ pub async fn crypto_connect_address(
 pub async fn crypto_update_account(
     input: UpdateAccountInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| vault.crypto_update_account(&input))
 }
 
@@ -54,7 +55,7 @@ pub async fn crypto_update_account(
 pub async fn crypto_forget_account(
     input: CryptoAccountRefInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| {
         vault.crypto_forget_account(&input.account_id)
     })

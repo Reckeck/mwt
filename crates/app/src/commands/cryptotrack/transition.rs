@@ -12,6 +12,7 @@ use trade_core::ipc_contract::cryptotrack::transition::{
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// What entering the module would change: the hand-kept crypto wallets the
@@ -21,7 +22,7 @@ use crate::ipc::commands::ipc_commands;
 #[tauri::command]
 pub async fn crypto_transition_plan(
     state: State<'_, AppState>,
-) -> Result<CryptoTransitionPlan, String> {
+) -> Result<CryptoTransitionPlan, IpcError> {
     with_vault(&state, |vault| Ok(vault.crypto_transition_plan()))
 }
 
@@ -33,7 +34,7 @@ pub async fn crypto_transition_plan(
 #[tauri::command]
 pub async fn crypto_archive_manual_wallets(
     state: State<'_, AppState>,
-) -> Result<CryptoArchiveReport, String> {
+) -> Result<CryptoArchiveReport, IpcError> {
     with_vault_mut(&state, |vault| vault.crypto_archive_manual_wallets())
 }
 

@@ -627,6 +627,7 @@ fn main() {
         trade_core::ipc_contract::events::PriceAlertPayload,
         trade_core::ipc_contract::events::EmptyPayload,
         trade_core::ipc_contract::events::EnrichmentReadyPayload,
+        trade_core::ipc_contract::events::VaultLockedPayload,
         trade_core::ipc_contract::events::VaultSaveFailedPayload,
         trade_core::ipc_contract::security::RaiseStage,
         trade_core::ipc_contract::security::ValidatePasswordStrengthInput,

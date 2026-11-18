@@ -38,6 +38,7 @@ use trade_core::workflow::RunOutcome;
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
+use crate::ipc::IpcError;
 
 /// How often the scheduler wakes up.
 const SCHEDULER_TICK_SEC: u64 = 30;
@@ -602,7 +603,7 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
 async fn poll_bybit_once(
     app: &AppHandle,
     keys: Vec<trade_core::vault_io::device_secrets::DeviceKey>,
-) -> Result<u32, String> {
+) -> Result<u32, IpcError> {
     let state = app.state::<AppState>();
     let mut recorded_total = 0u32;
     for key in keys {
@@ -616,12 +617,13 @@ async fn poll_bybit_once(
             trade_core::model::vault::ImportSource::Auto,
         )
         .await
-        .map_err(String::from)
         {
             Ok(run) => run,
             Err(err)
-                if err.starts_with("EXCHANGE_KEY_NOT_READ_ONLY")
-                    || err.starts_with("EXCHANGE_KEY_REJECTED") =>
+                if matches!(
+                    err.code(),
+                    "EXCHANGE_KEY_NOT_READ_ONLY" | "EXCHANGE_KEY_REJECTED"
+                ) =>
             {
                 continue;
             }

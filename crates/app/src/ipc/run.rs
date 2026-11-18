@@ -147,7 +147,6 @@ mod tests {
     use std::thread;
 
     use super::*;
-    use crate::commands::err_to_string;
 
     #[derive(Clone)]
     struct TestHost(Arc<AppState>);
@@ -220,7 +219,7 @@ mod tests {
         assert_eq!(error.code(), "SANDBOX");
         assert_eq!(
             error.to_string(),
-            err_to_string(Error::Sandbox("test_command is off in the sandbox".into()))
+            "SANDBOX: sandbox: test_command is off in the sandbox"
         );
     }
 
@@ -257,9 +256,6 @@ mod tests {
         })
         .join();
         let error = read(host, &META, OPEN, |_| Ok(())).await.unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            err_to_string(Error::Crypto("lock poisoned".into()))
-        );
+        assert_eq!(error.to_string(), "CRYPTO: crypto error: lock poisoned");
     }
 }

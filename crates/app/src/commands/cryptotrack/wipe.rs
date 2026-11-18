@@ -18,6 +18,7 @@ use trade_core::ipc_contract::cryptotrack::wipe::{
 use crate::commands::AppState;
 use crate::commands::app_settings;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// What a wipe would remove: the records per collection, the wallets that lose
@@ -27,7 +28,9 @@ use crate::ipc::commands::ipc_commands;
 /// Counted on demand and stored nowhere, so the screen may ask at any time
 /// without changing anything.
 #[tauri::command]
-pub async fn crypto_wipe_preview(state: State<'_, AppState>) -> Result<CryptoWipePreview, String> {
+pub async fn crypto_wipe_preview(
+    state: State<'_, AppState>,
+) -> Result<CryptoWipePreview, IpcError> {
     with_vault(&state, |vault| Ok(vault.crypto_wipe_preview()))
 }
 
@@ -44,12 +47,12 @@ pub async fn crypto_wipe_module(
     input: CryptoWipeInput,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<CryptoWipeReport, String> {
+) -> Result<CryptoWipeReport, IpcError> {
     let report =
-        with_vault_mut::<_, String>(&state, |vault| vault.crypto_wipe_module(&input.confirm))?;
+        with_vault_mut::<_, IpcError>(&state, |vault| vault.crypto_wipe_module(&input.confirm))?;
     if report.wiped_at.is_some() {
         crate::cryptotrack::jobs::forget_live_positions();
-        let path = with_vault::<_, String>(&state, |vault| Ok(vault.path.clone()))?;
+        let path = with_vault::<_, IpcError>(&state, |vault| Ok(vault.path.clone()))?;
         crate::biometric::system_gate(&app_settings::config_dir(&app))
             .disable(&path.to_string_lossy());
     }

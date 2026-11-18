@@ -76,12 +76,6 @@ impl Default for AppState {
     }
 }
 
-/// Map a core error into a Tauri-compatible error string (code-prefixed).
-#[cfg(test)]
-pub fn err_to_string(err: Error) -> String {
-    format!("{}: {}", err.code(), err)
-}
-
 /// Grab a locked vault; returns an error if the app is locked.
 pub fn lock_vault<'a>(
     state: &'a AppState,

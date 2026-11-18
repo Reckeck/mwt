@@ -10,6 +10,7 @@ use trade_core::ipc_contract::cryptotrack::relations::{CryptoRelations, CryptoRe
 
 use crate::commands::AppState;
 use crate::commands::planning::with_vault;
+use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// The relations of one account, each row carrying the operation filter it
@@ -18,7 +19,7 @@ use crate::ipc::commands::ipc_commands;
 pub async fn crypto_relations(
     input: CryptoRelationsInput,
     state: State<'_, AppState>,
-) -> Result<CryptoRelations, String> {
+) -> Result<CryptoRelations, IpcError> {
     with_vault(&state, |vault| vault.crypto_relations(&input))
 }
 

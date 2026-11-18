@@ -11,11 +11,12 @@ use trade_core::model::cryptotrack::TokenId;
 
 use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// The known and the quarantined tokens of the followed accounts.
 #[tauri::command]
-pub async fn crypto_list_tokens(state: State<'_, AppState>) -> Result<Vec<TokenView>, String> {
+pub async fn crypto_list_tokens(state: State<'_, AppState>) -> Result<Vec<TokenView>, IpcError> {
     with_vault(&state, |vault| Ok(vault.crypto_tokens()))
 }
 
@@ -25,7 +26,7 @@ pub async fn crypto_list_tokens(state: State<'_, AppState>) -> Result<Vec<TokenV
 pub async fn crypto_confirm_token(
     input: TokenRefInput,
     state: State<'_, AppState>,
-) -> Result<TokenStatus, String> {
+) -> Result<TokenStatus, IpcError> {
     let token = TokenId::new(input.chain, &input.contract);
     with_vault_mut(&state, |vault| vault.crypto_confirm_token(&token))
 }
@@ -35,7 +36,7 @@ pub async fn crypto_confirm_token(
 pub async fn crypto_reject_token(
     input: TokenRefInput,
     state: State<'_, AppState>,
-) -> Result<TokenStatus, String> {
+) -> Result<TokenStatus, IpcError> {
     let token = TokenId::new(input.chain, &input.contract);
     with_vault_mut(&state, |vault| vault.crypto_reject_token(&token))
 }
@@ -47,7 +48,7 @@ pub async fn crypto_reject_token(
 pub async fn crypto_clear_token_verdict(
     input: TokenRefInput,
     state: State<'_, AppState>,
-) -> Result<TokenStatus, String> {
+) -> Result<TokenStatus, IpcError> {
     let token = TokenId::new(input.chain, &input.contract);
     with_vault_mut(&state, |vault| vault.crypto_clear_token_verdict(&token))
 }
@@ -58,7 +59,7 @@ pub async fn crypto_clear_token_verdict(
 pub async fn crypto_set_token_basis(
     input: SetTokenBasisInput,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), IpcError> {
     let token = TokenId::new(input.chain, &input.contract);
     with_vault_mut(&state, |vault| {
         vault.crypto_set_token_basis(&token, input.basis_usd)

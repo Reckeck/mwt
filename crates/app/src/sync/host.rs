@@ -25,10 +25,11 @@ pub(crate) trait Host: Clone + Send + Sync + 'static {
     fn notifications_blocked(&self) -> bool {
         false
     }
-    fn emit<S: Serialize + Clone>(&self, event: &str, payload: S);
+    /// Transport only: implementors send the event, callers use `emit_event` (the name comes from `app_events!`).
+    fn emit_raw<S: Serialize + Clone>(&self, event: &str, payload: S);
     /// The typed emit: the event fixes its name and payload, a wrong payload does not compile.
     fn emit_event<E: AppEvent>(&self, payload: &E::Payload) {
-        self.emit(E::NAME, payload.clone());
+        self.emit_raw(E::NAME, payload.clone());
     }
     /// Show notices that arrived by sync (the system notice follows focus).
     fn deliver(&self, notices: Vec<NoticeRecord>);
@@ -95,7 +96,7 @@ impl Host for AppHandle {
         }
     }
 
-    fn emit<S: Serialize + Clone>(&self, event: &str, payload: S) {
+    fn emit_raw<S: Serialize + Clone>(&self, event: &str, payload: S) {
         let _ = Emitter::emit(self, event, payload);
     }
 

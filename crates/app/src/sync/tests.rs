@@ -26,6 +26,7 @@ mod liveness;
 
 use super::host::{Host, lock_hub};
 use super::{Hub, Order, Run, SyncHub};
+use crate::ipc::events::{AppEvent, SyncError, SyncOffer, SyncPairing, SyncPlanReady};
 
 struct Inner {
     hub: SyncHub,
@@ -70,7 +71,7 @@ impl Host for TestHost {
         "memory"
     }
 
-    fn emit<S: Serialize + Clone>(&self, event: &str, payload: S) {
+    fn emit_raw<S: Serialize + Clone>(&self, event: &str, payload: S) {
         let value = serde_json::to_value(payload).unwrap_or(Value::Null);
         let _ = self.0.events.send((event.to_string(), value));
     }
@@ -171,13 +172,13 @@ fn answer(host: TestHost, mut events: Events, accept: bool) -> Arc<Mutex<Vec<Str
                 .unwrap_or_default()
                 .to_string();
             match event.as_str() {
-                super::OFFER_EVENT => {
+                SyncOffer::NAME => {
                     super::send(&host, &session, Order::StartPairing);
                 }
-                super::PAIRING_EVENT | super::PLAN_EVENT => {
+                SyncPairing::NAME | SyncPlanReady::NAME => {
                     super::send(&host, &session, Order::Decide(accept));
                 }
-                super::ERROR_EVENT => {
+                SyncError::NAME => {
                     let code = payload
                         .get("code")
                         .and_then(Value::as_str)
@@ -518,10 +519,10 @@ fn dismiss(host: TestHost, mut events: Events) -> Arc<Mutex<Vec<String>>> {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string();
-            if event == super::OFFER_EVENT {
+            if event == SyncOffer::NAME {
                 super::send(&host, &session, Order::Dismiss);
             }
-            if event == super::ERROR_EVENT {
+            if event == SyncError::NAME {
                 log.lock().unwrap().push(event);
             }
         }
@@ -535,7 +536,7 @@ fn errors_only(mut events: Events) -> Arc<Mutex<Vec<String>>> {
     let log = seen.clone();
     tokio::spawn(async move {
         while let Some((event, _payload)) = events.recv().await {
-            if event == super::ERROR_EVENT {
+            if event == SyncError::NAME {
                 log.lock().unwrap().push(event);
             }
         }
@@ -648,7 +649,7 @@ async fn the_same_error_is_announced_once_until_it_is_cleared() {
     let count = |events: &mut Events| {
         let mut found = 0;
         while let Ok((event, _)) = events.try_recv() {
-            if event == super::ERROR_EVENT {
+            if event == SyncError::NAME {
                 found += 1;
             }
         }
@@ -828,7 +829,7 @@ async fn declining_the_list_of_changes_is_not_a_failure() {
 fn error_count(events: &mut Events) -> usize {
     let mut found = 0;
     while let Ok((event, _)) = events.try_recv() {
-        if event == super::ERROR_EVENT {
+        if event == SyncError::NAME {
             found += 1;
         }
     }
@@ -861,19 +862,19 @@ fn responder(host: TestHost, mut events: Events, plan: Option<bool>) -> Seen {
                 .unwrap_or_default()
                 .to_string();
             match event.as_str() {
-                super::OFFER_EVENT => {
+                SyncOffer::NAME => {
                     super::send(&host, &session, Order::StartPairing);
                 }
-                super::PAIRING_EVENT => {
+                SyncPairing::NAME => {
                     super::send(&host, &session, Order::Decide(true));
                 }
-                super::PLAN_EVENT => {
+                SyncPlanReady::NAME => {
                     log.plans.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     if let Some(accept) = plan {
                         super::send(&host, &session, Order::Decide(accept));
                     }
                 }
-                super::ERROR_EVENT => {
+                SyncError::NAME => {
                     let code = payload
                         .get("code")
                         .and_then(Value::as_str)
@@ -1194,7 +1195,7 @@ fn error_payloads(mut events: Events) -> Arc<Mutex<Vec<Value>>> {
     let log = seen.clone();
     tokio::spawn(async move {
         while let Some((event, payload)) = events.recv().await {
-            if event == super::ERROR_EVENT {
+            if event == SyncError::NAME {
                 log.lock().unwrap().push(payload);
             }
         }
@@ -1446,13 +1447,13 @@ fn gated(host: TestHost, mut events: Events) -> (Seen, Arc<std::sync::atomic::At
                 .unwrap_or_default()
                 .to_string();
             match event.as_str() {
-                super::OFFER_EVENT if gate.load(Ordering::SeqCst) => {
+                SyncOffer::NAME if gate.load(Ordering::SeqCst) => {
                     super::send(&host, &session, Order::StartPairing);
                 }
-                super::PAIRING_EVENT | super::PLAN_EVENT => {
+                SyncPairing::NAME | SyncPlanReady::NAME => {
                     super::send(&host, &session, Order::Decide(true));
                 }
-                super::ERROR_EVENT => {
+                SyncError::NAME => {
                     let code = payload
                         .get("code")
                         .and_then(Value::as_str)
@@ -1578,13 +1579,13 @@ fn hooked(
                 .unwrap_or_default()
                 .to_string();
             match event.as_str() {
-                super::OFFER_EVENT => {
+                SyncOffer::NAME => {
                     super::send(&host, &session, Order::StartPairing);
                 }
-                super::PAIRING_EVENT => {
+                SyncPairing::NAME => {
                     super::send(&host, &session, Order::Decide(true));
                 }
-                super::PLAN_EVENT => {
+                SyncPlanReady::NAME => {
                     let total = payload["summary"]["total"].as_u64().unwrap_or(0);
                     let number = log.plans() + 1;
                     // The hook blocks (it edits the other vault and waits):
@@ -1598,7 +1599,7 @@ fn hooked(
                         super::send(&host, &session, Order::Decide(accept));
                     }
                 }
-                super::ERROR_EVENT => {
+                SyncError::NAME => {
                     let code = payload
                         .get("code")
                         .and_then(Value::as_str)

@@ -15,15 +15,16 @@ use crate::ipc::commands::ipc_commands;
 
 /// Fetch a source's page and take its value out; the error text is what the
 /// source's status shows.
-async fn fetch_value(app: &AppHandle, source: &DataSource) -> Result<Extracted, String> {
+async fn fetch_value(app: &AppHandle, source: &DataSource) -> Result<Extracted, IpcError> {
     let state = app.state::<AppState>();
     crate::commands::sandbox::refuse(&state, "fetching a data source")?;
     let body = state
         .pricing
         .fetch_page(&source.url)
         .await
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| IpcError::Message(err.to_string()))?;
     datasource::extract(&source.method, source.output, &source.number, &body)
+        .map_err(IpcError::Message)
 }
 
 /// Tell the window that values changed: sources, prices and inflation may
@@ -37,7 +38,10 @@ fn announce(app: &AppHandle, notices: Vec<NoticeRecord>) {
 
 /// Fetch one source and record the result (value, failure or jump).
 async fn refresh_one(app: &AppHandle, source: &DataSource) -> Result<Vec<NoticeRecord>, IpcError> {
-    let fetched = fetch_value(app, source).await;
+    // The core records a failed fetch as the text the status shows.
+    let fetched = fetch_value(app, source)
+        .await
+        .map_err(|error| error.to_string());
     let russian = crate::scheduler::russian(app);
     let state = app.state::<AppState>();
     let mut guard = require_vault(&state)?;
@@ -74,13 +78,13 @@ pub async fn refresh_due_sources(app: &AppHandle) {
 /// A page fetch for the picker: refused in the sandbox and while locked, so a
 /// vault-less call is no read-back channel. The vault guard is dropped before
 /// any `.await` (rule 3).
-fn allow_page_fetch(state: &AppState) -> Result<(), String> {
+fn allow_page_fetch(state: &AppState) -> Result<(), IpcError> {
     crate::commands::sandbox::refuse(state, "fetching a data source")?;
     drop(require_vault(state).map_err(IpcError::from)?);
     Ok(())
 }
 
-async fn preview_page(state: &AppState, url: &str) -> Result<SourcePreview, String> {
+async fn preview_page(state: &AppState, url: &str) -> Result<SourcePreview, IpcError> {
     allow_page_fetch(state)?;
     let body = state
         .pricing
@@ -88,10 +92,10 @@ async fn preview_page(state: &AppState, url: &str) -> Result<SourcePreview, Stri
         .await
         .map_err(IpcError::from)?;
     datasource::preview(url, &body)
-        .map_err(|message| IpcError::from(trade_core::Error::InvalidInput(message)).to_string())
+        .map_err(|message| IpcError::from(trade_core::Error::InvalidInput(message)))
 }
 
-async fn test_method(state: &AppState, draft: &DataSourceDraft) -> Result<Extracted, String> {
+async fn test_method(state: &AppState, draft: &DataSourceDraft) -> Result<Extracted, IpcError> {
     allow_page_fetch(state)?;
     let body = state
         .pricing
@@ -99,7 +103,7 @@ async fn test_method(state: &AppState, draft: &DataSourceDraft) -> Result<Extrac
         .await
         .map_err(IpcError::from)?;
     datasource::extract(&draft.method, draft.output, &draft.number, &body)
-        .map_err(|message| IpcError::from(trade_core::Error::InvalidInput(message)).to_string())
+        .map_err(|message| IpcError::from(trade_core::Error::InvalidInput(message)))
 }
 
 /// The page at `url` for the picker: safe HTML, JSON text or file rows.
@@ -108,7 +112,7 @@ pub async fn datasource_preview(
     url: String,
     state: State<'_, AppState>,
 ) -> Result<SourcePreview, IpcError> {
-    preview_page(&state, &url).await.map_err(IpcError::from)
+    preview_page(&state, &url).await
 }
 
 /// Run the form's method against the live page without saving anything.
@@ -117,7 +121,7 @@ pub async fn datasource_test(
     draft: DataSourceDraft,
     state: State<'_, AppState>,
 ) -> Result<Extracted, IpcError> {
-    test_method(&state, &draft).await.map_err(IpcError::from)
+    test_method(&state, &draft).await
 }
 
 /// Every source with the places that use it.
@@ -263,14 +267,14 @@ mod tests {
         let err = preview_page(&state, "http://127.0.0.1:1/")
             .await
             .unwrap_err();
-        assert!(err.starts_with("REQUIRES_UNLOCK"), "{err}");
+        assert_eq!(err.code(), "REQUIRES_UNLOCK");
     }
 
     #[tokio::test]
     async fn locked_vault_refuses_test_without_a_request() {
         let state = AppState::new();
         let err = test_method(&state, &draft()).await.unwrap_err();
-        assert!(err.starts_with("REQUIRES_UNLOCK"), "{err}");
+        assert_eq!(err.code(), "REQUIRES_UNLOCK");
     }
 }
 

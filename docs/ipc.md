@@ -96,43 +96,43 @@ Events are fully covered: every event is declared once in `app_events!`.
 The event registry is `app_events!` in `crates/app/src/ipc/events.rs`: one line per event with its name and
 payload type. It generates a typed `emit` (a wrong payload does not compile) and the `EVENTS` table (name and
 payload TS type) that `events.gen.ts` is written from. Names and payload types are read there; the table
-below keeps only the hand-written part, **when an event fires** and what the frontend does about it. Never
+below has no payload column (read payloads in `EVENTS` or `src/shared/api/events.gen.ts`); it keeps only the hand-written part, **when an event fires** and what the frontend does about it. Never
 call `app.emit("..")` with a literal: add the event to `app_events!`.
 
-| Event | Payload | When |
-|---|---|---|
-| `prices-updated` | `RefreshResult` | after `refresh_all` (the button, the tray, the "price refresh interval" timer in the scheduler while the window is on screen) and `ensure_fx` (if anything was found); screens refresh the "price" keys from `use-cache-events`, not from the command response |
-| `rates-updated` | — | after `refresh_rates` (the "Refresh" button in the inflation settings and the scheduler's daily `rates_tick`) and `set_inflation_mode`; the frontend refreshes `inflation-overview`, `report`, `interest-tax` (`use-cache-events`) |
-| `sources-updated` | — | after `datasource_*` and the background `sources_tick`; the frontend refreshes `data-sources` (`prices-updated` and `rates-updated` are sent together with it) |
-| `bybit-import-pending` | `{ staged: 0, recorded: number }` | background Bybit polling recorded new operations. Since spec E7 they go straight into the crypto module, so `staged` is always 0; the event keeps its name so an older window still listens |
-| `crypto-updated` | `{ account_id }` | a background read stored something new for the account; the frontend drops every `['crypto']` query and the ledger keys the capital is computed from |
-| `automation-created` | `{ tx_ids: string[] }` | the scheduler created automation transactions |
-| `automation-rejected` | `AutomationRejectedEvent { run_id, automation_id, name, planned_at, reason }` | a run was not created: not enough funds, a credit card limit or the transaction failed validation (D26); a toast with "Retry / Skip" + a system notification |
-| `automation-skipped` | `{ count }` | after a long break, old dates beyond 24 are recorded as skipped |
-| — (notification) | key `automation-estimated:<tx_id>` | an automation with a varying amount recorded the transaction approximately: "check the amount" |
-| `workflows-ran` | `{ runs, queued }` | the scheduler ran schemes (nodes); `queued` — transactions that went to the confirmation queue. Created transactions also arrive through `automation-created` |
-| `price-alert` | `{ alert_id }` | a price alert fired (once) |
-| `reminder-due` | `{}` | reminder time has come — refresh their list |
-| `reminders-changed` | `{}` | sync created or moved auto-reminders |
-| `notification` | `NoticeRecord { key, category, title, body, link?, at, delivered_at, read }` | a notification was shown (a reminder, an alert, insufficient funds, a budget, an automation, a Bybit import): the bell and a toast. `link` is a route name or `wallet:<id>`. Each `key` is shown once for all time — the journal is in the vault |
-| `enrichment-ready` | `{ tx_id }` | the explorer returned data by the transaction hash; the finding awaits "Apply / Dismiss" |
-| `vault-mirror-failed` | `string` (reason) | the vault copy to an external file was not written (`platform_fs::mirror_sink`); the vault is intact, the status is `vault_link_status` |
-| `sync-status` | `SyncStatus` | the device sync state changed: role, connections, phases, progress (`docs/sync.md`) |
-| `sync-offer` | `SyncOfferEvent { session_id, peer_name }` | a device with the same vault, not yet paired, is nearby: a "Pair" banner |
-| `sync-pairing` | `SyncPairingEvent { session_id, peer_name, code }` | show a 6-digit code; it is the same on the second device |
-| `sync-plan-ready` | `SyncPlanEvent { session_id, peer_name, reason, summary, after }` | the change list awaits a decision (`sync_decide_plan`); `summary` items carry a readable `label`, the record `key` and, for an edit, `fields: FieldChange { field, before, after, money_currency }`; `after: AfterApply { currency, net_worth_before, net_worth_after, stores: StoreBalanceChange[] }` is the capital and wallet balances once applied (worked out on an in-memory copy, nothing written): the first batch with "Ask", the first pairing or a "temporarily untrusted" device |
-| `vault-synced` | `VaultSyncedEvent { session_id, batch: AppliedBatch, collections }` | a batch from another device was applied (`collections`: every collection it touched, dedupe and repair deletions included; `batch.summary.total` does not count those); the frontend re-reads the queries of the summary and of `collections`, a notification with "Undo" (`sync_undo`) |
-| `sync-clock` | `SyncClockEvent { session_id, peer_name, offset_ms, unreliable }` | device clocks diverge (5 min – 24 h) or jumped: the device is "temporarily untrusted" until the end of the session |
-| `sync-error` | `SyncErrorEvent { code, message, peer_name?, peer_version?, own_version? }` | the session did not start or was interrupted: `SYNC_OTHER_VAULT`, `SYNC_VERSION_MISMATCH`, `SYNC_CLOCK_SKEW`, `SYNC_REVOKED`, `SYNC_REJECTED`, `SYNC_CHANNEL`, `SYNC_PAUSED_BY_PEER` and `SYNC_FORGOTTEN_BY_PEER` (the other device paused the exchange or forgot this one; the text names the device, `peer_name`); `SYNC_VERSION_MISMATCH` also has `peer_version` (empty for an old build) and `own_version`: the text names the device and both versions |
-| `transfer-receive` | `TransferReceiveView` | a vault receive step: waiting, request, code, progress, done (`saved_path`), error (`SYNC_TRANSFER_EXPIRED`, `SYNC_BAD_CODE`, `SYNC_TRANSFER_DECLINED`, `SYNC_NOT_A_VAULT`) |
-| `transfer-send` | `TransferSendView` | a transfer step: waiting for "Accept", the code (`wrong_code`, `attempts_left`), progress, done, error |
-| `transfer-nearby` | `TransferNearby[]` | nearby devices waiting to receive |
-| `vault-changed` | `VaultStatus` | the vault was locked without a window request (Android: background lock, the button on the sync notification); the window goes to the unlock screen |
-| `vault-locked` | `{ reason, closed }` | the vault was locked, sent from the lock bus next to `vault-changed` (additive; the window still reacts to `vault-changed`) |
-| `vault-save-failed` | `string` or `{ reason, exiting }` | the batched vault write failed (it retries by itself); `exiting` — on exit, the window offers "Retry" / "Quit without saving" |
-| `vault-saved` | — | a write succeeded again after an error |
-| `update-state` | `UpdateStatusDto` | the update check changed phase: checking, downloading (`percent`), ready, available (hand-updated installs), up to date, error |
-| `security-raise-progress` | `RaiseProgress { stage: RaiseStage }` | the move to the crypto level reached a stage: `backup`, `reencrypt`, `verify` (`raise_to_crypto_level`) |
+| Event | When |
+|---|---|
+| `prices-updated` | after `refresh_all` (the button, the tray, the "price refresh interval" timer in the scheduler while the window is on screen) and `ensure_fx` (if anything was found); screens refresh the "price" keys from `use-cache-events`, not from the command response |
+| `rates-updated` | after `refresh_rates` (the "Refresh" button in the inflation settings and the scheduler's daily `rates_tick`) and `set_inflation_mode`; the frontend refreshes `inflation-overview`, `report`, `interest-tax` (`use-cache-events`) |
+| `sources-updated` | after `datasource_*` and the background `sources_tick`; the frontend refreshes `data-sources` (`prices-updated` and `rates-updated` are sent together with it) |
+| `bybit-import-pending` | background Bybit polling recorded new operations. Since spec E7 they go straight into the crypto module, so `staged` is always 0; the event keeps its name so an older window still listens |
+| `crypto-updated` | a background read stored something new for the account; the frontend drops every `['crypto']` query and the ledger keys the capital is computed from |
+| `automation-created` | the scheduler created automation transactions |
+| `automation-rejected` | a run was not created: not enough funds, a credit card limit or the transaction failed validation (D26); a toast with "Retry / Skip" + a system notification |
+| `automation-skipped` | after a long break, old dates beyond 24 are recorded as skipped |
+| — (notification) | an automation with a varying amount recorded the transaction approximately: "check the amount" |
+| `workflows-ran` | the scheduler ran schemes (nodes); `queued` — transactions that went to the confirmation queue. Created transactions also arrive through `automation-created` |
+| `price-alert` | a price alert fired (once) |
+| `reminder-due` | reminder time has come — refresh their list |
+| `reminders-changed` | sync created or moved auto-reminders |
+| `notification` | a notification was shown (a reminder, an alert, insufficient funds, a budget, an automation, a Bybit import): the bell and a toast. `link` is a route name or `wallet:<id>`. Each `key` is shown once for all time — the journal is in the vault |
+| `enrichment-ready` | the explorer returned data by the transaction hash; the finding awaits "Apply / Dismiss" |
+| `vault-mirror-failed` | the vault copy to an external file was not written (`platform_fs::mirror_sink`); the vault is intact, the status is `vault_link_status` |
+| `sync-status` | the device sync state changed: role, connections, phases, progress (`docs/sync.md`) |
+| `sync-offer` | a device with the same vault, not yet paired, is nearby: a "Pair" banner |
+| `sync-pairing` | show a 6-digit code; it is the same on the second device |
+| `sync-plan-ready` | the change list awaits a decision (`sync_decide_plan`); `summary` items carry a readable `label`, the record `key` and, for an edit, `fields: FieldChange { field, before, after, money_currency }`; `after: AfterApply { currency, net_worth_before, net_worth_after, stores: StoreBalanceChange[] }` is the capital and wallet balances once applied (worked out on an in-memory copy, nothing written): the first batch with "Ask", the first pairing or a "temporarily untrusted" device |
+| `vault-synced` | a batch from another device was applied (`collections`: every collection it touched, dedupe and repair deletions included; `batch.summary.total` does not count those); the frontend re-reads the queries of the summary and of `collections`, a notification with "Undo" (`sync_undo`) |
+| `sync-clock` | device clocks diverge (5 min – 24 h) or jumped: the device is "temporarily untrusted" until the end of the session |
+| `sync-error` | the session did not start or was interrupted: `SYNC_OTHER_VAULT`, `SYNC_VERSION_MISMATCH`, `SYNC_CLOCK_SKEW`, `SYNC_REVOKED`, `SYNC_REJECTED`, `SYNC_CHANNEL`, `SYNC_PAUSED_BY_PEER` and `SYNC_FORGOTTEN_BY_PEER` (the other device paused the exchange or forgot this one; the text names the device, `peer_name`); `SYNC_VERSION_MISMATCH` also has `peer_version` (empty for an old build) and `own_version`: the text names the device and both versions |
+| `transfer-receive` | a vault receive step: waiting, request, code, progress, done (`saved_path`), error (`SYNC_TRANSFER_EXPIRED`, `SYNC_BAD_CODE`, `SYNC_TRANSFER_DECLINED`, `SYNC_NOT_A_VAULT`) |
+| `transfer-send` | a transfer step: waiting for "Accept", the code (`wrong_code`, `attempts_left`), progress, done, error |
+| `transfer-nearby` | nearby devices waiting to receive |
+| `vault-changed` | the vault was locked without a window request (Android: background lock, the button on the sync notification); the window goes to the unlock screen |
+| `vault-locked` | the vault was locked, sent from the lock bus next to `vault-changed` (additive; the window still reacts to `vault-changed`) |
+| `vault-save-failed` | the batched vault write failed (it retries by itself); `exiting` — on exit, the window offers "Retry" / "Quit without saving" |
+| `vault-saved` | a write succeeded again after an error |
+| `update-state` | the update check changed phase: checking, downloading (`percent`), ready, available (hand-updated installs), up to date, error |
+| `security-raise-progress` | the move to the crypto level reached a stage: `backup`, `reencrypt`, `verify` (`raise_to_crypto_level`) |
 
 Background tasks live in `crates/app/src/scheduler.rs`: one thread, a tick every 30 s,
 only while the vault is unlocked — Bybit import, automations, alerts (prices of their

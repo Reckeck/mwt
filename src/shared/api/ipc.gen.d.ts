@@ -8840,6 +8840,17 @@ last_synced_at: string | null,
 last_error: string | null, };
 
 /**
+ * Payload of `vault-locked`: why the vault was locked and whether it
+ * closed (`false` when the flush failed and the vault stayed open).
+ */
+type VaultLockedPayload = { reason: VaultLockedReason, closed: boolean, };
+
+/**
+ * Why the vault was locked, as the `vault-locked` event names it.
+ */
+type VaultLockedReason = "manual" | "autolock" | "sandbox-leave" | "reopen" | "replace";
+
+/**
  * Payload of `vault-save-failed`: the message, or the reason with
  * `exiting` when the app was closing.
  */

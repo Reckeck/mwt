@@ -1,7 +1,7 @@
 //! Process-wide state that is not the vault: the bus of lock events (spec D5).
 
 use tauri::Manager;
-use trade_core::kernel::events::{DomainEvent, EventBus, LockReason, VaultLocked};
+use trade_core::kernel::events::{DomainEvent, EventBus, VaultLocked};
 
 use crate::ipc::events::{AppEvent, VaultLockedPayload};
 
@@ -20,17 +20,6 @@ pub fn on_vault_locked(bus: &EventBus, action: impl Fn(&VaultLocked) + Send + Sy
     });
 }
 
-/// The name of a lock reason on the `vault-locked` event.
-fn reason_name(reason: LockReason) -> &'static str {
-    match reason {
-        LockReason::Manual => "manual",
-        LockReason::Autolock => "autolock",
-        LockReason::SandboxLeave => "sandbox-leave",
-        LockReason::Reopen => "reopen",
-        LockReason::Replace => "replace",
-    }
-}
-
 /// Hand `send` the `vault-locked` payload of every `VaultLocked`, also when
 /// the flush failed and the vault stayed open (`closed = false`).
 pub(crate) fn announce_lock(
@@ -39,7 +28,7 @@ pub(crate) fn announce_lock(
 ) {
     on_vault_locked(bus, move |locked| {
         send(VaultLockedPayload {
-            reason: reason_name(locked.reason).to_owned(),
+            reason: locked.reason.into(),
             closed: locked.closed,
         });
     });
@@ -62,7 +51,10 @@ pub fn register_lock_subscribers(app: &tauri::AppHandle) {
 mod tests {
     use std::sync::{Arc, Mutex};
 
+    use trade_core::kernel::events::LockReason;
+
     use super::*;
+    use trade_core::ipc_contract::events::VaultLockedReason;
 
     fn recorded(bus: &EventBus) -> Arc<Mutex<Vec<VaultLockedPayload>>> {
         let seen = Arc::new(Mutex::new(vec![]));
@@ -83,7 +75,7 @@ mod tests {
             .into(),
         );
         let expected = VaultLockedPayload {
-            reason: "autolock".into(),
+            reason: VaultLockedReason::Autolock,
             closed: true,
         };
         assert_eq!(*seen.lock().unwrap(), vec![expected]);
