@@ -6,7 +6,7 @@ use crate::Amount;
 use crate::model::store::{AssetRef, PropertyInfo};
 use crate::model::store::{PropertyCategory, RevalueFloor, RevalueRule, StoreKind};
 use crate::model::transaction::Transaction;
-use crate::model::transaction::{KindDetails, PriceStamp, TopupTx};
+use crate::model::transaction::{AssetSellTx, KindDetails, PriceStamp, TopupTx};
 use crate::model::vault::ManualPrice;
 use crate::pricing::history::secs_or_now;
 use crate::service::StoreExtras;
@@ -318,4 +318,53 @@ fn a_purchase_without_a_label_is_signed_with_the_readers_base() {
         other => panic!("unexpected {other:?}"),
     };
     assert_eq!(stamp.price_base_currency.as_deref(), Some("eur"));
+}
+
+/// L9: a flat bought at 5M, revalued to 8M and then sold keeps its curve, so
+/// the months it was held are still valued.
+#[test]
+fn a_sold_flat_keeps_its_valuation_curve_in_past_months() {
+    let (_dir, mut vault) = empty_vault();
+    vault.set_base_currency("usd");
+    let flat = property(&mut vault, PropertyCategory::Flat);
+    buy(&mut vault, &flat, "5000000", "2020-01-10T00:00:00Z");
+    vault
+        .add_valuation(ValuationInput {
+            store_id: flat.clone(),
+            asset_key: thing().key(),
+            date: "2024-01-10".into(),
+            unit_price: amount("8000000"),
+            currency: "usd".into(),
+        })
+        .unwrap();
+    let mut sale = Transaction::AssetSell(AssetSellTx {
+        meta: meta("sold", &["income_other"]),
+        store_id: flat,
+        asset: thing(),
+        unit_price: amount("8000000"),
+        quantity: amount("1"),
+        currency: AssetRef::fiat("USD", "USD"),
+        proceeds_to: None,
+        fee: None,
+        price: PriceStamp::default(),
+    });
+    at(&mut sale, "2025-01-10T00:00:00Z");
+    vault.add_transaction(sale).unwrap();
+    let key = thing().key();
+    assert!(
+        vault.doc.holdings.iter().all(|row| row.asset.key() != key),
+        "the flat is no longer held"
+    );
+    let book = vault.rate_book();
+    let bought = secs_or_now("2020-01-10T00:00:00Z");
+    assert_eq!(book.history_price(&key, bought), Some(amount("5000000")));
+    let between = book
+        .history_price(&key, secs_or_now("2022-01-10T00:00:00Z"))
+        .expect("a month of the holding is valued");
+    assert!(
+        between > amount("5000000") && between < amount("8000000"),
+        "{between}"
+    );
+    let revalued = secs_or_now("2024-01-10T00:00:00Z");
+    assert_eq!(book.history_price(&key, revalued), Some(amount("8000000")));
 }

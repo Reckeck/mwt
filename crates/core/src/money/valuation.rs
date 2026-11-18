@@ -197,12 +197,12 @@ pub(crate) fn valuation_curves(books: &Books<'_>) -> HashMap<String, ValuationCu
     if !has_curves(doc) {
         return out;
     }
-    for store in &doc.stores {
-        if store.kind != StoreKind::Property {
-            continue;
-        }
-        for holding in doc.holdings.iter().filter(|row| row.store_id == store.id) {
-            let key = holding.asset.key();
+    for store in doc
+        .stores
+        .iter()
+        .filter(|store| store.kind == StoreKind::Property)
+    {
+        for key in property_assets(doc, store) {
             if out.contains_key(&key) {
                 continue;
             }
@@ -212,6 +212,35 @@ pub(crate) fn valuation_curves(books: &Books<'_>) -> HashMap<String, ValuationCu
         }
     }
     out
+}
+
+/// The assets a property held at any time, in the order they appear: the
+/// holdings, then what its valuations and operations name. A sold asset is
+/// no holding any more, but the months it was held keep their curve (`L9`).
+fn property_assets(doc: &VaultDoc, store: &Store) -> Vec<String> {
+    let held = doc
+        .holdings
+        .iter()
+        .filter(|row| row.store_id == store.id)
+        .map(|row| row.asset.key());
+    let valued = doc
+        .valuations
+        .iter()
+        .filter(|row| row.store_id == store.id)
+        .map(|row| row.asset_key.clone());
+    let traded = doc
+        .transactions
+        .iter()
+        .flat_map(Transaction::legs)
+        .filter(|leg| leg.store_id == store.id && !leg.asset.is_fiat())
+        .map(|leg| leg.asset.key());
+    let mut keys: Vec<String> = Vec::new();
+    for key in held.chain(valued).chain(traded) {
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys
 }
 
 /// The curve of one asset, if it has one.
