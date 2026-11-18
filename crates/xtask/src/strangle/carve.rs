@@ -18,7 +18,9 @@ use super::source::{self, LineIndex};
 
 #[derive(Args)]
 pub struct CarveArgs {
-    /// The carve description (`from`, `to`, `items`).
+    /// The carve description (`from`, `to`, `items`). Limit: a carved struct's private field read
+    /// is only detected on `self` and on the struct's snake_case name as binding (`Vault` ->
+    /// `vault`); a differently named binding is not seen and the compiler is the backstop.
     pub items: PathBuf,
 }
 
@@ -141,6 +143,10 @@ fn carve(files: &mut FileSet, service_dir: &str, items: &Items) -> Result<()> {
 
 /// A carved struct with a private field that the code left behind still reads cannot move: the
 /// field would be private to the new module. The message names the field.
+///
+/// Limit: reads are matched on `self` and on the snake_case binding of the struct name only
+/// (`Vault` -> `vault`). A read through a binding named otherwise (let or param types are not
+/// resolved) is not detected; the compiler is the backstop.
 fn refuse_private_fields(
     file: &syn::File,
     source: &str,
