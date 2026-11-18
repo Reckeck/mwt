@@ -141,6 +141,7 @@ fn render_events(events: &[EventMeta]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ipc::commands::tests::ipc_fns;
 
     #[test]
     fn camel_case_joins_the_words() {
@@ -164,14 +165,16 @@ mod tests {
 
     #[test]
     fn client_commands_cover_every_ipc_command_of_the_pilot() {
-        let source = include_str!("../commands/workflows.rs");
-        let declared = source
-            .lines()
-            .filter(|line| line.trim_start().starts_with("#[ipc("))
-            .count();
+        let declared: std::collections::BTreeSet<String> =
+            ipc_fns(include_str!("../commands/workflows.rs"))
+                .into_iter()
+                .collect();
+        let generated: std::collections::BTreeSet<String> = CLIENT_COMMANDS
+            .iter()
+            .map(|meta| meta.name.to_string())
+            .collect();
         assert_eq!(
-            declared,
-            CLIENT_COMMANDS.len(),
+            declared, generated,
             "CLIENT_COMMANDS is out of step with the #[ipc] commands of commands/workflows.rs"
         );
     }
