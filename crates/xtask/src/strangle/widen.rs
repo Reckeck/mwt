@@ -1,6 +1,7 @@
 //! `strangle widen`: every non-`pub` method of every `impl UnlockedVault` under the service dir
 //! becomes `pub(crate)`, so a method moved out of `service/` keeps access to its private siblings
-//! (spec D1, OD5). One token changes per method; nothing else.
+//! (spec D1, OD5). One token changes per method; nothing else. Fields of `UnlockedVault` (`password`,
+//! `key`, ...) are never touched here: the few a moved file reads are widened by hand in a named task.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -30,27 +31,10 @@ pub fn run(root: &Path, workspace: &Workspace) -> Result<()> {
             widened += count;
         }
     }
-    widened += widen_vault_definition(&mut files, &workspace.map.service_dir)?;
     let changed = files.changed().len();
     files.write()?;
-    println!("widen: {widened} method(s) and field(s) in {changed} file(s) are pub(crate) now");
+    println!("widen: {widened} method(s) in {changed} file(s) are pub(crate) now");
     Ok(())
-}
-
-/// The fields of `UnlockedVault` in `service/mod.rs` get the rule of the methods, so a moved
-/// method keeps reading them (`relocate` refuses until this ran).
-fn widen_vault_definition(files: &mut FileSet, service_dir: &str) -> Result<usize> {
-    let path = format!("{service_dir}/mod.rs");
-    let text = files.read(&path)?.to_string();
-    let wanted: BTreeSet<String> = unwidened_fields(&text, VAULT)
-        .with_context(|| path.clone())?
-        .into_iter()
-        .collect();
-    let (widened, names) = widen_fields(&text, VAULT, &wanted).with_context(|| path.clone())?;
-    if !names.is_empty() {
-        files.set(&path, widened)?;
-    }
-    Ok(names.len())
 }
 
 /// The source with its vault methods widened, and how many were.
@@ -147,33 +131,6 @@ fn struct_fields<'ast>(
         })
 }
 
-/// The source with the listed fields of `struct <name>` widened by the rule of `widen` (a
-/// non-`pub` field becomes `pub(crate)`), and the names of the fields that changed.
-pub fn widen_fields(
-    text: &str,
-    name: &str,
-    wanted: &BTreeSet<String>,
-) -> Result<(String, Vec<String>)> {
-    let file = syn::parse_file(text).context("parse")?;
-    let index = LineIndex::new(text);
-    let mut splices = Vec::new();
-    let mut widened = Vec::new();
-    for field in struct_fields(&file, name) {
-        let Some(ident) = field
-            .ident
-            .as_ref()
-            .filter(|ident| wanted.contains(&ident.to_string()))
-        else {
-            continue;
-        };
-        if let Some(splice) = source::widen(&index, &field.vis, ident.span().start()) {
-            splices.push(splice);
-            widened.push(ident.to_string());
-        }
-    }
-    Ok((source::apply(text, splices), widened))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,19 +217,25 @@ fn free() {}
     }
 
     #[test]
-    fn only_the_wanted_private_fields_are_widened() {
-        let text = "pub struct V {\n    /// Doc.\n    doc: u8,\n    pub(super) count: u8,\n    pub ok: u8,\n    other: u8,\n}\n";
+    fn field_visibility_helpers_tell_widened_from_private() {
+        let text = "pub struct V {\n    /// Doc.\n    doc: u8,\n    pub(super) count: u8,\n    pub ok: u8,\n    other: u8,\n    pub(crate) wide: u8,\n}\n";
         assert_eq!(private_fields(text, "V").unwrap(), ["doc", "other"]);
         assert_eq!(
             unwidened_fields(text, "V").unwrap(),
             ["doc", "count", "other"]
         );
-        let wanted: BTreeSet<String> = ["doc", "count", "ok"].map(String::from).into();
-        let (widened, names) = widen_fields(text, "V", &wanted).unwrap();
-        assert_eq!(names, ["doc", "count"]);
+    }
+
+    #[test]
+    fn run_leaves_the_vault_definition_fields_alone() {
+        let definition = "pub struct UnlockedVault {\n    password: String,\n    key: u8,\n    doc: u8,\n}\nimpl UnlockedVault {\n    fn read(&self) -> u8 { self.doc }\n}\n";
+        let tree = TempTree::new(&[(MAP_FILE, MAP), ("crates/svc/mod.rs", definition)]);
+        let workspace = Workspace::build(tree.root(), Map::load(tree.root()).unwrap()).unwrap();
+        run(tree.root(), &workspace).unwrap();
+        let text = std::fs::read_to_string(tree.root().join("crates/svc/mod.rs")).unwrap();
         assert_eq!(
-            widened,
-            "pub struct V {\n    /// Doc.\n    pub(crate) doc: u8,\n    pub(crate) count: u8,\n    pub ok: u8,\n    other: u8,\n}\n"
+            text,
+            definition.replace("    fn read", "    pub(crate) fn read")
         );
     }
 }

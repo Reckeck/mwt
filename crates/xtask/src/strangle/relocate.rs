@@ -77,7 +77,7 @@ fn move_file(files: &mut FileSet, map: &Map, home: &Home, source: &str) -> Resul
 }
 
 /// A moved file that reads a private field of `UnlockedVault` cannot leave `service/`: the field
-/// is widened once, by `strangle widen`, never by a stream (spec D5).
+/// is widened by hand in a named foundation task (T8 style), never by a stream (spec D5, OD5).
 fn refuse_private_vault_fields(files: &mut FileSet, service_dir: &str, source: &str) -> Result<()> {
     if !source.contains(VAULT) {
         return Ok(());
@@ -93,7 +93,7 @@ fn refuse_private_vault_fields(files: &mut FileSet, service_dir: &str, source: &
         return Ok(());
     }
     bail!(
-        "the moved file reads the private {VAULT} field(s) {}: run `strangle widen` first (it widens them in {definition})",
+        "the moved file reads the private {VAULT} field(s) {}: widen them by hand in {definition} in a named foundation task first (`strangle widen` touches methods only)",
         hidden.join(", ")
     )
 }
@@ -490,7 +490,7 @@ mod inner { use super::d; use crate::service::e; fn f() { crate::g; } }
         .unwrap();
         let error = relocated(&tree).unwrap_err().to_string();
         assert!(error.contains("field(s) count, doc"), "{error}");
-        assert!(error.contains("strangle widen"), "{error}");
+        assert!(error.contains("foundation task"), "{error}");
         assert_eq!(read(&tree, SERVICE), VAULT_FILE);
         assert_eq!(
             read(&tree, "crates/core/src/service/mod.rs"),
