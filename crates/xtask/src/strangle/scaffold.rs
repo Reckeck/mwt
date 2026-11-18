@@ -8,8 +8,11 @@ use anyhow::{Result, bail};
 use clap::Args;
 
 use super::fileset::FileSet;
-use super::home::USECASES;
+use super::home::{USECASES, core_dir};
 use super::map::{Area, ExtraStub, Map};
+
+/// What a stub starts with, so a real file is never overwritten (`relocate` checks for it).
+pub(super) const PLACEHOLDER: &str = "//! placeholder";
 
 #[derive(Args)]
 pub struct ScaffoldArgs {
@@ -53,12 +56,10 @@ struct Stub<'map> {
 }
 
 fn plan(map: &Map, files: &mut FileSet) -> Result<()> {
-    let core = Path::new(&map.service_dir)
-        .parent()
-        .map_or_else(String::new, |dir| dir.to_string_lossy().into_owned());
+    let core = core_dir(map);
     let lib = format!("{core}/lib.rs");
     for stub in stubs(map) {
-        let placeholder = format!("//! placeholder, filled by {}\n", stub.task);
+        let placeholder = format!("{PLACEHOLDER}, filled by {}\n", stub.task);
         let group = Module::declare(files, &lib, &core, stub.group)?;
         group.add_file(files, &stub.name, &placeholder)?;
         group.add_file(files, &format!("{}_tests", stub.name), &placeholder)?;
@@ -75,7 +76,7 @@ fn plan(map: &Map, files: &mut FileSet) -> Result<()> {
         ipc.add_file(
             files,
             &area.name,
-            &format!("//! placeholder, filled by {}\n", area.task),
+            &format!("{PLACEHOLDER}, filled by {}\n", area.task),
         )?;
     }
     for extra in &map.extra_stubs {
@@ -86,7 +87,7 @@ fn plan(map: &Map, files: &mut FileSet) -> Result<()> {
 
 /// `path` of an extra stub, created with its placeholder and declared in its parent module.
 fn extra_stub(files: &mut FileSet, lib: &str, core: &str, extra: &ExtraStub) -> Result<()> {
-    let placeholder = format!("//! placeholder, filled by {}\n", extra.task);
+    let placeholder = format!("{PLACEHOLDER}, filled by {}\n", extra.task);
     let is_dir = extra.path.ends_with('/');
     let trimmed = extra.path.trim_end_matches('/');
     let (parent, name) = trimmed.rsplit_once('/').unwrap_or(("", trimmed));

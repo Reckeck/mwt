@@ -14,14 +14,12 @@ use super::fileset::FileSet;
 use super::forward::{FORWARD_BEGIN, FORWARD_END};
 use super::home::{Home, homes};
 use super::map::Map;
+use super::scaffold::PLACEHOLDER;
 use super::source::{self, LineIndex, Splice};
 use super::widen::{field_reads, widen_fields};
 
 /// The struct whose private fields a moved method may read (spec D1, OD5).
 const VAULT: &str = "UnlockedVault";
-
-/// What a stub starts with, so a real file is never overwritten.
-const PLACEHOLDER: &str = "//! placeholder";
 
 #[derive(Args)]
 pub struct RelocateArgs {
