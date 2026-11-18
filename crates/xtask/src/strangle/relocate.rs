@@ -16,10 +16,7 @@ use super::home::{Home, homes};
 use super::map::Map;
 use super::scaffold::PLACEHOLDER;
 use super::source::{self, LineIndex, Splice};
-use super::widen::{field_reads, widen_fields};
-
-/// The struct whose private fields a moved method may read (spec D1, OD5).
-const VAULT: &str = "UnlockedVault";
+use super::widen::{VAULT, field_reads, unwidened_fields};
 
 #[derive(Args)]
 pub struct RelocateArgs {
@@ -71,7 +68,7 @@ fn move_file(files: &mut FileSet, map: &Map, home: &Home, source: &str) -> Resul
         bail!("{target} is not a placeholder stub: run `strangle scaffold` first");
     }
     let shim = shim_text(home, source)?;
-    widen_vault_fields(files, &map.service_dir, source)?;
+    refuse_private_vault_fields(files, &map.service_dir, source)?;
     for child in out_of_line_modules(home, source)? {
         move_child(files, home, &child)?;
     }
@@ -79,23 +76,26 @@ fn move_file(files: &mut FileSet, map: &Map, home: &Home, source: &str) -> Resul
     files.set(&home.shim(), shim)
 }
 
-/// A moved file that reads a private field of `UnlockedVault` leaves `service/`, so the field
-/// is widened to `pub(crate)` in `service/mod.rs` by the rule of `widen`.
-fn widen_vault_fields(files: &mut FileSet, service_dir: &str, source: &str) -> Result<()> {
+/// A moved file that reads a private field of `UnlockedVault` cannot leave `service/`: the field
+/// is widened once, by `strangle widen`, never by a stream (spec D5).
+fn refuse_private_vault_fields(files: &mut FileSet, service_dir: &str, source: &str) -> Result<()> {
     if !source.contains(VAULT) {
         return Ok(());
     }
     let definition = format!("{service_dir}/mod.rs");
-    let (text, widened) = widen_fields(files.read(&definition)?, VAULT, &field_reads(source)?)
-        .with_context(|| definition.clone())?;
-    if widened.is_empty() {
+    let reads = field_reads(source)?;
+    let hidden: Vec<String> = unwidened_fields(files.read(&definition)?, VAULT)
+        .with_context(|| definition.clone())?
+        .into_iter()
+        .filter(|field| reads.contains(field))
+        .collect();
+    if hidden.is_empty() {
         return Ok(());
     }
-    println!(
-        "relocate: widened {VAULT} field(s) {} in {definition}",
-        widened.join(", ")
-    );
-    files.set(&definition, text)
+    bail!(
+        "the moved file reads the private {VAULT} field(s) {}: run `strangle widen` first (it widens them in {definition})",
+        hidden.join(", ")
+    )
 }
 
 /// The names of the `mod x;` declarations of the file (inline modules move with the text).
@@ -480,7 +480,7 @@ mod inner { use super::d; use crate::service::e; fn f() { crate::g; } }
 ";
 
     #[test]
-    fn a_moved_method_reading_private_vault_fields_widens_exactly_those() {
+    fn a_moved_method_reading_private_vault_fields_is_refused_and_nothing_changes() {
         let tree = original_tree();
         std::fs::write(tree.root().join(SERVICE), VAULT_FILE).unwrap();
         std::fs::write(
@@ -488,17 +488,28 @@ mod inner { use super::d; use crate::service::e; fn f() { crate::g; } }
             VAULT_DEFINITION,
         )
         .unwrap();
-        relocated(&tree).unwrap();
+        let error = relocated(&tree).unwrap_err().to_string();
+        assert!(error.contains("field(s) count, doc"), "{error}");
+        assert!(error.contains("strangle widen"), "{error}");
+        assert_eq!(read(&tree, SERVICE), VAULT_FILE);
         assert_eq!(
             read(&tree, "crates/core/src/service/mod.rs"),
-            "pub struct UnlockedVault {
-    pub(crate) count: u32,
-    pub(crate) doc: String,
-    untouched: u32,
-    pub open: u32,
-}
-"
+            VAULT_DEFINITION
         );
+    }
+
+    #[test]
+    fn a_moved_method_reading_widened_vault_fields_moves() {
+        let tree = original_tree();
+        std::fs::write(tree.root().join(SERVICE), VAULT_FILE).unwrap();
+        std::fs::write(
+            tree.root().join("crates/core/src/service/mod.rs"),
+            VAULT_DEFINITION
+                .replace("    count", "    pub(crate) count")
+                .replace("    doc", "    pub(crate) doc"),
+        )
+        .unwrap();
+        relocated(&tree).unwrap();
         assert!(read(&tree, PURE).contains("self.count"));
     }
 

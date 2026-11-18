@@ -53,6 +53,20 @@ impl Corpus {
         self.files.get(path)
     }
 
+    /// One `<file>:<line>: macro body not scanned` note per macro call whose calls are not seen.
+    pub fn unscanned_notes(&self) -> Vec<String> {
+        self.files
+            .iter()
+            .flat_map(|(path, scanned)| {
+                scanned
+                    .facts
+                    .unscanned
+                    .iter()
+                    .map(move |line| format!("{path}:{line}: macro body not scanned"))
+            })
+            .collect()
+    }
+
     /// The files whose path starts with `prefix` (a directory with its trailing `/`).
     pub fn under<'corpus>(
         &'corpus self,

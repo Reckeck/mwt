@@ -466,4 +466,18 @@ impl UnlockedVault {
         let mut files = FileSet::new(tree.root());
         carve(&mut files, &map.service_dir, &items(&["Draft"])).unwrap();
     }
+
+    #[test]
+    fn a_carved_struct_whose_field_is_already_pub_crate_is_not_refused() {
+        let tree = TempTree::new(&[
+            (MAP_FILE, MAP),
+            (
+                "crates/svc/service/mod.rs",
+                "struct Draft {\n    pub(crate) secret: u32,\n    pub(super) other: u32,\n}\npub fn keep(draft: &Draft) -> u32 { draft.secret + draft.other }\n",
+            ),
+        ]);
+        let map = Map::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        carve(&mut files, &map.service_dir, &items(&["Draft"])).unwrap();
+    }
 }

@@ -182,3 +182,16 @@ fn test_files_are_found_by_declaration_name_and_inheritance() {
         ]
     );
 }
+
+#[test]
+fn unscanned_macro_bodies_are_shown_as_file_line_notes() {
+    let corpus = Corpus::from_sources(&[
+        (
+            "a.rs",
+            "fn f(vault: V) {\n    odd!(=> vault.hidden());\n}\n",
+        ),
+        ("b.rs", "fn g() {}\n"),
+    ])
+    .unwrap();
+    assert_eq!(corpus.unscanned_notes(), ["a.rs:2: macro body not scanned"]);
+}

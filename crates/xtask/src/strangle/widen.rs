@@ -13,6 +13,9 @@ use super::Workspace;
 use super::fileset::FileSet;
 use super::source::{self, LineIndex};
 
+/// The struct whose private fields a moved method may read (spec D1, OD5).
+pub const VAULT: &str = "UnlockedVault";
+
 pub fn run(root: &Path, workspace: &Workspace) -> Result<()> {
     let mut files = FileSet::new(root);
     let mut widened = 0;
@@ -27,10 +30,27 @@ pub fn run(root: &Path, workspace: &Workspace) -> Result<()> {
             widened += count;
         }
     }
+    widened += widen_vault_definition(&mut files, &workspace.map.service_dir)?;
     let changed = files.changed().len();
     files.write()?;
-    println!("widen: {widened} method(s) in {changed} file(s) are pub(crate) now");
+    println!("widen: {widened} method(s) and field(s) in {changed} file(s) are pub(crate) now");
     Ok(())
+}
+
+/// The fields of `UnlockedVault` in `service/mod.rs` get the rule of the methods, so a moved
+/// method keeps reading them (`relocate` refuses until this ran).
+fn widen_vault_definition(files: &mut FileSet, service_dir: &str) -> Result<usize> {
+    let path = format!("{service_dir}/mod.rs");
+    let text = files.read(&path)?.to_string();
+    let wanted: BTreeSet<String> = unwidened_fields(&text, VAULT)
+        .with_context(|| path.clone())?
+        .into_iter()
+        .collect();
+    let (widened, names) = widen_fields(&text, VAULT, &wanted).with_context(|| path.clone())?;
+    if !names.is_empty() {
+        files.set(&path, widened)?;
+    }
+    Ok(names.len())
 }
 
 /// The source with its vault methods widened, and how many were.
@@ -81,11 +101,32 @@ fn collect_field_reads(tokens: &[TokenTree], names: &mut BTreeSet<String>) {
     }
 }
 
-/// The named fields of `struct <name>` that are not `pub`, in the file's text.
+/// The named fields of `struct <name>` that no other module sees (no `pub` at all), in the
+/// file's text: a `pub(crate)` or `pub(super)` field is already widened.
 pub fn private_fields(text: &str, name: &str) -> Result<Vec<String>> {
+    fields_where(text, name, |vis| matches!(vis, Visibility::Inherited))
+}
+
+/// The named fields of `struct <name>` that `widen` would still change: neither `pub` nor
+/// `pub(crate)`. A method that leaves `service/` cannot read them.
+pub fn unwidened_fields(text: &str, name: &str) -> Result<Vec<String>> {
+    fields_where(text, name, |vis| {
+        !matches!(vis, Visibility::Public(_)) && !is_crate_visible(vis)
+    })
+}
+
+fn is_crate_visible(vis: &Visibility) -> bool {
+    matches!(vis, Visibility::Restricted(restricted) if restricted.path.is_ident("crate"))
+}
+
+fn fields_where(
+    text: &str,
+    name: &str,
+    wanted: impl Fn(&Visibility) -> bool,
+) -> Result<Vec<String>> {
     let file = syn::parse_file(text).context("parse")?;
     Ok(struct_fields(&file, name)
-        .filter(|field| !matches!(field.vis, Visibility::Public(_)))
+        .filter(|field| wanted(&field.vis))
         .filter_map(|field| field.ident.as_ref().map(ToString::to_string))
         .collect())
 }
@@ -221,8 +262,9 @@ fn free() {}
     #[test]
     fn only_the_wanted_private_fields_are_widened() {
         let text = "pub struct V {\n    /// Doc.\n    doc: u8,\n    pub(super) count: u8,\n    pub ok: u8,\n    other: u8,\n}\n";
+        assert_eq!(private_fields(text, "V").unwrap(), ["doc", "other"]);
         assert_eq!(
-            private_fields(text, "V").unwrap(),
+            unwidened_fields(text, "V").unwrap(),
             ["doc", "count", "other"]
         );
         let wanted: BTreeSet<String> = ["doc", "count", "ok"].map(String::from).into();

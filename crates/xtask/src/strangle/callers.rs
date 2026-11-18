@@ -26,6 +26,9 @@ pub fn run(root: &Path, args: &CallersArgs) -> Result<()> {
     for line in callers(&workspace, &baseline, args.area.as_deref())? {
         println!("{line}");
     }
+    for note in workspace.corpus.unscanned_notes() {
+        println!("{note}");
+    }
     Ok(())
 }
 
