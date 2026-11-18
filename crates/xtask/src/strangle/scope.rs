@@ -208,7 +208,7 @@ mod tests {
     #[test]
     fn an_extra_stub_is_green_for_its_task_and_red_for_another() {
         let file = changed(&["crates/core/src/usecases/react.rs"]);
-        let owner = findings(&real_workspace(), &file, Some("T45"));
+        let owner = findings(&real_workspace(), &file, Some("E"));
         assert!(owner.is_empty(), "{FIX_MAP}: {owner:?}");
         let other = findings(&real_workspace(), &file, Some("T26"));
         assert_eq!(other.len(), 1, "{FIX_MAP}: {other:?}");
