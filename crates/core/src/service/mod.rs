@@ -305,7 +305,7 @@ pub struct UnlockedVault {
     _lock: crate::storage::VaultLock,
     /// A sandbox copy: it runs every rule like the real vault but never
     /// writes the file (see [`Self::sandbox`]).
-    sandbox: bool,
+    pub(crate) sandbox: bool,
     /// What the last save looked like, to stamp changes for sync.
     tracker: Option<crate::sync::track::Tracker>,
     /// This device's clock for sync stamps.
