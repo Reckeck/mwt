@@ -14,6 +14,19 @@ pub struct Scanned {
     pub is_test: bool,
 }
 
+/// A macro call whose body the text scan does not look into.
+#[derive(Debug, PartialEq, Eq)]
+pub struct UnscannedMacro {
+    pub path: String,
+    pub line: usize,
+}
+
+impl std::fmt::Display for UnscannedMacro {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(out, "{}:{}: macro body not scanned", self.path, self.line)
+    }
+}
+
 /// Every `.rs` file of the scanned directories, by path relative to the workspace root.
 #[derive(Debug, Default)]
 pub struct Corpus {
@@ -53,8 +66,8 @@ impl Corpus {
         self.files.get(path)
     }
 
-    /// One `<file>:<line>: macro body not scanned` note per macro call whose calls are not seen.
-    pub fn unscanned_notes(&self) -> Vec<String> {
+    /// One entry per macro call whose calls are not seen, in file and line order.
+    pub fn unscanned_macros(&self) -> Vec<UnscannedMacro> {
         self.files
             .iter()
             .flat_map(|(path, scanned)| {
@@ -62,7 +75,10 @@ impl Corpus {
                     .facts
                     .unscanned
                     .iter()
-                    .map(move |line| format!("{path}:{line}: macro body not scanned"))
+                    .map(move |line| UnscannedMacro {
+                        path: path.clone(),
+                        line: *line,
+                    })
             })
             .collect()
     }

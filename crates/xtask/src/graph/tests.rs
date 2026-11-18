@@ -252,3 +252,34 @@ fn dry_run_prints_each_command_in_order_and_marks_built_ins() {
         "a                  Light  after: b\n"
     );
 }
+
+#[tokio::test]
+async fn ok_note_reaches_the_sink_as_ok_with_its_reason() {
+    let dir = scratch();
+    let events = dir.join("events");
+    let tasks = vec![Task::func("noted", Class::Light, &[], |_ctx| async {
+        Outcome::OkNote("degraded run".into())
+    })];
+    let reports = run_graph(
+        tasks,
+        Opts {
+            heavy: 1,
+            browser: 1,
+            keep_going: false,
+        },
+        CancellationToken::new(),
+        Arc::new(Sink::new(Some(std::fs::File::create(&events).unwrap()))),
+        &dir,
+        &dir.join("logs"),
+    )
+    .await;
+    assert_eq!(status(&reports, "noted"), Status::Ok);
+    assert_eq!(reports[0].note, "degraded run");
+    let written = std::fs::read_to_string(events).unwrap();
+    assert!(
+        written
+            .lines()
+            .any(|line| line.contains("OK     noted") && line.ends_with(": degraded run")),
+        "{written}"
+    );
+}

@@ -67,9 +67,10 @@ fn collect_field_reads(tokens: &[TokenTree], receivers: &[&str], names: &mut BTr
 }
 
 /// The named fields of `struct <name>` that are not visible outside the module that defines the
-/// struct: no `pub` at all, or `pub(self)`. Any wider form (`pub`, `pub(crate)`, `pub(super)`,
-/// `pub(in path)`) reaches code outside that module's subtree, which is where a moved or carved
-/// item lands, so those fields are never reported.
+/// struct: no `pub` at all, `pub(self)` or `pub(in self)`. Any wider form (`pub`, `pub(crate)`,
+/// `pub(super)`, `pub(in path)`) reaches code outside that module's subtree, which is where a moved or carved
+/// item lands, so those fields are never reported. Known limit: `pub(in self::child)` and other
+/// subtree paths count as visible (not hidden), the conservative side.
 pub fn hidden_fields(text: &str, name: &str) -> Result<Vec<String>> {
     let file = syn::parse_file(text).context("parse")?;
     Ok(struct_fields(&file, name)
@@ -141,5 +142,11 @@ mod tests {
     fn only_fields_invisible_outside_the_module_are_hidden() {
         let text = "pub struct V {\n    /// Doc.\n    doc: u8,\n    pub(super) count: u8,\n    pub ok: u8,\n    other: u8,\n    pub(crate) wide: u8,\n    pub(self) own: u8,\n}\n";
         assert_eq!(hidden_fields(text, "V").unwrap(), ["doc", "other", "own"]);
+    }
+
+    #[test]
+    fn pub_in_self_is_hidden_and_pub_in_a_subtree_path_is_not() {
+        let text = "struct V {\n    pub(in self) own: u8,\n    pub(in self::child) sub: u8,\n    pub(in crate::a) far: u8,\n}\n";
+        assert_eq!(hidden_fields(text, "V").unwrap(), ["own"]);
     }
 }

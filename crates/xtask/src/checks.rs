@@ -232,24 +232,37 @@ fn strangle_args(base: Option<&str>) -> Vec<String> {
 /// Runs this very binary, so no second cargo build is started.
 fn strangle() -> Task {
     Task::func("strangle", Class::Light, &[], |ctx: Ctx| async move {
-        let program = match std::env::current_exe() {
-            Ok(path) => path.display().to_string(),
-            Err(error) => return Outcome::Fail(format!("{error:#}")),
-        };
-        let base = diff_base(std::env::var("GITHUB_BASE_REF").ok().as_deref());
-        let known = ctx
-            .capture("git", &["rev-parse", "--verify", "--quiet", &base])
-            .await
-            .is_some();
-        let notice = (!known).then(|| missing_base_notice(&base));
-        let cmd = Cmd::new(&program).args(strangle_args(known.then_some(base.as_str())));
-        match ctx.exec(&cmd).await {
-            Ok(ExecEnd::Done(0)) => notice.map_or(Outcome::Ok, Outcome::OkNote),
-            Ok(ExecEnd::Done(code)) => Outcome::Fail(format!("strangle check exited with {code}")),
-            Ok(ExecEnd::Cancelled) => Outcome::Cancelled,
+        match std::env::current_exe() {
+            Ok(path) => strangle_outcome(&ctx, &path.display().to_string()).await,
             Err(error) => Outcome::Fail(format!("{error:#}")),
         }
     })
+}
+
+/// Runs `program strangle check --all [--diff <base>]` and maps its exit to an outcome.
+async fn strangle_outcome(ctx: &Ctx, program: &str) -> Outcome {
+    let base = diff_base(std::env::var("GITHUB_BASE_REF").ok().as_deref());
+    let known = ctx
+        .capture("git", &["rev-parse", "--verify", "--quiet", &base])
+        .await
+        .is_some();
+    let notice = (!known).then(|| missing_base_notice(&base));
+    let cmd = Cmd::new(program).args(strangle_args(known.then_some(base.as_str())));
+    match ctx.exec(&cmd).await {
+        Ok(ExecEnd::Done(0)) => notice.map_or(Outcome::Ok, Outcome::OkNote),
+        Ok(ExecEnd::Done(code)) => Outcome::Fail(strangle_failure(code, notice.as_deref())),
+        Ok(ExecEnd::Cancelled) => Outcome::Cancelled,
+        Err(error) => Outcome::Fail(format!("{error:#}")),
+    }
+}
+
+/// The failure reason of `strangle check`, with the missing-base notice kept on a second line.
+fn strangle_failure(code: i32, notice: Option<&str>) -> String {
+    let reason = format!("strangle check exited with {code}");
+    match notice {
+        Some(text) => format!("{reason}\n{text}"),
+        None => reason,
+    }
 }
 
 /// Regenerates ipc.gen.d.ts and fails when it differs from the committed file; the file is put back.
@@ -289,7 +302,11 @@ fn gen_types(_root: &Path) -> Task {
 mod tests {
     use super::{
         BrowserOpts, browser_cmd, diff_base, missing_base_notice, parse_shard, strangle_args,
+        strangle_failure, strangle_outcome,
     };
+    use crate::exec::Ctx;
+    use crate::graph::Outcome;
+    use tokio_util::sync::CancellationToken;
 
     fn opts(quick: bool, shard: Option<&str>, jobs: Option<usize>) -> BrowserOpts {
         BrowserOpts {
@@ -355,5 +372,30 @@ mod tests {
             "base ref origin/development not found locally: running --all without --diff"
         );
         assert!(!notice.contains('\n'));
+    }
+
+    #[test]
+    fn strangle_failure_keeps_the_missing_base_notice() {
+        let notice = missing_base_notice("origin/development");
+        let reason = strangle_failure(1, Some(&notice));
+        assert!(reason.starts_with("strangle check exited with 1"));
+        assert!(reason.contains(&notice));
+        assert_eq!(strangle_failure(1, None), "strangle check exited with 1");
+    }
+
+    #[tokio::test]
+    async fn strangle_without_a_base_passes_with_the_notice() {
+        // Not a git repository: the base ref cannot be found.
+        let root = std::env::temp_dir().join(format!("xtask-strangle-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let ctx = Ctx {
+            log: root.join("strangle.log"),
+            root,
+            cancel: CancellationToken::new(),
+        };
+        let Outcome::OkNote(note) = strangle_outcome(&ctx, "true").await else {
+            panic!("expected OkNote");
+        };
+        assert!(note.contains("not found locally"), "{note}");
     }
 }

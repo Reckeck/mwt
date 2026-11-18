@@ -193,7 +193,15 @@ fn unscanned_macro_bodies_are_shown_as_file_line_notes() {
         ("b.rs", "fn g() {}\n"),
     ])
     .unwrap();
-    assert_eq!(corpus.unscanned_notes(), ["a.rs:2: macro body not scanned"]);
+    let found = corpus.unscanned_macros();
+    assert_eq!(
+        found,
+        [UnscannedMacro {
+            path: "a.rs".to_string(),
+            line: 2
+        }]
+    );
+    assert_eq!(found[0].to_string(), "a.rs:2: macro body not scanned");
 }
 
 #[test]
@@ -218,4 +226,23 @@ fn json_bodies_are_parsed_as_expressions_and_their_vault_calls_found() {
         );
     }
     assert!(facts.unscanned.is_empty());
+}
+
+#[test]
+fn json_path_calls_are_not_mistaken_for_keys() {
+    let source = "fn f(vault: V) {\n    let v = json!({\"k\": [a::b(vault.foo())]});\n}\n";
+    let facts = scan_source(source).unwrap();
+    assert!(
+        facts
+            .calls
+            .iter()
+            .any(|call| call.name == "foo" && call.on_vault)
+    );
+    assert!(facts.unscanned.is_empty());
+}
+
+#[test]
+fn json_body_with_a_self_call_it_cannot_parse_is_unscanned() {
+    let source = "fn f() {\n    let v = json!({\"a\": Self::foo(), \"b\": @});\n}\n";
+    assert_eq!(scan_source(source).unwrap().unscanned, [2]);
 }
