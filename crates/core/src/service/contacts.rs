@@ -5,7 +5,7 @@ pub use crate::household::contacts::{
 };
 
 use crate::error::Result;
-use crate::model::contact::{Contact, ContactAccount};
+use crate::model::contact::Contact;
 
 use super::UnlockedVault;
 use super::forward::forward;
@@ -48,9 +48,4 @@ impl UnlockedVault {
             => crate::usecases::household::contacts::set_debt_terms;
     }
     // forward:end
-
-    /// The accounts of a contact or a guest, trimmed and checked.
-    pub(crate) fn clean_accounts(accounts: Vec<ContactAccount>) -> Result<Vec<ContactAccount>> {
-        crate::household::contacts::clean_accounts(accounts)
-    }
 }
