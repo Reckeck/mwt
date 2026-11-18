@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn vault_changed_still_fires() {
+    fn vault_changed_and_vault_locked_are_registered() {
         assert_eq!(VaultChanged::NAME, "vault-changed");
         assert_eq!(VaultLocked::NAME, "vault-locked");
     }
