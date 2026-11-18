@@ -5,6 +5,7 @@
 
 use std::cell::OnceCell;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::Amount;
 use crate::model::vault::VaultDoc;
@@ -40,10 +41,6 @@ impl<'vault> Books<'vault> {
     }
 
     /// The open vault this context reads.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "first caller arrives with the pilot")
-    )]
     pub(crate) fn vault(&self) -> &'vault UnlockedVault {
         self.vault
     }
@@ -71,7 +68,22 @@ impl<'vault> Books<'vault> {
 
     /// The rates at a moment, built on first use.
     pub fn rate_book(&self) -> &RateBook {
-        self.rate_book.get_or_init(|| self.vault.build_rate_book())
+        self.rate_book.get_or_init(|| self.build_rate_book())
+    }
+
+    /// A fresh book of this vault: the curves are built here (`valuation_curves`)
+    /// and go into `RateBook::build`, which reads nothing but its input. The one
+    /// place a book is built; counts builds in tests.
+    pub(crate) fn build_rate_book(&self) -> RateBook {
+        #[cfg(test)]
+        BUILDS.with(|count| count.set(count.get() + 1));
+        let curves = self
+            .vault
+            .valuation_curves()
+            .into_iter()
+            .map(|(key, curve)| (key, Arc::new(curve) as _))
+            .collect();
+        RateBook::build(&self.vault.doc, curves).with_base(self.base_and_fx().0)
     }
 
     /// For each payment of mine linked to a shared event: the share of it
