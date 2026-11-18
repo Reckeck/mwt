@@ -427,3 +427,7 @@ pub fn clear_estimated(tx: &mut Transaction) -> bool {
         _ => false,
     }
 }
+
+#[cfg(test)]
+#[path = "events_tests.rs"]
+mod events_tests;
