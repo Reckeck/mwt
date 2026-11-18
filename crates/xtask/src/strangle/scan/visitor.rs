@@ -1,7 +1,7 @@
 //! The `syn` visitor behind `scan_source`: one pass over a file that fills its `FileFacts`.
 
 use anyhow::{Context, Result};
-use proc_macro2::{TokenStream, TokenTree};
+use proc_macro2::{Delimiter, TokenStream, TokenTree};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
@@ -159,7 +159,10 @@ impl<'ast> Visit<'ast> for Scanner {
         for name in idents_of(node.tokens.clone()) {
             self.note_ident(name);
         }
-        match macro_arguments(node) {
+        let arguments: Option<Vec<Expr>> = macro_arguments(node)
+            .map(|parsed| parsed.into_iter().collect())
+            .or_else(|| json_values(node));
+        match arguments {
             Some(arguments) => {
                 for argument in &arguments {
                     visit::visit_expr(self, argument);
@@ -175,12 +178,83 @@ impl<'ast> Visit<'ast> for Scanner {
     }
 }
 
-/// Macros whose body is a definition or data, never a vault call: `macro_rules!`, `json!`.
-fn cannot_hold_vault_call(node: &Macro) -> bool {
+/// Macros whose body is a definition, never a vault call.
+const EXEMPT_MACROS: [&str; 1] = ["macro_rules"];
+
+/// Macros whose body is JSON-like data; its values are expressions.
+const JSON_MACROS: [&str; 1] = ["json"];
+
+fn macro_named(node: &Macro, names: &[&str]) -> bool {
     node.path
         .segments
         .last()
-        .is_some_and(|segment| segment.ident == "macro_rules" || segment.ident == "json")
+        .is_some_and(|segment| names.iter().any(|name| segment.ident == name))
+}
+
+/// A body that cannot be read and holds no method call cannot hide a vault call.
+fn cannot_hold_vault_call(node: &Macro) -> bool {
+    macro_named(node, &EXEMPT_MACROS)
+        || (macro_named(node, &JSON_MACROS) && !has_method_call(node.tokens.clone()))
+}
+
+/// The value expressions of a `json!` body (`{"k": expr, "list": [a, b]}`); `None` when a value
+/// does not parse as an expression.
+fn json_values(node: &Macro) -> Option<Vec<Expr>> {
+    if !macro_named(node, &JSON_MACROS) {
+        return None;
+    }
+    let mut values = Vec::new();
+    collect_json_values(node.tokens.clone(), &mut values).then_some(values)
+}
+
+fn collect_json_values(tokens: TokenStream, values: &mut Vec<Expr>) -> bool {
+    let mut segment: Vec<TokenTree> = Vec::new();
+    let mut segments: Vec<Vec<TokenTree>> = Vec::new();
+    for tree in tokens {
+        if matches!(&tree, TokenTree::Punct(punct) if punct.as_char() == ',') {
+            segments.push(std::mem::take(&mut segment));
+        } else {
+            segment.push(tree);
+        }
+    }
+    segments.push(segment);
+    segments
+        .into_iter()
+        .filter(|parts| !parts.is_empty())
+        .all(|parts| collect_json_value(parts, values))
+}
+
+fn collect_json_value(mut parts: Vec<TokenTree>, values: &mut Vec<Expr>) -> bool {
+    let keyed = matches!(parts.get(1), Some(TokenTree::Punct(punct)) if punct.as_char() == ':');
+    if keyed {
+        parts.drain(..2);
+    }
+    if let [TokenTree::Group(group)] = parts.as_slice()
+        && matches!(group.delimiter(), Delimiter::Brace | Delimiter::Bracket)
+    {
+        return collect_json_values(group.stream(), values);
+    }
+    match syn::parse2::<Expr>(parts.into_iter().collect()) {
+        Ok(expr) => {
+            values.push(expr);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// Whether the tokens hold `.name(..)`, groups included.
+fn has_method_call(tokens: TokenStream) -> bool {
+    let trees: Vec<TokenTree> = tokens.into_iter().collect();
+    trees.iter().enumerate().any(|(index, tree)| match tree {
+        TokenTree::Group(group) => has_method_call(group.stream()),
+        TokenTree::Punct(punct) if punct.as_char() == '.' => matches!(
+            (trees.get(index + 1), trees.get(index + 2)),
+            (Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)))
+                if call.delimiter() == Delimiter::Parenthesis
+        ),
+        _ => false,
+    })
 }
 
 /// The body of a macro call read as `Punctuated<Expr, Comma>` (`format!`, `assert!`, `vec![a, b]`);
