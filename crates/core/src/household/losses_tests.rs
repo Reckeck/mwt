@@ -10,7 +10,7 @@ use crate::model::transaction::AccountRef;
 use crate::model::transaction::{ConvertSide, ConvertTx, Leg, PriceStamp, Transaction, TxMeta};
 use crate::model::vault::{FxPoint, PricePoint, VaultDoc};
 use crate::service::test_support::*;
-use crate::service::{SaveHook, UnlockedVault};
+use crate::service::{Report, ReportFilter, ReportKind, SaveHook, UnlockedVault};
 
 fn rub() -> AssetRef {
     AssetRef::fiat("RUB", "Ruble")
@@ -368,4 +368,47 @@ fn the_delegates_equal_the_scenarios() {
         vault.fx_table(&favorites),
         crate::usecases::household::losses::fx_table(&vault, &favorites)
     );
+}
+
+/// L5: a side without a price is no evidence of a spread. The missing side
+/// used to count as zero, so 1000 USDT given for an unlisted token read as a
+/// loss of 1000.
+#[test]
+fn an_unlisted_token_bought_for_usdt_has_no_slippage_but_stays_incomplete() {
+    let (_dir, mut vault, _card, wallet, _) = setup();
+    let token = AssetRef::crypto("ZZZ", "Unlisted", None, Chain::Tron);
+    let bought = convert(
+        (&wallet, usdt(), "1000"),
+        (&wallet, token, "500"),
+        None,
+        "2026-02-01T10:00:00Z",
+    );
+    let id = bought.meta().id.clone();
+    vault.doc.transactions.push(bought);
+
+    let loss = vault.tx_loss(&id).unwrap();
+    assert_eq!(loss.slippage, Amount::ZERO);
+    assert_eq!(loss.total, Amount::ZERO);
+    assert!(!loss.complete);
+    assert!(vault.tx_losses().contains_key(&id));
+
+    let filter = ReportFilter {
+        from: Some("2026-01".into()),
+        to: Some("2026-03".into()),
+        currency: Some("usd".into()),
+        ..ReportFilter::default()
+    };
+    let Report::Losses(report) = vault
+        .report(
+            ReportKind::Losses,
+            &filter,
+            secs("2026-03-15T00:00:00Z"),
+            "UTC",
+        )
+        .unwrap()
+    else {
+        panic!("a losses report");
+    };
+    assert_eq!(report.total.slippage, Amount::ZERO);
+    assert_eq!(report.incomplete, 1);
 }

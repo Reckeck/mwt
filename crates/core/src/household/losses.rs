@@ -174,14 +174,15 @@ pub fn loss_of(
     {
         fee = values.value_at(&paid.asset, paid.amount.abs(), currency, secs);
     }
+    let mut priced = true;
     let mut market = |asset: &AssetRef, qty: Amount| {
         let value = values.value_at(asset, qty.abs(), currency, secs);
         if value.is_zero() && !qty.is_zero() {
-            complete = false;
+            priced = false;
         }
         value
     };
-    let slippage = match tx {
+    let spread = match tx {
         Transaction::Convert(inner) => {
             market(&inner.from.asset, inner.from.amount) - market(&inner.to.asset, inner.to.amount)
         }
@@ -195,6 +196,10 @@ pub fn loss_of(
         }
         _ => Amount::ZERO,
     };
+    // A side without a price is no evidence of a spread (L5): the spread counts
+    // only when every side was priced; `complete` says so.
+    let slippage = if priced { spread } else { Amount::ZERO };
+    complete &= priced;
     let fee = fee.round(2);
     let slippage = slippage.round(2);
     TxLoss {
