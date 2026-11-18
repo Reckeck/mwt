@@ -15,7 +15,8 @@ use crate::ipc::commands::ipc_commands;
 
 /// Fetch a source's page and take its value out; the error text is what the
 /// source's status shows. The core's `apply_source_fetch` takes that text as a
-/// `String`, so the sandbox refusal is the only error stringified here.
+/// `String`, so every error here (the sandbox refusal, the page fetch and the
+/// extraction) becomes that status `String`, not only the sandbox refusal.
 async fn fetch_value(app: &AppHandle, source: &DataSource) -> Result<Extracted, String> {
     let state = app.state::<AppState>();
     crate::commands::sandbox::refuse(&state, "fetching a data source")

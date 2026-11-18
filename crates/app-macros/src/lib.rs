@@ -329,6 +329,12 @@ fn parse_signature(function: &ItemFn, mode: Mode) -> Result<Signature, Error> {
     for param in params {
         let (name, ty) = param_ident(param)?;
         if !is_reference_to(ty, "AppHandle", false) {
+            if name == "app" {
+                return Err(Error::new_spanned(
+                    name,
+                    "`app` is reserved by #[ipc] for the &AppHandle",
+                ));
+            }
             arguments.push(Argument {
                 name: name.clone(),
                 ty: ty.clone(),
@@ -379,6 +385,8 @@ fn ts_printer(ty: &Type) -> TokenStream {
 /// What the three generated items share.
 struct Command<'a> {
     name: &'a Ident,
+    runner_name: Ident,
+    meta_name: Ident,
     ok: Type,
     signature: Signature,
 }
@@ -401,7 +409,7 @@ impl Command<'_> {
 fn command_item(command: &Command, attrs: &[Attribute]) -> TokenStream {
     let (name, ok) = (command.name, &command.ok);
     let (names, types) = (command.names(), command.types());
-    let runner_name = format_ident!("__ipc_run_{}", name);
+    let runner_name = &command.runner_name;
     quote! {
         #(#attrs)*
         #[tauri::command]
@@ -442,10 +450,9 @@ fn call_args(command: &Command, mode: Mode) -> Vec<TokenStream> {
 /// The runner: the body behind its gate, generic over the host so tests run
 /// it without a Tauri runtime.
 fn runner_item(command: &Command, function: &ItemFn, flags: Flags) -> TokenStream {
-    let (name, ok) = (command.name, &command.ok);
+    let ok = &command.ok;
     let (names, types) = (command.names(), command.types());
-    let runner_name = format_ident!("__ipc_run_{}", name);
-    let meta_name = format_ident!("__IPC_META_{}", name);
+    let (runner_name, meta_name) = (&command.runner_name, &command.meta_name);
     let host_name = format_ident!("{}", HOST);
     let handle_name = format_ident!("{}", HANDLE);
     let body = body_fn(function);
@@ -494,7 +501,7 @@ fn runner_item(command: &Command, function: &ItemFn, flags: Flags) -> TokenStrea
 /// The `CommandMeta` constant the TS generator reads.
 fn meta_item(command: &Command) -> TokenStream {
     let name = command.name;
-    let meta_name = format_ident!("__IPC_META_{}", name);
+    let meta_name = &command.meta_name;
     let names = command.names();
     let printers: Vec<TokenStream> = command.types().into_iter().map(ts_printer).collect();
     let ret_printer = ts_printer(&command.ok);
@@ -522,6 +529,8 @@ fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream, Error> {
     }
     let command = Command {
         name: &function.sig.ident,
+        runner_name: format_ident!("__ipc_run_{}", function.sig.ident),
+        meta_name: format_ident!("__IPC_META_{}", function.sig.ident),
         ok: ok_type(&function)?,
         signature: parse_signature(&function, flags.mode)?,
     };
@@ -647,6 +656,12 @@ mod tests {
     fn a_misnamed_app_handle_is_refused() {
         let item = "fn status(state: &AppState, handle: &AppHandle) -> Result<()> { todo!() }";
         assert!(error_of("locked_ok", item).contains("must be named `app`"));
+    }
+
+    #[test]
+    fn an_app_argument_that_is_not_the_app_handle_is_refused() {
+        let item = "fn list(vault: &UnlockedVault, app: String) -> Result<()> { todo!() }";
+        assert!(error_of("read", item).contains("`app` is reserved by #[ipc] for the &AppHandle"));
     }
 
     #[test]
