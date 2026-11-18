@@ -1,27 +1,43 @@
-//! Scenarios of the shared events area (the event, its people and items, and
-//! settling): each decides in `household::shared_events`, then ends in one
-//! `vault.transact`. A settlement that makes a real operation writes the
-//! operation first through the transactions area, then records the settlement.
+//! Scenarios of the shared events area (the event, its people and items,
+//! purchases, settling, the ledger and the budget figures): each decides in
+//! `household::shared_events`, then ends in one `vault.transact`. A settlement
+//! or a purchase that makes a real operation writes the operation first through
+//! the transactions area, then records itself in the event.
 
+use chrono::{Datelike, NaiveDate};
+
+use crate::calendar::Calendar;
 use crate::error::{Error, Result};
+use crate::household::shared_events::analytics::{category_group, extras_between, value_in};
+use crate::household::shared_events::ledger::{apply_edit, cascade_delete};
+use crate::household::shared_events::purchases::{
+    PaymentStep, PurchaseEdit, link_purchase, plan_add_purchase, plan_attach_payment,
+    plan_delete_purchase, plan_update_purchase,
+};
 use crate::household::shared_events::settle::{
     plan_due, plan_reassign, plan_settle, plan_take_back, plan_write_off,
 };
+use crate::household::shared_events::text::share_text;
 use crate::household::shared_events::{
     check_archivable, find_event, plan_add_item, plan_add_participant, plan_create_event,
     plan_delete_item, plan_guest_contact, plan_item_split, plan_remove_participant,
     plan_share_override, plan_update_event, plan_update_item, plan_update_participant,
 };
 use crate::ipc_contract::{
-    SetShareOverrideInput, SetSharedDueInput, SetSharedItemSplitInput, SettleSharedInput,
-    SharedEventDraft, SharedItemDraft, SharedParticipantDraft, SharedRemainderInput,
+    AttachPaymentInput, SetShareOverrideInput, SetSharedDueInput, SetSharedItemSplitInput,
+    SettleSharedInput, SharedEventDraft, SharedItemDraft, SharedParticipantDraft,
+    SharedPurchaseDraft, SharedRemainderInput,
 };
 use crate::kernel::tx::Tx;
+use crate::model::VaultDoc;
 use crate::model::contact::{Contact, DebtTerms};
 use crate::model::shared_event::{Settlement, SharedEvent};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
-use crate::service::{SharedEventView, UnlockedVault};
+use crate::money::rates::RateBook;
+use crate::money::shared_ratios::SharedExtra;
+use crate::service::{FlowClass, SharedEventView, UnlockedVault};
+use crate::usecases::planning::budget::Flow;
 
 /// Put the event in place of its older self. An archived event that was
 /// edited is open again.
@@ -42,22 +58,6 @@ fn commit_event(vault: &mut UnlockedVault, event: SharedEvent) -> Result<SharedE
     let id = event.id.clone();
     vault.transact(|tx| store_event(tx, event))?;
     vault.shared_event_view(&id)
-}
-
-/// Save after a change to the event: an archived event that was edited is
-/// open again.
-pub fn persist_event(vault: &mut UnlockedVault, id: &str) -> Result<()> {
-    vault.transact(|tx| {
-        if let Some(event) = tx
-            .doc_mut()
-            .shared_events
-            .iter_mut()
-            .find(|event| event.id == id)
-        {
-            event.archived = false;
-        }
-        Ok(())
-    })
 }
 
 pub fn create_shared_event(
@@ -293,7 +293,7 @@ pub fn delete_shared_settlement(
 ) -> Result<SharedEventView> {
     let tx_id = plan_take_back(&vault.doc, event_id, settlement_id)?;
     if let Some(tx_id) = tx_id {
-        vault.drop_shared_tx(&tx_id);
+        drop_shared_tx(vault, &tx_id);
         vault.recompute_holdings();
     }
     let mut event = find_event(&vault.doc, event_id)?.clone();
@@ -311,4 +311,147 @@ pub fn set_shared_due(
 ) -> Result<Option<DebtTerms>> {
     let draft = plan_due(&vault.doc, input)?;
     vault.set_debt_terms(draft)
+}
+
+/// Remove a transaction without saving; the caller saves.
+fn drop_shared_tx(vault: &mut UnlockedVault, tx_id: &str) {
+    vault.doc.transactions.retain(|tx| tx.meta().id != tx_id);
+    vault.set_property_link(tx_id, None);
+}
+
+/// Do what a changed purchase asks of the vault's payments, then write the
+/// event. Nothing of the event is saved if the vault refuses the payment.
+fn commit_purchase(vault: &mut UnlockedVault, edit: PurchaseEdit) -> Result<SharedEventView> {
+    let PurchaseEdit { mut event, payment } = edit;
+    match payment {
+        PaymentStep::Keep => {}
+        PaymentStep::Add {
+            payment,
+            purchase_id,
+        } => {
+            let saved = vault.add_transaction(payment)?;
+            link_purchase(&mut event, &purchase_id, &saved.meta().id);
+        }
+        PaymentStep::Update { tx_id, payment } => {
+            vault.update_transaction_unsynced(&tx_id, payment)?;
+        }
+        PaymentStep::Drop { tx_id } => {
+            drop_shared_tx(vault, &tx_id);
+            vault.recompute_holdings();
+        }
+    }
+    commit_event(vault, event)
+}
+
+pub fn add_shared_purchase(
+    vault: &mut UnlockedVault,
+    event_id: &str,
+    draft: SharedPurchaseDraft,
+) -> Result<SharedEventView> {
+    let books = vault.books();
+    let edit = plan_add_purchase(books.rate_book(), books.doc(), event_id, &draft, &now_iso())?;
+    commit_purchase(vault, edit)
+}
+
+/// Change a purchase; its item stays. A payment the event made follows the
+/// change; an adopted payment keeps its own amount and only the number of
+/// units can change.
+pub fn update_shared_purchase(
+    vault: &mut UnlockedVault,
+    event_id: &str,
+    purchase_id: &str,
+    draft: SharedPurchaseDraft,
+) -> Result<SharedEventView> {
+    let books = vault.books();
+    let edit = plan_update_purchase(
+        books.rate_book(),
+        books.doc(),
+        event_id,
+        purchase_id,
+        &draft,
+        &now_iso(),
+    )?;
+    commit_purchase(vault, edit)
+}
+
+/// Delete a purchase with the payment the event made for it; an adopted
+/// payment stays in the vault, unlinked.
+pub fn delete_shared_purchase(
+    vault: &mut UnlockedVault,
+    event_id: &str,
+    purchase_id: &str,
+) -> Result<SharedEventView> {
+    let edit = plan_delete_purchase(&vault.doc, event_id, purchase_id)?;
+    commit_purchase(vault, edit)
+}
+
+/// Take a payment that is already in the vault as my purchase of the event.
+pub fn attach_payment_to_shared_event(
+    vault: &mut UnlockedVault,
+    input: AttachPaymentInput,
+) -> Result<SharedEventView> {
+    let purchase_id = crate::service::sync_ids::payment_link_id(&input.tx_id);
+    let books = vault.books();
+    let event = plan_attach_payment(books.rate_book(), books.doc(), &input, purchase_id)?;
+    commit_event(vault, event)
+}
+
+/// Drop the purchases and settlements of every event that point at an
+/// operation about to be deleted. Reopens an archived event. The caller saves.
+pub(crate) fn cascade_shared_delete(vault: &mut UnlockedVault, tx_id: &str) {
+    cascade_delete(&mut vault.doc.shared_events, tx_id);
+}
+
+/// Put the event a ledger edit planned in place of its older self. The caller
+/// saves.
+pub(crate) fn apply_shared_edit(vault: &mut UnlockedVault, next: Option<SharedEvent>) {
+    apply_edit(&mut vault.doc.shared_events, next);
+}
+
+/// The settlement as text for a chat, in `ru` or `en`.
+pub fn shared_event_share_text(
+    vault: &UnlockedVault,
+    event_id: &str,
+    locale: &str,
+) -> Result<String> {
+    share_text(&vault.doc, event_id, locale, chrono::Utc::now().year())
+}
+
+/// One spending flow of mine in the event currency, valued in `currency`.
+fn event_flow(
+    doc: &VaultDoc,
+    book: &RateBook,
+    cal: &Calendar,
+    currency: &str,
+    extra: &SharedExtra,
+) -> Flow {
+    let (value, missing) = value_in(book, extra, currency);
+    let date: NaiveDate = cal.date_of(extra.secs);
+    Flow {
+        date,
+        class: UnlockedVault::spending(category_group(doc, &extra.category)),
+        value,
+        categories: vec![extra.category.clone()],
+        stores: Vec::new(),
+        tx_id: extra.tag.clone(),
+        missing,
+    }
+}
+
+/// Spending that has no payment of mine behind it: my part of other
+/// people's purchases and what I wrote off, over entries the caller already
+/// collected (`Books` keeps them, so a request collects them once).
+pub(crate) fn extra_flows_from(
+    doc: &VaultDoc,
+    extras: &[SharedExtra],
+    book: &RateBook,
+    cal: &Calendar,
+    currency: &str,
+    from: i64,
+    to: i64,
+) -> Vec<Flow> {
+    extras_between(extras, from, to)
+        .map(|extra| event_flow(doc, book, cal, currency, extra))
+        .filter(|flow| flow.class != FlowClass::Ignored)
+        .collect()
 }

@@ -1,7 +1,6 @@
-//! Shim of the shared events area (event, people, items, split, settling): moved to
-//! `crate::household::shared_events` and `crate::usecases::household::shared_events`
-//! (spec core-strangler, D1). The purchases, ledger, view, text and analytics
-//! parts have not moved yet.
+//! Shim of the shared events area (event, people, items, split, settling, purchases,
+//! ledger, view, text, analytics): moved to `crate::household::shared_events` and
+//! `crate::usecases::household::shared_events` (spec core-strangler, D1).
 
 use crate::error::Result;
 use crate::ipc_contract::{
@@ -14,17 +13,13 @@ use super::UnlockedVault;
 use super::forward::forward;
 
 mod analytics;
-pub(crate) use analytics::SharedExtra;
 mod ledger;
 mod purchases;
-#[cfg(test)]
-pub(crate) use crate::household::shared_events::testing;
 mod text;
 mod view;
 
 mod settle;
 pub(crate) mod split;
-pub(crate) use crate::household::shared_events::{FALLBACK_CATEGORY, item_category};
 pub use view::{
     ContactEventBalance, EventTotals, ItemShareView, ItemView, MyPosition, PersonKind, PersonView,
     PlannedPayment, PurchaseView, SettlementView, SharedEventSummary, SharedEventView,
@@ -34,10 +29,6 @@ pub use view::{
 impl UnlockedVault {
     // forward:begin
     forward! {
-        /// Save after a change to the event: an archived event that was edited is
-        /// open again.
-        pub(crate) fn persist_event(&mut self, id: &str) -> Result<()>
-            => crate::usecases::household::shared_events::persist_event;
         pub fn create_shared_event(&mut self, draft: SharedEventDraft) -> Result<SharedEventView>
             => crate::usecases::household::shared_events::create_shared_event;
         /// Change the event's own fields. Things the purchases and settlements

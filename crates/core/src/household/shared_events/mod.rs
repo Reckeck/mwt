@@ -21,8 +21,21 @@ use crate::model::shared_event::{
 };
 use crate::pricing::history::unix_secs;
 
+pub mod analytics;
+#[cfg(test)]
+mod analytics_tests;
+pub mod ledger;
+#[cfg(test)]
+mod ledger_tests;
+pub mod purchases;
+#[cfg(test)]
+mod purchases_tests;
 pub mod settle;
 pub mod split;
+pub mod text;
+#[cfg(test)]
+mod text_tests;
+pub mod view;
 
 #[cfg(test)]
 mod root_tests;
