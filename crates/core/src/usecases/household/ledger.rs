@@ -7,7 +7,6 @@ use std::collections::HashSet;
 use crate::error::Result;
 use crate::model::transaction::Transaction;
 use crate::money::ledger::{self, FilterSources, TxFilter, TxGraph, TxPage, WalletRow};
-use crate::service::reports::csv_text;
 use crate::service::{StoreTreeNode, UnlockedVault};
 
 /// The vault as the filter's source for the areas that have not moved.
@@ -60,7 +59,8 @@ pub fn list_transactions(
 /// The filtered operations as CSV, oldest first, one line per leg: the
 /// "Export ▾ › Transactions by filter" of the list.
 pub fn transactions_csv(vault: &UnlockedVault, filter: &TxFilter, zone: &str) -> Result<String> {
-    ledger::transaction_lines(&vault.books(), &VaultSources(vault), filter, zone).map(csv_text)
+    ledger::transaction_lines(&vault.books(), &VaultSources(vault), filter, zone)
+        .map(UnlockedVault::csv_text)
 }
 
 /// `limit` operations from `offset`, newest first: a long journal goes to

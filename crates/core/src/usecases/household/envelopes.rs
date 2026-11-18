@@ -13,8 +13,6 @@ use crate::planning::envelopes::{
     plan_fund_goal, plan_move_between_envelopes, plan_update_envelope, settle_envelopes as settle,
 };
 use crate::service::UnlockedVault;
-// The id of a goal's envelope is the sync area's: two devices make one envelope (OD6).
-use crate::service::sync_ids::goal_envelope_id;
 
 fn missing_envelope() -> Error {
     Error::Missing("envelope".into())
@@ -126,7 +124,8 @@ pub fn fund_goal(
         None => {
             // Named by goal, wallet and asset: two devices that start
             // funding the same goal make one envelope.
-            let id = goal_envelope_id(goal_id, store_id.as_str(), &funding.asset.key());
+            let id =
+                UnlockedVault::goal_envelope_id(goal_id, store_id.as_str(), &funding.asset.key());
             let draft = EnvelopeDraft {
                 store_id: store_id.to_string(),
                 name: funding.goal_name,

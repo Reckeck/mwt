@@ -80,7 +80,7 @@ mod scenarios;
 mod search;
 mod shared_events;
 pub(crate) use shared_events::SharedExtra;
-pub(crate) mod sync_ids;
+mod sync_ids;
 mod sync_journal;
 mod vehicle;
 mod where_went;
@@ -95,7 +95,7 @@ mod rates;
 mod rebase;
 mod recurring;
 mod relations;
-pub(crate) mod reports;
+mod reports;
 mod store_change;
 mod store_months;
 mod stores;
@@ -107,7 +107,7 @@ mod validate;
 mod valuation;
 mod workflow_templates;
 mod workflows;
-pub(crate) mod worth;
+mod worth;
 pub use portfolio::{
     AssetBalance, AssetStat, HistoryPoint, NamedValue, PnlLeg, PortfolioSummary, RealizedPnl,
     StoreChildRow, StoreCrumb, StoreOverview, StorePosition, StoreTreeNode, StoreValue,
