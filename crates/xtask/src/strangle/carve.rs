@@ -12,7 +12,7 @@ use syn::{Item, Visibility};
 
 use super::fileset::FileSet;
 use super::map::Map;
-use super::scan::VAULT_RECEIVERS;
+use super::scan::SELF_RECEIVER;
 use super::source::{self, LineIndex};
 use super::widen::{binding_of, field_reads, private_fields};
 
@@ -161,7 +161,7 @@ fn refuse_private_fields(
     }
     for name in carved_structs {
         let binding = binding_of(name);
-        let receivers = [VAULT_RECEIVERS[0], binding.as_str()];
+        let receivers = [SELF_RECEIVER, binding.as_str()];
         let reads = field_reads(remaining, &receivers)?;
         if let Some(field) = private_fields(source, name)?
             .into_iter()
