@@ -8,3 +8,6 @@ pub mod react;
 pub mod reports;
 pub mod sync;
 pub mod workflow;
+
+#[cfg(test)]
+mod react_tests;
