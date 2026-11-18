@@ -218,6 +218,11 @@ fn missing_base_notice(base: &str) -> String {
     format!("base ref {base} not found locally: running --all without --diff")
 }
 
+/// Puts the notice in the task log, the run's visible reason, instead of raw stderr.
+fn note_missing_base(ctx: &Ctx, base: &str) {
+    ctx.note(&missing_base_notice(base));
+}
+
 /// Arguments of `strangle check`: `--all`, plus `--diff <base>` when the base exists.
 fn strangle_args(base: Option<&str>) -> Vec<String> {
     let mut args: Vec<String> = ["strangle", "check", "--all"].map(String::from).into();
@@ -242,9 +247,7 @@ fn strangle() -> Task {
             .await
             .is_some();
         if !known {
-            let notice = missing_base_notice(&base);
-            ctx.note(&notice);
-            eprintln!("strangle: {notice}");
+            note_missing_base(&ctx, &base);
         }
         let cmd = Cmd::new(&program).args(strangle_args(known.then_some(base.as_str())));
         match ctx.exec(&cmd).await {
@@ -292,7 +295,8 @@ fn gen_types(_root: &Path) -> Task {
 #[cfg(test)]
 mod tests {
     use super::{
-        BrowserOpts, browser_cmd, diff_base, missing_base_notice, parse_shard, strangle_args,
+        BrowserOpts, browser_cmd, diff_base, missing_base_notice, note_missing_base, parse_shard,
+        strangle_args,
     };
 
     fn opts(quick: bool, shard: Option<&str>, jobs: Option<usize>) -> BrowserOpts {
@@ -359,5 +363,23 @@ mod tests {
             "base ref origin/development not found locally: running --all without --diff"
         );
         assert!(!notice.contains('\n'));
+    }
+
+    #[test]
+    fn strangle_missing_base_notice_lands_in_the_task_log() {
+        let dir = std::env::temp_dir().join(format!("xtask-note-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ctx = crate::exec::Ctx {
+            root: dir.clone(),
+            log: dir.join("strangle.log"),
+            cancel: tokio_util::sync::CancellationToken::new(),
+        };
+        note_missing_base(&ctx, "origin/development");
+        let logged = std::fs::read_to_string(&ctx.log).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(
+            logged,
+            format!("{}\n", missing_base_notice("origin/development"))
+        );
     }
 }
