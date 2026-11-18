@@ -1065,7 +1065,9 @@ pub(crate) fn networth_report(books: &Books, ctx: &Ctx) -> NetworthReport {
 
 pub(crate) fn stores_report(books: &Books, ctx: &Ctx) -> StoresReport {
     let book = books.rate_book();
-    let (start, end) = (ctx.start(), ctx.end().min(ctx.now));
+    // The period closes at its last second (or now): the closing value and the flows
+    // count the same operations.
+    let (start, end) = (ctx.start(), (ctx.end() - 1).min(ctx.now));
     let snapshots = positions_at(books, &[start - 1, end]);
     let value_of = |positions: &Positions, store_id: &str, secs: i64| {
         positions
@@ -1103,7 +1105,7 @@ pub(crate) fn stores_report(books: &Books, ctx: &Ctx) -> StoresReport {
         .collect();
     for tx in &books.doc().transactions {
         let secs = secs_or_now(&tx.meta().timestamp);
-        if secs < start || secs >= end {
+        if secs < start || secs > end {
             continue;
         }
         let mut touched: HashSet<String> = HashSet::new();

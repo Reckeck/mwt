@@ -652,3 +652,32 @@ fn a_range_over_the_report_limit_is_refused_not_cut() {
     };
     assert_eq!(report.meta.months.len(), MAX_REPORT_MONTHS);
 }
+
+#[test]
+fn an_operation_at_the_next_periods_first_second_is_in_neither_the_value_nor_the_flows() {
+    let (_dir, mut vault, card) = vault_with_card();
+    vault
+        .add_transaction(earn(&card, "1000", "2026-03-10T10:00:00Z"))
+        .unwrap();
+    vault
+        .add_transaction(earn(&card, "20", "2026-03-31T23:59:59Z"))
+        .unwrap();
+    vault
+        .add_transaction(earn(&card, "500", "2026-04-01T00:00:00Z"))
+        .unwrap();
+    let Report::Stores(report) = run(&vault, ReportKind::Stores, &range("2026-03", "2026-03"))
+    else {
+        panic!()
+    };
+    let row = report.rows.iter().find(|row| row.store_id == card).unwrap();
+    assert_eq!(row.inflow, amount("1020"));
+    assert_eq!(row.value_end, amount("1020"));
+    assert_eq!(row.change, row.inflow - row.outflow);
+    let Report::Stores(april) = run(&vault, ReportKind::Stores, &range("2026-04", "2026-04"))
+    else {
+        panic!()
+    };
+    let row = april.rows.iter().find(|row| row.store_id == card).unwrap();
+    assert_eq!(row.inflow, amount("500"));
+    assert_eq!(row.value_start, amount("1020"));
+}
