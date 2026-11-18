@@ -131,6 +131,7 @@ pub use automations::{
     AutomationDraft, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun,
     describe_reject,
 };
+pub(crate) use budget::MIN_HISTORY_MONTHS;
 pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
 pub use bulk::{DeletedTransaction, TxCategories, TxStore};
 pub use contacts::{

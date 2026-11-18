@@ -7,6 +7,7 @@ use crate::error::Result;
 use crate::kernel::events::DomainEvent;
 use crate::model::planning::Goal;
 use crate::service::UnlockedVault;
+use crate::usecases::planning::goals::goal_savers;
 
 /// An automation was deleted: its workflow goes with its runs.
 pub fn on_automation_deleted(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<()> {
@@ -32,7 +33,7 @@ pub fn on_goal_paused(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<
         return Ok(());
     };
     let goal = goal_of(vault, &paused.id)?;
-    for workflow in vault.goal_savers(&goal) {
+    for workflow in goal_savers(&vault.doc, &goal) {
         vault.set_workflow_active(&workflow, false, now_secs())?;
     }
     Ok(())

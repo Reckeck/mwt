@@ -16,11 +16,13 @@ use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::WorkflowPass;
 use crate::service::test_support::*;
-use crate::usecases::planning::automations::{
-    automation_occurrences, automation_runs, check_draft_moment,
+use crate::usecases::planning::automation_rules::{
+    automation_occurrences, automation_of, automation_run_of, automation_runs, check_draft_moment,
+    manual_run_record, new_automation_workflow, rewrite_automation, simulation_report,
 };
 use crate::workflow::automation as graph_of;
 use crate::workflow::model::RunOutcome;
+use std::collections::HashSet;
 
 fn secs(iso: &str) -> i64 {
     unix_secs(iso).unwrap()
@@ -1278,4 +1280,451 @@ fn the_view_and_the_occurrences_need_no_vault() {
         |planned: &[(i64, Transaction)]| planned.iter().map(|(day, _)| *day).collect::<Vec<_>>();
     assert_eq!(days(&moments), days(&delegate));
     assert!(automation_runs(&vault.doc, None).is_empty());
+}
+
+// -- one test per pure function on a bare document, and the family pins ------------
+
+/// A result as JSON with every id and timestamp blanked, so twin vaults compare.
+pub(super) fn without_ids<T: serde::Serialize>(value: &T, known_ids: &[&str]) -> serde_json::Value {
+    fn blank(node: &mut serde_json::Value, known_ids: &[&str]) {
+        match node {
+            serde_json::Value::Object(fields) => {
+                for (key, child) in fields.iter_mut() {
+                    if key == "id"
+                        || key.ends_with("_id")
+                        || key.ends_with("_at")
+                        || key.contains("timestamp")
+                    {
+                        *child = serde_json::Value::Null;
+                    } else {
+                        blank(child, known_ids);
+                    }
+                }
+            }
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    blank(item, known_ids);
+                }
+            }
+            serde_json::Value::String(text) if known_ids.contains(&text.as_str()) => {
+                *text = String::new();
+            }
+            _ => {}
+        }
+    }
+    let mut json = serde_json::to_value(value).unwrap();
+    blank(&mut json, known_ids);
+    json
+}
+
+fn bare_workflow(draft: &AutomationDraft, id: &str) -> crate::workflow::model::Workflow {
+    new_automation_workflow(draft, id, "2026-01-01T00:00:00Z").unwrap()
+}
+
+fn varying_draft() -> AutomationDraft {
+    AutomationDraft {
+        amount_mode: AmountMode::Varies,
+        ..monthly_draft("Pay", 5, salary_draft("wallet", "100"))
+    }
+}
+
+#[test]
+fn a_new_workflow_is_the_trimmed_draft_with_its_graph() {
+    let mut draft = monthly_draft("  Rent ", 5, rent_draft("wallet", "90"));
+    draft.active = false;
+    let workflow = bare_workflow(&draft, "wf");
+    assert_eq!(
+        (workflow.id.as_str(), workflow.name.as_str()),
+        ("wf", "Rent")
+    );
+    assert!(!workflow.active);
+    assert_eq!(workflow.created_at, "2026-01-01T00:00:00Z");
+    assert_eq!(workflow.automation, Some(draft.spec()));
+    assert!(workflow.graph.contains("trigger.schedule"));
+    assert!(workflow.versions.is_empty());
+}
+
+#[test]
+fn rewriting_keeps_the_old_graph_as_a_version_only_when_it_changed() {
+    let draft = monthly_draft("Rent", 5, rent_draft("wallet", "90"));
+    let mut workflow = bare_workflow(&draft, "wf");
+    let old_graph = workflow.graph.clone();
+    rewrite_automation(&mut workflow, &draft, "2026-02-01T00:00:00Z").unwrap();
+    assert!(workflow.versions.is_empty(), "same graph, no version");
+    assert_eq!(workflow.updated_at, "2026-02-01T00:00:00Z");
+    let moved = AutomationDraft {
+        name: " Rent 2 ".into(),
+        schedule: Schedule::Monthly { day: 9 },
+        ..draft
+    };
+    rewrite_automation(&mut workflow, &moved, "2026-03-01T00:00:00Z").unwrap();
+    assert_eq!(workflow.versions.len(), 1);
+    assert_eq!(workflow.versions[0].graph, old_graph);
+    assert_eq!(workflow.versions[0].saved_at, "2026-03-01T00:00:00Z");
+    assert_eq!(workflow.name, "Rent 2");
+    assert_eq!(workflow.automation, Some(moved.spec()));
+}
+
+#[test]
+fn a_workflow_is_an_automation_and_an_ordinary_one_is_not() {
+    let draft = varying_draft();
+    let mut workflow = bare_workflow(&draft, "wf");
+    let asked = std::cell::Cell::new(0);
+    let view = automation_of(
+        &workflow,
+        |id| {
+            asked.set(asked.get() + 1);
+            assert_eq!(id, "wf");
+            Some(amount("1300"))
+        },
+        Some("2026-02-05T09:00:00Z".into()),
+    )
+    .unwrap();
+    assert_eq!(view.estimate, Some(amount("1300")));
+    assert_eq!(
+        view.last_planned_at.as_deref(),
+        Some("2026-02-05T09:00:00Z")
+    );
+    assert_eq!(asked.get(), 1);
+    // The start mark is no processed date; a fixed amount asks for no average.
+    let fixed = bare_workflow(&monthly_draft("Pay", 5, salary_draft("w", "1")), "fx");
+    let mark = crate::workflow::automation::start_mark(fixed.automation.as_ref().unwrap());
+    let view = automation_of(&fixed, |_| panic!("not asked"), Some(mark)).unwrap();
+    assert_eq!((view.estimate, view.last_planned_at), (None, None));
+    workflow.automation = None;
+    assert!(automation_of(&workflow, |_| None, None).is_none());
+}
+
+#[test]
+fn a_manual_run_record_books_one_transaction_by_hand() {
+    let record = manual_run_record("run", "wf", "2026-01-05T09:00:00Z", "tx");
+    assert_eq!(record.id, "run");
+    assert_eq!(record.workflow_id, "wf");
+    assert_eq!(record.trigger, "manual 2026-01-05T09:00:00Z");
+    assert_eq!(record.created, vec!["tx".to_string()]);
+    assert!(matches!(record.outcome, RunOutcome::Done));
+    assert!(!record.dry_run);
+}
+
+#[test]
+fn a_run_reads_as_the_history_shows_it() {
+    let mut doc = crate::model::vault::VaultDoc::default();
+    let mut booked = income("wallet", "100", "salary");
+    booked.meta_mut().id = "tx".into();
+    doc.transactions.push(booked);
+    let record = manual_run_record("run", "wf", "2026-01-05T09:00:00Z", "tx");
+    let run = automation_run_of(&doc, &record).unwrap();
+    assert_eq!(run.automation_id, "wf");
+    assert_eq!(
+        run.outcome,
+        AutomationOutcome::Created { tx_id: "tx".into() }
+    );
+    assert_eq!(run.amount, Some(amount("100")));
+    assert_eq!(run.planned_at, "2026-01-05T09:00:00Z");
+    let mut skipped = record.clone();
+    skipped.outcome = RunOutcome::Dropped {
+        reason: "skipped".into(),
+    };
+    assert_eq!(
+        automation_run_of(&doc, &skipped).unwrap().outcome,
+        AutomationOutcome::Skipped
+    );
+    skipped.outcome = RunOutcome::Dropped {
+        reason: "other".into(),
+    };
+    assert!(automation_run_of(&doc, &skipped).is_none());
+}
+
+#[test]
+fn a_manual_transaction_carries_its_run_and_the_estimate_mark() {
+    let (_dir, mut vault) = empty_vault();
+    let wallet = store(&mut vault, "Wallet", StoreKind::Bank, None);
+    let draft = AutomationDraft {
+        amount_mode: AmountMode::Varies,
+        ..monthly_draft("Pay", 5, salary_draft(&wallet, "100"))
+    };
+    let automation = vault.create_automation(draft).unwrap();
+    let made = manual_run_transaction(&automation, "2026-01-05T09:00:00Z", "run-1");
+    let TxOrigin::Workflow {
+        estimated, run_id, ..
+    } = made.meta().origin.clone()
+    else {
+        panic!("not a workflow origin");
+    };
+    assert!(estimated);
+    assert_eq!(run_id, "run-1");
+    assert_eq!(made.meta().timestamp, "2026-01-05T09:00:00Z");
+}
+
+#[test]
+fn an_approximate_operation_is_confirmed_and_its_mark_cleared() {
+    let mut doc = crate::model::vault::VaultDoc::default();
+    let workflow = bare_workflow(&varying_draft(), "wf");
+    let automation = automation_of(&workflow, |_| None, None).unwrap();
+    let mut estimated = manual_run_transaction(&automation, "2026-01-05T09:00:00Z", "run");
+    estimated.meta_mut().id = "tx".into();
+    doc.transactions.push(estimated);
+    assert!(confirmed_transaction(&doc, "tx", crate::Amount::ZERO).is_err());
+    assert!(confirmed_transaction(&doc, "nope", amount("5")).is_err());
+    let mut corrected = confirmed_transaction(&doc, "tx", amount("130")).unwrap();
+    assert_eq!(main_amount(&corrected), Some(amount("130")));
+    assert!(clear_estimated(&mut corrected));
+    assert!(!clear_estimated(&mut corrected), "already clear");
+    doc.transactions[0] = corrected;
+    assert!(confirmed_transaction(&doc, "tx", amount("1")).is_err());
+}
+
+#[test]
+fn only_a_change_of_when_it_plans_changes_the_schedule() {
+    let draft = monthly_draft("Rent", 5, rent_draft("wallet", "90"));
+    let mut doc = crate::model::vault::VaultDoc::default();
+    doc.workflows.push(bare_workflow(&draft, "wf"));
+    assert!(!schedule_changed(&doc, "wf", &draft).unwrap());
+    let renamed = AutomationDraft {
+        name: "Other".into(),
+        ..draft.clone()
+    };
+    assert!(!schedule_changed(&doc, "wf", &renamed).unwrap());
+    let later = AutomationDraft {
+        time: Some("10:30".into()),
+        ..draft.clone()
+    };
+    assert!(schedule_changed(&doc, "wf", &later).unwrap());
+    assert!(schedule_changed(&doc, "none", &draft).is_err());
+}
+
+#[test]
+fn an_emulation_report_lists_only_the_new_runs() {
+    let mut doc = crate::model::vault::VaultDoc::default();
+    let draft = monthly_draft("Pay", 5, salary_draft("wallet", "100"));
+    doc.workflows.push(bare_workflow(&draft, "wf"));
+    let mut booked = income("wallet", "100", "salary");
+    booked.meta_mut().id = "tx".into();
+    doc.transactions.push(booked);
+    doc.workflow_runs
+        .push(manual_run_record("old", "wf", "2026-01-01T09:00:00Z", "tx"));
+    doc.workflow_runs
+        .push(manual_run_record("new", "wf", "2026-01-05T09:00:00Z", "tx"));
+    let known = HashSet::from(["old".to_string()]);
+    let report = simulation_report(&doc, &known, &[], None, secs("2026-01-02T00:00:00Z"), 10);
+    assert_eq!((report.created, report.rejected), (1, 0));
+    assert_eq!(report.runs.len(), 1);
+    assert_eq!(report.runs[0].automation_name, "Pay");
+    assert_eq!(report.from, "2026-01-02T00:00:00Z");
+    assert_eq!(report.until, "2026-01-12T00:00:00Z");
+    let other = simulation_report(&doc, &known, &[], Some("zzz"), 0, 1);
+    assert!(other.runs.is_empty());
+}
+
+#[test]
+fn run_now_books_the_transaction_under_a_recorded_run() {
+    let (_dir, mut vault) = empty_vault();
+    let wallet = store(&mut vault, "Wallet", StoreKind::Bank, None);
+    let pay = monthly(&mut vault, "Pay", 5, salary_draft(&wallet, "100"));
+    let now = secs("2026-01-05T10:00:00Z");
+    let saved =
+        crate::usecases::planning::automations::run_automation(&mut vault, &pay.id, now).unwrap();
+    let record = vault
+        .doc
+        .workflow_runs
+        .iter()
+        .find(|run| run.trigger.starts_with("manual "))
+        .expect("a run record");
+    let TxOrigin::Workflow { run_id, .. } = &saved.meta().origin else {
+        panic!("not a workflow origin");
+    };
+    assert_eq!(&record.id, run_id);
+    assert_eq!(record.created, vec![saved.meta().id.clone()]);
+    assert_eq!(record.trigger, format!("manual {}", calendar::iso(now)));
+    assert!(
+        vault
+            .doc
+            .transactions
+            .iter()
+            .any(|tx| tx.meta().id == saved.meta().id)
+    );
+}
+
+#[test]
+fn run_now_without_funds_is_refused_and_leaves_no_run() {
+    let (_dir, mut vault) = empty_vault();
+    let card = store(&mut vault, "Card", StoreKind::Bank, None);
+    let rent = monthly(&mut vault, "Rent", 5, rent_draft(&card, "800"));
+    let err = crate::usecases::planning::automations::run_automation(
+        &mut vault,
+        &rent.id,
+        secs("2026-01-05T10:00:00Z"),
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "INSUFFICIENT_FUNDS");
+    assert!(vault.doc.workflow_runs.is_empty());
+    assert!(vault.doc.transactions.is_empty());
+}
+
+fn twin_vaults() -> (
+    (tempfile::TempDir, UnlockedVault, String),
+    (tempfile::TempDir, UnlockedVault, String),
+) {
+    let build = || {
+        let (dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Bank, None);
+        (dir, vault, card)
+    };
+    (build(), build())
+}
+
+#[test]
+fn the_edit_delegates_equal_the_scenarios() {
+    use crate::usecases::planning::automations as scenario;
+    let ((_a, mut by_method, card_a), (_b, mut by_scenario, card_b)) = twin_vaults();
+    let draft = |card: &str| monthly_draft("Pay", 5, salary_draft(card, "100"));
+    let method = by_method.create_automation(draft(&card_a)).unwrap();
+    let made = scenario::create_automation(&mut by_scenario, draft(&card_b)).unwrap();
+    let ids = |automation: &Automation| vec![automation.id.clone()];
+    assert_eq!(
+        without_ids(&method, &[&ids(&method)[0], &card_a]),
+        without_ids(&made, &[&ids(&made)[0], &card_b])
+    );
+    let renamed = |card: &str| AutomationDraft {
+        name: "Pay 2".into(),
+        ..draft(card)
+    };
+    let method = by_method
+        .update_automation_at(&method.id, renamed(&card_a), 0)
+        .unwrap();
+    let made =
+        scenario::update_automation_at(&mut by_scenario, &made.id, renamed(&card_b), 0).unwrap();
+    assert_eq!(
+        without_ids(&method, &[&method.id, &card_a]),
+        without_ids(&made, &[&made.id, &card_b])
+    );
+    let method_flow = by_method.detach_automation(&method.id).unwrap();
+    let made_flow = scenario::detach_automation(&mut by_scenario, &made.id).unwrap();
+    let shape = |flow: &crate::workflow::model::Workflow| {
+        (
+            flow.name.clone(),
+            flow.automation.is_none(),
+            flow.versions.len(),
+        )
+    };
+    assert_eq!(shape(&method_flow), shape(&made_flow));
+    assert_eq!(
+        by_method.automations().len(),
+        by_scenario.automations().len()
+    );
+}
+
+#[test]
+fn the_delete_delegate_equals_the_scenario() {
+    use crate::usecases::planning::automations as scenario;
+    let ((_a, mut by_method, card_a), (_b, mut by_scenario, card_b)) = twin_vaults();
+    let method = by_method
+        .create_automation(monthly_draft("Pay", 5, salary_draft(&card_a, "100")))
+        .unwrap();
+    let made = scenario::create_automation(
+        &mut by_scenario,
+        monthly_draft("Pay", 5, salary_draft(&card_b, "100")),
+    )
+    .unwrap();
+    by_method.delete_automation(&method.id).unwrap();
+    scenario::delete_automation(&mut by_scenario, &made.id).unwrap();
+    assert!(by_method.doc.workflows.is_empty() && by_scenario.doc.workflows.is_empty());
+    assert!(by_method.delete_automation(&method.id).is_err());
+    assert!(scenario::delete_automation(&mut by_scenario, &made.id).is_err());
+}
+
+#[test]
+fn the_run_delegate_equals_the_scenario() {
+    use crate::usecases::planning::automations as scenario;
+    let ((_a, mut by_method, card_a), (_b, mut by_scenario, card_b)) = twin_vaults();
+    let method = by_method
+        .create_automation(monthly_draft("Pay", 5, salary_draft(&card_a, "100")))
+        .unwrap();
+    let made = scenario::create_automation(
+        &mut by_scenario,
+        monthly_draft("Pay", 5, salary_draft(&card_b, "100")),
+    )
+    .unwrap();
+    let now = secs("2026-01-05T10:00:00Z");
+    let by_hand = by_method.run_automation(&method.id, now).unwrap();
+    let by_case = scenario::run_automation(&mut by_scenario, &made.id, now).unwrap();
+    assert_eq!(
+        without_ids(&by_hand, &[&method.id, &card_a]),
+        without_ids(&by_case, &[&made.id, &card_b])
+    );
+    assert_eq!(
+        by_method.doc.workflow_runs.len(),
+        by_scenario.doc.workflow_runs.len()
+    );
+}
+
+#[test]
+fn the_retry_skip_and_confirm_delegates_equal_the_scenarios() {
+    use crate::usecases::planning::automations as scenario;
+    let ((_a, mut by_method, card_a), (_b, mut by_scenario, card_b)) = twin_vaults();
+    let rent = |card: &str| monthly_draft("Rent", 5, rent_draft(card, "800"));
+    let method = by_method.create_automation(rent(&card_a)).unwrap();
+    let made = scenario::create_automation(&mut by_scenario, rent(&card_b)).unwrap();
+    let due = secs("2026-02-20T12:00:00Z");
+    by_method.run_due_workflows(due, "UTC").unwrap();
+    by_scenario.run_due_workflows(due, "UTC").unwrap();
+    let runs_a = by_method.automation_runs(Some(&method.id));
+    let runs_b = by_scenario.automation_runs(Some(&made.id));
+    assert_eq!(runs_a.len(), runs_b.len());
+    let now = secs("2026-02-21T12:00:00Z");
+    // Both refuse for lack of funds, then both are funded and retry.
+    assert_eq!(
+        by_method
+            .retry_automation_run(&runs_a[0].id, now, "UTC")
+            .unwrap_err()
+            .code(),
+        scenario::retry_automation_run(&mut by_scenario, &runs_b[0].id, now, "UTC")
+            .unwrap_err()
+            .code()
+    );
+    for (vault, card) in [(&mut by_method, &card_a), (&mut by_scenario, &card_b)] {
+        let mut salary = income(card, "1000", "salary");
+        at(&mut salary, "2026-02-21T10:00:00Z");
+        vault.add_transaction(salary).unwrap();
+    }
+    let retried = by_method
+        .retry_automation_run(&runs_a[0].id, now, "UTC")
+        .unwrap();
+    let retried_by_case =
+        scenario::retry_automation_run(&mut by_scenario, &runs_b[0].id, now, "UTC").unwrap();
+    assert_eq!(retried.meta().timestamp, retried_by_case.meta().timestamp);
+    let skipped = by_method.skip_automation_run(&runs_a[1].id).unwrap();
+    let skipped_by_case = scenario::skip_automation_run(&mut by_scenario, &runs_b[1].id).unwrap();
+    assert_eq!(skipped.outcome, skipped_by_case.outcome);
+}
+
+#[test]
+fn the_confirm_delegate_equals_the_scenario() {
+    use crate::usecases::planning::automations as scenario;
+    let ((_a, mut by_method, card_a), (_b, mut by_scenario, card_b)) = twin_vaults();
+    let varying = |card: &str| AutomationDraft {
+        amount_mode: AmountMode::Varies,
+        workday_shift: WorkdayShift::Back,
+        ..monthly_draft("Pay", 20, salary_draft(card, "1000"))
+    };
+    by_method.create_automation(varying(&card_a)).unwrap();
+    scenario::create_automation(&mut by_scenario, varying(&card_b)).unwrap();
+    let due = secs("2026-02-20T10:00:00Z");
+    let booked = |vault: &mut UnlockedVault| {
+        let pass = vault.run_due_workflows(due, "UTC").unwrap();
+        made(vault, &pass).meta().id.clone()
+    };
+    let tx_a = booked(&mut by_method);
+    let tx_b = booked(&mut by_scenario);
+    let by_hand = by_method
+        .confirm_estimated_amount(&tx_a, amount("1300"))
+        .unwrap();
+    let by_case =
+        scenario::confirm_estimated_amount(&mut by_scenario, &tx_b, amount("1300")).unwrap();
+    assert_eq!(main_amount(&by_hand), main_amount(&by_case));
+    assert_eq!(
+        by_hand.meta().origin.is_estimated(),
+        by_case.meta().origin.is_estimated()
+    );
+    assert!(!by_case.meta().origin.is_estimated());
 }
