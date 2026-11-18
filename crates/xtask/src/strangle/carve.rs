@@ -12,8 +12,9 @@ use syn::{Item, Visibility};
 
 use super::fileset::FileSet;
 use super::map::Map;
+use super::scan::VAULT_RECEIVERS;
 use super::source::{self, LineIndex};
-use super::widen::{VAULT_RECEIVERS, binding_of, field_reads, private_fields};
+use super::widen::{binding_of, field_reads, private_fields};
 
 #[derive(Args)]
 pub struct CarveArgs {

@@ -15,8 +15,9 @@ use super::forward::{FORWARD_BEGIN, FORWARD_END};
 use super::home::{Home, homes};
 use super::map::Map;
 use super::scaffold::PLACEHOLDER;
+use super::scan::VAULT_RECEIVERS;
 use super::source::{self, LineIndex, Splice};
-use super::widen::{VAULT, VAULT_RECEIVERS, field_reads, unwidened_fields};
+use super::widen::{VAULT, field_reads, unwidened_fields};
 
 #[derive(Args)]
 pub struct RelocateArgs {

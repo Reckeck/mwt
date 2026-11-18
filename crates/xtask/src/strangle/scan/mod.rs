@@ -16,6 +16,9 @@ pub(in crate::strangle) use visitor::{is_test_attr, macro_arguments, macro_line,
 /// The type whose impl blocks the areas are made of.
 pub(in crate::strangle) const VAULT_TYPE: &str = "UnlockedVault";
 
+/// The receivers `on_vault` counts as the vault: `self` and `vault`.
+pub(in crate::strangle) const VAULT_RECEIVERS: [&str; 2] = ["self", "vault"];
+
 /// A method of `impl UnlockedVault`.
 #[derive(Debug, Clone)]
 pub struct Method {

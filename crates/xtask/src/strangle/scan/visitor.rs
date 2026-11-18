@@ -11,7 +11,7 @@ use syn::{
     Meta, Type, Visibility,
 };
 
-use super::{Call, FileFacts, Method, ModDecl, TestFn, VAULT_TYPE};
+use super::{Call, FileFacts, Method, ModDecl, TestFn, VAULT_RECEIVERS, VAULT_TYPE};
 
 pub fn scan_source(source: &str) -> Result<FileFacts> {
     let file = syn::parse_file(source).context("parse")?;
@@ -131,7 +131,7 @@ impl<'ast> Visit<'ast> for Scanner {
         visit::visit_expr(self, &node.receiver);
         let name = node.method.to_string();
         let on_vault = matches!(&*node.receiver, Expr::Path(path)
-            if path.path.is_ident("self") || path.path.is_ident("vault"));
+            if VAULT_RECEIVERS.iter().any(|receiver| path.path.is_ident(receiver)));
         if let Some(names) = &mut self.command {
             names.push(name.clone());
         }

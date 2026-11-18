@@ -51,9 +51,6 @@ pub fn widen_source(text: &str) -> Result<(String, usize)> {
     Ok((source::apply(text, splices), count))
 }
 
-/// The receivers `scan` counts as the vault (`on_vault`): `self` and `vault`.
-pub const VAULT_RECEIVERS: [&str; 2] = ["self", "vault"];
-
 /// The lower-snake binding a struct is conventionally held in (`Draft` -> `draft`).
 pub fn binding_of(struct_name: &str) -> String {
     let mut binding = String::new();
@@ -164,6 +161,7 @@ mod tests {
     use super::*;
     use crate::strangle::fixture::TempTree;
     use crate::strangle::map::{MAP_FILE, Map};
+    use crate::strangle::scan::VAULT_RECEIVERS;
 
     const MAP: &str = r#"
 service_dir = "crates/svc"
