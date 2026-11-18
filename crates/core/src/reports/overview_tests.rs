@@ -681,3 +681,31 @@ fn an_operation_at_the_next_periods_first_second_is_in_neither_the_value_nor_the
     assert_eq!(row.inflow, amount("500"));
     assert_eq!(row.value_start, amount("1020"));
 }
+
+#[test]
+fn pnl_without_a_rate_to_the_report_currency_is_marked_not_taken_one_to_one() {
+    let (_dir, mut vault) = setup();
+    vault.set_base_currency("usd");
+    let wallet = vault.doc.stores[1].id.clone();
+    let mut buy = income_of(&wallet, btc(), "1", "40000", "buy");
+    at(&mut buy, "2026-01-01T00:00:00Z");
+    vault.add_transaction(buy).unwrap();
+    let mut sale = sell_btc(&wallet, "1", "60000", "60000");
+    at(&mut sale, "2026-02-03T00:00:00Z");
+    vault.add_transaction(sale).unwrap();
+    let filter = ReportFilter {
+        currency: Some("eur".into()),
+        ..range("2026-01", "2026-02")
+    };
+    let Report::Pnl(report) = run(&vault, ReportKind::Pnl, &filter) else {
+        panic!()
+    };
+    // No euro rate exists: 20 000 base units are not 20 000 euros.
+    assert_eq!(report.total_realized, Amount::ZERO);
+    assert_eq!(report.unpriced, 1);
+    let Report::Pnl(base) = run(&vault, ReportKind::Pnl, &range("2026-01", "2026-02")) else {
+        panic!()
+    };
+    assert_eq!(base.total_realized, amount("20000"));
+    assert_eq!(base.unpriced, 0);
+}

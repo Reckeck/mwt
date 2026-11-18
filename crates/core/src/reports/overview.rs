@@ -243,6 +243,12 @@ pub struct PnlReport {
     /// A sale or a fee fell in the period (there is a row for every month).
     #[serde(default)]
     pub has_data: bool,
+    /// Realized results left out because no rate converts them to the report
+    /// currency. Not on the wire yet: the screen learns of it with the next
+    /// contract change (`ipc.gen.d.ts` stays as it is in this wave).
+    #[serde(skip)]
+    #[ts(skip)]
+    pub unpriced: u32,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -1154,6 +1160,7 @@ pub(crate) fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
     let book = books.rate_book();
     let base = books.base_and_fx().0;
     let mut has_data = false;
+    let mut unpriced = 0;
     let mut rows: Vec<PnlRow> = ctx
         .months
         .iter()
@@ -1167,11 +1174,14 @@ pub(crate) fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
         let Some(index) = ctx.index_of(ctx.cal.date_of(secs)) else {
             continue;
         };
-        let value = book
-            .convert(leg.pnl_base, base, &ctx.currency, secs)
-            .unwrap_or(leg.pnl_base);
-        rows[index].realized += value;
         has_data = true;
+        // No rate to the report currency: the result stays out and is counted, never
+        // shown as if base units were report units.
+        let Some(value) = book.convert(leg.pnl_base, base, &ctx.currency, secs) else {
+            unpriced += 1;
+            continue;
+        };
+        rows[index].realized += value;
     }
     for tx in &books.doc().transactions {
         let secs = secs_or_now(&tx.meta().timestamp);
@@ -1191,6 +1201,7 @@ pub(crate) fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
     let mut out = PnlReport {
         meta: ctx.meta(),
         has_data,
+        unpriced,
         ..PnlReport::default()
     };
     // Today's money is applied to the month's sum once: per leg, the
