@@ -1,6 +1,7 @@
 package dev.mwt.insets
 
 import android.app.Activity
+import android.view.WindowManager
 import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -23,6 +24,12 @@ class BarArgs {
  * `env(safe-area-inset-*)` as zero, so the page cannot see them otherwise.
  * The insets are only read, never consumed: the WebView still lays out
  * edge to edge.
+ *
+ * The keyboard is lifted by the page alone (`--safe-bottom` takes the IME
+ * height). The window is set to `adjustResize`: with `decorFitsSystemWindows`
+ * off that neither resizes nor pans it, it only delivers the IME insets.
+ * Left unspecified, Android panned the window up as well, and a field in a
+ * bottom sheet went off the top of the screen with an empty gap below it.
  */
 @TauriPlugin
 class InsetsPlugin(private val activity: Activity) : Plugin(activity) {
@@ -35,6 +42,7 @@ class InsetsPlugin(private val activity: Activity) : Plugin(activity) {
     super.load(webView)
     this.webView = webView
     WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+    activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     ViewCompat.setOnApplyWindowInsetsListener(webView) { _, insets ->
       val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
       val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
@@ -59,7 +67,10 @@ class InsetsPlugin(private val activity: Activity) : Plugin(activity) {
       "s.setProperty('--native-inset-right','${right}px');" +
       "s.setProperty('--native-inset-bottom','${bottom}px');" +
       "s.setProperty('--native-inset-left','${left}px');" +
-      "s.setProperty('--native-ime','${if (imeShown) 1 else 0}');})()"
+      "s.setProperty('--native-ime','${if (imeShown) 1 else 0}');" +
+      // The lift shrinks the sheet: bring the field being typed into back into view.
+      "if(${imeShown}){requestAnimationFrame(function(){var a=document.activeElement;" +
+      "if(a&&a!==document.body&&a.scrollIntoView)a.scrollIntoView({block:'nearest'});});}})()"
     activity.runOnUiThread { webView?.evaluateJavascript(js, null) }
   }
 

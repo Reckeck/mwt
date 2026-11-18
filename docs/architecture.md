@@ -55,7 +55,8 @@ nothing to the webview, Rust calls them (`run_mobile_plugin`):
   with a `CryptoObject` (`biometric/android.rs`);
 - `crates/plugin-insets` — system bars: status bar, navigation, cutout and keyboard
   insets as the CSS variables `--native-inset-*` and `--native-ime` (WebView reports
-  `env(safe-area-inset-*)` as zeros), icon color matching the theme
+  `env(safe-area-inset-*)` as zeros); the window is `adjustResize` edge to edge, so the
+  keyboard is lifted only by the page (`--safe-bottom`), never panned as well; icon color matching the theme
   (`set_system_bars`) and "move to back" (`move_to_back`). The frontend reads them
   through `--safe-*` and the `*-safe` utilities (`src/app/styles.css`).
 
