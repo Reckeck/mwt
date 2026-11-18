@@ -8,7 +8,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use clap::Args;
-use syn::{FnArg, Item, ItemFn, Pat, Type, Visibility};
+use syn::{FnArg, ImplItemFn, Item, ItemFn, Pat, Type, Visibility};
 
 use super::baseline::{Baseline, BaselineMethod};
 use super::fileset::FileSet;
@@ -96,7 +96,10 @@ fn entries_of(
             let Item::Fn(node) = item else { continue };
             match classify(node, methods) {
                 Delegate::Moved(receiver) => {
-                    entries.push(entry_of(&source, &index, node, &module, &receiver));
+                    let baseline = methods.iter().find(|method| node.sig.ident == method.name);
+                    entries.push(entry_of(
+                        &source, &index, node, &module, &receiver, baseline,
+                    ));
                 }
                 Delegate::Unmoved => skipped.push(node.sig.ident.to_string()),
                 Delegate::Other => {}
@@ -178,11 +181,23 @@ fn entry_of(
     node: &ItemFn,
     module: &str,
     receiver: &Receiver,
+    baseline: Option<&BaselineMethod>,
 ) -> String {
     let parts = Parts::new(source, index, &node.sig);
-    let params: Vec<String> = std::iter::once(receiver.text.to_string())
-        .chain(parts.params.iter().skip(1).cloned())
-        .collect();
+    let public = baseline
+        .map(|method| public_params(&method.signature))
+        .unwrap_or_default();
+    let mut conversions = Vec::new();
+    let mut params = vec![receiver.text.to_string()];
+    for text in parts.params.iter().skip(1) {
+        match typed_param(text, &public) {
+            Some(typed) => {
+                params.push(format!("{}: {}", typed.name, typed.public));
+                conversions.push(format!("{} => {}", typed.name, typed.conversion));
+            }
+            None => params.push(text.clone()),
+        }
+    }
     let mut entry: String = doc_lines(&node.attrs)
         .iter()
         .map(|doc| format!("    ///{doc}\n"))
@@ -192,8 +207,64 @@ fn entry_of(
     if let Some(marker) = receiver.marker {
         entry += &format!(" {marker}");
     }
+    if !conversions.is_empty() {
+        entry += &format!(" with ({})", conversions.join(", "));
+    }
     entry += ";\n";
     entry
+}
+
+/// A parameter whose type differs from the baseline public one: the delegate keeps the public type
+/// and converts the value to the new function's type (spec D3, the `with` clause of `forward!`).
+struct Typed {
+    name: String,
+    public: String,
+    conversion: String,
+}
+
+/// `(name, type)` of every parameter written `name: type`, from the texts of [`Parts::params`].
+fn named_params(params: &[String]) -> Vec<(&str, &str)> {
+    params
+        .iter()
+        .filter_map(|text| text.split_once(':'))
+        .map(|(name, ty)| (name.trim(), ty.trim()))
+        .collect()
+}
+
+/// The parameters of a baseline signature, as `(name, type)` text.
+fn public_params(signature: &str) -> Vec<(String, String)> {
+    let Ok(method) = syn::parse_str::<ImplItemFn>(&format!("{signature} {{}}")) else {
+        return Vec::new();
+    };
+    let parts = Parts::new(signature, &LineIndex::new(signature), &method.sig);
+    named_params(&parts.params)
+        .into_iter()
+        .map(|(name, ty)| (name.to_string(), ty.to_string()))
+        .collect()
+}
+
+fn typed_param(text: &str, public: &[(String, String)]) -> Option<Typed> {
+    let (name, ty) = text.split_once(':')?;
+    let (name, ty) = (name.trim(), ty.trim());
+    let (_, public_type) = public.iter().find(|(known, _)| known == name)?;
+    if public_type == ty {
+        return None;
+    }
+    let conversion = if let Some(target) = ty.strip_prefix('&') {
+        format!("&{}::from({name})", target.trim())
+    } else if let Some(inner) = ty
+        .strip_prefix("Option<")
+        .and_then(|rest| rest.strip_suffix('>'))
+    {
+        format!("{name}.map({}::from)", inner.trim())
+    } else {
+        format!("{ty}::from({name})")
+    };
+    Some(Typed {
+        name: name.to_string(),
+        public: public_type.clone(),
+        conversion,
+    })
 }
 
 /// The text with everything between the marker lines replaced by `block`.
@@ -371,6 +442,29 @@ pub fn a_test(doc: &VaultDoc) {}
         ] {
             assert!(!shim.contains(skipped), "{skipped}");
         }
+    }
+
+    #[test]
+    fn a_changed_parameter_type_keeps_the_baseline_type_and_converts() {
+        let tree = tree_with_empty_region();
+        std::fs::write(
+            tree.root().join(PURE),
+            "pub fn find(doc: &VaultDoc, id: &StoreId, other: Option<StoreId>, count: u8, kept: Option<String>) -> bool { true }\n",
+        )
+        .unwrap();
+        std::fs::write(tree.root().join(SCENARIO), "").unwrap();
+        let mut baseline = baseline_with(&[]);
+        baseline.areas.get_mut("loyalty").unwrap().methods.push(BaselineMethod {
+            name: "find".to_string(),
+            signature: "pub fn find(&self, id: &str, other: Option<String>, count: u8, kept: Option<String>) -> bool".to_string(),
+        });
+        let shim = forwarded_with(&tree, &baseline).unwrap();
+        assert!(
+            shim.contains(
+                "pub fn find(&self, id: &str, other: Option<String>, count: u8, kept: Option<String>) -> bool\n        => crate::household::loyalty::find @doc with (id => &StoreId::from(id), other => other.map(StoreId::from));"
+            ),
+            "{shim}"
+        );
     }
 
     #[test]
