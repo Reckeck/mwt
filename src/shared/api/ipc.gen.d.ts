@@ -700,7 +700,13 @@ spent: Amount, remaining: Amount,
 /**
  * `spent / limit`, 0 when the limit is zero.
  */
-used: Amount, period_start: string, period_end: string, };
+used: Amount, period_start: string, period_end: string, 
+/**
+ * Some spending of the period has no rate to the limit's currency, so
+ * `spent` leaves it out and is only a lower bound (C2-8). The front end
+ * ignores the field until a UI shows the mark.
+ */
+not_valued: boolean, };
 
 type BudgetTarget = "total" | { "category": string } | { "store": StoreScope };
 

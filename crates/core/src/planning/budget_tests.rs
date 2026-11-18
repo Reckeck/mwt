@@ -345,6 +345,59 @@ fn a_rub_limit_with_a_usd_base_and_a_thb_budget_use_the_day_rate() {
     assert_eq!(status[0].remaining, amount("4000"));
 }
 
+/// C2-8: spending that has no rate to the limit's currency is not worth
+/// zero, it is not valued: the status says so.
+#[test]
+fn a_limit_with_spending_that_has_no_rate_is_marked_not_valued() {
+    let (_dir, mut vault, card) = budget_vault();
+    let mut abroad = payment(&card, "1000", "food");
+    if let Transaction::Payment(inner) = &mut abroad {
+        inner.asset = AssetRef::fiat("RUB", "Ruble");
+        inner.price = PriceStamp::default();
+    }
+    abroad.meta_mut().categories = vec!["groceries".into()];
+    at(&mut abroad, "2026-03-10T10:00:00Z");
+    vault.add_transaction(abroad).unwrap();
+    vault
+        .add_transaction(spend(&card, "30", "2026-03-11T10:00:00Z"))
+        .unwrap();
+    vault
+        .create_budget(BudgetDraft {
+            active: true,
+            target: BudgetTarget::Category("groceries".into()),
+            period: BudgetPeriod::Month,
+            limit: amount("500"),
+            currency: "usd".into(),
+            warn: true,
+        })
+        .unwrap();
+    let status = vault.budget_status(secs("2026-03-20T00:00:00Z"), "UTC");
+    // The valued part still counts; the rest is flagged, not taken as zero.
+    assert_eq!(status[0].spent, amount("30"));
+    assert!(status[0].not_valued);
+}
+
+#[test]
+fn a_limit_whose_spending_is_all_valued_is_not_marked() {
+    let (_dir, mut vault, card) = budget_vault();
+    vault
+        .add_transaction(spend(&card, "30", "2026-03-11T10:00:00Z"))
+        .unwrap();
+    vault
+        .create_budget(BudgetDraft {
+            active: true,
+            target: BudgetTarget::Total,
+            period: BudgetPeriod::Month,
+            limit: amount("500"),
+            currency: "usd".into(),
+            warn: true,
+        })
+        .unwrap();
+    let status = vault.budget_status(secs("2026-03-20T00:00:00Z"), "UTC");
+    assert_eq!(status[0].spent, amount("30"));
+    assert!(!status[0].not_valued);
+}
+
 /// 26-b: a typed monthly figure fixes the currency it was typed in, so a
 /// device with another base does not read the number as its own money.
 #[test]

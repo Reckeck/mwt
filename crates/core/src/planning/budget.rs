@@ -48,6 +48,11 @@ pub struct BudgetStatus {
     pub used: Amount,
     pub period_start: String,
     pub period_end: String,
+    /// Some spending of the period has no rate to the limit's currency, so
+    /// `spent` leaves it out and is only a lower bound (C2-8). The front end
+    /// ignores the field until a UI shows the mark.
+    #[serde(default)]
+    pub not_valued: bool,
 }
 
 /// Totals of one calendar month in the budget currency.

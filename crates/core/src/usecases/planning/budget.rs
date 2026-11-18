@@ -267,6 +267,8 @@ pub fn budget_status(books: &Books<'_>, now: i64, zone: &str) -> Vec<BudgetStatu
                 used: used_of(spent, budget.limit),
                 period_start: calendar::iso(cal.start_of(start)),
                 period_end: calendar::iso(cal.start_of(end)),
+                // Stub: computed in the fix commit (C2-8).
+                not_valued: false,
             }
         })
         .collect()
