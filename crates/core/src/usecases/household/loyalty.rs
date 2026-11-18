@@ -32,14 +32,16 @@ fn apply_loyalty_update(tx: &mut Tx<'_>, update: LoyaltyUpdate) -> Result<Store>
         price,
     } = update;
     let doc = tx.doc_mut();
+    // Looked up first: a missing store must leave the document untouched.
+    let position = doc
+        .stores
+        .iter()
+        .position(|candidate| candidate.id == store_id.as_str())
+        .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
     doc.manual_prices
         .retain(|known| known.asset_key != asset_key);
     doc.manual_prices.extend(price);
-    let stored = doc
-        .stores
-        .iter_mut()
-        .find(|candidate| candidate.id == store_id.as_str())
-        .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
+    let stored = &mut doc.stores[position];
     stored.loyalty = Some(info);
     Ok(stored.clone())
 }
@@ -82,4 +84,41 @@ pub fn adjust_points(
         timestamp,
     )?;
     vault.add_transaction(tx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::vault::ManualPrice;
+    use crate::service::test_support::{amount, empty_vault};
+
+    #[test]
+    fn a_missing_store_leaves_the_document_untouched() {
+        let (_dir, mut vault) = empty_vault();
+        vault.doc.manual_prices.push(ManualPrice {
+            asset_key: "points".into(),
+            unit_price: amount("1"),
+            currency: "rub".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        });
+        let before = vault.doc.clone();
+        let update = LoyaltyUpdate {
+            store_id: StoreId::from("missing".to_string()),
+            asset_key: "points".into(),
+            info: LoyaltyInfo {
+                points_symbol: "points".into(),
+                point_value: amount("2"),
+                currency: "rub".into(),
+                expires_at: None,
+                expiring_points: None,
+                login: None,
+                source_store_ids: Vec::new(),
+                unit: Default::default(),
+            },
+            price: None,
+        };
+        let outcome = apply_loyalty_update(&mut Tx::new(&mut vault.doc), update);
+        assert!(matches!(outcome, Err(Error::Missing(_))));
+        assert_eq!(vault.doc, before);
+    }
 }
