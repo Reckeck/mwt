@@ -58,6 +58,14 @@ pub struct EnrichmentReadyPayload {
     pub tx_id: String,
 }
 
+/// Payload of `vault-locked`: why the vault was locked and whether it
+/// closed (`false` when the flush failed and the vault stayed open).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct VaultLockedPayload {
+    pub reason: String,
+    pub closed: bool,
+}
+
 /// Payload of `vault-save-failed`: the message, or the reason with
 /// `exiting` when the app was closing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

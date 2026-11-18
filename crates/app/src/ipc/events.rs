@@ -8,6 +8,8 @@ use serde::Serialize;
 use tauri::{Emitter, Runtime};
 use ts_rs::TS;
 
+pub use trade_core::ipc_contract::events::VaultLockedPayload;
+
 /// One event of the registry, as the generators see it.
 pub struct EventMeta {
     pub name: &'static str,
@@ -29,14 +31,6 @@ pub trait AppEvent {
 /// The TypeScript name of a payload type, for the [`EVENTS`] table.
 pub fn payload_ts<P: TS>() -> String {
     P::name(&ts_rs::Config::new())
-}
-
-/// The payload of `vault-locked`: why the vault was locked and whether it
-/// closed (`false` when the flush failed and the vault stayed open).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-pub struct VaultLockedPayload {
-    pub reason: String,
-    pub closed: bool,
 }
 
 /// Declares the events: `"name" => Marker(PayloadType)`.
