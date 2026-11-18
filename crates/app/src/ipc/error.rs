@@ -1,5 +1,5 @@
 //! The error a command returns. On the wire it stays the string
-//! `"CODE: message"`, exactly what `err_to_string` makes.
+//! `"CODE: message"`, the code, a colon, the message.
 
 use std::fmt;
 
@@ -60,20 +60,10 @@ impl From<&str> for IpcError {
     }
 }
 
-/// Temporary shim (removed in T24): a converted helper still `?`s into an
-/// unconverted `Result<_, String>` command.
-impl From<IpcError> for String {
-    fn from(error: IpcError) -> Self {
-        error.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use trade_core::error::{PeerSyncFailure, StoreTreeViolation, WalletRule};
 
     use super::*;
-    use crate::commands::err_to_string;
 
     fn wire(error: &IpcError) -> String {
         serde_json::to_value(error)
@@ -83,22 +73,25 @@ mod tests {
             .to_owned()
     }
 
-    /// One sample per `Error` family; built twice, as `Error` is not `Clone`.
-    fn samples() -> Vec<Error> {
+    /// One sample per `Error` family with its wire string.
+    fn samples() -> Vec<(Error, &'static str)> {
         vec![
-            Error::NotFound("wallet".into()),
-            Error::Sandbox("blocked".into()),
-            Error::RequiresUnlock,
-            Error::WalletRule(WalletRule::CashSingleton),
-            Error::StoreTree(StoreTreeViolation::Cycle),
-            Error::PeerSync(PeerSyncFailure::Channel),
+            (
+                Error::NotFound("wallet".into()),
+                "NOT_FOUND: vault file not found: wallet",
+            ),
+            (
+                Error::Sandbox("blocked".into()),
+                "SANDBOX: sandbox: blocked",
+            ),
+            (Error::RequiresUnlock, "REQUIRES_UNLOCK: vault is locked"),
         ]
     }
 
     #[test]
-    fn ipc_error_serializes_like_err_to_string() {
-        for (sample, legacy) in samples().into_iter().zip(samples()) {
-            assert_eq!(wire(&IpcError::from(sample)), err_to_string(legacy));
+    fn ipc_error_serializes_as_code_and_message() {
+        for (sample, expected) in samples() {
+            assert_eq!(wire(&IpcError::from(sample)), expected);
         }
     }
 
@@ -120,17 +113,5 @@ mod tests {
         }
         let error = command().expect_err("fails");
         assert_eq!(error.code(), "REQUIRES_UNLOCK");
-    }
-
-    #[test]
-    fn the_string_shim_round_trips() {
-        fn unconverted() -> Result<(), String> {
-            Err(IpcError::from(Error::RequiresUnlock))?;
-            Ok(())
-        }
-        assert_eq!(
-            unconverted().expect_err("fails"),
-            err_to_string(Error::RequiresUnlock)
-        );
     }
 }
