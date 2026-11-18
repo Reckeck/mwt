@@ -109,7 +109,7 @@ call `app.emit("..")` with a literal: add the event to `app_events!`.
 | `automation-created` | the scheduler created automation transactions |
 | `automation-rejected` | a run was not created: not enough funds, a credit card limit or the transaction failed validation (D26); a toast with "Retry / Skip" + a system notification |
 | `automation-skipped` | after a long break, old dates beyond 24 are recorded as skipped |
-| — (notification) | an automation with a varying amount recorded the transaction approximately: "check the amount" |
+| — (notification) | key `automation-estimated:<tx_id>`: an automation with a varying amount recorded the transaction approximately: "check the amount" |
 | `workflows-ran` | the scheduler ran schemes (nodes); `queued` — transactions that went to the confirmation queue. Created transactions also arrive through `automation-created` |
 | `price-alert` | a price alert fired (once) |
 | `reminder-due` | reminder time has come — refresh their list |
