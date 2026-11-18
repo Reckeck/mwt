@@ -108,6 +108,11 @@ files = [
 ]
 
 [[foundation]]
+# `sync_ids` becomes `pub(crate)` for the money scenarios that mint deterministic ids.
+task = "B"
+files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 
