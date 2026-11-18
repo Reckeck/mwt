@@ -259,9 +259,8 @@ pub fn file_is_encrypted(path: &std::path::Path) -> bool {
     if file.read_exact(&mut head).is_err() || &head[..VAULT_MAGIC.len()] != VAULT_MAGIC {
         return true;
     }
-    VaultHeader::from_bytes(&head[VAULT_MAGIC.len()..]).map_or(true, |header| {
-        header.version != crate::VAULT_CONTAINER_VERSION || !header.is_plain()
-    })
+    VaultHeader::from_bytes(&head[VAULT_MAGIC.len()..])
+        .map_or(true, |header| !header.is_readable() || !header.is_plain())
 }
 
 /// Encrypt `plaintext` under a header+password. Returns the full file bytes.
@@ -312,7 +311,7 @@ pub fn parse_file(bytes: &[u8]) -> Result<(VaultHeader, &[u8])> {
         return Err(Error::Unsupported);
     }
     let header = VaultHeader::from_bytes(&bytes[VAULT_MAGIC.len()..])?;
-    if header.version != crate::VAULT_CONTAINER_VERSION {
+    if !header.is_readable() {
         return Err(Error::Unsupported);
     }
     let ct = &bytes[VAULT_MAGIC.len() + VaultHeader::LEN..];
