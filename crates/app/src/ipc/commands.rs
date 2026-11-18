@@ -75,7 +75,7 @@ macro_rules! generate_handler {
 pub(crate) use {generate_handler, ipc_commands};
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     // Stand-in command modules; the real ones declare the same way.
     mod first {
         #[tauri::command]
@@ -188,12 +188,22 @@ mod tests {
     }
 
     /// The names of the `#[tauri::command]` and `#[ipc]` functions in one source text.
-    fn command_fns(source: &str) -> Vec<String> {
+    pub(crate) fn command_fns(source: &str) -> Vec<String> {
+        attributed_fns(source, &["#[tauri::command", "#[ipc"])
+    }
+
+    /// The names of the `#[ipc]` functions only in one source text.
+    pub(crate) fn ipc_fns(source: &str) -> Vec<String> {
+        attributed_fns(source, &["#[ipc"])
+    }
+
+    /// The names of the functions whose attribute starts with one of `prefixes`.
+    fn attributed_fns(source: &str, prefixes: &[&str]) -> Vec<String> {
         let lines: Vec<&str> = source.lines().collect();
         let mut names = Vec::new();
         for (index, line) in lines.iter().enumerate() {
             let attribute = line.trim_start();
-            if !(attribute.starts_with("#[tauri::command") || attribute.starts_with("#[ipc")) {
+            if !prefixes.iter().any(|prefix| attribute.starts_with(prefix)) {
                 continue;
             }
             let declaration = lines[index..]
