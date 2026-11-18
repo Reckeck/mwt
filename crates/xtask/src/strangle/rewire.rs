@@ -18,7 +18,7 @@ use syn::{Expr, ExprMethodCall, FnArg, ImplItemFn, ItemFn, ItemImpl, Pat, Type};
 use super::baseline::Baseline;
 use super::fileset::FileSet;
 use super::forward::delegate_target;
-use super::home::{core_dir, homes};
+use super::home::{DOC_MARKER, core_dir, homes};
 use super::map::Map;
 use super::source::{LineIndex, Splice, apply, is_vault_impl};
 
@@ -249,7 +249,7 @@ impl<'ast> Visit<'ast> for Rewriter<'_> {
             return visit::visit_expr_method_call(self, node);
         };
         let line = node.method.span().start().line;
-        if target.marker == Some("@doc") {
+        if target.marker == Some(DOC_MARKER) {
             self.skipped.push(format!(
                 "{line}: {name}(): `@doc` target is not rewritten (no `&VaultDoc` accessor)"
             ));

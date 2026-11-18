@@ -8,6 +8,7 @@ use anyhow::{Result, bail};
 use clap::Args;
 
 use super::fileset::FileSet;
+use super::home::USECASES;
 use super::map::{Area, ExtraStub, Map};
 
 #[derive(Args)]
@@ -61,7 +62,7 @@ fn plan(map: &Map, files: &mut FileSet) -> Result<()> {
         let group = Module::declare(files, &lib, &core, stub.group)?;
         group.add_file(files, &stub.name, &placeholder)?;
         group.add_file(files, &format!("{}_tests", stub.name), &placeholder)?;
-        let usecases = Module::declare(files, &lib, &core, "usecases")?;
+        let usecases = Module::declare(files, &lib, &core, USECASES)?;
         let context = Module::declare(files, &usecases.file, &usecases.dir, stub.context)?;
         context.add_file(files, &stub.name, &placeholder)?;
     }

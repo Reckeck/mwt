@@ -12,7 +12,7 @@ use syn::{FnArg, Item, ItemFn, Pat, Type, Visibility};
 
 use super::baseline::{Baseline, BaselineMethod};
 use super::fileset::FileSet;
-use super::home::{Home, homes};
+use super::home::{DOC_MARKER, Home, homes};
 use super::map::Map;
 use super::scan::is_test_attr;
 use super::signature::{Parts, doc_lines};
@@ -132,7 +132,7 @@ pub(super) fn receiver_of(first: &FnArg) -> Option<Receiver> {
         ("vault", "UnlockedVault", true) => ("&mut self", None),
         ("vault", "UnlockedVault", false) => ("&self", None),
         ("books", "Books", false) => ("&self", Some("@books")),
-        ("doc", "VaultDoc", false) => ("&self", Some("@doc")),
+        ("doc", "VaultDoc", false) => ("&self", Some(DOC_MARKER)),
         _ => return None,
     };
     Some(Receiver { text, marker })

@@ -22,7 +22,7 @@ use syn::{Block, Expr, Stmt};
 use super::Workspace;
 use super::baseline::{self, AreaBaseline, Baseline, production_methods};
 use super::forward::forwarded_entries;
-use super::home::{Home, allowed_files, area_files, homes};
+use super::home::{Home, USECASES, allowed_files, area_files, homes};
 use super::map::Area;
 use super::scope;
 
@@ -235,7 +235,7 @@ fn no_logic(subject: &Subject) -> Result<Vec<String>> {
     let targets: BTreeSet<&str> = homes
         .iter()
         .map(|home| home.group.as_str())
-        .chain(["usecases"])
+        .chain([USECASES])
         .collect();
     let mut found = Vec::new();
     for path in area_files(subject.workspace, subject.area) {
