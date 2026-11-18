@@ -29,7 +29,7 @@ pub use password::{CopyPolicy, PlainCopies, RotationReport};
 pub use saving::{FlushJob, Flushed, SaveHook};
 
 mod adjustments;
-mod agenda;
+pub(crate) mod agenda;
 mod allocation;
 mod asset_holdings;
 mod attachments;
