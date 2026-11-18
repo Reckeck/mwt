@@ -634,3 +634,21 @@ fn the_calendar_keeps_a_running_balance_and_the_days_notices() {
     assert_eq!(month.days[25].left, Some(amount("-360")));
     assert_eq!(month.days[30].left, Some(amount("-360")));
 }
+
+#[test]
+fn a_range_over_the_report_limit_is_refused_not_cut() {
+    let (_dir, vault, _card) = vault_with_card();
+    let result = vault.report(
+        ReportKind::Cashflow,
+        &range("2010-01", "2026-05"),
+        secs(NOW),
+        "UTC",
+    );
+    assert!(matches!(result, Err(crate::Error::InvalidInput(_))));
+    // Exactly the limit is still a report.
+    let Report::Cashflow(report) = run(&vault, ReportKind::Cashflow, &range("2016-07", "2026-06"))
+    else {
+        panic!()
+    };
+    assert_eq!(report.meta.months.len(), MAX_REPORT_MONTHS);
+}

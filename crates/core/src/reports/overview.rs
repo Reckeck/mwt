@@ -551,7 +551,12 @@ pub(crate) fn report_ctx(
         ));
     }
     let mut months = Vec::new();
-    while from <= to && months.len() < MAX_REPORT_MONTHS {
+    while from <= to {
+        if months.len() == MAX_REPORT_MONTHS {
+            return Err(Error::InvalidInput(format!(
+                "a report covers at most {MAX_REPORT_MONTHS} months"
+            )));
+        }
         months.push(from);
         from = next_month(from);
     }
