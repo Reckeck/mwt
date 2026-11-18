@@ -70,7 +70,7 @@ impl Host for TestHost {
         "memory"
     }
 
-    fn emit<S: Serialize + Clone>(&self, event: &str, payload: S) {
+    fn emit_raw<S: Serialize + Clone>(&self, event: &str, payload: S) {
         let value = serde_json::to_value(payload).unwrap_or(Value::Null);
         let _ = self.0.events.send((event.to_string(), value));
     }
