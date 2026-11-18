@@ -2,9 +2,12 @@
 //! becomes `pub(crate)`, so a method moved out of `service/` keeps access to its private siblings
 //! (spec D1, OD5). One token changes per method; nothing else.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use proc_macro2::{Delimiter, Spacing, TokenStream, TokenTree};
+use syn::{Fields, Item, Visibility};
 
 use super::Workspace;
 use super::fileset::FileSet;
@@ -42,6 +45,92 @@ pub fn widen_source(text: &str) -> Result<(String, usize)> {
         .collect();
     let count = splices.len();
     Ok((source::apply(text, splices), count))
+}
+
+/// Names read as a field (`.name`, not a call) anywhere in the source, macro bodies included.
+pub fn field_reads(text: &str) -> Result<BTreeSet<String>> {
+    let tokens: TokenStream = text
+        .parse()
+        .map_err(|error| anyhow::anyhow!("tokenize: {error}"))?;
+    let mut names = BTreeSet::new();
+    collect_field_reads(&tokens.into_iter().collect::<Vec<_>>(), &mut names);
+    Ok(names)
+}
+
+fn collect_field_reads(tokens: &[TokenTree], names: &mut BTreeSet<String>) {
+    for (at, token) in tokens.iter().enumerate() {
+        match token {
+            TokenTree::Group(group) => {
+                collect_field_reads(&group.stream().into_iter().collect::<Vec<_>>(), names);
+            }
+            TokenTree::Punct(dot) if dot.as_char() == '.' && dot.spacing() == Spacing::Alone => {
+                let range_end = at > 0
+                    && matches!(&tokens[at - 1], TokenTree::Punct(prev) if prev.as_char() == '.');
+                let called = matches!(
+                    tokens.get(at + 2),
+                    Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis
+                );
+                if let (false, false, Some(TokenTree::Ident(name))) =
+                    (range_end, called, tokens.get(at + 1))
+                {
+                    names.insert(name.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The named fields of `struct <name>` that are not `pub`, in the file's text.
+pub fn private_fields(text: &str, name: &str) -> Result<Vec<String>> {
+    let file = syn::parse_file(text).context("parse")?;
+    Ok(struct_fields(&file, name)
+        .filter(|field| !matches!(field.vis, Visibility::Public(_)))
+        .filter_map(|field| field.ident.as_ref().map(ToString::to_string))
+        .collect())
+}
+
+fn struct_fields<'ast>(
+    file: &'ast syn::File,
+    name: &'ast str,
+) -> impl Iterator<Item = &'ast syn::Field> {
+    file.items
+        .iter()
+        .filter_map(move |item| match item {
+            Item::Struct(node) if node.ident == name => Some(&node.fields),
+            _ => None,
+        })
+        .flat_map(|fields| match fields {
+            Fields::Named(named) => named.named.iter().collect::<Vec<_>>(),
+            _ => Vec::new(),
+        })
+}
+
+/// The source with the listed fields of `struct <name>` widened by the rule of `widen` (a
+/// non-`pub` field becomes `pub(crate)`), and the names of the fields that changed.
+pub fn widen_fields(
+    text: &str,
+    name: &str,
+    wanted: &BTreeSet<String>,
+) -> Result<(String, Vec<String>)> {
+    let file = syn::parse_file(text).context("parse")?;
+    let index = LineIndex::new(text);
+    let mut splices = Vec::new();
+    let mut widened = Vec::new();
+    for field in struct_fields(&file, name) {
+        let Some(ident) = field
+            .ident
+            .as_ref()
+            .filter(|ident| wanted.contains(&ident.to_string()))
+        else {
+            continue;
+        };
+        if let Some(splice) = source::widen(&index, &field.vis, ident.span().start()) {
+            splices.push(splice);
+            widened.push(ident.to_string());
+        }
+    }
+    Ok((source::apply(text, splices), widened))
 }
 
 #[cfg(test)]
@@ -117,5 +206,31 @@ fn free() {}
         let (once, first) = widen_source(MOD_RS).unwrap();
         assert_eq!(first, 1);
         assert_eq!(widen_source(&once).unwrap(), (once.clone(), 0));
+    }
+
+    #[test]
+    fn field_reads_see_fields_not_calls_ranges_or_macro_free_text() {
+        let reads = field_reads(
+            "fn a(v: &V) { let _ = v.doc.len() + v.count; for _ in 0..v.n {} println!(\"{}\", v.path); v.call(); }",
+        )
+        .unwrap();
+        let names: Vec<&str> = reads.iter().map(String::as_str).collect();
+        assert_eq!(names, ["count", "doc", "n", "path"]);
+    }
+
+    #[test]
+    fn only_the_wanted_private_fields_are_widened() {
+        let text = "pub struct V {\n    /// Doc.\n    doc: u8,\n    pub(super) count: u8,\n    pub ok: u8,\n    other: u8,\n}\n";
+        assert_eq!(
+            private_fields(text, "V").unwrap(),
+            ["doc", "count", "other"]
+        );
+        let wanted: BTreeSet<String> = ["doc", "count", "ok"].map(String::from).into();
+        let (widened, names) = widen_fields(text, "V", &wanted).unwrap();
+        assert_eq!(names, ["doc", "count"]);
+        assert_eq!(
+            widened,
+            "pub struct V {\n    /// Doc.\n    pub(crate) doc: u8,\n    pub(crate) count: u8,\n    pub ok: u8,\n    other: u8,\n}\n"
+        );
     }
 }

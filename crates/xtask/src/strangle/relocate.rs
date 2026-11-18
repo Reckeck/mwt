@@ -15,6 +15,10 @@ use super::forward::{FORWARD_BEGIN, FORWARD_END};
 use super::home::{Home, homes};
 use super::map::Map;
 use super::source::{self, LineIndex, Splice};
+use super::widen::{field_reads, widen_fields};
+
+/// The struct whose private fields a moved method may read (spec D1, OD5).
+const VAULT: &str = "UnlockedVault";
 
 /// What a stub starts with, so a real file is never overwritten.
 const PLACEHOLDER: &str = "//! placeholder";
@@ -56,24 +60,44 @@ pub(super) fn relocate(files: &mut FileSet, map: &Map, area: &str) -> Result<Vec
         } else if source.contains(FORWARD_BEGIN) {
             report.push(format!("{shim} is a shim already: skipped"));
         } else {
-            move_file(files, &home, &source)?;
+            move_file(files, map, &home, &source)?;
             report.push(format!("{shim} -> {}", home.pure_file()));
         }
     }
     Ok(report)
 }
 
-fn move_file(files: &mut FileSet, home: &Home, source: &str) -> Result<()> {
+fn move_file(files: &mut FileSet, map: &Map, home: &Home, source: &str) -> Result<()> {
     let target = home.pure_file();
     if !files.read(&target)?.starts_with(PLACEHOLDER) {
         bail!("{target} is not a placeholder stub: run `strangle scaffold` first");
     }
     let shim = shim_text(home, source)?;
+    widen_vault_fields(files, &map.service_dir, source)?;
     for child in out_of_line_modules(home, source)? {
         move_child(files, home, &child)?;
     }
     files.set(&target, rewrite_paths(source, home, 0)?)?;
     files.set(&home.shim(), shim)
+}
+
+/// A moved file that reads a private field of `UnlockedVault` leaves `service/`, so the field
+/// is widened to `pub(crate)` in `service/mod.rs` by the rule of `widen`.
+fn widen_vault_fields(files: &mut FileSet, service_dir: &str, source: &str) -> Result<()> {
+    if !source.contains(VAULT) {
+        return Ok(());
+    }
+    let definition = format!("{service_dir}/mod.rs");
+    let (text, widened) = widen_fields(files.read(&definition)?, VAULT, &field_reads(source)?)
+        .with_context(|| definition.clone())?;
+    if widened.is_empty() {
+        return Ok(());
+    }
+    println!(
+        "relocate: widened {VAULT} field(s) {} in {definition}",
+        widened.join(", ")
+    );
+    files.set(&definition, text)
 }
 
 /// The names of the `mod x;` declarations of the file (inline modules move with the text).
@@ -442,6 +466,61 @@ mod inner { use super::d; use crate::service::e; fn f() { crate::g; } }
                 "//! Shim of the `reports` area: moved to `crate::household::overview` (spec core-strangler, D1).\n"
             ),
             "{shim}"
+        );
+    }
+
+    const VAULT_FILE: &str = "impl UnlockedVault {
+    pub fn total(&self) -> u32 { self.count + self.doc.len() as u32 + self.open() }
+}
+";
+    const VAULT_DEFINITION: &str = "pub struct UnlockedVault {
+    count: u32,
+    doc: String,
+    untouched: u32,
+    pub open: u32,
+}
+";
+
+    #[test]
+    fn a_moved_method_reading_private_vault_fields_widens_exactly_those() {
+        let tree = original_tree();
+        std::fs::write(tree.root().join(SERVICE), VAULT_FILE).unwrap();
+        std::fs::write(
+            tree.root().join("crates/core/src/service/mod.rs"),
+            VAULT_DEFINITION,
+        )
+        .unwrap();
+        relocated(&tree).unwrap();
+        assert_eq!(
+            read(&tree, "crates/core/src/service/mod.rs"),
+            "pub struct UnlockedVault {
+    pub(crate) count: u32,
+    pub(crate) doc: String,
+    untouched: u32,
+    pub open: u32,
+}
+"
+        );
+        assert!(read(&tree, PURE).contains("self.count"));
+    }
+
+    #[test]
+    fn a_vault_file_without_private_reads_leaves_the_definition_alone() {
+        let tree = original_tree();
+        std::fs::write(
+            tree.root().join(SERVICE),
+            "impl UnlockedVault { pub fn a(&self) -> u32 { self.open } }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tree.root().join("crates/core/src/service/mod.rs"),
+            VAULT_DEFINITION,
+        )
+        .unwrap();
+        relocated(&tree).unwrap();
+        assert_eq!(
+            read(&tree, "crates/core/src/service/mod.rs"),
+            VAULT_DEFINITION
         );
     }
 }
