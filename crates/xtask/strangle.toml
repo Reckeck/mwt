@@ -167,6 +167,14 @@ files = [
 ]
 
 [[foundation]]
+# The household stub `shared_events.rs` becomes the directory `shared_events/` (mod.rs) and its scenario file is filled.
+task = "C"
+files = [
+    "crates/core/src/household/shared_events.rs", "crates/core/src/household/shared_events/mod.rs",
+    "crates/core/src/usecases/household/shared_events.rs",
+]
+
+[[foundation]]
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 
