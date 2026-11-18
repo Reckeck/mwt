@@ -30,10 +30,4 @@ impl UnlockedVault {
             => crate::usecases::household::ledger::tx_graph;
     }
     // forward:end
-
-    /// The reports area's spreadsheet writer, for the scenarios that have not
-    /// moved with it (OD6).
-    pub(crate) fn csv_text(lines: Vec<Vec<String>>) -> String {
-        super::reports::csv_text(lines)
-    }
 }

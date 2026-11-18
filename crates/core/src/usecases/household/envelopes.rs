@@ -124,8 +124,11 @@ pub fn fund_goal(
         None => {
             // Named by goal, wallet and asset: two devices that start
             // funding the same goal make one envelope.
-            let id =
-                UnlockedVault::goal_envelope_id(goal_id, store_id.as_str(), &funding.asset.key());
+            let id = crate::service::sync_ids::goal_envelope_id(
+                goal_id,
+                store_id.as_str(),
+                &funding.asset.key(),
+            );
             let draft = EnvelopeDraft {
                 store_id: store_id.to_string(),
                 name: funding.goal_name,

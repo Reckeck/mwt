@@ -60,7 +60,7 @@ pub fn list_transactions(
 /// "Export ▾ › Transactions by filter" of the list.
 pub fn transactions_csv(vault: &UnlockedVault, filter: &TxFilter, zone: &str) -> Result<String> {
     ledger::transaction_lines(&vault.books(), &VaultSources(vault), filter, zone)
-        .map(UnlockedVault::csv_text)
+        .map(crate::service::reports::csv_text)
 }
 
 /// `limit` operations from `offset`, newest first: a long journal goes to

@@ -58,10 +58,4 @@ impl UnlockedVault {
         pub(crate) fn settle_envelopes(&mut self) -> bool
             => crate::usecases::household::envelopes::settle_envelopes;
     }
-
-    /// The id of the envelope that holds a goal's money in one wallet and asset;
-    /// the sync area's, so two devices make one envelope (OD6).
-    pub(crate) fn goal_envelope_id(goal_id: &str, store_id: &str, asset_key: &str) -> String {
-        super::sync_ids::goal_envelope_id(goal_id, store_id, asset_key)
-    }
 }
