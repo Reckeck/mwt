@@ -108,6 +108,11 @@ files = [
 ]
 
 [[foundation]]
+# `sync_ids` and `reports` become `pub(crate)` for the household scenarios until their areas move.
+task = "A"
+files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 
