@@ -117,22 +117,22 @@ call `app.emit("..")` with a literal: add the event to `app_events!`.
 | `notification` | a notification was shown (a reminder, an alert, insufficient funds, a budget, an automation, a Bybit import): the bell and a toast. `link` is a route name or `wallet:<id>`. Each `key` is shown once for all time — the journal is in the vault |
 | `enrichment-ready` | the explorer returned data by the transaction hash; the finding awaits "Apply / Dismiss" |
 | `vault-mirror-failed` | the vault copy to an external file was not written (`platform_fs::mirror_sink`); the vault is intact, the status is `vault_link_status` |
-| `sync-status` | `SyncStatus` | the device sync state changed: role, connections, phases, progress (`docs/sync.md`) |
-| `sync-offer` | `SyncOfferEvent { session_id, peer_name }` | a device with the same vault, not yet paired, is nearby: a "Pair" banner |
-| `sync-pairing` | `SyncPairingEvent { session_id, peer_name, code }` | show a 6-digit code; it is the same on the second device |
-| `sync-plan-ready` | `SyncPlanEvent { session_id, peer_name, reason, summary, after }` | the change list awaits a decision (`sync_decide_plan`); `summary` items carry a readable `label`, the record `key` and, for an edit, `fields: FieldChange { field, before, after, money_currency }`; `after: AfterApply { currency, net_worth_before, net_worth_after, stores: StoreBalanceChange[] }` is the capital and wallet balances once applied (worked out on an in-memory copy, nothing written): the first batch with "Ask", the first pairing or a "temporarily untrusted" device |
-| `vault-synced` | `VaultSyncedEvent { session_id, batch: AppliedBatch, collections }` | a batch from another device was applied (`collections`: every collection it touched, dedupe and repair deletions included; `batch.summary.total` does not count those); the frontend re-reads the queries of the summary and of `collections`, a notification with "Undo" (`sync_undo`) |
-| `sync-clock` | `SyncClockEvent { session_id, peer_name, offset_ms, unreliable }` | device clocks diverge (5 min – 24 h) or jumped: the device is "temporarily untrusted" until the end of the session |
-| `sync-error` | `SyncErrorEvent { code, message, peer_name?, peer_version?, own_version? }` | the session did not start or was interrupted: `SYNC_OTHER_VAULT`, `SYNC_VERSION_MISMATCH`, `SYNC_CLOCK_SKEW`, `SYNC_REVOKED`, `SYNC_REJECTED`, `SYNC_CHANNEL`, `SYNC_PAUSED_BY_PEER` and `SYNC_FORGOTTEN_BY_PEER` (the other device paused the exchange or forgot this one; the text names the device, `peer_name`); `SYNC_VERSION_MISMATCH` also has `peer_version` (empty for an old build) and `own_version`: the text names the device and both versions |
-| `transfer-receive` | `TransferReceiveView` | a vault receive step: waiting, request, code, progress, done (`saved_path`), error (`SYNC_TRANSFER_EXPIRED`, `SYNC_BAD_CODE`, `SYNC_TRANSFER_DECLINED`, `SYNC_NOT_A_VAULT`) |
-| `transfer-send` | `TransferSendView` | a transfer step: waiting for "Accept", the code (`wrong_code`, `attempts_left`), progress, done, error |
-| `transfer-nearby` | `TransferNearby[]` | nearby devices waiting to receive |
-| `vault-changed` | `VaultStatus` | the vault was locked without a window request (Android: background lock, the button on the sync notification); the window goes to the unlock screen |
-| `vault-locked` | `{ reason, closed }` | the vault was locked, sent from the lock bus next to `vault-changed` (additive; the window still reacts to `vault-changed`) |
-| `vault-save-failed` | `string` or `{ reason, exiting }` | the batched vault write failed (it retries by itself); `exiting` — on exit, the window offers "Retry" / "Quit without saving" |
-| `vault-saved` | — | a write succeeded again after an error |
-| `update-state` | `UpdateStatusDto` | the update check changed phase: checking, downloading (`percent`), ready, available (hand-updated installs), up to date, error |
-| `security-raise-progress` | `RaiseProgress { stage: RaiseStage }` | the move to the crypto level reached a stage: `backup`, `reencrypt`, `verify` (`raise_to_crypto_level`) |
+| `sync-status` | the device sync state changed: role, connections, phases, progress (`docs/sync.md`) |
+| `sync-offer` | a device with the same vault, not yet paired, is nearby: a "Pair" banner |
+| `sync-pairing` | show a 6-digit code; it is the same on the second device |
+| `sync-plan-ready` | the change list awaits a decision (`sync_decide_plan`); `summary` items carry a readable `label`, the record `key` and, for an edit, `fields: FieldChange { field, before, after, money_currency }`; `after: AfterApply { currency, net_worth_before, net_worth_after, stores: StoreBalanceChange[] }` is the capital and wallet balances once applied (worked out on an in-memory copy, nothing written): the first batch with "Ask", the first pairing or a "temporarily untrusted" device |
+| `vault-synced` | a batch from another device was applied (`collections`: every collection it touched, dedupe and repair deletions included; `batch.summary.total` does not count those); the frontend re-reads the queries of the summary and of `collections`, a notification with "Undo" (`sync_undo`) |
+| `sync-clock` | device clocks diverge (5 min – 24 h) or jumped: the device is "temporarily untrusted" until the end of the session |
+| `sync-error` | the session did not start or was interrupted: `SYNC_OTHER_VAULT`, `SYNC_VERSION_MISMATCH`, `SYNC_CLOCK_SKEW`, `SYNC_REVOKED`, `SYNC_REJECTED`, `SYNC_CHANNEL`, `SYNC_PAUSED_BY_PEER` and `SYNC_FORGOTTEN_BY_PEER` (the other device paused the exchange or forgot this one; the text names the device, `peer_name`); `SYNC_VERSION_MISMATCH` also has `peer_version` (empty for an old build) and `own_version`: the text names the device and both versions |
+| `transfer-receive` | a vault receive step: waiting, request, code, progress, done (`saved_path`), error (`SYNC_TRANSFER_EXPIRED`, `SYNC_BAD_CODE`, `SYNC_TRANSFER_DECLINED`, `SYNC_NOT_A_VAULT`) |
+| `transfer-send` | a transfer step: waiting for "Accept", the code (`wrong_code`, `attempts_left`), progress, done, error |
+| `transfer-nearby` | nearby devices waiting to receive |
+| `vault-changed` | the vault was locked without a window request (Android: background lock, the button on the sync notification); the window goes to the unlock screen |
+| `vault-locked` | the vault was locked, sent from the lock bus next to `vault-changed` (additive; the window still reacts to `vault-changed`) |
+| `vault-save-failed` | the batched vault write failed (it retries by itself); `exiting` — on exit, the window offers "Retry" / "Quit without saving" |
+| `vault-saved` | a write succeeded again after an error |
+| `update-state` | the update check changed phase: checking, downloading (`percent`), ready, available (hand-updated installs), up to date, error |
+| `security-raise-progress` | the move to the crypto level reached a stage: `backup`, `reencrypt`, `verify` (`raise_to_crypto_level`) |
 
 Background tasks live in `crates/app/src/scheduler.rs`: one thread, a tick every 30 s,
 only while the vault is unlocked — Bybit import, automations, alerts (prices of their
