@@ -195,3 +195,10 @@ fn unscanned_macro_bodies_are_shown_as_file_line_notes() {
     .unwrap();
     assert_eq!(corpus.unscanned_notes(), ["a.rs:2: macro body not scanned"]);
 }
+
+#[test]
+fn macros_that_cannot_hold_a_vault_call_are_not_unscanned() {
+    let source =
+        "macro_rules! m {\n    () => {};\n}\nfn f() {\n    let v = json!({ \"a\": 1 });\n}\n";
+    assert!(scan_source(source).unwrap().unscanned.is_empty());
+}

@@ -165,6 +165,7 @@ impl<'ast> Visit<'ast> for Scanner {
                     visit::visit_expr(self, argument);
                 }
             }
+            None if cannot_hold_vault_call(node) => {}
             None => self.facts.unscanned.push(macro_line(node)),
         }
     }
@@ -172,6 +173,14 @@ impl<'ast> Visit<'ast> for Scanner {
     fn visit_ident(&mut self, node: &'ast Ident) {
         self.note_ident(node.to_string());
     }
+}
+
+/// Macros whose body is a definition or data, never a vault call: `macro_rules!`, `json!`.
+fn cannot_hold_vault_call(node: &Macro) -> bool {
+    node.path
+        .segments
+        .last()
+        .is_some_and(|segment| segment.ident == "macro_rules" || segment.ident == "json")
 }
 
 /// The body of a macro call read as `Punctuated<Expr, Comma>` (`format!`, `assert!`, `vec![a, b]`);
