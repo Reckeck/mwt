@@ -289,3 +289,122 @@ fn the_delegates_equal_the_scenarios() {
         cashback_report(&vault.books(), from, to)
     );
 }
+
+/// A result as JSON with every id and timestamp blanked, so twin vaults compare.
+fn without_ids<T: serde::Serialize>(value: &T, known_ids: &[&str]) -> serde_json::Value {
+    fn blank(node: &mut serde_json::Value, known_ids: &[&str]) {
+        match node {
+            serde_json::Value::Object(fields) => {
+                for (key, child) in fields.iter_mut() {
+                    if key == "id" || key.ends_with("_id") || key.contains("timestamp") {
+                        *child = serde_json::Value::Null;
+                    } else {
+                        blank(child, known_ids);
+                    }
+                }
+            }
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    blank(item, known_ids);
+                }
+            }
+            serde_json::Value::String(text) if known_ids.contains(&text.as_str()) => {
+                *text = String::new();
+            }
+            _ => {}
+        }
+    }
+    let mut json = serde_json::to_value(value).unwrap();
+    blank(&mut json, known_ids);
+    json
+}
+
+#[test]
+fn the_create_delegate_equals_the_scenario() {
+    let (_dir_a, mut by_method) = empty_vault();
+    let (_dir_b, mut by_scenario) = empty_vault();
+    let mut settings = info("миля");
+    settings.login = Some("  +7 900 000-00-00 ".into());
+    let method = by_method
+        .create_loyalty_program("Аэрофлот", "#db2777", None, settings.clone())
+        .unwrap();
+    let scenario = crate::usecases::household::loyalty::create_loyalty_program(
+        &mut by_scenario,
+        "Аэрофлот",
+        "#db2777",
+        None,
+        settings,
+    )
+    .unwrap();
+    assert_eq!(
+        without_ids(&method, &[method.id.as_str()]),
+        without_ids(&scenario, &[scenario.id.as_str()])
+    );
+    assert_eq!(
+        without_ids(&by_method.doc.stores, &[method.id.as_str()]),
+        without_ids(&by_scenario.doc.stores, &[scenario.id.as_str()])
+    );
+    assert_eq!(
+        by_method.doc.manual_prices.len(),
+        by_scenario.doc.manual_prices.len()
+    );
+}
+
+#[test]
+fn the_adjust_delegate_equals_the_scenario() {
+    let (_dir_a, mut by_method) = empty_vault();
+    let (_dir_b, mut by_scenario) = empty_vault();
+    let method_programme = store(&mut by_method, "A", StoreKind::Loyalty, None);
+    let scenario_programme = store(&mut by_scenario, "A", StoreKind::Loyalty, None);
+    by_method
+        .set_loyalty_info(&method_programme, info("PTS"))
+        .unwrap();
+    by_scenario
+        .set_loyalty_info(&scenario_programme, info("PTS"))
+        .unwrap();
+    let stamp = Some("2026-03-01T10:00:00Z".to_string());
+    for delta in ["500", "200"] {
+        let method = by_method
+            .adjust_points(
+                &method_programme,
+                amount(delta),
+                "groceries",
+                None,
+                stamp.clone(),
+            )
+            .unwrap();
+        let scenario = crate::usecases::household::loyalty::adjust_points(
+            &mut by_scenario,
+            &StoreId::from(&scenario_programme),
+            amount(delta),
+            "groceries",
+            None,
+            stamp.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            without_ids(&method, &[method_programme.as_str()]),
+            without_ids(&scenario, &[scenario_programme.as_str()])
+        );
+    }
+    assert_eq!(
+        by_method.doc.transactions.len(),
+        by_scenario.doc.transactions.len()
+    );
+    assert!(
+        by_method
+            .adjust_points(&method_programme, amount("0"), "c", None, None)
+            .is_err()
+    );
+    assert!(
+        crate::usecases::household::loyalty::adjust_points(
+            &mut by_scenario,
+            &StoreId::from(&scenario_programme),
+            amount("0"),
+            "c",
+            None,
+            None
+        )
+        .is_err()
+    );
+}

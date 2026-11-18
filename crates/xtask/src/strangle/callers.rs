@@ -23,10 +23,29 @@ pub struct CallersArgs {
 pub fn run(root: &Path, args: &CallersArgs) -> Result<()> {
     let workspace = Workspace::load(root)?;
     let baseline = Baseline::load(root)?;
-    for line in callers(&workspace, &baseline, args.area.as_deref())? {
+    let (stdout, stderr) = report(&workspace, &baseline, args.area.as_deref())?;
+    for line in stdout {
         println!("{line}");
     }
+    if let Some(note) = stderr {
+        eprintln!("{note}");
+    }
     Ok(())
+}
+
+/// The two streams of the command: stdout is only `file:line:` callers; the macro notes are one
+/// count for stderr (the list is in `strangle stats`).
+fn report(
+    workspace: &Workspace,
+    baseline: &Baseline,
+    area: Option<&str>,
+) -> Result<(Vec<String>, Option<String>)> {
+    let stdout = callers(workspace, baseline, area)?;
+    let unscanned = workspace.corpus.unscanned_notes().len();
+    let stderr = (unscanned > 0).then(|| {
+        format!("{unscanned} macro bodies not scanned (see `strangle stats` for the list)")
+    });
+    Ok((stdout, stderr))
 }
 
 /// One `path:line: name()` entry per call, sorted.
@@ -89,5 +108,30 @@ mod tests {
             ]
         );
         assert!(callers(&workspace, &baseline, Some("nope")).is_err());
+    }
+
+    #[test]
+    fn listed_lines_are_only_file_line_callers_even_with_unscanned_macros() {
+        let tree = original_tree();
+        let workspace = Workspace::load(tree.root()).unwrap();
+        let baseline = crate::strangle::baseline::capture(tree.root(), &workspace).unwrap();
+        std::fs::write(
+            tree.root().join("crates/core/src/user.rs"),
+            "fn user(vault: &mut UnlockedVault) {\n    odd!(=> vault.hidden());\n    vault.set_info(\"a\", info);\n}\n",
+        )
+        .unwrap();
+        let workspace = Workspace::load(tree.root()).unwrap();
+        let (stdout, stderr) = report(&workspace, &baseline, Some("loyalty")).unwrap();
+        assert!(!stdout.is_empty());
+        for line in &stdout {
+            let (location, _) = line.split_once(": ").unwrap();
+            let (file, number) = location.rsplit_once(':').unwrap();
+            assert!(
+                file.ends_with(".rs") && number.parse::<usize>().is_ok(),
+                "{line}"
+            );
+            assert!(!line.contains("macro"), "{line}");
+        }
+        assert!(stderr.unwrap().contains("macro bodies not scanned"));
     }
 }

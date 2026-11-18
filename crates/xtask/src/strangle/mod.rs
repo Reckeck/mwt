@@ -4,7 +4,7 @@
 //!
 //! - `stats`: facts of one area or all (files, lines, methods, `persist()`, commands, calls, untested).
 //! - `scaffold`: creates every module-group, area and scenario stub of the layout.
-//! - `widen`: makes non-`pub` `impl UnlockedVault` methods in `service/` `pub(crate)`.
+//! - `widen`: makes non-`pub` `impl UnlockedVault` methods in `service/` `pub(crate)` (methods only, never fields).
 //! - `carve`: moves items named in a TOML file out of a service file into a new one.
 //! - `relocate`: moves an area's files into their stubs and leaves the shim with `pub use`.
 //! - `forward`: regenerates the `forward!` block of an area's shims.

@@ -213,6 +213,11 @@ fn diff_base(github_base_ref: Option<&str>) -> String {
     }
 }
 
+/// The one line shown when the diff base is absent locally.
+fn missing_base_notice(base: &str) -> String {
+    format!("base ref {base} not found locally: running --all without --diff")
+}
+
 /// Arguments of `strangle check`: `--all`, plus `--diff <base>` when the base exists.
 fn strangle_args(base: Option<&str>) -> Vec<String> {
     let mut args: Vec<String> = ["strangle", "check", "--all"].map(String::from).into();
@@ -237,9 +242,9 @@ fn strangle() -> Task {
             .await
             .is_some();
         if !known {
-            ctx.note(&format!(
-                "base ref {base} not found locally: running --all without --diff"
-            ));
+            let notice = missing_base_notice(&base);
+            ctx.note(&notice);
+            eprintln!("strangle: {notice}");
         }
         let cmd = Cmd::new(&program).args(strangle_args(known.then_some(base.as_str())));
         match ctx.exec(&cmd).await {
@@ -286,7 +291,9 @@ fn gen_types(_root: &Path) -> Task {
 
 #[cfg(test)]
 mod tests {
-    use super::{BrowserOpts, browser_cmd, diff_base, parse_shard, strangle_args};
+    use super::{
+        BrowserOpts, browser_cmd, diff_base, missing_base_notice, parse_shard, strangle_args,
+    };
 
     fn opts(quick: bool, shard: Option<&str>, jobs: Option<usize>) -> BrowserOpts {
         BrowserOpts {
@@ -342,5 +349,15 @@ mod tests {
     #[test]
     fn strangle_without_a_base_checks_all_only() {
         assert_eq!(strangle_args(None), ["strangle", "check", "--all"]);
+    }
+
+    #[test]
+    fn missing_base_notice_is_one_line_naming_the_ref() {
+        let notice = missing_base_notice("origin/development");
+        assert_eq!(
+            notice,
+            "base ref origin/development not found locally: running --all without --diff"
+        );
+        assert!(!notice.contains('\n'));
     }
 }

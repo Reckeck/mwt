@@ -12,7 +12,9 @@ use syn::{Item, Visibility};
 
 use super::fileset::FileSet;
 use super::map::Map;
+use super::scan::VAULT_RECEIVERS;
 use super::source::{self, LineIndex};
+use super::widen::{binding_of, field_reads, private_fields};
 
 #[derive(Args)]
 pub struct CarveArgs {
@@ -126,13 +128,51 @@ fn carve(files: &mut FileSet, service_dir: &str, items: &Items) -> Result<()> {
         .map(|item| item.piece.lines)
         .chain(methods.iter().map(|item| item.lines))
         .collect();
-    files.set(&from, remove_lines(&lines, &cut))?;
+    let remaining = remove_lines(&lines, &cut);
+    refuse_private_fields(&file, &source, &remaining, &free)?;
+    files.set(&from, remaining)?;
     files.set(&to, body)?;
     files.declare(
         &format!("{service_dir}/mod.rs"),
         module_name(&items.to)?,
         &declaration(&items.to, &free)?,
     )
+}
+
+/// A carved struct with a private field that the code left behind still reads cannot move: the
+/// field would be private to the new module. The message names the field.
+fn refuse_private_fields(
+    file: &syn::File,
+    source: &str,
+    remaining: &str,
+    free: &[Free],
+) -> Result<()> {
+    let carved_structs: Vec<&str> = free
+        .iter()
+        .map(|item| item.piece.name.as_str())
+        .filter(|name| {
+            file.items
+                .iter()
+                .any(|item| matches!(item, Item::Struct(node) if node.ident == name))
+        })
+        .collect();
+    if carved_structs.is_empty() {
+        return Ok(());
+    }
+    for name in carved_structs {
+        let binding = binding_of(name);
+        let receivers = [VAULT_RECEIVERS[0], binding.as_str()];
+        let reads = field_reads(remaining, &receivers)?;
+        if let Some(field) = private_fields(source, name)?
+            .into_iter()
+            .find(|field| reads.contains(field))
+        {
+            bail!(
+                "`{name}` is carved but its private field `{field}` is read by code that stays: make it `pub(crate)` first"
+            );
+        }
+    }
+    Ok(())
 }
 
 fn module_name(file: &str) -> Result<&str> {
@@ -395,5 +435,66 @@ impl UnlockedVault {
                 .to_string()
                 .contains("exists")
         );
+    }
+
+    #[test]
+    fn a_carved_struct_whose_private_field_is_read_by_the_rest_is_refused_by_field_name() {
+        let tree = TempTree::new(&[
+            (MAP_FILE, MAP),
+            (
+                "crates/svc/service/mod.rs",
+                "struct Draft {\n    secret: u32,\n}\npub fn keep(draft: &Draft) -> u32 { draft.secret }\n",
+            ),
+        ]);
+        let map = Map::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        let error = carve(&mut files, &map.service_dir, &items(&["Draft"])).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("`secret`") && message.contains("`Draft`"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn a_private_field_name_read_on_another_binding_does_not_refuse() {
+        let tree = TempTree::new(&[
+            (MAP_FILE, MAP),
+            (
+                "crates/svc/service/mod.rs",
+                "struct Draft {\n    secret: u32,\n}\npub fn keep(other: &O) -> u32 { other.secret }\n",
+            ),
+        ]);
+        let map = Map::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        carve(&mut files, &map.service_dir, &items(&["Draft"])).unwrap();
+    }
+
+    #[test]
+    fn a_carved_struct_whose_private_field_nobody_else_reads_moves() {
+        let tree = TempTree::new(&[
+            (MAP_FILE, MAP),
+            (
+                "crates/svc/service/mod.rs",
+                "struct Draft {\n    secret: u32,\n}\npub fn keep() -> u32 { 1 }\n",
+            ),
+        ]);
+        let map = Map::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        carve(&mut files, &map.service_dir, &items(&["Draft"])).unwrap();
+    }
+
+    #[test]
+    fn a_carved_struct_whose_field_is_already_pub_crate_is_not_refused() {
+        let tree = TempTree::new(&[
+            (MAP_FILE, MAP),
+            (
+                "crates/svc/service/mod.rs",
+                "struct Draft {\n    pub(crate) secret: u32,\n    pub(super) other: u32,\n}\npub fn keep(draft: &Draft) -> u32 { draft.secret + draft.other }\n",
+            ),
+        ]);
+        let map = Map::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        carve(&mut files, &map.service_dir, &items(&["Draft"])).unwrap();
     }
 }

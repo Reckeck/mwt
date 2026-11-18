@@ -13,13 +13,14 @@ use anyhow::{Context, Result, bail};
 use clap::Args;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
-use syn::{Expr, ExprMethodCall, FnArg, ImplItemFn, ItemFn, ItemImpl, Pat, Type};
+use syn::{Expr, ExprMethodCall, FnArg, ImplItemFn, ItemFn, ItemImpl, Macro, Pat, Type};
 
 use super::baseline::Baseline;
 use super::fileset::FileSet;
 use super::forward::delegate_target;
-use super::home::{core_dir, homes};
+use super::home::{DOC_MARKER, core_dir, homes};
 use super::map::Map;
+use super::scan::{macro_arguments, macro_line};
 use super::source::{LineIndex, Splice, apply, is_vault_impl};
 
 #[derive(Args)]
@@ -243,13 +244,27 @@ impl<'ast> Visit<'ast> for Rewriter<'_> {
         });
     }
 
+    fn visit_macro(&mut self, node: &'ast Macro) {
+        match macro_arguments(node) {
+            Some(arguments) => {
+                for argument in &arguments {
+                    self.visit_expr(argument);
+                }
+            }
+            None => self.skipped.push(format!(
+                "{}: macro body is not a list of expressions: calls inside are not scanned",
+                macro_line(node)
+            )),
+        }
+    }
+
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
         let name = node.method.to_string();
         let Some(target) = self.targets.get(&name) else {
             return visit::visit_expr_method_call(self, node);
         };
         let line = node.method.span().start().line;
-        if target.marker == Some("@doc") {
+        if target.marker == Some(DOC_MARKER) {
             self.skipped.push(format!(
                 "{line}: {name}(): `@doc` target is not rewritten (no `&VaultDoc` accessor)"
             ));
@@ -374,6 +389,33 @@ impl Other {
         assert_eq!(report.replaced, 0);
         assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
         assert!(report.skipped[0].contains("peek(): `@doc` target is not rewritten"));
+    }
+
+    #[test]
+    fn calls_inside_macro_bodies_are_rewired_and_unparsable_bodies_are_listed() {
+        let tree = fixture();
+        let source = "fn command(vault: &mut UnlockedVault) {
+    let text = format!(\"{}\", vault.clash(\"a\"));
+    assert!(vault.clash(\"b\"), \"m\");
+    let list = vec![vault.clash(\"c\")];
+    odd!(=> vault.clash(\"d\"));
+}
+";
+        std::fs::write(tree.root().join(USER), source).unwrap();
+        let map = Map::load(tree.root()).unwrap();
+        let baseline = Baseline::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        let args = RewireArgs {
+            area: "loyalty".into(),
+            files: vec![USER.into()],
+        };
+        let report = rewire(tree.root(), &mut files, &map, &baseline, &args).unwrap();
+        assert_eq!(report.replaced, 3);
+        let text = files.read(USER).unwrap();
+        assert!(text.contains("clash(&vault.books(), \"a\")"), "{text}");
+        assert!(text.contains("vault.clash(\"d\")"), "{text}");
+        assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
+        assert!(report.skipped[0].starts_with(&format!("{USER}:5: macro body")));
     }
 
     #[test]

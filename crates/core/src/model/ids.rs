@@ -4,8 +4,9 @@
 //! exports as TS `string`, so JSON, the vault and `ipc.gen.d.ts` do not change.
 //! New signatures use these types; model struct fields keep `String` for now.
 
-/// Defines one newtype per name. Only `$crate::` paths name items of this
-/// crate, so the macro expands the same wherever it is invoked.
+/// Defines one newtype per name. Every path in the expansion is fully
+/// qualified (`::std::`, `::serde::`, `::ts_rs::`), so the macro expands the
+/// same wherever it is invoked (ADR-03 rule 4).
 macro_rules! id_types {
     ($($(#[$meta:meta])* $name:ident;)+) => {$(
         $(#[$meta])*
@@ -14,7 +15,7 @@ macro_rules! id_types {
             ::serde::Serialize, ::serde::Deserialize,
         )]
         #[serde(transparent)]
-        pub struct $name(String);
+        pub struct $name(::std::string::String);
 
         impl $name {
             /// The ID as a string slice.
@@ -36,7 +37,7 @@ macro_rules! id_types {
             }
 
             fn decl(_cfg: &::ts_rs::Config) -> ::std::string::String {
-                concat!("type ", stringify!($name), " = string;").into()
+                ::std::concat!("type ", ::std::stringify!($name), " = string;").into()
             }
 
             fn decl_concrete(cfg: &::ts_rs::Config) -> ::std::string::String {
@@ -68,7 +69,7 @@ macro_rules! id_types {
 
         impl ::std::convert::From<&str> for $name {
             fn from(raw: &str) -> Self {
-                Self(raw.to_string())
+                Self(::std::string::ToString::to_string(raw))
             }
         }
 

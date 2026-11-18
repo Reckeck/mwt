@@ -179,7 +179,7 @@ impl Area {
         let mut owners: BTreeMap<String, &str> = BTreeMap::new();
         for entry in &self.files {
             let first = owners.insert(self.stem_of(entry), entry);
-            // `a.rs` with `b.rs` is one module: the file and the directory of its children.
+            // `a.rs` with `a/` is one module: the file and the directory of its children.
             if let Some(first) = first.filter(|first| entry_name(first) != entry_name(entry)) {
                 bail!(
                     "strangle.toml: area `{}`: entries `{first}` and `{entry}` both resolve to stem `{}`",

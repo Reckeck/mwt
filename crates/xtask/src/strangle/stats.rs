@@ -73,6 +73,10 @@ pub struct Report {
 
 pub fn run(workspace: &Workspace, args: &StatsArgs) -> Result<()> {
     let mut report = compute(workspace);
+    // On stderr: `--json` output stays parseable.
+    for note in workspace.corpus.unscanned_notes() {
+        eprintln!("{note}");
+    }
     if let Some(name) = &args.area {
         let index = workspace.map.area_index(name)?;
         report.areas = vec![report.areas.swap_remove(index)];
