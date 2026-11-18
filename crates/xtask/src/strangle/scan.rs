@@ -6,6 +6,9 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use proc_macro2::{TokenStream, TokenTree};
+use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
+use syn::token::Comma;
 use syn::visit::{self, Visit};
 use syn::{
     Attribute, Expr, ExprCall, ExprMethodCall, Ident, ImplItemFn, ItemFn, ItemImpl, ItemMod, Macro,
@@ -66,6 +69,9 @@ pub struct FileFacts {
     pub test_idents: BTreeSet<String>,
     /// Every identifier written outside test code (all of it matter when the whole file is a test).
     pub other_idents: BTreeSet<String>,
+    /// Lines of macro calls whose body is not a comma-separated list of expressions: their calls
+    /// are not seen.
+    pub unscanned: Vec<usize>,
 }
 
 pub fn scan_source(source: &str) -> Result<FileFacts> {
@@ -214,12 +220,31 @@ impl<'ast> Visit<'ast> for Scanner {
         for name in idents_of(node.tokens.clone()) {
             self.note_ident(name);
         }
-        visit::visit_macro(self, node);
+        match macro_arguments(node) {
+            Some(arguments) => {
+                for argument in &arguments {
+                    visit::visit_expr(self, argument);
+                }
+            }
+            None => self.facts.unscanned.push(macro_line(node)),
+        }
     }
 
     fn visit_ident(&mut self, node: &'ast Ident) {
         self.note_ident(node.to_string());
     }
+}
+
+/// The body of a macro call read as `Punctuated<Expr, Comma>` (`format!`, `assert!`, `vec![a, b]`);
+/// `None` when it does not parse that way.
+pub(super) fn macro_arguments(node: &Macro) -> Option<Punctuated<Expr, Comma>> {
+    node.parse_body_with(Punctuated::<Expr, Comma>::parse_terminated)
+        .ok()
+}
+
+/// The line of the macro's name.
+pub(super) fn macro_line(node: &Macro) -> usize {
+    node.path.span().start().line
 }
 
 /// Every identifier in a token stream, groups included.
@@ -551,6 +576,23 @@ mod tests {
         assert_eq!(declared, [("declared", true)]);
         assert!(facts.test_idents.contains("plain"));
         assert!(!facts.other_idents.contains("assert_eq"));
+    }
+
+    #[test]
+    fn calls_inside_macro_bodies_are_seen_and_unparsable_bodies_are_listed() {
+        let source = "fn f(vault: V) {\n    let a = format!(\"{}\", vault.in_format());\n    assert!(vault.in_assert(), \"m\");\n    let b = vec![vault.in_vec(), 1];\n    odd!(=> vault.hidden());\n}\n";
+        let facts = scan_source(source).unwrap();
+        for name in ["in_format", "in_assert", "in_vec"] {
+            assert!(
+                facts
+                    .calls
+                    .iter()
+                    .any(|call| call.name == name && call.on_vault),
+                "{name}"
+            );
+        }
+        assert!(facts.calls.iter().all(|call| call.name != "hidden"));
+        assert_eq!(facts.unscanned, [5]);
     }
 
     #[test]
