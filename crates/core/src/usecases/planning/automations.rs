@@ -213,15 +213,21 @@ pub fn run_automation(vault: &mut UnlockedVault, id: &str, now: i64) -> Result<T
     let made = rules::manual_run_transaction(&automation, &planned_at, &run_id);
     let saved = checked_transaction(vault, made, now)?;
     let record = manual_run_record(&run_id, id, &planned_at, &saved.meta().id);
-    vault.transact(|tx| {
+    // The holdings follow the booked transaction and rebasing rewrites the
+    // stored `before` of corrections, so the booking is applied and the
+    // holdings recomputed before the one commit. The booking emits no events,
+    // so none is dropped by `run`.
+    vault.run(|tx| {
         let doc = tx.doc_mut();
         doc.transactions.push(saved.clone());
         doc.workflow_runs.push(record);
         Ok(())
     })?;
-    // Holdings follow the booked transaction once it is committed; the next
-    // save writes them.
     vault.recompute_holdings();
+    vault.transact(|tx| {
+        tx.touch();
+        Ok(())
+    })?;
     Ok(saved)
 }
 

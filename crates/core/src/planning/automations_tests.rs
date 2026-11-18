@@ -1546,6 +1546,52 @@ fn run_now_books_the_transaction_under_a_recorded_run() {
 }
 
 #[test]
+fn run_now_moves_the_holding_at_once() {
+    let (_dir, mut vault) = empty_vault();
+    let wallet = store(&mut vault, "Wallet", StoreKind::Bank, None);
+    let pay = monthly(&mut vault, "Pay", 5, salary_draft(&wallet, "100"));
+    let now = secs("2026-01-05T10:00:00Z");
+    crate::usecases::planning::automations::run_automation(&mut vault, &pay.id, now).unwrap();
+    assert_eq!(holding_of(&vault, &wallet, &usd()), amount("100"));
+}
+
+#[test]
+fn run_now_writes_the_rebased_corrections_with_its_commit() {
+    use crate::model::transaction::{AdjustmentLine, AdjustmentTx, TxMeta};
+    use crate::transaction::PriceStamp;
+    let (_dir, mut vault) = empty_vault();
+    let wallet = store(&mut vault, "Wallet", StoreKind::Bank, None);
+    let pay = monthly(&mut vault, "Pay", 5, salary_draft(&wallet, "100"));
+    let now = secs("2026-01-05T10:00:00Z");
+    let mut meta = TxMeta::new("Reconcile");
+    meta.timestamp = calendar::iso(now + 3600);
+    let correction = Transaction::Adjustment(AdjustmentTx {
+        meta,
+        store_id: wallet.clone(),
+        lines: vec![AdjustmentLine {
+            asset: usd(),
+            before: amount("0"),
+            after: amount("150"),
+            price: PriceStamp::default(),
+        }],
+        fee: None,
+    });
+    vault.add_transaction(correction).unwrap();
+    crate::usecases::planning::automations::run_automation(&mut vault, &pay.id, now).unwrap();
+    let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
+    let stored = reopened
+        .doc
+        .transactions
+        .iter()
+        .find_map(|tx| match tx {
+            Transaction::Adjustment(inner) => Some(inner.lines[0].before),
+            _ => None,
+        })
+        .expect("the correction");
+    assert_eq!(stored, amount("100"), "rebased before the commit wrote it");
+}
+
+#[test]
 fn run_now_without_funds_is_refused_and_leaves_no_run() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
