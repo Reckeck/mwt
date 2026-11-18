@@ -709,3 +709,73 @@ fn pnl_without_a_rate_to_the_report_currency_is_marked_not_taken_one_to_one() {
     assert_eq!(base.total_realized, amount("20000"));
     assert_eq!(base.unpriced, 0);
 }
+
+fn with_flat_inflation(vault: &mut UnlockedVault, percent: &str) {
+    vault
+        .update_settings(crate::ipc_contract::UpdateSettingsInput {
+            inflation_manual: Some(BTreeMap::from([("usd".to_string(), amount(percent))])),
+            ..Default::default()
+        })
+        .unwrap();
+}
+
+#[test]
+fn categories_in_real_terms_compare_with_the_previous_period_in_real_terms() {
+    let (_dir, mut vault, card) = vault_with_card();
+    vault
+        .add_transaction(spend(&card, "100", "groceries", "2026-02-10T10:00:00Z"))
+        .unwrap();
+    vault
+        .add_transaction(spend(&card, "100", "groceries", "2026-03-10T10:00:00Z"))
+        .unwrap();
+    with_flat_inflation(&mut vault, "10");
+    let filter = ReportFilter {
+        real_terms: true,
+        ..range("2026-03", "2026-03")
+    };
+    let Report::Categories(report) = vault
+        .report(ReportKind::Categories, &filter, secs(NOW), "UTC")
+        .unwrap()
+    else {
+        panic!()
+    };
+    let row = &report.groups[0].rows[0];
+    // Constant nominal spending is a slight fall in today's money (March 102.41 against
+    // February 103.23), not the rise that comparing with the raw 100 showed.
+    assert_eq!(row.delta_pct, Some(amount("-0.8")));
+}
+
+#[test]
+fn real_terms_cash_flow_and_categories_round_after_summing() {
+    let (_dir, mut vault, card) = vault_with_card();
+    for day in ["10", "11", "12"] {
+        vault
+            .add_transaction(spend(
+                &card,
+                "0.30",
+                "groceries",
+                &format!("2026-03-{day}T10:00:00Z"),
+            ))
+            .unwrap();
+    }
+    with_flat_inflation(&mut vault, "10");
+    let filter = ReportFilter {
+        real_terms: true,
+        ..range("2026-03", "2026-03")
+    };
+    // 0.90 × 1.0241 = 0.9217 → 0.92; rounding each flow first gave 3 × 0.31 = 0.93.
+    let Report::Cashflow(cash) = vault
+        .report(ReportKind::Cashflow, &filter, secs(NOW), "UTC")
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(cash.rows[0].daily, amount("0.92"));
+    let Report::Categories(categories) = vault
+        .report(ReportKind::Categories, &filter, secs(NOW), "UTC")
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(categories.groups[0].rows[0].cells[0], amount("0.92"));
+}

@@ -468,12 +468,24 @@ impl Ctx {
         Amount::from_f64((1.0 + rate.to_f64() / 100.0).powf(years))
     }
 
-    /// `amount` of `month` as the report shows it.
-    pub(crate) fn shown(&self, amount: Amount, month: NaiveDate) -> Amount {
+    /// `amount` of `month` in today's money when the report is in real terms, unrounded:
+    /// sums of such values are rounded once, by [`Ctx::shown`].
+    pub(crate) fn restated(&self, amount: Amount, month: NaiveDate) -> Amount {
         if self.real {
-            (amount * self.coefficient(month)).round(2)
+            amount * self.coefficient(month)
         } else {
             amount
+        }
+    }
+
+    /// `amount` of `month` as the report shows it. Pass a sum, not its parts: the rounding
+    /// of real terms happens here, once.
+    pub(crate) fn shown(&self, amount: Amount, month: NaiveDate) -> Amount {
+        let restated = self.restated(amount, month);
+        if self.real {
+            restated.round(2)
+        } else {
+            restated
         }
     }
 
@@ -577,9 +589,16 @@ pub(crate) fn report_ctx(
     let rate =
         crate::money::inflation::inflation_on(books.doc(), &currency, &calendar::month_key(today));
     // The inflation report reads coefficients even in nominal terms.
+    // From the start of the previous period: the categories report compares with it.
     let coefficients = months
         .first()
-        .and_then(|first| books.vault().real_coefficients(&currency, *first, today))
+        .and_then(|first| {
+            let mut earliest = *first;
+            for _ in 0..months.len() {
+                earliest = first_of_month(earliest - Duration::days(1));
+            }
+            books.vault().real_coefficients(&currency, earliest, today)
+        })
         .unwrap_or_default();
     Ok(Ctx {
         cal,
@@ -657,7 +676,7 @@ pub(crate) fn cashflow_report(books: &Books, ctx: &Ctx) -> CashflowReport {
         let Some(index) = ctx.index_of(flow.date) else {
             continue;
         };
-        let value = ctx.shown(flow.value, ctx.months[index]);
+        let value = flow.value;
         let row = &mut rows[index];
         match flow.class {
             FlowClass::Income => row.income += value,
@@ -667,6 +686,19 @@ pub(crate) fn cashflow_report(books: &Books, ctx: &Ctx) -> CashflowReport {
             FlowClass::BudgetIn => row.budget_in += value,
             FlowClass::BudgetOut => row.budget_out += value,
             FlowClass::Ignored => {}
+        }
+    }
+    // Today's money is applied to the month's sums once, not to every flow.
+    for (row, month) in rows.iter_mut().zip(&ctx.months) {
+        for cell in [
+            &mut row.income,
+            &mut row.fixed,
+            &mut row.daily,
+            &mut row.savings_moved,
+            &mut row.budget_in,
+            &mut row.budget_out,
+        ] {
+            *cell = ctx.shown(*cell, *month);
         }
     }
     let mut total = CashflowRow {
@@ -794,7 +826,7 @@ pub(crate) fn categories_report(books: &Books, ctx: &Ctx) -> CategoriesReport {
             .or_insert_with(|| (vec![Amount::ZERO; span], Amount::ZERO, Some(group), 0));
         match ctx.index_of(flow.date) {
             Some(index) => {
-                entry.0[index] += ctx.shown(flow.value, ctx.months[index]);
+                entry.0[index] += flow.value;
                 if !flow.priced() {
                     entry.3 += 1;
                     if matches!(group, CategoryGroup::Fixed | CategoryGroup::Daily) {
@@ -804,7 +836,17 @@ pub(crate) fn categories_report(books: &Books, ctx: &Ctx) -> CategoriesReport {
                     }
                 }
             }
-            None => entry.1 += flow.value,
+            None => entry.1 += ctx.restated(flow.value, flow.date),
+        }
+    }
+    // Today's money is applied to each month's sum once, and the previous period's flows
+    // are restated the same way so the two sides compare like with like.
+    for (cells, previous, _, _) in table.values_mut() {
+        for (cell, month) in cells.iter_mut().zip(&ctx.months) {
+            *cell = ctx.shown(*cell, *month);
+        }
+        if ctx.real {
+            *previous = previous.round(2);
         }
     }
     let mut blocks: Vec<CategoryGroupBlock> = Vec::new();
