@@ -14,7 +14,7 @@ use super::baseline::{Baseline, BaselineMethod};
 use super::fileset::FileSet;
 use super::home::{DOC_MARKER, Home, homes};
 use super::map::Map;
-use super::scan::is_test_attr;
+use super::scan::{VAULT_TYPE, is_test_attr};
 use super::signature::{Parts, doc_lines};
 use super::source::LineIndex;
 
@@ -132,8 +132,8 @@ pub(super) fn receiver_of(first: &FnArg) -> Option<Receiver> {
         target.as_str(),
         reference.mutability.is_some(),
     ) {
-        ("vault", "UnlockedVault", true) => ("&mut self", None),
-        ("vault", "UnlockedVault", false) => ("&self", None),
+        ("vault", VAULT_TYPE, true) => ("&mut self", None),
+        ("vault", VAULT_TYPE, false) => ("&self", None),
         ("books", "Books", false) => ("&self", Some("@books")),
         ("doc", "VaultDoc", false) => ("&self", Some(DOC_MARKER)),
         _ => return None,

@@ -14,9 +14,6 @@ use super::Workspace;
 use super::fileset::FileSet;
 use super::source::{self, LineIndex};
 
-/// The struct whose private fields a moved method may read (spec D1, OD5).
-pub const VAULT: &str = "UnlockedVault";
-
 pub fn run(root: &Path, workspace: &Workspace) -> Result<()> {
     let mut files = FileSet::new(root);
     let mut widened = 0;
