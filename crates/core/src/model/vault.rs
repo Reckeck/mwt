@@ -463,7 +463,7 @@ pub const MAX_IMPORT_RUNS: usize = 500;
 /// Most discarded exchange ids remembered so they are not staged again.
 pub const MAX_DISCARDED_IMPORTS: usize = 20_000;
 
-/// Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).
+/// Full plaintext vault document. Serialized as JSON (dev) or MessagePack (prod).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct VaultDoc {
     pub version: u32,

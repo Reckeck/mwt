@@ -283,7 +283,7 @@ pub struct MoveStoreInput {
 // -- transactions ------------------------------------------------------------
 //
 // One input enum, internally tagged with `type` — an IPC shape only, never
-// persisted (bincode cannot read internal tags). Each variant mirrors its
+// persisted (positional formats cannot read internal tags). Each variant mirrors its
 // domain transaction minus what the backend fills in: id, origin, prices.
 
 /// Shared asset identification, so each variant does not repeat five

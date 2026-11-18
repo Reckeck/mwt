@@ -670,7 +670,7 @@ impl UnlockedVault {
     }
 
     /// Re-encode on disk (dev JSON <-> prod binary) — mostly used by tests.
-    /// Legacy bincode is never written: asking for it writes MessagePack.
+    /// Asking for a legacy format writes MessagePack.
     pub fn switch_format(&mut self, fmt: SnapshotFormat) -> Result<()> {
         self.fmt = fmt.for_writing();
         self.persist_now()

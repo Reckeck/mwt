@@ -40,7 +40,7 @@ impl VaultHeader {
     /// correct password wrong. An unknown id makes it answer `Unsupported`.
     pub const KDF_ARGON2ID_HARDENED: u8 = 2;
     pub const FMT_JSON: u8 = 0;
-    /// bincode: positional, written by v1 release builds; read-only now.
+    /// Old positional binary, written by early release builds; refused now.
     pub const FMT_BIN: u8 = 1;
     /// MessagePack with field names: release builds from payload v2 on.
     pub const FMT_PACK: u8 = 2;
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn header_roundtrip() {
         let (_, _, _) = (0, [0u8; 16], [0u8; 24]);
-        let header = VaultHeader::new(SnapshotFormat::Bin, [7u8; 16], [9u8; 24]);
+        let header = VaultHeader::new(SnapshotFormat::Pack, [7u8; 16], [9u8; 24]);
         let bytes = header.bytes();
         assert_eq!(bytes.len(), HEADER_LEN);
         let parsed = VaultHeader::from_bytes(&bytes).unwrap();

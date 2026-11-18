@@ -1,5 +1,5 @@
 //! `Amount` — a decimal wrapper that is (de)serialized as a **string**
-//! in both snapshot formats (JSON and bincode) and exported to TypeScript
+//! in both snapshot formats (JSON and MessagePack) and exported to TypeScript
 //! as `string`. This avoids any float precision loss for money/quantities.
 
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};

@@ -5,25 +5,21 @@
 //! - `debug` build  -> pretty JSON (readable, easy to inspect & diff)
 //! - `release` build -> MessagePack with field names
 //!
-//! v1 release builds wrote bincode, which is positional: a field added
-//! anywhere broke every older file. It is still read, never written. Both
-//! JSON and MessagePack carry field names, so a field added with
-//! `#[serde(default)]` keeps older v2 files readable without a version bump.
+//! Both JSON and MessagePack carry field names, so a field added with
+//! `#[serde(default)]` keeps older files readable without a version bump.
+//! The positional binary encoding of old builds is refused (see [`crate::crypto::format::legacy_refusal`]).
 //!
 //! Every encoding lives inside the SAME encrypted container (see `crypto`),
 //! and a `payload_fmt` byte in the header makes any file self-describing.
 //!
-//! ## Versions and migrations
+//! ## Versions
 //!
-//! The payload's `version` is read first, then the document is decoded with
-//! the schema of that version and migrated up step by step (`v1` → `v2` →
-//! `v3` → current; v3 runs automations as workflows, see `v2`, and v4 opens
-//! the crypto module's collections, see `v3`). The steps are composed from
-//! one listing in [`chain`], not by hand.
-//! A version from the future is refused. To change the schema in a way an
-//! older file cannot be read with: freeze the current shape in a `vN` module,
-//! bump [`crate::VAULT_FORMAT_VERSION`], add the step (one `From`, one
-//! `impl Legacy`, one line in `schema_chain!`) and its tests.
+//! The payload's `version` is read first. Container 2 holds payload 1 (the
+//! current format); container 1 holds the old payloads, of which only v4 is
+//! converted once on open (see [`legacy_v4`]). A version from the future is
+//! refused. To change the schema in a way an older file cannot be read with:
+//! freeze the current shape in a `legacy_vN` module, bump
+//! [`crate::VAULT_FORMAT_VERSION`], add the step and its tests.
 
 use std::path::{Path, PathBuf};
 
@@ -46,7 +42,10 @@ mod fixtures_gen;
 
 pub use crate::vault_io::local::{VAULT_EXT, VaultLock, backup_path, ensure_wallet_ext};
 
+#[cfg(test)]
+use crate::crypto::format::LAST_LEGACY_BUILD;
 pub use crate::crypto::format::SnapshotFormat;
+use crate::crypto::format::legacy_refusal;
 
 /// Encode a snapshot into the raw payload bytes for a given format.
 pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
@@ -54,17 +53,11 @@ pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
         SnapshotFormat::Json => {
             serde_json::to_vec_pretty(doc).map_err(|err| Error::Serialize(err.to_string()))
         }
-        SnapshotFormat::Bin => bincode::serde::encode_to_vec(doc, bincode::config::standard())
-            .map_err(|err| Error::Serialize(err.to_string())),
         SnapshotFormat::Pack => {
             rmp_serde::to_vec_named(doc).map_err(|err| Error::Serialize(err.to_string()))
         }
     }
 }
-
-/// The last release that still reads the formats of before the reset; the
-/// refusal names it. Fixed at release time.
-const LAST_LEGACY_BUILD: &str = "Multi Wallet Tracker 0.X.Y";
 
 /// The payload version of an old v4 file, read once on open and converted
 /// (see [`legacy_v4`]).
@@ -97,7 +90,7 @@ pub fn decode_versioned(bytes: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
 /// Decode a payload from a file of `container` version, by the table: container
 /// 2 holds payload 1; container 1 holds the old payloads, of which only v4 is
 /// still read (converted by [`legacy_v4::transition`], with a [`Carry`]) and
-/// v1-v3 and bincode are refused with [`Error::LegacyVault`]; every other pair
+/// v1-v3 are refused (the positional binary encoding never gets here, see [`crate::crypto`]) with [`Error::LegacyVault`]; every other pair
 /// is [`Error::Unsupported`].
 ///
 /// A payload that claims a readable version but does not fit its schema is
@@ -115,9 +108,6 @@ pub fn decode_in_container(container: u32, bytes: &[u8], fmt: SnapshotFormat) ->
                 carry: None,
             })
         }
-        (crate::VAULT_LEGACY_CONTAINER_VERSION, _) if fmt == SnapshotFormat::Bin => {
-            Err(legacy_refusal(version, fmt))
-        }
         (crate::VAULT_LEGACY_CONTAINER_VERSION, Some(TRANSITION_FROM_VERSION)) => {
             let old = parse::<legacy_v4::VaultDocV4>(bytes, fmt).map_err(unfit)?;
             let (mut doc, carry) = legacy_v4::transition(old);
@@ -128,7 +118,9 @@ pub fn decode_in_container(container: u32, bytes: &[u8], fmt: SnapshotFormat) ->
                 carry: Some(carry),
             })
         }
-        (crate::VAULT_LEGACY_CONTAINER_VERSION, Some(1..=3)) => Err(legacy_refusal(version, fmt)),
+        (crate::VAULT_LEGACY_CONTAINER_VERSION, Some(1..=3)) => {
+            Err(legacy_refusal(version, encoding_name(fmt)))
+        }
         (_, None) => {
             // Not even a version to read: report why the payload does not parse.
             parse::<VaultDoc>(bytes, fmt)?;
@@ -143,23 +135,12 @@ fn unfit(err: Error) -> Error {
     Error::IncompatibleVault(err.to_string())
 }
 
-/// The refusal of a file in a format this build no longer reads (D6): the
-/// format number comes from the payload when it can be read.
-fn legacy_refusal(version: Option<u32>, fmt: SnapshotFormat) -> Error {
-    let number = version.map_or_else(
-        || "an unknown format".to_owned(),
-        |found| format!("format {found}"),
-    );
-    let encoding = match fmt {
+/// How a refusal names the encoding of a payload.
+fn encoding_name(fmt: SnapshotFormat) -> &'static str {
+    match fmt {
         SnapshotFormat::Json => "json",
         SnapshotFormat::Pack => "MessagePack",
-        SnapshotFormat::Bin => "bincode",
-    };
-    Error::LegacyVault(format!(
-        "This vault file is in {number} ({encoding}), which this version no longer reads. \
-         Open it once with {LAST_LEGACY_BUILD} (it converts the file to the format this \
-         version reads), then update."
-    ))
+    }
 }
 
 /// Just the `version` of a payload.
@@ -169,7 +150,6 @@ struct VersionProbe {
 }
 
 /// The `version` a payload claims, read without decoding the rest of it.
-/// `version` is the first field of `VaultDoc`, so for bincode it is the first value.
 fn stored_version(bytes: &[u8], fmt: SnapshotFormat) -> Option<u32> {
     match fmt {
         SnapshotFormat::Json => serde_json::from_slice::<serde_json::Value>(bytes)
@@ -177,11 +157,6 @@ fn stored_version(bytes: &[u8], fmt: SnapshotFormat) -> Option<u32> {
             .get("version")?
             .as_u64()
             .and_then(|version| u32::try_from(version).ok()),
-        SnapshotFormat::Bin => {
-            bincode::serde::decode_from_slice::<u32, _>(bytes, bincode::config::standard())
-                .ok()
-                .map(|(version, _)| version)
-        }
         SnapshotFormat::Pack => rmp_serde::from_slice::<VersionProbe>(bytes)
             .ok()
             .map(|probe| probe.version),
@@ -193,17 +168,6 @@ fn parse<T: DeserializeOwned>(bytes: &[u8], fmt: SnapshotFormat) -> Result<T> {
     match fmt {
         SnapshotFormat::Json => {
             serde_json::from_slice::<T>(bytes).map_err(|err| Error::Deserialize(err.to_string()))
-        }
-        SnapshotFormat::Bin => {
-            let (doc, consumed) =
-                bincode::serde::decode_from_slice::<T, _>(bytes, bincode::config::standard())
-                    .map_err(|err| Error::Deserialize(err.to_string()))?;
-            if consumed != bytes.len() {
-                return Err(Error::Deserialize(
-                    "trailing bytes in bincode payload".into(),
-                ));
-            }
-            Ok(doc)
         }
         SnapshotFormat::Pack => {
             rmp_serde::from_slice::<T>(bytes).map_err(|err| Error::Deserialize(err.to_string()))
@@ -550,21 +514,6 @@ mod tests {
     }
 
     #[test]
-    fn bin_roundtrip() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("test.wallet");
-        let doc = sample_doc();
-        VaultFile::create(&path, "pw").unwrap();
-        VaultFile::save(&path, "pw", &doc, SnapshotFormat::Bin).unwrap();
-
-        let (out, fmt) = VaultFile::open(&path, "pw").unwrap();
-        assert_eq!(fmt, SnapshotFormat::Bin);
-        assert_eq!(out.holdings[0].quantity.to_string(), "0.5");
-        assert_eq!(out.transactions[0].tag(), "topup");
-        assert_eq!(out.id, doc.id);
-    }
-
-    #[test]
     fn backup_copies_previous_vault_and_survives_overwrite() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v.wallet");
@@ -649,81 +598,6 @@ mod tests {
         ));
     }
 
-    /// Roundtrip: encode then decode a fresh v1 document (JSON + Bin).
-    #[test]
-    fn roundtrip_v1_doc() {
-        let doc = sample_doc();
-        for fmt in [
-            SnapshotFormat::Json,
-            SnapshotFormat::Bin,
-            SnapshotFormat::Pack,
-        ] {
-            let bytes = encode(&doc, fmt).unwrap();
-            let out = decode(&bytes, fmt).unwrap();
-            assert_eq!(out.version, VAULT_FORMAT_VERSION);
-            assert_eq!(out.id, doc.id);
-            assert_eq!(out.stores.len(), 1);
-            assert_eq!(out.holdings[0].quantity.to_string(), "0.5");
-            assert_eq!(out.transactions.len(), 1);
-            assert_eq!(out.transactions[0].meta().comment, "first buy");
-            assert_eq!(
-                out.transactions[0].legs()[0].price_usd.unwrap().to_string(),
-                "65000"
-            );
-        }
-    }
-
-    /// Multiple bybit accounts roundtrip (v1 with exchanges.bybit = Vec).
-    #[test]
-    fn roundtrip_v1_doc_with_multiple_bybit_accounts() {
-        let store1 = crate::model::store::Store::new(
-            "Bybit Main",
-            crate::model::store::StoreKind::Exchange,
-            "#f0b90b",
-        );
-        let store2 = crate::model::store::Store::new(
-            "Bybit Sub",
-            crate::model::store::StoreKind::Exchange,
-            "#ff5722",
-        );
-        let store1_id = store1.id.clone();
-        let store2_id = store2.id.clone();
-        let doc = VaultDoc {
-            stores: vec![store1, store2],
-            exchanges: Exchanges {
-                bybit: vec![
-                    ExchangeKeys {
-                        store_id: store1_id.clone(),
-                        api_key: "aaaa1111".into(),
-                        api_secret: "secret1".into(),
-                        spot_store_id: None,
-                        futures_store_id: None,
-                    },
-                    ExchangeKeys {
-                        store_id: store2_id,
-                        api_key: "bbbb2222".into(),
-                        api_secret: "secret2".into(),
-                        spot_store_id: Some("spot".into()),
-                        futures_store_id: None,
-                    },
-                ],
-            },
-            ..Default::default()
-        };
-        for fmt in [
-            SnapshotFormat::Json,
-            SnapshotFormat::Bin,
-            SnapshotFormat::Pack,
-        ] {
-            let bytes = encode(&doc, fmt).unwrap();
-            let out = decode(&bytes, fmt).unwrap();
-            assert_eq!(out.version, VAULT_FORMAT_VERSION);
-            assert_eq!(out.exchanges.bybit.len(), 2);
-            assert_eq!(out.exchanges.bybit[0].store_id, store1_id);
-            assert_eq!(out.exchanges.bybit[1].api_key, "bbbb2222");
-        }
-    }
-
     /// A payload from any other version must be rejected (Unsupported).
     #[test]
     fn future_payload_version_is_rejected() {
@@ -731,11 +605,10 @@ mod tests {
             version: VAULT_FORMAT_VERSION + 1,
             ..sample_doc()
         };
-        for fmt in [SnapshotFormat::Bin, SnapshotFormat::Pack] {
-            let err = decode(&encode(&doc, fmt).unwrap(), fmt)
-                .expect_err("newer payload must be rejected");
-            assert!(matches!(err, Error::Unsupported), "got {err:?}");
-        }
+        let fmt = SnapshotFormat::Pack;
+        let err =
+            decode(&encode(&doc, fmt).unwrap(), fmt).expect_err("newer payload must be rejected");
+        assert!(matches!(err, Error::Unsupported), "got {err:?}");
 
         let mut json: Json = serde_json::to_value(&doc).unwrap();
         json["version"] = Json::from(VAULT_FORMAT_VERSION + 1);
@@ -746,16 +619,11 @@ mod tests {
 
     /// Plan D11: every persisted type of phases 2–7 exists now. A document
     /// with every collection filled must survive both encodings unchanged —
-    /// the bincode half is what catches a type serde can write but not read
-    /// back (internal tags, `flatten`, `Value`).
+    /// the round trip catches a type serde can write but not read back.
     #[test]
     fn a_full_document_round_trips_in_every_format() {
         let doc = crate::model::fixtures::full_doc();
-        for fmt in [
-            SnapshotFormat::Json,
-            SnapshotFormat::Bin,
-            SnapshotFormat::Pack,
-        ] {
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
             let out = decode(&encode(&doc, fmt).unwrap(), fmt).unwrap();
             assert_eq!(out, doc, "{fmt:?}");
         }
@@ -811,11 +679,6 @@ mod tests {
         match fmt {
             SnapshotFormat::Json => serde_json::to_vec(&json).unwrap(),
             SnapshotFormat::Pack => rmp_serde::to_vec_named(&json).unwrap(),
-            SnapshotFormat::Bin => bincode::serde::encode_to_vec(
-                (version, "id", "2026-01-01T00:00:00Z"),
-                bincode::config::standard(),
-            )
-            .unwrap(),
         }
     }
 
@@ -869,13 +732,6 @@ mod tests {
             }
         }
 
-        // Container 1, bincode, any version: refused as legacy.
-        for version in [1, 2, 3, 4, 9] {
-            let bin = payload_of_version(version, SnapshotFormat::Bin);
-            let err = decode_in_container(1, &bin, SnapshotFormat::Bin).unwrap_err();
-            assert_refused_as_legacy(err, "bincode");
-        }
-
         // Container 2 with anything but payload 1, container 1 with 5 or more or 0,
         // any other container: Unsupported.
         for (container, version) in [
@@ -920,7 +776,7 @@ mod tests {
     }
 
     #[test]
-    fn an_old_v2_v3_and_bincode_payload_is_refused() {
+    fn an_old_v2_and_v3_payload_is_refused() {
         for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
             for version in [2, 3] {
                 let err =
@@ -928,20 +784,6 @@ mod tests {
                 assert_refused_as_legacy(err, &format!("format {version}"));
             }
         }
-        let err = decode_in_container(
-            1,
-            include_bytes!("fixtures/v3.bincode.bin"),
-            SnapshotFormat::Bin,
-        )
-        .unwrap_err();
-        assert_refused_as_legacy(err, "bincode");
-        let err = decode_in_container(
-            1,
-            include_bytes!("fixtures/v3.json.bin"),
-            SnapshotFormat::Json,
-        )
-        .unwrap_err();
-        assert_refused_as_legacy(err, "format 3");
     }
 
     /// A vault file of container 1 holding an old payload: opening it names the
@@ -953,7 +795,6 @@ mod tests {
             (1, SnapshotFormat::Json),
             (2, SnapshotFormat::Pack),
             (3, SnapshotFormat::Json),
-            (3, SnapshotFormat::Bin),
         ] {
             let path = dir.path().join(format!("v{version}-{fmt:?}.wallet"));
             let header = old_build_header(1, fmt);
@@ -962,6 +803,24 @@ mod tests {
 
             let err = VaultFile::open(&path, "pw").unwrap_err();
             assert!(matches!(err, Error::LegacyVault(_)), "{err:?}");
+            assert_eq!(std::fs::read(&path).unwrap(), file);
+        }
+    }
+
+    /// An old positional-binary file (payload_fmt 1) is refused as legacy and
+    /// left alone, whatever the container.
+    #[test]
+    fn a_file_in_the_old_binary_encoding_is_refused_on_open() {
+        let dir = tempfile::tempdir().unwrap();
+        for container in [1, 2] {
+            let path = dir.path().join(format!("c{container}.wallet"));
+            let mut header = old_build_header(container, SnapshotFormat::Json);
+            header.payload_fmt = crypto::header::VaultHeader::FMT_BIN;
+            let file = crypto::seal(&header, b"pw", b"whatever").unwrap();
+            std::fs::write(&path, &file).unwrap();
+
+            let err = VaultFile::open(&path, "pw").unwrap_err();
+            assert_refused_as_legacy(err, "positional binary");
             assert_eq!(std::fs::read(&path).unwrap(), file);
         }
     }
@@ -994,7 +853,7 @@ mod tests {
     }
 
     /// v2 carries field names: a field missing from an older v2 file takes its
-    /// default instead of breaking the read (the reason bincode was dropped).
+    /// default instead of breaking the read.
     #[test]
     fn a_v2_pack_payload_tolerates_a_missing_defaulted_field() {
         let doc = crate::model::fixtures::full_doc();
@@ -1036,21 +895,11 @@ mod tests {
         let err = decode(&serde_json::to_vec(&json).unwrap(), SnapshotFormat::Json).unwrap_err();
         assert!(matches!(err, Error::IncompatibleVault(_)), "got {err:?}");
         assert_eq!(err.code(), "INCOMPATIBLE_VAULT");
-
-        // bincode: the right version up front, then something else entirely.
-        let old = bincode::serde::encode_to_vec(
-            (VAULT_FORMAT_VERSION, "id", "2026-01-01T00:00:00Z", 8u32),
-            bincode::config::standard(),
-        )
-        .unwrap();
-        let err = decode(&old, SnapshotFormat::Bin).unwrap_err();
-        assert!(matches!(err, Error::IncompatibleVault(_)), "got {err:?}");
     }
 
     #[test]
     fn corrupt_payload_is_an_error_not_a_panic() {
         let junk = vec![0xffu8; 32];
-        assert!(decode(&junk, SnapshotFormat::Bin).is_err());
         assert!(decode(b"{not json", SnapshotFormat::Json).is_err());
         assert!(decode(&junk, SnapshotFormat::Pack).is_err());
     }
@@ -1117,11 +966,7 @@ mod tests {
     fn a_full_document_from_an_old_build_opens_in_every_format() {
         let dir = tempfile::tempdir().unwrap();
         let doc = crate::model::fixtures::full_doc();
-        for fmt in [
-            SnapshotFormat::Json,
-            SnapshotFormat::Bin,
-            SnapshotFormat::Pack,
-        ] {
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
             let path = dir.path().join(format!("{fmt:?}.wallet"));
             let header = old_build_header(2, fmt);
             let file = crypto::seal(&header, b"pw", &encode(&doc, fmt).unwrap()).unwrap();

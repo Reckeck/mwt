@@ -82,8 +82,8 @@ impl RecordStamps {
 /// the stamp of its deletion.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RecordState {
-    /// Kept as JSON text when stored or sent: every vault format (bincode
-    /// included) can carry a string, not all can carry free-form JSON.
+    /// Kept as JSON text when stored or sent: every vault format can carry a
+    /// string, not all can carry free-form JSON.
     #[serde(default, with = "json_text")]
     pub value: Option<serde_json::Value>,
     #[serde(default)]
