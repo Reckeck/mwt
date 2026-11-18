@@ -258,9 +258,9 @@ async fn both_devices_show_one_code_bound_to_the_nonces() {
     tokio::spawn(async move {
         while let Some((event, payload)) = events.recv().await {
             let session = field(&payload, "session_id");
-            if event == super::super::OFFER_EVENT {
+            if event == SyncOffer::NAME {
                 super::super::send(&host, &session, Order::StartPairing);
-            } else if event == super::super::PAIRING_EVENT {
+            } else if event == SyncPairing::NAME {
                 log.lock().unwrap().push(field(&payload, "code"));
             }
         }

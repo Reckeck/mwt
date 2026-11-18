@@ -43,22 +43,6 @@ use crate::commands::AppState;
 use crate::ipc::events::{SyncError, SyncStatusChanged};
 use host::Host;
 
-/// Event names the tests match on (the senders use the typed `emit_event`).
-#[cfg(test)]
-pub const STATUS_EVENT: &str = "sync-status";
-#[cfg(test)]
-pub const OFFER_EVENT: &str = "sync-offer";
-#[cfg(test)]
-pub const PAIRING_EVENT: &str = "sync-pairing";
-#[cfg(test)]
-pub const PLAN_EVENT: &str = "sync-plan-ready";
-#[cfg(test)]
-pub const SYNCED_EVENT: &str = "vault-synced";
-#[cfg(test)]
-pub const ERROR_EVENT: &str = "sync-error";
-#[cfg(test)]
-pub const CLOCK_EVENT: &str = "sync-clock";
-
 /// Failed handshakes or declined pairings from one address before it is
 /// ignored for a while.
 const MAX_FAILURES: usize = 3;

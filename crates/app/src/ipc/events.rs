@@ -177,27 +177,6 @@ mod tests {
         assert_eq!(VaultLocked::NAME, "vault-locked");
     }
 
-    #[test]
-    fn the_registry_pins_every_pub_event_constant() {
-        use crate::sync::{
-            CLOCK_EVENT, ERROR_EVENT, OFFER_EVENT, PAIRING_EVENT, PLAN_EVENT, STATUS_EVENT,
-            SYNCED_EVENT,
-        };
-
-        let pairs = [
-            (STATUS_EVENT, SyncStatusChanged::NAME),
-            (OFFER_EVENT, SyncOffer::NAME),
-            (PAIRING_EVENT, SyncPairing::NAME),
-            (PLAN_EVENT, SyncPlanReady::NAME),
-            (SYNCED_EVENT, VaultSynced::NAME),
-            (ERROR_EVENT, SyncError::NAME),
-            (CLOCK_EVENT, SyncClock::NAME),
-        ];
-        for (constant, registered) in pairs {
-            assert_eq!(constant, registered);
-        }
-    }
-
     /// Never called: it compiles only if typed `emit` accepts a real handle.
     fn emits_typed<R: Runtime>(app: &tauri::AppHandle<R>) {
         let _ = PricesUpdated::emit(app, &None);
