@@ -454,6 +454,12 @@ impl UnlockedVault {
         // A v4 file is transitioned once (it comes with a `Carry`); a file of the live
         // format has nothing to convert.
         let migrated = decoded.carry.is_some();
+        // The old Bybit queue became operations of the crypto module: the
+        // holdings are folded from them once the document is a vault.
+        let queue_converted = decoded
+            .carry
+            .as_ref()
+            .is_some_and(|carry| carry.adoption.converted > 0);
         if migrated {
             // The file as it was stays next to the vault before anything rewrites it.
             VaultFile::backup_version(&path, decoded.from_version)?;
@@ -508,6 +514,9 @@ impl UnlockedVault {
         // archived, whatever the level: a vault raised before the crypto
         // module existed keeps the wallets its user keeps by hand.
         let retired = vault.finish_cut_short_raise();
+        if queue_converted {
+            vault.crypto_sync_holdings()?;
+        }
         if migrated
             || keys_moved
             || envelopes_settled
@@ -2298,6 +2307,70 @@ mod tests {
             assert_eq!(std::fs::read(&path).unwrap(), vault_bytes, "{name}");
             assert_eq!(std::fs::read(bak_of(&path)).unwrap(), bytes, "{name}");
         }
+    }
+
+    /// The payload of a v4 fixture, with its queue filed under the fixture's exchange wallet so
+    /// that the transition converts it, sealed without a password in container 1.
+    fn v4_file_with_a_convertible_queue() -> Vec<u8> {
+        let (plaintext, fmt) =
+            crate::crypto::open_bytes(V4_FIXTURES[0].1, V4_PASSWORD.as_bytes()).unwrap();
+        let mut doc: serde_json::Value = serde_json::from_slice(&plaintext).unwrap();
+        let exchange = doc["stores"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|store| store["kind"] == "exchange")
+            .unwrap();
+        // The fixture's exchange wallet sits under another wallet; the queue converts under a root.
+        exchange["parent_id"] = serde_json::Value::Null;
+        let exchange = exchange["id"].clone();
+        for entry in doc["pending_imports"].as_array_mut().unwrap() {
+            entry["store_id"] = exchange.clone();
+        }
+        let payload = serde_json::to_vec(&doc).unwrap();
+        crate::crypto::seal_plain_in_container(1, fmt, &payload)
+    }
+
+    #[test]
+    fn v4_transition_refolds_the_holdings_of_the_converted_queue() {
+        let dir = tempdir().unwrap();
+        let path = v4_vault_at(dir.path(), &v4_file_with_a_convertible_queue());
+        let (decoded, _) = VaultFile::open_versioned(&path, "").unwrap();
+        let converted = decoded.carry.as_ref().unwrap().adoption.converted;
+        assert!(converted > 0);
+        let stale = decoded.doc.holdings.clone();
+        let vault = UnlockedVault::open(path.clone(), "").unwrap();
+        assert!(vault.doc.crypto_events.len() as u32 >= converted);
+        assert_ne!(vault.doc.holdings, stale);
+        let (reread, _) = VaultFile::open(&path, "").unwrap();
+        assert_eq!(reread.holdings, vault.doc.holdings);
+    }
+
+    #[test]
+    fn open_copy_and_probe_read_a_container_1_copy_by_its_own_container() {
+        let (_dir, vault) = setup();
+        for (name, bytes) in V4_FIXTURES {
+            let copy = vault.open_copy(bytes, V4_PASSWORD).unwrap();
+            assert_eq!(copy.doc.version, crate::VAULT_FORMAT_VERSION, "{name}");
+            let (_, _, key) =
+                crate::crypto::open_bytes_keyed(bytes, V4_PASSWORD.as_bytes()).unwrap();
+            crate::vault_io::import::probe_open(bytes, &key).unwrap();
+        }
+        let plain = crate::crypto::SealKey::plain();
+        let (plaintext, fmt) =
+            crate::crypto::open_bytes(V4_FIXTURES[0].1, V4_PASSWORD.as_bytes()).unwrap();
+        let mut old: serde_json::Value = serde_json::from_slice(&plaintext).unwrap();
+        old["version"] = 1.into();
+        let old_file =
+            crate::crypto::seal_plain_in_container(1, fmt, &serde_json::to_vec(&old).unwrap());
+        assert!(matches!(
+            vault.open_copy(&old_file, ""),
+            Err(crate::Error::LegacyVault(_))
+        ));
+        assert!(matches!(
+            crate::vault_io::import::probe_open(&old_file, &plain),
+            Err(crate::Error::LegacyVault(_))
+        ));
     }
 
     /// Interrupted after the backup, before the rewrite: the file is still v4.

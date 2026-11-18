@@ -81,10 +81,17 @@ pub fn decode(bytes: &[u8], fmt: SnapshotFormat) -> Result<VaultDoc> {
 }
 
 /// [`decode`], also telling which version the payload was stored at. For a
-/// payload read out of a file this build wrote (container 2); a file of unknown
-/// container goes through [`decode_in_container`].
-pub fn decode_versioned(bytes: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
+/// payload this build wrote itself (container 2: a snapshot, a store entry);
+/// a payload read out of a file goes through [`decode_file`].
+pub(crate) fn decode_versioned(bytes: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
     decode_in_container(crate::VAULT_CONTAINER_VERSION, bytes, fmt)
+}
+
+/// Decode `plaintext`, the opened payload of the vault file `file`, by the
+/// container version in the file's header (see [`decode_in_container`]).
+pub fn decode_file(file: &[u8], plaintext: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
+    let (header, _) = crypto::parse_file(file)?;
+    decode_in_container(header.version, plaintext, fmt)
 }
 
 /// Decode a payload from a file of `container` version, by the table: container
@@ -215,8 +222,7 @@ impl VaultFile {
     pub fn open_keyed(path: &Path, password: &str) -> Result<(Decoded, SnapshotFormat, SealKey)> {
         let bytes = crate::vault_io::local::read_all(path)?;
         let (plaintext, fmt, key) = crypto::open_bytes_keyed(&bytes, password.as_bytes())?;
-        let (header, _) = crypto::parse_file(&bytes)?;
-        let decoded = decode_in_container(header.version, &plaintext, fmt)?;
+        let decoded = decode_file(&bytes, &plaintext, fmt)?;
         Ok((decoded, fmt, key))
     }
 
@@ -327,7 +333,7 @@ impl VaultFile {
         kdf: KdfParams,
     ) -> Result<()> {
         let (plaintext, fmt, key) = crypto::open_bytes_keyed(written, password.as_bytes())?;
-        let decoded = decode_versioned(&plaintext, fmt)?;
+        let decoded = decode_file(written, &plaintext, fmt)?;
         if key.kdf() != kdf {
             return Err(Error::Crypto(
                 "the re-encrypted vault has the wrong key cost".into(),

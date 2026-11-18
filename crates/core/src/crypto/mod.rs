@@ -226,6 +226,25 @@ pub fn seal_with(key: &SealKey, payload_fmt: SnapshotFormat, plaintext: &[u8]) -
     encrypt(&header, &key.key, plaintext)
 }
 
+/// A plain file in an older container, as the builds before the format reset
+/// wrote it: for tests of the reader table.
+#[cfg(test)]
+pub(crate) fn seal_plain_in_container(
+    container: u32,
+    payload_fmt: SnapshotFormat,
+    plaintext: &[u8],
+) -> Vec<u8> {
+    let mut header = VaultHeader::plain(payload_fmt);
+    header.version = container;
+    let header = header.bytes();
+    let mut out = Vec::new();
+    out.extend_from_slice(VAULT_MAGIC);
+    out.extend_from_slice(&header);
+    out.extend_from_slice(plaintext);
+    out.extend_from_slice(&plain_checksum(&header, plaintext));
+    out
+}
+
 /// The file of a vault without a password: header, payload, checksum.
 pub fn seal_plain(payload_fmt: SnapshotFormat, plaintext: &[u8]) -> Vec<u8> {
     let header = VaultHeader::plain(payload_fmt).bytes();

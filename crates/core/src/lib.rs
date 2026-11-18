@@ -53,7 +53,7 @@ pub use storage::{SnapshotFormat, VaultFile};
 /// payload `version` there counts 1 to 4. 2: every file written since; the
 /// payload `version` counts again from 1. The reader accepts both (container 1
 /// only for the one-time transition of a payload v4, see
-/// `storage::decode_versioned`); every write is container 2. A build that
+/// `storage::decode_file`); every write is container 2. A build that
 /// predates the reset refuses a container 2 file at the header, so it cannot
 /// misread a new payload v1 as an old one.
 pub const VAULT_CONTAINER_VERSION: u32 = 2;

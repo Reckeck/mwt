@@ -24,7 +24,7 @@ pub fn validate_vault_bytes(bytes: &[u8]) -> Result<SnapshotFormat> {
 /// that passes the header check is refused here, before anything is replaced.
 pub fn probe_open(bytes: &[u8], key: &SealKey) -> Result<SnapshotFormat> {
     let (plaintext, fmt) = crypto::open_bytes_with(bytes, key)?;
-    crate::storage::decode_versioned(&plaintext, fmt)?;
+    crate::storage::decode_file(bytes, &plaintext, fmt)?;
     Ok(fmt)
 }
 
