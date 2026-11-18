@@ -243,7 +243,7 @@ pub fn budget_status(books: &Books<'_>, now: i64, zone: &str) -> Vec<BudgetStatu
                 BudgetTarget::Store(scope) => Some(resolve_scope(books, scope)),
                 _ => None,
             };
-            let spent = flows_between(
+            let counted: Vec<Flow> = flows_between(
                 books,
                 &cal,
                 &budget.currency,
@@ -259,7 +259,12 @@ pub fn budget_status(books: &Books<'_>, now: i64, zone: &str) -> Vec<BudgetStatu
                     .as_ref()
                     .is_some_and(|ids| flow.stores.iter().any(|id| ids.contains(id))),
             })
-            .fold(Amount::ZERO, |sum, flow| sum + flow.value);
+            .collect();
+            let spent = counted
+                .iter()
+                .fold(Amount::ZERO, |sum, flow| sum + flow.value);
+            // A flow without a rate adds nothing to `spent`: say so, do not pass it for zero (C2-8).
+            let not_valued = counted.iter().any(|flow| !flow.priced());
             BudgetStatus {
                 budget: budget.clone(),
                 spent,
@@ -267,8 +272,7 @@ pub fn budget_status(books: &Books<'_>, now: i64, zone: &str) -> Vec<BudgetStatu
                 used: used_of(spent, budget.limit),
                 period_start: calendar::iso(cal.start_of(start)),
                 period_end: calendar::iso(cal.start_of(end)),
-                // Stub: computed in the fix commit (C2-8).
-                not_valued: false,
+                not_valued,
             }
         })
         .collect()
