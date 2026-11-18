@@ -169,10 +169,6 @@ mod tests {
         assert_eq!(TransferReceive::NAME, "transfer-receive");
         assert_eq!(TransferSend::NAME, "transfer-send");
         assert_eq!(TransferNearby::NAME, "transfer-nearby");
-    }
-
-    #[test]
-    fn vault_changed_and_vault_locked_are_registered() {
         assert_eq!(VaultChanged::NAME, "vault-changed");
         assert_eq!(VaultLocked::NAME, "vault-locked");
     }
