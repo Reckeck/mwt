@@ -138,6 +138,15 @@ task = "C"
 files = ["crates/core/src/service/mod.rs"]
 
 [[foundation]]
+# `MIN_HISTORY_MONTHS` of the budget shim is re-exported `pub(crate)` for the goals scenarios until T41 moves the budget;
+# the planning module list gets `automation_rules`; the workflow reaction on a paused goal reads `goal_savers` from its scenario module.
+task = "D"
+files = [
+    "crates/core/src/service/mod.rs", "crates/core/src/usecases/planning/mod.rs",
+    "crates/core/src/usecases/workflow/reactions.rs",
+]
+
+[[foundation]]
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 
@@ -157,6 +166,11 @@ path = "usecases/react_tests.rs"
 [[extra_stub]]
 task = "E"
 path = "usecases/workflow/reactions.rs"
+
+[[extra_stub]]
+# The pure rules that read the workflow graph: `planning` may not use `workflow`, so they sit in the scenario layer.
+task = "D"
+path = "usecases/planning/automation_rules.rs"
 
 [[extra_stub]]
 task = "T46"
