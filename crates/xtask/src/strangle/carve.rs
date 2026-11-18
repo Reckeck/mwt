@@ -13,7 +13,7 @@ use syn::{Item, Visibility};
 use super::fileset::FileSet;
 use super::map::Map;
 use super::source::{self, LineIndex};
-use super::widen::{field_reads, private_fields};
+use super::widen::{VAULT_RECEIVERS, binding_of, field_reads, private_fields};
 
 #[derive(Args)]
 pub struct CarveArgs {
@@ -158,8 +158,10 @@ fn refuse_private_fields(
     if carved_structs.is_empty() {
         return Ok(());
     }
-    let reads = field_reads(remaining)?;
     for name in carved_structs {
+        let binding = binding_of(name);
+        let receivers = [VAULT_RECEIVERS[0], binding.as_str()];
+        let reads = field_reads(remaining, &receivers)?;
         if let Some(field) = private_fields(source, name)?
             .into_iter()
             .find(|field| reads.contains(field))
@@ -451,6 +453,20 @@ impl UnlockedVault {
             message.contains("`secret`") && message.contains("`Draft`"),
             "{message}"
         );
+    }
+
+    #[test]
+    fn a_private_field_name_read_on_another_binding_does_not_refuse() {
+        let tree = TempTree::new(&[
+            (MAP_FILE, MAP),
+            (
+                "crates/svc/service/mod.rs",
+                "struct Draft {\n    secret: u32,\n}\npub fn keep(other: &O) -> u32 { other.secret }\n",
+            ),
+        ]);
+        let map = Map::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        carve(&mut files, &map.service_dir, &items(&["Draft"])).unwrap();
     }
 
     #[test]

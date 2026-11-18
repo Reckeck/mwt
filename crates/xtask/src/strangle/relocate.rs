@@ -16,7 +16,7 @@ use super::home::{Home, homes};
 use super::map::Map;
 use super::scaffold::PLACEHOLDER;
 use super::source::{self, LineIndex, Splice};
-use super::widen::{VAULT, field_reads, unwidened_fields};
+use super::widen::{VAULT, VAULT_RECEIVERS, field_reads, unwidened_fields};
 
 #[derive(Args)]
 pub struct RelocateArgs {
@@ -68,7 +68,7 @@ fn move_file(files: &mut FileSet, map: &Map, home: &Home, source: &str) -> Resul
         bail!("{target} is not a placeholder stub: run `strangle scaffold` first");
     }
     let shim = shim_text(home, source)?;
-    refuse_private_vault_fields(files, &map.service_dir, source)?;
+    refuse_private_vault_fields(files, &map.service_dir, &home.shim(), source)?;
     for child in out_of_line_modules(home, source)? {
         move_child(files, home, &child)?;
     }
@@ -78,12 +78,17 @@ fn move_file(files: &mut FileSet, map: &Map, home: &Home, source: &str) -> Resul
 
 /// A moved file that reads a private field of `UnlockedVault` cannot leave `service/`: the field
 /// is widened by hand in a named foundation task (T8 style), never by a stream (spec D5, OD5).
-fn refuse_private_vault_fields(files: &mut FileSet, service_dir: &str, source: &str) -> Result<()> {
+fn refuse_private_vault_fields(
+    files: &mut FileSet,
+    service_dir: &str,
+    moved: &str,
+    source: &str,
+) -> Result<()> {
     if !source.contains(VAULT) {
         return Ok(());
     }
     let definition = format!("{service_dir}/mod.rs");
-    let reads = field_reads(source)?;
+    let reads = field_reads(source, &VAULT_RECEIVERS)?;
     let hidden: Vec<String> = unwidened_fields(files.read(&definition)?, VAULT)
         .with_context(|| definition.clone())?
         .into_iter()
@@ -93,7 +98,7 @@ fn refuse_private_vault_fields(files: &mut FileSet, service_dir: &str, source: &
         return Ok(());
     }
     bail!(
-        "the moved file reads the private {VAULT} field(s) {}: widen them by hand in {definition} in a named foundation task first (`strangle widen` touches methods only)",
+        "{moved} reads the private {VAULT} field(s) {}: widen them by hand in {definition} in a named foundation task first (`strangle widen` touches methods only)",
         hidden.join(", ")
     )
 }
@@ -491,11 +496,28 @@ mod inner { use super::d; use crate::service::e; fn f() { crate::g; } }
         let error = relocated(&tree).unwrap_err().to_string();
         assert!(error.contains("field(s) count, doc"), "{error}");
         assert!(error.contains("foundation task"), "{error}");
+        assert!(error.contains(SERVICE), "{error}");
         assert_eq!(read(&tree, SERVICE), VAULT_FILE);
         assert_eq!(
             read(&tree, "crates/core/src/service/mod.rs"),
             VAULT_DEFINITION
         );
+    }
+
+    #[test]
+    fn a_private_field_name_read_on_another_receiver_does_not_refuse() {
+        let tree = original_tree();
+        std::fs::write(
+            tree.root().join(SERVICE),
+            "impl UnlockedVault { pub fn a(&self, category: &C) -> u32 { category.count + self.open } }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tree.root().join("crates/core/src/service/mod.rs"),
+            VAULT_DEFINITION,
+        )
+        .unwrap();
+        relocated(&tree).unwrap();
     }
 
     #[test]

@@ -51,31 +51,59 @@ pub fn widen_source(text: &str) -> Result<(String, usize)> {
     Ok((source::apply(text, splices), count))
 }
 
-/// Names read as a field (`.name`, not a call) anywhere in the source, macro bodies included.
-pub fn field_reads(text: &str) -> Result<BTreeSet<String>> {
+/// The receivers `scan` counts as the vault (`on_vault`): `self` and `vault`.
+pub const VAULT_RECEIVERS: [&str; 2] = ["self", "vault"];
+
+/// The lower-snake binding a struct is conventionally held in (`Draft` -> `draft`).
+pub fn binding_of(struct_name: &str) -> String {
+    let mut binding = String::new();
+    for (at, letter) in struct_name.chars().enumerate() {
+        if letter.is_uppercase() && at > 0 {
+            binding.push('_');
+        }
+        binding.extend(letter.to_lowercase());
+    }
+    binding
+}
+
+/// Names read as a field (`<receiver>.name`, not a call) anywhere in the source, macro bodies
+/// included. Only a read whose token before the `.` is one of `receivers` counts: `other.key`
+/// is not a read of the struct's `key`.
+pub fn field_reads(text: &str, receivers: &[&str]) -> Result<BTreeSet<String>> {
     let tokens: TokenStream = text
         .parse()
         .map_err(|error| anyhow::anyhow!("tokenize: {error}"))?;
     let mut names = BTreeSet::new();
-    collect_field_reads(&tokens.into_iter().collect::<Vec<_>>(), &mut names);
+    collect_field_reads(
+        &tokens.into_iter().collect::<Vec<_>>(),
+        receivers,
+        &mut names,
+    );
     Ok(names)
 }
 
-fn collect_field_reads(tokens: &[TokenTree], names: &mut BTreeSet<String>) {
+fn collect_field_reads(tokens: &[TokenTree], receivers: &[&str], names: &mut BTreeSet<String>) {
     for (at, token) in tokens.iter().enumerate() {
         match token {
             TokenTree::Group(group) => {
-                collect_field_reads(&group.stream().into_iter().collect::<Vec<_>>(), names);
+                collect_field_reads(
+                    &group.stream().into_iter().collect::<Vec<_>>(),
+                    receivers,
+                    names,
+                );
             }
             TokenTree::Punct(dot) if dot.as_char() == '.' && dot.spacing() == Spacing::Alone => {
                 let range_end = at > 0
                     && matches!(&tokens[at - 1], TokenTree::Punct(prev) if prev.as_char() == '.');
+                let on_receiver = at > 0
+                    && matches!(&tokens[at - 1], TokenTree::Ident(prev)
+                        if receivers.contains(&prev.to_string().as_str()));
                 let called = matches!(
                     tokens.get(at + 2),
                     Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis
                 );
-                if let (false, false, Some(TokenTree::Ident(name))) =
-                    (range_end, called, tokens.get(at + 1))
+                if let (false, false, true, Some(TokenTree::Ident(name))) =
+                    (range_end, called, on_receiver, tokens.get(at + 1))
                 {
                     names.insert(name.to_string());
                 }
@@ -210,10 +238,30 @@ fn free() {}
     fn field_reads_see_fields_not_calls_ranges_or_macro_free_text() {
         let reads = field_reads(
             "fn a(v: &V) { let _ = v.doc.len() + v.count; for _ in 0..v.n {} println!(\"{}\", v.path); v.call(); }",
+            &["v"],
         )
         .unwrap();
         let names: Vec<&str> = reads.iter().map(String::as_str).collect();
         assert_eq!(names, ["count", "doc", "n", "path"]);
+    }
+
+    #[test]
+    fn field_reads_count_only_the_given_receivers() {
+        let reads = field_reads(
+            "fn a(&self, other: &O) { let _ = self.key + other.key + other.name + vault.doc; }",
+            &VAULT_RECEIVERS,
+        )
+        .unwrap();
+        let names: Vec<&str> = reads.iter().map(String::as_str).collect();
+        assert_eq!(names, ["doc", "key"]);
+        let others = field_reads("fn a(o: &O) { let _ = o.key; }", &VAULT_RECEIVERS).unwrap();
+        assert!(others.is_empty());
+    }
+
+    #[test]
+    fn a_binding_is_the_snake_case_of_the_struct() {
+        assert_eq!(binding_of("Draft"), "draft");
+        assert_eq!(binding_of("LoyaltyCard"), "loyalty_card");
     }
 
     #[test]
