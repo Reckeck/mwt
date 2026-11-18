@@ -199,8 +199,8 @@ For fiat, `AssetRef::fiat(symbol, name)` is built with `chain: Fiat`.
 
 ## Transaction (the source of truth)
 
-`Transaction` is a **closed enum** with an external tag (bincode cannot do internal
-tags). Four verbs and four special kinds:
+`Transaction` is a **closed enum** with an external tag (the stored JSON stays
+plain and stable). Four verbs and four special kinds:
 
 ```rust
 enum Transaction {
@@ -312,8 +312,8 @@ Sync: the collection `records("shared_events", ID)`. `removed_with_payment` (bac
 with a deleted payment, until the payment is back or gone for good (`docs/sync/compatibility.md`).
 
 **Transactions are not marked.** The "payment/transfer → event" link lives only in the event
-(`Purchase.tx_id`, `Settlement.tx_id`), not in `TxMeta`: v1 bincode files are read by field
-position, and a new field in `TxMeta` would break them (the same argument as for `TxOrigin::Workflow.estimated`).
+(`Purchase.tx_id`, `Settlement.tx_id`), not in `TxMeta`: the link has a single home, so a
+transaction needs no extra field (the same argument as for `TxOrigin::Workflow.estimated`).
 The reverse index is built by `shared_tx_links()`. If a transaction is deleted bypassing the event, the purchase/settlement
 stays with `payment_missing`.
 

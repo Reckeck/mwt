@@ -3,7 +3,7 @@
 //!
 //! Persisted in the vault. Every enum here is externally tagged and nothing
 //! uses `#[serde(tag)]`, `untagged`, `flatten` or `serde_json::Value`, so the
-//! positional formats stay readable. A new variant goes last;
+//! stored JSON stays plain and stable. A new variant goes last by convention;
 //! renaming or removing a field or variant needs a payload version bump with
 //! a migration (see `storage`).
 

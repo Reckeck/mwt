@@ -213,7 +213,7 @@ pub struct Valuation {
 
 /// An operation that belongs to a property (plan G4): rent received for a
 /// flat, fuel or insurance for a car. Kept beside the operations, not in
-/// them, so the operation format the older files store by position stays put.
+/// them, so the operation shape stays unchanged.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct TxProperty {
     pub tx_id: String,
