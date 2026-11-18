@@ -152,6 +152,7 @@ export function planAutomations(
             used: money(limit ? spent / limit : 0),
             period_start: `${currentMonth()}-01T00:00:00Z`,
             period_end: `${currentMonth()}-28T00:00:00Z`,
+            not_valued: false,
           }
         })
     }

@@ -44,6 +44,26 @@ task = "E"
 files = ["crates/core/src/kernel/events.rs"]
 
 [[foundation]]
+# Stream D adds the moment of the user's action (at) to the retry and pause/resume events and the stopped ids to GoalPaused.
+task = "D"
+files = ["crates/core/src/kernel/events.rs"]
+
+[[foundation]]
+# Stream D: the workflow reactions read the event's moment instead of the clock.
+task = "D"
+files = ["crates/core/src/usecases/workflow/reactions.rs"]
+
+[[foundation]]
+# Stream D: the reaction tests build the retry and pause/resume events with the new `at` and `workflow_ids` fields.
+task = "D"
+files = ["crates/core/src/usecases/react_tests.rs"]
+
+[[foundation]]
+# Stream D: tests that the planning scenarios emit the automation and goal events (observed through the reactions).
+task = "D"
+files = ["crates/core/src/planning/events_tests.rs"]
+
+[[foundation]]
 # The module wiring `scaffold` writes; the area stubs belong to their area tasks.
 task = "T6"
 files = [

@@ -59,7 +59,17 @@ fn active(vault: &UnlockedVault, workflow_id: &str) -> bool {
 #[test]
 fn a_paused_goal_stops_its_saver_and_a_resumed_one_starts_it_again() {
     let (_dir, mut vault, goal, saver) = saving_vault();
-    let paused = react(&mut vault, vec![GoalPaused { id: goal.clone() }.into()]);
+    let paused = react(
+        &mut vault,
+        vec![
+            GoalPaused {
+                id: goal.clone(),
+                workflow_ids: vec![saver.clone()],
+                at: 1_767_312_000,
+            }
+            .into(),
+        ],
+    );
     assert!(paused.is_empty(), "{paused:?}");
     assert!(!active(&vault, &saver));
     let resumed = react(
@@ -68,6 +78,7 @@ fn a_paused_goal_stops_its_saver_and_a_resumed_one_starts_it_again() {
             GoalResumed {
                 id: goal,
                 workflow_ids: vec![saver.clone()],
+                at: 1_767_312_000,
             }
             .into(),
         ],
@@ -82,7 +93,17 @@ fn a_saver_switched_off_by_hand_stays_off_after_pause_and_resume() {
     vault
         .set_workflow_active(&saver, false, 1_767_312_000)
         .unwrap();
-    let paused = react(&mut vault, vec![GoalPaused { id: goal.clone() }.into()]);
+    let paused = react(
+        &mut vault,
+        vec![
+            GoalPaused {
+                id: goal.clone(),
+                workflow_ids: vec![],
+                at: 1_767_312_000,
+            }
+            .into(),
+        ],
+    );
     assert!(paused.is_empty(), "{paused:?}");
     // The pause stopped nothing, so the resume names nothing.
     let resumed = react(
@@ -91,6 +112,7 @@ fn a_saver_switched_off_by_hand_stays_off_after_pause_and_resume() {
             GoalResumed {
                 id: goal,
                 workflow_ids: vec![],
+                at: 1_767_312_000,
             }
             .into(),
         ],
@@ -119,6 +141,7 @@ fn a_retry_of_an_unknown_run_is_reported() {
             AutomationRetried {
                 id: "run".into(),
                 zone: "UTC".into(),
+                at: 0,
             }
             .into(),
         ],
@@ -167,7 +190,14 @@ fn reactions_run_in_registration_order_and_a_failure_does_not_stop_the_rest() {
     let reactions: [Reaction; 3] = [first, failing, second];
     let failures = run(
         &mut vault,
-        vec![GoalPaused { id: "any".into() }.into()],
+        vec![
+            GoalPaused {
+                id: "any".into(),
+                workflow_ids: vec![],
+                at: 0,
+            }
+            .into(),
+        ],
         &reactions,
     );
     assert_eq!(failures.len(), 1);
@@ -214,6 +244,7 @@ fn a_retry_with_the_event_zone_books_the_refused_run_without_a_vault_zone() {
             AutomationRetried {
                 id: refused.clone(),
                 zone: "UTC".into(),
+                at: crate::calendar::now_secs(),
             }
             .into(),
         ],

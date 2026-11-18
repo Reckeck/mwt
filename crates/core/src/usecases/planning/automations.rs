@@ -1,8 +1,9 @@
 //! Scenarios of the automations area: each decides in `planning::automations`
 //! (and in `automation_rules` for the rules that read the workflow graph),
-//! then ends in one `vault.transact`. The schedule marks and the runs of the
-//! workflow service stay direct calls (`wf_set_mark`, `delete_workflow`,
-//! `retry_workflow_run`, `skip_workflow_run`) until events replace them (T44).
+//! then ends in one `vault.transact`. Deleting and retrying announce their
+//! event from inside that transact; the workflow reactions run after the
+//! commit (`usecases::react`). The schedule marks and `skip_workflow_run`
+//! stay direct calls of the workflow service.
 
 use std::collections::HashSet;
 
@@ -13,12 +14,14 @@ use super::automation_rules::{
 use crate::Amount;
 use crate::calendar;
 use crate::error::{Error, Result};
+use crate::kernel::events::{AutomationDeleted, AutomationRetried, DomainEvent};
 use crate::model::planning::{Automation, AutomationRun};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
 use crate::planning::automations::{self as rules, AutomationDraft, AutomationSimulation};
 use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
+use crate::usecases::react::{ReactionFailure, react};
 use crate::workflow::automation as graph_of;
 use crate::workflow::model::Workflow;
 
@@ -136,7 +139,25 @@ pub fn update_automation_at(
 /// Remove an automation and its run history. Transactions it created stay.
 pub fn delete_automation(vault: &mut UnlockedVault, id: &str) -> Result<()> {
     automation(vault, id)?;
-    vault.delete_workflow(id)
+    announce(vault, AutomationDeleted { id: id.to_string() }.into())
+}
+
+/// Commit `event` (it touches the document, so it is delivered), then run its
+/// reactions; the first one that failed is the error of the scenario.
+pub(super) fn announce(vault: &mut UnlockedVault, event: DomainEvent) -> Result<()> {
+    vault.transact(|tx| {
+        tx.emit(event.clone());
+        tx.touch();
+        Ok(())
+    })?;
+    first_failure(react(vault, vec![event]))
+}
+
+fn first_failure(failures: Vec<ReactionFailure>) -> Result<()> {
+    failures
+        .into_iter()
+        .next()
+        .map_or(Ok(()), |failure| Err(failure.error))
 }
 
 /// Make an automation an ordinary workflow: the graph stays and is edited
@@ -239,18 +260,28 @@ pub fn retry_automation_run(
     now: i64,
     zone: &str,
 ) -> Result<Transaction> {
-    let pass = vault.retry_workflow_run(run_id, now, zone)?;
-    let made = pass
-        .created
-        .first()
-        .ok_or_else(|| Error::InvalidInput("the run made no operation".into()))?;
+    if !vault.doc.workflow_runs.iter().any(|run| run.id == run_id) {
+        return Err(Error::Missing(format!("workflow run {run_id}")));
+    }
+    let known: HashSet<String> = vault
+        .doc
+        .transactions
+        .iter()
+        .map(|tx| tx.meta().id.clone())
+        .collect();
+    let retried = AutomationRetried {
+        id: run_id.to_string(),
+        zone: zone.to_string(),
+        at: now,
+    };
+    announce(vault, retried.into())?;
     vault
         .doc
         .transactions
         .iter()
-        .find(|tx| &tx.meta().id == made)
+        .find(|tx| !known.contains(&tx.meta().id))
         .cloned()
-        .ok_or_else(|| Error::Missing(format!("transaction {made}")))
+        .ok_or_else(|| Error::InvalidInput("the run made no operation".into()))
 }
 
 /// Dismiss a refused run.

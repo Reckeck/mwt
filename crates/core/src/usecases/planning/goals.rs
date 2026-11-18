@@ -1,7 +1,9 @@
 //! Scenarios of the goals area: each decides in `planning::goals`, then ends
-//! in one `vault.transact`. Deleting and restoring a goal switch its saving
-//! workflows through the workflow service, a direct call until events replace
-//! it (T44).
+//! in one `vault.transact`. Restoring a goal announces `GoalResumed` from
+//! inside that transact, naming the workflows to start again; the reaction
+//! runs after the commit (`usecases::react`). Deleting a goal first announces
+//! `GoalPaused` in the same transact that removes it, naming the saving
+//! workflows to stop.
 //!
 //! The progress queries sit here too: they gather what other areas know (the
 //! envelopes, the month summaries, the history series) and leave the rules to
@@ -15,6 +17,7 @@ use crate::Amount;
 use crate::calendar::{self, Calendar, first_of_month};
 use crate::error::{Error, Result};
 use crate::kernel::books::Books;
+use crate::kernel::events::{DomainEvent, GoalPaused, GoalResumed};
 use crate::model::planning::{Envelope, Goal};
 use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
@@ -28,6 +31,7 @@ use crate::planning::goals::{
 use crate::pricing::history::secs_or_now;
 use crate::service::MIN_HISTORY_MONTHS;
 use crate::service::UnlockedVault;
+use crate::usecases::react::react;
 
 /// Active workflows that move money into the goal's wallet (what
 /// "Set aside 10% of every salary" makes), unless another goal saves
@@ -92,17 +96,23 @@ pub fn update_goal(vault: &mut UnlockedVault, id: &str, draft: GoalDraft) -> Res
 /// unless [`restore_goal`] brings it back first.
 pub fn delete_goal(vault: &mut UnlockedVault, id: &str, now: i64) -> Result<GoalDeleted> {
     let deleted = plan_delete_goal(&vault.doc, id, |goal| goal_savers(&vault.doc, goal))?;
+    let paused = DomainEvent::from(GoalPaused {
+        id: id.to_string(),
+        workflow_ids: deleted.workflow_ids.clone(),
+        at: now,
+    });
     vault.transact(|tx| {
+        tx.emit(paused.clone());
         tx.collection::<Goal>().remove(id)?;
         for envelope in &deleted.envelopes {
             tx.collection::<Envelope>().remove(&envelope.id)?;
         }
         Ok(())
     })?;
-    for workflow in &deleted.workflow_ids {
-        vault.set_workflow_active(workflow, false, now)?;
+    match react(vault, vec![paused]).into_iter().next() {
+        Some(failure) => Err(failure.error),
+        None => Ok(deleted),
     }
-    Ok(deleted)
 }
 
 /// Undo [`delete_goal`]: the goal, its envelopes and its workflows.
@@ -111,17 +121,23 @@ pub fn restore_goal(vault: &mut UnlockedVault, deleted: GoalDeleted, now: i64) -
     let GoalDeleted {
         goal, envelopes, ..
     } = deleted;
+    let resumed = DomainEvent::from(GoalResumed {
+        id: goal.id.clone(),
+        workflow_ids: switch_on,
+        at: now,
+    });
     vault.transact(|tx| {
         tx.collection::<Goal>().insert(goal.clone())?;
         for envelope in envelopes {
             tx.collection::<Envelope>().insert(envelope)?;
         }
+        tx.emit(resumed.clone());
         Ok(())
     })?;
-    for workflow in &switch_on {
-        vault.set_workflow_active(workflow, true, now)?;
+    match react(vault, vec![resumed]).into_iter().next() {
+        Some(failure) => Err(failure.error),
+        None => Ok(goal),
     }
-    Ok(goal)
 }
 
 /// Net money put into `scope` within `[from, to)`, valued in `currency` on

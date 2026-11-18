@@ -11,7 +11,7 @@ pub(crate) use crate::planning::automations::{draft_to_transaction, main_amount}
 use crate::Amount;
 use crate::calendar::Calendar;
 use crate::error::Result;
-use crate::model::planning::{Automation, AutomationRun, RejectReason, TransactionDraft};
+use crate::model::planning::{Automation, AutomationRun, RejectReason};
 use crate::model::transaction::Transaction;
 use crate::workflow::model::Workflow;
 
@@ -68,8 +68,13 @@ impl UnlockedVault {
     // forward:end
 
     /// The template the next run books: with an amount that differs, at the
-    /// current estimate.
-    pub(crate) fn automation_draft(&self, automation: &Automation) -> TransactionDraft {
+    /// current estimate. Only the automation tests read it; the budget calls
+    /// the rule directly.
+    #[cfg(test)]
+    pub(crate) fn automation_draft(
+        &self,
+        automation: &Automation,
+    ) -> crate::model::planning::TransactionDraft {
         crate::planning::automations::automation_draft(automation)
     }
 
