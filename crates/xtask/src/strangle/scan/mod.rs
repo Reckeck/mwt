@@ -9,7 +9,7 @@ mod visitor;
 #[cfg(test)]
 mod tests;
 
-pub(in crate::strangle) use corpus::{Corpus, Scanned};
+pub(in crate::strangle) use corpus::{Corpus, Scanned, UnscannedMacro};
 pub use visitor::scan_source;
 pub(in crate::strangle) use visitor::{is_test_attr, macro_arguments, macro_line, names_type};
 

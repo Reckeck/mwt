@@ -193,7 +193,15 @@ fn unscanned_macro_bodies_are_shown_as_file_line_notes() {
         ("b.rs", "fn g() {}\n"),
     ])
     .unwrap();
-    assert_eq!(corpus.unscanned_notes(), ["a.rs:2: macro body not scanned"]);
+    let found = corpus.unscanned_macros();
+    assert_eq!(
+        found,
+        [UnscannedMacro {
+            path: "a.rs".to_string(),
+            line: 2
+        }]
+    );
+    assert_eq!(found[0].to_string(), "a.rs:2: macro body not scanned");
 }
 
 #[test]

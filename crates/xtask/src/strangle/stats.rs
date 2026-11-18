@@ -74,7 +74,7 @@ pub struct Report {
 pub fn run(workspace: &Workspace, args: &StatsArgs) -> Result<()> {
     let mut report = compute(workspace);
     // On stderr: `--json` output stays parseable.
-    for note in workspace.corpus.unscanned_notes() {
+    for note in workspace.corpus.unscanned_macros() {
         eprintln!("{note}");
     }
     if let Some(name) = &args.area {

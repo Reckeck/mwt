@@ -11,6 +11,7 @@ use clap::Args;
 use super::Workspace;
 use super::baseline::Baseline;
 use super::home::allowed_files;
+use super::scan::UnscannedMacro;
 
 /// The method whose calls are counted until `Books::vault()` is deleted.
 const BOOKS_VAULT: &str = "vault";
@@ -38,8 +39,8 @@ pub fn run(root: &Path, args: &CallersArgs) -> Result<()> {
 }
 
 /// The two streams of the command: stdout is only `file:line:` callers; the macro notes go to
-/// stderr, as one count or (`notes`) one line each. With an area only the notes of the area's own
-/// files count; without one, the whole tree.
+/// stderr. With an area only the macros of the area's own files are counted or (`notes`) listed,
+/// and the whole-tree count is added, since a macro outside the area may still hold its calls.
 fn report(
     workspace: &Workspace,
     baseline: &Baseline,
@@ -47,34 +48,40 @@ fn report(
     notes: bool,
 ) -> Result<(Vec<String>, Vec<String>)> {
     let stdout = callers(workspace, baseline, area)?;
-    let unscanned = unscanned_in_scope(workspace, area)?;
-    let stderr = if notes {
-        unscanned
-    } else if unscanned.is_empty() {
+    let whole = workspace.corpus.unscanned_macros();
+    let whole_count = whole.len();
+    let scoped = unscanned_in_scope(workspace, area, whole)?;
+    let mut stderr = if notes {
+        scoped.iter().map(ToString::to_string).collect()
+    } else if scoped.is_empty() {
         Vec::new()
     } else {
         vec![format!(
             "{} macro bodies not scanned (list them with `--notes`)",
-            unscanned.len()
+            scoped.len()
         )]
     };
+    if area.is_some() && whole_count > 0 {
+        stderr.push(format!(
+            "{whole_count} macro bodies not scanned in the whole tree"
+        ));
+    }
     Ok((stdout, stderr))
 }
 
-fn unscanned_in_scope(workspace: &Workspace, area: Option<&str>) -> Result<Vec<String>> {
-    let notes = workspace.corpus.unscanned_notes();
+fn unscanned_in_scope(
+    workspace: &Workspace,
+    area: Option<&str>,
+    macros: Vec<UnscannedMacro>,
+) -> Result<Vec<UnscannedMacro>> {
     let Some(name) = area else {
-        return Ok(notes);
+        return Ok(macros);
     };
     let index = workspace.map.area_index(name)?;
     let files = allowed_files(workspace, &workspace.map.areas[index]);
-    Ok(notes
+    Ok(macros
         .into_iter()
-        .filter(|note| {
-            note.split(':')
-                .next()
-                .is_some_and(|path| files.contains(path))
-        })
+        .filter(|entry| files.contains(entry.path.as_str()))
         .collect())
 }
 
@@ -182,7 +189,11 @@ mod tests {
         .unwrap();
         let workspace = Workspace::load(tree.root()).unwrap();
         let (_, scoped) = report(&workspace, &baseline, Some("loyalty"), false).unwrap();
-        assert!(scoped.is_empty(), "{scoped:?}");
+        assert_eq!(
+            scoped,
+            ["1 macro bodies not scanned in the whole tree"],
+            "the macro outside the area is counted in the whole-tree figure"
+        );
         let (_, whole) = report(&workspace, &baseline, None, false).unwrap();
         assert!(
             whole[0].starts_with("1 macro bodies not scanned"),
@@ -192,6 +203,11 @@ mod tests {
         assert_eq!(
             listed,
             ["crates/core/src/user.rs:2: macro body not scanned"]
+        );
+        let (_, scoped_listed) = report(&workspace, &baseline, Some("loyalty"), true).unwrap();
+        assert_eq!(
+            scoped_listed,
+            ["1 macro bodies not scanned in the whole tree"]
         );
     }
 }
