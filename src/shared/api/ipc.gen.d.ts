@@ -528,6 +528,11 @@ follows: string | null, trigger: CardTrigger, actions: Array<CardAction>, asks: 
 next_at: string | null, runs: Array<JournalEntry>, };
 
 /**
+ * Payload of `automation-created`: the transactions the run created.
+ */
+type AutomationCreatedPayload = { tx_ids: Array<string>, };
+
+/**
  * When a new automation would fire: the form asks for its next dates.
  */
 type AutomationDatesInput = { schedule: Schedule, 
@@ -607,6 +612,11 @@ amount: Amount | null, symbol: string, };
  * of the vault: nothing is written.
  */
 type AutomationSimulation = { from: string, until: string, runs: Array<SimulatedRun>, balances: Array<SimulatedBalance>, created: number, rejected: number, };
+
+/**
+ * Payload of `automation-skipped`: how many runs were skipped.
+ */
+type AutomationSkippedPayload = { count: number, };
 
 /**
  * What the user set in the automation form. Stored on the workflow the
@@ -714,6 +724,11 @@ type BybitExecutionsInput = { category: BybitCategory, symbol: string | null, li
  * Never fails: an unconfigured or unreachable key yields an empty list.
  */
 type BybitExecutionsResult = { executions: Array<BybitExecution>, notice: string | null, };
+
+/**
+ * Payload of `bybit-import-pending`: how many records the poll recorded.
+ */
+type BybitImportPendingPayload = { staged: number, recorded: number, };
 
 /**
  * Cached USD quote nearest the asked moment. `ts` is when that rate was
@@ -2486,6 +2501,11 @@ type CryptoTxKind = "transfer" | "swap" | "approve" | "stake" | "unstake" | "cla
 type CryptoUnlinkInput = { event_id: string, };
 
 /**
+ * Payload of `crypto-updated`: the account whose records changed.
+ */
+type CryptoUpdatedPayload = { account_id: string, };
+
+/**
  * A wipe of the module (spec E12), kept as a record so the other devices
  * learn about it through an ordinary sync instead of seeing the data come
  * back from them.
@@ -3057,6 +3077,11 @@ goal_ids: Array<string>, };
 type EmittedEvent = { name: string, payload: WfValue, };
 
 /**
+ * Payload of `reminder-due` and `reminders-changed`: nothing but the signal.
+ */
+type EmptyPayload = Record<symbol, never>;
+
+/**
  * Which endpoint of a network a command is about.
  */
 type EndpointKind = "rpc" | "blockscout";
@@ -3087,6 +3112,11 @@ presets: Array<string>,
 host: string, };
 
 type EnrichmentData = { fee: Fee | null, confirmed: boolean | null, block_time: string | null, from_address: string | null, to_address: string | null, token_name: string | null, token_decimals: number | null, contract: string | null, };
+
+/**
+ * Payload of `enrichment-ready`: the transaction that was enriched.
+ */
+type EnrichmentReadyPayload = { tx_id: string, };
 
 type EnrichmentRecord = { id: string, tx_id: string, source: EnrichmentSource, found: EnrichmentData, status: EnrichmentStatus, created_at: string, };
 
@@ -5485,6 +5515,11 @@ store_id?: string,
  * Fires on every crossing instead of once.
  */
 repeats: boolean, };
+
+/**
+ * Payload of `price-alert`: the alert that fired.
+ */
+type PriceAlertPayload = { alert_id: string, };
 
 /**
  * Where a price came from and when, for the hint next to it.
@@ -8805,6 +8840,12 @@ last_synced_at: string | null,
 last_error: string | null, };
 
 /**
+ * Payload of `vault-save-failed`: the message, or the reason with
+ * `exiting` when the app was closing.
+ */
+type VaultSaveFailedPayload = string | { reason: string, exiting: boolean, };
+
+/**
  * What the unlock screen needs to know about the app.
  */
 type VaultStatus = { path: string, exists: boolean, unlocked: boolean, info: VaultInfo | null, storage: VaultStorage, 
@@ -9179,6 +9220,12 @@ question: string,
  * When the run fell asleep (RFC3339).
  */
 created_at: string, };
+
+/**
+ * Payload of `workflows-ran`: empty after a manual run, the counts after a
+ * scheduled pass.
+ */
+type WorkflowsRanPayload = { runs?: number, queued?: number, };
 
 type YearReport = { meta: ReportMeta, year: number, rows: Array<YearRow>, total: YearRow, 
 /**

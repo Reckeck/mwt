@@ -33,8 +33,6 @@ use trade_core::storage::ensure_wallet_ext;
 use trade_core::vault_io::VaultLocation;
 use trade_core::vault_io::import::{import_into, safe_file_name};
 
-#[cfg(test)]
-pub use mirror_sink::MIRROR_FAILED_EVENT;
 pub use mirror_sink::attach_mirror;
 
 /// File name of the vault the app suggests first.

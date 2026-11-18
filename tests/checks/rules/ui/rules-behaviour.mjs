@@ -2,8 +2,8 @@
 // (AGENTS.md rule 17, references/stable-layout.md).
 import { atFile, callBody, openTags, templateOf } from './lib.mjs'
 
-/** Files that own the backend event plumbing: the only places `onEvent(` may be called. */
-const EVENT_PLUMBING = /^src\/shared\/api\/(?:ipc|use-backend-event|mock-bus)\.ts$|^src\/shared\/api\/mock\//
+/** Files that own the backend event plumbing (incl. the generated typed subscriptions): the only places `onEvent(` may be called. */
+const EVENT_PLUMBING = /^src\/shared\/api\/(?:ipc|use-backend-event|mock-bus|events\.gen)\.ts$|^src\/shared\/api\/mock\//
 
 const CHEAP_CALL = /^(?:String|Number|Boolean|t|\$t)\(/
 

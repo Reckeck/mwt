@@ -3,10 +3,12 @@
 //! and a silent clash would be worse than no shortcut.
 
 #[cfg(desktop)]
+use crate::ipc::events::{AppEvent, QuickAdd};
+#[cfg(desktop)]
+use tauri::Manager;
+#[cfg(desktop)]
 use tauri::plugin::TauriPlugin;
 use tauri::{AppHandle, Runtime};
-#[cfg(desktop)]
-use tauri::{Emitter, Manager};
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -41,7 +43,7 @@ pub fn show_quick_add<R: Runtime>(app: &AppHandle<R>) {
         window.unminimize().ok();
         window.set_focus().ok();
     }
-    app.emit("quick-add", ()).ok();
+    QuickAdd::emit(app, &()).ok();
 }
 
 /// Replace whatever is registered with `shortcut` (`None` = nothing).

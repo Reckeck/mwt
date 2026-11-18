@@ -1,4 +1,5 @@
-use tauri::{AppHandle, Emitter, State};
+use crate::ipc::events::{AppEvent, PricesUpdated};
+use tauri::{AppHandle, State};
 
 use trade_core::ipc_contract::{
     AssetPriceInput, CachedPrice, CandlePoint, ConvertAmountInput, ConvertedAmount, EnsureFxInput,
@@ -128,7 +129,7 @@ pub async fn refresh_all(
         restamped,
         updated_at,
     };
-    let _ = app.emit("prices-updated", &result);
+    let _ = PricesUpdated::emit(&app, &Some(result.clone()));
     Ok(result)
 }
 
@@ -201,14 +202,14 @@ pub async fn ensure_fx(
         vault.apply_fx(&points);
         let restamped = vault.restamp_missing();
         let _ = vault.persist();
-        let _ = app.emit(
-            "prices-updated",
-            &RefreshResult {
+        let _ = PricesUpdated::emit(
+            &app,
+            &Some(RefreshResult {
                 prices: 0,
                 fx: points.len(),
                 restamped,
                 updated_at: trade_core::model::vault::now_iso(),
-            },
+            }),
         );
     }
     Ok(EnsureFxOutput { points, missing })

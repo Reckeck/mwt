@@ -3,7 +3,9 @@
 //! variables. Everything lives in core; days are cut in the zone from
 //! [`current_zone`].
 
-use tauri::{AppHandle, Emitter, State};
+use crate::ipc::events::{AppEvent, AutomationCreated, WorkflowsRan};
+use tauri::{AppHandle, State};
+use trade_core::ipc_contract::events::{AutomationCreatedPayload, WorkflowsRanPayload};
 
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{
@@ -145,9 +147,11 @@ pub async fn run_workflow_now(
     })?;
     crate::scheduler::deliver(&app, report.notices.clone(), false);
     if !report.run.created.is_empty() {
-        let _ = app.emit(
-            "automation-created",
-            serde_json::json!({ "tx_ids": report.run.created }),
+        let _ = AutomationCreated::emit(
+            &app,
+            &AutomationCreatedPayload {
+                tx_ids: report.run.created.clone(),
+            },
         );
     }
     Ok(report)
@@ -175,7 +179,12 @@ pub async fn confirm_workflow_queued(
 ) -> Result<Vec<Transaction>, IpcError> {
     let saved = with_vault_mut(&state, |vault| vault.confirm_queued(&id))?;
     let ids: Vec<&str> = saved.iter().map(|tx| tx.meta().id.as_str()).collect();
-    let _ = app.emit("automation-created", serde_json::json!({ "tx_ids": ids }));
+    let _ = AutomationCreated::emit(
+        &app,
+        &AutomationCreatedPayload {
+            tx_ids: ids.iter().map(ToString::to_string).collect(),
+        },
+    );
     Ok(saved)
 }
 
@@ -205,12 +214,14 @@ pub async fn answer_workflow_wait(
     })?;
     crate::scheduler::deliver(&app, report.notices.clone(), false);
     if !report.run.created.is_empty() {
-        let _ = app.emit(
-            "automation-created",
-            serde_json::json!({ "tx_ids": report.run.created }),
+        let _ = AutomationCreated::emit(
+            &app,
+            &AutomationCreatedPayload {
+                tx_ids: report.run.created.clone(),
+            },
         );
     }
-    let _ = app.emit("workflows-ran", serde_json::json!({}));
+    let _ = WorkflowsRan::emit(&app, &WorkflowsRanPayload::default());
     Ok(report)
 }
 

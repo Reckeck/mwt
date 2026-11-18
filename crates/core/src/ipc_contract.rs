@@ -28,6 +28,7 @@ use crate::model::vault::DailyBudgetMode;
 use crate::service::{AutomationDraft, BudgetDraft, ContactDraft, GoalDraft, PriceAlertDraft};
 
 pub mod cryptotrack;
+pub mod events;
 pub mod security;
 
 // -- auth --------------------------------------------------------------------

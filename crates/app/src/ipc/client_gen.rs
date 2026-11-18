@@ -1,0 +1,210 @@
+//! The typed TypeScript client, generated from the `#[ipc]` command metadata.
+//! Only the pilot module has metadata so far; the other commands keep their
+//! hand-written wrappers. The test compares the committed file with the
+//! generated text; `UPDATE_CLIENT=1 cargo test -p trade-app client_gen`
+//! rewrites it.
+
+use std::fmt::Write;
+use std::path::PathBuf;
+
+use crate::commands::workflows;
+use ts_rs::TS;
+
+use crate::ipc::events::{EVENTS, EventMeta, VaultLockedPayload};
+use crate::ipc::run::CommandMeta;
+
+/// Every `#[ipc]` command that has a generated client: the pilot module.
+const CLIENT_COMMANDS: &[&CommandMeta] = &[
+    &workflows::__IPC_META_list_workflows,
+    &workflows::__IPC_META_get_workflow,
+    &workflows::__IPC_META_save_workflow,
+    &workflows::__IPC_META_save_workflow_draft,
+    &workflows::__IPC_META_discard_workflow_draft,
+    &workflows::__IPC_META_set_workflow_active,
+    &workflows::__IPC_META_delete_workflow,
+    &workflows::__IPC_META_restore_workflow_version,
+    &workflows::__IPC_META_dry_run_workflow,
+    &workflows::__IPC_META_list_workflow_runs,
+    &workflows::__IPC_META_list_workflow_queue,
+    &workflows::__IPC_META_discard_workflow_queued,
+    &workflows::__IPC_META_list_workflow_waits,
+    &workflows::__IPC_META_list_workflow_vars,
+    &workflows::__IPC_META_set_workflow_var,
+    &workflows::__IPC_META_delete_workflow_var,
+    &workflows::__IPC_META_export_workflow,
+    &workflows::__IPC_META_import_workflow,
+    &workflows::__IPC_META_preview_workflow_import,
+    &workflows::__IPC_META_workflow_templates,
+    &workflows::__IPC_META_workflow_from_template,
+    &workflows::__IPC_META_save_workflow_test,
+    &workflows::__IPC_META_delete_workflow_test,
+    &workflows::__IPC_META_run_workflow_tests,
+];
+
+const HEADER: &str = "// AUTO-GENERATED from the #[ipc] command metadata. Do not edit manually.\n\
+// Regenerate: UPDATE_CLIENT=1 cargo test -p trade-app client_gen\n\
+import { call } from './ipc'\n";
+
+/// `snake_case` (or `kebab-case`) to `camelCase`, the spelling Tauri expects for argument keys.
+fn camel_case(snake: &str) -> String {
+    let mut out = String::new();
+    let mut upper_next = false;
+    for character in snake.chars() {
+        if character == '_' || character == '-' {
+            upper_next = true;
+        } else if upper_next {
+            out.extend(character.to_uppercase());
+            upper_next = false;
+        } else {
+            out.push(character);
+        }
+    }
+    out
+}
+
+/// One exported function for one command.
+fn render_command(meta: &CommandMeta) -> String {
+    let ret = (meta.ret)();
+    let params: Vec<String> = meta
+        .args
+        .iter()
+        .map(|arg| format!("{}: {}", camel_case(arg.name), (arg.ts)()))
+        .collect();
+    let keys: Vec<String> = meta.args.iter().map(|arg| camel_case(arg.name)).collect();
+    let payload = if keys.is_empty() {
+        String::new()
+    } else {
+        format!(", {{ {} }}", keys.join(", "))
+    };
+    format!(
+        "export function {}({}): Promise<{ret}> {{\n  return call<{ret}>('{}'{payload})\n}}\n",
+        camel_case(meta.name),
+        params.join(", "),
+        meta.name,
+    )
+}
+
+/// The whole text of `client.gen.ts`.
+fn render_client(commands: &[&CommandMeta]) -> String {
+    let mut text = String::from(HEADER);
+    for meta in commands {
+        write!(text, "\n{}", render_command(meta)).expect("write to a String");
+    }
+    text
+}
+
+fn client_path() -> PathBuf {
+    api_path("client.gen.ts")
+}
+
+fn events_path() -> PathBuf {
+    api_path("events.gen.ts")
+}
+
+fn api_path(file: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../src/shared/api")
+        .join(file)
+}
+
+const EVENTS_HEADER: &str = "// AUTO-GENERATED from the EVENTS table. Do not edit manually.\n\
+// Regenerate: UPDATE_CLIENT=1 cargo test -p trade-app events_gen\n\
+import type { UnlistenFn } from '@tauri-apps/api/event'\n\
+import { onEvent } from './ipc'\n";
+
+/// `on<Name>`: the `PascalCase` subscription function of one event.
+fn subscription_name(event: &str) -> String {
+    let camel = camel_case(event);
+    let mut chars = camel.chars();
+    let first = chars.next().map(|first| first.to_uppercase().to_string());
+    format!("on{}{}", first.unwrap_or_default(), chars.as_str())
+}
+
+/// One subscription function for one event.
+fn render_event(meta: &EventMeta) -> String {
+    let payload = (meta.payload_ts)();
+    format!(
+        "export function {}(handler: (payload: {payload}) => void): Promise<UnlistenFn> {{\n  return onEvent<{payload}>('{}', handler)\n}}\n",
+        subscription_name(meta.name),
+        meta.name,
+    )
+}
+
+/// The whole text of `events.gen.ts`.
+fn render_events(events: &[EventMeta]) -> String {
+    let mut text = String::from(EVENTS_HEADER);
+    // The one payload type that lives in this crate, so `ipc.gen.d.ts` lacks it.
+    let local = VaultLockedPayload::decl(&ts_rs::Config::new());
+    write!(
+        text,
+        "\n// biome-ignore format: generated by ts-rs\n{local}\n"
+    )
+    .expect("write to a String");
+    for meta in events {
+        write!(text, "\n{}", render_event(meta)).expect("write to a String");
+    }
+    text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn camel_case_joins_the_words() {
+        assert_eq!(camel_case("list_workflow_runs"), "listWorkflowRuns");
+        assert_eq!(camel_case("id"), "id");
+    }
+
+    #[test]
+    fn a_command_with_arguments_passes_them_by_camel_case_key() {
+        let text = render_command(&workflows::__IPC_META_get_workflow);
+        assert!(text.contains("export function getWorkflow(id: string): Promise<Workflow>"));
+        assert!(text.contains("call<Workflow>('get_workflow', { id })"));
+    }
+
+    #[test]
+    fn a_command_without_arguments_sends_no_payload() {
+        let text = render_command(&workflows::__IPC_META_list_workflows);
+        assert!(text.contains("listWorkflows(): Promise<"));
+        assert!(text.contains("('list_workflows')"));
+    }
+
+    #[test]
+    fn client_gen_is_current() {
+        let generated = render_client(CLIENT_COMMANDS);
+        let path = client_path();
+        if std::env::var_os("UPDATE_CLIENT").is_some() {
+            std::fs::write(&path, &generated).expect("write client.gen.ts");
+            return;
+        }
+        let committed = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(
+            committed == generated,
+            "src/shared/api/client.gen.ts is stale: run `UPDATE_CLIENT=1 cargo test -p trade-app client_gen`"
+        );
+    }
+
+    #[test]
+    fn an_event_becomes_an_on_function_over_on_event() {
+        let text = render_event(&EVENTS[0]);
+        assert!(text.contains("export function onPricesUpdated(handler: (payload: "));
+        assert!(text.contains("onEvent<"));
+        assert!(text.contains("'prices-updated', handler)"));
+    }
+
+    #[test]
+    fn events_gen_is_current() {
+        let generated = render_events(EVENTS);
+        let path = events_path();
+        if std::env::var_os("UPDATE_CLIENT").is_some() {
+            std::fs::write(&path, &generated).expect("write events.gen.ts");
+            return;
+        }
+        let committed = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(
+            committed == generated,
+            "src/shared/api/events.gen.ts is stale: run `UPDATE_CLIENT=1 cargo test -p trade-app events_gen`"
+        );
+    }
+}

@@ -1,7 +1,9 @@
 //! Enrichment (plan §8.2): look an operation's hash up in a public explorer —
 //! only with the user's consent — and keep the finding for them to apply.
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use crate::ipc::events::{AppEvent, EnrichmentReady};
+use tauri::{AppHandle, Manager, State};
+use trade_core::ipc_contract::events::EnrichmentReadyPayload;
 
 use trade_core::model::enrichment::EnrichmentRecord;
 use trade_core::txinfo::TxInfoService;
@@ -35,7 +37,12 @@ pub async fn enrich(app: &AppHandle, tx_id: &str) -> Result<Option<EnrichmentRec
         record
     };
     if record.is_some() {
-        let _ = app.emit("enrichment-ready", serde_json::json!({ "tx_id": tx_id }));
+        let _ = EnrichmentReady::emit(
+            app,
+            &EnrichmentReadyPayload {
+                tx_id: tx_id.to_string(),
+            },
+        );
     }
     Ok(record)
 }

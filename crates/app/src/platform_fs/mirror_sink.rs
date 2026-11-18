@@ -4,18 +4,16 @@
 //! to write, so the copy happens on its own thread. Saves that pile up while
 //! one is being written collapse into the newest: only the last state matters.
 
+use crate::ipc::events::{AppEvent, VaultMirrorFailed};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use trade_core::service::UnlockedVault;
 use trade_core::vault_io::VaultMirror;
 
 use super::links;
-
-/// Event for the UI: the external copy could not be written (payload: why).
-pub const MIRROR_FAILED_EVENT: &str = "vault-mirror-failed";
 
 struct MirrorSink {
     queue: Sender<Vec<u8>>,
@@ -48,7 +46,7 @@ fn spawn(app: AppHandle, vault: PathBuf) -> MirrorSink {
             };
             links::push(&app, &vault, &link, &bytes);
             if let Some(error) = links::get(&app, &vault).and_then(|link| link.last_error) {
-                let _ = app.emit(MIRROR_FAILED_EVENT, error);
+                let _ = VaultMirrorFailed::emit(&app, &error);
             }
         }
     });
