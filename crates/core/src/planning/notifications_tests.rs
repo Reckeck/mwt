@@ -134,3 +134,115 @@ fn fresh_notices_skip_known_keys_and_the_log_is_capped() {
     append_notices(&mut many, &extra);
     assert_eq!(many.len(), MAX_NOTICE_LOG);
 }
+
+fn record(key: &str, category: NoticeCategory) -> NoticeRecord {
+    NoticeRecord {
+        key: key.into(),
+        category,
+        title: "Title".into(),
+        body: "Body".into(),
+        link: None,
+        at: "2026-03-05T09:00:00Z".into(),
+        delivered_at: "2026-03-05T09:00:30Z".into(),
+        read: false,
+    }
+}
+
+#[test]
+fn the_notice_delegates_equal_the_scenarios() {
+    use crate::usecases::planning::notifications as scenario;
+    let (_a, mut by_method) = empty_vault();
+    let (_b, mut by_scenario) = empty_vault();
+    let batch = || {
+        vec![
+            record("a", NoticeCategory::Reminder),
+            record("a", NoticeCategory::Reminder),
+            record("b", NoticeCategory::PriceAlert),
+        ]
+    };
+    let method = by_method.log_notices(batch()).unwrap();
+    let made = scenario::log_notices(&mut by_scenario, batch()).unwrap();
+    assert_eq!(method, made);
+    assert_eq!(method.len(), 2);
+    by_method
+        .mark_notifications_read(Some(&["a".to_string()]))
+        .unwrap();
+    scenario::mark_notifications_read(&mut by_scenario, Some(&["a".to_string()])).unwrap();
+    assert_eq!(by_method.notifications(), by_scenario.notifications());
+    assert_eq!(by_method.unread_notifications(), 1);
+    assert!(
+        by_method
+            .record_notice(record("c", NoticeCategory::Reminder))
+            .unwrap()
+    );
+    assert!(
+        scenario::record_notice(&mut by_scenario, record("c", NoticeCategory::Reminder)).unwrap()
+    );
+    assert!(
+        !by_method
+            .record_notice(record("c", NoticeCategory::Reminder))
+            .unwrap()
+    );
+    assert!(
+        !scenario::record_notice(&mut by_scenario, record("c", NoticeCategory::Reminder)).unwrap()
+    );
+    assert!(
+        by_method
+            .record_notice(record(" ", NoticeCategory::Reminder))
+            .is_err()
+    );
+    assert!(
+        scenario::record_notice(&mut by_scenario, record(" ", NoticeCategory::Reminder)).is_err()
+    );
+    assert_eq!(by_method.notifications(), by_scenario.notifications());
+}
+
+#[test]
+fn the_due_sweep_delegate_equals_the_scenario() {
+    use crate::usecases::planning::notifications as scenario;
+    let (_a, mut by_method) = empty_vault();
+    let (_b, mut by_scenario) = empty_vault();
+    for vault in [&mut by_method, &mut by_scenario] {
+        vault
+            .create_reminder("Позвонить в банк", "2026-03-05T09:00:00Z", None)
+            .unwrap();
+    }
+    let now = secs_or_now("2026-03-05T09:00:30Z");
+    let keys = |notices: Vec<NoticeRecord>| -> Vec<(String, String)> {
+        notices
+            .into_iter()
+            .map(|notice| (format!("{:?}", notice.category), notice.body))
+            .collect()
+    };
+    let method = keys(by_method.due_notices(now, "UTC", true).unwrap());
+    let made = keys(scenario::due_notices(&mut by_scenario, now, "UTC", true).unwrap());
+    assert_eq!(method, made);
+    assert_eq!(method.len(), 1);
+}
+
+#[test]
+fn the_log_rules_work_on_a_bare_document() {
+    let mut doc = crate::model::vault::VaultDoc::default();
+    let fresh = fresh_notices(
+        &doc,
+        vec![
+            record("a", NoticeCategory::Reminder),
+            record("a", NoticeCategory::Reminder),
+        ],
+    );
+    assert_eq!(fresh.len(), 1);
+    append_notices(&mut doc.notification_log, &fresh);
+    assert!(fresh_notices(&doc, vec![record("a", NoticeCategory::Reminder)]).is_empty());
+    assert_eq!(unread_notifications(&doc), 1);
+    mark_read(&mut doc.notification_log, Some(&["other".to_string()]));
+    assert_eq!(unread_notifications(&doc), 1);
+    mark_read(&mut doc.notification_log, None);
+    assert_eq!(unread_notifications(&doc), 0);
+    let full: Vec<NoticeRecord> = (0..MAX_NOTICE_LOG + 3)
+        .map(|at| record(&format!("k{at}"), NoticeCategory::Reminder))
+        .collect();
+    let mut log = Vec::new();
+    append_notices(&mut log, &full);
+    assert_eq!(log.len(), MAX_NOTICE_LOG);
+    assert_eq!(log[0].key, "k3");
+}

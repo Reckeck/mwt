@@ -148,3 +148,53 @@ fn card_follows_the_salary_and_the_journal_shows_the_asked_share() {
         1
     );
 }
+
+#[test]
+fn notice_entries_keep_reminders_and_alerts_and_newest_cuts_the_list() {
+    use crate::model::notify::{NoticeCategory, NoticeRecord};
+    let notice = |category, key: &str, delivered_at: &str| NoticeRecord {
+        key: key.into(),
+        category,
+        title: "Title".into(),
+        body: "Body".into(),
+        link: None,
+        at: "2026-03-01T00:00:00Z".into(),
+        delivered_at: delivered_at.into(),
+        read: false,
+    };
+    let entries = notice_entries(vec![
+        notice(
+            NoticeCategory::Reminder,
+            "reminder:r1:x",
+            "2026-03-02T00:00:00Z",
+        ),
+        notice(NoticeCategory::PriceAlert, "alert:a1:x", ""),
+        notice(NoticeCategory::Rates, "source:s1:x", "2026-03-03T00:00:00Z"),
+    ]);
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].kind, MineKind::Reminder);
+    assert_eq!(entries[0].source_id, "r1");
+    assert_eq!(entries[1].kind, MineKind::Alert);
+    assert_eq!(entries[1].at, "2026-03-01T00:00:00Z");
+    let newest = newest(entries, 1);
+    assert_eq!(newest.len(), 1);
+    assert_eq!(newest[0].source_id, "r1");
+}
+
+#[test]
+fn nothing_was_answered_in_an_empty_document() {
+    let doc = crate::model::vault::VaultDoc::default();
+    let run = WorkflowRun {
+        id: "run".into(),
+        workflow_id: "flow".into(),
+        trigger: String::new(),
+        started_at: "2026-03-01T00:00:00Z".into(),
+        outcome: RunOutcome::Done,
+        created: Vec::new(),
+        queued: 0,
+        trace: Vec::new(),
+        dry_run: false,
+        planned_date: None,
+    };
+    assert!(!answered_question(&doc, &run));
+}

@@ -3,7 +3,7 @@
 use super::agenda::*;
 use crate::Amount;
 use crate::error::Error;
-use crate::model::planning::AlertCondition;
+use crate::model::planning::{AlertCondition, PriceAlert};
 use crate::model::planning::{Reminder, ReminderPay};
 use crate::model::planning::{Schedule, TransactionDraft};
 use crate::model::store::StoreKind;
@@ -365,4 +365,36 @@ fn the_reminder_scenarios_equal_their_delegates() {
         vault.due_reminders(secs("2026-03-08T00:00:00Z")),
         due_reminders(&vault.doc, secs("2026-03-08T00:00:00Z"))
     );
+}
+
+#[test]
+fn fire_alerts_fires_once_and_rearms_a_repeating_one_on_a_bare_list() {
+    let alert = |repeats| PriceAlert {
+        id: "a".into(),
+        asset: btc(),
+        condition: AlertCondition::Above,
+        price: amount("95000"),
+        currency: "usd".into(),
+        active: true,
+        triggered_at: None,
+        triggered_for: None,
+        store_id: None,
+        repeats,
+    };
+    let at = |price: &'static str| move |_: &PriceAlert| Some(amount(price));
+    let mut once = vec![alert(false)];
+    let (fired, changed) = fire_alerts(&mut once, at("100000"), "t1");
+    assert_eq!((fired.len(), changed), (1, true));
+    let (fired, changed) = fire_alerts(&mut once, at("100000"), "t2");
+    assert_eq!((fired.len(), changed), (0, false));
+    let mut again = vec![alert(true)];
+    fire_alerts(&mut again, at("100000"), "t1");
+    let (fired, changed) = fire_alerts(&mut again, at("90000"), "t2");
+    assert_eq!((fired.len(), changed), (0, true), "rearmed, nothing fired");
+    assert!(!again[0].is_triggered());
+    let (fired, _) = fire_alerts(&mut again, at("100000"), "t3");
+    assert_eq!(fired.len(), 1);
+    let (fired, changed) = fire_alerts(&mut again, |_| None, "t4");
+    assert_eq!((fired.len(), changed), (0, false));
+    assert!(alert_assets(&crate::model::vault::VaultDoc::default()).is_empty());
 }

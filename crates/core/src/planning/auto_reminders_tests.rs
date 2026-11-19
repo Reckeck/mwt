@@ -554,3 +554,66 @@ fn a_notice_of_an_automatic_reminder_uses_the_language_of_the_device() {
     assert_ne!(body, &loan_text(&vault));
     assert!(body.contains("Ипотека"), "{body}");
 }
+
+#[test]
+fn the_sync_delegate_equals_the_scenario() {
+    let (_a, mut by_method) = empty_vault();
+    let (_b, mut by_scenario) = empty_vault();
+    loan(&mut by_method, 25);
+    loan(&mut by_scenario, 25);
+    let now = secs_or_now("2026-03-10T08:00:00Z");
+    let method = by_method.sync_auto_reminders(now, "UTC", true).unwrap();
+    let made = crate::usecases::planning::auto_reminders::sync_auto_reminders(
+        &mut by_scenario,
+        now,
+        "UTC",
+        true,
+    )
+    .unwrap();
+    assert!(method && made);
+    let shape = |vault: &UnlockedVault| -> Vec<(String, String, bool)> {
+        vault
+            .doc
+            .reminders
+            .iter()
+            .map(|reminder| {
+                (
+                    reminder.text.clone(),
+                    reminder.due_at.clone(),
+                    reminder.repeat.is_some(),
+                )
+            })
+            .collect()
+    };
+    assert!(!shape(&by_method).is_empty());
+    assert_eq!(shape(&by_method), shape(&by_scenario));
+    assert!(!by_method.sync_auto_reminders(now, "UTC", true).unwrap());
+    assert!(
+        !crate::usecases::planning::auto_reminders::sync_auto_reminders(
+            &mut by_scenario,
+            now,
+            "UTC",
+            true
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn a_second_sync_of_the_same_document_changes_nothing() {
+    let (_dir, mut vault) = empty_vault();
+    loan(&mut vault, 25);
+    let now = secs_or_now("2026-03-10T08:00:00Z");
+    let mut doc = vault.doc.clone();
+    let no_debt = |_: &crate::model::contact::DebtTerms| amount("0");
+    doc.reminders = synced_reminders(&doc, no_debt, now, "UTC", true).expect("first sync writes");
+    assert!(!doc.reminders.is_empty());
+    assert!(synced_reminders(&doc, no_debt, now, "UTC", true).is_none());
+}
+
+#[test]
+fn a_document_without_sources_has_nothing_to_sync() {
+    let doc = crate::model::vault::VaultDoc::default();
+    let no_debt = |_: &crate::model::contact::DebtTerms| amount("0");
+    assert!(synced_reminders(&doc, no_debt, 0, "UTC", true).is_none());
+}

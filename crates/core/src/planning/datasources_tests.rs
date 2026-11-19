@@ -2,7 +2,7 @@
 
 use super::datasources::*;
 use crate::datasource::Extracted;
-use crate::model::datasource::TableRow;
+use crate::model::datasource::{DataSource, TableRow};
 use crate::model::datasource::{
     NumberFormat, SourceInterval, SourceMethod, SourceOutput, SourceStatus,
 };
@@ -223,5 +223,108 @@ fn a_fetch_records_the_value_and_the_price_it_sets_together() {
             .price_cache
             .iter()
             .any(|point| point.asset_key == "asset:gold")
+    );
+}
+
+#[test]
+fn the_source_delegates_equal_the_scenarios() {
+    use crate::usecases::planning::datasources as scenario;
+    let (_a, mut by_method) = vault();
+    let (_b, mut by_scenario) = vault();
+    let method = by_method.save_data_source(draft(vec![])).unwrap().source;
+    let made = scenario::save_data_source(&mut by_scenario, draft(vec![]))
+        .unwrap()
+        .source;
+    let shape = |source: &DataSource| (source.name.clone(), source.url.clone(), source.status);
+    assert_eq!(shape(&method), shape(&made));
+    let method_notices = by_method
+        .apply_source_fetch(&method.id, number("6.35"), true)
+        .unwrap();
+    let made_notices =
+        scenario::apply_source_fetch(&mut by_scenario, &made.id, number("6.35"), true).unwrap();
+    assert_eq!(method_notices, made_notices);
+    // A jump waits; confirming it is the same through both doors.
+    by_method
+        .apply_source_fetch(&method.id, number("6350"), true)
+        .unwrap();
+    scenario::apply_source_fetch(&mut by_scenario, &made.id, number("6350"), true).unwrap();
+    assert_eq!(
+        by_method.data_source(&method.id).unwrap().status,
+        SourceStatus::Pending
+    );
+    assert_eq!(
+        by_method
+            .confirm_source_value(&method.id, true, true)
+            .unwrap(),
+        scenario::confirm_source_value(&mut by_scenario, &made.id, true, true).unwrap()
+    );
+    assert_eq!(
+        by_method
+            .data_source(&method.id)
+            .unwrap()
+            .last
+            .as_ref()
+            .map(|value| value.number),
+        by_scenario
+            .data_source(&made.id)
+            .unwrap()
+            .last
+            .as_ref()
+            .map(|value| value.number)
+    );
+    by_method.delete_data_source(&method.id).unwrap();
+    scenario::delete_data_source(&mut by_scenario, &made.id).unwrap();
+    assert!(by_method.data_sources_list().is_empty());
+    assert!(by_scenario.data_sources_list().is_empty());
+    assert!(by_method.delete_data_source(&method.id).is_err());
+    assert!(scenario::delete_data_source(&mut by_scenario, &made.id).is_err());
+}
+
+fn fresh_source() -> DataSource {
+    new_source(&draft(vec![]), "s1".into(), "2026-03-01T00:00:00Z".into())
+}
+
+#[test]
+fn a_fetch_that_jumps_waits_and_a_small_move_is_taken() {
+    let mut source = fresh_source();
+    let at = "2026-03-02T00:00:00Z";
+    let first = record_fetch(&mut source, number("6.35"), at, true);
+    assert!(first.spread && first.notices.is_empty());
+    let small = record_fetch(&mut source, number("6.40"), at, true);
+    assert!(small.spread);
+    assert_eq!(source.history.len(), 1);
+    let jump = record_fetch(&mut source, number("640"), at, true);
+    assert!(!jump.spread);
+    assert_eq!(jump.notices.len(), 1);
+    assert_eq!(source.status, SourceStatus::Pending);
+    assert!(source.pending.is_some());
+    assert!(!settle_pending(&mut source, false).unwrap());
+    assert_eq!(source.status, SourceStatus::Ok);
+    assert!(settle_pending(&mut source, true).is_err());
+}
+
+#[test]
+fn a_value_is_not_spread_without_a_rate_or_a_number() {
+    use crate::model::datasource::AssetPriceSource;
+    let mut doc = crate::model::vault::VaultDoc::default();
+    let mut source = fresh_source();
+    record_fetch(&mut source, number("100"), "2026-03-02T00:00:00Z", true);
+    doc.asset_price_sources.push(AssetPriceSource {
+        asset_key: "crypto:btc".into(),
+        source_id: "s1".into(),
+        currency: "rub".into(),
+    });
+    let spread = spread_value(&doc, &source, |_| Some(amount("0")), true, "now");
+    assert!(spread.points.is_empty(), "a zero per_usd sets no price");
+    let spread = spread_value(&doc, &source, |_| None, true, "now");
+    assert!(spread.points.is_empty());
+    let spread = spread_value(&doc, &source, |_| Some(amount("50")), true, "now");
+    assert_eq!(spread.points.len(), 1);
+    assert_eq!(spread.points[0].value_usd, amount("2"));
+    let bare = fresh_source();
+    assert!(
+        spread_value(&doc, &bare, |_| Some(amount("50")), true, "now")
+            .points
+            .is_empty()
     );
 }
