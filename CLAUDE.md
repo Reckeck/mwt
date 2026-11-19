@@ -61,9 +61,11 @@ mise, the artifacts end up in `target/` and the build starts from scratch.
   MessagePack (`Pack`) in release; this is the *write* format; on read the format
   is taken from the `payload_fmt` byte in the 55-byte header. Payload format 1
   (the old positional binary) is refused; `SnapshotFormat` is `Json | Pack`.
-  A container 1 / payload 4 file goes once through the
-  frozen `legacy_v4` transition (`storage::decode_versioned`), which puts
-  `<vault>.v4.bak` next to it and rewrites the file. Older formats are refused.
+  A container 1 / payload 4 file goes once
+  through `storage::decode_file` → `decode_in_container` → the frozen
+  `legacy_v4::transition`; `UnlockedVault::open_as` then puts `<vault>.v4.bak`
+  (`VaultFile::backup_version`) next to it and rewrites the file. Older formats
+  are refused.
 - **Prices.** A command takes the data it needs under the mutex, releases it, runs
   `PricingService::fetch_*` (network), takes the mutex again and calls
   `apply_*`; then it emits the `prices-updated` event, on which the frontend
