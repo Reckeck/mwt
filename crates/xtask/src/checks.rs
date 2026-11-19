@@ -265,11 +265,11 @@ async fn strangle_outcome(ctx: &Ctx, program: &str) -> Outcome {
     }
 }
 
-/// The failure reason of `strangle check`, with the missing-base notice kept on a second line.
+/// The failure reason of `strangle check`, with the missing-base notice joined with "; " so the reason stays one line.
 fn strangle_failure(code: i32, notice: Option<&str>) -> String {
     let reason = format!("strangle check exited with {code}");
     match notice {
-        Some(text) => format!("{reason}\n{text}"),
+        Some(text) => format!("{reason}; {text}"),
         None => reason,
     }
 }
@@ -389,6 +389,7 @@ mod tests {
         let reason = strangle_failure(1, Some(&notice));
         assert!(reason.starts_with("strangle check exited with 1"));
         assert!(reason.contains(&notice));
+        assert!(!reason.contains('\n'), "{reason}");
         assert_eq!(strangle_failure(1, None), "strangle check exited with 1");
     }
 
