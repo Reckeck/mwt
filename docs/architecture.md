@@ -99,7 +99,7 @@ the same way, but in `mwt.desktop` directories (channels — `docs/ci.md`).
 
 | Path (Linux) | What | Format |
 |---|---|---|
-| `~/.local/share/dev.mwt.desktop/vault.wallet` | the vault: vault settings, stores, transactions, **price and FX cache** | encrypted (JSON in dev, MessagePack in release; the old bincode is still readable) |
+| `~/.local/share/dev.mwt.desktop/vault.wallet` | the vault: vault settings, stores, transactions, **price and FX cache** | encrypted (JSON in dev, MessagePack in release) |
 | `~/.config/dev.mwt.desktop/app_settings.json` | theme, language, base currency, favorite currencies | plain JSON |
 | `~/.config/dev.mwt.desktop/currencies.json` | currency catalog cache (fiat + crypto) | plain JSON |
 | `~/.config/dev.mwt.desktop/recent_vaults.json` | recent vaults | plain JSON |
@@ -185,9 +185,10 @@ strangler moves continue in later waves.
   the sign-in screen should render in the right language before the password is entered. Vault-scoped
   settings (intervals, tray, widgets) stay in the document.
 - **Snapshot formats.** Dev — human-readable JSON, release — MessagePack with
-  field names (before v2 — bincode, now read-only). The type is stored in the file
-  header (`payload_fmt`), so the file is self-contained. Old schema versions are migrated
-  on open, see `docs/data-model.md` → "Versions and migrations".
+  field names. The type is stored in the file header (`payload_fmt`), so the file
+  is self-contained. The schema chain starts at v1; the only conversion from an
+  older file is the frozen `legacy_v4` transition, see `docs/data-model.md` →
+  "Versions and migrations".
 
 ## Scaling
 

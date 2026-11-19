@@ -7,7 +7,7 @@ portfolio container, not an asset; an asset is represented by a `Holding` inside
 
 | Field | Type | Comment |
 |---|---|---|
-| `version` | `u32` | `VAULT_FORMAT_VERSION = 4`. A file of an older version opens and migrates (`storage::decode_versioned`): an untouched copy is placed next to it as `<vault>.v<N>.bak`, then the document is rewritten in the current version. A version from the future is `UNSUPPORTED`; a file of a known version that does not fit its schema is `INCOMPATIBLE_VAULT`. Details — the "Versions and migrations" section below |
+| `version` | `u32` | `VAULT_FORMAT_VERSION = 1`. The reader accepts only this version (container 2); a file in the previous format is converted once by the v4 transition. A version from the future is `UNSUPPORTED`; a file that does not fit its schema is `INCOMPATIBLE_VAULT`. Details — the "Versions and migrations" section below |
 | `id` | `String` | uuid |
 | `created_at` | `String` | RFC3339 UTC |
 | `settings` | `Settings` | vault-scoped: decimals, widgets, intervals, tray |
@@ -43,10 +43,7 @@ a month carrying over the remainder, the default; `until_income` — until the n
 income), `budget_currency` (empty = the base currency), `notifications` (v2:
 system notifications on/off, hide details while the vault is locked,
 the time of auto-reminders, per category — on/off, how many days ahead, whether to create
-auto-reminders), `inflation_manual` (flat annual inflation by lowercase currency, only where the group differs from the shipped table; group data), `crypto_raise_pending` (device flag: the raise to level 3 re-encrypted the vault and has not finished archiving the hand-kept crypto wallets; set by the raise, cleared when the archiving is done, and the only thing that makes an open archive them), `inflation_adopted` (device flag: this device copied its old app-config rates into `inflation_manual`), `crypto` (derived since spec E14, never chosen by the user: `true` when the crypto module holds an address or an operation
-or the vault still carries a hand-made crypto wallet or exchange. The stored field stays for compatibility: `open` refreshes
-it in memory and the next save writes it, `get_settings` and `update_settings` answer with the derived value, an incoming
-`crypto` is read and ignored. Its one consumer is the background exchange polling; the interface no longer hides crypto).
+auto-reminders), `inflation_manual` (flat annual inflation by lowercase currency, only where the group differs from the shipped table; group data), `crypto_raise_pending` (device flag: the raise to level 3 re-encrypted the vault and has not finished archiving the hand-kept crypto wallets; set by the raise, cleared when the archiving is done, and the only thing that makes an open archive them), `inflation_adopted` (device flag: this device copied its old app-config rates into `inflation_manual`).
 
 Settings that describe the **user**, not this vault, live not in the document
 but next to the app — see "App settings" below.
@@ -368,7 +365,7 @@ transactions; `name: None` — the label comes from i18n `categories.default.<ke
 ## Money: Amount
 
 `Amount` is a newtype over `rust_decimal::Decimal`:
-- always **serialized as a string** (precision, stable JSON and bincode);
+- always **serialized as a string** (precision, stable JSON and MessagePack);
 - `Amount::parse("123.45")`, `Amount::from_f64`, `to_f64()` (for display/engine only),
 - Decimal arithmetic (no floating-point errors), `round(n)`;
 - in `ipc.gen.d.ts` money fields are declared as `type Amount = string;`.
@@ -450,8 +447,8 @@ wallet itself. The background polling interval is per exchange
 (`ExchangeProfile.import_interval_sec`). `PendingImport` stores `is_maker`, `closed_size`,
 `closed_pnl`; a futures trade with `closed_size > 0` is a position close.
 
-The field `exchanges: Exchanges` was added to `VaultDoc` (schema version **1**, the format
-was reset from v2 to v1 — backward compatibility is not preserved).
+`exchanges: Exchanges` is live storage at security levels 1-2 (the keys sit in the document);
+at level 3 they move to the device secrets file (see `docs/security.md`).
 
 ```rust
 pub struct ExchangeKeys {
@@ -485,60 +482,47 @@ Security guarantees:
   (`/v5/execution/list`). There are no code paths for placing, changing or canceling
   orders, so even a leaked key cannot move funds.
 
-Versions: `VAULT_CONTAINER_VERSION = 1` (the container format did not change),
-`VAULT_FORMAT_VERSION = 4` (the document schema).
+Versions: `VAULT_CONTAINER_VERSION = 2` (the container; 1 is accepted only for the transition below),
+`VAULT_FORMAT_VERSION = 1` (the document schema).
 
 ## Versions and migrations
 
-The payload is written in one of the formats, the `payload_fmt` byte of the header says which:
+The payload is written in one of two formats, the `payload_fmt` byte of the header says which:
 
 | Byte | Format | Who writes it |
 |---|---|---|
 | `0` | JSON | debug build |
-| `1` | bincode (positional) | release builds before v2; **read-only** |
-| `2` | MessagePack with field names | release builds since v2 |
+| `2` | MessagePack with field names | release builds |
 
-bincode does not store field names, so any new field broke old
-release files. JSON and MessagePack store names: a field added with
-`#[serde(default)]` is read from an old v2 file without a version bump.
+Byte `1` (bincode, positional) is refused. JSON and MessagePack store names: a field
+added with `#[serde(default)]` is read from an older file without a version bump.
 
-Reading: first `version`, then the document is parsed by the schema of that version and
-migrated along the chain. The chain is one listing — `schema_chain!` in
-`crates/core/src/storage/chain.rs`, newest version first; each frozen schema says through
-`impl Legacy` which version it is and which schema is one step up, so the order is checked
-by the compiler and a step cannot be skipped by accident.
-The v1 schema is frozen in `crates/core/src/storage/v1.rs`
-(types that changed in v2 are copied, the rest are reused) and is never edited.
-v1 → v2 loses nothing: new fields get default values.
-Before the first write after a migration the file is copied to `<vault>.v1.bak`;
-an existing copy is not overwritten. A bincode file is rewritten as
-MessagePack.
+**The container 2 rule.** The reader looks at the container header before it parses any
+payload. Container 2 with payload version 1 is the current format, read by `VaultDoc`
+directly: nothing is migrated, no copy is made, the file is not rewritten. Every write is
+container 2. A build from before the reset refuses a container 2 file at the header, so
+it cannot read a new v1 file as its old v1. Container 2 with any other payload version,
+and container 1 with a version of 5 or more or 0, is `UNSUPPORTED`.
 
-v2 → v3 (`storage/v2.rs`): the `automations` and `automation_runs` collections no longer
-exist — each automation becomes a scheme with the same id and
-`Workflow.automation` (the graph is built from the form), its `last_planned_at` becomes a
-`schedule:t` schedule mark (there is no repeated catch-up), each run becomes a `WorkflowRun`
-with the same outcome (`Created` → `Done` with a transaction, `Rejected` → `Rejected` with
-the planned moment, `Skipped` → `Dropped { "skipped" }`). Old transactions
-keep `TxOrigin::Automation` and are found by the same id. The rest of the v2 document
-is read by the current types (`serde(flatten)`), the file copy is `<vault>.v2.bak`.
-The bump is also needed for sync: a device with an old version does not sync
-with v3 and does not run automations a second time. The "amount is approximate" mark is carried
-by `TxOrigin::Workflow { planned_at, estimated }`, not by `TxMeta`: v1 bincode files are
-read by field position, and a new field in `TxMeta` would break them.
+**The transition.** The only path from an old file is a frozen copy of the last old
+schema, `crates/core/src/storage/legacy_v4.rs` (`VaultDocV4`). A container 1 file with
+payload version 4 (JSON or MessagePack) is parsed by it and converted to the live
+`VaultDoc` (`transition`): the Bybit import queue is converted once, the workflow graphs
+are brought to graph version 1, and the dropped `settings.crypto` is discarded;
+`exchanges` is read and written unchanged. Before the first write the untouched file is copied to
+`<vault>.v4.bak` (an existing whole copy is never overwritten); then the document is
+saved as v1 in container 2. A crash before the rewrite leaves the old file intact and the
+next open repeats the transition; the second open reads container 2 and does nothing.
+A file that does not fit the v4 schema is `INCOMPATIBLE_VAULT`.
 
-v3 → v4 (`storage/v3.rs`): nothing is converted. v4 adds the crypto module's own
-top-level collections (`crypto_accounts`, `crypto_events`, `crypto_overrides`,
-`crypto_tokens`, `crypto_positions`, `crypto_snapshots`, `crypto_cursors`,
-`crypto_prices`, `crypto_wiped_at`); they are additive and defaulted, so a v3 file is read
-by the current types and its crypto collections come out empty. The bump exists for the
-handshake: a build that does not know the module says "the versions differ, update"
-instead of meeting an unknown sync collection halfway through an exchange (the user
-accepted the price — no sync between the devices until both are updated — on 2026-11-10).
-The file copy is `<vault>.v3.bak`.
+**Older files are refused.** Container 1 files of format 1, 2 or 3 and every bincode file
+get `Error::LegacyVault`: the message names the format and tells the user to open the
+file once with the last build that still reads it (`LAST_LEGACY_BUILD`, which converts it),
+then update. The `legacy_v4` module and the transition are deleted in a later release.
 
-A new incompatible change: freeze the current schema in `storage::vN`, bump
-`VAULT_FORMAT_VERSION`, add a migration step and tests for both formats.
+A new incompatible change: freeze the current schema in `storage::vN` (N is the first
+version after the one being replaced), bump `VAULT_FORMAT_VERSION`, add the conversion
+and tests for both formats.
 
 ## The crypto module
 
@@ -573,8 +557,8 @@ only `service/cryptotrack/recompute.rs` and `apply.rs` touch the document (AGENT
   apart in time). Six networks (`chains.rs`): Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Smart Chain.
   Only `https` endpoints (plain `http` for localhost).
 - **Bybit** (`sources/bybit.rs`): an exchange is read by the same engine as an address. The old import queue
-  (`pending_imports`, the check screen) is gone; what an old file holds is converted once
-  (`service/cryptotrack/legacy_bybit.rs`). The old fields stay readable and are no longer written: `pending_imports`,
+  (`pending_imports`, the check screen) is gone; what an old file holds is converted once by the
+  v4 transition (`storage/legacy_v4`). The old fields stay readable and are no longer written: `pending_imports`,
   `discarded_imports` (a refused `exec_id` is never converted again) and `TxOrigin::Import { exec_id }`
   (already booked transactions stay as they are and their `exec_id`s count as decided).
 - **Tokens** (`tokens/`): a contract on the built-in list is `Known`; anything else that arrives is `Quarantined`
@@ -586,7 +570,7 @@ only `service/cryptotrack/recompute.rs` and `apply.rs` touch the document (AGENT
 ### What stays on the device
 
 The device secrets file `<vault>.secrets` (`crypto/device_secrets.rs`) holds what must never leave the device and is
-never part of the vault bytes, so the mirror, sync, transfers and backups do not carry it: the exchange keys, the
+never part of the vault bytes, so the mirror, sync, transfers and backups do not carry it: the exchange keys at level 3 (at levels 1-2 they are `VaultDoc.exchanges`), the
 per-network endpoints (own RPC node, Blockscout instance, explorer; a node URL often carries a provider key) and the
 optional Blockscout key. Its key is derived from the vault key by HKDF with its own `info`; the cipher is the vault's;
 a new vault key re-seals it in two steps (`.secrets.next`). The consent to read the networks is not in the vault at all: it is `crypto_tracking_consent` in the app settings
