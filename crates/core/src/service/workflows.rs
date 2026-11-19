@@ -47,7 +47,8 @@ pub const MAX_EVENT_DEPTH: u32 = 5;
 /// The format name of an exported workflow.
 pub const EXPORT_FORMAT: &str = "trade-app-workflow";
 /// The file version written now. Files of version 1 come from builds before the format reset: their
-/// graph goes through the frozen legacy steps on import.
+/// graph goes through the frozen legacy steps on import. When `storage::legacy_v4` is removed,
+/// files of version 1 are refused.
 const EXPORT_VERSION: u32 = 2;
 
 /// What the user edits of a workflow.

@@ -6,6 +6,9 @@
 //! the end (T17). It is deleted together with the one-time transition from payload v4 (container 1) to payload v1 (container 2); until then it is the only
 //! place that still reads a v4 file.
 //!
+//! `graph::migrate_graph_json` has a second user outside the transition: `import_workflow`
+//! (`service/workflows.rs`) runs the graph of an export file of version 1 through it.
+//!
 //! [`VaultDocV4`] is a copy of the live `VaultDoc` as it was written by the last build that
 //! produced v4. Types the format reset changes are copied here (`SettingsV4` with `crypto`,
 //! `WorkflowWaitV4` with `queue_mode`, `ExchangesV4`/`ExchangeKeysV4`, `PendingImportV4`); every
