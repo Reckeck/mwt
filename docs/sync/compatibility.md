@@ -12,8 +12,8 @@ the two sides differ. The policy is binding for every sync change.
 Every session starts with a `Hello` from each side (the dialer and the listener
 alike). It carries:
 
-- `protocol`: `PROTOCOL_VERSION`, now 4 (2 added the `security` notice category, 3 made purchases entries of their own, 4 moved the identity behind the vault proof);
-- `format`: `VAULT_FORMAT_VERSION`, now 4 (4 opened the crypto module's collections);
+- `protocol`: `PROTOCOL_VERSION`, now 5 (4 moved the identity behind the vault proof, 5 is the format reset below);
+- `format`: `VAULT_FORMAT_VERSION`, now 1 (the chain restarted at the reset);
 - `app_version`: the sender's app version, informational only.
 
 The checks, in order: the vault proof (a different vault is `SYNC_OTHER_VAULT`),
@@ -48,7 +48,7 @@ lacks:
 | Peers during the question | merges them, re-checks trust before applying | drops `Peers` there |
 | Log ties | breaks ties by key, same records everywhere | keeps insertion order, may keep other records at the cap |
 | Reminder ids | `auto-<kind>-<entity>` | random ids; dedupe bridges both by source |
-| Keep mark (`keep` on `TxMeta` and `Reminder`) | undoing a merge marks the copy it brings back; dedupe skips a pair holding a marked record, on every device with this build; «Allow merging» clears it | does not reach this build: the mark ships with protocol 3, so a protocol 2 device is refused at the handshake and cannot remove the copy or drop the mark. A vault that held an older build reads as `keep = false` |
+| Keep mark (`keep` on `TxMeta` and `Reminder`) | undoing a merge marks the copy it brings back; dedupe skips a pair holding a marked record, on every device with this build; «Allow merging» clears it | does not reach this build: an older device is refused at the handshake and cannot remove the copy or drop the mark |
 
 The new side keeps tombstones longer, so a record deleted on the new side does
 not come back from an old peer that kept it. Nothing new goes on the wire:
@@ -95,8 +95,7 @@ entry. A removed entry travels as the stamp of that entry.
 With an old device the whole field is still one value:
 
 - An old device's stamp of the whole field is a floor for every entry that has
-  no stamp of its own. A head stamp equal to the newest entry stamp is what a
-  new device adds for old receivers; it is derived and is no floor.
+  no stamp of its own.
 - An item deleted on an old device does not travel to new devices (an old
   device cannot say an entry is gone, so the new side keeps it).
 - Envelope `allocated` is derived from `moves` between new devices: it is
@@ -155,7 +154,7 @@ With an old device the whole field is still one value:
    `Hello`. A bump splits groups until every device is updated, so it needs the
    owner's decision.
 3. A new vault field is additive with `#[serde(default)]`, or
-   `VAULT_FORMAT_VERSION` is bumped **with a migration** (AGENTS.md rule 5). A
+   `VAULT_FORMAT_VERSION` is bumped **with a frozen schema and a conversion** (AGENTS.md rule 5). A
    format bump also stops sync with older builds, so "What's new" says to update
    every device.
 4. Local bookkeeping (`doc.sync` except the records) never travels over sync and
@@ -173,8 +172,6 @@ reuses the existing `Bye { reason }` variant.
 In `crates/core/src/sync/protocol.rs` and `crates/app/src/sync/tests.rs`:
 
 - an older `Hello` without the newer fields decodes, with an empty version;
-- a protocol 3 `Hello` decodes in a protocol 4 build, and a protocol 4 first
-  `Hello` decodes in a protocol 3 build with an empty identity;
 - an unknown message variant is an error, not a panic;
 - a different protocol or format is refused on both sides once, the peer stays
   trusted and the address is not marked failing;
@@ -201,203 +198,28 @@ an old random guest contact into the deterministic one (the participant link and
 the references to the contact move over), and rule R6 keeps one link per
 operation (the earliest one) however the ids look.
 
-## Protocol 3: shared-event purchases
+## The format reset of 2026-11-19: every device must update
 
-`PROTOCOL_VERSION` goes from 2 to 3. Before, the purchases of a shared event
-lived inside the entry `items.<id>`, which has one stamp, so the later write of
-the whole item won and a purchase added on another device at the same time was
-lost. Now every purchase is an entry of its own, `items.<item id>.purchases.<purchase id>`,
-with its own stamp (`Collection.flatten_inner` in `sync/registry.rs`). Two
-devices adding, editing or removing different purchases of one item all keep
-their change; the purchases of an item are ordered the same way on every device
-(the sequence both share, then the older change first, then by id).
-
-- **2 and 3 do not sync.** A protocol 2 build would overwrite a whole item and
-  lose or revive purchases, so the handshake refuses the pair. Nothing is
-  exchanged and nothing changes in either vault; trust is kept and the pair joins
-  by itself once both are updated.
-- **What each side shows.** The protocol 3 side shows the usual message
-  (`SYNC_VERSION_MISMATCH`): "The app versions do not match: <name> runs an old
-  version, this device <own>. Update the app on both devices." (or, when the peer
-  sent a version, with it). A protocol 2 build compares the hello the same way
-  and shows its own existing text with the 3 side's version, "Update the app on
-  both devices"; an old build cannot be changed.
-- **Old vaults keep working.** No vault format change and no migration: stamps
-  are additive keys. A purchase that has no stamp of its own takes the stamp of
-  its item (`entry_stamp`), so stamps written before the split still say when a
-  purchase last changed; the first edit of a purchase writes its own stamp.
-  A device on protocol 3 sends the legacy `items` stamp too (`with_legacy_heads`).
-- **A part that left with a payment comes back with it.** Deleting a payment in
-  the ledger takes its purchases and settlements out of their events, and each
-  stays in `SharedEvent.removed_with_payment`, merged by its own id. A newer edit
-  on another device beats the deletion, so the payment can come back: the repair
-  after the merge (and the local undo) then returns the part, unless the payment
-  is linked elsewhere or the item is gone. A part removed by hand in the event
-  leaves no record, so it never returns. The record goes once the payment is back
-  or its tombstone is gone. An older build ignores the field and only misses the
-  return.
-- **A side without a purchase and without its stamp never saw it.** Removing a
-  purchase always leaves a stamp, so the item's stamp cannot stand in for one:
-  a later edit of the item by a device that has not seen the purchase keeps it
-  (`cannot_express`). The item's own removal still takes it (`settle_orphans`).
-- **Item removed beside a new purchase.** The later write wins, like for any
-  field: a purchase stamped after the removal brings its item back (the item
-  without the older purchases that were removed with it); a purchase stamped
-  before the removal goes with the item. Both devices end equal.
-- **Rule R6** (one link per operation) compares the stamp of the purchase, with
-  the item's stamp as the fallback.
-
-## Sync repair stage S
-
-No protocol bump and no vault format change (`PROTOCOL_VERSION` stays 3,
-`VAULT_FORMAT_VERSION` 3). Two pairs of protocol 3 builds, one before this stage
-and one after it, still sync. What an older protocol 3 build sees:
-
-| Change | On the wire | Older build |
-|---|---|---|
-| `PriceAlert.triggered_for` (an edited alert is armed again) | an unknown field is ignored | drops the field when it resaves the alert and treats it as triggered as before; the fix holds only while a new build owns the record |
-| `SyncState.seen_by` (what a peer has seen, for "Overwritten") | not sent | none, it is local |
-| "Overwritten" after a change of the record's kind | the summary is local | none |
-| The editor's three-way save | ordinary stamped edits | takes them as the user's edits |
-| Restore with live peers | ordinary stamped edits | takes them as the user's edits |
-| `wf-off-<id>` run record (one per incomplete workflow, not one per device) | ordinary records | writes a `uuid` record; the extra ones are hidden by the `MAX_WORKFLOW_RUNS` trim |
-| Rule R9 (a staged import already booked or discarded leaves the queue; `repair_imports.rs`) | ordinary deletions | takes them as the user's edits |
-| `unstamped_conflicts` (external copies with no shared history) | the summary is local | none |
-
-The vault gains only `PriceAlert.triggered_for` and `SyncState.seen_by`, both
-`#[serde(default)]`; an old vault opens and keeps its data (`triggered_for`
-absent means "triggered as before", an empty `seen_by` means no hiding).
-
-Deletion loses to a live money reference: a payment that a shared purchase or
-settlement names comes back (rule R3) even if another device deleted it. Pinned
-in `repair_restore_payment_tests.rs`; the tests of this stage are
-`seen_tests.rs`, `stale_base_tests.rs` (R9, the editor, restore) and
-`unstamped_tests.rs` in `crates/core/src/service/peer_sync/`, and
-`service/agenda/alert_tests.rs` (`triggered_for`).
-
-## Sync repair stage P
-
-No protocol bump and no vault format change (`PROTOCOL_VERSION` stays 3,
-`VAULT_FORMAT_VERSION` 3). Builds before and after this stage still sync. What
-an older protocol 3 build sees:
-
-| Change | On the wire | Older build |
-|---|---|---|
-| `Settings.notifications` split into entries (`notifications.default_time`, `notifications.categories.<category>`) | new entries per category; the whole-object head is added for older receivers (`with_legacy_heads`, as for `marks`) | keeps the object as one value; the head stamp is the newest entry stamp and is a floor for entries without a stamp of their own; two older devices still lose one of two parallel switches |
-| `notifications.system`, `notifications.hide_details_when_locked` under `skip` | never sent, never taken | keeps sending its own with the object; a new device ignores them and keeps its own |
-| `dashboard_widgets`, `dashboard_period`, `pinned` under `skip` | never sent, never taken | keeps sending its own; a new device ignores them. It stops receiving the new device's layout |
-| `Settings.inflation_manual` (flat rates by currency, split per currency) | additive entries `inflation_manual.<currency>` | does not know it; keeps its rates in its app config and computes with them; the group's rates do not reach it until it is updated |
-| `Settings.inflation_adopted` under `skip` | never sent | none; a peer's flag does not cancel this device's adoption |
-| `Settings.crypto_raise_pending` under `skip` (additive, `#[serde(default)]`) | never sent | none; a peer's mark does not say that a raise was cut short here |
-| `PriceStamp.price_base_currency` | field inside `price`, an unknown field is ignored | drops the label when it re-saves a transaction through its typed document; the number is then read as before (without a label) |
-| `Workflow.max_amount_currency` | additive field of `workflows` | ignores it; the cap stays "in the base of the runner" |
-| Text of an automatic reminder | the field `text` is the same | keeps rewriting the text in its own language; a new device does not rewrite in reply (a text equal to one of the two renderings is left alone, nothing is stamped) |
-| Removing the password | local, the wire is untouched | none |
-
-Scope of every setting. `sync::registry::SETTINGS_SCOPE` decides Group or
-Device for every field of `Settings` (and for the parts of `notifications`);
-`every_setting_has_a_scope` and `every_part_of_a_split_setting_has_a_scope` fail
-for a new field without a line, `device_fields_are_skipped` requires every
-Device name to be in the `skip` of the `settings` rule and no Group name there.
-
-- Device: `display_decimals`, `fx_refresh_interval_sec`, `minimize_to_tray`
-  (also in the app config), `dashboard_widgets`, `dashboard_period`, `pinned`,
-  `inflation_adopted`, `crypto_raise_pending`, `notifications.system`,
-  `notifications.hide_details_when_locked`.
-- Group: everything else, among it `notifications.default_time`,
-  `notifications.categories`, `inflation_mode`, `inflation_source`,
-  `inflation_manual`.
-
-The dashboard layout, its period and the pins stay in the encrypted vault, not
-in `app_settings.json`: that file is plain JSON and a pinned filter holds text
-the user typed. The cost: a full replacement of the vault by another copy
-brings that copy's layout and pins.
-
-Money labelled with a currency:
-
-- **Price base (26).** `price_base_currency` is written wherever `price_base`
-  is (the base of the device that entered it). `leg_price_in_base` keeps
-  `price_base` when the label is missing or equals the reader's base; when it
-  differs the price is read through `price_usd` and the reader's rate, and
-  `price_base` is kept as is when `price_usd` or the rate is missing. A
-  purchase of a property is signed with the currency of the label, the edit
-  form takes its price currency from it. A record without a label (every
-  record from before this stage, and one re-saved by an older build) reads as
-  before. `budget_currency` is fixed when a manual income or expense is saved,
-  because the figure is a number in the budget currency.
-- **Cap (27).** `max_amount_currency` is filled from the saving device's base
-  unless the form chose one. The run is checked in that currency: money already
-  in the cap's currency needs no rate. A cap with no price or rate rejects the
-  run, an old cap without a label included; an old cap is read in the base of
-  the runner and gets the saving device's base as its label on the next save.
-- **Inflation (100).** `flat_inflation()` is the shipped table with
-  `inflation_manual` on top; every reader (goals, real returns, debts,
-  property, the workflow node `data.inflation`, the health snapshot) uses it.
-  On open the app layer calls `adopt_flat_inflation` once: rates of the app
-  config that differ from the shipped ones and are not yet in the vault are
-  copied into it. Two devices that adopted different values for one currency
-  settle on the later write. `AppSettings.inflation` stays readable and is not
-  written; `update_app_settings` ignores its `inflation`.
-
-Tests: `peer_sync/notice_settings_tests.rs`, `peer_sync/inflation_tests.rs`,
-`sync/registry.rs` (scope and path tests), the labelled-price tests in
-`service/rates.rs` and `service/valuation.rs`, the cap tests in
-`service/workflows/tests.rs`, `service/auto_reminders.rs`, and the convergence
-test (`convergence_catalog.rs`: `NoticeSettings121`, `ReminderText33`,
-`PriceBase26`, `FlatInflation100`; `KNOWN_OPEN` is empty).
-
-## Sync repair stage C
-
-No bump of the protocol or of the vault format. Only the connection and the
-merge core changed.
-
-| Change | On the wire | Older build |
-|---|---|---|
-| Silent peer in the exchange | `Bye "timeout"`, then a closed connection | treats any `Bye` as a quiet close and dials again |
-| Limit of incoming connections (`MAX_INCOMING`) | the connection closes at once | sees a failed dial and backs off |
-| Close of a live link | one more `Changed` before `Bye "closed"` | applies it normally |
-| Order of a capped union (`discarded_imports`) | the same records | keeps other records at the cap and re-sends them; the new side trims again, extra traffic only |
-| A record this build cannot read | left out and journaled once, the session goes on | fails the batch and ends every session with this device |
-| Own entry in the peer list | still sent, it carries a revocation on | counts it as a device that never acks, so its tombstones stay |
-
-Known limit (catalog 85). An older build drops a new optional field when it
-rebuilds a record, so its digest never equals the newer build's. Each session
-there gives a plan, a journal line and a toast until it is updated. A newer
-build cannot fix this from its side.
+`PROTOCOL_VERSION` goes to 5 and `VAULT_FORMAT_VERSION` to 1 (the vault format
+chain restarts, see [Versions and migrations](../data-model.md#versions-and-migrations)).
+**All devices must update**: a device on an older protocol is refused at the
+handshake with `SYNC_VERSION_MISMATCH`, in both directions (dialer and
+listener), before any record is exchanged. Nothing changes in either vault,
+trust is kept and the pair joins by itself once both are updated. Records,
+tombstones and stamps keep their wire shape; the sync state of the document is
+carried over unchanged. The release notes say: update all devices together.
 
 ## Protocol 4: identity after the vault proof
 
-`PROTOCOL_VERSION` goes from 3 to 4 (catalog item 46). Before, the first
-`Hello` carried the device id, name, mDNS instance, main flag, rank and clock,
-so any device on the network that dialed learned them before it proved it holds
-the vault; and the pairing code came from the handshake hash alone, so a device
-in the middle that also knew the vault id could grind its key until both codes
-matched (about 2^20 tries).
-
-Now the first `Hello` carries only `protocol`, `format`, the proof,
-`app_version` and, from the dialer, `commit = SHA256(nonce_d)`; the identity
-fields are sent empty. After the proof and the versions pass, the listener
-sends `Message::Identity` with its nonce, the dialer answers with its own, and
-the listener checks the dialer's nonce against the commit (`SYNC_CHANNEL`
+The first `Hello` carries only `protocol`, `format`, the proof, `app_version`
+and, from the dialer, `commit = SHA256(nonce_d)`; the identity fields are sent
+empty. After the proof and the versions pass, the listener sends
+`Message::Identity` with its nonce, the dialer answers with its own, and the
+listener checks the dialer's nonce against the commit (`SYNC_CHANNEL`
 otherwise). The pairing code is `HMAC(handshake_hash, "mwt-sas4" || nonce_d ||
 nonce_l)`. Steps and the diagram: [Pairing and trust](pairing.md#a-session-opens-noise-hello-and-identity).
-
-- **3 and 4 do not sync.** Devices on the previous version stop syncing with
-  updated ones until they are updated too. Nothing is exchanged and nothing
-  changes in either vault; trust is kept and the pair joins by itself once both
-  are updated.
-- **An old build still refuses cleanly.** The first `Hello` keeps the variant
-  and the shape of protocol 3 (`commit` is a new `#[serde(default)]` field, an
-  old build ignores it), so a protocol 3 build decodes it, verifies the proof and
-  shows its usual `SYNC_VERSION_MISMATCH`. The device name in its message is
-  empty (the old text cannot be changed); the version of the new side is shown.
-  `Message::Identity` never reaches an old build: it is sent only after the
-  versions matched.
-- **The new side names the old device.** A protocol 3 `Hello` is full, so the
-  protocol 4 side shows the old device's name and version. Between two newer
-  builds that differ (a later protocol or format), the name comes from the list
-  of trusted devices by the Noise key; an untrusted one stays unnamed.
-- **No vault change.** Nothing in the vault format changes; no migration.
+Between two builds that differ, the refused device's name comes from the list
+of trusted devices by the Noise key; an untrusted one stays unnamed.
 
 ### `Identity.security_level`
 
@@ -405,9 +227,9 @@ nonce_l)`. Steps and the diagram: [Pairing and trust](pairing.md#a-session-opens
 its vault is protected, level 1 to 3). A level-3 sender uses it to leave the crypto
 module's collections out of everything it sends to a receiver below level 3.
 
-- The field is `#[serde(default)]`, so the protocol stays 4. A missing field
-  (an older build) reads as the lowest level, `ledger`: nothing crypto is sent
-  to a device that did not say, even when it is at level 3.
+- The field is `#[serde(default)]`. A missing field reads as the lowest level,
+  `ledger`: nothing crypto is sent to a device that did not say, even when it
+  is at level 3.
 - A receiver below level 3 never trusts the sender: `sync_admit` drops crypto
   records that arrive anyway and applies the rest, and `SECURITY_LEVEL_REQUIRED`
   is shown once with the sender's name (the code calls such a sender broken or
@@ -415,28 +237,11 @@ module's collections out of everything it sends to a receiver below level 3.
 - A `Bye` with the reason `security_level_required` is understood and closes
   quietly with the same notice; the current build does not send it.
 
-## Payload 3 and payload 4 do not sync
-
-`VAULT_FORMAT_VERSION` 4 adds the crypto module's collections. The `format`
-check at the handshake therefore refuses a pair where one device is still on
-payload 3: it is the honest answer, because a payload 3 build meeting a
-`crypto_events` record would answer `InvalidInput: sync: unknown record` in the
-middle of an exchange. Nothing is exchanged, nothing changes in either vault,
-trust is kept and the pair joins by itself once both are updated. The user
-accepted this price on 2026-11-10. The migration itself converts no data, so
-updating a device is enough: see
-[Versions and migrations](../data-model.md#versions-and-migrations).
-
 Tests: `pairing_code_depends_on_both_nonces`, `commit_mismatch_is_rejected`
-(`sync/session.rs`); `an_identity_round_trips`,
-`a_protocol_three_hello_still_decodes`,
-`a_protocol_four_hello_decodes_in_an_old_build_without_identity`
-(`sync/protocol.rs`); `a_device_without_the_vault_learns_no_name`,
-`a_wrong_nonce_ends_the_session`, `a_protocol_three_dialer_is_refused_with_its_name`,
-`a_protocol_three_listener_is_refused_with_its_name`,
+(`sync/session.rs`); `an_identity_round_trips` (`sync/protocol.rs`);
+`a_device_without_the_vault_learns_no_name`, `a_wrong_nonce_ends_the_session`,
 `both_devices_show_one_code_bound_to_the_nonces`
-(`crates/app/src/sync/tests/handshake.rs`); `a_protocol_three_peer_is_refused_on_both_sides`
-(`crates/app/src/sync/tests.rs`).
+(`crates/app/src/sync/tests/handshake.rs`).
 
 ## What an old peer still gets wrong
 

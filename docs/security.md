@@ -84,7 +84,7 @@ header = u32 version | u8 kdf_id | u32 mem_kib | u32 iters | u8 par
 - **AEAD** — XChaCha20-Poly1305: `key = XChaCha20Poly1305::new(derive_key(pw, salt))`,
   `nonce = random 24B`, `aad = header.bytes()`, a new random salt+nonce on
   every write (no nonce reuse across collisions).
-- **payload_fmt** — `0` = JSON (dev), `1` = bincode (release before v2, read-only), `2` = MessagePack with field names (release since v2); the file is self-contained.
+- **payload_fmt** — `0` = JSON (dev), `2` = MessagePack with field names (release); `1` (bincode) is refused. The container `version` is 2 (1 is read only for the one-time transition, see `docs/data-model.md`, "Versions and migrations"); the file is self-contained.
 - **Atomic write** — a temporary file next to it (`.<name>.tmp.<pid>.<uuid>`), write,
   `fsync(file)`, `rename`, best-effort `fsync(dir)`; on error the tmp file is removed.
 
@@ -135,6 +135,9 @@ PIN; 1 = level 1, plain; 2 = level 3, crypto). Code:
   The KDF cost is calibrated on this device, or on the phone profile when the
   vault has an external copy (it may be opened on a phone). Progress goes to
   the `security-raise-progress` event.
+- **Where exchange keys live.** At levels 1-2 they are part of the vault document
+  (`VaultDoc.exchanges`), protected as the vault is; at level 3 they live only in the device
+  secrets file next to the vault and never in the vault bytes. The format reset changed neither.
 - **No downgrade.** A vault that holds crypto data (stage 1: exchange keys on
   this device or their file next to the vault) does not go below level 3:
   removing or weakening its password is `SECURITY_DOWNGRADE_REFUSED`, and the

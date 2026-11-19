@@ -6,7 +6,7 @@ Status legend: `[x]` done · `[~]` in progress · `[ ]` planned.
 - `[x]` Cargo workspace (`crates/core` + `crates/app`), mise environment, tasks
 - `[x]` Domain model (VaultDoc, Store/Holding, Transaction, Settings, Chain, Sim)
 - `[x]` Crypto: Argon2id + XChaCha20-Poly1305, header=AAD, atomic write
-- `[x]` Storage: JSON (dev) / bincode (release), VaultFile::create/open/save
+- `[x]` Storage: JSON (dev) / MessagePack (release; bincode was replaced by the 2026-11-19 reset), VaultFile::create/open/save
 - `[x]` UnlockedVault: mutations, holdings (derived), summary, history, realized PnL
 - `[x]` Prices+FX: CoinGecko→CoinCap→Binance, open.er-api.com, TTL cache
 - `[x]` IPC contract + the `src/shared/api/ipc.gen.d.ts` generator (ts-rs)
@@ -58,7 +58,7 @@ the `[Unreleased]` section. Here — what changed in essence.
   into `pending_imports` and become transactions **only** after the
   user confirms; deduplication by `execId`, background polling on a schedule
   (`bybit_import_interval_sec`, `0` — off) and the `bybit-import-pending` event
-- `[x]` **Misc**: strict `decode_bin` (a truncated bincode snapshot → an error
+- `[x]` **Misc**: strict `decode_bin` (a truncated snapshot → an error
   instead of silent garbage), `clippy -D warnings` across the whole workspace, 97 new
   localization keys in ru/en
 
@@ -103,6 +103,7 @@ the `[Unreleased]` section. Here — what changed in essence.
 - `[ ]` Windows/macOS builds in CI (GitHub Actions + mise steps identical to local ones)
 - `[ ]` E2E smoke: create vault → transaction → chart → lock/unlock
 - `[ ]` Performance: indexes on transactions, lazy charts on big data
+- `[x]` **Vault format reset (2026-11-19)**: format chain restarts at v1 in container 2, bincode and v1-v3 migrations removed, one frozen `legacy_v4` transition (`.v4.bak`), sync protocol 5: all devices must update
 - `[ ]` Updater (tauri-plugin-updater), artifact signing
 
 ## Out of scope (deliberately)

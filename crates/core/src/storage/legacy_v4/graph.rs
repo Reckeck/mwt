@@ -3,6 +3,8 @@
 //! A v4 vault may hold graphs written by any build of the workflow engine. The steps bring an older
 //! graph to the content of version 3 (the last one before the format reset); the result is stamped
 //! with the version the live code expects ([`GRAPH_VERSION`]), so the live code needs no migration.
+//!
+//! Two callers: the v4 transition, and `import_workflow` for export files of version 1.
 
 use crate::workflow::exec::FREE_RUNNING;
 use crate::workflow::graph::{GRAPH_VERSION, Graph};
@@ -15,7 +17,7 @@ const LAST_LEGACY_VERSION: u32 = 3;
 ///
 /// The stored number is the old counter's, so it is never compared with the live one except when
 /// the two counters still agree on version 3.
-pub(super) fn migrate_graph_json(json: &str) -> Option<String> {
+pub(crate) fn migrate_graph_json(json: &str) -> Option<String> {
     if json.trim().is_empty() {
         return None;
     }

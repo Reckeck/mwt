@@ -464,7 +464,7 @@ fn savers_are_active_ordinary_workflows_paying_into_an_unshared_wallet() {
     doc.workflows.push(saver.clone());
     assert!(crate::usecases::planning::goals::goal_savers(&doc, &goal).is_empty());
     saver.automation = None;
-    saver.graph = r#"{"version":3,"nodes":[{"id":"a","kind":"action.transaction","params":{"to":"wallet"},"position":{"x":0.0,"y":0.0},"disabled":false,"label":""}],"edges":[],"comments":[]}"#.into();
+    saver.graph = r#"{"version":1,"nodes":[{"id":"a","kind":"action.transaction","params":{"to":"wallet"},"position":{"x":0.0,"y":0.0},"disabled":false,"label":""}],"edges":[],"comments":[]}"#.into();
     doc.workflows[0] = saver;
     assert_eq!(
         crate::usecases::planning::goals::goal_savers(&doc, &goal),

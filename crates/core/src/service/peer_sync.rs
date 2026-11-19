@@ -657,7 +657,6 @@ impl UnlockedVault {
         self.start_tracking()?;
         self.ensure_cash_wallet("Cash")?;
         self.ensure_default_categories();
-        self.migrate_workflow_graphs();
         self.disable_incomplete_workflows(crate::calendar::now_secs());
         self.prune_attachments();
         self.scrub_sync_secrets();

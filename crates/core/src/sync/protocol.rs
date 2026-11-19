@@ -228,7 +228,7 @@ mod tests {
             rank: u32,
         }
         let old = OldHello {
-            protocol: PROTOCOL_VERSION,
+            protocol: 1,
             format: 1,
             device_id: "d".into(),
             device_name: "Old".into(),
@@ -248,6 +248,48 @@ mod tests {
         assert_eq!(hello.instance, "");
         assert!(!hello.unreached);
         assert_eq!(hello.app_version, "");
+    }
+
+    /// The wire shape of a protocol-4 `Hello`, frozen: field names and types
+    /// must keep decoding, with the identity fields empty.
+    #[test]
+    fn a_frozen_protocol_4_hello_decodes_with_an_empty_identity() {
+        #[derive(Serialize)]
+        struct FrozenHelloV4 {
+            protocol: u32,
+            format: u32,
+            device_id: String,
+            device_name: String,
+            proof: Vec<u8>,
+            now_ms: u64,
+            main: bool,
+            prefer_main: bool,
+            needs_pairing: bool,
+            rank: u32,
+            instance: String,
+            unreached: bool,
+            app_version: String,
+            commit: Vec<u8>,
+        }
+        let frozen = FrozenHelloV4 {
+            protocol: PROTOCOL_VERSION,
+            format: 1,
+            device_id: String::new(),
+            device_name: String::new(),
+            proof: vec![9, 8],
+            now_ms: 0,
+            main: false,
+            prefer_main: false,
+            needs_pairing: false,
+            rank: 0,
+            instance: String::new(),
+            unreached: false,
+            app_version: "1.0.0".into(),
+            commit: vec![4, 5],
+        };
+        let bytes = rmp_serde::to_vec_named(&serde_json::json!({ "hello": frozen })).unwrap();
+        let expected = Hello::first(PROTOCOL_VERSION, 1, vec![9, 8], "1.0.0".into(), vec![4, 5]);
+        assert_eq!(decode(&bytes).unwrap(), Message::Hello(expected));
     }
 
     #[test]

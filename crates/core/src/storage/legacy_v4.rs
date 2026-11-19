@@ -6,6 +6,9 @@
 //! the end (T17). It is deleted together with the one-time transition from payload v4 (container 1) to payload v1 (container 2); until then it is the only
 //! place that still reads a v4 file.
 //!
+//! `graph::migrate_graph_json` has a second user outside the transition: `import_workflow`
+//! (`service/workflows.rs`) runs the graph of an export file of version 1 through it.
+//!
 //! [`VaultDocV4`] is a copy of the live `VaultDoc` as it was written by the last build that
 //! produced v4. Types the format reset changes are copied here (`SettingsV4` with `crypto`,
 //! `WorkflowWaitV4` with `queue_mode`, `ExchangesV4`/`ExchangeKeysV4`, `PendingImportV4`); every
@@ -13,7 +16,7 @@
 //! Parsing only: nothing here is written back.
 //!
 //! The D4 defaulted fields that sit inside the vault document are frozen here too, as they were
-//! (`CategoryV4`: `essential`/`passive` default to `None`), so later tasks may drop those defaults
+//! (`CategoryV4`: `essential`/`passive` default to `None`; `BudgetV4`: `warn` defaults to on), so later tasks may drop those defaults
 //! from the live types without touching this file. Three D4 sites have no copy because no vault
 //! payload holds them: the notification snapshot is a separate device file, `sync_ids` is an empty
 //! placeholder, and the planning and shared-event defaults (`SharedEvent` and the planning types
@@ -21,7 +24,7 @@
 //! if T17 changes the shape of those live types, that is the one case where it adds a copy.
 
 mod adopt;
-mod graph;
+pub(crate) mod graph;
 
 use serde::Deserialize;
 
@@ -32,7 +35,8 @@ use crate::model::category::{Category, CategoryGroup};
 use crate::model::contact::Contact;
 use crate::model::enrichment::EnrichmentRecord;
 use crate::model::planning::{
-    Budget, CategorizationRule, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
+    Budget, BudgetPeriod, BudgetTarget, CategorizationRule, Goal, MeterReading, PriceAlert,
+    Reminder, UtilityItem,
 };
 use crate::model::store::{Holding, Store};
 use crate::model::transaction::Transaction;
@@ -69,7 +73,7 @@ pub struct VaultDocV4 {
     #[serde(default)]
     pub pending_imports: Vec<PendingImportV4>,
     pub contacts: Vec<Contact>,
-    pub budgets: Vec<Budget>,
+    pub budgets: Vec<BudgetV4>,
     pub goals: Vec<Goal>,
     pub reminders: Vec<Reminder>,
     pub price_alerts: Vec<PriceAlert>,
@@ -307,6 +311,24 @@ pub struct CategoryV4 {
     pub passive: Option<bool>,
 }
 
+/// A budget of v4: files of old builds may lack `warn`, which read as on. The live type has no
+/// default, so the transition writes it explicitly.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct BudgetV4 {
+    pub id: String,
+    pub active: bool,
+    pub target: BudgetTarget,
+    pub period: BudgetPeriod,
+    pub limit: Amount,
+    pub currency: String,
+    #[serde(default = "warn_on")]
+    pub warn: bool,
+}
+
+fn warn_on() -> bool {
+    true
+}
+
 /// Exchange credentials of v4.
 #[derive(Clone, PartialEq, Eq, Deserialize)]
 pub struct ExchangeKeysV4 {
@@ -515,7 +537,7 @@ impl From<VaultDocV4> for VaultDoc {
                 .map(PendingImport::from)
                 .collect(),
             contacts,
-            budgets,
+            budgets: budgets.into_iter().map(Budget::from).collect(),
             goals,
             reminders,
             price_alerts,
@@ -651,6 +673,20 @@ impl From<CategoryV4> for Category {
     }
 }
 
+impl From<BudgetV4> for Budget {
+    fn from(old: BudgetV4) -> Self {
+        Self {
+            id: old.id,
+            active: old.active,
+            target: old.target,
+            period: old.period,
+            limit: old.limit,
+            currency: old.currency,
+            warn: old.warn,
+        }
+    }
+}
+
 impl From<&ExchangeKeysV4> for ExchangeKeys {
     fn from(old: &ExchangeKeysV4) -> Self {
         Self {
@@ -709,7 +745,6 @@ impl From<WorkflowWaitV4> for WorkflowWait {
             node_id: old.node_id,
             resume_at: old.resume_at,
             memo: old.memo,
-            queue_mode: old.queue_mode,
             trigger: old.trigger,
             kind: old.kind,
             question: old.question,
@@ -720,10 +755,45 @@ impl From<WorkflowWaitV4> for WorkflowWait {
 }
 
 #[cfg(test)]
+pub(crate) mod dropped {
+    /// Fields the reset drops from the live document, as JSON pointers; the live and the
+    /// frozen document are compared without them.
+    pub(crate) const DROPPED: [&str; 1] = ["/settings/crypto"];
+
+    /// The document with every [`DROPPED`] field removed.
+    pub(crate) fn without_dropped(mut doc: serde_json::Value) -> serde_json::Value {
+        for pointer in DROPPED {
+            if let Some((parent, field)) = pointer.rsplit_once('/')
+                && let Some(object) = doc
+                    .pointer_mut(parent)
+                    .and_then(|node| node.as_object_mut())
+            {
+                object.remove(field);
+            }
+        }
+        doc
+    }
+}
+
+#[cfg(test)]
 mod tests {
+    use super::dropped::without_dropped;
     use super::*;
     use crate::crypto::format::SnapshotFormat;
     use crate::storage::fixtures_gen::V4_PASSWORD;
+
+    #[test]
+    fn a_budget_without_warn_reads_as_on() {
+        let budget: BudgetV4 = serde_json::from_value(serde_json::json!({
+            "id": "b1", "active": true,
+            "target": "total",
+            "period": "month",
+            "limit": "100",
+            "currency": "USD"
+        }))
+        .unwrap();
+        assert!(Budget::from(budget).warn);
+    }
 
     const FIXTURES: [(&str, SnapshotFormat, &[u8]); 2] = [
         (
@@ -766,10 +836,6 @@ mod tests {
         }
     }
 
-    /// Fields the reset drops from the live document; both sides are compared without them.
-    /// Empty until a later task removes a live field the frozen document still carries.
-    const DROPPED: [&str; 1] = ["/settings/crypto"];
-
     /// The expected document, with the graph strings brought to the live version as the
     /// conversion does (the graph steps themselves are tested in `graph`).
     fn expected_converted() -> serde_json::Value {
@@ -796,19 +862,6 @@ mod tests {
             }
         }
         expected
-    }
-
-    fn without_dropped(mut doc: serde_json::Value) -> serde_json::Value {
-        for pointer in DROPPED {
-            if let Some((parent, field)) = pointer.rsplit_once('/')
-                && let Some(object) = doc
-                    .pointer_mut(parent)
-                    .and_then(|node| node.as_object_mut())
-            {
-                object.remove(field);
-            }
-        }
-        doc
     }
 
     #[test]

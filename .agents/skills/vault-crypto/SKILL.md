@@ -4,7 +4,7 @@ description: >
   Invariants of the encrypted vault in trade-app: container format, versions,
   VaultDoc migrations, Argon2id/XChaCha20-Poly1305, atomic writes, money
   precision via Amount (Decimal) and the rules for handling secrets. Use when
-  changing model/vault.rs, storage/mod.rs, crypto/*, amount.rs, service.rs, and
+  changing model/vault.rs, storage/mod.rs, crypto/*, amount.rs, service/mod.rs, and
   for tasks like "add a field to the vault" («добавь поле в vault»),
   "migration" («миграция»), "old file does not open" («старый файл не
   открывается»), "wrong password" («неверный пароль»), "data loss" («потеря
@@ -24,8 +24,8 @@ data, not just a build. Every change must come with a test.
 
 | Constant | What it versions | When to bump |
 |---|---|---|
-| `VAULT_CONTAINER_VERSION` (currently `1`) | the envelope: magic, header fields, KDF parameters, cipher | only when the byte layout of the container changes; otherwise old vaults stop opening |
-| `VAULT_FORMAT_VERSION` (currently `2`) | the `VaultDoc` payload schema, the `doc.version` field | only for an incompatible schema change and **only together with a migration** |
+| `VAULT_CONTAINER_VERSION` (currently `2`; `1` is read only for the `legacy_v4` transition) | the envelope: magic, header fields, KDF parameters, cipher | only when the byte layout of the container changes; otherwise old vaults stop opening |
+| `VAULT_FORMAT_VERSION` (currently `1`) | the `VaultDoc` payload schema, the `doc.version` field | only for an incompatible schema change and **only together with a migration** |
 
 Both live in `crates/core/src/lib.rs`. File format:
 
@@ -35,10 +35,11 @@ Both live in `crates/core/src/lib.rs`. File format:
                      used as AAD
 ```
 
-`payload_fmt` in the header: `FMT_JSON`(0) is debug; `FMT_BIN`(1) is bincode
-from release builds before v2, **read-only**; `FMT_PACK`(2) is MessagePack with
-field names, release since v2. The file is self-describing: the application
-reads all three.
+`payload_fmt` in the header: `FMT_JSON`(0) is debug; `FMT_PACK`(2) is MessagePack with
+field names, release. Payload format 1 (the old positional binary) is
+**refused**. The file is self-describing: the application reads JSON and MessagePack.
+The chain starts at v1; the frozen `legacy_v4` transition is the one exception
+and the only path from old files.
 
 ## Backward compatibility (mandatory since 2026-10-11)
 
@@ -49,7 +50,7 @@ after an update.
 
 1. Add the field with `#[serde(default)]` (and `#[ts(optional)]` if the
    frontend mocks would break otherwise). JSON and MessagePack store field
-   names, so an old v2 file will still be read; **no bump needed**.
+   names, so an older file will still be read; **no bump needed**.
 2. Never use `skip_serializing_if` on persisted fields.
 3. Test: a document without the new field is read in `Json` and `Pack`
    (example: `a_v2_pack_payload_tolerates_a_missing_defaulted_field`), and
@@ -60,21 +61,23 @@ after an update.
 
 Renaming a field, changing its type or meaning, removing an enum variant:
 
-1. Copy the current shape of the changed types (and their parents up to
-   `VaultDoc`) into a new module `storage/vN.rs` (example: `storage/v1.rs`).
-   These definitions are never edited again.
+1. Freeze the schema being replaced: N is the current `VAULT_FORMAT_VERSION`
+   before the bump (the first one is `storage/v1.rs`, `VaultDocV1`). Copy the
+   changed types and their parents up to `VaultDoc` into `storage/vN.rs`. These
+   definitions are never edited again.
 2. `impl From<VaultDocVN> for VaultDoc` (or a `vN → vN+1` step), losing
    nothing.
-3. `impl storage::chain::Legacy` for the frozen document (its `VERSION` and
-   the schema one step up), add one line to `schema_chain!` in
-   `storage/chain.rs` and bump `VAULT_FORMAT_VERSION`. There is no `match` to
-   edit: `decode_versioned` is generated from that listing.
-4. Tests: one `migration_cases!` block in `storage/mod.rs` with the payload
-   of that version and the formats a file of that era could hold — JSON
-   **and** the binary format. It generates one test per format: the document
-   migrates without loss, opening creates `.vN.bak`, the file is rewritten at
-   the current version and is migrated only once (example: the v1 block, with
-   `Json` and `Bin`).
+3. Add the arm `(VAULT_CONTAINER_VERSION, Some(N))` to `decode_in_container`
+   in `storage/mod.rs`: it parses the frozen document and converts it, next to
+   the current-version arm (`decode_file` and `decode_versioned` both go
+   through it). Then bump `VAULT_FORMAT_VERSION` to N+1. Without the arm every
+   existing vault is `Unsupported`.
+4. Tests in `storage/mod.rs`, modelled on the `legacy_v4` fixture tests
+   (`v4_fixture_opens_in_both_formats_and_equals_the_expected_document`): a
+   payload of that version in JSON **and** MessagePack opens, equals the
+   expected document, and is refused with another password; opening creates
+   `.vN.bak` (N, the old version), the file is rewritten at the current version and is migrated
+   only once.
 5. Update `docs/data-model.md` ("Versions and migrations").
 
 A bump without a migration is not allowed: `decode` rejects an unknown
@@ -140,8 +143,8 @@ Invariants:
   `create_new` temp file, read back and verified through the same handle,
   renamed only while the name is still that file.
 
-`switch_format` (`service.rs`) exists to force a JSON↔MessagePack switch (a
-request for bincode writes MessagePack). This is also a migration, so it needs
+`switch_format` (`service/mod.rs`) exists to force a JSON↔MessagePack switch (a
+request for an unsupported format is refused). This is also a migration, so it needs
 a round-trip test.
 
 ## Money: only `Amount` (Decimal)
@@ -203,7 +206,7 @@ Plus: vault creation, reopening, a round trip of all fields in all formats,
 saving and reloading, migration from all previous versions.
 
 All of these tests live in `#[cfg(test)] mod tests` next to the code
-(`crypto/mod.rs`, `crypto/header.rs`, `storage/mod.rs`, `service.rs`).
+(`crypto/mod.rs`, `crypto/header.rs`, `storage/mod.rs`, `service/mod.rs`).
 
 ## Checks
 

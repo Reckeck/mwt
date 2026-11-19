@@ -58,7 +58,7 @@ crates/core/          # all business logic, WITHOUT Tauri
   src/model/          # domain: chain.rs, store.rs, transaction.rs, vault.rs (VaultDoc, Settings…)
   src/appconfig.rs    # app settings OUTSIDE the vault: theme, locale, base_currency, favorites
   src/crypto/         # header.rs (55 bytes, AAD) + mod.rs (seal/open/atomic_write)
-  src/storage/        # SnapshotFormat (Json/Bin + for_profile()), VaultFile::create/open/save
+  src/storage/        # SnapshotFormat (Json/Pack + for_profile()), VaultFile::create/open/save
   src/vault_io/       # vault file on any OS: local (atomic_write, lock, .bak), path|URI, import, mirror (docs/storage-platforms.md)
   src/pricing/        # PricingService: fetch_prices/fetch_fx (pure, no doc mutation)
   src/service.rs      # UnlockedVault: mutations, holdings, portfolio, history, PnL
@@ -113,13 +113,15 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
    pure (they do not touch `doc`), `apply_prices/apply_fx` apply the result.
 5. **Vault file schema: compatibility or migration.** Existing vaults
    must open and keep their data after an update. Add an additive field
-   with `#[serde(default)]`: JSON and MessagePack (release since v2) store
+   with `#[serde(default)]`: JSON and MessagePack (release) store
    field names, no bump needed. Do not rename, delete or change the meaning of
    a stored field or enum variant. If a change is incompatible — bump
    `VAULT_FORMAT_VERSION` **together with a migration**: freeze the current schema in
-   `storage::vN`, add a step and tests for the JSON and binary formats (the
-   user decided so on 2026-10-11; a bump without a migration is not allowed). The old bincode
-   (`FMT_BIN`) is read-only. Details: the `vault-crypto` skill.
+   `storage::vN`, add a step and tests for the JSON and MessagePack formats (the
+   user decided so on 2026-10-11; a bump without a migration is not allowed). The
+   chain starts at v1; the frozen `legacy_v4` transition is the one exception
+   and the only path from old files. Payload format 1 (the old positional binary) is
+   refused. Details: the `vault-crypto` skill.
 6. **IPC contract.** Keep `#[derive(TS)]` on all types from `ipc_contract.rs`
    and on the domain structs that reach commands. After a change, regenerate:
    `mise run gen-types`. Do not edit `src/shared/api/ipc.gen.d.ts` by hand.

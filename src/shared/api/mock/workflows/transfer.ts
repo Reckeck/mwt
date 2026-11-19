@@ -5,6 +5,8 @@ import { emptyGraph } from '@/shared/lib/workflow'
 import { find, save } from './state'
 
 const FORMAT = 'trade-app-workflow'
+/** The export file version the app writes; mirrors `EXPORT_VERSION` in `service/workflows.rs`. */
+const EXPORT_VERSION = 2
 
 type FileStore = { id: string; name: string }
 
@@ -45,7 +47,14 @@ export function exportWorkflow(id: string): string {
     const store = mockStores.find((entry) => entry.id === text)
     if (store) stores.push({ id: store.id, name: store.name })
   }
-  const file = { format: FORMAT, version: 1, name: workflow.name, description: workflow.description, graph, stores }
+  const file = {
+    format: FORMAT,
+    version: EXPORT_VERSION,
+    name: workflow.name,
+    description: workflow.description,
+    graph,
+    stores,
+  }
   return JSON.stringify(file, null, 2)
 }
 

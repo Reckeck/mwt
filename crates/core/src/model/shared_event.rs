@@ -221,8 +221,7 @@ pub struct Settlement {
     #[serde(default)]
     pub to: Vec<String>,
     /// The event organizer when this was recorded ([`ME`] or a participant
-    /// id). Settlements of older builds have none.
-    #[serde(default)]
+    /// id). `None` when unknown; a missing key reads as `None` (`Option`).
     #[ts(optional)]
     pub organizer: Option<String>,
 }

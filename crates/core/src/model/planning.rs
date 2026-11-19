@@ -271,13 +271,8 @@ pub struct Budget {
     pub period: BudgetPeriod,
     pub limit: Amount,
     pub currency: String,
-    /// Notify when the period's spending nears the limit. Older vaults: on.
-    #[serde(default = "warn_on")]
+    /// Notify when the period's spending nears the limit.
     pub warn: bool,
-}
-
-fn warn_on() -> bool {
-    true
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
@@ -618,8 +613,7 @@ pub struct PriceAlert {
     pub active: bool,
     pub triggered_at: Option<String>,
     /// The threshold `triggered_at` belongs to ([`PriceAlert::fingerprint`] when it
-    /// fired). `None` on a record from an older build: it counts as fired.
-    #[serde(default)]
+    /// fired). `None` counts as fired.
     #[ts(optional)]
     pub triggered_for: Option<String>,
     /// The exchange whose terminal set the alert; `None` for a vault-wide one.
@@ -725,7 +719,6 @@ pub struct MeterReading {
     /// Day of the month the meter was read (1–31); `None` = the month's end.
     /// A month may hold several readings: moving out on the 15th and the
     /// next flat's first reading the same day.
-    #[serde(default)]
     pub day: Option<u8>,
     /// The tariff zone of a multi-rate meter; `None` for a one-rate one.
     #[serde(default)]

@@ -463,10 +463,7 @@ async fn session<H: Host>(
                 .trusted(&remote_key)
                 .map(|peer| (peer.device_id.clone(), peer.name.clone())))
         })?;
-        let (device_id, name) = match known {
-            Some((id, name)) if hello.device_id.is_empty() => (id, name),
-            _ => (hello.device_id.clone(), hello.device_name.clone()),
-        };
+        let (device_id, name) = known.unwrap_or_default();
         return Err(Stop::Incompatible {
             device_id,
             name,
