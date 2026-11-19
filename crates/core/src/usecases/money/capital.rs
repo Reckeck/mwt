@@ -10,10 +10,17 @@ use crate::error::Result;
 use crate::kernel::books::Books;
 use crate::model::store::{LiabilityKind, StoreKind};
 use crate::model::vault::{ManualPrice, now_iso};
+use crate::money::worth;
 use crate::money::worth::{ClassShare, LiabilityShare, NetWorth, plan_manual_price};
 use crate::planning::allocation::Slot;
+use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
 use crate::usecases::household::contacts::contact_balances;
+
+/// USD value of one unit of a hand-priced asset, read at the present moment.
+pub(crate) fn manual_price_usd(books: &Books<'_>, asset_key: &str) -> Option<Amount> {
+    worth::manual_price_usd(books, asset_key, secs_or_now(""))
+}
 
 /// Set the value of one unit of a property asset.
 pub fn set_manual_price(

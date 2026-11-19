@@ -4,9 +4,10 @@
 use super::worth::*;
 use crate::Amount;
 use crate::model::planning::Goal;
-use crate::model::store::StoreKind;
 use crate::model::store::{AssetRef, LiabilityKind, LiabilityTerms, StoreScope};
+use crate::model::store::{Holding, Store, StoreKind};
 use crate::model::transaction::{AccountRef, Transaction};
+use crate::model::vault::VaultDoc;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
@@ -332,4 +333,101 @@ fn fees_do_not_fake_a_profit() {
     assert_eq!(pnl.total_base, Amount::ZERO);
     assert_eq!(pnl.fees_base, amount("4"));
     assert_eq!(holding_of(&vault, &store, &usd()), amount("996"));
+}
+
+/// A bare document: a bank (in the budget), a property wallet holding `FLAT`.
+fn bare_doc() -> (VaultDoc, AssetRef) {
+    let thing = AssetRef {
+        symbol: "FLAT".into(),
+        name: "Flat".into(),
+        coingecko_id: None,
+        chain: None,
+        contract: None,
+        quote: "FLAT".into(),
+    };
+    let mut doc = VaultDoc::default();
+    let mut bank = Store::new("Bank", StoreKind::Bank, "");
+    bank.id = "bank".into();
+    let mut flat = Store::new("Flat", StoreKind::Property, "");
+    flat.id = "flat".into();
+    doc.stores.extend([bank, flat]);
+    doc.holdings.push(Holding {
+        id: "h1".into(),
+        store_id: "flat".into(),
+        asset: thing.clone(),
+        quantity: amount("1"),
+        avg_cost: None,
+    });
+    (doc, thing)
+}
+
+#[test]
+fn plan_manual_price_refuses_bad_input_and_accepts_held_property() {
+    let (doc, thing) = bare_doc();
+    let key = thing.key();
+    let plan = |price: &str, currency: &str, key: &str| {
+        plan_manual_price(&doc, key, amount(price), currency, "now".into())
+    };
+    assert!(plan("0", "usd", &key).is_err());
+    assert!(plan("-5", "usd", &key).is_err());
+    assert!(plan("10", "  ", &key).is_err());
+    assert!(plan("10", "usd", "asset:OTHER").is_err());
+    let price = plan("120000", " USD ", &key).unwrap();
+    assert_eq!(price.asset_key, key);
+    assert_eq!(price.unit_price, amount("120000"));
+    assert_eq!(price.currency, "usd");
+    assert_eq!(price.updated_at, "now");
+}
+
+#[test]
+fn classify_flow_reads_a_bare_document() {
+    let (doc, _) = bare_doc();
+    assert_eq!(
+        classify_flow(&doc, &payment("bank", "5", "lunch")),
+        FlowClass::Daily
+    );
+    assert_eq!(
+        classify_flow(&doc, &payment("flat", "5", "x")),
+        FlowClass::Ignored
+    );
+    assert!(goal_store_ids(&doc).is_empty());
+}
+
+#[test]
+fn set_manual_price_through_the_delegate_equals_the_usecase() {
+    let build = || {
+        let (_dir, mut vault) = empty_vault();
+        let flat = store(&mut vault, "Flat", StoreKind::Property, None);
+        let (_, thing) = bare_doc();
+        vault
+            .transact(|tx| {
+                tx.doc_mut().holdings.push(Holding {
+                    id: "h1".into(),
+                    store_id: flat.clone(),
+                    asset: thing.clone(),
+                    quantity: amount("1"),
+                    avg_cost: None,
+                });
+                Ok(())
+            })
+            .unwrap();
+        (_dir, vault, thing)
+    };
+    let (_dir_a, mut via_delegate, thing) = build();
+    let (_dir_b, mut via_usecase, _) = build();
+    let first = via_delegate
+        .set_manual_price(&thing.key(), amount("7"), "usd")
+        .unwrap();
+    let second = crate::usecases::money::capital::set_manual_price(
+        &mut via_usecase,
+        &thing.key(),
+        amount("7"),
+        "usd",
+    )
+    .unwrap();
+    assert_eq!(first.unit_price, second.unit_price);
+    assert_eq!(first.currency, second.currency);
+    assert_eq!(via_delegate.doc.manual_prices.len(), 1);
+    assert_eq!(via_usecase.doc.manual_prices.len(), 1);
+    assert_eq!(via_delegate.net_worth(), via_usecase.net_worth());
 }

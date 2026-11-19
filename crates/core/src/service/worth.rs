@@ -26,7 +26,7 @@ impl UnlockedVault {
         /// USD value of one unit of a hand-priced asset, if it has a price and the
         /// rate of its currency is known.
         pub(crate) fn manual_price_usd(&self, asset_key: &str) -> Option<Amount>
-            => crate::money::worth::manual_price_usd @books;
+            => crate::usecases::money::capital::manual_price_usd @books;
         /// Set the value of one unit of a property asset. Applies to its whole
         /// history (plan D24), so revaluing does not make the chart jump.
         pub fn set_manual_price(&mut self, asset_key: &str, unit_price: Amount, currency: &str) -> Result<ManualPrice>

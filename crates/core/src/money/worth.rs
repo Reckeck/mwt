@@ -73,11 +73,16 @@ pub enum FlowClass {
 }
 
 /// USD value of one unit of a hand-priced asset, if it has a price and the
-/// rate of its currency is known.
-pub(crate) fn manual_price_usd(books: &Books<'_>, asset_key: &str) -> Option<Amount> {
+/// rate of its currency is known. `now_secs` is the moment a valuation curve
+/// is read at.
+pub(crate) fn manual_price_usd(
+    books: &Books<'_>,
+    asset_key: &str,
+    now_secs: i64,
+) -> Option<Amount> {
     let doc = books.doc();
-    if let Some(curve) = books.vault().valuation_curve(asset_key) {
-        let value = curve.value_at(crate::pricing::history::secs_or_now(""))?;
+    if let Some(curve) = crate::money::valuation::valuation_curve(books, asset_key) {
+        let value = curve.value_at(now_secs)?;
         let rate = per_usd(doc, &curve.currency)?;
         return (!rate.is_zero()).then(|| value / rate);
     }
