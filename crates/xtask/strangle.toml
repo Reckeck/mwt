@@ -232,6 +232,8 @@ files = [
     "crates/core/src/sync/repair/mod.rs",
     # T39: the crypto gate keeps its list (kernel sits beside sync, not below it) and a test pins it to the record kinds.
     "crates/core/src/sync/crypto_gate.rs",
+    # T38: the pure part of applying a batch (stamps and tombstones) and its atomicity tests.
+    "crates/core/src/sync/apply.rs", "crates/core/src/sync/apply_tests.rs",
 ]
 
 [[foundation]]
