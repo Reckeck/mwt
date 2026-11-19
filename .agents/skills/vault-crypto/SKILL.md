@@ -50,7 +50,7 @@ after an update.
 
 1. Add the field with `#[serde(default)]` (and `#[ts(optional)]` if the
    frontend mocks would break otherwise). JSON and MessagePack store field
-   names, so an old v2 file will still be read; **no bump needed**.
+   names, so an older file will still be read; **no bump needed**.
 2. Never use `skip_serializing_if` on persisted fields.
 3. Test: a document without the new field is read in `Json` and `Pack`
    (example: `a_v2_pack_payload_tolerates_a_missing_defaulted_field`), and
@@ -61,21 +61,22 @@ after an update.
 
 Renaming a field, changing its type or meaning, removing an enum variant:
 
-1. Copy the current shape of the changed types (and their parents up to
-   `VaultDoc`) into a new module `storage/vN.rs` (example: `storage/v1.rs`).
-   These definitions are never edited again.
+1. Freeze the current schema (the changed types and their parents up to
+   `VaultDoc`) in a new module `storage/vN.rs`, N being the first version after
+   1 (so `storage/v1.rs` is never the name: v1 is the live schema). These
+   definitions are never edited again.
 2. `impl From<VaultDocVN> for VaultDoc` (or a `vN → vN+1` step), losing
-   nothing.
-3. `impl storage::chain::Legacy` for the frozen document (its `VERSION` and
-   the schema one step up), add one line to `schema_chain!` in
-   `storage/chain.rs` and bump `VAULT_FORMAT_VERSION`. There is no `match` to
-   edit: `decode_versioned` is generated from that listing.
-4. Tests: one `migration_cases!` block in `storage/mod.rs` with the payload
-   of that version and the formats a file of that era could hold — JSON
-   **and** MessagePack. It generates one test per format: the document
-   migrates without loss, opening creates `.vN.bak`, the file is rewritten at
-   the current version and is migrated only once (example: the v1 block, with
-   `Json` and `Pack`).
+   nothing, and bump `VAULT_FORMAT_VERSION`.
+3. Add the step to `decode_in_container` in `storage/mod.rs`: a
+   `(VAULT_CONTAINER_VERSION, Some(N))` arm that parses the frozen document
+   and converts it, next to the current-version arm (`decode_versioned` calls
+   it). Without the arm the old payload is `Unsupported`.
+4. Tests in `storage/mod.rs`, modelled on the `legacy_v4` fixture tests
+   (`v4_fixture_opens_in_both_formats_and_equals_the_expected_document`): a
+   payload of that version in JSON **and** MessagePack opens, equals the
+   expected document, and is refused with another password; opening creates
+   `.vN.bak`, the file is rewritten at the current version and is migrated
+   only once.
 5. Update `docs/data-model.md` ("Versions and migrations").
 
 A bump without a migration is not allowed: `decode` rejects an unknown
