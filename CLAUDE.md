@@ -59,8 +59,9 @@ mise, the artifacts end up in `target/` and the build starts from scratch.
   is pushed into the vault via `sync_base_currency`.
 - **Snapshot format.** `SnapshotFormat::for_profile()`: JSON in debug,
   MessagePack (`Pack`) in release; this is the *write* format; on read the format
-  is taken from the `payload_fmt` byte in the 55-byte header. The old bincode
-  (`Bin`) is read-only. `UnlockedVault::open` migrates an old schema version
+  is taken from the `payload_fmt` byte in the 55-byte header. Payload format 1
+  (the old positional binary) is refused; `SnapshotFormat` is `Json | Pack`.
+  `UnlockedVault::open` migrates an old schema version
   (`storage::decode_versioned`), puts `<vault>.vN.bak` next to it and immediately
   rewrites the file.
 - **Prices.** A command takes the data it needs under the mutex, releases it, runs

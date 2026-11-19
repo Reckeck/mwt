@@ -24,8 +24,8 @@ data, not just a build. Every change must come with a test.
 
 | Constant | What it versions | When to bump |
 |---|---|---|
-| `VAULT_CONTAINER_VERSION` (currently `1`) | the envelope: magic, header fields, KDF parameters, cipher | only when the byte layout of the container changes; otherwise old vaults stop opening |
-| `VAULT_FORMAT_VERSION` (currently `2`) | the `VaultDoc` payload schema, the `doc.version` field | only for an incompatible schema change and **only together with a migration** |
+| `VAULT_CONTAINER_VERSION` (currently `2`; `1` is read only for the `legacy_v4` transition) | the envelope: magic, header fields, KDF parameters, cipher | only when the byte layout of the container changes; otherwise old vaults stop opening |
+| `VAULT_FORMAT_VERSION` (currently `1`) | the `VaultDoc` payload schema, the `doc.version` field | only for an incompatible schema change and **only together with a migration** |
 
 Both live in `crates/core/src/lib.rs`. File format:
 
@@ -35,10 +35,11 @@ Both live in `crates/core/src/lib.rs`. File format:
                      used as AAD
 ```
 
-`payload_fmt` in the header: `FMT_JSON`(0) is debug; `FMT_BIN`(1) is bincode
-from release builds before v2, **read-only**; `FMT_PACK`(2) is MessagePack with
-field names, release since v2. The file is self-describing: the application
-reads all three.
+`payload_fmt` in the header: `FMT_JSON`(0) is debug; `FMT_PACK`(2) is MessagePack with
+field names, release. Payload format 1 (the old positional binary) is
+**refused**. The file is self-describing: the application reads JSON and MessagePack.
+The chain starts at v1; the frozen `legacy_v4` transition is the one exception
+and the only path from old files.
 
 ## Backward compatibility (mandatory since 2026-10-11)
 
@@ -71,10 +72,10 @@ Renaming a field, changing its type or meaning, removing an enum variant:
    edit: `decode_versioned` is generated from that listing.
 4. Tests: one `migration_cases!` block in `storage/mod.rs` with the payload
    of that version and the formats a file of that era could hold — JSON
-   **and** the binary format. It generates one test per format: the document
+   **and** MessagePack. It generates one test per format: the document
    migrates without loss, opening creates `.vN.bak`, the file is rewritten at
    the current version and is migrated only once (example: the v1 block, with
-   `Json` and `Bin`).
+   `Json` and `Pack`).
 5. Update `docs/data-model.md` ("Versions and migrations").
 
 A bump without a migration is not allowed: `decode` rejects an unknown
@@ -141,7 +142,7 @@ Invariants:
   renamed only while the name is still that file.
 
 `switch_format` (`service.rs`) exists to force a JSON↔MessagePack switch (a
-request for bincode writes MessagePack). This is also a migration, so it needs
+request for an unsupported format is refused). This is also a migration, so it needs
 a round-trip test.
 
 ## Money: only `Amount` (Decimal)

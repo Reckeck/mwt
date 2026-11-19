@@ -4,14 +4,14 @@
 //!
 //! ```text
 //! 0         magic        "TRDWVLT\0"            (8 bytes)
-//! 8         version      u32                     (1)
+//! 8         version      u32                     (2; 1 is read only for the legacy_v4 transition)
 //! 12        kdf_id       u8                      (0 = Argon2id, 2 = crypto level)
 //! 13        kdf_mem_kib  u32                     (64 MiB below the crypto level)
 //! 17        kdf_iters    u32                     (3)
 //! 21        kdf_par      u8                      (1)
 //! 22        salt[16]
 //! 38        nonce[24]                            (XChaCha20-Poly1305)
-//! 62        payload_fmt  u8                      (0 = JSON, 1 = old positional binary, refused; 2 = MessagePack)
+//! 62        payload_fmt  u8                      (0 = JSON, 2 = MessagePack; 1 = old positional binary, refused)
 //! 63        payload ... ciphertext + 16-byte tag  (AAD = bytes[0..63])
 //! ```
 //!
