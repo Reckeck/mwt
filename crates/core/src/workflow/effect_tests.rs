@@ -64,6 +64,86 @@ fn later() -> i64 {
     now_secs() + 5
 }
 
+// -- C2-2 ---------------------------------------------------------------------
+
+/// «Ask first → yes: 300 from the card to savings», with only 100 on the card.
+fn asked_transfer() -> (tempfile::TempDir, UnlockedVault, String, String, Workflow) {
+    let (dir, mut vault) = empty_vault();
+    let card = store(&mut vault, "Card", StoreKind::Cash, None);
+    let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
+    vault
+        .add_transaction(income(&card, "100", "opening"))
+        .unwrap();
+    let workflow = save(
+        &mut vault,
+        "Ask",
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node("c", "action.confirm", json!({ "question": "Move 300?" })),
+            node(
+                "tx",
+                "action.transaction",
+                json!({ "tx_kind": "transfer", "account": store_ref(&card), "to": store_ref(&savings), "asset": "USD", "amount": "300", "on_shortfall": "reject" }),
+            ),
+        ],
+        vec![wire("t", "out", "c", "in"), wire("c", "true", "tx", "in")],
+    );
+    (dir, vault, card, savings, workflow)
+}
+
+#[test]
+fn an_asked_operation_refused_for_lack_of_funds_is_booked_by_a_retry() {
+    let (_dir, mut vault, card, savings, workflow) = asked_transfer();
+    vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    let wait = vault.workflow_waits().remove(0);
+    let report = vault
+        .answer_workflow_wait(&wait.id, true, later(), "UTC")
+        .unwrap();
+    let RunOutcome::Rejected { trigger_node, .. } = &report.run.outcome else {
+        panic!("expected a refusal, got {:?}", report.run.outcome);
+    };
+    assert_eq!(
+        trigger_node, "t",
+        "the refusal names the trigger, not the question"
+    );
+    // The refused operation waits in the queue, for the run that was refused.
+    let queue = vault.workflow_queue();
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue[0].run_id, report.run.id);
+    assert_eq!(queue[0].transactions.len(), 1);
+
+    // Still short: the retry says so and keeps the refusal.
+    assert!(
+        vault
+            .retry_workflow_run(&report.run.id, later(), "UTC")
+            .is_err()
+    );
+    assert_eq!(vault.workflow_queue().len(), 1);
+
+    vault
+        .add_transaction(income(&card, "5000", "salary"))
+        .unwrap();
+    let pass = vault
+        .retry_workflow_run(&report.run.id, later(), "UTC")
+        .unwrap();
+    assert_eq!(pass.created.len(), 1, "{:?}", pass.runs);
+    assert_eq!(holding_of(&vault, &savings, &usd()), amount("300"));
+    assert!(vault.workflow_queue().is_empty());
+    assert!(
+        vault.workflow_waits().is_empty(),
+        "the retry did not ask again"
+    );
+    assert!(
+        vault
+            .workflow_runs(Some(&workflow.id), 10)
+            .iter()
+            .all(|run| run.id != report.run.id),
+        "the refusal gives way to the new run"
+    );
+}
+
 // -- C2-5 and the lock --------------------------------------------------------
 
 /// A host that keeps the vault behind a lock: every call takes it, uses it and
