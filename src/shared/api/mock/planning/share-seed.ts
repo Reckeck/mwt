@@ -98,7 +98,6 @@ export function seedShare(from: string, to: string, deposits: Transaction[]) {
       ['income', 'amount', income],
       ['income', 'account', { type: 'account', value: { store: from } }],
     ]),
-    queue_mode: false,
     trigger: 'income',
     kind: 'confirm',
     question,

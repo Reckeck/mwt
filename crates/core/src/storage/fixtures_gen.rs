@@ -186,7 +186,6 @@ fn wait(graph: &str) -> crate::model::workflow::WorkflowWait {
         node_id: "t".into(),
         resume_at: "2026-04-02T09:00:00Z".into(),
         memo: "{}".into(),
-        queue_mode: true,
         trigger: "schedule 2026-04-01T09:00:00Z".into(),
         kind: crate::model::workflow::WaitKind::Confirm,
         question: "Pay the rent?".into(),

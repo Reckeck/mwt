@@ -9209,12 +9209,7 @@ resume_at: string,
 /**
  * Node outputs computed before the wait, as JSON.
  */
-memo: string, 
-/**
- * Unused: the confirmation queue is gone (a "Wait for confirmation" node
- * asks instead). Kept so older vaults read.
- */
-queue_mode: boolean, trigger: string, kind: WaitKind, 
+memo: string, trigger: string, kind: WaitKind, 
 /**
  * The question of a "Wait for confirmation" node.
  */

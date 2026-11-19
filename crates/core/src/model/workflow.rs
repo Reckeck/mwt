@@ -228,9 +228,6 @@ pub struct WorkflowWait {
     pub resume_at: String,
     /// Node outputs computed before the wait, as JSON.
     pub memo: String,
-    /// Unused: the confirmation queue is gone (a "Wait for confirmation" node
-    /// asks instead). Kept so older vaults read.
-    pub queue_mode: bool,
     pub trigger: String,
     #[serde(default)]
     pub kind: WaitKind,

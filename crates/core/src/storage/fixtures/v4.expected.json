@@ -2113,7 +2113,6 @@
       "node_id": "t",
       "resume_at": "2026-04-02T09:00:00Z",
       "memo": "{}",
-      "queue_mode": true,
       "trigger": "schedule 2026-04-01T09:00:00Z",
       "kind": "confirm",
       "question": "Pay the rent?",

@@ -291,36 +291,6 @@ fn an_emulation_asks_and_then_follows_the_answer() {
 }
 
 #[test]
-fn an_old_confirm_wire_from_next_becomes_yes() {
-    let (_dir, mut vault, card, savings) = wallets();
-    let nodes = vec![
-        node("t", "trigger.manual", json!({})),
-        node("c", "action.confirm", json!({})),
-        transfer_node("tx", &card, &savings, "300"),
-    ];
-    let edges = vec![wire("t", "out", "c", "in"), wire("c", "out", "tx", "in")];
-    let old = graph(nodes, edges);
-    let workflow = save(&mut vault, "Old", old.clone());
-    assert!(
-        workflow.graph.contains("\"from_port\":\"true\""),
-        "{}",
-        workflow.graph
-    );
-    // A vault written by the older app is brought up to date when it opens.
-    vault.doc.workflows[0].graph = old;
-    assert!(vault.migrate_workflow_graphs());
-    assert!(!vault.migrate_workflow_graphs());
-    let parsed = Graph::parse(&vault.doc.workflows[0].graph).unwrap();
-    assert_eq!(parsed.version, crate::workflow::graph::GRAPH_VERSION);
-    assert!(
-        parsed
-            .edges
-            .iter()
-            .any(|edge| edge.from == "c" && edge.from_port == "true")
-    );
-}
-
-#[test]
 fn a_failed_action_rolls_the_run_back_unless_it_has_an_error_way() {
     let (_dir, mut vault, card, savings) = wallets();
     // 100 goes, then 5000 does not: nothing of the run is kept.
@@ -1812,10 +1782,10 @@ fn a_question_without_text_is_left_for_the_app_to_word() {
     assert!(vault.workflow_waits()[0].question.is_empty());
 }
 
-/* --- data order, branches, waits (graph v3) ----------------------------------- */
+/* --- data order, branches, waits (graph v1) ----------------------------------- */
 
-fn graph_v3(nodes: Vec<Value>, edges: Vec<Value>) -> String {
-    json!({ "version": 3, "nodes": nodes, "edges": edges }).to_string()
+fn graph_v1(nodes: Vec<Value>, edges: Vec<Value>) -> String {
+    json!({ "version": 1, "nodes": nodes, "edges": edges }).to_string()
 }
 
 /// The trace's node ids in the order they ran.
@@ -1840,7 +1810,7 @@ fn an_action_runs_after_the_action_it_takes_data_from_without_a_flow_wire() {
         wire("t", "out", "pay", "in"),
         wire("pay", "transaction", "n", "text"),
     ];
-    let workflow = save(&mut vault, "Order", graph_v3(nodes, edges));
+    let workflow = save(&mut vault, "Order", graph_v1(nodes, edges));
     let report = vault
         .run_workflow_now(&workflow.id, None, later(), "UTC")
         .unwrap();
@@ -1870,7 +1840,7 @@ fn an_action_waiting_on_a_branch_that_did_not_run_does_not_run() {
         wire("b", "true", "pay", "in"),
         wire("pay", "transaction", "n", "text"),
     ];
-    let workflow = save(&mut vault, "Gated", graph_v3(nodes, edges));
+    let workflow = save(&mut vault, "Gated", graph_v1(nodes, edges));
     let report = vault
         .run_workflow_now(&workflow.id, None, later(), "UTC")
         .unwrap();
@@ -1895,7 +1865,7 @@ fn data_order_reaches_through_pure_data_nodes() {
         wire("pay", "transaction", "text", "a"),
         wire("text", "text", "n", "text"),
     ];
-    let workflow = save(&mut vault, "Through", graph_v3(nodes, edges));
+    let workflow = save(&mut vault, "Through", graph_v1(nodes, edges));
     let report = vault
         .run_workflow_now(&workflow.id, None, later(), "UTC")
         .unwrap();
@@ -1920,7 +1890,7 @@ fn a_failing_branch_is_undone_and_its_sibling_goes_on() {
         wire("t", "out", "bad", "in"),
         wire("t", "out", "good", "in"),
     ];
-    let workflow = save(&mut vault, "Branches", graph_v3(nodes, edges));
+    let workflow = save(&mut vault, "Branches", graph_v1(nodes, edges));
     let report = vault
         .run_workflow_now(&workflow.id, None, later(), "UTC")
         .unwrap();
@@ -1944,7 +1914,7 @@ fn a_failure_on_the_main_line_still_undoes_the_whole_run() {
         wire("t", "out", "good", "in"),
         wire("good", "out", "bad", "in"),
     ];
-    let workflow = save(&mut vault, "Line", graph_v3(nodes, edges));
+    let workflow = save(&mut vault, "Line", graph_v1(nodes, edges));
     let before = vault.doc.transactions.len();
     let report = vault
         .run_workflow_now(&workflow.id, None, later(), "UTC")
@@ -1973,7 +1943,7 @@ fn a_nested_fork_catches_its_own_failure() {
         wire("a", "out", "bad", "in"),
         wire("a", "out", "b", "in"),
     ];
-    let workflow = save(&mut vault, "Nested", graph_v3(nodes, edges));
+    let workflow = save(&mut vault, "Nested", graph_v1(nodes, edges));
     let report = vault
         .run_workflow_now(&workflow.id, None, later(), "UTC")
         .unwrap();
@@ -1984,28 +1954,6 @@ fn a_nested_fork_catches_its_own_failure() {
     );
     // «a» and «b» around the failed «bad», and «c» on the other side.
     assert_eq!(report.transactions.len(), 3);
-}
-
-#[test]
-fn an_older_graph_keeps_switched_off_what_data_order_would_wake() {
-    let nodes = vec![
-        node("t", "trigger.manual", json!({})),
-        node("pay", "action.transaction", json!({})),
-        node("late", "action.transaction", json!({})),
-        node("n", "action.notify", json!({})),
-    ];
-    let edges = vec![
-        wire("t", "out", "pay", "in"),
-        wire("pay", "transaction", "late", "amount"),
-        wire("pay", "transaction", "n", "text"),
-    ];
-    let json = json!({ "version": 2, "nodes": nodes, "edges": edges }).to_string();
-    let graph = Graph::parse(&json).unwrap();
-    assert_eq!(graph.version, crate::workflow::graph::GRAPH_VERSION);
-    let disabled = |id: &str| graph.node(id).unwrap().disabled;
-    assert!(disabled("late"), "it never ran before: it stays that way");
-    assert!(!disabled("n"), "a notice apart from the flow always ran");
-    assert!(!disabled("pay"));
 }
 
 #[test]
@@ -2021,7 +1969,7 @@ fn a_flow_wire_that_repeats_a_data_wire_is_pointed_out() {
         wire("pay", "out", "n", "in"),
         wire("pay", "transaction", "n", "text"),
     ];
-    let graph = Graph::parse(&graph_v3(nodes, edges)).unwrap();
+    let graph = Graph::parse(&graph_v1(nodes, edges)).unwrap();
     let issues = validate(&graph);
     assert!(
         issues.iter().any(|issue| issue.code == "redundant_flow"
@@ -2043,7 +1991,7 @@ fn reading_an_action_that_runs_later_is_a_warning() {
         wire("t", "out", "pay", "in"),
         wire("pay", "transaction", "n", "text"),
     ];
-    let graph = Graph::parse(&graph_v3(nodes, edges)).unwrap();
+    let graph = Graph::parse(&graph_v1(nodes, edges)).unwrap();
     let issues = validate(&graph);
     assert!(
         issues
@@ -2055,7 +2003,7 @@ fn reading_an_action_that_runs_later_is_a_warning() {
 
 /// «Run → wait 2 h → notice», with a free counter that adds up on each finish.
 fn waiting_graph() -> String {
-    graph_v3(
+    graph_v1(
         vec![
             node("t", "trigger.manual", json!({})),
             node("w", "action.wait", json!({ "hours": "2" })),
@@ -2099,7 +2047,7 @@ fn a_sleeping_run_goes_on_along_the_graph_it_fell_asleep_on() {
         .run_workflow_now(&workflow.id, None, now, "UTC")
         .unwrap();
     // Edited while asleep: the notice is gone from the current graph.
-    let edited = graph_v3(
+    let edited = graph_v1(
         vec![
             node("t", "trigger.manual", json!({})),
             node("w", "action.wait", json!({ "hours": "2" })),
@@ -2189,7 +2137,7 @@ fn run_now_from_a_schedule_takes_its_latest_moment_and_says_by_hand() {
         wire("s", "at", "text", "a"),
         wire("text", "text", "n", "text"),
     ];
-    let workflow = save(&mut vault, "Pick", graph_v3(nodes, edges));
+    let workflow = save(&mut vault, "Pick", graph_v1(nodes, edges));
     let now = unix_secs("2026-03-05T15:30:00Z").unwrap();
     let report = vault
         .run_workflow_now(&workflow.id, Some("s"), now, "UTC")
@@ -2241,7 +2189,7 @@ fn queue_vault(mode: Option<&str>) -> (tempfile::TempDir, UnlockedVault, String,
             ],
         ),
     };
-    let workflow = save(&mut vault, "Queue", graph_v3(nodes, edges));
+    let workflow = save(&mut vault, "Queue", graph_v1(nodes, edges));
     (dir, vault, savings, workflow)
 }
 
@@ -2329,7 +2277,7 @@ fn without_a_queue_every_firing_is_its_own_run() {
 
 #[test]
 fn a_queue_stands_after_a_trigger_and_does_not_sleep() {
-    let lone = crate::workflow::Graph::parse(&graph_v3(
+    let lone = crate::workflow::Graph::parse(&graph_v1(
         vec![
             node("t", "trigger.manual", json!({})),
             node("q", "flow.queue", json!({})),
@@ -2346,7 +2294,7 @@ fn a_queue_stands_after_a_trigger_and_does_not_sleep() {
         "{codes:?}"
     );
 
-    let sleepy = crate::workflow::Graph::parse(&graph_v3(
+    let sleepy = crate::workflow::Graph::parse(&graph_v1(
         vec![
             node("t", "trigger.manual", json!({})),
             node("q", "flow.queue", json!({})),

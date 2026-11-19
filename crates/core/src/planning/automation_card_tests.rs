@@ -124,7 +124,6 @@ fn card_follows_the_salary_and_the_journal_shows_the_asked_share() {
         node_id: "ask".into(),
         resume_at: String::new(),
         memo,
-        queue_mode: false,
         trigger: "income".into(),
         kind: WaitKind::Confirm,
         question: String::new(),

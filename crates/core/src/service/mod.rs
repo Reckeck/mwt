@@ -498,7 +498,6 @@ impl UnlockedVault {
         vault.ensure_cash_wallet("Cash")?;
         // Built-in categories added in later versions reach old vaults too.
         let categories_added = vault.ensure_default_categories();
-        let graphs_migrated = vault.migrate_workflow_graphs();
         // A field became required after the workflow was switched on: off, and said so.
         let incomplete = vault.disable_incomplete_workflows(crate::calendar::now_secs());
         // Files removed last session (their "Undo" is long gone) go now.
@@ -522,7 +521,6 @@ impl UnlockedVault {
             || keys_moved
             || envelopes_settled
             || categories_added
-            || graphs_migrated
             || incomplete
             || attachments_pruned
             || repaired

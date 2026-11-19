@@ -539,25 +539,6 @@ impl UnlockedVault {
 
     // -- CRUD -----------------------------------------------------------------------
 
-    /// Rewrite stored graphs (and their versions) in an older graph format,
-    /// so the editor always gets the current one. Returns whether any changed.
-    pub(crate) fn migrate_workflow_graphs(&mut self) -> bool {
-        let mut changed = false;
-        for workflow in &mut self.doc.workflows {
-            if let Some(json) = Graph::migrate_json(&workflow.graph) {
-                workflow.graph = json;
-                changed = true;
-            }
-            for version in &mut workflow.versions {
-                if let Some(json) = Graph::migrate_json(&version.graph) {
-                    version.graph = json;
-                    changed = true;
-                }
-            }
-        }
-        changed
-    }
-
     /// Active workflows a required field now stops (they used to run with it
     /// empty and fail, or never fire): switched off on open, each with a line
     /// in the journal and a notice, so `run_due_workflows` does not skip them

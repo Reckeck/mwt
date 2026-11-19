@@ -1,6 +1,5 @@
 //! The graph a workflow is drawn as. Kept as JSON in the vault, so its shape
-//! can grow without a vault format change; `version` lets a later app migrate
-//! an older graph when it loads it.
+//! can grow without a vault format change; `version` rejects a graph from a newer app.
 
 use std::collections::{HashMap, HashSet};
 
@@ -9,14 +8,9 @@ use serde::{Deserialize, Serialize};
 use super::catalog::node_def;
 use super::types::PortType;
 
-/// Current graph format.
-///
-/// - 2: "Wait for confirmation" answers with "Yes"/"No" instead of one "Next";
-///   a wire from its old "Next" now leaves "Yes".
-/// - 3: data sets the order: an action with no flow wire into it runs after
-///   the actions it takes data from. A node that this would bring to life in
-///   an older graph (it never ran there) is switched off, so nothing changes.
-pub const GRAPH_VERSION: u32 = 3;
+/// Current graph format. Older files are converted once by the frozen
+/// `storage::legacy_v4` transition, not here.
+pub const GRAPH_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 #[ts(rename = "WorkflowPosition")]
@@ -106,60 +100,14 @@ impl Graph {
         if json.trim().is_empty() {
             return Ok(Self::default());
         }
-        let mut graph: Graph = serde_json::from_str(json)
+        let graph: Graph = serde_json::from_str(json)
             .map_err(|err| crate::Error::InvalidInput(format!("workflow graph: {err}")))?;
         if graph.version > GRAPH_VERSION {
             return Err(crate::Error::InvalidInput(
                 "the workflow was made by a newer app".into(),
             ));
         }
-        graph.migrate();
         Ok(graph)
-    }
-
-    /// Bring an older graph to the current format. Returns whether it changed.
-    pub fn migrate(&mut self) -> bool {
-        if self.version >= GRAPH_VERSION {
-            return false;
-        }
-        if self.version < 2 {
-            let confirms: Vec<String> = self
-                .nodes
-                .iter()
-                .filter(|node| node.kind == "action.confirm")
-                .map(|node| node.id.clone())
-                .collect();
-            for edge in &mut self.edges {
-                if edge.from_port == "out" && confirms.contains(&edge.from) {
-                    edge.from_port = "true".into();
-                }
-            }
-        }
-        if self.version < 3 {
-            let woken: Vec<String> = self
-                .data_order()
-                .into_keys()
-                .filter(|id| {
-                    self.node(id).is_some_and(|node| {
-                        !super::exec::FREE_RUNNING.contains(&node.kind.as_str())
-                    })
-                })
-                .collect();
-            for node in &mut self.nodes {
-                if woken.contains(&node.id) {
-                    node.disabled = true;
-                }
-            }
-        }
-        self.version = GRAPH_VERSION;
-        true
-    }
-
-    /// The graph JSON brought to the current format, or `None` when it is
-    /// current already (or not a graph at all).
-    pub fn migrate_json(json: &str) -> Option<String> {
-        let mut graph: Graph = serde_json::from_str(json).ok()?;
-        graph.migrate().then(|| graph.to_json())
     }
 
     pub fn to_json(&self) -> String {

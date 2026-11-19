@@ -193,7 +193,6 @@ export function keepQuestion(report: RunReport) {
     node_id: outcome.asking.node_id,
     resume_at: '',
     memo: '[]',
-    queue_mode: false,
     trigger: report.run.trigger,
     kind: 'confirm',
     question: outcome.asking.question,

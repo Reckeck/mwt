@@ -709,7 +709,6 @@ impl From<WorkflowWaitV4> for WorkflowWait {
             node_id: old.node_id,
             resume_at: old.resume_at,
             memo: old.memo,
-            queue_mode: old.queue_mode,
             trigger: old.trigger,
             kind: old.kind,
             question: old.question,
