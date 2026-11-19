@@ -39,3 +39,5 @@ mod sync_ids_tests;
 pub mod sync_journal;
 #[cfg(test)]
 mod sync_journal_tests;
+#[cfg(test)]
+mod sync_pins_tests;
