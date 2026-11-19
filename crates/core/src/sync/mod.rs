@@ -8,8 +8,10 @@ pub mod crypto_gate;
 pub mod derived;
 pub mod fields;
 pub mod flatten;
+pub mod history;
 pub mod journal;
 pub mod manifest;
+pub mod manifest_view;
 pub mod merge;
 pub mod plan;
 pub mod protocol;
@@ -19,6 +21,7 @@ pub mod stamp;
 pub mod state;
 pub mod track;
 pub mod transfer;
+pub mod trust;
 pub mod view;
 
 pub use plan::{
@@ -39,3 +42,5 @@ mod sync_ids_tests;
 pub mod sync_journal;
 #[cfg(test)]
 mod sync_journal_tests;
+#[cfg(test)]
+mod sync_pins_tests;

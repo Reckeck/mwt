@@ -180,6 +180,17 @@ task = "C"
 files = ["crates/core/src/money/mod.rs", "crates/core/src/money/shared_ratios.rs"]
 
 [[foundation]]
+# T35: the sync read side and trust move into new files of `sync/` and `usecases/sync/` (both module lists declare them);
+# `sync_pins_tests.rs` pins the peer_sync methods before the move.
+task = "C"
+files = [
+    "crates/core/src/sync/mod.rs", "crates/core/src/sync/manifest_view.rs", "crates/core/src/sync/history.rs",
+    "crates/core/src/sync/trust.rs", "crates/core/src/sync/sync_pins_tests.rs",
+    "crates/core/src/usecases/sync/mod.rs", "crates/core/src/usecases/sync/read.rs",
+    "crates/core/src/usecases/sync/trust.rs",
+]
+
+[[foundation]]
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 

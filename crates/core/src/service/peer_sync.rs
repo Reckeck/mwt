@@ -11,35 +11,28 @@ use serde_json::Value;
 use zeroize::Zeroizing;
 
 use super::UnlockedVault;
+use super::forward::forward;
 use crate::error::{Error, Result};
 use crate::ipc_contract::security::SecurityLevel;
-use crate::ipc_contract::{AfterApply, StoreBalanceChange, SyncCutReason};
+use crate::ipc_contract::{AfterApply, SyncCutReason};
 #[cfg(test)]
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::storage::VaultFile;
+pub use crate::sync::history::AppliedBatch;
+use crate::sync::history::applied_of;
 use crate::sync::journal::SyncJournalOutcome;
-use crate::sync::manifest::{Manifest, digest};
+use crate::sync::manifest::Manifest;
+#[cfg(test)]
+use crate::sync::manifest_view::is_crypto_key;
 use crate::sync::registry::Rule;
 use crate::sync::state::{
     BATCH_DAYS, CutBy, MAX_BATCHES, REVOKED_GATE_DAYS, TOMBSTONE_DAYS, acked_through,
 };
 use crate::sync::track::Tracker;
-use crate::sync::view::{self, record_key, split_key};
+use crate::sync::view::{self, split_key};
 use crate::sync::{BatchEntry, RecordState, Stamp, SyncBatch, SyncSummary, TrustedPeer};
 use keep::{generated_key, reminder_identity};
-
-/// Whether a device protected at `level` may hold the crypto module's records
-/// (only level 3 may, spec E0).
-fn may_hold_crypto(level: SecurityLevel) -> bool {
-    level == SecurityLevel::Crypto
-}
-
-/// Whether the record key (`collection:key`) belongs to the crypto module.
-fn is_crypto_key(key: &str) -> bool {
-    split_key(key)
-        .is_some_and(|(coll, _)| crate::sync::crypto_gate::is_crypto_collection(coll.name))
-}
 
 /// Told the keys of every local save, so a live session can send them on.
 pub trait SyncTap: Send + Sync {
@@ -57,23 +50,6 @@ impl<T: SyncTap + ?Sized> crate::kernel::events::ChangeSink for T {
 pub struct PeerRef {
     pub device_id: String,
     pub name: String,
-}
-
-/// A batch just applied, as the UI shows it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
-pub struct AppliedBatch {
-    pub id: String,
-    pub peer_name: String,
-    pub applied_at: String,
-    pub summary: SyncSummary,
-    #[serde(default)]
-    pub undone_at: Option<String>,
-    /// Not a batch: the vault was handed to this device from here.
-    #[serde(default)]
-    pub transferred_to: Option<String>,
-    /// Keys of records left out because they do not fit this build's schema.
-    #[serde(default)]
-    pub skipped: Vec<String>,
 }
 
 /// What an undo did.
@@ -105,6 +81,79 @@ fn ser_err(err: serde_json::Error) -> Error {
 }
 
 impl UnlockedVault {
+    // The read side and trust moved in T35; the rest of the area moves in T36-T38. The task that
+    // moves the last method adds the forward markers, so `strangle check` holds the whole area at once.
+    forward! {
+        /// A record as the digest sees it: its value and stamps, or its tombstone.
+        pub(crate) fn state_of(&self, records: &BTreeMap<String, Value>, key: &str) -> RecordState
+            => crate::sync::manifest_view::record_state @doc;
+        /// One digest per record and deletion. `union_since_ms` leaves out cached
+        /// prices and rates older than that (a first sync sends 90 days).
+        pub fn sync_manifest(&mut self, union_since_ms: Option<u64>) -> Result<Manifest>
+            => crate::usecases::sync::read::sync_manifest;
+        /// [`Self::sync_manifest`] for a peer protected at `peer`: below level 3
+        /// the crypto module's records are left out, so their keys never reach
+        /// the network. Also says how many records were left out.
+        pub fn sync_manifest_for(&mut self, union_since_ms: Option<u64>, peer: SecurityLevel) -> Result<(Manifest, usize)>
+            => crate::usecases::sync::read::sync_manifest_for;
+        /// `(to_request, to_send)` for two manifests: the plain diff without the
+        /// cache points this device would thin away as soon as they arrive.
+        pub fn sync_diff(&self, mine: &Manifest, theirs: &Manifest) -> (Vec<String>, Vec<String>)
+            => crate::usecases::sync::read::sync_diff;
+        /// The full state of each asked record (absent keys come back empty).
+        pub fn sync_records(&mut self, keys: &[String]) -> Result<BTreeMap<String, RecordState>>
+            => crate::usecases::sync::read::sync_records;
+        /// [`Self::sync_records`] for a peer protected at `peer`: below level 3 a
+        /// crypto record is not answered even when asked for, so it never leaves
+        /// this device.
+        pub fn sync_records_for(&mut self, keys: &[String], peer: SecurityLevel) -> Result<BTreeMap<String, RecordState>>
+            => crate::usecases::sync::read::sync_records_for;
+        /// What applying `incoming` would change, without changing anything.
+        pub fn sync_preview(&mut self, incoming: &BTreeMap<String, RecordState>) -> Result<SyncSummary>
+            => crate::usecases::sync::read::sync_preview;
+        /// [`Self::sync_preview`] for a batch from the device `device_id`: what
+        /// that device has already seen of this one is not listed as overwritten.
+        pub fn sync_preview_from(&mut self, incoming: &BTreeMap<String, RecordState>, device_id: &str) -> Result<SyncSummary>
+            => crate::usecases::sync::read::sync_preview_from;
+        /// Capital and the balances of the stores the batch moves, as they would
+        /// be once applied (the batch goes into a sandbox copy).
+        pub fn sync_preview_after(&mut self, incoming: &BTreeMap<String, RecordState>) -> Result<Option<AfterApply>>
+            => crate::usecases::sync::read::sync_preview_after;
+        /// Keys a kept batch changed (to pass on to the other devices).
+        pub fn sync_batch_keys(&self, batch_id: &str) -> Vec<String>
+            => crate::sync::history::batch_keys @doc;
+        /// Sorted distinct collections a kept batch touched, the dedupe and the
+        /// repair deletions included.
+        pub fn sync_batch_collections(&self, batch_id: &str) -> Vec<String>
+            => crate::sync::history::batch_collections @doc;
+        /// Notices a kept batch added (to show them on this device).
+        pub fn sync_batch_notices(&self, batch_id: &str) -> Vec<crate::model::notify::NoticeRecord>
+            => crate::sync::history::batch_notices @doc;
+        /// The batches still kept and the transfers to new devices, newest first.
+        pub fn sync_history(&self) -> Vec<AppliedBatch>
+            => crate::sync::history::history @doc;
+        /// Trust a device after both sides confirmed the pairing code.
+        pub fn sync_trust_peer(&mut self, device_id: &str, name: &str, public_key: &str) -> Result<()>
+            => crate::usecases::sync::trust::sync_trust_peer;
+        /// "Forget device": its key is refused here and, once this reaches
+        /// them, on every other device.
+        pub fn sync_forget_peer(&mut self, device_id: &str) -> Result<()>
+            => crate::usecases::sync::trust::sync_forget_peer;
+    }
+
+    /// A stamp that sorts after every entry held for this device (and key): the
+    /// clock lives here, so the trust scenarios ask the vault for it.
+    pub(crate) fn stamp_past_known_peer(
+        &mut self,
+        device_id: &str,
+        public_key: Option<&str>,
+    ) -> Stamp {
+        for known in crate::sync::trust::known_stamps(&self.doc.sync, device_id, public_key) {
+            self.clock.observe(&known);
+        }
+        self.clock.tick()
+    }
+
     /// The document without the sync bookkeeping, serialized.
     pub(crate) fn doc_value(&mut self) -> Result<Value> {
         let sync = std::mem::take(&mut self.doc.sync);
@@ -223,97 +272,6 @@ impl UnlockedVault {
         &self.doc.sync
     }
 
-    pub(crate) fn state_of(&self, records: &BTreeMap<String, Value>, key: &str) -> RecordState {
-        let union = split_key(key).is_some_and(|(coll, _)| matches!(coll.rule, Rule::Union { .. }));
-        let value = records.get(key).cloned();
-        if union {
-            return RecordState {
-                value,
-                stamps: None,
-                tombstone: None,
-            };
-        }
-        match value {
-            Some(value) => RecordState {
-                value: Some(value),
-                stamps: Some(self.doc.sync.stamps.get(key).cloned().unwrap_or_default()),
-                tombstone: None,
-            },
-            None => RecordState {
-                value: None,
-                stamps: None,
-                tombstone: self.doc.sync.tombstones.get(key).cloned(),
-            },
-        }
-    }
-
-    /// A record as the digest sees it: what the devices share, not what
-    /// stays on one (a flow's cursor).
-    pub(crate) fn shared_state(mut state: RecordState, key: &str) -> RecordState {
-        if let (Some((coll, _)), Some(value)) = (split_key(key), state.value.as_mut()) {
-            *value = view::shareable(coll, value);
-        }
-        state
-    }
-
-    /// One digest per record and deletion. `union_since_ms` leaves out cached
-    /// prices and rates older than that (a first sync sends 90 days).
-    pub fn sync_manifest(&mut self, union_since_ms: Option<u64>) -> Result<Manifest> {
-        Ok(self
-            .sync_manifest_for(union_since_ms, SecurityLevel::Crypto)?
-            .0)
-    }
-
-    /// [`Self::sync_manifest`] for a peer protected at `peer`: below level 3
-    /// the crypto module's records are left out, so their keys never reach
-    /// the network. Also says how many records were left out.
-    pub fn sync_manifest_for(
-        &mut self,
-        union_since_ms: Option<u64>,
-        peer: SecurityLevel,
-    ) -> Result<(Manifest, usize)> {
-        self.track_changes()?;
-        let value = self.doc_value()?;
-        let records = view::records(&value);
-        let keeps_fx = self.fx_history_filter();
-        let withhold = !may_hold_crypto(peer);
-        let mut withheld = 0;
-        let mut manifest = Manifest::new();
-        for key in records.keys() {
-            if !self.wants_cache_key(key, &keeps_fx) {
-                continue;
-            }
-            if withhold && is_crypto_key(key) {
-                withheld += 1;
-                continue;
-            }
-            if let (Some(since), Some((coll, _))) = (union_since_ms, split_key(key))
-                && let Some(field) = coll.age
-                && let Some(Value::String(at)) = records[key].get(field)
-                && u64::try_from(crate::model::vault::iso_to_millis(at)).unwrap_or(0) < since
-            {
-                continue;
-            }
-            manifest.insert(
-                key.clone(),
-                digest(&Self::shared_state(self.state_of(&records, key), key)),
-            );
-        }
-        for key in self.doc.sync.tombstones.keys() {
-            if !records.contains_key(key) {
-                if withhold && is_crypto_key(key) {
-                    withheld += 1;
-                    continue;
-                }
-                manifest.insert(
-                    key.clone(),
-                    digest(&Self::shared_state(self.state_of(&records, key), key)),
-                );
-            }
-        }
-        Ok((manifest, withheld))
-    }
-
     /// [`Self::sync_manifest`] and the newest stamp of this device's clock at
     /// that moment: what the peer will have seen once this exchange is applied
     /// (see [`Self::sync_mark_synced`]).
@@ -334,170 +292,6 @@ impl UnlockedVault {
     ) -> Result<(Manifest, Stamp, usize)> {
         let (manifest, withheld) = self.sync_manifest_for(union_since_ms, peer)?;
         Ok((manifest, self.clock.last(), withheld))
-    }
-
-    /// Whether a cache point is worth syncing here: rates of a currency that
-    /// is not in use are thinned to one point right after a merge (the rule
-    /// of `thin_rate_caches`), so asking for or offering them only repeats
-    /// the same list in every session. Other keys always qualify.
-    pub(crate) fn wants_cache_key(&self, key: &str, keeps_fx: &impl Fn(&str) -> bool) -> bool {
-        match key.strip_prefix("fx_cache:") {
-            Some(point) => keeps_fx(point.split_once('|').map_or(point, |(code, _)| code)),
-            None => true,
-        }
-    }
-
-    /// `(to_request, to_send)` for two manifests: [`diff`] without the cache
-    /// points this device would thin away as soon as they arrive.
-    ///
-    /// [`diff`]: crate::sync::manifest::diff
-    pub fn sync_diff(&self, mine: &Manifest, theirs: &Manifest) -> (Vec<String>, Vec<String>) {
-        let keeps_fx = self.fx_history_filter();
-        let (mut request, send) = crate::sync::manifest::diff(mine, theirs);
-        request.retain(|key| self.wants_cache_key(key, &keeps_fx));
-        (request, send)
-    }
-
-    /// The full state of each asked record (absent keys come back empty).
-    pub fn sync_records(&mut self, keys: &[String]) -> Result<BTreeMap<String, RecordState>> {
-        self.sync_records_for(keys, SecurityLevel::Crypto)
-    }
-
-    /// [`Self::sync_records`] for a peer protected at `peer`: below level 3 a
-    /// crypto record is not answered even when asked for (a broken or hostile
-    /// peer may ask for any key), so it never leaves this device.
-    pub fn sync_records_for(
-        &mut self,
-        keys: &[String],
-        peer: SecurityLevel,
-    ) -> Result<BTreeMap<String, RecordState>> {
-        self.track_changes()?;
-        let value = self.doc_value()?;
-        let records = view::records(&value);
-        let withhold = !may_hold_crypto(peer);
-        Ok(keys
-            .iter()
-            .filter(|key| split_key(key).is_some())
-            .filter(|key| !(withhold && is_crypto_key(key)))
-            .map(|key| {
-                let mut state = self.state_of(&records, key);
-                if let (Some((coll, _)), Some(stamps)) = (split_key(key), state.stamps.as_mut()) {
-                    crate::sync::merge::with_legacy_heads(coll, stamps);
-                }
-                (key.clone(), state)
-            })
-            .collect())
-    }
-
-    /// Refuse records filed under a key they do not carry, or under a
-    /// collection that does not sync: a broken or hostile peer must not be
-    /// able to overwrite one record with another.
-    pub(crate) fn check_incoming(incoming: &BTreeMap<String, RecordState>) -> Result<()> {
-        for (key, state) in incoming {
-            let Some((coll, inner)) = split_key(key) else {
-                return Err(Error::InvalidInput(format!("sync: unknown record {key}")));
-            };
-            if let Some(value) = &state.value
-                && coll.rule != Rule::Single
-                && record_key(coll, value).as_deref() != Some(inner)
-            {
-                return Err(Error::InvalidInput(format!(
-                    "sync: record does not match {key}"
-                )));
-            }
-        }
-        Ok(())
-    }
-
-    /// What applying `incoming` would change, without changing anything.
-    pub fn sync_preview(
-        &mut self,
-        incoming: &BTreeMap<String, RecordState>,
-    ) -> Result<SyncSummary> {
-        self.sync_preview_from(incoming, "")
-    }
-
-    /// [`Self::sync_preview`] for a batch from the device `device_id`: what
-    /// that device has already seen of this one is not listed as overwritten.
-    pub fn sync_preview_from(
-        &mut self,
-        incoming: &BTreeMap<String, RecordState>,
-        device_id: &str,
-    ) -> Result<SyncSummary> {
-        Self::check_incoming(incoming)?;
-        self.sync_check_level(incoming)?;
-        self.track_changes()?;
-        let value = self.doc_value()?;
-        let records = view::records(&value);
-        let seen = self.doc.sync.seen_by.get(device_id).cloned();
-        Ok(crate::sync::plan::plan_seen(
-            incoming,
-            |key| self.state_of(&records, key),
-            seen.as_ref(),
-        )
-        .summary)
-    }
-
-    /// Capital and the balances of the stores the batch moves, as they would
-    /// be once applied: the batch goes into an in-memory copy of the vault
-    /// (a sandbox writes nothing), this vault is not touched.
-    pub fn sync_preview_after(
-        &mut self,
-        incoming: &BTreeMap<String, RecordState>,
-    ) -> Result<Option<AfterApply>> {
-        Self::check_incoming(incoming)?;
-        self.sync_check_level(incoming)?;
-        self.track_changes()?;
-        let mut copy = self.sandbox();
-        let peer = PeerRef {
-            device_id: String::new(),
-            name: String::new(),
-        };
-        // A sandbox never persists, mirrors or announces: the copy takes the
-        // batch exactly as the real apply would and is dropped.
-        if copy.apply_batch(incoming, &peer, true)?.is_none() {
-            return Ok(None);
-        }
-        let (currency, fx) = self.base_and_fx();
-        let (_, copy_fx) = copy.base_and_fx();
-        let before = self.store_values_usd();
-        let after = copy.store_values_usd();
-        let names: HashMap<&str, &str> = self
-            .doc
-            .stores
-            .iter()
-            .chain(&copy.doc.stores)
-            .map(|store| (store.id.as_str(), store.name.as_str()))
-            .collect();
-        let mut stores: Vec<StoreBalanceChange> = Vec::new();
-        for id in before.keys().chain(after.keys()) {
-            if stores.iter().any(|store| &store.id == id) {
-                continue;
-            }
-            let old = before.get(id).copied().unwrap_or_default() * fx;
-            let new = after.get(id).copied().unwrap_or_default() * copy_fx;
-            if old == new {
-                continue;
-            }
-            stores.push(StoreBalanceChange {
-                id: id.clone(),
-                name: names
-                    .get(id.as_str())
-                    .copied()
-                    .unwrap_or_default()
-                    .to_string(),
-                before: old,
-                after: new,
-                currency: currency.clone(),
-            });
-        }
-        stores.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
-        Ok(Some(AfterApply {
-            currency,
-            net_worth_before: self.net_worth().net,
-            net_worth_after: copy.net_worth().net,
-            stores,
-        }))
     }
 
     /// Merge records from another device and save. `None` when nothing
@@ -532,7 +326,7 @@ impl UnlockedVault {
         carry: bool,
         external: bool,
     ) -> Result<Option<AppliedBatch>> {
-        Self::check_incoming(incoming)?;
+        crate::sync::manifest_view::check_incoming(incoming)?;
         self.sync_check_level(incoming)?;
         self.track_changes()?;
         for state in incoming.values() {
@@ -863,77 +657,6 @@ impl UnlockedVault {
         self.recompute_holdings();
         self.persist_now()?;
         Ok(ExternalMerge::Done(None))
-    }
-
-    /// Keys a kept batch changed (to pass on to the other devices).
-    pub fn sync_batch_keys(&self, batch_id: &str) -> Vec<String> {
-        self.doc
-            .sync
-            .batches
-            .iter()
-            .find(|batch| batch.id == batch_id)
-            .map(|batch| {
-                batch
-                    .entries
-                    .iter()
-                    .map(|entry| entry.key.clone())
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    /// Sorted distinct collections a kept batch touched, the dedupe and the
-    /// repair deletions included (they are batch entries too); the summary of
-    /// the batch does not count those, so the `vault-synced` event names them.
-    pub fn sync_batch_collections(&self, batch_id: &str) -> Vec<String> {
-        self.sync_batch_keys(batch_id)
-            .iter()
-            .filter_map(|key| key.split_once(':').map(|(collection, _)| collection))
-            .map(str::to_string)
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .collect()
-    }
-
-    /// Notices a kept batch added (to show them on this device). A notice the
-    /// batch only updated (read on the other device) was shown before.
-    pub fn sync_batch_notices(&self, batch_id: &str) -> Vec<crate::model::notify::NoticeRecord> {
-        let keys: std::collections::HashSet<String> = self
-            .doc
-            .sync
-            .batches
-            .iter()
-            .find(|batch| batch.id == batch_id)
-            .into_iter()
-            .flat_map(|batch| batch.entries.iter())
-            .filter(|entry| entry.before.value.is_none())
-            .filter_map(|entry| entry.key.strip_prefix("notification_log:"))
-            .map(str::to_string)
-            .collect();
-        self.doc
-            .notification_log
-            .iter()
-            .filter(|record| keys.contains(&record.key))
-            .cloned()
-            .collect()
-    }
-
-    /// The batches still kept and the transfers to new devices, newest first.
-    pub fn sync_history(&self) -> Vec<AppliedBatch> {
-        let mut history: Vec<AppliedBatch> = self.doc.sync.batches.iter().map(applied_of).collect();
-        history.extend(self.doc.sync.transfers.iter().map(|transfer| AppliedBatch {
-            id: transfer.id.clone(),
-            peer_name: transfer.device_name.clone(),
-            applied_at: transfer.at.clone(),
-            summary: SyncSummary::default(),
-            undone_at: None,
-            transferred_to: Some(transfer.device_name.clone()),
-            skipped: Vec::new(),
-        }));
-        history.sort_by_key(|item| {
-            std::cmp::Reverse(crate::model::vault::iso_to_millis(&item.applied_at))
-        });
-        history
     }
 
     /// The vault was just handed to a new device: trust it for sync, keep it
@@ -1374,37 +1097,6 @@ impl UnlockedVault {
 
     // -- trusted devices ------------------------------------------------------
 
-    /// Trust a device after both sides confirmed the pairing code.
-    pub fn sync_trust_peer(&mut self, device_id: &str, name: &str, public_key: &str) -> Result<()> {
-        // The new entry must sort after whatever is known of this device/key.
-        for known in &self.doc.sync.peers {
-            if known.device_id == device_id || known.public_key == public_key {
-                self.clock.observe(&known.stamp);
-            }
-        }
-        let stamp = self.clock.tick();
-        let peer = TrustedPeer {
-            device_id: device_id.to_string(),
-            name: name.to_string(),
-            public_key: public_key.to_string(),
-            paired_at: now_iso(),
-            last_synced_at: None,
-            revoked: None,
-            stamp,
-        };
-        let peers = &mut self.doc.sync.peers;
-        match peers.iter_mut().find(|known| known.device_id == device_id) {
-            Some(known) => *known = peer,
-            None => peers.push(peer),
-        }
-        // Paired afresh: whatever it told us before no longer holds.
-        self.doc.sync.cut_by.remove(device_id);
-        self.doc.sync.paused.remove(device_id);
-        self.doc.sync.tombstone_acks.remove(device_id);
-        self.doc.sync.seen_by.remove(device_id);
-        self.persist()
-    }
-
     /// A vault file that arrived by transfer carries the sender's sync
     /// bookkeeping verbatim. Keep the record metadata and the trusted devices,
     /// drop everything device-local (undo batches, journal, transfers,
@@ -1417,36 +1109,6 @@ impl UnlockedVault {
             peer.last_synced_at = None;
         }
         self.doc.sync = fresh;
-        self.persist()
-    }
-
-    /// "Forget device": its key is refused here and, once this reaches
-    /// them, on every other device.
-    pub fn sync_forget_peer(&mut self, device_id: &str) -> Result<()> {
-        if let Some(known) = self
-            .doc
-            .sync
-            .peers
-            .iter()
-            .find(|peer| peer.device_id == device_id)
-        {
-            self.clock.observe(&known.stamp);
-        }
-        let stamp = self.clock.tick();
-        let Some(peer) = self
-            .doc
-            .sync
-            .peers
-            .iter_mut()
-            .find(|peer| peer.device_id == device_id)
-        else {
-            return Err(Error::NotFound(format!("device {device_id}")));
-        };
-        peer.revoked = Some(stamp.clone());
-        peer.stamp = stamp;
-        // A forgotten device pairs afresh; an old pause must not block that.
-        self.doc.sync.paused.remove(device_id);
-        self.doc.sync.cut_by.remove(device_id);
         self.persist()
     }
 
@@ -1639,18 +1301,6 @@ impl UnlockedVault {
 
 fn day_ms(days: u64) -> u64 {
     days.saturating_mul(24 * 3600 * 1000)
-}
-
-fn applied_of(batch: &SyncBatch) -> AppliedBatch {
-    AppliedBatch {
-        id: batch.id.clone(),
-        peer_name: batch.peer_name.clone(),
-        applied_at: batch.applied_at.clone(),
-        summary: batch.summary.clone(),
-        undone_at: batch.undone_at.clone(),
-        transferred_to: None,
-        skipped: Vec::new(),
-    }
 }
 
 #[cfg(test)]
