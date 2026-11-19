@@ -12,7 +12,7 @@ use crate::kernel::books::Books;
 use crate::model::store::{AssetRef, Holding, MAX_STORE_DEPTH, Store, StoreScope};
 use crate::model::transaction::{Leg, LegRole, Transaction};
 use crate::model::vault::{VaultDoc, iso_to_millis, now_iso};
-use crate::money::cost_basis::{self, CostBook, Movement, PositionKey};
+use crate::money::cost_basis::{self, CostStrategy, PositionKey, Replayed, position_key};
 use crate::money::price_info::{PriceInfo, PriceOrigin, PriceQuote, price_quote_for};
 use crate::money::rates::{RateBook, is_fiat_of, per_usd};
 use crate::money::tree::{ancestors_of, children_of, find_store, resolve_scope, subtree_ids};
@@ -193,32 +193,6 @@ struct TreeCtx<'doc> {
 const TOP_ASSETS: usize = 3;
 
 /// Live before archived, then by name.
-fn position_key(leg: &Leg) -> PositionKey {
-    PositionKey {
-        store_id: leg.store_id.clone(),
-        asset_key: leg.asset.key(),
-    }
-}
-
-/// How a leg moves its position. A leg outside cost basis (fiat, derivative,
-/// fee, settled PnL) still moves the quantity, but at an unknown price, so it
-/// neither sets a cost nor realizes a profit.
-fn movement_of(leg: &Leg, price_base: Amount) -> Movement {
-    let price_base = if cost_basis::takes_part(leg) {
-        price_base
-    } else {
-        Amount::ZERO
-    };
-    if leg.amount.is_positive() {
-        Movement::Incoming { price_base }
-    } else {
-        Movement::Outgoing {
-            price_base,
-            leaves: leg.role == LegRole::Principal && leg.to_store_id.is_none(),
-        }
-    }
-}
-
 fn sort_tree(nodes: &mut [StoreTreeNode]) {
     nodes.sort_by(|left, right| {
         left.store
@@ -308,7 +282,7 @@ pub fn compute_holdings(books: &Books<'_>) -> Vec<Holding> {
     let doc = books.doc();
     let base = books.base_and_fx().0;
     let book = books.rate_book();
-    let mut cost_book = CostBook::default();
+    let mut strategy = CostStrategy::default();
     let mut seen: HashSet<PositionKey> = HashSet::new();
 
     let mut txs: Vec<&Transaction> = doc.transactions.iter().collect();
@@ -316,15 +290,9 @@ pub fn compute_holdings(books: &Books<'_>) -> Vec<Holding> {
 
     for tx in txs {
         let secs = secs_or_now(&tx.meta().timestamp);
-        for leg in tx.legs() {
-            let delta = leg.amount;
-            if delta.is_zero() {
-                continue;
-            }
-            let key = position_key(&leg);
-            let price = book.leg_price_in_base(&leg, base, secs);
-            cost_book.apply(&key, delta, movement_of(&leg, price));
-            seen.insert(key);
+        let price_of = |leg: &Leg| book.leg_price_in_base(leg, base, secs);
+        for replayed in strategy.apply_transaction(tx.legs(), price_of) {
+            seen.insert(position_key(&replayed.leg));
         }
     }
 
@@ -342,7 +310,7 @@ pub fn compute_holdings(books: &Books<'_>) -> Vec<Holding> {
 
     seen.into_iter()
         .filter_map(|key| {
-            let position = cost_book.position(&key);
+            let position = strategy.position(&key);
             if position.quantity.is_zero() {
                 return None;
             }
@@ -1018,65 +986,63 @@ pub(crate) fn realized_pnl_filtered(
     let base = books.base_and_fx().0;
     let book = books.rate_book();
 
-    // Flatten to (timestamp, leg) and replay. Only legs booked in scope
-    // count, which is what makes a per-store PnL differ from the
-    // vault-wide one even though they share this code path.
-    let mut movements: Vec<(String, &str, Leg)> = Vec::new();
-    for tx in &books.doc().transactions {
-        let ts = tx.meta().timestamp.clone();
-        for leg in tx.legs() {
-            if scope.is_some_and(|ids| !ids.contains(&leg.store_id)) {
-                continue;
-            }
-            movements.push((ts.clone(), tx.meta().id.as_str(), leg));
-        }
-    }
-    movements.sort_by(|left, right| left.0.cmp(&right.0));
+    // Replay every transaction so a move carries its cost from a wallet out of
+    // scope; only legs booked in scope count, which is what makes a per-store
+    // PnL differ from the vault-wide one even though they share this code path.
+    let mut txs: Vec<&Transaction> = books.doc().transactions.iter().collect();
+    txs.sort_by(|left, right| left.meta().timestamp.cmp(&right.meta().timestamp));
 
-    let mut cost_book = CostBook::default();
+    let mut strategy = CostStrategy::default();
     let mut total = Amount::ZERO;
     let mut fees = Amount::ZERO;
     let mut legs = Vec::new();
 
-    for (ts, tx_id, leg) in &movements {
-        let delta = leg.amount;
-        if delta.is_zero() || leg.asset.is_derivative() {
-            continue;
-        }
-        let key = position_key(leg);
-        let price = book.leg_price_in_base(leg, base, secs_or_now(ts));
-        let realized = cost_book.apply(&key, delta, movement_of(leg, price));
-        match leg.role {
-            // A fee is a cost of its own, never a sale at a profit.
-            LegRole::Fee => fees += delta.abs() * price,
-            // Settled by the exchange: the PnL is the amount itself.
-            LegRole::Pnl => {
-                let pnl = delta * price;
-                total += pnl;
-                legs.push(PnlLeg {
-                    ts: ts.clone(),
-                    tx_id: tx_id.to_string(),
-                    store_id: leg.store_id.clone(),
-                    asset_key: leg.asset.key(),
-                    quantity: delta.abs(),
-                    pnl_base: pnl,
-                    side: "settled".into(),
-                });
+    for tx in txs {
+        let ts = &tx.meta().timestamp;
+        let secs = secs_or_now(ts);
+        let price_of = |leg: &Leg| book.leg_price_in_base(leg, base, secs);
+        for replayed in strategy.apply_transaction(tx.legs(), price_of) {
+            let Replayed {
+                leg,
+                price,
+                realized,
+            } = replayed;
+            if leg.asset.is_derivative() || scope.is_some_and(|ids| !ids.contains(&leg.store_id)) {
+                continue;
             }
-            // Only the covered part of a sale that leaves the user's
-            // wallets is a profit; the rule lives in `cost_basis`.
-            LegRole::Principal | LegRole::Adjustment => {
-                if let Some(sale) = realized {
-                    total += sale.pnl_base;
+            let delta = leg.amount;
+            match leg.role {
+                // A fee is a cost of its own, never a sale at a profit.
+                LegRole::Fee => fees += delta.abs() * price,
+                // Settled by the exchange: the PnL is the amount itself.
+                LegRole::Pnl => {
+                    let pnl = delta * price;
+                    total += pnl;
                     legs.push(PnlLeg {
                         ts: ts.clone(),
-                        tx_id: tx_id.to_string(),
+                        tx_id: tx.meta().id.clone(),
                         store_id: leg.store_id.clone(),
                         asset_key: leg.asset.key(),
-                        quantity: sale.quantity,
-                        pnl_base: sale.pnl_base,
-                        side: "sell".into(),
+                        quantity: delta.abs(),
+                        pnl_base: pnl,
+                        side: "settled".into(),
                     });
+                }
+                // Only the covered part of a sale that leaves the user's
+                // wallets is a profit; the rule lives in `cost_basis`.
+                LegRole::Principal | LegRole::Adjustment => {
+                    if let Some(sale) = realized {
+                        total += sale.pnl_base;
+                        legs.push(PnlLeg {
+                            ts: ts.clone(),
+                            tx_id: tx.meta().id.clone(),
+                            store_id: leg.store_id.clone(),
+                            asset_key: leg.asset.key(),
+                            quantity: sale.quantity,
+                            pnl_base: sale.pnl_base,
+                            side: "sell".into(),
+                        });
+                    }
                 }
             }
         }

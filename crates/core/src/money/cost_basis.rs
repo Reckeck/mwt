@@ -2,6 +2,11 @@
 //!
 //! Depends only on `Amount` and the leg model. Prices are per unit, in the
 //! base currency; a zero price means "cost unknown".
+//!
+//! `CostStrategy` is the one policy both the balance replay and the PnL replay
+//! run: a move of an asset between the user's own wallets carries the source's
+//! average cost to the destination and realizes nothing; a Convert or an
+//! AssetSell realizes the gain on the outgoing leg, at the price of the leg.
 
 use std::collections::HashMap;
 
@@ -104,6 +109,116 @@ fn apply_outgoing(
     realized
 }
 
+/// One leg of a transaction after the replay.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Replayed {
+    pub leg: Leg,
+    /// The leg's market price per unit in the base currency; zero when unknown.
+    pub price: Amount,
+    /// The covered gain of a sale that leaves the user's wallets.
+    pub realized: Option<Realized>,
+}
+
+/// The cost-basis policy: replays the legs of a transaction into a `CostBook`.
+#[derive(Debug, Default)]
+pub struct CostStrategy {
+    book: CostBook,
+}
+
+impl CostStrategy {
+    /// Zero quantity and unknown cost when the key was never seen.
+    pub fn position(&self, key: &PositionKey) -> Position {
+        self.book.position(key)
+    }
+
+    /// Replays the legs of one transaction, outgoing ones first so that the
+    /// incoming leg of a move finds the source's cost. Zero-amount legs are
+    /// skipped. The result keeps the order of `legs`.
+    pub fn apply_transaction(
+        &mut self,
+        legs: Vec<Leg>,
+        price_of: impl Fn(&Leg) -> Amount,
+    ) -> Vec<Replayed> {
+        let mut order: Vec<usize> = (0..legs.len())
+            .filter(|&index| !legs[index].amount.is_zero())
+            .collect();
+        order.sort_by_key(|&index| legs[index].amount.is_positive());
+        let mut carried: HashMap<PositionKey, Option<Amount>> = HashMap::new();
+        let mut outcomes: Vec<Option<(Amount, Option<Realized>)>> = vec![None; legs.len()];
+        for index in order {
+            let leg = &legs[index];
+            let key = position_key(leg);
+            let market = price_of(leg);
+            let price = if takes_part(leg) {
+                market
+            } else {
+                Amount::ZERO
+            };
+            let realized = if leg.amount.is_positive() {
+                let price_base = match carried.get(&position_key(leg)) {
+                    Some(cost) => cost.unwrap_or(Amount::ZERO),
+                    None => price,
+                };
+                let movement = Movement::Incoming { price_base };
+                self.book.apply(&key, leg.amount, movement)
+            } else {
+                let moves = moves_between_own_wallets(leg, &legs);
+                if moves {
+                    carried.insert(
+                        PositionKey {
+                            store_id: leg.to_store_id.clone().unwrap_or_default(),
+                            asset_key: key.asset_key.clone(),
+                        },
+                        self.book.position(&key).cost,
+                    );
+                }
+                let leaves = leg.role == LegRole::Principal && !moves;
+                self.book.apply(
+                    &key,
+                    leg.amount,
+                    Movement::Outgoing {
+                        price_base: price,
+                        leaves,
+                    },
+                )
+            };
+            outcomes[index] = Some((market, realized));
+        }
+        legs.into_iter()
+            .zip(outcomes)
+            .filter_map(|(leg, outcome)| {
+                outcome.map(|(price, realized)| Replayed {
+                    leg,
+                    price,
+                    realized,
+                })
+            })
+            .collect()
+    }
+}
+
+/// The position a leg moves.
+pub fn position_key(leg: &Leg) -> PositionKey {
+    PositionKey {
+        store_id: leg.store_id.clone(),
+        asset_key: leg.asset.key(),
+    }
+}
+
+/// A principal outgoing leg whose same asset arrives on `to_store_id` in the
+/// same transaction: a move, not a sale.
+fn moves_between_own_wallets(leg: &Leg, legs: &[Leg]) -> bool {
+    leg.role == LegRole::Principal
+        && leg.to_store_id.as_deref().is_some_and(|target| {
+            legs.iter().any(|other| {
+                other.amount.is_positive()
+                    && other.role == LegRole::Principal
+                    && other.store_id == target
+                    && other.asset.key() == leg.asset.key()
+            })
+        })
+}
+
 /// Rule 1: only principal and adjustment legs of non-fiat, non-derivative
 /// assets take part in cost basis.
 pub fn takes_part(leg: &Leg) -> bool {
@@ -119,6 +234,10 @@ pub fn unrealized(quantity: Amount, cost: Option<Amount>, price_base: Amount) ->
         _ => Amount::ZERO,
     }
 }
+
+#[cfg(test)]
+#[path = "cost_basis_tests.rs"]
+mod strategy_tests;
 
 #[cfg(test)]
 mod tests {
@@ -271,7 +390,3 @@ mod tests {
         )));
     }
 }
-
-#[cfg(test)]
-#[path = "cost_basis_tests.rs"]
-mod strategy_tests;
