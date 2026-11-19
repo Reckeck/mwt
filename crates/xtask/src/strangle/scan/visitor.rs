@@ -247,7 +247,8 @@ fn collect_json_value(mut parts: Vec<TokenTree>, values: &mut Vec<Expr>) -> bool
     }
 }
 
-/// Whether the tokens hold `.name(..)` or `Self::name(..)`, groups included.
+/// Whether the tokens hold `.name(..)` or `Self::name` (a call, a turbofish call, or a value),
+/// groups included.
 fn has_method_call(tokens: TokenStream) -> bool {
     let trees: Vec<TokenTree> = tokens.into_iter().collect();
     trees.iter().enumerate().any(|(index, tree)| match tree {
@@ -258,10 +259,9 @@ fn has_method_call(tokens: TokenStream) -> bool {
                 if call.delimiter() == Delimiter::Parenthesis
         ),
         TokenTree::Ident(ident) if ident == "Self" => matches!(
-            (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3), trees.get(index + 4)),
-            (Some(TokenTree::Punct(first)), Some(TokenTree::Punct(second)), Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)))
+            (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),
+            (Some(TokenTree::Punct(first)), Some(TokenTree::Punct(second)), Some(TokenTree::Ident(_)))
                 if first.as_char() == ':' && second.as_char() == ':'
-                    && call.delimiter() == Delimiter::Parenthesis
         ),
         _ => false,
     })
