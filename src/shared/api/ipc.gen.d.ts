@@ -677,7 +677,7 @@ type BiometricUnlockInput = { path: string, };
 
 type Budget = { id: string, active: boolean, target: BudgetTarget, period: BudgetPeriod, limit: Amount, currency: string, 
 /**
- * Notify when the period's spending nears the limit. Older vaults: on.
+ * Notify when the period's spending nears the limit.
  */
 warn: boolean, };
 
@@ -5495,7 +5495,7 @@ type PreviewWarning = { "kind": "negative_balance", store_id: string, asset: Ass
 type PriceAlert = { id: string, asset: AssetRef, condition: AlertCondition, price: Amount, currency: string, active: boolean, triggered_at: string | null, 
 /**
  * The threshold `triggered_at` belongs to ([`PriceAlert::fingerprint`] when it
- * fired). `None` on a record from an older build: it counts as fired.
+ * fired). `None` counts as fired.
  */
 triggered_for?: string, 
 /**
@@ -6521,7 +6521,7 @@ tx_id: string | null,
 to: Array<string>, 
 /**
  * The event organizer when this was recorded ([`ME`] or a participant
- * id). Settlements of older builds have none.
+ * id). `None` when unknown; a missing key reads as `None` (`Option`).
  */
 organizer?: string, };
 
