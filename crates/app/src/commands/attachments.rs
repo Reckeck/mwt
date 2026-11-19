@@ -2,6 +2,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use tauri::{AppHandle, Manager, State};
 
+use trade_core::household::attachments as attachment_reads;
 use trade_core::ipc_contract::{
     AddAttachmentFileInput, AddAttachmentLinkInput, AttachmentIdInput, ListAttachmentsInput,
     RenameAttachmentInput,
@@ -9,7 +10,9 @@ use trade_core::ipc_contract::{
 use trade_core::kernel::events::EventBus;
 use trade_core::model::attachment::{Attachment, AttachmentKind};
 use trade_core::service::NewFile;
+use trade_core::usecases::household::attachments;
 
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
@@ -21,11 +24,12 @@ pub async fn list_attachments(
     input: ListAttachmentsInput,
     state: State<'_, AppState>,
 ) -> Result<Vec<Attachment>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard
-        .as_ref()
-        .unwrap()
-        .list_attachments(input.owner.as_ref()))
+    with_vault(&state, |vault| {
+        Ok(attachment_reads::list_attachments(
+            &vault.doc,
+            input.owner.as_ref(),
+        ))
+    })
 }
 
 #[tauri::command]
@@ -33,11 +37,9 @@ pub async fn add_attachment_link(
     input: AddAttachmentLinkInput,
     state: State<'_, AppState>,
 ) -> Result<Attachment, IpcError> {
-    let mut guard = require_vault(&state)?;
-    Ok(guard
-        .as_mut()
-        .unwrap()
-        .add_attachment_link(input.owner, &input.url, &input.title)?)
+    with_vault_mut(&state, |vault| {
+        attachments::add_attachment_link(vault, input.owner, &input.url, &input.title)
+    })
 }
 
 #[tauri::command]
@@ -48,15 +50,17 @@ pub async fn add_attachment_file(
     let bytes = BASE64
         .decode(input.data_base64.as_bytes())
         .map_err(|_| IpcError::from("the file did not arrive whole"))?;
-    let mut guard = require_vault(&state)?;
-    Ok(guard.as_mut().unwrap().add_attachment_file(
-        input.owner,
-        NewFile {
-            name: &input.name,
-            mime: input.mime.as_deref(),
-            bytes: &bytes,
-        },
-    )?)
+    with_vault_mut(&state, |vault| {
+        attachments::add_attachment_file(
+            vault,
+            input.owner,
+            NewFile {
+                name: &input.name,
+                mime: input.mime.as_deref(),
+                bytes: &bytes,
+            },
+        )
+    })
 }
 
 /// A link opens in the browser; a file is opened into the app's cache and
@@ -71,15 +75,14 @@ pub async fn open_attachment(
     let (item, bytes) = {
         let guard = require_vault(&state)?;
         let vault = guard.as_ref().unwrap();
-        let item = vault
-            .list_attachments(None)
+        let item = attachment_reads::list_attachments(&vault.doc, None)
             .into_iter()
             .find(|item| item.id == input.id)
             .ok_or_else(|| format!("attachment {} is gone", input.id))?;
         if item.kind == AttachmentKind::Link {
             (item, Vec::new())
         } else {
-            vault.read_attachment(&input.id)?
+            attachments::read_attachment(vault, &input.id)?
         }
     };
     if let Some(url) = item.url.as_deref() {
@@ -151,8 +154,9 @@ pub async fn remove_attachment(
     input: AttachmentIdInput,
     state: State<'_, AppState>,
 ) -> Result<Attachment, IpcError> {
-    let mut guard = require_vault(&state)?;
-    Ok(guard.as_mut().unwrap().remove_attachment(&input.id)?)
+    with_vault_mut(&state, |vault| {
+        attachments::remove_attachment(vault, &input.id)
+    })
 }
 
 #[tauri::command]
@@ -160,8 +164,9 @@ pub async fn restore_attachment(
     input: AttachmentIdInput,
     state: State<'_, AppState>,
 ) -> Result<Attachment, IpcError> {
-    let mut guard = require_vault(&state)?;
-    Ok(guard.as_mut().unwrap().restore_attachment(&input.id)?)
+    with_vault_mut(&state, |vault| {
+        attachments::restore_attachment(vault, &input.id)
+    })
 }
 
 /// The file's own name without anything that could leave the folder.
@@ -187,11 +192,9 @@ pub async fn rename_attachment(
     input: RenameAttachmentInput,
     state: State<'_, AppState>,
 ) -> Result<Attachment, IpcError> {
-    let mut guard = require_vault(&state)?;
-    Ok(guard
-        .as_mut()
-        .unwrap()
-        .rename_attachment(&input.id, &input.title)?)
+    with_vault_mut(&state, |vault| {
+        attachments::rename_attachment(vault, &input.id, &input.title)
+    })
 }
 
 /// "Save as…": the save dialog, then the opened bytes where it points.
@@ -204,7 +207,7 @@ pub async fn save_attachment_as(
 ) -> Result<Option<String>, IpcError> {
     let (item, bytes) = {
         let guard = require_vault(&state)?;
-        guard.as_ref().unwrap().read_attachment(&input.id)?
+        attachments::read_attachment(guard.as_ref().unwrap(), &input.id)?
     };
     let name = safe_name(&item.title);
     let extension = name.rsplit_once('.').map(|(_, ext)| ext.to_string());
