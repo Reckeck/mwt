@@ -188,6 +188,8 @@ files = [
     "crates/core/src/sync/trust.rs", "crates/core/src/sync/sync_pins_tests.rs",
     "crates/core/src/usecases/sync/mod.rs", "crates/core/src/usecases/sync/read.rs",
     "crates/core/src/usecases/sync/trust.rs",
+    # T36: the repair rules become the module tree under `sync/repair/` (its `mod.rs` declares them).
+    "crates/core/src/sync/repair/mod.rs",
 ]
 
 [[foundation]]

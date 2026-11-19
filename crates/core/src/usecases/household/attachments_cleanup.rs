@@ -10,6 +10,7 @@ use crate::household::attachments_cleanup::{
 };
 use crate::model::entity_ref::EntityRef;
 use crate::service::UnlockedVault;
+use crate::sync::repair::repair_restore::deleted_value;
 use crate::usecases::household::attachments::attachments_dir;
 
 /// Drop the attachments the user removed and those whose owner is gone
@@ -37,7 +38,7 @@ pub fn prune_attachments(vault: &mut UnlockedVault) -> bool {
 /// and this one holds its last live value.
 pub fn owner_may_return(vault: &UnlockedVault, owner: &EntityRef) -> bool {
     owner_history_key(owner)
-        .is_some_and(|key| vault.deleted_value::<serde_json::Value>(&key).is_some())
+        .is_some_and(|key| deleted_value::<serde_json::Value>(&vault.doc, &key).is_some())
 }
 
 /// Delete the files of the attachments directory that no record names.

@@ -1,80 +1,9 @@
-//! Stage M, rule R1 of `repair_invariants`: one root Cash wallet.
-//!
-//! Two vaults made apart each own a Cash wallet, and both are locked against
-//! delete and archive, so after the first sync the user could not fix it.
-//! Winner: the id `cash` (what `ensure_cash_wallet` makes now), else the
-//! earliest creation stamp, else the smaller id, so every device picks the
-//! same one from the same merged state. A loser's sub-accounts move under the
-//! winner (a clashing name gets a free one), every reference to it (operations,
-//! links, goals, exchange targets) is pointed at the winner and the loser is
-//! dropped, which the change tracker turns into a tombstone. The user-facing
-//! `merge_into` still refuses a root Cash; this is a path of the repair only.
+//! Shim of the `peer_sync/repair_cash` area: moved to `crate::sync::repair::repair_cash` (spec core-strangler, D1).
 
+#[cfg(test)]
 use super::UnlockedVault;
-use super::repair::RepairReport;
-use crate::model::store::StoreKind;
+#[cfg(test)]
 use crate::service::CASH_WALLET_ID;
-use crate::service::store_change::replace_id;
-
-impl UnlockedVault {
-    /// Merge the root Cash wallets into one; the ids of the merged-away go to the report.
-    pub(crate) fn repair_cash_wallets(&mut self, report: &mut RepairReport) {
-        let mut roots: Vec<String> = self
-            .doc
-            .stores
-            .iter()
-            .filter(|node| node.kind == StoreKind::Cash && node.parent_id.is_none())
-            .map(|node| node.id.clone())
-            .collect();
-        if roots.len() < 2 {
-            return;
-        }
-        let created = |id: &str| {
-            self.doc
-                .sync
-                .stamps
-                .get(&format!("stores:{id}"))
-                .map(|known| known.created.clone())
-                .unwrap_or_default()
-        };
-        roots.sort_by_key(|id| (id != CASH_WALLET_ID, created(id), id.clone()));
-        let winner = roots.remove(0);
-        for loser in roots {
-            if self.merge_cash_into(&loser, &winner).is_some() {
-                report.merged_cash.push(loser);
-            }
-        }
-    }
-
-    pub(crate) fn merge_cash_into(&mut self, loser: &str, winner: &str) -> Option<()> {
-        let mut children: Vec<String> = self
-            .children_of(loser)
-            .into_iter()
-            .map(|child| child.id.clone())
-            .collect();
-        children.sort();
-        for child in children {
-            let name = self.find_store(&child)?.name.clone();
-            let free = self.free_name(&child, Some(winner), &name);
-            let node = self.doc.stores.iter_mut().find(|node| node.id == child)?;
-            node.parent_id = Some(winner.to_string());
-            node.name = free;
-        }
-        self.doc.stores.retain(|node| node.id != loser);
-        self.doc
-            .exchanges
-            .bybit
-            .retain(|keys| keys.store_id != loser);
-        // Sync bookkeeping keeps its own keys; only the document is repointed.
-        let sync = std::mem::take(&mut self.doc.sync);
-        let mut value = serde_json::to_value(&self.doc).ok()?;
-        replace_id(&mut value, loser, winner);
-        let mut doc = serde_json::from_value(value).ok()?;
-        std::mem::swap(&mut self.doc, &mut doc);
-        self.doc.sync = sync;
-        Some(())
-    }
-}
 
 #[cfg(test)]
 mod tests {

@@ -26,13 +26,15 @@ use crate::sync::manifest::Manifest;
 #[cfg(test)]
 use crate::sync::manifest_view::is_crypto_key;
 use crate::sync::registry::Rule;
+use crate::sync::repair::bad_record::unparsable_keys;
+use crate::sync::repair::keep::{generated_key, mark_kept};
 use crate::sync::state::{
     BATCH_DAYS, CutBy, MAX_BATCHES, REVOKED_GATE_DAYS, TOMBSTONE_DAYS, acked_through,
 };
 use crate::sync::track::Tracker;
 use crate::sync::view::{self, split_key};
 use crate::sync::{BatchEntry, RecordState, Stamp, SyncBatch, SyncSummary, TrustedPeer};
-use keep::{generated_key, reminder_identity};
+use keep::reminder_identity;
 
 /// Told the keys of every local save, so a live session can send them on.
 pub trait SyncTap: Send + Sync {
@@ -152,6 +154,12 @@ impl UnlockedVault {
             self.clock.observe(&known);
         }
         self.clock.tick()
+    }
+
+    /// Whether notices made inside the core are in Russian: the repair scenario
+    /// asks the vault, the field is private to `service`.
+    pub(crate) fn notice_in_russian(&self) -> bool {
+        self.notice_ru
     }
 
     /// The document without the sync bookkeeping, serialized.
@@ -392,7 +400,7 @@ impl UnlockedVault {
         let mut doc: VaultDoc = match serde_json::from_value(value.clone()) {
             Ok(doc) => doc,
             Err(err) => {
-                let bad = Self::unparsable_keys(&base, &plan);
+                let bad = unparsable_keys(&base, &plan);
                 if bad.is_empty() {
                     return Err(Error::InvalidInput(format!("sync: {err}")));
                 }
@@ -781,7 +789,7 @@ impl UnlockedVault {
         doc.sync = std::mem::take(&mut self.doc.sync);
         doc.sync.batches[index].undone_at = Some(now_iso());
         self.doc = doc;
-        self.mark_kept(&brought_back);
+        mark_kept(&mut self.doc, &brought_back, reminder_identity);
         for key in &forgotten {
             self.sync_forget_log_record(key)?;
         }
