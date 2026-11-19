@@ -292,7 +292,6 @@ impl VaultFile {
             ));
         }
         on_stage(RaiseStage::Reencrypt);
-        let fmt = fmt.for_writing();
         let key = SealKey::fresh_with(password.as_bytes(), kdf)?;
         let sealed = crypto::seal_with(&key, fmt, &encode(doc, fmt)?)?;
 

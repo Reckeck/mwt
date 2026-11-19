@@ -573,7 +573,7 @@ impl UnlockedVault {
         let decoded = crate::storage::decode_file(remote, &plaintext, fmt)?;
         Ok(UnlockedVault {
             path: self.path.clone(),
-            fmt: fmt.for_writing(),
+            fmt,
             doc: decoded.doc,
             base_currency: self.base_currency.clone(),
             notice_ru: self.notice_ru,

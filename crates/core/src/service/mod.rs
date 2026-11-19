@@ -466,7 +466,7 @@ impl UnlockedVault {
         }
         let mut vault = Self {
             path,
-            fmt: fmt.for_writing(),
+            fmt,
             doc: decoded.doc,
             base_currency: crate::appconfig::DEFAULT_BASE_CURRENCY.to_string(),
             notice_ru: true,
@@ -663,9 +663,8 @@ impl UnlockedVault {
     }
 
     /// Re-encode on disk (dev JSON <-> prod binary) — mostly used by tests.
-    /// Asking for a legacy format writes MessagePack.
     pub fn switch_format(&mut self, fmt: SnapshotFormat) -> Result<()> {
-        self.fmt = fmt.for_writing();
+        self.fmt = fmt;
         self.persist_now()
     }
 
