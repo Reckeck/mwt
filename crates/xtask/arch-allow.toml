@@ -25,4 +25,7 @@ allow = [
     { from = "reports/dashboard.rs", to = "service", until = "Ф5", reason = "reads FlowClass from service until budget flows move to their groups" },
     { from = "reports/dashboard_tiles.rs", to = "service", until = "Ф5", reason = "reads FlowClass from service until budget flows move to their groups" },
     { from = "reports/dashboard_today.rs", to = "service", until = "Ф5", reason = "reads UpcomingKind from service until stream D moves the agenda (T43)" },
+    { from = "storage/legacy_v4/adopt.rs", to = "cryptotrack", until = "v4 transition removed", reason = "the frozen one-time conversion of the old Bybit queue reuses the crypto math, prices and Bybit chain id; it goes away with the v4 transition" },
+    { from = "storage/legacy_v4/adopt.rs", to = "exchange", until = "v4 transition removed", reason = "the frozen one-time conversion registers coins through exchange::well_known_coin; it goes away with the v4 transition" },
+    { from = "storage/legacy_v4/graph.rs", to = "workflow", until = "v4 transition removed", reason = "the frozen graph steps 1-3 stamp graphs with the live GRAPH_VERSION; they go away with the v4 transition" },
 ]

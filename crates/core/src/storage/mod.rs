@@ -5,25 +5,21 @@
 //! - `debug` build  -> pretty JSON (readable, easy to inspect & diff)
 //! - `release` build -> MessagePack with field names
 //!
-//! v1 release builds wrote bincode, which is positional: a field added
-//! anywhere broke every older file. It is still read, never written. Both
-//! JSON and MessagePack carry field names, so a field added with
-//! `#[serde(default)]` keeps older v2 files readable without a version bump.
+//! Both JSON and MessagePack carry field names, so a field added with
+//! `#[serde(default)]` keeps older files readable without a version bump.
+//! The positional binary encoding of old builds is refused (see [`crate::crypto::format::legacy_refusal`]).
 //!
 //! Every encoding lives inside the SAME encrypted container (see `crypto`),
 //! and a `payload_fmt` byte in the header makes any file self-describing.
 //!
-//! ## Versions and migrations
+//! ## Versions
 //!
-//! The payload's `version` is read first, then the document is decoded with
-//! the schema of that version and migrated up step by step (`v1` → `v2` →
-//! `v3` → current; v3 runs automations as workflows, see `v2`, and v4 opens
-//! the crypto module's collections, see `v3`). The steps are composed from
-//! one listing in [`chain`], not by hand.
-//! A version from the future is refused. To change the schema in a way an
-//! older file cannot be read with: freeze the current shape in a `vN` module,
-//! bump [`crate::VAULT_FORMAT_VERSION`], add the step (one `From`, one
-//! `impl Legacy`, one line in `schema_chain!`) and its tests.
+//! The payload's `version` is read first. Container 2 holds payload 1 (the
+//! current format); container 1 holds the old payloads, of which only v4 is
+//! converted once on open (see [`legacy_v4`]). A version from the future is
+//! refused. To change the schema in a way an older file cannot be read with:
+//! freeze the current shape in a `legacy_vN` module, bump
+//! [`crate::VAULT_FORMAT_VERSION`], add the step and its tests.
 
 use std::path::{Path, PathBuf};
 
@@ -39,14 +35,17 @@ use crate::vault_io::local::{
     create_synced, read_back, reencrypt_tmp_path, replace_with, still_the_written_file,
 };
 
-pub mod chain;
-pub mod v1;
-pub mod v2;
-pub mod v3;
+pub mod legacy_v4;
+
+#[cfg(test)]
+mod fixtures_gen;
 
 pub use crate::vault_io::local::{VAULT_EXT, VaultLock, backup_path, ensure_wallet_ext};
 
+#[cfg(test)]
+use crate::crypto::format::LAST_LEGACY_BUILD;
 pub use crate::crypto::format::SnapshotFormat;
+use crate::crypto::format::legacy_refusal;
 
 /// Encode a snapshot into the raw payload bytes for a given format.
 pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
@@ -54,43 +53,101 @@ pub fn encode(doc: &VaultDoc, fmt: SnapshotFormat) -> Result<Vec<u8>> {
         SnapshotFormat::Json => {
             serde_json::to_vec_pretty(doc).map_err(|err| Error::Serialize(err.to_string()))
         }
-        SnapshotFormat::Bin => bincode::serde::encode_to_vec(doc, bincode::config::standard())
-            .map_err(|err| Error::Serialize(err.to_string())),
         SnapshotFormat::Pack => {
             rmp_serde::to_vec_named(doc).map_err(|err| Error::Serialize(err.to_string()))
         }
     }
 }
 
+/// The payload version of an old v4 file, read once on open and converted
+/// (see [`legacy_v4`]).
+const TRANSITION_FROM_VERSION: u32 = 4;
+
 /// A decoded document and the payload version it was stored at.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Decoded {
     pub doc: VaultDoc,
-    /// The version on disk; below [`crate::VAULT_FORMAT_VERSION`] when migrated.
+    /// The version on disk: [`crate::VAULT_FORMAT_VERSION`] for a current file,
+    /// 4 for a file the transition converted.
     pub from_version: u32,
+    /// What the transition from a v4 file hands on besides the document;
+    /// `None` for a current file.
+    pub carry: Option<legacy_v4::Carry>,
 }
 
-/// Decode raw payload bytes according to the format written in the file,
-/// migrating an older version up to the current one.
+/// Decode raw payload bytes of a current (container 2) file.
 pub fn decode(bytes: &[u8], fmt: SnapshotFormat) -> Result<VaultDoc> {
     decode_versioned(bytes, fmt).map(|decoded| decoded.doc)
 }
 
-/// [`decode`], also telling which version the payload was stored at.
+/// [`decode`], also telling which version the payload was stored at. For a
+/// payload this build wrote itself (container 2: a snapshot, a store entry);
+/// a payload read out of a file goes through [`decode_file`].
+pub(crate) fn decode_versioned(bytes: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
+    decode_in_container(crate::VAULT_CONTAINER_VERSION, bytes, fmt)
+}
+
+/// Decode `plaintext`, the opened payload of the vault file `file`, by the
+/// container version in the file's header (see [`decode_in_container`]).
+pub fn decode_file(file: &[u8], plaintext: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
+    let (header, _) = crypto::parse_file(file)?;
+    decode_in_container(header.version, plaintext, fmt)
+}
+
+/// Decode a payload from a file of `container` version, by the table: container
+/// 2 holds payload 1; container 1 holds the old payloads, of which only v4 is
+/// still read (converted by [`legacy_v4::transition`], with a [`Carry`]) and
+/// v1-v3 are refused (the positional binary encoding never gets here, see [`crate::crypto`]) with [`Error::LegacyVault`]; every other pair
+/// is [`Error::Unsupported`].
 ///
-/// A version from the future is [`Error::Unsupported`]; a payload that claims
-/// a known version but does not fit its schema is [`Error::IncompatibleVault`].
-pub fn decode_versioned(bytes: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
-    let Some(version) = stored_version(bytes, fmt) else {
-        // Not even a version to read: report why the payload does not parse.
-        parse::<VaultDoc>(bytes, fmt)?;
-        return Err(Error::Unsupported);
-    };
-    let doc = chain::upgrade(version, bytes, fmt)?;
-    Ok(Decoded {
-        doc,
-        from_version: version,
-    })
+/// A payload that claims a readable version but does not fit its schema is
+/// [`Error::IncompatibleVault`].
+///
+/// [`Carry`]: legacy_v4::Carry
+pub fn decode_in_container(container: u32, bytes: &[u8], fmt: SnapshotFormat) -> Result<Decoded> {
+    let version = stored_version(bytes, fmt);
+    match (container, version) {
+        (crate::VAULT_CONTAINER_VERSION, Some(crate::VAULT_FORMAT_VERSION)) => {
+            let doc = parse::<VaultDoc>(bytes, fmt).map_err(unfit)?;
+            Ok(Decoded {
+                doc,
+                from_version: crate::VAULT_FORMAT_VERSION,
+                carry: None,
+            })
+        }
+        (crate::VAULT_LEGACY_CONTAINER_VERSION, Some(TRANSITION_FROM_VERSION)) => {
+            let old = parse::<legacy_v4::VaultDocV4>(bytes, fmt).map_err(unfit)?;
+            let (mut doc, carry) = legacy_v4::transition(old);
+            doc.version = crate::VAULT_FORMAT_VERSION;
+            Ok(Decoded {
+                doc,
+                from_version: TRANSITION_FROM_VERSION,
+                carry: Some(carry),
+            })
+        }
+        (crate::VAULT_LEGACY_CONTAINER_VERSION, Some(1..=3)) => {
+            Err(legacy_refusal(version, encoding_name(fmt)))
+        }
+        (_, None) => {
+            // Not even a version to read: report why the payload does not parse.
+            parse::<VaultDoc>(bytes, fmt)?;
+            Err(Error::Unsupported)
+        }
+        _ => Err(Error::Unsupported),
+    }
+}
+
+/// A payload claiming a readable version but not fitting its schema.
+fn unfit(err: Error) -> Error {
+    Error::IncompatibleVault(err.to_string())
+}
+
+/// How a refusal names the encoding of a payload.
+fn encoding_name(fmt: SnapshotFormat) -> &'static str {
+    match fmt {
+        SnapshotFormat::Json => "json",
+        SnapshotFormat::Pack => "MessagePack",
+    }
 }
 
 /// Just the `version` of a payload.
@@ -100,7 +157,6 @@ struct VersionProbe {
 }
 
 /// The `version` a payload claims, read without decoding the rest of it.
-/// `version` is the first field of `VaultDoc`, so for bincode it is the first value.
 fn stored_version(bytes: &[u8], fmt: SnapshotFormat) -> Option<u32> {
     match fmt {
         SnapshotFormat::Json => serde_json::from_slice::<serde_json::Value>(bytes)
@@ -108,11 +164,6 @@ fn stored_version(bytes: &[u8], fmt: SnapshotFormat) -> Option<u32> {
             .get("version")?
             .as_u64()
             .and_then(|version| u32::try_from(version).ok()),
-        SnapshotFormat::Bin => {
-            bincode::serde::decode_from_slice::<u32, _>(bytes, bincode::config::standard())
-                .ok()
-                .map(|(version, _)| version)
-        }
         SnapshotFormat::Pack => rmp_serde::from_slice::<VersionProbe>(bytes)
             .ok()
             .map(|probe| probe.version),
@@ -124,17 +175,6 @@ fn parse<T: DeserializeOwned>(bytes: &[u8], fmt: SnapshotFormat) -> Result<T> {
     match fmt {
         SnapshotFormat::Json => {
             serde_json::from_slice::<T>(bytes).map_err(|err| Error::Deserialize(err.to_string()))
-        }
-        SnapshotFormat::Bin => {
-            let (doc, consumed) =
-                bincode::serde::decode_from_slice::<T, _>(bytes, bincode::config::standard())
-                    .map_err(|err| Error::Deserialize(err.to_string()))?;
-            if consumed != bytes.len() {
-                return Err(Error::Deserialize(
-                    "trailing bytes in bincode payload".into(),
-                ));
-            }
-            Ok(doc)
         }
         SnapshotFormat::Pack => {
             rmp_serde::from_slice::<T>(bytes).map_err(|err| Error::Deserialize(err.to_string()))
@@ -182,7 +222,7 @@ impl VaultFile {
     pub fn open_keyed(path: &Path, password: &str) -> Result<(Decoded, SnapshotFormat, SealKey)> {
         let bytes = crate::vault_io::local::read_all(path)?;
         let (plaintext, fmt, key) = crypto::open_bytes_keyed(&bytes, password.as_bytes())?;
-        let decoded = decode_versioned(&plaintext, fmt)?;
+        let decoded = decode_file(&bytes, &plaintext, fmt)?;
         Ok((decoded, fmt, key))
     }
 
@@ -293,7 +333,7 @@ impl VaultFile {
         kdf: KdfParams,
     ) -> Result<()> {
         let (plaintext, fmt, key) = crypto::open_bytes_keyed(written, password.as_bytes())?;
-        let decoded = decode_versioned(&plaintext, fmt)?;
+        let decoded = decode_file(written, &plaintext, fmt)?;
         if key.kdf() != kdf {
             return Err(Error::Crypto(
                 "the re-encrypted vault has the wrong key cost".into(),
@@ -480,21 +520,6 @@ mod tests {
     }
 
     #[test]
-    fn bin_roundtrip() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("test.wallet");
-        let doc = sample_doc();
-        VaultFile::create(&path, "pw").unwrap();
-        VaultFile::save(&path, "pw", &doc, SnapshotFormat::Bin).unwrap();
-
-        let (out, fmt) = VaultFile::open(&path, "pw").unwrap();
-        assert_eq!(fmt, SnapshotFormat::Bin);
-        assert_eq!(out.holdings[0].quantity.to_string(), "0.5");
-        assert_eq!(out.transactions[0].tag(), "topup");
-        assert_eq!(out.id, doc.id);
-    }
-
-    #[test]
     fn backup_copies_previous_vault_and_survives_overwrite() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v.wallet");
@@ -579,81 +604,6 @@ mod tests {
         ));
     }
 
-    /// Roundtrip: encode then decode a fresh v1 document (JSON + Bin).
-    #[test]
-    fn roundtrip_v1_doc() {
-        let doc = sample_doc();
-        for fmt in [
-            SnapshotFormat::Json,
-            SnapshotFormat::Bin,
-            SnapshotFormat::Pack,
-        ] {
-            let bytes = encode(&doc, fmt).unwrap();
-            let out = decode(&bytes, fmt).unwrap();
-            assert_eq!(out.version, VAULT_FORMAT_VERSION);
-            assert_eq!(out.id, doc.id);
-            assert_eq!(out.stores.len(), 1);
-            assert_eq!(out.holdings[0].quantity.to_string(), "0.5");
-            assert_eq!(out.transactions.len(), 1);
-            assert_eq!(out.transactions[0].meta().comment, "first buy");
-            assert_eq!(
-                out.transactions[0].legs()[0].price_usd.unwrap().to_string(),
-                "65000"
-            );
-        }
-    }
-
-    /// Multiple bybit accounts roundtrip (v1 with exchanges.bybit = Vec).
-    #[test]
-    fn roundtrip_v1_doc_with_multiple_bybit_accounts() {
-        let store1 = crate::model::store::Store::new(
-            "Bybit Main",
-            crate::model::store::StoreKind::Exchange,
-            "#f0b90b",
-        );
-        let store2 = crate::model::store::Store::new(
-            "Bybit Sub",
-            crate::model::store::StoreKind::Exchange,
-            "#ff5722",
-        );
-        let store1_id = store1.id.clone();
-        let store2_id = store2.id.clone();
-        let doc = VaultDoc {
-            stores: vec![store1, store2],
-            exchanges: Exchanges {
-                bybit: vec![
-                    ExchangeKeys {
-                        store_id: store1_id.clone(),
-                        api_key: "aaaa1111".into(),
-                        api_secret: "secret1".into(),
-                        spot_store_id: None,
-                        futures_store_id: None,
-                    },
-                    ExchangeKeys {
-                        store_id: store2_id,
-                        api_key: "bbbb2222".into(),
-                        api_secret: "secret2".into(),
-                        spot_store_id: Some("spot".into()),
-                        futures_store_id: None,
-                    },
-                ],
-            },
-            ..Default::default()
-        };
-        for fmt in [
-            SnapshotFormat::Json,
-            SnapshotFormat::Bin,
-            SnapshotFormat::Pack,
-        ] {
-            let bytes = encode(&doc, fmt).unwrap();
-            let out = decode(&bytes, fmt).unwrap();
-            assert_eq!(out.version, VAULT_FORMAT_VERSION);
-            assert_eq!(out.exchanges.bybit.len(), 2);
-            assert_eq!(out.exchanges.bybit[0].store_id, store1_id);
-            assert_eq!(out.exchanges.bybit[1].api_key, "bbbb2222");
-        }
-    }
-
     /// A payload from any other version must be rejected (Unsupported).
     #[test]
     fn future_payload_version_is_rejected() {
@@ -661,11 +611,10 @@ mod tests {
             version: VAULT_FORMAT_VERSION + 1,
             ..sample_doc()
         };
-        for fmt in [SnapshotFormat::Bin, SnapshotFormat::Pack] {
-            let err = decode(&encode(&doc, fmt).unwrap(), fmt)
-                .expect_err("newer payload must be rejected");
-            assert!(matches!(err, Error::Unsupported), "got {err:?}");
-        }
+        let fmt = SnapshotFormat::Pack;
+        let err =
+            decode(&encode(&doc, fmt).unwrap(), fmt).expect_err("newer payload must be rejected");
+        assert!(matches!(err, Error::Unsupported), "got {err:?}");
 
         let mut json: Json = serde_json::to_value(&doc).unwrap();
         json["version"] = Json::from(VAULT_FORMAT_VERSION + 1);
@@ -676,16 +625,11 @@ mod tests {
 
     /// Plan D11: every persisted type of phases 2–7 exists now. A document
     /// with every collection filled must survive both encodings unchanged —
-    /// the bincode half is what catches a type serde can write but not read
-    /// back (internal tags, `flatten`, `Value`).
+    /// the round trip catches a type serde can write but not read back.
     #[test]
     fn a_full_document_round_trips_in_every_format() {
         let doc = crate::model::fixtures::full_doc();
-        for fmt in [
-            SnapshotFormat::Json,
-            SnapshotFormat::Bin,
-            SnapshotFormat::Pack,
-        ] {
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
             let out = decode(&encode(&doc, fmt).unwrap(), fmt).unwrap();
             assert_eq!(out, doc, "{fmt:?}");
         }
@@ -721,561 +665,201 @@ mod tests {
         }
     }
 
-    // -- migrations ---------------------------------------------------------
-    //
-    // One case per (version, format): the skeleton below is the same for
-    // every version, so it is written once and the cases say what differs.
-
-    /// The three encoders in one place: the payload bytes a file of that era
-    /// held. bincode is positional, so such a case hands over the frozen
-    /// struct itself; JSON and MessagePack carry field names, so the raw
-    /// document will do.
+    /// A raw JSON document as the payload bytes of a format that carries field names.
     fn encode_as(payload: &impl serde::Serialize, fmt: SnapshotFormat) -> Vec<u8> {
         match fmt {
-            SnapshotFormat::Json => serde_json::to_vec(payload).expect("a json payload"),
-            SnapshotFormat::Bin => {
-                bincode::serde::encode_to_vec(payload, bincode::config::standard())
-                    .expect("a bincode payload")
-            }
             SnapshotFormat::Pack => rmp_serde::to_vec_named(payload).expect("a packed payload"),
+            _ => serde_json::to_vec(payload).expect("a json payload"),
         }
     }
 
-    /// A vault file holding `payload` as a file of that era held it: the
-    /// header of `fmt`, sealed with "pw", written atomically. Hands back the
-    /// path and the untouched bytes, for the backup assertion.
-    fn sealed(
-        dir: &Path,
-        name: &str,
-        payload: &impl serde::Serialize,
-        fmt: SnapshotFormat,
-    ) -> (PathBuf, Vec<u8>) {
-        let path = dir.join(name);
-        let (header, _, _) = crypto::random_header(fmt);
-        let file = crypto::seal(&header, b"pw", &encode_as(payload, fmt)).expect("seal");
-        crate::vault_io::local::atomic_write(&path, &file).expect("write the vault");
-        (path, file)
-    }
+    // -- the reader table (D2) -----------------------------------------------
 
-    /// What a migration on open must leave behind: the untouched file as
-    /// `.v<N>.bak`, the vault rewritten at the current version in the format
-    /// it is written in from now on (bincode never again), and a second open
-    /// that neither migrates again nor replaces the backup.
-    fn assert_migrated_once(path: &Path, original: &[u8], from_version: u32, fmt: SnapshotFormat) {
-        // Built by hand: `VaultFile::backup_version` would make the copy a
-        // missing backup should be caught by.
-        let mut name = path.file_name().unwrap_or_default().to_os_string();
-        name.push(format!(".v{from_version}.bak"));
-        let backup = path.with_file_name(name);
-        assert_eq!(
-            std::fs::read(&backup).expect("the kept original"),
-            original,
-            "the backup is the untouched file"
-        );
-
-        let (decoded, written) = VaultFile::open_versioned(path, "pw").expect("reopen the vault");
-        assert_eq!(written, fmt.for_writing(), "rewritten in another format");
-        assert_eq!(
-            decoded.from_version, VAULT_FORMAT_VERSION,
-            "the file was not rewritten at the current version"
-        );
-
-        // A second open neither migrates nor replaces the first backup.
-        drop(crate::service::UnlockedVault::open(path.to_path_buf(), "pw").expect("open again"));
-        assert_eq!(std::fs::read(&backup).expect("the kept original"), original);
-    }
-
-    /// One `#[test]` per (version, format): `payload` as a file of that
-    /// version held it, `decoded` what the migrated document must hold, and
-    /// `opened` what the vault shows once it is open. A format no case names
-    /// is missing from the list, where it can be seen.
-    macro_rules! migration_cases {
-        (
-            version: $version:literal,
-            formats: [$($fmt:ident as $case:ident),+ $(,)?],
-            payload: $payload:expr,
-            decoded: $decoded:expr,
-            opened: $opened:expr,
-        ) => {
-            $(
-                #[test]
-                fn $case() {
-                    let fmt = SnapshotFormat::$fmt;
-                    let payload = $payload;
-
-                    // Decoding alone: the version found and the document built.
-                    let decoded = decode_versioned(&encode_as(&payload, fmt), fmt)
-                        .unwrap_or_else(|err| panic!("a v{} payload in {fmt:?}: {err:?}", $version));
-                    assert_eq!(decoded.from_version, $version);
-                    assert_eq!(decoded.doc.version, VAULT_FORMAT_VERSION);
-                    let check_decoded = $decoded;
-                    check_decoded(&decoded.doc);
-
-                    // The same payload as a file on disk: opened, migrated,
-                    // kept as a backup, and migrated only once.
-                    let dir = tempfile::tempdir().expect("temp dir");
-                    let (path, original) =
-                        sealed(dir.path(), &format!("v{}.wallet", $version), &payload, fmt);
-                    let vault = crate::service::UnlockedVault::open(path.clone(), "pw")
-                        .expect("open the migrated vault");
-                    let check_opened = $opened;
-                    check_opened(&vault);
-                    drop(vault);
-                    assert_migrated_once(&path, &original, $version, fmt);
-                }
-            )+
-        };
-    }
-
-    /// The full document as a v1 file holds it, and what it becomes in v2.
-    fn as_v1(doc: &VaultDoc) -> (Json, VaultDoc) {
-        let mut json: Json = serde_json::to_value(doc).unwrap();
-        json["version"] = Json::from(1);
-        let root = json.as_object_mut().unwrap();
-        root.remove("notification_log");
-        root.remove("sync");
-        root.remove("emergency_fund");
-        root.remove("health_last");
-        root.remove("asset_classes");
-        root.remove("asset_class_of");
-        root.remove("valuations");
-        root.remove("tx_properties");
-        // v1 had neither workflows nor automations as workflows.
-        root.remove("workflows");
-        root.remove("workflow_runs");
-        root.insert("automations".into(), Json::Array(Vec::new()));
-        root.insert("automation_runs".into(), Json::Array(Vec::new()));
-        root["settings"]
-            .as_object_mut()
-            .unwrap()
-            .remove("notifications");
-        for contact in root["contacts"].as_array_mut().unwrap() {
-            contact.as_object_mut().unwrap().remove("group");
-        }
-        for reminder in root["reminders"].as_array_mut().unwrap() {
-            let reminder = reminder.as_object_mut().unwrap();
-            for key in [
-                "repeat",
-                "source",
-                "muted",
-                "user_edited",
-                "snoozed_until",
-                "source_key",
-            ] {
-                reminder.remove(key);
-            }
-        }
-        for reading in root["meter_readings"].as_array_mut().unwrap() {
-            let reading = reading.as_object_mut().unwrap();
-            reading.remove("day");
-            reading.remove("zone");
-        }
-        for item in root["utility_items"].as_array_mut().unwrap() {
-            if let Some(meter) = item
-                .get_mut("kind")
-                .and_then(|kind| kind.get_mut("metered"))
-                .and_then(Json::as_object_mut)
-            {
-                meter.remove("formula");
-                meter.remove("zones");
-            }
-        }
-        let mut expected = doc.clone();
-        // The crypto module came with v4: the v1 field list does not hold it.
-        expected.crypto_accounts.clear();
-        expected.crypto_events.clear();
-        expected.crypto_overrides.clear();
-        expected.crypto_tokens.clear();
-        expected.crypto_positions.clear();
-        expected.crypto_snapshots.clear();
-        expected.crypto_cursors.clear();
-        expected.crypto_prices.clear();
-        expected.crypto_wiped_at.clear();
-        expected.workflows.clear();
-        expected.workflow_runs.clear();
-        expected.notification_log.clear();
-        expected.sync = crate::sync::SyncState::default();
-        expected.emergency_fund = Default::default();
-        expected.health_last = None;
-        expected.asset_classes.clear();
-        expected.asset_class_of.clear();
-        expected.valuations.clear();
-        expected.tx_properties.clear();
-        expected.settings.notifications = crate::model::notify::NotificationSettings::default();
-        // A migrated v1 vault has seen no category batch yet, so `open` adds them.
-        expected.settings.categories_rev = 0;
-        for contact in &mut expected.contacts {
-            contact.group.clear();
-        }
-        for reminder in &mut expected.reminders {
-            *reminder = crate::model::planning::Reminder {
-                id: reminder.id.clone(),
-                done: reminder.done,
-                ..crate::model::planning::Reminder::new(&reminder.text, &reminder.due_at)
-            };
-        }
-        for reading in &mut expected.meter_readings {
-            reading.day = None;
-            reading.zone = None;
-        }
-        for item in &mut expected.utility_items {
-            if let crate::model::planning::UtilityKind::Metered { formula, zones, .. } =
-                &mut item.kind
-            {
-                *formula = None;
-                zones.clear();
-            }
-        }
-        (json, expected)
-    }
-
-    /// `as_v1` of the full fixture, built once: the fixture takes a fresh id
-    /// and timestamp on every call, while a case builds the payload and the
-    /// expected document in two steps.
-    fn as_v1_fixture() -> &'static (Json, VaultDoc) {
-        static FIXTURE: std::sync::OnceLock<(Json, VaultDoc)> = std::sync::OnceLock::new();
-        FIXTURE.get_or_init(|| as_v1(&crate::model::fixtures::full_doc()))
-    }
-
-    /// The full document as a v1 file holds it, typed: a bincode v1 payload
-    /// is exactly this struct's field list, by position.
-    fn as_v1_doc() -> (v1::VaultDocV1, VaultDoc) {
-        let (json, expected) = as_v1_fixture();
-        (
-            serde_json::from_value(json.clone()).expect("the v1 field list"),
-            expected.clone(),
-        )
-    }
-
-    migration_cases! {
-        version: 1,
-        formats: [
-            Json as a_v1_file_in_json_migrates_and_is_backed_up,
-            Bin as a_v1_file_in_bincode_migrates_and_is_backed_up,
-        ],
-        payload: as_v1_doc().0,
-        // A v1 file migrates with nothing lost: every field v1 did not have
-        // takes its default, and nothing it did have changes.
-        decoded: |doc: &VaultDoc| assert_eq!(*doc, as_v1_doc().1),
-        opened: |vault: &crate::service::UnlockedVault| {
-            let expected = as_v1_doc().1;
-            assert_eq!(vault.doc.contacts, expected.contacts);
-            assert_eq!(vault.doc.reminders, expected.reminders);
-        },
-    }
-
-    /// A v2 document with automations, as v2 stored them.
-    fn v2_with_automations() -> Json {
+    /// The payload bytes of a document of that `version`, as the format holds
+    /// it: JSON and MessagePack carry field names, so the live document with
+    /// another `version` stands in for an old one (the table looks at the
+    /// version and the container, not at the rest).
+    fn payload_of_version(version: u32, fmt: SnapshotFormat) -> Vec<u8> {
         let mut json: Json = serde_json::to_value(sample_doc()).unwrap();
-        json["version"] = Json::from(2);
-        let template = serde_json::to_value(crate::model::planning::TransactionDraft::Topup(
-            match crate::model::fixtures::full_doc()
-                .transactions
-                .into_iter()
-                .find(|tx| matches!(tx, crate::model::transaction::Transaction::Topup(_)))
-            {
-                Some(crate::model::transaction::Transaction::Topup(inner)) => inner,
-                _ => unreachable!(),
-            },
-        ))
-        .unwrap();
-        json["automations"] = serde_json::json!([{
-            "id": "salary", "name": "Salary", "active": true, "preset": "salary",
-            "schedule": { "monthly": { "day": 20 } },
-            "starts_at": "2026-01-01T00:00:00Z", "template": template,
-            "last_planned_at": "2026-09-20T09:00:00Z", "created_at": "2026-01-01T00:00:00Z"
-        }]);
-        json["automation_runs"] = serde_json::json!([
-            { "id": "r1", "automation_id": "salary", "planned_at": "2026-09-20T09:00:00Z",
-              "processed_at": "2026-09-20T09:00:01Z", "outcome": { "created": { "tx_id": "tx-1" } } },
-            { "id": "r2", "automation_id": "salary", "planned_at": "2026-08-20T09:00:00Z",
-              "processed_at": "2026-08-20T09:00:01Z", "outcome": { "rejected": { "reason": { "invalid": { "message": "archived" } } } } },
-            { "id": "r3", "automation_id": "salary", "planned_at": "2026-07-20T09:00:00Z",
-              "processed_at": "2026-07-20T09:00:01Z", "outcome": "skipped" }
-        ]);
-        json
-    }
-
-    migration_cases! {
-        version: 2,
-        formats: [
-            Json as a_v2_file_in_json_migrates_and_is_backed_up,
-            Pack as a_v2_file_in_pack_migrates_and_is_backed_up,
-        ],
-        payload: v2_with_automations(),
-        // v2 -> v3: an automation becomes a workflow with the same id, its
-        // last date the schedule's mark, its runs workflow runs with the
-        // same outcome.
-        decoded: |doc: &VaultDoc| {
-            let workflow = doc
-                .workflows
-                .iter()
-                .find(|item| item.id == "salary")
-                .expect("the automation became a workflow");
-            assert_eq!(workflow.name, "Salary");
-            let spec = workflow.automation.as_ref().expect("the automation form");
-            assert_eq!(
-                spec.schedule,
-                crate::model::planning::Schedule::Monthly { day: 20 }
-            );
-            assert_eq!(
-                spec.preset,
-                Some(crate::model::planning::AutomationPreset::Salary)
-            );
-            let graph = crate::workflow::Graph::parse(&workflow.graph).expect("the graph parses");
-            assert!(!crate::workflow::validate::has_errors(
-                &crate::workflow::validate(&graph)
-            ));
-            let state = doc
-                .workflow_state
-                .iter()
-                .find(|state| state.workflow_id == "salary")
-                .expect("the schedule mark");
-            assert_eq!(
-                state.marks.get("schedule:t").map(String::as_str),
-                Some("2026-09-20T09:00:00Z")
-            );
-            let outcomes: Vec<_> = doc
-                .workflow_runs
-                .iter()
-                .map(|run| (run.id.as_str(), run.outcome.clone(), run.created.clone()))
-                .collect();
-            assert!(outcomes.contains(&(
-                "r1",
-                crate::workflow::RunOutcome::Done,
-                vec!["tx-1".to_string()]
-            )));
-            assert!(outcomes.iter().any(|(id, outcome, _)| *id == "r2"
-                && matches!(outcome, crate::workflow::RunOutcome::Rejected { planned_at: Some(at), .. } if at == "2026-08-20T09:00:00Z")));
-            assert!(outcomes.contains(&(
-                "r3",
-                crate::workflow::RunOutcome::Dropped {
-                    reason: "skipped".into()
-                },
-                Vec::new()
-            )));
-        },
-        opened: |vault: &crate::service::UnlockedVault| {
-            let automations = vault.automations();
-            assert_eq!(automations.len(), 1);
-            assert_eq!(
-                automations[0].last_planned_at.as_deref(),
-                Some("2026-09-20T09:00:00Z")
-            );
-            assert_eq!(vault.automation_runs(Some("salary")).len(), 3);
-        },
-    }
-
-    /// The full document as a v3 file holds it, and what it becomes in v4:
-    /// the crypto module's collections came with v4, so a v3 file has none of
-    /// them and nothing else changes.
-    fn as_v3(doc: &VaultDoc) -> (Json, VaultDoc) {
-        let mut json: Json = serde_json::to_value(doc).unwrap();
-        json["version"] = Json::from(3);
-        let root = json.as_object_mut().unwrap();
-        let crypto: Vec<String> = root
-            .keys()
-            .filter(|name| crate::kernel::record::level3_collections().any(|known| known == *name))
-            .cloned()
-            .collect();
-        // The fixture fills every crypto collection, so this also checks the
-        // v3 payload really goes in without them.
-        assert_eq!(crypto.len(), 9, "the crypto collections of the document");
-        for name in &crypto {
-            root.remove(name);
+        json["version"] = Json::from(version);
+        match fmt {
+            SnapshotFormat::Json => serde_json::to_vec(&json).unwrap(),
+            SnapshotFormat::Pack => rmp_serde::to_vec_named(&json).unwrap(),
         }
-        let mut expected = doc.clone();
-        expected.crypto_accounts.clear();
-        expected.crypto_events.clear();
-        expected.crypto_overrides.clear();
-        expected.crypto_tokens.clear();
-        expected.crypto_positions.clear();
-        expected.crypto_snapshots.clear();
-        expected.crypto_cursors.clear();
-        expected.crypto_prices.clear();
-        expected.crypto_wiped_at.clear();
-        (json, expected)
     }
 
-    /// `as_v3` of the full fixture, built once (see `as_v1_fixture`).
-    fn as_v3_fixture() -> &'static (Json, VaultDoc) {
-        static FIXTURE: std::sync::OnceLock<(Json, VaultDoc)> = std::sync::OnceLock::new();
-        FIXTURE.get_or_init(|| as_v3(&crate::model::fixtures::full_doc()))
+    /// The payload of the committed v4 fixture of that format, as it is inside
+    /// its container 1.
+    fn v4_payload(fmt: SnapshotFormat) -> Vec<u8> {
+        let (_, _, bytes) = V4_FIXTURES.iter().find(|(_, own, _)| *own == fmt).unwrap();
+        let (plaintext, read) = crypto::open_bytes(bytes, V4_PASSWORD.as_bytes()).unwrap();
+        assert_eq!(read, fmt);
+        plaintext
     }
 
-    /// The v3 struct names the v3 fields itself: serialized, it carries every
-    /// top-level field of the live document except the crypto collections, so
-    /// a field added to the live document later does not become part of v3.
+    fn assert_refused_as_legacy(err: Error, format_text: &str) {
+        let Error::LegacyVault(message) = &err else {
+            panic!("expected LegacyVault, got {err:?}");
+        };
+        assert_eq!(err.code(), "UNSUPPORTED");
+        assert!(message.contains(format_text), "{message}");
+        assert!(message.contains("no longer reads"), "{message}");
+        assert!(message.contains(LAST_LEGACY_BUILD), "{message}");
+    }
+
+    /// Every row of the table of D2, one by one.
     #[test]
-    fn the_v3_struct_lists_no_crypto_collection() {
-        let live = serde_json::to_value(crate::model::fixtures::full_doc()).unwrap();
-        let (v3_json, _) = as_v3_fixture();
-        let v3: super::v3::VaultDocV3 = serde_json::from_value(v3_json.clone()).unwrap();
-        let listed = serde_json::to_value(&v3).unwrap();
-        let listed = listed.as_object().unwrap();
-        for name in listed.keys() {
+    fn the_reader_table_holds_row_by_row() {
+        let json = SnapshotFormat::Json;
+        let new_container = crate::VAULT_CONTAINER_VERSION;
+        let old_container = crate::VAULT_LEGACY_CONTAINER_VERSION;
+        assert_eq!((old_container, new_container), (1, 2));
+
+        // Container 2, payload 1: the current format, nothing to convert.
+        let current = decode_in_container(2, &payload_of_version(1, json), json).unwrap();
+        assert_eq!(current.from_version, 1);
+        assert_eq!(current.doc.version, VAULT_FORMAT_VERSION);
+        assert!(current.carry.is_none());
+
+        // Container 1, payload 4 (Json or Pack): the transition.
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
+            let moved = decode_in_container(1, &v4_payload(fmt), fmt).unwrap();
+            assert_eq!(moved.from_version, 4, "{fmt:?}");
+            assert_eq!(moved.doc.version, VAULT_FORMAT_VERSION, "{fmt:?}");
+            assert!(moved.carry.is_some(), "{fmt:?}");
+        }
+
+        // Container 1, payload 1, 2, 3 (Json or Pack): refused as legacy.
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
+            for version in 1..=3 {
+                let err =
+                    decode_in_container(1, &payload_of_version(version, fmt), fmt).unwrap_err();
+                assert_refused_as_legacy(err, &format!("format {version}"));
+            }
+        }
+
+        // Container 2 with anything but payload 1, container 1 with 5 or more or 0,
+        // any other container: Unsupported.
+        for (container, version) in [
+            (2, 0),
+            (2, 2),
+            (2, 4),
+            (2, 5),
+            (1, 0),
+            (1, 5),
+            (1, 99),
+            (0, 1),
+            (3, 1),
+            (3, 4),
+            (99, 1),
+        ] {
+            let err = decode_in_container(container, &payload_of_version(version, json), json)
+                .unwrap_err();
             assert!(
-                !name.starts_with("crypto_"),
-                "{name} is a crypto collection"
+                matches!(err, Error::Unsupported),
+                "container {container}, payload {version}: {err:?}"
             );
         }
-        let expected: Vec<&String> = live
-            .as_object()
-            .unwrap()
-            .keys()
-            .filter(|name| !name.starts_with("crypto_"))
-            .collect();
-        assert_eq!(listed.len(), expected.len());
-        for name in expected {
-            assert!(listed.contains_key(name), "{name} is missing from v3");
+    }
+
+    /// An old-v1 payload (the counter before the reset) in container 1 is not read as the new
+    /// v1, which is the whole point of the container version.
+    #[test]
+    fn an_old_v1_payload_is_refused() {
+        let doc = crate::model::fixtures::full_doc();
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
+            let mut json: Json = serde_json::to_value(&doc).unwrap();
+            json["version"] = Json::from(1);
+            let old = match fmt {
+                SnapshotFormat::Pack => rmp_serde::to_vec_named(&json).unwrap(),
+                _ => serde_json::to_vec(&json).unwrap(),
+            };
+            let err = decode_in_container(1, &old, fmt).unwrap_err();
+            assert_refused_as_legacy(err, "format 1");
+            // The same bytes in container 2 are the new v1.
+            assert_eq!(decode_in_container(2, &old, fmt).unwrap().from_version, 1);
         }
-    }
-
-    migration_cases! {
-        version: 3,
-        formats: [
-            Json as a_v3_file_in_json_migrates_and_is_backed_up,
-            Pack as a_v3_file_in_pack_migrates_and_is_backed_up,
-        ],
-        payload: as_v3_fixture().0.clone(),
-        // v3 -> v4: no data changes. Everything the file held is still there,
-        // and the crypto collections it could not hold are empty.
-        decoded: |doc: &VaultDoc| {
-            assert_eq!(*doc, as_v3_fixture().1);
-            assert!(doc.crypto_accounts.is_empty());
-            assert!(doc.crypto_events.is_empty());
-            assert!(doc.crypto_prices.is_empty());
-        },
-        opened: |vault: &crate::service::UnlockedVault| {
-            let expected = &as_v3_fixture().1;
-            assert_eq!(vault.doc.contacts, expected.contacts);
-            assert_eq!(vault.doc.transactions, expected.transactions);
-            assert!(vault.doc.crypto_events.is_empty());
-            // A document with no crypto data does not force level 3.
-            assert_eq!(
-                vault.min_allowed_level(),
-                crate::crypto::level::SecurityLevel::Ledger
-            );
-        },
-    }
-
-    /// What the two committed v3 files (`fixtures/v3.json.bin`,
-    /// `fixtures/v3.bincode.bin`) hold once migrated, written out by hand and
-    /// not built from today's structs, so a change to them that alters how an
-    /// old file reads shows up here. Fields the files leave empty come from
-    /// `VaultDoc::default()` (empty collections); everything else is spelled
-    /// out, including the values a default would also give.
-    fn the_committed_v3_file_as_v4() -> VaultDoc {
-        use crate::model::category::{Category, CategoryGroup};
-        use crate::model::notify::NotificationSettings;
-        use crate::model::planning::EmergencyFund;
-        use crate::model::store::StoreScope;
-        use crate::model::vault::{DailyBudgetMode, DashPeriod, ManualPrice, Settings, TxProperty};
-
-        VaultDoc {
-            version: 4,
-            id: "3f6c1f0e-0000-4000-8000-000000000003".into(),
-            created_at: "2026-01-15T08:00:00Z".into(),
-            settings: Settings {
-                display_decimals: 2,
-                dashboard_widgets: Vec::new(),
-                fx_refresh_interval_sec: 300,
-                minimize_to_tray: true,
-                savings_rate: Amount::parse("0.15").unwrap(),
-                daily_budget_mode: DailyBudgetMode::UntilIncome,
-                budget_currency: "thb".into(),
-                notifications: NotificationSettings {
-                    system: true,
-                    hide_details_when_locked: false,
-                    default_time: "09:30".into(),
-                    categories: Vec::new(),
-                },
-                budget_configured: true,
-                onboarding_skipped: vec!["tour".into()],
-                inflation_mode: Default::default(),
-                inflation_source: Default::default(),
-                inflation_manual: Default::default(),
-                inflation_adopted: false,
-                manual_income: Some(Amount::parse("50000").unwrap()),
-                manual_expenses: None,
-                categories_rev: 1,
-                freedom_rate: None,
-                carry_since: Some("2026-01".into()),
-                pinned: Vec::new(),
-                dashboard_period: DashPeriod::Quarter,
-                onboarding_checklist_hidden: false,
-                crypto: None,
-                schedule_timezone: Some("Asia/Bangkok".into()),
-                crypto_raise_pending: false,
-            },
-            categories: vec![
-                Category {
-                    key: "salary".into(),
-                    name: None,
-                    group: CategoryGroup::Income,
-                    archived: false,
-                    essential: None,
-                    passive: Some(true),
-                },
-                Category {
-                    key: "groceries".into(),
-                    name: Some("Food".into()),
-                    group: CategoryGroup::Daily,
-                    archived: false,
-                    essential: Some(true),
-                    passive: None,
-                },
-            ],
-            manual_prices: vec![ManualPrice {
-                asset_key: "property:flat".into(),
-                unit_price: Amount::parse("4500000").unwrap(),
-                currency: "thb".into(),
-                updated_at: "2026-03-01T00:00:00Z".into(),
-            }],
-            discarded_imports: vec!["bybit-1".into()],
-            emergency_fund: EmergencyFund {
-                scope: StoreScope {
-                    store_ids: Vec::new(),
-                    include_children: false,
-                },
-                target_months: 6,
-                avg_months: 6,
-            },
-            tx_properties: vec![TxProperty {
-                tx_id: "tx-1".into(),
-                property_id: "flat".into(),
-            }],
-            ..VaultDoc::default()
-        }
-    }
-
-    /// A v3 file as it was written then: the bytes are committed, produced
-    /// once and never by a test, so this reads old bytes with the code as it
-    /// is today. Migrating it yields the literal above.
-    fn assert_a_committed_v3_file_migrates(bytes: &[u8], fmt: SnapshotFormat) {
-        let decoded = decode_versioned(bytes, fmt).expect("the committed v3 file reads");
-        assert_eq!(decoded.from_version, 3);
-        assert_eq!(decoded.doc, the_committed_v3_file_as_v4());
     }
 
     #[test]
-    fn a_v3_file_in_json_opens_and_migrates() {
-        assert_a_committed_v3_file_migrates(
-            include_bytes!("fixtures/v3.json.bin"),
+    fn an_old_v2_and_v3_payload_is_refused() {
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
+            for version in [2, 3] {
+                let err =
+                    decode_in_container(1, &payload_of_version(version, fmt), fmt).unwrap_err();
+                assert_refused_as_legacy(err, &format!("format {version}"));
+            }
+        }
+    }
+
+    /// A vault file of container 1 holding an old payload: opening it names the
+    /// problem and leaves the file as it was.
+    #[test]
+    fn an_old_vault_file_is_refused_on_open_and_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        for (version, fmt) in [
+            (1, SnapshotFormat::Json),
+            (2, SnapshotFormat::Pack),
+            (3, SnapshotFormat::Json),
+        ] {
+            let path = dir.path().join(format!("v{version}-{fmt:?}.wallet"));
+            let header = old_build_header(1, fmt);
+            let file = crypto::seal(&header, b"pw", &payload_of_version(version, fmt)).unwrap();
+            std::fs::write(&path, &file).unwrap();
+
+            let err = VaultFile::open(&path, "pw").unwrap_err();
+            assert!(matches!(err, Error::LegacyVault(_)), "{err:?}");
+            assert_eq!(std::fs::read(&path).unwrap(), file);
+        }
+    }
+
+    /// An old positional-binary file (payload_fmt 1) is refused as legacy and
+    /// left alone, whatever the container.
+    #[test]
+    fn a_file_in_the_old_binary_encoding_is_refused_on_open() {
+        let dir = tempfile::tempdir().unwrap();
+        for container in [1, 2] {
+            let path = dir.path().join(format!("c{container}.wallet"));
+            let mut header = old_build_header(container, SnapshotFormat::Json);
+            header.payload_fmt = crypto::header::VaultHeader::FMT_BIN;
+            let file = crypto::seal(&header, b"pw", b"whatever").unwrap();
+            std::fs::write(&path, &file).unwrap();
+
+            let err = VaultFile::open(&path, "pw").unwrap_err();
+            assert_refused_as_legacy(err, "positional binary");
+            assert_eq!(std::fs::read(&path).unwrap(), file);
+        }
+    }
+
+    /// A file written now is container 2, payload 1, in both formats.
+    #[test]
+    fn a_new_file_is_container_2_payload_1() {
+        let dir = tempfile::tempdir().unwrap();
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
+            let path = dir.path().join(format!("{fmt:?}.wallet"));
+            VaultFile::create(&path, "pw").unwrap();
+            VaultFile::save(&path, "pw", &sample_doc(), fmt).unwrap();
+            let bytes = std::fs::read(&path).unwrap();
+            let (header, _) = crypto::parse_file(&bytes).unwrap();
+            assert_eq!(header.version, 2);
+            let (decoded, _) = VaultFile::open_versioned(&path, "pw").unwrap();
+            assert_eq!(decoded.from_version, 1);
+            assert_eq!(decoded.doc.version, 1);
+            assert!(decoded.carry.is_none());
+        }
+        let plain = dir.path().join("plain.wallet");
+        let doc = sample_doc();
+        let file = crypto::seal_plain(
             SnapshotFormat::Json,
+            &encode(&doc, SnapshotFormat::Json).unwrap(),
         );
-    }
-
-    #[test]
-    fn a_v3_file_in_bincode_opens_and_migrates() {
-        assert_a_committed_v3_file_migrates(
-            include_bytes!("fixtures/v3.bincode.bin"),
-            SnapshotFormat::Bin,
-        );
+        std::fs::write(&plain, file).unwrap();
+        let (header, _) = crypto::parse_file(&std::fs::read(&plain).unwrap()).unwrap();
+        assert_eq!(header.version, 2);
     }
 
     /// v2 carries field names: a field missing from an older v2 file takes its
-    /// default instead of breaking the read (the reason bincode was dropped).
+    /// default instead of breaking the read.
     #[test]
     fn a_v2_pack_payload_tolerates_a_missing_defaulted_field() {
         let doc = crate::model::fixtures::full_doc();
@@ -1317,21 +901,11 @@ mod tests {
         let err = decode(&serde_json::to_vec(&json).unwrap(), SnapshotFormat::Json).unwrap_err();
         assert!(matches!(err, Error::IncompatibleVault(_)), "got {err:?}");
         assert_eq!(err.code(), "INCOMPATIBLE_VAULT");
-
-        // bincode: the right version up front, then something else entirely.
-        let old = bincode::serde::encode_to_vec(
-            (VAULT_FORMAT_VERSION, "id", "2026-01-01T00:00:00Z", 8u32),
-            bincode::config::standard(),
-        )
-        .unwrap();
-        let err = decode(&old, SnapshotFormat::Bin).unwrap_err();
-        assert!(matches!(err, Error::IncompatibleVault(_)), "got {err:?}");
     }
 
     #[test]
     fn corrupt_payload_is_an_error_not_a_panic() {
         let junk = vec![0xffu8; 32];
-        assert!(decode(&junk, SnapshotFormat::Bin).is_err());
         assert!(decode(b"{not json", SnapshotFormat::Json).is_err());
         assert!(decode(&junk, SnapshotFormat::Pack).is_err());
     }
@@ -1379,10 +953,11 @@ mod tests {
     // -- files of every version ---------------------------------------------
 
     /// The header as builds before the crypto level wrote it, field by field:
-    /// nothing here follows the current constants.
-    fn old_build_header(fmt: SnapshotFormat) -> crypto::header::VaultHeader {
+    /// nothing here follows the current constants. `container` is the container
+    /// version written into it.
+    fn old_build_header(container: u32, fmt: SnapshotFormat) -> crypto::header::VaultHeader {
         crypto::header::VaultHeader {
-            version: 1,
+            version: container,
             kdf_id: 0,
             kdf_mem_kib: 64 * 1024,
             kdf_iters: 3,
@@ -1397,13 +972,9 @@ mod tests {
     fn a_full_document_from_an_old_build_opens_in_every_format() {
         let dir = tempfile::tempdir().unwrap();
         let doc = crate::model::fixtures::full_doc();
-        for fmt in [
-            SnapshotFormat::Json,
-            SnapshotFormat::Bin,
-            SnapshotFormat::Pack,
-        ] {
+        for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
             let path = dir.path().join(format!("{fmt:?}.wallet"));
-            let header = old_build_header(fmt);
+            let header = old_build_header(2, fmt);
             let file = crypto::seal(&header, b"pw", &encode(&doc, fmt).unwrap()).unwrap();
             std::fs::write(&path, file).unwrap();
 
@@ -1680,5 +1251,124 @@ mod tests {
         // stores are not equal to the input; none of them goes.
         let kept: Vec<_> = decoded.doc.stores.iter().map(|store| &store.id).collect();
         assert!(doc.stores.iter().all(|store| kept.contains(&&store.id)));
+    }
+
+    // -- the committed v4 fixtures (vault reset) -----------------------------
+
+    use super::fixtures_gen::{V4_PASSWORD, V4_VERSION};
+
+    const V4_FIXTURES: [(&str, SnapshotFormat, &[u8]); 2] = [
+        (
+            "v4.json.wallet",
+            SnapshotFormat::Json,
+            include_bytes!("fixtures/v4.json.wallet"),
+        ),
+        (
+            "v4.pack.wallet",
+            SnapshotFormat::Pack,
+            include_bytes!("fixtures/v4.pack.wallet"),
+        ),
+    ];
+
+    /// The document the fixtures hold, as written by the generator.
+    fn v4_expected() -> Json {
+        serde_json::from_str(include_str!("fixtures/v4.expected.json")).unwrap()
+    }
+
+    /// Opens the committed fixture with the password written in the generator.
+    fn open_v4_fixture(name: &str, bytes: &[u8]) -> (Decoded, SnapshotFormat) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(name);
+        std::fs::write(&path, bytes).unwrap();
+        VaultFile::open_versioned(&path, V4_PASSWORD).unwrap()
+    }
+
+    #[test]
+    fn v4_fixture_opens_in_both_formats_and_equals_the_expected_document() {
+        let expected = v4_expected();
+        for (name, fmt, bytes) in V4_FIXTURES {
+            let (decoded, read) = open_v4_fixture(name, bytes);
+            assert_eq!(read, fmt, "{name}");
+            assert_eq!(decoded.from_version, V4_VERSION, "{name}");
+            assert!(decoded.carry.is_some(), "{name}");
+            // The transition renumbers the document; its content is the fixture's.
+            let mut transitioned = serde_json::to_value(&decoded.doc).unwrap();
+            assert_eq!(transitioned["version"], VAULT_FORMAT_VERSION);
+            transitioned["version"] = expected["version"].clone();
+            // The graphs are brought to the live version by the transition, so the fields
+            // that hold them differ by design.
+            let graph_fields = ["workflows", "workflow_waits", "workflow_queue"];
+            for (field, value) in expected.as_object().unwrap() {
+                if graph_fields.contains(&field.as_str()) {
+                    continue;
+                }
+                assert_eq!(&transitioned[field], value, "{name}: {field}");
+            }
+        }
+    }
+
+    #[test]
+    fn v4_fixture_is_refused_with_another_password() {
+        for (name, _, bytes) in V4_FIXTURES {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join(name);
+            std::fs::write(&path, bytes).unwrap();
+            assert!(matches!(
+                VaultFile::open(&path, "wrong"),
+                Err(Error::Secret)
+            ));
+        }
+    }
+
+    #[test]
+    fn v4_fixture_fills_every_collection() {
+        let doc = v4_expected();
+        let fields = doc.as_object().unwrap();
+        for (field, value) in fields {
+            let empty = match value {
+                Json::Array(items) => items.is_empty(),
+                Json::Object(entries) => entries.is_empty(),
+                Json::Null => true,
+                _ => false,
+            };
+            assert!(!empty, "the fixture leaves `{field}` empty");
+        }
+        for (field, value) in fields["sync"].as_object().unwrap() {
+            let must_be_filled = [
+                "stamps",
+                "tombstones",
+                "tombstones_seen",
+                "peers",
+                "batches",
+            ];
+            assert!(
+                !must_be_filled.contains(&field.as_str())
+                    || !value.as_object().map_or_else(
+                        || value.as_array().is_some_and(Vec::is_empty),
+                        |entries| entries.is_empty()
+                    ),
+                "the fixture's sync leaves `{field}` empty"
+            );
+        }
+    }
+
+    #[test]
+    fn v4_fixture_carries_what_the_reset_has_to_transition() {
+        let doc = v4_expected();
+        assert_eq!(doc["settings"]["crypto"], true);
+        assert!(!doc["pending_imports"].as_array().unwrap().is_empty());
+        assert!(!doc["sync"]["tombstones"].as_object().unwrap().is_empty());
+        let graph: Json =
+            serde_json::from_str(doc["workflows"][0]["graph"].as_str().unwrap()).unwrap();
+        assert_eq!(graph["version"], 2);
+        let (decoded, _) = open_v4_fixture(V4_FIXTURES[0].0, V4_FIXTURES[0].2);
+        let carry = decoded.carry.expect("a v4 file hands on a carry");
+        assert!(!carry.exchange_keys.is_empty());
+        assert!(
+            carry
+                .exchange_keys
+                .iter()
+                .all(|key| !key.api_secret.is_empty())
+        );
     }
 }

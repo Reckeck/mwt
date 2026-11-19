@@ -3,7 +3,7 @@
 //!
 //! Persisted in the vault. Every enum here is externally tagged and nothing
 //! uses `#[serde(tag)]`, `untagged`, `flatten` or `serde_json::Value`, so the
-//! legacy bincode files of payload v1 stay readable. A new variant goes last;
+//! stored JSON stays plain and stable. A new variant goes last by convention;
 //! renaming or removing a field or variant needs a payload version bump with
 //! a migration (see `storage`).
 
@@ -90,7 +90,7 @@ pub enum TxOrigin {
         planned_date: Option<crate::time::LocalDate>,
         /// Booked with an approximate amount (a salary that differs every
         /// time); cleared when the user puts in the real one. Lives here, not
-        /// in `TxMeta`, so v1 bincode files (read by position) keep reading.
+        /// in `TxMeta`.
         #[serde(default)]
         estimated: bool,
         /// The occasion this run was for (`crate::workflow::RunKey`), the

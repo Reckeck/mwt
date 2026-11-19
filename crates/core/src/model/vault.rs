@@ -213,7 +213,7 @@ pub struct Valuation {
 
 /// An operation that belongs to a property (plan G4): rent received for a
 /// flat, fuel or insurance for a car. Kept beside the operations, not in
-/// them, so the operation format the older files store by position stays put.
+/// them, so the operation shape stays unchanged.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct TxProperty {
     pub tx_id: String,
@@ -463,7 +463,7 @@ pub const MAX_IMPORT_RUNS: usize = 500;
 /// Most discarded exchange ids remembered so they are not staged again.
 pub const MAX_DISCARDED_IMPORTS: usize = 20_000;
 
-/// Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).
+/// Full plaintext vault document. Serialized as JSON (dev) or MessagePack (prod).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
 pub struct VaultDoc {
     pub version: u32,

@@ -15,6 +15,11 @@ pub enum Error {
     #[error("unsupported vault file/version")]
     Unsupported,
 
+    /// A vault file of a format this build no longer reads; the text says
+    /// which format it is and what to do.
+    #[error("{0}")]
+    LegacyVault(String),
+
     #[error("serialization error: {0}")]
     Serialize(String),
 
@@ -266,7 +271,7 @@ impl Error {
             Error::Secret => "SECRET",
             Error::AlreadyExists(_) => "ALREADY_EXISTS",
             Error::NotFound(_) => "NOT_FOUND",
-            Error::Unsupported => "UNSUPPORTED",
+            Error::Unsupported | Error::LegacyVault(_) => "UNSUPPORTED",
             Error::Serialize(_) => "SERIALIZE",
             Error::Deserialize(_) => "DESERIALIZE",
             Error::Crypto(_) => "CRYPTO",

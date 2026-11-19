@@ -40,10 +40,17 @@ impl VaultHeader {
     /// correct password wrong. An unknown id makes it answer `Unsupported`.
     pub const KDF_ARGON2ID_HARDENED: u8 = 2;
     pub const FMT_JSON: u8 = 0;
-    /// bincode: positional, written by v1 release builds; read-only now.
+    /// Old positional binary, written by early release builds; refused now.
     pub const FMT_BIN: u8 = 1;
     /// MessagePack with field names: release builds from payload v2 on.
     pub const FMT_PACK: u8 = 2;
+
+    /// Whether this build reads the container: the current version and the one
+    /// before the format reset (see [`crate::VAULT_LEGACY_CONTAINER_VERSION`]).
+    pub fn is_readable(&self) -> bool {
+        self.version == crate::VAULT_CONTAINER_VERSION
+            || self.version == crate::VAULT_LEGACY_CONTAINER_VERSION
+    }
 
     pub fn new(fmt: SnapshotFormat, salt: [u8; SALT_LEN], nonce: [u8; NONCE_LEN]) -> Self {
         Self::with_kdf(fmt, KdfParams::STANDARD, salt, nonce)
@@ -159,7 +166,7 @@ pub fn level_of_container(head: &[u8]) -> Result<SecurityLevel> {
         .strip_prefix(VAULT_MAGIC.as_slice())
         .ok_or(Error::Unsupported)?;
     let header = VaultHeader::from_bytes(body)?;
-    if header.version != crate::VAULT_CONTAINER_VERSION {
+    if !header.is_readable() {
         return Err(Error::Unsupported);
     }
     Ok(match header.kdf_id {
@@ -191,7 +198,7 @@ mod tests {
     #[test]
     fn header_roundtrip() {
         let (_, _, _) = (0, [0u8; 16], [0u8; 24]);
-        let header = VaultHeader::new(SnapshotFormat::Bin, [7u8; 16], [9u8; 24]);
+        let header = VaultHeader::new(SnapshotFormat::Pack, [7u8; 16], [9u8; 24]);
         let bytes = header.bytes();
         assert_eq!(bytes.len(), HEADER_LEN);
         let parsed = VaultHeader::from_bytes(&bytes).unwrap();
@@ -275,6 +282,22 @@ mod tests {
         unknown_kdf[VAULT_MAGIC.len() + 4] = 9;
         for bad in [&b""[..], &good[..20], &foreign, &future, &unknown_kdf] {
             assert!(matches!(level_of_container(bad), Err(Error::Unsupported)));
+        }
+    }
+
+    #[test]
+    fn the_reader_takes_container_1_and_2_and_every_header_is_written_as_2() {
+        let mut header = VaultHeader::new(SnapshotFormat::Pack, [7u8; 16], [9u8; 24]);
+        assert_eq!(header.version, 2);
+        assert_eq!(VaultHeader::plain(SnapshotFormat::Json).version, 2);
+        for (version, readable) in [(0, false), (1, true), (2, true), (3, false)] {
+            header.version = version;
+            assert_eq!(header.is_readable(), readable, "container {version}");
+            assert_eq!(
+                level_of_container(&container(&header)).is_ok(),
+                readable,
+                "container {version}"
+            );
         }
     }
 }

@@ -328,7 +328,7 @@ mod tests {
       "warnings":{
         "unsound":[{"kind":"unsound","package":{"name":"glib","version":"0.18.5"},
           "advisory":{"id":"RUSTSEC-2024-0429","title":"Unsoundness","aliases":["GHSA-wrw7-89jp-8q8g"]}}],
-        "unmaintained":[{"kind":"unmaintained","package":{"name":"bincode","version":"2.0.1"},
+        "unmaintained":[{"kind":"unmaintained","package":{"name":"oldpkg","version":"2.0.1"},
           "advisory":{"id":"RUSTSEC-2025-0141","title":"unmaintained","aliases":[]}}],
         "yanked":[{"kind":"yanked","package":{"name":"foo","version":"1.0.0"},"advisory":null}]}}"#;
 

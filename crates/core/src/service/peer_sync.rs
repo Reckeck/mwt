@@ -562,7 +562,7 @@ impl UnlockedVault {
     /// writing or syncing anything. Only for reading records out of it.
     pub(crate) fn open_copy(&self, remote: &[u8], password: &str) -> Result<UnlockedVault> {
         let (plaintext, fmt, _key) = crate::crypto::open_bytes_keyed(remote, password.as_bytes())?;
-        let decoded = crate::storage::decode_versioned(&plaintext, fmt)?;
+        let decoded = crate::storage::decode_file(remote, &plaintext, fmt)?;
         Ok(UnlockedVault {
             path: self.path.clone(),
             fmt: fmt.for_writing(),

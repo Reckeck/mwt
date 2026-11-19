@@ -11,7 +11,7 @@
 //! 21        kdf_par      u8                      (1)
 //! 22        salt[16]
 //! 38        nonce[24]                            (XChaCha20-Poly1305)
-//! 62        payload_fmt  u8                      (0 = JSON, 1 = bincode)
+//! 62        payload_fmt  u8                      (0 = JSON, 1 = old positional binary, refused; 2 = MessagePack)
 //! 63        payload ... ciphertext + 16-byte tag  (AAD = bytes[0..63])
 //! ```
 //!
@@ -226,6 +226,25 @@ pub fn seal_with(key: &SealKey, payload_fmt: SnapshotFormat, plaintext: &[u8]) -
     encrypt(&header, &key.key, plaintext)
 }
 
+/// A plain file in an older container, as the builds before the format reset
+/// wrote it: for tests of the reader table.
+#[cfg(test)]
+pub(crate) fn seal_plain_in_container(
+    container: u32,
+    payload_fmt: SnapshotFormat,
+    plaintext: &[u8],
+) -> Vec<u8> {
+    let mut header = VaultHeader::plain(payload_fmt);
+    header.version = container;
+    let header = header.bytes();
+    let mut out = Vec::new();
+    out.extend_from_slice(VAULT_MAGIC);
+    out.extend_from_slice(&header);
+    out.extend_from_slice(plaintext);
+    out.extend_from_slice(&plain_checksum(&header, plaintext));
+    out
+}
+
 /// The file of a vault without a password: header, payload, checksum.
 pub fn seal_plain(payload_fmt: SnapshotFormat, plaintext: &[u8]) -> Vec<u8> {
     let header = VaultHeader::plain(payload_fmt).bytes();
@@ -259,18 +278,26 @@ pub fn file_is_encrypted(path: &std::path::Path) -> bool {
     if file.read_exact(&mut head).is_err() || &head[..VAULT_MAGIC.len()] != VAULT_MAGIC {
         return true;
     }
-    VaultHeader::from_bytes(&head[VAULT_MAGIC.len()..]).map_or(true, |header| {
-        header.version != crate::VAULT_CONTAINER_VERSION || !header.is_plain()
-    })
+    VaultHeader::from_bytes(&head[VAULT_MAGIC.len()..])
+        .map_or(true, |header| !header.is_readable() || !header.is_plain())
+}
+
+/// The payload format a header names: the old positional binary (1) is refused as a legacy
+/// vault, any other unknown byte is unsupported.
+fn payload_format_of(header: &VaultHeader) -> Result<SnapshotFormat> {
+    match SnapshotFormat::from_u8(header.payload_fmt) {
+        Some(fmt) => Ok(fmt),
+        None if header.payload_fmt == VaultHeader::FMT_BIN => {
+            Err(format::legacy_refusal(None, "positional binary"))
+        }
+        None => Err(Error::Unsupported),
+    }
 }
 
 /// Encrypt `plaintext` under a header+password. Returns the full file bytes.
 pub fn seal(header: &VaultHeader, password: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
     if header.is_plain() {
-        return Ok(seal_plain(
-            SnapshotFormat::from_u8(header.payload_fmt).ok_or(Error::Unsupported)?,
-            plaintext,
-        ));
+        return Ok(seal_plain(payload_format_of(header)?, plaintext));
     }
     let key = Zeroizing::new(derive_key(password, &header.salt, &header.kdf())?);
     encrypt(header, &key, plaintext)
@@ -312,7 +339,7 @@ pub fn parse_file(bytes: &[u8]) -> Result<(VaultHeader, &[u8])> {
         return Err(Error::Unsupported);
     }
     let header = VaultHeader::from_bytes(&bytes[VAULT_MAGIC.len()..])?;
-    if header.version != crate::VAULT_CONTAINER_VERSION {
+    if !header.is_readable() {
         return Err(Error::Unsupported);
     }
     let ct = &bytes[VAULT_MAGIC.len() + VaultHeader::LEN..];
@@ -350,7 +377,7 @@ fn open_plain(header: &VaultHeader, ct: &[u8]) -> Result<(Vec<u8>, SnapshotForma
     if header.kdf_mem_kib != 0 || header.kdf_iters != 0 || header.kdf_par != 0 {
         return Err(Error::Secret);
     }
-    let fmt = SnapshotFormat::from_u8(header.payload_fmt).ok_or(Error::Unsupported)?;
+    let fmt = payload_format_of(header)?;
     let split = ct.len().checked_sub(32).ok_or(Error::Unsupported)?;
     let (payload, checksum) = ct.split_at(split);
     if plain_checksum(&header.bytes(), payload).as_slice() != checksum {
@@ -366,7 +393,7 @@ fn decrypt(header: &VaultHeader, ct: &[u8], key: &SealKey) -> Result<(Vec<u8>, S
     let pt = cipher
         .decrypt(&nonce, Payload { msg: ct, aad: &aad })
         .map_err(|_| Error::Secret)?;
-    let fmt = SnapshotFormat::from_u8(header.payload_fmt).ok_or(Error::Unsupported)?;
+    let fmt = payload_format_of(header)?;
     Ok((pt, fmt))
 }
 
@@ -643,7 +670,6 @@ mod tests {
     fn files_of_the_old_builds_still_open() {
         for (golden, fmt) in [
             (GOLDEN_JSON, SnapshotFormat::Json),
-            (GOLDEN_BIN, SnapshotFormat::Bin),
             (GOLDEN_PACK, SnapshotFormat::Pack),
         ] {
             let file = unhex(golden);
@@ -652,6 +678,13 @@ mod tests {
             assert_eq!(key.kdf(), KdfParams::STANDARD);
             assert!(matches!(open_bytes(&file, b"wrong"), Err(Error::Secret)));
         }
+        // An old-binary file decrypts, then is refused as a legacy vault.
+        let bin = unhex(GOLDEN_BIN);
+        assert!(matches!(
+            open_bytes(&bin, b"golden password"),
+            Err(Error::LegacyVault(_))
+        ));
+        assert!(matches!(open_bytes(&bin, b"wrong"), Err(Error::Secret)));
         let (plaintext, fmt) = open_bytes(&unhex(GOLDEN_PLAIN), b"").unwrap();
         assert_eq!(
             (plaintext.as_slice(), fmt),

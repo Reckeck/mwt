@@ -8068,7 +8068,7 @@ planned_date?: string | null,
 /**
  * Booked with an approximate amount (a salary that differs every
  * time); cleared when the user puts in the real one. Lives here, not
- * in `TxMeta`, so v1 bincode files (read by position) keep reading.
+ * in `TxMeta`.
  */
 estimated: boolean, 
 /**
@@ -8112,7 +8112,7 @@ convert: ConvertPreview | null, };
 /**
  * An operation that belongs to a property (plan G4): rent received for a
  * flat, fuel or insurance for a car. Kept beside the operations, not in
- * them, so the operation format the older files store by position stays put.
+ * them, so the operation shape stays unchanged.
  */
 type TxProperty = { tx_id: string, 
 /**
@@ -8695,7 +8695,7 @@ name: string,
 modified_at: string, size_bytes: number, };
 
 /**
- * Full plaintext vault document. Serialized as JSON (dev) or bincode (prod).
+ * Full plaintext vault document. Serialized as JSON (dev) or MessagePack (prod).
  */
 type VaultDoc = { version: number, id: string, created_at: string, settings: Settings, stores: Array<Store>, holdings: Array<Holding>, transactions: Array<Transaction>, categories: Array<Category>, price_cache: Array<PricePoint>, fx_cache: Array<FxPoint>, 
 /**
