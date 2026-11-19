@@ -39,11 +39,49 @@ fn code_of(line: &str) -> &str {
     line.split_once("//").map_or(line, |(code, _)| code)
 }
 
+/// Net `{` minus `}` of a line's code part.
+fn brace_delta(line: &str) -> i32 {
+    code_of(line).chars().fold(0, |depth, ch| match ch {
+        '{' => depth + 1,
+        '}' => depth - 1,
+        _ => depth,
+    })
+}
+
+/// Line indices (0-based) of the items that follow a `#[cfg(test)]` line: a one-line item
+/// ending in `;`, or a braced block up to its closing brace.
+fn test_item_lines(lines: &[&str]) -> Vec<bool> {
+    let mut skipped = vec![false; lines.len()];
+    let mut index = 0;
+    while index < lines.len() {
+        if lines[index].trim() != CFG_TEST {
+            index += 1;
+            continue;
+        }
+        skipped[index] = true;
+        let mut depth = 0;
+        index += 1;
+        while index < lines.len() {
+            skipped[index] = true;
+            depth += brace_delta(lines[index]);
+            let code = code_of(lines[index]);
+            index += 1;
+            if depth <= 0 && (code.trim_end().ends_with(';') || code.contains('}')) {
+                break;
+            }
+        }
+    }
+    skipped
+}
+
 /// Lines of one source text that use `f64` outside tests and without the marker.
 fn findings_in(file: &str, text: &str) -> Vec<Finding> {
-    text.lines()
+    let lines: Vec<&str> = text.lines().collect();
+    let skipped = test_item_lines(&lines);
+    lines
+        .iter()
         .enumerate()
-        .take_while(|(_, line)| line.trim() != CFG_TEST)
+        .filter(|(index, _)| !skipped[*index])
         .filter(|(_, line)| code_of(line).contains("f64") && !line.contains(MARKER))
         .map(|(index, _)| Finding {
             file: file.to_string(),
@@ -117,6 +155,16 @@ mod tests {
     fn test_code_is_not_scanned() {
         let text = "fn a() {}\n#[cfg(test)]\nmod tests { fn b(_: f64) {} }\n";
         assert!(findings_in("x.rs", text).is_empty());
+    }
+
+    #[test]
+    fn code_after_a_test_item_is_still_scanned() {
+        let text = "#[cfg(test)]\nmod x_tests;\nfn a(_: f64) {}\n#[cfg(test)]\nmod t {\n    fn b(_: f64) {}\n}\nfn c(_: f64) {}\n";
+        let lines: Vec<usize> = findings_in("x.rs", text)
+            .iter()
+            .map(|found| found.line)
+            .collect();
+        assert_eq!(lines, [3, 8]);
     }
 
     #[test]

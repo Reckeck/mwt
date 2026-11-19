@@ -209,3 +209,17 @@ fn a_deposit_at_one_in_the_morning_in_utc_plus_three_accrues_no_extra_day() {
     // 100 000 × 18.25 % / 365 = 50 ₽ a day, for the 10th only.
     assert_eq!(report.accrued_year, amount_str("50"));
 }
+
+/// `grow` keeps the numbers the old f64 formula gave (1000 at 12 % over a year).
+#[test]
+fn grow_pins_the_yearly_figures_of_each_capitalization() {
+    let grown = |days: i64, capitalization: Capitalization| {
+        grow(amount_str("1000"), amount_str("12"), days, capitalization)
+    };
+    assert_eq!(grown(365, Capitalization::None), amount_str("1120.00"));
+    assert_eq!(grown(365, Capitalization::AtEnd), amount_str("1120.00"));
+    assert_eq!(grown(365, Capitalization::Daily), amount_str("1127.47"));
+    assert_eq!(grown(365, Capitalization::Monthly), amount_str("1126.83"));
+    // Two years, monthly: 1000 * 1.01^24.
+    assert_eq!(grown(730, Capitalization::Monthly), amount_str("1269.73"));
+}
