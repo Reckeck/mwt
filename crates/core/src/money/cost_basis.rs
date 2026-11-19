@@ -271,3 +271,7 @@ mod tests {
         )));
     }
 }
+
+#[cfg(test)]
+#[path = "cost_basis_tests.rs"]
+mod strategy_tests;
