@@ -21,10 +21,10 @@ use crate::Amount;
 use crate::model::notify::NoticeRecord;
 use crate::model::planning::Reminder;
 use crate::model::transaction::Transaction;
-use crate::service::UnlockedVault;
 
 use super::catalog::{NodeDef, ParamKind, node_def};
 use super::graph::{Graph, Node};
+use super::host::{Checkpoint, WorkflowHost};
 use super::model::{QueuedActions, RunOutcome, WaitKind, WorkflowRun, WorkflowWait};
 use super::types::{PortType, WfValue};
 
@@ -256,7 +256,7 @@ impl Step {
 }
 
 pub(crate) struct Executor<'run> {
-    pub vault: &'run mut UnlockedVault,
+    pub host: &'run mut dyn WorkflowHost,
     pub graph: &'run Graph,
     pub ctx: &'run RunContext,
     memo: HashMap<(String, String), WfValue>,
@@ -289,7 +289,7 @@ pub(crate) struct Executor<'run> {
 
 /// Where a branch started: what to put back if it fails.
 struct Savepoint {
-    doc: crate::model::vault::VaultDoc,
+    host: Checkpoint,
     memo: HashMap<(String, String), WfValue>,
     ran: HashMap<String, u64>,
     created: usize,
@@ -305,10 +305,10 @@ struct Savepoint {
 const RAN_PORT: &str = "__ran";
 
 /// Run a workflow on `vault`. A live run that fails leaves the vault as it was.
-pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunReport {
-    let backup = (ctx.mode == RunMode::Live).then(|| vault.doc.clone());
+pub fn run(host: &mut dyn WorkflowHost, graph: &Graph, ctx: &RunContext) -> RunReport {
+    let backup = (ctx.mode == RunMode::Live).then(|| host.checkpoint());
     let started_at = crate::calendar::iso(ctx.now);
-    let mut exec = Executor::new(vault, graph, ctx);
+    let mut exec = Executor::new(host, graph, ctx);
     let result = exec.start();
     let edge_values = exec.edge_values();
     let mut wait = None;
@@ -363,8 +363,8 @@ pub fn run(vault: &mut UnlockedVault, graph: &Graph, ctx: &RunContext) -> RunRep
         trace,
         ..
     } = exec;
-    if failed && let Some(doc) = backup {
-        vault.doc = doc;
+    if failed && let Some(checkpoint) = backup {
+        host.restore(checkpoint);
     }
     let (created, queued, notices, events, reminders) = if failed {
         (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
@@ -404,12 +404,12 @@ fn memo_key(node: &str, port: &str) -> (String, String) {
 
 impl<'run> Executor<'run> {
     pub(crate) fn new(
-        vault: &'run mut UnlockedVault,
+        host: &'run mut dyn WorkflowHost,
         graph: &'run Graph,
         ctx: &'run RunContext,
     ) -> Self {
         Executor {
-            vault,
+            host,
             graph,
             ctx,
             memo: HashMap::new(),
@@ -667,7 +667,7 @@ impl Executor<'_> {
 
     fn savepoint(&self) -> Savepoint {
         Savepoint {
-            doc: self.vault.doc.clone(),
+            host: self.host.checkpoint(),
             memo: self.memo.clone(),
             ran: self.ran.clone(),
             created: self.created.len(),
@@ -682,7 +682,7 @@ impl Executor<'_> {
 
     /// A failed branch: everything it did is put back; the run goes on.
     fn undo_branch(&mut self, start: &str, point: Savepoint, message: String) {
-        self.vault.doc = point.doc;
+        self.host.restore(point.host);
         self.memo = point.memo;
         self.ran = point.ran;
         self.created.truncate(point.created);

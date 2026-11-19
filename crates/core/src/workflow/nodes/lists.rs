@@ -41,9 +41,9 @@ impl Executor<'_> {
                     WfValue::Account(AccountRef::Store(id)) => Some(id),
                     _ => None,
                 };
-                let base = self.vault.base_currency().to_string();
+                let base = self.host.base_currency().to_string();
                 let items = self
-                    .vault
+                    .host
                     .wf_accounts(parent.as_deref())
                     .into_iter()
                     .map(|(id, name, value)| {
@@ -61,7 +61,7 @@ impl Executor<'_> {
             }
             "list.goals" => {
                 let items = self
-                    .vault
+                    .host
                     .goal_progress(self.now(), &self.ctx.zone)
                     .iter()
                     .map(|progress| {
@@ -70,8 +70,8 @@ impl Executor<'_> {
                                 .into_iter()
                                 .map(|(port, value)| (port.to_string(), value))
                                 .collect();
-                        record.insert("name".into(), WfValue::Text(progress.goal.name.clone()));
-                        record.insert("goal".into(), WfValue::Text(progress.goal.id.clone()));
+                        record.insert("name".into(), WfValue::Text(progress.name.clone()));
+                        record.insert("goal".into(), WfValue::Text(progress.id.clone()));
                         WfValue::Record(record)
                     })
                     .collect();

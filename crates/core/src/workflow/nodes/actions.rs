@@ -15,6 +15,7 @@ use crate::model::transaction::{
     TxOrigin,
 };
 use crate::workflow::catalog::NodeDef;
+use crate::workflow::effect::Effect;
 use crate::workflow::exec::{
     EmittedEvent, Executor, Fault, Halt, MAX_ACTIONS, MAX_CALL_DEPTH, RunContext, RunMode, Step,
 };
@@ -69,17 +70,11 @@ fn store_of(account: Option<AccountRef>, what: &str) -> Result<String, String> {
 impl Executor<'_> {
     fn account_name(&self, account: &AccountRef) -> String {
         match account {
-            AccountRef::Store(id) => self
-                .vault
-                .find_store(id)
-                .map_or_else(|| id.clone(), |store| store.name.clone()),
+            AccountRef::Store(id) => self.host.store_name(id).unwrap_or_else(|| id.clone()),
             AccountRef::Contact { contact_id, .. } => self
-                .vault
-                .doc
-                .contacts
-                .iter()
-                .find(|contact| contact.id == *contact_id)
-                .map_or_else(|| contact_id.clone(), |contact| contact.name.clone()),
+                .host
+                .contact_name(contact_id)
+                .unwrap_or_else(|| contact_id.clone()),
             AccountRef::Raw(text) => text.clone(),
         }
     }
@@ -205,10 +200,10 @@ impl Executor<'_> {
                     .ctx
                     .max_amount_currency
                     .clone()
-                    .unwrap_or_else(|| self.vault.base_currency().to_string());
+                    .unwrap_or_else(|| self.host.base_currency().to_string());
                 let mut sum = Amount::ZERO;
                 for tx in &txs {
-                    let Some(part) = self.vault.wf_outflow_in(tx, &currency) else {
+                    let Some(part) = self.host.wf_outflow_in(tx, &currency) else {
                         return Err(Halt::Fail(format!(
                             "no price or rate to check the cap of {cap} {}",
                             currency.to_uppercase()
@@ -229,11 +224,11 @@ impl Executor<'_> {
             }
             None => txs
                 .iter()
-                .fold(Amount::ZERO, |sum, tx| sum + self.vault.wf_outflow_base(tx)),
+                .fold(Amount::ZERO, |sum, tx| sum + self.host.wf_outflow_base(tx)),
         };
-        let saved = self.vault.wf_insert(txs, self.now())?;
+        let now = self.now();
+        let saved = self.perform(Effect::Insert { txs, now })?;
         self.moved += value;
-        self.created.extend(saved.iter().cloned());
         Ok(saved)
     }
 
@@ -291,7 +286,7 @@ impl Executor<'_> {
         let asset = match self.asset_input(node, "asset")? {
             Some(asset) => asset,
             None => match amount_value.currency() {
-                Some(code) => self.vault.wf_asset(&code),
+                Some(code) => self.host.wf_asset(&code),
                 None => return Err("choose the asset".into()),
             },
         };
@@ -367,7 +362,7 @@ impl Executor<'_> {
         let amount_value = self.input(node, "amount")?;
         let total = positive(amount_value.as_number(), "the amount")?;
         let asset = match amount_value.currency() {
-            Some(code) => self.vault.wf_asset(&code),
+            Some(code) => self.host.wf_asset(&code),
             None => return Err("wire an amount with its currency".into()),
         };
         let from = self
@@ -454,7 +449,7 @@ impl Executor<'_> {
                 let tx = self.build_transaction(node)?;
                 if self.text_param(node, "on_shortfall") == "reject"
                     && let Some(reason) = self
-                        .vault
+                        .host
                         .funds_shortfall(&tx, secs_of(&tx.meta().timestamp, now))
                 {
                     return Err(Fault::Halt(Halt::Reject(Box::new(reason))));
@@ -491,7 +486,7 @@ impl Executor<'_> {
                     title
                 };
                 let key = format!("wf:{}:{}:{}", self.ctx.run_id, node.id, self.notices.len());
-                self.notices.push(crate::service::notice(
+                self.perform(Effect::Notify(crate::service::notice(
                     NoticeCategory::Automation,
                     key,
                     &title,
@@ -502,7 +497,7 @@ impl Executor<'_> {
                         self.ctx.workflow_id
                     )),
                     crate::calendar::iso(now),
-                ));
+                )))?;
                 Ok(Step::next(
                     "out",
                     format!("«{}»: {text}", def.title.ru),
@@ -540,8 +535,7 @@ impl Executor<'_> {
                 };
                 let due = crate::calendar::iso(cal.at_local_hm(date, hour, minute));
                 let reminder = Reminder::new(&text, &due);
-                self.reminders.push(reminder.clone());
-                self.vault.doc.reminders.push(reminder);
+                self.perform(Effect::Remind(reminder))?;
                 Ok(Step::next(
                     "out",
                     format!("«{}»: «{text}» на {due}", def.title.ru),
@@ -612,10 +606,10 @@ impl Executor<'_> {
                     return Err(Fault::Error("name the event".into()));
                 }
                 let payload = self.input(node, "payload")?;
-                self.events.push(EmittedEvent {
+                self.perform(Effect::Emit(EmittedEvent {
                     name: name.clone(),
                     payload,
-                });
+                }))?;
                 Ok(Step::next(
                     "out",
                     format!("«{}»: «{name}»", def.title.ru),
@@ -675,12 +669,8 @@ impl Executor<'_> {
         }
         let target = self.text_param(node, "workflow");
         let callee = self
-            .vault
-            .doc
-            .workflows
-            .iter()
-            .find(|workflow| workflow.id == target)
-            .cloned()
+            .host
+            .callee(&target)
             .ok_or("choose the workflow to call")?;
         let graph = Graph::parse(&callee.graph).map_err(|err| err.to_string())?;
         let entry = graph
@@ -701,7 +691,7 @@ impl Executor<'_> {
         ctx.trigger_values = std::collections::BTreeMap::from([("payload".to_string(), payload)]);
 
         let (actions, moved) = (self.actions, self.moved);
-        let mut child = Executor::new(&mut *self.vault, &graph, &ctx);
+        let mut child = Executor::new(&mut *self.host, &graph, &ctx);
         child.actions = actions;
         child.moved = moved;
         let result = child.start();

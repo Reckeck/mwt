@@ -4,6 +4,7 @@ use rust_decimal::Decimal;
 
 use crate::Amount;
 use crate::workflow::catalog::NodeDef;
+use crate::workflow::effect::Effect;
 use crate::workflow::exec::{Executor, Fault, Halt, Step, StepStatus};
 use crate::workflow::graph::Node;
 use crate::workflow::model::VarScope;
@@ -206,12 +207,12 @@ impl Executor<'_> {
                 };
                 let value = amount.as_number().unwrap_or(Amount::ZERO);
                 let converted = self
-                    .vault
+                    .host
                     .wf_convert(value, &from, &to, self.now())
                     .ok_or_else(|| {
                         format!("no rate {}→{}", from.to_uppercase(), to.to_uppercase())
                     })?;
-                let places = if self.vault.wf_asset(&to).is_fiat() {
+                let places = if self.host.wf_asset(&to).is_fiat() {
                     2
                 } else {
                     8
@@ -295,7 +296,7 @@ impl Executor<'_> {
                 let gap = (hours.to_f64() * 3600.0) as i64;
                 let key = format!("throttle:{}", node.id);
                 let last = self
-                    .vault
+                    .host
                     .wf_mark(&self.ctx.workflow_id, &key)
                     .and_then(|mark| crate::pricing::history::unix_secs(&mark));
                 if let Some(last) = last
@@ -315,7 +316,11 @@ impl Executor<'_> {
                     .with_status(StepStatus::Skipped));
                 }
                 let now = crate::calendar::iso(self.now());
-                self.vault.wf_set_mark(&self.ctx.workflow_id, &key, &now);
+                self.perform(Effect::Mark {
+                    workflow_id: self.ctx.workflow_id.clone(),
+                    key,
+                    value: now,
+                })?;
                 Ok(Step::next(
                     "out",
                     format!("«{}»: пропускаю дальше", def.title.ru),
@@ -365,7 +370,7 @@ impl Executor<'_> {
     pub(crate) fn eval_var(&mut self, node: &Node) -> Result<Outputs, String> {
         let name = self.var_name(node)?;
         let value = self
-            .vault
+            .host
             .wf_var(&self.var_scope(node), &name)
             .unwrap_or_default();
         Ok(single("value", value))
@@ -380,7 +385,7 @@ impl Executor<'_> {
             } else {
                 self.param(node, "delta")
             };
-            let current = self.vault.wf_var(&scope, &name).unwrap_or_default();
+            let current = self.host.wf_var(&scope, &name).unwrap_or_default();
             let current = if current.is_null() {
                 WfValue::Number(Amount::ZERO)
             } else {
@@ -392,7 +397,11 @@ impl Executor<'_> {
         } else {
             self.input(node, "value")?
         };
-        self.vault.wf_set_var(scope, &name, &value);
+        self.perform(Effect::SetVar {
+            scope,
+            name: name.clone(),
+            value: value.clone(),
+        })?;
         Ok(Step::next(
             "out",
             format!("«{}»: {name} = {}", def.title.ru, value.as_text()),

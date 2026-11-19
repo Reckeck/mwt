@@ -14,6 +14,8 @@ pub mod catalog;
 mod catalog_capital;
 mod catalog_more;
 pub mod effect;
+#[cfg(test)]
+mod effect_tests;
 pub mod exec;
 pub mod graph;
 pub mod host;
