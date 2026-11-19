@@ -18,7 +18,10 @@ use super::view::split_key;
 
 /// Collections whose records are crypto-module data: every synced
 /// `crypto_*` field of the document. `crypto_cursors` is not here because it
-/// never travels at all (`registry::LOCAL`).
+/// never travels at all (`registry::LOCAL`). The list stays here because the
+/// record kinds (`kernel::record`) sit beside sync in the layer table, not
+/// below it; `the_gate_agrees_with_the_record_kinds` pins the two together
+/// until the kinds move below sync (core crate split, Ф6).
 pub const CRYPTO_COLLECTIONS: &[&str] = &[
     "crypto_accounts",
     "crypto_events",
@@ -206,6 +209,39 @@ mod tests {
             "crypto_events:cev-1".to_string()
         ]));
         assert!(!carries_crypto_data(&vec!["stores:abc".to_string()]));
+    }
+
+    /// `CRYPTO_COLLECTIONS` is exactly the level-3 collections of the record
+    /// kinds less the device-local ones.
+    #[test]
+    fn the_gate_agrees_with_the_record_kinds() {
+        let mut from_kinds: Vec<&str> = crate::kernel::record::level3_collections()
+            .filter(|name| !crate::sync::registry::LOCAL.contains(name))
+            .collect();
+        let mut listed = CRYPTO_COLLECTIONS.to_vec();
+        from_kinds.sort_unstable();
+        listed.sort_unstable();
+        assert_eq!(listed, from_kinds);
+    }
+
+    /// The gate answers exactly what the old `crypto_` prefix rule did, for
+    /// every record kind and every collection of the sync registry.
+    #[test]
+    fn the_gate_agrees_with_the_old_prefix_rule() {
+        let old_rule = |name: &str| {
+            name.starts_with("crypto_") && !crate::sync::registry::LOCAL.contains(&name)
+        };
+        let names = crate::kernel::record::record_kinds()
+            .iter()
+            .map(|kind| kind.collection)
+            .chain(
+                crate::sync::registry::COLLECTIONS
+                    .iter()
+                    .map(|coll| coll.name),
+            );
+        for name in names {
+            assert_eq!(is_crypto_collection(name), old_rule(name), "{name}");
+        }
     }
 
     #[test]
