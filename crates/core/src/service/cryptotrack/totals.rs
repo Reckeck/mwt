@@ -8,7 +8,9 @@ pub use crate::cryptotrack::service::totals::CryptoLeftOut;
 use crate::cryptotrack::service::totals::CryptoOutsideTotals;
 
 use crate::cryptotrack::service::totals::CryptoHistory;
+#[cfg(test)]
 use crate::model::cryptotrack::CryptoAsset;
+#[cfg(test)]
 use crate::model::store::AssetRef;
 
 use super::super::UnlockedVault;
@@ -40,6 +42,7 @@ impl UnlockedVault {
         pub(crate) fn crypto_quarantined(&self) -> Vec<CryptoOutsideTotals>
             => crate::cryptotrack::service::totals::crypto_quarantined @doc;
         /// The identity a module holding is shown and priced under.
+        #[cfg(test)]
         pub(crate) fn crypto_asset_ref(&self, asset: &CryptoAsset) -> AssetRef
             => crate::cryptotrack::service::totals::crypto_asset_ref @doc;
     }

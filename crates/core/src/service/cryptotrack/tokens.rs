@@ -1,8 +1,6 @@
 //! Shim of the `cryptotrack/tokens` area: the rules moved to `crate::cryptotrack::service::tokens`,
 //! the scenarios to `crate::usecases::cryptotrack::tokens` (spec core-strangler, D1).
 
-pub use crate::cryptotrack::service::tokens::counts_asset;
-
 use crate::Amount;
 use crate::cryptotrack::protocols::LegToken;
 use crate::cryptotrack::tokens::TokenStatus;
