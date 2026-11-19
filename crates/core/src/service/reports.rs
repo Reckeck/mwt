@@ -37,14 +37,6 @@ impl UnlockedVault {
             => crate::reports::overview::report_flows @books;
         pub(crate) fn cashflow_report(&self, ctx: &Ctx) -> CashflowReport
             => crate::reports::overview::cashflow_report @books;
-        pub(crate) fn year_report(&self, ctx: &Ctx) -> YearReport
-            => crate::reports::overview::year_report @books;
-        pub(crate) fn categories_report(&self, ctx: &Ctx) -> CategoriesReport
-            => crate::reports::overview::categories_report @books;
-        pub(crate) fn networth_report(&self, ctx: &Ctx) -> NetworthReport
-            => crate::reports::overview::networth_report @books;
-        pub(crate) fn pnl_report(&self, ctx: &Ctx) -> PnlReport
-            => crate::reports::overview::pnl_report @books;
     }
     // forward:end
 

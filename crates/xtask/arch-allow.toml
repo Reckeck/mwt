@@ -16,4 +16,13 @@ allow = [
     { from = "household/shared_events/purchases.rs", to = "ipc_contract", until = "Ф5", reason = "the purchase plans take the request inputs of the shared events commands; the input types stay in ipc_contract until the contract moves" },
     { from = "kernel/books.rs", to = "money", until = "Ф5", reason = "Books computes the shared-event ratios and extras through money::shared_ratios (T33) until the kernel is re-layered" },
     { from = "money/shared_ratios.rs", to = "household", until = "Ф5", reason = "the shared-event figures need the event split from household/shared_events until the split moves below money (follow-up T135)" },
+    { from = "reports/where_went.rs", to = "service", until = "Ф5", reason = "where_went reads the rate book and flow classes from service until rates and budget flows move to their groups" },
+    { from = "reports/notify_snapshot.rs", to = "service", until = "Ф5", reason = "the notification snapshot reads the agenda, category_of and the notice texts from service until stream D moves notifications and agenda (T43)" },
+    { from = "reports/insights.rs", to = "usecases", until = "Ф5", reason = "insights read loss_report (household) and lifestyle_creep (planning) until those queries move to a lower layer" },
+    { from = "reports/dashboard.rs", to = "ipc_contract", until = "Ф5", reason = "dashboard figures carry Comparison and BaseKind from ipc_contract until the comparison type moves to a lower layer" },
+    { from = "reports/dashboard_tiles.rs", to = "ipc_contract", until = "Ф5", reason = "dashboard figures carry Comparison and BaseKind from ipc_contract until the comparison type moves to a lower layer" },
+    { from = "reports/dashboard_today.rs", to = "ipc_contract", until = "Ф5", reason = "dashboard figures carry Comparison and BaseKind from ipc_contract until the comparison type moves to a lower layer" },
+    { from = "reports/dashboard.rs", to = "service", until = "Ф5", reason = "reads FlowClass from service until budget flows move to their groups" },
+    { from = "reports/dashboard_tiles.rs", to = "service", until = "Ф5", reason = "reads FlowClass from service until budget flows move to their groups" },
+    { from = "reports/dashboard_today.rs", to = "service", until = "Ф5", reason = "reads UpcomingKind from service until stream D moves the agenda (T43)" },
 ]
