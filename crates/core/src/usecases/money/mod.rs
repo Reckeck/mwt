@@ -3,6 +3,7 @@
 pub mod adjustments;
 pub mod asset_holdings;
 pub mod bulk;
+pub mod capital;
 pub mod enrichment;
 pub mod inflation;
 pub mod interest;

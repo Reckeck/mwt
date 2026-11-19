@@ -153,6 +153,21 @@ task = "B"
 files = ["crates/core/src/service/mod.rs"]
 
 [[foundation]]
+# T23: the net worth assembly is the capital scenario (spec F3); the money usecases module list declares it.
+task = "B"
+files = ["crates/core/src/usecases/money/capital.rs", "crates/core/src/usecases/money/mod.rs"]
+
+[[foundation]]
+# T24: `UnlockedVault::store_sides` lost its last non-test caller when store_change moved; it becomes `#[cfg(test)]`.
+task = "B"
+files = ["crates/core/src/service/validate.rs"]
+
+[[foundation]]
+# T25: `main_amount` lost its last user when service/transactions.rs moved; its re-export in service/automations.rs goes.
+task = "B"
+files = ["crates/core/src/service/automations.rs"]
+
+[[foundation]]
 # `sync_ids` becomes `pub(crate)` for the household scenarios that mint deterministic ids.
 task = "C"
 files = ["crates/core/src/service/mod.rs"]
