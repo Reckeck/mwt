@@ -1,8 +1,7 @@
-//! Protocol 4 (catalog item 46): nothing about the device before the other
+//! Protocol 5 (catalog item 46): nothing about the device before the other
 //! side's vault proof, the dialer's nonce committed before the listener's,
-//! and how a protocol 3 build is refused both ways.
+//! and how a protocol 4 build is refused both ways.
 
-use serde::Serialize;
 use trade_core::sync::protocol::{Hello, Message, PROTOCOL_VERSION};
 use trade_core::sync::session::{commit_to, new_nonce};
 
@@ -28,41 +27,16 @@ async fn rest(raw: &mut RawLink) -> Vec<Message> {
     seen
 }
 
-/// A protocol 3 `Hello` as such a build writes it: identity included, no commit.
-#[derive(Serialize)]
-struct HelloV3 {
-    protocol: u32,
-    format: u32,
-    device_id: String,
-    device_name: String,
-    proof: Vec<u8>,
-    now_ms: u64,
-    main: bool,
-    prefer_main: bool,
-    needs_pairing: bool,
-    rank: u32,
-    instance: String,
-    unreached: bool,
-    app_version: String,
-}
-
-fn hello_v3(name: &str, proof: Vec<u8>, main: bool) -> Vec<u8> {
-    let hello = HelloV3 {
-        protocol: 3,
-        format: trade_core::VAULT_FORMAT_VERSION,
-        device_id: format!("{name}-id"),
-        device_name: name.into(),
+/// A protocol 4 `Hello` as that build writes it: anonymous, with a commit.
+fn hello_v4(proof: Vec<u8>) -> Vec<u8> {
+    let first = Hello::first(
+        4,
+        trade_core::VAULT_FORMAT_VERSION,
         proof,
-        now_ms: trade_core::sync::stamp::now_ms(),
-        main,
-        prefer_main: false,
-        needs_pairing: false,
-        rank: 0,
-        instance: format!("{name}._mwt"),
-        unreached: false,
-        app_version: "0.1.0-30".into(),
-    };
-    rmp_serde::to_vec_named(&serde_json::json!({ "hello": hello })).unwrap()
+        "0.1.0-30".into(),
+        commit_to(&new_nonce()),
+    );
+    trade_core::sync::protocol::encode(&Message::Hello(first)).unwrap()
 }
 
 fn field(payload: &Value, name: &str) -> String {
@@ -164,10 +138,10 @@ async fn a_wrong_nonce_ends_the_session() {
     assert!(main.hub().links.is_empty());
 }
 
-/// An old (protocol 3) client dials an updated main device: refused on the
-/// version, named in the message; the old client learns no name either.
+/// A protocol 4 client dials an updated main device: refused on the
+/// version, named by its trusted key; the old client learns no name either.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_protocol_three_dialer_is_refused_with_its_name() {
+async fn a_protocol_four_dialer_is_refused_with_its_name() {
     let dir = tempfile::tempdir().unwrap();
     let (left, _right) = same_vault(dir.path());
     let (main, main_events) = device("Laptop", left, SyncRole::Main);
@@ -181,14 +155,14 @@ async fn a_protocol_three_dialer_is_refused_with_its_name() {
 
     let mut raw = RawLink::dial(addr, &raw_key).await;
     let proof = raw.channel.proof(&vault_id);
-    raw.send_raw(&hello_v3("Old phone", proof, false)).await;
+    raw.send_raw(&hello_v4(proof)).await;
 
     let seen = rest(&mut raw).await;
     assert_eq!(seen.len(), 1, "only the hello, got {seen:?}");
     let Message::Hello(hello) = &seen[0] else {
         panic!("not a hello");
     };
-    assert_eq!(hello.protocol, 4);
+    assert_eq!(hello.protocol, 5);
     assert_anonymous(hello);
     until("the refusal is reported", || {
         !main_errors.lock().unwrap().is_empty()
@@ -205,15 +179,20 @@ async fn a_protocol_three_dialer_is_refused_with_its_name() {
     );
 }
 
-/// An updated client dials an old (protocol 3) main device: refused on the
-/// version with the old device's name, and nothing about the client is sent.
+/// An updated client dials a protocol 4 main device: refused on the
+/// version with the name of its trusted key, and nothing about the client is sent.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_protocol_three_listener_is_refused_with_its_name() {
+async fn a_protocol_four_listener_is_refused_with_its_name() {
     let dir = tempfile::tempdir().unwrap();
     let (_left, right) = same_vault(dir.path());
     let (client, client_events) = device("Phone", right, SyncRole::Client);
     let client_errors = error_payloads(client_events);
     let vault_id = client.with_vault(|vault| Ok(vault.doc.id.clone())).unwrap();
+    let raw_key = DeviceKey::generate().unwrap();
+    let public_key = raw_key.public_hex();
+    client
+        .with_vault(|vault| vault.sync_trust_peer("Old laptop", "Old laptop", &public_key))
+        .unwrap();
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -223,17 +202,16 @@ async fn a_protocol_three_listener_is_refused_with_its_name() {
         super::super::link::run(dialer, stream, addr, 1, true).await;
     });
     let (stream, _) = listener.accept().await.unwrap();
-    let raw_key = DeviceKey::generate().unwrap();
     let mut raw = RawLink::handshake(stream, &raw_key, false).await;
     let proof = raw.channel.proof(&vault_id);
-    raw.send_raw(&hello_v3("Old laptop", proof, true)).await;
+    raw.send_raw(&hello_v4(proof)).await;
 
     let seen = rest(&mut raw).await;
     assert_eq!(seen.len(), 1, "only the hello, got {seen:?}");
     let Message::Hello(hello) = &seen[0] else {
         panic!("not a hello");
     };
-    assert_eq!(hello.protocol, 4);
+    assert_eq!(hello.protocol, 5);
     assert_anonymous(hello);
     until("the refusal is reported", || {
         !client_errors.lock().unwrap().is_empty()
@@ -245,7 +223,7 @@ async fn a_protocol_three_listener_is_refused_with_its_name() {
     assert_eq!(field(&on_client, "peer_version"), "0.1.0-30");
 }
 
-/// Two updated devices see the same code; it is not the protocol 3 code.
+/// Two updated devices see the same code; it is not the protocol 4 code.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn both_devices_show_one_code_bound_to_the_nonces() {
     let dir = tempfile::tempdir().unwrap();

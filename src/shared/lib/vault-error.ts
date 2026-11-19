@@ -16,7 +16,7 @@ const VAULT_ERROR_KEYS: Record<string, string> = {
   SYNC_CONFLICT: 'vaultLink.conflictTitle',
 }
 
-/** The generic backend text of `Error::Unsupported`; any other UNSUPPORTED text names the build to use. */
+/** The generic backend text of `Error::Unsupported` (pinned by a test in crates/core/src/error.rs); any other UNSUPPORTED text names the build to use. */
 const GENERIC_UNSUPPORTED = 'unsupported vault file/version'
 
 /** The vault's own wording for an error, or null when the code has none. */

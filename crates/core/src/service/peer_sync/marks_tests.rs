@@ -131,12 +131,11 @@ fn marks_from_an_old_peer_do_not_erase_another_trigger() {
         Some("above"),
         "an entry the old map lacks was dropped"
     );
-    // The new side still sends the full map, and a stamp an old peer reads.
+    // The new side still sends the full map.
     let sent = right.sync_records(std::slice::from_ref(&key)).unwrap();
     let sent = &sent[&key];
     let marks = sent.value.as_ref().unwrap()["marks"].as_object().unwrap();
     assert_eq!(marks.len(), 2, "{marks:?}");
-    assert!(sent.stamps.as_ref().unwrap().fields.contains_key("marks"));
 }
 
 /// «A top-up comes → move 5 from cash to savings», armed on both devices.
@@ -332,11 +331,11 @@ fn a_batch_with_nothing_restored_stays_undoable() {
             topup.meta.comment = "edited here".into();
         }
     }
-    right.doc.settings.schedule_timezone = Some("Asia/Bangkok".into());
     right.persist().unwrap();
     let report = right.sync_undo(&batch.id).unwrap();
     assert_eq!(report.restored, 0);
-    assert_eq!(report.skipped.len(), 2, "{report:?}");
+    // The batch no longer carries a settings record (the derived crypto copy is gone).
+    assert_eq!(report.skipped.len(), 1, "{report:?}");
     let listed: BTreeMap<_, _> = right
         .sync_history()
         .into_iter()

@@ -455,8 +455,8 @@ async fn session<H: Host>(
         return Err(failure(PeerSyncFailure::OtherVault));
     }
     if (hello.protocol, hello.format) != versions {
-        // An older build (protocol 3) named itself in its hello; a newer one
-        // does not, so a trusted key gives the name it was paired under.
+        // A hello before the vault proof names no device, so a trusted key
+        // gives the name it was paired under.
         let known = app.with_vault(|vault| {
             Ok(vault
                 .sync_state()

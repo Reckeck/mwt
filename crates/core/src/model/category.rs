@@ -31,11 +31,13 @@ pub struct Category {
     /// Whether everyday spending here is a must (plan C1). `None` takes the
     /// default by key ([`DEFAULT_ESSENTIAL`]); only `Daily` reads it, `Fixed`
     /// is always essential.
+    // new data may lack it: `None` is the legitimate "take the default by key" value.
     #[serde(default)]
     pub essential: Option<bool>,
     /// Whether income here comes from capital rather than work (plan D).
     /// `None` takes the default by key ([`DEFAULT_PASSIVE`]); only `Income`
     /// reads it.
+    // new data may lack it: `None` is the legitimate "take the default by key" value.
     #[serde(default)]
     pub passive: Option<bool>,
 }

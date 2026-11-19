@@ -1543,11 +1543,7 @@ password: string | null,
 /**
  * Name of the cash wallet every vault starts with, in the user's language.
  */
-cash_name: string | null, 
-/**
- * Read for compatibility and ignored: whether the vault holds crypto is derived (spec E14).
- */
-crypto: boolean | null, };
+cash_name: string | null, };
 
 /**
  * An address the module follows. Every account is shown by a
@@ -6467,12 +6463,6 @@ dashboard_period: DashPeriod,
  */
 onboarding_checklist_hidden: boolean, 
 /**
- * Whether the vault holds crypto. Derived since spec E14 (the crypto module has data, or a
- * hand-made crypto wallet remains): [`crate::UnlockedVault::open`] refreshes this copy, nobody
- * sets it. The field stays in the file for compatibility with old and new builds.
- */
-crypto: boolean | null, 
-/**
  * The IANA zone schedule moments are computed in, the same on every
  * device so they agree on which moment it is. `None` until the first
  * device that runs a schedule writes its own zone.
@@ -8362,10 +8352,6 @@ manual_income: Amount | null,
  * Usual monthly spending while there is no history; zero clears it.
  */
 manual_expenses: Amount | null, dashboard_period: DashPeriod | null, onboarding_checklist_hidden: boolean | null, 
-/**
- * Read for compatibility and ignored: whether the vault holds crypto is derived (spec E14).
- */
-crypto: boolean | null, 
 /**
  * Replaces the flat inflation table of the group, percent by currency
  * code. Currencies whose value did not change are not stamped.

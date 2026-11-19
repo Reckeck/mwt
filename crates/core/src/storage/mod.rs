@@ -292,7 +292,6 @@ impl VaultFile {
             ));
         }
         on_stage(RaiseStage::Reencrypt);
-        let fmt = fmt.for_writing();
         let key = SealKey::fresh_with(password.as_bytes(), kdf)?;
         let sealed = crypto::seal_with(&key, fmt, &encode(doc, fmt)?)?;
 
@@ -871,21 +870,6 @@ mod tests {
         assert_eq!(out.contacts, doc.contacts);
     }
 
-    /// The stored `crypto` setting is still read as written, in both formats an
-    /// old file can hold (spec E14: the switch is gone, the field stays).
-    #[test]
-    fn the_stored_crypto_setting_is_read_back_in_json_and_pack() {
-        for stored in [Some(true), Some(false), None] {
-            let mut doc = crate::model::fixtures::full_doc();
-            doc.settings.crypto = stored;
-            for format in [SnapshotFormat::Json, SnapshotFormat::Pack] {
-                let bytes = encode(&doc, format).unwrap();
-                let out = decode(&bytes, format).unwrap();
-                assert_eq!(out.settings.crypto, stored, "{format:?}");
-            }
-        }
-    }
-
     /// A version-1 file from before the schema break says so, instead of
     /// reporting a parse error (plan §4.10).
     #[test]
@@ -1298,8 +1282,15 @@ mod tests {
             // The graphs are brought to the live version by the transition, so the fields
             // that hold them differ by design.
             let graph_fields = ["workflows", "workflow_waits", "workflow_queue"];
+            // `settings.crypto` is dropped: whether the vault holds crypto is derived.
+            let mut expected_settings = expected["settings"].clone();
+            expected_settings.as_object_mut().unwrap().remove("crypto");
+            assert_eq!(
+                transitioned["settings"], expected_settings,
+                "{name}: settings"
+            );
             for (field, value) in expected.as_object().unwrap() {
-                if graph_fields.contains(&field.as_str()) {
+                if graph_fields.contains(&field.as_str()) || field == "settings" {
                     continue;
                 }
                 assert_eq!(&transitioned[field], value, "{name}: {field}");
@@ -1362,13 +1353,9 @@ mod tests {
             serde_json::from_str(doc["workflows"][0]["graph"].as_str().unwrap()).unwrap();
         assert_eq!(graph["version"], 2);
         let (decoded, _) = open_v4_fixture(V4_FIXTURES[0].0, V4_FIXTURES[0].2);
-        let carry = decoded.carry.expect("a v4 file hands on a carry");
-        assert!(!carry.exchange_keys.is_empty());
-        assert!(
-            carry
-                .exchange_keys
-                .iter()
-                .all(|key| !key.api_secret.is_empty())
-        );
+        assert!(decoded.carry.is_some(), "a v4 file hands on a carry");
+        let bybit = &decoded.doc.exchanges.bybit;
+        assert!(!bybit.is_empty());
+        assert!(bybit.iter().all(|key| !key.api_secret.is_empty()));
     }
 }

@@ -12,6 +12,8 @@ pub enum Error {
     #[error("vault file not found: {0}")]
     NotFound(String),
 
+    /// The text is a contract with `src/shared/lib/vault-error.ts`, which tells
+    /// this generic error from `LegacyVault` by it; a test pins it.
     #[error("unsupported vault file/version")]
     Unsupported,
 
@@ -326,3 +328,24 @@ impl From<serde_json::Error> for Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unsupported_text_is_the_frontend_marker() {
+        // src/shared/lib/vault-error.ts compares against this exact text.
+        assert_eq!(
+            Error::Unsupported.to_string(),
+            "unsupported vault file/version"
+        );
+    }
+
+    #[test]
+    fn legacy_vault_shares_the_unsupported_code_but_not_the_text() {
+        let legacy = Error::LegacyVault("use build 1.2".into());
+        assert_eq!(legacy.to_string(), "use build 1.2");
+        assert_eq!(legacy.code(), Error::Unsupported.code());
+    }
+}

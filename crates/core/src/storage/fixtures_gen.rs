@@ -127,7 +127,6 @@ fn extras() -> Json {
 pub(super) fn v4_doc() -> VaultDoc {
     let mut doc = full_doc();
     assert_eq!(doc.version, V4_VERSION, "the generator needs the v4 build");
-    doc.settings.crypto = Some(true);
     doc.exchanges = Exchanges {
         bybit: vec![ExchangeKeys {
             store_id: "bybit".into(),
@@ -202,14 +201,39 @@ fn write_fixture(dir: &Path, name: &str, doc: &VaultDoc, fmt: SnapshotFormat) {
     VaultFile::save(&path, V4_PASSWORD, doc, fmt).expect("write the fixture");
 }
 
+/// The files the generator writes.
+const FIXTURE_FILES: [&str; 3] = ["v4.json.wallet", "v4.pack.wallet", "v4.expected.json"];
+
+/// Refuses to run over fixtures that already exist: they are committed bytes.
+fn ensure_nothing_to_overwrite(dir: &Path) -> Result<(), String> {
+    match FIXTURE_FILES.iter().find(|name| dir.join(name).exists()) {
+        Some(name) => Err(format!(
+            "{name} already exists in {}; the committed fixtures are never overwritten",
+            dir.display()
+        )),
+        None => Ok(()),
+    }
+}
+
 /// Writes the three fixture files next to this module. Run by hand, see the module docs.
 #[test]
 #[ignore = "writes the committed fixtures; run by hand once, before the format changes"]
 fn generate_v4_fixtures() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/storage/fixtures");
+    ensure_nothing_to_overwrite(&dir).unwrap_or_else(|reason| panic!("{reason}"));
     let doc = v4_doc();
     write_fixture(&dir, "v4.json.wallet", &doc, SnapshotFormat::Json);
     write_fixture(&dir, "v4.pack.wallet", &doc, SnapshotFormat::Pack);
     let expected = serde_json::to_string_pretty(&doc).expect("doc as JSON");
     std::fs::write(dir.join("v4.expected.json"), expected + "\n").expect("write expected");
+}
+
+#[test]
+fn the_generator_refuses_to_overwrite_existing_fixtures() {
+    let committed = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/storage/fixtures");
+    assert!(ensure_nothing_to_overwrite(&committed).is_err());
+    let empty = std::env::temp_dir().join(format!("fixtures-gen-guard-{}", std::process::id()));
+    std::fs::create_dir_all(&empty).expect("temp dir");
+    assert!(ensure_nothing_to_overwrite(&empty).is_ok());
+    std::fs::remove_dir_all(&empty).expect("clean up");
 }

@@ -42,7 +42,6 @@ pub fn fill(vault: &mut UnlockedVault, today: NaiveDate) -> Result<()> {
 fn book(vault: &mut UnlockedVault, today: NaiveDate) -> Result<()> {
     vault.doc.id = ids::vault();
     vault.doc.created_at = format!("{}T00:00:00Z", today - chrono::Duration::days(365));
-    vault.doc.settings.crypto = Some(true);
     let wallets = wallets::create_all(vault)?;
     for (number, planned) in ledger::plan(&wallets, today, SEED).into_iter().enumerate() {
         vault.add_transaction(planned.into_transaction(number as u128))?;

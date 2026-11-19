@@ -9,14 +9,8 @@ use crate::error::{Error, Result};
 
 /// Bumped on an incompatible change; devices on different versions refuse
 /// to sync and ask to update instead.
-/// 2: notices may carry the `security` category (vault transfer).
-/// 3: every purchase of a shared event is an entry of its own
-/// (`items.<id>.purchases.<id>`); a device on 2 would overwrite a whole item
-/// and lose a parallel purchase (`docs/sync/compatibility.md`).
-/// 4: the first [`Hello`] carries no identity; each side tells who it is in
-/// an [`Identity`] only after the other side's vault proof passed, and the
-/// pairing code binds a committed nonce of each side (`docs/sync/pairing.md`).
-pub const PROTOCOL_VERSION: u32 = 4;
+/// 5: format reset; 4 and older are refused.
+pub const PROTOCOL_VERSION: u32 = 5;
 
 /// Largest message after reassembly: a manifest or records batch is split
 /// well below it, so anything larger is a broken or hostile peer.
@@ -33,7 +27,7 @@ pub enum Message {
     /// First message each way after the handshake.
     Hello(Hello),
     /// Who the sender is: the listener sends it once the dialer's proof and
-    /// versions passed, the dialer answers with its own (protocol 4).
+    /// versions passed, the dialer answers with its own.
     Identity(Identity),
     /// The user pressed "Pair" on the sender: show the code here too.
     PairRequest,
@@ -79,9 +73,9 @@ pub enum Message {
     },
 }
 
-/// Protocol 4 sends the identity fields empty: they stay only so a protocol 3
-/// build still decodes the message and refuses on the version. A protocol 3
-/// build fills them; they are read only for the text of that refusal.
+/// The identity fields are sent empty: they stay only so an older build still
+/// decodes the message and refuses on the version. An older build may fill
+/// them; they are read only for the text of that refusal.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
     pub protocol: u32,
@@ -119,7 +113,7 @@ pub struct Hello {
 }
 
 impl Hello {
-    /// The first message of protocol 4: versions and the proof, nothing about the device.
+    /// The first message: versions and the proof, nothing about the device.
     pub fn first(
         protocol: u32,
         format: u32,
@@ -235,7 +229,7 @@ mod tests {
         }
         let old = OldHello {
             protocol: PROTOCOL_VERSION,
-            format: 3,
+            format: 1,
             device_id: "d".into(),
             device_name: "Old".into(),
             proof: vec![1, 2, 3],
@@ -260,7 +254,7 @@ mod tests {
     fn an_app_version_round_trips_in_the_hello() {
         let mut hello = Hello {
             protocol: PROTOCOL_VERSION,
-            format: 3,
+            format: 1,
             device_id: "d".into(),
             device_name: "New".into(),
             proof: vec![],
@@ -312,104 +306,6 @@ mod tests {
     fn an_identity_round_trips() {
         let message = Message::Identity(identity());
         assert_eq!(decode(&encode(&message).unwrap()).unwrap(), message);
-    }
-
-    /// The `Hello` of a protocol 3 build: every field, identity included, and no commit.
-    #[test]
-    fn a_protocol_three_hello_still_decodes() {
-        #[derive(Serialize)]
-        struct HelloV3 {
-            protocol: u32,
-            format: u32,
-            device_id: String,
-            device_name: String,
-            proof: Vec<u8>,
-            now_ms: u64,
-            main: bool,
-            prefer_main: bool,
-            needs_pairing: bool,
-            rank: u32,
-            instance: String,
-            unreached: bool,
-            app_version: String,
-        }
-        let old = HelloV3 {
-            protocol: 3,
-            format: 3,
-            device_id: "d".into(),
-            device_name: "Old phone".into(),
-            proof: vec![1, 2, 3],
-            now_ms: 7,
-            main: false,
-            prefer_main: false,
-            needs_pairing: true,
-            rank: 1,
-            instance: "old._mwt".into(),
-            unreached: false,
-            app_version: "0.1.0-30".into(),
-        };
-        let bytes = rmp_serde::to_vec_named(&serde_json::json!({ "hello": old })).unwrap();
-        let Message::Hello(hello) = decode(&bytes).unwrap() else {
-            panic!("not a hello");
-        };
-        assert_eq!(hello.protocol, 3);
-        assert_eq!(hello.device_name, "Old phone");
-        assert_eq!(hello.app_version, "0.1.0-30");
-        assert!(hello.commit.is_empty());
-    }
-
-    /// What a protocol 3 build makes of the first message of a protocol 4
-    /// one: it decodes (so it can refuse on the version), and it learns no
-    /// identity. The old structs are frozen copies of the protocol 3 ones.
-    #[test]
-    fn a_protocol_four_hello_decodes_in_an_old_build_without_identity() {
-        #[derive(Deserialize)]
-        #[allow(dead_code)]
-        struct HelloV3 {
-            protocol: u32,
-            format: u32,
-            device_id: String,
-            device_name: String,
-            proof: Vec<u8>,
-            now_ms: u64,
-            main: bool,
-            prefer_main: bool,
-            needs_pairing: bool,
-            rank: u32,
-            #[serde(default)]
-            instance: String,
-            #[serde(default)]
-            unreached: bool,
-            #[serde(default)]
-            app_version: String,
-        }
-        #[derive(Deserialize)]
-        #[serde(rename_all = "snake_case")]
-        enum MessageV3 {
-            Hello(HelloV3),
-        }
-        let first = Hello::first(
-            PROTOCOL_VERSION,
-            3,
-            vec![9; 32],
-            "0.2.0".into(),
-            vec![5; 32],
-        );
-        let bytes = encode(&Message::Hello(first)).unwrap();
-        let MessageV3::Hello(seen) = rmp_serde::from_slice::<MessageV3>(&bytes).unwrap();
-        assert_eq!(seen.protocol, 4);
-        assert_eq!(seen.app_version, "0.2.0");
-        assert_eq!(seen.device_id, "");
-        assert_eq!(seen.device_name, "");
-        assert_eq!(seen.instance, "");
-        assert_eq!(seen.now_ms, 0);
-        assert!(!seen.main && !seen.prefer_main && !seen.needs_pairing && !seen.unreached);
-        assert_eq!(seen.rank, 0);
-        // And a new build reads the commit back.
-        let Message::Hello(back) = decode(&bytes).unwrap() else {
-            panic!("not a hello");
-        };
-        assert_eq!(back.commit, vec![5; 32]);
     }
 
     #[test]

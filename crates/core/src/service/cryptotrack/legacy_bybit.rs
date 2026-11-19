@@ -1,5 +1,6 @@
-//! Bybit on the engine, and the one-time conversion of what the old import
-//! left behind (stage 2, spec E7).
+//! Bybit on the engine: storing exchange records as operations of the crypto
+//! module (stage 2, spec E7). The one-time conversion of the old queue lives
+//! in `storage::legacy_v4`.
 //!
 //! Until now an exchange sweep *staged* every record it found
 //! (`VaultDoc::pending_imports`) and the user confirmed it into a ledger
@@ -14,8 +15,8 @@
 //! (`AGENTS.md`, rule 5: a stored field is never renamed, removed or
 //! repurposed — it simply stops being written):
 //!
-//! * `pending_imports` — the queue. Its entries are *put through* by this
-//!   conversion, one operation each. Nothing writes the field again.
+//! * `pending_imports` — the queue. Its entries were put through once by the
+//!   v4 transition. Nothing writes the field again.
 //! * `discarded_imports` — records the user refused. They stay refused: a
 //!   discarded `exec_id` is never converted and never fetched in again.
 //! * `TxOrigin::Import { exec_id }` — records already booked as ledger
@@ -87,19 +88,6 @@ impl BybitStored {
     pub fn recorded(&self) -> u32 {
         self.added + self.rewritten
     }
-}
-
-/// What the one-time conversion of the old queue did.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct LegacyAdoption {
-    /// Queue entries that became operations of the module.
-    pub converted: u32,
-    /// Queue entries that were settled already (booked or refused) and were
-    /// therefore only dropped from the queue, never counted twice.
-    pub known: u32,
-    /// Queue entries left in place because they could not be read or their
-    /// wallet is gone. Nothing is ever thrown away silently.
-    pub kept: u32,
 }
 
 impl UnlockedVault {
@@ -283,54 +271,6 @@ impl UnlockedVault {
         Ok(out)
     }
 
-    /// Put the old verification queue through the same conversion. Idempotent
-    /// and safe to call on every pass: a vault with no queue does nothing and
-    /// writes nothing.
-    ///
-    /// A queue entry is either converted into an operation, or found to be
-    /// settled already (booked into a transaction, or refused) and dropped
-    /// from the queue without being counted a second time, or left exactly
-    /// where it is when it cannot be read or its wallet is gone. No entry is
-    /// discarded silently.
-    pub fn adopt_legacy_bybit(&mut self) -> Result<LegacyAdoption> {
-        let mut out = LegacyAdoption::default();
-        if self.doc.pending_imports.is_empty() {
-            return Ok(out);
-        }
-        // By wallet, so each wallet's records reach their own account; sorted,
-        // so two devices do the same work in the same order.
-        let mut by_wallet: BTreeMap<String, Vec<PendingImport>> = BTreeMap::new();
-        let mut kept: Vec<PendingImport> = Vec::new();
-        for record in std::mem::take(&mut self.doc.pending_imports) {
-            let root = self.root_of(&record.store_id);
-            let known_wallet = self
-                .find_store(&root)
-                .is_some_and(|store| store.kind == StoreKind::Exchange);
-            if known_wallet {
-                by_wallet.entry(root).or_default().push(record);
-            } else {
-                kept.push(record);
-            }
-        }
-        for (root, records) in &by_wallet {
-            let stored = self.bybit_store(root, records)?;
-            out.converted += stored.recorded();
-            out.known += stored.known;
-            let unread: BTreeSet<&str> = stored.unread.iter().map(String::as_str).collect();
-            kept.extend(
-                records
-                    .iter()
-                    .filter(|record| unread.contains(record.exec_id.as_str()))
-                    .cloned(),
-            );
-        }
-        out.kept = kept.len() as u32;
-        self.doc.pending_imports = kept;
-        // The converted queue is capital now, not a pending list.
-        self.crypto_sync_holdings()?;
-        Ok(out)
-    }
-
     /// An exchange coin as a token of the module, counted in the totals.
     ///
     /// An exchange ticker is on no contract list and would be quarantined out
@@ -448,7 +388,6 @@ mod tests {
     use crate::cryptotrack::sources::bybit::exchange_asset;
     use crate::exchange::{Execution, InterTransfer};
     use crate::model::store::ExchangeProvider;
-    use crate::model::transaction::TxOrigin;
     use crate::service::StoreExtras;
 
     const ACCOUNT_NAMES: [&str; 3] = ["Funding", "Unified", "Earn"];
@@ -525,205 +464,26 @@ mod tests {
             "events": vault.doc.crypto_events,
             "tokens": vault.doc.crypto_tokens,
             "prices": vault.doc.crypto_prices,
-            "queue": vault.doc.pending_imports,
         }))
         .unwrap()
     }
 
-    fn event_ids(vault: &UnlockedVault) -> Vec<String> {
-        vault
-            .doc
-            .crypto_events
-            .iter()
-            .map(|event| event.id.clone())
-            .collect()
-    }
-
     #[test]
-    fn converting_twice_writes_the_same_records() {
+    fn storing_the_same_records_again_rewrites_them() {
         let (_dir, mut vault, wallet) = bybit_wallet();
-        vault
-            .stage_imports(vec![
-                bought(&wallet, "exec-1", "60000", DAY_MS),
-                bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
-                moved(&wallet, "t-1", DAY_MS + 120_000),
-            ])
-            .unwrap();
-
-        let first = vault.adopt_legacy_bybit().unwrap();
-        assert_eq!(
-            first,
-            LegacyAdoption {
-                converted: 3,
-                known: 0,
-                kept: 0
-            }
-        );
+        let records = vec![
+            bought(&wallet, "exec-1", "60000", DAY_MS),
+            bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
+            moved(&wallet, "t-1", DAY_MS + 120_000),
+        ];
+        let first = vault.bybit_store(&wallet, &records).unwrap();
+        assert_eq!(first.recorded(), 3);
         let after_first = written(&vault);
 
-        // The second pass has nothing left to convert and changes nothing.
-        let second = vault.adopt_legacy_bybit().unwrap();
-        assert_eq!(second, LegacyAdoption::default());
-        assert_eq!(written(&vault), after_first);
-
-        // And storing the very same records again, as a later sweep would,
-        // rewrites them instead of adding a second copy.
-        let again = vault
-            .bybit_store(
-                &wallet,
-                &[
-                    bought(&wallet, "exec-1", "60000", DAY_MS),
-                    bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
-                    moved(&wallet, "t-1", DAY_MS + 120_000),
-                ],
-            )
-            .unwrap();
+        let again = vault.bybit_store(&wallet, &records).unwrap();
         assert_eq!(again.recorded(), 0, "all three were settled already");
         assert_eq!(again.known, 3);
         assert_eq!(written(&vault), after_first);
-    }
-
-    #[test]
-    fn two_devices_convert_the_same_file_to_the_same_records() {
-        let (_dir, mut first, wallet) = bybit_wallet();
-        first
-            .stage_imports(vec![
-                bought(&wallet, "exec-1", "60000", DAY_MS),
-                bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
-                moved(&wallet, "t-1", DAY_MS + 120_000),
-            ])
-            .unwrap();
-
-        // The same file opened on another device: same document, own path.
-        let other_dir = tempfile::tempdir().unwrap();
-        let mut second = UnlockedVault::create(other_dir.path().join("copy.wallet"), "pw").unwrap();
-        second.replace_doc(first.doc.clone()).unwrap();
-
-        first.adopt_legacy_bybit().unwrap();
-        second.adopt_legacy_bybit().unwrap();
-        // Byte for byte: ids, times, prices and token records. Had any of
-        // them come from a clock or a counter, the two would differ here and
-        // the sync would see one operation as two.
-        assert_eq!(written(&first), written(&second));
-    }
-
-    #[test]
-    fn an_old_queue_loses_not_one_operation() {
-        let (_dir, mut vault, wallet) = bybit_wallet();
-        // The file an older build left: one record booked into the ledger,
-        // one refused, three still waiting, and one the module cannot read.
-        let mut broken = bought(&wallet, "exec-broken", "60000", DAY_MS);
-        broken.occurred_at = String::new();
-        vault
-            .stage_imports(vec![
-                bought(&wallet, "exec-booked", "50000", DAY_MS),
-                bought(&wallet, "exec-refused", "55000", DAY_MS),
-                bought(&wallet, "exec-1", "60000", DAY_MS),
-                bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
-                moved(&wallet, "t-1", DAY_MS + 120_000),
-                broken,
-            ])
-            .unwrap();
-        vault
-            .confirm_pending_imports(&["exec-booked".to_owned()])
-            .unwrap();
-        vault
-            .discard_pending_imports(&["exec-refused".to_owned()])
-            .unwrap();
-        let booked: Vec<String> = vault
-            .doc
-            .transactions
-            .iter()
-            .map(|tx| format!("{:?}", tx.meta().origin))
-            .collect();
-
-        let out = vault.adopt_legacy_bybit().unwrap();
-
-        // Operation by operation: the three readable ones became operations
-        // of the module, under the id their facts give them.
-        assert_eq!(
-            event_ids(&vault),
-            vec![
-                format!("cev:bybit:{wallet}:bybit:exec-1"),
-                format!("cev:bybit:{wallet}:bybit:exec-2"),
-                format!("cev:bybit:{wallet}:bybit:transfer:t-1"),
-            ]
-        );
-        assert_eq!(
-            out,
-            LegacyAdoption {
-                converted: 3,
-                known: 0,
-                kept: 1
-            }
-        );
-        // The one that cannot be read is still in the queue, not thrown away.
-        assert_eq!(
-            vault
-                .doc
-                .pending_imports
-                .iter()
-                .map(|record| record.exec_id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["exec-broken"]
-        );
-        // The booked one is still the ledger transaction it was, untouched.
-        assert_eq!(
-            vault
-                .doc
-                .transactions
-                .iter()
-                .map(|tx| format!("{:?}", tx.meta().origin))
-                .collect::<Vec<_>>(),
-            booked
-        );
-        // The refused one stays refused.
-        assert_eq!(vault.doc.discarded_imports, vec!["exec-refused"]);
-        // Six records in, six accounted for, none twice.
-        assert_eq!(out.converted + out.kept + 1 + 1, 6);
-    }
-
-    #[test]
-    fn a_record_is_never_in_the_ledger_and_in_the_module_at_once() {
-        let (_dir, mut vault, wallet) = bybit_wallet();
-        vault
-            .stage_imports(vec![
-                bought(&wallet, "exec-booked", "50000", DAY_MS),
-                bought(&wallet, "exec-1", "60000", DAY_MS),
-            ])
-            .unwrap();
-        vault
-            .confirm_pending_imports(&["exec-booked".to_owned()])
-            .unwrap();
-        vault.adopt_legacy_bybit().unwrap();
-
-        let in_ledger: BTreeSet<String> = vault
-            .doc
-            .transactions
-            .iter()
-            .filter_map(|tx| match &tx.meta().origin {
-                TxOrigin::Import { exec_id } => Some(exec_id.clone()),
-                _ => None,
-            })
-            .collect();
-        let in_module = vault.bybit_event_ids();
-        assert_eq!(in_ledger, BTreeSet::from(["exec-booked".to_owned()]));
-        assert_eq!(in_module, BTreeSet::from(["exec-1".to_owned()]));
-        assert!(in_ledger.is_disjoint(&in_module));
-
-        // In the totals: the module counts the one bitcoin it was given and
-        // not the one the ledger already holds.
-        let totals = vault.crypto_totals(AT);
-        let bitcoin = totals
-            .assets
-            .iter()
-            .find(|total| total.asset == exchange_asset("BTC"))
-            .expect("the coin is counted, not quarantined");
-        assert_eq!(bitcoin.quantity, Amount::parse("1").unwrap());
-        assert_eq!(bitcoin.cost_usd, Amount::parse("60000").unwrap());
-        // And the profit is not touched by the booked record either.
-        assert_eq!(bitcoin.realized_usd, Amount::ZERO);
-        assert_eq!(totals.realized_usd, Amount::ZERO);
     }
 
     #[test]
@@ -733,12 +493,14 @@ mod tests {
         // can only price a day, so the day's point is their weighted mean —
         // and the pool must still cost 60000 + 70000.
         vault
-            .stage_imports(vec![
-                bought(&wallet, "exec-1", "60000", DAY_MS),
-                bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
-            ])
+            .bybit_store(
+                &wallet,
+                &[
+                    bought(&wallet, "exec-1", "60000", DAY_MS),
+                    bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
+                ],
+            )
             .unwrap();
-        vault.adopt_legacy_bybit().unwrap();
 
         let totals = vault.crypto_totals(AT);
         let bitcoin = totals
@@ -764,9 +526,8 @@ mod tests {
         // Before anything is followed, nothing claims the wallet.
         assert!(!vault.exchange_is_engine_driven(&wallet));
         vault
-            .stage_imports(vec![bought(&wallet, "exec-1", "60000", DAY_MS)])
+            .bybit_store(&wallet, &[bought(&wallet, "exec-1", "60000", DAY_MS)])
             .unwrap();
-        vault.adopt_legacy_bybit().unwrap();
         assert!(vault.exchange_is_engine_driven(&wallet));
         // A sub-account of it answers the same, because archiving reaches the
         // whole wallet.

@@ -149,16 +149,8 @@ fn a_whole_notification_object_from_an_older_build_merges() {
     assert_eq!(loan.lead_days, 2);
     assert!(config.system, "the old device's switch is not taken");
     assert!(!config.hide_details_when_locked);
-    // What this side sends still carries a head stamp an old peer reads.
     let sent = right.sync_records(&["settings:".to_string()]).unwrap();
     let sent = &sent["settings:"];
-    assert!(
-        sent.stamps
-            .as_ref()
-            .unwrap()
-            .fields
-            .contains_key("notifications")
-    );
     let object = &sent.value.as_ref().unwrap()["notifications"];
     assert!(object["categories"].is_array(), "{object}");
     assert!(object.get("system").is_none(), "{object}");

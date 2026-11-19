@@ -53,11 +53,6 @@ impl SnapshotFormat {
         }
     }
 
-    /// The format a document read in `self` is written back in: the same one.
-    pub fn for_writing(self) -> Self {
-        self
-    }
-
     pub fn label(self) -> &'static str {
         match self {
             SnapshotFormat::Json => "json",

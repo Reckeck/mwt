@@ -88,7 +88,9 @@ pub struct NotificationSnapshot {
     pub hidden_body: String,
     /// The device was a sync client when this was written: the main shows
     /// the notices, so a locked client fires none. An older snapshot has no
-    /// field and counts as not a client.
+    /// field and counts as not a client. The default stays after the v4
+    /// reset: notify-snapshot.bin outlives app updates and is never
+    /// transitioned, so a file from an older build must still load.
     #[serde(default)]
     pub role_client: bool,
 }

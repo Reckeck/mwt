@@ -8,9 +8,8 @@
 //!
 //! Since spec E7 an exchange is read by the crypto module: a record becomes a
 //! [`crate::model::cryptotrack::CryptoTx`] at once instead of waiting in
-//! `pending_imports` for the user to confirm it, and the conversion of what
-//! an older build staged lives in
-//! [`super::cryptotrack`]'s `legacy_bybit`. Everything the old import stored
+//! `pending_imports` for the user to confirm it; the one-time conversion of
+//! what an older build staged lives in `storage::legacy_v4`. Everything the old import stored
 //! stays readable and keeps deduplicating — the queue, the refused ids and
 //! the `exec_id` of a booked transaction all answer
 //! [`UnlockedVault::decided_import_ids`] — so a record that was already
@@ -309,10 +308,6 @@ impl UnlockedVault {
     ) -> Result<ImportRun> {
         let root = self.root_of(store_id);
         let settings = self.import_settings(&root)?;
-        // The queue an older build left behind is put through by the same
-        // conversion, and before this batch, so one record cannot arrive
-        // twice by two routes.
-        let adopted = self.adopt_legacy_bybit()?;
         let mut known = self.known_import_ids();
         let mut run = ImportRun {
             id: uuid::Uuid::new_v4().to_string(),
@@ -340,7 +335,7 @@ impl UnlockedVault {
         run.transfers = count(ImportKind::Transfer);
         let stored = self.bybit_store(&root, &fresh)?;
         run.known += stored.known;
-        run.confirmed = stored.recorded() + adopted.converted;
+        run.confirmed = stored.recorded();
         // A poll that brought nothing new refreshes the last empty run in memory
         // and writes nothing: the background import polls every few minutes.
         if run.confirmed == 0 {

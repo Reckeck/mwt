@@ -151,13 +151,7 @@ pub fn records_for(
     keys.iter()
         .filter(|key| split_key(key).is_some())
         .filter(|key| !(withhold && is_crypto_key(key)))
-        .map(|key| {
-            let mut state = record_state(doc, records, key);
-            if let (Some((coll, _)), Some(stamps)) = (split_key(key), state.stamps.as_mut()) {
-                super::merge::with_legacy_heads(coll, stamps);
-            }
-            (key.clone(), state)
-        })
+        .map(|key| (key.clone(), record_state(doc, records, key)))
         .collect()
 }
 

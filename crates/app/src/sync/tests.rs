@@ -1173,20 +1173,19 @@ async fn a_different_protocol_is_refused_on_both_sides() {
     assert_refused_on_both_sides((current + 1, trade_core::VAULT_FORMAT_VERSION)).await;
 }
 
-/// Protocol 3 (a purchase is an entry of its own) does not sync with the
-/// protocol 2 builds, whose item holds its purchases whole.
+/// Protocol 5 does not sync with protocol 2 builds.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_protocol_two_peer_is_refused_on_both_sides() {
-    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 4);
+    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 5);
     assert_refused_on_both_sides((2, trade_core::VAULT_FORMAT_VERSION)).await;
 }
 
-/// Protocol 4 (identity after the vault proof) does not sync with protocol
-/// 3 builds; a real protocol 3 build is played by hand in `handshake.rs`.
+/// Protocol 5 (format reset) does not sync with protocol 4 builds; a hand-played
+/// protocol 4 hello is in `handshake.rs`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_protocol_three_peer_is_refused_on_both_sides() {
-    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 4);
-    assert_refused_on_both_sides((3, trade_core::VAULT_FORMAT_VERSION)).await;
+async fn a_protocol_four_peer_is_refused_on_both_sides() {
+    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 5);
+    assert_refused_on_both_sides((4, trade_core::VAULT_FORMAT_VERSION)).await;
 }
 
 /// The `sync-error` payloads of a device, in order.

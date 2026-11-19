@@ -421,8 +421,6 @@ pub struct WorkflowWaitV4 {
 /// What the transition hands on besides the document.
 #[derive(Debug)]
 pub struct Carry {
-    /// The `exchanges.bybit` entries that hold a secret; they reach the device secrets once.
-    pub exchange_keys: Vec<ExchangeKeys>,
     /// What the conversion of the old Bybit queue did.
     pub adoption: LegacyAdoption,
 }
@@ -431,21 +429,8 @@ pub struct Carry {
 /// Bybit queue is converted into operations of the crypto module and every workflow graph is
 /// brought to the live version. The holdings are not refolded here.
 pub fn transition(mut doc: VaultDocV4) -> (VaultDoc, Carry) {
-    let exchange_keys = doc
-        .exchanges
-        .bybit
-        .iter()
-        .filter(|keys| !keys.api_secret.is_empty())
-        .map(ExchangeKeys::from)
-        .collect();
     let adoption = adopt_bybit(&mut doc);
-    (
-        VaultDoc::from(doc),
-        Carry {
-            exchange_keys,
-            adoption,
-        },
-    )
+    (VaultDoc::from(doc), Carry { adoption })
 }
 
 impl From<VaultDocV4> for VaultDoc {
@@ -620,7 +605,7 @@ impl From<SettingsV4> for Settings {
             pinned,
             dashboard_period,
             onboarding_checklist_hidden,
-            crypto,
+            crypto: _,
             schedule_timezone,
             crypto_raise_pending,
         } = old;
@@ -647,7 +632,6 @@ impl From<SettingsV4> for Settings {
             pinned,
             dashboard_period,
             onboarding_checklist_hidden,
-            crypto,
             schedule_timezone,
             crypto_raise_pending,
         }
@@ -784,7 +768,7 @@ mod tests {
 
     /// Fields the reset drops from the live document; both sides are compared without them.
     /// Empty until a later task removes a live field the frozen document still carries.
-    const DROPPED: [&str; 0] = [];
+    const DROPPED: [&str; 1] = ["/settings/crypto"];
 
     /// The expected document, with the graph strings brought to the live version as the
     /// conversion does (the graph steps themselves are tested in `graph`).
@@ -851,7 +835,7 @@ mod tests {
     }
 
     #[test]
-    fn exchange_keys_are_carried_as_they_are() {
+    fn exchanges_are_carried_unchanged() {
         let (name, fmt, bytes) = FIXTURES[0];
         let old = parse_fixture(name, fmt, bytes);
         let secrets: Vec<(String, String, String)> = old
@@ -867,7 +851,7 @@ mod tests {
             })
             .collect();
         assert!(!secrets.is_empty());
-        let (live, carry) = transition(old);
+        let (live, _carry) = transition(old);
         let carried = |keys: &[ExchangeKeys]| -> Vec<(String, String, String)> {
             keys.iter()
                 .map(|key| {
@@ -880,7 +864,6 @@ mod tests {
                 .collect()
         };
         assert_eq!(carried(&live.exchanges.bybit), secrets);
-        assert_eq!(carried(&carry.exchange_keys), secrets);
     }
 
     #[test]
