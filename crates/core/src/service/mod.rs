@@ -576,15 +576,6 @@ impl UnlockedVault {
         &self.base_currency
     }
 
-    /// The vault holds crypto: the module has an address or an operation, or
-    /// the vault still carries a hand-made crypto wallet or exchange. Derived
-    /// from what the document holds (spec E14), never chosen by the user.
-    pub fn crypto_enabled(&self) -> bool {
-        !self.doc.crypto_accounts.is_empty()
-            || !self.doc.crypto_events.is_empty()
-            || self.doc.stores.iter().any(|store| store.kind.is_crypto())
-    }
-
     /// A copy of the vault in memory for emulation: every operation and rule
     /// works on it as on the real one, but nothing is ever written, so trying
     /// things out cannot break the user's data.
@@ -1756,35 +1747,6 @@ mod tests {
     }
 
     // -- crypto direction (derived since spec E14) -----------------------------
-
-    #[test]
-    fn the_crypto_answer_follows_the_module_and_cannot_be_set() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("crypto.wallet");
-        let mut vault = UnlockedVault::create(path, "pw").unwrap();
-        assert!(!vault.crypto_enabled());
-        vault
-            .doc
-            .crypto_accounts
-            .push(crate::model::cryptotrack::CryptoAccount::new(
-                "acc",
-                "Main",
-                crate::model::chain::Chain::Solana,
-                "So11111111111111111111111111111111111111112",
-                "2026-11-10T00:00:00Z",
-            ));
-        assert!(vault.crypto_enabled());
-    }
-
-    #[test]
-    fn a_vault_with_an_exchange_holds_crypto() {
-        let dir = tempdir().unwrap();
-        let mut vault = UnlockedVault::create(dir.path().join("crypto.wallet"), "pw").unwrap();
-        vault
-            .create_store("Bybit", StoreKind::Exchange, "#f0b90b", "", None)
-            .unwrap();
-        assert!(vault.crypto_enabled());
-    }
 
     #[test]
     fn settings_with_an_old_crypto_field_still_load() {
