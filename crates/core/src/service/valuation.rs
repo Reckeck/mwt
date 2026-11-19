@@ -2,10 +2,10 @@
 //! The scenarios that write valuations and the revalue rule live in
 //! `usecases::money::valuation`.
 
+pub(crate) use crate::money::valuation::ValuationCurve;
 pub use crate::money::valuation::{
     PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput,
 };
-pub(crate) use crate::money::valuation::{ValuationCurve, initial_rule};
 
 use std::collections::HashMap;
 

@@ -33,6 +33,7 @@ impl UnlockedVault {
     }
 
     /// Every store a transaction is booked on.
+    #[cfg(test)]
     pub(crate) fn store_sides(tx: &Transaction) -> Vec<&str> {
         crate::money::validate::store_sides(tx)
     }

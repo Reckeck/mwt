@@ -8,12 +8,14 @@ use zeroize::Zeroizing;
 
 use crate::Amount;
 use crate::crypto::SealKey;
-use crate::error::{Error, Result, StoreTreeViolation, WalletRule};
+#[cfg(test)]
+use crate::error::StoreTreeViolation;
+use crate::error::{Error, Result, WalletRule};
 use crate::model::chain::Chain;
 use crate::model::store::{
-    AssetRef, Binding, BindingShape, Custody, ExchangeProfile, ExchangeProvider, Holding,
-    IndicatorCfg, LiabilityTerms, MAX_STORE_DEPTH, PropertyInfo, Purpose, Store, StoreKind,
-    StoreScope, SubType, TerminalLayout, TerminalState,
+    AssetRef, Binding, Custody, ExchangeProfile, ExchangeProvider, Holding, IndicatorCfg,
+    LiabilityTerms, MAX_STORE_DEPTH, PropertyInfo, Purpose, Store, StoreKind, StoreScope, SubType,
+    TerminalLayout, TerminalState,
 };
 use crate::model::transaction::{
     AccountRef, Fee, FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Leg, LegRole,
