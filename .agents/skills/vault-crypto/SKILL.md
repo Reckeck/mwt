@@ -4,7 +4,7 @@ description: >
   Invariants of the encrypted vault in trade-app: container format, versions,
   VaultDoc migrations, Argon2id/XChaCha20-Poly1305, atomic writes, money
   precision via Amount (Decimal) and the rules for handling secrets. Use when
-  changing model/vault.rs, storage/mod.rs, crypto/*, amount.rs, service.rs, and
+  changing model/vault.rs, storage/mod.rs, crypto/*, amount.rs, service/mod.rs, and
   for tasks like "add a field to the vault" («добавь поле в vault»),
   "migration" («миграция»), "old file does not open" («старый файл не
   открывается»), "wrong password" («неверный пароль»), "data loss" («потеря
@@ -143,7 +143,7 @@ Invariants:
   `create_new` temp file, read back and verified through the same handle,
   renamed only while the name is still that file.
 
-`switch_format` (`service.rs`) exists to force a JSON↔MessagePack switch (a
+`switch_format` (`service/mod.rs`) exists to force a JSON↔MessagePack switch (a
 request for an unsupported format is refused). This is also a migration, so it needs
 a round-trip test.
 
@@ -206,7 +206,7 @@ Plus: vault creation, reopening, a round trip of all fields in all formats,
 saving and reloading, migration from all previous versions.
 
 All of these tests live in `#[cfg(test)] mod tests` next to the code
-(`crypto/mod.rs`, `crypto/header.rs`, `storage/mod.rs`, `service.rs`).
+(`crypto/mod.rs`, `crypto/header.rs`, `storage/mod.rs`, `service/mod.rs`).
 
 ## Checks
 
