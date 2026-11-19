@@ -190,6 +190,8 @@ files = [
     "crates/core/src/usecases/sync/trust.rs",
     # T36: the repair rules become the module tree under `sync/repair/` (its `mod.rs` declares them).
     "crates/core/src/sync/repair/mod.rs",
+    # T39: the crypto gate keeps its list (kernel sits beside sync, not below it) and a test pins it to the record kinds.
+    "crates/core/src/sync/crypto_gate.rs",
 ]
 
 [[foundation]]
