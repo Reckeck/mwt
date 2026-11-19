@@ -620,7 +620,7 @@ impl From<SettingsV4> for Settings {
             pinned,
             dashboard_period,
             onboarding_checklist_hidden,
-            crypto,
+            crypto: _,
             schedule_timezone,
             crypto_raise_pending,
         } = old;
@@ -647,7 +647,6 @@ impl From<SettingsV4> for Settings {
             pinned,
             dashboard_period,
             onboarding_checklist_hidden,
-            crypto,
             schedule_timezone,
             crypto_raise_pending,
         }
@@ -784,7 +783,7 @@ mod tests {
 
     /// Fields the reset drops from the live document; both sides are compared without them.
     /// Empty until a later task removes a live field the frozen document still carries.
-    const DROPPED: [&str; 0] = [];
+    const DROPPED: [&str; 1] = ["/settings/crypto"];
 
     /// The expected document, with the graph strings brought to the live version as the
     /// conversion does (the graph steps themselves are tested in `graph`).

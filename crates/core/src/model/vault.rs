@@ -150,11 +150,6 @@ pub struct Settings {
     /// The user hid the "Where to start" checklist (plan H3; it lived in localStorage).
     #[serde(default)]
     pub onboarding_checklist_hidden: bool,
-    /// Whether the vault holds crypto. Derived since spec E14 (the crypto module has data, or a
-    /// hand-made crypto wallet remains): [`crate::UnlockedVault::open`] refreshes this copy, nobody
-    /// sets it. The field stays in the file for compatibility with old and new builds.
-    #[serde(default)]
-    pub crypto: Option<bool>,
     /// The IANA zone schedule moments are computed in, the same on every
     /// device so they agree on which moment it is. `None` until the first
     /// device that runs a schedule writes its own zone.
@@ -246,7 +241,6 @@ impl Default for Settings {
             pinned: Vec::new(),
             dashboard_period: DashPeriod::Month,
             onboarding_checklist_hidden: false,
-            crypto: None,
             schedule_timezone: None,
             crypto_raise_pending: false,
         }

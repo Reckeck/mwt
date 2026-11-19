@@ -654,7 +654,6 @@ impl UnlockedVault {
         sync.take_records_from(remote_sync, crate::sync::stamp::now_ms());
         self.doc = std::mem::take(&mut copy.doc);
         self.doc.sync = sync;
-        self.answer_crypto();
         self.start_tracking()?;
         self.ensure_cash_wallet("Cash")?;
         self.ensure_default_categories();

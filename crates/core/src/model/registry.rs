@@ -301,7 +301,6 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("freedom_rate", Scope::Group),
     ("carry_since", Scope::Group),
     ("onboarding_checklist_hidden", Scope::Group),
-    ("crypto", Scope::Group),
     ("schedule_timezone", Scope::Group),
 ];
 

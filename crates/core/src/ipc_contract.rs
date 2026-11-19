@@ -43,9 +43,6 @@ pub struct CreateVaultInput {
     /// Name of the cash wallet every vault starts with, in the user's language.
     #[serde(default)]
     pub cash_name: Option<String>,
-    /// Read for compatibility and ignored: whether the vault holds crypto is derived (spec E14).
-    #[serde(default)]
-    pub crypto: Option<bool>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
@@ -1818,9 +1815,6 @@ pub struct UpdateSettingsInput {
     pub dashboard_period: Option<crate::model::vault::DashPeriod>,
     #[serde(default)]
     pub onboarding_checklist_hidden: Option<bool>,
-    /// Read for compatibility and ignored: whether the vault holds crypto is derived (spec E14).
-    #[serde(default)]
-    pub crypto: Option<bool>,
     /// Replaces the flat inflation table of the group, percent by currency
     /// code. Currencies whose value did not change are not stamped.
     #[serde(default)]

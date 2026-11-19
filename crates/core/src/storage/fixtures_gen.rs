@@ -127,7 +127,6 @@ fn extras() -> Json {
 pub(super) fn v4_doc() -> VaultDoc {
     let mut doc = full_doc();
     assert_eq!(doc.version, V4_VERSION, "the generator needs the v4 build");
-    doc.settings.crypto = Some(true);
     doc.exchanges = Exchanges {
         bybit: vec![ExchangeKeys {
             store_id: "bybit".into(),

@@ -332,11 +332,11 @@ fn a_batch_with_nothing_restored_stays_undoable() {
             topup.meta.comment = "edited here".into();
         }
     }
-    right.doc.settings.schedule_timezone = Some("Asia/Bangkok".into());
     right.persist().unwrap();
     let report = right.sync_undo(&batch.id).unwrap();
     assert_eq!(report.restored, 0);
-    assert_eq!(report.skipped.len(), 2, "{report:?}");
+    // The batch no longer carries a settings record (the derived crypto copy is gone).
+    assert_eq!(report.skipped.len(), 1, "{report:?}");
     let listed: BTreeMap<_, _> = right
         .sync_history()
         .into_iter()

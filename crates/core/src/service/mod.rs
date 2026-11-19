@@ -484,7 +484,6 @@ impl UnlockedVault {
         if let Some(device_id) = device_id {
             vault.set_device(device_id);
         }
-        vault.answer_crypto();
         // Before tracking starts, so the opening entries of envelopes (the
         // same on every device) are never stamped as an edit.
         let envelopes_settled = vault.settle_envelopes();
@@ -576,26 +575,11 @@ impl UnlockedVault {
 
     /// The vault holds crypto: the module has an address or an operation, or
     /// the vault still carries a hand-made crypto wallet or exchange. Derived
-    /// from what the document holds (spec E14), never chosen by the user: the
-    /// stored `settings.crypto` is only a copy of this answer, kept for old
-    /// builds and old files.
+    /// from what the document holds (spec E14), never chosen by the user.
     pub fn crypto_enabled(&self) -> bool {
         !self.doc.crypto_accounts.is_empty()
             || !self.doc.crypto_events.is_empty()
             || self.doc.stores.iter().any(|store| store.kind.is_crypto())
-    }
-
-    /// Refresh the stored copy of [`Self::crypto_enabled`]. Only in memory:
-    /// the next write stores it, and every device works it out the same way.
-    pub(crate) fn answer_crypto(&mut self) {
-        self.doc.settings.crypto = Some(self.crypto_enabled());
-    }
-
-    /// The settings as the interface sees them: `crypto` is the derived answer.
-    pub fn settings_view(&self) -> Settings {
-        let mut settings = self.doc.settings.clone();
-        settings.crypto = Some(self.crypto_enabled());
-        settings
     }
 
     /// A copy of the vault in memory for emulation: every operation and rule
@@ -805,7 +789,7 @@ impl UnlockedVault {
         if *settings != before {
             self.persist()?;
         }
-        Ok(self.settings_view())
+        Ok(self.doc.settings.clone())
     }
 
     // -- stores -------------------------------------------------------------
@@ -1771,58 +1755,11 @@ mod tests {
 
     // -- crypto direction (derived since spec E14) -----------------------------
 
-    /// A vault written before the crypto question, reopened.
-    fn reopened_with(
-        stored: Option<bool>,
-        with_exchange: bool,
-    ) -> (tempfile::TempDir, UnlockedVault) {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("crypto.wallet");
-        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
-        if with_exchange {
-            vault
-                .create_store("Bybit", StoreKind::Exchange, "#f0b90b", "", None)
-                .unwrap();
-        }
-        vault.doc.settings.crypto = stored;
-        vault.persist_now().unwrap();
-        drop(vault);
-        let reopened = UnlockedVault::open(path, "pw").unwrap();
-        (dir, reopened)
-    }
-
-    #[test]
-    fn an_old_vault_with_an_exchange_keeps_crypto() {
-        for stored in [None, Some(true), Some(false)] {
-            let (_dir, vault) = reopened_with(stored, true);
-            assert_eq!(vault.doc.settings.crypto, Some(true), "stored {stored:?}");
-            assert!(vault.crypto_enabled());
-        }
-    }
-
-    #[test]
-    fn an_old_vault_without_crypto_records_reads_no_crypto() {
-        for stored in [None, Some(false)] {
-            let (_dir, vault) = reopened_with(stored, false);
-            assert_eq!(vault.doc.settings.crypto, Some(false), "stored {stored:?}");
-            assert!(!vault.crypto_enabled());
-        }
-    }
-
     #[test]
     fn the_crypto_answer_follows_the_module_and_cannot_be_set() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("crypto.wallet");
         let mut vault = UnlockedVault::create(path, "pw").unwrap();
-        assert!(!vault.crypto_enabled());
-        // The old switch is read and ignored.
-        let settings = vault
-            .update_settings(crate::ipc_contract::UpdateSettingsInput {
-                crypto: Some(true),
-                ..Default::default()
-            })
-            .unwrap();
-        assert_eq!(settings.crypto, Some(false));
         assert!(!vault.crypto_enabled());
         vault
             .doc
@@ -1835,35 +1772,28 @@ mod tests {
                 "2026-11-10T00:00:00Z",
             ));
         assert!(vault.crypto_enabled());
-        assert_eq!(vault.settings_view().crypto, Some(true));
     }
 
     #[test]
-    fn settings_without_the_crypto_field_still_load() {
+    fn a_vault_with_an_exchange_holds_crypto() {
+        let dir = tempdir().unwrap();
+        let mut vault = UnlockedVault::create(dir.path().join("crypto.wallet"), "pw").unwrap();
+        vault
+            .create_store("Bybit", StoreKind::Exchange, "#f0b90b", "", None)
+            .unwrap();
+        assert!(vault.crypto_enabled());
+    }
+
+    #[test]
+    fn settings_with_an_old_crypto_field_still_load() {
         let mut json = serde_json::to_value(Settings::default()).unwrap();
-        json.as_object_mut().unwrap().remove("crypto");
+        json.as_object_mut()
+            .unwrap()
+            .insert("crypto".into(), serde_json::Value::Bool(true));
         let from_json: Settings = serde_json::from_value(json.clone()).unwrap();
-        assert_eq!(from_json.crypto, None);
         let packed = rmp_serde::to_vec_named(&json).unwrap();
         let from_pack: Settings = rmp_serde::from_slice(&packed).unwrap();
-        assert_eq!(from_pack.crypto, None);
-    }
-
-    /// An old file keeps its stored field through a read in both formats.
-    #[test]
-    fn a_stored_crypto_field_survives_both_formats() {
-        for stored in [Some(true), Some(false)] {
-            let settings = Settings {
-                crypto: stored,
-                ..Settings::default()
-            };
-            let json = serde_json::to_value(&settings).unwrap();
-            let from_json: Settings = serde_json::from_value(json.clone()).unwrap();
-            let packed = rmp_serde::to_vec_named(&json).unwrap();
-            let from_pack: Settings = rmp_serde::from_slice(&packed).unwrap();
-            assert_eq!(from_json.crypto, stored);
-            assert_eq!(from_pack.crypto, stored);
-        }
+        assert_eq!(from_json, from_pack);
     }
 
     // -- password ------------------------------------------------------------
@@ -3009,7 +2939,6 @@ mod persist_tests {
             }],
             dashboard_period: crate::model::vault::DashPeriod::Year,
             onboarding_checklist_hidden: true,
-            crypto: Some(false),
             schedule_timezone: Some("Asia/Bangkok".into()),
             crypto_raise_pending: true,
         };
