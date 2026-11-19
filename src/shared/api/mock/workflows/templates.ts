@@ -52,7 +52,7 @@ export function fromTemplate(input: WorkflowFromTemplateInput): SavedWorkflow {
   const missing = template.fields.find((entry) => entry.required && !input.params[entry.key]?.trim())
   if (missing) throw { code: 'INVALID_INPUT', message: `${missing.key}: required` }
   const graph = {
-    version: 3,
+    version: 1,
     nodes: [
       node('when', 'trigger.schedule', 0, { every: 'day', interval: '1', time: '10:00' }),
       node('tell', 'action.notify', 1, { title: template.id, text: template.id }),

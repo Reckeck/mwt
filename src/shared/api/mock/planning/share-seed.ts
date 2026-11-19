@@ -30,7 +30,7 @@ function shareGraph(from: string, to: string): WorkflowGraph {
     to_port,
   })
   return {
-    version: 3,
+    version: 1,
     nodes: [
       node('income', 'trigger.transaction', { tx_kind: 'topup', category: 'salary', store: { store: from } }, 0, 0),
       node('share', 'logic.math', { op: 'percent', b: '10' }, 240, 170),

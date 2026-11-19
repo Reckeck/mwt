@@ -59,7 +59,7 @@ export const GROUP_COLOR: Record<NodeGroup, string> = {
 }
 
 /** The graph format the app writes; mirrors `GRAPH_VERSION` in `graph.rs`. */
-export const GRAPH_VERSION = 3
+export const GRAPH_VERSION = 1
 
 /** An empty graph of the current format. */
 export function emptyGraph(): WorkflowGraph {

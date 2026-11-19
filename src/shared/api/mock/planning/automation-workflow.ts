@@ -79,7 +79,7 @@ function graphOf(automation: Automation): string {
     to_port: toPort,
   })
   return JSON.stringify({
-    version: 3,
+    version: 1,
     nodes: [trigger, action],
     edges: [edge('t', 'out', 'tx', 'in'), edge('t', 'at', 'tx', 'date')],
     comments: [],
