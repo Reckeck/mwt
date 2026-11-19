@@ -243,7 +243,7 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
 CI and releases are workflows in `.github/workflows/` (`ci.yml` — checks on PRs and
 via `workflow_call` from `release.yml`; `images.yml` — CI images in ghcr;
 `release.yml` — pre-releases and the release; `release-start.yml` — the manual start of a release; `audit.yml`; `cache-cleanup.yml`;
-`dependabot-merge.yml`). All logic is in `cargo xtask` and the scripts
+`dependabot-merge.yml`; `pr-title.yml` — the PR title is a Conventional Commits subject, since the squash makes it the commit). All logic is in `cargo xtask` and the scripts
 `scripts/ci/*`, `.github/scripts/*`; packaging manifests are in `packaging/`;
 the design and secrets are in `docs/ci.md`; branches and releases are in `docs/workflow.md`.
 PRs, runs and logs go through `gh` (`gh pr create --base development`,

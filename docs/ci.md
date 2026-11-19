@@ -21,6 +21,7 @@ only a mirror without CI.
 | `release-start.yml` | manually (on `development`, no inputs) | `cargo xtask release-start`: branch `release/vX.Y.Z`, bump, tag `release-base/vX.Y.Z`, PR into `main` with auto-merge (squash) |
 | `audit.yml` | PR, push to `development`/`main`, daily, manually | dependency audit (`cargo xtask audit`) |
 | `dependabot-merge.yml` | Sunday, manually | merges green Dependabot updates |
+| `pr-title.yml` | PR into `development`/`main`: opened, renamed, pushed | the title is a Conventional Commits subject of at most 72 characters (`.github/scripts/check-pr-title.sh`; the squash makes it the commit subject, git-cliff drops anything else); required by branch protection next to `ci-ok` |
 | `cache-cleanup.yml` | PR closed, branch deleted | deletes the branch's caches |
 
 The macOS jobs (`clippy-macos` in `ci.yml`, `build-macos` in `release.yml`) are paused. Setting the repo variable `MACOS_ENABLED=true` is not enough on its own: also apply the steps written in the job comments (for `clippy-macos`, restore the `deps-native` matrix entry; for `build-macos`, pass `--macos` to `xtask check-release-files`).
