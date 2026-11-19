@@ -7,6 +7,7 @@
 //! answer is applied by `cryptotrack::prices::apply_historic`.
 
 use std::collections::BTreeMap;
+use std::future::Future;
 
 use chrono::NaiveDate;
 use reqwest::header::{ACCEPT, USER_AGENT};
@@ -105,36 +106,56 @@ pub fn parse_historical(
     out
 }
 
+/// Reads one DeFiLlama URL as JSON; what a test replaces to see the requests.
+trait CoinsApi {
+    fn get_json(&self, url: &str) -> impl Future<Output = Result<serde_json::Value>> + Send;
+}
+
+/// Historic USD prices for `(asset, date)` pairs, one request per date.
+/// Pure: nothing is written to the document. A price DeFiLlama does not have
+/// is missing from the result, not zero. Without consent (`may_lookup_contract`
+/// false, `N1`) a token is not asked about at all: only native coins are.
+async fn fetch_historic<A: CoinsApi>(
+    api: &A,
+    may_lookup_contract: bool,
+    wanted: &[(CryptoAsset, NaiveDate)],
+) -> Result<Vec<CryptoPricePoint>> {
+    let mut by_date: BTreeMap<NaiveDate, BTreeMap<String, String>> = BTreeMap::new();
+    for (asset, date) in wanted {
+        if matches!(asset, CryptoAsset::Token(_)) && !may_lookup_contract {
+            continue;
+        }
+        if let Some(coin) = llama_coin(asset) {
+            by_date.entry(*date).or_default().insert(coin, asset.key());
+        }
+    }
+    let mut out = Vec::new();
+    let mut last_err = None;
+    for (date, requested) in by_date {
+        let coins: Vec<String> = requested.keys().cloned().collect();
+        let url = historical_url(DEFILLAMA_COINS, date_secs(date), &coins);
+        match api.get_json(&url).await {
+            Ok(body) => out.extend(parse_historical(&body, &requested, date)),
+            Err(err) => last_err = Some(err),
+        }
+    }
+    match last_err {
+        Some(err) if out.is_empty() => Err(err),
+        _ => Ok(out),
+    }
+}
+
 impl PricingService {
-    /// Historic USD prices for `(asset, date)` pairs, one request per date.
-    /// Pure: nothing is written to the document. A price DeFiLlama does not
-    /// have is missing from the result, not zero.
+    /// Historic USD prices, as the consent setting allows.
     pub async fn fetch_historic_prices(
         &self,
         wanted: &[(CryptoAsset, NaiveDate)],
     ) -> Result<Vec<CryptoPricePoint>> {
-        let mut by_date: BTreeMap<NaiveDate, BTreeMap<String, String>> = BTreeMap::new();
-        for (asset, date) in wanted {
-            if let Some(coin) = llama_coin(asset) {
-                by_date.entry(*date).or_default().insert(coin, asset.key());
-            }
-        }
-        let mut out = Vec::new();
-        let mut last_err = None;
-        for (date, requested) in by_date {
-            let coins: Vec<String> = requested.keys().cloned().collect();
-            let url = historical_url(DEFILLAMA_COINS, date_secs(date), &coins);
-            match self.get_json(&url).await {
-                Ok(body) => out.extend(parse_historical(&body, &requested, date)),
-                Err(err) => last_err = Some(err),
-            }
-        }
-        match last_err {
-            Some(err) if out.is_empty() => Err(err),
-            _ => Ok(out),
-        }
+        fetch_historic(self, self.lookup_contracts, wanted).await
     }
+}
 
+impl CoinsApi for PricingService {
     async fn get_json(&self, url: &str) -> Result<serde_json::Value> {
         let resp = self
             .client
@@ -219,5 +240,54 @@ mod tests {
         assert_eq!(points[0].ts, "2026-03-01T00:00:00Z");
         let zero = serde_json::json!({"coins": {coin: {"price": 0}}});
         assert!(parse_historical(&zero, &requested, day()).is_empty());
+    }
+
+    /// Records every URL; answers with no coins.
+    struct Recording(std::sync::Mutex<Vec<String>>);
+
+    impl CoinsApi for Recording {
+        async fn get_json(&self, url: &str) -> Result<serde_json::Value> {
+            self.0.lock().unwrap().push(url.to_owned());
+            Ok(serde_json::json!({"coins": {}}))
+        }
+    }
+
+    fn wanted() -> Vec<(CryptoAsset, NaiveDate)> {
+        vec![
+            (
+                CryptoAsset::Native {
+                    chain: Chain::Ethereum,
+                },
+                day(),
+            ),
+            (
+                CryptoAsset::Token(TokenId::new(Chain::Ethereum, USDC)),
+                day(),
+            ),
+        ]
+    }
+
+    #[tokio::test]
+    async fn without_consent_no_token_contract_reaches_the_source() {
+        let api = Recording(Default::default());
+        fetch_historic(&api, false, &wanted()).await.unwrap();
+        let urls = api.0.lock().unwrap().clone();
+        assert_eq!(urls.len(), 1, "the native coin is still asked: {urls:?}");
+        assert!(!urls.iter().any(|url| url.to_lowercase().contains("0xa0b8")));
+    }
+
+    #[tokio::test]
+    async fn with_consent_the_contract_is_asked() {
+        let api = Recording(Default::default());
+        fetch_historic(&api, true, &wanted()).await.unwrap();
+        let urls = api.0.lock().unwrap().clone();
+        assert!(urls.iter().any(|url| url.to_lowercase().contains("0xa0b8")));
+    }
+
+    #[test]
+    fn the_real_adapter_defaults_to_no_consent() {
+        let service = PricingService::default();
+        assert!(!service.looks_up_contracts());
+        assert!(service.with_contract_lookup(true).looks_up_contracts());
     }
 }

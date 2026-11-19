@@ -44,6 +44,16 @@ task = "E"
 files = ["crates/core/src/kernel/events.rs"]
 
 [[foundation]]
+# T46: the cryptotrack ports, their fake-backed tests and the RPC adapter of `ChainSource`.
+task = "E"
+files = [
+    "crates/core/src/cryptotrack/ports.rs",
+    "crates/core/src/cryptotrack/ports_tests.rs",
+    "crates/core/src/cryptotrack/rpc/mod.rs",
+    "crates/core/src/cryptotrack/rpc/port.rs",
+]
+
+[[foundation]]
 # Stream D adds the moment of the user's action (at) to the retry and pause/resume events and the stopped ids to GoalPaused.
 task = "D"
 files = ["crates/core/src/kernel/events.rs"]
