@@ -17,7 +17,7 @@ use super::PricingService;
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
-use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint};
+use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint, TokenId};
 use crate::time::{date_secs, date_ts};
 
 pub const DEFILLAMA_COINS: &str = "https://coins.llama.fi";
@@ -114,15 +114,20 @@ trait CoinsApi {
 /// Historic USD prices for `(asset, date)` pairs, one request per date.
 /// Pure: nothing is written to the document. A price DeFiLlama does not have
 /// is missing from the result, not zero. Without consent (`may_lookup_contract`
-/// false, `N1`) a token is not asked about at all: only native coins are.
+/// false, `N1`) a token for which `is_known` is false is not asked about:
+/// native coins and known tokens are. The caller owns the built-in list.
 async fn fetch_historic<A: CoinsApi>(
     api: &A,
     may_lookup_contract: bool,
+    is_known: impl Fn(&TokenId) -> bool,
     wanted: &[(CryptoAsset, NaiveDate)],
 ) -> Result<Vec<CryptoPricePoint>> {
     let mut by_date: BTreeMap<NaiveDate, BTreeMap<String, String>> = BTreeMap::new();
     for (asset, date) in wanted {
-        if matches!(asset, CryptoAsset::Token(_)) && !may_lookup_contract {
+        if let CryptoAsset::Token(token) = asset
+            && !may_lookup_contract
+            && !is_known(token)
+        {
             continue;
         }
         if let Some(coin) = llama_coin(asset) {
@@ -146,12 +151,14 @@ async fn fetch_historic<A: CoinsApi>(
 }
 
 impl PricingService {
-    /// Historic USD prices, as the consent setting allows.
+    /// Historic USD prices, as the consent setting allows. `is_known` says
+    /// which tokens are on the built-in list: those are asked without consent.
     pub async fn fetch_historic_prices(
         &self,
+        is_known: impl Fn(&TokenId) -> bool,
         wanted: &[(CryptoAsset, NaiveDate)],
     ) -> Result<Vec<CryptoPricePoint>> {
-        fetch_historic(self, self.lookup_contracts, wanted).await
+        fetch_historic(self, self.lookup_contracts, is_known, wanted).await
     }
 }
 
@@ -183,7 +190,6 @@ impl CoinsApi for PricingService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::cryptotrack::TokenId;
 
     const WALLET: &str = "0x00000000000000000000000000000000deadbeef";
     const USDC: &str = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
@@ -252,6 +258,10 @@ mod tests {
         }
     }
 
+    fn only_usdc(token: &TokenId) -> bool {
+        token.contract.eq_ignore_ascii_case(USDC)
+    }
+
     fn wanted() -> Vec<(CryptoAsset, NaiveDate)> {
         vec![
             (
@@ -268,18 +278,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn without_consent_no_token_contract_reaches_the_source() {
+    async fn without_consent_an_unknown_contract_never_reaches_the_source() {
         let api = Recording(Default::default());
-        fetch_historic(&api, false, &wanted()).await.unwrap();
+        fetch_historic(&api, false, |_| false, &wanted())
+            .await
+            .unwrap();
         let urls = api.0.lock().unwrap().clone();
         assert_eq!(urls.len(), 1, "the native coin is still asked: {urls:?}");
         assert!(!urls.iter().any(|url| url.to_lowercase().contains("0xa0b8")));
     }
 
     #[tokio::test]
+    async fn without_consent_a_known_token_is_still_asked() {
+        let api = Recording(Default::default());
+        fetch_historic(&api, false, only_usdc, &wanted())
+            .await
+            .unwrap();
+        let urls = api.0.lock().unwrap().clone();
+        assert!(urls.iter().any(|url| url.to_lowercase().contains("0xa0b8")));
+    }
+
+    #[tokio::test]
     async fn with_consent_the_contract_is_asked() {
         let api = Recording(Default::default());
-        fetch_historic(&api, true, &wanted()).await.unwrap();
+        fetch_historic(&api, true, |_| false, &wanted())
+            .await
+            .unwrap();
         let urls = api.0.lock().unwrap().clone();
         assert!(urls.iter().any(|url| url.to_lowercase().contains("0xa0b8")));
     }
