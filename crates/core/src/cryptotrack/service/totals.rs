@@ -336,8 +336,7 @@ pub fn crypto_retired_wallets(doc: &VaultDoc) -> HashSet<String> {
 /// (`engine::position_value::held_by_account`): wallet, ledger position,
 /// the adapter legs no operation accounts for, minus the debt legs. A
 /// debt over the collateral gives a negative quantity, kept as is. Which
-/// accounts count and what their positions are come from the positions area,
-/// through the vault of the books (spec core-strangler OD6).
+/// accounts count and what their positions are come from the positions area.
 pub(crate) fn capital(books: &Books<'_>) -> Capital {
     let doc = books.doc();
     let mut out = Capital::default();
@@ -349,8 +348,9 @@ pub(crate) fn capital(books: &Books<'_>) -> Capital {
     let ledger = fold(books);
     let (_, fx) = books.base_and_fx();
     let vault = books.vault();
-    let account_counts = |account_id: &str| vault.crypto_account_counts(account_id);
-    let inputs = vault.crypto_position_inputs();
+    let account_counts =
+        |account_id: &str| super::positions::crypto_account_counts(doc, account_id);
+    let inputs = super::positions::crypto_position_inputs(doc);
     add_receipts_left_out(doc, &ledger, &inputs.receipts, &account_counts, &mut out);
     for held in inputs.with(|taking| held_by_account(&ledger, taking)) {
         let owned = held.net();

@@ -35,6 +35,7 @@ use crate::ipc_contract::cryptotrack::operations::{
     OwnEntry,
 };
 use crate::kernel::books::Books;
+use crate::kernel::tx::Tx;
 use crate::model::cryptotrack::{CryptoDirection, CryptoOverride, CryptoTx, TrackingRef};
 use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
@@ -555,7 +556,8 @@ pub fn crypto_set_override(
     vault: &mut UnlockedVault,
     input: &CryptoSetOverrideInput,
 ) -> Result<CryptoSetOverrideResult> {
-    let result = lay_override(&mut vault.doc, input, &now_iso())?;
+    let now = now_iso();
+    let result = vault.transact(|tx| lay_override(tx, input, &now))?;
     // The chain decides a cost basis and a kind decides how an operation
     // folds, so the holdings are derived again before the save.
     vault.crypto_sync_holdings()?;
@@ -565,10 +567,11 @@ pub fn crypto_set_override(
 /// The edit of the document a correction makes: the operation's own record,
 /// the rule for its contract and the contact's address. Saves nothing.
 fn lay_override(
-    doc: &mut VaultDoc,
+    tx: &mut Tx<'_>,
     input: &CryptoSetOverrideInput,
     now: &str,
 ) -> Result<CryptoSetOverrideResult> {
+    let doc = tx.doc();
     let event = crypto_event_ref(doc, &input.event_id)?.clone();
     if let Some(comment) = &input.comment
         && comment.chars().count() > COMMENT_MAX
@@ -626,7 +629,7 @@ fn lay_override(
             OverrideField::Contact => fix.contact_id = None,
             OverrideField::Flow => {
                 if let Some(old) = fix.flow_id.take() {
-                    crypto_release_chain(doc, &old, &fix.event_id);
+                    crypto_release_chain(tx.doc_mut(), &old, &fix.event_id);
                 }
             }
         }
@@ -651,7 +654,7 @@ fn lay_override(
         fix.not_exchange = flag;
     }
     if let Some(tx_id) = &input.link_transaction_id {
-        let flow = crypto_join_chain(doc, tx_id, fix.flow_id.as_deref())?;
+        let flow = crypto_join_chain(tx.doc_mut(), tx_id, fix.flow_id.as_deref())?;
         fix.flow_id = Some(flow);
         // Linked is the opposite of «not an exchange».
         fix.not_exchange = false;
@@ -659,25 +662,18 @@ fn lay_override(
     let flow_now = fix.flow_id.clone();
     fix.updated_at = now.to_string();
     fix.validate()?;
-    match doc
-        .crypto_overrides
-        .iter_mut()
-        .find(|have| have.id == fix.id)
-    {
-        Some(have) => *have = fix,
-        None => doc.crypto_overrides.push(fix),
-    }
+    upsert_override(tx, fix)?;
 
     // 2. The rule for the contract, which outlives any refetch.
     let mut applied = 1u32;
     if (input.same_contract || input.remove_contract_rule)
         && let Some(key) = overrides::contract_key(&event)
     {
-        applied = crypto_write_rule(doc, &key, input, now)?;
+        applied = crypto_write_rule(tx, &key, input, now)?;
     }
 
     if let Some(contact_id) = &input.contact_id {
-        crypto_remember_address(doc, contact_id, &event);
+        crypto_remember_address(tx.doc_mut(), contact_id, &event);
     }
     Ok(CryptoSetOverrideResult {
         flow_id: flow_now,
@@ -685,16 +681,28 @@ fn lay_override(
     })
 }
 
+/// Store `fix` under its id: a new record is inserted, a known one rewritten.
+fn upsert_override(tx: &mut Tx<'_>, fix: CryptoOverride) -> Result<()> {
+    let mut stored = tx.collection::<CryptoOverride>();
+    if stored.get(&fix.id).is_some() {
+        let id = fix.id.clone();
+        stored.update(&id, |have| *have = fix)
+    } else {
+        stored.insert(fix)
+    }
+}
+
 /// Set, change or remove the rule of one contract; the rule is a record of
 /// `crypto_overrides` under [`overrides::rule_event_id`]. A rule left with
 /// nothing in it is removed. Returns how many operations it reaches.
 fn crypto_write_rule(
-    doc: &mut VaultDoc,
+    tx: &mut Tx<'_>,
     key: &str,
     input: &CryptoSetOverrideInput,
     now: &str,
 ) -> Result<u32> {
     let event_id = overrides::rule_event_id(key);
+    let doc = tx.doc();
     let mut rule = overrides::rules(&doc.crypto_overrides)
         .get(key)
         .map(|found| (*found).clone())
@@ -732,14 +740,25 @@ fn crypto_write_rule(
     }
     let empty = input.remove_contract_rule
         || (rule.kind.is_none() && rule.categories.is_empty() && rule.contact_id.is_none());
-    doc.crypto_overrides
-        .retain(|have| have.event_id != event_id);
     if !empty {
         rule.updated_at = now.to_string();
         rule.validate()?;
-        doc.crypto_overrides.push(rule);
     }
-    Ok(doc
+    let stale: Vec<String> = doc
+        .crypto_overrides
+        .iter()
+        .filter(|have| have.event_id == event_id && (empty || have.id != rule.id))
+        .map(|have| have.id.clone())
+        .collect();
+    let mut stored = tx.collection::<CryptoOverride>();
+    for id in &stale {
+        stored.remove(id)?;
+    }
+    if !empty {
+        upsert_override(tx, rule)?;
+    }
+    Ok(tx
+        .doc()
         .crypto_events
         .iter()
         .filter(|other| ids::adjustment(&other.id).is_none())

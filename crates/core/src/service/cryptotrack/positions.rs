@@ -5,6 +5,7 @@
 #[cfg(test)]
 use std::collections::BTreeSet;
 
+#[cfg(test)]
 pub(crate) use crate::cryptotrack::service::positions::CryptoPositionInputs;
 pub use crate::cryptotrack::service::positions::CryptoPositionsApplied;
 
@@ -64,16 +65,12 @@ impl UnlockedVault {
     }
     // forward:end
 
-    // Called by the totals and the snapshots until those read the document
-    // directly; not in the baseline (crate-private), so outside the regenerated block.
+    // Crate-private and test-only, so not in the baseline: outside the regenerated block.
     forward! {
-        /// Whether the capital counts what this account holds: it is followed
-        /// and not archived. An address watched without being counted stays out.
-        pub(crate) fn crypto_account_counts(&self, account_id: &str) -> bool
-            => crate::cryptotrack::service::positions::crypto_account_counts @doc;
         /// What takes part in a position's value, built once for the present
         /// capital and the snapshots: positions of followed, live accounts, no
         /// stale twin of an old key, plus the receipts.
+        #[cfg(test)]
         pub(crate) fn crypto_position_inputs(&self) -> CryptoPositionInputs<'_>
             => crate::cryptotrack::service::positions::crypto_position_inputs @doc;
         /// Asset keys the module holds only as the receipt of a position (an

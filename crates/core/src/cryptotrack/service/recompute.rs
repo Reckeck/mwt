@@ -540,8 +540,7 @@ pub fn crypto_totals(books: &Books<'_>, at: &str) -> CryptoTotals {
 
 /// The value of each account and of the module for the day of `at`, as the
 /// records the document keeps. What counts as a followed account and what
-/// a position is worth come from the positions area, through the vault of
-/// the books (spec core-strangler OD6).
+/// a position is worth come from the positions area.
 pub fn snapshot_records(books: &Books<'_>, at: &str) -> Vec<CryptoSnapshot> {
     let doc = books.doc();
     let ledger = fold(books);
@@ -550,9 +549,9 @@ pub fn snapshot_records(books: &Books<'_>, at: &str) -> Vec<CryptoSnapshot> {
         market: PriceIndex::of(doc),
         linked: BTreeMap::new(),
     };
-    let vault = books.vault();
-    let inputs = vault.crypto_position_inputs();
-    let counts_account = |account_id: &str| vault.crypto_account_counts(account_id);
+    let inputs = super::positions::crypto_position_inputs(doc);
+    let counts_account =
+        |account_id: &str| super::positions::crypto_account_counts(doc, account_id);
     inputs
         .with(|taking| engine::snapshot::take(&ledger, taking, &counts_account, at, &prices))
         .records

@@ -819,3 +819,62 @@ fn no_command_creates_or_deletes_an_operation() {
             && !body.contains("crypto_events.retain")
     );
 }
+
+struct NoWake;
+
+impl crate::service::SaveHook for NoWake {
+    fn dirty(&self) {}
+}
+
+fn flush(vault: &mut UnlockedVault) {
+    if let Some(job) = vault.prepare_flush().unwrap() {
+        let done = job.write().unwrap();
+        vault.finish_flush(&done);
+    }
+}
+
+#[test]
+fn clearing_a_contract_rule_leaves_a_tombstone() {
+    let (_dir, mut vault) = vault_with(vec![event(
+        "a",
+        "2026-03-03T10:00:00Z",
+        CryptoDirection::In,
+        "1",
+    )]);
+    vault.set_device("aaaaaaaa-rule");
+    vault.set_write_behind(Some(std::sync::Arc::new(NoWake)));
+    vault
+        .crypto_set_override(&CryptoSetOverrideInput {
+            event_id: "a".into(),
+            kind: Some(CryptoTxKind::Claim),
+            same_contract: true,
+            ..Default::default()
+        })
+        .unwrap();
+    flush(&mut vault);
+    let rule = vault
+        .doc
+        .crypto_overrides
+        .iter()
+        .find(|fix| fix.id.starts_with("crule:"))
+        .expect("the rule is stored")
+        .id
+        .clone();
+    vault
+        .crypto_set_override(&CryptoSetOverrideInput {
+            event_id: "a".into(),
+            remove_contract_rule: true,
+            ..Default::default()
+        })
+        .unwrap();
+    flush(&mut vault);
+    assert!(
+        vault
+            .doc
+            .sync
+            .tombstones
+            .keys()
+            .any(|key| key.contains(&rule)),
+        "removing the rule is a deletion the sync must carry"
+    );
+}
