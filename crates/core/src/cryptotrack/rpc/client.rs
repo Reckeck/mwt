@@ -5,10 +5,10 @@ use std::time::Duration;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use tokio::time::Instant;
-use zeroize::Zeroizing;
 
 use super::limiter::HostLimiter;
 use crate::error::{Error, Result};
+use crate::secret::Secret;
 
 /// Knobs of the client. The defaults suit public endpoints.
 #[derive(Debug, Clone)]
@@ -70,14 +70,7 @@ impl RpcCall {
 /// The optional Blockscout key (decision R8, spec E17). It is sent only as an
 /// `x-api-key` header, never in a URL, and only over `https`. Its
 /// `Debug` hides the value so no log line or error can carry it.
-#[derive(Clone)]
-struct ApiKey(Arc<Zeroizing<String>>);
-
-impl std::fmt::Debug for ApiKey {
-    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        out.write_str("ApiKey(<hidden>)")
-    }
-}
+type ApiKey = Secret<String>;
 
 /// Talks JSON-RPC over HTTPS. Cheap to clone; clones share the limiter.
 #[derive(Debug, Clone)]
@@ -128,7 +121,7 @@ impl RpcClient {
         keyed.api_key = key
             .map(str::trim)
             .filter(|text| !text.is_empty())
-            .map(|text| ApiKey(Arc::new(Zeroizing::new(text.to_owned()))));
+            .map(|text| ApiKey::new(text.to_owned()));
         keyed
     }
 
@@ -330,7 +323,7 @@ fn with_key_header(
     {
         return Ok(request);
     }
-    let mut value = reqwest::header::HeaderValue::from_str(key.0.as_str())
+    let mut value = reqwest::header::HeaderValue::from_str(key.expose().as_str())
         .map_err(|_| Error::InvalidInput("the Blockscout key cannot be sent".into()))?;
     value.set_sensitive(true);
     Ok(request.header("x-api-key", value))
@@ -389,7 +382,7 @@ mod api_key_tests {
     #[test]
     fn the_key_goes_in_the_x_api_key_header_and_nowhere_else() {
         let client = reqwest::Client::new();
-        let key = ApiKey(Arc::new(Zeroizing::new(key_text())));
+        let key = ApiKey::new(key_text());
         let url = "https://scout.example.org/api/v2/stats";
         let built = with_key_header(client.get(url), url, Some(&key))
             .unwrap()

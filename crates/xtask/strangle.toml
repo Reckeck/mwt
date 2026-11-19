@@ -54,6 +54,11 @@ files = [
 ]
 
 [[foundation]]
+# T50 (`N5`): the Blockscout key becomes `Secret<String>`; the IPC inputs that carry a password or a key get a closed `Debug`.
+task = "E"
+files = ["crates/core/src/cryptotrack/rpc/client.rs", "crates/core/src/ipc_contract.rs"]
+
+[[foundation]]
 # Stream D adds the moment of the user's action (at) to the retry and pause/resume events and the stopped ids to GoalPaused.
 task = "D"
 files = ["crates/core/src/kernel/events.rs"]
