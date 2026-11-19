@@ -32,6 +32,34 @@ pub fn complete_transaction(books: &Books, tx: &mut Transaction) {
         .map(|rate| unit_price / rate);
 }
 
+/// An edit of one operation that names only what it changes (F4): the new
+/// content of the operation, and the links it carries. A link the patch does
+/// not name keeps its stored value; naming `Some(None)` clears it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransactionPatch {
+    /// The new content. Its own id, origin, flow and bill are not read: the
+    /// fields below say what happens to those.
+    pub tx: Transaction,
+    /// The utility bill the operation settles.
+    pub utility_item_id: Option<Option<String>>,
+    /// The chain of operations it belongs to.
+    pub flow_id: Option<Option<String>>,
+    /// Where the record came from (the source link).
+    pub origin: Option<TxOrigin>,
+}
+
+impl TransactionPatch {
+    /// A patch that changes the content and names no link.
+    pub fn of(tx: Transaction) -> Self {
+        Self {
+            tx,
+            utility_item_id: None,
+            flow_id: None,
+            origin: None,
+        }
+    }
+}
+
 /// Give a new operation an id of its own when it has none or the id is taken.
 pub fn ensure_fresh_id(doc: &VaultDoc, tx: &mut Transaction) {
     let id = tx.meta().id.trim();

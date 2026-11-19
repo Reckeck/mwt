@@ -8,7 +8,7 @@ use crate::error::{Error, Result};
 use crate::model::store::StoreScope;
 use crate::model::transaction::Transaction;
 use crate::model::vault::{iso_to_millis, now_iso};
-use crate::money::transactions::{complete_transaction, edited, ensure_fresh_id};
+use crate::money::transactions::{TransactionPatch, complete_transaction, edited, ensure_fresh_id};
 use crate::service::UnlockedVault;
 use crate::usecases::household::property_links::{check_property_link, set_property_link};
 use crate::usecases::household::shared_events::cascade_shared_delete;
@@ -132,6 +132,16 @@ pub fn update_transaction(
 ) -> Result<Transaction> {
     let property = vault.property_of_tx(id).map(str::to_string);
     edit(vault, id, tx, property.as_deref(), true)
+}
+
+/// Change an operation by naming only what changes (F4): every link the patch
+/// does not name keeps its stored value, the property link included.
+pub fn patch_transaction(
+    vault: &mut UnlockedVault,
+    id: &str,
+    patch: TransactionPatch,
+) -> Result<Transaction> {
+    update_transaction(vault, id, patch.tx)
 }
 
 /// [`update_transaction`] for the shared event that owns the operation: the

@@ -125,3 +125,66 @@ fn history_comes_newest_first() {
     let history = vault.transactions(&Default::default());
     assert_eq!(history[0].meta().comment, "new");
 }
+
+fn linked_operation(vault: &mut crate::service::UnlockedVault, cash: &str) -> Transaction {
+    let mut tx = income(cash, "100", "water");
+    tx.meta_mut().flow_id = Some("flow-1".into());
+    tx.meta_mut().utility_item_id = Some("util-1".into());
+    tx.meta_mut().origin = TxOrigin::Import {
+        exec_id: "exec-1".into(),
+    };
+    vault.add_transaction(tx).unwrap()
+}
+
+#[test]
+fn a_patch_keeps_every_field_it_does_not_name() {
+    let (_dir, mut vault) = empty_vault();
+    let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+    let saved = linked_operation(&mut vault, &cash);
+    let id = saved.meta().id.clone();
+
+    let patched = vault
+        .patch_transaction(&id, TransactionPatch::of(income(&cash, "120", "water")))
+        .unwrap();
+
+    let meta = patched.meta();
+    assert_eq!(meta.id, id);
+    assert_eq!(meta.flow_id.as_deref(), Some("flow-1"));
+    assert_eq!(meta.utility_item_id.as_deref(), Some("util-1"));
+    assert_eq!(
+        meta.origin,
+        TxOrigin::Import {
+            exec_id: "exec-1".into()
+        }
+    );
+}
+
+#[test]
+fn a_patch_changes_only_the_links_it_names() {
+    let (_dir, mut vault) = empty_vault();
+    let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+    let saved = linked_operation(&mut vault, &cash);
+    let patch = TransactionPatch {
+        utility_item_id: Some(None),
+        flow_id: Some(Some("flow-2".into())),
+        ..TransactionPatch::of(income(&cash, "100", "water"))
+    };
+
+    let patched = vault.patch_transaction(&saved.meta().id, patch).unwrap();
+
+    assert_eq!(patched.meta().utility_item_id, None);
+    assert_eq!(patched.meta().flow_id.as_deref(), Some("flow-2"));
+}
+
+#[test]
+fn a_replacing_edit_never_drops_the_flow_link() {
+    let (_dir, mut vault) = empty_vault();
+    let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
+    let saved = linked_operation(&mut vault, &cash);
+
+    let updated = vault
+        .update_transaction(&saved.meta().id, income(&cash, "120", "water"))
+        .unwrap();
+
+    assert_eq!(updated.meta().flow_id.as_deref(), Some("flow-1"));
+}

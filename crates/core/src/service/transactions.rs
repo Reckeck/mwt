@@ -5,6 +5,7 @@
 use crate::error::Result;
 use crate::model::store::StoreScope;
 use crate::model::transaction::Transaction;
+use crate::money::transactions::TransactionPatch;
 
 use super::UnlockedVault;
 use super::forward::forward;
@@ -40,6 +41,10 @@ impl UnlockedVault {
         /// changes what happened, not where the record came from.
         pub fn update_transaction(&mut self, id: &str, tx: Transaction) -> Result<Transaction>
             => crate::usecases::money::transactions::update_transaction;
+        /// Change an operation by naming only what changes (F4): every link the patch
+        /// does not name keeps its stored value, the property link included.
+        pub fn patch_transaction(&mut self, id: &str, patch: TransactionPatch) -> Result<Transaction>
+            => crate::usecases::money::transactions::patch_transaction;
         /// [`Self::update_transaction`] for the shared event that owns the
         /// operation: the event has changed its own side already.
         pub(crate) fn update_transaction_unsynced(&mut self, id: &str, tx: Transaction) -> Result<Transaction>
