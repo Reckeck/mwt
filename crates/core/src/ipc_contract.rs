@@ -3,6 +3,8 @@
 //! Commands in the `app` crate only translate between these DTOs and the
 //! domain services — never expose internal model directly.
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::Amount;
@@ -25,6 +27,7 @@ use crate::model::transaction::{
     TransferTx, TxKind, TxMeta, allowed_kinds, default_kind,
 };
 use crate::model::vault::DailyBudgetMode;
+use crate::secret::Hidden;
 use crate::service::{AutomationDraft, BudgetDraft, ContactDraft, GoalDraft, PriceAlertDraft};
 
 pub mod cryptotrack;
@@ -33,7 +36,7 @@ pub mod security;
 
 // -- auth --------------------------------------------------------------------
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct CreateVaultInput {
     pub path: String,
     /// `None` makes a vault without a password (its file is not encrypted);
@@ -45,16 +48,44 @@ pub struct CreateVaultInput {
     pub cash_name: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+impl fmt::Debug for CreateVaultInput {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("CreateVaultInput")
+            .field("path", &self.path)
+            .field("password", &Hidden)
+            .field("cash_name", &self.cash_name)
+            .finish()
+    }
+}
+
+#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct UnlockInput {
     pub path: String,
     pub password: String,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+impl fmt::Debug for UnlockInput {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("UnlockInput")
+            .field("path", &self.path)
+            .field("password", &Hidden)
+            .finish()
+    }
+}
+
+#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct ChangePasswordInput {
     pub current_password: String,
     pub new_password: String,
+}
+
+impl fmt::Debug for ChangePasswordInput {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("ChangePasswordInput")
+            .field("current_password", &Hidden)
+            .field("new_password", &Hidden)
+            .finish()
+    }
 }
 
 /// `serde(default)` for `encrypted`: a payload without it is a vault with a password.
@@ -63,12 +94,21 @@ fn yes() -> bool {
 }
 
 /// Set a password on the open vault that has none.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct SetVaultPasswordInput {
     pub new_password: String,
     /// Also delete this vault's `.bak` copies that are not encrypted.
     #[serde(default)]
     pub delete_plain_copies: bool,
+}
+
+impl fmt::Debug for SetVaultPasswordInput {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("SetVaultPasswordInput")
+            .field("new_password", &Hidden)
+            .field("delete_plain_copies", &self.delete_plain_copies)
+            .finish()
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
@@ -78,13 +118,22 @@ pub struct SetVaultPasswordResult {
 }
 
 /// Take the password off the open vault.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct RemoveVaultPasswordInput {
     pub current_password: String,
     /// The user agreed that the external copy loses its password too. Without
     /// it a vault with an external copy keeps its password (`INVALID_INPUT`).
     #[serde(default)]
     pub external_copy_too: bool,
+}
+
+impl fmt::Debug for RemoveVaultPasswordInput {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("RemoveVaultPasswordInput")
+            .field("current_password", &Hidden)
+            .field("external_copy_too", &self.external_copy_too)
+            .finish()
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
@@ -1954,12 +2003,22 @@ pub struct ExchangeKeyStatusInput {
 
 /// Stores a read-only key for a specific store. Both fields are written to the
 /// encrypted vault and are never echoed back to the frontend.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub struct SetExchangeKeyInput {
     pub store_id: String,
     pub api_key: String,
     pub api_secret: String,
+}
+
+impl fmt::Debug for SetExchangeKeyInput {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("SetExchangeKeyInput")
+            .field("store_id", &self.store_id)
+            .field("api_key", &Hidden)
+            .field("api_secret", &Hidden)
+            .finish()
+    }
 }
 
 /// Which sub-accounts imported spot and futures fills land on.
@@ -2205,7 +2264,7 @@ pub enum ConflictSide {
     Remote,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub struct ResolveVaultConflictInput {
     pub path: String,
@@ -2213,6 +2272,16 @@ pub struct ResolveVaultConflictInput {
     /// The vault's password: keeping the remote copy trial-opens it first.
     #[serde(default)]
     pub password: String,
+}
+
+impl fmt::Debug for ResolveVaultConflictInput {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("ResolveVaultConflictInput")
+            .field("path", &self.path)
+            .field("keep", &self.keep)
+            .field("password", &Hidden)
+            .finish()
+    }
 }
 
 /// Output of the dev dump vault command (DEV only).
@@ -2601,10 +2670,19 @@ pub struct TransferNearby {
 }
 
 /// "Send": to whom, and the vault password typed again.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct TransferSendInput {
     pub id: String,
     pub password: String,
+}
+
+impl fmt::Debug for TransferSendInput {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("TransferSendInput")
+            .field("id", &self.id)
+            .field("password", &Hidden)
+            .finish()
+    }
 }
 
 pub use crate::model::sync_state::SyncCutReason;
@@ -3034,4 +3112,93 @@ pub struct UpdateStatusDto {
     pub auto_update: bool,
     /// RFC 3339 time of the last finished check.
     pub last_check: Option<String>,
+}
+
+#[cfg(test)]
+mod secret_debug_tests {
+    use super::*;
+
+    const LEAK: &str = "fake-leak-7Hq2";
+
+    fn leaks(debug: String) -> bool {
+        debug.contains(LEAK)
+    }
+
+    #[test]
+    fn create_vault_input_debug_hides_the_password() {
+        let input = CreateVaultInput {
+            path: "/v".into(),
+            password: Some(LEAK.into()),
+            ..Default::default()
+        };
+        assert!(!leaks(format!("{input:?}")));
+        assert!(format!("{input:?}").contains("/v"));
+    }
+
+    #[test]
+    fn unlock_input_debug_hides_the_password() {
+        let input = UnlockInput {
+            path: "/v".into(),
+            password: LEAK.into(),
+        };
+        assert!(!leaks(format!("{input:?}")));
+    }
+
+    #[test]
+    fn change_password_input_debug_hides_both_passwords() {
+        let input = ChangePasswordInput {
+            current_password: LEAK.into(),
+            new_password: LEAK.into(),
+        };
+        assert!(!leaks(format!("{input:?}")));
+    }
+
+    #[test]
+    fn set_vault_password_input_debug_hides_the_password() {
+        let input = SetVaultPasswordInput {
+            new_password: LEAK.into(),
+            delete_plain_copies: true,
+        };
+        assert!(!leaks(format!("{input:?}")));
+    }
+
+    #[test]
+    fn remove_vault_password_input_debug_hides_the_password() {
+        let input = RemoveVaultPasswordInput {
+            current_password: LEAK.into(),
+            external_copy_too: false,
+        };
+        assert!(!leaks(format!("{input:?}")));
+    }
+
+    #[test]
+    fn set_exchange_key_input_debug_hides_key_and_secret() {
+        let input = SetExchangeKeyInput {
+            store_id: "s1".into(),
+            api_key: LEAK.into(),
+            api_secret: LEAK.into(),
+        };
+        let shown = format!("{input:?}");
+        assert!(!leaks(shown.clone()));
+        assert!(shown.contains("s1"));
+    }
+
+    #[test]
+    fn resolve_vault_conflict_input_debug_hides_the_password() {
+        let input = ResolveVaultConflictInput {
+            path: "/v".into(),
+            keep: ConflictSide::Local,
+            password: LEAK.into(),
+        };
+        assert!(!leaks(format!("{input:?}")));
+    }
+
+    #[test]
+    fn transfer_send_input_debug_hides_the_password() {
+        let input = TransferSendInput {
+            id: "t1".into(),
+            password: LEAK.into(),
+        };
+        assert!(!leaks(format!("{input:?}")));
+    }
 }

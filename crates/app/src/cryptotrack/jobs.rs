@@ -53,6 +53,7 @@ use trade_core::cryptotrack::rpc::{RpcClient, RpcConfig};
 use trade_core::cryptotrack::sources::evm::{
     BalanceRequest, Cursor, EvmSource, HistoryRequest, RawAsset, SourceBatch, Stream,
 };
+use trade_core::cryptotrack::tokens::known;
 use trade_core::error::{Error, Result};
 use trade_core::ipc_contract::cryptotrack::sync::{
     CryptoPages, CryptoSyncAccountStatus, CryptoSyncState, CryptoSyncStatus, CryptoSyncTarget,
@@ -845,7 +846,9 @@ impl Reader for EvmReader {
         &self,
         wanted: &[(CryptoAsset, NaiveDate)],
     ) -> Result<Vec<CryptoPricePoint>> {
-        self.pricing.fetch_historic_prices(wanted).await
+        self.pricing
+            .fetch_historic_prices(known::is_known, wanted)
+            .await
     }
 }
 

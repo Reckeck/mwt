@@ -10,6 +10,7 @@ use crate::model::planning::{
 };
 use crate::model::store::{AssetRef, Holding, Store};
 use crate::model::transaction::Transaction;
+use crate::secret::Secret;
 use schemars::JsonSchema;
 
 /// One widget on the dashboard grid (12 columns). A widget not in the list is
@@ -310,7 +311,7 @@ impl std::fmt::Debug for ExchangeKeys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExchangeKeys")
             .field("store_id", &self.store_id)
-            .field("api_key", &self.hint())
+            .field("api_key", &Secret::new(self.api_key.clone()))
             .field("api_secret", &"<redacted>")
             .finish()
     }
@@ -848,5 +849,28 @@ mod json_schema_tests {
         ] {
             assert!(defs.contains_key(def), "schema is missing `{def}`");
         }
+    }
+}
+
+#[cfg(test)]
+mod secret_debug_tests {
+    use super::*;
+
+    #[test]
+    fn exchange_keys_debug_shows_no_key_text() {
+        let key = ["fake", "-key-", "Zx81Qp0a"].concat();
+        let secret = ["fake", "-secret-", "Lm42Vb9c"].concat();
+        let keys = ExchangeKeys {
+            store_id: "store-1".into(),
+            api_key: key.clone(),
+            api_secret: secret.clone(),
+            spot_store_id: None,
+            futures_store_id: None,
+        };
+        let shown = format!("{keys:?}");
+        assert!(!shown.contains(&key), "{shown}");
+        assert!(!shown.contains(&key[..4]), "{shown}");
+        assert!(!shown.contains(&secret), "{shown}");
+        assert!(shown.contains("Secret(..)"), "{shown}");
     }
 }

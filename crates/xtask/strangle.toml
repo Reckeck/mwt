@@ -44,6 +44,31 @@ task = "E"
 files = ["crates/core/src/kernel/events.rs"]
 
 [[foundation]]
+# T46: the cryptotrack ports, their fake-backed tests and the RPC adapter of `ChainSource`.
+task = "E"
+files = [
+    "crates/core/src/cryptotrack/ports.rs",
+    "crates/core/src/cryptotrack/ports_tests.rs",
+    "crates/core/src/cryptotrack/rpc/mod.rs",
+    "crates/core/src/cryptotrack/rpc/port.rs",
+]
+
+[[foundation]]
+# T50 (`N5`): the Blockscout key becomes `Secret<String>`; the IPC inputs that carry a password or a key get a closed `Debug`.
+task = "E"
+files = ["crates/core/src/cryptotrack/rpc/client.rs", "crates/core/src/ipc_contract.rs"]
+
+[[foundation]]
+# T47: the cryptotrack service and usecase module lists declare the accounts, tokens, links and relations files.
+task = "E"
+files = ["crates/core/src/cryptotrack/service/mod.rs", "crates/core/src/usecases/cryptotrack/mod.rs"]
+
+[[foundation]]
+# T46 review fix: the cryptotrack sync job passes the built-in token predicate to pricing, so only unknown contracts wait for consent.
+task = "E"
+files = ["crates/app/src/cryptotrack/jobs.rs"]
+
+[[foundation]]
 # Stream D adds the moment of the user's action (at) to the retry and pause/resume events and the stopped ids to GoalPaused.
 task = "D"
 files = ["crates/core/src/kernel/events.rs"]

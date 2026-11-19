@@ -84,6 +84,9 @@ const ER_API: &str = "https://open.er-api.com/v6";
 #[derive(Debug, Clone)]
 pub struct PricingService {
     client: Client,
+    /// Open question 5 (`N1`): may a token contract be sent to a price
+    /// source. Off until the user turns it on.
+    lookup_contracts: bool,
 }
 
 impl Default for PricingService {
@@ -93,11 +96,26 @@ impl Default for PricingService {
                 .timeout(std::time::Duration::from_secs(15))
                 .build()
                 .expect("reqwest client"),
+            lookup_contracts: false,
         }
     }
 }
 
 impl PricingService {
+    /// The consent setting of Open question 5: look unknown tokens up by
+    /// contract. The default is off.
+    #[must_use]
+    pub fn with_contract_lookup(mut self, allowed: bool) -> Self {
+        self.lookup_contracts = allowed;
+        self
+    }
+
+    /// Whether a token contract may be sent to a price source (Open question 5).
+    #[must_use]
+    pub fn looks_up_contracts(&self) -> bool {
+        self.lookup_contracts
+    }
+
     /// Network-only price fetch (no cache mutation) — usable across `.await`
     /// without borrowing the vault.
     pub async fn fetch_prices(&self, assets: &[AssetRef]) -> Result<Vec<PricePoint>> {
