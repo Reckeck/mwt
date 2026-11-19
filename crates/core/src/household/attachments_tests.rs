@@ -426,3 +426,57 @@ fn the_link_delegate_matches_the_scenario() {
     assert_eq!(strip(&via_delegate), strip(&via_scenario));
     assert_eq!(vault.list_attachments(Some(&owner)).len(), 2);
 }
+
+#[test]
+fn the_file_delegate_matches_the_scenario() {
+    let (_dir, mut vault) = setup();
+    let owner = tx_owner(&mut vault);
+    let via_delegate = vault
+        .add_attachment_file(owner.clone(), receipt(b"%PDF-1 receipt"))
+        .unwrap();
+    let via_scenario = crate::usecases::household::attachments::add_attachment_file(
+        &mut vault,
+        owner.clone(),
+        receipt(b"%PDF-1 receipt"),
+    )
+    .unwrap();
+    // The same file of the same owner is stored once, so both calls agree.
+    assert_eq!(via_delegate, via_scenario);
+    assert_eq!(vault.list_attachments(Some(&owner)).len(), 1);
+}
+
+#[test]
+fn the_remove_rename_restore_delegates_match_their_scenarios() {
+    use crate::usecases::household::attachments as scenario;
+    let (_dir, mut vault) = setup();
+    let owner = tx_owner(&mut vault);
+    let first = vault
+        .add_attachment_link(owner.clone(), "example.com", "One")
+        .unwrap();
+    let second = vault
+        .add_attachment_link(owner.clone(), "example.org", "Two")
+        .unwrap();
+
+    let removed_a = vault.remove_attachment(&first.id).unwrap();
+    let removed_b = scenario::remove_attachment(&mut vault, &second.id).unwrap();
+    assert!(removed_a.removed_at.is_some() && removed_b.removed_at.is_some());
+
+    let restored_a = vault.restore_attachment(&first.id).unwrap();
+    let restored_b = scenario::restore_attachment(&mut vault, &second.id).unwrap();
+    assert!(restored_a.removed_at.is_none() && restored_b.removed_at.is_none());
+
+    let renamed_a = vault.rename_attachment(&first.id, " New ").unwrap();
+    let renamed_b = scenario::rename_attachment(&mut vault, &second.id, " New ").unwrap();
+    assert_eq!(renamed_a.title, renamed_b.title);
+
+    for call in [
+        vault.remove_attachment("missing").err(),
+        vault.rename_attachment("missing", "x").err(),
+        vault.restore_attachment("missing").err(),
+    ] {
+        assert!(call.is_some());
+    }
+    assert!(scenario::remove_attachment(&mut vault, "missing").is_err());
+    assert!(scenario::rename_attachment(&mut vault, "missing", "x").is_err());
+    assert!(scenario::restore_attachment(&mut vault, "missing").is_err());
+}
