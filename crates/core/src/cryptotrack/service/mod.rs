@@ -18,3 +18,6 @@ pub mod transition;
 #[cfg(test)]
 mod volume;
 pub mod wipe;
+
+#[cfg(test)]
+mod tests;

@@ -41,6 +41,7 @@ use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::money::rates::convert_at;
 use crate::service::UnlockedVault;
+use crate::usecases::cryptotrack::recompute::refold_holdings;
 
 /// How far apart the two sides of an exchange may be dated, in days.
 const CANDIDATE_DAYS: i64 = 3;
@@ -557,11 +558,14 @@ pub fn crypto_set_override(
     input: &CryptoSetOverrideInput,
 ) -> Result<CryptoSetOverrideResult> {
     let now = now_iso();
-    let result = vault.transact(|tx| lay_override(tx, input, &now))?;
+    let (result, _, _) = vault.run(|tx| lay_override(tx, input, &now))?;
     // The chain decides a cost basis and a kind decides how an operation
-    // folds, so the holdings are derived again before the save.
-    vault.crypto_sync_holdings()?;
-    Ok(result)
+    // folds, so the holdings are derived again before the one save.
+    refold_holdings(vault);
+    vault.transact(|tx| {
+        tx.touch();
+        Ok(result)
+    })
 }
 
 /// The edit of the document a correction makes: the operation's own record,
