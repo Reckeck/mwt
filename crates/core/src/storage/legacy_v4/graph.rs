@@ -15,7 +15,7 @@ const LAST_LEGACY_VERSION: u32 = 3;
 ///
 /// The stored number is the old counter's, so it is never compared with the live one except when
 /// the two counters still agree on version 3.
-pub(super) fn migrate_graph_json(json: &str) -> Option<String> {
+pub(crate) fn migrate_graph_json(json: &str) -> Option<String> {
     if json.trim().is_empty() {
         return None;
     }

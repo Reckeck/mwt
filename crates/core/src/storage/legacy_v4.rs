@@ -21,7 +21,7 @@
 //! if T17 changes the shape of those live types, that is the one case where it adds a copy.
 
 mod adopt;
-mod graph;
+pub(crate) mod graph;
 
 use serde::Deserialize;
 
@@ -778,6 +778,19 @@ mod tests {
     use super::*;
     use crate::crypto::format::SnapshotFormat;
     use crate::storage::fixtures_gen::V4_PASSWORD;
+
+    #[test]
+    fn a_budget_without_warn_reads_as_on() {
+        let budget: BudgetV4 = serde_json::from_value(serde_json::json!({
+            "id": "b1", "active": true,
+            "target": "total",
+            "period": "month",
+            "limit": "100",
+            "currency": "USD"
+        }))
+        .unwrap();
+        assert!(Budget::from(budget).warn);
+    }
 
     const FIXTURES: [(&str, SnapshotFormat, &[u8]); 2] = [
         (

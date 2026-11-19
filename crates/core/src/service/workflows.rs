@@ -46,6 +46,9 @@ pub const MAX_RUNS_PER_HOUR: usize = 60;
 pub const MAX_EVENT_DEPTH: u32 = 5;
 /// The format name of an exported workflow.
 pub const EXPORT_FORMAT: &str = "trade-app-workflow";
+/// The file version written now. Files of version 1 come from builds before the format reset: their
+/// graph goes through the frozen legacy steps on import.
+const EXPORT_VERSION: u32 = 2;
 
 /// What the user edits of a workflow.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -894,7 +897,7 @@ impl UnlockedVault {
             .collect();
         serde_json::to_string_pretty(&ExportedWorkflow {
             format: EXPORT_FORMAT.into(),
-            version: 1,
+            version: EXPORT_VERSION,
             name: workflow.name,
             description: workflow.description,
             graph,
@@ -945,11 +948,17 @@ impl UnlockedVault {
             return Err(Error::InvalidInput(format!("unknown wallet {unknown}")));
         }
         replace_strings(&mut exported.graph, stores);
+        let graph = if exported.version < EXPORT_VERSION {
+            let text = exported.graph.to_string();
+            crate::storage::legacy_v4::graph::migrate_graph_json(&text).unwrap_or(text)
+        } else {
+            exported.graph.to_string()
+        };
         let draft = WorkflowDraft {
             name: exported.name,
             description: exported.description,
             active: false,
-            graph: exported.graph.to_string(),
+            graph,
             react_to_workflows: false,
             max_amount: None,
             max_amount_currency: None,

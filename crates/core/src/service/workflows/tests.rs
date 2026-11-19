@@ -2794,6 +2794,51 @@ fn an_old_file_without_wallets_still_imports() {
 }
 
 #[test]
+fn a_version_1_file_goes_through_the_legacy_steps() {
+    let (_dir, mut vault) = empty_vault();
+    let file = json!({
+        "format": EXPORT_FORMAT, "version": 1, "name": "Old",
+        "graph": {
+            "version": 1,
+            "nodes": [
+                node("t", "trigger.manual", json!({})),
+                node("ask", "action.confirm", json!({})),
+                node("n", "action.notify", json!({ "text": "x" })),
+            ],
+            "edges": [wire("t", "out", "ask", "in"), wire("ask", "out", "n", "in")],
+        },
+    })
+    .to_string();
+    let imported = vault
+        .import_workflow(&file, &HashMap::new(), now_secs())
+        .unwrap()
+        .workflow;
+    let graph = Graph::parse(&imported.graph).unwrap();
+    let confirm_wire = graph.edges.iter().find(|edge| edge.from == "ask").unwrap();
+    assert_eq!(confirm_wire.from_port, "true");
+}
+
+#[test]
+fn a_version_3_graph_in_an_old_file_imports() {
+    let (_dir, mut vault) = empty_vault();
+    let file = json!({
+        "format": EXPORT_FORMAT, "version": 1, "name": "Old3",
+        "graph": {
+            "version": 3,
+            "nodes": [node("t", "trigger.manual", json!({})), node("n", "action.notify", json!({ "text": "x" }))],
+            "edges": [wire("t", "out", "n", "in")],
+        },
+    })
+    .to_string();
+    let imported = vault
+        .import_workflow(&file, &HashMap::new(), now_secs())
+        .unwrap()
+        .workflow;
+    assert_eq!(imported.name, "Old3");
+    assert_eq!(Graph::parse(&imported.graph).unwrap().edges.len(), 1);
+}
+
+#[test]
 fn a_swap_for_an_unknown_wallet_is_refused() {
     let (_dir, mut vault) = empty_vault();
     let old = store(&mut vault, "Sber", StoreKind::Bank, None);
