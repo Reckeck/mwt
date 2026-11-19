@@ -1,0 +1,32 @@
+# The PR title is a Conventional Commits subject: a squash merge makes it the commit subject on
+# development/main, and git-cliff leaves every other subject out of CHANGELOG.md and the version bump.
+# Separate from ci.yml so that renaming a PR (`edited`) reruns only this check, not the whole CI.
+# Branch protection requires the `pr-title` job next to ci-ok. Rules: .github/scripts/check-pr-title.sh.
+name: pr-title
+
+on:
+  pull_request:
+    branches: [development, main]
+    types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Check the title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: .github/scripts/check-pr-title.sh

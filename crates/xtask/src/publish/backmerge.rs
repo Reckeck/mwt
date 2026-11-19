@@ -41,7 +41,7 @@ pub fn list_args(repo: &str, source: &str, target: &str) -> Vec<String> {
 }
 
 pub fn create_args(repo: &str, source: &str, target: &str, version: &str) -> Vec<String> {
-    let title = format!("Back-merge {source} into {target} after v{version}");
+    let title = format!("chore(release): back-merge v{version} into {target}");
     let body = format!(
         "Release v{version} is out. Merge it back so {target} carries it, then raise the version on {target} to the next one."
     );
