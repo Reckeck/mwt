@@ -18,8 +18,8 @@ use serde_json::Value;
 
 use super::repair_report::RepairReport;
 use crate::model::vault::VaultDoc;
-use crate::service::sync_ids;
 use crate::sync::state::RecordStamps;
+use crate::sync::sync_ids;
 
 /// How a collection names its natural key and what it must not carry over.
 struct Fold<'rules, T> {

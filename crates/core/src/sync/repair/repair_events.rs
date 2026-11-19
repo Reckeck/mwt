@@ -23,9 +23,9 @@ use crate::model::contact::Contact;
 use crate::model::shared_event::ME;
 use crate::model::transaction::AccountRef;
 use crate::model::vault::VaultDoc;
-use crate::service::sync_ids;
 use crate::sync::flatten;
 use crate::sync::registry;
+use crate::sync::sync_ids;
 use crate::sync::{Stamp, state::RecordStamps};
 
 /// One link purchase of an operation inside an event.

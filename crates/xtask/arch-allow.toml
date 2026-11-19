@@ -3,8 +3,6 @@
 # A back edge outside this list fails with file:line; an entry that matches nothing fails too: delete it.
 # To allow a new edge, add an entry with `until` and a reason in the PR.
 allow = [
-    { from = "sync/repair/repair_events.rs", to = "service", until = "T37", reason = "the repair rules read the derived ids in service/sync_ids.rs; T37 moves them to sync/ids.rs and removes this entry" },
-    { from = "sync/repair/repair_natural.rs", to = "service", until = "T37", reason = "the repair rules read the derived ids in service/sync_ids.rs; T37 moves them to sync/ids.rs and removes this entry" },
     { from = "kernel/books.rs", to = "service", until = "Ф5", reason = "the kernel still calls service while the write path moves out of it" },
     { from = "kernel/persistence.rs", to = "service", until = "Ф5", reason = "the kernel still calls service while the write path moves out of it" },
     { from = "workflow/exec.rs", to = "service", until = "Ф5", reason = "workflow nodes call service until the node ports exist" },
