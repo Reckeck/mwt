@@ -1,1 +1,227 @@
-//! placeholder, filled by T30
+//! Tests of the datasources area: the old inline tests (names and bodies unchanged).
+
+use super::datasources::*;
+use crate::datasource::Extracted;
+use crate::model::datasource::TableRow;
+use crate::model::datasource::{
+    NumberFormat, SourceInterval, SourceMethod, SourceOutput, SourceStatus,
+};
+use crate::model::inflation::InflationMode;
+use crate::service::test_support::{amount, empty_vault as vault};
+
+fn draft(uses: Vec<SourceUse>) -> DataSourceDraft {
+    DataSourceDraft {
+        id: None,
+        name: "ЦБ".into(),
+        url: "https://cbr.ru/hd_base/infl/".into(),
+        method: SourceMethod::Table {
+            table_selector: "table.data".into(),
+            column_header: "Инфляция".into(),
+            row: TableRow::ByDate,
+        },
+        output: SourceOutput::Number,
+        number: NumberFormat::default(),
+        interval: SourceInterval::Day,
+        uses,
+    }
+}
+
+fn number(value: &str) -> std::result::Result<Extracted, String> {
+    Ok(Extracted {
+        number: Some(amount(value)),
+        ..Extracted::default()
+    })
+}
+
+#[test]
+fn three_failures_in_a_row_break_a_source() {
+    let (_dir, mut vault) = vault();
+    let id = vault.save_data_source(draft(vec![])).unwrap().source.id;
+    for attempt in 1..=2 {
+        let notices = vault
+            .apply_source_fetch(&id, Err("no table".into()), true)
+            .unwrap();
+        assert!(notices.is_empty(), "attempt {attempt}");
+    }
+    let notices = vault
+        .apply_source_fetch(&id, Err("no table".into()), true)
+        .unwrap();
+    assert_eq!(notices.len(), 1);
+    assert_eq!(vault.data_source(&id).unwrap().status, SourceStatus::Broken);
+    // A fourth failure does not announce it again; a value repairs it.
+    assert!(
+        vault
+            .apply_source_fetch(&id, Err("no table".into()), true)
+            .unwrap()
+            .is_empty()
+    );
+    vault.apply_source_fetch(&id, number("6.35"), true).unwrap();
+    let source = vault.data_source(&id).unwrap();
+    assert_eq!(source.status, SourceStatus::Ok);
+    assert_eq!(source.failures, 0);
+    assert_eq!(source.last.as_ref().unwrap().number, Some(amount("6.35")));
+}
+
+#[test]
+fn an_out_of_range_fetch_is_recorded_and_not_due() {
+    let (_dir, mut vault) = vault();
+    let id = vault.save_data_source(draft(vec![])).unwrap().source.id;
+    vault
+        .apply_source_fetch(&id, Err("number out of range".into()), true)
+        .unwrap();
+    let source = vault.data_source(&id).unwrap();
+    assert!(source.checked_at.is_some());
+    assert_eq!(source.failures, 1);
+    assert!(!is_due(source, chrono::Utc::now()));
+}
+
+#[test]
+fn a_jump_waits_for_confirmation() {
+    let (_dir, mut vault) = vault();
+    let id = vault.save_data_source(draft(vec![])).unwrap().source.id;
+    vault.apply_source_fetch(&id, number("6.35"), true).unwrap();
+    let notices = vault.apply_source_fetch(&id, number("635"), true).unwrap();
+    assert_eq!(notices.len(), 1);
+    let source = vault.data_source(&id).unwrap();
+    assert_eq!(source.status, SourceStatus::Pending);
+    assert_eq!(source.last.as_ref().unwrap().number, Some(amount("6.35")));
+    vault.confirm_source_value(&id, true, true).unwrap();
+    let source = vault.data_source(&id).unwrap();
+    assert_eq!(source.status, SourceStatus::Ok);
+    assert_eq!(source.last.as_ref().unwrap().number, Some(amount("635")));
+    assert_eq!(source.history.len(), 1);
+    // A small move is taken at once.
+    vault.apply_source_fetch(&id, number("640"), true).unwrap();
+    assert_eq!(vault.data_source(&id).unwrap().status, SourceStatus::Ok);
+}
+
+#[test]
+fn inflation_in_source_mode_reads_the_source() {
+    let (_dir, mut vault) = vault();
+    let view = vault
+        .save_data_source(draft(vec![SourceUse::Inflation {
+            currency: "THB".into(),
+        }]))
+        .unwrap();
+    let id = view.source.id;
+    assert_eq!(
+        view.used_by,
+        vec![SourceUse::Inflation {
+            currency: "thb".into()
+        }]
+    );
+    assert!(vault.inflation_series("thb").is_empty());
+    vault
+        .apply_source_fetch(
+            &id,
+            Ok(Extracted {
+                series: vec![
+                    crate::model::datasource::SeriesPoint {
+                        label: "08.2026".into(),
+                        value: amount("1.10"),
+                    },
+                    crate::model::datasource::SeriesPoint {
+                        label: "09.2026".into(),
+                        value: amount("1.25"),
+                    },
+                ],
+                ..Extracted::default()
+            }),
+            true,
+        )
+        .unwrap();
+    let series = vault.inflation_series("thb");
+    assert_eq!(series.len(), 2);
+    assert_eq!(series[1].month, "2026-09");
+    assert_eq!(series[1].yoy_pct, amount("1.25"));
+    assert_eq!(vault.inflation_mode("thb"), InflationMode::Source);
+    // Deleting the source returns the currency to its default mode.
+    vault.delete_data_source(&id).unwrap();
+    assert!(vault.doc.settings.inflation_source.is_empty());
+    assert_ne!(vault.inflation_mode("thb"), InflationMode::Source);
+}
+
+#[test]
+fn a_price_source_writes_custom_points_in_usd() {
+    let (_dir, mut vault) = vault();
+    let id = vault
+        .save_data_source(draft(vec![SourceUse::AssetPrice {
+            asset_key: "asset:gold".into(),
+            currency: "usd".into(),
+        }]))
+        .unwrap()
+        .source
+        .id;
+    vault.apply_source_fetch(&id, number("2400"), true).unwrap();
+    let point = vault
+        .doc
+        .price_cache
+        .iter()
+        .find(|point| point.asset_key == "asset:gold")
+        .unwrap();
+    assert_eq!(point.value_usd, amount("2400"));
+    assert_eq!(point.source, format!("custom:{id}"));
+}
+
+#[test]
+fn a_draft_is_checked() {
+    let (_dir, mut vault) = vault();
+    let mut bad = draft(vec![]);
+    bad.url = "ftp://x".into();
+    assert!(vault.save_data_source(bad).is_err());
+    let mut text = draft(vec![SourceUse::AssetPrice {
+        asset_key: "asset:gold".into(),
+        currency: "usd".into(),
+    }]);
+    text.output = SourceOutput::Text;
+    assert!(vault.save_data_source(text).is_err());
+}
+
+#[test]
+fn the_list_is_sorted_by_name_and_a_fresh_source_is_due() {
+    let (_dir, mut vault) = vault();
+    let mut second = draft(vec![]);
+    second.name = "Alpha".into();
+    vault.save_data_source(draft(vec![])).unwrap();
+    vault.save_data_source(second).unwrap();
+    let names: Vec<String> = vault
+        .data_sources_list()
+        .into_iter()
+        .map(|view| view.source.name)
+        .collect();
+    assert_eq!(names, ["Alpha", "ЦБ"]);
+    let now = chrono::Utc::now();
+    assert_eq!(vault.due_data_sources(now).len(), 2);
+    assert_eq!(due_data_sources(&vault.doc, now).len(), 2);
+}
+
+#[test]
+fn a_fetch_records_the_value_and_the_price_it_sets_together() {
+    let (_dir, mut vault) = vault();
+    let id = vault
+        .save_data_source(draft(vec![SourceUse::AssetPrice {
+            asset_key: "asset:gold".into(),
+            currency: "usd".into(),
+        }]))
+        .unwrap()
+        .source
+        .id;
+    vault.apply_source_fetch(&id, number("2400"), true).unwrap();
+    assert_eq!(
+        vault
+            .data_source(&id)
+            .unwrap()
+            .last
+            .as_ref()
+            .unwrap()
+            .number,
+        Some(amount("2400"))
+    );
+    assert!(
+        vault
+            .doc
+            .price_cache
+            .iter()
+            .any(|point| point.asset_key == "asset:gold")
+    );
+}
