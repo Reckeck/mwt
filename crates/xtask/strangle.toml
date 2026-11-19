@@ -64,6 +64,11 @@ task = "E"
 files = ["crates/core/src/cryptotrack/service/mod.rs", "crates/core/src/usecases/cryptotrack/mod.rs"]
 
 [[foundation]]
+# T48/T49: the tests of the cryptotrack service move next to it.
+task = "E"
+files = ["crates/core/src/cryptotrack/service/tests.rs"]
+
+[[foundation]]
 # T46 review fix: the cryptotrack sync job passes the built-in token predicate to pricing, so only unknown contracts wait for consent.
 task = "E"
 files = ["crates/app/src/cryptotrack/jobs.rs"]
