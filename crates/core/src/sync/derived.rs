@@ -3,9 +3,8 @@
 //!
 //! Between devices that know the array the field is never an edit of its own.
 //! After a merge it is re-derived from the merged entries and stamped with
-//! the stamp of the newest entry (and a sender stamps it that way too, see
-//! [`with_legacy_heads`](super::flatten::with_legacy_heads)), so a device that
-//! recomputed it cannot look as if it had edited it.
+//! the stamp of the newest entry, so a device that recomputed it cannot look
+//! as if it had edited it.
 //!
 //! A device that does not know the array (an older version: its value has no
 //! `moves` at all) just writes the field. That is recognised by a stamp

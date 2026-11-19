@@ -131,12 +131,11 @@ fn marks_from_an_old_peer_do_not_erase_another_trigger() {
         Some("above"),
         "an entry the old map lacks was dropped"
     );
-    // The new side still sends the full map, and a stamp an old peer reads.
+    // The new side still sends the full map.
     let sent = right.sync_records(std::slice::from_ref(&key)).unwrap();
     let sent = &sent[&key];
     let marks = sent.value.as_ref().unwrap()["marks"].as_object().unwrap();
     assert_eq!(marks.len(), 2, "{marks:?}");
-    assert!(sent.stamps.as_ref().unwrap().fields.contains_key("marks"));
 }
 
 /// «A top-up comes → move 5 from cash to savings», armed on both devices.

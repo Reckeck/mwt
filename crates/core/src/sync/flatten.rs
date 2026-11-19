@@ -2,9 +2,9 @@
 //! (`Collection.flatten`, `meta.<key>`) or an array split by item id
 //! (`Collection.flatten_by`, `items.<id>`).
 //!
-//! An entry has its own stamp. A stamp of the whole field (`items`, written
-//! by an older device, or left from before the split) is a floor for every
-//! entry without a stamp of its own.
+//! An entry has its own stamp. A stamp of the whole field (`items`, left when
+//! the field was written empty) is a floor for every entry without a stamp of
+//! its own.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -35,10 +35,9 @@ pub fn is_entry(coll: &Collection, name: &str) -> bool {
     head_of(coll, name).is_some()
 }
 
-/// The stamp of the whole field `head` when it says something of its own: an
-/// older device wrote the field as one, or the field was last written empty.
-/// A head stamp that only repeats the newest of its entries is what
-/// [`with_legacy_heads`] adds for older receivers; it is no floor, or every
+/// The stamp of the whole field `head` when it says something of its own: the
+/// field was written as one, or last written empty.
+/// A head stamp that only repeats the newest of its entries is no floor, or every
 /// entry the sender never touched would look as new as its newest one.
 fn whole_stamp<'stamps>(stamps: &'stamps RecordStamps, head: &str) -> Option<&'stamps Stamp> {
     let own = stamps.fields.get(head)?;
@@ -388,32 +387,6 @@ fn merge_sequences(left: &[String], right: &[String], rank: &dyn Fn(&str) -> Sta
         out.push(pick.clone());
     }
     out
-}
-
-/// What an older device reads: a stamp for each split field as a whole, the
-/// newest of its entries (removed ones count). Added only to what is sent,
-/// never stored.
-pub fn with_legacy_heads(coll: &Collection, stamps: &mut RecordStamps) {
-    for head in coll.heads() {
-        let prefix = format!("{head}.");
-        let newest = stamps
-            .fields
-            .iter()
-            .filter(|(name, _)| name.starts_with(&prefix))
-            .map(|(_, stamp)| stamp)
-            .chain(stamps.fields.get(head))
-            .max()
-            .cloned();
-        if let Some(newest) = newest {
-            stamps.fields.insert(head.to_string(), newest);
-        }
-    }
-    // A derived field (`allocated`) says nothing but the newest entry it sums.
-    for (field, head) in coll.derived {
-        if let Some(newest) = super::derived::newest_entry(stamps, head).cloned() {
-            stamps.fields.insert((*field).to_string(), newest);
-        }
-    }
 }
 
 /// Build the body entries of the split arrays into `body`. The arrays inside

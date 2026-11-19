@@ -15,8 +15,6 @@ use super::registry::{Collection, Rule};
 use super::state::{RecordStamps, RecordState};
 use super::view::{Fields, comparable, is_device_field, join_with, split};
 
-pub use super::flatten::with_legacy_heads;
-
 /// A field the merge took from the other device although this one had
 /// edited it too: shown in the summary as "overwritten".
 #[derive(Debug, Clone, PartialEq)]

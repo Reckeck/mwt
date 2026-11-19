@@ -4,7 +4,7 @@
 
 use serde_json::{Value, json};
 
-use super::merge::{merge, with_legacy_heads};
+use super::merge::merge;
 use super::registry::{Collection, Rule};
 use super::stamp::Stamp;
 use super::state::{RecordStamps, RecordState};
@@ -199,15 +199,6 @@ fn legacy_floor_applies_beside_stamped_entries_of_an_object() {
         merged.value.unwrap()["marks"],
         json!({"a": "theirs", "b": "mine"})
     );
-}
-
-#[test]
-fn legacy_heads_cover_split_arrays_for_older_peers() {
-    let mut stamps = RecordStamps::created(at(1, "a"));
-    stamps.fields.insert("items.a".into(), at(4, "a"));
-    stamps.fields.insert("items.b".into(), at(8, "a"));
-    with_legacy_heads(&LISTS, &mut stamps);
-    assert_eq!(stamps.fields["items"], at(8, "a"));
 }
 
 #[test]
