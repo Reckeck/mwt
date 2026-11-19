@@ -131,22 +131,34 @@ impl CostStrategy {
         self.book.position(key)
     }
 
-    /// Replays the legs of one transaction, outgoing ones first so that the
-    /// incoming leg of a move finds the source's cost. Zero-amount legs are
-    /// skipped. The result keeps the order of `legs`.
+    /// The source's average cost per destination position of each move.
+    fn source_costs(&self, legs: &[Leg]) -> HashMap<PositionKey, Option<Amount>> {
+        legs.iter()
+            .filter(|leg| leg.amount.is_negative() && moves_between_own_wallets(leg, legs))
+            .map(|leg| {
+                let destination = PositionKey {
+                    store_id: leg.to_store_id.clone().unwrap_or_default(),
+                    asset_key: leg.asset.key(),
+                };
+                (destination, self.book.position(&position_key(leg)).cost)
+            })
+            .collect()
+    }
+
+    /// Replays the legs of one transaction in their order. The source cost of
+    /// every move is read before any leg is applied, so the incoming leg of a
+    /// move finds it wherever it sits. Zero-amount legs are skipped.
     pub fn apply_transaction(
         &mut self,
         legs: Vec<Leg>,
         price_of: impl Fn(&Leg) -> Amount,
     ) -> Vec<Replayed> {
-        let mut order: Vec<usize> = (0..legs.len())
-            .filter(|&index| !legs[index].amount.is_zero())
-            .collect();
-        order.sort_by_key(|&index| legs[index].amount.is_positive());
-        let mut carried: HashMap<PositionKey, Option<Amount>> = HashMap::new();
+        let carried = self.source_costs(&legs);
         let mut outcomes: Vec<Option<(Amount, Option<Realized>)>> = vec![None; legs.len()];
-        for index in order {
-            let leg = &legs[index];
+        for (index, leg) in legs.iter().enumerate() {
+            if leg.amount.is_zero() {
+                continue;
+            }
             let key = position_key(leg);
             let market = price_of(leg);
             let price = if takes_part(leg) {
@@ -155,24 +167,15 @@ impl CostStrategy {
                 Amount::ZERO
             };
             let realized = if leg.amount.is_positive() {
-                let price_base = match carried.get(&position_key(leg)) {
+                let price_base = match carried.get(&key) {
                     Some(cost) => cost.unwrap_or(Amount::ZERO),
                     None => price,
                 };
                 let movement = Movement::Incoming { price_base };
                 self.book.apply(&key, leg.amount, movement)
             } else {
-                let moves = moves_between_own_wallets(leg, &legs);
-                if moves {
-                    carried.insert(
-                        PositionKey {
-                            store_id: leg.to_store_id.clone().unwrap_or_default(),
-                            asset_key: key.asset_key.clone(),
-                        },
-                        self.book.position(&key).cost,
-                    );
-                }
-                let leaves = leg.role == LegRole::Principal && !moves;
+                let leaves =
+                    leg.role == LegRole::Principal && !moves_between_own_wallets(leg, &legs);
                 self.book.apply(
                     &key,
                     leg.amount,

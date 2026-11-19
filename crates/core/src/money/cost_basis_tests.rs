@@ -125,3 +125,24 @@ fn asset_sell_realizes_with_tracked_proceeds() {
     let replayed = strategy.apply_transaction(sell.legs(), |_| amount("60000"));
     assert_eq!(replayed[0].realized.unwrap().pnl_base, amount("40000"));
 }
+
+/// A buy that pays its fee in the bought asset keeps the replay-order average.
+#[test]
+fn buy_with_fee_in_the_bought_asset_averages_in_leg_order() {
+    let mut strategy = CostStrategy::default();
+    let first = income_of("a", btc(), "1", "20000", "first").legs();
+    strategy.apply_transaction(first, |_| amount("20000"));
+    let mut second = income_of("a", btc(), "1", "30000", "second").legs();
+    let mut fee = second[0].clone();
+    fee.amount = -amount("0.01");
+    fee.role = LegRole::Fee;
+    second.push(fee);
+    strategy.apply_transaction(second, |_| amount("30000"));
+    let key = PositionKey {
+        store_id: "a".into(),
+        asset_key: btc().key(),
+    };
+    let position = strategy.position(&key);
+    assert_eq!(position.quantity, amount("1.99"));
+    assert_eq!(position.cost, Some(amount("25000")));
+}
