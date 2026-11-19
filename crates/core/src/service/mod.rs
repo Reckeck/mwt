@@ -536,6 +536,9 @@ impl UnlockedVault {
     /// Run the invariant pass until it changes nothing: a fix can change the
     /// key of the notice it announces, so one more pass would write one more
     /// notice on the next open. Bounded, as every pass either fixes or settles.
+    /// A single pass is not enough on the v4 fixtures (pinned by
+    /// `open_leaves_nothing_for_another_repair_pass` and
+    /// `v4_transition_is_idempotent`).
     fn repair_until_settled(&mut self) -> Result<bool> {
         const MAX_PASSES: usize = 3;
         let mut repaired = false;
@@ -2221,6 +2224,17 @@ mod tests {
                 *keys,
                 "{name}"
             );
+        }
+    }
+
+    /// Opening runs the invariant pass until it settles: another pass finds nothing to fix.
+    #[test]
+    fn open_leaves_nothing_for_another_repair_pass() {
+        for (name, bytes) in V4_FIXTURES {
+            let dir = tempdir().unwrap();
+            let path = v4_vault_at(dir.path(), bytes);
+            let mut vault = UnlockedVault::open(path, V4_PASSWORD).unwrap();
+            assert!(vault.repair_invariants(None).unwrap().is_empty(), "{name}");
         }
     }
 
