@@ -82,21 +82,12 @@ fn a_locked_client_snapshot_fires_nothing() {
 }
 
 #[test]
-fn an_old_snapshot_without_role_still_fires() {
-    let (_dir, mut vault) = empty_vault();
-    vault
-        .create_reminder("Аренда", "2026-03-05T09:00:00Z", None)
-        .unwrap();
+fn a_snapshot_without_role_client_fails_to_parse() {
+    let (_dir, vault) = empty_vault();
     let snapshot = vault.notification_snapshot(secs_or_now("2026-03-01T00:00:00Z"), "UTC", true);
     let mut value = serde_json::to_value(&snapshot).unwrap();
     value.as_object_mut().unwrap().remove("role_client");
-    let old: NotificationSnapshot = serde_json::from_value(value).unwrap();
-    assert!(!old.role_client);
-    assert_eq!(
-        old.due(secs_or_now("2026-03-05T10:00:00Z"), &HashSet::new())
-            .len(),
-        1
-    );
+    assert!(serde_json::from_value::<NotificationSnapshot>(value).is_err());
 }
 
 #[test]

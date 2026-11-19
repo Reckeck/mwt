@@ -87,9 +87,7 @@ pub struct NotificationSnapshot {
     /// Title shown for a notice whose details are hidden.
     pub hidden_body: String,
     /// The device was a sync client when this was written: the main shows
-    /// the notices, so a locked client fires none. An older snapshot has no
-    /// field and counts as not a client.
-    #[serde(default)]
+    /// the notices, so a locked client fires none. Always written.
     pub role_client: bool,
 }
 
