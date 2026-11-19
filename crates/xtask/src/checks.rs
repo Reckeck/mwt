@@ -2,6 +2,7 @@
 //! plus `cargo fmt --check` and the platform builds.
 
 pub mod groups;
+pub mod money_f64;
 
 use std::path::{Path, PathBuf};
 
@@ -184,20 +185,28 @@ fn ci_scripts() -> Task {
     })
 }
 
-/// The module graph of `crates/core/src` against the layer table (`crate::arch`).
+/// The module graph of `crates/core/src` against the layer table (`crate::arch`), and the
+/// `no-f64-in-money` rule (`money_f64`).
 fn arch() -> Task {
     Task::func("arch", Class::Light, &[], |ctx: Ctx| async move {
         let report = match crate::arch::check(&ctx.root) {
             Ok(report) => report,
             Err(error) => return Outcome::Fail(format!("{error:#}")),
         };
+        let floats = match money_f64::check(&ctx.root) {
+            Ok(found) => found,
+            Err(error) => return Outcome::Fail(format!("{error:#}")),
+        };
         for line in report.lines() {
             ctx.note(&line);
         }
-        match report.failures() {
+        for finding in &floats {
+            ctx.note(&finding.message());
+        }
+        match report.failures() + floats.len() {
             0 => Outcome::Ok,
             count => Outcome::Fail(format!(
-                "{count} back edge(s) or stale allowlist entries, see the log"
+                "{count} back edge(s), stale allowlist entries or f64 in money code, see the log"
             )),
         }
     })

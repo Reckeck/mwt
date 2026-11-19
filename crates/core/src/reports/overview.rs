@@ -20,8 +20,9 @@ use crate::model::transaction::{Leg, LegRole};
 use crate::pricing::history::secs_or_now;
 
 use crate::kernel::books::Books;
+pub(crate) use crate::money::rates::value_at;
 use crate::service::budget::Flow;
-use crate::service::{FlowClass, RateBook, UpcomingItem};
+use crate::service::{FlowClass, UpcomingItem};
 use crate::usecases::planning::budget::leg_value_in;
 
 /// Longest range a report covers.
@@ -956,25 +957,6 @@ pub(crate) fn positions_at(books: &Books, cutoffs: &[i64]) -> Vec<Positions> {
         out.push(current.clone());
     }
     out
-}
-
-/// Value of a quantity in `currency` at `secs`; zero without a rate.
-pub(crate) fn value_at(
-    book: &RateBook,
-    asset: &AssetRef,
-    qty: Amount,
-    currency: &str,
-    secs: i64,
-) -> Amount {
-    if qty.is_zero() {
-        return Amount::ZERO;
-    }
-    if asset.is_fiat() && asset.symbol.eq_ignore_ascii_case(currency) {
-        return qty;
-    }
-    book.history_price(&asset.key(), secs)
-        .and_then(|usd| book.convert(qty * usd, "usd", currency, secs))
-        .unwrap_or(Amount::ZERO)
 }
 
 pub(crate) fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {

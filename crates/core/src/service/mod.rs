@@ -13,18 +13,19 @@ use crate::error::StoreTreeViolation;
 use crate::error::{Error, Result, WalletRule};
 use crate::model::chain::Chain;
 use crate::model::store::{
-    AssetRef, Binding, Custody, ExchangeProfile, ExchangeProvider, Holding, IndicatorCfg,
-    LiabilityTerms, MAX_STORE_DEPTH, PropertyInfo, Purpose, Store, StoreKind, StoreScope, SubType,
-    TerminalLayout, TerminalState,
+    AssetRef, Binding, Custody, ExchangeProfile, ExchangeProvider, IndicatorCfg, LiabilityTerms,
+    PropertyInfo, Purpose, StoreKind, SubType, TerminalLayout, TerminalState,
 };
+#[cfg(test)]
+use crate::model::store::{Holding, Store, StoreScope};
+#[cfg(test)]
+use crate::model::transaction::LegRole;
 use crate::model::transaction::{
-    AccountRef, Fee, FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Leg, LegRole,
-    Liquidity, PriceStamp, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction,
-    TransferTx, TxMeta, TxOrigin,
+    AccountRef, Fee, FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Liquidity,
+    PriceStamp, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TransferTx, TxMeta,
+    TxOrigin,
 };
-use crate::model::vault::{PendingImport, Settings, VaultDoc, iso_to_millis, now_iso};
-use crate::money::cost_basis::{self, CostBook, Movement, PositionKey};
-use crate::pricing::history::secs_or_now;
+use crate::model::vault::{PendingImport, Settings, VaultDoc};
 use crate::storage::{SnapshotFormat, VaultFile};
 
 pub use password::{CopyPolicy, PlainCopies, RotationReport};

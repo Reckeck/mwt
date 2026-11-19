@@ -52,10 +52,11 @@ pub const GROUPS: &[Group] = &[
         layer: 3,
         modules: &["pricing", "exchange", "datasource", "market", "updates"],
     },
+    // `txinfo` is a re-export of `money::txinfo` until Ф7 removes the old path (core-strangler T27).
     Group {
         name: "money",
         layer: 4,
-        modules: &["money"],
+        modules: &["money", "txinfo"],
     },
     Group {
         name: "planning",
@@ -71,11 +72,6 @@ pub const GROUPS: &[Group] = &[
         name: "workflow",
         layer: 4,
         modules: &["workflow"],
-    },
-    Group {
-        name: "txinfo",
-        layer: 4,
-        modules: &["txinfo"],
     },
     Group {
         name: "utilities_formula",

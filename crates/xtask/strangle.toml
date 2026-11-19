@@ -242,6 +242,17 @@ files = [
 ]
 
 [[foundation]]
+# T27: the pure RateBook helper `value_at` moves from `reports/overview.rs` to `money/rates.rs` (money must not use reports).
+task = "B"
+files = [
+    "crates/core/src/reports/overview.rs",
+    # T27: txinfo moves into money (re-export kept at crate::txinfo).
+    "crates/core/src/money/mod.rs", "crates/core/src/money/txinfo.rs",
+    # T28: the cost basis strategy (user decision (a)) and its tests.
+    "crates/core/src/money/cost_basis.rs", "crates/core/src/money/cost_basis_tests.rs",
+]
+
+[[foundation]]
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 

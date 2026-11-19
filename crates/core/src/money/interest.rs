@@ -303,15 +303,20 @@ pub(crate) fn grow(
     days: i64,
     capitalization: Capitalization,
 ) -> Amount {
-    let yearly = rate.to_f64() / 100.0;
-    let principal = balance.to_f64();
-    let years = days as f64 / 365.0;
+    let yearly = rate / amount(100);
+    let day_count = u32::try_from(days).unwrap_or(0);
+    let years = amount(i64::from(day_count)) / amount(365);
+    let one = amount(1);
     let grown = match capitalization {
-        Capitalization::None | Capitalization::AtEnd => principal * (1.0 + yearly * years),
-        Capitalization::Daily => principal * (1.0 + yearly / 365.0).powf(days as f64),
-        Capitalization::Monthly => principal * (1.0 + yearly / 12.0).powf(years * 12.0),
+        Capitalization::None | Capitalization::AtEnd => balance * (one + yearly * years),
+        Capitalization::Daily => balance * (one + yearly / amount(365)).pow_int(day_count),
+        // (1 + r/12)^(12 * days / 365), as the 365th root raised to 12 * days.
+        Capitalization::Monthly => {
+            let factor = (one + yearly / amount(12)).root_n(365);
+            balance * factor.pow_int(day_count.saturating_mul(12))
+        }
     };
-    Amount::from_f64(grown).round(2)
+    grown.round(2)
 }
 
 /// Interest booked this year on a store (`deposit_interest` top-ups).

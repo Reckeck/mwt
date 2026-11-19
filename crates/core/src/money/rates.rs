@@ -470,3 +470,22 @@ pub fn stamp_prices(book: &RateBook, tx: &mut Transaction) -> usize {
     }
     stamped
 }
+
+/// Value of a quantity in `currency` at `secs`; zero without a rate.
+pub(crate) fn value_at(
+    book: &RateBook,
+    asset: &AssetRef,
+    qty: Amount,
+    currency: &str,
+    secs: i64,
+) -> Amount {
+    if qty.is_zero() {
+        return Amount::ZERO;
+    }
+    if asset.is_fiat() && asset.symbol.eq_ignore_ascii_case(currency) {
+        return qty;
+    }
+    book.history_price(&asset.key(), secs)
+        .and_then(|usd| book.convert(qty * usd, "usd", currency, secs))
+        .unwrap_or(Amount::ZERO)
+}
