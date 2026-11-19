@@ -15,9 +15,6 @@ impl UnlockedVault {
     forward! {
         pub(crate) fn find_store(&self, id: &str) -> Option<&Store>
             => crate::money::tree::find_store @doc;
-        /// Parent chain from the root down to `id`'s parent (see [`crate::money::tree::ancestors_of`]).
-        pub(crate) fn ancestors_of(&self, id: &str) -> Vec<&Store>
-            => crate::money::tree::ancestors_of @doc;
         /// 0 for a top-level wallet.
         pub fn depth(&self, id: &str) -> usize
             => crate::money::tree::depth @doc;

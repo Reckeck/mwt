@@ -3,6 +3,7 @@
 //! `usecases::money::rates`.
 
 pub use crate::money::rates::RateBook;
+#[cfg(test)]
 pub(crate) use crate::money::rates::is_fiat_of;
 
 use std::collections::HashSet;
