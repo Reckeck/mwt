@@ -99,6 +99,7 @@ pub fn plan_file(
     id: String,
     now: &str,
 ) -> Result<FilePlan> {
+    check_owner(doc, &owner)?;
     let name = file.name.trim();
     if name.is_empty() {
         return Err(Error::InvalidInput("a file needs a name".into()));

@@ -317,6 +317,26 @@ fn plan_file_checks_name_bytes_and_size() {
 }
 
 #[test]
+fn plan_file_checks_the_owner_before_the_file() {
+    let (doc, _) = bare_doc();
+    let file = NewFile {
+        name: " ",
+        mime: None,
+        bytes: b"",
+    };
+    let missing = EntityRef::new(EntityKind::Goal, "nope");
+    let wrong_kind = EntityRef::new(EntityKind::Store, "g1");
+    assert!(matches!(
+        plan_file(&doc, missing, &file, "a1".into(), NOW),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        plan_file(&doc, wrong_kind, &file, "a1".into(), NOW),
+        Err(Error::InvalidInput(_))
+    ));
+}
+
+#[test]
 fn plan_file_gives_back_the_same_file_of_the_same_owner() {
     let (mut doc, owner) = bare_doc();
     let file = NewFile {
