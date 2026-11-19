@@ -24,9 +24,6 @@ impl UnlockedVault {
         /// Top-level wallet that `id` belongs to (itself for a root).
         pub fn root_of(&self, id: &str) -> String
             => crate::money::tree::root_of @doc;
-        /// A name free among the wallets (or among the children of `parent`).
-        pub(crate) fn free_name(&self, node: &str, parent: Option<&str>, wanted: &str) -> String
-            => crate::money::stores::free_name @doc;
         /// Whether `node` (an existing store, or `None` for a new one) may sit
         /// under `parent` with `name`. Rules R1–R6.
         pub(crate) fn validate_placement(&self, node: Option<&str>, parent: Option<&str>, name: &str) -> Result<()>

@@ -3,7 +3,6 @@
 //! document; the scenarios that plan and apply it live in
 //! `usecases::money::store_change`.
 
-pub(in crate::service) use crate::money::store_change::replace_id;
 pub use crate::money::store_change::{
     StoreChange, StoreChangeConflict, StoreChangeInput, StoreChangeItem, StoreChangePlan,
 };
