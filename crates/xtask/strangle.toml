@@ -163,6 +163,11 @@ task = "B"
 files = ["crates/core/src/service/validate.rs"]
 
 [[foundation]]
+# T25: `main_amount` lost its last user when service/transactions.rs moved; its re-export in service/automations.rs goes.
+task = "B"
+files = ["crates/core/src/service/automations.rs"]
+
+[[foundation]]
 # `sync_ids` becomes `pub(crate)` for the household scenarios that mint deterministic ids.
 task = "C"
 files = ["crates/core/src/service/mod.rs"]
