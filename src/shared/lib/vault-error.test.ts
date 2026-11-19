@@ -20,3 +20,20 @@ describe('vaultErrorMessage', () => {
     expect(text).not.toBe(i18n.global.t('auth.wrongPassword'))
   })
 })
+
+describe('LegacyVault refusal', () => {
+  const translate = (key: string) => i18n.global.t(key)
+  const message =
+    'This vault file is in format 3 (binary), which this version no longer reads. Open it once with v0.9.0.'
+
+  it('shows the full backend message, which names the build to use', () => {
+    expect(vaultErrorMessage(`UNSUPPORTED: ${message}`, translate)).toBe(message)
+    expect(anyErrorMessage(`UNSUPPORTED: ${message}`, translate)).toBe(message)
+  })
+
+  it('keeps the fixed text for the generic unsupported error', () => {
+    expect(vaultErrorMessage('UNSUPPORTED: unsupported vault file/version', translate)).toBe(
+      i18n.global.t('auth.unsupported'),
+    )
+  })
+})

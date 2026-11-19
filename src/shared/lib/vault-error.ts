@@ -16,6 +16,18 @@ const VAULT_ERROR_KEYS: Record<string, string> = {
   SYNC_CONFLICT: 'vaultLink.conflictTitle',
 }
 
+/** The generic backend text of `Error::Unsupported`; any other UNSUPPORTED text names the build to use. */
+const GENERIC_UNSUPPORTED = 'unsupported vault file/version'
+
+/** The vault's own wording for an error, or null when the code has none. */
+function vaultText(err: AppError, t: Translate): string | null {
+  if (err.code === 'UNSUPPORTED' && err.message !== GENERIC_UNSUPPORTED) return err.message
+  const key = VAULT_ERROR_KEYS[err.code]
+  if (!key) return null
+  const known = t(key)
+  return known === key ? null : known
+}
+
 /**
  * Reads an `AppError` into a translated message.
  *
@@ -23,19 +35,12 @@ const VAULT_ERROR_KEYS: Record<string, string> = {
  * raw `CODE: message` string when the vault is the thing that failed.
  */
 export function vaultErrorMessage(err: unknown, t: Translate): string {
-  const { code, message } = parseError(err)
-  const key = VAULT_ERROR_KEYS[code]
-  if (!key) return message
-  const known = t(key)
-  return known === key ? message : known
+  return appErrorMessage(parseError(err), t)
 }
 
 /** Same mapping for an already-parsed error. */
 export function appErrorMessage(err: AppError, t: Translate): string {
-  const key = VAULT_ERROR_KEYS[err.code]
-  if (!key) return err.message
-  const known = t(key)
-  return known === key ? err.message : known
+  return vaultText(err, t) ?? err.message
 }
 
 /**
@@ -58,10 +63,5 @@ export function codeErrorMessage(err: AppError, t: Translate): string {
  */
 export function anyErrorMessage(err: unknown, t: Translate): string {
   const parsed = parseError(err)
-  const key = VAULT_ERROR_KEYS[parsed.code]
-  if (key) {
-    const known = t(key)
-    if (known !== key) return known
-  }
-  return codeErrorMessage(parsed, t)
+  return vaultText(parsed, t) ?? codeErrorMessage(parsed, t)
 }
