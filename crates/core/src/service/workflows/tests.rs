@@ -2109,7 +2109,7 @@ fn a_question_of_a_switched_off_workflow_cannot_be_answered() {
 fn a_wait_from_an_older_app_still_reads() {
     let old = json!({
         "id": "w1", "workflow_id": "wf", "run_id": "r", "node_id": "n",
-        "resume_at": "", "memo": "[]", "queue_mode": true, "trigger": "manual",
+        "resume_at": "", "memo": "[]", "trigger": "manual",
     });
     let from_json: WorkflowWait = serde_json::from_value(old.clone()).unwrap();
     assert!(from_json.graph.is_empty());
