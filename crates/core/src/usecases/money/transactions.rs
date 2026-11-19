@@ -8,7 +8,9 @@ use crate::error::{Error, Result};
 use crate::model::store::StoreScope;
 use crate::model::transaction::Transaction;
 use crate::model::vault::{iso_to_millis, now_iso};
-use crate::money::transactions::{TransactionPatch, complete_transaction, edited, ensure_fresh_id};
+use crate::money::transactions::{
+    TransactionPatch, complete_transaction, ensure_fresh_id, patched, replacing,
+};
 use crate::service::UnlockedVault;
 use crate::usecases::household::property_links::{check_property_link, set_property_link};
 use crate::usecases::household::shared_events::cascade_shared_delete;
@@ -124,24 +126,27 @@ fn book_linked(
 }
 
 /// Replace a transaction entirely. Its id and origin are kept: an edit
-/// changes what happened, not where the record came from.
+/// changes what happened, not where the record came from, and never drops a
+/// link the form has no field for.
 pub fn update_transaction(
     vault: &mut UnlockedVault,
     id: &str,
     tx: Transaction,
 ) -> Result<Transaction> {
     let property = vault.property_of_tx(id).map(str::to_string);
-    edit(vault, id, tx, property.as_deref(), true)
+    edit(vault, id, replacing(tx), property.as_deref(), true)
 }
 
 /// Change an operation by naming only what changes (F4): every link the patch
-/// does not name keeps its stored value, the property link included.
+/// does not name keeps its stored value, the property link included. A scenario
+/// only: it is new, so the vault has no delegate for it.
 pub fn patch_transaction(
     vault: &mut UnlockedVault,
     id: &str,
     patch: TransactionPatch,
 ) -> Result<Transaction> {
-    update_transaction(vault, id, patch.tx)
+    let property = vault.property_of_tx(id).map(str::to_string);
+    edit(vault, id, patch, property.as_deref(), true)
 }
 
 /// [`update_transaction`] for the shared event that owns the operation: the
@@ -152,7 +157,7 @@ pub(crate) fn update_transaction_unsynced(
     tx: Transaction,
 ) -> Result<Transaction> {
     let property = vault.property_of_tx(id).map(str::to_string);
-    edit(vault, id, tx, property.as_deref(), false)
+    edit(vault, id, replacing(tx), property.as_deref(), false)
 }
 
 /// [`update_transaction`] that also sets the operation's property; `None`
@@ -163,7 +168,7 @@ pub fn update_transaction_for(
     tx: Transaction,
     property_id: Option<&str>,
 ) -> Result<Transaction> {
-    edit(vault, id, tx, property_id, true)
+    edit(vault, id, replacing(tx), property_id, true)
 }
 
 /// `follow_events`: an operation a shared event owns drags the event's
@@ -171,13 +176,13 @@ pub fn update_transaction_for(
 fn edit(
     vault: &mut UnlockedVault,
     id: &str,
-    tx: Transaction,
+    patch: TransactionPatch,
     property_id: Option<&str>,
     follow_events: bool,
 ) -> Result<Transaction> {
     check_property_link(vault, property_id)?;
     let index = position_of(&vault.doc.transactions, id)?;
-    let mut tx = edited(&vault.doc.transactions[index], id, tx);
+    let mut tx = patched(&vault.doc.transactions[index], id, patch);
     prepare_transaction(vault, &mut tx)?;
     let event_edit = if follow_events {
         vault.plan_shared_tx_edit(id, &tx)?

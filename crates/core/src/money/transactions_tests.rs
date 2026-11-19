@@ -7,6 +7,7 @@ use crate::model::store::StoreKind;
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
 use crate::service::test_support::*;
+use crate::usecases::money::transactions::patch_transaction;
 
 fn workflow_origin(estimated: bool) -> TxOrigin {
     TxOrigin::Workflow {
@@ -49,13 +50,13 @@ fn an_edit_keeps_the_id_origin_keep_mark_and_bill() {
     stored.meta_mut().keep = true;
     stored.meta_mut().utility_item_id = Some("bill".into());
 
-    let same_amount = edited(&stored, "id-1", income(&cash, "100", "pay"));
+    let same_amount = patched(&stored, "id-1", replacing(income(&cash, "100", "pay")));
     assert_eq!(same_amount.meta().id, "id-1");
     assert_eq!(same_amount.meta().origin, workflow_origin(true));
     assert!(same_amount.meta().keep);
     assert_eq!(same_amount.meta().utility_item_id.as_deref(), Some("bill"));
 
-    let real_amount = edited(&stored, "id-1", income(&cash, "120", "pay"));
+    let real_amount = patched(&stored, "id-1", replacing(income(&cash, "120", "pay")));
     assert_eq!(real_amount.meta().origin, workflow_origin(false));
 }
 
@@ -143,9 +144,12 @@ fn a_patch_keeps_every_field_it_does_not_name() {
     let saved = linked_operation(&mut vault, &cash);
     let id = saved.meta().id.clone();
 
-    let patched = vault
-        .patch_transaction(&id, TransactionPatch::of(income(&cash, "120", "water")))
-        .unwrap();
+    let patched = patch_transaction(
+        &mut vault,
+        &id,
+        TransactionPatch::of(income(&cash, "120", "water")),
+    )
+    .unwrap();
 
     let meta = patched.meta();
     assert_eq!(meta.id, id);
@@ -170,7 +174,7 @@ fn a_patch_changes_only_the_links_it_names() {
         ..TransactionPatch::of(income(&cash, "100", "water"))
     };
 
-    let patched = vault.patch_transaction(&saved.meta().id, patch).unwrap();
+    let patched = patch_transaction(&mut vault, &saved.meta().id, patch).unwrap();
 
     assert_eq!(patched.meta().utility_item_id, None);
     assert_eq!(patched.meta().flow_id.as_deref(), Some("flow-2"));

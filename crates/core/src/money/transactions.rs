@@ -68,13 +68,17 @@ pub fn ensure_fresh_id(doc: &VaultDoc, tx: &mut Transaction) {
     }
 }
 
-/// The edit of `stored` as the form sent it: the id and the origin are kept
-/// (an edit changes what happened, not where the record came from), and so are
-/// the «keep» mark and the utility bill the operation settles (the form has no
-/// such fields). A new amount for an operation booked approximately is the
-/// real one.
-pub fn edited(stored: &Transaction, id: &str, mut tx: Transaction) -> Transaction {
-    let mut origin = stored.meta().origin.clone();
+/// `stored` as `patch` changes it. A link the patch does not name keeps its
+/// stored value; the id and the «keep» mark are never the patch's to change. A
+/// new amount for an operation booked approximately is the real one.
+pub fn patched(stored: &Transaction, id: &str, patch: TransactionPatch) -> Transaction {
+    let TransactionPatch {
+        mut tx,
+        utility_item_id,
+        flow_id,
+        origin,
+    } = patch;
+    let mut origin = origin.unwrap_or_else(|| stored.meta().origin.clone());
     if let TxOrigin::Workflow { estimated, .. } = &mut origin
         && *estimated
         && main_amount(stored) != main_amount(&tx)
@@ -85,6 +89,17 @@ pub fn edited(stored: &Transaction, id: &str, mut tx: Transaction) -> Transactio
     meta.id = id.to_string();
     meta.origin = origin;
     meta.keep = stored.meta().keep;
-    meta.utility_item_id = stored.meta().utility_item_id.clone();
+    meta.utility_item_id = utility_item_id.unwrap_or_else(|| stored.meta().utility_item_id.clone());
+    meta.flow_id = flow_id.unwrap_or_else(|| stored.meta().flow_id.clone());
     tx
+}
+
+/// The patch a whole-form edit comes to: the form names a flow link only when
+/// it has one; the bill and the origin it has no field for stay as stored. An
+/// edit replaces the content but never drops a link.
+pub fn replacing(tx: Transaction) -> TransactionPatch {
+    TransactionPatch {
+        flow_id: tx.meta().flow_id.clone().map(Some),
+        ..TransactionPatch::of(tx)
+    }
 }
