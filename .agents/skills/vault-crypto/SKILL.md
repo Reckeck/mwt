@@ -61,21 +61,22 @@ after an update.
 
 Renaming a field, changing its type or meaning, removing an enum variant:
 
-1. Freeze the current schema (the changed types and their parents up to
-   `VaultDoc`) in a new module `storage/vN.rs`, N being the first version after
-   1 (so `storage/v1.rs` is never the name: v1 is the live schema). These
+1. Freeze the schema being replaced: N is the current `VAULT_FORMAT_VERSION`
+   before the bump (the first one is `storage/v1.rs`, `VaultDocV1`). Copy the
+   changed types and their parents up to `VaultDoc` into `storage/vN.rs`. These
    definitions are never edited again.
 2. `impl From<VaultDocVN> for VaultDoc` (or a `vN → vN+1` step), losing
-   nothing, and bump `VAULT_FORMAT_VERSION`.
-3. Add the step to `decode_in_container` in `storage/mod.rs`: a
-   `(VAULT_CONTAINER_VERSION, Some(N))` arm that parses the frozen document
-   and converts it, next to the current-version arm (`decode_versioned` calls
-   it). Without the arm the old payload is `Unsupported`.
+   nothing.
+3. Add the arm `(VAULT_CONTAINER_VERSION, Some(N))` to `decode_in_container`
+   in `storage/mod.rs`: it parses the frozen document and converts it, next to
+   the current-version arm (`decode_file` and `decode_versioned` both go
+   through it). Then bump `VAULT_FORMAT_VERSION` to N+1. Without the arm every
+   existing vault is `Unsupported`.
 4. Tests in `storage/mod.rs`, modelled on the `legacy_v4` fixture tests
    (`v4_fixture_opens_in_both_formats_and_equals_the_expected_document`): a
    payload of that version in JSON **and** MessagePack opens, equals the
    expected document, and is refused with another password; opening creates
-   `.vN.bak`, the file is rewritten at the current version and is migrated
+   `.vN.bak` (N, the old version), the file is rewritten at the current version and is migrated
    only once.
 5. Update `docs/data-model.md` ("Versions and migrations").
 
