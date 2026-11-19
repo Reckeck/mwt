@@ -1354,13 +1354,9 @@ mod tests {
             serde_json::from_str(doc["workflows"][0]["graph"].as_str().unwrap()).unwrap();
         assert_eq!(graph["version"], 2);
         let (decoded, _) = open_v4_fixture(V4_FIXTURES[0].0, V4_FIXTURES[0].2);
-        let carry = decoded.carry.expect("a v4 file hands on a carry");
-        assert!(!carry.exchange_keys.is_empty());
-        assert!(
-            carry
-                .exchange_keys
-                .iter()
-                .all(|key| !key.api_secret.is_empty())
-        );
+        assert!(decoded.carry.is_some(), "a v4 file hands on a carry");
+        let bybit = &decoded.doc.exchanges.bybit;
+        assert!(!bybit.is_empty());
+        assert!(bybit.iter().all(|key| !key.api_secret.is_empty()));
     }
 }
