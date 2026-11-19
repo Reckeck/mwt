@@ -20,6 +20,7 @@ use crate::pricing::history::{secs_or_now, unix_secs};
 use crate::time::{Clock, FixedClock, LocalDate};
 use crate::workflow::RunKey;
 use crate::workflow::automation;
+use crate::workflow::effect::Effect;
 use crate::workflow::exec::{
     self, EmittedEvent, Resume, RunContext, RunMode, RunReport, StepStatus, TraceStep,
 };
@@ -1360,6 +1361,17 @@ impl UnlockedVault {
             self.persist()?;
             return Ok(WorkflowPass::default());
         }
+        // A refusal after a question has no trigger to start from (it would
+        // ask again): its operation waits in the queue, and the retry books it.
+        if let Some(batch) = self
+            .doc
+            .workflow_queue
+            .iter()
+            .find(|batch| batch.run_id == run.id)
+            .cloned()
+        {
+            return self.retry_queued_refusal(&run, batch, now);
+        }
         let workflow = self.workflow(&run.workflow_id)?;
         let graph = Graph::parse(&workflow.graph)?;
         let trigger = graph
@@ -1389,6 +1401,45 @@ impl UnlockedVault {
         if !pass.notices.is_empty() {
             pass.notices = self.log_notices(std::mem::take(&mut pass.notices))?;
         }
+        Ok(pass)
+    }
+
+    /// Retry a refused run from its queued operations: they are dated now and
+    /// the money checked now. Still short, the refusal and the queue stay.
+    fn retry_queued_refusal(
+        &mut self,
+        run: &WorkflowRun,
+        batch: QueuedActions,
+        now: i64,
+    ) -> Result<WorkflowPass> {
+        let mut txs = batch.transactions;
+        for tx in &mut txs {
+            tx.meta_mut().timestamp = crate::calendar::iso(now);
+        }
+        if let Some(reason) = txs.iter().find_map(|tx| self.funds_shortfall(tx, now)) {
+            return Err(Error::InsufficientFunds(self.describe_shortfall(&reason)));
+        }
+        let saved = Effect::Insert { txs, now }
+            .apply_to(self)
+            .map_err(Error::InvalidInput)?;
+        self.doc
+            .workflow_queue
+            .retain(|queued| queued.id != batch.id);
+        self.forget_run(&run.id)?;
+        let done = WorkflowRun {
+            id: uuid::Uuid::new_v4().to_string(),
+            started_at: crate::calendar::iso(now),
+            outcome: RunOutcome::Done,
+            created: saved.iter().map(|tx| tx.meta().id.clone()).collect(),
+            queued: 0,
+            ..run.clone()
+        };
+        let mut pass = WorkflowPass::default();
+        self.doc.workflow_runs.push(done.clone());
+        pass.created.clone_from(&done.created);
+        pass.runs.push(done);
+        self.recompute_holdings();
+        self.persist()?;
         Ok(pass)
     }
 
@@ -1484,6 +1535,10 @@ impl UnlockedVault {
             reason: "skipped".into(),
         };
         let out = run.clone();
+        // What a refusal queued goes with it: nothing is left to retry.
+        self.doc
+            .workflow_queue
+            .retain(|queued| queued.run_id != run_id);
         self.persist()?;
         Ok(out)
     }

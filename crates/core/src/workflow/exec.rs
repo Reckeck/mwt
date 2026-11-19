@@ -326,15 +326,14 @@ pub fn run(host: &mut dyn WorkflowHost, graph: &Graph, ctx: &RunContext) -> RunR
         Ok(()) | Err(Halt::Return(_) | Halt::Break) => done(),
         Err(Halt::Stop(reason)) => RunOutcome::Stopped { reason },
         Err(Halt::Fail(message)) => RunOutcome::Failed { message },
-        Err(Halt::Reject(reason)) => RunOutcome::Rejected {
-            reason: *reason,
-            trigger_node: ctx.trigger_node.clone(),
-            planned_at: ctx
-                .trigger_values
-                .get("at")
-                .map(WfValue::as_text)
-                .filter(|at| !at.is_empty()),
-        },
+        Err(Halt::Reject(reason)) => {
+            let (trigger_node, planned_at) = exec.refusal_origin();
+            RunOutcome::Rejected {
+                reason: *reason,
+                trigger_node,
+                planned_at,
+            }
+        }
         Err(Halt::Wait(asleep)) => {
             let outcome = match asleep.kind {
                 WaitKind::Timer => RunOutcome::Waiting {
@@ -354,6 +353,8 @@ pub fn run(host: &mut dyn WorkflowHost, graph: &Graph, ctx: &RunContext) -> RunR
         outcome,
         RunOutcome::Failed { .. } | RunOutcome::Rejected { .. }
     );
+    // A refusal keeps what it queued: the refused operation, for a retry.
+    let refused = matches!(outcome, RunOutcome::Rejected { .. });
     let Executor {
         created,
         queued,
@@ -367,7 +368,8 @@ pub fn run(host: &mut dyn WorkflowHost, graph: &Graph, ctx: &RunContext) -> RunR
         host.restore(checkpoint);
     }
     let (created, queued, notices, events, reminders) = if failed {
-        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
+        let kept = if refused { queued } else { Vec::new() };
+        (Vec::new(), kept, Vec::new(), Vec::new(), Vec::new())
     } else {
         (created, queued, notices, events, reminders)
     };
@@ -458,6 +460,29 @@ impl<'run> Executor<'run> {
         }
         self.after = after;
         self
+    }
+
+    /// The trigger a refusal belongs to and the moment it was planned for. A
+    /// run that went on after a question has no trigger of its own: they are
+    /// what the first part of the run left in the memo.
+    fn refusal_origin(&self) -> (String, Option<String>) {
+        let planned =
+            |values: Option<&WfValue>| values.map(WfValue::as_text).filter(|at| !at.is_empty());
+        if self.ctx.resume.is_none() {
+            return (
+                self.ctx.trigger_node.clone(),
+                planned(self.ctx.trigger_values.get("at")),
+            );
+        }
+        self.graph
+            .nodes
+            .iter()
+            .filter(|node| node.kind.starts_with("trigger."))
+            .find_map(|node| {
+                let at = self.memo.get(&memo_key(&node.id, "at"));
+                at.map(|_| (node.id.clone(), planned(at)))
+            })
+            .unwrap_or_else(|| (self.ctx.trigger_node.clone(), None))
     }
 
     /// The moment the run is at: the start, moved on by emulated waits.

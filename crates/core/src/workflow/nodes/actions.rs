@@ -21,7 +21,7 @@ use crate::workflow::exec::{
 };
 use crate::workflow::graph::Graph;
 use crate::workflow::graph::Node;
-use crate::workflow::model::{WaitKind, WorkflowWait};
+use crate::workflow::model::{QueuedActions, WaitKind, WorkflowWait};
 use crate::workflow::types::WfValue;
 
 use super::{json_account, json_number};
@@ -432,6 +432,24 @@ impl Executor<'_> {
             .collect())
     }
 
+    /// An operation refused for lack of money after a question was answered:
+    /// the run cannot be started again from its trigger (that would ask
+    /// again), so the operation waits in the queue and a retry books it.
+    fn queue_refused(&mut self, tx: &Transaction) -> Result<(), String> {
+        if self.ctx.resume.is_none() {
+            return Ok(());
+        }
+        let batch = QueuedActions {
+            id: uuid::Uuid::new_v4().to_string(),
+            workflow_id: self.ctx.workflow_id.clone(),
+            run_id: self.ctx.run_id.clone(),
+            created_at: crate::calendar::iso(self.now()),
+            summary: self.describe(tx).1,
+            transactions: vec![tx.clone()],
+        };
+        self.perform(Effect::Queue(batch)).map(|_| ())
+    }
+
     fn said_commit(&self, def: &NodeDef, txs: &[Transaction]) -> Step {
         let (ru, en): (Vec<String>, Vec<String>) = txs.iter().map(|tx| self.describe(tx)).unzip();
         let (ru, en) = (ru.join("; "), en.join("; "));
@@ -452,6 +470,7 @@ impl Executor<'_> {
                         .host
                         .funds_shortfall(&tx, secs_of(&tx.meta().timestamp, now))
                 {
+                    self.queue_refused(&tx)?;
                     return Err(Fault::Halt(Halt::Reject(Box::new(reason))));
                 }
                 let saved = self.commit(vec![tx])?;
