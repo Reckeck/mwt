@@ -37,7 +37,7 @@ pub struct NamedValue {
     pub label: String,
     pub value_usd: Amount,
     pub value_base: Amount,
-    pub pct: f64,
+    pub pct: f64, // allowed: display only
 }
 
 /// One store's slice of the portfolio. Unlike [`NamedValue`] it carries the
@@ -48,7 +48,7 @@ pub struct StoreValue {
     pub name: String,
     pub value_usd: Amount,
     pub value_base: Amount,
-    pub pct: f64,
+    pub pct: f64, // allowed: display only
 }
 
 /// A single open position inside one store.
@@ -83,7 +83,7 @@ pub struct StoreChildRow {
     /// Value including the child's own sub-accounts.
     pub subtree_base: Amount,
     /// Share of the parent's subtree value, 0..1.
-    pub share: f64,
+    pub share: f64, // allowed: display only
 }
 
 /// One ancestor in the wallet page breadcrumbs.
@@ -703,7 +703,7 @@ pub fn store_overview(
             share: if node.subtree_usd.is_zero() {
                 0.0
             } else {
-                (child.subtree_usd / node.subtree_usd).to_f64()
+                (child.subtree_usd / node.subtree_usd).to_f64() // allowed: display only
             },
         })
         .collect();
@@ -845,7 +845,7 @@ pub fn portfolio_summary(books: &Books<'_>) -> PortfolioSummary {
         if total_usd == Amount::ZERO {
             0.0
         } else {
-            (value / total_usd).to_f64() * 100.0
+            (value / total_usd).to_f64() * 100.0 // allowed: display only
         }
     };
 
