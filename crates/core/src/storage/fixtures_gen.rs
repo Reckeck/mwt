@@ -231,8 +231,6 @@ fn generate_v4_fixtures() {
 fn the_generator_refuses_to_overwrite_existing_fixtures() {
     let committed = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/storage/fixtures");
     assert!(ensure_nothing_to_overwrite(&committed).is_err());
-    let empty = std::env::temp_dir().join(format!("fixtures-gen-guard-{}", std::process::id()));
-    std::fs::create_dir_all(&empty).expect("temp dir");
-    assert!(ensure_nothing_to_overwrite(&empty).is_ok());
-    std::fs::remove_dir_all(&empty).expect("clean up");
+    let empty = tempfile::tempdir().expect("temp dir");
+    assert!(ensure_nothing_to_overwrite(empty.path()).is_ok());
 }
