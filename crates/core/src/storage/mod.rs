@@ -1282,11 +1282,10 @@ mod tests {
             // The graphs are brought to the live version by the transition, so the fields
             // that hold them differ by design.
             let graph_fields = ["workflows", "workflow_waits", "workflow_queue"];
-            // `settings.crypto` is dropped: whether the vault holds crypto is derived.
-            let mut expected_settings = expected["settings"].clone();
-            expected_settings.as_object_mut().unwrap().remove("crypto");
+            // The reset drops some settings fields (`legacy_v4::dropped`): compare without them.
             assert_eq!(
-                transitioned["settings"], expected_settings,
+                legacy_v4::dropped::without_dropped(transitioned.clone())["settings"],
+                legacy_v4::dropped::without_dropped(expected.clone())["settings"],
                 "{name}: settings"
             );
             for (field, value) in expected.as_object().unwrap() {

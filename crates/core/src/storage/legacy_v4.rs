@@ -719,7 +719,29 @@ impl From<WorkflowWaitV4> for WorkflowWait {
 }
 
 #[cfg(test)]
+pub(crate) mod dropped {
+    /// Fields the reset drops from the live document, as JSON pointers; the live and the
+    /// frozen document are compared without them.
+    pub(crate) const DROPPED: [&str; 1] = ["/settings/crypto"];
+
+    /// The document with every [`DROPPED`] field removed.
+    pub(crate) fn without_dropped(mut doc: serde_json::Value) -> serde_json::Value {
+        for pointer in DROPPED {
+            if let Some((parent, field)) = pointer.rsplit_once('/')
+                && let Some(object) = doc
+                    .pointer_mut(parent)
+                    .and_then(|node| node.as_object_mut())
+            {
+                object.remove(field);
+            }
+        }
+        doc
+    }
+}
+
+#[cfg(test)]
 mod tests {
+    use super::dropped::without_dropped;
     use super::*;
     use crate::crypto::format::SnapshotFormat;
     use crate::storage::fixtures_gen::V4_PASSWORD;
@@ -765,10 +787,6 @@ mod tests {
         }
     }
 
-    /// Fields the reset drops from the live document; both sides are compared without them.
-    /// Empty until a later task removes a live field the frozen document still carries.
-    const DROPPED: [&str; 1] = ["/settings/crypto"];
-
     /// The expected document, with the graph strings brought to the live version as the
     /// conversion does (the graph steps themselves are tested in `graph`).
     fn expected_converted() -> serde_json::Value {
@@ -795,19 +813,6 @@ mod tests {
             }
         }
         expected
-    }
-
-    fn without_dropped(mut doc: serde_json::Value) -> serde_json::Value {
-        for pointer in DROPPED {
-            if let Some((parent, field)) = pointer.rsplit_once('/')
-                && let Some(object) = doc
-                    .pointer_mut(parent)
-                    .and_then(|node| node.as_object_mut())
-            {
-                object.remove(field);
-            }
-        }
-        doc
     }
 
     #[test]
