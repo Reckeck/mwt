@@ -419,30 +419,40 @@ impl UnlockedVault {
                 return Ok(outcome);
             }
         };
-        doc.sync = std::mem::take(&mut self.doc.sync);
-        for (key, change) in &plan.changes {
-            match &change.after.stamps {
-                Some(stamps) => doc.sync.stamps.insert(key.clone(), stamps.clone()),
-                None => doc.sync.stamps.remove(key),
-            };
-            match &change.after.tombstone {
-                Some(stamp) => {
-                    // Kept from when it arrived, whatever its own stamp says.
-                    doc.sync
-                        .tombstones_seen
-                        .insert(key.clone(), crate::sync::stamp::now_ms());
-                    doc.sync.tombstones.insert(key.clone(), stamp.clone())
-                }
-                None => {
-                    doc.sync.tombstones_seen.remove(key);
-                    doc.sync.tombstones.remove(key)
-                }
-            };
-        }
+        // Cloned, not taken: the old document must stay whole for a rollback.
+        doc.sync = self.doc.sync.clone();
+        crate::sync::apply::stamp_changes(&mut doc, &plan.changes);
         // Log entries the cap cut off keep no stamps.
         let kept = view::records(&value);
         doc.sync.stamps.retain(|key, _| kept.contains_key(key));
-        self.doc = doc;
+        // The merged document is complete: swap it in. Every step after this
+        // can fail; on failure the old document goes back (atomic batch).
+        let tracker = self.tracker.clone();
+        let before = self.swap_doc(doc)?;
+        match self.finish_batch(plan, peer, carry) {
+            Ok(applied) => Ok(Some(applied)),
+            Err(err) => {
+                self.swap_doc(before)?;
+                self.tracker = tracker;
+                Err(err)
+            }
+        }
+    }
+
+    /// Put `doc` in place of the open document; the old one comes back.
+    fn swap_doc(&mut self, doc: VaultDoc) -> Result<VaultDoc> {
+        self.run(|tx| Ok(tx.replace_doc(doc)))
+            .map(|(old, _, _)| old)
+    }
+
+    /// What follows the swap of a merged document: settle it, journal the
+    /// batch, repair, save once.
+    fn finish_batch(
+        &mut self,
+        plan: crate::sync::SyncPlan,
+        peer: &PeerRef,
+        carry: bool,
+    ) -> Result<AppliedBatch> {
         // A union of two devices' caches can overshoot the caps: thin it the
         // way a refresh does, before the baseline is taken, so the dropped
         // points are neither stamped nor sent as deletions.
@@ -500,7 +510,7 @@ impl UnlockedVault {
         self.repair_invariants(Some(&applied.id))?;
         self.recompute_holdings();
         self.persist()?;
-        Ok(Some(applied))
+        Ok(applied)
     }
 
     /// `incoming` without the deletions that were already compacted: tombstone
