@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::Amount;
 use crate::model::vault::VaultDoc;
-use crate::service::SharedExtra;
+use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
 
 use crate::service::RateBook;
 use crate::service::UnlockedVault;
@@ -90,7 +90,7 @@ impl<'vault> Books<'vault> {
     /// that is my own expense, computed on first use.
     pub fn shared_ratios(&self) -> &HashMap<String, Amount> {
         self.shared_ratios
-            .get_or_init(|| self.vault.shared_payment_ratios())
+            .get_or_init(|| shared_payment_ratios(self.doc()))
     }
 
     /// The spending entries without a payment of mine behind them (my part of
@@ -98,7 +98,7 @@ impl<'vault> Books<'vault> {
     /// not valued yet: the currency and period are asked per use.
     pub(crate) fn shared_extras(&self) -> &[SharedExtra] {
         self.shared_extras
-            .get_or_init(|| self.vault.shared_extras())
+            .get_or_init(|| shared_extra_flows(self.doc()))
     }
 
     /// The base currency code, lower case.

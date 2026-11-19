@@ -13,4 +13,7 @@ allow = [
     { from = "reports/overview.rs", to = "usecases", until = "Ф5", reason = "leg_value_in lives in usecases/planning/budget.rs (stream D); reports read it until the pricing helper moves to a lower layer" },
     { from = "household/shared_events/mod.rs", to = "ipc_contract", until = "Ф5", reason = "the plan functions take the request inputs of the shared events commands; the input types stay in ipc_contract until the contract moves" },
     { from = "household/shared_events/settle.rs", to = "ipc_contract", until = "Ф5", reason = "the settle plans take the request inputs of the shared events commands; the input types stay in ipc_contract until the contract moves" },
+    { from = "household/shared_events/purchases.rs", to = "ipc_contract", until = "Ф5", reason = "the purchase plans take the request inputs of the shared events commands; the input types stay in ipc_contract until the contract moves" },
+    { from = "kernel/books.rs", to = "money", until = "Ф5", reason = "Books computes the shared-event ratios and extras through money::shared_ratios (T33) until the kernel is re-layered" },
+    { from = "money/shared_ratios.rs", to = "household", until = "Ф5", reason = "the shared-event figures need the event split from household/shared_events until the split moves below money (follow-up T135)" },
 ]

@@ -49,6 +49,7 @@ mod rebase_tests;
 pub mod search;
 #[cfg(test)]
 mod search_tests;
+pub mod shared_ratios;
 pub mod store_change;
 #[cfg(test)]
 mod store_change_tests;

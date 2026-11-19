@@ -175,6 +175,11 @@ files = [
 ]
 
 [[foundation]]
+# T33: the shared ratios move from the vault to `money/shared_ratios.rs` (Books reads them); the module is listed in money/mod.rs.
+task = "C"
+files = ["crates/core/src/money/mod.rs", "crates/core/src/money/shared_ratios.rs"]
+
+[[foundation]]
 task = "T60"
 files = ["crates/core/src/service/mod.rs"]
 
