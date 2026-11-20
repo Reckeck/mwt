@@ -120,3 +120,52 @@ fn a_batch_that_succeeds_writes_once() {
 
     assert_eq!(wakes.0.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
+
+#[derive(Default)]
+struct Announced(std::sync::Mutex<Vec<String>>);
+
+impl crate::service::SyncTap for Announced {
+    fn changed(&self, keys: &[String]) {
+        self.0.lock().unwrap().extend(keys.iter().cloned());
+    }
+}
+
+#[test]
+fn a_failed_batch_announces_nothing_it_stamped_on_its_way() {
+    use crate::model::transaction::{Transaction, TxOrigin};
+    let (dir, mut left, mut right) = left_ahead();
+    let tap = std::sync::Arc::new(Announced::default());
+    right.set_sync_tap(Some(tap.clone()));
+    right.set_write_behind(Some(std::sync::Arc::new(Wakes::default())));
+    // Two copies of one generated operation: the batch's dedupe deletes one
+    // and queues its key for the live session.
+    let cash = right.doc_value().unwrap()["stores"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    for comment in ["first", "second"] {
+        let mut tx = crate::service::test_support::income(&cash, "100", comment);
+        if let Transaction::Topup(topup) = &mut tx {
+            topup.meta.origin = TxOrigin::Import {
+                exec_id: "exec-1".into(),
+            };
+        }
+        right.add_transaction(tx).unwrap();
+    }
+    let incoming = incoming_for(&mut left, &mut right);
+    // What was stamped so far goes out first: the queue is empty.
+    drop(right.prepare_flush().unwrap().expect("dirty"));
+    tap.0.lock().unwrap().clear();
+    right.set_write_behind(None);
+    let file = dir.path().join("copy.wallet");
+    std::fs::remove_file(&file).unwrap();
+    std::fs::create_dir(&file).unwrap();
+    assert!(right.sync_apply(&incoming, &peer()).is_err());
+
+    right.set_write_behind(Some(std::sync::Arc::new(Wakes::default())));
+    right.persist().unwrap();
+    drop(right.prepare_flush().unwrap());
+
+    let sent = tap.0.lock().unwrap().clone();
+    assert!(sent.is_empty(), "announced after a failed batch: {sent:?}");
+}
