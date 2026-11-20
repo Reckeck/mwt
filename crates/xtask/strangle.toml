@@ -62,6 +62,8 @@ files = [
     "crates/core/src/cryptotrack/ports_tests.rs",
     "crates/core/src/cryptotrack/rpc/mod.rs",
     "crates/core/src/cryptotrack/rpc/port.rs",
+    # T146: the explorer port gets one blanket impl over `ChainSource` instead of a second RpcClient forward.
+    "crates/core/src/cryptotrack/sources/evm/blockscout.rs",
 ]
 
 [[foundation]]
