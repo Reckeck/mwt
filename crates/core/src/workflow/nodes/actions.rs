@@ -187,13 +187,10 @@ impl Executor<'_> {
         })
     }
 
-    /// Make the operations: all of them are kept or none.
-    fn commit(&mut self, txs: Vec<Transaction>) -> Result<Vec<Transaction>, Fault> {
-        self.actions += 1;
-        if self.actions > MAX_ACTIONS {
-            return Err(Halt::Fail(format!("more than {MAX_ACTIONS} actions in one run")).into());
-        }
-        let value = match self.ctx.max_amount {
+    /// What the operations take out, in the cap's currency; refused when the
+    /// run would move more than its cap (or the value is unknown under a cap).
+    fn check_cap(&self, txs: &[Transaction]) -> Result<Amount, Fault> {
+        Ok(match self.ctx.max_amount {
             // With a cap, a move whose value is unknown is refused, never counted as nothing.
             Some(cap) => {
                 let currency = self
@@ -202,7 +199,7 @@ impl Executor<'_> {
                     .clone()
                     .unwrap_or_else(|| self.host.base_currency().to_string());
                 let mut sum = Amount::ZERO;
-                for tx in &txs {
+                for tx in txs {
                     let Some(part) = self.host.wf_outflow_in(tx, &currency) else {
                         return Err(Halt::Fail(format!(
                             "no price or rate to check the cap of {cap} {}",
@@ -225,7 +222,16 @@ impl Executor<'_> {
             None => txs
                 .iter()
                 .fold(Amount::ZERO, |sum, tx| sum + self.host.wf_outflow_base(tx)),
-        };
+        })
+    }
+
+    /// Make the operations: all of them are kept or none.
+    fn commit(&mut self, txs: Vec<Transaction>) -> Result<Vec<Transaction>, Fault> {
+        self.actions += 1;
+        if self.actions > MAX_ACTIONS {
+            return Err(Halt::Fail(format!("more than {MAX_ACTIONS} actions in one run")).into());
+        }
+        let value = self.check_cap(&txs)?;
         let now = self.now();
         let saved = self.perform(Effect::Insert { txs, now })?;
         self.moved += value;
@@ -470,6 +476,8 @@ impl Executor<'_> {
                         .host
                         .funds_shortfall(&tx, secs_of(&tx.meta().timestamp, now))
                 {
+                    // Only an operation within the cap is queued for a retry.
+                    self.check_cap(std::slice::from_ref(&tx))?;
                     self.queue_refused(&tx)?;
                     return Err(Fault::Halt(Halt::Reject(Box::new(reason))));
                 }
