@@ -12,7 +12,7 @@
 //! contract on a chain, and the user cannot point at a block. The stored
 //! model has one place for "an asset that is not on a network":
 //! [`Chain::Fiat`], the pseudo-variant the ledger already uses for a coin
-//! whose network is unresolved (`UnlockedVault::asset_for_import` leaves
+//! whose network is unresolved (`cryptotrack::exchange_import::asset_for_import` leaves
 //! `chain: None` for exactly that reason). So an exchange coin is
 //! [`CryptoAsset::Token`] on [`Chain::Fiat`] with the ticker as its
 //! "contract", which gives it a stable key (`fiat|USDT`) and keeps it apart

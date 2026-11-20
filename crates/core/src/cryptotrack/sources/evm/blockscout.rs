@@ -17,6 +17,7 @@ use super::cursor::{Cursor, PageParams, Stream, query_string, validate_params};
 use super::model::{BalanceSource, RawAsset, RawBalance, RawEvent, RawKind, Rejected, SourceBatch};
 use super::uint::{Uint256, shorten};
 use crate::cryptotrack::chains::{self, EvmChain};
+use crate::cryptotrack::ports::ChainSource;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::normalize_address;
@@ -38,14 +39,17 @@ pub trait ExplorerApi: Send + Sync {
     ) -> impl Future<Output = Result<Value>> + Send;
 }
 
-impl ExplorerApi for crate::cryptotrack::rpc::RpcClient {
+/// Every chain source reads explorer URLs with its own `get_json`, so the
+/// shared client ([`ChainSource`] in `rpc/port.rs`) is the one production
+/// explorer too.
+impl<C: ChainSource> ExplorerApi for C {
     fn get_json(
         &self,
         base: &str,
         path_and_query: &str,
         subject: &str,
     ) -> impl Future<Output = Result<Value>> + Send {
-        Self::get_json(self, base, path_and_query, subject)
+        ChainSource::get_json(self, base, path_and_query, subject)
     }
 }
 

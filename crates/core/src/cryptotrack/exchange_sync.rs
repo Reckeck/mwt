@@ -351,24 +351,18 @@ pub fn preview_exchange_sync(
     imports: Vec<PendingImport>,
     settings: &ImportSettings,
 ) -> ImportPreview {
-    let known = known_import_ids(books.doc());
-    let mut preview = ImportPreview {
-        fetched: imports.len() as u32,
-        ..ImportPreview::default()
-    };
-    for imp in imports {
-        if imp.exec_id.is_empty() || known.contains(&imp.exec_id) {
-            preview.known += 1;
-        } else if !import_wanted(books, &imp, settings) {
-            preview.filtered += 1;
-        } else {
-            preview.new += 1;
-            if preview.items.len() < MAX_PREVIEW_ITEMS {
-                preview.items.push(imp);
-            }
-        }
+    let fetched = imports.len() as u32;
+    let taken = intake(books, imports, settings, known_import_ids(books.doc()));
+    let new = taken.fresh.len() as u32;
+    let mut items = taken.fresh;
+    items.truncate(MAX_PREVIEW_ITEMS);
+    ImportPreview {
+        fetched,
+        known: taken.known,
+        filtered: taken.filtered,
+        new,
+        items,
     }
-    preview
 }
 
 /// A run of `source` over the wallet `root` at `now`, with nothing counted yet.
@@ -476,5 +470,40 @@ pub fn imported_transactions(
             .take(limit)
             .cloned()
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::UnlockedVault;
+
+    fn fill(exec_id: &str) -> PendingImport {
+        PendingImport {
+            exec_id: exec_id.into(),
+            kind: ImportKind::Fill,
+            ..PendingImport::default()
+        }
+    }
+
+    #[test]
+    fn a_preview_counts_a_repeated_exec_id_once_like_the_import() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+        let books = vault.books();
+        let batch = vec![fill("twice"), fill("twice"), fill(""), fill("other")];
+        let settings = ImportSettings::default();
+        let preview = preview_exchange_sync(&books, batch.clone(), &settings);
+        let taken = intake(&books, batch, &settings, known_import_ids(books.doc()));
+        assert_eq!(
+            (
+                preview.fetched,
+                preview.known,
+                preview.filtered,
+                preview.new
+            ),
+            (4, 2, 0, 2)
+        );
+        assert_eq!(preview.items, taken.fresh);
     }
 }
