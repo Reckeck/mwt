@@ -248,7 +248,7 @@ impl Executor<'_> {
         let planned = self.date_input(node)?;
         let comment = self.text_param(node, "comment");
         let fresh = self.meta_at(&comment, None, planned);
-        let mut tx = crate::service::draft_to_transaction(&draft, "", "", &fresh.timestamp);
+        let mut tx = crate::model::planning::draft_to_transaction(&draft, "", "", &fresh.timestamp);
         match &mut tx {
             Transaction::Topup(inner) => inner.amount = amount,
             Transaction::Payment(inner) => inner.amount = amount,

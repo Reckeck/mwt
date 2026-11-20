@@ -45,12 +45,6 @@ pub const EXEMPTIONS: &[Exemption] = &[
         until: "T229",
         reason: "the overview carries service::losses::LossReport until the loss report moves to its area",
     },
-    Exemption {
-        file: "workflow/nodes/actions.rs",
-        item: "draft_to_transaction",
-        until: "T235",
-        reason: "the action node calls service::draft_to_transaction until the draft conversion moves below service",
-    },
 ];
 
 /// One forbidden name found in a domain module.
@@ -318,9 +312,9 @@ mod tests {
     }
 
     #[test]
-    fn there_are_exactly_the_three_named_exemptions() {
+    fn there_are_exactly_the_two_named_exemptions() {
         let tasks: Vec<&str> = EXEMPTIONS.iter().map(|entry| entry.until).collect();
-        assert_eq!(tasks, ["T227", "T229", "T235"]);
+        assert_eq!(tasks, ["T227", "T229"]);
         assert!(EXEMPTIONS.iter().all(|entry| !entry.reason.is_empty()));
     }
 }

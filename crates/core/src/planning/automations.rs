@@ -13,10 +13,10 @@ use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::planning::{
     AmountMode, Automation, AutomationOutcome, AutomationPreset, AutomationSpec, RejectReason,
-    Schedule, TransactionDraft, WorkdayShift,
+    Schedule, TransactionDraft, WorkdayShift, draft_to_transaction,
 };
 use crate::model::store::{AssetRef, Store, StoreKind};
-use crate::model::transaction::{PriceStamp, Transaction, TxOrigin};
+use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
 use crate::pricing::history::secs_or_now;
 
@@ -107,37 +107,6 @@ pub struct AutomationSimulation {
     pub balances: Vec<SimulatedBalance>,
     pub created: u32,
     pub rejected: u32,
-}
-
-/// A transaction from a template, dated `ts`; prices are left to the stamp.
-/// It names the automation and the planned moment it was made for.
-pub(crate) fn draft_to_transaction(
-    draft: &TransactionDraft,
-    automation_id: &str,
-    planned_at: &str,
-    ts: &str,
-) -> Transaction {
-    let mut tx = match draft.clone() {
-        TransactionDraft::Topup(inner) => Transaction::Topup(inner),
-        TransactionDraft::Payment(inner) => Transaction::Payment(inner),
-        TransactionDraft::Transfer(inner) => Transaction::Transfer(inner),
-        TransactionDraft::Convert(inner) => Transaction::Convert(inner),
-    };
-    let meta = tx.meta_mut();
-    meta.id = uuid::Uuid::new_v4().to_string();
-    meta.timestamp = ts.to_string();
-    meta.origin = TxOrigin::Workflow {
-        workflow_id: automation_id.to_string(),
-        run_id: String::new(),
-        planned_at: (!planned_at.is_empty()).then(|| planned_at.to_string()),
-        planned_date: None,
-        estimated: false,
-        run_key: None,
-    };
-    for (_, stamp) in tx.stamps_mut() {
-        *stamp = PriceStamp::default();
-    }
-    tx
 }
 
 /// The amount a top-up, a payment or a transfer moves (an exchange: what it gives).

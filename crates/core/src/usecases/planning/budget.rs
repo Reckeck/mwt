@@ -15,12 +15,13 @@ use crate::Amount;
 use crate::calendar::{self, AUTOMATION_HOUR, Calendar, first_of_month};
 use crate::error::Result;
 use crate::kernel::books::Books;
+use crate::model::planning::draft_to_transaction;
 use crate::model::planning::{Automation, AutomationRun, Budget, BudgetTarget, UtilityKind};
 use crate::model::store::StoreKind;
 use crate::model::transaction::{Leg, LegRole, Transaction};
 use crate::model::vault::DailyBudgetMode;
 use crate::money::worth::classify_flow;
-use crate::planning::automations::{automation_draft, draft_to_transaction};
+use crate::planning::automations::automation_draft;
 use crate::planning::budget::{
     AVG_LOOKBACK_MONTHS, BudgetDraft, BudgetStatus, DailyBudget, MonthAllowance, MonthAvg,
     MonthSummary, allowance_of, amount_of_days, average_month, budget_balance, budget_currency,

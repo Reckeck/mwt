@@ -1,7 +1,6 @@
 //! Shim of the `automations` area: the rules moved to `crate::planning::automations`, the
 //! scenarios to `crate::usecases::planning::automations` (spec core-strangler, D1).
 
-pub(crate) use crate::planning::automations::draft_to_transaction;
 pub(super) use crate::planning::automations::outflow;
 pub use crate::planning::automations::{
     AutomationDraft, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun,

@@ -50,7 +50,7 @@ impl CardMoney {
 
     /// What the operation template says, for what the node itself leaves empty.
     pub(crate) fn fill_from(&mut self, draft: &TransactionDraft) {
-        let probe = crate::planning::automations::draft_to_transaction(draft, "", "", "");
+        let probe = crate::model::planning::draft_to_transaction(draft, "", "", "");
         let from_template = Self::of(&probe);
         self.currency = self.currency.take().or(from_template.currency);
         self.from_store = self.from_store.take().or(from_template.from_store);
