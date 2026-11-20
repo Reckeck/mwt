@@ -425,8 +425,8 @@ fn an_unlisted_token_bought_for_usdt_has_no_slippage_but_stays_incomplete() {
     else {
         panic!("a losses report");
     };
-    assert_eq!(report.total.slippage, Amount::ZERO);
-    assert_eq!(report.incomplete, 1);
+    assert_eq!(report.losses.total.slippage, Amount::ZERO);
+    assert_eq!(report.losses.incomplete, 1);
 }
 
 #[test]

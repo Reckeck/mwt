@@ -1818,7 +1818,12 @@ pub fn report_csv(report: &Report) -> String {
                     .map(String::from)
                     .to_vec(),
             );
-            for row in data.rows.iter().chain(std::iter::once(&data.total)) {
+            for row in data
+                .losses
+                .rows
+                .iter()
+                .chain(std::iter::once(&data.losses.total))
+            {
                 lines.push(vec![
                     if row.month.is_empty() {
                         "total".into()

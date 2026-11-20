@@ -262,6 +262,8 @@ files = [
     "crates/core/src/household/losses.rs", "crates/core/src/household/losses_tests.rs",
     "crates/core/src/usecases/household/losses.rs", "crates/core/src/reports/overview.rs",
     "crates/core/src/calendar.rs",
+    # T203: without Deref on LossReport its readers in reports/ read `report.losses` (orchestrator decision 2026-11-20).
+    "crates/core/src/reports/insights.rs", "crates/core/src/reports/where_went.rs",
 ]
 
 [[foundation]]
