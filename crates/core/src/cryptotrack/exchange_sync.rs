@@ -81,17 +81,17 @@ pub struct Intake {
 
 /// Top-level wallet of `id` (the tree is `money`'s, see the module docs).
 pub(crate) fn root_of(books: &Books<'_>, id: &str) -> String {
-    books.vault().root_of(id)
+    crate::money::tree::root_of(books.doc(), id)
 }
 
 /// The store with this id.
 pub(crate) fn find_store<'books>(books: &Books<'books>, id: &str) -> Option<&'books Store> {
-    books.vault().find_store(id)
+    crate::money::tree::find_store(books.doc(), id)
 }
 
 /// Direct children of a store.
 pub(crate) fn children_of<'books>(books: &Books<'books>, parent_id: &str) -> Vec<&'books Store> {
-    books.vault().children_of(parent_id)
+    crate::money::tree::children_of(books.doc(), parent_id)
 }
 
 /// The account type an account name stands for, as the settings store it.

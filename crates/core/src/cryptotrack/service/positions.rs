@@ -71,6 +71,7 @@ use crate::model::cryptotrack::{
     CryptoAsset, CryptoDirection, CryptoLeg, CryptoPosition, CryptoTx, CryptoTxKind,
 };
 use crate::model::vault::VaultDoc;
+use crate::money::price_info::price_quote_for;
 use crate::pricing::history::unix_secs;
 
 use super::tokens::counts_asset;
@@ -379,9 +380,7 @@ pub(crate) fn price_now_usd(books: &Books<'_>, asset: &CryptoAsset) -> Option<Am
     {
         return None;
     }
-    let quote = books
-        .vault()
-        .price_quote_for(&crypto_asset_ref(doc, asset).key());
+    let quote = price_quote_for(books, &crypto_asset_ref(doc, asset).key());
     // The default origin is `PriceOrigin::None`: no price at all.
     if quote.info.origin != Default::default() {
         return Some(quote.usd);

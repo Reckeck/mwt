@@ -661,7 +661,7 @@ fn flow_paid_usd(books: &Books<'_>, flow_id: &str, when: &str) -> Option<Amount>
             };
             let unit = leg
                 .price_usd
-                .or_else(|| books.vault().price_at(&leg.asset.key(), at))?;
+                .or_else(|| crate::money::rates::price_at(books, &leg.asset.key(), at))?;
             paid = engine::math::add(paid, engine::math::mul(leg.amount.abs(), unit)?)?;
             seen = true;
         }

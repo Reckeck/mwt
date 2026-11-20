@@ -23,6 +23,7 @@ use crate::model::store::{PropertyCategory, RevalueFloor, RevalueRule, Store, St
 use crate::model::transaction::Transaction;
 use crate::model::vault::{Valuation, VaultDoc};
 use crate::money::inflation::{inflation_on, inflation_series, real_coefficients};
+use crate::money::price_info::last_stamp;
 use crate::money::rates::per_usd;
 use crate::money::tree::find_store;
 use crate::pricing::history::secs_or_now;
@@ -527,10 +528,10 @@ pub fn property_values(
 /// only the vault values), else the last price a transaction recorded for
 /// it, in `currency`.
 fn unpriced_unit(books: &Books<'_>, key: &str, currency: &str) -> Option<Amount> {
-    let vault = books.vault();
-    vault
+    books
+        .vault()
         .manual_price_usd(key)
-        .or_else(|| vault.last_stamp(key).map(|(_, usd)| usd))
+        .or_else(|| last_stamp(books.doc(), key).map(|(_, usd)| usd))
         .and_then(|usd| Some(usd * per_usd(books.doc(), currency)?))
 }
 

@@ -11,7 +11,9 @@ use std::collections::HashSet;
 
 use crate::Amount;
 use crate::error::Result;
-use crate::model::store::{Store, StoreScope};
+#[cfg(test)]
+use crate::model::store::Store;
+use crate::model::store::StoreScope;
 use crate::model::transaction::Transaction;
 
 use super::RateBook;
@@ -45,6 +47,7 @@ impl UnlockedVault {
         pub(crate) fn store_positions(&self, store_id: &str, fx: Amount) -> Vec<StorePosition>
             => crate::money::portfolio::store_positions @books;
         /// Direct children of a store.
+        #[cfg(test)]
         pub(crate) fn children_of(&self, parent_id: &str) -> Vec<&Store>
             => crate::money::tree::children_of @doc;
         /// Every descendant id of `root_id`, without `root_id` itself.
