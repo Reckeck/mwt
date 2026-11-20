@@ -38,6 +38,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 
+use trade_core::cryptotrack::tokens::known;
 use trade_core::error::Error;
 use trade_core::pricing::PricingService;
 use trade_core::service::UnlockedVault;
@@ -61,7 +62,7 @@ impl AppState {
     pub fn new() -> Self {
         Self {
             vault: Mutex::new(None),
-            pricing: PricingService::default(),
+            pricing: PricingService::default().with_known_tokens(known::is_known),
             vault_path: Mutex::new(PathBuf::new()),
             notify: Mutex::new(crate::notify_store::NotifyMemory::default()),
             sandbox: AtomicBool::new(false),

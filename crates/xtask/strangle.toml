@@ -88,7 +88,11 @@ files = ["crates/core/src/cryptotrack/service/tests.rs"]
 [[foundation]]
 # T46 review fix: the cryptotrack sync job passes the built-in token predicate to pricing, so only unknown contracts wait for consent.
 task = "E"
-files = ["crates/app/src/cryptotrack/jobs.rs"]
+files = [
+    "crates/app/src/cryptotrack/jobs.rs",
+    # T159: the app state's pricing service gets the built-in token list too (orchestrator decision 2026-11-20).
+    "crates/app/src/commands/mod.rs",
+]
 
 [[foundation]]
 # Stream D adds the moment of the user's action (at) to the retry and pause/resume events and the stopped ids to GoalPaused.

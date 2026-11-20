@@ -772,7 +772,7 @@ impl EvmReader {
                 allow_loopback_http: true,
                 ..RpcConfig::default()
             })?,
-            pricing: PricingService::default(),
+            pricing: PricingService::default().with_known_tokens(known::is_known),
         })
     }
 

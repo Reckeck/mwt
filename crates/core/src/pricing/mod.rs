@@ -26,6 +26,7 @@ use rust_decimal::Decimal;
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
+use crate::model::cryptotrack::TokenId;
 use crate::model::store::AssetRef;
 use crate::model::vault::{FxPoint, PricePoint, VaultDoc};
 
@@ -77,6 +78,18 @@ fn token_price_in(body: &HashMap<String, HashMap<String, f64>>, contract: &str) 
         .map(Amount::from_f64)
 }
 
+/// Whether the current-price path may send this asset's contract to
+/// CoinGecko (`N1`): with consent always, without it only for a token on the
+/// built-in list. The same rule as the historic path in `llama`.
+fn contract_lookup_allowed(
+    consent: bool,
+    is_known: impl Fn(&TokenId) -> bool,
+    chain: Chain,
+    contract: &str,
+) -> bool {
+    consent || is_known(&TokenId::new(chain, contract))
+}
+
 const COINCAP_V2: &str = "https://api.coincap.io/v2";
 const BINANCE_API: &str = "https://api.binance.com/api/v3";
 const ER_API: &str = "https://open.er-api.com/v6";
@@ -87,6 +100,11 @@ pub struct PricingService {
     /// Open question 5 (`N1`): may a token contract be sent to a price
     /// source. Off until the user turns it on.
     lookup_contracts: bool,
+    /// The built-in token list (`N1`): those tokens are asked by contract
+    /// even without consent. The app layer owns the list and injects it.
+    is_known: fn(&TokenId) -> bool,
+    /// Where `/simple/token_price` is asked; a test points it at a fake.
+    token_price_base: String,
 }
 
 impl Default for PricingService {
@@ -97,6 +115,8 @@ impl Default for PricingService {
                 .build()
                 .expect("reqwest client"),
             lookup_contracts: false,
+            is_known: |_| false,
+            token_price_base: COINGECKO_V3.into(),
         }
     }
 }
@@ -110,6 +130,14 @@ impl PricingService {
         self
     }
 
+    /// Names the built-in tokens, which are priced by contract even without
+    /// consent, as on the historic path (`N1`). Default: none.
+    #[must_use]
+    pub fn with_known_tokens(mut self, is_known: fn(&TokenId) -> bool) -> Self {
+        self.is_known = is_known;
+        self
+    }
+
     /// Whether a token contract may be sent to a price source (Open question 5).
     #[must_use]
     pub fn looks_up_contracts(&self) -> bool {
@@ -118,6 +146,9 @@ impl PricingService {
 
     /// Network-only price fetch (no cache mutation) — usable across `.await`
     /// without borrowing the vault.
+    ///
+    /// Without consent only the built-in tokens ([`Self::with_known_tokens`])
+    /// are asked by contract, as on the historic path (`N1`).
     pub async fn fetch_prices(&self, assets: &[AssetRef]) -> Result<Vec<PricePoint>> {
         if assets.is_empty() {
             return Ok(Vec::new());
@@ -285,6 +316,7 @@ impl PricingService {
         }
         // 2) CoinGecko token by contract
         if let (Some(chain), Some(contract)) = (asset.chain, &asset.contract)
+            && contract_lookup_allowed(self.lookup_contracts, self.is_known, chain, contract)
             && let Ok(price) = self
                 .coingecko_token_price(chain, contract, &asset.symbol)
                 .await
@@ -362,7 +394,7 @@ impl PricingService {
             .info()
             .cg_platform
             .ok_or_else(|| Error::Pricing("chain has no coingecko platform".into()))?;
-        let url = format!("{COINGECKO_V3}/simple/token_price/{platform}");
+        let url = format!("{}/simple/token_price/{platform}", self.token_price_base);
         let resp = self
             .client
             .get(&url)
@@ -553,6 +585,45 @@ mod tests {
         assert_eq!(token_price_in(&body, "0xdead"), None);
     }
 
+    fn only_usdc(token: &TokenId) -> bool {
+        token
+            .contract
+            .eq_ignore_ascii_case("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+    }
+
+    #[test]
+    fn without_consent_an_unknown_contract_is_not_looked_up() {
+        let contract = "0x0000000000000000000000000000000000000bad";
+        assert!(!contract_lookup_allowed(
+            false,
+            only_usdc,
+            Chain::Ethereum,
+            contract
+        ));
+    }
+
+    #[test]
+    fn without_consent_a_known_token_is_still_looked_up() {
+        let usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+        assert!(contract_lookup_allowed(
+            false,
+            only_usdc,
+            Chain::Ethereum,
+            usdc
+        ));
+    }
+
+    #[test]
+    fn with_consent_an_unknown_contract_is_looked_up() {
+        let contract = "0x0000000000000000000000000000000000000bad";
+        assert!(contract_lookup_allowed(
+            true,
+            |_| false,
+            Chain::Ethereum,
+            contract
+        ));
+    }
+
     #[test]
     fn a_contract_miss_never_falls_back_to_the_symbol() {
         let mut scam = AssetRef::crypto("USDC", "Fake USDC", None, Chain::Ethereum);
@@ -561,5 +632,51 @@ mod tests {
         // A plain coin without a contract may still be found by its symbol.
         let coin = AssetRef::crypto("BTC", "Bitcoin", None, Chain::Bitcoin);
         assert!(symbol_fallback_allowed(&coin));
+    }
+
+    /// A fake CoinGecko: counts the requests it gets and drops each one.
+    fn fake_source() -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let hits = std::sync::Arc::new(AtomicUsize::new(0));
+        let counter = hits.clone();
+        std::thread::spawn(move || {
+            for _stream in listener.incoming().flatten() {
+                counter.fetch_add(1, Ordering::SeqCst);
+            }
+        });
+        (base, hits)
+    }
+
+    async fn requests_made(consent: bool, contract: &str) -> usize {
+        let (base, hits) = fake_source();
+        let mut service = PricingService::default()
+            .with_contract_lookup(consent)
+            .with_known_tokens(only_usdc);
+        service.token_price_base = base;
+        let mut token = AssetRef::crypto("TKN", "Token", None, Chain::Ethereum);
+        token.contract = Some(contract.into());
+        // The fake never answers, so the outcome is an error either way.
+        let _ = service.fetch_prices(&[token]).await;
+        hits.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    const UNKNOWN: &str = "0x0000000000000000000000000000000000000bad";
+    const USDC: &str = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+
+    #[tokio::test]
+    async fn fetch_prices_without_consent_never_sends_an_unknown_contract() {
+        assert_eq!(requests_made(false, UNKNOWN).await, 0);
+    }
+
+    #[tokio::test]
+    async fn fetch_prices_without_consent_still_asks_a_known_token() {
+        assert_eq!(requests_made(false, USDC).await, 1);
+    }
+
+    #[tokio::test]
+    async fn fetch_prices_with_consent_asks_an_unknown_contract() {
+        assert_eq!(requests_made(true, UNKNOWN).await, 1);
     }
 }
