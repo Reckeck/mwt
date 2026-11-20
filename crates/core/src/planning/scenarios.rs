@@ -11,6 +11,7 @@ use crate::model::deposit::Capitalization;
 use crate::model::planning::{CalcScenario, ScenarioSource};
 use crate::model::vault::VaultDoc;
 
+use super::budget::income_basis;
 use super::goals::{resolve_scope, store_values_usd};
 
 /// Periods "From your data" can average income over.
@@ -233,7 +234,7 @@ pub fn scenario_prefill(
         None => (None, None, None, false),
     };
 
-    let average = books.income_basis(source.income_months as usize, now, zone);
+    let average = income_basis(books, source.income_months as usize, now, zone);
     let income_avg = average.as_ref().and_then(|avg| {
         book.convert(avg.income, &avg.currency, currency, now)
             .map(|value| value.round(2))

@@ -20,14 +20,16 @@ use crate::model::transaction::{Leg, LegRole};
 use crate::pricing::history::secs_or_now;
 
 use super::where_went::where_report;
+use crate::household::contacts::contact_balances_until;
+use crate::household::losses::{LossWindow, MonthLosses, Valuation, month_losses};
 use crate::kernel::books::Books;
 use crate::money::portfolio::realized_pnl_filtered;
+use crate::money::rates::RateBook;
 pub(crate) use crate::money::rates::value_at;
 use crate::money::worth::FlowClass;
 use crate::planning::agenda::UpcomingItem;
 use crate::planning::budget::{budget_currency, manual_day_limit};
-use crate::service::budget::Flow;
-use crate::usecases::planning::budget::{flows_between, leg_value_in};
+use crate::planning::flows::{Flow, flows_between, leg_value_in};
 
 /// Longest range a report covers.
 pub const MAX_REPORT_MONTHS: usize = 120;
@@ -86,6 +88,48 @@ pub struct ReportMeta {
     /// What the report says in words; filled once the report is built.
     #[serde(default)]
     pub insights: Vec<crate::reports::insights::Insight>,
+}
+
+// Losses by month and by kind, wallet, contact and chain, under the report header.
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct LossReport {
+    pub meta: ReportMeta,
+    #[serde(flatten)]
+    #[ts(flatten)]
+    pub losses: MonthLosses,
+}
+
+/// The book of one request as the loss functions' valuation.
+pub(crate) struct BookValues<'book>(pub(crate) &'book RateBook);
+
+impl Valuation for BookValues<'_> {
+    fn leg_value_in(&self, leg: &Leg, currency: &str, secs: i64) -> Option<Amount> {
+        leg_value_in(self.0, leg, currency, secs)
+    }
+
+    fn value_at(&self, asset: &AssetRef, qty: Amount, currency: &str, secs: i64) -> Amount {
+        value_at(self.0, asset, qty, currency, secs)
+    }
+}
+
+/// Losses by month and by kind, wallet, contact and chain.
+pub(crate) fn loss_report(books: &Books, ctx: &Ctx) -> LossReport {
+    let window = LossWindow {
+        months: &ctx.months,
+        calendar: &ctx.cal,
+        currency: &ctx.currency,
+        scope: ctx.scope.as_ref(),
+    };
+    let losses = month_losses(
+        books.doc(),
+        &BookValues(books.rate_book()),
+        &window,
+        |amount, month| ctx.shown(amount, month),
+    );
+    LossReport {
+        meta: ctx.meta(),
+        losses,
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -309,7 +353,7 @@ pub enum Report {
     Pnl(PnlReport),
     Portfolio(PortfolioReport),
     Inflation(InflationReport),
-    Losses(crate::service::losses::LossReport),
+    Losses(LossReport),
     Where(crate::reports::where_went::WhereReport),
 }
 
@@ -655,7 +699,7 @@ pub fn report(
         ReportKind::Pnl => Report::Pnl(pnl_report(books, &ctx)),
         ReportKind::Portfolio => Report::Portfolio(portfolio_report(books, &ctx)),
         ReportKind::Inflation => Report::Inflation(inflation_report(books, &ctx)),
-        ReportKind::Losses => Report::Losses(books.loss_report(&ctx)),
+        ReportKind::Losses => Report::Losses(loss_report(books, &ctx)),
         ReportKind::Where => Report::Where(where_report(books, &ctx)),
     };
     let insights = crate::reports::insights::report_insights(&report);
@@ -1054,7 +1098,7 @@ pub(crate) fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {
                 point.crypto += value;
             }
             if ctx.scope.is_none() {
-                for balance in books.contact_balances_until(*cutoff) {
+                for balance in contact_balances_until(books, *cutoff) {
                     let unit = value_at(book, &balance.asset, one(), &ctx.currency, *cutoff);
                     point.receivables += balance.receivable.max(Amount::ZERO) * unit;
                     point.payables += balance.payable.max(Amount::ZERO) * unit;
@@ -1223,9 +1267,13 @@ pub(crate) fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
             if leg.role != LegRole::Fee || !ctx.in_scope(&leg.store_id) {
                 continue;
             }
-            let value = leg_value_in(book, &leg, &ctx.currency, secs).unwrap_or(Amount::ZERO);
-            rows[index].fees += value;
             has_data = true;
+            // Like the legs: a fee with no rate stays out and is counted.
+            let Some(value) = leg_value_in(book, &leg, &ctx.currency, secs) else {
+                unpriced += 1;
+                continue;
+            };
+            rows[index].fees += value;
         }
     }
     let mut out = PnlReport {
@@ -1896,4 +1944,19 @@ pub(crate) fn csv_text(lines: Vec<Vec<String>>) -> String {
         out.push_str("\r\n");
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LossReport;
+
+    #[test]
+    fn loss_report_serializes_flat_without_a_losses_key() {
+        let json = serde_json::to_value(LossReport::default()).unwrap();
+        let object = json.as_object().unwrap();
+        for key in ["meta", "rows", "total", "incomplete"] {
+            assert!(object.contains_key(key), "missing top-level key {key}");
+        }
+        assert!(!object.contains_key("losses"));
+    }
 }

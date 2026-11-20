@@ -14,6 +14,7 @@ use crate::model::vault::DashPeriod;
 use crate::money::portfolio::history_series;
 use crate::money::worth::FlowClass;
 use crate::planning::budget::budget_currency;
+use crate::planning::flows::flows_between;
 use crate::planning::period::{PeriodWindow, months_back, period_window};
 
 /// How many growing categories "This month" names.
@@ -80,7 +81,8 @@ fn pace_totals(
     to: NaiveDate,
 ) -> PaceTotals {
     let mut totals = PaceTotals::default();
-    for flow in books.flows_between(
+    for flow in flows_between(
+        books,
         cal,
         currency,
         cal.start_of(from),

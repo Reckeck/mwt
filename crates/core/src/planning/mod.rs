@@ -27,6 +27,7 @@ mod emergency_tests;
 pub mod envelopes;
 #[cfg(test)]
 mod envelopes_tests;
+pub(crate) mod flows;
 pub mod goals;
 #[cfg(test)]
 mod goals_tests;

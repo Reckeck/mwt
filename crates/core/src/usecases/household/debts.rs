@@ -8,6 +8,7 @@ use crate::household::debts::{
     DTI_MONTHS, DebtLoad, IncomeBasis, LoanContext, LoanInputs, debt_load_of, finished_months,
     loan_status, loan_stores,
 };
+use crate::planning::budget::income_basis;
 use crate::service::UnlockedVault;
 
 /// Every live loan and credit card with a debt or a payment, their class
@@ -37,11 +38,9 @@ pub fn debt_load(vault: &UnlockedVault, now: i64, zone: &str) -> Result<DebtLoad
             loan_status(&books, store, &context, inputs)
         })
         .collect();
-    let basis = vault
-        .income_basis(DTI_MONTHS as usize, now, zone)
-        .map(|avg| IncomeBasis {
-            income: avg.income,
-            months: avg.months,
-        });
+    let basis = income_basis(&books, DTI_MONTHS as usize, now, zone).map(|avg| IncomeBasis {
+        income: avg.income,
+        months: avg.months,
+    });
     Ok(debt_load_of(currency, loans, basis, key_rate))
 }

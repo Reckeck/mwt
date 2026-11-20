@@ -14,13 +14,12 @@ use crate::model::category::CategoryGroup;
 use crate::kernel::books::Books;
 use crate::money::portfolio::realized_pnl_filtered;
 use crate::planning::budget::budget_currency;
-use crate::usecases::household::losses::LossReport;
 use crate::usecases::planning::health::lifestyle_creep;
 
 use super::overview::{
-    CashflowReport, CategoriesReport, InflationReport, NetworthReport, PnlReport, PortfolioReport,
-    Report, ReportFilter, StoresReport, YearReport, cashflow_report, categories_report,
-    networth_report, pnl_report, report_ctx, year_report,
+    CashflowReport, CategoriesReport, InflationReport, LossReport, NetworthReport, PnlReport,
+    PortfolioReport, Report, ReportFilter, StoresReport, YearReport, cashflow_report,
+    categories_report, loss_report, networth_report, pnl_report, report_ctx, year_report,
 };
 
 /// A category must change at least this much (percent) to be named as grown.
@@ -509,7 +508,7 @@ pub fn report_overview(
     let january = NaiveDate::from_ymd_opt(year, 1, 1).unwrap_or(month);
     let since_january = report_ctx(books, &span(january, month), now, zone)?;
     let pnl = pnl_report(books, &since_january);
-    let losses = books.loss_report(&since_january);
+    let losses = loss_report(books, &since_january);
     // Spending a currency also closes «positions»; only a result counts.
     let traded = realized_pnl_filtered(books, since_january.scope.as_ref())
         .legs

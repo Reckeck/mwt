@@ -7,6 +7,7 @@ use crate::Amount;
 use crate::error::Result;
 use crate::kernel::books::Books;
 use crate::model::planning::EmergencyFund;
+use crate::planning::budget::income_basis;
 use crate::planning::emergency::{
     EmergencyStatus, fund_status, plan_set_emergency_fund, prune_emergency_fund as prune,
     toggled_fund,
@@ -14,7 +15,6 @@ use crate::planning::emergency::{
 use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
 use crate::service::interest::INTEREST_CATEGORY;
-use crate::usecases::planning::budget::income_basis;
 
 const YEAR_SECS: i64 = 365 * 86_400;
 

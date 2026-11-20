@@ -4,17 +4,16 @@
 //! The figures of a period come from money flows of the budget stores
 //! (`in_budget`), classified once by `classify_flow` and valued in the budget
 //! currency at the rate of the day they happened (D20). The flows carry the
-//! worth classification, which `planning` may not name (layer table), so the
-//! queries over them sit in `usecases::planning::budget`. Days, weeks and
-//! months are cut in the user's local zone (§7.6). Nothing here reads the
-//! clock: `now` is an argument.
+//! worth classification (`planning::flows`). Days, weeks and months are cut
+//! in the user's local zone (§7.6). Nothing here reads the clock: `now` is an
+//! argument.
 
 use std::collections::HashSet;
 
 use chrono::{Datelike, Duration, NaiveDate};
 
 use crate::Amount;
-use crate::calendar::{self, days_in_month, first_of_month};
+use crate::calendar::{self, Calendar, days_in_month, first_of_month};
 use crate::error::{Error, Result};
 use crate::kernel::books::Books;
 use crate::model::planning::{
@@ -22,7 +21,10 @@ use crate::model::planning::{
 };
 use crate::model::store::StoreScope;
 use crate::model::vault::{DailyBudgetMode, VaultDoc};
+use crate::money::worth::FlowClass;
 use crate::pricing::history::secs_or_now;
+
+use super::flows::flows_between;
 
 use super::goals::resolve_scope;
 
@@ -337,6 +339,68 @@ pub fn manual_month(books: &Books<'_>) -> Option<MonthAvg> {
         months: 0,
         currency: budget_currency(books),
     })
+}
+
+/// Income, mandatory spending, everyday spending and savings of a calendar
+/// month (`YYYY-MM`) in the budget currency (plan §7.3). `not_executed` stays
+/// zero: it comes from the automation runs, which sit above this layer.
+pub fn month_summary(books: &Books<'_>, month: &str, zone: &str) -> Result<MonthSummary> {
+    let first = calendar::parse_month(month)
+        .ok_or_else(|| Error::InvalidInput(format!("month {month}: expected YYYY-MM")))?;
+    let cal = Calendar::new(zone);
+    let (from, to) = cal.month_bounds(first);
+    let currency = budget_currency(books);
+    let mut out = MonthSummary {
+        month: calendar::month_key(first),
+        currency: currency.clone(),
+        complete: true,
+        ..MonthSummary::default()
+    };
+    for flow in flows_between(books, &cal, &currency, from, to) {
+        out.complete &= flow.priced();
+        match flow.class {
+            FlowClass::Income => out.income += flow.value,
+            FlowClass::Fixed => out.fixed += flow.value,
+            FlowClass::Daily => {
+                out.daily += flow.value;
+                if is_essential_spending(books.doc(), &flow.categories) {
+                    out.essential_daily += flow.value;
+                }
+            }
+            FlowClass::Savings => out.savings_moved += flow.value,
+            FlowClass::BudgetIn => out.budget_in += flow.value,
+            FlowClass::BudgetOut => out.budget_out += flow.value,
+            FlowClass::Ignored => {}
+        }
+    }
+    settle_month(&mut out, books.doc().settings.savings_rate);
+    Ok(out)
+}
+
+/// Averages of the last `months` finished calendar months that had any
+/// flow, before the month of `now`; `None` without such months.
+pub fn avg_month(books: &Books<'_>, months: usize, now: i64, zone: &str) -> Option<MonthAvg> {
+    let cal = Calendar::new(zone);
+    let mut month = first_of_month(cal.date_of(now));
+    let mut found: Vec<MonthSummary> = Vec::new();
+    for _ in 0..AVG_LOOKBACK_MONTHS {
+        if found.len() >= months {
+            break;
+        }
+        month = first_of_month(month - Duration::days(1));
+        let summary = month_summary(books, &calendar::month_key(month), zone).ok()?;
+        if summary.income.is_zero() && summary.fixed.is_zero() && summary.daily.is_zero() {
+            continue;
+        }
+        found.push(summary);
+    }
+    average_month(&found, budget_currency(books))
+}
+
+/// [`avg_month`], or the hand-entered month while fewer than
+/// `MIN_HISTORY_MONTHS` finished months have flows.
+pub fn income_basis(books: &Books<'_>, months: usize, now: i64, zone: &str) -> Option<MonthAvg> {
+    income_basis_of(avg_month(books, months, now, zone), manual_month(books))
 }
 
 /// The average of month summaries; `None` without any.

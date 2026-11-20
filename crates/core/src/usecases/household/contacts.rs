@@ -4,8 +4,8 @@
 
 use crate::error::Result;
 use crate::household::contacts::{
-    ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft, EventDebt,
-    EventDebts, balances_until, debt_terms_of, debt_terms_replaced, plan_create_contact,
+    ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft,
+    contact_balances_until, debt_terms_of, debt_terms_replaced, event_debts, plan_create_contact,
     plan_debt_terms, plan_delete_contact, plan_update_contact, require_contact, summaries,
     turnover,
 };
@@ -73,38 +73,15 @@ pub fn contact_turnover(
 /// One summary per contact: operation count, the latest operation and the
 /// debts converted to the base currency with the cached rates (no network).
 pub fn contact_summaries(vault: &UnlockedVault) -> Result<Vec<ContactSummary>> {
-    Ok(summaries(&vault.books(), &event_debts(vault, i64::MAX)))
+    Ok(summaries(
+        &vault.books(),
+        &event_debts(&vault.doc, i64::MAX),
+    ))
 }
 
 /// Personal debts per contact and asset, from transfers marked as debts only.
 pub fn contact_balances(vault: &UnlockedVault) -> Vec<ContactBalance> {
-    contact_balances_until(vault, i64::MAX)
-}
-
-/// Personal debts from debt transfers made up to `secs`, plus what the
-/// shared events stood at then.
-pub fn contact_balances_until(vault: &UnlockedVault, secs: i64) -> Vec<ContactBalance> {
-    balances_until(&vault.doc, secs, &event_debts(vault, secs))
-}
-
-/// The shared events' part of the debts as of `secs`.
-fn event_debts(vault: &UnlockedVault, secs: i64) -> EventDebts {
-    EventDebts {
-        tx_ids: vault
-            .shared_tx_links()
-            .into_iter()
-            .map(|link| link.tx_id)
-            .collect(),
-        debts: vault
-            .shared_debts(secs)
-            .into_iter()
-            .map(|debt| EventDebt {
-                contact_id: debt.contact_id,
-                currency: debt.currency,
-                amount: debt.amount,
-            })
-            .collect(),
-    }
+    contact_balances_until(&vault.books(), i64::MAX)
 }
 
 /// Set (or replace) the terms of one contact's debt in one asset; an

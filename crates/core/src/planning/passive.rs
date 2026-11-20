@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use super::budget::budget_currency;
+use super::budget::{budget_currency, income_basis};
 use crate::calendar::{self, Calendar};
 use crate::kernel::books::Books;
 use crate::model::category::{
@@ -162,9 +162,8 @@ pub fn passive_income(
     by_category.sort_by_key(|share| std::cmp::Reverse(share.amount));
 
     let fund = &doc.emergency_fund;
-    let e_mand = books
-        .income_basis(fund.avg_months as usize, now, zone)
-        .map(|avg| avg.essential.round(2));
+    let e_mand =
+        income_basis(books, fund.avg_months as usize, now, zone).map(|avg| avg.essential.round(2));
     let positive = e_mand.filter(|value| value.is_positive());
     let hundred = Amount::from(100u32);
     let twelve = Amount::from(PASSIVE_MONTHS);

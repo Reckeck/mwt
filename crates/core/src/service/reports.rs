@@ -14,7 +14,6 @@ use crate::Amount;
 use crate::error::Result;
 use crate::model::store::AssetRef;
 
-use super::RateBook;
 use super::UnlockedVault;
 use super::budget::Flow;
 use super::forward::forward;
@@ -39,18 +38,6 @@ impl UnlockedVault {
             => crate::reports::overview::cashflow_report @books;
     }
     // forward:end
-
-    /// Value of a quantity in `currency` at `secs`; zero without a rate. An associated function
-    /// (no receiver), so it sits outside `forward!`.
-    pub(crate) fn value_at(
-        book: &RateBook,
-        asset: &AssetRef,
-        qty: Amount,
-        currency: &str,
-        secs: i64,
-    ) -> Amount {
-        crate::reports::overview::value_at(book, asset, qty, currency, secs)
-    }
 }
 
 /// What the crypto module was worth at each cutoff in USD (`None`: no record that month) and

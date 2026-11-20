@@ -14,7 +14,7 @@ use crate::money::rates::RateBook;
 use crate::money::tree::find_store;
 use crate::money::worth::FlowClass;
 
-use super::overview::{Ctx, ReportMeta, report_flows};
+use super::overview::{Ctx, ReportMeta, loss_report, report_flows};
 
 /// Items a row lists by name; the rest only counts.
 pub const WHERE_ITEMS: usize = 6;
@@ -217,7 +217,7 @@ pub(crate) fn where_report(books: &Books, ctx: &Ctx) -> WhereReport {
             _ => {}
         }
     }
-    let losses = books.loss_report(ctx);
+    let losses = loss_report(books, ctx);
     let mut lost = WhereRow::new(WhereKind::Losses);
     lost.value = losses.losses.total.total;
     lost.count = losses

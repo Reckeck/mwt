@@ -2,44 +2,20 @@
 //! (called by method: OD6) and reach the pure functions through `Valuation`
 //! and `FxSources`. The two chain writes each end in one `vault.transact`.
 //!
-//! Only `LossReport` (the reports area's `ReportMeta` plus its `Ctx`) stays
-//! here; the month figures come from `household::losses::month_losses`.
+//! The month report is `reports::overview::loss_report`.
 
 use std::collections::{BTreeMap, HashSet};
 
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::household::losses::{
-    CryptoQuote, FlowSummary, FxSources, FxTable, LossWindow, MonthLosses, TxLoss, Valuation,
-    chain_summaries, loss_by_id, losses_by_id, month_losses, plan_link, rates_table,
+    CryptoQuote, FlowSummary, FxSources, FxTable, TxLoss, chain_summaries, loss_by_id,
+    losses_by_id, plan_link, rates_table,
 };
 use crate::kernel::books::Books;
-use crate::model::store::AssetRef;
-use crate::model::transaction::Leg;
 use crate::pricing::history::secs_or_now;
-use crate::service::reports::{Ctx, ReportMeta};
-use crate::service::{RateBook, UnlockedVault};
-
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-pub struct LossReport {
-    pub meta: ReportMeta,
-    #[serde(flatten)]
-    #[ts(flatten)]
-    pub losses: MonthLosses,
-}
-
-/// The book of one request as the pure functions' valuation.
-struct BookValues<'book>(&'book RateBook);
-
-impl Valuation for BookValues<'_> {
-    fn leg_value_in(&self, leg: &Leg, currency: &str, secs: i64) -> Option<Amount> {
-        UnlockedVault::leg_value_in(self.0, leg, currency, secs)
-    }
-
-    fn value_at(&self, asset: &AssetRef, qty: Amount, currency: &str, secs: i64) -> Amount {
-        UnlockedVault::value_at(self.0, asset, qty, currency, secs)
-    }
-}
+use crate::reports::overview::BookValues;
+use crate::service::UnlockedVault;
 
 /// The vault's rates as the table's source.
 struct VaultRates<'vault> {
@@ -88,27 +64,6 @@ pub fn tx_losses(vault: &UnlockedVault) -> BTreeMap<String, TxLoss> {
         &BookValues(books.rate_book()),
         books.base_and_fx().0,
     )
-}
-
-/// Losses by month and by kind, wallet, contact and chain.
-pub(crate) fn loss_report(vault: &UnlockedVault, ctx: &Ctx) -> LossReport {
-    let books = vault.books();
-    let window = LossWindow {
-        months: &ctx.months,
-        calendar: &ctx.cal,
-        currency: &ctx.currency,
-        scope: ctx.scope.as_ref(),
-    };
-    let losses = month_losses(
-        &vault.doc,
-        &BookValues(books.rate_book()),
-        &window,
-        |amount, month| ctx.shown(amount, month),
-    );
-    LossReport {
-        meta: ctx.meta(),
-        losses,
-    }
 }
 
 /// Put transactions into one chain: the given one, else the chain one of
@@ -176,19 +131,4 @@ pub fn fx_table(vault: &UnlockedVault, favorites: &[String]) -> FxTable {
         now: secs_or_now(""),
     };
     rates_table(&vault.doc, &rates, books.base_and_fx().0, favorites)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::LossReport;
-
-    #[test]
-    fn loss_report_serializes_flat_without_a_losses_key() {
-        let json = serde_json::to_value(LossReport::default()).unwrap();
-        let object = json.as_object().unwrap();
-        for key in ["meta", "rows", "total", "incomplete"] {
-            assert!(object.contains_key(key), "missing top-level key {key}");
-        }
-        assert!(!object.contains_key("losses"));
-    }
 }

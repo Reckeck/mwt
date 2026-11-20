@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use crate::Amount;
 use crate::error::Result;
+use crate::household::contacts::contact_balances_until;
 use crate::kernel::books::Books;
 use crate::model::store::{LiabilityKind, StoreKind};
 use crate::model::vault::{ManualPrice, now_iso};
@@ -129,7 +130,7 @@ pub(crate) fn net_worth_with_crypto(books: &Books<'_>) -> (NetWorth, Amount) {
             *by_class.entry(None).or_default() += value;
         }
     }
-    for balance in books.contact_balances_until(ALL_BALANCES) {
+    for balance in contact_balances_until(books, ALL_BALANCES) {
         let price = books.price_base(&balance.asset.key());
         out.receivables += balance.receivable.max(Amount::ZERO) * price;
         out.payables += balance.payable.max(Amount::ZERO) * price;

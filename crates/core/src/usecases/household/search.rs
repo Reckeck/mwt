@@ -8,6 +8,7 @@ use crate::error::Result;
 use crate::household::relations::entity_card_head;
 use crate::model::entity_ref::{EntityKind, Pinned};
 use crate::money::search::{PinnedView, plan_pins};
+use crate::planning::flows::flows_between;
 use crate::service::{BudgetStatus, FlowClass, GoalProgress, UnlockedVault};
 
 use super::relations::store_worth;
@@ -23,8 +24,7 @@ fn category_month_spent(
     let cal = Calendar::new(zone);
     let (from, to) = cal.month_bounds(cal.date_of(now));
     let currency = vault.budget_currency();
-    let spent = vault
-        .flows_between(&cal, &currency, from, to)
+    let spent = flows_between(&vault.books(), &cal, &currency, from, to)
         .into_iter()
         .filter(|flow| {
             matches!(

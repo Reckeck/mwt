@@ -18,12 +18,10 @@ use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
 use crate::vault_io::device_secrets::DeviceSecrets;
 
-use crate::service::budget::{Flow, MonthAllowance, MonthAvg};
-use crate::service::losses::LossReport;
-use crate::service::reports::Ctx;
+use crate::service::budget::{Flow, MonthAllowance};
 use crate::service::{
-    ContactBalance, DailyBudget, DebtLoad, HealthReport, MonthSummary, NetWorth, RateBook,
-    StoreOverview, UnlockedVault, UpcomingItem, UtilityBill,
+    DailyBudget, DebtLoad, HealthReport, MonthSummary, NetWorth, RateBook, StoreOverview,
+    UnlockedVault, UpcomingItem, UtilityBill,
 };
 
 #[cfg(test)]
@@ -146,11 +144,6 @@ impl Books<'_> {
         self.vault.device_secrets_for_request()
     }
 
-    /// The loyalty programme shares its symbol with another one.
-    pub(crate) fn loyalty_symbol_clash(&self, store_id: &str) -> bool {
-        self.vault.loyalty_symbol_clash(store_id)
-    }
-
     /// Today's valuation.
     pub(crate) fn net_worth(&self) -> NetWorth {
         self.vault.net_worth()
@@ -173,22 +166,6 @@ impl Books<'_> {
     /// The budget of one month over this context.
     pub(crate) fn month_summary_in(&self, month: &str, zone: &str) -> Result<MonthSummary> {
         self.vault.month_summary_in(self, month, zone)
-    }
-
-    /// The average income and essential spending over finished months.
-    pub(crate) fn income_basis(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg> {
-        self.vault.income_basis(months, now, zone)
-    }
-
-    /// The budget flows of a period.
-    pub(crate) fn flows_between(
-        &self,
-        cal: &Calendar,
-        currency: &str,
-        from: i64,
-        to: i64,
-    ) -> Vec<Flow> {
-        self.vault.flows_between(cal, currency, from, to)
     }
 
     /// Planned income and fixed spending of the month containing `date`.
@@ -222,11 +199,6 @@ impl Books<'_> {
         self.vault.upcoming(days, now, zone)
     }
 
-    /// Losses by month and by kind, wallet, contact and chain.
-    pub(crate) fn loss_report(&self, ctx: &Ctx) -> LossReport {
-        self.vault.loss_report(ctx)
-    }
-
     /// The utility bill of a property for a period.
     pub(crate) fn utility_bill(
         &self,
@@ -245,11 +217,6 @@ impl Books<'_> {
     /// Debts against income.
     pub(crate) fn debt_load(&self, now: i64, zone: &str) -> Result<DebtLoad> {
         self.vault.debt_load(now, zone)
-    }
-
-    /// Personal debts and shared events as of `secs`.
-    pub(crate) fn contact_balances_until(&self, secs: i64) -> Vec<ContactBalance> {
-        self.vault.contact_balances_until(secs)
     }
 
     /// What the crypto module was worth at each cutoff in USD and whether it
@@ -342,22 +309,17 @@ mod tests {
         "earmarked",
         "keys_on_device",
         "device_secrets_for_request",
-        "loyalty_symbol_clash",
         "net_worth",
         "subtree_ids",
         "store_overview",
         "month_summary_in",
-        "income_basis",
-        "flows_between",
         "month_plan",
         "month_allowance",
         "daily_budget",
         "upcoming",
-        "loss_report",
         "utility_bill",
         "capital_health",
         "debt_load",
-        "contact_balances_until",
         "crypto_module",
     ];
 
