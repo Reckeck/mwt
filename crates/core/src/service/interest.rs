@@ -11,7 +11,7 @@ use crate::Amount;
 use crate::error::Result;
 use crate::model::deposit::{DepositTerms, KeyRatePoint};
 use crate::model::ids::StoreId;
-use crate::model::store::{AssetRef, Store};
+use crate::model::store::Store;
 
 use super::UnlockedVault;
 use super::forward::forward;
@@ -40,9 +40,6 @@ impl UnlockedVault {
         /// the ledger by hand, and guessing them would count them twice.
         pub fn post_due_interest(&mut self, today: NaiveDate) -> Result<u32>
             => crate::usecases::money::interest::post_due_interest;
-        /// The money an account holds: its bound currency, else the base one.
-        pub(crate) fn deposit_asset(&self, store: &Store) -> AssetRef
-            => crate::money::interest::deposit_asset @books;
     }
     // forward:end
 }

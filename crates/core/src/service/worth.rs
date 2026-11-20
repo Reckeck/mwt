@@ -25,6 +25,7 @@ impl UnlockedVault {
             => crate::money::rates::per_usd @doc;
         /// USD value of one unit of a hand-priced asset, if it has a price and the
         /// rate of its currency is known.
+        #[cfg(test)]
         pub(crate) fn manual_price_usd(&self, asset_key: &str) -> Option<Amount>
             => crate::usecases::money::capital::manual_price_usd @books;
         /// Set the value of one unit of a property asset. Applies to its whole
@@ -35,10 +36,6 @@ impl UnlockedVault {
             => crate::usecases::money::capital::clear_manual_price;
         pub fn net_worth(&self) -> NetWorth
             => crate::usecases::money::capital::net_worth @books;
-        /// Today's valuation plus the part of `financial` held in crypto wallets
-        /// and exchanges. The one source of the current capital.
-        pub(crate) fn net_worth_with_crypto(&self) -> (NetWorth, Amount)
-            => crate::usecases::money::capital::net_worth_with_crypto @books;
         /// The one classification budgets, cash flow, month totals and the
         /// calendar share (plan §7.3).
         pub fn classify_flow(&self, tx: &Transaction) -> FlowClass

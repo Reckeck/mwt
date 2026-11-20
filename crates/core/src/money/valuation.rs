@@ -528,8 +528,7 @@ pub fn property_values(
 /// only the vault values), else the last price a transaction recorded for
 /// it, in `currency`.
 fn unpriced_unit(books: &Books<'_>, key: &str, currency: &str) -> Option<Amount> {
-    books
-        .manual_price_usd(key)
+    crate::money::worth::manual_price_usd(books, key, secs_or_now(""))
         .or_else(|| last_stamp(books.doc(), key).map(|(_, usd)| usd))
         .and_then(|usd| Some(usd * per_usd(books.doc(), currency)?))
 }

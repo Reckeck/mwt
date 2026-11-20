@@ -783,3 +783,22 @@ files = [
     "crates/core/src/service/notifications.rs",
     "crates/xtask/src/arch/",
 ]
+
+[[foundation]]
+# T226/T228 (z9): money reads called directly; Books delegates and their service forwards go. One wave, one label (CI checks one task per PR).
+task = "T226"
+files = [
+  "crates/core/src/money/",
+  "crates/core/src/planning/goals.rs",
+  "crates/core/src/planning/emergency.rs",
+  "crates/core/src/planning/passive.rs",
+  "crates/core/src/workflow/service/vars.rs",
+  "crates/core/src/reports/overview.rs",
+  "crates/core/src/kernel/books.rs",
+  "crates/core/src/service/worth.rs",
+  "crates/core/src/service/portfolio.rs",
+  "crates/core/src/service/interest.rs",
+  "crates/core/src/service/inflation.rs",
+  "crates/core/src/usecases/money/",
+  "crates/xtask/arch-allow.toml",
+]

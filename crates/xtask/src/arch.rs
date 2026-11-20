@@ -325,7 +325,9 @@ mod tests {
         assert!(layers::is_legal("service", "model"));
         assert!(layers::is_legal("workflow", "workflow"));
         assert!(!layers::is_legal("error", "service"));
-        assert!(!layers::is_legal("planning", "money"));
+        assert!(layers::is_legal("planning", "money"));
+        assert!(!layers::is_legal("money", "planning"));
+        assert!(!layers::is_legal("workflow", "money"));
         assert!(!layers::is_legal("sync", "storage"));
     }
 

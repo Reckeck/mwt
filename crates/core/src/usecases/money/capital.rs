@@ -10,15 +10,21 @@ use crate::error::Result;
 use crate::kernel::books::Books;
 use crate::model::store::{LiabilityKind, StoreKind};
 use crate::model::vault::{ManualPrice, now_iso};
-use crate::money::worth;
 use crate::money::worth::{ClassShare, LiabilityShare, NetWorth, plan_manual_price};
 use crate::planning::allocation::{Slot, slot_resolver};
-use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
 
+/// The bound that takes every contact balance, however late.
+const ALL_BALANCES: i64 = i64::MAX;
+
 /// USD value of one unit of a hand-priced asset, read at the present moment.
+#[cfg(test)]
 pub(crate) fn manual_price_usd(books: &Books<'_>, asset_key: &str) -> Option<Amount> {
-    worth::manual_price_usd(books, asset_key, secs_or_now(""))
+    crate::money::worth::manual_price_usd(
+        books,
+        asset_key,
+        crate::pricing::history::secs_or_now(""),
+    )
 }
 
 /// Set the value of one unit of a property asset.
@@ -123,7 +129,7 @@ pub(crate) fn net_worth_with_crypto(books: &Books<'_>) -> (NetWorth, Amount) {
             *by_class.entry(None).or_default() += value;
         }
     }
-    for balance in books.contact_balances_until(i64::MAX) {
+    for balance in books.contact_balances_until(ALL_BALANCES) {
         let price = books.price_base(&balance.asset.key());
         out.receivables += balance.receivable.max(Amount::ZERO) * price;
         out.payables += balance.payable.max(Amount::ZERO) * price;
