@@ -2,7 +2,6 @@
 //! `crate::usecases::planning::agenda` (spec core-strangler, D1).
 
 pub use crate::planning::agenda::{PriceAlertDraft, UpcomingItem, UpcomingKind};
-pub(crate) use crate::planning::agenda::{next_occurrence, reminder_secs};
 
 use crate::error::Result;
 use crate::model::planning::{PriceAlert, Reminder, ReminderPay, ReminderRepeat};
