@@ -13,7 +13,7 @@ use chrono::NaiveDate;
 use reqwest::header::{ACCEPT, USER_AGENT};
 use rust_decimal::Decimal;
 
-use super::PricingService;
+use super::{PricingService, contract_lookup_allowed};
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
@@ -125,8 +125,12 @@ async fn fetch_historic<A: CoinsApi>(
     let mut by_date: BTreeMap<NaiveDate, BTreeMap<String, String>> = BTreeMap::new();
     for (asset, date) in wanted {
         if let CryptoAsset::Token(token) = asset
-            && !may_lookup_contract
-            && !is_known(token)
+            && !contract_lookup_allowed(
+                may_lookup_contract,
+                &is_known,
+                token.chain,
+                &token.contract,
+            )
         {
             continue;
         }

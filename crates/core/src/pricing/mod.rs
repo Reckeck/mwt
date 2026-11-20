@@ -80,8 +80,8 @@ fn token_price_in(body: &HashMap<String, HashMap<String, f64>>, contract: &str) 
 
 /// Whether the current-price path may send this asset's contract to
 /// CoinGecko (`N1`): with consent always, without it only for a token on the
-/// built-in list. The same rule as the historic path in `llama`.
-fn contract_lookup_allowed(
+/// built-in list. `llama::fetch_historic` calls it too.
+pub(super) fn contract_lookup_allowed(
     consent: bool,
     is_known: impl Fn(&TokenId) -> bool,
     chain: Chain,
