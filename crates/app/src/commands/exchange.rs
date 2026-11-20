@@ -8,6 +8,7 @@
 use tauri::State;
 
 use trade_core::calendar::now_secs;
+use trade_core::cryptotrack::{exchange_import as import_reads, exchange_sync as sync_reads};
 use trade_core::error::Error;
 use trade_core::exchange::bybit::KeyCheck;
 use trade_core::exchange::{BybitClient, Category};
@@ -25,6 +26,7 @@ use trade_core::model::store::{ImportSettings, TerminalState};
 use trade_core::model::vault::{ImportRun, ImportSource, PendingImport};
 use trade_core::service::ImportedTransactions;
 use trade_core::txinfo::{TxInfo, TxInfoService};
+use trade_core::usecases::cryptotrack::{exchange_import, exchange_sync};
 use trade_core::vault_io::device_secrets::DeviceKey;
 
 use crate::commands::{AppState, require_vault};
@@ -215,8 +217,8 @@ pub async fn exchange_key_status(
 ) -> Result<ExchangeKeyStatus, IpcError> {
     let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
-    match vault.bybit_key_for(&input.store_id) {
-        Some(entry) => Ok(vault.exchange_key_status(&entry.store_id)),
+    match import_reads::bybit_key_for(&vault.books(), &input.store_id) {
+        Some(entry) => Ok(exchange_import::exchange_key_status(vault, &entry.store_id)),
         None => Ok(ExchangeKeyStatus::default()),
     }
 }
@@ -258,7 +260,7 @@ pub async fn set_exchange_key(
     let vault = guard.as_mut().unwrap();
     vault.store_device_key(&input.store_id, &api_key, &api_secret, verified)?;
     vault.persist()?;
-    Ok(vault.exchange_key_status(&input.store_id))
+    Ok(exchange_import::exchange_key_status(vault, &input.store_id))
 }
 
 /// Choose the sub-accounts imported spot and futures fills land on.
@@ -268,11 +270,13 @@ pub async fn set_exchange_targets(
     state: State<'_, AppState>,
 ) -> Result<ExchangeKeyStatus, IpcError> {
     let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .set_exchange_targets(&input.store_id, input.spot_store_id, input.futures_store_id)
-        .map_err(IpcError::from)
+    exchange_import::set_exchange_targets(
+        guard.as_mut().unwrap(),
+        &input.store_id,
+        input.spot_store_id,
+        input.futures_store_id,
+    )
+    .map_err(IpcError::from)
 }
 
 /// The exchange's own background import interval; `0` turns it off.
@@ -282,11 +286,12 @@ pub async fn set_import_interval(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .set_import_interval(&input.store_id, input.interval_sec)
-        .map_err(IpcError::from)
+    exchange_import::set_import_interval(
+        guard.as_mut().unwrap(),
+        &input.store_id,
+        input.interval_sec,
+    )
+    .map_err(IpcError::from)
 }
 
 /// Everything the exchange's trading terminal remembers.
@@ -296,11 +301,7 @@ pub async fn get_terminal_state(
     state: State<'_, AppState>,
 ) -> Result<TerminalState, IpcError> {
     let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .terminal_state(&store_id)
-        .map_err(IpcError::from)
+    import_reads::terminal_state(&guard.as_ref().unwrap().doc, &store_id).map_err(IpcError::from)
 }
 
 /// Patch the terminal: only the fields present change.
@@ -310,10 +311,7 @@ pub async fn update_terminal_state(
     state: State<'_, AppState>,
 ) -> Result<TerminalState, IpcError> {
     let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .update_terminal_state(&input.store_id, input.patch)
+    exchange_import::update_terminal_state(guard.as_mut().unwrap(), &input.store_id, input.patch)
         .map_err(IpcError::from)
 }
 
@@ -324,11 +322,13 @@ pub async fn save_terminal_drawings(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .save_terminal_drawings(&input.store_id, &input.symbol, &input.json)
-        .map_err(IpcError::from)
+    exchange_import::save_terminal_drawings(
+        guard.as_mut().unwrap(),
+        &input.store_id,
+        &input.symbol,
+        &input.json,
+    )
+    .map_err(IpcError::from)
 }
 
 /// Remove the stored Bybit key for a specific store.
@@ -385,8 +385,7 @@ pub async fn create_bybit_accounts(
         input.unified_name.trim(),
         input.earn_name.trim(),
     ];
-    vault
-        .ensure_bybit_accounts_for(&input.store_id, names, wanted)
+    exchange_import::ensure_bybit_accounts_for(vault, &input.store_id, names, wanted)
         .map(|ids| ids.into_iter().flatten().collect())
         .map_err(IpcError::from)
 }
@@ -409,8 +408,12 @@ pub async fn bybit_balances(
         .await?;
     let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    vault.reconcile_exchange(&root_id, &balances, now_secs())?;
-    Ok(vault.bybit_reconcile(&root_id, &balances))
+    exchange_sync::reconcile_exchange(vault, &root_id, &balances, now_secs())?;
+    Ok(exchange_import::bybit_reconcile(
+        &vault.books(),
+        &root_id,
+        &balances,
+    ))
 }
 
 /// One sync of a Bybit wallet: fetch fills, moves between accounts and Earn
@@ -435,9 +438,14 @@ pub(crate) async fn sync_bybit(
             let vault = guard
                 .as_mut()
                 .ok_or("REQUIRES_UNLOCK: vault was locked mid-sync")?;
-            return vault
-                .record_import_error(root_id, source, import_notice(&message), now_secs())
-                .map_err(IpcError::from);
+            return exchange_sync::record_import_error(
+                vault,
+                root_id,
+                source,
+                import_notice(&message),
+                now_secs(),
+            )
+            .map_err(IpcError::from);
         }
     };
     let mut run = {
@@ -445,7 +453,7 @@ pub(crate) async fn sync_bybit(
         let vault = guard
             .as_mut()
             .ok_or("REQUIRES_UNLOCK: vault was locked mid-sync")?;
-        vault.sync_exchange(root_id, imports, source, now_secs())?
+        exchange_sync::sync_exchange(vault, root_id, imports, source, now_secs())?
     };
     // The live balance is optional: a key without wallet rights still syncs.
     if let Ok(balances) = client.balances(api_key, api_secret).await {
@@ -453,7 +461,7 @@ pub(crate) async fn sync_bybit(
         let vault = guard
             .as_mut()
             .ok_or("REQUIRES_UNLOCK: vault was locked mid-sync")?;
-        let made = vault.reconcile_exchange(root_id, &balances, now_secs())?;
+        let made = exchange_sync::reconcile_exchange(vault, root_id, &balances, now_secs())?;
         run.reconcile_tx_id = made.into_iter().next();
     }
     Ok(run)
@@ -511,10 +519,11 @@ pub async fn preview_bybit_import(
     {
         Ok(imports) => {
             let guard = require_vault(&state)?;
-            let preview = guard
-                .as_ref()
-                .unwrap()
-                .preview_exchange_sync(imports, &input.settings);
+            let preview = sync_reads::preview_exchange_sync(
+                &guard.as_ref().unwrap().books(),
+                imports,
+                &input.settings,
+            );
             Ok(ImportPreviewOutput {
                 preview: Some(preview),
                 notice: None,
@@ -557,11 +566,7 @@ pub async fn get_import_settings(
     state: State<'_, AppState>,
 ) -> Result<ImportSettings, IpcError> {
     let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .import_settings(&store_id)
-        .map_err(IpcError::from)
+    sync_reads::import_settings(&guard.as_ref().unwrap().books(), &store_id).map_err(IpcError::from)
 }
 
 #[tauri::command]
@@ -570,10 +575,7 @@ pub async fn set_import_settings(
     state: State<'_, AppState>,
 ) -> Result<ImportSettings, IpcError> {
     let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .set_import_settings(&input.store_id, input.settings)
+    exchange_sync::set_import_settings(guard.as_mut().unwrap(), &input.store_id, input.settings)
         .map_err(IpcError::from)
 }
 
@@ -584,7 +586,10 @@ pub async fn list_import_runs(
     state: State<'_, AppState>,
 ) -> Result<Vec<ImportRun>, IpcError> {
     let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().import_runs(&store_id))
+    Ok(sync_reads::import_runs(
+        &guard.as_ref().unwrap().books(),
+        &store_id,
+    ))
 }
 
 /// Operations brought in from one exchange wallet, newest first.
@@ -594,7 +599,8 @@ pub async fn list_imported_transactions(
     state: State<'_, AppState>,
 ) -> Result<ImportedTransactions, IpcError> {
     let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().imported_transactions(
+    Ok(sync_reads::imported_transactions(
+        &guard.as_ref().unwrap().books(),
         &input.store_id,
         input.limit.unwrap_or(50).clamp(1, 500) as usize,
         input.offset.unwrap_or(0) as usize,
@@ -609,7 +615,7 @@ pub async fn list_pending_imports(
     let guard = require_vault(&state)?;
     let vault = guard.as_ref().unwrap();
     Ok(ListPendingImportsOutput {
-        imports: vault.pending_imports(),
+        imports: import_reads::pending_imports(&vault.doc),
     })
 }
 
@@ -621,7 +627,7 @@ pub async fn confirm_pending_imports(
 ) -> Result<ConfirmPendingImportsOutput, IpcError> {
     let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    let confirmed = vault.confirm_pending_imports(&input.exec_ids)?;
+    let confirmed = exchange_import::confirm_pending_imports(vault, &input.exec_ids)?;
     Ok(ConfirmPendingImportsOutput { confirmed })
 }
 
@@ -633,7 +639,7 @@ pub async fn discard_pending_imports(
 ) -> Result<DiscardPendingImportsOutput, IpcError> {
     let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    let discarded = vault.discard_pending_imports(&input.exec_ids)?;
+    let discarded = exchange_import::discard_pending_imports(vault, &input.exec_ids)?;
     Ok(DiscardPendingImportsOutput { discarded })
 }
 
