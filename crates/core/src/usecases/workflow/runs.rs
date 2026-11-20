@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use chrono::{Datelike, Duration};
 
+use super::records::close_refused_as_done;
 use crate::Amount;
 use crate::calendar::{Calendar, first_of_month};
 use crate::error::{Error, Result};
@@ -478,19 +479,12 @@ fn retry_queued_refusal(
     let saved = Effect::Insert { txs, now }
         .apply_to(vault)
         .map_err(Error::InvalidInput)?;
-    let done = WorkflowRun {
-        id: uuid::Uuid::new_v4().to_string(),
-        started_at: crate::calendar::iso(now),
-        outcome: RunOutcome::Done,
-        created: saved.iter().map(|tx| tx.meta().id.clone()).collect(),
-        queued: 0,
-        ..run.clone()
-    };
+    let created: Vec<String> = saved.iter().map(|tx| tx.meta().id.clone()).collect();
     vault.recompute_holdings();
-    vault.transact(|tx| {
+    let done = vault.transact(|tx| {
         tx.collection::<QueuedActions>().remove(&batch.id)?;
-        tx.collection::<WorkflowRun>().remove(&run.id)?;
-        tx.collection::<WorkflowRun>().insert(done.clone())
+        close_refused_as_done(tx, &run.id, created)?
+            .ok_or_else(|| Error::Missing(format!("workflow run {}", run.id)))
     })?;
     let mut pass = WorkflowPass::default();
     pass.created.clone_from(&done.created);

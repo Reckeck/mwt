@@ -277,20 +277,33 @@ pub fn confirm_queued(vault: &mut UnlockedVault, id: &str) -> Result<Vec<Transac
         tx.collection::<QueuedActions>().remove(id)?;
         // The refusal this batch waited for is answered: its run is done, so a
         // retry cannot book the operations a second time.
-        if let Some(run) = refused_run(tx, &batch.run_id) {
-            let done = WorkflowRun {
-                id: uuid::Uuid::new_v4().to_string(),
-                outcome: RunOutcome::Done,
-                created,
-                queued: 0,
-                ..run
-            };
-            tx.collection::<WorkflowRun>().remove(&batch.run_id)?;
-            tx.collection::<WorkflowRun>().insert(done)?;
-        }
+        close_refused_as_done(tx, &batch.run_id, created)?;
         Ok(())
     })?;
     Ok(saved)
+}
+
+/// Close a refused run as done once its queued operations are booked: it
+/// keeps its original `started_at` and gets a fresh id, so a retry cannot book
+/// them twice. Returns the done run, or `None` when the run is no longer a refusal.
+pub(super) fn close_refused_as_done(
+    tx: &mut Tx,
+    run_id: &str,
+    created: Vec<String>,
+) -> Result<Option<WorkflowRun>> {
+    let Some(run) = refused_run(tx, run_id) else {
+        return Ok(None);
+    };
+    let done = WorkflowRun {
+        id: uuid::Uuid::new_v4().to_string(),
+        outcome: RunOutcome::Done,
+        created,
+        queued: 0,
+        ..run
+    };
+    tx.collection::<WorkflowRun>().remove(run_id)?;
+    tx.collection::<WorkflowRun>().insert(done.clone())?;
+    Ok(Some(done))
 }
 
 /// The run a queued batch belongs to, while it is still a refusal.
