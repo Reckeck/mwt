@@ -398,6 +398,7 @@ mod tests {
         // Not a git repository: the base ref cannot be found.
         let root = std::env::temp_dir().join(format!("xtask-strangle-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
+        // Calls `strangle_outcome` directly, not the Task wrapper (`run_graph`).
         let ctx = Ctx {
             log: root.join("strangle.log"),
             root,
