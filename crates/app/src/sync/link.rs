@@ -37,6 +37,10 @@ use trade_core::sync::stamp::{device_tag, now_ms};
 use super::host::Host;
 use super::{Link, Order, set_phase, set_progress, update_link};
 use crate::ipc::events::{SyncClock, SyncOffer, SyncPairing, SyncPlanReady, VaultSynced};
+use trade_core::sync::history as history_reads;
+use trade_core::usecases::sync::read as sync_read;
+use trade_core::usecases::sync::sync_journal as journal_cases;
+use trade_core::usecases::sync::trust as sync_trust;
 
 /// The largest place in the queue to take over the main role.
 pub(crate) const MAX_RANK: u32 = 5;
@@ -811,7 +815,7 @@ async fn pair<H: Host>(
                 link.view.pairing_expires_ms = None;
             });
             with_peer_vault(app, peer, |vault| {
-                vault.sync_trust_peer(&peer.device_id, &peer.name, &peer.remote_key)
+                sync_trust::sync_trust_peer(vault, &peer.device_id, &peer.name, &peer.remote_key)
             })?;
             if let Some(peers) = held_peers.take()
                 && take_peers(app, peer, &peers)?
@@ -957,7 +961,7 @@ async fn send_records<H: Host>(app: &H, peer: &Peer, wire: &mut Wire, keys: &[St
     let count = chunks.len();
     for (index, chunk) in chunks.into_iter().enumerate() {
         let records = with_peer_vault(app, peer, |vault| {
-            vault.sync_records_for(chunk, peer.security_level)
+            sync_read::sync_records_for(vault, chunk, peer.security_level)
         })?;
         wire.send(&Message::Records {
             records: records.into_iter().collect(),
@@ -1042,7 +1046,7 @@ async fn exchange<H: Host>(
                 Some(Message::Manifest { entries, last }) => {
                     theirs.extend(entries);
                     if last {
-                        let (want, _) = app.with_vault(|vault| Ok(vault.sync_diff(&mine, &theirs)))?;
+                        let (want, _) = app.with_vault(|vault| Ok(sync_read::sync_diff(vault, &mine, &theirs)))?;
                         total = u32::try_from(want.len()).unwrap_or(u32::MAX);
                         if total > 0 {
                             set_progress(app, &peer.session_id, Some(SyncProgress { received: 0, total }));
@@ -1192,8 +1196,8 @@ async fn apply_shown<H: Host>(
         None
     });
     if let Some(reason) = reason {
-        let summary =
-            app.with_vault(|vault| vault.sync_preview_from(&incoming, &peer.device_id))?;
+        let summary = app
+            .with_vault(|vault| sync_read::sync_preview_from(vault, &incoming, &peer.device_id))?;
         if summary.is_empty() && !first {
             return Ok(());
         }
@@ -1201,7 +1205,7 @@ async fn apply_shown<H: Host>(
             // Capital and balances afterwards; the question still shows
             // without them when they cannot be worked out.
             let after = app
-                .with_vault(|vault| vault.sync_preview_after(&incoming))
+                .with_vault(|vault| sync_read::sync_preview_after(vault, &incoming))
                 .unwrap_or_default();
             *asked = Some(reason);
             update_link(app, &peer.session_id, |link| {
@@ -1271,7 +1275,8 @@ async fn apply_shown<H: Host>(
                     // "Decline" pauses exchange with this device until the
                     // user resumes it; a timeout only closes this session.
                     let _ = with_peer_vault(app, peer, |vault| {
-                        vault.sync_journal_record(
+                        journal_cases::sync_journal_record(
+                            vault,
                             &peer.name,
                             &summary,
                             SyncJournalOutcome::Declined,
@@ -1308,10 +1313,14 @@ async fn apply_shown<H: Host>(
         // The question can be open for minutes: a device forgotten meanwhile
         // (here, or through another link) gets nothing.
         if vault.sync_state().trusted(&peer.remote_key).is_none() {
-            let summary = vault
-                .sync_preview_from(&incoming, &peer.device_id)
-                .unwrap_or_default();
-            vault.sync_journal_record(&peer.name, &summary, SyncJournalOutcome::Declined)?;
+            let summary =
+                sync_read::sync_preview_from(vault, &incoming, &peer.device_id).unwrap_or_default();
+            journal_cases::sync_journal_record(
+                vault,
+                &peer.name,
+                &summary,
+                SyncJournalOutcome::Declined,
+            )?;
             dropped = true;
             return Ok(Some(None));
         }
@@ -1322,9 +1331,9 @@ async fn apply_shown<H: Host>(
         let Some(batch) = vault.sync_apply(&incoming, &peer_ref)? else {
             return Ok(Some(None));
         };
-        let keys = vault.sync_batch_keys(&batch.id);
-        let collections = vault.sync_batch_collections(&batch.id);
-        let notices = vault.sync_batch_notices(&batch.id);
+        let keys = history_reads::batch_keys(&vault.doc, &batch.id);
+        let collections = history_reads::batch_collections(&vault.doc, &batch.id);
+        let notices = history_reads::batch_notices(&vault.doc, &batch.id);
         Ok(Some(Some((batch, keys, collections, notices))))
     });
     if backed_up && let Some(run) = app.hub().run.as_mut() {
@@ -1335,10 +1344,15 @@ async fn apply_shown<H: Host>(
         Err(err) => {
             // The journal tells that a batch came and failed; nothing of its content.
             let summary = app
-                .with_vault(|vault| vault.sync_preview_from(&incoming, &peer.device_id))
+                .with_vault(|vault| sync_read::sync_preview_from(vault, &incoming, &peer.device_id))
                 .unwrap_or_default();
             let _ = app.with_vault(|vault| {
-                vault.sync_journal_record(&peer.name, &summary, SyncJournalOutcome::Failed)
+                journal_cases::sync_journal_record(
+                    vault,
+                    &peer.name,
+                    &summary,
+                    SyncJournalOutcome::Failed,
+                )
             });
             return Err(err.into());
         }
@@ -1417,7 +1431,7 @@ async fn live<H: Host>(
                 flush_at = None;
                 let keys: Vec<String> = std::mem::take(&mut pending).into_iter().collect();
                 for chunk in keys.chunks(RECORDS_PER_MESSAGE) {
-                    let records = with_peer_vault(app, peer, |vault| vault.sync_records_for(chunk, peer.security_level))?;
+                    let records = with_peer_vault(app, peer, |vault| sync_read::sync_records_for(vault, chunk, peer.security_level))?;
                     wire.send(&Message::Changed { records: records.into_iter().collect() }).await?;
                 }
             }
@@ -1443,7 +1457,7 @@ async fn live<H: Host>(
                     // vault may already be closed: then there is nothing to send.
                     let keys: Vec<String> = std::mem::take(&mut pending).into_iter().collect();
                     for chunk in keys.chunks(RECORDS_PER_MESSAGE) {
-                        let Ok(records) = with_peer_vault(app, peer, |vault| vault.sync_records_for(chunk, peer.security_level)) else {
+                        let Ok(records) = with_peer_vault(app, peer, |vault| sync_read::sync_records_for(vault, chunk, peer.security_level)) else {
                             break;
                         };
                         if wire.send(&Message::Changed { records: records.into_iter().collect() }).await.is_err() {

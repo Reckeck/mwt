@@ -27,6 +27,8 @@ mod liveness;
 use super::host::{Host, lock_hub};
 use super::{Hub, Order, Run, SyncHub};
 use crate::ipc::events::{AppEvent, SyncError, SyncOffer, SyncPairing, SyncPlanReady};
+use trade_core::usecases::sync::read as sync_read;
+use trade_core::usecases::sync::trust as sync_trust;
 
 struct Inner {
     hub: SyncHub,
@@ -584,8 +586,8 @@ fn forgotten_pair(dir: &std::path::Path) -> (TestHost, Events, TestHost, Events)
     let client_id = client.settings().device_id;
     let client_key = trade_core::sync::session::hex(&client.0.key.public);
     main.with_vault(|vault| {
-        vault.sync_trust_peer(&client_id, "Phone", &client_key)?;
-        vault.sync_forget_peer(&client_id)
+        sync_trust::sync_trust_peer(vault, &client_id, "Phone", &client_key)?;
+        sync_trust::sync_forget_peer(vault, &client_id)
     })
     .unwrap();
     (main, main_events, client, client_events)
@@ -780,10 +782,10 @@ async fn a_revocation_closes_that_link_and_the_others_hear_of_it() {
     let (left, _right) = same_vault(dir.path());
     let (host, _events) = device("Laptop", left, SyncRole::Main);
     host.with_vault(|vault| {
-        vault.sync_trust_peer("dev-gone", "Gone", "gone-key")?;
-        vault.sync_trust_peer("dev-stay", "Stay", "stay-key")?;
-        vault.sync_trust_peer("dev-origin", "Origin", "origin-key")?;
-        vault.sync_forget_peer("dev-gone")
+        sync_trust::sync_trust_peer(vault, "dev-gone", "Gone", "gone-key")?;
+        sync_trust::sync_trust_peer(vault, "dev-stay", "Stay", "stay-key")?;
+        sync_trust::sync_trust_peer(vault, "dev-origin", "Origin", "origin-key")?;
+        sync_trust::sync_forget_peer(vault, "dev-gone")
     })
     .unwrap();
     let mut gone = fake_link(&host, "gone", "gone-key", SyncPhase::Live);
@@ -1024,7 +1026,7 @@ async fn pairing_again_after_forgetting_works_in_the_same_run() {
         link.instance = "Laptop".into();
     }
     client
-        .with_vault(|vault| vault.sync_forget_peer(&main_id))
+        .with_vault(|vault| sync_trust::sync_forget_peer(vault, &main_id))
         .unwrap();
     super::forget_device(&client, &main_id);
     assert!(
@@ -1071,10 +1073,10 @@ async fn a_peers_change_keeps_links_that_are_pairing() {
     let (left, _right) = same_vault(dir.path());
     let (host, _events) = device("Laptop", left, SyncRole::Main);
     host.with_vault(|vault| {
-        vault.sync_trust_peer("dev-back", "Back", "back-key")?;
-        vault.sync_forget_peer("dev-back")?;
-        vault.sync_trust_peer("dev-gone", "Gone", "gone-key")?;
-        vault.sync_forget_peer("dev-gone")
+        sync_trust::sync_trust_peer(vault, "dev-back", "Back", "back-key")?;
+        sync_trust::sync_forget_peer(vault, "dev-back")?;
+        sync_trust::sync_trust_peer(vault, "dev-gone", "Gone", "gone-key")?;
+        sync_trust::sync_forget_peer(vault, "dev-gone")
     })
     .unwrap();
     // «back» is re-pairing: its key is revoked until the code is confirmed.
@@ -1113,7 +1115,7 @@ fn trusting_pair(
         let device_id = there.settings().device_id;
         let name = there.settings().device_name.unwrap_or_default();
         let public_key = there.0.key.public_hex();
-        here.with_vault(|vault| vault.sync_trust_peer(&device_id, &name, &public_key))
+        here.with_vault(|vault| sync_trust::sync_trust_peer(vault, &device_id, &name, &public_key))
             .unwrap();
     }
     *client.0.versions.lock().unwrap() = odd_versions;
@@ -1249,7 +1251,7 @@ async fn an_unknown_message_variant_closes_the_session_without_a_panic() {
     let main_errors = errors_only(main_events);
     let raw_key = DeviceKey::generate().unwrap();
     let public_key = raw_key.public_hex();
-    main.with_vault(|vault| vault.sync_trust_peer("raw-device", "Raw", &public_key))
+    main.with_vault(|vault| sync_trust::sync_trust_peer(vault, "raw-device", "Raw", &public_key))
         .unwrap();
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1706,7 +1708,7 @@ async fn a_live_link_receives_an_edit_made_just_before_a_sync_call() {
     client
         .with_vault(|vault| {
             vault.doc.stores[0].name = "Renamed on the phone".into();
-            vault.sync_manifest(None)?;
+            sync_read::sync_manifest(vault, None)?;
             vault.persist()
         })
         .unwrap();
@@ -1837,8 +1839,8 @@ async fn a_forgotten_device_can_pair_again() {
     // The phone trusted the laptop, then the user forgot it.
     phone
         .with_vault(|vault| {
-            vault.sync_trust_peer(&laptop_id, "Laptop", &laptop_key)?;
-            vault.sync_forget_peer(&laptop_id)
+            sync_trust::sync_trust_peer(vault, &laptop_id, "Laptop", &laptop_key)?;
+            sync_trust::sync_forget_peer(vault, &laptop_id)
         })
         .unwrap();
     assert!(!trusted(&phone, &laptop_id));
@@ -1959,7 +1961,7 @@ async fn a_peer_forgotten_during_the_question_is_not_applied() {
         |laptop, phone| {
             let id = device_id_of(laptop);
             phone
-                .with_vault(|vault| vault.sync_forget_peer(&id))
+                .with_vault(|vault| sync_trust::sync_forget_peer(vault, &id))
                 .unwrap();
         },
     )
@@ -2108,7 +2110,7 @@ async fn clock_skew_refusal_is_not_retried() {
     let main_errors = errors_only(main_events);
     let raw_key = DeviceKey::generate().unwrap();
     let public_key = raw_key.public_hex();
-    main.with_vault(|vault| vault.sync_trust_peer("raw-device", "Raw", &public_key))
+    main.with_vault(|vault| sync_trust::sync_trust_peer(vault, "raw-device", "Raw", &public_key))
         .unwrap();
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2312,7 +2314,7 @@ async fn a_forgotten_main_is_not_dialed_again() {
     let (_dir, host) = single_device_host();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    host.with_vault(|vault| vault.sync_trust_peer("dev-main", "Main", "main-key"))
+    host.with_vault(|vault| sync_trust::sync_trust_peer(vault, "dev-main", "Main", "main-key"))
         .unwrap();
     {
         let mut hub = host.hub();
@@ -2329,7 +2331,7 @@ async fn a_forgotten_main_is_not_dialed_again() {
             },
         );
     }
-    host.with_vault(|vault| vault.sync_forget_peer("dev-main"))
+    host.with_vault(|vault| sync_trust::sync_forget_peer(vault, "dev-main"))
         .unwrap();
     super::forget_device(&host, "dev-main");
     {
@@ -2352,7 +2354,7 @@ async fn a_forgotten_main_is_not_dialed_again() {
     assert_eq!(host.hub().run.as_ref().unwrap().role, SyncRole::Searching);
 
     // Pairing it again lifts the skip.
-    host.with_vault(|vault| vault.sync_trust_peer("dev-main", "Main", "main-key"))
+    host.with_vault(|vault| sync_trust::sync_trust_peer(vault, "dev-main", "Main", "main-key"))
         .unwrap();
     assert!(!super::discovery::skipped_instances(&host, false).contains("inst-main"));
 }

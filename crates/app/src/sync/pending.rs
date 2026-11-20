@@ -8,6 +8,7 @@ use trade_core::appconfig::{AppSettings, PendingTrustPref};
 use trade_core::error::Result;
 use trade_core::model::notify::NoticeRecord;
 use trade_core::service::UnlockedVault;
+use trade_core::usecases::sync::trust as sync_trust;
 
 use super::transfer::Delivered;
 
@@ -52,7 +53,8 @@ pub(super) fn take(settings: &mut AppSettings, path: &Path, now_ms: u64) -> Vec<
 
 /// Trust the sender in the freshly opened received copy.
 pub(super) fn apply(vault: &mut UnlockedVault, pending: &PendingTrustPref) -> Result<()> {
-    vault.sync_trust_peer(
+    sync_trust::sync_trust_peer(
+        vault,
         &pending.device_id,
         &pending.device_name,
         &pending.device_key,
