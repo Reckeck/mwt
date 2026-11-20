@@ -451,18 +451,32 @@ fn the_link_delegate_matches_the_scenario() {
 fn the_file_delegate_matches_the_scenario() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
+    // Different bytes, so both calls take the fresh-write path (seal, write, key record).
     let via_delegate = vault
-        .add_attachment_file(owner.clone(), receipt(b"%PDF-1 receipt"))
+        .add_attachment_file(owner.clone(), receipt(b"%PDF-1 receipt one"))
         .unwrap();
     let via_scenario = crate::usecases::household::attachments::add_attachment_file(
         &mut vault,
         owner.clone(),
-        receipt(b"%PDF-1 receipt"),
+        receipt(b"%PDF-1 receipt two"),
     )
     .unwrap();
-    // The same file of the same owner is stored once, so both calls agree.
-    assert_eq!(via_delegate, via_scenario);
-    assert_eq!(vault.list_attachments(Some(&owner)).len(), 1);
+    assert_ne!(via_delegate.id, via_scenario.id);
+    let strip = |item: &Attachment| Attachment {
+        id: String::new(),
+        created_at: String::new(),
+        sha256: None,
+        ..item.clone()
+    };
+    assert_eq!(strip(&via_delegate), strip(&via_scenario));
+    assert_ne!(via_delegate.sha256, via_scenario.sha256);
+
+    let (read_delegate, bytes_delegate) = vault.read_attachment(&via_delegate.id).unwrap();
+    let (read_scenario, bytes_scenario) = vault.read_attachment(&via_scenario.id).unwrap();
+    assert_eq!(strip(&read_delegate), strip(&read_scenario));
+    assert_eq!(bytes_delegate, b"%PDF-1 receipt one");
+    assert_eq!(bytes_scenario, b"%PDF-1 receipt two");
+    assert_eq!(vault.list_attachments(Some(&owner)).len(), 2);
 }
 
 #[test]
