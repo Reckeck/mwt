@@ -850,7 +850,7 @@ impl Executor<'_> {
                         format!("«{}»: leaving the loop", def.title.en),
                     ),
                     Halt::Reject(reason) => {
-                        let why = crate::service::describe_reject(reason);
+                        let why = crate::model::planning::describe_reject(reason);
                         (
                             StepStatus::Error,
                             format!("«{}»: отказ — {why}", def.title.ru),

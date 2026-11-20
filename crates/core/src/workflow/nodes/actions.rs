@@ -773,7 +773,7 @@ impl Executor<'_> {
                 return Err(Fault::Error(format!(
                     "«{}»: {}",
                     callee.name,
-                    crate::service::describe_reject(&reason)
+                    crate::model::planning::describe_reject(&reason)
                 )));
             }
         };

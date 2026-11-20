@@ -10,9 +10,9 @@ use crate::pricing::history::secs_or_now;
 
 use crate::kernel::books::Books;
 use crate::model::vault::VaultDoc;
+use crate::money::rates::RateBook;
 use crate::money::tree::find_store;
-use crate::service::FlowClass;
-use crate::service::RateBook;
+use crate::money::worth::FlowClass;
 
 use super::overview::{Ctx, ReportMeta, report_flows};
 
