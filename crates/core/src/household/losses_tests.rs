@@ -276,6 +276,21 @@ fn a_chain_needs_known_transactions() {
 }
 
 #[test]
+fn empty_or_unreadable_flow_bounds_stay_open() {
+    let (mut doc, _) = bare_doc_with_convert();
+    doc.transactions[0].meta_mut().flow_id = Some("flow".into());
+    let count = |from: Option<&str>, to: Option<&str>| {
+        chain_summaries(&doc, &NoRates, "usd", from, to, &[]).len()
+    };
+    assert_eq!(count(None, None), 1);
+    for open in ["", "garbage"] {
+        assert_eq!(count(Some(open), None), 1, "from {open:?}");
+        assert_eq!(count(None, Some(open)), 1, "to {open:?}");
+        assert_eq!(count(Some(open), Some(open)), 1, "both {open:?}");
+    }
+}
+
+#[test]
 fn a_chain_is_joined_when_one_link_is_in_it() {
     let (mut doc, id) = bare_doc_with_convert();
     doc.transactions[0].meta_mut().flow_id = Some("old".into());

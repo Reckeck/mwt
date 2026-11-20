@@ -8001,7 +8001,9 @@ slippage: Amount, total: Amount,
  */
 internal: boolean, 
 /**
- * Every side had a price; otherwise the missing side counts as zero.
+ * Every fee leg and every side had a price. Otherwise the unpriced fee
+ * leg adds nothing to the fee and the spread is left out (slippage is
+ * zero), so the figures are a lower bound, not a full loss.
  */
 complete: boolean, };
 

@@ -226,6 +226,15 @@ files = [
 ]
 
 [[foundation]]
+# Review minors of #161 (T105, T107, T109) and T191: the TxLoss doc, the clock parameter, the pure `month_losses`
+# and the open flow bounds touch the loss report of the `leaves` area (task A) from stream C.
+task = "C"
+files = [
+    "crates/core/src/household/losses.rs", "crates/core/src/household/losses_tests.rs",
+    "crates/core/src/usecases/household/losses.rs",
+]
+
+[[foundation]]
 # T33: the shared ratios move from the vault to `money/shared_ratios.rs` (Books reads them); the module is listed in money/mod.rs.
 task = "C"
 files = ["crates/core/src/money/mod.rs", "crates/core/src/money/shared_ratios.rs"]

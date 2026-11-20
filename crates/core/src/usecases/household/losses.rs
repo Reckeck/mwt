@@ -8,12 +8,10 @@
 use std::collections::{BTreeMap, HashSet};
 
 use crate::Amount;
-use crate::calendar;
 use crate::error::{Error, Result};
 use crate::household::losses::{
-    CryptoQuote, FlowSummary, FxSources, FxTable, LossBucket, LossBuckets, LossRow, TxLoss,
-    Valuation, chain_summaries, loss_by_id, loss_of, losses_by_id, plan_link, rates_table,
-    touches_any,
+    CryptoQuote, FlowSummary, FxSources, FxTable, LossBucket, LossRow, LossWindow, TxLoss,
+    Valuation, chain_summaries, loss_by_id, losses_by_id, month_losses, plan_link, rates_table,
 };
 use crate::kernel::books::Books;
 use crate::model::store::AssetRef;
@@ -100,56 +98,28 @@ pub fn tx_losses(vault: &UnlockedVault) -> BTreeMap<String, TxLoss> {
 /// Losses by month and by kind, wallet, contact and chain.
 pub(crate) fn loss_report(vault: &UnlockedVault, ctx: &Ctx) -> LossReport {
     let books = vault.books();
-    let values = BookValues(books.rate_book());
-    let mut out = LossReport {
-        meta: ctx.meta(),
-        rows: ctx
-            .months
-            .iter()
-            .map(|month| LossRow {
-                month: calendar::month_key(*month),
-                ..LossRow::default()
-            })
-            .collect(),
-        ..LossReport::default()
+    let window = LossWindow {
+        months: &ctx.months,
+        calendar: &ctx.cal,
+        currency: &ctx.currency,
+        scope: ctx.scope.as_ref(),
     };
-    let mut buckets = LossBuckets::default();
-    for tx in &vault.doc.transactions {
-        let secs = secs_or_now(&tx.meta().timestamp);
-        let Some(index) = ctx.index_of(ctx.cal.date_of(secs)) else {
-            continue;
-        };
-        if let Some(ids) = &ctx.scope
-            && !touches_any(tx, ids)
-        {
-            continue;
-        }
-        let loss = loss_of(&vault.doc, &values, tx, &ctx.currency);
-        if loss.total.is_zero() && loss.complete {
-            continue;
-        }
-        let month = ctx.months[index];
-        let (fee, slippage) = (ctx.shown(loss.fee, month), ctx.shown(loss.slippage, month));
-        let row = &mut out.rows[index];
-        row.fee += fee;
-        row.slippage += slippage;
-        row.total += fee + slippage;
-        if !loss.complete {
-            out.incomplete += 1;
-        }
-        buckets.add(tx, fee + slippage);
+    let losses = month_losses(
+        &vault.doc,
+        &BookValues(books.rate_book()),
+        &window,
+        |amount, month| ctx.shown(amount, month),
+    );
+    LossReport {
+        meta: ctx.meta(),
+        rows: losses.rows,
+        total: losses.total,
+        by_kind: losses.by_kind,
+        by_store: losses.by_store,
+        by_contact: losses.by_contact,
+        by_flow: losses.by_flow,
+        incomplete: losses.incomplete,
     }
-    for row in &out.rows {
-        out.total.fee += row.fee;
-        out.total.slippage += row.slippage;
-        out.total.total += row.total;
-    }
-    let [by_kind, by_store, by_contact, by_flow] = buckets.ranked();
-    out.by_kind = by_kind;
-    out.by_store = by_store;
-    out.by_contact = by_contact;
-    out.by_flow = by_flow;
-    out
 }
 
 /// Put transactions into one chain: the given one, else the chain one of

@@ -451,18 +451,32 @@ fn the_link_delegate_matches_the_scenario() {
 fn the_file_delegate_matches_the_scenario() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
+    // Different bytes, so both calls take the fresh-write path (seal, write, key record).
     let via_delegate = vault
-        .add_attachment_file(owner.clone(), receipt(b"%PDF-1 receipt"))
+        .add_attachment_file(owner.clone(), receipt(b"%PDF-1 receipt one"))
         .unwrap();
     let via_scenario = crate::usecases::household::attachments::add_attachment_file(
         &mut vault,
         owner.clone(),
-        receipt(b"%PDF-1 receipt"),
+        receipt(b"%PDF-1 receipt two"),
     )
     .unwrap();
-    // The same file of the same owner is stored once, so both calls agree.
-    assert_eq!(via_delegate, via_scenario);
-    assert_eq!(vault.list_attachments(Some(&owner)).len(), 1);
+    assert_ne!(via_delegate.id, via_scenario.id);
+    let strip = |item: &Attachment| Attachment {
+        id: String::new(),
+        created_at: String::new(),
+        sha256: None,
+        ..item.clone()
+    };
+    assert_eq!(strip(&via_delegate), strip(&via_scenario));
+    assert_ne!(via_delegate.sha256, via_scenario.sha256);
+
+    let (read_delegate, bytes_delegate) = vault.read_attachment(&via_delegate.id).unwrap();
+    let (read_scenario, bytes_scenario) = vault.read_attachment(&via_scenario.id).unwrap();
+    assert_eq!(strip(&read_delegate), strip(&read_scenario));
+    assert_eq!(bytes_delegate, b"%PDF-1 receipt one");
+    assert_eq!(bytes_scenario, b"%PDF-1 receipt two");
+    assert_eq!(vault.list_attachments(Some(&owner)).len(), 2);
 }
 
 #[test]
@@ -489,16 +503,30 @@ fn the_remove_rename_restore_delegates_match_their_scenarios() {
     let renamed_b = scenario::rename_attachment(&mut vault, &second.id, " New ").unwrap();
     assert_eq!(renamed_a.title, renamed_b.title);
 
-    for call in [
-        vault.remove_attachment("missing").err(),
-        vault.rename_attachment("missing", "x").err(),
-        vault.restore_attachment("missing").err(),
-    ] {
-        assert!(call.is_some());
-    }
-    assert!(scenario::remove_attachment(&mut vault, "missing").is_err());
-    assert!(scenario::rename_attachment(&mut vault, "missing", "x").is_err());
-    assert!(scenario::restore_attachment(&mut vault, "missing").is_err());
+    assert!(matches!(
+        vault.remove_attachment("missing"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        vault.rename_attachment("missing", "x"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        vault.restore_attachment("missing"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        scenario::remove_attachment(&mut vault, "missing"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        scenario::rename_attachment(&mut vault, "missing", "x"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        scenario::restore_attachment(&mut vault, "missing"),
+        Err(Error::Missing(_))
+    ));
 }
 
 #[test]
