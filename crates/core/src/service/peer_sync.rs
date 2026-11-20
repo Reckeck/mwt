@@ -409,8 +409,17 @@ impl UnlockedVault {
                     .map(|(key, state)| (key.clone(), state.clone()))
                     .partition(|(key, _)| bad.contains(key));
                 let summary = plan_of(&left_out).summary;
+                // The skip is told only if the rest applies: on failure the
+                // journal goes back with the rolled-back document.
+                let journal = self.doc.sync.journal.clone();
                 let journaled = self.journal_skipped(&peer.name, &summary);
-                let mut outcome = self.apply_batch_from(&rest, peer, carry, external)?;
+                let mut outcome = match self.apply_batch_from(&rest, peer, carry, external) {
+                    Ok(outcome) => outcome,
+                    Err(err) => {
+                        self.doc.sync.journal = journal;
+                        return Err(err);
+                    }
+                };
                 match outcome.as_mut() {
                     Some(applied) => applied.skipped = bad,
                     None if journaled => self.persist()?,
@@ -428,21 +437,27 @@ impl UnlockedVault {
         // The merged document is complete: swap it in. Every step after this
         // can fail; on failure the old document goes back (atomic batch).
         let tracker = self.tracker.clone();
-        let before = self.swap_doc(doc)?;
+        let announce = self.announce.clone();
+        let before = self.swap_doc(doc);
         match self.finish_batch(plan, peer, carry) {
             Ok(applied) => Ok(Some(applied)),
             Err(err) => {
-                self.swap_doc(before)?;
+                // Tracker and queued announcements first, then the document;
+                // the swap cannot fail, so the batch's own error is the one
+                // the caller sees. Keys the batch queued would otherwise go
+                // to a live session for changes that never happened.
                 self.tracker = tracker;
+                self.announce = announce;
+                self.swap_doc(before);
                 Err(err)
             }
         }
     }
 
-    /// Put `doc` in place of the open document; the old one comes back.
-    fn swap_doc(&mut self, doc: VaultDoc) -> Result<VaultDoc> {
-        self.run(|tx| Ok(tx.replace_doc(doc)))
-            .map(|(old, _, _)| old)
+    /// Put `doc` in place of the open document; the old one comes back. It
+    /// cannot fail, so a rollback never hides the error that caused it.
+    fn swap_doc(&mut self, doc: VaultDoc) -> VaultDoc {
+        crate::kernel::tx::Tx::new(&mut self.doc).replace_doc(doc)
     }
 
     /// What follows the swap of a merged document: settle it, journal the
@@ -502,6 +517,7 @@ impl UnlockedVault {
         self.doc.sync.batches.push(batch);
         self.prune_batches();
         self.compact_tombstones();
+        let queued = self.announce.clone();
         // Both devices may have run the same automation or import before
         // they met; the copy made later goes (as an ordinary deletion).
         self.dedupe_generated(&applied.id, carry)?;
@@ -509,8 +525,20 @@ impl UnlockedVault {
         // goals, dangling settings): `repair.rs`.
         self.repair_invariants(Some(&applied.id))?;
         self.recompute_holdings();
-        self.persist()?;
+        self.persist_then_announce(&queued)?;
         Ok(applied)
+    }
+
+    /// Save, announcing only what the batch itself queued after the write
+    /// went through: a save announces the queue before it writes, and a failed
+    /// batch is rolled back, so its keys would reach a live session for
+    /// changes that never happened. `queued` is what was waiting before.
+    fn persist_then_announce(&mut self, queued: &std::collections::BTreeSet<String>) -> Result<()> {
+        let batch_keys: Vec<String> = self.announce.difference(queued).cloned().collect();
+        self.announce.clone_from(queued);
+        self.persist()?;
+        self.announce.extend(batch_keys);
+        Ok(())
     }
 
     /// `incoming` without the deletions that were already compacted: tombstone
@@ -1376,6 +1404,8 @@ mod repair_restore_tests;
 mod repoint;
 #[cfg(test)]
 mod repoint_tests;
+#[cfg(test)]
+mod rollback_tests;
 #[cfg(test)]
 mod run_key_tests;
 #[cfg(test)]

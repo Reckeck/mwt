@@ -120,3 +120,85 @@ fn a_batch_that_succeeds_writes_once() {
 
     assert_eq!(wakes.0.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
+
+#[derive(Default)]
+struct Announced(std::sync::Mutex<Vec<String>>);
+
+impl crate::service::SyncTap for Announced {
+    fn changed(&self, keys: &[String]) {
+        self.0.lock().unwrap().extend(keys.iter().cloned());
+    }
+}
+
+#[test]
+fn a_failed_batch_announces_nothing_it_stamped_on_its_way() {
+    use crate::model::transaction::{Transaction, TxOrigin};
+    let (dir, mut left, mut right) = left_ahead();
+    let tap = std::sync::Arc::new(Announced::default());
+    right.set_sync_tap(Some(tap.clone()));
+    right.set_write_behind(Some(std::sync::Arc::new(Wakes::default())));
+    // Two copies of one generated operation: the batch's dedupe deletes one
+    // and queues its key for the live session.
+    let cash = right.doc_value().unwrap()["stores"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    for comment in ["first", "second"] {
+        let mut tx = crate::service::test_support::income(&cash, "100", comment);
+        if let Transaction::Topup(topup) = &mut tx {
+            topup.meta.origin = TxOrigin::Import {
+                exec_id: "exec-1".into(),
+            };
+        }
+        right.add_transaction(tx).unwrap();
+    }
+    let incoming = incoming_for(&mut left, &mut right);
+    // What was stamped so far goes out first: the queue is empty.
+    drop(right.prepare_flush().unwrap().expect("dirty"));
+    tap.0.lock().unwrap().clear();
+    right.set_write_behind(None);
+    let file = dir.path().join("copy.wallet");
+    std::fs::remove_file(&file).unwrap();
+    std::fs::create_dir(&file).unwrap();
+    assert!(right.sync_apply(&incoming, &peer()).is_err());
+
+    right.set_write_behind(Some(std::sync::Arc::new(Wakes::default())));
+    right.persist().unwrap();
+    drop(right.prepare_flush().unwrap());
+
+    let sent = tap.0.lock().unwrap().clone();
+    assert!(sent.is_empty(), "announced after a failed batch: {sent:?}");
+}
+
+#[test]
+fn a_failed_write_after_an_unparsable_record_leaves_no_journal_entry() {
+    let (dir, mut left, mut right) = left_ahead();
+    left.create_store_with(
+        "Second jar",
+        StoreKind::Bank,
+        "#000",
+        "",
+        None,
+        StoreExtras::default(),
+    )
+    .unwrap();
+    let mut incoming = incoming_for(&mut left, &mut right);
+    let bad = incoming
+        .keys()
+        .find(|key| key.starts_with("stores:"))
+        .cloned()
+        .expect("a store record");
+    incoming.get_mut(&bad).unwrap().value.as_mut().unwrap()["kind"] =
+        serde_json::json!("not-a-kind");
+    assert!(incoming.len() > 1, "a good record must remain");
+    let file = dir.path().join("copy.wallet");
+    std::fs::remove_file(&file).unwrap();
+    std::fs::create_dir(&file).unwrap();
+    let before = bytes(&mut right);
+
+    let outcome = right.sync_apply(&incoming, &peer());
+
+    assert!(outcome.is_err(), "the write was expected to fail");
+    assert!(right.sync_journal().is_empty(), "a journal entry was left");
+    assert!(bytes(&mut right) == before, "the document changed");
+}
