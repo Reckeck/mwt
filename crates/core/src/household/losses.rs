@@ -441,8 +441,9 @@ pub fn chain_summaries(
     to: Option<&str>,
     store_ids: &[String],
 ) -> Vec<FlowSummary> {
-    let lower = from.map(timestamp_secs).unwrap_or(i64::MIN);
-    let upper = to.map(timestamp_secs).unwrap_or(i64::MAX);
+    // An empty or unreadable bound is no bound.
+    let lower = from.and_then(unix_secs).unwrap_or(i64::MIN);
+    let upper = to.and_then(unix_secs).unwrap_or(i64::MAX);
     // A chain belongs to the wallets any of its links moved money in.
     let scope = (!store_ids.is_empty()).then(|| {
         resolve_scope(
