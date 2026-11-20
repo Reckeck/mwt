@@ -440,11 +440,13 @@ impl Executor<'_> {
 
     /// An operation refused for lack of money after a question was answered:
     /// the run cannot be started again from its trigger (that would ask
-    /// again), so the operation waits in the queue and a retry books it.
-    fn queue_refused(&mut self, tx: &Transaction) -> Result<(), String> {
+    /// again), so the operation waits in the queue and a retry books it. Only
+    /// an operation within the cap is queued.
+    fn queue_refused(&mut self, tx: &Transaction) -> Result<(), Fault> {
         if self.ctx.resume.is_none() {
             return Ok(());
         }
+        self.check_cap(std::slice::from_ref(tx))?;
         let batch = QueuedActions {
             id: uuid::Uuid::new_v4().to_string(),
             workflow_id: self.ctx.workflow_id.clone(),
@@ -453,7 +455,9 @@ impl Executor<'_> {
             summary: self.describe(tx).1,
             transactions: vec![tx.clone()],
         };
-        self.perform(Effect::Queue(batch)).map(|_| ())
+        self.perform(Effect::Queue(batch))
+            .map(|_| ())
+            .map_err(Fault::from)
     }
 
     fn said_commit(&self, def: &NodeDef, txs: &[Transaction]) -> Step {
@@ -476,8 +480,6 @@ impl Executor<'_> {
                         .host
                         .funds_shortfall(&tx, secs_of(&tx.meta().timestamp, now))
                 {
-                    // Only an operation within the cap is queued for a retry.
-                    self.check_cap(std::slice::from_ref(&tx))?;
                     self.queue_refused(&tx)?;
                     return Err(Fault::Halt(Halt::Reject(Box::new(reason))));
                 }

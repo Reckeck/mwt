@@ -245,6 +245,51 @@ fn an_asked_transfer_over_the_cap_is_not_queued_and_books_nothing() {
     assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
 }
 
+#[test]
+fn a_plain_refusal_under_a_cap_ends_rejected_even_without_a_price() {
+    let (_dir, mut vault) = empty_vault();
+    let card = store(&mut vault, "Card", StoreKind::Cash, None);
+    let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
+    vault
+        .add_transaction(income(&card, "100", "opening"))
+        .unwrap();
+    let workflow = save(
+        &mut vault,
+        "Plain",
+        vec![
+            node("t", "trigger.manual", json!({})),
+            node(
+                "tx",
+                "action.transaction",
+                json!({ "tx_kind": "transfer", "account": store_ref(&card), "to": store_ref(&savings), "asset": "NOPRICE", "amount": "300", "on_shortfall": "reject" }),
+            ),
+        ],
+        vec![wire("t", "out", "tx", "in")],
+    );
+    let draft = WorkflowDraft {
+        name: workflow.name.clone(),
+        description: String::new(),
+        active: true,
+        graph: workflow.graph.clone(),
+        react_to_workflows: false,
+        max_amount: Some(amount("100")),
+        max_amount_currency: None,
+    };
+    let workflow = vault
+        .save_workflow(Some(&workflow.id), draft, now_secs())
+        .unwrap()
+        .workflow;
+    let report = vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(report.run.outcome, RunOutcome::Rejected { .. }),
+        "{:?}",
+        report.run.outcome
+    );
+    assert!(vault.workflow_queue().is_empty());
+}
+
 // -- C2-5 and the lock --------------------------------------------------------
 
 /// A host that keeps the vault behind a lock: every call takes it, uses it and
