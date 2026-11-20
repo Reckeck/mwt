@@ -4,7 +4,9 @@
 //! through the [`WorkflowHost`] (what the vault holds) or into the report (what
 //! the caller keeps: notices, queue, events). The nodes never write to the vault
 //! themselves, so the same effect can be applied again later: a refused
-//! operation sits in the queue as an `Effect::Insert` batch and a retry runs it.
+//! operation sits in the queue as an `Effect::Insert` batch, and a retry books
+//! it through `retry_queued_refusal` with the same checks as `Effect::Insert`
+//! (the money and the rules, all or none).
 
 use crate::model::notify::NoticeRecord;
 use crate::model::planning::Reminder;

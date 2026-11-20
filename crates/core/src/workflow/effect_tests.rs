@@ -169,6 +169,23 @@ fn an_asked_operation_refused_for_lack_of_funds_is_booked_by_a_retry() {
     );
 }
 
+#[test]
+fn a_refused_retry_is_insufficient_funds_by_variant() {
+    let (_dir, mut vault, _card, _savings, workflow) = asked_transfer();
+    vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    let wait = vault.workflow_waits().remove(0);
+    let report = vault
+        .answer_workflow_wait(&wait.id, true, later(), "UTC")
+        .unwrap();
+    let refusal = vault.retry_workflow_run(&report.run.id, later(), "UTC");
+    assert!(
+        matches!(refusal, Err(crate::Error::InsufficientFunds(_))),
+        "{refusal:?}"
+    );
+}
+
 fn refused_asked_transfer() -> (tempfile::TempDir, UnlockedVault, String, String, String) {
     let (dir, mut vault, card, savings, workflow) = asked_transfer();
     vault
@@ -201,6 +218,46 @@ fn a_confirmed_refusal_closes_its_run_and_a_retry_books_nothing_more() {
     assert!(vault.retry_workflow_run(&run_id, later(), "UTC").is_err());
     assert_eq!(vault.doc.transactions.len(), booked);
     assert_eq!(holding_of(&vault, &savings, &usd()), holding);
+}
+
+#[test]
+fn a_confirmed_refusal_keeps_the_started_at_of_the_refused_run() {
+    let (_dir, mut vault, _savings, run_id, workflow_id) = refused_asked_transfer();
+    let started_at = refused_started_at(&vault, &workflow_id, &run_id);
+    let batch = vault.workflow_queue().remove(0);
+    vault.confirm_queued(&batch.id).unwrap();
+    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    let done = runs
+        .iter()
+        .find(|run| matches!(run.outcome, RunOutcome::Done))
+        .unwrap();
+    assert_eq!(done.started_at, started_at);
+}
+
+#[test]
+fn a_retried_refusal_keeps_the_started_at_of_the_refused_run() {
+    let (_dir, mut vault, _savings, run_id, workflow_id) = refused_asked_transfer();
+    let started_at = refused_started_at(&vault, &workflow_id, &run_id);
+    // A retry a day later: a fresh stamp would differ from the refusal's.
+    vault
+        .retry_workflow_run(&run_id, later() + 86_400, "UTC")
+        .unwrap();
+    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    let done = runs
+        .iter()
+        .find(|run| matches!(run.outcome, RunOutcome::Done))
+        .unwrap();
+    assert_eq!(done.started_at, started_at);
+}
+
+fn refused_started_at(vault: &UnlockedVault, workflow_id: &str, run_id: &str) -> String {
+    vault
+        .workflow_runs(Some(workflow_id), 10)
+        .iter()
+        .find(|run| run.id == run_id)
+        .unwrap()
+        .started_at
+        .clone()
 }
 
 #[test]

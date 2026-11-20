@@ -446,7 +446,7 @@ pub fn retry_workflow_run(
         .find(|batch| batch.run_id == run.id)
         .cloned()
     {
-        return retry_queued_refusal(vault, &run, batch, now);
+        return retry_queued_refusal(vault, batch, now);
     }
     let workflow = workflow_record(&vault.doc, &run.workflow_id)?;
     let graph = Graph::parse(&workflow.graph)?;
@@ -482,7 +482,6 @@ pub fn retry_workflow_run(
 /// money checked now. Still short, the refusal and the queue stay.
 fn retry_queued_refusal(
     vault: &mut UnlockedVault,
-    run: &WorkflowRun,
     batch: QueuedActions,
     now: i64,
 ) -> Result<WorkflowPass> {
@@ -497,10 +496,12 @@ fn retry_queued_refusal(
             InsertRefusal::Invalid(message) => Error::InvalidInput(message),
         })
     })?;
-    let done = done.ok_or_else(|| Error::Missing(format!("workflow run {}", run.id)))?;
+    // `RunClosing::Required` already failed with `Missing` when the run is gone.
     let mut pass = WorkflowPass::default();
-    pass.created.clone_from(&done.created);
-    pass.runs.push(done);
+    if let Some(closed) = done {
+        pass.created.clone_from(&closed.created);
+        pass.runs.push(closed);
+    }
     Ok(pass)
 }
 
