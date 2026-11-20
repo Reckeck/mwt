@@ -34,9 +34,50 @@ fn is_test_file(name: &str) -> bool {
     name == "tests.rs" || name.ends_with("_tests.rs") || name.starts_with("test_")
 }
 
-/// The code part of a line: what comes before a `//` comment.
-fn code_of(line: &str) -> &str {
-    line.split_once("//").map_or(line, |(code, _)| code)
+/// The line with the contents of string and char literals dropped, so that a `//` or a brace
+/// inside a literal is not read as code. A lifetime (`'a`) is not a char literal and stays.
+fn without_literals(line: &str) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    let mut kept = String::new();
+    let mut index = 0;
+    while index < chars.len() {
+        let ch = chars[index];
+        if ch == '"' {
+            index += 1;
+            while index < chars.len() && chars[index] != '"' {
+                index += if chars[index] == '\\' { 2 } else { 1 };
+            }
+            index += 1;
+        } else if ch == '\'' {
+            let close = match (chars.get(index + 1), chars.get(index + 2)) {
+                (Some('\\'), _) => chars[index + 2..]
+                    .iter()
+                    .position(|&next| next == '\'')
+                    .map(|offset| index + 2 + offset),
+                (Some(_), Some('\'')) => Some(index + 2),
+                _ => None,
+            };
+            if let Some(close) = close {
+                index = close + 1;
+            } else {
+                kept.push(ch);
+                index += 1;
+            }
+        } else {
+            kept.push(ch);
+            index += 1;
+        }
+    }
+    kept
+}
+
+/// The code part of a line: what comes before a `//` comment, literals dropped.
+fn code_of(line: &str) -> String {
+    let stripped = without_literals(line);
+    match stripped.split_once("//") {
+        Some((code, _)) => code.to_string(),
+        None => stripped,
+    }
 }
 
 /// Net `{` minus `}` of a line's code part.
@@ -165,6 +206,26 @@ mod tests {
             .map(|found| found.line)
             .collect();
         assert_eq!(lines, [3, 8]);
+    }
+
+    #[test]
+    fn a_url_string_does_not_hide_later_f64() {
+        let text = "let url = \"https://x\"; let rate: f64 = 1.0;\n";
+        let lines: Vec<usize> = findings_in("x.rs", text)
+            .iter()
+            .map(|found| found.line)
+            .collect();
+        assert_eq!(lines, [1]);
+    }
+
+    #[test]
+    fn a_brace_char_in_test_code_does_not_hide_later_f64() {
+        let text = "#[cfg(test)]\nmod t {\n    const OPEN: char = '{';\n}\nfn a(_: f64) {}\n";
+        let lines: Vec<usize> = findings_in("x.rs", text)
+            .iter()
+            .map(|found| found.line)
+            .collect();
+        assert_eq!(lines, [5]);
     }
 
     #[test]
