@@ -71,7 +71,7 @@ pub async fn capital_health(
 ) -> Result<HealthReport, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        health::capital_health(&vault.books(), now_secs(), &zone)
+        trade_core::reports::health::capital_health(&vault.books(), now_secs(), &zone)
     })
 }
 

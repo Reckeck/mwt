@@ -4,6 +4,7 @@ use super::debts::*;
 use crate::Amount;
 use crate::model::store::{LiabilityKind, LiabilityTerms, StoreKind};
 use crate::model::transaction::AccountRef;
+use crate::planning::debt_load::debt_load;
 use crate::service::test_support::*;
 use crate::service::{StoreExtras, UnlockedVault};
 
@@ -133,7 +134,7 @@ fn dti_takes_terms_or_recent_repayments_against_income() {
     }
 
     let now = unix("2026-09-10T10:00:00Z");
-    let load = vault.debt_load(now, "UTC").unwrap();
+    let load = debt_load(&vault.books(), now, "UTC").unwrap();
     assert_eq!(load.loans.len(), 2);
     let find = |id: &str| load.loans.iter().find(|loan| loan.store_id == id).unwrap();
     let home = find(&mortgage);

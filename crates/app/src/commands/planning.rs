@@ -327,7 +327,7 @@ pub async fn emergency_fund_get(
 ) -> Result<EmergencyStatus, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        Ok(emergency::emergency_fund_status(
+        Ok(trade_core::planning::emergency::emergency_fund_status(
             &vault.books(),
             now_secs(),
             &zone,
@@ -728,7 +728,13 @@ pub async fn get_utility_bill(
         )
     });
     with_vault(&state, |vault| {
-        utilities::utility_bill(vault, &property_id, &period, &zone)
+        trade_core::household::utilities::utility_bill(
+            &vault.books(),
+            &property_id,
+            &period,
+            &zone,
+            now_secs(),
+        )
     })
 }
 

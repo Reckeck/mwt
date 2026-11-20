@@ -78,9 +78,6 @@ impl UnlockedVault {
         /// rate (Currency-1 · 7, "Show").
         pub(crate) fn unpriced_tx_ids(&self) -> HashSet<String>
             => crate::usecases::planning::budget::unpriced_tx_ids @books;
-        /// The currency a store mostly holds, for terms entered without one.
-        pub(crate) fn store_currency(&self, store_id: &str) -> String
-            => crate::planning::budget::store_currency @books;
     }
 
     /// [`Self::month_summary`] over the books of one request.

@@ -7,10 +7,12 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use super::dashboard_tiles::net_worth_trend;
+use super::health::capital_health;
 use crate::Amount;
 use crate::calc::invest;
 use crate::calendar::{Calendar, clamp_day, first_of_month, month_key};
 use crate::error::{Error, Result};
+use crate::household::utilities::utility_bill;
 use crate::ipc_contract::Comparison;
 use crate::kernel::books::Books;
 use crate::model::planning::HealthColor;
@@ -284,7 +286,7 @@ fn overdue_utilities(
         if due >= today {
             continue;
         }
-        let Ok(bill) = books.utility_bill(&store.id, &month_key(today), zone) else {
+        let Ok(bill) = utility_bill(books, &store.id, &month_key(today), zone, now) else {
             continue;
         };
         let unpaid: Vec<_> = bill
@@ -321,8 +323,7 @@ pub fn dashboard_today(books: &Books, period: DashPeriod, now: i64, zone: &str) 
         period,
         currency: trend.currency,
         net_worth: trend.change,
-        health: books
-            .capital_health(now, zone)
+        health: capital_health(books, now, zone)
             .ok()
             .map(|report| report.color),
         left_today: budget.left_today,

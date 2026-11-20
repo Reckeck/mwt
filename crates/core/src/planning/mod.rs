@@ -23,6 +23,7 @@ pub mod daily_budget;
 pub mod datasources;
 #[cfg(test)]
 mod datasources_tests;
+pub mod debt_load;
 pub mod emergency;
 #[cfg(test)]
 mod emergency_tests;

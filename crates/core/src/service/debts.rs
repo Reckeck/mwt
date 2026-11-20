@@ -13,7 +13,7 @@ impl UnlockedVault {
         /// Every live loan and credit card with a debt or a payment, their class
         /// and DTI. `manual` is the hand-entered inflation table.
         pub fn debt_load(&self, now: i64, zone: &str) -> Result<DebtLoad>
-            => crate::usecases::household::debts::debt_load;
+            => crate::planning::debt_load::debt_load @books;
     }
     // forward:end
 }

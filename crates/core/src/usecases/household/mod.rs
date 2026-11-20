@@ -4,7 +4,6 @@ pub mod attachments;
 pub mod attachments_cleanup;
 pub mod categories;
 pub mod contacts;
-pub mod debts;
 pub mod envelopes;
 pub mod ledger;
 pub mod losses;

@@ -15,10 +15,7 @@ use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
 use crate::vault_io::device_secrets::DeviceSecrets;
 
-use crate::service::{
-    DebtLoad, HealthReport, MonthSummary, NetWorth, RateBook, StoreOverview, UnlockedVault,
-    UtilityBill,
-};
+use crate::service::{MonthSummary, NetWorth, RateBook, StoreOverview, UnlockedVault};
 
 #[cfg(test)]
 thread_local! {
@@ -164,26 +161,6 @@ impl Books<'_> {
         self.vault.month_summary_in(self, month, zone)
     }
 
-    /// The utility bill of a property for a period.
-    pub(crate) fn utility_bill(
-        &self,
-        property_id: &str,
-        period: &str,
-        zone: &str,
-    ) -> Result<UtilityBill> {
-        self.vault.utility_bill(property_id, period, zone)
-    }
-
-    /// The capital health report.
-    pub(crate) fn capital_health(&self, now: i64, zone: &str) -> Result<HealthReport> {
-        self.vault.capital_health(now, zone)
-    }
-
-    /// Debts against income.
-    pub(crate) fn debt_load(&self, now: i64, zone: &str) -> Result<DebtLoad> {
-        self.vault.debt_load(now, zone)
-    }
-
     /// What the crypto module was worth at each cutoff in USD and whether it
     /// already counts a replayed wallet's coins.
     pub(crate) fn crypto_module(
@@ -278,9 +255,6 @@ mod tests {
         "subtree_ids",
         "store_overview",
         "month_summary_in",
-        "utility_bill",
-        "capital_health",
-        "debt_load",
         "crypto_module",
     ];
 

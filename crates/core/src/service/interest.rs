@@ -2,7 +2,6 @@
 //! The scenarios that write terms, key rates and interest live in
 //! `usecases::money::interest`.
 
-pub(crate) use crate::money::interest::INTEREST_CATEGORY;
 pub use crate::money::interest::{DepositReport, InterestTaxReport, PdsReport};
 
 use chrono::NaiveDate;
