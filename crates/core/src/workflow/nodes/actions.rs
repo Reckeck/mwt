@@ -515,7 +515,7 @@ impl Executor<'_> {
                     title
                 };
                 let key = format!("wf:{}:{}:{}", self.ctx.run_id, node.id, self.notices.len());
-                self.perform(Effect::Notify(crate::service::notice(
+                self.perform(Effect::Notify(crate::model::notify::notice(
                     NoticeCategory::Automation,
                     key,
                     &title,

@@ -34,18 +34,6 @@ pub struct Exemption {
 /// Named exemptions, no blanket ones. Never add an entry: remove it when its task lands.
 pub const EXEMPTIONS: &[Exemption] = &[
     Exemption {
-        file: "reports/notify_snapshot.rs",
-        item: "notice",
-        until: "T234",
-        reason: "the notification snapshot builds its texts with service::notice until the notice texts move down",
-    },
-    Exemption {
-        file: "workflow/nodes/actions.rs",
-        item: "notice",
-        until: "T234",
-        reason: "the notify node builds its text with service::notice until the notice texts move down",
-    },
-    Exemption {
         file: "reports/overview.rs",
         item: "Flow",
         until: "T227",
@@ -330,9 +318,9 @@ mod tests {
     }
 
     #[test]
-    fn there_are_exactly_the_five_named_exemptions() {
+    fn there_are_exactly_the_three_named_exemptions() {
         let tasks: Vec<&str> = EXEMPTIONS.iter().map(|entry| entry.until).collect();
-        assert_eq!(tasks, ["T234", "T234", "T227", "T229", "T235"]);
+        assert_eq!(tasks, ["T227", "T229", "T235"]);
         assert!(EXEMPTIONS.iter().all(|entry| !entry.reason.is_empty()));
     }
 }

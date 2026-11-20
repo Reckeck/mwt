@@ -1,8 +1,7 @@
 //! Shim of the `notifications` area: the rules moved to `crate::planning::notifications`, the
 //! scenarios to `crate::usecases::planning::notifications` (spec core-strangler, D1).
 
-pub use crate::planning::notifications::notice_title;
-pub use crate::usecases::planning::notifications::notice;
+pub use crate::model::notify::{notice, notice_title};
 
 use crate::error::Result;
 use crate::model::notify::{NoticeCategory, NoticeRecord};

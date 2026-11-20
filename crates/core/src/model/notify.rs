@@ -4,6 +4,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::model::vault::now_iso;
+
 /// A kind of notice. Each one can be turned off and told ahead of time.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
@@ -136,4 +138,85 @@ pub struct NoticeRecord {
     /// RFC3339: when it was shown.
     pub delivered_at: String,
     pub read: bool,
+}
+
+/// Short titles in the user's language.
+pub fn notice_title(category: NoticeCategory, ru: bool) -> &'static str {
+    use NoticeCategory::*;
+    match (category, ru) {
+        (Reminder, true) => "Напоминание",
+        (Reminder, false) => "Reminder",
+        (PriceAlert, true) => "Ценовой алерт",
+        (PriceAlert, false) => "Price alert",
+        (Automation, true) => "Автоматизация",
+        (Automation, false) => "Automation",
+        (BybitImport, true) => "Импорт Bybit",
+        (BybitImport, false) => "Bybit import",
+        (Loan, true) => "Платёж по кредиту",
+        (Loan, false) => "Loan payment",
+        (Rent, true) => "Аренда",
+        (Rent, false) => "Rent",
+        (Utilities, true) => "ЖКХ",
+        (Utilities, false) => "Utilities",
+        (Debt, true) => "Долг",
+        (Debt, false) => "Debt",
+        (Deposit, true) => "Вклад",
+        (Deposit, false) => "Deposit",
+        (Loyalty, true) => "Бонусные баллы",
+        (Loyalty, false) => "Loyalty points",
+        (Goal, true) => "Цель",
+        (Goal, false) => "Goal",
+        (Budget, true) => "Бюджет",
+        (Budget, false) => "Budget",
+        (Shortfall, true) => "Не хватит денег",
+        (Shortfall, false) => "Money will run short",
+        (Tax, true) => "Налоги",
+        (Tax, false) => "Taxes",
+        (Rates, true) => "Инфляция и ставка",
+        (Rates, false) => "Inflation and rates",
+        (Health, true) => "Чекап капитала",
+        (Health, false) => "Capital checkup",
+        (Security, true) => "Безопасность",
+        (Security, false) => "Security",
+        (Vehicle, true) => "Машина",
+        (Vehicle, false) => "Car",
+    }
+}
+
+/// A notice about to be shown, stamped `delivered_at`.
+pub fn notice_at(
+    category: NoticeCategory,
+    key: String,
+    title: &str,
+    body: String,
+    link: Option<String>,
+    at: String,
+    delivered_at: String,
+) -> NoticeRecord {
+    debug_assert!(
+        link.as_deref().is_none_or(crate::routes::is_known_link),
+        "unknown notice link {link:?}"
+    );
+    NoticeRecord {
+        key,
+        category,
+        title: title.to_string(),
+        body,
+        link,
+        at,
+        delivered_at,
+        read: false,
+    }
+}
+
+/// A notice about to be shown, stamped now.
+pub fn notice(
+    category: NoticeCategory,
+    key: String,
+    title: &str,
+    body: String,
+    link: Option<String>,
+    at: String,
+) -> NoticeRecord {
+    notice_at(category, key, title, body, link, at, now_iso())
 }
