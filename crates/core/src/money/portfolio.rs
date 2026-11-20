@@ -749,8 +749,34 @@ pub fn store_overview(
         tx_count: txs.len() as u32,
         first_tx_at,
         last_tx_at,
-        symbol_clash: books.loyalty_symbol_clash(store_id),
+        symbol_clash: symbol_clash(books.doc(), store_id),
     })
+}
+
+/// A loyalty symbol as it is compared: trimmed and upper-cased.
+pub fn normalized_symbol(raw: &str) -> String {
+    raw.trim().to_uppercase()
+}
+
+/// Another programme already uses `symbol` (already normalized).
+pub fn symbol_taken_by_other(doc: &VaultDoc, store_id: Option<&str>, symbol: &str) -> bool {
+    doc.stores.iter().any(|other| {
+        Some(other.id.as_str()) != store_id
+            && other
+                .loyalty
+                .as_ref()
+                .is_some_and(|known| normalized_symbol(&known.points_symbol) == symbol)
+    })
+}
+
+/// The loyalty programme shares its symbol with another one. Computed for
+/// the view, never stored; the form asks to rename.
+pub fn symbol_clash(doc: &VaultDoc, store_id: &str) -> bool {
+    find_store(doc, store_id)
+        .and_then(|store| store.loyalty.as_ref())
+        .is_some_and(|info| {
+            symbol_taken_by_other(doc, Some(store_id), &normalized_symbol(&info.points_symbol))
+        })
 }
 
 /// Portfolio value of one store (optionally with its subtree) over time.

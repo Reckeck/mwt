@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use crate::Amount;
 use crate::error::{Error, Result};
+use crate::household::shared_events::view::{shared_debts, shared_tx_links};
 use crate::kernel::books::Books;
 use crate::model::VaultDoc;
 use crate::model::contact::{Contact, ContactAccount, ContactKind, DebtTerms};
@@ -100,6 +101,31 @@ pub struct EventDebt {
     pub contact_id: String,
     pub currency: String,
     pub amount: Amount,
+}
+
+/// Personal debts from debt transfers made up to `secs`, plus what the
+/// shared events stood at then.
+pub fn contact_balances_until(books: &Books<'_>, secs: i64) -> Vec<ContactBalance> {
+    let doc = books.doc();
+    balances_until(doc, secs, &event_debts(doc, secs))
+}
+
+/// The shared events' part of the debts as of `secs`.
+pub fn event_debts(doc: &VaultDoc, secs: i64) -> EventDebts {
+    EventDebts {
+        tx_ids: shared_tx_links(doc)
+            .into_iter()
+            .map(|link| link.tx_id)
+            .collect(),
+        debts: shared_debts(doc, secs)
+            .into_iter()
+            .map(|debt| EventDebt {
+                contact_id: debt.contact_id,
+                currency: debt.currency,
+                amount: debt.amount,
+            })
+            .collect(),
+    }
 }
 
 /// The fields `update_contact` writes, checked.

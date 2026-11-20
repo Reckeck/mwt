@@ -8,7 +8,6 @@ pub use crate::household::shared_events::view::{
 };
 
 use crate::error::Result;
-use crate::household::shared_events::view::SharedDebt;
 #[cfg(test)]
 use crate::model::shared_event::SharedEvent;
 
@@ -28,10 +27,6 @@ impl UnlockedVault {
         /// The events that left a debt with (or credit from) a contact.
         pub fn contact_shared_events(&self, contact_id: &str) -> Vec<ContactEventBalance>
             => crate::household::shared_events::view::contact_shared_events @doc;
-        /// Every event debt with a contact, for the contact balances: positive
-        /// means the contact owes me.
-        pub(crate) fn shared_debts(&self, secs: i64) -> Vec<SharedDebt>
-            => crate::household::shared_events::view::shared_debts @doc;
         /// Every operation tied to an event, found through the events (the
         /// operations themselves carry no mark, so older vault files still read).
         pub fn shared_tx_links(&self) -> Vec<SharedTxLink>

@@ -14,6 +14,7 @@ use crate::model::ids::StoreId;
 use crate::model::store::{LoyaltyInfo, StoreKind};
 use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, TopupTx, Transaction, TxMeta};
 use crate::model::vault::{ManualPrice, VaultDoc};
+use crate::money::portfolio::{normalized_symbol, symbol_clash, symbol_taken_by_other};
 use crate::money::tree::find_store;
 use crate::pricing::history::secs_or_now;
 
@@ -71,33 +72,10 @@ pub struct NewProgramme {
     pub contact_id: Option<String>,
 }
 
-fn normalized_symbol(raw: &str) -> String {
-    raw.trim().to_uppercase()
-}
-
-/// Another programme already uses `symbol` (already normalized).
-fn symbol_taken_by_other(doc: &VaultDoc, store_id: Option<&str>, symbol: &str) -> bool {
-    doc.stores.iter().any(|other| {
-        Some(other.id.as_str()) != store_id
-            && other
-                .loyalty
-                .as_ref()
-                .is_some_and(|known| normalized_symbol(&known.points_symbol) == symbol)
-    })
-}
-
 /// The programme shares its symbol with another one. Computed for the
 /// view, never stored; the form asks to rename.
 pub fn loyalty_symbol_clash(doc: &VaultDoc, store_id: &StoreId) -> bool {
-    find_store(doc, store_id.as_str())
-        .and_then(|store| store.loyalty.as_ref())
-        .is_some_and(|info| {
-            symbol_taken_by_other(
-                doc,
-                Some(store_id.as_str()),
-                &normalized_symbol(&info.points_symbol),
-            )
-        })
+    symbol_clash(doc, store_id.as_str())
 }
 
 /// Normalize and check a programme's settings; `store_id` is the programme

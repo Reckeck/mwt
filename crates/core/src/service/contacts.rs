@@ -38,8 +38,9 @@ impl UnlockedVault {
             => crate::usecases::household::contacts::contact_balances;
         /// Personal debts from debt transfers made up to `secs`, plus what the
         /// shared events stood at then.
+        #[cfg(test)]
         pub(crate) fn contact_balances_until(&self, secs: i64) -> Vec<ContactBalance>
-            => crate::usecases::household::contacts::contact_balances_until;
+            => crate::household::contacts::contact_balances_until @books;
         pub fn debt_terms(&self, contact_id: Option<&str>) -> Vec<crate::model::contact::DebtTerms>
             => crate::household::contacts::debt_terms @doc;
         /// Set (or replace) the terms of one contact's debt in one asset; an

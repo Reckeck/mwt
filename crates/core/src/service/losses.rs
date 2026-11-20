@@ -3,7 +3,7 @@
 pub use crate::household::losses::{
     FlowAmount, FlowLink, FlowSummary, FxRow, FxTable, LossBucket, LossRow, TxLoss,
 };
-pub use crate::usecases::household::losses::LossReport;
+pub use crate::reports::overview::LossReport;
 
 use std::collections::BTreeMap;
 
@@ -11,7 +11,6 @@ use crate::error::Result;
 
 use super::UnlockedVault;
 use super::forward::forward;
-use super::reports::Ctx;
 
 impl UnlockedVault {
     // forward:begin
@@ -40,11 +39,4 @@ impl UnlockedVault {
             => crate::usecases::household::losses::fx_table;
     }
     // forward:end
-
-    // The tool forwards public methods only; the report's crate-private delegate is kept by hand.
-    forward! {
-        /// Losses by month and by kind, wallet, contact and chain.
-        pub(crate) fn loss_report(&self, ctx: &Ctx) -> LossReport
-            => crate::usecases::household::losses::loss_report;
-    }
 }
