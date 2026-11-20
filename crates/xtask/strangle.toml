@@ -810,3 +810,33 @@ files = [
     "crates/core/src/usecases/planning/automations.rs",
     "crates/core/src/usecases/planning/automations_tests.rs",
 ]
+
+[[foundation]]
+# T227/T229/T125 (z10): budget and household reads move down and take &Books; T125 counts unpriced fees.
+task = "T227"
+files = [
+  "crates/core/src/planning/",
+  "crates/core/src/reports/",
+  "crates/core/src/household/",
+  "crates/core/src/money/portfolio.rs",
+  "crates/core/src/kernel/books.rs",
+  "crates/core/src/usecases/planning/budget.rs",
+  "crates/core/src/usecases/planning/goals.rs",
+  "crates/core/src/usecases/planning/emergency.rs",
+  "crates/core/src/usecases/household/debts.rs",
+  "crates/core/src/usecases/household/search.rs",
+  "crates/core/src/usecases/household/losses.rs",
+  "crates/core/src/usecases/household/contacts.rs",
+  "crates/core/src/usecases/household/shared_events.rs",
+  "crates/core/src/usecases/workflow/runs.rs",
+  "crates/core/src/usecases/money/capital.rs",
+  "crates/core/src/service/budget.rs",
+  "crates/core/src/service/losses.rs",
+  "crates/core/src/service/contacts.rs",
+  "crates/core/src/service/loyalty.rs",
+  "crates/core/src/service/mod.rs",
+  "crates/core/src/service/worth.rs",
+  "crates/core/src/service/shared_events/view.rs",
+  "crates/core/src/service/reports.rs",
+  "crates/xtask/src/arch/",
+]
