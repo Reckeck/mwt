@@ -7,7 +7,6 @@
 
 use std::sync::Mutex;
 
-use chrono::NaiveDate;
 use serde_json::{Value, json};
 
 use super::{ChainSource, ExchangeClient, PriceSource};
@@ -17,7 +16,7 @@ use crate::cryptotrack::sources::evm::{ExplorerApi, HistoryRequest, fetch_page};
 use crate::error::Result;
 use crate::exchange::{EarnYield, InterTransfer};
 use crate::model::chain::Chain;
-use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint, TokenId};
+use crate::pricing::PricingService;
 
 const ADDRESS: &str = "0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe";
 
@@ -89,41 +88,16 @@ async fn the_engine_normalizes_a_page_read_through_a_fake_chain_source() {
     assert_eq!(*chain.subjects.lock().unwrap(), vec![address]);
 }
 
-/// Records what it was asked and honours the policy like the real adapter.
-struct FakePrices {
-    consent: bool,
-    asked: Mutex<Vec<String>>,
-}
-
-impl PriceSource for FakePrices {
-    fn may_lookup_contract(&self) -> bool {
-        self.consent
-    }
-
-    async fn historic_prices(
-        &self,
-        wanted: &[(CryptoAsset, NaiveDate)],
-    ) -> Result<Vec<CryptoPricePoint>> {
-        for (asset, _) in wanted {
-            if self.consent || matches!(asset, CryptoAsset::Native { .. }) {
-                self.asked.lock().unwrap().push(asset.key());
-            }
-        }
-        Ok(Vec::new())
-    }
-}
-
-#[tokio::test]
-async fn a_price_source_reports_its_consent() {
-    let source = FakePrices {
-        consent: false,
-        asked: Mutex::default(),
-    };
-    let day = NaiveDate::from_ymd_opt(2026, 3, 1).unwrap();
-    let token = CryptoAsset::Token(TokenId::new(Chain::Ethereum, "0xabc"));
-    source.historic_prices(&[(token, day)]).await.unwrap();
-    assert!(!source.may_lookup_contract());
-    assert!(source.asked.lock().unwrap().is_empty());
+/// The real price adapter reports the consent setting through the port; the
+/// default withholds it, so unknown tokens are not looked up by contract.
+#[test]
+fn the_price_adapter_reports_its_consent() {
+    let service = PricingService::default();
+    assert!(!service.looks_up_contracts());
+    assert!(!service.may_lookup_contract());
+    let consenting = service.with_contract_lookup(true);
+    assert!(consenting.looks_up_contracts());
+    assert!(consenting.may_lookup_contract());
 }
 
 /// An exchange that answers nothing, to check the port is implementable.
