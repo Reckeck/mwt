@@ -34,22 +34,13 @@ pub struct Exemption {
 }
 
 /// Named exemptions, no blanket ones. Never add an entry: remove it when its task lands.
-pub const EXEMPTIONS: &[Exemption] = &[
-    Exemption {
-        file: "reports/overview.rs",
-        item: "Flow",
-        uses: 1,
-        until: "T227",
-        reason: "the overview names the budget Flow of service::budget until Flow moves to planning",
-    },
-    Exemption {
-        file: "reports/overview.rs",
-        item: "LossReport",
-        uses: 1,
-        until: "T229",
-        reason: "the overview carries service::losses::LossReport until the loss report moves to its area",
-    },
-];
+pub const EXEMPTIONS: &[Exemption] = &[Exemption {
+    file: "reports/overview.rs",
+    item: "LossReport",
+    uses: 1,
+    until: "T229",
+    reason: "the overview carries service::losses::LossReport until the loss report moves to its area",
+}];
 
 /// One forbidden name found in a domain module.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -352,9 +343,9 @@ mod tests {
     }
 
     #[test]
-    fn there_are_exactly_the_two_named_exemptions() {
+    fn there_is_exactly_the_one_named_exemption() {
         let tasks: Vec<&str> = EXEMPTIONS.iter().map(|entry| entry.until).collect();
-        assert_eq!(tasks, ["T227", "T229"]);
+        assert_eq!(tasks, ["T229"]);
         assert!(EXEMPTIONS.iter().all(|entry| !entry.reason.is_empty()));
     }
 }

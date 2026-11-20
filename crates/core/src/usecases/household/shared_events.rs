@@ -4,11 +4,9 @@
 //! or a purchase that makes a real operation writes the operation first through
 //! the transactions area, then records itself in the event.
 
-use chrono::{Datelike, NaiveDate};
+use chrono::Datelike;
 
-use crate::calendar::Calendar;
 use crate::error::{Error, Result};
-use crate::household::shared_events::analytics::{category_group, extras_between, value_in};
 use crate::household::shared_events::ledger::{apply_edit, cascade_delete};
 use crate::household::shared_events::purchases::{
     PaymentStep, PurchaseEdit, link_purchase, plan_add_purchase, plan_attach_payment,
@@ -29,15 +27,11 @@ use crate::ipc_contract::{
     SharedPurchaseDraft, SharedRemainderInput,
 };
 use crate::kernel::tx::Tx;
-use crate::model::VaultDoc;
 use crate::model::contact::{Contact, DebtTerms};
 use crate::model::shared_event::{Settlement, SharedEvent};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
-use crate::money::rates::RateBook;
-use crate::money::shared_ratios::SharedExtra;
-use crate::service::{FlowClass, SharedEventView, UnlockedVault};
-use crate::usecases::planning::budget::Flow;
+use crate::service::{SharedEventView, UnlockedVault};
 
 /// Put the event in place of its older self. An archived event that was
 /// edited is open again.
@@ -415,43 +409,4 @@ pub fn shared_event_share_text(
     locale: &str,
 ) -> Result<String> {
     share_text(&vault.doc, event_id, locale, chrono::Utc::now().year())
-}
-
-/// One spending flow of mine in the event currency, valued in `currency`.
-fn event_flow(
-    doc: &VaultDoc,
-    book: &RateBook,
-    cal: &Calendar,
-    currency: &str,
-    extra: &SharedExtra,
-) -> Flow {
-    let (value, missing) = value_in(book, extra, currency);
-    let date: NaiveDate = cal.date_of(extra.secs);
-    Flow {
-        date,
-        class: UnlockedVault::spending(category_group(doc, &extra.category)),
-        value,
-        categories: vec![extra.category.clone()],
-        stores: Vec::new(),
-        tx_id: extra.tag.clone(),
-        missing,
-    }
-}
-
-/// Spending that has no payment of mine behind it: my part of other
-/// people's purchases and what I wrote off, over entries the caller already
-/// collected (`Books` keeps them, so a request collects them once).
-pub(crate) fn extra_flows_from(
-    doc: &VaultDoc,
-    extras: &[SharedExtra],
-    book: &RateBook,
-    cal: &Calendar,
-    currency: &str,
-    from: i64,
-    to: i64,
-) -> Vec<Flow> {
-    extras_between(extras, from, to)
-        .map(|extra| event_flow(doc, book, cal, currency, extra))
-        .filter(|flow| flow.class != FlowClass::Ignored)
-        .collect()
 }

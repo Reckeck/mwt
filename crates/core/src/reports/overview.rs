@@ -26,8 +26,7 @@ pub(crate) use crate::money::rates::value_at;
 use crate::money::worth::FlowClass;
 use crate::planning::agenda::UpcomingItem;
 use crate::planning::budget::{budget_currency, manual_day_limit};
-use crate::service::budget::Flow;
-use crate::usecases::planning::budget::{flows_between, leg_value_in};
+use crate::planning::flows::{Flow, flows_between, leg_value_in};
 
 /// Longest range a report covers.
 pub const MAX_REPORT_MONTHS: usize = 120;

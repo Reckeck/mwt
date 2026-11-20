@@ -12,6 +12,7 @@ use crate::kernel::books::Books;
 use crate::model::vault::DashPeriod;
 use crate::money::worth::FlowClass;
 use crate::planning::budget::budget_currency;
+use crate::planning::flows::flows_between;
 use crate::planning::period::{PeriodWindow, period_window};
 
 /// One day of the "Spending" week strip.
@@ -57,7 +58,8 @@ fn spending_totals(
     from: NaiveDate,
     to: NaiveDate,
 ) -> (Totals, Vec<(NaiveDate, Amount)>) {
-    let flows = books.flows_between(
+    let flows = flows_between(
+        books,
         cal,
         currency,
         cal.start_of(from),

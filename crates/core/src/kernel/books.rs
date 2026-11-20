@@ -18,7 +18,7 @@ use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
 use crate::vault_io::device_secrets::DeviceSecrets;
 
-use crate::service::budget::{Flow, MonthAllowance, MonthAvg};
+use crate::service::budget::{Flow, MonthAllowance};
 use crate::service::losses::LossReport;
 use crate::service::reports::Ctx;
 use crate::service::{
@@ -173,22 +173,6 @@ impl Books<'_> {
     /// The budget of one month over this context.
     pub(crate) fn month_summary_in(&self, month: &str, zone: &str) -> Result<MonthSummary> {
         self.vault.month_summary_in(self, month, zone)
-    }
-
-    /// The average income and essential spending over finished months.
-    pub(crate) fn income_basis(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg> {
-        self.vault.income_basis(months, now, zone)
-    }
-
-    /// The budget flows of a period.
-    pub(crate) fn flows_between(
-        &self,
-        cal: &Calendar,
-        currency: &str,
-        from: i64,
-        to: i64,
-    ) -> Vec<Flow> {
-        self.vault.flows_between(cal, currency, from, to)
     }
 
     /// Planned income and fixed spending of the month containing `date`.
@@ -347,8 +331,6 @@ mod tests {
         "subtree_ids",
         "store_overview",
         "month_summary_in",
-        "income_basis",
-        "flows_between",
         "month_plan",
         "month_allowance",
         "daily_budget",

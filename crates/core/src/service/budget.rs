@@ -1,11 +1,11 @@
 //! Shim of the `budget` area: the rules moved to `crate::planning::budget`, the scenarios and the
-//! flow queries to `crate::usecases::planning::budget` (spec core-strangler, D1).
+//! flow queries to `crate::planning::flows` (spec core-strangler, D1).
 
 pub(crate) use crate::planning::budget::MonthAllowance;
 pub use crate::planning::budget::{
     BudgetDraft, BudgetStatus, DailyBudget, MIN_HISTORY_MONTHS, MonthAvg, MonthSummary,
 };
-pub(crate) use crate::usecases::planning::budget::Flow;
+pub(crate) use crate::planning::flows::Flow;
 
 use std::collections::HashSet;
 
@@ -58,11 +58,11 @@ impl UnlockedVault {
         /// Averages of the last `months` finished calendar months that had any
         /// flow, before the month of `now`; `None` without such months.
         pub fn avg_month(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg>
-            => crate::usecases::planning::budget::avg_month @books;
+            => crate::planning::budget::avg_month @books;
         /// [`avg_month`], or the hand-entered month while fewer than
         /// `MIN_HISTORY_MONTHS` finished months have flows.
         pub fn income_basis(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg>
-            => crate::usecases::planning::budget::income_basis @books;
+            => crate::planning::budget::income_basis @books;
         /// How much can be spent today (plan §7.3), in the budget currency.
         pub fn daily_budget(&self, now: i64, zone: &str) -> DailyBudget
             => crate::usecases::planning::budget::daily_budget;
@@ -73,8 +73,9 @@ impl UnlockedVault {
     // regenerated block.
     forward! {
         /// Classified flows in `[from, to)`, valued in `currency`.
+        #[cfg(test)]
         pub(crate) fn flows_between(&self, cal: &Calendar, currency: &str, from: i64, to: i64) -> Vec<Flow>
-            => crate::usecases::planning::budget::flows_between @books;
+            => crate::planning::flows::flows_between @books;
         /// Operations the budget could not value in its currency: a side had no
         /// rate (Currency-1 · 7, "Show").
         pub(crate) fn unpriced_tx_ids(&self) -> HashSet<String>
@@ -107,6 +108,6 @@ impl UnlockedVault {
         currency: &str,
         secs: i64,
     ) -> Option<Amount> {
-        crate::usecases::planning::budget::leg_value_in(book, leg, currency, secs)
+        crate::planning::flows::leg_value_in(book, leg, currency, secs)
     }
 }

@@ -1,13 +1,12 @@
 //! Scenarios and queries of the budget area. Each scenario decides in
 //! `planning::budget`, then ends in one `vault.transact`.
 //!
-//! The queries over money flows sit here too: a flow carries the worth
-//! classification (`FlowClass`), which `planning` may not name, and the
-//! automation plan comes from `automation_rules`, which sits above it. The
-//! queries take the `Books` of one request and the automations as arguments,
-//! so a request builds its rates once; only the entry points read the vault.
+//! The queries that need the automation plan sit here: it comes from
+//! `automation_rules`, which sits above `planning`. The queries take the
+//! `Books` of one request and the automations as arguments, so a request
+//! builds its rates once; only the entry points read the vault.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use chrono::{Duration, NaiveDate};
 
@@ -16,45 +15,22 @@ use crate::calendar::{self, AUTOMATION_HOUR, Calendar, first_of_month};
 use crate::error::Result;
 use crate::kernel::books::Books;
 use crate::model::planning::draft_to_transaction;
-use crate::model::planning::{Automation, AutomationRun, Budget, BudgetTarget, UtilityKind};
+use crate::model::planning::{Automation, Budget, BudgetTarget, UtilityKind};
 use crate::model::store::StoreKind;
-use crate::model::transaction::{Leg, LegRole, Transaction};
+use crate::model::transaction::Transaction;
 use crate::model::vault::DailyBudgetMode;
-use crate::money::worth::classify_flow;
+use crate::money::worth::FlowClass;
 use crate::planning::automations::automation_draft;
 use crate::planning::budget::{
-    AVG_LOOKBACK_MONTHS, BudgetDraft, BudgetStatus, DailyBudget, MonthAllowance, MonthAvg,
-    MonthSummary, allowance_of, amount_of_days, average_month, budget_balance, budget_currency,
-    income_basis_of, is_essential_spending, manual_day_limit, manual_month, not_executed,
-    period_dates, plan_create_budget, plan_delete_budget, plan_update_budget, settle_month,
-    store_currency, used_of,
+    BudgetDraft, BudgetStatus, DailyBudget, MonthAllowance, MonthSummary, allowance_of,
+    amount_of_days, budget_balance, budget_currency, manual_day_limit, not_executed, period_dates,
+    plan_create_budget, plan_delete_budget, plan_update_budget, store_currency, used_of,
 };
+use crate::planning::flows::{Flow, classify, flow_value, flows_between};
 use crate::planning::goals::resolve_scope;
-use crate::pricing::history::secs_or_now;
-use crate::service::{FlowClass, RateBook, UnlockedVault};
-use crate::usecases::household::shared_events::extra_flows_from;
+use crate::service::UnlockedVault;
 use crate::usecases::planning::automation_rules::{automation_occurrences, automation_runs};
 use crate::usecases::planning::automations::automations;
-
-/// One classified flow.
-#[derive(Debug, Clone)]
-pub(crate) struct Flow {
-    pub date: NaiveDate,
-    pub class: FlowClass,
-    /// In the requested currency.
-    pub value: Amount,
-    pub categories: Vec<String>,
-    pub stores: Vec<String>,
-    pub tx_id: String,
-    /// Currencies (upper case) of the sides that had no rate; empty = priced.
-    pub missing: Vec<String>,
-}
-
-impl Flow {
-    pub fn priced(&self) -> bool {
-        self.missing.is_empty()
-    }
-}
 
 // -- CRUD -------------------------------------------------------------------
 
@@ -92,130 +68,6 @@ pub fn delete_budget(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 }
 
 // -- flows ------------------------------------------------------------------
-
-/// Where a transaction lands in the budget: the one classification, asked of
-/// the vault until the worth area moves.
-fn classify(books: &Books<'_>, tx: &Transaction) -> FlowClass {
-    classify_flow(books.doc(), tx)
-}
-
-/// Value of one leg in `currency` at `secs`; `None` without a rate.
-pub(crate) fn leg_value_in(
-    book: &RateBook,
-    leg: &Leg,
-    currency: &str,
-    secs: i64,
-) -> Option<Amount> {
-    let qty = leg.amount.abs();
-    if leg.asset.is_fiat() && leg.asset.symbol.eq_ignore_ascii_case(currency) {
-        return Some(qty);
-    }
-    let usd = leg
-        .price_usd
-        .or_else(|| book.price_at(&leg.asset.key(), secs))?;
-    book.convert(qty * usd, "usd", currency, secs)
-}
-
-/// What a flow is worth to the budget: the money that came in for income
-/// and money entering the budget, the money (and fees) that went out for
-/// everything else. Also the currencies of the sides without a rate,
-/// which count as zero.
-fn flow_value(
-    book: &RateBook,
-    tx: &Transaction,
-    class: FlowClass,
-    currency: &str,
-) -> (Amount, Vec<String>) {
-    let secs = secs_or_now(&tx.meta().timestamp);
-    let incoming = matches!(class, FlowClass::Income | FlowClass::BudgetIn);
-    let mut total = Amount::ZERO;
-    let mut missing: Vec<String> = Vec::new();
-    for leg in tx.legs() {
-        let counts = match leg.role {
-            LegRole::Principal => leg.amount.is_positive() == incoming,
-            LegRole::Fee => !incoming,
-            // A correction is neither income nor spending.
-            LegRole::Pnl | LegRole::Adjustment => false,
-        };
-        if !counts || leg.amount.is_zero() {
-            continue;
-        }
-        match leg_value_in(book, &leg, currency, secs) {
-            Some(value) => total += value,
-            None => {
-                let code = leg.asset.symbol.to_uppercase();
-                if !missing.contains(&code) {
-                    missing.push(code);
-                }
-            }
-        }
-    }
-    (total, missing)
-}
-
-/// The flows of my own operations; a payment made for a shared event
-/// counts for my part of it only.
-fn payment_flows(
-    books: &Books<'_>,
-    cal: &Calendar,
-    currency: &str,
-    from: i64,
-    to: i64,
-) -> Vec<Flow> {
-    let book = books.rate_book();
-    let shared: &HashMap<String, Amount> = books.shared_ratios();
-    books
-        .doc()
-        .transactions
-        .iter()
-        .filter_map(|tx| {
-            let secs = secs_or_now(&tx.meta().timestamp);
-            if secs < from || secs >= to {
-                return None;
-            }
-            let class = classify(books, tx);
-            if class == FlowClass::Ignored {
-                return None;
-            }
-            let (mut value, missing) = flow_value(book, tx, class, currency);
-            if let Some(ratio) = shared.get(&tx.meta().id) {
-                value = value * *ratio;
-            }
-            Some(Flow {
-                date: cal.date_of(secs),
-                class,
-                value,
-                categories: tx.meta().categories.clone(),
-                stores: tx.legs().into_iter().map(|leg| leg.store_id).collect(),
-                tx_id: tx.meta().id.clone(),
-                missing,
-            })
-        })
-        .collect()
-}
-
-/// Classified flows in `[from, to)`, valued in `currency`, over the books of
-/// one request: the rates and the shared-event figures are built once and
-/// shared.
-pub(crate) fn flows_between(
-    books: &Books<'_>,
-    cal: &Calendar,
-    currency: &str,
-    from: i64,
-    to: i64,
-) -> Vec<Flow> {
-    let mut flows = payment_flows(books, cal, currency, from, to);
-    flows.extend(extra_flows_from(
-        books.doc(),
-        books.shared_extras(),
-        books.rate_book(),
-        cal,
-        currency,
-        from,
-        to,
-    ));
-    flows
-}
 
 /// Operations the budget could not value in its currency: a side had no
 /// rate (Currency-1 · 7, "Show").
@@ -285,77 +137,16 @@ pub fn budget_status(books: &Books<'_>, now: i64, zone: &str) -> Vec<BudgetStatu
 // -- month totals -----------------------------------------------------------
 
 /// Income, mandatory spending, everyday spending and savings of a calendar
-/// month (`YYYY-MM`) in the budget currency (plan §7.3).
+/// month (`YYYY-MM`) in the budget currency (plan §7.3): the books' figures
+/// plus the automation runs that did not execute.
 pub fn month_summary(books: &Books<'_>, month: &str, zone: &str) -> Result<MonthSummary> {
-    month_summary_with(books, &automation_runs(books.doc(), None), month, zone)
-}
-
-/// [`month_summary`] with the automation runs the caller already has.
-fn month_summary_with(
-    books: &Books<'_>,
-    runs: &[AutomationRun],
-    month: &str,
-    zone: &str,
-) -> Result<MonthSummary> {
+    let mut out = crate::planning::budget::month_summary(books, month, zone)?;
     let first = calendar::parse_month(month).ok_or_else(|| {
         crate::error::Error::InvalidInput(format!("month {month}: expected YYYY-MM"))
     })?;
-    let cal = Calendar::new(zone);
-    let (from, to) = cal.month_bounds(first);
-    let currency = budget_currency(books);
-    let mut out = MonthSummary {
-        month: calendar::month_key(first),
-        currency: currency.clone(),
-        complete: true,
-        ..MonthSummary::default()
-    };
-    for flow in flows_between(books, &cal, &currency, from, to) {
-        out.complete &= flow.priced();
-        match flow.class {
-            FlowClass::Income => out.income += flow.value,
-            FlowClass::Fixed => out.fixed += flow.value,
-            FlowClass::Daily => {
-                out.daily += flow.value;
-                if is_essential_spending(books.doc(), &flow.categories) {
-                    out.essential_daily += flow.value;
-                }
-            }
-            FlowClass::Savings => out.savings_moved += flow.value,
-            FlowClass::BudgetIn => out.budget_in += flow.value,
-            FlowClass::BudgetOut => out.budget_out += flow.value,
-            FlowClass::Ignored => {}
-        }
-    }
-    settle_month(&mut out, books.doc().settings.savings_rate);
-    out.not_executed = not_executed(runs, from, to);
+    let (from, to) = Calendar::new(zone).month_bounds(first);
+    out.not_executed = not_executed(&automation_runs(books.doc(), None), from, to);
     Ok(out)
-}
-
-/// Averages of the last `months` finished calendar months that had any
-/// flow, before the month of `now`; `None` without such months.
-pub fn avg_month(books: &Books<'_>, months: usize, now: i64, zone: &str) -> Option<MonthAvg> {
-    let runs = automation_runs(books.doc(), None);
-    let cal = Calendar::new(zone);
-    let mut month = first_of_month(cal.date_of(now));
-    let mut found: Vec<MonthSummary> = Vec::new();
-    for _ in 0..AVG_LOOKBACK_MONTHS {
-        if found.len() >= months {
-            break;
-        }
-        month = first_of_month(month - Duration::days(1));
-        let summary = month_summary_with(books, &runs, &calendar::month_key(month), zone).ok()?;
-        if summary.income.is_zero() && summary.fixed.is_zero() && summary.daily.is_zero() {
-            continue;
-        }
-        found.push(summary);
-    }
-    average_month(&found, budget_currency(books))
-}
-
-/// [`avg_month`], or the hand-entered month while fewer than
-/// `MIN_HISTORY_MONTHS` finished months have flows.
-pub fn income_basis(books: &Books<'_>, months: usize, now: i64, zone: &str) -> Option<MonthAvg> {
-    income_basis_of(avg_month(books, months, now, zone), manual_month(books))
 }
 
 // -- the plan of a month from automations -----------------------------------

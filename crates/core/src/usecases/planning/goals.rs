@@ -22,7 +22,7 @@ use crate::model::planning::{Envelope, Goal};
 use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::money::portfolio::history_series_filtered_in;
-use crate::planning::budget::{budget_currency, manual_month};
+use crate::planning::budget::{budget_currency, manual_month, month_summary};
 use crate::planning::envelopes::envelope_saved_for_goal;
 use crate::planning::goals::{
     DAYS_PER_MONTH, FORECAST_DAYS, GoalCalendar, GoalCalendarMonth, GoalDeleted, GoalDraft,
@@ -34,7 +34,6 @@ use crate::planning::goals::{
 use crate::pricing::history::secs_or_now;
 use crate::service::MIN_HISTORY_MONTHS;
 use crate::service::UnlockedVault;
-use crate::usecases::planning::budget::month_summary;
 use crate::usecases::react::react;
 
 /// Active workflows that move money into the goal's wallet (what
