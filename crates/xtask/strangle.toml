@@ -64,6 +64,8 @@ files = [
     "crates/core/src/cryptotrack/rpc/port.rs",
     # T146: the explorer port gets one blanket impl over `ChainSource` instead of a second RpcClient forward.
     "crates/core/src/cryptotrack/sources/evm/blockscout.rs",
+    # T183: the Bybit source doc points at exchange_import::asset_for_import instead of the removed UnlockedVault path.
+    "crates/core/src/cryptotrack/sources/bybit.rs",
 ]
 
 [[foundation]]
