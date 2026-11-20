@@ -457,7 +457,7 @@ impl UnlockedVault {
     /// Put `doc` in place of the open document; the old one comes back. It
     /// cannot fail, so a rollback never hides the error that caused it.
     fn swap_doc(&mut self, doc: VaultDoc) -> VaultDoc {
-        crate::kernel::tx::Tx::new(&mut self.doc).replace_doc(doc)
+        std::mem::replace(&mut self.doc, doc)
     }
 
     /// What follows the swap of a merged document: settle it, journal the
