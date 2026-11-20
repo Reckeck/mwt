@@ -52,6 +52,8 @@ pub const GROUPS: &[Group] = &[
         layer: 3,
         modules: &["pricing", "exchange", "datasource", "market", "updates"],
     },
+    // Domain order follows target-structure §3: money <- household <- planning <- reports; cryptotrack sits on
+    // money; workflow sees only model and base (data through the `WorkflowHost` port).
     // `txinfo` is a re-export of `money::txinfo` until Ф7 removes the old path (core-strangler T27).
     Group {
         name: "money",
@@ -60,7 +62,7 @@ pub const GROUPS: &[Group] = &[
     },
     Group {
         name: "planning",
-        layer: 4,
+        layer: 6,
         modules: &["planning"],
     },
     Group {
@@ -81,7 +83,7 @@ pub const GROUPS: &[Group] = &[
     // Scenarios and the service shim sit above the pure areas they call (core-strangler OD1).
     Group {
         name: "usecases",
-        layer: 6,
+        layer: 8,
         modules: &[
             "service",
             "sandbox",
@@ -97,13 +99,13 @@ pub const GROUPS: &[Group] = &[
     },
     Group {
         name: "reports",
-        layer: 5,
+        layer: 7,
         modules: &["reports"],
     },
     // Test support on top of everything: compiled only under `cfg(test)` or the `testkit` feature.
     Group {
         name: "testkit",
-        layer: 7,
+        layer: 9,
         modules: &["testkit"],
     },
 ];
