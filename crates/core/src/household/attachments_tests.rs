@@ -503,16 +503,30 @@ fn the_remove_rename_restore_delegates_match_their_scenarios() {
     let renamed_b = scenario::rename_attachment(&mut vault, &second.id, " New ").unwrap();
     assert_eq!(renamed_a.title, renamed_b.title);
 
-    for call in [
-        vault.remove_attachment("missing").err(),
-        vault.rename_attachment("missing", "x").err(),
-        vault.restore_attachment("missing").err(),
-    ] {
-        assert!(call.is_some());
-    }
-    assert!(scenario::remove_attachment(&mut vault, "missing").is_err());
-    assert!(scenario::rename_attachment(&mut vault, "missing", "x").is_err());
-    assert!(scenario::restore_attachment(&mut vault, "missing").is_err());
+    assert!(matches!(
+        vault.remove_attachment("missing"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        vault.rename_attachment("missing", "x"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        vault.restore_attachment("missing"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        scenario::remove_attachment(&mut vault, "missing"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        scenario::rename_attachment(&mut vault, "missing", "x"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        scenario::restore_attachment(&mut vault, "missing"),
+        Err(Error::Missing(_))
+    ));
 }
 
 #[test]
