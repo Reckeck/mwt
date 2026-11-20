@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use chrono::{Datelike, Duration};
 
+use super::records::{RunClosing, SKIPPED, book_and_close, mark_skipped};
 use crate::Amount;
 use crate::calendar::{Calendar, first_of_month};
 use crate::error::{Error, Result};
@@ -29,7 +30,6 @@ use crate::usecases::planning::notifications::notice;
 use crate::workflow::RunKey;
 use crate::workflow::automation;
 use crate::workflow::catalog::node_def;
-use crate::workflow::effect::Effect;
 use crate::workflow::exec::{self, EmittedEvent, Resume, RunContext, RunMode, RunReport};
 use crate::workflow::graph::{Graph, Node};
 use crate::workflow::model::{
@@ -81,6 +81,24 @@ pub fn wf_insert(
     txs: Vec<Transaction>,
     now: i64,
 ) -> std::result::Result<Vec<Transaction>, String> {
+    insert_checked(vault, txs, now).map_err(|refusal| match refusal {
+        InsertRefusal::Short(reason) => describe_reject(&reason),
+        InsertRefusal::Invalid(message) => message,
+    })
+}
+
+/// Why `insert_checked` booked nothing.
+enum InsertRefusal {
+    /// The money is short: the one place that says so.
+    Short(Box<RejectReason>),
+    Invalid(String),
+}
+
+fn insert_checked(
+    vault: &mut UnlockedVault,
+    txs: Vec<Transaction>,
+    now: i64,
+) -> std::result::Result<Vec<Transaction>, InsertRefusal> {
     let backup = vault.doc.clone();
     let flow = (txs.len() > 1).then(|| uuid::Uuid::new_v4().to_string());
     let mut saved = Vec::with_capacity(txs.len());
@@ -90,16 +108,16 @@ pub fn wf_insert(
         }
         let secs = secs_or_now(&tx.meta().timestamp);
         let result = match vault.funds_shortfall(&tx, secs) {
-            Some(reason) => Err(describe_reject(&reason)),
+            Some(reason) => Err(InsertRefusal::Short(Box::new(reason))),
             // The run's clock, not the wall one: an emulated run days
             // ahead dates its operations days ahead too.
             None => vault
                 .prepare_transaction_at(&mut tx, now.max(secs) * 1000)
-                .map_err(|err| err.to_string()),
+                .map_err(|err| InsertRefusal::Invalid(err.to_string())),
         };
-        if let Err(message) = result {
+        if let Err(refusal) = result {
             vault.doc = backup;
-            return Err(message);
+            return Err(refusal);
         }
         vault.doc.transactions.push(tx.clone());
         vault.recompute_holdings();
@@ -468,30 +486,18 @@ fn retry_queued_refusal(
     batch: QueuedActions,
     now: i64,
 ) -> Result<WorkflowPass> {
-    let mut txs = batch.transactions;
-    for tx in &mut txs {
-        tx.meta_mut().timestamp = crate::calendar::iso(now);
-    }
-    if let Some(reason) = txs.iter().find_map(|tx| vault.funds_shortfall(tx, now)) {
-        return Err(Error::InsufficientFunds(vault.describe_shortfall(&reason)));
-    }
-    let saved = Effect::Insert { txs, now }
-        .apply_to(vault)
-        .map_err(Error::InvalidInput)?;
-    let done = WorkflowRun {
-        id: uuid::Uuid::new_v4().to_string(),
-        started_at: crate::calendar::iso(now),
-        outcome: RunOutcome::Done,
-        created: saved.iter().map(|tx| tx.meta().id.clone()).collect(),
-        queued: 0,
-        ..run.clone()
-    };
-    vault.recompute_holdings();
-    vault.transact(|tx| {
-        tx.collection::<QueuedActions>().remove(&batch.id)?;
-        tx.collection::<WorkflowRun>().remove(&run.id)?;
-        tx.collection::<WorkflowRun>().insert(done.clone())
+    let (_, done) = book_and_close(vault, &batch, RunClosing::Required, |vault, mut txs| {
+        for tx in &mut txs {
+            tx.meta_mut().timestamp = crate::calendar::iso(now);
+        }
+        insert_checked(vault, txs, now).map_err(|refusal| match refusal {
+            InsertRefusal::Short(reason) => {
+                Error::InsufficientFunds(vault.describe_shortfall(&reason))
+            }
+            InsertRefusal::Invalid(message) => Error::InvalidInput(message),
+        })
     })?;
+    let done = done.ok_or_else(|| Error::Missing(format!("workflow run {}", run.id)))?;
     let mut pass = WorkflowPass::default();
     pass.created.clone_from(&done.created);
     pass.runs.push(done);
@@ -510,12 +516,7 @@ pub fn skip_workflow_run(vault: &mut UnlockedVault, run_id: &str) -> Result<Work
                 "only a refused run can be skipped".into(),
             ));
         }
-        let skipped = tx.collection::<WorkflowRun>().update(run_id, |run| {
-            run.outcome = RunOutcome::Dropped {
-                reason: "skipped".into(),
-            };
-            run.clone()
-        })?;
+        let skipped = mark_skipped(tx, run_id)?;
         // What a refusal queued goes with it: nothing is left to retry.
         let queued: Vec<String> = tx
             .collection::<QueuedActions>()
@@ -860,7 +861,7 @@ fn fire_due_automations(
         let overflow = fresh.len().saturating_sub(MAX_CATCH_UP);
         for moment in &fresh[..overflow] {
             let label = trigger_label(&trigger.kind, &crate::calendar::iso(*moment));
-            keep_dropped(vault, &workflow.id, &label, "skipped", now, pass)?;
+            keep_dropped(vault, &workflow.id, &label, SKIPPED, now, pass)?;
             pass.skipped += 1;
         }
         for moment in &fresh[overflow..] {

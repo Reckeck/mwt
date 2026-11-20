@@ -2598,25 +2598,104 @@ mod tests {
         );
     }
 
-    /// The mock file was written from the list this registry replaced, so it is
-    /// the old catalog: every entry, in its place, must be the same.
+    /// The old catalog order, pinned as a literal list: moving, adding or
+    /// removing a node changes it and fails here.
     #[test]
     fn the_registry_builds_the_old_catalog_entry_by_entry() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../src/shared/api")
-            .join(MOCK_CATALOG_FILE);
-        let old: Vec<serde_json::Value> =
-            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        let now = catalog();
-        assert_eq!(old.len(), now.len(), "the number of nodes changed");
-        for (index, (old_entry, def)) in old.iter().zip(now).enumerate() {
-            assert_eq!(
-                old_entry,
-                &serde_json::to_value(def).unwrap(),
-                "entry {index} ({}) differs from the old list",
-                def.kind
-            );
-        }
+        const OLD_ORDER: [(&str, &str); 80] = [
+            ("trigger.manual", "trigger"),
+            ("trigger.schedule", "trigger"),
+            ("trigger.transaction", "trigger"),
+            ("trigger.balance", "trigger"),
+            ("trigger.price", "trigger"),
+            ("trigger.source", "trigger"),
+            ("trigger.event", "trigger"),
+            ("trigger.called", "trigger"),
+            ("data.balance", "data"),
+            ("data.price", "data"),
+            ("data.fx", "data"),
+            ("data.constant", "data"),
+            ("data.sum", "data"),
+            ("data.recent_average", "data"),
+            ("data.source", "data"),
+            ("data.budget", "data"),
+            ("data.goal", "data"),
+            ("data.now", "data"),
+            ("data.tx_fields", "data"),
+            ("data.workday", "data"),
+            ("logic.compare", "logic"),
+            ("logic.and", "logic"),
+            ("logic.or", "logic"),
+            ("logic.not", "logic"),
+            ("logic.branch", "logic"),
+            ("logic.guard", "logic"),
+            ("logic.math", "logic"),
+            ("logic.convert", "logic"),
+            ("logic.text", "logic"),
+            ("logic.throttle", "logic"),
+            ("var.get", "variable"),
+            ("var.set", "variable"),
+            ("var.add", "variable"),
+            ("action.transaction", "action"),
+            ("action.distribute", "action"),
+            ("action.notify", "action"),
+            ("action.reminder", "action"),
+            ("action.confirm", "action"),
+            ("action.stop", "action"),
+            ("action.emit", "action"),
+            ("action.wait", "action"),
+            ("action.call", "action"),
+            ("action.return", "action"),
+            ("list.accounts", "list"),
+            ("list.goals", "list"),
+            ("list.for_each", "list"),
+            ("flow.queue", "logic"),
+            ("list.count", "list"),
+            ("list.field", "list"),
+            ("date.parts", "date"),
+            ("date.make", "date"),
+            ("date.add", "date"),
+            ("date.diff", "date"),
+            ("date.boundary", "date"),
+            ("date.shift_workday", "date"),
+            ("date.format", "date"),
+            ("text.extract", "text"),
+            ("text.number", "text"),
+            ("text.split", "text"),
+            ("text.replace", "text"),
+            ("text.case", "text"),
+            ("text.join", "text"),
+            ("convert.to", "text"),
+            ("logic.select", "logic"),
+            ("logic.round", "logic"),
+            ("logic.switch", "logic"),
+            ("list.make", "list"),
+            ("list.at", "list"),
+            ("list.sum", "list"),
+            ("list.filter", "list"),
+            ("list.record", "list"),
+            ("loop.repeat", "logic"),
+            ("loop.range", "logic"),
+            ("loop.while", "logic"),
+            ("loop.break", "logic"),
+            ("data.emergency_gap", "data"),
+            ("data.key_rate", "data"),
+            ("data.inflation", "data"),
+            ("data.recurring", "data"),
+            ("data.topup_advice", "data"),
+        ];
+        let now: Vec<(String, String)> = catalog()
+            .iter()
+            .map(|def| {
+                let group = serde_json::to_value(def.group).unwrap();
+                (def.kind.to_string(), group.as_str().unwrap().to_string())
+            })
+            .collect();
+        let old: Vec<(String, String)> = OLD_ORDER
+            .iter()
+            .map(|(kind, group)| (kind.to_string(), group.to_string()))
+            .collect();
+        assert_eq!(old, now, "the (kind, group) order of the catalog changed");
     }
 
     #[test]

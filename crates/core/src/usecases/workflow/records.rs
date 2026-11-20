@@ -266,31 +266,90 @@ pub fn confirm_queued(vault: &mut UnlockedVault, id: &str) -> Result<Vec<Transac
         .find(|batch| batch.id == id)
         .cloned()
         .ok_or_else(|| Error::Missing(format!("queued {id}")))?;
-    let saved = if batch.transactions.len() == 1 {
-        let mut txs = batch.transactions;
-        vec![vault.add_transaction(txs.remove(0))?]
-    } else {
-        vault.add_linked_transactions(batch.transactions, None)?
-    };
-    let created: Vec<String> = saved.iter().map(|tx| tx.meta().id.clone()).collect();
-    vault.transact(|tx| {
-        tx.collection::<QueuedActions>().remove(id)?;
-        // The refusal this batch waited for is answered: its run is done, so a
-        // retry cannot book the operations a second time.
-        if let Some(run) = refused_run(tx, &batch.run_id) {
-            let done = WorkflowRun {
-                id: uuid::Uuid::new_v4().to_string(),
-                outcome: RunOutcome::Done,
-                created,
-                queued: 0,
-                ..run
-            };
-            tx.collection::<WorkflowRun>().remove(&batch.run_id)?;
-            tx.collection::<WorkflowRun>().insert(done)?;
-        }
-        Ok(())
-    })?;
+    let (saved, _) = book_and_close(
+        vault,
+        &batch,
+        RunClosing::Optional,
+        |vault, transactions| {
+            if transactions.len() == 1 {
+                let mut txs = transactions;
+                Ok(vec![vault.add_transaction(txs.remove(0))?])
+            } else {
+                vault.add_linked_transactions(transactions, None)
+            }
+        },
+    )?;
     Ok(saved)
+}
+
+/// Whether the run a batch waited for must still be there to be closed.
+#[derive(Clone, Copy)]
+pub(super) enum RunClosing {
+    Required,
+    Optional,
+}
+
+/// Book a queued batch, take it off the queue and close its refused run as one
+/// unit: when any step fails the document is put back as it was, so nothing
+/// stays booked while the batch and its refusal wait.
+pub(super) fn book_and_close(
+    vault: &mut UnlockedVault,
+    batch: &QueuedActions,
+    closing: RunClosing,
+    book: impl FnOnce(&mut UnlockedVault, Vec<Transaction>) -> Result<Vec<Transaction>>,
+) -> Result<(Vec<Transaction>, Option<WorkflowRun>)> {
+    let backup = vault.doc.clone();
+    let outcome = book(vault, batch.transactions.clone()).and_then(|saved| {
+        let created: Vec<String> = saved.iter().map(|tx| tx.meta().id.clone()).collect();
+        vault.recompute_holdings();
+        let done = close_batch(vault, batch, created)?;
+        if done.is_none() && matches!(closing, RunClosing::Required) {
+            return Err(Error::Missing(format!("workflow run {}", batch.run_id)));
+        }
+        Ok((saved, done))
+    });
+    if outcome.is_err() {
+        vault.doc = backup;
+        vault.recompute_holdings();
+        vault.persist()?;
+    }
+    outcome
+}
+
+/// Take the batch off the queue and close the run it waited for: that
+/// refusal is answered, so a retry cannot book the operations a second time.
+fn close_batch(
+    vault: &mut UnlockedVault,
+    batch: &QueuedActions,
+    created: Vec<String>,
+) -> Result<Option<WorkflowRun>> {
+    vault.transact(|tx| {
+        tx.collection::<QueuedActions>().remove(&batch.id)?;
+        close_refused_as_done(tx, &batch.run_id, created)
+    })
+}
+
+/// Close a refused run as done once its queued operations are booked: it
+/// keeps its original `started_at` and gets a fresh id, so a retry cannot book
+/// them twice. Returns the done run, or `None` when the run is no longer a refusal.
+fn close_refused_as_done(
+    tx: &mut Tx,
+    run_id: &str,
+    created: Vec<String>,
+) -> Result<Option<WorkflowRun>> {
+    let Some(run) = refused_run(tx, run_id) else {
+        return Ok(None);
+    };
+    let done = WorkflowRun {
+        id: uuid::Uuid::new_v4().to_string(),
+        outcome: RunOutcome::Done,
+        created,
+        queued: 0,
+        ..run
+    };
+    tx.collection::<WorkflowRun>().remove(run_id)?;
+    tx.collection::<WorkflowRun>().insert(done.clone())?;
+    Ok(Some(done))
 }
 
 /// The run a queued batch belongs to, while it is still a refusal.
@@ -301,6 +360,19 @@ fn refused_run(tx: &mut Tx, run_id: &str) -> Option<WorkflowRun> {
         .cloned()
 }
 
+/// The reason a dismissed run carries in the journal.
+pub(super) const SKIPPED: &str = "skipped";
+
+/// Turn a run into a skipped one: the single home of the skip rule.
+pub(super) fn mark_skipped(tx: &mut Tx, run_id: &str) -> Result<WorkflowRun> {
+    tx.collection::<WorkflowRun>().update(run_id, |run| {
+        run.outcome = RunOutcome::Dropped {
+            reason: SKIPPED.into(),
+        };
+        run.clone()
+    })
+}
+
 pub fn discard_queued(vault: &mut UnlockedVault, id: &str) -> Result<()> {
     vault.transact(|tx| {
         let Some(batch) = tx.collection::<QueuedActions>().get(id).cloned() else {
@@ -309,12 +381,7 @@ pub fn discard_queued(vault: &mut UnlockedVault, id: &str) -> Result<()> {
         tx.collection::<QueuedActions>().remove(id)?;
         // Nothing is left to retry: the refused run is skipped, as by `skip_workflow_run`.
         if refused_run(tx, &batch.run_id).is_some() {
-            tx.collection::<WorkflowRun>()
-                .update(&batch.run_id, |run| {
-                    run.outcome = RunOutcome::Dropped {
-                        reason: "skipped".into(),
-                    };
-                })?;
+            mark_skipped(tx, &batch.run_id)?;
         }
         Ok(())
     })
@@ -511,6 +578,21 @@ mod tests {
         assert!(vault.workflow_queue().is_empty());
         assert_eq!(vault.doc.transactions.len(), 1);
         assert!(matches!(vault.confirm_queued("q1"), Err(Error::Missing(_))));
+    }
+
+    #[test]
+    fn a_failed_close_books_nothing_and_keeps_the_batch() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Cash, None);
+        let batch = queued("q1", vec![income(&card, "25", "queued")]);
+        vault.doc.workflow_queue.push(batch.clone());
+        // The run the batch waited for is gone, and the close insists on it.
+        let result = book_and_close(&mut vault, &batch, RunClosing::Required, |vault, txs| {
+            vault.add_linked_transactions(txs, None)
+        });
+        assert!(matches!(result, Err(Error::Missing(_))));
+        assert!(vault.doc.transactions.is_empty());
+        assert_eq!(vault.workflow_queue().len(), 1);
     }
 
     #[test]
