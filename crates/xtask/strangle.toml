@@ -59,6 +59,12 @@ task = "E"
 files = ["crates/core/src/cryptotrack/rpc/client.rs", "crates/core/src/ipc_contract.rs"]
 
 [[foundation]]
+# T51: the exchange sync and import logic leaves `service/`, so the `use` block of `service/mod.rs` drops what only it
+# needed and keeps the inline tests' imports under `#[cfg(test)]`.
+task = "E"
+files = ["crates/core/src/service/mod.rs"]
+
+[[foundation]]
 # T47: the cryptotrack service and usecase module lists declare the accounts, tokens, links and relations files.
 task = "E"
 files = ["crates/core/src/cryptotrack/service/mod.rs", "crates/core/src/usecases/cryptotrack/mod.rs"]
