@@ -16,7 +16,6 @@ use crate::model::store::Store;
 use crate::model::store::StoreScope;
 use crate::model::transaction::Transaction;
 
-use super::RateBook;
 use super::UnlockedVault;
 use super::forward::forward;
 
@@ -78,9 +77,6 @@ impl UnlockedVault {
         /// boundaries and the nearest cached price (≤ event ts) per asset.
         pub fn history_series(&self, base_currency: &str) -> Vec<HistoryPoint>
             => crate::money::portfolio::history_series @books;
-        /// The history replay over a book the caller already built.
-        pub(crate) fn history_series_filtered_in(&self, book: &RateBook, scope: Option<&HashSet<String>>, base_currency: &str) -> Vec<HistoryPoint>
-            => crate::money::portfolio::history_series_filtered_in @doc;
         pub fn realized_pnl(&self) -> RealizedPnl
             => crate::money::portfolio::realized_pnl @books;
         /// Shared PnL replay. `scope` restricts it to the legs booked on those

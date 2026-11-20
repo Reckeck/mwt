@@ -1,6 +1,7 @@
 //! Shim of the `allocation` area: the rules moved to `crate::planning::allocation`, the
 //! scenarios to `crate::usecases::planning::allocation` (spec core-strangler, D1).
 
+#[cfg(test)]
 pub(crate) use crate::planning::allocation::Slot;
 pub use crate::planning::allocation::{
     AssetClassTarget, AssetClassesView, PRESET_GLOBAL, PRESET_LOCAL, PRESET_RISKY, TopupAdvice,
@@ -10,6 +11,7 @@ pub use crate::planning::allocation::{
 use crate::Amount;
 use crate::error::Result;
 use crate::model::planning::AssetClass;
+#[cfg(test)]
 use crate::model::store::Holding;
 
 use super::UnlockedVault;
@@ -39,6 +41,7 @@ impl UnlockedVault {
     forward! {
         pub(crate) fn effective_classes(&self) -> Vec<AssetClass>
             => crate::planning::allocation::effective_classes @doc;
+        #[cfg(test)]
         pub(crate) fn slot_resolver(&self) -> impl Fn(&Holding) -> Slot + '_
             => crate::planning::allocation::slot_resolver @doc;
     }

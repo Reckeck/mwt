@@ -12,7 +12,7 @@ use crate::model::store::{LiabilityKind, StoreKind};
 use crate::model::vault::{ManualPrice, now_iso};
 use crate::money::worth;
 use crate::money::worth::{ClassShare, LiabilityShare, NetWorth, plan_manual_price};
-use crate::planning::allocation::Slot;
+use crate::planning::allocation::{Slot, slot_resolver};
 use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
 use crate::usecases::household::contacts::contact_balances;
@@ -79,7 +79,7 @@ pub(crate) fn net_worth_with_crypto(books: &Books<'_>) -> (NetWorth, Amount) {
     };
     let mut crypto = Amount::ZERO;
     let mut loans: HashMap<&str, Amount> = HashMap::new();
-    let slot_of = books.vault().slot_resolver();
+    let slot_of = slot_resolver(books.doc());
     let mut by_class: HashMap<Option<String>, Amount> = HashMap::new();
     for holding in doc
         .holdings

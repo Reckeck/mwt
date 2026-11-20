@@ -37,10 +37,6 @@ impl UnlockedVault {
         /// wallet filter.
         pub(crate) fn crypto_history(&self, cutoffs: &[i64], in_scope: impl Fn(&str) -> bool) -> CryptoHistory
             => crate::cryptotrack::service::totals::crypto_history @books;
-        /// Tokens the module met and refuses to fold, named so a total can say
-        /// what it left out.
-        pub(crate) fn crypto_quarantined(&self) -> Vec<CryptoOutsideTotals>
-            => crate::cryptotrack::service::totals::crypto_quarantined @doc;
         /// The identity a module holding is shown and priced under.
         #[cfg(test)]
         pub(crate) fn crypto_asset_ref(&self, asset: &CryptoAsset) -> AssetRef
