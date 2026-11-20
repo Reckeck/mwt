@@ -8,11 +8,17 @@ use trade_core::model::store::StoreKind;
 use trade_core::model::transaction::Transaction;
 use trade_core::model::vault::TxProperty;
 
+use trade_core::household::property_links::tx_property_links as property_link_reads;
+use trade_core::money::{preview, rebase};
 use trade_core::service::{AdjustmentDraft, TxFilter, TxGraph, TxPage, TxPreview};
+use trade_core::usecases::household::ledger;
+use trade_core::usecases::money::adjustments::adjustment_draft;
+use trade_core::usecases::money::{rates, transactions};
 
+use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
 use crate::commands::enrichment::enrich_in_background;
-use crate::commands::{AppState, require_vault};
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
@@ -24,12 +30,9 @@ pub async fn list_transactions(
     state: State<'_, AppState>,
 ) -> Result<Vec<Transaction>, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .list_transactions(&filter.unwrap_or_default(), &zone)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| {
+        ledger::list_transactions(vault, &filter.unwrap_or_default(), &zone)
+    })
 }
 
 /// The filtered operations as CSV through the native save dialog; `None`
@@ -42,11 +45,9 @@ pub async fn export_transactions_csv(
 ) -> Result<Option<String>, IpcError> {
     let zone = current_zone(&app);
     let csv = {
-        let guard = require_vault(&state)?;
-        guard
-            .as_ref()
-            .unwrap()
-            .transactions_csv(&filter.unwrap_or_default(), &zone)?
+        with_vault::<_, IpcError>(&state, |vault| {
+            ledger::transactions_csv(vault, &filter.unwrap_or_default(), &zone)
+        })?
     };
     crate::platform_fs::save_bytes_dialog(&app, "transactions.csv", "CSV", &["csv"], csv.as_bytes())
         .map_err(IpcError::from)
@@ -62,12 +63,9 @@ pub async fn list_transactions_page(
     state: State<'_, AppState>,
 ) -> Result<TxPage, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .list_transactions_page(&filter.unwrap_or_default(), offset, limit, &zone)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| {
+        ledger::list_transactions_page(vault, &filter.unwrap_or_default(), offset, limit, &zone)
+    })
 }
 
 /// The same operations as lanes and edges; `collapsed` folds a store's
@@ -80,16 +78,14 @@ pub async fn get_tx_graph(
     state: State<'_, AppState>,
 ) -> Result<TxGraph, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .tx_graph(
+    with_vault(&state, |vault| {
+        ledger::tx_graph(
+            vault,
             &filter.unwrap_or_default(),
             &collapsed.unwrap_or_default(),
             &zone,
         )
-        .map_err(IpcError::from)
+    })
 }
 
 /// Every kind of transaction goes through here: build, auto-categorize,
@@ -102,10 +98,14 @@ pub async fn add_transaction(
 ) -> Result<Transaction, IpcError> {
     let saved = {
         let mut input = input;
-        let mut guard = require_vault(&state)?;
-        let vault = guard.as_mut().unwrap();
-        vault.resolve_input_price(&mut input)?;
-        vault.add_transaction_for(input.to_transaction(), input.property_id().as_deref())?
+        with_vault_mut::<_, IpcError>(&state, |vault| {
+            rates::resolve_input_price(vault, &mut input)?;
+            transactions::add_transaction_for(
+                vault,
+                input.to_transaction(),
+                input.property_id().as_deref(),
+            )
+        })?
     };
     enrich_in_background(&app, saved.meta().id.clone());
     Ok(saved)
@@ -118,14 +118,18 @@ pub async fn preview_transaction(
     input: PreviewTransactionInput,
     state: State<'_, AppState>,
 ) -> Result<TxPreview, IpcError> {
-    let guard = require_vault(&state)?;
-    let vault = guard.as_ref().unwrap();
-    let mut draft = input.transaction;
-    // A missing rate is not a preview error: the draft previews unpriced.
-    if vault.resolve_input_price(&mut draft).is_err() {
-        draft.common_mut().price = None;
-    }
-    Ok(vault.preview_transaction(draft.to_transaction(), input.replaces.as_deref()))
+    with_vault(&state, |vault| {
+        let mut draft = input.transaction;
+        // A missing rate is not a preview error: the draft previews unpriced.
+        if rates::resolve_input_price(vault, &mut draft).is_err() {
+            draft.common_mut().price = None;
+        }
+        Ok(preview::preview_transaction(
+            &vault.books(),
+            draft.to_transaction(),
+            input.replaces.as_deref(),
+        ))
+    })
 }
 
 /// Replace a transaction with an edited version; its id and origin are kept.
@@ -137,12 +141,21 @@ pub async fn update_transaction(
 ) -> Result<Transaction, IpcError> {
     let saved = {
         let mut draft = input.transaction;
-        let mut guard = require_vault(&state)?;
-        let vault = guard.as_mut().unwrap();
-        vault.resolve_input_price(&mut draft)?;
-        let edited =
-            vault.rebase_transaction(&input.id, input.base.as_ref(), draft.to_transaction())?;
-        vault.update_transaction_for(&input.id, edited, draft.property_id().as_deref())?
+        with_vault_mut::<_, IpcError>(&state, |vault| {
+            rates::resolve_input_price(vault, &mut draft)?;
+            let edited = rebase::rebase_transaction(
+                &vault.doc,
+                &input.id,
+                input.base.as_ref(),
+                draft.to_transaction(),
+            )?;
+            transactions::update_transaction_for(
+                vault,
+                &input.id,
+                edited,
+                draft.property_id().as_deref(),
+            )
+        })?
     };
     enrich_in_background(&app, saved.meta().id.clone());
     Ok(saved)
@@ -157,14 +170,14 @@ pub async fn add_linked_transactions(
     state: State<'_, AppState>,
 ) -> Result<Vec<Transaction>, IpcError> {
     let saved = {
-        let mut guard = require_vault(&state)?;
-        let vault = guard.as_mut().unwrap();
-        let mut txs = Vec::with_capacity(input.transactions.len());
-        for mut draft in input.transactions {
-            vault.resolve_input_price(&mut draft)?;
-            txs.push(draft.to_transaction());
-        }
-        vault.add_linked_transactions(txs, input.flow_id.as_deref())?
+        with_vault_mut::<_, IpcError>(&state, |vault| {
+            let mut txs = Vec::with_capacity(input.transactions.len());
+            for mut draft in input.transactions {
+                rates::resolve_input_price(vault, &mut draft)?;
+                txs.push(draft.to_transaction());
+            }
+            transactions::add_linked_transactions(vault, txs, input.flow_id.as_deref())
+        })?
     };
     for tx in &saved {
         enrich_in_background(&app, tx.meta().id.clone());
@@ -179,29 +192,18 @@ pub async fn get_adjustment_draft(
     input: AdjustmentDraftInput,
     state: State<'_, AppState>,
 ) -> Result<AdjustmentDraft, IpcError> {
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .adjustment_draft(&input)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| adjustment_draft(&vault.doc, &input))
 }
 
 /// Which operation belongs to which property (plan G4).
 #[tauri::command]
 pub async fn tx_property_links(state: State<'_, AppState>) -> Result<Vec<TxProperty>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().tx_property_links())
+    with_vault(&state, |vault| Ok(property_link_reads(&vault.doc)))
 }
 
 #[tauri::command]
 pub async fn delete_transaction(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .delete_transaction(&id)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| transactions::delete_transaction(vault, &id))
 }
 
 /// Which transaction kinds a wallet of this kind accepts.

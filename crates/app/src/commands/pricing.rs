@@ -7,8 +7,11 @@ use trade_core::ipc_contract::{
 };
 use trade_core::model::cryptotrack::{CryptoToken, TokenId};
 use trade_core::model::store::AssetRef;
+use trade_core::money::rates as rate_reads;
 use trade_core::pricing::AssetSearchHit;
+use trade_core::usecases::money::rates;
 
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
@@ -32,12 +35,16 @@ pub async fn get_cached_price(
     input: AssetPriceInput,
     state: State<'_, AppState>,
 ) -> Result<CachedPrice, IpcError> {
-    let guard = require_vault(&state)?;
-    let vault = guard.as_ref().unwrap();
-    if input.symbol.trim().is_empty() {
-        return Ok(CachedPrice::default());
-    }
-    Ok(vault.cached_quote(&input.to_asset(), input.at.as_deref().unwrap_or_default()))
+    with_vault(&state, |vault| {
+        if input.symbol.trim().is_empty() {
+            return Ok(CachedPrice::default());
+        }
+        Ok(rates::cached_quote(
+            vault,
+            &input.to_asset(),
+            input.at.as_deref().unwrap_or_default(),
+        ))
+    })
 }
 
 /// Convert an amount between two currencies at the rate of a moment.
@@ -46,15 +53,16 @@ pub async fn convert_amount(
     input: ConvertAmountInput,
     state: State<'_, AppState>,
 ) -> Result<ConvertedAmount, IpcError> {
-    let guard = require_vault(&state)?;
-    let vault = guard.as_ref().unwrap();
-    Ok(ConvertedAmount {
-        amount: vault.convert_at(
-            input.amount,
-            &input.from,
-            &input.to,
-            input.at.as_deref().unwrap_or_default(),
-        ),
+    with_vault(&state, |vault| {
+        Ok(ConvertedAmount {
+            amount: rate_reads::convert_at(
+                &vault.books(),
+                input.amount,
+                &input.from,
+                &input.to,
+                input.at.as_deref().unwrap_or_default(),
+            ),
+        })
     })
 }
 
@@ -79,7 +87,7 @@ pub async fn refresh_all(
         // Crypto favourites are priced too, so the rates table can show them.
         let favored = favorites
             .iter()
-            .filter_map(|code| vault.favorite_asset(code));
+            .filter_map(|code| rate_reads::favorite_asset(&vault.doc, code));
         let wanted = held
             .chain(favored)
             .filter(|asset| seen.insert(asset.key()))
@@ -98,13 +106,10 @@ pub async fn refresh_all(
         Ok(fx) => fx,
         Err(err) => {
             let tracked: Vec<String> = {
-                let guard = require_vault(&state)?;
-                guard
-                    .as_ref()
-                    .unwrap()
-                    .fx_currencies_in_use()
-                    .into_iter()
-                    .collect()
+                let in_use = with_vault::<_, IpcError>(&state, |vault| {
+                    Ok(rate_reads::fx_currencies_in_use(&vault.books()))
+                })?;
+                in_use.into_iter().collect()
             };
             let today = chrono::Utc::now().date_naive();
             let fallback = state.pricing.fetch_fx_on(&tracked, today, today).await;
@@ -117,9 +122,9 @@ pub async fn refresh_all(
 
     let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    vault.apply_prices(&prices);
-    vault.apply_fx(&fx);
-    let restamped = vault.restamp_missing();
+    rates::apply_prices(vault, &prices);
+    rates::apply_fx(vault, &fx);
+    let restamped = rates::restamp_missing(vault);
     let updated_at = trade_core::model::vault::now_iso();
     let _ = vault.persist();
 
@@ -182,11 +187,13 @@ pub async fn ensure_fx(
         None => today,
     };
     let wanted = {
-        let guard = require_vault(&state)?;
-        guard
-            .as_ref()
-            .unwrap()
-            .fx_missing_on(&input.currencies, date)
+        with_vault::<_, IpcError>(&state, |vault| {
+            Ok(rate_reads::fx_missing_on(
+                &vault.doc,
+                &input.currencies,
+                date,
+            ))
+        })?
     };
     if wanted.is_empty() {
         return Ok(EnsureFxOutput::default());
@@ -197,11 +204,12 @@ pub async fn ensure_fx(
         .filter(|code| !points.iter().any(|point| &point.currency == code))
         .collect();
     if !points.is_empty() {
-        let mut guard = require_vault(&state)?;
-        let vault = guard.as_mut().unwrap();
-        vault.apply_fx(&points);
-        let restamped = vault.restamp_missing();
-        let _ = vault.persist();
+        let restamped = with_vault_mut::<_, IpcError>(&state, |vault| {
+            rates::apply_fx(vault, &points);
+            let restamped = rates::restamp_missing(vault);
+            let _ = vault.persist();
+            Ok(restamped)
+        })?;
         let _ = PricesUpdated::emit(
             &app,
             &Some(RefreshResult {
