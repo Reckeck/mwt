@@ -537,6 +537,9 @@ async fn coingecko_token_price<A: llama::CoinsApi>(
 mod tests {
     use super::*;
 
+    const UNKNOWN: &str = "0x0000000000000000000000000000000000000bad";
+    const USDC: &str = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+
     #[test]
     fn simple_price_reads_the_24h_change() {
         let body: HashMap<String, serde_json::Value> = serde_json::from_str(
@@ -580,48 +583,43 @@ mod tests {
     }
 
     fn only_usdc(token: &TokenId) -> bool {
-        token
-            .contract
-            .eq_ignore_ascii_case("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+        token.contract.eq_ignore_ascii_case(USDC)
     }
 
     #[test]
     fn without_consent_an_unknown_contract_is_not_looked_up() {
-        let contract = "0x0000000000000000000000000000000000000bad";
         assert!(!contract_lookup_allowed(
             false,
             only_usdc,
             Chain::Ethereum,
-            contract
+            UNKNOWN
         ));
     }
 
     #[test]
     fn without_consent_a_known_token_is_still_looked_up() {
-        let usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
         assert!(contract_lookup_allowed(
             false,
             only_usdc,
             Chain::Ethereum,
-            usdc
+            USDC
         ));
     }
 
     #[test]
     fn with_consent_an_unknown_contract_is_looked_up() {
-        let contract = "0x0000000000000000000000000000000000000bad";
         assert!(contract_lookup_allowed(
             true,
             |_| false,
             Chain::Ethereum,
-            contract
+            UNKNOWN
         ));
     }
 
     #[test]
     fn a_contract_miss_never_falls_back_to_the_symbol() {
         let mut scam = AssetRef::crypto("USDC", "Fake USDC", None, Chain::Ethereum);
-        scam.contract = Some("0x0000000000000000000000000000000000000bad".into());
+        scam.contract = Some(UNKNOWN.into());
         assert!(!symbol_fallback_allowed(&scam));
         // A plain coin without a contract may still be found by its symbol.
         let coin = AssetRef::crypto("BTC", "Bitcoin", None, Chain::Bitcoin);
@@ -659,9 +657,6 @@ mod tests {
         );
         urls.len()
     }
-
-    const UNKNOWN: &str = "0x0000000000000000000000000000000000000bad";
-    const USDC: &str = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 
     #[tokio::test]
     async fn fetch_prices_without_consent_never_sends_an_unknown_contract() {
