@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use super::catalog::{
-    NodeDef, NodeGroup, ParamKind, Text, flow_in, param, port, select, txt, wired,
+    NodeDef, NodeGroup, ParamKind, PortDef, Text, flow_in, param, port, select, txt, wired,
 };
 use super::types::PortType as Ty;
 
@@ -46,23 +46,22 @@ const TYPES: [(&str, Text); 6] = [
     ("currency", txt("валюта", "currency")),
 ];
 
-#[allow(clippy::too_many_lines)]
-pub(super) fn more_nodes(out: &mut Vec<NodeDef>) {
-    dates(out);
-    texts(out);
-    choosing(out);
-    lists(out);
-    loops(out);
-}
-
-fn date_in(name: &'static str, label: Text) -> super::catalog::PortDef {
+fn date_in(name: &'static str, label: Text) -> PortDef {
     port(name, Ty::Date, label)
 }
 
-#[allow(clippy::too_many_lines)]
-fn dates(out: &mut Vec<NodeDef>) {
+fn loop_outputs(value: PortDef) -> Vec<PortDef> {
+    vec![
+        port("each", Ty::Flow, txt("Каждый раз", "Each time")),
+        port("done", Ty::Flow, txt("Готово", "Done")),
+        port("index", Ty::Number, txt("Номер (с 0)", "Index (from 0)")),
+        value,
+    ]
+}
+
+pub(super) fn date_parts() -> NodeDef {
     use NodeGroup::Date;
-    out.push(NodeDef {
+    NodeDef {
         kind: "date.parts",
         group: Date,
         title: txt("Части даты", "Date parts"),
@@ -82,14 +81,31 @@ fn dates(out: &mut Vec<NodeDef>) {
             port("weekday", Ty::Number, txt("День недели", "Weekday")),
             port("hour", Ty::Number, txt("Час", "Hour")),
             port("minute", Ty::Number, txt("Минута", "Minute")),
-            port("days_in_month", Ty::Number, txt("Дней в месяце", "Days in the month")),
+            port(
+                "days_in_month",
+                Ty::Number,
+                txt("Дней в месяце", "Days in the month"),
+            ),
             port("date_text", Ty::Text, txt("День", "Day as text")),
         ],
         params: vec![],
         advanced: false,
-        keywords: vec!["год", "месяц", "число", "день недели", "year", "month", "day", "weekday", "parts"],
-    });
+        keywords: vec![
+            "год",
+            "месяц",
+            "число",
+            "день недели",
+            "year",
+            "month",
+            "day",
+            "weekday",
+            "parts",
+        ],
+    }
+}
 
+pub(super) fn date_make() -> NodeDef {
+    use NodeGroup::Date;
     let mut inputs = vec![date_in("base", txt("От какой даты", "Based on"))];
     let params = vec![
         wired(
@@ -132,7 +148,7 @@ fn dates(out: &mut Vec<NodeDef>) {
             json!("0"),
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "date.make",
         group: Date,
         title: txt("Собрать дату", "Make a date"),
@@ -148,9 +164,20 @@ fn dates(out: &mut Vec<NodeDef>) {
         outputs: vec![port("date", Ty::Date, txt("Дата", "Date"))],
         params,
         advanced: false,
-        keywords: vec!["дата", "собрать", "число месяца", "зарплата", "аванс", "make date", "build date"],
-    });
+        keywords: vec![
+            "дата",
+            "собрать",
+            "число месяца",
+            "зарплата",
+            "аванс",
+            "make date",
+            "build date",
+        ],
+    }
+}
 
+pub(super) fn date_add() -> NodeDef {
+    use NodeGroup::Date;
     let mut inputs = vec![date_in("date", txt("Дата", "Date"))];
     let params = vec![
         wired(
@@ -173,7 +200,7 @@ fn dates(out: &mut Vec<NodeDef>) {
         Ty::Duration,
         txt("Длительность", "Duration"),
     ));
-    out.push(NodeDef {
+    NodeDef {
         kind: "date.add",
         group: Date,
         title: txt("Сдвинуть дату", "Shift a date"),
@@ -189,14 +216,28 @@ fn dates(out: &mut Vec<NodeDef>) {
         outputs: vec![port("date", Ty::Date, txt("Дата", "Date"))],
         params,
         advanced: false,
-        keywords: vec!["прибавить", "вычесть", "через", "назад", "add", "subtract", "shift date"],
-    });
+        keywords: vec![
+            "прибавить",
+            "вычесть",
+            "через",
+            "назад",
+            "add",
+            "subtract",
+            "shift date",
+        ],
+    }
+}
 
-    out.push(NodeDef {
+pub(super) fn date_diff() -> NodeDef {
+    use NodeGroup::Date;
+    NodeDef {
         kind: "date.diff",
         group: Date,
         title: txt("Разница дат", "Between dates"),
-        description: txt("Сколько дней и часов от A до B.", "How many days and hours from A to B."),
+        description: txt(
+            "Сколько дней и часов от A до B.",
+            "How many days and hours from A to B.",
+        ),
         help: txt(
             "Положительно, если B позже A. Без подключённой B — до сейчас. Дни считаются по календарю вашего пояса.",
             "Positive when B is later than A. Without a wired B, up to now. Days follow the calendar of your zone.",
@@ -209,9 +250,19 @@ fn dates(out: &mut Vec<NodeDef>) {
         ],
         params: vec![],
         advanced: false,
-        keywords: vec!["разница", "сколько дней", "осталось", "difference", "days between", "until"],
-    });
+        keywords: vec![
+            "разница",
+            "сколько дней",
+            "осталось",
+            "difference",
+            "days between",
+            "until",
+        ],
+    }
+}
 
+pub(super) fn date_boundary() -> NodeDef {
+    use NodeGroup::Date;
     let inputs = vec![date_in("date", txt("Дата", "Date"))];
     let params = vec![param(
         "which",
@@ -239,7 +290,7 @@ fn dates(out: &mut Vec<NodeDef>) {
         txt("Что", "What"),
         json!("month_start"),
     )];
-    out.push(NodeDef {
+    NodeDef {
         kind: "date.boundary",
         group: Date,
         title: txt("Начало или конец периода", "Start or end of a period"),
@@ -255,9 +306,19 @@ fn dates(out: &mut Vec<NodeDef>) {
         outputs: vec![port("date", Ty::Date, txt("Дата", "Date"))],
         params,
         advanced: false,
-        keywords: vec!["начало месяца", "конец месяца", "первое число", "последний день", "month start", "month end"],
-    });
+        keywords: vec![
+            "начало месяца",
+            "конец месяца",
+            "первое число",
+            "последний день",
+            "month start",
+            "month end",
+        ],
+    }
+}
 
+pub(super) fn date_shift_workday() -> NodeDef {
+    use NodeGroup::Date;
     let inputs = vec![date_in("date", txt("Дата", "Date"))];
     let params = vec![
         param(
@@ -306,7 +367,7 @@ fn dates(out: &mut Vec<NodeDef>) {
             json!(""),
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "date.shift_workday",
         group: Date,
         title: txt("Сдвинуть на рабочий день", "Shift to a working day"),
@@ -325,9 +386,21 @@ fn dates(out: &mut Vec<NodeDef>) {
         ],
         params,
         advanced: false,
-        keywords: vec!["рабочий день", "выходной", "перенести", "зарплата", "пятница", "workday", "business day", "payday"],
-    });
+        keywords: vec![
+            "рабочий день",
+            "выходной",
+            "перенести",
+            "зарплата",
+            "пятница",
+            "workday",
+            "business day",
+            "payday",
+        ],
+    }
+}
 
+pub(super) fn date_format() -> NodeDef {
+    use NodeGroup::Date;
     let mut inputs = vec![date_in("date", txt("Дата", "Date"))];
     let params = vec![wired(
         "pattern",
@@ -337,7 +410,7 @@ fn dates(out: &mut Vec<NodeDef>) {
         json!("ДД.ММ.ГГГГ"),
         &mut inputs,
     )];
-    out.push(NodeDef {
+    NodeDef {
         kind: "date.format",
         group: Date,
         title: txt("Дата текстом", "Date as text"),
@@ -354,11 +427,10 @@ fn dates(out: &mut Vec<NodeDef>) {
         params,
         advanced: false,
         keywords: vec!["формат", "дата текстом", "format date", "date to text"],
-    });
+    }
 }
 
-#[allow(clippy::too_many_lines)]
-fn texts(out: &mut Vec<NodeDef>) {
+pub(super) fn text_extract() -> NodeDef {
     use NodeGroup::Text as Group;
     let mut inputs = vec![port("text", Ty::Text, txt("Текст", "Text"))];
     let params = vec![
@@ -389,7 +461,7 @@ fn texts(out: &mut Vec<NodeDef>) {
             json!(true),
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "text.extract",
         group: Group,
         title: txt("Найти в тексте", "Find in text"),
@@ -409,10 +481,22 @@ fn texts(out: &mut Vec<NodeDef>) {
         ],
         params,
         advanced: false,
-        keywords: vec!["найти", "извлечь", "регулярка", "из строки", "regex", "extract", "find", "parse"],
-    });
+        keywords: vec![
+            "найти",
+            "извлечь",
+            "регулярка",
+            "из строки",
+            "regex",
+            "extract",
+            "find",
+            "parse",
+        ],
+    }
+}
 
-    out.push(NodeDef {
+pub(super) fn text_number() -> NodeDef {
+    use NodeGroup::Text as Group;
+    NodeDef {
         kind: "text.number",
         group: Group,
         title: txt("Число из текста", "Number from text"),
@@ -429,11 +513,26 @@ fn texts(out: &mut Vec<NodeDef>) {
             port("number", Ty::Number, txt("Число", "Number")),
             port("found", Ty::Bool, txt("Найдено", "Found")),
         ],
-        params: vec![param("index", ParamKind::Number, txt("Какое по счёту", "Which one"), json!("1"))],
+        params: vec![param(
+            "index",
+            ParamKind::Number,
+            txt("Какое по счёту", "Which one"),
+            json!("1"),
+        )],
         advanced: false,
-        keywords: vec!["число", "сумма из текста", "распознать", "number", "parse number", "amount"],
-    });
+        keywords: vec![
+            "число",
+            "сумма из текста",
+            "распознать",
+            "number",
+            "parse number",
+            "amount",
+        ],
+    }
+}
 
+pub(super) fn text_split() -> NodeDef {
+    use NodeGroup::Text as Group;
     let mut inputs = vec![port("text", Ty::Text, txt("Текст", "Text"))];
     let params = vec![wired(
         "separator",
@@ -443,11 +542,14 @@ fn texts(out: &mut Vec<NodeDef>) {
         json!(","),
         &mut inputs,
     )];
-    out.push(NodeDef {
+    NodeDef {
         kind: "text.split",
         group: Group,
         title: txt("Разбить текст", "Split text"),
-        description: txt("Список частей строки по разделителю.", "The parts of a string, split by a separator."),
+        description: txt(
+            "Список частей строки по разделителю.",
+            "The parts of a string, split by a separator.",
+        ),
         help: txt(
             "Пробелы по краям частей убираются, пустые части выбрасываются. Дальше — «Для каждого» или «Элемент списка».",
             "Spaces around parts are trimmed, empty parts dropped. Then «For each» or «List item».",
@@ -460,8 +562,11 @@ fn texts(out: &mut Vec<NodeDef>) {
         params,
         advanced: true,
         keywords: vec!["разбить", "разделить", "split", "separate"],
-    });
+    }
+}
 
+pub(super) fn text_replace() -> NodeDef {
+    use NodeGroup::Text as Group;
     let mut inputs = vec![port("text", Ty::Text, txt("Текст", "Text"))];
     let params = vec![
         wired(
@@ -487,7 +592,7 @@ fn texts(out: &mut Vec<NodeDef>) {
             json!(false),
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "text.replace",
         group: Group,
         title: txt("Заменить в тексте", "Replace in text"),
@@ -504,8 +609,11 @@ fn texts(out: &mut Vec<NodeDef>) {
         params,
         advanced: true,
         keywords: vec!["заменить", "replace", "substitute"],
-    });
+    }
+}
 
+pub(super) fn text_case() -> NodeDef {
+    use NodeGroup::Text as Group;
     let params = vec![param(
         "mode",
         select(&[
@@ -517,7 +625,7 @@ fn texts(out: &mut Vec<NodeDef>) {
         txt("Как", "How"),
         json!("trim"),
     )];
-    out.push(NodeDef {
+    NodeDef {
         kind: "text.case",
         group: Group,
         title: txt("Регистр и пробелы", "Case and spaces"),
@@ -547,8 +655,11 @@ fn texts(out: &mut Vec<NodeDef>) {
             "trim",
             "length",
         ],
-    });
+    }
+}
 
+pub(super) fn text_join() -> NodeDef {
+    use NodeGroup::Text as Group;
     let mut inputs = vec![port("items", Ty::List, txt("Список", "List"))];
     let params = vec![
         wired(
@@ -569,7 +680,7 @@ fn texts(out: &mut Vec<NodeDef>) {
             json!(""),
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "text.join",
         group: Group,
         title: txt("Склеить список", "Join a list"),
@@ -586,8 +697,11 @@ fn texts(out: &mut Vec<NodeDef>) {
         params,
         advanced: true,
         keywords: vec!["склеить", "объединить", "join", "concatenate"],
-    });
+    }
+}
 
+pub(super) fn convert_to() -> NodeDef {
+    use NodeGroup::Text as Group;
     let params = vec![
         param("to", select(&TYPES), txt("Во что", "Into"), json!("number")),
         param(
@@ -606,7 +720,7 @@ fn texts(out: &mut Vec<NodeDef>) {
             json!(""),
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "convert.to",
         group: Group,
         title: txt("Преобразовать", "Convert type"),
@@ -625,18 +739,32 @@ fn texts(out: &mut Vec<NodeDef>) {
         ],
         params,
         advanced: false,
-        keywords: vec!["преобразовать", "тип", "в число", "в текст", "в дату", "конвертер", "convert", "cast", "parse", "to number", "to date"],
-    });
+        keywords: vec![
+            "преобразовать",
+            "тип",
+            "в число",
+            "в текст",
+            "в дату",
+            "конвертер",
+            "convert",
+            "cast",
+            "parse",
+            "to number",
+            "to date",
+        ],
+    }
 }
 
-#[allow(clippy::too_many_lines)]
-fn choosing(out: &mut Vec<NodeDef>) {
+pub(super) fn logic_select() -> NodeDef {
     use NodeGroup::Logic;
-    out.push(NodeDef {
+    NodeDef {
         kind: "logic.select",
         group: Logic,
         title: txt("Выбрать значение", "Pick a value"),
-        description: txt("Если условие да — A, иначе B.", "If the condition is yes, A, else B."),
+        description: txt(
+            "Если условие да — A, иначе B.",
+            "If the condition is yes, A, else B.",
+        ),
         help: txt(
             "Как «Ветвление», но для данных: не нужно рисовать две ветки ради одного числа. Пример: выходной? → сумма 0 : сумма платежа.",
             "Like «Branch» but for data: no need for two ways for one number. Example: a day off? → 0 : the payment.",
@@ -649,9 +777,19 @@ fn choosing(out: &mut Vec<NodeDef>) {
         outputs: vec![port("result", Ty::Any, txt("Результат", "Result"))],
         params: vec![],
         advanced: false,
-        keywords: vec!["выбрать", "если иначе", "тернарный", "select", "choose", "if else"],
-    });
+        keywords: vec![
+            "выбрать",
+            "если иначе",
+            "тернарный",
+            "select",
+            "choose",
+            "if else",
+        ],
+    }
+}
 
+pub(super) fn logic_round() -> NodeDef {
+    use NodeGroup::Logic;
     let mut inputs = vec![port("value", Ty::Any, txt("Значение", "Value"))];
     let params = vec![
         wired(
@@ -673,7 +811,7 @@ fn choosing(out: &mut Vec<NodeDef>) {
             json!("round"),
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "logic.round",
         group: Logic,
         title: txt("Округлить", "Round"),
@@ -690,8 +828,11 @@ fn choosing(out: &mut Vec<NodeDef>) {
         params,
         advanced: false,
         keywords: vec!["округлить", "вниз", "вверх", "round", "floor", "ceil"],
-    });
+    }
+}
 
+pub(super) fn logic_switch() -> NodeDef {
+    use NodeGroup::Logic;
     let mut outputs: Vec<_> = (1..=4)
         .map(|index| {
             let (name, ru, en): (&'static str, &'static str, &'static str) = match index {
@@ -704,7 +845,7 @@ fn choosing(out: &mut Vec<NodeDef>) {
         })
         .collect();
     outputs.push(port("other", Ty::Flow, txt("Иначе", "Otherwise")));
-    out.push(NodeDef {
+    NodeDef {
         kind: "logic.switch",
         group: Logic,
         title: txt("Выбор по значению", "Switch"),
@@ -719,24 +860,46 @@ fn choosing(out: &mut Vec<NodeDef>) {
         inputs: vec![flow_in(), port("value", Ty::Any, txt("Значение", "Value"))],
         outputs,
         params: vec![
-            param("case1", ParamKind::Text, txt("Вариант 1", "Case 1"), json!("")),
-            param("case2", ParamKind::Text, txt("Вариант 2", "Case 2"), json!("")),
-            param("case3", ParamKind::Text, txt("Вариант 3", "Case 3"), json!("")),
-            param("case4", ParamKind::Text, txt("Вариант 4", "Case 4"), json!("")),
+            param(
+                "case1",
+                ParamKind::Text,
+                txt("Вариант 1", "Case 1"),
+                json!(""),
+            ),
+            param(
+                "case2",
+                ParamKind::Text,
+                txt("Вариант 2", "Case 2"),
+                json!(""),
+            ),
+            param(
+                "case3",
+                ParamKind::Text,
+                txt("Вариант 3", "Case 3"),
+                json!(""),
+            ),
+            param(
+                "case4",
+                ParamKind::Text,
+                txt("Вариант 4", "Case 4"),
+                json!(""),
+            ),
         ],
         advanced: true,
         keywords: vec!["выбор", "варианты", "switch", "case", "match"],
-    });
+    }
 }
 
-#[allow(clippy::too_many_lines)]
-fn lists(out: &mut Vec<NodeDef>) {
+pub(super) fn list_make() -> NodeDef {
     use NodeGroup::List;
-    out.push(NodeDef {
+    NodeDef {
         kind: "list.make",
         group: List,
         title: txt("Собрать список", "Make a list"),
-        description: txt("Список из подключённых значений.", "A list of the wired values."),
+        description: txt(
+            "Список из подключённых значений.",
+            "A list of the wired values.",
+        ),
         help: txt(
             "Пустые входы пропускаются. Дальше — «Для каждого», «Сумма списка» или «Склеить список».",
             "Empty inputs are skipped. Then «For each», «Sum of a list» or «Join a list».",
@@ -751,8 +914,11 @@ fn lists(out: &mut Vec<NodeDef>) {
         params: vec![],
         advanced: true,
         keywords: vec!["список", "собрать", "массив", "make list", "array"],
-    });
+    }
+}
 
+pub(super) fn list_at() -> NodeDef {
+    use NodeGroup::List;
     let mut inputs = vec![port("items", Ty::List, txt("Список", "List"))];
     let params = vec![wired(
         "index",
@@ -765,7 +931,7 @@ fn lists(out: &mut Vec<NodeDef>) {
         json!("1"),
         &mut inputs,
     )];
-    out.push(NodeDef {
+    NodeDef {
         kind: "list.at",
         group: List,
         title: txt("Элемент списка", "List item"),
@@ -790,8 +956,11 @@ fn lists(out: &mut Vec<NodeDef>) {
             "last",
             "index",
         ],
-    });
+    }
+}
 
+pub(super) fn list_sum() -> NodeDef {
+    use NodeGroup::List;
     let params = vec![param(
         "field",
         ParamKind::Text,
@@ -801,7 +970,7 @@ fn lists(out: &mut Vec<NodeDef>) {
         ),
         json!(""),
     )];
-    out.push(NodeDef {
+    NodeDef {
         kind: "list.sum",
         group: List,
         title: txt("Сумма списка", "Sum of a list"),
@@ -821,9 +990,21 @@ fn lists(out: &mut Vec<NodeDef>) {
         ],
         params,
         advanced: true,
-        keywords: vec!["сумма", "итого", "минимум", "максимум", "sum", "total", "min", "max"],
-    });
+        keywords: vec![
+            "сумма",
+            "итого",
+            "минимум",
+            "максимум",
+            "sum",
+            "total",
+            "min",
+            "max",
+        ],
+    }
+}
 
+pub(super) fn list_filter() -> NodeDef {
+    use NodeGroup::List;
     let mut inputs = vec![port("items", Ty::List, txt("Список", "List"))];
     let params = vec![
         param(
@@ -858,7 +1039,7 @@ fn lists(out: &mut Vec<NodeDef>) {
             &mut inputs,
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "list.filter",
         group: List,
         title: txt("Отобрать из списка", "Filter a list"),
@@ -878,8 +1059,11 @@ fn lists(out: &mut Vec<NodeDef>) {
         params,
         advanced: true,
         keywords: vec!["фильтр", "отобрать", "где", "filter", "where"],
-    });
+    }
+}
 
+pub(super) fn list_record() -> NodeDef {
+    use NodeGroup::List;
     let mut inputs = Vec::new();
     let params = vec![
         param(
@@ -915,7 +1099,7 @@ fn lists(out: &mut Vec<NodeDef>) {
             &mut inputs,
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "list.record",
         group: List,
         title: txt("Собрать запись", "Make a record"),
@@ -929,21 +1113,11 @@ fn lists(out: &mut Vec<NodeDef>) {
         params,
         advanced: true,
         keywords: vec!["запись", "объект", "поля", "record", "object", "struct"],
-    });
+    }
 }
 
-#[allow(clippy::too_many_lines)]
-fn loops(out: &mut Vec<NodeDef>) {
+pub(super) fn loop_repeat() -> NodeDef {
     use NodeGroup::Logic;
-    let loop_outputs = |value: super::catalog::PortDef| {
-        vec![
-            port("each", Ty::Flow, txt("Каждый раз", "Each time")),
-            port("done", Ty::Flow, txt("Готово", "Done")),
-            port("index", Ty::Number, txt("Номер (с 0)", "Index (from 0)")),
-            value,
-        ]
-    };
-
     let mut inputs = vec![flow_in()];
     let params = vec![wired(
         "count",
@@ -953,7 +1127,7 @@ fn loops(out: &mut Vec<NodeDef>) {
         json!("3"),
         &mut inputs,
     )];
-    out.push(NodeDef {
+    NodeDef {
         kind: "loop.repeat",
         group: Logic,
         title: txt("Повторить N раз", "Repeat N times"),
@@ -970,8 +1144,11 @@ fn loops(out: &mut Vec<NodeDef>) {
         params,
         advanced: false,
         keywords: vec!["повторить", "цикл", "раз", "repeat", "loop", "times"],
-    });
+    }
+}
 
+pub(super) fn loop_range() -> NodeDef {
+    use NodeGroup::Logic;
     let mut inputs = vec![flow_in()];
     let params = vec![
         wired(
@@ -999,7 +1176,7 @@ fn loops(out: &mut Vec<NodeDef>) {
             &mut inputs,
         ),
     ];
-    out.push(NodeDef {
+    NodeDef {
         kind: "loop.range",
         group: Logic,
         title: txt("Цикл по числам", "Count from … to"),
@@ -1015,9 +1192,20 @@ fn loops(out: &mut Vec<NodeDef>) {
         outputs: loop_outputs(port("value", Ty::Number, txt("Число", "Number"))),
         params,
         advanced: false,
-        keywords: vec!["цикл", "от до", "по порядку", "for", "range", "loop", "count"],
-    });
+        keywords: vec![
+            "цикл",
+            "от до",
+            "по порядку",
+            "for",
+            "range",
+            "loop",
+            "count",
+        ],
+    }
+}
 
+pub(super) fn loop_while() -> NodeDef {
+    use NodeGroup::Logic;
     let inputs = vec![
         flow_in(),
         port("condition", Ty::Bool, txt("Пока да", "While yes")),
@@ -1028,7 +1216,7 @@ fn loops(out: &mut Vec<NodeDef>) {
         txt("Не больше раз", "At most times"),
         json!("50"),
     )];
-    out.push(NodeDef {
+    NodeDef {
         kind: "loop.while",
         group: Logic,
         title: txt("Пока условие да", "While"),
@@ -1045,9 +1233,12 @@ fn loops(out: &mut Vec<NodeDef>) {
         params,
         advanced: true,
         keywords: vec!["пока", "цикл", "while", "loop", "until"],
-    });
+    }
+}
 
-    out.push(NodeDef {
+pub(super) fn loop_break() -> NodeDef {
+    use NodeGroup::Logic;
+    NodeDef {
         kind: "loop.break",
         group: Logic,
         title: txt("Прервать цикл", "Break the loop"),
@@ -1064,5 +1255,5 @@ fn loops(out: &mut Vec<NodeDef>) {
         params: vec![],
         advanced: true,
         keywords: vec!["прервать", "выйти", "стоп цикла", "break", "exit loop"],
-    });
+    }
 }
