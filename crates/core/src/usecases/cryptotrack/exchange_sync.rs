@@ -59,7 +59,7 @@ pub fn sync_exchange(
     source: ImportSource,
     now: i64,
 ) -> Result<ImportRun> {
-    let (root, mut run, fresh, known) = {
+    let (root, mut run, fresh, counts) = {
         let books = vault.books();
         let root = root_of(&books, store_id);
         let settings = import_settings(&books, &root)?;
@@ -73,7 +73,7 @@ pub fn sync_exchange(
         );
         (root, run, taken.fresh, (taken.known, taken.filtered))
     };
-    (run.known, run.filtered) = known;
+    (run.known, run.filtered) = counts;
     rules::count_kinds(&mut run, &fresh);
     let stored = vault.bybit_store(&root, &fresh)?;
     run.known += stored.known;
