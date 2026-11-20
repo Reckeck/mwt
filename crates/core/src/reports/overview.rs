@@ -510,9 +510,14 @@ impl Ctx {
     }
 
     pub(crate) fn index_of(&self, date: NaiveDate) -> Option<usize> {
-        let first = first_of_month(date);
-        self.months.iter().position(|month| *month == first)
+        month_index(&self.months, date)
     }
+}
+
+/// Position of the month holding `date` in `months` (first days of months).
+pub(crate) fn month_index(months: &[NaiveDate], date: NaiveDate) -> Option<usize> {
+    let first = first_of_month(date);
+    months.iter().position(|month| *month == first)
 }
 
 /// Months from `from` to `to`, both included; zero when `to` is earlier.

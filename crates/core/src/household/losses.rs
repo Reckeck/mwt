@@ -16,13 +16,14 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use chrono::NaiveDate;
 
 use crate::Amount;
-use crate::calendar::{self, Calendar, first_of_month};
+use crate::calendar::{self, Calendar};
 use crate::error::{Error, Result};
 use crate::model::store::{AssetRef, StoreScope};
 use crate::model::transaction::{AccountRef, Leg, LegRole, Transaction};
 use crate::model::vault::{VaultDoc, unix_to_iso};
 use crate::money::tree::{resolve_scope, root_of};
 use crate::pricing::history::unix_secs;
+use crate::reports::overview::month_index;
 
 /// What the rates book answers: the value of a leg or a quantity in a
 /// currency at a moment.
@@ -371,8 +372,7 @@ pub fn month_losses(
     let mut buckets = LossBuckets::default();
     for tx in &doc.transactions {
         let secs = timestamp_secs(&tx.meta().timestamp);
-        let first = first_of_month(window.calendar.date_of(secs));
-        let Some(index) = window.months.iter().position(|month| *month == first) else {
+        let Some(index) = month_index(window.months, window.calendar.date_of(secs)) else {
             continue;
         };
         if let Some(ids) = window.scope
