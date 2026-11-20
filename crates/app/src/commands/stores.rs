@@ -7,15 +7,22 @@ use trade_core::ipc_contract::{
     UpdateEnvelopeInput, UpdateStoreInput, VehicleMileageInput, VehicleServiceDoneInput,
     WalletCatalog,
 };
+use trade_core::model::ids::StoreId;
 use trade_core::model::planning::Envelope;
 use trade_core::model::store::{Store, StoreKind};
+use trade_core::money::portfolio;
+use trade_core::planning::envelopes as envelope_reads;
 use trade_core::service::{
     EnvelopeDraft, EnvelopeView, StoreChangeInput, StoreChangePlan, StoreExtras, StoreMoveTargets,
     StoreOverview, StoreTreeNode,
 };
+use trade_core::usecases::household::{envelopes, vehicle};
+use trade_core::usecases::money::rebase::{rebase_envelope_input, rebase_store_input};
+use trade_core::usecases::money::{store_change, stores, valuation};
 
+use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
-use crate::commands::{AppState, require_vault};
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
@@ -28,8 +35,7 @@ pub async fn get_wallet_catalog() -> Result<WalletCatalog, IpcError> {
 
 #[tauri::command]
 pub async fn list_stores(state: State<'_, AppState>) -> Result<Vec<Store>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().doc.stores.clone())
+    with_vault(&state, |vault| Ok(vault.doc.stores.clone()))
 }
 
 #[tauri::command]
@@ -37,8 +43,6 @@ pub async fn create_store(
     input: CreateStoreInput,
     state: State<'_, AppState>,
 ) -> Result<Store, IpcError> {
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
     let extras = StoreExtras {
         purpose: input.purpose,
         liability: input.liability,
@@ -52,11 +56,19 @@ pub async fn create_store(
         opening: input.opening,
         margin: input.margin,
     };
-    match input.card {
+    with_vault_mut(&state, |vault| match input.card {
         Some(card) if input.kind == StoreKind::Bank && input.parent_id.is_none() => {
-            vault.create_bank_with_card(&input.name, &input.color, &input.note, extras, card)
+            stores::create_bank_with_card(
+                vault,
+                &input.name,
+                &input.color,
+                &input.note,
+                extras,
+                card,
+            )
         }
-        _ => vault.create_store_with(
+        _ => stores::create_store_with(
+            vault,
             &input.name,
             input.kind,
             &input.color,
@@ -64,8 +76,7 @@ pub async fn create_store(
             input.parent_id,
             extras,
         ),
-    }
-    .map_err(IpcError::from)
+    })
 }
 
 #[tauri::command]
@@ -73,11 +84,10 @@ pub async fn update_store(
     input: UpdateStoreInput,
     state: State<'_, AppState>,
 ) -> Result<Store, IpcError> {
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
-    let input = vault.rebase_store_input(input)?;
-    vault
-        .update_store(
+    with_vault_mut(&state, |vault| {
+        let input = rebase_store_input(&vault.doc, input)?;
+        stores::update_store(
+            vault,
             &input.id,
             &input.name,
             &input.color,
@@ -96,14 +106,13 @@ pub async fn update_store(
                 margin: None,
             },
         )
-        .map_err(IpcError::from)
+    })
 }
 
 /// The wallet tree with own and rolled-up values (sidebar, wallets page).
 #[tauri::command]
 pub async fn get_store_tree(state: State<'_, AppState>) -> Result<Vec<StoreTreeNode>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().store_tree())
+    with_vault(&state, |vault| Ok(portfolio::store_tree(&vault.books())))
 }
 
 #[tauri::command]
@@ -111,11 +120,9 @@ pub async fn move_store(
     input: MoveStoreInput,
     state: State<'_, AppState>,
 ) -> Result<Store, IpcError> {
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
-    vault
-        .move_store(&input.id, input.parent_id.as_deref())
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        stores::move_store(vault, &input.id, input.parent_id.as_deref())
+    })
 }
 
 /// Where a sub-account may be moved to.
@@ -124,12 +131,7 @@ pub async fn store_move_targets(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<StoreMoveTargets, IpcError> {
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .store_move_targets(&id)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| stores::store_move_targets(vault, &id))
 }
 
 #[tauri::command]
@@ -138,16 +140,12 @@ pub async fn archive_store(
     archived: bool,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
-    vault.archive_store(&id, archived).map_err(IpcError::from)
+    with_vault_mut(&state, |vault| stores::archive_store(vault, &id, archived))
 }
 
 #[tauri::command]
 pub async fn delete_store(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
-    vault.delete_store(&id).map_err(IpcError::from)
+    with_vault_mut(&state, |vault| stores::delete_store(vault, &id))
 }
 
 /// One round trip for the whole wallet page header: store card, totals,
@@ -159,12 +157,9 @@ pub async fn get_store_overview(
     include_children: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<StoreOverview, IpcError> {
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .store_overview(&store_id, include_children.unwrap_or(true))
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| {
+        portfolio::store_overview(&vault.books(), &store_id, include_children.unwrap_or(true))
+    })
 }
 
 // -- envelopes ---------------------------------------------------------------
@@ -175,8 +170,12 @@ pub async fn list_envelopes(
     store_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Vec<EnvelopeView>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().envelopes(store_id.as_deref()))
+    with_vault(&state, |vault| {
+        Ok(envelope_reads::envelopes(
+            &vault.doc,
+            store_id.map(StoreId::from),
+        ))
+    })
 }
 
 #[tauri::command]
@@ -184,12 +183,7 @@ pub async fn create_envelope(
     input: EnvelopeDraft,
     state: State<'_, AppState>,
 ) -> Result<Envelope, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .create_envelope(input)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| envelopes::create_envelope(vault, input))
 }
 
 #[tauri::command]
@@ -197,12 +191,10 @@ pub async fn update_envelope(
     input: UpdateEnvelopeInput,
     state: State<'_, AppState>,
 ) -> Result<Envelope, IpcError> {
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
-    let input = vault.rebase_envelope_input(input)?;
-    vault
-        .update_envelope(&input.id, input.draft)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        let input = rebase_envelope_input(&vault.doc, input)?;
+        envelopes::update_envelope(vault, &input.id, input.draft)
+    })
 }
 
 /// Earmark more (`amount > 0`) or release (`amount < 0`).
@@ -211,12 +203,9 @@ pub async fn fund_envelope(
     input: FundEnvelopeInput,
     state: State<'_, AppState>,
 ) -> Result<Envelope, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .fund_envelope(&input.id, input.amount)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        envelopes::fund_envelope(vault, &input.id, input.amount)
+    })
 }
 
 /// Earmark up to `amount` for a goal in a wallet; returns what was taken.
@@ -225,12 +214,14 @@ pub async fn fund_goal(
     input: FundGoalInput,
     state: State<'_, AppState>,
 ) -> Result<Amount, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .fund_goal(&input.goal_id, &input.store_id, input.amount)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        envelopes::fund_goal(
+            vault,
+            &input.goal_id,
+            &StoreId::from(input.store_id.as_str()),
+            input.amount,
+        )
+    })
 }
 
 #[tauri::command]
@@ -238,22 +229,14 @@ pub async fn move_between_envelopes(
     input: MoveEnvelopeInput,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .move_between_envelopes(&input.from, &input.to, input.amount)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        envelopes::move_between_envelopes(vault, &input.from, &input.to, input.amount)
+    })
 }
 
 #[tauri::command]
 pub async fn delete_envelope(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .delete_envelope(&id)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| envelopes::delete_envelope(vault, &id))
 }
 
 /// What changing a wallet's kind, moving, detaching or merging an account
@@ -264,8 +247,9 @@ pub async fn plan_store_change(
     input: StoreChangeInput,
     state: State<'_, AppState>,
 ) -> Result<StoreChangePlan, IpcError> {
-    let mut guard = require_vault(&state)?;
-    Ok(guard.as_mut().unwrap().plan_store_change(&input))
+    with_vault(&state, |vault| {
+        Ok(store_change::plan_store_change(vault, &input))
+    })
 }
 
 /// Make that change: refused while the plan has an error or a conflict. The
@@ -275,12 +259,9 @@ pub async fn apply_store_change(
     input: StoreChangeInput,
     state: State<'_, AppState>,
 ) -> Result<StoreChangePlan, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .apply_store_change(&input)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        store_change::apply_store_change(vault, &input)
+    })
 }
 
 // -- cars ---------------------------------------------------------------------------
@@ -293,11 +274,9 @@ pub async fn vehicle_update_mileage(
     state: State<'_, AppState>,
 ) -> Result<Store, IpcError> {
     let today = Calendar::new(&current_zone(&app)).date_of(now_secs());
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
-    vault
-        .vehicle_update_mileage(&input.store_id, input.km, today)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        vehicle::vehicle_update_mileage(vault, &StoreId::from(input.store_id), input.km, today)
+    })
 }
 
 /// A car's service done: the next one moves by its intervals.
@@ -308,11 +287,9 @@ pub async fn vehicle_service_done(
 ) -> Result<Store, IpcError> {
     let date = chrono::NaiveDate::parse_from_str(&input.date, "%Y-%m-%d")
         .map_err(|_| IpcError::from(trade_core::Error::InvalidInput("date".into())))?;
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
-    vault
-        .vehicle_service_done(&input.store_id, date, input.km)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        vehicle::vehicle_service_done(vault, &StoreId::from(input.store_id), date, input.km)
+    })
 }
 
 /// Set or switch off the automatic revaluation of a property.
@@ -324,12 +301,9 @@ pub async fn property_set_revalue(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let zone = current_zone(&app);
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .set_revalue_rule(&store_id, rule, &zone)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        valuation::set_revalue_rule(vault, &StoreId::from(store_id), rule, &zone)
+    })
 }
 
 ipc_commands!(stores_commands, STORES_NAMES, commands::stores: [get_wallet_catalog, list_stores, create_store, update_store, get_store_tree, move_store, store_move_targets, archive_store, delete_store, get_store_overview, list_envelopes, create_envelope, update_envelope, fund_envelope, fund_goal, move_between_envelopes, delete_envelope, plan_store_change, apply_store_change, vehicle_update_mileage, vehicle_service_done, property_set_revalue]);

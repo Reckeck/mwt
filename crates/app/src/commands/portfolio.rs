@@ -3,24 +3,32 @@ use tauri::{AppHandle, State};
 use trade_core::Amount;
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::SetManualPriceInput;
+use trade_core::model::ids::StoreId;
 use trade_core::model::planning::AssetClass;
 use trade_core::model::store::AssetRef;
 use trade_core::model::vault::ManualPrice;
 use trade_core::model::vault::Valuation;
+use trade_core::money::{asset_holdings, investments, portfolio, valuation as valuation_reads};
+use trade_core::planning::allocation as allocation_reads;
 use trade_core::service::{
     AssetClassTarget, AssetClassesView, AssetHoldings, HistoryPoint, Investments, NetWorth,
     PortfolioSummary, PropertyValue, RealizedPnl, StoreMonthRow, TopupAdvice, ValuationInput,
 };
+use trade_core::usecases::household::store_months;
+use trade_core::usecases::money::{capital, valuation};
+use trade_core::usecases::planning::allocation;
 
+use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
-use crate::commands::{AppState, require_vault};
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 #[tauri::command]
 pub async fn get_summary(state: State<'_, AppState>) -> Result<PortfolioSummary, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().portfolio_summary())
+    with_vault(&state, |vault| {
+        Ok(portfolio::portfolio_summary(&vault.books()))
+    })
 }
 
 #[tauri::command]
@@ -28,10 +36,10 @@ pub async fn get_history(
     base_currency: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Vec<HistoryPoint>, IpcError> {
-    let guard = require_vault(&state)?;
-    let vault = guard.as_ref().unwrap();
-    let base = base_currency.unwrap_or_else(|| vault.base_currency().to_string());
-    Ok(vault.history_series(&base))
+    with_vault(&state, |vault| {
+        let base = base_currency.unwrap_or_else(|| vault.base_currency().to_string());
+        Ok(portfolio::history_series(&vault.books(), &base))
+    })
 }
 
 /// The same asset on every wallet (the «elsewhere» block of the asset sheet).
@@ -40,8 +48,9 @@ pub async fn get_asset_holdings(
     asset: AssetRef,
     state: State<'_, AppState>,
 ) -> Result<AssetHoldings, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().asset_holdings(&asset))
+    with_vault(&state, |vault| {
+        Ok(asset_holdings::asset_holdings(&vault.books(), &asset))
+    })
 }
 
 /// "Investments": coins and futures margin, at cost and today (Money 2 · 13).
@@ -50,11 +59,12 @@ pub async fn get_investments(
     store_ids: Option<Vec<String>>,
     state: State<'_, AppState>,
 ) -> Result<Investments, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard
-        .as_ref()
-        .unwrap()
-        .investments(&store_ids.unwrap_or_default()))
+    with_vault(&state, |vault| {
+        Ok(investments::investments(
+            &vault.books(),
+            &store_ids.unwrap_or_default(),
+        ))
+    })
 }
 
 /// Money in and out of a wallet per local month, the last `months` (default 6).
@@ -67,20 +77,21 @@ pub async fn get_store_months(
     state: State<'_, AppState>,
 ) -> Result<Vec<StoreMonthRow>, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().store_months(
-        &store_id,
-        include_children.unwrap_or(true),
-        months.unwrap_or(6).clamp(1, 36),
-        now_secs(),
-        &zone,
-    ))
+    with_vault(&state, |vault| {
+        Ok(store_months::store_months(
+            vault,
+            &StoreId::from(store_id),
+            include_children.unwrap_or(true),
+            months.unwrap_or(6).clamp(1, 36),
+            now_secs(),
+            &zone,
+        ))
+    })
 }
 
 #[tauri::command]
 pub async fn get_realized_pnl(state: State<'_, AppState>) -> Result<RealizedPnl, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().realized_pnl())
+    with_vault(&state, |vault| Ok(portfolio::realized_pnl(&vault.books())))
 }
 
 /// Value of a single store over time (wallet page chart); with its
@@ -92,10 +103,15 @@ pub async fn get_store_history(
     base_currency: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Vec<HistoryPoint>, IpcError> {
-    let guard = require_vault(&state)?;
-    let vault = guard.as_ref().unwrap();
-    let base = base_currency.unwrap_or_else(|| vault.base_currency().to_string());
-    Ok(vault.store_history(&store_id, include_children.unwrap_or(true), &base))
+    with_vault(&state, |vault| {
+        let base = base_currency.unwrap_or_else(|| vault.base_currency().to_string());
+        Ok(portfolio::store_history(
+            &vault.books(),
+            &store_id,
+            include_children.unwrap_or(true),
+            &base,
+        ))
+    })
 }
 
 /// Realized PnL booked on a single store (and, by default, its sub-accounts).
@@ -105,18 +121,19 @@ pub async fn get_store_pnl(
     include_children: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<RealizedPnl, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard
-        .as_ref()
-        .unwrap()
-        .store_pnl(&store_id, include_children.unwrap_or(true)))
+    with_vault(&state, |vault| {
+        Ok(portfolio::store_pnl(
+            &vault.books(),
+            &store_id,
+            include_children.unwrap_or(true),
+        ))
+    })
 }
 
 /// Assets, debts and what people owe, in the base currency.
 #[tauri::command]
 pub async fn get_net_worth(state: State<'_, AppState>) -> Result<NetWorth, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().net_worth())
+    with_vault(&state, |vault| Ok(capital::net_worth(&vault.books())))
 }
 
 /// Hand-set value of one unit of a property asset (a flat, a car).
@@ -125,12 +142,9 @@ pub async fn set_manual_price(
     input: SetManualPriceInput,
     state: State<'_, AppState>,
 ) -> Result<ManualPrice, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .set_manual_price(&input.asset_key, input.unit_price, &input.currency)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        capital::set_manual_price(vault, &input.asset_key, input.unit_price, &input.currency)
+    })
 }
 
 #[tauri::command]
@@ -138,19 +152,17 @@ pub async fn clear_manual_price(
     asset_key: String,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .clear_manual_price(&asset_key)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        capital::clear_manual_price(vault, &asset_key)
+    })
 }
 
 /// Portfolio baskets with target shares; the preset until saved (plan F).
 #[tauri::command]
 pub async fn asset_classes_get(state: State<'_, AppState>) -> Result<AssetClassesView, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().asset_classes())
+    with_vault(&state, |vault| {
+        Ok(allocation_reads::asset_classes(&vault.doc))
+    })
 }
 
 /// Replace the baskets; shares must add up to 100, an empty list = preset.
@@ -159,12 +171,9 @@ pub async fn asset_classes_set(
     classes: Vec<AssetClass>,
     state: State<'_, AppState>,
 ) -> Result<AssetClassesView, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .set_asset_classes(classes)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        allocation::set_asset_classes(vault, classes)
+    })
 }
 
 /// Put an asset or a store in a basket, or take it out with `None`.
@@ -174,12 +183,9 @@ pub async fn asset_class_assign(
     class_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<AssetClassesView, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .assign_asset_class(target, class_id)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        allocation::assign_asset_class(vault, target, class_id)
+    })
 }
 
 /// Where the free money should go to bring the shares back to target.
@@ -190,11 +196,14 @@ pub async fn topup_advice(
     state: State<'_, AppState>,
 ) -> Result<TopupAdvice, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    Ok(guard
-        .as_ref()
-        .unwrap()
-        .topup_advice(amount, now_secs(), &zone))
+    with_vault(&state, |vault| {
+        Ok(allocation_reads::topup_advice(
+            &vault.books(),
+            amount,
+            now_secs(),
+            &zone,
+        ))
+    })
 }
 
 /// The value story of a property's assets: purchase, dated valuations, the
@@ -206,12 +215,9 @@ pub async fn property_valuations(
     state: State<'_, AppState>,
 ) -> Result<Vec<PropertyValue>, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .property_values(&store_id, &zone)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| {
+        valuation_reads::property_values(&vault.books(), &StoreId::from(store_id), &zone)
+    })
 }
 
 /// A dated valuation of a property asset; one on the same day replaces it.
@@ -220,12 +226,7 @@ pub async fn property_valuation_add(
     input: ValuationInput,
     state: State<'_, AppState>,
 ) -> Result<Valuation, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .add_valuation(input)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| valuation::add_valuation(vault, input))
 }
 
 /// Remove a valuation; the removed one comes back for "Undo".
@@ -234,12 +235,7 @@ pub async fn property_valuation_delete(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<Valuation, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .delete_valuation(&id)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| valuation::delete_valuation(vault, &id))
 }
 
 ipc_commands!(portfolio_commands, PORTFOLIO_NAMES, commands::portfolio: [get_summary, get_history, get_asset_holdings, get_investments, get_store_months, get_realized_pnl, get_store_history, get_store_pnl, get_net_worth, set_manual_price, clear_manual_price, asset_classes_get, asset_classes_set, asset_class_assign, topup_advice, property_valuations, property_valuation_add, property_valuation_delete]);

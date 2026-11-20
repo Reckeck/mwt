@@ -5,9 +5,13 @@ use crate::ipc::events::{AppEvent, RatesUpdated};
 use chrono::{Datelike, Months, NaiveDate};
 use tauri::{AppHandle, Manager, State};
 use trade_core::model::inflation::{InflationMode, InflationSource};
+use trade_core::money::inflation as inflation_reads;
 use trade_core::pricing::PricingService;
 use trade_core::service::{FetchedRates, InflationCurrency};
+use trade_core::usecases::money::inflation;
+use trade_core::usecases::planning::notifications;
 
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
@@ -51,9 +55,9 @@ pub async fn refresh_rates_now(app: &AppHandle) -> Result<Vec<InflationCurrency>
     let (fresh, overview) = {
         let mut guard = require_vault(&state)?;
         let vault = guard.as_mut().unwrap();
-        let notices = vault.apply_rates(&fetched, russian)?;
-        let fresh = vault.log_notices(notices)?;
-        (fresh, vault.inflation_overview())
+        let notices = inflation::apply_rates(vault, &fetched, russian)?;
+        let fresh = notifications::log_notices(vault, notices)?;
+        (fresh, inflation_reads::inflation_overview(&vault.doc))
     };
     crate::scheduler::deliver(app, fresh, false);
     let _ = RatesUpdated::emit(app, &());
@@ -71,8 +75,9 @@ pub async fn refresh_rates(app: AppHandle) -> Result<Vec<InflationCurrency>, Ipc
 pub async fn get_inflation_overview(
     state: State<'_, AppState>,
 ) -> Result<Vec<InflationCurrency>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().inflation_overview())
+    with_vault(&state, |vault| {
+        Ok(inflation_reads::inflation_overview(&vault.doc))
+    })
 }
 
 /// Pick Auto / Manual for a currency (`null` = back to the default).
@@ -83,11 +88,10 @@ pub async fn set_inflation_mode(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<InflationCurrency>, IpcError> {
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
-    vault.set_inflation_mode(&currency, mode)?;
-    let overview = vault.inflation_overview();
-    drop(guard);
+    let overview = with_vault_mut::<_, IpcError>(&state, |vault| {
+        inflation::set_inflation_mode(vault, &currency, mode)?;
+        Ok(inflation_reads::inflation_overview(&vault.doc))
+    })?;
     let _ = RatesUpdated::emit(&app, &());
     Ok(overview)
 }

@@ -6,9 +6,12 @@ use tauri::{AppHandle, Manager, State};
 use trade_core::ipc_contract::events::EnrichmentReadyPayload;
 
 use trade_core::model::enrichment::EnrichmentRecord;
+use trade_core::money::enrichment as enrichment_reads;
 use trade_core::txinfo::TxInfoService;
+use trade_core::usecases::money::enrichment as enrichment_cases;
 
 use crate::commands::app_settings::current_settings;
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
@@ -19,10 +22,9 @@ use crate::ipc::commands::ipc_commands;
 pub async fn enrich(app: &AppHandle, tx_id: &str) -> Result<Option<EnrichmentRecord>, IpcError> {
     let state = app.state::<AppState>();
     crate::commands::sandbox::refuse(&state, "looking up a transaction online")?;
-    let request = {
-        let guard = require_vault(&state)?;
-        guard.as_ref().unwrap().enrichment_request(tx_id)
-    };
+    let request = with_vault::<_, IpcError>(&state, |vault| {
+        Ok(enrichment_reads::enrichment_request(&vault.doc, tx_id))
+    })?;
     let Some((hash, network)) = request else {
         return Ok(None);
     };
@@ -30,7 +32,7 @@ pub async fn enrich(app: &AppHandle, tx_id: &str) -> Result<Option<EnrichmentRec
     let record = {
         let mut guard = require_vault(&state)?;
         let vault = guard.as_mut().unwrap();
-        let record = vault.apply_enrichment_result(tx_id, &info);
+        let record = enrichment_cases::apply_enrichment_result(vault, tx_id, &info);
         if record.is_some() {
             vault.persist()?;
         }
@@ -63,8 +65,9 @@ pub async fn get_enrichments(
     tx_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Vec<EnrichmentRecord>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().enrichments(tx_id.as_deref()))
+    with_vault(&state, |vault| {
+        Ok(enrichment_reads::enrichments(&vault.doc, tx_id.as_deref()))
+    })
 }
 
 #[tauri::command]
@@ -72,12 +75,9 @@ pub async fn apply_enrichment(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<EnrichmentRecord, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .apply_enrichment(&id)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        enrichment_cases::apply_enrichment(vault, &id)
+    })
 }
 
 #[tauri::command]
@@ -85,12 +85,9 @@ pub async fn reject_enrichment(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<EnrichmentRecord, IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .reject_enrichment(&id)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        enrichment_cases::reject_enrichment(vault, &id)
+    })
 }
 
 /// Look a transaction up again now. Refused without the user's consent.
