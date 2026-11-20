@@ -64,7 +64,12 @@ fn upcoming_flags_a_payment_the_balance_will_not_cover() {
             property_id: None,
         })
         .unwrap();
-    let items = vault.upcoming(45, secs("2026-03-10T00:00:00Z"), "UTC");
+    let items = crate::planning::upcoming::upcoming(
+        &vault.books(),
+        45,
+        secs("2026-03-10T00:00:00Z"),
+        "UTC",
+    );
     let titles: Vec<(&str, Option<Amount>)> = items
         .iter()
         .map(|item| (item.title.as_str(), item.shortfall))

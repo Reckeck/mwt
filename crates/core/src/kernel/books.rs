@@ -7,10 +7,7 @@ use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::NaiveDate;
-
 use crate::Amount;
-use crate::calendar::Calendar;
 use crate::error::Result;
 use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
@@ -18,10 +15,9 @@ use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
 use crate::vault_io::device_secrets::DeviceSecrets;
 
-use crate::service::budget::{Flow, MonthAllowance};
 use crate::service::{
-    DailyBudget, DebtLoad, HealthReport, MonthSummary, NetWorth, RateBook, StoreOverview,
-    UnlockedVault, UpcomingItem, UtilityBill,
+    DebtLoad, HealthReport, MonthSummary, NetWorth, RateBook, StoreOverview, UnlockedVault,
+    UtilityBill,
 };
 
 #[cfg(test)]
@@ -168,37 +164,6 @@ impl Books<'_> {
         self.vault.month_summary_in(self, month, zone)
     }
 
-    /// Planned income and fixed spending of the month containing `date`.
-    pub(crate) fn month_plan(
-        &self,
-        cal: &Calendar,
-        date: NaiveDate,
-        currency: &str,
-    ) -> (Amount, Amount) {
-        self.vault.month_plan(cal, date, currency)
-    }
-
-    /// The month-mode allowance of the month containing `date`.
-    pub(crate) fn month_allowance(
-        &self,
-        cal: &Calendar,
-        date: NaiveDate,
-        currency: &str,
-        flows: &[Flow],
-    ) -> MonthAllowance {
-        self.vault.month_allowance(cal, date, currency, flows)
-    }
-
-    /// How much can be spent today.
-    pub(crate) fn daily_budget(&self, now: i64, zone: &str) -> DailyBudget {
-        self.vault.daily_budget(now, zone)
-    }
-
-    /// What is due in the next `days` days.
-    pub(crate) fn upcoming(&self, days: u32, now: i64, zone: &str) -> Vec<UpcomingItem> {
-        self.vault.upcoming(days, now, zone)
-    }
-
     /// The utility bill of a property for a period.
     pub(crate) fn utility_bill(
         &self,
@@ -313,10 +278,6 @@ mod tests {
         "subtree_ids",
         "store_overview",
         "month_summary_in",
-        "month_plan",
-        "month_allowance",
-        "daily_budget",
-        "upcoming",
         "utility_bill",
         "capital_health",
         "debt_load",

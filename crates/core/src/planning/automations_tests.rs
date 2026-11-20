@@ -987,7 +987,11 @@ fn golden_g8_net_worth_and_the_daily_budget_after_the_rent() {
     assert_eq!(worth.financial, amount("600"));
     assert_eq!(worth.liabilities, amount("410"));
     assert_eq!(worth.net, amount("190"));
-    let budget = vault.daily_budget(secs("2026-02-20T12:00:00Z"), "Europe/Berlin");
+    let budget = crate::planning::daily_budget::daily_budget(
+        &vault.books(),
+        secs("2026-02-20T12:00:00Z"),
+        "Europe/Berlin",
+    );
     // Feb has no income and the 300 rent is mandatory: -300 over 28 days,
     // 20 days elapsed incl. today -> -214.2857... (the code's figure today).
     assert_eq!(budget.fixed, amount("300"));

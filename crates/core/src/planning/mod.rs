@@ -19,6 +19,7 @@ mod automations_tests;
 pub mod budget;
 #[cfg(test)]
 mod budget_tests;
+pub mod daily_budget;
 pub mod datasources;
 #[cfg(test)]
 mod datasources_tests;
@@ -52,3 +53,4 @@ pub mod scenarios;
 #[cfg(test)]
 mod scenarios_tests;
 pub mod schedule;
+pub mod upcoming;

@@ -22,6 +22,7 @@ use crate::model::notify::{notice, notice_title};
 use crate::planning::agenda::UpcomingKind;
 use crate::planning::agenda::{next_occurrence, reminder_secs};
 use crate::planning::auto_reminders::category_of;
+use crate::planning::upcoming::upcoming;
 
 /// How far ahead a snapshot looks.
 pub const SNAPSHOT_DAYS: u32 = 60;
@@ -232,8 +233,7 @@ pub fn notification_snapshot(
 
     // An automation cannot run while the vault is locked: say it is waiting.
     if settings.category(NoticeCategory::Automation).enabled {
-        for item in books
-            .upcoming(SNAPSHOT_DAYS, now, zone)
+        for item in upcoming(books, SNAPSHOT_DAYS, now, zone)
             .into_iter()
             .filter(|item| item.kind == UpcomingKind::Automation)
         {
