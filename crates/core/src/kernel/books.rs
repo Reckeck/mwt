@@ -232,16 +232,6 @@ impl Books<'_> {
         self.vault.month_allowance(cal, date, currency, flows)
     }
 
-    /// Today's valuation plus the part of `financial` held in crypto.
-    pub(crate) fn net_worth_with_crypto(&self) -> (NetWorth, Amount) {
-        self.vault.net_worth_with_crypto()
-    }
-
-    /// USD value of one unit of a hand-priced asset.
-    pub(crate) fn manual_price_usd(&self, asset_key: &str) -> Option<Amount> {
-        self.vault.manual_price_usd(asset_key)
-    }
-
     /// How much can be spent today.
     pub(crate) fn daily_budget(&self, now: i64, zone: &str) -> DailyBudget {
         self.vault.daily_budget(now, zone)
@@ -385,8 +375,6 @@ mod tests {
         "flows_between",
         "month_plan",
         "month_allowance",
-        "net_worth_with_crypto",
-        "manual_price_usd",
         "daily_budget",
         "upcoming",
         "loss_report",
