@@ -7,6 +7,7 @@ use tauri::{AppHandle, State};
 use trade_core::Amount;
 use trade_core::calendar::now_secs;
 use trade_core::household::loyalty::cashback_report;
+use trade_core::household::utilities as utility_reads;
 use trade_core::ipc_contract::{
     AdjustPointsInput, AutomationInput, BudgetInput, ConfirmEstimatedInput,
     CreateLoyaltyProgramInput, GoalInput, MeterReadingInput, PriceAlertInput, ReminderInput,
@@ -21,13 +22,21 @@ use trade_core::model::planning::{
 };
 use trade_core::model::store::Store;
 use trade_core::model::transaction::Transaction;
+use trade_core::money::interest as interest_reads;
+use trade_core::planning::{agenda as agenda_reads, budget as budget_reads, goals as goal_reads};
 use trade_core::service::{
     AutomationSimulation, BudgetStatus, CashbackReport, DailyBudget, DepositReport,
     EmergencyStatus, GoalCalendar, GoalDeleted, GoalProgress, InterestTaxReport, MonthSummary,
     PayUtilityBillInput, PropertySummary, UnlockedVault, UpcomingItem, UtilityBill,
     UtilityPaymentDraft, UtilityTrend,
 };
-use trade_core::usecases::household::loyalty;
+use trade_core::usecases::household::{loyalty, utilities};
+use trade_core::usecases::money::interest;
+use trade_core::usecases::money::rebase;
+use trade_core::usecases::planning::{
+    agenda, auto_reminders, automation_card, automations, budget, emergency, goals, my_automations,
+    scenarios,
+};
 use trade_core::workflow::Workflow;
 
 use crate::commands::app_settings::current_zone;
@@ -59,7 +68,7 @@ pub(crate) fn with_vault_mut<T, E: From<IpcError>>(
 
 #[tauri::command]
 pub async fn list_automations(state: State<'_, AppState>) -> Result<Vec<Automation>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.automations()))
+    with_vault(&state, |vault| Ok(automations::automations(vault)))
 }
 
 #[tauri::command]
@@ -68,7 +77,7 @@ pub async fn create_automation(
     state: State<'_, AppState>,
 ) -> Result<Automation, IpcError> {
     let draft = input.to_draft()?;
-    with_vault_mut(&state, |vault| vault.create_automation(draft))
+    with_vault_mut(&state, |vault| automations::create_automation(vault, draft))
 }
 
 #[tauri::command]
@@ -77,15 +86,15 @@ pub async fn update_automation(
     state: State<'_, AppState>,
 ) -> Result<Automation, IpcError> {
     with_vault_mut(&state, |vault| {
-        let input = vault.rebase_automation_input(input)?;
+        let input = rebase::rebase_automation_input(vault, input)?;
         let draft = input.automation.to_draft()?;
-        vault.update_automation(&input.id, draft)
+        automations::update_automation(vault, &input.id, draft)
     })
 }
 
 #[tauri::command]
 pub async fn delete_automation(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.delete_automation(&id))
+    with_vault_mut(&state, |vault| automations::delete_automation(vault, &id))
 }
 
 /// "Create now": same funds check as the schedule; a shortfall is
@@ -95,7 +104,9 @@ pub async fn run_automation(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<Transaction, IpcError> {
-    with_vault_mut(&state, |vault| vault.run_automation(&id, now_secs()))
+    with_vault_mut(&state, |vault| {
+        automations::run_automation(vault, &id, now_secs())
+    })
 }
 
 /// What the automations would do over the next days, worked out on a sandbox
@@ -108,7 +119,8 @@ pub async fn simulate_automations(
 ) -> Result<AutomationSimulation, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        vault.simulate_automations(
+        automations::simulate_automations(
+            vault,
             input.automation_id.as_deref(),
             input.days,
             now_secs(),
@@ -135,7 +147,7 @@ pub async fn retry_automation_run(
 ) -> Result<Transaction, IpcError> {
     let zone = current_zone(&app);
     with_vault_mut(&state, |vault| {
-        vault.retry_automation_run(&run_id, now_secs(), &zone)
+        automations::retry_automation_run(vault, &run_id, now_secs(), &zone)
     })
 }
 
@@ -148,7 +160,7 @@ pub async fn confirm_estimated_amount(
 ) -> Result<Transaction, IpcError> {
     let amount = Amount::parse(&input.amount)?;
     with_vault_mut(&state, |vault| {
-        vault.confirm_estimated_amount(&input.tx_id, amount)
+        automations::confirm_estimated_amount(vault, &input.tx_id, amount)
     })
 }
 
@@ -159,7 +171,7 @@ pub async fn detach_automation(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<Workflow, IpcError> {
-    with_vault_mut(&state, |vault| vault.detach_automation(&id))
+    with_vault_mut(&state, |vault| automations::detach_automation(vault, &id))
 }
 
 #[tauri::command]
@@ -167,14 +179,16 @@ pub async fn skip_automation_run(
     run_id: String,
     state: State<'_, AppState>,
 ) -> Result<AutomationRun, IpcError> {
-    with_vault_mut(&state, |vault| vault.skip_automation_run(&run_id))
+    with_vault_mut(&state, |vault| {
+        automations::skip_automation_run(vault, &run_id)
+    })
 }
 
 // -- budgets ---------------------------------------------------------------------
 
 #[tauri::command]
 pub async fn list_budgets(state: State<'_, AppState>) -> Result<Vec<Budget>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.budgets()))
+    with_vault(&state, |vault| Ok(budget_reads::budgets(&vault.doc)))
 }
 
 #[tauri::command]
@@ -182,7 +196,7 @@ pub async fn create_budget(
     input: BudgetInput,
     state: State<'_, AppState>,
 ) -> Result<Budget, IpcError> {
-    with_vault_mut(&state, |vault| vault.create_budget(input.into()))
+    with_vault_mut(&state, |vault| budget::create_budget(vault, input.into()))
 }
 
 #[tauri::command]
@@ -191,14 +205,14 @@ pub async fn update_budget(
     state: State<'_, AppState>,
 ) -> Result<Budget, IpcError> {
     with_vault_mut(&state, |vault| {
-        let input = vault.rebase_budget_input(input)?;
-        vault.update_budget(&input.id, input.budget.into())
+        let input = rebase::rebase_budget_input(&vault.doc, input)?;
+        budget::update_budget(vault, &input.id, input.budget.into())
     })
 }
 
 #[tauri::command]
 pub async fn delete_budget(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.delete_budget(&id))
+    with_vault_mut(&state, |vault| budget::delete_budget(vault, &id))
 }
 
 #[tauri::command]
@@ -207,7 +221,9 @@ pub async fn get_budget_status(
     state: State<'_, AppState>,
 ) -> Result<Vec<BudgetStatus>, IpcError> {
     let zone = current_zone(&app);
-    with_vault(&state, |vault| Ok(vault.budget_status(now_secs(), &zone)))
+    with_vault(&state, |vault| {
+        Ok(budget::budget_status(&vault.books(), now_secs(), &zone))
+    })
 }
 
 #[tauri::command]
@@ -216,7 +232,9 @@ pub async fn get_daily_budget(
     state: State<'_, AppState>,
 ) -> Result<DailyBudget, IpcError> {
     let zone = current_zone(&app);
-    with_vault(&state, |vault| Ok(vault.daily_budget(now_secs(), &zone)))
+    with_vault(&state, |vault| {
+        Ok(budget::daily_budget(vault, now_secs(), &zone))
+    })
 }
 
 /// Totals of a `YYYY-MM` month; the current month when omitted.
@@ -231,19 +249,21 @@ pub async fn get_month_summary(
         let date = trade_core::calendar::Calendar::new(&zone).date_of(now_secs());
         trade_core::calendar::month_key(date)
     });
-    with_vault(&state, |vault| vault.month_summary(&month, &zone))
+    with_vault(&state, |vault| {
+        budget::month_summary(&vault.books(), &month, &zone)
+    })
 }
 
 // -- goals -----------------------------------------------------------------------
 
 #[tauri::command]
 pub async fn list_goals(state: State<'_, AppState>) -> Result<Vec<Goal>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.goals()))
+    with_vault(&state, |vault| Ok(goal_reads::goals(&vault.doc)))
 }
 
 #[tauri::command]
 pub async fn create_goal(input: GoalInput, state: State<'_, AppState>) -> Result<Goal, IpcError> {
-    with_vault_mut(&state, |vault| vault.create_goal(input.into()))
+    with_vault_mut(&state, |vault| goals::create_goal(vault, input.into()))
 }
 
 #[tauri::command]
@@ -252,14 +272,14 @@ pub async fn update_goal(
     state: State<'_, AppState>,
 ) -> Result<Goal, IpcError> {
     with_vault_mut(&state, |vault| {
-        let input = vault.rebase_goal_input(input)?;
-        vault.update_goal(&input.id, input.goal.into())
+        let input = rebase::rebase_goal_input(&vault.doc, input)?;
+        goals::update_goal(vault, &input.id, input.goal.into())
     })
 }
 
 #[tauri::command]
 pub async fn delete_goal(id: String, state: State<'_, AppState>) -> Result<GoalDeleted, IpcError> {
-    with_vault_mut(&state, |vault| vault.delete_goal(&id, now_secs()))
+    with_vault_mut(&state, |vault| goals::delete_goal(vault, &id, now_secs()))
 }
 
 /// Undo of [`delete_goal`].
@@ -268,7 +288,9 @@ pub async fn restore_goal(
     deleted: GoalDeleted,
     state: State<'_, AppState>,
 ) -> Result<Goal, IpcError> {
-    with_vault_mut(&state, |vault| vault.restore_goal(deleted, now_secs()))
+    with_vault_mut(&state, |vault| {
+        goals::restore_goal(vault, deleted, now_secs())
+    })
 }
 
 #[tauri::command]
@@ -277,7 +299,9 @@ pub async fn get_goal_progress(
     state: State<'_, AppState>,
 ) -> Result<Vec<GoalProgress>, IpcError> {
     let zone = current_zone(&app);
-    with_vault(&state, |vault| Ok(vault.goal_progress(now_secs(), &zone)))
+    with_vault(&state, |vault| {
+        Ok(goals::goal_progress(&vault.books(), now_secs(), &zone))
+    })
 }
 
 /// A goal draft that reaches what a calculator scenario ends with; the goal
@@ -290,7 +314,7 @@ pub async fn goal_from_scenario(
 ) -> Result<GoalInput, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        vault.goal_from_scenario(&id, now_secs(), &zone)
+        scenarios::goal_from_scenario(&vault.doc, &id, now_secs(), &zone)
     })
 }
 
@@ -301,7 +325,9 @@ pub async fn get_goal_calendar(
     state: State<'_, AppState>,
 ) -> Result<GoalCalendar, IpcError> {
     let zone = current_zone(&app);
-    with_vault(&state, |vault| vault.goal_calendar(year, now_secs(), &zone))
+    with_vault(&state, |vault| {
+        goals::goal_calendar(&vault.books(), year, now_secs(), &zone)
+    })
 }
 
 // -- emergency fund --------------------------------------------------------------
@@ -314,7 +340,11 @@ pub async fn emergency_fund_get(
 ) -> Result<EmergencyStatus, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        Ok(vault.emergency_fund_status(now_secs(), &zone))
+        Ok(emergency::emergency_fund_status(
+            &vault.books(),
+            now_secs(),
+            &zone,
+        ))
     })
 }
 
@@ -323,7 +353,7 @@ pub async fn emergency_fund_set(
     fund: EmergencyFund,
     state: State<'_, AppState>,
 ) -> Result<EmergencyFund, IpcError> {
-    with_vault_mut(&state, |vault| vault.set_emergency_fund(fund))
+    with_vault_mut(&state, |vault| emergency::set_emergency_fund(vault, fund))
 }
 
 /// Add a savings account to the fund or take it out.
@@ -333,7 +363,9 @@ pub async fn emergency_fund_toggle(
     on: bool,
     state: State<'_, AppState>,
 ) -> Result<EmergencyFund, IpcError> {
-    with_vault_mut(&state, |vault| vault.emergency_fund_toggle(&store_id, on))
+    with_vault_mut(&state, |vault| {
+        emergency::emergency_fund_toggle(vault, &store_id, on)
+    })
 }
 
 // -- reminders -------------------------------------------------------------------
@@ -347,8 +379,8 @@ pub async fn list_reminders(
     let zone = current_zone(&app);
     let ru = crate::scheduler::russian(&app);
     with_vault_mut(&state, |vault| {
-        vault.sync_auto_reminders(now_secs(), &zone, ru)?;
-        Ok(vault.reminders_in(now_secs(), &zone, ru))
+        auto_reminders::sync_auto_reminders(vault, now_secs(), &zone, ru)?;
+        Ok(auto_reminders::reminders_in(vault, now_secs(), &zone, ru))
     })
 }
 
@@ -358,7 +390,7 @@ pub async fn create_reminder(
     state: State<'_, AppState>,
 ) -> Result<Reminder, IpcError> {
     with_vault_mut(&state, |vault| {
-        vault.create_reminder_paying(&input.text, &input.due_at, input.repeat, input.pay)
+        agenda::create_reminder_paying(vault, &input.text, &input.due_at, input.repeat, input.pay)
     })
 }
 
@@ -368,8 +400,9 @@ pub async fn update_reminder(
     state: State<'_, AppState>,
 ) -> Result<Reminder, IpcError> {
     with_vault_mut(&state, |vault| {
-        let input = vault.rebase_reminder_input(input)?;
-        vault.update_reminder_paying(
+        let input = rebase::rebase_reminder_input(&vault.doc, input)?;
+        agenda::update_reminder_paying(
+            vault,
             &input.id,
             &input.reminder.text,
             &input.reminder.due_at,
@@ -381,7 +414,7 @@ pub async fn update_reminder(
 
 #[tauri::command]
 pub async fn delete_reminder(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.delete_reminder(&id))
+    with_vault_mut(&state, |vault| agenda::delete_reminder(vault, &id))
 }
 
 #[tauri::command]
@@ -390,7 +423,7 @@ pub async fn set_reminder_done(
     done: bool,
     state: State<'_, AppState>,
 ) -> Result<Reminder, IpcError> {
-    with_vault_mut(&state, |vault| vault.set_reminder_done(&id, done))
+    with_vault_mut(&state, |vault| agenda::set_reminder_done(vault, &id, done))
 }
 
 /// Stop a repeating reminder for good.
@@ -399,7 +432,7 @@ pub async fn finish_reminder_series(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<Reminder, IpcError> {
-    with_vault_mut(&state, |vault| vault.finish_reminder_series(&id))
+    with_vault_mut(&state, |vault| agenda::finish_reminder_series(vault, &id))
 }
 
 /// Put a reminder off until a moment.
@@ -409,7 +442,7 @@ pub async fn snooze_reminder(
     state: State<'_, AppState>,
 ) -> Result<Reminder, IpcError> {
     with_vault_mut(&state, |vault| {
-        vault.snooze_reminder(&input.id, &input.until)
+        agenda::snooze_reminder(vault, &input.id, &input.until)
     })
 }
 
@@ -417,7 +450,7 @@ pub async fn snooze_reminder(
 
 #[tauri::command]
 pub async fn list_price_alerts(state: State<'_, AppState>) -> Result<Vec<PriceAlert>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.price_alerts()))
+    with_vault(&state, |vault| Ok(agenda_reads::price_alerts(&vault.doc)))
 }
 
 #[tauri::command]
@@ -425,7 +458,9 @@ pub async fn create_price_alert(
     input: PriceAlertInput,
     state: State<'_, AppState>,
 ) -> Result<PriceAlert, IpcError> {
-    with_vault_mut(&state, |vault| vault.create_price_alert(input.into()))
+    with_vault_mut(&state, |vault| {
+        agenda::create_price_alert(vault, input.into())
+    })
 }
 
 #[tauri::command]
@@ -434,14 +469,14 @@ pub async fn update_price_alert(
     state: State<'_, AppState>,
 ) -> Result<PriceAlert, IpcError> {
     with_vault_mut(&state, |vault| {
-        let input = vault.rebase_price_alert_input(input)?;
-        vault.update_price_alert(&input.id, input.alert.into())
+        let input = rebase::rebase_price_alert_input(&vault.doc, input)?;
+        agenda::update_price_alert(vault, &input.id, input.alert.into())
     })
 }
 
 #[tauri::command]
 pub async fn delete_price_alert(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.delete_price_alert(&id))
+    with_vault_mut(&state, |vault| agenda::delete_price_alert(vault, &id))
 }
 
 // -- agenda ----------------------------------------------------------------------
@@ -455,7 +490,12 @@ pub async fn get_upcoming(
 ) -> Result<Vec<UpcomingItem>, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        Ok(vault.upcoming(days.unwrap_or(30).min(366), now_secs(), &zone))
+        Ok(agenda::upcoming(
+            vault,
+            days.unwrap_or(30).min(366),
+            now_secs(),
+            &zone,
+        ))
     })
 }
 
@@ -466,7 +506,9 @@ pub async fn list_my_automations(
     state: State<'_, AppState>,
 ) -> Result<Vec<trade_core::service::MineItem>, IpcError> {
     let zone = current_zone(&app);
-    with_vault(&state, |vault| Ok(vault.my_automations(now_secs(), &zone)))
+    with_vault(&state, |vault| {
+        Ok(my_automations::my_automations(vault, now_secs(), &zone))
+    })
 }
 
 /// The "On" switch of a "Mine" row, whatever kind it is.
@@ -476,7 +518,13 @@ pub async fn set_my_automation_active(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| {
-        vault.set_my_automation_active(input.kind, &input.id, input.active, now_secs())
+        my_automations::set_my_automation_active(
+            vault,
+            input.kind,
+            &input.id,
+            input.active,
+            now_secs(),
+        )
     })
 }
 
@@ -489,7 +537,7 @@ pub async fn get_automation_card(
 ) -> Result<trade_core::service::AutomationCard, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        vault.automation_card(&id, now_secs(), &zone)
+        automation_card::automation_card(vault, &id, now_secs(), &zone)
     })
 }
 
@@ -509,7 +557,10 @@ pub async fn list_automation_journal(
     state: State<'_, AppState>,
 ) -> Result<Vec<trade_core::service::JournalEntry>, IpcError> {
     with_vault(&state, |vault| {
-        Ok(vault.automation_journal(limit.unwrap_or(100).min(500)))
+        Ok(automation_card::automation_journal(
+            vault,
+            limit.unwrap_or(100).min(500),
+        ))
     })
 }
 
@@ -521,7 +572,7 @@ pub async fn set_deposit_terms(
     state: State<'_, AppState>,
 ) -> Result<trade_core::model::store::Store, IpcError> {
     with_vault_mut(&state, |vault| {
-        vault.set_deposit_terms(&input.store_id, input.terms)
+        interest::set_deposit_terms(vault, &StoreId::from(input.store_id.as_str()), input.terms)
     })
 }
 
@@ -533,7 +584,9 @@ pub async fn get_deposit_report(
     state: State<'_, AppState>,
 ) -> Result<DepositReport, IpcError> {
     let today = trade_core::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
-    with_vault(&state, |vault| vault.deposit_report(&store_id, today))
+    with_vault(&state, |vault| {
+        interest_reads::deposit_report(&vault.books(), &StoreId::from(store_id.as_str()), today)
+    })
 }
 
 /// НДФЛ on deposit interest for a year (this one by default).
@@ -546,7 +599,10 @@ pub async fn get_interest_tax(
     use chrono::Datelike;
     let today = trade_core::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
     with_vault(&state, |vault| {
-        Ok(vault.interest_tax(year.unwrap_or(today.year())))
+        Ok(interest_reads::interest_tax(
+            &vault.books(),
+            year.unwrap_or(today.year()),
+        ))
     })
 }
 
@@ -614,7 +670,7 @@ pub fn get_cashback_report(
 
 #[tauri::command]
 pub async fn list_utility_items(state: State<'_, AppState>) -> Result<Vec<UtilityItem>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.utility_items()))
+    with_vault(&state, |vault| Ok(utility_reads::utility_items(&vault.doc)))
 }
 
 #[tauri::command]
@@ -622,7 +678,9 @@ pub async fn create_utility_item(
     input: UtilityInput,
     state: State<'_, AppState>,
 ) -> Result<UtilityItem, IpcError> {
-    with_vault_mut(&state, |vault| vault.create_utility_item(input.into()))
+    with_vault_mut(&state, |vault| {
+        utilities::create_utility_item(vault, input.into())
+    })
 }
 
 #[tauri::command]
@@ -631,14 +689,14 @@ pub async fn update_utility_item(
     state: State<'_, AppState>,
 ) -> Result<UtilityItem, IpcError> {
     with_vault_mut(&state, |vault| {
-        let input = vault.rebase_utility_input(input)?;
-        vault.update_utility_item(&input.id, input.item.into())
+        let input = rebase::rebase_utility_input(&vault.doc, input)?;
+        utilities::update_utility_item(vault, &input.id, input.item.into())
     })
 }
 
 #[tauri::command]
 pub async fn delete_utility_item(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.delete_utility_item(&id))
+    with_vault_mut(&state, |vault| utilities::delete_utility_item(vault, &id))
 }
 
 #[tauri::command]
@@ -647,7 +705,8 @@ pub async fn add_meter_reading(
     state: State<'_, AppState>,
 ) -> Result<MeterReading, IpcError> {
     with_vault_mut(&state, |vault| {
-        vault.add_meter_reading(
+        utilities::add_meter_reading(
+            vault,
             &input.item_id,
             input.value,
             &input.period,
@@ -663,7 +722,7 @@ pub async fn update_meter_reading(
     state: State<'_, AppState>,
 ) -> Result<MeterReading, IpcError> {
     with_vault_mut(&state, |vault| {
-        vault.update_meter_reading(&input.id, input.value, &input.period, input.day)
+        utilities::update_meter_reading(vault, &input.id, input.value, &input.period, input.day)
     })
 }
 
@@ -682,7 +741,7 @@ pub async fn get_utility_bill(
         )
     });
     with_vault(&state, |vault| {
-        vault.utility_bill(&property_id, &period, &zone)
+        utilities::utility_bill(vault, &property_id, &period, &zone)
     })
 }
 
@@ -694,12 +753,14 @@ pub async fn pay_utility_bill(
     state: State<'_, AppState>,
 ) -> Result<Vec<Transaction>, IpcError> {
     let zone = current_zone(&app);
-    with_vault_mut(&state, |vault| vault.pay_utility_bill(input, &zone))
+    with_vault_mut(&state, |vault| {
+        utilities::pay_utility_bill(vault, input, &zone)
+    })
 }
 
 #[tauri::command]
 pub async fn delete_meter_reading(id: String, state: State<'_, AppState>) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.delete_meter_reading(&id))
+    with_vault_mut(&state, |vault| utilities::delete_meter_reading(vault, &id))
 }
 
 #[tauri::command]
@@ -709,7 +770,9 @@ pub async fn get_meter_trend(
     state: State<'_, AppState>,
 ) -> Result<UtilityTrend, IpcError> {
     let zone = current_zone(&app);
-    with_vault(&state, |vault| vault.meter_trend(&item_id, &zone))
+    with_vault(&state, |vault| {
+        utility_reads::meter_trend(&vault.books(), &item_id, &zone)
+    })
 }
 
 /// A property's value, debt and monthly costs.
@@ -720,7 +783,9 @@ pub async fn get_property_summary(
     state: State<'_, AppState>,
 ) -> Result<PropertySummary, IpcError> {
     let zone = current_zone(&app);
-    with_vault(&state, |vault| vault.property_summary(&store_id, &zone))
+    with_vault(&state, |vault| {
+        utilities::property_summary(vault, &store_id, &zone)
+    })
 }
 
 /// What a meter's bill would be by its formula (or tariff); needs no vault.
@@ -746,7 +811,7 @@ pub async fn get_utility_payment_draft(
         )
     });
     with_vault(&state, |vault| {
-        vault.utility_payment_draft(&item_id, &period, &zone)
+        utilities::utility_payment_draft(vault, &item_id, &period, &zone)
     })
 }
 

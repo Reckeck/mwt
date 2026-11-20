@@ -15,9 +15,14 @@ use trade_core::service::{
     SearchEntry, SpendingOverview, report_csv,
 };
 
+use trade_core::money::search;
+use trade_core::reports::{dashboard, dashboard_tiles, dashboard_today, insights, overview};
+use trade_core::usecases::household::{month_balance, relations, search as search_scenarios};
+use trade_core::usecases::planning::health;
+
+use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
-use crate::commands::planning::with_vault_mut;
-use crate::commands::{AppState, require_vault};
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
@@ -28,12 +33,9 @@ fn build_report(
     filter: &ReportFilter,
 ) -> Result<Report, IpcError> {
     let zone = current_zone(app);
-    let guard = require_vault(state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .report(kind, filter, now_secs(), &zone)
-        .map_err(IpcError::from)
+    with_vault(state, |vault| {
+        overview::report(&vault.books(), kind, filter, now_secs(), &zone)
+    })
 }
 
 #[tauri::command]
@@ -55,12 +57,9 @@ pub async fn get_report_overview(
     state: State<'_, AppState>,
 ) -> Result<ReportOverview, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .report_overview(&filter, now_secs(), &zone)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| {
+        insights::report_overview(&vault.books(), &filter, now_secs(), &zone)
+    })
 }
 
 /// The capital checkup (plan C4): the light, the fund, loans and DTI, the
@@ -71,12 +70,9 @@ pub async fn capital_health(
     state: State<'_, AppState>,
 ) -> Result<HealthReport, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .capital_health(now_secs(), &zone)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| {
+        health::capital_health(&vault.books(), now_secs(), &zone)
+    })
 }
 
 /// The yearly return the freedom potential assumes; `None` = the key rate.
@@ -85,7 +81,9 @@ pub async fn health_settings_set(
     expected_return: Option<Amount>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.set_freedom_rate(expected_return))
+    with_vault_mut(&state, |vault| {
+        health::set_freedom_rate(vault, expected_return)
+    })
 }
 
 /// Save a report as CSV through the native save dialog. `None` when the
@@ -118,12 +116,9 @@ pub async fn get_month_balance(
     state: State<'_, AppState>,
 ) -> Result<MonthBalance, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .month_balance(&filter, now_secs(), &zone)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| {
+        month_balance::month_balance(vault, &filter, now_secs(), &zone)
+    })
 }
 
 /// Carry the unspent money over from `month` (`YYYY-MM`); `None` stops it.
@@ -132,7 +127,9 @@ pub async fn set_carry_over(
     month: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.set_carry_over(month.as_deref()))
+    with_vault_mut(&state, |vault| {
+        month_balance::set_carry_over(vault, month.as_deref())
+    })
 }
 
 /// Spending by day of a `YYYY-MM` month; the current month when omitted.
@@ -144,12 +141,9 @@ pub async fn get_calendar(
 ) -> Result<CalendarMonth, IpcError> {
     let zone = current_zone(&app);
     let month = month.unwrap_or_else(|| month_key(Calendar::new(&zone).date_of(now_secs())));
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .calendar_month(&month, now_secs(), &zone)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| {
+        overview::calendar_month(&vault.books(), &month, now_secs(), &zone)
+    })
 }
 
 /// The dashboard «Spending» widget (plan H2): the period against the previous
@@ -161,10 +155,15 @@ pub async fn get_spending_overview(
     state: State<'_, AppState>,
 ) -> Result<SpendingOverview, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    let vault = guard.as_ref().unwrap();
-    let period = period.unwrap_or(vault.doc.settings.dashboard_period);
-    Ok(vault.spending_overview(period, now_secs(), &zone))
+    with_vault(&state, |vault| {
+        let period = period.unwrap_or(vault.doc.settings.dashboard_period);
+        Ok(dashboard::spending_overview(
+            &vault.books(),
+            period,
+            now_secs(),
+            &zone,
+        ))
+    })
 }
 
 /// "Daily budget" and "This month" (plan H3): the month so far against the
@@ -175,8 +174,13 @@ pub async fn get_month_pace(
     state: State<'_, AppState>,
 ) -> Result<MonthPace, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().month_pace(now_secs(), &zone))
+    with_vault(&state, |vault| {
+        Ok(dashboard_tiles::month_pace(
+            &vault.books(),
+            now_secs(),
+            &zone,
+        ))
+    })
 }
 
 /// "Net worth" (plan H3): the holdings now against the period's start, and
@@ -188,10 +192,15 @@ pub async fn get_net_worth_trend(
     state: State<'_, AppState>,
 ) -> Result<NetWorthTrend, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    let vault = guard.as_ref().unwrap();
-    let period = period.unwrap_or(vault.doc.settings.dashboard_period);
-    Ok(vault.net_worth_trend(period, now_secs(), &zone))
+    with_vault(&state, |vault| {
+        let period = period.unwrap_or(vault.doc.settings.dashboard_period);
+        Ok(dashboard_tiles::net_worth_trend(
+            &vault.books(),
+            period,
+            now_secs(),
+            &zone,
+        ))
+    })
 }
 
 /// The "Today" strip (plan H5): capital and its change, the light, what
@@ -203,10 +212,15 @@ pub async fn get_dashboard_today(
     state: State<'_, AppState>,
 ) -> Result<DashboardToday, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    let vault = guard.as_ref().unwrap();
-    let period = period.unwrap_or(vault.doc.settings.dashboard_period);
-    Ok(vault.dashboard_today(period, now_secs(), &zone))
+    with_vault(&state, |vault| {
+        let period = period.unwrap_or(vault.doc.settings.dashboard_period);
+        Ok(dashboard_today::dashboard_today(
+            &vault.books(),
+            period,
+            now_secs(),
+            &zone,
+        ))
+    })
 }
 
 /// The "Scenario" widget (plan H4): a calculator scenario's plan to date
@@ -218,12 +232,9 @@ pub async fn get_scenario_status(
     state: State<'_, AppState>,
 ) -> Result<ScenarioStatus, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .scenario_status(&id, now_secs(), &zone)
-        .map_err(IpcError::from)
+    with_vault(&state, |vault| {
+        dashboard_today::scenario_status(&vault.books(), &id, now_secs(), &zone)
+    })
 }
 
 /// The card of any entity (plan J1): its head and what links to it.
@@ -232,15 +243,13 @@ pub async fn get_entity_card(
     target: EntityRef,
     state: State<'_, AppState>,
 ) -> Result<EntityCard, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().entity_card(&target))
+    with_vault(&state, |vault| Ok(relations::entity_card(vault, &target)))
 }
 
 /// Everything the palette can find by name (plan J2); wallets come from the tree.
 #[tauri::command]
 pub async fn get_search_index(state: State<'_, AppState>) -> Result<Vec<SearchEntry>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().search_index())
+    with_vault(&state, |vault| Ok(search::search_index(&vault.doc)))
 }
 
 /// Operations matching a text or an amount, newest first. `categories` are
@@ -252,11 +261,14 @@ pub async fn search_transactions(
     limit: usize,
     state: State<'_, AppState>,
 ) -> Result<Vec<Transaction>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard
-        .as_ref()
-        .unwrap()
-        .search_transactions(&query, &categories, limit))
+    with_vault(&state, |vault| {
+        Ok(search::search_transactions(
+            &vault.doc,
+            &query,
+            &categories,
+            limit,
+        ))
+    })
 }
 
 /// The sidebar's pinned entities and saved filters with their short values.
@@ -266,8 +278,9 @@ pub async fn get_pinned(
     state: State<'_, AppState>,
 ) -> Result<Vec<PinnedView>, IpcError> {
     let zone = current_zone(&app);
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().pinned(now_secs(), &zone))
+    with_vault(&state, |vault| {
+        Ok(search_scenarios::pinned(vault, now_secs(), &zone))
+    })
 }
 
 /// Replaces the pinned list (order kept) and returns it valued.
@@ -279,8 +292,8 @@ pub async fn set_pinned(
 ) -> Result<Vec<PinnedView>, IpcError> {
     let zone = current_zone(&app);
     with_vault_mut(&state, |vault| {
-        vault.set_pinned(pins)?;
-        Ok(vault.pinned(now_secs(), &zone))
+        search_scenarios::set_pinned(vault, pins)?;
+        Ok(search_scenarios::pinned(vault, now_secs(), &zone))
     })
 }
 
