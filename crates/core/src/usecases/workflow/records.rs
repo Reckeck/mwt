@@ -20,7 +20,8 @@ use crate::service::UnlockedVault;
 use crate::usecases::planning::notifications::notice;
 use crate::workflow::graph::Graph;
 use crate::workflow::model::{
-    MAX_WORKFLOW_RUNS, QueuedActions, VarScope, Workflow, WorkflowRun, WorkflowTest, WorkflowWait,
+    MAX_WORKFLOW_RUNS, QueuedActions, RunOutcome, VarScope, Workflow, WorkflowRun, WorkflowTest,
+    WorkflowWait,
 };
 use crate::workflow::service::marks;
 use crate::workflow::service::records::{
@@ -271,19 +272,50 @@ pub fn confirm_queued(vault: &mut UnlockedVault, id: &str) -> Result<Vec<Transac
     } else {
         vault.add_linked_transactions(batch.transactions, None)?
     };
+    let created: Vec<String> = saved.iter().map(|tx| tx.meta().id.clone()).collect();
     vault.transact(|tx| {
         tx.collection::<QueuedActions>().remove(id)?;
+        // The refusal this batch waited for is answered: its run is done, so a
+        // retry cannot book the operations a second time.
+        if let Some(run) = refused_run(tx, &batch.run_id) {
+            let done = WorkflowRun {
+                id: uuid::Uuid::new_v4().to_string(),
+                outcome: RunOutcome::Done,
+                created,
+                queued: 0,
+                ..run
+            };
+            tx.collection::<WorkflowRun>().remove(&batch.run_id)?;
+            tx.collection::<WorkflowRun>().insert(done)?;
+        }
         Ok(())
     })?;
     Ok(saved)
 }
 
+/// The run a queued batch belongs to, while it is still a refusal.
+fn refused_run(tx: &mut Tx, run_id: &str) -> Option<WorkflowRun> {
+    tx.collection::<WorkflowRun>()
+        .get(run_id)
+        .filter(|run| matches!(run.outcome, RunOutcome::Rejected { .. }))
+        .cloned()
+}
+
 pub fn discard_queued(vault: &mut UnlockedVault, id: &str) -> Result<()> {
     vault.transact(|tx| {
-        if tx.collection::<QueuedActions>().get(id).is_none() {
+        let Some(batch) = tx.collection::<QueuedActions>().get(id).cloned() else {
             return Err(Error::Missing(format!("queued {id}")));
-        }
+        };
         tx.collection::<QueuedActions>().remove(id)?;
+        // Nothing is left to retry: the refused run is skipped, as by `skip_workflow_run`.
+        if refused_run(tx, &batch.run_id).is_some() {
+            tx.collection::<WorkflowRun>()
+                .update(&batch.run_id, |run| {
+                    run.outcome = RunOutcome::Dropped {
+                        reason: "skipped".into(),
+                    };
+                })?;
+        }
         Ok(())
     })
 }

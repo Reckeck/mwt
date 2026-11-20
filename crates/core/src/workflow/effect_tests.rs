@@ -169,6 +169,52 @@ fn an_asked_operation_refused_for_lack_of_funds_is_booked_by_a_retry() {
     );
 }
 
+fn refused_asked_transfer() -> (tempfile::TempDir, UnlockedVault, String, String, String) {
+    let (dir, mut vault, card, savings, workflow) = asked_transfer();
+    vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    let wait = vault.workflow_waits().remove(0);
+    let report = vault
+        .answer_workflow_wait(&wait.id, true, later(), "UTC")
+        .unwrap();
+    assert!(matches!(report.run.outcome, RunOutcome::Rejected { .. }));
+    vault
+        .add_transaction(income(&card, "5000", "salary"))
+        .unwrap();
+    (dir, vault, savings, report.run.id, workflow.id)
+}
+
+#[test]
+fn a_confirmed_refusal_closes_its_run_and_a_retry_books_nothing_more() {
+    let (_dir, mut vault, savings, run_id, workflow_id) = refused_asked_transfer();
+    let batch = vault.workflow_queue().remove(0);
+    vault.confirm_queued(&batch.id).unwrap();
+    let booked = vault.doc.transactions.len();
+    let holding = holding_of(&vault, &savings, &usd());
+    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    assert!(runs.iter().all(|run| run.id != run_id));
+    assert!(
+        runs.iter()
+            .any(|run| matches!(run.outcome, RunOutcome::Done))
+    );
+    assert!(vault.retry_workflow_run(&run_id, later(), "UTC").is_err());
+    assert_eq!(vault.doc.transactions.len(), booked);
+    assert_eq!(holding_of(&vault, &savings, &usd()), holding);
+}
+
+#[test]
+fn a_discarded_refusal_is_no_longer_retryable() {
+    let (_dir, mut vault, savings, run_id, workflow_id) = refused_asked_transfer();
+    let batch = vault.workflow_queue().remove(0);
+    vault.discard_queued(&batch.id).unwrap();
+    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    let run = runs.iter().find(|run| run.id == run_id).unwrap();
+    assert!(matches!(run.outcome, RunOutcome::Dropped { .. }));
+    assert!(vault.retry_workflow_run(&run_id, later(), "UTC").is_err());
+    assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
+}
+
 #[test]
 fn an_asked_transfer_over_the_cap_is_not_queued_and_books_nothing() {
     let (_dir, mut vault, card, savings, workflow) = asked_transfer_capped(Some("100"));
