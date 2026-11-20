@@ -349,12 +349,12 @@ pub(crate) fn inflation_insights(report: &InflationReport) -> Vec<Insight> {
 }
 
 pub(crate) fn loss_insights(report: &LossReport) -> Vec<Insight> {
-    let total = report.total.total;
+    let total = report.losses.total.total;
     if !total.is_positive() {
         return Vec::new();
     }
     let mut fact = Insight::new(InsightCode::ConversionLosses).amount(total);
-    if let Some(pct) = share(report.total.fee, total) {
+    if let Some(pct) = share(report.losses.total.fee, total) {
         fact = fact.pct(pct);
     }
     vec![fact]
@@ -520,8 +520,8 @@ pub fn report_overview(
     let investments = OverviewInvestments {
         realized: pnl.total_realized,
         fees: pnl.total_fees,
-        losses: losses.total.total,
-        has_data: traded || !pnl.total_fees.is_zero() || !losses.total.total.is_zero(),
+        losses: losses.losses.total.total,
+        has_data: traded || !pnl.total_fees.is_zero() || !losses.losses.total.total.is_zero(),
         insights: invest_insights,
     };
 

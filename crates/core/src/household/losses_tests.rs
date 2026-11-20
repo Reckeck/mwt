@@ -425,8 +425,8 @@ fn an_unlisted_token_bought_for_usdt_has_no_slippage_but_stays_incomplete() {
     else {
         panic!("a losses report");
     };
-    assert_eq!(report.total.slippage, Amount::ZERO);
-    assert_eq!(report.incomplete, 1);
+    assert_eq!(report.losses.total.slippage, Amount::ZERO);
+    assert_eq!(report.losses.incomplete, 1);
 }
 
 #[test]
@@ -436,4 +436,14 @@ fn month_index_finds_the_month_of_a_date() {
     assert_eq!(month_index(&months, day(2026, 2, 17)), Some(1));
     assert_eq!(month_index(&months, day(2026, 1, 1)), Some(0));
     assert_eq!(month_index(&months, day(2026, 3, 1)), None);
+}
+
+#[test]
+fn loss_report_serializes_flat_without_a_losses_key() {
+    let json = serde_json::to_value(crate::service::LossReport::default()).unwrap();
+    let object = json.as_object().unwrap();
+    for key in ["meta", "rows", "total", "incomplete"] {
+        assert!(object.contains_key(key), "missing top-level key {key}");
+    }
+    assert!(!object.contains_key("losses"));
 }

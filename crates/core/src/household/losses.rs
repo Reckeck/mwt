@@ -16,8 +16,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use chrono::NaiveDate;
 
 use crate::Amount;
-use crate::calendar::month_index;
-use crate::calendar::{self, Calendar};
+use crate::calendar::{self, Calendar, month_index};
 use crate::error::{Error, Result};
 use crate::model::store::{AssetRef, StoreScope};
 use crate::model::transaction::{AccountRef, Leg, LegRole, Transaction};

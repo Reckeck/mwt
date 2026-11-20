@@ -28,15 +28,6 @@ pub struct LossReport {
     pub losses: MonthLosses,
 }
 
-/// The report reads as its figures: `report.rows`, `report.total`, ...
-impl std::ops::Deref for LossReport {
-    type Target = MonthLosses;
-
-    fn deref(&self) -> &MonthLosses {
-        &self.losses
-    }
-}
-
 /// The book of one request as the pure functions' valuation.
 struct BookValues<'book>(&'book RateBook);
 

@@ -219,9 +219,14 @@ pub(crate) fn where_report(books: &Books, ctx: &Ctx) -> WhereReport {
     }
     let losses = books.vault().loss_report(ctx);
     let mut lost = WhereRow::new(WhereKind::Losses);
-    lost.value = losses.total.total;
-    lost.count = losses.by_kind.iter().map(|bucket| bucket.count).sum();
-    lost.partial = losses.incomplete > 0;
+    lost.value = losses.losses.total.total;
+    lost.count = losses
+        .losses
+        .by_kind
+        .iter()
+        .map(|bucket| bucket.count)
+        .sum();
+    lost.partial = losses.losses.incomplete > 0;
 
     WhereReport {
         meta: ctx.meta(),
