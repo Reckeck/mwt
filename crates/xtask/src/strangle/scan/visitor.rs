@@ -191,7 +191,9 @@ fn macro_named(node: &Macro, names: &[&str]) -> bool {
         .is_some_and(|segment| names.iter().any(|name| segment.ident == name))
 }
 
-/// A body that cannot be read and holds no method call cannot hide a vault call.
+/// A macro body that cannot be read as arguments cannot hide a vault call when the macro is exempt,
+/// or is a JSON macro whose tokens pass `may_hold_vault_call` as clean: no `.name(..)` call, no
+/// `Self::name` value and no turbofish call (`Self::name::<T>(..)`).
 fn cannot_hold_vault_call(node: &Macro) -> bool {
     macro_named(node, &EXEMPT_MACROS)
         || (macro_named(node, &JSON_MACROS) && !may_hold_vault_call(node.tokens.clone()))
