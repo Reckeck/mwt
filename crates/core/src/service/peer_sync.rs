@@ -1377,6 +1377,8 @@ mod repoint;
 #[cfg(test)]
 mod repoint_tests;
 #[cfg(test)]
+mod rollback_tests;
+#[cfg(test)]
 mod run_key_tests;
 #[cfg(test)]
 mod seen_tests;
