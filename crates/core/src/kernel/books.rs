@@ -363,4 +363,103 @@ mod tests {
         );
         assert!(std::ptr::eq(books.doc(), &vault.doc));
     }
+
+    /// The methods of the vault-reaching block (`impl Books<'_>`), the only list of them.
+    /// A ratchet (core-strangler Z6f): it shrinks, it never grows. A method that must go
+    /// away is deleted together with its entry here.
+    const FROZEN_VAULT_READS: &[&str] = &[
+        "prepare_transaction",
+        "earmarked",
+        "keys_on_device",
+        "device_secrets_for_request",
+        "loyalty_symbol_clash",
+        "net_worth",
+        "resolve_scope",
+        "subtree_ids",
+        "store_overview",
+        "key_rate_on",
+        "deposit_asset",
+        "inflation_on",
+        "month_summary_in",
+        "income_basis",
+        "flows_between",
+        "month_plan",
+        "month_allowance",
+        "net_worth_with_crypto",
+        "manual_price_usd",
+        "daily_budget",
+        "upcoming",
+        "loss_report",
+        "utility_bill",
+        "capital_health",
+        "debt_load",
+        "contact_balances_until",
+        "crypto_module",
+    ];
+
+    /// Names of the `pub`/`pub(crate)` fns declared in the block that opens with `header`.
+    fn method_names(source: &str, header: &str) -> Vec<String> {
+        let block = source
+            .split_once(header)
+            .map(|(_, rest)| rest)
+            .unwrap_or_else(|| panic!("`{header}` is gone from books.rs"));
+        let block = block.split_once("\n}\n").map_or(block, |(body, _)| body);
+        block
+            .lines()
+            .filter_map(|line| {
+                let rest = line
+                    .strip_prefix("    pub(crate) fn ")
+                    .or_else(|| line.strip_prefix("    pub fn "))?;
+                let end = rest.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))?;
+                Some(rest[..end].to_string())
+            })
+            .collect()
+    }
+
+    fn unfrozen_and_stale(source: &str) -> (Vec<String>, Vec<String>) {
+        let found = method_names(source, "impl Books<'_> {");
+        let unfrozen = found
+            .iter()
+            .filter(|name| !FROZEN_VAULT_READS.contains(&name.as_str()))
+            .cloned()
+            .collect();
+        let stale = FROZEN_VAULT_READS
+            .iter()
+            .filter(|name| !found.iter().any(|found| found == *name))
+            .map(|name| name.to_string())
+            .collect();
+        (unfrozen, stale)
+    }
+
+    #[test]
+    fn books_gains_no_vault_read_beyond_the_frozen_list() {
+        let (unfrozen, stale) = unfrozen_and_stale(include_str!("books.rs"));
+        assert!(
+            unfrozen.is_empty(),
+            "Books must not grow: new method(s) {unfrozen:?}; take `&Books` in the callee instead (Z6f)"
+        );
+        assert!(
+            stale.is_empty(),
+            "FROZEN_VAULT_READS lists removed method(s) {stale:?}; delete the entries"
+        );
+    }
+
+    #[test]
+    fn the_ratchet_names_a_new_method_and_accepts_a_removal() {
+        let source = include_str!("books.rs");
+        let added = source.replacen(
+            "impl Books<'_> {",
+            "impl Books<'_> {\n    pub fn dummy_read(&self) {}",
+            1,
+        );
+        assert_eq!(unfrozen_and_stale(&added).0, vec!["dummy_read".to_string()]);
+        let removed = source.replace(
+            "    pub(crate) fn net_worth(&self)",
+            "    fn net_worth(&self)",
+        );
+        assert_eq!(
+            unfrozen_and_stale(&removed).1,
+            vec!["net_worth".to_string()]
+        );
+    }
 }
