@@ -752,3 +752,15 @@ stubs = false
 group = "vault"
 context = "vault"
 files = ["document_edit.rs"]
+
+[[foundation]]
+# minors15 (T175/T189, T190, T198, T199, T200, T233): the command layer gets `with_vault`/`with_vault_mut` next to
+# `require_vault` in commands/mod.rs and every command module imports them from there; one alias rule for the
+# workflow command imports; the sync tests use the `sync_trust` alias; `automation_runs` becomes a pub usecase;
+# UnlockedVault gets one "announce to the sync tap" helper for saving.rs and peer_sync.rs.
+task = "T189"
+files = [
+    "crates/app/src/commands/", "crates/app/src/sync/tests/",
+    "crates/core/src/usecases/planning/automation_rules.rs",
+    "crates/core/src/service/peer_sync.rs", "crates/core/src/service/saving.rs",
+]
