@@ -14,6 +14,10 @@ use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 use crate::sync::{self, Order};
+use trade_core::sync::history as history_reads;
+use trade_core::usecases::sync::repair as sync_repair;
+use trade_core::usecases::sync::sync_journal as journal_cases;
+use trade_core::usecases::sync::trust as sync_trust;
 
 #[tauri::command]
 pub async fn sync_status(app: AppHandle) -> Result<SyncStatus, IpcError> {
@@ -190,7 +194,7 @@ pub async fn sync_forget_peer(
     {
         let mut guard = require_vault(&state)?;
         let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
-        vault.sync_forget_peer(&device_id)?;
+        sync_trust::sync_forget_peer(vault, &device_id)?;
     }
     sync::forget_device(&app, &device_id);
     sync::emit_status(&app);
@@ -219,7 +223,7 @@ pub async fn sync_resume_peer(
 pub async fn sync_history(state: State<'_, AppState>) -> Result<Vec<AppliedBatch>, IpcError> {
     let guard = require_vault(&state)?;
     let vault = guard.as_ref().ok_or(trade_core::Error::RequiresUnlock)?;
-    Ok(vault.sync_history())
+    Ok(history_reads::history(&vault.doc))
 }
 
 /// The journal of taken batches (applied, declined, failed), newest first.
@@ -227,7 +231,7 @@ pub async fn sync_history(state: State<'_, AppState>) -> Result<Vec<AppliedBatch
 pub async fn sync_journal(state: State<'_, AppState>) -> Result<Vec<SyncJournalEntry>, IpcError> {
     let guard = require_vault(&state)?;
     let vault = guard.as_ref().ok_or(trade_core::Error::RequiresUnlock)?;
-    Ok(vault.sync_journal())
+    Ok(journal_cases::sync_journal(vault))
 }
 
 /// Undo one batch; the undo itself reaches the other devices.
@@ -249,9 +253,7 @@ pub async fn allow_merging(
 ) -> Result<(), IpcError> {
     let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
-    vault
-        .allow_merging(input.target, &input.id)
-        .map_err(IpcError::from)
+    sync_repair::allow_merging(vault, input.target, &input.id).map_err(IpcError::from)
 }
 
 /// The emergency exit: everything as before the last session's first batch.
