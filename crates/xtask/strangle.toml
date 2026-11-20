@@ -39,6 +39,17 @@ task = "E"
 files = ["crates/core/src/usecases/mod.rs", "crates/core/src/usecases/workflow/mod.rs"]
 
 [[foundation]]
+# T52/T53: the workflow engine moves onto `WorkflowHost` and `Effect`; stream E owns the new workflow module, its host adapter
+# and the run and record scenarios that the `workflows.rs` shim forwards to.
+task = "E"
+files = [
+    "crates/core/src/workflow/",
+    "crates/core/src/usecases/workflow/host.rs",
+    "crates/core/src/usecases/workflow/records.rs",
+    "crates/core/src/usecases/workflow/runs.rs",
+]
+
+[[foundation]]
 # Stream E adds what the workflow reactions need to two planning event payloads (zone, workflow_ids); nothing emits them until T44.
 task = "E"
 files = ["crates/core/src/kernel/events.rs"]

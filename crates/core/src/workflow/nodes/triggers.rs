@@ -11,9 +11,9 @@ use crate::calendar::workdays::{WorkdayRules, WorkdayShift};
 use crate::calendar::{Calendar, clamp_day};
 use crate::model::store::StoreScope;
 use crate::model::transaction::{AccountRef, LegRole, Transaction, TxOrigin};
-use crate::service::UnlockedVault;
 
 use super::{json_number, json_text};
+use crate::workflow::host::WorkflowHost;
 use crate::workflow::types::WfValue;
 
 /// Most missed moments of a schedule run at once; older ones are dropped.
@@ -207,7 +207,7 @@ pub(crate) fn tx_fields(tx: &Transaction) -> super::Outputs {
 }
 
 /// Whether an operation passes the filter of a "Transaction added" node.
-pub fn tx_matches(vault: &UnlockedVault, params: &Map<String, Value>, tx: &Transaction) -> bool {
+pub fn tx_matches(host: &dyn WorkflowHost, params: &Map<String, Value>, tx: &Transaction) -> bool {
     if matches!(tx.meta().origin, TxOrigin::Workflow { .. })
         && !field(params, "include_workflows")
             .and_then(Value::as_bool)
@@ -226,7 +226,7 @@ pub fn tx_matches(vault: &UnlockedVault, params: &Map<String, Value>, tx: &Trans
             _ => None,
         })
     {
-        let ids = vault.resolve_scope(&StoreScope {
+        let ids = host.resolve_scope(&StoreScope {
             store_ids: vec![store],
             include_children: true,
         });

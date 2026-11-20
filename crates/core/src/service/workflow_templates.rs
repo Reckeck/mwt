@@ -1,83 +1,28 @@
-//! Workflows made from the ready-made templates of the gallery.
+//! Shim of the `workflow_templates` area (spec core-strangler, F2, D1): the
+//! gallery and the workflow made from a template live in
+//! `crate::usecases::workflow::records`.
 
 use std::collections::BTreeMap;
 
-use rust_decimal::Decimal;
-
-use super::{SavedWorkflow, UnlockedVault, WorkflowDraft};
-use crate::Amount;
-use crate::error::{Error, Result};
-use crate::workflow::templates::{
-    TemplateDefaults, TemplateFieldKind, WorkflowTemplateInfo, build_template, template_list,
-};
+use super::SavedWorkflow;
+use super::UnlockedVault;
+use super::forward::forward;
+#[cfg(test)]
+use crate::error::Error;
+use crate::error::Result;
+use crate::workflow::templates::WorkflowTemplateInfo;
 
 impl UnlockedVault {
-    /// The gallery: the savings share and the budget currency come from the vault.
-    pub fn workflow_templates(&self) -> Vec<WorkflowTemplateInfo> {
-        let pct = (self.doc.settings.savings_rate * Amount::new(Decimal::ONE_HUNDRED))
-            .round(2)
-            .into_inner()
-            .normalize();
-        template_list(&TemplateDefaults {
-            savings_pct: pct.to_string(),
-            currency: self.budget_currency().to_lowercase(),
-        })
+    // forward:begin
+    forward! {
+        /// The gallery: the savings share and the budget currency come from the vault.
+        pub fn workflow_templates(&self) -> Vec<WorkflowTemplateInfo>
+            => crate::usecases::workflow::records::workflow_templates @books;
+        /// Builds the template's graph from the form and saves it as an active workflow.
+        pub fn workflow_from_template(&mut self, id: &str, params: &BTreeMap<String, String>, locale: &str, now: i64) -> Result<SavedWorkflow>
+            => crate::usecases::workflow::records::workflow_from_template;
     }
-
-    /// Builds the template's graph from the form and saves it as an active workflow.
-    pub fn workflow_from_template(
-        &mut self,
-        id: &str,
-        params: &BTreeMap<String, String>,
-        locale: &str,
-        now: i64,
-    ) -> Result<SavedWorkflow> {
-        let info = self
-            .workflow_templates()
-            .into_iter()
-            .find(|info| info.id == id)
-            .ok_or_else(|| Error::Missing(format!("template {id}")))?;
-        for field in &info.fields {
-            let value = params.get(&field.key).map_or("", |value| value.trim());
-            if value.is_empty() {
-                if field.required {
-                    return Err(Error::InvalidInput(format!("{}: required", field.key)));
-                }
-                continue;
-            }
-            let valid = match field.kind {
-                TemplateFieldKind::Store => self.find_store(value).is_some(),
-                TemplateFieldKind::Number => {
-                    Amount::parse(value).is_ok_and(|number| number > Amount::ZERO)
-                }
-                TemplateFieldKind::Weekday => value.parse::<u8>().is_ok_and(|day| day <= 6),
-                TemplateFieldKind::Day => {
-                    value.parse::<u8>().is_ok_and(|day| (1..=31).contains(&day))
-                }
-                TemplateFieldKind::Category
-                | TemplateFieldKind::Currency
-                | TemplateFieldKind::Budget => true,
-            };
-            if !valid {
-                return Err(Error::InvalidInput(format!(
-                    "{}: invalid value {value}",
-                    field.key
-                )));
-            }
-        }
-        let built = build_template(id, params, locale)
-            .ok_or_else(|| Error::Missing(format!("template {id}")))?;
-        let draft = WorkflowDraft {
-            name: built.name,
-            description: built.description,
-            active: true,
-            graph: built.graph,
-            react_to_workflows: false,
-            max_amount: None,
-            max_amount_currency: None,
-        };
-        self.save_workflow(None, draft, now)
-    }
+    // forward:end
 }
 
 #[cfg(test)]

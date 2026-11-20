@@ -8,6 +8,7 @@ pub(crate) use crate::calendar::workdays::{WorkdayRules, parse_date, parse_dates
 use crate::model::transaction::AccountRef;
 use crate::workflow::exec::Executor;
 use crate::workflow::graph::Node;
+use crate::workflow::host::GoalReading;
 use crate::workflow::types::WfValue;
 
 use super::{Outputs, json_number, single};
@@ -32,7 +33,7 @@ impl Executor<'_> {
                 let asset = self.asset_input(node, "asset")?;
                 Ok(single(
                     "value",
-                    self.vault.wf_balance(&store_id, asset.as_ref())?,
+                    self.host.wf_balance(&store_id, asset.as_ref())?,
                 ))
             }
             "data.price" => {
@@ -40,7 +41,7 @@ impl Executor<'_> {
                 let currency = self
                     .currency_input(node, "currency")?
                     .unwrap_or_else(|| "usd".into());
-                let price = self.vault.wf_price(&asset, &currency, now).ok_or_else(|| {
+                let price = self.host.wf_price(&asset, &currency, now).ok_or_else(|| {
                     format!(
                         "no price of {} in {}",
                         asset.symbol,
@@ -57,7 +58,7 @@ impl Executor<'_> {
                     .currency_input(node, "to")?
                     .ok_or("choose the currency to convert to")?;
                 let rate = self
-                    .vault
+                    .host
                     .wf_convert(Amount::new(rust_decimal::Decimal::ONE), &from, &to, now)
                     .ok_or_else(|| {
                         format!("no rate {}→{}", from.to_uppercase(), to.to_uppercase())
@@ -87,11 +88,11 @@ impl Executor<'_> {
                 let category = self.text_param(node, "category");
                 let category = (!category.trim().is_empty()).then_some(category);
                 let total =
-                    self.vault
+                    self.host
                         .wf_sum(&period, &flow, category.as_deref(), now, &self.ctx.zone);
                 Ok(single(
                     "total",
-                    WfValue::money(total, self.vault.base_currency()),
+                    WfValue::money(total, &self.host.base_currency()),
                 ))
             }
             "data.recent_average" => {
@@ -101,7 +102,7 @@ impl Executor<'_> {
                     .parse::<usize>()
                     .unwrap_or(3)
                     .clamp(1, 24);
-                match self.vault.wf_recent_average(&self.ctx.workflow_id, count) {
+                match self.host.wf_recent_average(&self.ctx.workflow_id, count) {
                     Some((average, symbol)) => {
                         Ok(single("amount", WfValue::money(average, &symbol)))
                     }
@@ -111,15 +112,15 @@ impl Executor<'_> {
             "data.budget" => {
                 let id = self.text_param(node, "budget");
                 let status = self
-                    .vault
+                    .host
                     .budget_status(now, &self.ctx.zone)
                     .into_iter()
-                    .find(|status| status.budget.id == id)
+                    .find(|status| status.id == id)
                     .ok_or("choose an active limit")?;
                 Ok(Outputs::from([
                     (
                         "remaining",
-                        WfValue::money(status.remaining, &status.budget.currency),
+                        WfValue::money(status.remaining, &status.currency),
                     ),
                     ("used", number(percent(status.used))),
                     (
@@ -132,7 +133,7 @@ impl Executor<'_> {
             "data.source" => {
                 let id = self.text_param(node, "source");
                 let source = self
-                    .vault
+                    .host
                     .data_source(&id)
                     .ok_or("choose one of your data sources")?;
                 let last = source.last.as_ref().ok_or("the source has no value yet")?;
@@ -156,10 +157,10 @@ impl Executor<'_> {
             "data.goal" => {
                 let id = self.text_param(node, "goal");
                 let progress = self
-                    .vault
+                    .host
                     .goal_progress(now, &self.ctx.zone)
                     .into_iter()
-                    .find(|progress| progress.goal.id == id)
+                    .find(|progress| progress.id == id)
                     .ok_or("choose an active goal")?;
                 Ok(goal_outputs(&progress))
             }
@@ -212,9 +213,9 @@ impl Executor<'_> {
 }
 
 /// Saved, left and percent of a goal.
-pub(crate) fn goal_outputs(progress: &crate::service::GoalProgress) -> Outputs {
-    let currency = &progress.goal.currency;
-    let left = (progress.goal.target_amount - progress.saved).max(Amount::ZERO);
+pub(crate) fn goal_outputs(progress: &GoalReading) -> Outputs {
+    let currency = &progress.currency;
+    let left = (progress.target_amount - progress.saved).max(Amount::ZERO);
     Outputs::from([
         ("saved", WfValue::money(progress.saved, currency)),
         ("left", WfValue::money(left, currency)),

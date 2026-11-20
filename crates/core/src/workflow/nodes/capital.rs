@@ -32,7 +32,7 @@ impl Executor<'_> {
             "data.emergency_gap" => self.emergency_gap(node, now),
             "data.key_rate" => Ok(single(
                 "rate",
-                self.vault
+                self.host
                     .key_rate_on(today)
                     .map_or(WfValue::Null, WfValue::Number),
             )),
@@ -41,9 +41,9 @@ impl Executor<'_> {
                     .currency_input(node, "currency")?
                     .unwrap_or_else(|| "rub".into());
                 let month = calendar::month_key(today);
-                let value = self.vault.inflation_on(&currency, &month);
+                let value = self.host.inflation_on(&currency, &month);
                 let last = self
-                    .vault
+                    .host
                     .inflation_series(&currency)
                     .into_iter()
                     .filter(|reading| reading.month <= month)
@@ -56,7 +56,7 @@ impl Executor<'_> {
             }
             "data.recurring" => match self.input(node, "transaction")? {
                 WfValue::Transaction(tx) => {
-                    let check = self.vault.recurring_check(&tx);
+                    let check = self.host.recurring_check(&tx);
                     let currency = super::triggers::tx_fields(&tx)
                         .get("amount")
                         .and_then(|value| match value {
@@ -86,21 +86,21 @@ impl Executor<'_> {
                 let given = self
                     .number_input(node, "amount")?
                     .filter(|amount| !amount.is_zero());
-                let advice = self.vault.topup_advice(given, now, &self.ctx.zone);
+                let advice = self.host.topup_advice(given, now, &self.ctx.zone);
                 let code = advice.currency.to_uppercase();
                 let text = advice
-                    .rows
+                    .baskets
                     .iter()
                     .filter(|row| row.add > Amount::ZERO)
-                    .map(|row| format!("{}: {} {code}", row.class.name, row.add.round(2)))
+                    .map(|row| format!("{}: {} {code}", row.name, row.add.round(2)))
                     .collect::<Vec<_>>()
                     .join("\n");
                 let list = advice
-                    .rows
+                    .baskets
                     .iter()
                     .map(|row| {
                         WfValue::Record(BTreeMap::from([
-                            ("name".to_string(), WfValue::Text(row.class.name.clone())),
+                            ("name".to_string(), WfValue::Text(row.name.clone())),
                             ("add".to_string(), WfValue::money(row.add, &advice.currency)),
                             ("capped".to_string(), WfValue::Bool(row.capped)),
                         ]))
@@ -124,7 +124,7 @@ impl Executor<'_> {
             other => return Err(format!("not an amount: {}", other.as_text())),
         };
         let amount = amount.max(Amount::ZERO);
-        let status = self.vault.emergency_fund_status(now, &self.ctx.zone);
+        let status = self.host.emergency_fund_status(now, &self.ctx.zone);
         let currency = if currency.is_empty() {
             status.currency.to_lowercase()
         } else {
@@ -137,14 +137,14 @@ impl Executor<'_> {
                 if gap.is_zero() {
                     Some(gap)
                 } else {
-                    self.vault.wf_convert(gap, &status.currency, &currency, now)
+                    self.host.wf_convert(gap, &status.currency, &currency, now)
                 }
             })
             .unwrap_or(Amount::ZERO)
             .round(2);
         let to_cushion = amount.min(gap);
-        let store = status.stores.first().map_or(WfValue::Null, |store| {
-            WfValue::Account(AccountRef::Store(store.store_id.clone()))
+        let store = status.first_store_id.map_or(WfValue::Null, |store_id| {
+            WfValue::Account(AccountRef::Store(store_id))
         });
         Ok(Outputs::from([
             ("to_cushion", WfValue::money(to_cushion, &currency)),

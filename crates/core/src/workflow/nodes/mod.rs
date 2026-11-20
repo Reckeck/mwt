@@ -97,7 +97,7 @@ impl Executor<'_> {
     pub(crate) fn json_asset(&self, value: &Value) -> Option<AssetRef> {
         match value {
             Value::Object(_) => serde_json::from_value(value.clone()).ok(),
-            Value::String(symbol) if !symbol.trim().is_empty() => Some(self.vault.wf_asset(symbol)),
+            Value::String(symbol) if !symbol.trim().is_empty() => Some(self.host.wf_asset(symbol)),
             _ => None,
         }
     }
@@ -197,9 +197,9 @@ impl Executor<'_> {
         Ok(match self.input(node, name)? {
             WfValue::Asset(asset) => Some(asset),
             WfValue::Currency(code) | WfValue::Text(code) if !code.trim().is_empty() => {
-                Some(self.vault.wf_asset(&code))
+                Some(self.host.wf_asset(&code))
             }
-            WfValue::Money { currency, .. } => Some(self.vault.wf_asset(&currency)),
+            WfValue::Money { currency, .. } => Some(self.host.wf_asset(&currency)),
             _ => None,
         })
     }

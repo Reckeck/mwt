@@ -7,8 +7,6 @@ allow = [
     { from = "kernel/persistence.rs", to = "service", until = "Ф5", reason = "the kernel still calls service while the write path moves out of it" },
     { from = "workflow/exec.rs", to = "service", until = "Ф5", reason = "workflow nodes call service until the node ports exist" },
     { from = "workflow/nodes/actions.rs", to = "service", until = "Ф5", reason = "workflow nodes call service until the node ports exist" },
-    { from = "workflow/nodes/data.rs", to = "service", until = "Ф5", reason = "workflow nodes call service until the node ports exist" },
-    { from = "workflow/nodes/triggers.rs", to = "service", until = "Ф5", reason = "workflow nodes call service until the node ports exist" },
     { from = "reports/overview.rs", to = "service", until = "Ф5", reason = "the reports area still reads budget flows, rate books, insights and the loss and where-it-went reports from service until those areas move to their groups" },
     { from = "reports/overview.rs", to = "usecases", until = "Ф5", reason = "leg_value_in lives in usecases/planning/budget.rs (stream D); reports read it until the pricing helper moves to a lower layer" },
     { from = "household/shared_events/mod.rs", to = "ipc_contract", until = "Ф5", reason = "the plan functions take the request inputs of the shared events commands; the input types stay in ipc_contract until the contract moves" },
