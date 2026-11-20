@@ -12,9 +12,9 @@ use crate::ipc_contract::{BaseKind, Comparison};
 use crate::kernel::books::Books;
 use crate::model::vault::DashPeriod;
 use crate::money::portfolio::history_series;
+use crate::money::worth::FlowClass;
 use crate::planning::budget::budget_currency;
 use crate::planning::period::{PeriodWindow, months_back, period_window};
-use crate::service::FlowClass;
 
 /// How many growing categories "This month" names.
 const TOP_GROWTH: usize = 3;

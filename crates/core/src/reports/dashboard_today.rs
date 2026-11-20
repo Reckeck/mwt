@@ -17,9 +17,9 @@ use crate::model::planning::HealthColor;
 use crate::model::store::StoreScope;
 use crate::model::vault::DashPeriod;
 use crate::money::tree::{find_store, resolve_scope};
+use crate::planning::agenda::UpcomingKind;
 use crate::planning::goals::store_values_usd;
 use crate::planning::scenarios::{find_calc_scenario, planned_balance};
-use crate::service::UpcomingKind;
 
 /// The strip lists at most this many things to do.
 pub const TODAY_TODOS: usize = 3;

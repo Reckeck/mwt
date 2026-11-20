@@ -1,5 +1,6 @@
 //! `xtask arch`: the module graph of `crates/core/src`, read from the non-test `crate::` paths.
 
+mod domain;
 mod layers;
 mod scan;
 
@@ -59,12 +60,14 @@ impl AllowEntry {
 pub struct Report {
     pub violations: Vec<Violation>,
     pub stale: Vec<AllowEntry>,
+    /// Forbidden names in the domain modules the exemptions do not cover, and exemptions that cover nothing.
+    pub domain: domain::Findings,
 }
 
 impl Report {
     /// How many findings fail the check.
     pub fn failures(&self) -> usize {
-        self.violations.len() + self.stale.len()
+        self.violations.len() + self.stale.len() + self.domain.failures()
     }
 
     /// The log lines: every violation as `file:line`, every stale entry as an error.
@@ -85,12 +88,13 @@ impl Report {
                 entry.from, entry.to, entry.until
             )
         }));
+        lines.extend(self.domain.lines(CORE_SRC));
         lines
     }
 }
 
 /// Sorts the edges into back edges and allowed ones; entries that matched no back edge are stale.
-fn evaluate(edges: &[Edge], allow: &[AllowEntry]) -> Report {
+fn evaluate(edges: &[Edge], allow: &[AllowEntry], domain: domain::Findings) -> Report {
     let back_edges: Vec<&Edge> = edges
         .iter()
         .filter(|edge| !layers::is_legal(&edge.from_module, &edge.to_module))
@@ -105,15 +109,21 @@ fn evaluate(edges: &[Edge], allow: &[AllowEntry]) -> Report {
         .filter(|entry| !back_edges.iter().any(|edge| entry.covers(edge)))
         .cloned()
         .collect();
-    Report { violations, stale }
+    Report {
+        violations,
+        stale,
+        domain,
+    }
 }
 
 /// Scans the core crate under the repository `root` and holds it against the layer table and the allowlist.
 pub fn check(root: &Path) -> Result<Report> {
-    let edges = scan(&root.join(CORE_SRC))?;
+    let sources = sources(&root.join(CORE_SRC))?;
+    let edges = edges_of(&root.join(CORE_SRC), &sources)?;
+    let domain = domain::check(&sources, domain::EXEMPTIONS);
     let path = root.join(ALLOW_FILE);
     let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    Ok(evaluate(&edges, &parse_allowlist(&text)?))
+    Ok(evaluate(&edges, &parse_allowlist(&text)?, domain))
 }
 
 /// Directories outside the layer table: binaries are adapters, `tests` is test code.
@@ -222,29 +232,50 @@ fn declare_gated_modules(file: &Path, gated: &mut Files) -> Result<()> {
     Ok(())
 }
 
-/// Every non-test `crate::` path under `root` (`crates/core/src`), in file order.
-pub fn scan(root: &Path) -> Result<Vec<Edge>> {
-    let modules = module_names(root)?;
+/// One non-test source file of the core crate.
+pub struct Source {
+    /// Path under `crates/core/src`, with `/`.
+    pub file: String,
+    /// The top-level module, or `testkit` for the files gated by the testkit feature.
+    pub module: String,
+    pub text: String,
+}
+
+/// Every source file under `root` (`crates/core/src`) that is not test code, in file order.
+fn sources(root: &Path) -> Result<Vec<Source>> {
     let mut gated = Files::default();
     let mut files = Vec::new();
     collect_files(root, &mut gated, &mut files)?;
-    let mut edges = Vec::new();
+    let mut found = Vec::new();
     for file in files.iter().filter(|file| !gated.test.contains(*file)) {
         let relative = file.strip_prefix(root).unwrap_or(file);
         let text = fs::read_to_string(file).with_context(|| format!("read {}", file.display()))?;
-        let from_module = if gated.testkit.contains(file) {
+        let module = if gated.testkit.contains(file) {
             TESTKIT.to_string()
         } else {
             module_of(relative)
         };
-        edges.extend(scan::read_edges(
-            &relative.to_string_lossy().replace('\\', "/"),
-            &from_module,
-            &text,
-            &modules,
-        ));
+        found.push(Source {
+            file: relative.to_string_lossy().replace('\\', "/"),
+            module,
+            text,
+        });
     }
-    Ok(edges)
+    Ok(found)
+}
+
+fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
+    let modules = module_names(root)?;
+    Ok(sources
+        .iter()
+        .flat_map(|source| scan::read_edges(&source.file, &source.module, &source.text, &modules))
+        .collect())
+}
+
+/// Every non-test `crate::` path under `root` (`crates/core/src`), in file order.
+#[cfg(test)]
+fn scan(root: &Path) -> Result<Vec<Edge>> {
+    edges_of(root, &sources(root)?)
 }
 
 #[cfg(test)]
@@ -286,7 +317,7 @@ mod tests {
     #[test]
     fn the_baseline_matches_the_tree() {
         let report = check(&repo_root()).unwrap();
-        assert!(report.violations.is_empty(), "{:#?}", report.lines());
+        assert_eq!(report.failures(), 0, "{:#?}", report.lines());
     }
 
     #[test]
@@ -312,7 +343,7 @@ mod tests {
     #[test]
     fn a_downward_import_is_not_reported() {
         let edges = [edge("service/x.rs", 1, "service", "model")];
-        let report = evaluate(&edges, &[]);
+        let report = evaluate(&edges, &[], domain::Findings::default());
         assert!(report.violations.is_empty());
         assert_eq!(report.failures(), 0);
     }
@@ -361,7 +392,11 @@ mod tests {
             edge("model/vault.rs", 405, "model", "exchange"),
             edge("model/vault.rs", 456, "model", "exchange"),
         ];
-        let report = evaluate(&edges, &[entry("model/vault.rs", "exchange")]);
+        let report = evaluate(
+            &edges,
+            &[entry("model/vault.rs", "exchange")],
+            domain::Findings::default(),
+        );
         assert!(report.violations.is_empty() && report.stale.is_empty());
         assert_eq!(report.failures(), 0);
     }
@@ -369,7 +404,7 @@ mod tests {
     #[test]
     fn a_violation_outside_the_list_fails_with_file_and_line() {
         let edges = [edge("error.rs", 131, "error", "service")];
-        let report = evaluate(&edges, &[]);
+        let report = evaluate(&edges, &[], domain::Findings::default());
         assert_eq!(report.violations, edges);
         assert!(report.lines()[0].contains("crates/core/src/error.rs:131"));
         assert_eq!(report.failures(), 1);
@@ -378,7 +413,7 @@ mod tests {
     #[test]
     fn a_stale_entry_fails() {
         let allow = [entry("model/vault.rs", "exchange")];
-        let report = evaluate(&[], &allow);
+        let report = evaluate(&[], &allow, domain::Findings::default());
         assert_eq!(report.stale, allow);
         assert_eq!(report.failures(), 1);
         assert!(report.lines()[0].starts_with("error:"));

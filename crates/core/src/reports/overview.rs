@@ -23,9 +23,10 @@ use super::where_went::where_report;
 use crate::kernel::books::Books;
 use crate::money::portfolio::realized_pnl_filtered;
 pub(crate) use crate::money::rates::value_at;
+use crate::money::worth::FlowClass;
+use crate::planning::agenda::UpcomingItem;
 use crate::planning::budget::{budget_currency, manual_day_limit};
 use crate::service::budget::Flow;
-use crate::service::{FlowClass, UpcomingItem};
 use crate::usecases::planning::budget::{flows_between, leg_value_in};
 
 /// Longest range a report covers.
@@ -84,7 +85,7 @@ pub struct ReportMeta {
     pub inflation_rate: Option<Amount>,
     /// What the report says in words; filled once the report is built.
     #[serde(default)]
-    pub insights: Vec<crate::service::insights::Insight>,
+    pub insights: Vec<crate::reports::insights::Insight>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -309,7 +310,7 @@ pub enum Report {
     Portfolio(PortfolioReport),
     Inflation(InflationReport),
     Losses(crate::service::losses::LossReport),
-    Where(crate::service::where_went::WhereReport),
+    Where(crate::reports::where_went::WhereReport),
 }
 
 impl Report {
@@ -657,7 +658,7 @@ pub fn report(
         ReportKind::Losses => Report::Losses(books.loss_report(&ctx)),
         ReportKind::Where => Report::Where(where_report(books, &ctx)),
     };
-    let insights = crate::service::insights::report_insights(&report);
+    let insights = crate::reports::insights::report_insights(&report);
     report.meta_mut().insights = insights;
     Ok(report)
 }
