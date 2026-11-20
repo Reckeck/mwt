@@ -169,6 +169,23 @@ fn an_asked_operation_refused_for_lack_of_funds_is_booked_by_a_retry() {
     );
 }
 
+#[test]
+fn a_refused_retry_is_insufficient_funds_by_variant() {
+    let (_dir, mut vault, _card, _savings, workflow) = asked_transfer();
+    vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    let wait = vault.workflow_waits().remove(0);
+    let report = vault
+        .answer_workflow_wait(&wait.id, true, later(), "UTC")
+        .unwrap();
+    let refusal = vault.retry_workflow_run(&report.run.id, later(), "UTC");
+    assert!(
+        matches!(refusal, Err(crate::Error::InsufficientFunds(_))),
+        "{refusal:?}"
+    );
+}
+
 fn refused_asked_transfer() -> (tempfile::TempDir, UnlockedVault, String, String, String) {
     let (dir, mut vault, card, savings, workflow) = asked_transfer();
     vault
