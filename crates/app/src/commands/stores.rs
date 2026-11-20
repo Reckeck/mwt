@@ -22,7 +22,7 @@ use trade_core::usecases::money::{store_change, stores, valuation};
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
-use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
@@ -218,7 +218,7 @@ pub async fn fund_goal(
         envelopes::fund_goal(
             vault,
             &input.goal_id,
-            &StoreId::from(input.store_id.as_str()),
+            &StoreId::from(input.store_id),
             input.amount,
         )
     })

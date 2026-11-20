@@ -97,10 +97,8 @@ async fn a_wrong_nonce_ends_the_session() {
     let main_errors = error_payloads(main_events);
     let raw_key = DeviceKey::generate().unwrap();
     let public_key = raw_key.public_hex();
-    main.with_vault(|vault| {
-        trade_core::usecases::sync::trust::sync_trust_peer(vault, "raw-device", "Raw", &public_key)
-    })
-    .unwrap();
+    main.with_vault(|vault| sync_trust::sync_trust_peer(vault, "raw-device", "Raw", &public_key))
+        .unwrap();
     let vault_id = main.with_vault(|vault| Ok(vault.doc.id.clone())).unwrap();
     let addr = serve_once(main.clone()).await;
 
@@ -151,12 +149,7 @@ async fn a_protocol_four_dialer_is_refused_with_its_name() {
     let raw_key = DeviceKey::generate().unwrap();
     let public_key = raw_key.public_hex();
     main.with_vault(|vault| {
-        trade_core::usecases::sync::trust::sync_trust_peer(
-            vault,
-            "Old phone-id",
-            "Old phone",
-            &public_key,
-        )
+        sync_trust::sync_trust_peer(vault, "Old phone-id", "Old phone", &public_key)
     })
     .unwrap();
     let vault_id = main.with_vault(|vault| Ok(vault.doc.id.clone())).unwrap();
@@ -201,12 +194,7 @@ async fn a_protocol_four_listener_is_refused_with_its_name() {
     let public_key = raw_key.public_hex();
     client
         .with_vault(|vault| {
-            trade_core::usecases::sync::trust::sync_trust_peer(
-                vault,
-                "Old laptop",
-                "Old laptop",
-                &public_key,
-            )
+            sync_trust::sync_trust_peer(vault, "Old laptop", "Old laptop", &public_key)
         })
         .unwrap();
 

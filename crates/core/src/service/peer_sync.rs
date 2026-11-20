@@ -543,8 +543,8 @@ impl UnlockedVault {
         self.persist()?;
         if self.sandbox || self.session.is_dirty() {
             self.announce.extend(batch_keys);
-        } else if self.sync_tap.is_some() && !batch_keys.is_empty() {
-            self.session.announce_changes(batch_keys);
+        } else {
+            self.announce_to_tap(batch_keys);
         }
         Ok(())
     }

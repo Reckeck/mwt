@@ -11,8 +11,8 @@ use trade_core::money::rates as rate_reads;
 use trade_core::pricing::AssetSearchHit;
 use trade_core::usecases::money::rates;
 
-use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, require_vault};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 use crate::ipc::opener::UrlKind;

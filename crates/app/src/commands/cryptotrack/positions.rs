@@ -15,7 +15,7 @@ use trade_core::ipc_contract::cryptotrack::positions::PositionView;
 use trade_core::model::vault::now_iso;
 
 use crate::commands::AppState;
-use crate::commands::planning::with_vault;
+use crate::commands::with_vault;
 use crate::cryptotrack::jobs;
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;

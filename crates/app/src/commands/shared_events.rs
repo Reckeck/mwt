@@ -18,7 +18,7 @@ use trade_core::service::{ContactEventBalance, SharedEventSummary, SharedEventVi
 use trade_core::usecases::household::shared_events;
 
 use crate::commands::AppState;
-use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 

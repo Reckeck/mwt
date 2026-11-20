@@ -34,35 +34,16 @@ use trade_core::usecases::household::{loyalty, utilities};
 use trade_core::usecases::money::interest;
 use trade_core::usecases::money::rebase;
 use trade_core::usecases::planning::{
-    agenda, auto_reminders, automation_card, automations, budget, emergency, goals, my_automations,
-    scenarios,
+    agenda, auto_reminders, automation_card, automation_rules, automations, budget, emergency,
+    goals, my_automations, scenarios,
 };
 use trade_core::workflow::Workflow;
 
 use crate::commands::app_settings::current_zone;
-use crate::commands::{AppState, require_vault};
+use crate::commands::{AppState, with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 use crate::ipc::ipc;
-
-/// Run `read` against the open vault. `E` is `IpcError`, or `String` for a
-/// command not yet converted (the shim goes with T24).
-pub(crate) fn with_vault<T, E: From<IpcError>>(
-    state: &State<'_, AppState>,
-    read: impl FnOnce(&UnlockedVault) -> trade_core::Result<T>,
-) -> Result<T, E> {
-    let guard = require_vault(state).map_err(IpcError::from)?;
-    Ok(read(guard.as_ref().unwrap()).map_err(IpcError::from)?)
-}
-
-/// Run `write` against the open vault; `E` as in `with_vault`.
-pub(crate) fn with_vault_mut<T, E: From<IpcError>>(
-    state: &State<'_, AppState>,
-    write: impl FnOnce(&mut UnlockedVault) -> trade_core::Result<T>,
-) -> Result<T, E> {
-    let mut guard = require_vault(state).map_err(IpcError::from)?;
-    Ok(write(guard.as_mut().unwrap()).map_err(IpcError::from)?)
-}
 
 // -- automations -----------------------------------------------------------------
 
@@ -135,7 +116,10 @@ pub async fn list_automation_runs(
     state: State<'_, AppState>,
 ) -> Result<Vec<AutomationRun>, IpcError> {
     with_vault(&state, |vault| {
-        Ok(vault.automation_runs(automation_id.as_deref()))
+        Ok(automation_rules::automation_runs(
+            &vault.doc,
+            automation_id.as_deref(),
+        ))
     })
 }
 

@@ -13,10 +13,8 @@ struct RawPeer {
 async fn raw_peer(main: &TestHost) -> RawPeer {
     let raw_key = DeviceKey::generate().unwrap();
     let public_key = raw_key.public_hex();
-    main.with_vault(|vault| {
-        trade_core::usecases::sync::trust::sync_trust_peer(vault, "raw-device", "Raw", &public_key)
-    })
-    .unwrap();
+    main.with_vault(|vault| sync_trust::sync_trust_peer(vault, "raw-device", "Raw", &public_key))
+        .unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server = main.clone();

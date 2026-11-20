@@ -181,9 +181,7 @@ impl UnlockedVault {
         // Everything stamped since the last push, by this save or by a sync
         // call in between.
         let changed: Vec<String> = std::mem::take(&mut self.announce).into_iter().collect();
-        if !changed.is_empty() && self.sync_tap.is_some() {
-            self.session.announce_changes(changed);
-        }
+        self.announce_to_tap(changed);
         // Level 3: exchange keys go to the device file, and the document is
         // written without them (the in-memory index stays).
         self.flush_device_keys()?;
@@ -207,6 +205,14 @@ impl UnlockedVault {
             },
             store: self.session.store(),
         }))
+    }
+
+    /// Tell the sync tap which keys changed; nothing when no tap is set or
+    /// there are no keys. The one home of that rule.
+    pub(super) fn announce_to_tap(&mut self, keys: Vec<String>) {
+        if self.sync_tap.is_some() && !keys.is_empty() {
+            self.session.announce_changes(keys);
+        }
     }
 
     /// Back under the vault lock after [`FlushJob::write`]: clean unless the

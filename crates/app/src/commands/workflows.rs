@@ -19,7 +19,9 @@ use trade_core::service::{
     SavedWorkflow, UnlockedVault, WorkflowImportPreview, WorkflowTestResult,
 };
 use trade_core::usecases::workflow::{records, runs};
-use trade_core::workflow::service::{records as workflow_records, runs as run_reads, vars};
+use trade_core::workflow::service::{
+    records as record_reads, runs as run_reads, vars as var_reads,
+};
 use trade_core::workflow::templates::WorkflowTemplateInfo;
 use trade_core::workflow::{
     GraphIssue, NodeDef, QueuedActions, RunReport, Workflow, WorkflowRun, WorkflowVar,
@@ -27,23 +29,13 @@ use trade_core::workflow::{
 };
 
 use crate::commands::app_settings::current_zone;
-use crate::commands::{AppState, require_vault};
+use crate::commands::{AppState, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 use crate::ipc::ipc;
 
 /// Most runs one listing returns by default.
 const DEFAULT_RUNS: u32 = 100;
-
-/// The write step of the commands that also emit or deliver after it (they
-/// stay plain commands until the emit sites move, T21).
-fn with_vault_mut<T>(
-    state: &State<'_, AppState>,
-    write: impl FnOnce(&mut UnlockedVault) -> trade_core::Result<T>,
-) -> Result<T, IpcError> {
-    let mut guard = require_vault(state)?;
-    write(guard.as_mut().unwrap()).map_err(IpcError::from)
-}
 
 /// Every node there is, with its ports, fields and help (works locked too).
 #[tauri::command]
@@ -59,12 +51,12 @@ pub async fn validate_workflow(input: ValidateWorkflowInput) -> Result<Vec<Graph
 
 #[ipc(read)]
 pub fn list_workflows(vault: &UnlockedVault) -> trade_core::Result<Vec<Workflow>> {
-    Ok(workflow_records::workflows(&vault.doc))
+    Ok(record_reads::workflows(&vault.doc))
 }
 
 #[ipc(read)]
 pub fn get_workflow(vault: &UnlockedVault, id: String) -> trade_core::Result<Workflow> {
-    workflow_records::workflow(&vault.doc, &id)
+    record_reads::workflow(&vault.doc, &id)
 }
 
 #[ipc(write)]
@@ -145,7 +137,7 @@ pub async fn run_workflow_now(
 ) -> Result<RunReport, IpcError> {
     let zone = current_zone(&app);
     let ru = crate::scheduler::russian(&app);
-    let report = with_vault_mut(&state, |vault| {
+    let report = with_vault_mut::<_, IpcError>(&state, |vault| {
         vault.set_notice_language(ru);
         runs::run_workflow_now(
             vault,
@@ -191,7 +183,7 @@ pub async fn confirm_workflow_queued(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<Transaction>, IpcError> {
-    let saved = with_vault_mut(&state, |vault| records::confirm_queued(vault, &id))?;
+    let saved = with_vault_mut::<_, IpcError>(&state, |vault| records::confirm_queued(vault, &id))?;
     let ids: Vec<&str> = saved.iter().map(|tx| tx.meta().id.as_str()).collect();
     let _ = AutomationCreated::emit(
         &app,
@@ -222,7 +214,7 @@ pub async fn answer_workflow_wait(
 ) -> Result<RunReport, IpcError> {
     let zone = current_zone(&app);
     let ru = crate::scheduler::russian(&app);
-    let report = with_vault_mut(&state, |vault| {
+    let report = with_vault_mut::<_, IpcError>(&state, |vault| {
         vault.set_notice_language(ru);
         runs::answer_workflow_wait(vault, &input.id, input.yes, now_secs(), &zone)
     })?;
@@ -241,7 +233,7 @@ pub async fn answer_workflow_wait(
 
 #[ipc(read)]
 pub fn list_workflow_vars(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowVar>> {
-    Ok(vars::variables(&vault.doc))
+    Ok(var_reads::variables(&vault.doc))
 }
 
 #[ipc(write)]
@@ -263,7 +255,7 @@ pub fn delete_workflow_var(
 /// The workflow as a file's text.
 #[ipc(read)]
 pub fn export_workflow(vault: &UnlockedVault, id: String) -> trade_core::Result<String> {
-    workflow_records::export_workflow(&vault.doc, &id)
+    record_reads::export_workflow(&vault.doc, &id)
 }
 
 /// Add a workflow from a file's text, switched off.
@@ -281,7 +273,7 @@ pub fn preview_workflow_import(
     vault: &UnlockedVault,
     json: String,
 ) -> trade_core::Result<WorkflowImportPreview> {
-    workflow_records::preview_import(&vault.doc, &json)
+    record_reads::preview_import(&vault.doc, &json)
 }
 
 /// The gallery of ready-made workflows with defaults from the vault.
