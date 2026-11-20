@@ -335,3 +335,34 @@ fn sync_forget_peer_revokes_a_device_and_refuses_an_unknown_one() {
     let error = left.sync_forget_peer("ghost").unwrap_err();
     assert!(matches!(error, crate::error::Error::NotFound(_)));
 }
+
+/// `sync_forget_peer` makes the clock pass the stamps of every entry held for
+/// the device id (not only the first), so the revocation sorts after all of
+/// them; pinned here through the stamps it observes.
+#[test]
+fn sync_forget_peer_observes_the_stamps_of_every_entry_with_the_device_id() {
+    use crate::sync::stamp::{Clock, Stamp};
+    let peer = |device: &str, wall: u64| crate::sync::TrustedPeer {
+        device_id: device.into(),
+        name: "Phone".into(),
+        public_key: "cc".into(),
+        paired_at: "2026-10-01T00:00:00Z".into(),
+        last_synced_at: None,
+        revoked: None,
+        stamp: Stamp::new(wall, 0, "zz"),
+    };
+    let sync = crate::sync::SyncState {
+        peers: vec![peer("dev-c", 10), peer("other", 99), peer("dev-c", 50)],
+        ..Default::default()
+    };
+    let known = crate::sync::trust::known_stamps(&sync, "dev-c", None);
+    assert_eq!(
+        known,
+        vec![Stamp::new(10, 0, "zz"), Stamp::new(50, 0, "zz")]
+    );
+    let mut clock = Clock::new("dev-a");
+    for stamp in &known {
+        clock.observe(stamp);
+    }
+    assert!(clock.tick_at(1) > Stamp::new(50, 0, "zz"));
+}
