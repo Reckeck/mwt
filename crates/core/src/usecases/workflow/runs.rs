@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use chrono::{Datelike, Duration};
 
-use super::records::{SKIPPED, close_refused_as_done, mark_skipped};
+use super::records::{RunClosing, SKIPPED, book_and_close, mark_skipped};
 use crate::Amount;
 use crate::calendar::{Calendar, first_of_month};
 use crate::error::{Error, Result};
@@ -486,21 +486,18 @@ fn retry_queued_refusal(
     batch: QueuedActions,
     now: i64,
 ) -> Result<WorkflowPass> {
-    let mut txs = batch.transactions;
-    for tx in &mut txs {
-        tx.meta_mut().timestamp = crate::calendar::iso(now);
-    }
-    let saved = insert_checked(vault, txs, now).map_err(|refusal| match refusal {
-        InsertRefusal::Short(reason) => Error::InsufficientFunds(vault.describe_shortfall(&reason)),
-        InsertRefusal::Invalid(message) => Error::InvalidInput(message),
+    let (_, done) = book_and_close(vault, &batch, RunClosing::Required, |vault, mut txs| {
+        for tx in &mut txs {
+            tx.meta_mut().timestamp = crate::calendar::iso(now);
+        }
+        insert_checked(vault, txs, now).map_err(|refusal| match refusal {
+            InsertRefusal::Short(reason) => {
+                Error::InsufficientFunds(vault.describe_shortfall(&reason))
+            }
+            InsertRefusal::Invalid(message) => Error::InvalidInput(message),
+        })
     })?;
-    let created: Vec<String> = saved.iter().map(|tx| tx.meta().id.clone()).collect();
-    vault.recompute_holdings();
-    let done = vault.transact(|tx| {
-        tx.collection::<QueuedActions>().remove(&batch.id)?;
-        close_refused_as_done(tx, &run.id, created)?
-            .ok_or_else(|| Error::Missing(format!("workflow run {}", run.id)))
-    })?;
+    let done = done.ok_or_else(|| Error::Missing(format!("workflow run {}", run.id)))?;
     let mut pass = WorkflowPass::default();
     pass.created.clone_from(&done.created);
     pass.runs.push(done);
