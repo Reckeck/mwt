@@ -18,6 +18,8 @@ use trade_core::model::transaction::Transaction;
 use trade_core::service::{
     SavedWorkflow, UnlockedVault, WorkflowImportPreview, WorkflowTestResult,
 };
+use trade_core::usecases::workflow::{records, runs};
+use trade_core::workflow::service::{records as workflow_records, runs as run_reads, vars};
 use trade_core::workflow::templates::WorkflowTemplateInfo;
 use trade_core::workflow::{
     GraphIssue, NodeDef, QueuedActions, RunReport, Workflow, WorkflowRun, WorkflowVar,
@@ -57,12 +59,12 @@ pub async fn validate_workflow(input: ValidateWorkflowInput) -> Result<Vec<Graph
 
 #[ipc(read)]
 pub fn list_workflows(vault: &UnlockedVault) -> trade_core::Result<Vec<Workflow>> {
-    Ok(vault.workflows())
+    Ok(workflow_records::workflows(&vault.doc))
 }
 
 #[ipc(read)]
 pub fn get_workflow(vault: &UnlockedVault, id: String) -> trade_core::Result<Workflow> {
-    vault.workflow(&id)
+    workflow_records::workflow(&vault.doc, &id)
 }
 
 #[ipc(write)]
@@ -70,7 +72,8 @@ pub fn save_workflow(
     vault: &mut UnlockedVault,
     input: SaveWorkflowInput,
 ) -> trade_core::Result<SavedWorkflow> {
-    vault.save_workflow(
+    records::save_workflow(
+        vault,
         input.id.as_deref().filter(|id| !id.is_empty()),
         input.workflow,
         now_secs(),
@@ -83,7 +86,7 @@ pub fn save_workflow_draft(
     vault: &mut UnlockedVault,
     input: SaveWorkflowDraftInput,
 ) -> trade_core::Result<Workflow> {
-    vault.save_workflow_draft(&input.id, &input.graph, now_secs())
+    records::save_workflow_draft(vault, &input.id, &input.graph, now_secs())
 }
 
 #[ipc(write)]
@@ -91,7 +94,7 @@ pub fn discard_workflow_draft(
     vault: &mut UnlockedVault,
     id: String,
 ) -> trade_core::Result<Workflow> {
-    vault.discard_workflow_draft(&id)
+    records::discard_workflow_draft(vault, &id)
 }
 
 #[ipc(write)]
@@ -99,12 +102,12 @@ pub fn set_workflow_active(
     vault: &mut UnlockedVault,
     input: SetWorkflowActiveInput,
 ) -> trade_core::Result<Workflow> {
-    vault.set_workflow_active(&input.id, input.active, now_secs())
+    records::set_workflow_active(vault, &input.id, input.active, now_secs())
 }
 
 #[ipc(write)]
 pub fn delete_workflow(vault: &mut UnlockedVault, id: String) -> trade_core::Result<()> {
-    vault.delete_workflow(&id)
+    records::delete_workflow(vault, &id)
 }
 
 #[ipc(write)]
@@ -112,7 +115,7 @@ pub fn restore_workflow_version(
     vault: &mut UnlockedVault,
     input: RestoreWorkflowVersionInput,
 ) -> trade_core::Result<SavedWorkflow> {
-    vault.restore_workflow_version(&input.id, &input.saved_at, now_secs())
+    records::restore_workflow_version(vault, &input.id, &input.saved_at, now_secs())
 }
 
 /// Emulate on a copy of the vault: nothing is written.
@@ -122,7 +125,8 @@ pub fn dry_run_workflow(
     app: &AppHandle,
     input: DryRunWorkflowInput,
 ) -> trade_core::Result<RunReport> {
-    vault.dry_run_workflow(
+    runs::dry_run_workflow(
+        vault,
         &input.graph,
         input.workflow_id.as_deref(),
         input.trigger_node.as_deref(),
@@ -143,7 +147,13 @@ pub async fn run_workflow_now(
     let ru = crate::scheduler::russian(&app);
     let report = with_vault_mut(&state, |vault| {
         vault.set_notice_language(ru);
-        vault.run_workflow_now(&input.id, input.trigger_node.as_deref(), now_secs(), &zone)
+        runs::run_workflow_now(
+            vault,
+            &input.id,
+            input.trigger_node.as_deref(),
+            now_secs(),
+            &zone,
+        )
     })?;
     crate::scheduler::deliver(&app, report.notices.clone(), false);
     if !report.run.created.is_empty() {
@@ -163,12 +173,16 @@ pub fn list_workflow_runs(
     input: ListWorkflowRunsInput,
 ) -> trade_core::Result<Vec<WorkflowRun>> {
     let limit = input.limit.unwrap_or(DEFAULT_RUNS) as usize;
-    Ok(vault.workflow_runs(input.workflow_id.as_deref(), limit))
+    Ok(run_reads::runs(
+        &vault.doc,
+        input.workflow_id.as_deref(),
+        limit,
+    ))
 }
 
 #[ipc(read)]
 pub fn list_workflow_queue(vault: &UnlockedVault) -> trade_core::Result<Vec<QueuedActions>> {
-    Ok(vault.workflow_queue())
+    Ok(run_reads::queue(&vault.doc))
 }
 
 #[tauri::command]
@@ -177,7 +191,7 @@ pub async fn confirm_workflow_queued(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<Transaction>, IpcError> {
-    let saved = with_vault_mut(&state, |vault| vault.confirm_queued(&id))?;
+    let saved = with_vault_mut(&state, |vault| records::confirm_queued(vault, &id))?;
     let ids: Vec<&str> = saved.iter().map(|tx| tx.meta().id.as_str()).collect();
     let _ = AutomationCreated::emit(
         &app,
@@ -190,13 +204,13 @@ pub async fn confirm_workflow_queued(
 
 #[ipc(write)]
 pub fn discard_workflow_queued(vault: &mut UnlockedVault, id: String) -> trade_core::Result<()> {
-    vault.discard_queued(&id)
+    records::discard_queued(vault, &id)
 }
 
 /// Runs asleep: timers and questions waiting for an answer.
 #[ipc(read)]
 pub fn list_workflow_waits(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowWait>> {
-    Ok(vault.workflow_waits())
+    Ok(run_reads::waits(&vault.doc))
 }
 
 /// Answer a "Wait for confirmation" question; the run goes on at once.
@@ -210,7 +224,7 @@ pub async fn answer_workflow_wait(
     let ru = crate::scheduler::russian(&app);
     let report = with_vault_mut(&state, |vault| {
         vault.set_notice_language(ru);
-        vault.answer_workflow_wait(&input.id, input.yes, now_secs(), &zone)
+        runs::answer_workflow_wait(vault, &input.id, input.yes, now_secs(), &zone)
     })?;
     crate::scheduler::deliver(&app, report.notices.clone(), false);
     if !report.run.created.is_empty() {
@@ -227,7 +241,7 @@ pub async fn answer_workflow_wait(
 
 #[ipc(read)]
 pub fn list_workflow_vars(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowVar>> {
-    Ok(vault.workflow_vars())
+    Ok(vars::variables(&vault.doc))
 }
 
 #[ipc(write)]
@@ -235,7 +249,7 @@ pub fn set_workflow_var(
     vault: &mut UnlockedVault,
     input: SetWorkflowVarInput,
 ) -> trade_core::Result<()> {
-    vault.set_workflow_var(input.scope, &input.name, &input.value)
+    records::set_workflow_var(vault, input.scope, &input.name, &input.value)
 }
 
 #[ipc(write)]
@@ -243,13 +257,13 @@ pub fn delete_workflow_var(
     vault: &mut UnlockedVault,
     input: DeleteWorkflowVarInput,
 ) -> trade_core::Result<()> {
-    vault.delete_workflow_var(&input.scope, &input.name)
+    records::delete_workflow_var(vault, &input.scope, &input.name)
 }
 
 /// The workflow as a file's text.
 #[ipc(read)]
 pub fn export_workflow(vault: &UnlockedVault, id: String) -> trade_core::Result<String> {
-    vault.export_workflow(&id)
+    workflow_records::export_workflow(&vault.doc, &id)
 }
 
 /// Add a workflow from a file's text, switched off.
@@ -258,7 +272,7 @@ pub fn import_workflow(
     vault: &mut UnlockedVault,
     input: ImportWorkflowInput,
 ) -> trade_core::Result<SavedWorkflow> {
-    vault.import_workflow(&input.json, &input.stores, now_secs())
+    records::import_workflow(vault, &input.json, &input.stores, now_secs())
 }
 
 /// What a workflow file holds and which of its wallets are missing here.
@@ -267,13 +281,13 @@ pub fn preview_workflow_import(
     vault: &UnlockedVault,
     json: String,
 ) -> trade_core::Result<WorkflowImportPreview> {
-    vault.preview_workflow_import(&json)
+    workflow_records::preview_import(&vault.doc, &json)
 }
 
 /// The gallery of ready-made workflows with defaults from the vault.
 #[ipc(read)]
 pub fn workflow_templates(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowTemplateInfo>> {
-    Ok(vault.workflow_templates())
+    Ok(records::workflow_templates(&vault.books()))
 }
 
 /// Build a template's workflow from its form and save it switched on.
@@ -288,7 +302,7 @@ pub fn workflow_from_template(
     } else {
         "en"
     };
-    vault.workflow_from_template(&input.template_id, &input.params, locale, now_secs())
+    records::workflow_from_template(vault, &input.template_id, &input.params, locale, now_secs())
 }
 
 #[ipc(write)]
@@ -296,7 +310,7 @@ pub fn save_workflow_test(
     vault: &mut UnlockedVault,
     input: SaveWorkflowTestInput,
 ) -> trade_core::Result<Workflow> {
-    vault.save_workflow_test(&input.workflow_id, input.test)
+    records::save_workflow_test(vault, &input.workflow_id, input.test)
 }
 
 #[ipc(write)]
@@ -304,7 +318,7 @@ pub fn delete_workflow_test(
     vault: &mut UnlockedVault,
     input: DeleteWorkflowTestInput,
 ) -> trade_core::Result<Workflow> {
-    vault.delete_workflow_test(&input.workflow_id, &input.test_id)
+    records::delete_workflow_test(vault, &input.workflow_id, &input.test_id)
 }
 
 /// Every test of a workflow by emulation; nothing is written.
@@ -314,7 +328,7 @@ pub fn run_workflow_tests(
     app: &AppHandle,
     id: String,
 ) -> trade_core::Result<Vec<WorkflowTestResult>> {
-    vault.run_workflow_tests(&id, now_secs(), &current_zone(app))
+    runs::run_workflow_tests(vault, &id, now_secs(), &current_zone(app))
 }
 
 ipc_commands!(workflows_commands, WORKFLOWS_NAMES, commands::workflows: [workflow_node_catalog, validate_workflow, list_workflows, get_workflow, save_workflow, save_workflow_draft, discard_workflow_draft, set_workflow_active, delete_workflow, restore_workflow_version, dry_run_workflow, run_workflow_now, list_workflow_runs, list_workflow_queue, confirm_workflow_queued, discard_workflow_queued, list_workflow_waits, answer_workflow_wait, list_workflow_vars, set_workflow_var, delete_workflow_var, export_workflow, import_workflow, preview_workflow_import, workflow_templates, workflow_from_template, save_workflow_test, delete_workflow_test, run_workflow_tests]);
