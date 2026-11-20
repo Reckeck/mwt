@@ -1025,7 +1025,7 @@ pub(crate) fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {
     // see it: an earlier point takes its value from the snapshots the
     // module wrote on every read (spec E8, `cryptotrack::totals`).
     let (module_values, module_supersedes) =
-        books.crypto_module(&cutoffs, |store_id| ctx.in_scope(store_id));
+        super::crypto_module::crypto_module(books, &cutoffs, |store_id| ctx.in_scope(store_id));
     // The current point is today's valuation, the same function and rates
     // as `net_worth_base`, so every screen shows one capital.
     let current = (ctx.scope.is_none() && ctx.currency.eq_ignore_ascii_case(base))

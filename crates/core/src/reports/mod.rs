@@ -1,5 +1,6 @@
 //! The `reports` module group (spec core-strangler, D1).
 
+pub(crate) mod crypto_module;
 pub mod dashboard;
 #[cfg(test)]
 mod dashboard_tests;

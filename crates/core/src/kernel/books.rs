@@ -9,7 +9,6 @@ use std::sync::Arc;
 
 use crate::Amount;
 use crate::error::Result;
-use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
 use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
@@ -160,16 +159,6 @@ impl Books<'_> {
     pub(crate) fn month_summary_in(&self, month: &str, zone: &str) -> Result<MonthSummary> {
         self.vault.month_summary_in(self, month, zone)
     }
-
-    /// What the crypto module was worth at each cutoff in USD and whether it
-    /// already counts a replayed wallet's coins.
-    pub(crate) fn crypto_module(
-        &self,
-        cutoffs: &[i64],
-        in_scope: impl Fn(&str) -> bool,
-    ) -> (Vec<Option<Amount>>, impl Fn(&str, &AssetRef) -> bool) {
-        crate::service::reports::crypto_module(self.vault, cutoffs, in_scope)
-    }
 }
 
 impl UnlockedVault {
@@ -255,7 +244,6 @@ mod tests {
         "subtree_ids",
         "store_overview",
         "month_summary_in",
-        "crypto_module",
     ];
 
     /// Names of the `pub`/`pub(crate)` fns declared in the block that opens with `header`.
