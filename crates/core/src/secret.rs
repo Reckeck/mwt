@@ -16,7 +16,7 @@
 //! | type | Debug prints the text | state |
 //! |---|---|---|
 //! | `cryptotrack::rpc::client` api key (`ApiKey`) | no | `Secret<String>`; test `the_api_key_never_prints` |
-//! | `model::vault::ExchangeKeys` (key, secret) | no | hand `Debug` prints `Secret(..)` for the key and `<redacted>` for the secret (the frozen test `storage::tests::exchange_keys_debug_redacts_the_secret` asserts `<redacted>`); fields stay `String` (T148) |
+//! | `model::vault::ExchangeKeys` (key, secret) | no | hand `Debug` prints `Secret(..)` (via `Hidden`) for the key and `<redacted>` for the secret (the frozen test `storage::tests::exchange_keys_debug_redacts_the_secret` asserts `<redacted>`); fields stay `String` (T148) |
 //! | `storage::legacy_v4::ExchangeKeysV4` | no | hand `Debug` prints `<redacted>`; parse-only copy of the v4 file, outside T50 files |
 //! | `ipc_contract::SetExchangeKeyInput` (`api_key`, `api_secret`) | no | fixed: hand `Debug` prints `Secret(..)`; test `set_exchange_key_input_debug_hides_key_and_secret` |
 //! | `ipc_contract::{CreateVaultInput, UnlockInput, ChangePasswordInput, SetVaultPasswordInput, RemoveVaultPasswordInput, ResolveVaultConflictInput, TransferSendInput}` (passwords) | no | fixed: hand `Debug` prints `Secret(..)` for passwords; one `*_debug_hides_*` test each in `ipc_contract::secret_debug_tests` |

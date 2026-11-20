@@ -10,7 +10,7 @@ use crate::model::planning::{
 };
 use crate::model::store::{AssetRef, Holding, Store};
 use crate::model::transaction::Transaction;
-use crate::secret::Secret;
+use crate::secret::Hidden;
 use schemars::JsonSchema;
 
 /// One widget on the dashboard grid (12 columns). A widget not in the list is
@@ -311,7 +311,7 @@ impl std::fmt::Debug for ExchangeKeys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExchangeKeys")
             .field("store_id", &self.store_id)
-            .field("api_key", &Secret::new(self.api_key.clone()))
+            .field("api_key", &Hidden)
             .field("api_secret", &"<redacted>")
             .finish()
     }
