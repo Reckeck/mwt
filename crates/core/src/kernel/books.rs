@@ -119,9 +119,12 @@ impl<'vault> Books<'vault> {
     }
 }
 
-/// Reads that need the open vault itself: its security level, its shared
-/// events, its envelopes. The areas ask the context; only the kernel holds
-/// the vault (D2, OD6). Each one is the vault's own answer, unchanged.
+/// Reads that need the open vault itself: its security level, its envelopes,
+/// its device secrets. The areas ask the context; only the kernel holds the
+/// vault (D2, OD6). The reads after `device_secrets_for_request` are
+/// transitional: their callee sits in a layer above the caller (or takes the
+/// vault), so no legal direct call exists yet; each goes when its callee moves
+/// down or gets a port (core-strangler T213 follow-up).
 impl Books<'_> {
     /// The writers' checks of a transaction (dates, envelopes, ownership).
     pub(crate) fn prepare_transaction(&self, tx: &mut Transaction) -> Result<()> {
@@ -151,16 +154,6 @@ impl Books<'_> {
     /// Today's valuation.
     pub(crate) fn net_worth(&self) -> NetWorth {
         self.vault.net_worth()
-    }
-
-    /// Today's valuation plus the part of `financial` held in crypto.
-    pub(crate) fn net_worth_with_crypto(&self) -> (NetWorth, Amount) {
-        self.vault.net_worth_with_crypto()
-    }
-
-    /// USD value of one unit of a hand-priced asset.
-    pub(crate) fn manual_price_usd(&self, asset_key: &str) -> Option<Amount> {
-        self.vault.manual_price_usd(asset_key)
     }
 
     /// Every store id a scope covers.
@@ -237,6 +230,16 @@ impl Books<'_> {
         flows: &[Flow],
     ) -> MonthAllowance {
         self.vault.month_allowance(cal, date, currency, flows)
+    }
+
+    /// Today's valuation plus the part of `financial` held in crypto.
+    pub(crate) fn net_worth_with_crypto(&self) -> (NetWorth, Amount) {
+        self.vault.net_worth_with_crypto()
+    }
+
+    /// USD value of one unit of a hand-priced asset.
+    pub(crate) fn manual_price_usd(&self, asset_key: &str) -> Option<Amount> {
+        self.vault.manual_price_usd(asset_key)
     }
 
     /// How much can be spent today.

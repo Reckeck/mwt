@@ -26,7 +26,7 @@ pub(crate) use crate::money::rates::value_at;
 use crate::planning::budget::{budget_currency, manual_day_limit};
 use crate::service::budget::Flow;
 use crate::service::{FlowClass, UpcomingItem};
-use crate::usecases::planning::budget::leg_value_in;
+use crate::usecases::planning::budget::{flows_between, leg_value_in};
 
 /// Longest range a report covers.
 pub const MAX_REPORT_MONTHS: usize = 120;
@@ -664,8 +664,7 @@ pub fn report(
 
 /// Classified flows of the report range (or `[from, to)`), in scope.
 pub(crate) fn report_flows(books: &Books, ctx: &Ctx, from: i64, to: i64) -> Vec<Flow> {
-    books
-        .flows_between(&ctx.cal, &ctx.currency, from, to)
+    flows_between(books, &ctx.cal, &ctx.currency, from, to)
         .into_iter()
         .filter(|flow| {
             ctx.scope
@@ -1423,7 +1422,7 @@ pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Resul
     let today = cal.date_of(now);
     let currency = budget_currency(books);
     let (from, to) = cal.month_bounds(first);
-    let flows = books.flows_between(&cal, &currency, from, to);
+    let flows = flows_between(books, &cal, &currency, from, to);
     let month = books.month_allowance(&cal, first, &currency, &flows);
     let planned = month.per_day.is_positive().then_some(month.per_day);
     let manual = manual_day_limit(books, &currency, now);
