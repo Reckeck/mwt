@@ -202,6 +202,9 @@ files = [
     "crates/core/src/service/portfolio.rs", "crates/core/src/service/price_info.rs",
     "crates/core/src/service/scenarios.rs", "crates/core/src/service/shared_events/analytics.rs",
     "crates/core/src/service/where_went.rs",
+    # T231: the domain imports of next_occurrence, reminder_secs and draft_to_transaction point at planning, so their
+    # service re-exports lose their last user and go.
+    "crates/core/src/service/agenda.rs", "crates/core/src/service/automations.rs", "crates/core/src/service/mod.rs",
 ]
 
 [[foundation]]
