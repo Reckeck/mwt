@@ -169,3 +169,36 @@ fn a_failed_batch_announces_nothing_it_stamped_on_its_way() {
     let sent = tap.0.lock().unwrap().clone();
     assert!(sent.is_empty(), "announced after a failed batch: {sent:?}");
 }
+
+#[test]
+fn a_failed_write_after_an_unparsable_record_leaves_no_journal_entry() {
+    let (dir, mut left, mut right) = left_ahead();
+    left.create_store_with(
+        "Second jar",
+        StoreKind::Bank,
+        "#000",
+        "",
+        None,
+        StoreExtras::default(),
+    )
+    .unwrap();
+    let mut incoming = incoming_for(&mut left, &mut right);
+    let bad = incoming
+        .keys()
+        .find(|key| key.starts_with("stores:"))
+        .cloned()
+        .expect("a store record");
+    incoming.get_mut(&bad).unwrap().value.as_mut().unwrap()["kind"] =
+        serde_json::json!("not-a-kind");
+    assert!(incoming.len() > 1, "a good record must remain");
+    let file = dir.path().join("copy.wallet");
+    std::fs::remove_file(&file).unwrap();
+    std::fs::create_dir(&file).unwrap();
+    let before = bytes(&mut right);
+
+    let outcome = right.sync_apply(&incoming, &peer());
+
+    assert!(outcome.is_err(), "the write was expected to fail");
+    assert!(right.sync_journal().is_empty(), "a journal entry was left");
+    assert!(bytes(&mut right) == before, "the document changed");
+}
