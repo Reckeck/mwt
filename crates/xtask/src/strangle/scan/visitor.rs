@@ -254,9 +254,13 @@ fn may_hold_vault_call(tokens: TokenStream) -> bool {
     trees.iter().enumerate().any(|(index, tree)| match tree {
         TokenTree::Group(group) => may_hold_vault_call(group.stream()),
         TokenTree::Punct(punct) if punct.as_char() == '.' => matches!(
-            (trees.get(index + 1), trees.get(index + 2)),
-            (Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)))
+            (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),
+            (Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)), _)
                 if call.delimiter() == Delimiter::Parenthesis
+        ) || matches!(
+            (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),
+            (Some(TokenTree::Ident(_)), Some(TokenTree::Punct(first)), Some(TokenTree::Punct(second)))
+                if first.as_char() == ':' && second.as_char() == ':'
         ),
         TokenTree::Ident(ident) if ident == "Self" => matches!(
             (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),
