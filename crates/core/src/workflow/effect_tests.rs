@@ -68,6 +68,13 @@ fn later() -> i64 {
 
 /// «Ask first → yes: 300 from the card to savings», with only 100 on the card.
 fn asked_transfer() -> (tempfile::TempDir, UnlockedVault, String, String, Workflow) {
+    asked_transfer_capped(None)
+}
+
+/// The same, with the workflow's cap on what a run may move.
+fn asked_transfer_capped(
+    cap: Option<&str>,
+) -> (tempfile::TempDir, UnlockedVault, String, String, Workflow) {
     let (dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Cash, None);
     let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
@@ -88,6 +95,24 @@ fn asked_transfer() -> (tempfile::TempDir, UnlockedVault, String, String, Workfl
         ],
         vec![wire("t", "out", "c", "in"), wire("c", "true", "tx", "in")],
     );
+    let workflow = match cap {
+        None => workflow,
+        Some(cap) => {
+            let draft = WorkflowDraft {
+                name: workflow.name.clone(),
+                description: String::new(),
+                active: true,
+                graph: workflow.graph.clone(),
+                react_to_workflows: false,
+                max_amount: Some(amount(cap)),
+                max_amount_currency: None,
+            };
+            vault
+                .save_workflow(Some(&workflow.id), draft, now_secs())
+                .unwrap()
+                .workflow
+        }
+    };
     (dir, vault, card, savings, workflow)
 }
 
@@ -142,6 +167,36 @@ fn an_asked_operation_refused_for_lack_of_funds_is_booked_by_a_retry() {
             .all(|run| run.id != report.run.id),
         "the refusal gives way to the new run"
     );
+}
+
+#[test]
+fn an_asked_transfer_over_the_cap_is_not_queued_and_books_nothing() {
+    let (_dir, mut vault, card, savings, workflow) = asked_transfer_capped(Some("100"));
+    vault
+        .run_workflow_now(&workflow.id, None, later(), "UTC")
+        .unwrap();
+    let wait = vault.workflow_waits().remove(0);
+    let report = vault
+        .answer_workflow_wait(&wait.id, true, later(), "UTC")
+        .unwrap();
+    assert!(
+        matches!(&report.run.outcome, RunOutcome::Failed { message } if message.contains("cap")),
+        "{:?}",
+        report.run.outcome
+    );
+    assert!(
+        vault.workflow_queue().is_empty(),
+        "over the cap: nothing to retry"
+    );
+    vault
+        .add_transaction(income(&card, "5000", "salary"))
+        .unwrap();
+    assert!(
+        vault
+            .retry_workflow_run(&report.run.id, later(), "UTC")
+            .is_err()
+    );
+    assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
 }
 
 // -- C2-5 and the lock --------------------------------------------------------
