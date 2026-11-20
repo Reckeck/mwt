@@ -19,7 +19,7 @@ use crate::model::store::{AssetRef, StoreScope};
 use crate::model::transaction::{AccountRef, Leg, LegRole, Transaction};
 use crate::model::vault::{VaultDoc, unix_to_iso};
 use crate::money::tree::{resolve_scope, root_of};
-use crate::pricing::history::{secs_or_now, unix_secs};
+use crate::pricing::history::unix_secs;
 
 /// What the rates book answers: the value of a leg or a quantity in a
 /// currency at a moment.
@@ -148,6 +148,12 @@ pub trait FxSources {
     fn crypto_quote(&self, code: &str) -> Option<CryptoQuote>;
 }
 
+/// Unix seconds of a timestamp; an unreadable one is the epoch, never the
+/// clock, so the same book always gives the same figures.
+pub fn timestamp_secs(iso: &str) -> i64 {
+    unix_secs(iso).unwrap_or(0)
+}
+
 fn one() -> Amount {
     Amount::new(rust_decimal::Decimal::ONE)
 }
@@ -159,7 +165,7 @@ pub fn loss_of(
     tx: &Transaction,
     currency: &str,
 ) -> TxLoss {
-    let secs = secs_or_now(&tx.meta().timestamp);
+    let secs = timestamp_secs(&tx.meta().timestamp);
     let mut complete = true;
     let mut fee = Amount::ZERO;
     for leg in tx.legs().into_iter().filter(|leg| leg.role == LegRole::Fee) {
@@ -350,8 +356,8 @@ pub fn chain_summaries(
     to: Option<&str>,
     store_ids: &[String],
 ) -> Vec<FlowSummary> {
-    let lower = from.map(secs_or_now).unwrap_or(i64::MIN);
-    let upper = to.map(secs_or_now).unwrap_or(i64::MAX);
+    let lower = from.map(timestamp_secs).unwrap_or(i64::MIN);
+    let upper = to.map(timestamp_secs).unwrap_or(i64::MAX);
     // A chain belongs to the wallets any of its links moved money in.
     let scope = (!store_ids.is_empty()).then(|| {
         resolve_scope(
@@ -373,12 +379,12 @@ pub fn chain_summaries(
         .into_iter()
         .filter(|(_, links)| {
             links.iter().any(|tx| {
-                let secs = secs_or_now(&tx.meta().timestamp);
+                let secs = timestamp_secs(&tx.meta().timestamp);
                 secs >= lower && secs < upper
             }) && links.iter().any(|tx| touches_scope(tx))
         })
         .map(|(flow_id, mut links)| {
-            links.sort_by_key(|tx| secs_or_now(&tx.meta().timestamp));
+            links.sort_by_key(|tx| timestamp_secs(&tx.meta().timestamp));
             flow_summary(doc, values, currency, flow_id, &links)
         })
         .collect();
@@ -394,7 +400,7 @@ fn flow_summary(
     links: &[&Transaction],
 ) -> FlowSummary {
     let side = |tx: &Transaction, outgoing: bool| -> Vec<FlowAmount> {
-        let secs = secs_or_now(&tx.meta().timestamp);
+        let secs = timestamp_secs(&tx.meta().timestamp);
         tx.legs()
             .into_iter()
             .filter(|leg| leg.role == LegRole::Principal && leg.amount.is_negative() == outgoing)
@@ -579,4 +585,18 @@ fn crypto_fx_rows(
         });
     }
     rows
+}
+
+#[cfg(test)]
+mod timestamp_tests {
+    use super::timestamp_secs;
+
+    #[test]
+    fn an_unreadable_timestamp_is_the_epoch_whatever_the_clock() {
+        for garbage in ["", "not a date", "2026-13-40"] {
+            assert_eq!(timestamp_secs(garbage), 0);
+        }
+        assert_eq!(timestamp_secs("1970-01-01T00:00:00Z"), 0);
+        assert_eq!(timestamp_secs("2026-02-01T10:00:00Z"), 1_769_940_000);
+    }
 }

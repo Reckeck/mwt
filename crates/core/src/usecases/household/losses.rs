@@ -13,7 +13,7 @@ use crate::error::{Error, Result};
 use crate::household::losses::{
     CryptoQuote, FlowSummary, FxSources, FxTable, LossBucket, LossBuckets, LossRow, TxLoss,
     Valuation, chain_summaries, loss_by_id, loss_of, losses_by_id, plan_link, rates_table,
-    touches_any,
+    timestamp_secs, touches_any,
 };
 use crate::kernel::books::Books;
 use crate::model::store::AssetRef;
@@ -115,7 +115,7 @@ pub(crate) fn loss_report(vault: &UnlockedVault, ctx: &Ctx) -> LossReport {
     };
     let mut buckets = LossBuckets::default();
     for tx in &vault.doc.transactions {
-        let secs = secs_or_now(&tx.meta().timestamp);
+        let secs = timestamp_secs(&tx.meta().timestamp);
         let Some(index) = ctx.index_of(ctx.cal.date_of(secs)) else {
             continue;
         };
