@@ -194,7 +194,7 @@ fn macro_named(node: &Macro, names: &[&str]) -> bool {
 /// A body that cannot be read and holds no method call cannot hide a vault call.
 fn cannot_hold_vault_call(node: &Macro) -> bool {
     macro_named(node, &EXEMPT_MACROS)
-        || (macro_named(node, &JSON_MACROS) && !has_method_call(node.tokens.clone()))
+        || (macro_named(node, &JSON_MACROS) && !may_hold_vault_call(node.tokens.clone()))
 }
 
 /// The value expressions of a `json!` body (`{"k": expr, "list": [a, b]}`); `None` when a value
@@ -249,14 +249,18 @@ fn collect_json_value(mut parts: Vec<TokenTree>, values: &mut Vec<Expr>) -> bool
 
 /// Whether the tokens hold `.name(..)` or `Self::name` (a call, a turbofish call, or a value),
 /// groups included.
-fn has_method_call(tokens: TokenStream) -> bool {
+fn may_hold_vault_call(tokens: TokenStream) -> bool {
     let trees: Vec<TokenTree> = tokens.into_iter().collect();
     trees.iter().enumerate().any(|(index, tree)| match tree {
-        TokenTree::Group(group) => has_method_call(group.stream()),
+        TokenTree::Group(group) => may_hold_vault_call(group.stream()),
         TokenTree::Punct(punct) if punct.as_char() == '.' => matches!(
-            (trees.get(index + 1), trees.get(index + 2)),
-            (Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)))
+            (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),
+            (Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)), _)
                 if call.delimiter() == Delimiter::Parenthesis
+        ) || matches!(
+            (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),
+            (Some(TokenTree::Ident(_)), Some(TokenTree::Punct(first)), Some(TokenTree::Punct(second)))
+                if first.as_char() == ':' && second.as_char() == ':'
         ),
         TokenTree::Ident(ident) if ident == "Self" => matches!(
             (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),

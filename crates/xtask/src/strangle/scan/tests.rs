@@ -258,3 +258,9 @@ fn json_body_with_a_self_function_value_it_cannot_parse_is_unscanned() {
     let source = "fn f() {\n    let v = json!({\"a\": Self::foo, \"b\": @});\n}\n";
     assert_eq!(scan_source(source).unwrap().unscanned, [2]);
 }
+
+#[test]
+fn json_body_with_a_method_turbofish_call_it_cannot_parse_is_unscanned() {
+    let source = "fn f(vault: V) {\n    let v = json!({\"a\": vault.foo::<u8>(), \"b\": @});\n}\n";
+    assert_eq!(scan_source(source).unwrap().unscanned, [2]);
+}
