@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use chrono::{Datelike, Duration, NaiveDate};
 
 use crate::Amount;
-use crate::calendar::{self, Calendar, first_of_month, next_month};
+use crate::calendar::{self, Calendar, first_of_month, month_index, next_month};
 use crate::error::{Error, Result};
 use crate::model::category::CategoryGroup;
 use crate::model::store::{AssetRef, StoreKind, StoreScope};
@@ -510,8 +510,7 @@ impl Ctx {
     }
 
     pub(crate) fn index_of(&self, date: NaiveDate) -> Option<usize> {
-        let first = first_of_month(date);
-        self.months.iter().position(|month| *month == first)
+        month_index(&self.months, date)
     }
 }
 

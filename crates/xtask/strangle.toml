@@ -237,12 +237,15 @@ files = [
 ]
 
 [[foundation]]
-# Review minors of #161 (T105, T107, T109) and T191: the TxLoss doc, the clock parameter, the pure `month_losses`
-# and the open flow bounds touch the loss report of the `leaves` area (task A) from stream C.
+# Review minors of #161 (T105, T107, T109), T191 and T192-T194: the TxLoss doc, the clock parameter, the pure
+# `month_losses`, the open flow bounds and the shared month lookup touch the loss report of the `leaves` area
+# (task A) and `Ctx::index_of` in reports/overview.rs from stream C. The shared `month_index` lives in calendar.rs,
+# below both layers (household must not use reports).
 task = "C"
 files = [
     "crates/core/src/household/losses.rs", "crates/core/src/household/losses_tests.rs",
-    "crates/core/src/usecases/household/losses.rs",
+    "crates/core/src/usecases/household/losses.rs", "crates/core/src/reports/overview.rs",
+    "crates/core/src/calendar.rs",
 ]
 
 [[foundation]]

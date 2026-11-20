@@ -191,7 +191,9 @@ fn macro_named(node: &Macro, names: &[&str]) -> bool {
         .is_some_and(|segment| names.iter().any(|name| segment.ident == name))
 }
 
-/// A body that cannot be read and holds no method call cannot hide a vault call.
+/// A macro body that cannot be read as arguments cannot hide a vault call when the macro is exempt,
+/// or is a JSON macro whose tokens pass `may_hold_vault_call` as clean: no `.name(..)` call, no
+/// `Self::name` value and no turbofish call (`Self::name::<T>(..)`).
 fn cannot_hold_vault_call(node: &Macro) -> bool {
     macro_named(node, &EXEMPT_MACROS)
         || (macro_named(node, &JSON_MACROS) && !may_hold_vault_call(node.tokens.clone()))
@@ -253,15 +255,17 @@ fn may_hold_vault_call(tokens: TokenStream) -> bool {
     let trees: Vec<TokenTree> = tokens.into_iter().collect();
     trees.iter().enumerate().any(|(index, tree)| match tree {
         TokenTree::Group(group) => may_hold_vault_call(group.stream()),
-        TokenTree::Punct(punct) if punct.as_char() == '.' => matches!(
-            (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),
-            (Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)), _)
-                if call.delimiter() == Delimiter::Parenthesis
-        ) || matches!(
-            (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),
-            (Some(TokenTree::Ident(_)), Some(TokenTree::Punct(first)), Some(TokenTree::Punct(second)))
-                if first.as_char() == ':' && second.as_char() == ':'
-        ),
+        TokenTree::Punct(punct) if punct.as_char() == '.' => {
+            match (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)) {
+                (Some(TokenTree::Ident(_)), Some(TokenTree::Group(call)), _) => {
+                    call.delimiter() == Delimiter::Parenthesis
+                }
+                (Some(TokenTree::Ident(_)), Some(TokenTree::Punct(first)), Some(TokenTree::Punct(second))) => {
+                    first.as_char() == ':' && second.as_char() == ':'
+                }
+                _ => false,
+            }
+        }
         TokenTree::Ident(ident) if ident == "Self" => matches!(
             (trees.get(index + 1), trees.get(index + 2), trees.get(index + 3)),
             (Some(TokenTree::Punct(first)), Some(TokenTree::Punct(second)), Some(TokenTree::Ident(_)))

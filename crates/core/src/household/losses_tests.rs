@@ -3,6 +3,7 @@
 
 use super::losses::*;
 use crate::Amount;
+use crate::calendar::month_index;
 use crate::error::Error;
 use crate::model::chain::Chain;
 use crate::model::store::{AssetRef, StoreKind};
@@ -426,4 +427,13 @@ fn an_unlisted_token_bought_for_usdt_has_no_slippage_but_stays_incomplete() {
     };
     assert_eq!(report.total.slippage, Amount::ZERO);
     assert_eq!(report.incomplete, 1);
+}
+
+#[test]
+fn month_index_finds_the_month_of_a_date() {
+    let day = |year, month, day| chrono::NaiveDate::from_ymd_opt(year, month, day).unwrap();
+    let months = [day(2026, 1, 1), day(2026, 2, 1)];
+    assert_eq!(month_index(&months, day(2026, 2, 17)), Some(1));
+    assert_eq!(month_index(&months, day(2026, 1, 1)), Some(0));
+    assert_eq!(month_index(&months, day(2026, 3, 1)), None);
 }

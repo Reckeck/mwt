@@ -2,16 +2,16 @@
 //! (called by method: OD6) and reach the pure functions through `Valuation`
 //! and `FxSources`. The two chain writes each end in one `vault.transact`.
 //!
-//! The month report lives here, not in `household::losses`, because it carries
-//! the reports area's `ReportMeta` and reads its `Ctx`; both move with that area.
+//! Only `LossReport` (the reports area's `ReportMeta` plus its `Ctx`) stays
+//! here; the month figures come from `household::losses::month_losses`.
 
 use std::collections::{BTreeMap, HashSet};
 
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::household::losses::{
-    CryptoQuote, FlowSummary, FxSources, FxTable, LossBucket, LossRow, LossWindow, TxLoss,
-    Valuation, chain_summaries, loss_by_id, losses_by_id, month_losses, plan_link, rates_table,
+    CryptoQuote, FlowSummary, FxSources, FxTable, LossWindow, MonthLosses, TxLoss, Valuation,
+    chain_summaries, loss_by_id, losses_by_id, month_losses, plan_link, rates_table,
 };
 use crate::kernel::books::Books;
 use crate::model::store::AssetRef;
@@ -23,14 +23,18 @@ use crate::service::{RateBook, UnlockedVault};
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct LossReport {
     pub meta: ReportMeta,
-    pub rows: Vec<LossRow>,
-    pub total: LossRow,
-    pub by_kind: Vec<LossBucket>,
-    pub by_store: Vec<LossBucket>,
-    pub by_contact: Vec<LossBucket>,
-    pub by_flow: Vec<LossBucket>,
-    /// Transactions whose loss is only partly known.
-    pub incomplete: u32,
+    #[serde(flatten)]
+    #[ts(flatten)]
+    pub losses: MonthLosses,
+}
+
+/// The report reads as its figures: `report.rows`, `report.total`, ...
+impl std::ops::Deref for LossReport {
+    type Target = MonthLosses;
+
+    fn deref(&self) -> &MonthLosses {
+        &self.losses
+    }
 }
 
 /// The book of one request as the pure functions' valuation.
@@ -112,13 +116,7 @@ pub(crate) fn loss_report(vault: &UnlockedVault, ctx: &Ctx) -> LossReport {
     );
     LossReport {
         meta: ctx.meta(),
-        rows: losses.rows,
-        total: losses.total,
-        by_kind: losses.by_kind,
-        by_store: losses.by_store,
-        by_contact: losses.by_contact,
-        by_flow: losses.by_flow,
-        incomplete: losses.incomplete,
+        losses,
     }
 }
 
