@@ -20,6 +20,7 @@ use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::model::vault::DailyBudgetMode;
 use crate::money::worth::FlowClass;
+use crate::planning::automation_plan::{automation_occurrences, automation_runs};
 use crate::planning::automations::automation_draft;
 use crate::planning::budget::{
     BudgetDraft, BudgetStatus, DailyBudget, MonthAllowance, MonthSummary, allowance_of,
@@ -29,7 +30,6 @@ use crate::planning::budget::{
 use crate::planning::flows::{Flow, classify, flow_value, flows_between};
 use crate::planning::goals::resolve_scope;
 use crate::service::UnlockedVault;
-use crate::usecases::planning::automation_rules::{automation_occurrences, automation_runs};
 use crate::usecases::planning::automations::automations;
 
 // -- CRUD -------------------------------------------------------------------
@@ -145,7 +145,7 @@ pub fn month_summary(books: &Books<'_>, month: &str, zone: &str) -> Result<Month
         crate::error::Error::InvalidInput(format!("month {month}: expected YYYY-MM"))
     })?;
     let (from, to) = Calendar::new(zone).month_bounds(first);
-    out.not_executed = not_executed(&automation_runs(books.doc(), None), from, to);
+    out.not_executed = not_executed(&automation_runs(books, None), from, to);
     Ok(out)
 }
 

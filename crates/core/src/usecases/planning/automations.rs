@@ -8,8 +8,8 @@
 use std::collections::HashSet;
 
 use super::automation_rules::{
-    automation_of, automation_run_of, check_draft_moment, detach, manual_run_record,
-    new_automation_workflow, rewrite_automation, simulation_report,
+    check_draft_moment, detach, manual_run_record, new_automation_workflow, rewrite_automation,
+    simulation_report,
 };
 use crate::Amount;
 use crate::calendar;
@@ -18,6 +18,7 @@ use crate::kernel::events::{AutomationDeleted, AutomationRetried, DomainEvent};
 use crate::model::planning::{Automation, AutomationRun, draft_to_transaction};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
+use crate::planning::automation_plan as plan;
 use crate::planning::automations::{self as rules, AutomationDraft, AutomationSimulation};
 use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
@@ -25,27 +26,8 @@ use crate::usecases::react::{ReactionFailure, react};
 use crate::workflow::automation as graph_of;
 use crate::workflow::model::Workflow;
 
-fn automation_in_vault(vault: &UnlockedVault, workflow: &Workflow) -> Option<Automation> {
-    automation_of(
-        workflow,
-        |id| {
-            vault
-                .wf_recent_average(id, graph_of::ESTIMATE_OF)
-                .map(|(average, _)| average)
-        },
-        vault.wf_mark(&workflow.id, &graph_of::schedule_key()),
-    )
-}
-
 pub fn automations(vault: &UnlockedVault) -> Vec<Automation> {
-    let mut out: Vec<Automation> = vault
-        .doc
-        .workflows
-        .iter()
-        .filter_map(|workflow| automation_in_vault(vault, workflow))
-        .collect();
-    out.sort_by_key(|automation| automation.name.to_lowercase());
-    out
+    plan::automations(&vault.books())
 }
 
 pub fn automation(vault: &UnlockedVault, id: &str) -> Result<Automation> {
@@ -54,7 +36,7 @@ pub fn automation(vault: &UnlockedVault, id: &str) -> Result<Automation> {
         .workflows
         .iter()
         .find(|workflow| workflow.id == id)
-        .and_then(|workflow| automation_in_vault(vault, workflow))
+        .and_then(|workflow| plan::automation_in(&vault.books(), workflow))
         .ok_or_else(|| Error::Missing(format!("automation {id}")))
 }
 
@@ -287,7 +269,7 @@ pub fn retry_automation_run(
 /// Dismiss a refused run.
 pub fn skip_automation_run(vault: &mut UnlockedVault, run_id: &str) -> Result<AutomationRun> {
     let run = vault.skip_workflow_run(run_id)?;
-    automation_run_of(&vault.doc, &run)
+    plan::automation_run_of(&vault.doc, &run)
         .ok_or_else(|| Error::Missing(format!("automation run {run_id}")))
 }
 

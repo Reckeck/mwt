@@ -12,14 +12,17 @@ use crate::model::store::{LiabilityKind, LiabilityTerms};
 use crate::model::transaction::{AccountRef, PaymentTx, TopupTx};
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::now_iso;
+use crate::planning::automation_plan::{
+    automation_occurrences, automation_of, automation_run_of, automation_runs,
+};
 use crate::pricing::history::unix_secs;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::WorkflowPass;
 use crate::service::test_support::*;
 use crate::usecases::planning::automation_rules::{
-    automation_occurrences, automation_of, automation_run_of, automation_runs, check_draft_moment,
-    manual_run_record, new_automation_workflow, rewrite_automation, simulation_report,
+    check_draft_moment, manual_run_record, new_automation_workflow, rewrite_automation,
+    simulation_report,
 };
 use crate::workflow::automation as graph_of;
 use crate::workflow::model::RunOutcome;
@@ -1280,7 +1283,7 @@ fn the_view_and_the_occurrences_need_no_vault() {
     let days =
         |planned: &[(i64, Transaction)]| planned.iter().map(|(day, _)| *day).collect::<Vec<_>>();
     assert_eq!(days(&moments), days(&delegate));
-    assert!(automation_runs(&vault.doc, None).is_empty());
+    assert!(automation_runs(&vault.books(), None).is_empty());
 }
 
 // -- one test per pure function on a bare document, and the family pins ------------

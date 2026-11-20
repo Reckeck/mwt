@@ -12,6 +12,7 @@ mod auto_reminders_tests;
 pub mod automation_card;
 #[cfg(test)]
 mod automation_card_tests;
+pub mod automation_plan;
 pub mod automations;
 #[cfg(test)]
 mod automations_tests;
