@@ -846,9 +846,7 @@ impl Reader for EvmReader {
         &self,
         wanted: &[(CryptoAsset, NaiveDate)],
     ) -> Result<Vec<CryptoPricePoint>> {
-        self.pricing
-            .fetch_historic_prices(known::is_known, wanted)
-            .await
+        self.pricing.fetch_historic_prices(wanted).await
     }
 }
 

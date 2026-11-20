@@ -13,7 +13,7 @@ use chrono::NaiveDate;
 use reqwest::header::{ACCEPT, USER_AGENT};
 use rust_decimal::Decimal;
 
-use super::PricingService;
+use super::{PricingService, contract_lookup_allowed};
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
@@ -107,7 +107,7 @@ pub fn parse_historical(
 }
 
 /// Reads one DeFiLlama URL as JSON; what a test replaces to see the requests.
-trait CoinsApi {
+pub(super) trait CoinsApi {
     fn get_json(&self, url: &str) -> impl Future<Output = Result<serde_json::Value>> + Send;
 }
 
@@ -125,8 +125,12 @@ async fn fetch_historic<A: CoinsApi>(
     let mut by_date: BTreeMap<NaiveDate, BTreeMap<String, String>> = BTreeMap::new();
     for (asset, date) in wanted {
         if let CryptoAsset::Token(token) = asset
-            && !may_lookup_contract
-            && !is_known(token)
+            && !contract_lookup_allowed(
+                may_lookup_contract,
+                &is_known,
+                token.chain,
+                &token.contract,
+            )
         {
             continue;
         }
@@ -151,14 +155,14 @@ async fn fetch_historic<A: CoinsApi>(
 }
 
 impl PricingService {
-    /// Historic USD prices, as the consent setting allows. `is_known` says
-    /// which tokens are on the built-in list: those are asked without consent.
+    /// Historic USD prices, as the consent setting allows. The known list
+    /// injected with `with_known_tokens` says which tokens are asked without
+    /// consent.
     pub async fn fetch_historic_prices(
         &self,
-        is_known: impl Fn(&TokenId) -> bool,
         wanted: &[(CryptoAsset, NaiveDate)],
     ) -> Result<Vec<CryptoPricePoint>> {
-        fetch_historic(self, self.lookup_contracts, is_known, wanted).await
+        fetch_historic(self, self.lookup_contracts, self.is_known, wanted).await
     }
 }
 
@@ -177,7 +181,7 @@ impl CoinsApi for PricingService {
             .map_err(|err| Error::Network(err.without_url().to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!(
-                "defillama http {:?}",
+                "price source http {:?}",
                 resp.status()
             )));
         }
