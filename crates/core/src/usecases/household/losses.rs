@@ -2,8 +2,8 @@
 //! (called by method: OD6) and reach the pure functions through `Valuation`
 //! and `FxSources`. The two chain writes each end in one `vault.transact`.
 //!
-//! The month report lives here, not in `household::losses`, because it carries
-//! the reports area's `ReportMeta` and reads its `Ctx`; both move with that area.
+//! Only `LossReport` (the reports area's `ReportMeta` plus its `Ctx`) stays
+//! here; the month figures come from `household::losses::month_losses`.
 
 use std::collections::{BTreeMap, HashSet};
 
