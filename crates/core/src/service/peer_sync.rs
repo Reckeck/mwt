@@ -428,13 +428,17 @@ impl UnlockedVault {
         // The merged document is complete: swap it in. Every step after this
         // can fail; on failure the old document goes back (atomic batch).
         let tracker = self.tracker.clone();
+        let announce = self.announce.clone();
         let before = self.swap_doc(doc);
         match self.finish_batch(plan, peer, carry) {
             Ok(applied) => Ok(Some(applied)),
             Err(err) => {
-                // Tracker first, then the document; the swap cannot fail, so
-                // the batch's own error is the one the caller sees.
+                // Tracker and queued announcements first, then the document;
+                // the swap cannot fail, so the batch's own error is the one
+                // the caller sees. Keys the batch queued would otherwise go
+                // to a live session for changes that never happened.
                 self.tracker = tracker;
+                self.announce = announce;
                 self.swap_doc(before);
                 Err(err)
             }
@@ -504,6 +508,7 @@ impl UnlockedVault {
         self.doc.sync.batches.push(batch);
         self.prune_batches();
         self.compact_tombstones();
+        let queued = self.announce.clone();
         // Both devices may have run the same automation or import before
         // they met; the copy made later goes (as an ordinary deletion).
         self.dedupe_generated(&applied.id, carry)?;
@@ -511,8 +516,20 @@ impl UnlockedVault {
         // goals, dangling settings): `repair.rs`.
         self.repair_invariants(Some(&applied.id))?;
         self.recompute_holdings();
-        self.persist()?;
+        self.persist_then_announce(&queued)?;
         Ok(applied)
+    }
+
+    /// Save, announcing only what the batch itself queued after the write
+    /// went through: a save announces the queue before it writes, and a failed
+    /// batch is rolled back, so its keys would reach a live session for
+    /// changes that never happened. `queued` is what was waiting before.
+    fn persist_then_announce(&mut self, queued: &std::collections::BTreeSet<String>) -> Result<()> {
+        let batch_keys: Vec<String> = self.announce.difference(queued).cloned().collect();
+        self.announce.clone_from(queued);
+        self.persist()?;
+        self.announce.extend(batch_keys);
+        Ok(())
     }
 
     /// `incoming` without the deletions that were already compacted: tombstone
