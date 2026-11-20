@@ -107,7 +107,7 @@ pub fn parse_historical(
 }
 
 /// Reads one DeFiLlama URL as JSON; what a test replaces to see the requests.
-trait CoinsApi {
+pub(super) trait CoinsApi {
     fn get_json(&self, url: &str) -> impl Future<Output = Result<serde_json::Value>> + Send;
 }
 
@@ -181,7 +181,7 @@ impl CoinsApi for PricingService {
             .map_err(|err| Error::Network(err.without_url().to_string()))?;
         if !resp.status().is_success() {
             return Err(Error::Pricing(format!(
-                "defillama http {:?}",
+                "price source http {:?}",
                 resp.status()
             )));
         }
