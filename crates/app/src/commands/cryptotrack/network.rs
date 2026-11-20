@@ -20,6 +20,7 @@ use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, sandbox};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
+use trade_core::usecases::cryptotrack::network;
 
 /// The endpoints of every network, with the presets to fall back to. Below
 /// protection level 3 they are the presets and `editable` is false.
@@ -28,8 +29,9 @@ pub async fn crypto_network_settings(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<NetworkSettings, IpcError> {
-    let mut settings =
-        with_vault::<_, IpcError>(&state, |vault| Ok(vault.crypto_network_settings()))?;
+    let mut settings = with_vault::<_, IpcError>(&state, |vault| {
+        Ok(network::crypto_network_settings(&vault.books()))
+    })?;
     // The consent is this device's own answer and lives in the app settings.
     let app_settings = current_settings(&app);
     if app_settings.crypto_tracking_allowed() {
@@ -46,7 +48,9 @@ pub async fn crypto_set_network_settings(
     input: SetNetworkSettingsInput,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.crypto_set_network_settings(&input))
+    with_vault_mut(&state, |vault| {
+        network::crypto_set_network_settings(vault, &input)
+    })
 }
 
 /// Ask one endpoint whether it answers, on the user's button. A network call,
@@ -64,7 +68,9 @@ pub async fn crypto_test_network(
             "the sandbox talks to no network".into(),
         )));
     }
-    let (url, key) = with_vault::<_, IpcError>(&state, |vault| vault.crypto_test_target(&input))?;
+    let (url, key) = with_vault::<_, IpcError>(&state, |vault| {
+        network::crypto_test_target(&vault.books(), &input)
+    })?;
     let probe = NetworkProbe::new()?;
     test_endpoint(&probe, consent, input.chain, input.kind, &url, key.as_ref())
         .await

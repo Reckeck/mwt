@@ -13,11 +13,12 @@ use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
+use trade_core::usecases::cryptotrack::tokens;
 
 /// The known and the quarantined tokens of the followed accounts.
 #[tauri::command]
 pub async fn crypto_list_tokens(state: State<'_, AppState>) -> Result<Vec<TokenView>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.crypto_tokens()))
+    with_vault(&state, |vault| Ok(tokens::crypto_tokens(&vault.doc)))
 }
 
 /// Take a quarantined token into the totals. The verdict is a correction, so
@@ -28,7 +29,7 @@ pub async fn crypto_confirm_token(
     state: State<'_, AppState>,
 ) -> Result<TokenStatus, IpcError> {
     let token = TokenId::new(input.chain, &input.contract);
-    with_vault_mut(&state, |vault| vault.crypto_confirm_token(&token))
+    with_vault_mut(&state, |vault| tokens::crypto_confirm_token(vault, &token))
 }
 
 /// Hide a token: a scam airdrop is shown nowhere and priced nowhere.
@@ -38,7 +39,7 @@ pub async fn crypto_reject_token(
     state: State<'_, AppState>,
 ) -> Result<TokenStatus, IpcError> {
     let token = TokenId::new(input.chain, &input.contract);
-    with_vault_mut(&state, |vault| vault.crypto_reject_token(&token))
+    with_vault_mut(&state, |vault| tokens::crypto_reject_token(vault, &token))
 }
 
 /// Take back a recognition or a hiding: the token is judged by the built-in
@@ -50,7 +51,9 @@ pub async fn crypto_clear_token_verdict(
     state: State<'_, AppState>,
 ) -> Result<TokenStatus, IpcError> {
     let token = TokenId::new(input.chain, &input.contract);
-    with_vault_mut(&state, |vault| vault.crypto_clear_token_verdict(&token))
+    with_vault_mut(&state, |vault| {
+        tokens::crypto_clear_token_verdict(vault, &token)
+    })
 }
 
 /// The cost basis of what was bought before the module started following the
@@ -62,7 +65,7 @@ pub async fn crypto_set_token_basis(
 ) -> Result<(), IpcError> {
     let token = TokenId::new(input.chain, &input.contract);
     with_vault_mut(&state, |vault| {
-        vault.crypto_set_token_basis(&token, input.basis_usd)
+        tokens::crypto_set_token_basis(vault, &token, input.basis_usd)
     })
 }
 

@@ -20,6 +20,7 @@ use crate::commands::app_settings;
 use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
+use trade_core::usecases::cryptotrack::wipe;
 
 /// What a wipe would remove: the records per collection, the wallets that lose
 /// their link to the module and are archived, what the capital loses and the
@@ -31,7 +32,7 @@ use crate::ipc::commands::ipc_commands;
 pub async fn crypto_wipe_preview(
     state: State<'_, AppState>,
 ) -> Result<CryptoWipePreview, IpcError> {
-    with_vault(&state, |vault| Ok(vault.crypto_wipe_preview()))
+    with_vault(&state, |vault| Ok(wipe::crypto_wipe_preview(vault)))
 }
 
 /// Wipe the module. `input.confirm` is the fixed token the window sends once
@@ -48,8 +49,9 @@ pub async fn crypto_wipe_module(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<CryptoWipeReport, IpcError> {
-    let report =
-        with_vault_mut::<_, IpcError>(&state, |vault| vault.crypto_wipe_module(&input.confirm))?;
+    let report = with_vault_mut::<_, IpcError>(&state, |vault| {
+        wipe::crypto_wipe_module(vault, &input.confirm)
+    })?;
     if report.wiped_at.is_some() {
         crate::cryptotrack::jobs::forget_live_positions();
         let path = with_vault::<_, IpcError>(&state, |vault| Ok(vault.path.clone()))?;

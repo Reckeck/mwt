@@ -19,6 +19,7 @@ use crate::commands::planning::with_vault;
 use crate::cryptotrack::jobs;
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
+use trade_core::usecases::cryptotrack::positions;
 
 /// The positions of the followed accounts, open ones first. Read only.
 ///
@@ -31,7 +32,9 @@ pub async fn crypto_list_positions(
 ) -> Result<Vec<PositionView>, IpcError> {
     let live = jobs::live_positions();
     let at = now_iso();
-    with_vault(&state, |vault| Ok(vault.crypto_list_positions(&live, &at)))
+    with_vault(&state, |vault| {
+        Ok(positions::crypto_list_positions(&vault.books(), &live, &at))
+    })
 }
 
 ipc_commands!(cryptotrack_positions_commands, CRYPTOTRACK_POSITIONS_NAMES, commands::cryptotrack::positions: [crypto_list_positions]);
