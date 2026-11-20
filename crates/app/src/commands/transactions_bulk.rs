@@ -8,7 +8,7 @@ use trade_core::service::{DeletedTransaction, TxCategories, TxStore};
 use trade_core::usecases::money::bulk;
 
 use crate::commands::AppState;
-use crate::commands::planning::with_vault_mut;
+use crate::commands::with_vault_mut;
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 

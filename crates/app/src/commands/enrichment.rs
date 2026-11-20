@@ -11,8 +11,8 @@ use trade_core::txinfo::TxInfoService;
 use trade_core::usecases::money::enrichment as enrichment_cases;
 
 use crate::commands::app_settings::current_settings;
-use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, require_vault};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 

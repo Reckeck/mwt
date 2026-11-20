@@ -17,7 +17,7 @@ use trade_core::ipc_contract::cryptotrack::wipe::{
 
 use crate::commands::AppState;
 use crate::commands::app_settings;
-use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 use trade_core::usecases::cryptotrack::wipe;

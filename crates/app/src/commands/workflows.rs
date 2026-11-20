@@ -27,23 +27,13 @@ use trade_core::workflow::{
 };
 
 use crate::commands::app_settings::current_zone;
-use crate::commands::{AppState, require_vault};
+use crate::commands::{AppState, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 use crate::ipc::ipc;
 
 /// Most runs one listing returns by default.
 const DEFAULT_RUNS: u32 = 100;
-
-/// The write step of the commands that also emit or deliver after it (they
-/// stay plain commands until the emit sites move, T21).
-fn with_vault_mut<T>(
-    state: &State<'_, AppState>,
-    write: impl FnOnce(&mut UnlockedVault) -> trade_core::Result<T>,
-) -> Result<T, IpcError> {
-    let mut guard = require_vault(state)?;
-    write(guard.as_mut().unwrap()).map_err(IpcError::from)
-}
 
 /// Every node there is, with its ports, fields and help (works locked too).
 #[tauri::command]
@@ -145,7 +135,7 @@ pub async fn run_workflow_now(
 ) -> Result<RunReport, IpcError> {
     let zone = current_zone(&app);
     let ru = crate::scheduler::russian(&app);
-    let report = with_vault_mut(&state, |vault| {
+    let report = with_vault_mut::<_, IpcError>(&state, |vault| {
         vault.set_notice_language(ru);
         runs::run_workflow_now(
             vault,
@@ -191,7 +181,7 @@ pub async fn confirm_workflow_queued(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<Transaction>, IpcError> {
-    let saved = with_vault_mut(&state, |vault| records::confirm_queued(vault, &id))?;
+    let saved = with_vault_mut::<_, IpcError>(&state, |vault| records::confirm_queued(vault, &id))?;
     let ids: Vec<&str> = saved.iter().map(|tx| tx.meta().id.as_str()).collect();
     let _ = AutomationCreated::emit(
         &app,
@@ -222,7 +212,7 @@ pub async fn answer_workflow_wait(
 ) -> Result<RunReport, IpcError> {
     let zone = current_zone(&app);
     let ru = crate::scheduler::russian(&app);
-    let report = with_vault_mut(&state, |vault| {
+    let report = with_vault_mut::<_, IpcError>(&state, |vault| {
         vault.set_notice_language(ru);
         runs::answer_workflow_wait(vault, &input.id, input.yes, now_secs(), &zone)
     })?;

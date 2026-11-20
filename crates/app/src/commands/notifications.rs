@@ -12,7 +12,7 @@ use trade_core::service::{notice, notice_title};
 use trade_core::usecases::planning::notifications;
 
 use crate::commands::AppState;
-use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 

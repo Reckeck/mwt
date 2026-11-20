@@ -10,7 +10,7 @@ use trade_core::usecases::household::contacts;
 use trade_core::usecases::money::rebase::rebase_contact_input;
 
 use crate::commands::AppState;
-use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 

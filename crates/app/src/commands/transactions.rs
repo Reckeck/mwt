@@ -18,7 +18,7 @@ use trade_core::usecases::money::{rates, transactions};
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
 use crate::commands::enrichment::enrich_in_background;
-use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 

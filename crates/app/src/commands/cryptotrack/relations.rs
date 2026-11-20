@@ -9,7 +9,7 @@ use tauri::State;
 use trade_core::ipc_contract::cryptotrack::relations::{CryptoRelations, CryptoRelationsInput};
 
 use crate::commands::AppState;
-use crate::commands::planning::with_vault;
+use crate::commands::with_vault;
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 use trade_core::usecases::cryptotrack::relations;

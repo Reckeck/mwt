@@ -11,8 +11,8 @@ use trade_core::service::{FetchedRates, InflationCurrency};
 use trade_core::usecases::money::inflation;
 use trade_core::usecases::planning::notifications;
 
-use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, require_vault};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 

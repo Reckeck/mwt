@@ -13,7 +13,7 @@ use trade_core::usecases::planning::scenarios;
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
-use crate::commands::planning::{with_vault, with_vault_mut};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 

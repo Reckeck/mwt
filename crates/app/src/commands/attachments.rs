@@ -12,8 +12,8 @@ use trade_core::model::attachment::{Attachment, AttachmentKind};
 use trade_core::service::NewFile;
 use trade_core::usecases::household::attachments;
 
-use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, require_vault};
+use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 use crate::ipc::opener::UrlKind;

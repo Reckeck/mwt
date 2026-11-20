@@ -38,11 +38,13 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 
+use tauri::State;
 use trade_core::cryptotrack::tokens::known;
 use trade_core::error::Error;
 use trade_core::pricing::PricingService;
 use trade_core::service::UnlockedVault;
 
+use crate::ipc::IpcError;
 use crate::ipc::opener::Opener;
 
 /// Global application state managed by Tauri.
@@ -95,4 +97,23 @@ pub fn require_vault(
         return Err(Error::RequiresUnlock);
     }
     Ok(guard)
+}
+
+/// Run `read` against the open vault. `E` is `IpcError`, or `String` for a
+/// command not yet converted (the shim goes with T24).
+pub(crate) fn with_vault<T, E: From<IpcError>>(
+    state: &State<'_, AppState>,
+    read: impl FnOnce(&UnlockedVault) -> trade_core::Result<T>,
+) -> Result<T, E> {
+    let guard = require_vault(state).map_err(IpcError::from)?;
+    Ok(read(guard.as_ref().unwrap()).map_err(IpcError::from)?)
+}
+
+/// Run `write` against the open vault; `E` as in `with_vault`.
+pub(crate) fn with_vault_mut<T, E: From<IpcError>>(
+    state: &State<'_, AppState>,
+    write: impl FnOnce(&mut UnlockedVault) -> trade_core::Result<T>,
+) -> Result<T, E> {
+    let mut guard = require_vault(state).map_err(IpcError::from)?;
+    Ok(write(guard.as_mut().unwrap()).map_err(IpcError::from)?)
 }
