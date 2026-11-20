@@ -37,6 +37,10 @@ fn is_test_file(name: &str) -> bool {
 
 /// The line with the contents of string and char literals dropped, so that a `//` or a brace
 /// inside a literal is not read as code. A lifetime (`'a`) is not a char literal and stays.
+///
+/// Limits: this is line-based, it keeps no state between lines. A raw string (`r"..."`,
+/// `r#"..."#`) is not recognised, and a string that spans several lines is not tracked, so the
+/// lines after the first one are read as code.
 fn without_literals(line: &str) -> String {
     let chars: Vec<char> = line.chars().collect();
     let mut kept = String::new();
