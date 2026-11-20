@@ -4,7 +4,7 @@
 //! it on, instead of building the book again for every step.
 
 use std::cell::OnceCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::NaiveDate;
@@ -12,7 +12,7 @@ use chrono::NaiveDate;
 use crate::Amount;
 use crate::calendar::Calendar;
 use crate::error::Result;
-use crate::model::store::{AssetRef, Store, StoreScope};
+use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
 use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
@@ -156,11 +156,6 @@ impl Books<'_> {
         self.vault.net_worth()
     }
 
-    /// Every store id a scope covers.
-    pub(crate) fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String> {
-        self.vault.resolve_scope(scope)
-    }
-
     /// The store and all stores below it.
     pub(crate) fn subtree_ids(&self, root_id: &str) -> Vec<String> {
         self.vault.subtree_ids(root_id)
@@ -173,21 +168,6 @@ impl Books<'_> {
         include_children: bool,
     ) -> Result<StoreOverview> {
         self.vault.store_overview(store_id, include_children)
-    }
-
-    /// The key rate on `day`.
-    pub(crate) fn key_rate_on(&self, day: NaiveDate) -> Option<Amount> {
-        self.vault.key_rate_on(day)
-    }
-
-    /// The asset a deposit store earns its interest in.
-    pub(crate) fn deposit_asset(&self, store: &Store) -> AssetRef {
-        self.vault.deposit_asset(store)
-    }
-
-    /// Inflation of `currency` in `month`.
-    pub(crate) fn inflation_on(&self, currency: &str, month: &str) -> Option<Amount> {
-        self.vault.inflation_on(currency, month)
     }
 
     /// The budget of one month over this context.
@@ -364,12 +344,8 @@ mod tests {
         "device_secrets_for_request",
         "loyalty_symbol_clash",
         "net_worth",
-        "resolve_scope",
         "subtree_ids",
         "store_overview",
-        "key_rate_on",
-        "deposit_asset",
-        "inflation_on",
         "month_summary_in",
         "income_basis",
         "flows_between",

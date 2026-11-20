@@ -352,10 +352,9 @@ pub fn plan_restore_goal(doc: &VaultDoc, deleted: &GoalDeleted) -> Result<Vec<St
 
 // -- shares of shared stores ----------------------------------------------
 
-/// Every store id a scope covers. The tree reads sit in `money::tree`, which
-/// `planning` may not use; this is the one place the area asks for them.
+/// Every store id a scope covers.
 pub(crate) fn resolve_scope(books: &Books<'_>, scope: &StoreScope) -> HashSet<String> {
-    books.resolve_scope(scope)
+    crate::money::tree::resolve_scope(books.doc(), scope)
 }
 
 /// Current USD value of each store.

@@ -161,8 +161,8 @@ pub fn fund_status(
                 .deposit
                 .as_ref()
                 .and_then(|terms| terms.rate_on(&today_raw));
-            let own_currency = books.deposit_asset(store).symbol.to_lowercase();
-            let inflation = books.inflation_on(&own_currency, &month);
+            let own_currency = crate::money::interest::deposit_asset(books, store).symbol.to_lowercase();
+            let inflation = crate::money::inflation::inflation_on(books.doc(), &own_currency, &month);
             EmergencyStore {
                 store_id: store.id.clone(),
                 value: to_budget(values.get(&store.id).copied().unwrap_or_default()),

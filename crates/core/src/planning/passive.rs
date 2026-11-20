@@ -181,7 +181,8 @@ pub fn passive_income(
         .filter_map(|usd| book.convert(*usd, "usd", &currency, now))
         .fold(Amount::ZERO, |sum, value| sum + value)
         .round(2);
-    let expected_pct = expected_pct.or_else(|| books.key_rate_on(today));
+    let expected_pct =
+        expected_pct.or_else(|| crate::money::interest::key_rate_on(books.doc(), today));
     let freedom_potential_pct = match (positive, expected_pct) {
         (Some(value), Some(rate)) => {
             Some((invested * rate / hundred / twelve / value * hundred).round(1))
