@@ -106,7 +106,7 @@ pub fn parse_historical(
     out
 }
 
-/// Reads one DeFiLlama URL as JSON; what a test replaces to see the requests.
+/// Reads one price-source URL as JSON; what a test replaces to see the requests.
 pub(super) trait CoinsApi {
     fn get_json(&self, url: &str) -> impl Future<Output = Result<serde_json::Value>> + Send;
 }
