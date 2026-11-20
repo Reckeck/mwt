@@ -129,7 +129,6 @@ pub use auto_reminders::category_of;
 pub use automation_card::{
     AutomationCard, CardAction, CardMoney, CardTrigger, JournalEntry, JournalStatus,
 };
-pub(crate) use automations::draft_to_transaction;
 pub use automations::{
     AutomationDraft, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun,
     describe_reject,

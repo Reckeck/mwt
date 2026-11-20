@@ -3,7 +3,7 @@
 //! `cryptotrack::service` is the module's own and is not the top-level `service`.
 //! A few uses are exempt until the task named in the exemption moves them; entries may only be removed.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 use super::Source;
 use super::scan;
@@ -27,6 +27,8 @@ const SERVICE: &str = "service";
 pub struct Exemption {
     pub file: &'static str,
     pub item: &'static str,
+    /// How many times the file uses the item; one more or fewer fails the check.
+    pub uses: usize,
     pub until: &'static str,
     pub reason: &'static str,
 }
@@ -34,34 +36,18 @@ pub struct Exemption {
 /// Named exemptions, no blanket ones. Never add an entry: remove it when its task lands.
 pub const EXEMPTIONS: &[Exemption] = &[
     Exemption {
-        file: "reports/notify_snapshot.rs",
-        item: "notice",
-        until: "T234",
-        reason: "the notification snapshot builds its texts with service::notice until the notice texts move down",
-    },
-    Exemption {
-        file: "workflow/nodes/actions.rs",
-        item: "notice",
-        until: "T234",
-        reason: "the notify node builds its text with service::notice until the notice texts move down",
-    },
-    Exemption {
         file: "reports/overview.rs",
         item: "Flow",
+        uses: 1,
         until: "T227",
         reason: "the overview names the budget Flow of service::budget until Flow moves to planning",
     },
     Exemption {
         file: "reports/overview.rs",
         item: "LossReport",
+        uses: 1,
         until: "T229",
         reason: "the overview carries service::losses::LossReport until the loss report moves to its area",
-    },
-    Exemption {
-        file: "workflow/nodes/actions.rs",
-        item: "draft_to_transaction",
-        until: "T235",
-        reason: "the action node calls service::draft_to_transaction until the draft conversion moves below service",
     },
 ];
 
@@ -176,7 +162,7 @@ fn forbidden_in(text: &str) -> Vec<(usize, String, Option<String>)> {
 
 /// Holds the non-test files of the domain modules against the rows and the exemptions.
 pub fn check(sources: &[Source], exemptions: &[Exemption]) -> Findings {
-    let mut used: BTreeSet<usize> = BTreeSet::new();
+    let mut used: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     let mut violations = Vec::new();
     for source in sources
         .iter()
@@ -189,9 +175,7 @@ pub fn check(sources: &[Source], exemptions: &[Exemption]) -> Findings {
                     .position(|entry| entry.file == source.file && entry.item == name)
             });
             match exempt {
-                Some(index) => {
-                    used.insert(index);
-                }
+                Some(index) => used.entry(index).or_default().push(line),
                 None => violations.push(Finding {
                     file: source.file.clone(),
                     line,
@@ -200,10 +184,25 @@ pub fn check(sources: &[Source], exemptions: &[Exemption]) -> Findings {
             }
         }
     }
+    for (index, lines) in &used {
+        let entry = &exemptions[*index];
+        if lines.len() != entry.uses {
+            violations.push(Finding {
+                file: entry.file.to_string(),
+                line: lines[0],
+                what: format!(
+                    "`{}` used {} times, the exemption expects {}",
+                    entry.item,
+                    lines.len(),
+                    entry.uses
+                ),
+            });
+        }
+    }
     let stale = exemptions
         .iter()
         .enumerate()
-        .filter(|(index, _)| !used.contains(index))
+        .filter(|(index, _)| !used.contains_key(index))
         .map(|(_, entry)| {
             format!(
                 "{} `{}` (until {}: {})",
@@ -296,6 +295,7 @@ mod tests {
         let exemptions = [Exemption {
             file: "reports/a.rs",
             item: "notice",
+            uses: 1,
             until: "T234",
             reason: "test",
         }];
@@ -317,10 +317,32 @@ mod tests {
     }
 
     #[test]
+    fn a_second_use_of_an_exempted_item_fails_with_file_item_and_count() {
+        let exemptions = [Exemption {
+            file: "reports/a.rs",
+            item: "notice",
+            uses: 1,
+            until: "T234",
+            reason: "test",
+        }];
+        let text = "let _ = crate::service::notice(1);\nlet _ = crate::service::notice(2);\n";
+        let found = messages(&[source("reports/a.rs", text)], &exemptions);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(
+            found[0].contains("reports/a.rs")
+                && found[0].contains("`notice`")
+                && found[0].contains("used 2 times")
+                && found[0].contains("expects 1"),
+            "{found:?}"
+        );
+    }
+
+    #[test]
     fn an_exemption_that_covers_nothing_is_stale() {
         let exemptions = [Exemption {
             file: "reports/a.rs",
             item: "notice",
+            uses: 1,
             until: "T234",
             reason: "test",
         }];
@@ -330,9 +352,9 @@ mod tests {
     }
 
     #[test]
-    fn there_are_exactly_the_five_named_exemptions() {
+    fn there_are_exactly_the_two_named_exemptions() {
         let tasks: Vec<&str> = EXEMPTIONS.iter().map(|entry| entry.until).collect();
-        assert_eq!(tasks, ["T234", "T234", "T227", "T229", "T235"]);
+        assert_eq!(tasks, ["T227", "T229"]);
         assert!(EXEMPTIONS.iter().all(|entry| !entry.reason.is_empty()));
     }
 }

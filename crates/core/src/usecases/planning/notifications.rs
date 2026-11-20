@@ -3,22 +3,11 @@
 //! `planning::notifications`; only this file reads the clock.
 
 use crate::error::{Error, Result};
-use crate::model::notify::{NoticeCategory, NoticeRecord};
+use crate::model::notify::NoticeRecord;
+pub use crate::model::notify::notice;
 use crate::model::vault::now_iso;
 use crate::planning::notifications as rules;
 use crate::service::UnlockedVault;
-
-/// A notice about to be shown, stamped now.
-pub fn notice(
-    category: NoticeCategory,
-    key: String,
-    title: &str,
-    body: String,
-    link: Option<String>,
-    at: String,
-) -> NoticeRecord {
-    rules::notice_at(category, key, title, body, link, at, now_iso())
-}
 
 /// Mark notices read: the ones named, or all of them.
 pub fn mark_notifications_read(vault: &mut UnlockedVault, keys: Option<&[String]>) -> Result<()> {

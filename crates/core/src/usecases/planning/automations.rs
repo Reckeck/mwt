@@ -15,7 +15,7 @@ use crate::Amount;
 use crate::calendar;
 use crate::error::{Error, Result};
 use crate::kernel::events::{AutomationDeleted, AutomationRetried, DomainEvent};
-use crate::model::planning::{Automation, AutomationRun};
+use crate::model::planning::{Automation, AutomationRun, draft_to_transaction};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
 use crate::planning::automations::{self as rules, AutomationDraft, AutomationSimulation};
@@ -66,7 +66,7 @@ fn check_automation(vault: &UnlockedVault, draft: &AutomationDraft) -> Result<()
     let starts = check_draft_moment(draft)?;
     // The probe is dated at the start, which may be months ahead: it is
     // checked against the rules, not against today.
-    let mut probe = rules::draft_to_transaction(&draft.template, "", "", &draft.starts_at);
+    let mut probe = draft_to_transaction(&draft.template, "", "", &draft.starts_at);
     let reference = starts.max(secs_or_now(&now_iso()));
     vault.prepare_transaction_at(&mut probe, reference * 1000)
 }

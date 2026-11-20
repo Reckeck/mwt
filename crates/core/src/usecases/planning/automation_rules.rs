@@ -13,13 +13,14 @@ use crate::calendar::Calendar;
 use crate::error::{Error, Result};
 use crate::model::planning::{
     AmountMode, Automation, AutomationOutcome, AutomationRun, AutomationSpec, RejectReason,
+    draft_to_transaction,
 };
 use crate::model::store::Holding;
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
 use crate::planning::automations::{
     self as rules, AutomationDraft, AutomationSimulation, SimulatedBalance, SimulatedRun,
-    automation_draft, draft_to_transaction, main_amount, outflow,
+    automation_draft, main_amount, outflow,
 };
 use crate::pricing::history::unix_secs;
 use crate::workflow::automation::{self as graph_of, automation_graph};

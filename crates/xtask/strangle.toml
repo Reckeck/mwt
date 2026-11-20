@@ -764,3 +764,22 @@ files = [
     "crates/core/src/usecases/planning/automation_rules.rs",
     "crates/core/src/service/peer_sync.rs", "crates/core/src/service/saving.rs",
 ]
+
+[[foundation]]
+# T234/T235/T237 (z8): `notice` and `draft_to_transaction` move below workflow, their T59 exemptions go, the remaining
+# exemptions carry a use count. One wave, one label (CI checks one task per PR).
+task = "T234"
+files = [
+    "crates/core/src/usecases/planning/notifications.rs",
+    "crates/core/src/usecases/planning/automation_rules.rs",
+    "crates/core/src/usecases/planning/automations.rs",
+    "crates/core/src/usecases/planning/budget.rs",
+    "crates/core/src/planning/",
+    "crates/core/src/model/",
+    "crates/core/src/reports/notify_snapshot.rs",
+    "crates/core/src/workflow/nodes/actions.rs",
+    "crates/core/src/service/mod.rs",
+    "crates/core/src/service/automations.rs",
+    "crates/core/src/service/notifications.rs",
+    "crates/xtask/src/arch/",
+]

@@ -2,6 +2,7 @@
 
 use super::automations::*;
 use crate::calendar::{self, Calendar};
+use crate::model::planning::draft_to_transaction;
 use crate::model::planning::{
     AmountMode, Automation, AutomationOutcome, AutomationPreset, RejectReason, Schedule,
     TransactionDraft, WorkdayShift,

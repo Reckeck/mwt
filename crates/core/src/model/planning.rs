@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::Amount;
 use crate::model::store::{AssetRef, StoreScope};
-use crate::model::transaction::{ConvertTx, PaymentTx, TopupTx, TransferTx};
+use crate::model::transaction::{
+    ConvertTx, PaymentTx, PriceStamp, TopupTx, Transaction, TransferTx, TxOrigin,
+};
 
 pub use crate::calendar::workdays::WorkdayShift;
 
@@ -856,4 +858,35 @@ pub fn describe_reject(reason: &RejectReason) -> String {
         } => format!("store {store_id}: credit limit {limit}, needed {required}"),
         RejectReason::Invalid { message } => message.clone(),
     }
+}
+
+/// A transaction from a template, dated `ts`; prices are left to the stamp.
+/// It names the automation and the planned moment it was made for.
+pub(crate) fn draft_to_transaction(
+    draft: &TransactionDraft,
+    automation_id: &str,
+    planned_at: &str,
+    ts: &str,
+) -> Transaction {
+    let mut tx = match draft.clone() {
+        TransactionDraft::Topup(inner) => Transaction::Topup(inner),
+        TransactionDraft::Payment(inner) => Transaction::Payment(inner),
+        TransactionDraft::Transfer(inner) => Transaction::Transfer(inner),
+        TransactionDraft::Convert(inner) => Transaction::Convert(inner),
+    };
+    let meta = tx.meta_mut();
+    meta.id = uuid::Uuid::new_v4().to_string();
+    meta.timestamp = ts.to_string();
+    meta.origin = TxOrigin::Workflow {
+        workflow_id: automation_id.to_string(),
+        run_id: String::new(),
+        planned_at: (!planned_at.is_empty()).then(|| planned_at.to_string()),
+        planned_date: None,
+        estimated: false,
+        run_key: None,
+    };
+    for (_, stamp) in tx.stamps_mut() {
+        *stamp = PriceStamp::default();
+    }
+    tx
 }
