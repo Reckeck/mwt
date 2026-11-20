@@ -428,21 +428,23 @@ impl UnlockedVault {
         // The merged document is complete: swap it in. Every step after this
         // can fail; on failure the old document goes back (atomic batch).
         let tracker = self.tracker.clone();
-        let before = self.swap_doc(doc)?;
+        let before = self.swap_doc(doc);
         match self.finish_batch(plan, peer, carry) {
             Ok(applied) => Ok(Some(applied)),
             Err(err) => {
-                self.swap_doc(before)?;
+                // Tracker first, then the document; the swap cannot fail, so
+                // the batch's own error is the one the caller sees.
                 self.tracker = tracker;
+                self.swap_doc(before);
                 Err(err)
             }
         }
     }
 
-    /// Put `doc` in place of the open document; the old one comes back.
-    fn swap_doc(&mut self, doc: VaultDoc) -> Result<VaultDoc> {
-        self.run(|tx| Ok(tx.replace_doc(doc)))
-            .map(|(old, _, _)| old)
+    /// Put `doc` in place of the open document; the old one comes back. It
+    /// cannot fail, so a rollback never hides the error that caused it.
+    fn swap_doc(&mut self, doc: VaultDoc) -> VaultDoc {
+        crate::kernel::tx::Tx::new(&mut self.doc).replace_doc(doc)
     }
 
     /// What follows the swap of a merged document: settle it, journal the
