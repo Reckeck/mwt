@@ -13,11 +13,6 @@ use super::UnlockedVault;
 use super::forward::forward;
 
 impl UnlockedVault {
-    /// A spending flow by its category, `Daily` when it has none.
-    pub(crate) fn spending(group: Option<crate::model::category::CategoryGroup>) -> FlowClass {
-        crate::money::worth::spending(group)
-    }
-
     // forward:begin
     forward! {
         /// Units of `currency` per USD from the FX cache; USD itself is 1.
