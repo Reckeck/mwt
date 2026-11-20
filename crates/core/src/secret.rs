@@ -56,7 +56,7 @@ impl<T: Zeroize> Secret<T> {
 
 impl<T: Zeroize> fmt::Debug for Secret<T> {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
-        out.write_str("Secret(..)")
+        fmt::Debug::fmt(&Hidden, out)
     }
 }
 
