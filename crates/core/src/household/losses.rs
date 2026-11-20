@@ -44,7 +44,9 @@ pub struct TxLoss {
     /// A move between the user's own sub-accounts: only the fee and the
     /// spread count, it is neither income nor spending.
     pub internal: bool,
-    /// Every side had a price; otherwise the missing side counts as zero.
+    /// Every fee leg and every side had a price. Otherwise the unpriced fee
+    /// leg adds nothing to the fee and the spread is left out (slippage is
+    /// zero), so the figures are a lower bound, not a full loss.
     pub complete: bool,
 }
 
