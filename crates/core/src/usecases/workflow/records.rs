@@ -308,10 +308,12 @@ pub(super) fn book_and_close(
         }
         Ok((saved, done))
     });
-    if outcome.is_err() {
+    if outcome.is_err() && vault.doc != backup {
         vault.doc = backup;
         vault.recompute_holdings();
-        vault.persist()?;
+        // The caller gets the original refusal; a failed write here must not hide it,
+        // and the next persist writes the restored document anyway.
+        let _ = vault.persist();
     }
     outcome
 }
@@ -592,6 +594,21 @@ mod tests {
         });
         assert!(matches!(result, Err(Error::Missing(_))));
         assert!(vault.doc.transactions.is_empty());
+        assert_eq!(vault.workflow_queue().len(), 1);
+    }
+
+    #[test]
+    fn a_refused_booking_writes_nothing() {
+        let (_dir, mut vault) = empty_vault();
+        let card = store(&mut vault, "Card", StoreKind::Cash, None);
+        let batch = queued("q1", vec![income(&card, "25", "queued")]);
+        vault.doc.workflow_queue.push(batch.clone());
+        let before = std::fs::read(&vault.path).unwrap();
+        let result = book_and_close(&mut vault, &batch, RunClosing::Optional, |_, _| {
+            Err(Error::InsufficientFunds("short".into()))
+        });
+        assert!(matches!(result, Err(Error::InsufficientFunds(_))));
+        assert_eq!(std::fs::read(&vault.path).unwrap(), before);
         assert_eq!(vault.workflow_queue().len(), 1);
     }
 
