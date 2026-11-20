@@ -137,11 +137,11 @@ fn non_test_part(text: &str) -> String {
     kept.join("\n")
 }
 
-fn is_ident_char(ch: char) -> bool {
+pub(super) fn is_ident_char(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }
 
-fn leading_ident(text: &str) -> &str {
+pub(super) fn leading_ident(text: &str) -> &str {
     let end = text.find(|ch| !is_ident_char(ch)).unwrap_or(text.len());
     &text[..end]
 }
@@ -175,7 +175,7 @@ fn group_items(text: &str, open: usize) -> Vec<usize> {
 }
 
 /// Offsets where the module name of each `crate::` path in the text begins.
-fn name_offsets(text: &str) -> Vec<usize> {
+pub(super) fn name_offsets(text: &str) -> Vec<usize> {
     let mut found = Vec::new();
     for (start, _) in text.match_indices(CRATE_PATH) {
         if text[..start].chars().next_back().is_some_and(is_ident_char) {
@@ -193,6 +193,11 @@ fn name_offsets(text: &str) -> Vec<usize> {
     found
 }
 
+/// The text without comments and without the items under a top-level `#[cfg(test)]`; line numbers stay.
+pub(super) fn production_text(text: &str) -> String {
+    non_test_part(&strip_comments(text))
+}
+
 /// Every `crate::` path of the non-test part of `text`, as edges from `from_file` (module `from_module`).
 pub fn read_edges(
     from_file: &str,
@@ -200,7 +205,7 @@ pub fn read_edges(
     text: &str,
     modules: &BTreeSet<String>,
 ) -> Vec<Edge> {
-    let cleaned = non_test_part(&strip_comments(text));
+    let cleaned = production_text(text);
     name_offsets(&cleaned)
         .into_iter()
         .filter_map(|offset| {
