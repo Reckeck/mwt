@@ -19,6 +19,7 @@ use crate::commands::AppState;
 use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
+use trade_core::usecases::cryptotrack::accounts;
 
 /// The accounts the module follows, with the wallet that shows each and the
 /// tokens of it that wait in quarantine.
@@ -26,7 +27,9 @@ use crate::ipc::commands::ipc_commands;
 pub async fn crypto_list_accounts(
     state: State<'_, AppState>,
 ) -> Result<Vec<CryptoAccountView>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.crypto_list_accounts()))
+    with_vault(&state, |vault| {
+        Ok(accounts::crypto_list_accounts(&vault.books()))
+    })
 }
 
 /// Follow a public address: the last step of the wallet wizard for the
@@ -37,7 +40,9 @@ pub async fn crypto_connect_address(
     input: ConnectAddressInput,
     state: State<'_, AppState>,
 ) -> Result<ConnectAddressResult, IpcError> {
-    with_vault_mut(&state, |vault| vault.crypto_connect_address(&input))
+    with_vault_mut(&state, |vault| {
+        accounts::crypto_connect_address(vault, &input)
+    })
 }
 
 /// Rename an account, change its note or stop counting it.
@@ -46,7 +51,9 @@ pub async fn crypto_update_account(
     input: UpdateAccountInput,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    with_vault_mut(&state, |vault| vault.crypto_update_account(&input))
+    with_vault_mut(&state, |vault| {
+        accounts::crypto_update_account(vault, &input)
+    })
 }
 
 /// Stop following an address. Its events stay until the module is wiped
@@ -57,7 +64,7 @@ pub async fn crypto_forget_account(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| {
-        vault.crypto_forget_account(&input.account_id)
+        accounts::crypto_forget_account(vault, &input.account_id)
     })
 }
 

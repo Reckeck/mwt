@@ -12,6 +12,7 @@ use crate::commands::AppState;
 use crate::commands::planning::with_vault;
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
+use trade_core::usecases::cryptotrack::relations;
 
 /// The relations of one account, each row carrying the operation filter it
 /// opens. Read only.
@@ -20,7 +21,9 @@ pub async fn crypto_relations(
     input: CryptoRelationsInput,
     state: State<'_, AppState>,
 ) -> Result<CryptoRelations, IpcError> {
-    with_vault(&state, |vault| vault.crypto_relations(&input))
+    with_vault(&state, |vault| {
+        relations::crypto_relations(&vault.books(), &input)
+    })
 }
 
 ipc_commands!(cryptotrack_relations_commands, CRYPTOTRACK_RELATIONS_NAMES, commands::cryptotrack::relations: [crypto_relations]);
