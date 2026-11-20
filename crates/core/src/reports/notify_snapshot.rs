@@ -19,9 +19,9 @@ use crate::pricing::history::secs_or_now;
 
 use crate::kernel::books::Books;
 use crate::planning::agenda::UpcomingKind;
+use crate::planning::agenda::{next_occurrence, reminder_secs};
 use crate::planning::auto_reminders::category_of;
 use crate::planning::notifications::notice_title;
-use crate::service::agenda::{next_occurrence, reminder_secs};
 use crate::service::notice;
 
 /// How far ahead a snapshot looks.
