@@ -100,6 +100,12 @@ pub fn first_of_month(date: NaiveDate) -> NaiveDate {
     date.with_day(1).unwrap_or(date)
 }
 
+/// Position of the month holding `date` in `months` (first days of months).
+pub(crate) fn month_index(months: &[NaiveDate], date: NaiveDate) -> Option<usize> {
+    let first = first_of_month(date);
+    months.iter().position(|month| *month == first)
+}
+
 pub fn next_month(date: NaiveDate) -> NaiveDate {
     let first = first_of_month(date);
     let (year, month) = if first.month() == 12 {

@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use chrono::NaiveDate;
 
 use crate::Amount;
+use crate::calendar::month_index;
 use crate::calendar::{self, Calendar};
 use crate::error::{Error, Result};
 use crate::model::store::{AssetRef, StoreScope};
@@ -23,7 +24,6 @@ use crate::model::transaction::{AccountRef, Leg, LegRole, Transaction};
 use crate::model::vault::{VaultDoc, unix_to_iso};
 use crate::money::tree::{resolve_scope, root_of};
 use crate::pricing::history::unix_secs;
-use crate::reports::overview::month_index;
 
 /// What the rates book answers: the value of a leg or a quantity in a
 /// currency at a moment.
