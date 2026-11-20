@@ -221,6 +221,46 @@ fn a_confirmed_refusal_closes_its_run_and_a_retry_books_nothing_more() {
 }
 
 #[test]
+fn a_confirmed_refusal_keeps_the_started_at_of_the_refused_run() {
+    let (_dir, mut vault, _savings, run_id, workflow_id) = refused_asked_transfer();
+    let started_at = refused_started_at(&vault, &workflow_id, &run_id);
+    let batch = vault.workflow_queue().remove(0);
+    vault.confirm_queued(&batch.id).unwrap();
+    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    let done = runs
+        .iter()
+        .find(|run| matches!(run.outcome, RunOutcome::Done))
+        .unwrap();
+    assert_eq!(done.started_at, started_at);
+}
+
+#[test]
+fn a_retried_refusal_keeps_the_started_at_of_the_refused_run() {
+    let (_dir, mut vault, _savings, run_id, workflow_id) = refused_asked_transfer();
+    let started_at = refused_started_at(&vault, &workflow_id, &run_id);
+    // A retry a day later: a fresh stamp would differ from the refusal's.
+    vault
+        .retry_workflow_run(&run_id, later() + 86_400, "UTC")
+        .unwrap();
+    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    let done = runs
+        .iter()
+        .find(|run| matches!(run.outcome, RunOutcome::Done))
+        .unwrap();
+    assert_eq!(done.started_at, started_at);
+}
+
+fn refused_started_at(vault: &UnlockedVault, workflow_id: &str, run_id: &str) -> String {
+    vault
+        .workflow_runs(Some(workflow_id), 10)
+        .iter()
+        .find(|run| run.id == run_id)
+        .unwrap()
+        .started_at
+        .clone()
+}
+
+#[test]
 fn a_discarded_refusal_is_no_longer_retryable() {
     let (_dir, mut vault, savings, run_id, workflow_id) = refused_asked_transfer();
     let batch = vault.workflow_queue().remove(0);
