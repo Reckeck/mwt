@@ -38,6 +38,8 @@ pub fn run(root: &Path, args: &CallersArgs) -> Result<()> {
     Ok(())
 }
 
+const WHOLE_TREE_HINT: &str = "(list them with --notes without an area)";
+
 /// The two streams of the command: stdout is only `file:line:` callers; the macro notes go to
 /// stderr. With an area only the macros of the area's own files are counted or (`notes`) listed,
 /// and the whole-tree count is added, since a macro outside the area may still hold its calls.
@@ -63,7 +65,7 @@ fn report(
     };
     if area.is_some() && whole_count > 0 {
         stderr.push(format!(
-            "{whole_count} macro bodies not scanned in the whole tree"
+            "{whole_count} macro bodies not scanned in the whole tree {WHOLE_TREE_HINT}"
         ));
     }
     Ok((stdout, stderr))
@@ -191,7 +193,9 @@ mod tests {
         let (_, scoped) = report(&workspace, &baseline, Some("loyalty"), false).unwrap();
         assert_eq!(
             scoped,
-            ["1 macro bodies not scanned in the whole tree"],
+            [
+                "1 macro bodies not scanned in the whole tree (list them with --notes without an area)"
+            ],
             "the macro outside the area is counted in the whole-tree figure"
         );
         let (_, whole) = report(&workspace, &baseline, None, false).unwrap();
@@ -207,7 +211,9 @@ mod tests {
         let (_, scoped_listed) = report(&workspace, &baseline, Some("loyalty"), true).unwrap();
         assert_eq!(
             scoped_listed,
-            ["1 macro bodies not scanned in the whole tree"]
+            [
+                "1 macro bodies not scanned in the whole tree (list them with --notes without an area)"
+            ]
         );
     }
 }
