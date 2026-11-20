@@ -281,6 +281,8 @@ files = ["crates/core/src/money/mod.rs", "crates/core/src/money/shared_ratios.rs
 task = "C"
 files = [
     "crates/core/src/sync/mod.rs", "crates/core/src/sync/manifest_view.rs", "crates/core/src/sync/history.rs",
+    # T223: the balance-diff tests of the sync preview live beside history.rs.
+    "crates/core/src/sync/history_tests.rs",
     "crates/core/src/sync/trust.rs", "crates/core/src/sync/sync_pins_tests.rs",
     "crates/core/src/usecases/sync/mod.rs", "crates/core/src/usecases/sync/read.rs",
     "crates/core/src/usecases/sync/trust.rs",

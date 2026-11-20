@@ -177,3 +177,18 @@ pub fn fx_table(vault: &UnlockedVault, favorites: &[String]) -> FxTable {
     };
     rates_table(&vault.doc, &rates, books.base_and_fx().0, favorites)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LossReport;
+
+    #[test]
+    fn loss_report_serializes_flat_without_a_losses_key() {
+        let json = serde_json::to_value(LossReport::default()).unwrap();
+        let object = json.as_object().unwrap();
+        for key in ["meta", "rows", "total", "incomplete"] {
+            assert!(object.contains_key(key), "missing top-level key {key}");
+        }
+        assert!(!object.contains_key("losses"));
+    }
+}

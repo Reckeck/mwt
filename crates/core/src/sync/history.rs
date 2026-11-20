@@ -1,11 +1,13 @@
 //! The batches this vault kept and the transfers it made, as the history screen lists
-//! them (docs/sync.md). Pure reads over the document.
+//! them (docs/sync.md). Pure reads over the document. Also the balance diff of a
+//! sync preview: which stores a batch moves.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 
 use super::{SyncBatch, SyncSummary};
+use crate::Amount;
 use crate::model::notify::NoticeRecord;
 use crate::model::vault::{VaultDoc, iso_to_millis};
 
@@ -103,3 +105,56 @@ pub fn history(doc: &VaultDoc) -> Vec<AppliedBatch> {
     history.sort_by_key(|item| std::cmp::Reverse(iso_to_millis(&item.applied_at)));
     history
 }
+
+/// One store whose balance differs between two sides of a sync preview.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreChange {
+    pub id: String,
+    pub name: String,
+    pub before: Amount,
+    pub after: Amount,
+}
+
+/// One side of the diff: the USD value of each store and the rate that turns
+/// USD into the display currency on that side.
+pub struct StoreValues<'a> {
+    pub usd: &'a HashMap<String, Amount>,
+    pub fx: Amount,
+}
+
+/// The stores whose balance differs between `before` and `after`, each side's
+/// USD amounts converted with that side's `fx`, sorted by name then id. A store missing on one side
+/// counts as zero there; `names` gives the label of each store id.
+pub fn store_changes(
+    before: &StoreValues<'_>,
+    after: &StoreValues<'_>,
+    names: &HashMap<&str, &str>,
+) -> Vec<StoreChange> {
+    let mut stores: Vec<StoreChange> = Vec::new();
+    for id in before.usd.keys().chain(after.usd.keys()) {
+        if stores.iter().any(|store| &store.id == id) {
+            continue;
+        }
+        let old = before.usd.get(id).copied().unwrap_or_default() * before.fx;
+        let new = after.usd.get(id).copied().unwrap_or_default() * after.fx;
+        if old == new {
+            continue;
+        }
+        stores.push(StoreChange {
+            id: id.clone(),
+            name: names
+                .get(id.as_str())
+                .copied()
+                .unwrap_or_default()
+                .to_string(),
+            before: old,
+            after: new,
+        });
+    }
+    stores.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    stores
+}
+
+#[cfg(test)]
+#[path = "history_tests.rs"]
+mod tests;

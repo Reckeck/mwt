@@ -40,15 +40,6 @@ impl<'a> Tx<'a> {
         self.doc
     }
 
-    /// Swap the whole document for `doc` and hand back the old one; marks the
-    /// transaction touched. The sync merge builds its result aside and swaps
-    /// it in only once the merge is complete, so a failure later on can put
-    /// the returned document back. No other rollback exists in `Tx`.
-    pub(crate) fn replace_doc(&mut self, doc: VaultDoc) -> VaultDoc {
-        self.touched = true;
-        std::mem::replace(self.doc, doc)
-    }
-
     /// Mark the transaction touched without changing anything here.
     pub fn touch(&mut self) {
         self.touched = true;
@@ -107,16 +98,5 @@ mod tests {
         let mut tx = Tx::new(&mut other);
         tx.touch();
         assert!(tx.is_touched());
-    }
-
-    #[test]
-    fn replace_doc_swaps_and_returns_the_old_document() {
-        let mut doc = VaultDoc::default();
-        doc.sync.tombstones_seen.insert("old".into(), 1);
-        let mut tx = Tx::new(&mut doc);
-        let old = tx.replace_doc(VaultDoc::default());
-        assert!(tx.is_touched());
-        assert!(old.sync.tombstones_seen.contains_key("old"));
-        assert!(tx.doc().sync.tombstones_seen.is_empty());
     }
 }

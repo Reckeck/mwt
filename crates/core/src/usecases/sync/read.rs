@@ -8,10 +8,10 @@ use crate::error::Result;
 use crate::ipc_contract::security::SecurityLevel;
 use crate::ipc_contract::{AfterApply, StoreBalanceChange};
 use crate::service::{PeerRef, UnlockedVault};
+use crate::sync::history::{StoreValues, store_changes};
 use crate::sync::manifest::Manifest;
 use crate::sync::manifest_view::{
-    StoreValues, check_incoming, diff_wanted, manifest_for, preview_summary, records_for,
-    store_changes,
+    check_incoming, diff_wanted, manifest_for, preview_summary, records_for,
 };
 use crate::sync::view;
 use crate::sync::{RecordState, SyncSummary};
