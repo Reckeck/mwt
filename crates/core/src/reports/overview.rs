@@ -1267,9 +1267,13 @@ pub(crate) fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
             if leg.role != LegRole::Fee || !ctx.in_scope(&leg.store_id) {
                 continue;
             }
-            let value = leg_value_in(book, &leg, &ctx.currency, secs).unwrap_or(Amount::ZERO);
-            rows[index].fees += value;
             has_data = true;
+            // Like the legs: a fee with no rate stays out and is counted.
+            let Some(value) = leg_value_in(book, &leg, &ctx.currency, secs) else {
+                unpriced += 1;
+                continue;
+            };
+            rows[index].fees += value;
         }
     }
     let mut out = PnlReport {

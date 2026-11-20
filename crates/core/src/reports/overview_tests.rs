@@ -901,3 +901,23 @@ fn calendar_month_over_books_has_a_day_per_date_and_refuses_junk() {
     assert_eq!(month.days.len(), 28);
     assert!(calendar_month(&books, "February", secs(NOW), "UTC").is_err());
 }
+
+#[test]
+fn pnl_counts_a_fee_without_a_rate_as_unpriced() {
+    let (_dir, mut vault, card) = vault_with_card();
+    let mut tx = spend(&card, "1", "groceries", "2025-06-05T10:00:00Z");
+    if let Transaction::Payment(inner) = &mut tx {
+        inner.fee = Some(crate::model::transaction::Fee {
+            asset: AssetRef::fiat("THB", "Thai Baht"),
+            amount: amount("30"),
+            price: PriceStamp::default(),
+        });
+    }
+    vault.add_transaction(tx).unwrap();
+    let books = vault.books();
+    let ctx = report_ctx(&books, &range("2025-06", "2025-06"), secs(NOW), "UTC").unwrap();
+    let report = pnl_report(&books, &ctx);
+    assert!(report.has_data);
+    assert_eq!(report.unpriced, 1);
+    assert_eq!(report.total_fees, Amount::ZERO);
+}
