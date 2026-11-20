@@ -218,7 +218,7 @@ pub async fn fund_goal(
         envelopes::fund_goal(
             vault,
             &input.goal_id,
-            &StoreId::from(input.store_id.as_str()),
+            &StoreId::from(input.store_id),
             input.amount,
         )
     })
