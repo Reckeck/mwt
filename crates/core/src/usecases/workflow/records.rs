@@ -312,8 +312,12 @@ pub(super) fn book_and_close(
         vault.doc = backup;
         vault.recompute_holdings();
         // The caller gets the original refusal; a failed write here must not hide it,
-        // and the next persist writes the restored document anyway.
-        let _ = vault.persist();
+        // so it is logged, and the next persist writes the restored document anyway.
+        if let Err(error) = vault.persist() {
+            eprintln!(
+                "workflow records: restoring the vault after a refused batch failed to persist ({error})"
+            );
+        }
     }
     outcome
 }
