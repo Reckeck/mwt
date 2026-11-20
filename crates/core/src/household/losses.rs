@@ -338,7 +338,7 @@ pub struct LossWindow<'window> {
 }
 
 /// Losses by month and the buckets they fall into.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct MonthLosses {
     pub rows: Vec<LossRow>,
     pub total: LossRow,
