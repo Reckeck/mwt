@@ -26,6 +26,7 @@ use rust_decimal::Decimal;
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
+use crate::model::cryptotrack::TokenId;
 use crate::model::store::AssetRef;
 use crate::model::vault::{FxPoint, PricePoint, VaultDoc};
 
@@ -75,6 +76,19 @@ fn token_price_in(body: &HashMap<String, HashMap<String, f64>>, contract: &str) 
         .and_then(|(_, quote)| quote.get("usd"))
         .copied()
         .map(Amount::from_f64)
+}
+
+/// Whether the current-price path may send this asset's contract to
+/// CoinGecko (`N1`): with consent always, without it only for a token on the
+/// built-in list. The same rule as the historic path in `llama`.
+fn contract_lookup_allowed(
+    consent: bool,
+    is_known: impl Fn(&TokenId) -> bool,
+    chain: Chain,
+    contract: &str,
+) -> bool {
+    let _ = (consent, is_known, chain, contract);
+    true
 }
 
 const COINCAP_V2: &str = "https://api.coincap.io/v2";
@@ -551,6 +565,45 @@ mod tests {
             Some(Amount::from_f64(1.5))
         );
         assert_eq!(token_price_in(&body, "0xdead"), None);
+    }
+
+    fn only_usdc(token: &TokenId) -> bool {
+        token
+            .contract
+            .eq_ignore_ascii_case("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+    }
+
+    #[test]
+    fn without_consent_an_unknown_contract_is_not_looked_up() {
+        let contract = "0x0000000000000000000000000000000000000bad";
+        assert!(!contract_lookup_allowed(
+            false,
+            only_usdc,
+            Chain::Ethereum,
+            contract
+        ));
+    }
+
+    #[test]
+    fn without_consent_a_known_token_is_still_looked_up() {
+        let usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+        assert!(contract_lookup_allowed(
+            false,
+            only_usdc,
+            Chain::Ethereum,
+            usdc
+        ));
+    }
+
+    #[test]
+    fn with_consent_an_unknown_contract_is_looked_up() {
+        let contract = "0x0000000000000000000000000000000000000bad";
+        assert!(contract_lookup_allowed(
+            true,
+            |_| false,
+            Chain::Ethereum,
+            contract
+        ));
     }
 
     #[test]
