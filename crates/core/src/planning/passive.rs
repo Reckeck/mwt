@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use super::budget::budget_currency;
 use crate::calendar::{self, Calendar};
 use crate::kernel::books::Books;
 use crate::model::category::{
@@ -80,7 +81,7 @@ pub fn passive_income(
     let doc = books.doc();
     let cal = Calendar::new(zone);
     let today = cal.date_of(now);
-    let currency = books.vault().budget_currency();
+    let currency = budget_currency(books);
     let book = books.rate_book();
 
     let this_start = calendar::first_of_month(today);
