@@ -20,7 +20,6 @@ use crate::model::transaction::{
     AdjustmentLine, AdjustmentTx, PriceStamp, Transaction, TxMeta, TxOrigin,
 };
 use crate::model::vault::{ImportRun, ImportSource, PendingImport};
-use crate::money::tree;
 use crate::money::validate::live_store;
 use crate::service::UnlockedVault;
 use crate::usecases::cryptotrack::exchange_import::bybit_reconcile;
@@ -33,10 +32,10 @@ pub fn set_import_settings(
     store_id: &str,
     settings: ImportSettings,
 ) -> Result<ImportSettings> {
-    let root = tree::root_of(&vault.doc, store_id);
+    let root = root_of(&vault.books(), store_id);
     let settings = rules::normalize_settings(&vault.doc, settings, |target| {
         let store = live_store(&vault.doc, target)?;
-        if store.kind != StoreKind::Exchange || tree::root_of(&vault.doc, target) != root {
+        if store.kind != StoreKind::Exchange || root_of(&vault.books(), target) != root {
             return Err(Error::InvalidInput(
                 "an exchange account books only into this wallet or its sub-accounts".into(),
             ));
