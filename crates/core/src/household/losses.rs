@@ -13,7 +13,10 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use chrono::NaiveDate;
+
 use crate::Amount;
+use crate::calendar::{self, Calendar, first_of_month};
 use crate::error::{Error, Result};
 use crate::model::store::{AssetRef, StoreScope};
 use crate::model::transaction::{AccountRef, Leg, LegRole, Transaction};
@@ -323,6 +326,88 @@ impl LossBuckets {
     }
 }
 
+/// The months a loss report covers and who is in it.
+pub struct LossWindow<'window> {
+    /// First days of the report months.
+    pub months: &'window [NaiveDate],
+    pub calendar: &'window Calendar,
+    pub currency: &'window str,
+    /// Wallets the report is limited to; `None` is all of them.
+    pub scope: Option<&'window HashSet<String>>,
+}
+
+/// Losses by month and the buckets they fall into.
+#[derive(Debug, Default, PartialEq)]
+pub struct MonthLosses {
+    pub rows: Vec<LossRow>,
+    pub total: LossRow,
+    pub by_kind: Vec<LossBucket>,
+    pub by_store: Vec<LossBucket>,
+    pub by_contact: Vec<LossBucket>,
+    pub by_flow: Vec<LossBucket>,
+    /// Transactions whose loss is only partly known.
+    pub incomplete: u32,
+}
+
+/// Losses of the transactions in `window`, a row per month. `shown` turns a
+/// month's sum into what the report shows (real terms, rounded once).
+pub fn month_losses(
+    doc: &VaultDoc,
+    values: &impl Valuation,
+    window: &LossWindow,
+    shown: impl Fn(Amount, NaiveDate) -> Amount,
+) -> MonthLosses {
+    let mut out = MonthLosses {
+        rows: window
+            .months
+            .iter()
+            .map(|month| LossRow {
+                month: calendar::month_key(*month),
+                ..LossRow::default()
+            })
+            .collect(),
+        ..MonthLosses::default()
+    };
+    let mut buckets = LossBuckets::default();
+    for tx in &doc.transactions {
+        let secs = timestamp_secs(&tx.meta().timestamp);
+        let first = first_of_month(window.calendar.date_of(secs));
+        let Some(index) = window.months.iter().position(|month| *month == first) else {
+            continue;
+        };
+        if let Some(ids) = window.scope
+            && !touches_any(tx, ids)
+        {
+            continue;
+        }
+        let loss = loss_of(doc, values, tx, window.currency);
+        if loss.total.is_zero() && loss.complete {
+            continue;
+        }
+        let month = window.months[index];
+        let (fee, slippage) = (shown(loss.fee, month), shown(loss.slippage, month));
+        let row = &mut out.rows[index];
+        row.fee += fee;
+        row.slippage += slippage;
+        row.total += fee + slippage;
+        if !loss.complete {
+            out.incomplete += 1;
+        }
+        buckets.add(tx, fee + slippage);
+    }
+    for row in &out.rows {
+        out.total.fee += row.fee;
+        out.total.slippage += row.slippage;
+        out.total.total += row.total;
+    }
+    let [by_kind, by_store, by_contact, by_flow] = buckets.ranked();
+    out.by_kind = by_kind;
+    out.by_store = by_store;
+    out.by_contact = by_contact;
+    out.by_flow = by_flow;
+    out
+}
+
 /// The chain the transactions `ids` go into: the given one, else the chain
 /// one of them is already in, else a new one. A refusal when none is chosen
 /// or one is unknown.
@@ -598,5 +683,77 @@ mod timestamp_tests {
         }
         assert_eq!(timestamp_secs("1970-01-01T00:00:00Z"), 0);
         assert_eq!(timestamp_secs("2026-02-01T10:00:00Z"), 1_769_940_000);
+    }
+}
+
+#[cfg(test)]
+mod month_tests {
+    use super::*;
+    use crate::model::chain::Chain;
+    use crate::model::transaction::{ConvertSide, ConvertTx, PriceStamp, TxMeta};
+
+    /// 100 RUB per unit of anything else; no leg is priced as a fee.
+    struct Fixed;
+
+    impl Valuation for Fixed {
+        fn leg_value_in(&self, _leg: &Leg, _currency: &str, _secs: i64) -> Option<Amount> {
+            None
+        }
+
+        fn value_at(&self, asset: &AssetRef, qty: Amount, _currency: &str, _secs: i64) -> Amount {
+            if asset.key() == AssetRef::fiat("RUB", "Ruble").key() {
+                qty / Amount::new(rust_decimal::Decimal::from(100))
+            } else {
+                qty
+            }
+        }
+    }
+
+    fn side(store: &str, asset: AssetRef, units: i64) -> ConvertSide {
+        ConvertSide {
+            account: AccountRef::Store(store.into()),
+            asset,
+            amount: Amount::new(rust_decimal::Decimal::new(units, 1)),
+            price: PriceStamp::default(),
+        }
+    }
+
+    #[test]
+    fn a_bare_document_has_its_slippage_in_the_month_of_the_transaction() {
+        let mut meta = TxMeta::new("exchange");
+        meta.timestamp = "2026-02-01T10:00:00Z".into();
+        let mut doc = VaultDoc::default();
+        // 1000 RUB (10) for 5 USDT: a slippage of 5.
+        doc.transactions.push(Transaction::Convert(ConvertTx {
+            meta,
+            from: side("a", AssetRef::fiat("RUB", "Ruble"), 10_000),
+            to: side(
+                "b",
+                AssetRef::crypto("USDT", "Tether", None, Chain::Tron),
+                50,
+            ),
+            fee: None,
+            rate_override: None,
+        }));
+        let months = [
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(),
+        ];
+        let calendar = Calendar::new("UTC");
+        let window = LossWindow {
+            months: &months,
+            calendar: &calendar,
+            currency: "usd",
+            scope: None,
+        };
+        let losses = month_losses(&doc, &Fixed, &window, |amount, _| amount);
+        let five = Amount::new(rust_decimal::Decimal::from(5));
+        assert_eq!(losses.rows[0].total, Amount::ZERO);
+        assert_eq!(losses.rows[1].month, "2026-02");
+        assert_eq!(losses.rows[1].slippage, five);
+        assert_eq!(losses.total.total, five);
+        assert_eq!(losses.incomplete, 0);
+        assert_eq!(losses.by_kind.len(), 1);
+        assert_eq!(losses.by_kind[0].total, five);
     }
 }
