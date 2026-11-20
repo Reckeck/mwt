@@ -12,6 +12,7 @@ use crate::error::Result;
 use crate::model::category::CategoryGroup;
 
 use crate::kernel::books::Books;
+use crate::money::portfolio::realized_pnl_filtered;
 use crate::planning::budget::budget_currency;
 use crate::usecases::household::losses::{LossReport, loss_report};
 use crate::usecases::planning::health::lifestyle_creep;
@@ -510,9 +511,7 @@ pub fn report_overview(
     let pnl = pnl_report(books, &since_january);
     let losses = loss_report(books.vault(), &since_january);
     // Spending a currency also closes «positions»; only a result counts.
-    let traded = books
-        .vault()
-        .realized_pnl_filtered(since_january.scope.as_ref())
+    let traded = realized_pnl_filtered(books, since_january.scope.as_ref())
         .legs
         .iter()
         .any(|leg| !leg.pnl_base.is_zero());

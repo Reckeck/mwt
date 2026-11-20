@@ -82,9 +82,6 @@ impl UnlockedVault {
         /// The currency a store mostly holds, for terms entered without one.
         pub(crate) fn store_currency(&self, store_id: &str) -> String
             => crate::planning::budget::store_currency @books;
-        /// The smallest active `Total / Day` limit, in `currency`.
-        pub(crate) fn manual_day_limit(&self, currency: &str, now: i64) -> Option<Amount>
-            => crate::planning::budget::manual_day_limit @books;
         /// Planned income and mandatory spending of the month containing `date`.
         pub(crate) fn month_plan(&self, cal: &Calendar, date: NaiveDate, currency: &str) -> (Amount, Amount)
             => crate::usecases::planning::budget::month_plan_of;

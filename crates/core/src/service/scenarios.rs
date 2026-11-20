@@ -37,10 +37,4 @@ impl UnlockedVault {
             => crate::usecases::planning::scenarios::goal_from_scenario @doc;
     }
     // forward:end
-
-    // Read by the dashboard, the relations and the goal checks until they move.
-    forward! {
-        pub(crate) fn find_calc_scenario(&self, id: &str) -> Option<&CalcScenario>
-            => crate::planning::scenarios::find_calc_scenario @doc;
-    }
 }

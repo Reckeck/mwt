@@ -18,7 +18,7 @@ use crate::model::store::StoreScope;
 use crate::model::vault::DashPeriod;
 use crate::money::tree::{find_store, resolve_scope};
 use crate::planning::goals::store_values_usd;
-use crate::planning::scenarios::planned_balance;
+use crate::planning::scenarios::{find_calc_scenario, planned_balance};
 use crate::service::UpcomingKind;
 
 /// The strip lists at most this many things to do.
@@ -126,9 +126,7 @@ fn scope_value_in(books: &Books, scope: &StoreScope, currency: &str, now: i64) -
 /// Plan against fact for one saved scenario: the fact is its "From your data"
 /// wallets, or else the wallets of the goal that follows it.
 pub fn scenario_status(books: &Books, id: &str, now: i64, zone: &str) -> Result<ScenarioStatus> {
-    let scenario = books
-        .vault()
-        .find_calc_scenario(id)
+    let scenario = find_calc_scenario(books.doc(), id)
         .ok_or_else(|| Error::Missing(format!("scenario {id}")))?;
     let input = &scenario.input;
     let today = Calendar::new(zone).date_of(now);

@@ -13,6 +13,7 @@ use crate::error::Result;
 use crate::kernel::books::Books;
 use crate::model::notify::{NoticeCategory, NoticeRecord};
 use crate::model::planning::{HealthColor, HealthReasonCode, HealthSnapshot};
+use crate::planning::budget::budget_currency;
 use crate::planning::health::{
     DTI_ELEVATED_PCT, DTI_HIGH_PCT, FUND_MIN_MONTHS, FUND_SAFE_MONTHS, HealthReason, RECENT_MONTHS,
     SavingsMonth, check_freedom_rate, color_text, finished_months, months_average, percent,
@@ -22,6 +23,7 @@ use crate::planning::passive::{PassiveIncome, passive_income};
 use crate::service::{
     DebtLoad, EmergencyStatus, Insight, InsightCode, LoanClass, UnlockedVault, notice, notice_title,
 };
+use crate::usecases::planning::emergency::emergency_fund_status;
 
 /// The whole checkup (plan C4).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -190,7 +192,7 @@ pub fn lifestyle_creep(books: &Books<'_>, now: i64, zone: &str) -> Option<Insigh
 /// other inflation readers.
 pub fn capital_health(books: &Books<'_>, now: i64, zone: &str) -> Result<HealthReport> {
     let doc = books.doc();
-    let emergency = books.vault().emergency_fund_status(now, zone);
+    let emergency = emergency_fund_status(books, now, zone);
     let debts = books.vault().debt_load(now, zone)?;
     let freedom_rate = doc.settings.freedom_rate;
     let passive = passive_income(books, now, zone, freedom_rate)?;
@@ -221,7 +223,7 @@ pub fn capital_health(books: &Books<'_>, now: i64, zone: &str) -> Result<HealthR
     Ok(HealthReport {
         color,
         reasons,
-        currency: books.vault().budget_currency(),
+        currency: budget_currency(books),
         emergency,
         debts,
         passive,

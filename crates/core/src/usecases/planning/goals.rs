@@ -21,6 +21,9 @@ use crate::kernel::events::{DomainEvent, GoalPaused, GoalResumed};
 use crate::model::planning::{Envelope, Goal};
 use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
+use crate::money::portfolio::history_series_filtered_in;
+use crate::planning::budget::{budget_currency, manual_month};
+use crate::planning::envelopes::envelope_saved_for_goal;
 use crate::planning::goals::{
     DAYS_PER_MONTH, FORECAST_DAYS, GoalCalendar, GoalCalendarMonth, GoalDeleted, GoalDraft,
     GoalProgress, RealismIssue, SURPLUS_MONTHS, active_goals, amount_of, deposits,
@@ -31,6 +34,7 @@ use crate::planning::goals::{
 use crate::pricing::history::secs_or_now;
 use crate::service::MIN_HISTORY_MONTHS;
 use crate::service::UnlockedVault;
+use crate::usecases::planning::budget::month_summary;
 use crate::usecases::react::react;
 
 /// Active workflows that move money into the goal's wallet (what
@@ -182,10 +186,7 @@ pub fn free_surplus_avg(books: &Books<'_>, now: i64, zone: &str) -> Option<Amoun
     let mut found: Vec<Amount> = Vec::new();
     for _ in 0..24 {
         month = first_of_month(month - Duration::days(1));
-        let summary = books
-            .vault()
-            .month_summary_in(books, &calendar::month_key(month), zone)
-            .ok()?;
+        let summary = month_summary(books, &calendar::month_key(month), zone).ok()?;
         if summary.income.is_zero() && summary.fixed.is_zero() && summary.daily.is_zero() {
             continue;
         }
@@ -196,7 +197,7 @@ pub fn free_surplus_avg(books: &Books<'_>, now: i64, zone: &str) -> Option<Amoun
     }
     // Short history: the user's own month, when given (plan B).
     if found.len() < MIN_HISTORY_MONTHS as usize
-        && let Some(manual) = books.vault().manual_month()
+        && let Some(manual) = manual_month(books)
     {
         return Some(manual.income - manual.fixed - manual.daily);
     }
@@ -214,9 +215,7 @@ fn daily_values(
     cal: &Calendar,
     now: i64,
 ) -> Vec<(f64, f64)> {
-    let series = books
-        .vault()
-        .history_series_filtered_in(books.rate_book(), Some(scope), "usd");
+    let series = history_series_filtered_in(books.doc(), books.rate_book(), Some(scope), "usd");
     let today = cal.date_of(now);
     (0..=FORECAST_DAYS)
         .map(|offset| {
@@ -248,9 +247,7 @@ pub fn goal_progress(books: &Books<'_>, now: i64, zone: &str) -> Vec<GoalProgres
                 alloc_usd / scope_usd
             };
             // A goal backed by envelopes is exactly what they earmark.
-            let saved = books
-                .vault()
-                .envelope_saved_for_goal(&goal.id, &goal.currency, now)
+            let saved = envelope_saved_for_goal(books, &goal.id, &goal.currency, now)
                 .unwrap_or_else(|| {
                     book.convert(alloc_usd, "usd", &goal.currency, now)
                         .unwrap_or(Amount::ZERO)
@@ -328,7 +325,7 @@ pub fn goal_progress(books: &Books<'_>, now: i64, zone: &str) -> Vec<GoalProgres
         .collect();
 
     // All goals together against what is usually left over.
-    let currency = books.vault().budget_currency();
+    let currency = budget_currency(books);
     if let Some(surplus) = free_surplus_avg(books, now, zone) {
         let need_total = out
             .iter()
@@ -356,7 +353,7 @@ pub fn goal_progress(books: &Books<'_>, now: i64, zone: &str) -> Vec<GoalProgres
 pub fn goal_calendar(books: &Books<'_>, year: i32, now: i64, zone: &str) -> Result<GoalCalendar> {
     let cal = Calendar::new(zone);
     let book = books.rate_book();
-    let currency = books.vault().budget_currency();
+    let currency = budget_currency(books);
     let first = NaiveDate::from_ymd_opt(year, 1, 1)
         .ok_or_else(|| Error::InvalidInput(format!("year {year}")))?;
     let goals = active_goals(books.doc());

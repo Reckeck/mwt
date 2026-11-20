@@ -11,6 +11,7 @@ use crate::calendar::{self, Calendar};
 use crate::ipc_contract::{BaseKind, Comparison};
 use crate::kernel::books::Books;
 use crate::model::vault::DashPeriod;
+use crate::money::portfolio::history_series;
 use crate::planning::budget::budget_currency;
 use crate::planning::period::{PeriodWindow, months_back, period_window};
 use crate::service::FlowClass;
@@ -179,7 +180,7 @@ pub fn net_worth_trend(books: &Books, period: DashPeriod, now: i64, zone: &str) 
         }
     };
     let slots = step(today) + 1;
-    let history = books.vault().history_series(&currency);
+    let history = history_series(books, &currency);
     let mut opening = None;
     let mut values: Vec<Option<Amount>> = vec![None; slots];
     for point in &history {

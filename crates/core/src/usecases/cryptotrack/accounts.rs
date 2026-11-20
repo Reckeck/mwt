@@ -19,6 +19,7 @@ use rust_decimal::Decimal;
 use crate::Amount;
 use crate::cryptotrack::engine::math;
 use crate::cryptotrack::service::accounts::{self as rules, looks_like_secret};
+use crate::cryptotrack::service::totals::crypto_quarantined;
 use crate::cryptotrack::tokens;
 use crate::error::{Error, Result};
 use crate::ipc_contract::cryptotrack::accounts::{
@@ -110,9 +111,7 @@ fn crypto_month_change(doc: &VaultDoc, account_id: &str, now_secs: i64) -> Optio
 /// user decides: quarantined, not rejected, and met in an event.
 fn crypto_quarantine_by_account(books: &Books<'_>) -> BTreeMap<String, Vec<QuarantinedHolding>> {
     let doc = books.doc();
-    let left_out: Vec<String> = books
-        .vault()
-        .crypto_quarantined()
+    let left_out: Vec<String> = crypto_quarantined(doc)
         .into_iter()
         .filter(|row| {
             // Hidden tokens are the settings' business, not this block's.

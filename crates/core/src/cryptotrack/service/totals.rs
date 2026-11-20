@@ -146,6 +146,7 @@ use crate::model::chain::Chain;
 use crate::model::cryptotrack::CryptoAsset;
 use crate::model::store::{AssetRef, Holding, StoreKind};
 use crate::model::vault::VaultDoc;
+use crate::money::price_info::price_quote_for;
 use crate::pricing::history::unix_secs;
 
 /// Why something the module knows about stays out of the capital.
@@ -347,7 +348,6 @@ pub(crate) fn capital(books: &Books<'_>) -> Capital {
     }
     let ledger = fold(books);
     let (_, fx) = books.base_and_fx();
-    let vault = books.vault();
     let account_counts =
         |account_id: &str| super::positions::crypto_account_counts(doc, account_id);
     let inputs = super::positions::crypto_position_inputs(doc);
@@ -376,7 +376,7 @@ pub(crate) fn capital(books: &Books<'_>) -> Capital {
         };
         // The default origin is `PriceOrigin::None`: no price at all; the type itself
         // lives above this layer, so it is not named here.
-        if vault.price_quote_for(&asset.key()).info.origin == Default::default() {
+        if price_quote_for(books, &asset.key()).info.origin == Default::default() {
             out.left_out.push(CryptoOutsideTotals {
                 account_id: Some(held.account_id.clone()),
                 store_id: Some(wallet.id.clone()),

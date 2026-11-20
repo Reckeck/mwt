@@ -185,6 +185,22 @@ files = [
 ]
 
 [[foundation]]
+# T58 (Z5): every `Books::vault()` call in the domain areas and their usecases goes to the area function; `vault()` is
+# deleted from kernel/books.rs. Call sites only; area modules keep their shape.
+task = "T58"
+files = [
+    "crates/core/src/money/", "crates/core/src/household/", "crates/core/src/planning/",
+    "crates/core/src/reports/", "crates/core/src/cryptotrack/", "crates/core/src/workflow/",
+    "crates/core/src/usecases/", "crates/core/src/kernel/books.rs",
+    # Forwards in service/ that lose their last caller are deleted (orchestrator decision 2026-11-20).
+    "crates/core/src/service/allocation.rs", "crates/core/src/service/budget.rs",
+    "crates/core/src/service/cryptotrack/totals.rs", "crates/core/src/service/envelopes.rs",
+    "crates/core/src/service/portfolio.rs", "crates/core/src/service/price_info.rs",
+    "crates/core/src/service/scenarios.rs", "crates/core/src/service/shared_events/analytics.rs",
+    "crates/core/src/service/where_went.rs",
+]
+
+[[foundation]]
 # `sync_ids` and `reports` become `pub(crate)` for the household scenarios until their areas move.
 task = "A"
 files = ["crates/core/src/service/mod.rs"]

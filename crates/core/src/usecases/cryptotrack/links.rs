@@ -18,6 +18,7 @@ use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::money::rates::convert_at;
 use crate::service::UnlockedVault;
+use crate::usecases::cryptotrack::operations::crypto_operation_detail;
 
 /// Crypto operations that look like the same movement of money as a fiat
 /// record: close in time, the ones whose value fits first. Only a
@@ -52,14 +53,15 @@ pub fn crypto_link_candidates(
 /// The row of one operation, as the list shows it. The detail is built by the
 /// operations area, which has not moved yet: one `Books::vault()` call.
 fn crypto_row_of(books: &Books<'_>, event_id: &str) -> Option<CryptoOpRow> {
-    books
-        .vault()
-        .crypto_operation_detail(&CryptoOperationDetailInput {
+    crypto_operation_detail(
+        books,
+        &CryptoOperationDetailInput {
             id: event_id.to_string(),
             with_candidates: false,
-        })
-        .ok()
-        .map(|detail| detail.row)
+        },
+    )
+    .ok()
+    .map(|detail| detail.row)
 }
 
 fn value_fits(books: &Books<'_>, input: &CryptoLinkCandidatesInput, row: &CryptoOpRow) -> bool {

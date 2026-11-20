@@ -19,6 +19,7 @@ use crate::model::planning::{Automation, AutomationRun, Budget, BudgetTarget, Ut
 use crate::model::store::StoreKind;
 use crate::model::transaction::{Leg, LegRole, Transaction};
 use crate::model::vault::DailyBudgetMode;
+use crate::money::worth::classify_flow;
 use crate::planning::automations::{automation_draft, draft_to_transaction};
 use crate::planning::budget::{
     AVG_LOOKBACK_MONTHS, BudgetDraft, BudgetStatus, DailyBudget, MonthAllowance, MonthAvg,
@@ -30,6 +31,7 @@ use crate::planning::budget::{
 use crate::planning::goals::resolve_scope;
 use crate::pricing::history::secs_or_now;
 use crate::service::{FlowClass, RateBook, UnlockedVault};
+use crate::usecases::household::shared_events::extra_flows_from;
 use crate::usecases::planning::automation_rules::{automation_occurrences, automation_runs};
 use crate::usecases::planning::automations::automations;
 
@@ -93,7 +95,7 @@ pub fn delete_budget(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 /// Where a transaction lands in the budget: the one classification, asked of
 /// the vault until the worth area moves.
 fn classify(books: &Books<'_>, tx: &Transaction) -> FlowClass {
-    books.vault().classify_flow(tx)
+    classify_flow(books.doc(), tx)
 }
 
 /// Value of one leg in `currency` at `secs`; `None` without a rate.
@@ -202,7 +204,8 @@ pub(crate) fn flows_between(
     to: i64,
 ) -> Vec<Flow> {
     let mut flows = payment_flows(books, cal, currency, from, to);
-    flows.extend(books.vault().extra_flows_from(
+    flows.extend(extra_flows_from(
+        books.doc(),
         books.shared_extras(),
         books.rate_book(),
         cal,
