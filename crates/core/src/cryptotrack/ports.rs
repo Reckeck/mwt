@@ -20,7 +20,6 @@ use chrono::NaiveDate;
 use serde_json::Value;
 
 use crate::cryptotrack::sources::bybit::{Fills, FillsPage, PageRequest};
-use crate::cryptotrack::tokens::known;
 use crate::error::Result;
 use crate::exchange::{EarnYield, InterTransfer};
 use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint};
@@ -74,7 +73,7 @@ impl PriceSource for PricingService {
         &self,
         wanted: &[(CryptoAsset, NaiveDate)],
     ) -> Result<Vec<CryptoPricePoint>> {
-        self.fetch_historic_prices(known::is_known, wanted).await
+        self.fetch_historic_prices(wanted).await
     }
 }
 

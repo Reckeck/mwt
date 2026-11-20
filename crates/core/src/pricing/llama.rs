@@ -151,14 +151,14 @@ async fn fetch_historic<A: CoinsApi>(
 }
 
 impl PricingService {
-    /// Historic USD prices, as the consent setting allows. `is_known` says
-    /// which tokens are on the built-in list: those are asked without consent.
+    /// Historic USD prices, as the consent setting allows. The known list
+    /// injected with `with_known_tokens` says which tokens are asked without
+    /// consent.
     pub async fn fetch_historic_prices(
         &self,
-        is_known: impl Fn(&TokenId) -> bool,
         wanted: &[(CryptoAsset, NaiveDate)],
     ) -> Result<Vec<CryptoPricePoint>> {
-        fetch_historic(self, self.lookup_contracts, is_known, wanted).await
+        fetch_historic(self, self.lookup_contracts, self.is_known, wanted).await
     }
 }
 
