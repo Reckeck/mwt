@@ -10,7 +10,8 @@ use crate::ipc_contract::{AfterApply, StoreBalanceChange};
 use crate::service::{PeerRef, UnlockedVault};
 use crate::sync::manifest::Manifest;
 use crate::sync::manifest_view::{
-    check_incoming, diff_wanted, manifest_for, preview_summary, records_for,
+    StoreValues, check_incoming, diff_wanted, manifest_for, preview_summary, records_for,
+    store_changes,
 };
 use crate::sync::view;
 use crate::sync::{RecordState, SyncSummary};
@@ -128,29 +129,23 @@ pub fn sync_preview_after(
         .chain(&copy.doc.stores)
         .map(|store| (store.id.as_str(), store.name.as_str()))
         .collect();
-    let mut stores: Vec<StoreBalanceChange> = Vec::new();
-    for id in before.keys().chain(after.keys()) {
-        if stores.iter().any(|store| &store.id == id) {
-            continue;
-        }
-        let old = before.get(id).copied().unwrap_or_default() * fx;
-        let new = after.get(id).copied().unwrap_or_default() * copy_fx;
-        if old == new {
-            continue;
-        }
-        stores.push(StoreBalanceChange {
-            id: id.clone(),
-            name: names
-                .get(id.as_str())
-                .copied()
-                .unwrap_or_default()
-                .to_string(),
-            before: old,
-            after: new,
-            currency: currency.clone(),
-        });
-    }
-    stores.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    let stores = store_changes(
+        &StoreValues { usd: &before, fx },
+        &StoreValues {
+            usd: &after,
+            fx: copy_fx,
+        },
+        &names,
+    )
+    .into_iter()
+    .map(|change| StoreBalanceChange {
+        id: change.id,
+        name: change.name,
+        before: change.before,
+        after: change.after,
+        currency: currency.clone(),
+    })
+    .collect();
     Ok(Some(AfterApply {
         currency,
         net_worth_before: vault.net_worth().net,

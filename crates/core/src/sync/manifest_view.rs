@@ -3,7 +3,7 @@
 //! serialized records it is given; stamping the pending edits and building the records
 //! happen in the scenarios (`usecases::sync::read`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde_json::Value;
 
@@ -12,6 +12,7 @@ use super::plan::plan_seen;
 use super::registry::Rule;
 use super::view::{self, record_key, split_key};
 use super::{RecordState, SyncSummary};
+use crate::Amount;
 use crate::crypto::level::SecurityLevel;
 use crate::error::{Error, Result};
 use crate::model::vault::{VaultDoc, iso_to_millis};
@@ -185,4 +186,115 @@ pub fn preview_summary(
 ) -> SyncSummary {
     let seen = doc.sync.seen_by.get(device_id);
     plan_seen(incoming, |key| record_state(doc, records, key), seen).summary
+}
+
+/// One store whose balance differs between two sides of a sync preview.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreChange {
+    pub id: String,
+    pub name: String,
+    pub before: Amount,
+    pub after: Amount,
+}
+
+/// One side of the diff: the USD value of each store and the rate that turns
+/// USD into the display currency on that side.
+pub struct StoreValues<'a> {
+    pub usd: &'a HashMap<String, Amount>,
+    pub fx: Amount,
+}
+
+/// The stores whose balance differs between `before` and `after`, in the
+/// display `currency`, sorted by name then id. A store missing on one side
+/// counts as zero there; `names` gives the label of each store id.
+pub fn store_changes(
+    before: &StoreValues<'_>,
+    after: &StoreValues<'_>,
+    names: &HashMap<&str, &str>,
+) -> Vec<StoreChange> {
+    let mut stores: Vec<StoreChange> = Vec::new();
+    for id in before.usd.keys().chain(after.usd.keys()) {
+        if stores.iter().any(|store| &store.id == id) {
+            continue;
+        }
+        let old = before.usd.get(id).copied().unwrap_or_default() * before.fx;
+        let new = after.usd.get(id).copied().unwrap_or_default() * after.fx;
+        if old == new {
+            continue;
+        }
+        stores.push(StoreChange {
+            id: id.clone(),
+            name: names
+                .get(id.as_str())
+                .copied()
+                .unwrap_or_default()
+                .to_string(),
+            before: old,
+            after: new,
+        });
+    }
+    stores.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    stores
+}
+
+#[cfg(test)]
+mod store_changes_tests {
+    use super::*;
+
+    fn amount(text: &str) -> Amount {
+        Amount::parse(text).unwrap()
+    }
+
+    fn values(entries: &[(&str, &str)]) -> HashMap<String, Amount> {
+        entries
+            .iter()
+            .map(|(id, value)| (id.to_string(), amount(value)))
+            .collect()
+    }
+
+    #[test]
+    fn store_changes_lists_moved_stores_sorted_by_name_and_skips_unchanged() {
+        let before = values(&[("a", "10"), ("b", "5"), ("same", "7")]);
+        let after = values(&[("a", "12"), ("c", "3"), ("same", "7")]);
+        let names = HashMap::from([("a", "Zeta"), ("b", "Beta"), ("c", "Alpha"), ("same", "S")]);
+        let one = amount("1");
+        let changes = store_changes(
+            &StoreValues {
+                usd: &before,
+                fx: one,
+            },
+            &StoreValues {
+                usd: &after,
+                fx: one,
+            },
+            &names,
+        );
+        let ids: Vec<&str> = changes.iter().map(|change| change.id.as_str()).collect();
+        assert_eq!(ids, ["c", "b", "a"]);
+        assert_eq!(changes[0].before, amount("0"));
+        assert_eq!(changes[0].after, amount("3"));
+        assert_eq!(changes[1].after, amount("0"));
+        assert_eq!(changes[2].before, amount("10"));
+        assert_eq!(changes[2].after, amount("12"));
+    }
+
+    #[test]
+    fn store_changes_applies_each_sides_rate() {
+        let usd = values(&[("a", "10")]);
+        let changes = store_changes(
+            &StoreValues {
+                usd: &usd,
+                fx: amount("1"),
+            },
+            &StoreValues {
+                usd: &usd,
+                fx: amount("2"),
+            },
+            &HashMap::new(),
+        );
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].before, amount("10"));
+        assert_eq!(changes[0].after, amount("20"));
+        assert_eq!(changes[0].name, "");
+    }
 }
