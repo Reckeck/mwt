@@ -802,3 +802,11 @@ files = [
   "crates/core/src/usecases/money/",
   "crates/xtask/arch-allow.toml",
 ]
+
+[[foundation]]
+# T120/T121 (minors17): automation retry/delete behaviour fixes. One wave, one label (CI checks one task per PR).
+task = "T120"
+files = [
+    "crates/core/src/usecases/planning/automations.rs",
+    "crates/core/src/usecases/planning/automations_tests.rs",
+]
