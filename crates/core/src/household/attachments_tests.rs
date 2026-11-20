@@ -317,6 +317,26 @@ fn plan_file_checks_name_bytes_and_size() {
 }
 
 #[test]
+fn plan_file_checks_the_owner_before_the_file() {
+    let (doc, _) = bare_doc();
+    let file = NewFile {
+        name: " ",
+        mime: None,
+        bytes: b"",
+    };
+    let missing = EntityRef::new(EntityKind::Goal, "nope");
+    let wrong_kind = EntityRef::new(EntityKind::Store, "g1");
+    assert!(matches!(
+        plan_file(&doc, missing, &file, "a1".into(), NOW),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        plan_file(&doc, wrong_kind, &file, "a1".into(), NOW),
+        Err(Error::InvalidInput(_))
+    ));
+}
+
+#[test]
 fn plan_file_gives_back_the_same_file_of_the_same_owner() {
     let (mut doc, owner) = bare_doc();
     let file = NewFile {
@@ -425,4 +445,147 @@ fn the_link_delegate_matches_the_scenario() {
     };
     assert_eq!(strip(&via_delegate), strip(&via_scenario));
     assert_eq!(vault.list_attachments(Some(&owner)).len(), 2);
+}
+
+#[test]
+fn the_file_delegate_matches_the_scenario() {
+    let (_dir, mut vault) = setup();
+    let owner = tx_owner(&mut vault);
+    let via_delegate = vault
+        .add_attachment_file(owner.clone(), receipt(b"%PDF-1 receipt"))
+        .unwrap();
+    let via_scenario = crate::usecases::household::attachments::add_attachment_file(
+        &mut vault,
+        owner.clone(),
+        receipt(b"%PDF-1 receipt"),
+    )
+    .unwrap();
+    // The same file of the same owner is stored once, so both calls agree.
+    assert_eq!(via_delegate, via_scenario);
+    assert_eq!(vault.list_attachments(Some(&owner)).len(), 1);
+}
+
+#[test]
+fn the_remove_rename_restore_delegates_match_their_scenarios() {
+    use crate::usecases::household::attachments as scenario;
+    let (_dir, mut vault) = setup();
+    let owner = tx_owner(&mut vault);
+    let first = vault
+        .add_attachment_link(owner.clone(), "example.com", "One")
+        .unwrap();
+    let second = vault
+        .add_attachment_link(owner.clone(), "example.org", "Two")
+        .unwrap();
+
+    let removed_a = vault.remove_attachment(&first.id).unwrap();
+    let removed_b = scenario::remove_attachment(&mut vault, &second.id).unwrap();
+    assert!(removed_a.removed_at.is_some() && removed_b.removed_at.is_some());
+
+    let restored_a = vault.restore_attachment(&first.id).unwrap();
+    let restored_b = scenario::restore_attachment(&mut vault, &second.id).unwrap();
+    assert!(restored_a.removed_at.is_none() && restored_b.removed_at.is_none());
+
+    let renamed_a = vault.rename_attachment(&first.id, " New ").unwrap();
+    let renamed_b = scenario::rename_attachment(&mut vault, &second.id, " New ").unwrap();
+    assert_eq!(renamed_a.title, renamed_b.title);
+
+    for call in [
+        vault.remove_attachment("missing").err(),
+        vault.rename_attachment("missing", "x").err(),
+        vault.restore_attachment("missing").err(),
+    ] {
+        assert!(call.is_some());
+    }
+    assert!(scenario::remove_attachment(&mut vault, "missing").is_err());
+    assert!(scenario::rename_attachment(&mut vault, "missing", "x").is_err());
+    assert!(scenario::restore_attachment(&mut vault, "missing").is_err());
+}
+
+#[test]
+fn list_attachments_filters_by_owner_and_hides_removed() {
+    let (mut doc, goal_owner) = bare_doc();
+    let tx_owner = EntityRef::new(EntityKind::Tx, "t1");
+    link_in(&mut doc, &goal_owner, "a1");
+    link_in(&mut doc, &tx_owner, "a2");
+    link_in(&mut doc, &goal_owner, "a3");
+    doc.attachments[2].removed_at = Some(NOW.into());
+
+    let ids =
+        |items: Vec<Attachment>| -> Vec<String> { items.into_iter().map(|item| item.id).collect() };
+    assert_eq!(ids(list_attachments(&doc, None)), ["a1", "a2"]);
+    assert_eq!(ids(list_attachments(&doc, Some(&goal_owner))), ["a1"]);
+    assert_eq!(ids(list_attachments(&doc, Some(&tx_owner))), ["a2"]);
+    assert!(list_attachments(&doc, Some(&EntityRef::new(EntityKind::Tx, "t9"))).is_empty());
+}
+
+#[test]
+fn transactions_with_attachments_lists_each_operation_once_sorted() {
+    let (mut doc, goal_owner) = bare_doc();
+    link_in(&mut doc, &EntityRef::new(EntityKind::Tx, "t2"), "a1");
+    link_in(&mut doc, &EntityRef::new(EntityKind::Tx, "t1"), "a2");
+    link_in(&mut doc, &EntityRef::new(EntityKind::Tx, "t2"), "a3");
+    link_in(&mut doc, &goal_owner, "a4");
+    link_in(&mut doc, &EntityRef::new(EntityKind::Tx, "t3"), "a5");
+    doc.attachments[4].removed_at = Some(NOW.into());
+
+    assert_eq!(transactions_with_attachments(&doc), ["t1", "t2"]);
+    assert!(transactions_with_attachments(&VaultDoc::default()).is_empty());
+}
+
+#[test]
+fn find_attachment_finds_live_records_only() {
+    let (mut doc, owner) = bare_doc();
+    link_in(&mut doc, &owner, "a1");
+    link_in(&mut doc, &owner, "a2");
+    doc.attachments[1].removed_at = Some(NOW.into());
+
+    assert_eq!(find_attachment(&doc, "a1").unwrap().id, "a1");
+    assert!(matches!(
+        find_attachment(&doc, "a2"),
+        Err(Error::Missing(_))
+    ));
+    assert!(matches!(
+        find_attachment(&doc, "nope"),
+        Err(Error::Missing(_))
+    ));
+}
+
+#[test]
+fn owner_exists_knows_operations_and_goals_only() {
+    let (mut doc, goal_owner) = bare_doc();
+    let tx = income("s1", "100", "salary");
+    let tx_id = tx.meta().id.clone();
+    doc.transactions.push(tx);
+
+    assert!(owner_exists(&doc, &goal_owner));
+    assert!(owner_exists(
+        &doc,
+        &EntityRef::new(EntityKind::Tx, tx_id.clone())
+    ));
+    assert!(!owner_exists(&doc, &EntityRef::new(EntityKind::Tx, "g1")));
+    assert!(!owner_exists(
+        &doc,
+        &EntityRef::new(EntityKind::Goal, tx_id)
+    ));
+    assert!(!owner_exists(
+        &doc,
+        &EntityRef::new(EntityKind::Goal, "nope")
+    ));
+    assert!(!owner_exists(
+        &doc,
+        &EntityRef::new(EntityKind::Store, "g1")
+    ));
+}
+
+#[test]
+fn attachments_dir_appends_files_to_the_vault_path() {
+    use std::path::Path;
+    assert_eq!(
+        attachments_dir(Path::new("/data/vault.wallet")),
+        Path::new("/data/vault.wallet.files")
+    );
+    assert_eq!(
+        attachments_dir(Path::new("vault")),
+        Path::new("vault.files")
+    );
 }

@@ -1,8 +1,9 @@
 //! Shim of the `attachments_cleanup` area: moved to `crate::household::attachments_cleanup` (spec core-strangler, D1).
 //!
-//! No old method of this area is public, so the generated block above stays
-//! empty; the two internal callers (open and external merge) keep these
-//! delegates until their files move.
+//! The generated region stays empty because no old method of this area is
+//! public. The block below it is hand-written for the two crate-internal
+//! callers (vault open and external merge) that still use these delegates
+//! until their files move.
 
 use super::UnlockedVault;
 use super::forward::forward;
