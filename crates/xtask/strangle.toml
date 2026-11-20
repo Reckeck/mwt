@@ -810,3 +810,26 @@ files = [
     "crates/core/src/usecases/planning/automations.rs",
     "crates/core/src/usecases/planning/automations_tests.rs",
 ]
+
+[[foundation]]
+# T111/T148/T165/T170 (minors16): behaviour-changing review minors. One wave, one label (CI checks one task per PR).
+task = "T111"
+files = [
+  "crates/core/src/usecases/household/utilities.rs",
+  "crates/core/src/service/utilities.rs",
+  "crates/core/src/model/vault.rs",
+  "crates/core/src/secret.rs",
+  "crates/core/src/service/password.rs",
+  "crates/app/src/commands/exchange.rs",
+  "crates/core/src/service/exchange_keys.rs",
+  "crates/core/src/service/exchange_import.rs",
+  "crates/core/src/service/cryptotrack/transition/tests.rs",
+  "crates/core/src/service/cryptotrack/operations.rs",
+  "crates/core/src/cryptotrack/",
+  "crates/core/src/usecases/cryptotrack/",
+  "crates/core/src/storage/fixtures_gen.rs",
+  "crates/core/src/storage/legacy_v4.rs",
+  "crates/core/src/storage/mod.rs",
+  "crates/core/src/vault_io/device_secrets.rs",
+  "crates/core/src/money/cost_basis.rs",
+]
