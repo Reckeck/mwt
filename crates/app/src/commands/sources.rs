@@ -7,8 +7,12 @@ use tauri::{AppHandle, Manager, State};
 use trade_core::datasource::{self, Extracted, SourcePreview};
 use trade_core::model::datasource::DataSource;
 use trade_core::model::notify::NoticeRecord;
+use trade_core::planning::datasources as source_reads;
 use trade_core::service::{DataSourceDraft, DataSourceView};
+use trade_core::usecases::money::inflation;
+use trade_core::usecases::planning::datasources;
 
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
@@ -44,11 +48,9 @@ async fn refresh_one(app: &AppHandle, source: &DataSource) -> Result<Vec<NoticeR
     let fetched = fetch_value(app, source).await;
     let russian = crate::scheduler::russian(app);
     let state = app.state::<AppState>();
-    let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().unwrap();
-    vault
-        .apply_source_fetch(&source.id, fetched, russian)
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        datasources::apply_source_fetch(vault, &source.id, fetched, russian)
+    })
 }
 
 /// The background job: every source whose interval has passed.
@@ -59,7 +61,7 @@ pub async fn refresh_due_sources(app: &AppHandle) {
             return;
         };
         match guard.as_ref() {
-            Some(vault) => vault.due_data_sources(chrono::Utc::now()),
+            Some(vault) => source_reads::due_data_sources(&vault.doc, chrono::Utc::now()),
             None => return,
         }
     };
@@ -127,8 +129,9 @@ pub async fn datasource_test(
 /// Every source with the places that use it.
 #[tauri::command]
 pub async fn datasources_list(state: State<'_, AppState>) -> Result<Vec<DataSourceView>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().data_sources_list())
+    with_vault(&state, |vault| {
+        Ok(datasources::data_sources_list(&vault.doc))
+    })
 }
 
 /// Create or change a source; a new or re-pointed one is fetched right away.
@@ -138,10 +141,8 @@ pub async fn datasource_save(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<DataSourceView, IpcError> {
-    let saved = {
-        let mut guard = require_vault(&state)?;
-        guard.as_mut().unwrap().save_data_source(draft)?
-    };
+    let saved =
+        with_vault_mut::<_, IpcError>(&state, |vault| datasources::save_data_source(vault, draft))?;
     if saved.source.last.is_none()
         && let Ok(notices) = refresh_one(&app, &saved.source).await
     {
@@ -150,15 +151,12 @@ pub async fn datasource_save(
         let _ = SourcesUpdated::emit(&app, &());
         let _ = RatesUpdated::emit(&app, &());
     }
-    let guard = require_vault(&state)?;
-    let view = guard
-        .as_ref()
-        .unwrap()
-        .data_sources_list()
-        .into_iter()
-        .find(|view| view.source.id == saved.source.id)
-        .unwrap_or(saved);
-    Ok(view)
+    with_vault(&state, |vault| {
+        Ok(datasources::data_sources_list(&vault.doc)
+            .into_iter()
+            .find(|view| view.source.id == saved.source.id)
+            .unwrap_or(saved))
+    })
 }
 
 /// Delete a source; the inflation that read it goes back to its default.
@@ -168,10 +166,7 @@ pub async fn datasource_delete(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    {
-        let mut guard = require_vault(&state)?;
-        guard.as_mut().unwrap().delete_data_source(&id)?;
-    }
+    with_vault_mut::<_, IpcError>(&state, |vault| datasources::delete_data_source(vault, &id))?;
     let _ = SourcesUpdated::emit(&app, &());
     let _ = RatesUpdated::emit(&app, &());
     Ok(())
@@ -184,27 +179,19 @@ pub async fn datasource_refresh(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<DataSourceView, IpcError> {
-    let source = {
-        let guard = require_vault(&state)?;
-        guard
-            .as_ref()
-            .unwrap()
-            .data_source(&id)
+    let source = with_vault::<_, IpcError>(&state, |vault| {
+        source_reads::data_source(&vault.doc, &id)
             .cloned()
-            .ok_or_else(|| {
-                IpcError::from(trade_core::Error::NotFound(format!("data source {id}")))
-            })?
-    };
+            .ok_or_else(|| trade_core::Error::NotFound(format!("data source {id}")))
+    })?;
     let notices = refresh_one(&app, &source).await?;
     announce(&app, notices);
-    let guard = require_vault(&state)?;
-    guard
-        .as_ref()
-        .unwrap()
-        .data_sources_list()
-        .into_iter()
-        .find(|view| view.source.id == id)
-        .ok_or_else(|| IpcError::from(trade_core::Error::NotFound(format!("data source {id}"))))
+    with_vault(&state, |vault| {
+        datasources::data_sources_list(&vault.doc)
+            .into_iter()
+            .find(|view| view.source.id == id)
+            .ok_or_else(|| trade_core::Error::NotFound(format!("data source {id}")))
+    })
 }
 
 /// Accept or drop a value that jumped more than tenfold.
@@ -216,13 +203,9 @@ pub async fn datasource_confirm(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let russian = crate::scheduler::russian(&app);
-    let notices = {
-        let mut guard = require_vault(&state)?;
-        guard
-            .as_mut()
-            .unwrap()
-            .confirm_source_value(&id, accept, russian)?
-    };
+    let notices = with_vault_mut::<_, IpcError>(&state, |vault| {
+        datasources::confirm_source_value(vault, &id, accept, russian)
+    })?;
     announce(&app, notices);
     Ok(())
 }
@@ -235,13 +218,9 @@ pub async fn set_inflation_source(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    {
-        let mut guard = require_vault(&state)?;
-        guard
-            .as_mut()
-            .unwrap()
-            .set_inflation_source(&currency, &source_id)?;
-    }
+    with_vault_mut::<_, IpcError>(&state, |vault| {
+        inflation::set_inflation_source(vault, &currency, &source_id)
+    })?;
     let _ = RatesUpdated::emit(&app, &());
     Ok(())
 }

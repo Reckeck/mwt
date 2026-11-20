@@ -7,7 +7,9 @@ use trade_core::calc::invest::{
 use trade_core::calc::{self, CalcInput, CalcResult};
 use trade_core::calendar::now_secs;
 use trade_core::model::planning::{CalcScenario, ScenarioSource};
+use trade_core::planning::scenarios as scenario_reads;
 use trade_core::service::{CalcScenarioDeleted, CalcScenarioDraft, ScenarioPrefill};
+use trade_core::usecases::planning::scenarios;
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
@@ -57,7 +59,9 @@ pub async fn calc_invest_safe_withdrawal(input: InvestInput) -> Result<Option<Am
 pub async fn calc_scenarios_list(
     state: State<'_, AppState>,
 ) -> Result<Vec<CalcScenario>, IpcError> {
-    with_vault(&state, |vault| Ok(vault.calc_scenarios()))
+    with_vault(&state, |vault| {
+        Ok(scenario_reads::calc_scenarios(&vault.doc))
+    })
 }
 
 #[tauri::command]
@@ -65,7 +69,7 @@ pub async fn calc_scenario_save(
     draft: CalcScenarioDraft,
     state: State<'_, AppState>,
 ) -> Result<CalcScenario, IpcError> {
-    with_vault_mut(&state, |vault| vault.save_calc_scenario(draft))
+    with_vault_mut(&state, |vault| scenarios::save_calc_scenario(vault, draft))
 }
 
 #[tauri::command]
@@ -73,7 +77,7 @@ pub async fn calc_scenario_delete(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<CalcScenarioDeleted, IpcError> {
-    with_vault_mut(&state, |vault| vault.delete_calc_scenario(&id))
+    with_vault_mut(&state, |vault| scenarios::delete_calc_scenario(vault, &id))
 }
 
 /// Undo of [`calc_scenario_delete`].
@@ -82,7 +86,9 @@ pub async fn calc_scenario_restore(
     deleted: CalcScenarioDeleted,
     state: State<'_, AppState>,
 ) -> Result<CalcScenario, IpcError> {
-    with_vault_mut(&state, |vault| vault.restore_calc_scenario(deleted))
+    with_vault_mut(&state, |vault| {
+        scenarios::restore_calc_scenario(vault, deleted)
+    })
 }
 
 /// "From your data": start amount, rate and contribution from the user's wallets
@@ -96,7 +102,7 @@ pub async fn calc_scenario_prefill(
 ) -> Result<ScenarioPrefill, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        vault.scenario_prefill(&source, &currency, now_secs(), &zone)
+        scenario_reads::scenario_prefill(&vault.books(), &source, &currency, now_secs(), &zone)
     })
 }
 

@@ -7,17 +7,21 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 use trade_core::model::notify::{NoticeCategory, NoticeRecord};
+use trade_core::planning::notifications as notification_reads;
 use trade_core::service::{notice, notice_title};
+use trade_core::usecases::planning::notifications;
 
-use crate::commands::{AppState, require_vault};
+use crate::commands::AppState;
+use crate::commands::planning::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// Every notice shown so far, newest first.
 #[tauri::command]
 pub async fn list_notifications(state: State<'_, AppState>) -> Result<Vec<NoticeRecord>, IpcError> {
-    let guard = require_vault(&state)?;
-    Ok(guard.as_ref().unwrap().notifications())
+    with_vault(&state, |vault| {
+        Ok(notification_reads::notifications(&vault.doc))
+    })
 }
 
 /// Mark notices read: the keys given, or every one.
@@ -26,12 +30,9 @@ pub async fn mark_notifications_read(
     keys: Option<Vec<String>>,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    let mut guard = require_vault(&state)?;
-    guard
-        .as_mut()
-        .unwrap()
-        .mark_notifications_read(keys.as_deref())
-        .map_err(IpcError::from)
+    with_vault_mut(&state, |vault| {
+        notifications::mark_notifications_read(vault, keys.as_deref())
+    })
 }
 
 /// Show a notice right now, to check that they come through.
