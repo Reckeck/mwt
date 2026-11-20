@@ -19,8 +19,11 @@ use crate::model::store::{AssetRef, StoreKind, StoreScope};
 use crate::model::transaction::{Leg, LegRole};
 use crate::pricing::history::secs_or_now;
 
+use super::where_went::where_report;
 use crate::kernel::books::Books;
+use crate::money::portfolio::realized_pnl_filtered;
 pub(crate) use crate::money::rates::value_at;
+use crate::planning::budget::{budget_currency, manual_day_limit};
 use crate::service::budget::Flow;
 use crate::service::{FlowClass, UpcomingItem};
 use crate::usecases::planning::budget::leg_value_in;
@@ -598,7 +601,7 @@ pub(crate) fn report_ctx(
         .as_deref()
         .map(|code| code.trim().to_lowercase())
         .filter(|code| !code.is_empty())
-        .unwrap_or_else(|| books.vault().budget_currency());
+        .unwrap_or_else(|| budget_currency(books));
     let scope = (!filter.scope.store_ids.is_empty())
         .then(|| crate::money::tree::resolve_scope(books.doc(), &filter.scope));
     let rate =
@@ -652,7 +655,7 @@ pub fn report(
         ReportKind::Portfolio => Report::Portfolio(portfolio_report(books, &ctx)),
         ReportKind::Inflation => Report::Inflation(inflation_report(books, &ctx)),
         ReportKind::Losses => Report::Losses(books.vault().loss_report(&ctx)),
-        ReportKind::Where => Report::Where(books.vault().where_report(&ctx)),
+        ReportKind::Where => Report::Where(where_report(books, &ctx)),
     };
     let insights = crate::service::insights::report_insights(&report);
     report.meta_mut().insights = insights;
@@ -1200,7 +1203,7 @@ pub(crate) fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
             ..PnlRow::default()
         })
         .collect();
-    for leg in books.vault().realized_pnl_filtered(ctx.scope.as_ref()).legs {
+    for leg in realized_pnl_filtered(books, ctx.scope.as_ref()).legs {
         let secs = secs_or_now(&leg.ts);
         let Some(index) = ctx.index_of(ctx.cal.date_of(secs)) else {
             continue;
@@ -1421,14 +1424,14 @@ pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Resul
         .ok_or_else(|| Error::InvalidInput(format!("month {month}: expected YYYY-MM")))?;
     let cal = Calendar::new(zone);
     let today = cal.date_of(now);
-    let currency = books.vault().budget_currency();
+    let currency = budget_currency(books);
     let (from, to) = cal.month_bounds(first);
     let flows = books.vault().flows_between(&cal, &currency, from, to);
     let month = books
         .vault()
         .month_allowance(&cal, first, &currency, &flows);
     let planned = month.per_day.is_positive().then_some(month.per_day);
-    let manual = books.vault().manual_day_limit(&currency, now);
+    let manual = manual_day_limit(books, &currency, now);
     let allowance = match (planned, manual) {
         (Some(plan), Some(limit)) => Some(plan.min(limit)),
         (plan, limit) => plan.or(limit),
