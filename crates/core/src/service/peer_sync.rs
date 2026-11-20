@@ -409,8 +409,17 @@ impl UnlockedVault {
                     .map(|(key, state)| (key.clone(), state.clone()))
                     .partition(|(key, _)| bad.contains(key));
                 let summary = plan_of(&left_out).summary;
+                // The skip is told only if the rest applies: on failure the
+                // journal goes back with the rolled-back document.
+                let journal = self.doc.sync.journal.clone();
                 let journaled = self.journal_skipped(&peer.name, &summary);
-                let mut outcome = self.apply_batch_from(&rest, peer, carry, external)?;
+                let mut outcome = match self.apply_batch_from(&rest, peer, carry, external) {
+                    Ok(outcome) => outcome,
+                    Err(err) => {
+                        self.doc.sync.journal = journal;
+                        return Err(err);
+                    }
+                };
                 match outcome.as_mut() {
                     Some(applied) => applied.skipped = bad,
                     None if journaled => self.persist()?,
