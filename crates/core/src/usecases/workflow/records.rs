@@ -314,6 +314,19 @@ fn refused_run(tx: &mut Tx, run_id: &str) -> Option<WorkflowRun> {
         .cloned()
 }
 
+/// The reason a dismissed run carries in the journal.
+pub(super) const SKIPPED: &str = "skipped";
+
+/// Turn a run into a skipped one: the single home of the skip rule.
+pub(super) fn mark_skipped(tx: &mut Tx, run_id: &str) -> Result<WorkflowRun> {
+    tx.collection::<WorkflowRun>().update(run_id, |run| {
+        run.outcome = RunOutcome::Dropped {
+            reason: SKIPPED.into(),
+        };
+        run.clone()
+    })
+}
+
 pub fn discard_queued(vault: &mut UnlockedVault, id: &str) -> Result<()> {
     vault.transact(|tx| {
         let Some(batch) = tx.collection::<QueuedActions>().get(id).cloned() else {
@@ -322,12 +335,7 @@ pub fn discard_queued(vault: &mut UnlockedVault, id: &str) -> Result<()> {
         tx.collection::<QueuedActions>().remove(id)?;
         // Nothing is left to retry: the refused run is skipped, as by `skip_workflow_run`.
         if refused_run(tx, &batch.run_id).is_some() {
-            tx.collection::<WorkflowRun>()
-                .update(&batch.run_id, |run| {
-                    run.outcome = RunOutcome::Dropped {
-                        reason: "skipped".into(),
-                    };
-                })?;
+            mark_skipped(tx, &batch.run_id)?;
         }
         Ok(())
     })

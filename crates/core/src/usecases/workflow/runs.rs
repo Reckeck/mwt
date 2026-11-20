@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use chrono::{Datelike, Duration};
 
-use super::records::close_refused_as_done;
+use super::records::{SKIPPED, close_refused_as_done, mark_skipped};
 use crate::Amount;
 use crate::calendar::{Calendar, first_of_month};
 use crate::error::{Error, Result};
@@ -504,12 +504,7 @@ pub fn skip_workflow_run(vault: &mut UnlockedVault, run_id: &str) -> Result<Work
                 "only a refused run can be skipped".into(),
             ));
         }
-        let skipped = tx.collection::<WorkflowRun>().update(run_id, |run| {
-            run.outcome = RunOutcome::Dropped {
-                reason: "skipped".into(),
-            };
-            run.clone()
-        })?;
+        let skipped = mark_skipped(tx, run_id)?;
         // What a refusal queued goes with it: nothing is left to retry.
         let queued: Vec<String> = tx
             .collection::<QueuedActions>()
@@ -854,7 +849,7 @@ fn fire_due_automations(
         let overflow = fresh.len().saturating_sub(MAX_CATCH_UP);
         for moment in &fresh[..overflow] {
             let label = trigger_label(&trigger.kind, &crate::calendar::iso(*moment));
-            keep_dropped(vault, &workflow.id, &label, "skipped", now, pass)?;
+            keep_dropped(vault, &workflow.id, &label, SKIPPED, now, pass)?;
             pass.skipped += 1;
         }
         for moment in &fresh[overflow..] {
