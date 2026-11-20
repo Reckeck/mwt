@@ -2,8 +2,6 @@
 //! `crate::cryptotrack::service::legacy_bybit`, the scenario to
 //! `crate::usecases::cryptotrack::legacy_bybit` (spec core-strangler, D1).
 
-use std::collections::BTreeSet;
-
 use crate::cryptotrack::service::legacy_bybit::BybitStored;
 use crate::error::Result;
 use crate::model::vault::PendingImport;
@@ -26,12 +24,9 @@ impl UnlockedVault {
     }
     // forward:end
 
-    // Called by the exchange sync until that area moves; not in the baseline
+    // Called by the exchange sync; not in the baseline
     // (crate-private), so outside the regenerated block.
     forward! {
-        /// `exec_id`s of the exchange operations the module already holds.
-        pub(crate) fn bybit_event_ids(&self) -> BTreeSet<String>
-            => crate::cryptotrack::service::legacy_bybit::bybit_event_ids @doc;
         /// Store exchange records as operations of the module. The one way in:
         /// both a fresh sweep and the conversion of the old queue come through
         /// here, so neither can write an operation the other would not.

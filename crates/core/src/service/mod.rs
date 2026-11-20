@@ -1,31 +1,32 @@
 //! Domain services: everything the app does on top of the [`VaultDoc`].
 //! This module is pure Rust (no Tauri); the `app` crate only maps commands.
 
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use zeroize::Zeroizing;
 
 use crate::Amount;
 use crate::crypto::SealKey;
-#[cfg(test)]
-use crate::error::StoreTreeViolation;
-use crate::error::{Error, Result, WalletRule};
-use crate::model::chain::Chain;
+use crate::error::{Error, Result};
 use crate::model::store::{
-    AssetRef, Binding, Custody, ExchangeProfile, ExchangeProvider, IndicatorCfg, LiabilityTerms,
-    PropertyInfo, Purpose, StoreKind, SubType, TerminalLayout, TerminalState,
+    AssetRef, Binding, Custody, ExchangeProvider, IndicatorCfg, LiabilityTerms, PropertyInfo,
+    Purpose, SubType, TerminalLayout,
 };
+use crate::model::vault::{Settings, VaultDoc};
+// What the inline tests reach through `super::*` since the exchange sync and import moved out.
 #[cfg(test)]
-use crate::model::store::{Holding, Store, StoreScope};
+use crate::error::{StoreTreeViolation, WalletRule};
 #[cfg(test)]
-use crate::model::transaction::LegRole;
+use crate::model::chain::Chain;
+#[cfg(test)]
+use crate::model::store::{Holding, Store, StoreKind, StoreScope, TerminalState};
+#[cfg(test)]
 use crate::model::transaction::{
-    AccountRef, Fee, FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Liquidity,
-    PriceStamp, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TransferTx, TxMeta,
+    AccountRef, Fee, FuturesAction, FuturesDirection, LegRole, Liquidity, PriceStamp, Transaction,
     TxOrigin,
 };
-use crate::model::vault::{PendingImport, Settings, VaultDoc};
+#[cfg(test)]
+use crate::model::vault::PendingImport;
 use crate::storage::{SnapshotFormat, VaultFile};
 
 pub use password::{CopyPolicy, PlainCopies, RotationReport};
