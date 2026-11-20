@@ -73,7 +73,7 @@ pub fn crypto_network_settings(books: &Books<'_>) -> NetworkSettings {
     // (`usecases::cryptotrack::network::crypto_set_network_settings`) so it is
     // never overwritten blindly.
     let secrets = network_secrets(books);
-    let editable = books.vault().keys_on_device() && secrets.is_ok();
+    let editable = books.keys_on_device() && secrets.is_ok();
     let secrets = secrets.unwrap_or_default();
     NetworkSettings {
         editable,

@@ -328,8 +328,7 @@ pub(crate) fn last_month_savings(
     let first = today - Duration::days(i64::from(chrono::Datelike::day(&today)) - 1);
     let month = calendar::month_key(first - Duration::days(1));
     let saved = books
-        .vault()
-        .month_summary_in(books, &month, zone)
+        .month_summary_in(&month, zone)
         .map(|summary| {
             books
                 .rate_book()

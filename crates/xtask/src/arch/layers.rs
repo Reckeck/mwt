@@ -65,7 +65,7 @@ pub const GROUPS: &[Group] = &[
     },
     Group {
         name: "cryptotrack",
-        layer: 4,
+        layer: 5,
         modules: &["cryptotrack"],
     },
     Group {
@@ -150,5 +150,11 @@ mod tests {
     fn household_may_use_lower_layers_and_itself() {
         assert!(is_legal("household", "money"));
         assert!(is_legal("household", "household"));
+    }
+
+    #[test]
+    fn cryptotrack_sits_above_money() {
+        assert!(is_legal("cryptotrack", "money"));
+        assert!(!is_legal("money", "cryptotrack"));
     }
 }

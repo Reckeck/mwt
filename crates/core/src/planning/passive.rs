@@ -163,7 +163,6 @@ pub fn passive_income(
 
     let fund = &doc.emergency_fund;
     let e_mand = books
-        .vault()
         .income_basis(fund.avg_months as usize, now, zone)
         .map(|avg| avg.essential.round(2));
     let positive = e_mand.filter(|value| value.is_positive());
@@ -182,7 +181,7 @@ pub fn passive_income(
         .filter_map(|usd| book.convert(*usd, "usd", &currency, now))
         .fold(Amount::ZERO, |sum, value| sum + value)
         .round(2);
-    let expected_pct = expected_pct.or_else(|| books.vault().key_rate_on(today));
+    let expected_pct = expected_pct.or_else(|| books.key_rate_on(today));
     let freedom_potential_pct = match (positive, expected_pct) {
         (Some(value), Some(rate)) => {
             Some((invested * rate / hundred / twelve / value * hundred).round(1))

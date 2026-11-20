@@ -172,7 +172,7 @@ pub(crate) fn all_today_todos(
         NaiveDate::parse_from_str(date, "%Y-%m-%d").is_ok_and(|day| day >= today && day <= horizon)
     };
     let mut todos = Vec::new();
-    for item in books.vault().upcoming(TODAY_HORIZON_DAYS, now, zone) {
+    for item in books.upcoming(TODAY_HORIZON_DAYS, now, zone) {
         let kind = match item.kind {
             UpcomingKind::RejectedRun => TodayTodoKind::RejectedRun,
             UpcomingKind::UnconfirmedRun => TodayTodoKind::UnconfirmedRun,
@@ -282,10 +282,7 @@ fn overdue_utilities(
         if due >= today {
             continue;
         }
-        let Ok(bill) = books
-            .vault()
-            .utility_bill(&store.id, &month_key(today), zone)
-        else {
+        let Ok(bill) = books.utility_bill(&store.id, &month_key(today), zone) else {
             continue;
         };
         let unpaid: Vec<_> = bill
@@ -316,14 +313,13 @@ fn overdue_utilities(
 /// Everything "Today" shows, in one request (plan H5).
 pub fn dashboard_today(books: &Books, period: DashPeriod, now: i64, zone: &str) -> DashboardToday {
     let trend = net_worth_trend(books, period, now, zone);
-    let budget = books.vault().daily_budget(now, zone);
+    let budget = books.daily_budget(now, zone);
     let todos = all_today_todos(books, now, zone, Some(&budget.currency));
     DashboardToday {
         period,
         currency: trend.currency,
         net_worth: trend.change,
         health: books
-            .vault()
             .capital_health(now, zone)
             .ok()
             .map(|report| report.color),

@@ -4,15 +4,27 @@
 //! it on, instead of building the book again for every step.
 
 use std::cell::OnceCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use chrono::NaiveDate;
+
 use crate::Amount;
+use crate::calendar::Calendar;
+use crate::error::Result;
+use crate::model::store::{AssetRef, Store, StoreScope};
+use crate::model::transaction::Transaction;
 use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
+use crate::vault_io::device_secrets::DeviceSecrets;
 
-use crate::service::RateBook;
-use crate::service::UnlockedVault;
+use crate::service::budget::{Flow, MonthAllowance, MonthAvg};
+use crate::service::losses::LossReport;
+use crate::service::reports::Ctx;
+use crate::service::{
+    ContactBalance, DailyBudget, DebtLoad, HealthReport, MonthSummary, NetWorth, RateBook,
+    StoreOverview, UnlockedVault, UpcomingItem, UtilityBill,
+};
 
 #[cfg(test)]
 thread_local! {
@@ -38,11 +50,6 @@ impl<'vault> Books<'vault> {
             shared_extras: OnceCell::new(),
             base_and_fx: OnceCell::new(),
         }
-    }
-
-    /// The open vault this context reads.
-    pub(crate) fn vault(&self) -> &'vault UnlockedVault {
-        self.vault
     }
 
     /// The vault document.
@@ -109,6 +116,180 @@ impl<'vault> Books<'vault> {
     /// The asset keys that have a dated valuation curve (part of the book).
     pub fn curves(&self) -> impl Iterator<Item = &str> {
         self.rate_book().curves().keys().map(String::as_str)
+    }
+}
+
+/// Reads that need the open vault itself: its security level, its envelopes,
+/// its device secrets. The areas ask the context; only the kernel holds the
+/// vault (D2, OD6). The reads after `device_secrets_for_request` are
+/// transitional: their callee sits in a layer above the caller (or takes the
+/// vault), so no legal direct call exists yet; each goes when its callee moves
+/// down or gets a port (core-strangler T213 follow-up).
+impl Books<'_> {
+    /// The writers' checks of a transaction (dates, envelopes, ownership).
+    pub(crate) fn prepare_transaction(&self, tx: &mut Transaction) -> Result<()> {
+        self.vault.prepare_transaction(tx)
+    }
+
+    /// The part of the asset in the store that envelopes claim.
+    pub(crate) fn earmarked(&self, store_id: &str, asset_key: &str) -> Amount {
+        self.vault.earmarked(store_id, asset_key)
+    }
+
+    /// Whether the exchange keys live on this device (security level 3).
+    pub(crate) fn keys_on_device(&self) -> bool {
+        self.vault.keys_on_device()
+    }
+
+    /// The whole device secrets file for one request (the caller drops it soon).
+    pub(crate) fn device_secrets_for_request(&self) -> Result<DeviceSecrets> {
+        self.vault.device_secrets_for_request()
+    }
+
+    /// The loyalty programme shares its symbol with another one.
+    pub(crate) fn loyalty_symbol_clash(&self, store_id: &str) -> bool {
+        self.vault.loyalty_symbol_clash(store_id)
+    }
+
+    /// Today's valuation.
+    pub(crate) fn net_worth(&self) -> NetWorth {
+        self.vault.net_worth()
+    }
+
+    /// Every store id a scope covers.
+    pub(crate) fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String> {
+        self.vault.resolve_scope(scope)
+    }
+
+    /// The store and all stores below it.
+    pub(crate) fn subtree_ids(&self, root_id: &str) -> Vec<String> {
+        self.vault.subtree_ids(root_id)
+    }
+
+    /// One store with its positions and values.
+    pub(crate) fn store_overview(
+        &self,
+        store_id: &str,
+        include_children: bool,
+    ) -> Result<StoreOverview> {
+        self.vault.store_overview(store_id, include_children)
+    }
+
+    /// The key rate on `day`.
+    pub(crate) fn key_rate_on(&self, day: NaiveDate) -> Option<Amount> {
+        self.vault.key_rate_on(day)
+    }
+
+    /// The asset a deposit store earns its interest in.
+    pub(crate) fn deposit_asset(&self, store: &Store) -> AssetRef {
+        self.vault.deposit_asset(store)
+    }
+
+    /// Inflation of `currency` in `month`.
+    pub(crate) fn inflation_on(&self, currency: &str, month: &str) -> Option<Amount> {
+        self.vault.inflation_on(currency, month)
+    }
+
+    /// The budget of one month over this context.
+    pub(crate) fn month_summary_in(&self, month: &str, zone: &str) -> Result<MonthSummary> {
+        self.vault.month_summary_in(self, month, zone)
+    }
+
+    /// The average income and essential spending over finished months.
+    pub(crate) fn income_basis(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg> {
+        self.vault.income_basis(months, now, zone)
+    }
+
+    /// The budget flows of a period.
+    pub(crate) fn flows_between(
+        &self,
+        cal: &Calendar,
+        currency: &str,
+        from: i64,
+        to: i64,
+    ) -> Vec<Flow> {
+        self.vault.flows_between(cal, currency, from, to)
+    }
+
+    /// Planned income and fixed spending of the month containing `date`.
+    pub(crate) fn month_plan(
+        &self,
+        cal: &Calendar,
+        date: NaiveDate,
+        currency: &str,
+    ) -> (Amount, Amount) {
+        self.vault.month_plan(cal, date, currency)
+    }
+
+    /// The month-mode allowance of the month containing `date`.
+    pub(crate) fn month_allowance(
+        &self,
+        cal: &Calendar,
+        date: NaiveDate,
+        currency: &str,
+        flows: &[Flow],
+    ) -> MonthAllowance {
+        self.vault.month_allowance(cal, date, currency, flows)
+    }
+
+    /// Today's valuation plus the part of `financial` held in crypto.
+    pub(crate) fn net_worth_with_crypto(&self) -> (NetWorth, Amount) {
+        self.vault.net_worth_with_crypto()
+    }
+
+    /// USD value of one unit of a hand-priced asset.
+    pub(crate) fn manual_price_usd(&self, asset_key: &str) -> Option<Amount> {
+        self.vault.manual_price_usd(asset_key)
+    }
+
+    /// How much can be spent today.
+    pub(crate) fn daily_budget(&self, now: i64, zone: &str) -> DailyBudget {
+        self.vault.daily_budget(now, zone)
+    }
+
+    /// What is due in the next `days` days.
+    pub(crate) fn upcoming(&self, days: u32, now: i64, zone: &str) -> Vec<UpcomingItem> {
+        self.vault.upcoming(days, now, zone)
+    }
+
+    /// Losses by month and by kind, wallet, contact and chain.
+    pub(crate) fn loss_report(&self, ctx: &Ctx) -> LossReport {
+        self.vault.loss_report(ctx)
+    }
+
+    /// The utility bill of a property for a period.
+    pub(crate) fn utility_bill(
+        &self,
+        property_id: &str,
+        period: &str,
+        zone: &str,
+    ) -> Result<UtilityBill> {
+        self.vault.utility_bill(property_id, period, zone)
+    }
+
+    /// The capital health report.
+    pub(crate) fn capital_health(&self, now: i64, zone: &str) -> Result<HealthReport> {
+        self.vault.capital_health(now, zone)
+    }
+
+    /// Debts against income.
+    pub(crate) fn debt_load(&self, now: i64, zone: &str) -> Result<DebtLoad> {
+        self.vault.debt_load(now, zone)
+    }
+
+    /// Personal debts and shared events as of `secs`.
+    pub(crate) fn contact_balances_until(&self, secs: i64) -> Vec<ContactBalance> {
+        self.vault.contact_balances_until(secs)
+    }
+
+    /// What the crypto module was worth at each cutoff in USD and whether it
+    /// already counts a replayed wallet's coins.
+    pub(crate) fn crypto_module(
+        &self,
+        cutoffs: &[i64],
+        in_scope: impl Fn(&str) -> bool,
+    ) -> (Vec<Option<Amount>>, impl Fn(&str, &AssetRef) -> bool) {
+        crate::service::reports::crypto_module(self.vault, cutoffs, in_scope)
     }
 }
 
@@ -180,7 +361,6 @@ mod tests {
             books.price_base("coin:bitcoin"),
             vault.price_base_for("coin:bitcoin", fx)
         );
-        assert!(std::ptr::eq(books.vault(), &vault));
         assert!(std::ptr::eq(books.doc(), &vault.doc));
     }
 }

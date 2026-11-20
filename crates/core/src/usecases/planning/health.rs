@@ -193,7 +193,7 @@ pub fn lifestyle_creep(books: &Books<'_>, now: i64, zone: &str) -> Option<Insigh
 pub fn capital_health(books: &Books<'_>, now: i64, zone: &str) -> Result<HealthReport> {
     let doc = books.doc();
     let emergency = emergency_fund_status(books, now, zone);
-    let debts = books.vault().debt_load(now, zone)?;
+    let debts = books.debt_load(now, zone)?;
     let freedom_rate = doc.settings.freedom_rate;
     let passive = passive_income(books, now, zone, freedom_rate)?;
     let savings = savings_series(books, now, zone)?;

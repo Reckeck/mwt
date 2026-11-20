@@ -233,9 +233,7 @@ pub fn scenario_prefill(
         None => (None, None, None, false),
     };
 
-    let average = books
-        .vault()
-        .income_basis(source.income_months as usize, now, zone);
+    let average = books.income_basis(source.income_months as usize, now, zone);
     let income_avg = average.as_ref().and_then(|avg| {
         book.convert(avg.income, &avg.currency, currency, now)
             .map(|value| value.round(2))

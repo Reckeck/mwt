@@ -124,11 +124,8 @@ pub fn preview_transaction(
     if let Some(id) = replaces {
         tx.meta_mut().id = id.to_string();
     }
-    // Writers' checks live with the transactions area, which has not moved
-    // onto `Books` yet (OD6).
-    // So do the envelopes (planning), read through the same delegate.
-    let vault = books.vault();
-    let error = vault
+    // The writers' checks and the envelopes read the open vault through `Books`.
+    let error = books
         .prepare_transaction(&mut tx)
         .err()
         .map(|err| format!("{}: {err}", err.code()));
@@ -181,7 +178,7 @@ pub fn preview_transaction(
                     })
                 }
                 _ => {
-                    let earmarked = vault.earmarked(&store_id, &asset_key);
+                    let earmarked = books.earmarked(&store_id, &asset_key);
                     if delta.is_negative() && !earmarked.is_zero() && after < earmarked {
                         warnings.push(PreviewWarning::IntoEnvelopes {
                             store_id: store_id.clone(),

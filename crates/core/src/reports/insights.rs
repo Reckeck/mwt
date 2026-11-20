@@ -14,7 +14,7 @@ use crate::model::category::CategoryGroup;
 use crate::kernel::books::Books;
 use crate::money::portfolio::realized_pnl_filtered;
 use crate::planning::budget::budget_currency;
-use crate::usecases::household::losses::{LossReport, loss_report};
+use crate::usecases::household::losses::LossReport;
 use crate::usecases::planning::health::lifestyle_creep;
 
 use super::overview::{
@@ -509,7 +509,7 @@ pub fn report_overview(
     let january = NaiveDate::from_ymd_opt(year, 1, 1).unwrap_or(month);
     let since_january = report_ctx(books, &span(january, month), now, zone)?;
     let pnl = pnl_report(books, &since_january);
-    let losses = loss_report(books.vault(), &since_january);
+    let losses = books.loss_report(&since_january);
     // Spending a currency also closes «positions»; only a result counts.
     let traded = realized_pnl_filtered(books, since_january.scope.as_ref())
         .legs

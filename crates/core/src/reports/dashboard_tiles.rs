@@ -80,7 +80,7 @@ fn pace_totals(
     to: NaiveDate,
 ) -> PaceTotals {
     let mut totals = PaceTotals::default();
-    for flow in books.vault().flows_between(
+    for flow in books.flows_between(
         cal,
         currency,
         cal.start_of(from),

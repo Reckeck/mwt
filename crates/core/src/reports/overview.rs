@@ -26,7 +26,7 @@ pub(crate) use crate::money::rates::value_at;
 use crate::planning::budget::{budget_currency, manual_day_limit};
 use crate::service::budget::Flow;
 use crate::service::{FlowClass, UpcomingItem};
-use crate::usecases::planning::budget::leg_value_in;
+use crate::usecases::planning::budget::{flows_between, leg_value_in};
 
 /// Longest range a report covers.
 pub const MAX_REPORT_MONTHS: usize = 120;
@@ -654,7 +654,7 @@ pub fn report(
         ReportKind::Pnl => Report::Pnl(pnl_report(books, &ctx)),
         ReportKind::Portfolio => Report::Portfolio(portfolio_report(books, &ctx)),
         ReportKind::Inflation => Report::Inflation(inflation_report(books, &ctx)),
-        ReportKind::Losses => Report::Losses(books.vault().loss_report(&ctx)),
+        ReportKind::Losses => Report::Losses(books.loss_report(&ctx)),
         ReportKind::Where => Report::Where(where_report(books, &ctx)),
     };
     let insights = crate::service::insights::report_insights(&report);
@@ -664,9 +664,7 @@ pub fn report(
 
 /// Classified flows of the report range (or `[from, to)`), in scope.
 pub(crate) fn report_flows(books: &Books, ctx: &Ctx, from: i64, to: i64) -> Vec<Flow> {
-    books
-        .vault()
-        .flows_between(&ctx.cal, &ctx.currency, from, to)
+    flows_between(books, &ctx.cal, &ctx.currency, from, to)
         .into_iter()
         .filter(|flow| {
             ctx.scope
@@ -980,13 +978,11 @@ pub(crate) fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {
     // see it: an earlier point takes its value from the snapshots the
     // module wrote on every read (spec E8, `cryptotrack::totals`).
     let (module_values, module_supersedes) =
-        crate::service::reports::crypto_module(books.vault(), &cutoffs, |store_id| {
-            ctx.in_scope(store_id)
-        });
+        books.crypto_module(&cutoffs, |store_id| ctx.in_scope(store_id));
     // The current point is today's valuation, the same function and rates
     // as `net_worth_base`, so every screen shows one capital.
     let current = (ctx.scope.is_none() && ctx.currency.eq_ignore_ascii_case(base))
-        .then(|| books.vault().net_worth_with_crypto());
+        .then(|| books.net_worth_with_crypto());
     ctx.months
         .iter()
         .zip(cutoffs.iter().zip(snapshots))
@@ -1057,7 +1053,7 @@ pub(crate) fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {
                 point.crypto += value;
             }
             if ctx.scope.is_none() {
-                for balance in books.vault().contact_balances_until(*cutoff) {
+                for balance in books.contact_balances_until(*cutoff) {
                     let unit = value_at(book, &balance.asset, one(), &ctx.currency, *cutoff);
                     point.receivables += balance.receivable.max(Amount::ZERO) * unit;
                     point.payables += balance.payable.max(Amount::ZERO) * unit;
@@ -1426,10 +1422,8 @@ pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Resul
     let today = cal.date_of(now);
     let currency = budget_currency(books);
     let (from, to) = cal.month_bounds(first);
-    let flows = books.vault().flows_between(&cal, &currency, from, to);
-    let month = books
-        .vault()
-        .month_allowance(&cal, first, &currency, &flows);
+    let flows = flows_between(books, &cal, &currency, from, to);
+    let month = books.month_allowance(&cal, first, &currency, &flows);
     let planned = month.per_day.is_positive().then_some(month.per_day);
     let manual = manual_day_limit(books, &currency, now);
     let allowance = match (planned, manual) {
@@ -1460,7 +1454,7 @@ pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Resul
     // The running balance's pool. Mandatory spending does not count in it: only the
     // *planned* mandatory is set aside, so paying rent or a bill (above plan or with no
     // plan at all) never moves the balance; everyday spending alone draws it down.
-    let (_, planned_fixed) = books.vault().month_plan(&cal, first, &currency);
+    let (_, planned_fixed) = books.month_plan(&cal, first, &currency);
     // It exists whenever the month has income, even when mandatory spending above
     // plan leaves no day allowance.
     let pool = (!by_limit && month.income.is_positive()).then_some(CalendarPool {
@@ -1581,7 +1575,6 @@ pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Resul
     let upcoming = if end > today {
         let days_left = (end - today).num_days().max(0) as u32;
         books
-            .vault()
             .upcoming(days_left, now, zone)
             .into_iter()
             .filter(|item| {

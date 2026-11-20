@@ -749,7 +749,7 @@ pub fn store_overview(
         tx_count: txs.len() as u32,
         first_tx_at,
         last_tx_at,
-        symbol_clash: books.vault().loyalty_symbol_clash(store_id),
+        symbol_clash: books.loyalty_symbol_clash(store_id),
     })
 }
 
@@ -849,7 +849,7 @@ pub fn portfolio_summary(books: &Books<'_>) -> PortfolioSummary {
         }
     };
 
-    let worth = books.vault().net_worth();
+    let worth = books.net_worth();
     PortfolioSummary {
         prices_as_of: prices_as_of(doc),
         base_fx_as_of: base_fx_as_of(books),
