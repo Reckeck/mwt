@@ -1,6 +1,7 @@
 //! Rule `no-f64-in-money`: money code does its arithmetic in `Amount`/`Decimal`, never in `f64`.
-//! `clippy::disallowed_types` can name `f64`, but its list is workspace-wide and cannot be scoped
-//! to one module, so this text rule reads `crates/core/src/money` instead.
+//! `clippy::disallowed_types` can name `f64`, but its list is workspace-wide; scoping it to the
+//! money module would need allow attributes on every other crate root, so a text rule that reads
+//! `crates/core/src/money` is simpler.
 //!
 //! A line with `f64` in non-test code fails unless it carries the marker `// allowed: display only`
 //! (a share or percentage that only feeds a chart, never a balance).
