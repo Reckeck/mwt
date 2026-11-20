@@ -2637,8 +2637,7 @@ fn a_stale_rejected_is_cleared_not_retried() {
 fn a_refused_retry_on_a_still_short_run_leaves_the_vault_file_untouched() {
     let (_dir, mut vault, _card, _workflow, refused) = refused_rent();
     let file_before = std::fs::read(&vault.path).unwrap();
-    let runs_before = vault.doc.workflow_runs.len();
-    let transactions_before = vault.doc.transactions.len();
+    let doc_before = vault.doc.clone();
 
     let err = vault
         .retry_workflow_run(&refused.id, secs_at("2026-12-02T10:00:00Z"), "UTC")
@@ -2648,8 +2647,7 @@ fn a_refused_retry_on_a_still_short_run_leaves_the_vault_file_untouched() {
     // The refusal is decided before anything is written: not a byte of the
     // file moves (a save re-encrypts, so any write shows here).
     assert_eq!(std::fs::read(&vault.path).unwrap(), file_before);
-    assert_eq!(vault.doc.workflow_runs.len(), runs_before);
-    assert_eq!(vault.doc.transactions.len(), transactions_before);
+    assert_eq!(vault.doc, doc_before);
 }
 
 #[test]
