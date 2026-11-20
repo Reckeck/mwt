@@ -533,11 +533,19 @@ impl UnlockedVault {
     /// went through: a save announces the queue before it writes, and a failed
     /// batch is rolled back, so its keys would reach a live session for
     /// changes that never happened. `queued` is what was waiting before.
+    ///
+    /// Written at once (no save hook), the batch keys are announced right
+    /// after `persist` succeeds, to the sync tap if one is set. Batched
+    /// (dirty, a hook waits), they join the queue and go with the next save.
     fn persist_then_announce(&mut self, queued: &std::collections::BTreeSet<String>) -> Result<()> {
         let batch_keys: Vec<String> = self.announce.difference(queued).cloned().collect();
         self.announce.clone_from(queued);
         self.persist()?;
-        self.announce.extend(batch_keys);
+        if self.sandbox || self.session.is_dirty() {
+            self.announce.extend(batch_keys);
+        } else if self.sync_tap.is_some() && !batch_keys.is_empty() {
+            self.session.announce_changes(batch_keys);
+        }
         Ok(())
     }
 
@@ -1544,6 +1552,28 @@ mod tests {
         assert!(sent.iter().any(|key| key.contains(&cash)));
         assert_eq!(sent, expected, "the tap got exactly the changed keys");
         drop(right);
+    }
+
+    #[test]
+    fn a_write_now_batch_announces_its_dedupe_keys_right_after_persist() {
+        let (_dir, mut left, mut right) = two_devices();
+        let tap = Arc::new(Announced::default());
+        left.set_sync_tap(Some(tap.clone()));
+        rent(&mut left, "first");
+        pause();
+        rent(&mut left, "second");
+        right.doc.stores[0].color = "#123456".into();
+        right.persist().unwrap();
+        tap.0.lock().unwrap().clear();
+        let (applied, _) = exchange(&mut left, &mut right);
+        let batch = applied.expect("left applied the store change");
+        assert_eq!(left.doc.transactions.len(), 1, "dedupe removed a copy");
+        let sent = tap.0.lock().unwrap().clone();
+        assert!(
+            sent.iter().any(|key| key.starts_with("transactions:")),
+            "the dedupe deletion of batch {} was not announced: {sent:?}",
+            batch.id
+        );
     }
 
     #[test]
