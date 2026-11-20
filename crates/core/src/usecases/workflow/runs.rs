@@ -30,7 +30,6 @@ use crate::usecases::planning::notifications::notice;
 use crate::workflow::RunKey;
 use crate::workflow::automation;
 use crate::workflow::catalog::node_def;
-use crate::workflow::effect::Effect;
 use crate::workflow::exec::{self, EmittedEvent, Resume, RunContext, RunMode, RunReport};
 use crate::workflow::graph::{Graph, Node};
 use crate::workflow::model::{
@@ -82,6 +81,24 @@ pub fn wf_insert(
     txs: Vec<Transaction>,
     now: i64,
 ) -> std::result::Result<Vec<Transaction>, String> {
+    insert_checked(vault, txs, now).map_err(|refusal| match refusal {
+        InsertRefusal::Short(reason) => describe_reject(&reason),
+        InsertRefusal::Invalid(message) => message,
+    })
+}
+
+/// Why `insert_checked` booked nothing.
+enum InsertRefusal {
+    /// The money is short: the one place that says so.
+    Short(Box<RejectReason>),
+    Invalid(String),
+}
+
+fn insert_checked(
+    vault: &mut UnlockedVault,
+    txs: Vec<Transaction>,
+    now: i64,
+) -> std::result::Result<Vec<Transaction>, InsertRefusal> {
     let backup = vault.doc.clone();
     let flow = (txs.len() > 1).then(|| uuid::Uuid::new_v4().to_string());
     let mut saved = Vec::with_capacity(txs.len());
@@ -91,16 +108,16 @@ pub fn wf_insert(
         }
         let secs = secs_or_now(&tx.meta().timestamp);
         let result = match vault.funds_shortfall(&tx, secs) {
-            Some(reason) => Err(describe_reject(&reason)),
+            Some(reason) => Err(InsertRefusal::Short(Box::new(reason))),
             // The run's clock, not the wall one: an emulated run days
             // ahead dates its operations days ahead too.
             None => vault
                 .prepare_transaction_at(&mut tx, now.max(secs) * 1000)
-                .map_err(|err| err.to_string()),
+                .map_err(|err| InsertRefusal::Invalid(err.to_string())),
         };
-        if let Err(message) = result {
+        if let Err(refusal) = result {
             vault.doc = backup;
-            return Err(message);
+            return Err(refusal);
         }
         vault.doc.transactions.push(tx.clone());
         vault.recompute_holdings();
@@ -473,12 +490,10 @@ fn retry_queued_refusal(
     for tx in &mut txs {
         tx.meta_mut().timestamp = crate::calendar::iso(now);
     }
-    if let Some(reason) = txs.iter().find_map(|tx| vault.funds_shortfall(tx, now)) {
-        return Err(Error::InsufficientFunds(vault.describe_shortfall(&reason)));
-    }
-    let saved = Effect::Insert { txs, now }
-        .apply_to(vault)
-        .map_err(Error::InvalidInput)?;
+    let saved = insert_checked(vault, txs, now).map_err(|refusal| match refusal {
+        InsertRefusal::Short(reason) => Error::InsufficientFunds(vault.describe_shortfall(&reason)),
+        InsertRefusal::Invalid(message) => Error::InvalidInput(message),
+    })?;
     let created: Vec<String> = saved.iter().map(|tx| tx.meta().id.clone()).collect();
     vault.recompute_holdings();
     let done = vault.transact(|tx| {
