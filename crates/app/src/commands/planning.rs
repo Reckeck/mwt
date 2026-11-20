@@ -34,8 +34,8 @@ use trade_core::usecases::household::{loyalty, utilities};
 use trade_core::usecases::money::interest;
 use trade_core::usecases::money::rebase;
 use trade_core::usecases::planning::{
-    agenda, auto_reminders, automation_card, automations, budget, emergency, goals, my_automations,
-    scenarios,
+    agenda, auto_reminders, automation_card, automation_rules, automations, budget, emergency,
+    goals, my_automations, scenarios,
 };
 use trade_core::workflow::Workflow;
 
@@ -116,7 +116,10 @@ pub async fn list_automation_runs(
     state: State<'_, AppState>,
 ) -> Result<Vec<AutomationRun>, IpcError> {
     with_vault(&state, |vault| {
-        Ok(vault.automation_runs(automation_id.as_deref()))
+        Ok(automation_rules::automation_runs(
+            &vault.doc,
+            automation_id.as_deref(),
+        ))
     })
 }
 

@@ -93,7 +93,7 @@ pub(crate) fn automation_occurrences(
 }
 
 /// Run history, newest planned date first.
-pub(crate) fn automation_runs(doc: &VaultDoc, automation_id: Option<&str>) -> Vec<AutomationRun> {
+pub fn automation_runs(doc: &VaultDoc, automation_id: Option<&str>) -> Vec<AutomationRun> {
     let ids: HashSet<&str> = doc
         .workflows
         .iter()
