@@ -51,10 +51,11 @@ fn without_literals(line: &str) -> String {
             index += 1;
         } else if ch == '\'' {
             let close = match (chars.get(index + 1), chars.get(index + 2)) {
-                (Some('\\'), _) => chars[index + 2..]
-                    .iter()
-                    .position(|&next| next == '\'')
-                    .map(|offset| index + 2 + offset),
+                // Skip the escaped char, so `'\''` does not close at its middle quote.
+                (Some('\\'), _) => chars
+                    .get(index + 3..)
+                    .and_then(|rest| rest.iter().position(|&next| next == '\''))
+                    .map(|offset| index + 3 + offset),
                 (Some(_), Some('\'')) => Some(index + 2),
                 _ => None,
             };
@@ -227,6 +228,12 @@ mod tests {
             .map(|found| found.line)
             .collect();
         assert_eq!(lines, [5]);
+    }
+
+    #[test]
+    fn an_escaped_quote_char_leaves_no_stray_quote() {
+        assert_eq!(without_literals("let q = '\\''; {"), "let q = ; {");
+        assert_eq!(brace_delta("let q = '\\'' {"), 1);
     }
 
     #[test]
