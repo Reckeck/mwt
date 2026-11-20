@@ -57,7 +57,7 @@ fn spending_totals(
     from: NaiveDate,
     to: NaiveDate,
 ) -> (Totals, Vec<(NaiveDate, Amount)>) {
-    let flows = books.vault().flows_between(
+    let flows = books.flows_between(
         cal,
         currency,
         cal.start_of(from),

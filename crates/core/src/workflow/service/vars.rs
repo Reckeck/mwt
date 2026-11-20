@@ -101,7 +101,7 @@ pub fn balance(
     match asset {
         Some(asset) => {
             let key = asset.key();
-            let mut ids = books.vault().subtree_ids(store_id);
+            let mut ids = books.subtree_ids(store_id);
             ids.push(store_id.to_string());
             let quantity = doc
                 .holdings
@@ -112,7 +112,6 @@ pub fn balance(
         }
         None => {
             let overview = books
-                .vault()
                 .store_overview(store_id, true)
                 .map_err(|err| err.to_string())?;
             Ok(WfValue::money(
@@ -177,7 +176,6 @@ pub fn accounts(books: &Books<'_>, parent: Option<&str>) -> Vec<(String, String,
         .filter(|store| !store.archived && store.parent_id.as_deref() == parent)
         .map(|store| {
             let value = books
-                .vault()
                 .store_overview(&store.id, true)
                 .map_or(Amount::ZERO, |overview| overview.subtree_base.round(2));
             (store.id.clone(), store.name.clone(), value)

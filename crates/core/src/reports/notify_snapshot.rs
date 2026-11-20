@@ -231,7 +231,6 @@ pub fn notification_snapshot(
     // An automation cannot run while the vault is locked: say it is waiting.
     if settings.category(NoticeCategory::Automation).enabled {
         for item in books
-            .vault()
             .upcoming(SNAPSHOT_DAYS, now, zone)
             .into_iter()
             .filter(|item| item.kind == UpcomingKind::Automation)

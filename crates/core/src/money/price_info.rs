@@ -58,11 +58,7 @@ pub struct PriceQuote {
 /// The current USD price of one unit, and where it came from; the hand-set
 /// price is the one thing only the vault can value, so it is asked from `books`.
 pub(crate) fn price_quote_for(books: &Books, asset_key: &str) -> PriceQuote {
-    price_quote(
-        books.doc(),
-        asset_key,
-        books.vault().manual_price_usd(asset_key),
-    )
+    price_quote(books.doc(), asset_key, books.manual_price_usd(asset_key))
 }
 
 /// The current USD price of one unit, and where it came from. The order is

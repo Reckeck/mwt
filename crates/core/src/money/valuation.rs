@@ -529,7 +529,6 @@ pub fn property_values(
 /// it, in `currency`.
 fn unpriced_unit(books: &Books<'_>, key: &str, currency: &str) -> Option<Amount> {
     books
-        .vault()
         .manual_price_usd(key)
         .or_else(|| last_stamp(books.doc(), key).map(|(_, usd)| usd))
         .and_then(|usd| Some(usd * per_usd(books.doc(), currency)?))

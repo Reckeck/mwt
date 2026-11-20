@@ -15,7 +15,6 @@ use crate::money::worth::{ClassShare, LiabilityShare, NetWorth, plan_manual_pric
 use crate::planning::allocation::{Slot, slot_resolver};
 use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
-use crate::usecases::household::contacts::contact_balances;
 
 /// USD value of one unit of a hand-priced asset, read at the present moment.
 pub(crate) fn manual_price_usd(books: &Books<'_>, asset_key: &str) -> Option<Amount> {
@@ -124,7 +123,7 @@ pub(crate) fn net_worth_with_crypto(books: &Books<'_>) -> (NetWorth, Amount) {
             *by_class.entry(None).or_default() += value;
         }
     }
-    for balance in contact_balances(books.vault()) {
+    for balance in books.contact_balances_until(i64::MAX) {
         let price = books.price_base(&balance.asset.key());
         out.receivables += balance.receivable.max(Amount::ZERO) * price;
         out.payables += balance.payable.max(Amount::ZERO) * price;

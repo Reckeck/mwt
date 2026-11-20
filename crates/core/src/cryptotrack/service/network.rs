@@ -133,11 +133,10 @@ pub fn host_of(url: &str) -> String {
 
 /// The secrets of the networks, or none below level 3 (the presets then).
 pub fn network_secrets(books: &Books<'_>) -> Result<DeviceSecrets> {
-    let vault = books.vault();
-    if !vault.keys_on_device() {
+    if !books.keys_on_device() {
         return Ok(DeviceSecrets::default());
     }
-    vault.device_secrets_for_request()
+    books.device_secrets_for_request()
 }
 
 /// What the reader of `chain` uses for one request. Never fails: a vault
