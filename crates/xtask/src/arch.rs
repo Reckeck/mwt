@@ -22,10 +22,10 @@ pub struct Edge {
 
 const CORE_SRC: &str = "crates/core/src";
 const ALLOW_FILE: &str = "crates/xtask/arch-allow.toml";
-/// Layer of the modules gated by the `testkit` feature (see `layers::GROUPS`).
+/// Group of the modules gated by the `testkit` feature (see `layers::GROUPS`).
 const TESTKIT: &str = "testkit";
 
-/// A back edge: the same data as an edge, the ones the layer table does not allow.
+/// A back edge: the same data as an edge, the ones the crate table does not allow.
 pub type Violation = Edge;
 
 /// One line of `arch-allow.toml`: back edges from `from` (under `crates/core/src`) to module `to`.
@@ -77,7 +77,7 @@ impl Report {
             .iter()
             .map(|edge| {
                 format!(
-                    "error: {CORE_SRC}/{}:{}: `{}` must not use `{}` (back edge of the layer table)",
+                    "error: {CORE_SRC}/{}:{}: `{}` must not use `{}` (edge the crate table forbids)",
                     edge.from_file, edge.line, edge.from_module, edge.to_module
                 )
             })
@@ -116,7 +116,7 @@ fn evaluate(edges: &[Edge], allow: &[AllowEntry], domain: domain::Findings) -> R
     }
 }
 
-/// Scans the core crate under the repository `root` and holds it against the layer table and the allowlist.
+/// Scans the core crate under the repository `root` and holds it against the crate table and the allowlist.
 pub fn check(root: &Path) -> Result<Report> {
     let sources = sources(&root.join(CORE_SRC))?;
     let edges = edges_of(&root.join(CORE_SRC), &sources)?;
@@ -126,7 +126,7 @@ pub fn check(root: &Path) -> Result<Report> {
     Ok(evaluate(&edges, &parse_allowlist(&text)?, domain))
 }
 
-/// Directories outside the layer table: binaries are adapters, `tests` is test code.
+/// Directories outside the crate table: binaries are adapters, `tests` is test code.
 fn is_skipped_dir(name: &str) -> bool {
     matches!(name, "bin" | "tests")
 }
@@ -203,7 +203,7 @@ fn collect_files(dir: &Path, skipped: &mut Files, files: &mut Vec<PathBuf>) -> R
 }
 
 /// Files of modules declared under a cfg gate: `#[cfg(test)]` ones are skipped, ones gated by the
-/// `testkit` feature are test support and are checked as the `testkit` layer.
+/// `testkit` feature are test support and are checked as the `testkit` crate.
 #[derive(Default)]
 struct Files {
     test: BTreeSet<PathBuf>,
@@ -305,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn every_module_of_core_is_in_the_layer_table() {
+    fn every_module_of_core_is_in_the_crate_table() {
         let names = module_names(&repo_root().join(CORE_SRC)).unwrap();
         let missing: Vec<_> = names
             .iter()
@@ -329,10 +329,11 @@ mod tests {
         assert!(!layers::is_legal("money", "planning"));
         assert!(!layers::is_legal("workflow", "money"));
         assert!(!layers::is_legal("sync", "storage"));
+        assert!(!layers::is_legal("money", "pricing"));
     }
 
     #[test]
-    fn modules_gated_by_the_testkit_feature_are_checked_as_the_testkit_layer() {
+    fn modules_gated_by_the_testkit_feature_are_checked_as_the_testkit_crate() {
         let edges = scan(&repo_root().join(CORE_SRC)).unwrap();
         let fixtures: Vec<&Edge> = edges
             .iter()
@@ -383,8 +384,8 @@ mod tests {
     }
 
     #[test]
-    fn testkit_sits_on_top_and_nothing_below_may_use_it() {
-        assert!(layers::is_legal("testkit", "service"));
+    fn testkit_is_a_low_crate_and_nothing_below_the_facade_may_use_it() {
+        assert!(layers::is_legal("testkit", "model"));
         assert!(!layers::is_legal("service", "testkit"));
     }
 

@@ -79,7 +79,7 @@ pub fn test_modules(text: &str) -> Vec<String> {
 }
 
 /// Modules the text declares as `#[cfg(any(test, feature = "testkit"))] mod name;`: test support
-/// that other crates can compile, checked as the `testkit` layer.
+/// that other crates can compile, checked as the `testkit` crate.
 pub fn testkit_modules(text: &str) -> Vec<String> {
     modules_under(text, CFG_TESTKIT)
 }
