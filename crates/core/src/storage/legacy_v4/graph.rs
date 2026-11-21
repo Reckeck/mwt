@@ -6,7 +6,136 @@
 //!
 //! Two callers: the v4 transition, and `import_workflow` for export files of version 1.
 
-use crate::workflow::graph::Graph;
+use std::collections::{HashMap, HashSet};
+
+use serde::{Deserialize, Serialize};
+
+use super::graph_kinds::kind;
+
+/// The graph as the transition reads and writes it: a copy of the live shape, so the live type may
+/// change. Fields the steps do not touch are kept as they are.
+#[derive(Serialize, Deserialize)]
+struct Graph {
+    #[serde(default = "graph_version")]
+    version: u32,
+    #[serde(default)]
+    nodes: Vec<Node>,
+    #[serde(default)]
+    edges: Vec<Edge>,
+    #[serde(default)]
+    comments: Vec<Comment>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Node {
+    id: String,
+    kind: String,
+    #[serde(default)]
+    params: serde_json::Map<String, serde_json::Value>,
+    #[serde(default)]
+    position: Position,
+    #[serde(default)]
+    disabled: bool,
+    #[serde(default)]
+    label: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Edge {
+    id: String,
+    from: String,
+    from_port: String,
+    to: String,
+    to_port: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Comment {
+    id: String,
+    text: String,
+    #[serde(default)]
+    position: Position,
+    #[serde(default)]
+    width: f64,
+    #[serde(default)]
+    height: f64,
+    #[serde(default)]
+    color: String,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct Position {
+    #[serde(rename = "x")]
+    left: f64,
+    #[serde(rename = "y")]
+    top: f64,
+}
+
+fn graph_version() -> u32 {
+    GRAPH_VERSION
+}
+
+impl Graph {
+    fn node(&self, id: &str) -> Option<&Node> {
+        self.nodes.iter().find(|node| node.id == id)
+    }
+
+    /// Data order: each node with a flow input but no flow wire into it, and the actions it takes
+    /// data from. One that takes data from no action is left out.
+    fn data_order(&self) -> HashMap<String, Vec<String>> {
+        let mut out = HashMap::new();
+        for node in self.nodes.iter().filter(|node| !node.disabled) {
+            let Some(def) = kind(&node.kind) else {
+                continue;
+            };
+            if def.trigger || def.flow_inputs.is_empty() || self.has_flow_in(node) {
+                continue;
+            }
+            let sources = self.action_sources(&node.id);
+            if !sources.is_empty() {
+                out.insert(node.id.clone(), sources);
+            }
+        }
+        out
+    }
+
+    fn has_flow_in(&self, node: &Node) -> bool {
+        let Some(def) = kind(&node.kind) else {
+            return false;
+        };
+        self.edges
+            .iter()
+            .any(|edge| edge.to == node.id && def.flow_inputs.contains(&edge.to_port.as_str()))
+    }
+
+    /// The actions (flow nodes other than triggers) whose outputs reach the data inputs of
+    /// `node_id`, directly or through pure data nodes.
+    fn action_sources(&self, node_id: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        self.collect_sources(node_id, &mut HashSet::new(), &mut found);
+        found
+    }
+
+    fn collect_sources(&self, node_id: &str, seen: &mut HashSet<String>, found: &mut Vec<String>) {
+        let Some(def) = self.node(node_id).and_then(|node| kind(&node.kind)) else {
+            return;
+        };
+        for edge in self.edges.iter().filter(|edge| edge.to == node_id) {
+            if !def.data_inputs.contains(&edge.to_port.as_str()) || !seen.insert(edge.from.clone())
+            {
+                continue;
+            }
+            let Some(from_def) = self.node(&edge.from).and_then(|from| kind(&from.kind)) else {
+                continue;
+            };
+            if !from_def.has_flow() {
+                self.collect_sources(&edge.from, seen, found);
+            } else if !from_def.trigger {
+                found.push(edge.from.clone());
+            }
+        }
+    }
+}
 
 /// The graph version the live code expected when the transition was frozen. Frozen conversions do
 /// not follow live code: a later change of the live number does not change what an old file is
@@ -46,7 +175,7 @@ pub(crate) fn migrate_graph_json(json: &str) -> Option<String> {
         switch_off_nodes_the_data_order_wakes(&mut graph);
     }
     graph.version = GRAPH_VERSION;
-    Some(graph.to_json())
+    serde_json::to_string(&graph).ok()
 }
 
 /// Version 2: "Wait for confirmation" answers "Yes"/"No"; a wire from its old "Next" leaves "Yes".
