@@ -26,3 +26,6 @@ chrono-tz.workspace = true
 zeroize.workspace = true
 ts-rs = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true

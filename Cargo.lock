@@ -3075,6 +3075,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "mwt-macros",
+ "proptest",
  "rust_decimal",
  "schemars 1.2.3",
  "serde",

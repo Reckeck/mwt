@@ -16,3 +16,12 @@ pub mod utilities_formula;
 
 pub use amount::Amount;
 pub use error::{Error, Result};
+
+#[cfg(test)]
+mod amount_props;
+#[cfg(test)]
+mod calendar_props;
+#[cfg(test)]
+mod props;
+#[cfg(test)]
+mod time_props;
