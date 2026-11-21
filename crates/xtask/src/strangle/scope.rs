@@ -139,7 +139,7 @@ mod tests {
         let found = findings(
             &real_workspace(),
             &changed(&[
-                "crates/core/src/kernel/events.rs",
+                "crates/vault/src/kernel/events.rs",
                 "crates/app/src/commands/calc.rs",
             ]),
             None,

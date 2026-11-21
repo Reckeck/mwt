@@ -25,6 +25,8 @@ pub struct Home {
     pub context: String,
     service_dir: String,
     core_dir: String,
+    /// The directory of the group's modules: the map's `group_dirs` entry, else `<core_dir>/<group>`.
+    group_dir: String,
 }
 
 impl Home {
@@ -45,7 +47,7 @@ impl Home {
 
     /// `<group>/<stem>.rs`: the pure functions (and the relocated file).
     pub fn pure_file(&self) -> String {
-        format!("{}/{}/{}.rs", self.core_dir, self.group, self.stem)
+        format!("{}/{}.rs", self.group_dir, self.stem)
     }
 
     /// `usecases/<context>/<stem>.rs`: the scenarios.
@@ -60,7 +62,7 @@ impl Home {
     pub fn test_files(&self) -> [String; 2] {
         [
             format!("{}/{}_tests.rs", self.service_dir, self.source),
-            format!("{}/{}/{}_tests.rs", self.core_dir, self.group, self.stem),
+            format!("{}/{}_tests.rs", self.group_dir, self.stem),
         ]
     }
 
@@ -88,7 +90,7 @@ impl Home {
 
     /// `<group>/<stem>/<child>.rs`: where a child module lands next to the pure file.
     pub fn child_target(&self, child: &str) -> String {
-        format!("{}/{}/{}/{child}.rs", self.core_dir, self.group, self.stem)
+        format!("{}/{}/{child}.rs", self.group_dir, self.stem)
     }
 
     /// The directories of the stem whose every file belongs to it: the children of the old file
@@ -96,7 +98,7 @@ impl Home {
     fn directories(&self) -> [String; 3] {
         [
             format!("{}/{}/", self.service_dir, self.source),
-            format!("{}/{}/{}/", self.core_dir, self.group, self.stem),
+            format!("{}/{}/", self.group_dir, self.stem),
             format!(
                 "{}/{USECASES}/{}/{}/",
                 self.core_dir, self.context, self.stem
@@ -131,13 +133,22 @@ pub fn homes(map: &Map, area: &Area) -> Vec<Home> {
     let core = core_dir(map);
     stems(area)
         .into_iter()
-        .map(|stem| Home {
-            source: source_of(area, &stem),
-            group: area.homes.get(&stem).unwrap_or(&area.group).clone(),
-            context: area.context.clone(),
-            service_dir: map.service_dir.clone(),
-            core_dir: core.clone(),
-            stem,
+        .map(|stem| {
+            let group = area.homes.get(&stem).unwrap_or(&area.group).clone();
+            let group_dir = map
+                .group_dirs
+                .get(&group)
+                .cloned()
+                .unwrap_or_else(|| format!("{core}/{group}"));
+            Home {
+                source: source_of(area, &stem),
+                group,
+                context: area.context.clone(),
+                service_dir: map.service_dir.clone(),
+                core_dir: core.clone(),
+                group_dir,
+                stem,
+            }
         })
         .collect()
 }
@@ -223,5 +234,26 @@ mod tests {
         ] {
             assert_eq!(groups[stem], group, "{FIX_MAP}: {stem}");
         }
+    }
+
+    #[test]
+    fn a_group_dir_moves_the_group_files_but_not_the_scenarios() {
+        let mut map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
+        map.group_dirs
+            .insert("sync".to_string(), "crates/sync/src".to_string());
+        let area = &map.areas[map.area_index("sync_ids_journal").expect(FIX_MAP)];
+        let home = homes(&map, area).remove(0);
+        assert_eq!(
+            home.pure_file(),
+            format!("crates/sync/src/{}.rs", home.stem)
+        );
+        assert_eq!(
+            home.test_files()[1],
+            format!("crates/sync/src/{}_tests.rs", home.stem)
+        );
+        assert!(
+            home.scenario_file()
+                .starts_with("crates/core/src/usecases/")
+        );
     }
 }

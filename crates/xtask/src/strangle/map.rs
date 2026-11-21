@@ -26,6 +26,10 @@ pub struct Map {
     /// foundation task or a grant may change (spec D5, rule 5).
     #[serde(default)]
     pub guarded: Vec<String>,
+    /// Group to the `src` directory that holds its module, for a group that lives in another
+    /// crate than the core one (`sync = "crates/sync/src"`); the default is the core `src`.
+    #[serde(default)]
+    pub group_dirs: BTreeMap<String, String>,
     /// The foundation tasks (no area) and the files they own in the shared tree.
     #[serde(default, rename = "foundation")]
     pub foundations: Vec<Foundation>,
