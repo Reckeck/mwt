@@ -139,8 +139,8 @@ mod tests {
         let found = findings(
             &real_workspace(),
             &changed(&[
-                "crates/core/src/service/loyalty.rs",
-                "crates/core/src/service/rates.rs",
+                "crates/core/src/kernel/events.rs",
+                "crates/app/src/commands/calc.rs",
             ]),
             None,
         );

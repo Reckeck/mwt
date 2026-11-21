@@ -92,9 +92,9 @@ pub(crate) fn months_average(
     let mut income = Amount::ZERO;
     let mut spent = Amount::ZERO;
     for month in months {
-        let summary = books
-            .month_summary_in(&calendar::month_key(*month), zone)
-            .ok()?;
+        let summary =
+            crate::planning::budget::month_summary(books, &calendar::month_key(*month), zone)
+                .ok()?;
         if summary.income.is_zero() && summary.fixed.is_zero() && summary.daily.is_zero() {
             return None;
         }
@@ -111,7 +111,8 @@ pub fn savings_series(books: &Books<'_>, now: i64, zone: &str) -> Result<Vec<Sav
     finished_months(today, SAVINGS_MONTHS)
         .into_iter()
         .map(|month| {
-            let summary = books.month_summary_in(&calendar::month_key(month), zone)?;
+            let summary =
+                crate::planning::budget::month_summary(books, &calendar::month_key(month), zone)?;
             Ok(SavingsMonth {
                 saved_pct: percent(summary.savings_fact, summary.income),
                 month: summary.month,

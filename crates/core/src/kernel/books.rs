@@ -14,7 +14,7 @@ use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
 use crate::vault_io::device_secrets::DeviceSecrets;
 
-use crate::service::{MonthSummary, RateBook, UnlockedVault};
+use crate::service::{RateBook, UnlockedVault};
 
 #[cfg(test)]
 thread_local! {
@@ -135,11 +135,6 @@ impl Books<'_> {
     pub(crate) fn device_secrets_for_request(&self) -> Result<DeviceSecrets> {
         self.vault.device_secrets_for_request()
     }
-
-    /// The budget of one month over this context.
-    pub(crate) fn month_summary_in(&self, month: &str, zone: &str) -> Result<MonthSummary> {
-        self.vault.month_summary_in(self, month, zone)
-    }
 }
 
 impl UnlockedVault {
@@ -221,7 +216,6 @@ mod tests {
         "earmarked",
         "keys_on_device",
         "device_secrets_for_request",
-        "month_summary_in",
     ];
 
     /// Names of the `pub`/`pub(crate)` fns declared in the block that opens with `header`.
