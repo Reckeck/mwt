@@ -6,6 +6,8 @@ pub mod file;
 pub mod html;
 pub mod json;
 pub mod number;
+#[cfg(test)]
+mod number_props;
 
 use chrono::NaiveDate;
 use scraper::Html;

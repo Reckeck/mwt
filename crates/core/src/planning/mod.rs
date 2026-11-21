@@ -5,6 +5,8 @@ pub mod agenda;
 mod agenda_tests;
 pub mod allocation;
 #[cfg(test)]
+mod allocation_props;
+#[cfg(test)]
 mod allocation_tests;
 pub mod auto_reminders;
 #[cfg(test)]
@@ -17,6 +19,8 @@ pub mod automations;
 #[cfg(test)]
 mod automations_tests;
 pub mod budget;
+#[cfg(test)]
+mod budget_props;
 #[cfg(test)]
 mod budget_tests;
 pub mod daily_budget;
@@ -47,6 +51,8 @@ pub mod passive;
 #[cfg(test)]
 mod passive_tests;
 pub mod period;
+#[cfg(test)]
+mod period_props;
 pub mod recurring;
 #[cfg(test)]
 mod recurring_tests;
