@@ -147,7 +147,7 @@ use crate::model::cryptotrack::CryptoAsset;
 use crate::model::store::{AssetRef, Holding, StoreKind};
 use crate::model::vault::VaultDoc;
 use crate::money::price_info::price_quote_for;
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 
 /// Why something the module knows about stays out of the capital.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

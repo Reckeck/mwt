@@ -8,9 +8,9 @@ use crate::model::planning::UtilityKind;
 use crate::model::store::StoreScope;
 use crate::model::store::{LoyaltyInfo, PropertyInfo, StoreKind};
 use crate::model::vault::DashPeriod;
-use crate::pricing::history::unix_secs;
 use crate::service::test_support::*;
 use crate::service::{CalcScenarioDraft, StoreExtras, UtilityDraft};
+use crate::time::unix_secs;
 use chrono::NaiveDate;
 
 #[test]

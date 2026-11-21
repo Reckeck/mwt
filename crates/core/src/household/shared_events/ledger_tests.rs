@@ -270,8 +270,8 @@ fn the_event_refuses_what_it_cannot_follow() {
 fn event_debts_are_dated_and_event_transfers_are_never_counted_twice() {
     let mut scenario = skewers_scenario();
     settle_petya(&mut scenario, "1735", Some("2026-10-05"));
-    let before = crate::pricing::history::secs_or_now("2026-10-04T00:00:00Z");
-    let after = crate::pricing::history::secs_or_now("2026-10-06T00:00:00Z");
+    let before = crate::time::secs_or_now("2026-10-04T00:00:00Z");
+    let after = crate::time::secs_or_now("2026-10-06T00:00:00Z");
     // the purchases are dated 3 October: Petya owes 1 735 on the 4th, nothing on the 6th
     assert_eq!(petya_debt(&scenario, before), amount("1735"));
     assert_eq!(petya_debt(&scenario, after), amount("0"));

@@ -26,7 +26,7 @@ use crate::model::vault::VaultDoc;
 use crate::money::stores::free_name;
 use crate::money::tree::{children_of, find_store};
 use crate::money::validate::store_sides;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// Creation order of a record, built by the caller from the sync stamp
 /// (money must not depend on sync). Only its order matters.

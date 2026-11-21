@@ -11,11 +11,11 @@ use crate::model::store::{LiabilityKind, LiabilityTerms};
 use crate::model::store::{StoreKind, StoreScope};
 use crate::model::transaction::PriceStamp;
 use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
-use crate::pricing::history::unix_secs;
 use crate::service::UnlockedVault;
 use crate::service::WhereKind;
 use crate::service::test_support::*;
 use crate::service::{ContactDraft, StoreExtras, TxFilter};
+use crate::time::unix_secs;
 
 fn secs(iso: &str) -> i64 {
     unix_secs(iso).unwrap()

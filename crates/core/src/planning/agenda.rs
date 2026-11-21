@@ -19,7 +19,7 @@ use crate::model::planning::{
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::vault::VaultDoc;
 use crate::planning::automations::outflow;
-use crate::pricing::history::{secs_or_now, unix_secs};
+use crate::time::{secs_or_now, unix_secs};
 
 /// How many dates of one repeating reminder the agenda lists at most.
 const MAX_REPEATS_LISTED: usize = 60;

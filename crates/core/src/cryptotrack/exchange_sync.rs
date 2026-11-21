@@ -135,7 +135,7 @@ pub fn normalize_settings(
         .map(|since| since.trim().to_string())
         .filter(|since| !since.is_empty());
     if let Some(since) = &settings.since
-        && crate::pricing::history::unix_secs(since).is_none()
+        && crate::time::unix_secs(since).is_none()
     {
         return Err(Error::InvalidInput(format!("not a date: {since}")));
     }
@@ -242,13 +242,8 @@ pub(crate) fn import_wanted(
             return false;
         }
     }
-    match (
-        &settings.since,
-        crate::pricing::history::unix_secs(&imp.occurred_at),
-    ) {
-        (Some(since), Some(at)) => {
-            crate::pricing::history::unix_secs(since).is_none_or(|since| at >= since)
-        }
+    match (&settings.since, crate::time::unix_secs(&imp.occurred_at)) {
+        (Some(since), Some(at)) => crate::time::unix_secs(since).is_none_or(|since| at >= since),
         _ => true,
     }
 }

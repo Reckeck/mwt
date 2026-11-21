@@ -286,9 +286,9 @@ mod merge_correction_tests {
         AdjustmentLine, AdjustmentTx, PriceStamp, Transaction, TxMeta,
     };
     use crate::money::store_change::*;
-    use crate::pricing::history::secs_or_now;
     use crate::service::UnlockedVault;
     use crate::service::test_support::*;
+    use crate::time::secs_or_now;
 
     fn rub() -> AssetRef {
         AssetRef::fiat("RUB", "RUB")

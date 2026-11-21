@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::Amount;
 
 /// What is wrong with a formula, worded for the form, and where (1-based character).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct FormulaIssue {
     pub position: u32,
     pub text_ru: String,

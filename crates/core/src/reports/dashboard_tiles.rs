@@ -113,7 +113,7 @@ pub fn month_pace(books: &Books, now: i64, zone: &str) -> MonthPace {
     let current = pace_totals(books, &cal, &currency, first, today);
     let previous = pace_totals(books, &cal, &currency, prev_first, prev_today);
     let has_history = books.doc().transactions.iter().any(|tx| {
-        crate::pricing::history::unix_secs(&tx.meta().timestamp)
+        crate::time::unix_secs(&tx.meta().timestamp)
             .is_some_and(|secs| cal.date_of(secs) <= prev_today)
     });
     let base = |value: Amount| has_history.then_some(value);

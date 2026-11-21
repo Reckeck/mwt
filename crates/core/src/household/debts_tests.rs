@@ -153,7 +153,7 @@ fn dti_takes_terms_or_recent_repayments_against_income() {
 }
 
 fn unix(stamp: &str) -> i64 {
-    crate::pricing::history::unix_secs(stamp).unwrap()
+    crate::time::unix_secs(stamp).unwrap()
 }
 
 #[test]

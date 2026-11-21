@@ -69,13 +69,13 @@ mod tests {
     }
 
     #[test]
-    fn moved_time_helpers_keep_their_old_paths() {
+    fn unix_secs_reads_rfc3339() {
+        assert_eq!(unix_secs("2026-03-01T20:00:00Z"), Some(1_772_395_200));
+    }
+
+    #[test]
+    fn date_helpers_agree() {
         let day = NaiveDate::from_ymd_opt(2026, 3, 1).unwrap();
-        let iso = "2026-03-01T20:00:00Z";
-        assert_eq!(crate::pricing::history::unix_secs(iso), unix_secs(iso));
-        assert_eq!(crate::pricing::history::secs_or_now(iso), secs_or_now(iso));
-        assert_eq!(crate::cryptotrack::prices::date_secs(day), date_secs(day));
-        assert_eq!(crate::cryptotrack::prices::date_ts(day), date_ts(day));
-        assert_eq!(unix_secs(iso), Some(1_772_395_200));
+        assert_eq!(unix_secs(&date_ts(day)), Some(date_secs(day)));
     }
 }

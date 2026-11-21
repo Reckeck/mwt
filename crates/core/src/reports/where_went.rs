@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use crate::Amount;
 use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 use crate::kernel::books::Books;
 use crate::model::vault::VaultDoc;

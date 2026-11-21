@@ -23,7 +23,7 @@ use crate::model::ids::StoreId;
 use crate::model::store::{AssetRef, Binding, Store, StoreKind, SubType};
 use crate::model::transaction::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta, TxOrigin};
 use crate::model::vault::VaultDoc;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// Category of posted interest and of the programme's co-financing.
 pub const INTEREST_CATEGORY: &str = "deposit_interest";

@@ -20,7 +20,7 @@ use crate::model::planning::{
 };
 use crate::model::store::{PropertyCategory, StoreKind, SubType};
 use crate::model::transaction::{LegRole, Transaction};
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 use crate::model::vault::VaultDoc;
 use crate::planning::agenda::next_occurrence;

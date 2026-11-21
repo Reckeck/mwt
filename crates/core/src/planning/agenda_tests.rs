@@ -9,10 +9,10 @@ use crate::model::planning::{Schedule, TransactionDraft};
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::model::vault::PricePoint;
-use crate::pricing::history::unix_secs;
 use crate::service::AutomationDraft;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
+use crate::time::unix_secs;
 
 fn secs(iso: &str) -> i64 {
     unix_secs(iso).unwrap()

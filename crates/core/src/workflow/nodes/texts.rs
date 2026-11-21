@@ -78,7 +78,7 @@ fn read_number(raw: &str) -> Option<Amount> {
 /// `25.11.2026 14:30`, or by a pattern of `ДД ММ ГГГГ ЧЧ мм` (Latin too).
 pub(crate) fn date_from_text(text: &str, pattern: &str, cal: &Calendar) -> Option<NaiveDateTime> {
     let text = text.trim();
-    if let Some(secs) = crate::pricing::history::unix_secs(text) {
+    if let Some(secs) = crate::time::unix_secs(text) {
         return Some(cal.local(secs));
     }
     let formats: Vec<String> = if pattern.trim().is_empty() {

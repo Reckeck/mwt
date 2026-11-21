@@ -42,9 +42,9 @@ mod fixtures_gen;
 
 pub use crate::vault_io::local::{VAULT_EXT, VaultLock, backup_path, ensure_wallet_ext};
 
+pub use crate::crypto::SnapshotFormat;
 #[cfg(test)]
 use crate::crypto::format::LAST_LEGACY_BUILD;
-pub use crate::crypto::format::SnapshotFormat;
 use crate::crypto::format::legacy_refusal;
 
 /// Encode a snapshot into the raw payload bytes for a given format.

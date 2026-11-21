@@ -16,7 +16,7 @@ use crate::model::contact::{Contact, ContactAccount, ContactKind, DebtTerms};
 use crate::model::store::AssetRef;
 use crate::model::transaction::{AccountRef, DebtEffect, LegRole, Transaction};
 use crate::money::tree::root_of;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// Money moved with one contact in one asset.
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]

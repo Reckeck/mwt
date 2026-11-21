@@ -13,7 +13,7 @@ use crate::kernel::books::Books;
 use crate::model::ids::StoreId;
 use crate::model::transaction::{Leg, LegRole};
 use crate::money::tree::subtree_ids;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// One local calendar month of a wallet, in the base currency.
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]

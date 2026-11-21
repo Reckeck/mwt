@@ -22,7 +22,7 @@ use crate::model::store::{AssetRef, StoreScope};
 use crate::model::transaction::{AccountRef, Leg, LegRole, Transaction};
 use crate::model::vault::{VaultDoc, unix_to_iso};
 use crate::money::tree::{resolve_scope, root_of};
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 
 /// What the rates book answers: the value of a leg or a quantity in a
 /// currency at a moment.

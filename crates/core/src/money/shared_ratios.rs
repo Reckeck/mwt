@@ -19,7 +19,7 @@ use crate::household::shared_events::split;
 use crate::household::shared_events::{FALLBACK_CATEGORY, item_category};
 use crate::model::VaultDoc;
 use crate::model::shared_event::{ME, SettlementKind};
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// One extra spending entry of mine: a part of somebody else's purchase or a
 /// write-off, in the event currency.

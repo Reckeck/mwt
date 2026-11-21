@@ -10,16 +10,11 @@ pub const MAX_STORE_DEPTH: usize = 1;
 
 #[cfg(test)]
 mod tests {
-    use crate::{limits, model, service};
+    use super::*;
 
     #[test]
-    fn limits_keep_their_old_paths() {
-        assert_eq!(
-            service::security_level::MIN_PIN_DIGITS,
-            limits::MIN_PIN_DIGITS
-        );
-        assert_eq!(model::store::MAX_STORE_DEPTH, limits::MAX_STORE_DEPTH);
-        assert_eq!(limits::MIN_PIN_DIGITS, 6);
-        assert_eq!(limits::MAX_STORE_DEPTH, 1);
+    fn limits_keep_their_values() {
+        assert_eq!(MIN_PIN_DIGITS, 6);
+        assert_eq!(MAX_STORE_DEPTH, 1);
     }
 }

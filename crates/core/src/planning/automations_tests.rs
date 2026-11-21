@@ -15,11 +15,11 @@ use crate::model::vault::now_iso;
 use crate::planning::automation_plan::{
     automation_occurrences, automation_of, automation_run_of, automation_runs,
 };
-use crate::pricing::history::unix_secs;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::WorkflowPass;
 use crate::service::test_support::*;
+use crate::time::unix_secs;
 use crate::usecases::planning::automation_rules::{
     check_draft_moment, manual_run_record, new_automation_workflow, rewrite_automation,
     simulation_report,

@@ -13,7 +13,7 @@ use crate::model::planning::UtilityItem;
 use crate::model::store::{Store, StoreKind};
 use crate::model::transaction::{PaymentTx, Transaction};
 use crate::model::vault::{TxProperty, VaultDoc};
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// The summary's look back: a year.
 const YEAR_SECS: i64 = 365 * 86_400;

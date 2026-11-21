@@ -6,9 +6,9 @@ use super::tests::{settle, two_devices};
 use super::*;
 use crate::model::planning::{Reminder, ReminderSource, ReminderSourceKind};
 use crate::model::store::{LiabilityKind, LiabilityTerms, StoreKind};
-use crate::pricing::history::secs_or_now;
 use crate::service::StoreExtras;
 use crate::service::test_support::amount;
+use crate::time::secs_or_now;
 
 const NOW: &str = "2026-03-10T08:00:00Z";
 

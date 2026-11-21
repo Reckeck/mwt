@@ -31,9 +31,9 @@ use crate::planning::goals::{
     plan_create_goal, plan_delete_goal, plan_restore_goal, plan_update_goal, planned_now,
     resolve_scope, slope,
 };
-use crate::pricing::history::secs_or_now;
 use crate::service::MIN_HISTORY_MONTHS;
 use crate::service::UnlockedVault;
+use crate::time::secs_or_now;
 use crate::usecases::react::react;
 
 /// Active workflows that move money into the goal's wallet (what

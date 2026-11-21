@@ -4,7 +4,7 @@
 
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 use crate::workflow::graph::Graph;
 use crate::workflow::model::WorkflowState;
 

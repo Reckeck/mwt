@@ -6,10 +6,10 @@ use crate::model::planning::EmergencyFund;
 use crate::model::store::{Binding, Purpose, StoreKind, StoreScope, SubType};
 use crate::model::transaction::{AccountRef, Transaction};
 use crate::money::interest::INTEREST_CATEGORY;
-use crate::pricing::history::unix_secs;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
+use crate::time::unix_secs;
 
 fn savings(vault: &mut UnlockedVault, name: &str) -> String {
     let bank = store(vault, &format!("{name} bank"), StoreKind::Bank, None);

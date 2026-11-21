@@ -8,8 +8,9 @@ use crate::ipc_contract::{CachedPrice, TransactionInput};
 use crate::model::store::AssetRef;
 use crate::model::vault::{FxPoint, PricePoint};
 use crate::money::rates::{fx_history_filter, iso_of, stamp_prices};
-use crate::pricing::history::{self, secs_or_now};
+use crate::pricing::history;
 use crate::service::UnlockedVault;
+use crate::time::secs_or_now;
 
 /// The cached USD quote of an asset nearest `ts` (RFC3339; empty = now),
 /// with the moment that rate was taken. Lives here with its contract type

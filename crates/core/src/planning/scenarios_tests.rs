@@ -11,10 +11,10 @@ use crate::model::planning::ScenarioSource;
 use crate::model::store::StoreScope;
 use crate::model::store::{Binding, StoreKind, SubType};
 use crate::model::transaction::{AccountRef, Transaction};
-use crate::pricing::history::unix_secs;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::service::{EntityKind, EntityRef, RelationKind, StoreExtras};
+use crate::time::unix_secs;
 
 pub(super) fn input(initial: &str, monthly: &str, months: u32) -> InvestInput {
     InvestInput {

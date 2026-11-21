@@ -1,3 +1,4 @@
+#![warn(unreachable_pub)]
 //! Encrypted vault container.
 //!
 //! File layout (all integers little-endian):
@@ -39,16 +40,37 @@ use rand::Rng;
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
-use self::format::SnapshotFormat;
-use crate::VAULT_MAGIC;
-use crate::crypto::header::VaultHeader;
-use crate::crypto::kdf_profile::KdfParams;
-use crate::error::{Error, Result};
+use crate::header::VaultHeader;
+use crate::kdf_profile::KdfParams;
+use mwt_base::error::{Error, Result};
 
 pub mod format;
 pub mod header;
 pub mod kdf_profile;
 pub mod level;
+
+pub use format::SnapshotFormat;
+
+/// Version of the encrypted *container* layout: magic, header fields, KDF
+/// parameters and cipher, and the one number that tells an old payload from a
+/// new one.
+///
+/// 1: the files of every build before the format reset of 2026-11-19; the
+/// payload `version` there counts 1 to 4. 2: every file written since; the
+/// payload `version` counts again from 1. The reader accepts both (container 1
+/// only for the one-time transition of a payload v4, see
+/// `storage::decode_file`); every write is container 2. A build that
+/// predates the reset refuses a container 2 file at the header, so it cannot
+/// misread a new payload v1 as an old one.
+pub const VAULT_CONTAINER_VERSION: u32 = 2;
+
+/// The container version of the files before the format reset; read, never
+/// written.
+pub const VAULT_LEGACY_CONTAINER_VERSION: u32 = 1;
+
+/// Magic bytes prefix of a vault file. Kept from the TradeApp days: changing
+/// them would make every existing vault unreadable.
+pub const VAULT_MAGIC: &[u8; 8] = b"TRDWVLT\x00";
 
 pub const NONCE_LEN: usize = 24;
 pub const TAG_LEN: usize = 16;
@@ -107,9 +129,9 @@ fn too_heavy(mem_kib: u32, ceiling_kib: u32) -> Error {
 
 /// Compute a fresh random salt + nonce header at the standard cost. Tests
 /// only: outside them a header comes from a [`SealKey`], which carries the
-/// vault's cost.
-#[cfg(test)]
-pub(crate) fn random_header(
+/// vault's cost. Test support: `trade-core` tests reach it through feature `testing`.
+#[cfg(any(test, feature = "testing"))]
+pub fn random_header(
     payload_fmt: SnapshotFormat,
 ) -> (VaultHeader, [u8; SALT_LEN], [u8; NONCE_LEN]) {
     let mut salt = [0u8; SALT_LEN];
@@ -203,8 +225,8 @@ impl SealKey {
     }
 
     /// A key for another file, derived from this one with HKDF-SHA256 and
-    /// `info`, so the vault key itself is never reused.
-    pub(crate) fn derive_subkey(&self, info: &[u8]) -> Zeroizing<[u8; KEY_LEN]> {
+    /// `info`, so the vault key itself is never reused. Used by `vault_io::device_secrets`.
+    pub fn derive_subkey(&self, info: &[u8]) -> Zeroizing<[u8; KEY_LEN]> {
         hkdf_sha256(&self.salt, &self.key[..], info)
     }
 }
@@ -227,9 +249,10 @@ pub fn seal_with(key: &SealKey, payload_fmt: SnapshotFormat, plaintext: &[u8]) -
 }
 
 /// A plain file in an older container, as the builds before the format reset
-/// wrote it: for tests of the reader table.
-#[cfg(test)]
-pub(crate) fn seal_plain_in_container(
+/// wrote it: for tests of the reader table. Test support: `trade-core` tests
+/// reach it through feature `testing`.
+#[cfg(any(test, feature = "testing"))]
+pub fn seal_plain_in_container(
     container: u32,
     payload_fmt: SnapshotFormat,
     plaintext: &[u8],
@@ -433,8 +456,9 @@ pub fn random_blob_key() -> Zeroizing<[u8; KEY_LEN]> {
 }
 
 /// Seal a blob: `nonce ‖ ciphertext`, bound to `aad` (the blob's id), so a
-/// file cannot be swapped for another one sealed with the same key.
-pub(crate) fn seal_blob(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
+/// file cannot be swapped for another one sealed with the same key. Used by
+/// `vault_io::device_secrets`.
+pub fn seal_blob(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
     let mut nonce = [0u8; NONCE_LEN];
     rand::rng().fill_bytes(&mut nonce);
     let cipher = cipher_for(key)?;
@@ -454,7 +478,8 @@ pub(crate) fn seal_blob(key: &[u8; KEY_LEN], aad: &[u8], plaintext: &[u8]) -> Re
 }
 
 /// Open what [`seal_blob`] wrote; a changed byte or another id is an error.
-pub(crate) fn open_blob(key: &[u8; KEY_LEN], aad: &[u8], sealed: &[u8]) -> Result<Vec<u8>> {
+/// Used by `vault_io::device_secrets`.
+pub fn open_blob(key: &[u8; KEY_LEN], aad: &[u8], sealed: &[u8]) -> Result<Vec<u8>> {
     if sealed.len() < NONCE_LEN + TAG_LEN {
         return Err(Error::Crypto("sealed file is cut short".into()));
     }

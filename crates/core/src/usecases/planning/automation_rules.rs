@@ -10,7 +10,7 @@ use crate::planning::automation_plan::runs_in;
 use crate::planning::automations::{
     AutomationDraft, AutomationSimulation, SimulatedBalance, SimulatedRun,
 };
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 use crate::workflow::automation::{self as graph_of, automation_graph};
 use crate::workflow::exec::{StepStatus, TraceStep};
 use crate::workflow::model::{GraphVersion, MAX_GRAPH_VERSIONS, RunOutcome, Workflow, WorkflowRun};

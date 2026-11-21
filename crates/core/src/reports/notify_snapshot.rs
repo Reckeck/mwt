@@ -15,7 +15,7 @@ use crate::model::notify::{NoticeCategory, NoticeRecord};
 use crate::model::planning::AlertCondition;
 use crate::model::store::AssetRef;
 use crate::model::vault::now_iso;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 use crate::kernel::books::Books;
 use crate::model::notify::{notice, notice_title};

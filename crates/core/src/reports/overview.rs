@@ -17,7 +17,7 @@ use crate::error::{Error, Result};
 use crate::model::category::CategoryGroup;
 use crate::model::store::{AssetRef, StoreKind, StoreScope};
 use crate::model::transaction::{Leg, LegRole};
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 use super::where_went::where_report;
 use crate::household::contacts::contact_balances_until;

@@ -16,6 +16,10 @@ testkit = []
 deprecated-forwards = []
 
 [dependencies]
+# The DTO derives of base are always on here: this crate derives `TS`/`JsonSchema` over `Amount`.
+mwt-base = { path = "../base", features = ["ts", "schema"] }
+# `SecurityLevel` / `RaiseStage` are TS types of the IPC contract.
+mwt-crypto = { path = "../crypto", features = ["ts"] }
 serde.workspace = true
 serde_json.workspace = true
 rmp-serde.workspace = true
@@ -27,9 +31,6 @@ time.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 zeroize.workspace = true
-argon2.workspace = true
-chacha20poly1305.workspace = true
-aes.workspace = true
 hmac.workspace = true
 sha2.workspace = true
 blake2.workspace = true
@@ -48,6 +49,7 @@ calamine.workspace = true
 ego-tree.workspace = true
 
 [dev-dependencies]
+mwt-crypto = { path = "../crypto", features = ["ts", "testing"] }
 tempfile = "3"
 
 [[bin]]

@@ -1,5 +1,5 @@
-//! `Secret<T>`: a value that never prints (rule `N5`). A minimal stub; it moves
-//! to `mwt-base` in phase 6.
+//! `Secret<T>`: a value that never prints (rule `N5`). A minimal stub; it lives
+//! in `mwt-base`.
 //!
 //! `Debug` shows `Secret(..)` and nothing of the value, the value is wiped from
 //! memory on drop, and the only way to read it is the explicit [`Secret::expose`].
@@ -23,15 +23,18 @@
 //! | `ipc_contract::security::{RaiseToCryptoInput, ValidatePasswordStrengthInput, BiometricEnableInput}` | no (no `Debug` derive, no manual impl) | nothing to print |
 //! | `ipc_contract::cryptotrack::operations::CryptoOpFilter::token` | no | not a secret: a token symbol filter (false positive of the grep) |
 
+#[cfg(feature = "schema")]
 use std::borrow::Cow;
 use std::fmt;
 
+#[cfg(feature = "schema")]
 use schemars::{JsonSchema, SchemaGenerator};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use zeroize::{Zeroize, Zeroizing};
 
 /// Stands in for a secret field in a hand-written `Debug`: prints `Secret(..)`.
-pub(crate) struct Hidden;
+/// Public because the hand `Debug` impls of `ipc_contract` (facade) use it.
+pub struct Hidden;
 
 impl fmt::Debug for Hidden {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -40,6 +43,7 @@ impl fmt::Debug for Hidden {
 }
 
 /// A value that is wiped on drop and prints as `Secret(..)`.
+#[mwt_macros::dto(manual(serde, ts, schema))]
 #[derive(Clone, PartialEq, Eq)]
 pub struct Secret<T: Zeroize>(Zeroizing<T>);
 
@@ -84,6 +88,7 @@ impl<'de, T: Zeroize + Deserialize<'de>> Deserialize<'de> for Secret<T> {
     }
 }
 
+#[cfg(feature = "schema")]
 impl<T: Zeroize + JsonSchema> JsonSchema for Secret<T> {
     fn inline_schema() -> bool {
         T::inline_schema()

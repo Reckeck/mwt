@@ -18,8 +18,8 @@ fn a_far_deadline_with_a_return_does_not_panic() {
 use crate::model::store::StoreKind;
 use crate::model::transaction::AccountRef;
 use crate::model::vault::PricePoint;
-use crate::pricing::history::unix_secs;
 use crate::service::test_support::*;
+use crate::time::unix_secs;
 
 fn secs(iso: &str) -> i64 {
     unix_secs(iso).unwrap()

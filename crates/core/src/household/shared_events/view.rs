@@ -475,7 +475,7 @@ fn as_of(event: &SharedEvent, secs: i64) -> std::borrow::Cow<'_, SharedEvent> {
     if secs == i64::MAX {
         return std::borrow::Cow::Borrowed(event);
     }
-    let until = |at: &str| crate::pricing::history::secs_or_now(at) <= secs;
+    let until = |at: &str| crate::time::secs_or_now(at) <= secs;
     let mut past = event.clone();
     for item in &mut past.items {
         item.purchases.retain(|purchase| until(&purchase.at));

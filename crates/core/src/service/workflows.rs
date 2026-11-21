@@ -20,7 +20,7 @@ use crate::workflow::types::WfValue;
 
 // The tests of this area name these through `super::*`.
 #[cfg(test)]
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 #[cfg(test)]
 use crate::workflow::graph::Graph;
 #[cfg(test)]

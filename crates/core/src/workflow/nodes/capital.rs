@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use crate::Amount;
 use crate::calendar::{self, Calendar};
 use crate::model::transaction::AccountRef;
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 use crate::workflow::exec::Executor;
 use crate::workflow::graph::Node;
 use crate::workflow::types::WfValue;

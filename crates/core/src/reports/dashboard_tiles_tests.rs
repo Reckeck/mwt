@@ -3,8 +3,8 @@
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::model::vault::DashPeriod;
-use crate::pricing::history::unix_secs;
 use crate::service::test_support::*;
+use crate::time::unix_secs;
 
 fn dated(mut tx: Transaction, category: &str, ts: &str) -> Transaction {
     tx.meta_mut().categories = vec![category.into()];

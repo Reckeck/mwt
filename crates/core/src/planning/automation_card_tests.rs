@@ -9,9 +9,9 @@ use serde_json::json;
 
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
-use crate::pricing::history::unix_secs;
 use crate::service::test_support::*;
 use crate::service::{AutomationDraft, WorkflowDraft};
+use crate::time::unix_secs;
 use crate::workflow::model::{WaitKind, WorkflowWait};
 
 #[test]

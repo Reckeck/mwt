@@ -4,9 +4,9 @@ use super::tests::{settle, two_devices};
 use super::*;
 use crate::model::planning::AlertCondition;
 use crate::model::vault::PricePoint;
-use crate::pricing::history::unix_secs;
 use crate::service::PriceAlertDraft;
 use crate::service::test_support::{amount, btc};
+use crate::time::unix_secs;
 
 fn price(vault: &mut UnlockedVault, value: &str, ts: &str) {
     vault.doc.price_cache.push(PricePoint {

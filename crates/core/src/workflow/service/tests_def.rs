@@ -3,7 +3,7 @@
 //! what the test expected.
 
 use crate::error::{Error, Result};
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 use crate::workflow::exec::RunReport;
 use crate::workflow::model::{RunOutcome, TestExpect, Workflow, WorkflowTest};
 

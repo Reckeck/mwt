@@ -21,7 +21,7 @@ fn store_months_split_inflow_and_outflow_by_month() {
     at(&mut food, "2026-10-06T12:00:00Z");
     vault.add_transaction(food).unwrap();
 
-    let now = crate::pricing::history::secs_or_now("2026-10-19T12:00:00Z");
+    let now = crate::time::secs_or_now("2026-10-19T12:00:00Z");
     let rows = vault.store_months(&bank, true, 2, now, "UTC");
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].month, "2026-09");
@@ -63,7 +63,7 @@ fn two_wallets() -> (tempfile::TempDir, UnlockedVault, String, String) {
 #[test]
 fn children_count_only_when_asked_and_an_empty_scope_has_empty_months() {
     let (_dir, vault, parent, _child) = two_wallets();
-    let now = crate::pricing::history::secs_or_now("2026-10-19T12:00:00Z");
+    let now = crate::time::secs_or_now("2026-10-19T12:00:00Z");
     let with_children = rows(&vault, &parent, true, 1, now);
     let alone = rows(&vault, &parent, false, 1, now);
     assert_eq!(with_children[0].inflow, amount("100"));
@@ -80,7 +80,7 @@ fn children_count_only_when_asked_and_an_empty_scope_has_empty_months() {
 #[test]
 fn zero_months_gives_the_current_one_and_the_delegate_equals_the_function() {
     let (_dir, vault, parent, _child) = two_wallets();
-    let now = crate::pricing::history::secs_or_now("2026-10-19T12:00:00Z");
+    let now = crate::time::secs_or_now("2026-10-19T12:00:00Z");
     let direct = rows(&vault, &parent, true, 0, now);
     assert_eq!(direct.len(), 1);
     assert_eq!(direct, vault.store_months(&parent, true, 0, now, "UTC"));

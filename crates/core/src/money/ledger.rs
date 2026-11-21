@@ -15,7 +15,7 @@ use crate::calendar::Calendar;
 use crate::error::{Error, Result};
 use crate::model::store::StoreScope;
 use crate::model::transaction::{LegRole, Transaction, TxKind, TxOrigin};
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 use crate::kernel::books::Books;
 use crate::model::vault::VaultDoc;

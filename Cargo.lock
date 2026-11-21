@@ -3003,6 +3003,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-base"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "mwt-macros",
+ "rust_decimal",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "time",
+ "ts-rs",
+ "zeroize",
+]
+
+[[package]]
+name = "mwt-crypto"
+version = "0.1.0"
+dependencies = [
+ "aes 0.9.4",
+ "argon2",
+ "blake2 0.11.0",
+ "chacha20poly1305 0.11.0",
+ "hmac 0.13.0",
+ "mwt-base",
+ "rand 0.10.4",
+ "serde",
+ "sha2 0.11.1",
+ "tempfile",
+ "ts-rs",
+ "zeroize",
+]
+
+[[package]]
+name = "mwt-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6100,17 +6145,16 @@ dependencies = [
 name = "trade-core"
 version = "0.1.0"
 dependencies = [
- "aes 0.9.4",
- "argon2",
  "base64 0.23.1",
  "blake2 0.11.0",
  "calamine",
- "chacha20poly1305 0.11.0",
  "chrono",
  "chrono-tz",
  "csv",
  "ego-tree",
  "hmac 0.13.0",
+ "mwt-base",
+ "mwt-crypto",
  "rand 0.10.4",
  "regex",
  "reqwest 0.12.28",

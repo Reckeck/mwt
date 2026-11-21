@@ -15,7 +15,7 @@ use crate::model::planning::{
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
 use crate::planning::automations::{self as rules, automation_draft, main_amount, outflow};
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 use crate::workflow::automation::{self as graph_of, ESTIMATE_OF};
 use crate::workflow::model::{RunOutcome, Workflow, WorkflowRun};
 use crate::workflow::nodes::triggers::schedule_moments_limited;

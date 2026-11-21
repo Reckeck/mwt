@@ -6,11 +6,11 @@ use crate::model::planning::EmergencyFund;
 use crate::model::planning::{HealthColor, HealthReasonCode};
 use crate::model::store::{StoreKind, StoreScope, SubType};
 use crate::model::transaction::Transaction;
-use crate::pricing::history::secs_or_now;
 use crate::reports::health::*;
 use crate::service::StoreExtras;
 use crate::service::test_support::*;
 use crate::service::{Insight, InsightCode, LoanClass, UnlockedVault};
+use crate::time::secs_or_now;
 
 fn pct(raw: &str) -> Amount {
     Amount::parse(raw).unwrap()

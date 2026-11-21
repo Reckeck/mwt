@@ -11,6 +11,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::{Error, Result};
 
+#[mwt_macros::dto(manual(serde, ts, schema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 pub struct Amount(pub Decimal);
 
@@ -277,6 +278,7 @@ impl<'de> Deserialize<'de> for Amount {
     }
 }
 
+#[cfg(feature = "ts")]
 impl ts_rs::TS for Amount {
     type WithoutGenerics = Self;
     type OptionInnerType = Self;
@@ -310,6 +312,7 @@ impl ts_rs::TS for Amount {
 
 /// Schema for the editor: `Amount` reaches JSON as a decimal *string*, so the
 /// schema must say `string` rather than expose the `Decimal` newtype.
+#[cfg(feature = "schema")]
 impl schemars::JsonSchema for Amount {
     fn schema_name() -> std::borrow::Cow<'static, str> {
         "string".into()

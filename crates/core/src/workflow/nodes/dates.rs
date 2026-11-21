@@ -135,7 +135,7 @@ impl Executor<'_> {
             WfValue::Text(text) if text.trim().is_empty() => Ok(cal.local(self.now())),
             WfValue::Date(text) | WfValue::Text(text) => {
                 let text = text.trim();
-                if let Some(secs) = crate::pricing::history::unix_secs(text) {
+                if let Some(secs) = crate::time::unix_secs(text) {
                     return Ok(cal.local(secs));
                 }
                 parse_date(text, &cal)

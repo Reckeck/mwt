@@ -22,7 +22,7 @@ use crate::model::planning::{
 use crate::model::store::StoreScope;
 use crate::model::vault::{DailyBudgetMode, VaultDoc};
 use crate::money::worth::FlowClass;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 use super::flows::flows_between;
 

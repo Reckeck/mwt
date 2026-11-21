@@ -15,7 +15,7 @@ use crate::money::tree::find_store;
 use crate::planning::agenda::{self as rules, UpcomingItem, UpcomingKind, Window};
 use crate::planning::automation_plan::{automation_occurrences, automation_runs, automations};
 use crate::planning::automations::{balance_at, outflow};
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// A forecast balance, seeded from the real one on first use.
 fn forecast_balance(
