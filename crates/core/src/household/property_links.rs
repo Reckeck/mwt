@@ -8,11 +8,11 @@
 
 use crate::Amount;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::planning::UtilityItem;
 use crate::model::store::{Store, StoreKind};
 use crate::model::transaction::{PaymentTx, Transaction};
 use crate::model::vault::{TxProperty, VaultDoc};
+use crate::money::books::Books;
 use crate::time::secs_or_now;
 
 /// The summary's look back: a year.

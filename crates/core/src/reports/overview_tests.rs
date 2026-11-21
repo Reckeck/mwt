@@ -4,13 +4,13 @@ use super::overview::*;
 use std::collections::BTreeMap;
 
 use crate::Amount;
-use crate::kernel::books::Books;
 use crate::model::category::CategoryGroup;
 use crate::model::store::AssetRef;
 use crate::model::store::{LiabilityKind, LiabilityTerms};
 use crate::model::store::{StoreKind, StoreScope};
 use crate::model::transaction::PriceStamp;
 use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
+use crate::money::books::Books;
 use crate::service::UnlockedVault;
 use crate::service::WhereKind;
 use crate::service::test_support::*;

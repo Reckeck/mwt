@@ -13,7 +13,7 @@ use crate::ipc_contract::cryptotrack::relations::{
     CryptoFiatGroup, CryptoFiatRelation, CryptoRelationGroup, CryptoRelationRow, CryptoRelations,
     CryptoRelationsInput,
 };
-use crate::kernel::books::Books;
+use crate::money::books::Books;
 use crate::usecases::cryptotrack::links::crypto_pairs;
 
 /// The most rows of one group.

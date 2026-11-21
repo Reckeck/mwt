@@ -12,21 +12,10 @@ mod number_props;
 use chrono::NaiveDate;
 use scraper::Html;
 
-use crate::Amount;
+pub use crate::model::datasource::Extracted;
 use crate::model::datasource::{NumberFormat, SeriesPoint, SourceMethod, SourceOutput, TableRow};
 
 pub use number::parse_number;
-
-/// What a method found, before it gets a timestamp.
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
-pub struct Extracted {
-    pub number: Option<Amount>,
-    pub text: Option<String>,
-    pub series: Vec<SeriesPoint>,
-    /// Set when the value came from a fallback (the selector stopped
-    /// matching and `text_hint` was used): the source works but needs fixing.
-    pub warning: Option<String>,
-}
 
 /// What the address returned, as the picker shows it.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
@@ -387,6 +376,7 @@ mod tests {
     }
 
     use super::*;
+    use crate::Amount;
     use crate::model::datasource::FileFormat;
     use std::str::FromStr;
 

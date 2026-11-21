@@ -9,11 +9,11 @@ use std::collections::BTreeMap;
 
 use crate::Amount;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::ids::StoreId;
 use crate::model::store::{LoyaltyInfo, StoreKind};
 use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, TopupTx, Transaction, TxMeta};
 use crate::model::vault::{ManualPrice, VaultDoc};
+use crate::money::books::Books;
 use crate::money::portfolio::{normalized_symbol, symbol_clash, symbol_taken_by_other};
 use crate::money::tree::find_store;
 use crate::time::secs_or_now;

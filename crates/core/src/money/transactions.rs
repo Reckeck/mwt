@@ -3,10 +3,10 @@
 //! read context or a document; the scenarios that write live in
 //! `usecases::money::transactions`.
 
-use crate::kernel::books::Books;
 use crate::model::store::StoreKind;
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::money::rates::fx_at;
 use crate::money::search::main_amount;
 

@@ -9,12 +9,37 @@ use std::sync::Arc;
 
 use crate::Amount;
 use crate::error::Result;
+use crate::model::device_secrets::DeviceSecrets;
 use crate::model::transaction::Transaction;
 use crate::model::vault::VaultDoc;
-use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
-use crate::vault_io::device_secrets::DeviceSecrets;
 
-use crate::service::{RateBook, UnlockedVault};
+use super::rates::RateBook;
+use super::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
+use super::valuation::ValuationCurve;
+
+/// What a [`Books`] reads from the open vault. The vault itself
+/// (`service::UnlockedVault`) implements it in the facade (`service/books.rs`),
+/// so this module names no vault type and the money rules stay below the vault.
+pub(crate) trait BooksSource {
+    /// The vault document.
+    fn doc(&self) -> &VaultDoc;
+    /// The base currency code (never empty) and its latest cached FX rate.
+    fn base_and_fx(&self) -> (String, Amount);
+    /// Current USD price of one unit of the asset.
+    fn price_usd_for(&self, asset_key: &str) -> Amount;
+    /// Base-currency price of one unit of the asset.
+    fn price_base_for(&self, asset_key: &str, fx: Amount) -> Amount;
+    /// Curves of every property asset that has a valuation or a rule.
+    fn valuation_curves(&self) -> HashMap<String, ValuationCurve>;
+    /// The writers' checks of a transaction (dates, envelopes, ownership).
+    fn prepare_transaction(&self, tx: &mut Transaction) -> Result<()>;
+    /// The part of the asset in the store that envelopes claim.
+    fn earmarked(&self, store_id: &str, asset_key: &str) -> Amount;
+    /// Whether the exchange keys live on this device (security level 3).
+    fn keys_on_device(&self) -> bool;
+    /// The whole device secrets file for one request.
+    fn device_secrets_for_request(&self) -> Result<DeviceSecrets>;
+}
 
 #[cfg(test)]
 thread_local! {
@@ -24,7 +49,7 @@ thread_local! {
 
 /// Lazy read context over an open vault.
 pub struct Books<'vault> {
-    vault: &'vault UnlockedVault,
+    vault: &'vault dyn BooksSource,
     rate_book: OnceCell<RateBook>,
     shared_ratios: OnceCell<HashMap<String, Amount>>,
     shared_extras: OnceCell<Vec<SharedExtra>>,
@@ -32,7 +57,7 @@ pub struct Books<'vault> {
 }
 
 impl<'vault> Books<'vault> {
-    pub(crate) fn new(vault: &'vault UnlockedVault) -> Self {
+    pub(crate) fn new(vault: &'vault dyn BooksSource) -> Self {
         Self {
             vault,
             rate_book: OnceCell::new(),
@@ -44,7 +69,7 @@ impl<'vault> Books<'vault> {
 
     /// The vault document.
     pub fn doc(&self) -> &'vault VaultDoc {
-        &self.vault.doc
+        self.vault.doc()
     }
 
     /// The base currency code and its latest FX rate, computed on first use.
@@ -80,7 +105,7 @@ impl<'vault> Books<'vault> {
             .into_iter()
             .map(|(key, curve)| (key, Arc::new(curve) as _))
             .collect();
-        RateBook::build(&self.vault.doc, curves).with_base(self.base_and_fx().0)
+        RateBook::build(self.vault.doc(), curves).with_base(self.base_and_fx().0)
     }
 
     /// For each payment of mine linked to a shared event: the share of it
@@ -137,77 +162,8 @@ impl Books<'_> {
     }
 }
 
-impl UnlockedVault {
-    /// A fresh read context; the book inside is built once, when first used.
-    pub fn books(&self) -> Books<'_> {
-        Books::new(self)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::BUILDS;
-    use super::*;
-
-    fn open_vault() -> (tempfile::TempDir, UnlockedVault) {
-        let dir = tempfile::tempdir().unwrap();
-        let vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
-        (dir, vault)
-    }
-
-    fn builds() -> usize {
-        BUILDS.with(std::cell::Cell::get)
-    }
-
-    #[test]
-    fn books_build_each_field_once() {
-        let (_dir, vault) = open_vault();
-        let before = builds();
-        let books = vault.books();
-        assert_eq!(builds(), before, "nothing is built before the first ask");
-        books.rate_book();
-        books.curves().count();
-        books.base();
-        books.rate_book();
-        assert_eq!(builds(), before + 1);
-        // The other fields are built once too: a repeated ask is the same value.
-        assert!(std::ptr::eq(books.shared_ratios(), books.shared_ratios()));
-        assert!(std::ptr::eq(books.shared_extras(), books.shared_extras()));
-        assert_eq!(builds(), before + 1, "they do not build another book");
-    }
-
-    #[test]
-    fn books_equals_per_call_values() {
-        let (_dir, vault) = open_vault();
-        let books = vault.books();
-        let fresh = vault.rate_book();
-        assert_eq!(books.base(), fresh.base());
-        assert_eq!(books.curves().count(), fresh.curves().len());
-        assert_eq!(
-            books.rate_book().fx_at("eur", 1_700_000_000),
-            fresh.fx_at("eur", 1_700_000_000)
-        );
-        assert_eq!(
-            books.rate_book().price_at("coin:bitcoin", 1_700_000_000),
-            fresh.price_at("coin:bitcoin", 1_700_000_000)
-        );
-    }
-
-    #[test]
-    fn books_base_and_fx_equals_vault() {
-        let (_dir, vault) = open_vault();
-        let books = vault.books();
-        let (vault_base, vault_fx) = vault.base_and_fx();
-        assert_eq!(books.base_and_fx(), (vault_base.as_str(), vault_fx));
-        assert_eq!(books.price_usd("fiat:usd"), vault.price_usd_for("fiat:usd"));
-        let fx = vault.base_and_fx().1;
-        assert_eq!(
-            books.price_base("coin:bitcoin"),
-            vault.price_base_for("coin:bitcoin", fx)
-        );
-        assert!(std::ptr::eq(books.doc(), &vault.doc));
-    }
-
     /// The methods of the vault-reaching block (`impl Books<'_>`), the only list of them.
     /// A ratchet (core-strangler Z6f): it shrinks, it never grows. A method that must go
     /// away is deleted together with its entry here.

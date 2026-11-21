@@ -25,8 +25,8 @@ use crate::ipc_contract::cryptotrack::network::{
     EndpointKind, EndpointView, NetworkSettings, NetworkTestOutcome, NetworkTestResult,
     NetworkView, SetNetworkSettingsInput, TestNetworkInput,
 };
-use crate::kernel::books::Books;
 use crate::model::chain::Chain;
+use crate::money::books::Books;
 use crate::service::UnlockedVault;
 use crate::vault_io::device_secrets::{self, BlockscoutKey, NetworkEndpoints};
 

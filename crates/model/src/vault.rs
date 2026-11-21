@@ -416,6 +416,9 @@ pub const ACCOUNT_EARN: &str = "EARN";
 /// The Bybit unified trading account type.
 pub const ACCOUNT_UNIFIED: &str = "UNIFIED";
 
+/// The Bybit funding account type.
+pub const ACCOUNT_FUND: &str = "FUND";
+
 impl PendingImport {
     /// Assets referenced by this fill, for the staging UI summary.
     pub fn symbols(&self) -> [String; 2] {

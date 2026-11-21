@@ -10,7 +10,6 @@ use zeroize::Zeroizing;
 
 use crate::crypto::SealKey;
 use crate::error::Result;
-use crate::service::Flushed;
 use crate::storage::{SnapshotFormat, VaultFile};
 use crate::vault_io::VaultMirror;
 
@@ -23,6 +22,15 @@ pub struct SealedWrite {
     pub revision: u64,
     /// The newest revision written, shared with the jobs in flight.
     pub gate: Arc<Mutex<u64>>,
+}
+
+/// A job that went to disk (or was dropped as older than what is there).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Flushed {
+    pub path: PathBuf,
+    pub revision: u64,
+    /// The bytes that went out; `None` when nothing was written.
+    pub sealed: Option<Vec<u8>>,
 }
 
 /// Where a snapshot is written.

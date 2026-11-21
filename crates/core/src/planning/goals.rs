@@ -8,11 +8,11 @@ use chrono::{Datelike, NaiveDate};
 use crate::Amount;
 use crate::calendar::Calendar;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::planning::{Envelope, Goal};
 use crate::model::store::StoreScope;
 use crate::model::transaction::LegRole;
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::time::secs_or_now;
 
 use super::scenarios::{find_calc_scenario, planned_balance};

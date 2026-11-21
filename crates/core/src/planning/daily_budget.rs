@@ -7,12 +7,12 @@ use chrono::{Duration, NaiveDate};
 
 use crate::Amount;
 use crate::calendar::{self, AUTOMATION_HOUR, Calendar, first_of_month};
-use crate::kernel::books::Books;
 use crate::model::planning::draft_to_transaction;
 use crate::model::planning::{Automation, UtilityKind};
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::model::vault::DailyBudgetMode;
+use crate::money::books::Books;
 use crate::money::worth::FlowClass;
 use crate::planning::automation_plan::{automation_occurrences, automations};
 use crate::planning::automations::automation_draft;

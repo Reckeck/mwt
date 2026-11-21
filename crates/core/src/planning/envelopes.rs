@@ -9,11 +9,11 @@
 
 use crate::Amount;
 use crate::error::{Error, Result, WalletRule};
-use crate::kernel::books::Books;
 use crate::model::ids::StoreId;
 use crate::model::planning::Envelope;
 use crate::model::store::{AssetRef, Store};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 
 /// What creating or editing an envelope takes.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]

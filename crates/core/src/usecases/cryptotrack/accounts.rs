@@ -26,12 +26,12 @@ use crate::ipc_contract::cryptotrack::accounts::{
     ConnectAddressInput, ConnectAddressResult, CryptoAccountView, MonthChange, QuarantinedHolding,
     SECRET_REFUSED, UpdateAccountInput,
 };
-use crate::kernel::books::Books;
 use crate::model::cryptotrack::{
     CryptoAccount, CryptoAsset, CryptoDirection, CryptoPosition, TokenId,
 };
 use crate::model::store::{Store, StoreKind};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::service::{StoreExtras, UnlockedVault};
 use crate::time::{secs_or_now, unix_secs};
 

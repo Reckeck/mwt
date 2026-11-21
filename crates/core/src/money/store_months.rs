@@ -9,9 +9,9 @@ use std::collections::HashSet;
 
 use crate::Amount;
 use crate::calendar::{Calendar, first_of_month, month_key, next_month};
-use crate::kernel::books::Books;
 use crate::model::ids::StoreId;
 use crate::model::transaction::{Leg, LegRole};
+use crate::money::books::Books;
 use crate::money::tree::subtree_ids;
 use crate::time::secs_or_now;
 

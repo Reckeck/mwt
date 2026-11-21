@@ -2,12 +2,25 @@
 //!
 //! A v4 vault may hold graphs written by any build of the workflow engine. The steps bring an older
 //! graph to the content of version 3 (the last one before the format reset); the result is stamped
-//! with the version the live code expects ([`GRAPH_VERSION`]), so the live code needs no migration.
+//! with the frozen [`GRAPH_VERSION`], so the live code needs no migration.
 //!
 //! Two callers: the v4 transition, and `import_workflow` for export files of version 1.
 
-use crate::workflow::exec::FREE_RUNNING;
-use crate::workflow::graph::{GRAPH_VERSION, Graph};
+use crate::workflow::graph::Graph;
+
+/// The graph version the live code expected when the transition was frozen. Frozen conversions do
+/// not follow live code: a later change of the live number does not change what an old file is
+/// stamped with here.
+const GRAPH_VERSION: u32 = 1;
+
+/// Nodes that may stand apart from the flow (a copy of the list the version 3 step used).
+const FREE_RUNNING: [&str; 5] = [
+    "var.set",
+    "var.add",
+    "action.notify",
+    "action.reminder",
+    "action.emit",
+];
 
 /// The last graph version the steps below know. A graph above it is left alone.
 const LAST_LEGACY_VERSION: u32 = 3;

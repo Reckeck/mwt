@@ -8,10 +8,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::Amount;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::store::{AssetRef, Holding, MAX_STORE_DEPTH, Store, StoreScope};
 use crate::model::transaction::{Leg, LegRole, Transaction};
 use crate::model::vault::{VaultDoc, iso_to_millis, now_iso};
+use crate::money::books::Books;
 use crate::money::cost_basis::{self, CostStrategy, PositionKey, Replayed, position_key};
 use crate::money::price_info::{PriceInfo, PriceOrigin, PriceQuote, price_quote_for};
 use crate::money::rates::{RateBook, is_fiat_of, per_usd};

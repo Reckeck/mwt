@@ -15,10 +15,10 @@ use serde::{Deserialize, Serialize};
 use crate::Amount;
 use crate::calendar;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::deposit::KeyRatePoint;
 use crate::model::inflation::{InflationMode, InflationReading, InflationSource};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 
 /// Months of series the settings screen draws.
 pub const INFLATION_CHART_MONTHS: usize = 24;

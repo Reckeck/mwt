@@ -44,10 +44,14 @@ pub mod cryptotrack {
 
 pub mod datasource {
     pub use mwt_model::{
-        AssetPriceSource, BROKEN_AFTER, DataSource, DepositRateSource, FileFormat, JUMP_FACTOR,
-        MAX_SOURCE_HISTORY, NumberFormat, SeriesPoint, SourceInterval, SourceMethod, SourceOutput,
-        SourceStatus, SourceValue, TableRow,
+        AssetPriceSource, BROKEN_AFTER, DataSource, DepositRateSource, Extracted, FileFormat,
+        JUMP_FACTOR, MAX_SOURCE_HISTORY, NumberFormat, SeriesPoint, SourceInterval, SourceMethod,
+        SourceOutput, SourceStatus, SourceValue, TableRow,
     };
+}
+
+pub mod device_secrets {
+    pub use mwt_model::{BlockscoutKey, DeviceKey, DeviceSecrets, NetworkEndpoints};
 }
 
 pub mod deposit {
@@ -146,8 +150,8 @@ pub mod transaction {
 
 pub mod vault {
     pub use mwt_model::{
-        ACCOUNT_EARN, ACCOUNT_UNIFIED, DailyBudgetMode, DashPeriod, DashboardWidgetCfg,
-        ExchangeKeys, Exchanges, FxPoint, ImportKind, ImportRun, ImportSource,
+        ACCOUNT_EARN, ACCOUNT_FUND, ACCOUNT_UNIFIED, DailyBudgetMode, DashPeriod,
+        DashboardWidgetCfg, ExchangeKeys, Exchanges, FxPoint, ImportKind, ImportRun, ImportSource,
         MAX_DISCARDED_IMPORTS, MAX_IMPORT_RUNS, ManualPrice, PendingImport, PricePoint, Settings,
         TxProperty, VAULT_FORMAT_VERSION, Valuation, VaultDoc, default_fx_interval,
         default_minimize_to_tray, iso_to_millis, json_schema, now_iso, unix_to_iso,

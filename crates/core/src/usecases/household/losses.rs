@@ -12,7 +12,7 @@ use crate::household::losses::{
     CryptoQuote, FlowSummary, FxSources, FxTable, TxLoss, chain_summaries, loss_by_id,
     losses_by_id, plan_link, rates_table,
 };
-use crate::kernel::books::Books;
+use crate::money::books::Books;
 use crate::reports::overview::BookValues;
 use crate::service::UnlockedVault;
 use crate::time::secs_or_now;

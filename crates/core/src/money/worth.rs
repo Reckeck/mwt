@@ -7,11 +7,11 @@ use std::collections::HashSet;
 
 use crate::Amount;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::category::CategoryGroup;
 use crate::model::store::{LiabilityKind, StoreKind};
 use crate::model::transaction::{AccountRef, Transaction};
 use crate::model::vault::{ManualPrice, VaultDoc};
+use crate::money::books::Books;
 use crate::money::rates::per_usd;
 use crate::money::tree::{resolve_scope, root_of};
 

@@ -232,3 +232,15 @@ pub struct DepositRateSource {
     pub store_id: String,
     pub source_id: String,
 }
+
+/// What a method found, before it gets a timestamp.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct Extracted {
+    pub number: Option<Amount>,
+    pub text: Option<String>,
+    pub series: Vec<SeriesPoint>,
+    /// Set when the value came from a fallback (the selector stopped
+    /// matching and `text_hint` was used): the source works but needs fixing.
+    pub warning: Option<String>,
+}

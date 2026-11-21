@@ -66,11 +66,11 @@ use crate::cryptotrack::protocols::{
     record_id_prefixes,
 };
 use crate::cryptotrack::tokens;
-use crate::kernel::books::Books;
 use crate::model::cryptotrack::{
     CryptoAsset, CryptoDirection, CryptoLeg, CryptoPosition, CryptoTx, CryptoTxKind,
 };
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::money::price_info::price_quote_for;
 use crate::time::unix_secs;
 

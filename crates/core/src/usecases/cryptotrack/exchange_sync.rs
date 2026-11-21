@@ -161,7 +161,7 @@ pub fn reconcile_exchange(
 
 /// The corrections the live balances ask for, one per sub-account.
 fn corrections(
-    books: &crate::kernel::books::Books<'_>,
+    books: &crate::money::books::Books<'_>,
     root: &str,
     settings: &ImportSettings,
     balances: &[(String, Vec<CoinBalance>)],

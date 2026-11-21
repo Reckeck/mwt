@@ -2,8 +2,8 @@
 
 use crate::Amount;
 use crate::cryptotrack::service::totals::crypto_history;
-use crate::kernel::books::Books;
 use crate::model::store::AssetRef;
+use crate::money::books::Books;
 
 /// What the crypto module was worth at each cutoff in USD (`None`: no record that month) and
 /// whether it already counts a replayed wallet's coins.

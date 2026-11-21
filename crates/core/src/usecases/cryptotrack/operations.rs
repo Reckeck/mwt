@@ -36,11 +36,11 @@ use crate::ipc_contract::cryptotrack::operations::{
     CryptoOpsPage, CryptoSetOverrideInput, CryptoSetOverrideResult, OPERATIONS_PAGE, OverrideField,
     OwnEntry,
 };
-use crate::kernel::books::Books;
 use crate::kernel::tx::Tx;
 use crate::model::cryptotrack::{CryptoDirection, CryptoOverride, CryptoTx, TrackingRef};
 use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
+use crate::money::books::Books;
 use crate::money::rates::convert_at;
 use crate::service::UnlockedVault;
 use crate::usecases::cryptotrack::recompute::refold_holdings;

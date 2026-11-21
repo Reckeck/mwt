@@ -5,8 +5,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::Amount;
-use crate::datasource::Extracted;
 use crate::error::{Error, Result};
+use crate::model::datasource::Extracted;
 use crate::model::datasource::{
     AssetPriceSource, BROKEN_AFTER, DataSource, DepositRateSource, JUMP_FACTOR, MAX_SOURCE_HISTORY,
     NumberFormat, SourceInterval, SourceMethod, SourceOutput, SourceStatus, SourceValue,

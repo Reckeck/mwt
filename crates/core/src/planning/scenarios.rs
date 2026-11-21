@@ -6,10 +6,10 @@ use crate::Amount;
 use crate::calc::invest::{self, CapFreq, ContributionStage, Freq, InvestInput};
 use crate::calendar::{self, Calendar};
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::deposit::Capitalization;
 use crate::model::planning::{CalcScenario, ScenarioSource};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 
 use super::budget::income_basis;
 use super::goals::{resolve_scope, store_values_usd};

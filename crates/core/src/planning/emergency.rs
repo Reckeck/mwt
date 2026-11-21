@@ -2,10 +2,10 @@
 //! measured in months of mandatory spending `E_mand`.
 
 use crate::calendar::{self, Calendar};
-use crate::kernel::books::Books;
 use crate::model::planning::EmergencyFund;
 use crate::model::store::{Purpose, Store};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::money::interest::INTEREST_CATEGORY;
 use crate::time::secs_or_now;
 use crate::{Amount, Error, Result};

@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 
 use crate::Amount;
 use crate::calendar::{self, Calendar};
-use crate::kernel::books::Books;
 use crate::model::planning::UtilityItem;
 use crate::model::transaction::Transaction;
+use crate::money::books::Books;
 use crate::time::secs_or_now;
 
 use crate::household::property_links::item_payments;

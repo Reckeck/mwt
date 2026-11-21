@@ -14,8 +14,8 @@ use crate::cryptotrack::service::positions::{self as rules, CryptoPositionsAppli
 use crate::cryptotrack::service::totals::crypto_asset_ref;
 use crate::error::Result;
 use crate::ipc_contract::cryptotrack::positions::{PositionAssetView, PositionView};
-use crate::kernel::books::Books;
 use crate::model::cryptotrack::{CryptoLeg, CryptoPosition, CryptoTx};
+use crate::money::books::Books;
 use crate::service::UnlockedVault;
 
 /// Store what the protocol adapters read for one account: the positions

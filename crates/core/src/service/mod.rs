@@ -42,6 +42,7 @@ mod auto_reminders;
 mod automation_card;
 mod automations;
 mod backups;
+mod books;
 pub(crate) mod budget;
 mod bulk;
 mod categories;
@@ -92,6 +93,7 @@ mod exchange_import;
 #[cfg(test)]
 mod golden_tests;
 mod portfolio;
+mod ports;
 mod preview;
 mod price_info;
 mod rates;
@@ -326,6 +328,12 @@ pub struct UnlockedVault {
 }
 
 impl UnlockedVault {
+    /// A fresh read context; the book inside is built once, when first used.
+    /// (`Books` is in `money/books.rs`; the vault is its source, see `books.rs`.)
+    pub fn books(&self) -> crate::money::books::Books<'_> {
+        crate::money::books::Books::new(self)
+    }
+
     pub fn create(path: PathBuf, password: &str) -> Result<Self> {
         Self::create_with(path, Some(password))
     }

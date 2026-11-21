@@ -8,8 +8,8 @@ use chrono::{Duration, NaiveDate};
 use crate::Amount;
 use crate::calendar::{self, Calendar};
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::planning::{HealthColor, HealthReasonCode};
+use crate::money::books::Books;
 
 /// DTI above this (percent) is red.
 pub const DTI_HIGH_PCT: u32 = 50;

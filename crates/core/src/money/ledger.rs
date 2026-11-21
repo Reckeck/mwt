@@ -17,8 +17,8 @@ use crate::model::store::StoreScope;
 use crate::model::transaction::{LegRole, Transaction, TxKind, TxOrigin};
 use crate::time::secs_or_now;
 
-use crate::kernel::books::Books;
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::money::tree::{ancestors_of, find_store, resolve_scope, root_of};
 
 /// More nodes than this and the graph is unreadable (and slow): narrow the filter.

@@ -15,12 +15,12 @@ use chrono::{Datelike, Duration, NaiveDate};
 use crate::Amount;
 use crate::calendar::{self, Calendar, days_in_month, first_of_month};
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::planning::{
     AutomationOutcome, AutomationRun, Budget, BudgetPeriod, BudgetTarget,
 };
 use crate::model::store::StoreScope;
 use crate::model::vault::{DailyBudgetMode, VaultDoc};
+use crate::money::books::Books;
 use crate::money::worth::FlowClass;
 use crate::time::secs_or_now;
 

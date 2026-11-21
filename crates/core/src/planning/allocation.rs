@@ -6,10 +6,10 @@ use std::collections::{HashMap, HashSet};
 use chrono::Duration;
 
 use crate::calendar::{self, Calendar};
-use crate::kernel::books::Books;
 use crate::model::planning::{AssetClass, AssetClassLink};
 use crate::model::store::{Holding, StoreKind};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::{Amount, Error, Result};
 
 /// Ids of the preset baskets; an empty name on one of them means «the UI's

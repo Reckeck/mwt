@@ -6,13 +6,13 @@ use std::collections::{BTreeMap, HashMap};
 
 use super::budget::{budget_currency, income_basis};
 use crate::calendar::{self, Calendar};
-use crate::kernel::books::Books;
 use crate::model::category::{
     CATEGORIES_REV, CATEGORY_ADDITIONS, Category, default_categories, is_passive_key,
 };
 use crate::model::store::Purpose;
 use crate::model::transaction::Transaction;
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::time::secs_or_now;
 use crate::{Amount, Result};
 
