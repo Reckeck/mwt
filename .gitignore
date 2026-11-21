@@ -27,6 +27,8 @@ src-tauri/gen/schemas/
 data/
 *.wallet
 *.wallet.bak
+# Committed test fixtures of the frozen v4 format (crates/vault/src/storage/legacy_v4 tests).
+!crates/vault/src/storage/fixtures/*.wallet
 
 # CI (scripts/ci, .github/workflows): caches, collected bundles, generated projects
 .cache/

@@ -1,0 +1,32 @@
+[package]
+name = "mwt-vault"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker vault: the encrypted file codec, the open-vault session and its transactions, persistence, vault files and copies, frozen v1-v4 schemas (depends on mwt-base, mwt-crypto and mwt-model only)"
+
+[lints]
+workspace = true
+
+[features]
+# Test support for the tests of `trade-core`: `VaultFile::{create, save, save_sealed}` (and the crypto test helpers they use).
+testing = ["mwt-crypto/testing"]
+
+[dependencies]
+mwt-base = { path = "../base" }
+mwt-crypto = { path = "../crypto" }
+mwt-model = { path = "../model" }
+serde.workspace = true
+serde_json.workspace = true
+rmp-serde.workspace = true
+zeroize.workspace = true
+uuid.workspace = true
+sha2.workspace = true
+rust_decimal.workspace = true
+chrono.workspace = true
+time.workspace = true
+
+[dev-dependencies]
+mwt-crypto = { path = "../crypto", features = ["testing"] }
+tempfile = "3"

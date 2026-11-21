@@ -117,7 +117,13 @@ pub const GROUPS: &[Group] = &[
     // The facade (`trade-core`): scenarios, the service shim, sandbox and config; it uses every crate.
     Group {
         name: "facade",
-        modules: &["service", "usecases", "sandbox", "appconfig"],
+        modules: &[
+            "service",
+            "usecases",
+            "sandbox",
+            "appconfig",
+            "vault_facade_tests",
+        ],
         may_use: &[
             "base",
             "crypto",

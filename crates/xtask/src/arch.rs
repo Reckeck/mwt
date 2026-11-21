@@ -2,6 +2,7 @@
 
 mod domain;
 mod layers;
+mod manifests;
 mod scan;
 
 use std::collections::BTreeSet;
@@ -62,12 +63,14 @@ pub struct Report {
     pub stale: Vec<AllowEntry>,
     /// Forbidden names in the domain modules the exemptions do not cover, and exemptions that cover nothing.
     pub domain: domain::Findings,
+    /// Crates that list a dev-only crate as a normal dependency (`manifests.rs`).
+    pub manifests: Vec<String>,
 }
 
 impl Report {
     /// How many findings fail the check.
     pub fn failures(&self) -> usize {
-        self.violations.len() + self.stale.len() + self.domain.failures()
+        self.violations.len() + self.stale.len() + self.domain.failures() + self.manifests.len()
     }
 
     /// The log lines: every violation as `file:line`, every stale entry as an error.
@@ -89,6 +92,7 @@ impl Report {
             )
         }));
         lines.extend(self.domain.lines(CORE_SRC));
+        lines.extend(self.manifests.iter().cloned());
         lines
     }
 }
@@ -113,6 +117,7 @@ fn evaluate(edges: &[Edge], allow: &[AllowEntry], domain: domain::Findings) -> R
         violations,
         stale,
         domain,
+        manifests: Vec::new(),
     }
 }
 
@@ -123,7 +128,9 @@ pub fn check(root: &Path) -> Result<Report> {
     let domain = domain::check(&sources, domain::EXEMPTIONS);
     let path = root.join(ALLOW_FILE);
     let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    Ok(evaluate(&edges, &parse_allowlist(&text)?, domain))
+    let mut report = evaluate(&edges, &parse_allowlist(&text)?, domain);
+    report.manifests = manifests::check(&root.join("crates"))?;
+    Ok(report)
 }
 
 /// Directories outside the crate table: binaries are adapters, `tests` is test code.
