@@ -72,7 +72,7 @@ impl UnlockedVault {
         pub fn prices_as_of(&self) -> Option<String>
             => crate::money::portfolio::prices_as_of @doc;
         pub fn portfolio_summary(&self) -> PortfolioSummary
-            => crate::money::portfolio::portfolio_summary @books;
+            => crate::usecases::money::capital::portfolio_summary @books;
         /// Portfolio value over time using transaction timestamps as event
         /// boundaries and the nearest cached price (≤ event ts) per asset.
         pub fn history_series(&self, base_currency: &str) -> Vec<HistoryPoint>

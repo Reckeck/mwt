@@ -11,6 +11,7 @@ use crate::household::contacts::contact_balances_until;
 use crate::kernel::books::Books;
 use crate::model::store::{LiabilityKind, StoreKind};
 use crate::model::vault::{ManualPrice, now_iso};
+use crate::money::portfolio::PortfolioSummary;
 use crate::money::worth::{ClassShare, LiabilityShare, NetWorth, plan_manual_price};
 use crate::planning::allocation::{Slot, slot_resolver};
 use crate::service::UnlockedVault;
@@ -51,6 +52,11 @@ pub fn clear_manual_price(vault: &mut UnlockedVault, asset_key: &str) -> Result<
             .retain(|existing| existing.asset_key != asset_key);
         Ok(())
     })
+}
+
+/// The portfolio summary with today's net worth worked out for it.
+pub fn portfolio_summary(books: &Books<'_>) -> PortfolioSummary {
+    crate::money::portfolio::portfolio_summary(books, &net_worth(books))
 }
 
 pub fn net_worth(books: &Books<'_>) -> NetWorth {

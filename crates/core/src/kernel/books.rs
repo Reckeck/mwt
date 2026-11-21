@@ -14,7 +14,7 @@ use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
 use crate::vault_io::device_secrets::DeviceSecrets;
 
-use crate::service::{MonthSummary, NetWorth, RateBook, StoreOverview, UnlockedVault};
+use crate::service::{MonthSummary, RateBook, StoreOverview, UnlockedVault};
 
 #[cfg(test)]
 thread_local! {
@@ -136,11 +136,6 @@ impl Books<'_> {
         self.vault.device_secrets_for_request()
     }
 
-    /// Today's valuation.
-    pub(crate) fn net_worth(&self) -> NetWorth {
-        self.vault.net_worth()
-    }
-
     /// The store and all stores below it.
     pub(crate) fn subtree_ids(&self, root_id: &str) -> Vec<String> {
         self.vault.subtree_ids(root_id)
@@ -240,7 +235,6 @@ mod tests {
         "earmarked",
         "keys_on_device",
         "device_secrets_for_request",
-        "net_worth",
         "subtree_ids",
         "store_overview",
         "month_summary_in",
@@ -303,12 +297,12 @@ mod tests {
         );
         assert_eq!(unfrozen_and_stale(&added).0, vec!["dummy_read".to_string()]);
         let removed = source.replace(
-            "    pub(crate) fn net_worth(&self)",
-            "    fn net_worth(&self)",
+            "    pub(crate) fn subtree_ids(&self",
+            "    fn subtree_ids(&self",
         );
         assert_eq!(
             unfrozen_and_stale(&removed).1,
-            vec!["net_worth".to_string()]
+            vec!["subtree_ids".to_string()]
         );
     }
 }

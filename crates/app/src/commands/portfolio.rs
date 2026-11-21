@@ -27,7 +27,7 @@ use crate::ipc::commands::ipc_commands;
 #[tauri::command]
 pub async fn get_summary(state: State<'_, AppState>) -> Result<PortfolioSummary, IpcError> {
     with_vault(&state, |vault| {
-        Ok(portfolio::portfolio_summary(&vault.books()))
+        Ok(capital::portfolio_summary(&vault.books()))
     })
 }
 

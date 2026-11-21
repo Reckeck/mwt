@@ -33,7 +33,10 @@ fn queries_over_books_equal_the_delegates() {
         .unwrap();
     let books = vault.books();
     assert_eq!(store_tree(&books), vault.store_tree());
-    assert_eq!(portfolio_summary(&books), vault.portfolio_summary());
+    assert_eq!(
+        crate::usecases::money::capital::portfolio_summary(&books),
+        vault.portfolio_summary()
+    );
     assert_eq!(realized_pnl(&books), vault.realized_pnl());
     assert_eq!(
         store_overview(&books, &cold, true).unwrap(),
