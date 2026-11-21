@@ -1,4 +1,4 @@
-// Routes the backend links to: every name in `crates/core/src/routes.rs` must be a route of the UI
+// Routes the backend links to: every name in `crates/base/src/routes.rs` must be a route of the UI
 // router (`src/app/providers/router`), and no Rust source may hold a route name as a bare string.
 // Static: reads the sources, runs nothing.
 import { readFileSync } from 'node:fs'
@@ -11,13 +11,13 @@ import { routeNames } from './lib/routes'
 import { walk } from './lib/walk'
 
 const routes = routeNames(ROOT)
-const source = readFileSync(join(ROOT, 'crates/core/src/routes.rs'), 'utf8')
+const source = readFileSync(join(ROOT, 'crates/base/src/routes.rs'), 'utf8')
 const listed = [...source.matchAll(/^\s+[A-Z_]+ = "([^"]+)",$/gm)].map((match) => match[1])
 
 describe('check-routes', () => {
   it('routes.rs lists route names that exist in the router', () => {
     const errors: string[] = []
-    if (listed.length === 0) errors.push('crates/core/src/routes.rs: no route names found')
+    if (listed.length === 0) errors.push('crates/base/src/routes.rs: no route names found')
     for (const name of listed) {
       if (!routes.has(name)) errors.push(`routes.rs: "${name}" is not a route in src/app/providers/router`)
     }

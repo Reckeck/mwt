@@ -19,7 +19,7 @@ use crate::model::shared_event::{
     EventItem, GuestDetails, ItemSplit, ME, Participant, ROUNDING_STEPS, ShareOverride,
     SharedEvent, SharedEventStatus,
 };
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 
 pub mod analytics;
 #[cfg(test)]

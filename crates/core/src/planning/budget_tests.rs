@@ -12,11 +12,11 @@ use crate::model::transaction::Transaction;
 use crate::model::transaction::{AccountRef, PriceStamp};
 use crate::model::vault::DailyBudgetMode;
 use crate::model::vault::FxPoint;
-use crate::pricing::history::unix_secs;
 use crate::service::AutomationDraft;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
+use crate::time::unix_secs;
 
 fn secs(iso: &str) -> i64 {
     unix_secs(iso).unwrap()

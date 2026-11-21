@@ -3,7 +3,7 @@
 use crate::Amount;
 use crate::model::VaultDoc;
 use crate::model::transaction::{AccountRef, PaymentTx, Transaction};
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 
 /// How far back an earlier payment still counts as the same subscription.
 const WINDOW_DAYS: i64 = 45;

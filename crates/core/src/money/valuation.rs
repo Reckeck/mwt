@@ -26,7 +26,7 @@ use crate::money::inflation::{inflation_on, inflation_series, real_coefficients}
 use crate::money::price_info::last_stamp;
 use crate::money::rates::per_usd;
 use crate::money::tree::find_store;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// Average month, for the rule's position inside a month.
 pub(super) const MONTH_SECS: i64 = 2_629_746;

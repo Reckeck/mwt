@@ -29,7 +29,7 @@ pub fn schedule_key() -> String {
 
 /// The mark a new automation starts from: nothing planned before its start.
 pub fn start_mark(spec: &AutomationSpec) -> String {
-    crate::pricing::history::unix_secs(&spec.starts_at).map_or_else(
+    crate::time::unix_secs(&spec.starts_at).map_or_else(
         || spec.starts_at.clone(),
         |secs| crate::calendar::iso(secs - 1),
     )
@@ -100,7 +100,7 @@ pub fn upcoming(
     now: i64,
     count: usize,
 ) -> Vec<i64> {
-    let start = crate::pricing::history::unix_secs(when.starts_at).map_or(now, |secs| secs - 1);
+    let start = crate::time::unix_secs(when.starts_at).map_or(now, |secs| secs - 1);
     let after = now.max(start);
     let params = when_params(when);
     let mut moments = Vec::new();

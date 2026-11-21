@@ -16,7 +16,7 @@ use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, TopupTx, Tra
 use crate::model::vault::{ManualPrice, VaultDoc};
 use crate::money::portfolio::{normalized_symbol, symbol_clash, symbol_taken_by_other};
 use crate::money::tree::find_store;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// Income category of cashback.
 pub const CASHBACK_CATEGORY: &str = "cashback";

@@ -277,6 +277,7 @@ impl<'de> Deserialize<'de> for Amount {
     }
 }
 
+#[cfg(feature = "ts")]
 impl ts_rs::TS for Amount {
     type WithoutGenerics = Self;
     type OptionInnerType = Self;
@@ -310,6 +311,7 @@ impl ts_rs::TS for Amount {
 
 /// Schema for the editor: `Amount` reaches JSON as a decimal *string*, so the
 /// schema must say `string` rather than expose the `Decimal` newtype.
+#[cfg(feature = "schema")]
 impl schemars::JsonSchema for Amount {
     fn schema_name() -> std::borrow::Cow<'static, str> {
         "string".into()

@@ -7,7 +7,7 @@ use crate::model::planning::EmergencyFund;
 use crate::model::store::{Purpose, Store};
 use crate::model::vault::VaultDoc;
 use crate::money::interest::INTEREST_CATEGORY;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 use crate::{Amount, Error, Result};
 
 use super::budget::{MonthAvg, budget_currency, income_basis};

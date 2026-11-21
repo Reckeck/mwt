@@ -18,7 +18,7 @@ use crate::model::planning::{
 use crate::model::store::{AssetRef, Store, StoreKind};
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// Most planned dates one pass creates per automation; older missed dates
 /// are recorded as skipped, so a long time away does not flood the history

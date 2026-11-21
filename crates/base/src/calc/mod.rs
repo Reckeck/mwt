@@ -20,7 +20,8 @@ pub mod invest;
 const HUNDRED: Amount = Amount(Decimal::ONE_HUNDRED);
 
 /// Which set of inputs/outputs [`preview`] should compute.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum CalcMode {
     /// `amount` of one asset priced into another.
@@ -33,7 +34,8 @@ pub enum CalcMode {
 
 /// Raw calculator inputs. The UI is expected to pass empty/zero values while
 /// the user is still typing — every field is optional in practice.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CalcInput {
     pub mode: CalcMode,
     /// Source asset symbol, display only.
@@ -58,7 +60,8 @@ pub struct CalcInput {
 
 /// Ready-to-render result. Fields that do not apply to the chosen mode stay
 /// zero; the UI shows an em dash for them.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CalcResult {
     /// `Converter`: `amount × price_in` — the notional put in.
     /// `Position`: `amount − fee` — the part that buys units.

@@ -12,7 +12,7 @@ use crate::money::portfolio::price_usd_for;
 use crate::money::rates::{per_usd, value_at};
 use crate::money::tree::find_store;
 use crate::money::worth::{FlowClass, classify_flow};
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// One `(store, asset)` position a draft would change.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]

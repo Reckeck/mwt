@@ -14,7 +14,7 @@ use crate::model::planning::{AlertCondition, Automation, PriceAlert, Reminder};
 use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
 use crate::model::vault::VaultDoc;
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 
 /// How far ahead "Next time" looks: a yearly schedule still has a date.
 const LOOKAHEAD_DAYS: i64 = 400;

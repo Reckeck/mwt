@@ -32,8 +32,8 @@ use crate::model::cryptotrack::{
 };
 use crate::model::store::{Store, StoreKind};
 use crate::model::vault::VaultDoc;
-use crate::pricing::history::{secs_or_now, unix_secs};
 use crate::service::{StoreExtras, UnlockedVault};
+use crate::time::{secs_or_now, unix_secs};
 
 /// A secret in any of these texts is refused: they are stored in the vault and
 /// synced to the other devices exactly like the address, so a seed pasted into

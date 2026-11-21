@@ -170,7 +170,7 @@ impl Executor<'_> {
         Ok(match self.input(node, "date")? {
             WfValue::Date(text) | WfValue::Text(text) if !text.trim().is_empty() => {
                 let cal = crate::calendar::Calendar::new(&self.ctx.zone);
-                let moment = crate::pricing::history::unix_secs(&text).or_else(|| {
+                let moment = crate::time::unix_secs(&text).or_else(|| {
                     super::data::parse_date(&text, &cal)
                         .map(|date| cal.at_local(date, crate::calendar::AUTOMATION_HOUR))
                 });
@@ -788,7 +788,7 @@ impl Executor<'_> {
 }
 
 fn secs_of(timestamp: &str, fallback: i64) -> i64 {
-    crate::pricing::history::unix_secs(timestamp).unwrap_or(fallback)
+    crate::time::unix_secs(timestamp).unwrap_or(fallback)
 }
 
 #[cfg(test)]

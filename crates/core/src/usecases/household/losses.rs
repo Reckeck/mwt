@@ -13,9 +13,9 @@ use crate::household::losses::{
     losses_by_id, plan_link, rates_table,
 };
 use crate::kernel::books::Books;
-use crate::pricing::history::secs_or_now;
 use crate::reports::overview::BookValues;
 use crate::service::UnlockedVault;
+use crate::time::secs_or_now;
 
 /// The vault's rates as the table's source.
 struct VaultRates<'vault> {

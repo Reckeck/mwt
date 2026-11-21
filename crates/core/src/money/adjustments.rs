@@ -11,9 +11,9 @@ use crate::error::{Error, Result};
 use crate::model::store::AssetRef;
 use crate::model::transaction::{AdjustmentLine, Transaction};
 use crate::model::vault::VaultDoc;
-use crate::pricing::history::secs_or_now;
 use crate::sync::stamp::Stamp;
 use crate::sync::view::full_key;
+use crate::time::secs_or_now;
 
 /// What the correction screen opens with.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]

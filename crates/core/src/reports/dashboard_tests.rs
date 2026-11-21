@@ -4,9 +4,9 @@ use crate::Amount;
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::model::vault::DashPeriod;
-use crate::pricing::history::unix_secs;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
+use crate::time::unix_secs;
 
 fn spend(store: &str, sum: &str, category: &str, ts: &str) -> Transaction {
     let mut tx = payment(store, sum, "spend");

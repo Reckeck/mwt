@@ -315,12 +315,6 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<argon2::password_hash::Error> for Error {
-    fn from(source: argon2::password_hash::Error) -> Self {
-        Error::Crypto(source.to_string())
-    }
-}
-
 impl From<serde_json::Error> for Error {
     fn from(source: serde_json::Error) -> Self {
         Error::Serialize(source.to_string())

@@ -5,8 +5,8 @@ use crate::model::category::CategoryGroup;
 use crate::model::planning::EmergencyFund;
 use crate::model::store::{Purpose, StoreKind, StoreScope};
 use crate::model::transaction::Transaction;
-use crate::pricing::history::unix_secs;
 use crate::service::test_support::*;
+use crate::time::unix_secs;
 
 fn booked(mut tx: Transaction, category: &str, ts: &str) -> Transaction {
     tx.meta_mut().categories = vec![category.into()];

@@ -1,0 +1,27 @@
+[package]
+name = "mwt-base"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker base: Amount, errors, limits, time and calendar, calculators, secrets, route names (no workspace dependencies)"
+
+[lints]
+workspace = true
+
+[features]
+# `ts-rs` / `schemars` derives of the DTO types; off by default, `trade-core` turns them on.
+ts = ["dep:ts-rs"]
+schema = ["dep:schemars"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+rust_decimal.workspace = true
+time.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+zeroize.workspace = true
+ts-rs = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }

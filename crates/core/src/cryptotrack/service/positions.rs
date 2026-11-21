@@ -72,7 +72,7 @@ use crate::model::cryptotrack::{
 };
 use crate::model::vault::VaultDoc;
 use crate::money::price_info::price_quote_for;
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 
 use super::tokens::counts_asset;
 use super::totals::crypto_asset_ref;

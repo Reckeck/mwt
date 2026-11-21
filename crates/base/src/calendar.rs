@@ -101,7 +101,8 @@ pub fn first_of_month(date: NaiveDate) -> NaiveDate {
 }
 
 /// Position of the month holding `date` in `months` (first days of months).
-pub(crate) fn month_index(months: &[NaiveDate], date: NaiveDate) -> Option<usize> {
+/// Public because the `household::losses` tests (facade) use it.
+pub fn month_index(months: &[NaiveDate], date: NaiveDate) -> Option<usize> {
     let first = first_of_month(date);
     months.iter().position(|month| *month == first)
 }
@@ -168,7 +169,7 @@ mod tests {
     fn a_day_is_cut_at_local_midnight() {
         let bangkok = Calendar::new("Asia/Bangkok");
         // 2026-03-01T20:00Z is 03:00 on the 2nd in Bangkok (UTC+7).
-        let secs = crate::pricing::history::unix_secs("2026-03-01T20:00:00Z").unwrap();
+        let secs = crate::time::unix_secs("2026-03-01T20:00:00Z").unwrap();
         assert_eq!(bangkok.date_of(secs), date("2026-03-02"));
         assert_eq!(Calendar::new("").date_of(secs), date("2026-03-01"));
         assert_eq!(

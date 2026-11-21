@@ -10,7 +10,8 @@ use crate::kernel::books::Books;
 use crate::model::store::AssetRef;
 use crate::model::transaction::{Leg, Transaction};
 use crate::model::vault::{FxPoint, VaultDoc};
-use crate::pricing::history::{RateIndex, secs_or_now};
+use crate::pricing::history::RateIndex;
+use crate::time::secs_or_now;
 
 const FIAT_PREFIX: &str = "fiat:";
 const PERP_PREFIX: &str = "perp:";

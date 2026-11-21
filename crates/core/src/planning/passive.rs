@@ -13,7 +13,7 @@ use crate::model::category::{
 use crate::model::store::Purpose;
 use crate::model::transaction::Transaction;
 use crate::model::vault::VaultDoc;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 use crate::{Amount, Result};
 
 /// Finished months the passive income and the fact index are measured over.

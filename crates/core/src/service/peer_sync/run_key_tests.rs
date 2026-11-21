@@ -9,9 +9,9 @@ use super::*;
 use crate::calendar::now_secs;
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
-use crate::pricing::history::unix_secs;
 use crate::service::test_support::{income, store};
 use crate::service::workflows::WorkflowDraft;
+use crate::time::unix_secs;
 
 fn node(id: &str, kind: &str, params: Value) -> Value {
     json!({ "id": id, "kind": kind, "params": params })

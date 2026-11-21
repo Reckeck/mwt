@@ -3,7 +3,6 @@
 //! payment off a day off.
 
 use chrono::{Datelike, NaiveDate, Weekday};
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::Calendar;
@@ -108,9 +107,9 @@ impl WorkdayRules {
 }
 
 /// Where a planned date that falls on a day off goes.
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum WorkdayShift {
     /// Stays on the day off.

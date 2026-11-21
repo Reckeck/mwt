@@ -17,7 +17,7 @@ use crate::money::price_info::{PriceInfo, PriceOrigin, PriceQuote, price_quote_f
 use crate::money::rates::{RateBook, is_fiat_of, per_usd};
 use crate::money::tree::{ancestors_of, children_of, find_store, resolve_scope, subtree_ids};
 use crate::money::worth::NetWorth;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 pub struct AssetStat {

@@ -2403,7 +2403,7 @@ fn opening_a_vault_turns_off_workflows_missing_a_required_field() {
 }
 
 fn secs_at(iso: &str) -> i64 {
-    crate::pricing::history::unix_secs(iso).unwrap()
+    crate::time::unix_secs(iso).unwrap()
 }
 
 /// «The 20th, moved back off a day off → top the card up by the average of

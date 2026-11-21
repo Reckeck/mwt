@@ -41,18 +41,9 @@ const BISECTION_STEPS: u32 = 80;
 const TERM_VERIFY_STEPS: u32 = 36;
 
 /// How often earned interest joins the balance.
-#[derive(
-    Default,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    ts_rs::TS,
-    schemars::JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum CapFreq {
     Daily,
@@ -65,18 +56,9 @@ pub enum CapFreq {
 }
 
 /// How often a contribution or a withdrawal repeats, counted from its start month.
-#[derive(
-    Default,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    ts_rs::TS,
-    schemars::JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Freq {
     #[default]
@@ -86,18 +68,9 @@ pub enum Freq {
 }
 
 /// Whether a contribution arrives before the month's interest or after it.
-#[derive(
-    Default,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    ts_rs::TS,
-    schemars::JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Timing {
     Start,
@@ -105,18 +78,9 @@ pub enum Timing {
     End,
 }
 
-#[derive(
-    Default,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    ts_rs::TS,
-    schemars::JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TaxMode {
     /// Every year on the interest capitalized during it.
@@ -127,9 +91,9 @@ pub enum TaxMode {
 }
 
 /// Tax on interest; `pct = 0` means no tax.
-#[derive(
-    Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, schemars::JsonSchema,
-)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct TaxRule {
     pub pct: Amount,
@@ -137,9 +101,9 @@ pub struct TaxRule {
 }
 
 /// A contribution plan from `from_month` until the next stage starts.
-#[derive(
-    Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, schemars::JsonSchema,
-)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct ContributionStage {
     /// 1-based month the stage starts in.
@@ -150,9 +114,9 @@ pub struct ContributionStage {
 }
 
 /// Regular withdrawals; they stop once the balance runs out.
-#[derive(
-    Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, schemars::JsonSchema,
-)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct Withdrawal {
     pub amount: Amount,
@@ -163,9 +127,9 @@ pub struct Withdrawal {
     pub index_to_inflation: bool,
 }
 
-#[derive(
-    Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, schemars::JsonSchema,
-)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct InvestInput {
     /// Display only: the currency every amount is in.
@@ -187,7 +151,8 @@ pub struct InvestInput {
     pub withdrawal: Option<Withdrawal>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct InvestMonth {
     /// 1-based.
     pub month: u32,
@@ -202,7 +167,8 @@ pub struct InvestMonth {
     pub balance: Amount,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct InvestYear {
     /// 1-based; the last year may be partial.
     pub year: u32,
@@ -218,7 +184,8 @@ pub struct InvestYear {
     pub months: Vec<InvestMonth>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct InvestResult {
     pub final_nominal: Amount,
     /// `final_nominal` in money of month 1.
@@ -240,7 +207,8 @@ pub struct InvestResult {
 }
 
 /// What [`solve`] looks for.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum SolveUnknown {
     /// The first stage's amount; every stage scales by the same factor.
@@ -254,7 +222,8 @@ pub enum SolveUnknown {
 
 /// The answer of [`solve`]. When the target cannot be reached, `value` and
 /// `result` describe the best the unknown can do, and the UI says so in text.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SolveResult {
     pub reachable: bool,
     pub value: Amount,
@@ -263,7 +232,8 @@ pub struct SolveResult {
     pub result: InvestResult,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum CompareKind {
     /// The input as it is.
@@ -275,7 +245,8 @@ pub enum CompareKind {
     MoreContribution,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CompareRow {
     pub kind: CompareKind,
     pub final_nominal: Amount,
@@ -284,7 +255,8 @@ pub struct CompareRow {
 }
 
 /// "What pays off more?": a higher rate against higher contributions.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct InvestCompare {
     pub rows: Vec<CompareRow>,
     /// Larger contributions beat the higher rate: the calmer way wins.

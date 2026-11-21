@@ -1,7 +1,7 @@
 use crate::Amount;
 use crate::calendar::Calendar;
-use crate::pricing::history::secs_or_now;
 use crate::service::FlowClass;
+use crate::time::secs_or_now;
 use std::collections::HashMap;
 
 use super::testing::*;

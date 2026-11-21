@@ -12,9 +12,9 @@ use crate::model::store::StoreScope;
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::Transaction;
 use crate::model::vault::PricePoint;
-use crate::pricing::history::unix_secs;
 use crate::service::test_support::*;
 use crate::service::{NetworthPoint, Report, ReportFilter, ReportKind};
+use crate::time::unix_secs;
 
 const ME: &str = "0xabcd00000000000000000000000000000000ef01";
 const MATE: &str = "0x1111111111111111111111111111111111111111";

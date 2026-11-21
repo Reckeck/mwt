@@ -93,7 +93,7 @@ pub(crate) fn moment_of(value: &WfValue) -> Option<i64> {
         return None;
     };
     let text = text.trim();
-    crate::pricing::history::unix_secs(text).or_else(|| {
+    crate::time::unix_secs(text).or_else(|| {
         chrono::NaiveDate::parse_from_str(text.get(..10)?, "%Y-%m-%d")
             .ok()
             .and_then(|day| day.and_hms_opt(0, 0, 0))
@@ -298,7 +298,7 @@ impl Executor<'_> {
                 let last = self
                     .host
                     .wf_mark(&self.ctx.workflow_id, &key)
-                    .and_then(|mark| crate::pricing::history::unix_secs(&mark));
+                    .and_then(|mark| crate::time::unix_secs(&mark));
                 if let Some(last) = last
                     && self.now() - last < gap
                 {

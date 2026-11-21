@@ -16,7 +16,7 @@ use crate::model::shared_event::{EventItem, ItemSplit, ME, PriceMode, Purchase, 
 use crate::model::store::AssetRef;
 use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, Transaction, TxMeta};
 use crate::money::rates::RateBook;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 /// What the vault has to do about the payment of a changed purchase.
 pub enum PaymentStep {

@@ -270,7 +270,7 @@ mod tests {
     }
 
     fn secs(iso: &str) -> i64 {
-        crate::pricing::history::unix_secs(iso).unwrap()
+        crate::time::unix_secs(iso).unwrap()
     }
 
     #[test]

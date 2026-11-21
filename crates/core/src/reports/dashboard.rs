@@ -102,7 +102,7 @@ pub fn spending_overview(
     let (current, days) = spending_totals(books, &cal, &currency, start, end);
     let (previous, _) = spending_totals(books, &cal, &currency, prev_start, prev_end);
     let has_history = books.doc().transactions.iter().any(|tx| {
-        crate::pricing::history::unix_secs(&tx.meta().timestamp)
+        crate::time::unix_secs(&tx.meta().timestamp)
             .is_some_and(|secs| cal.date_of(secs) <= prev_end)
     });
     let base = |value: Amount| has_history.then_some(value);

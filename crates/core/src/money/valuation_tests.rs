@@ -8,10 +8,10 @@ use crate::model::store::{PropertyCategory, RevalueFloor, RevalueRule, StoreKind
 use crate::model::transaction::Transaction;
 use crate::model::transaction::{AssetSellTx, KindDetails, PriceStamp, TopupTx};
 use crate::model::vault::ManualPrice;
-use crate::pricing::history::secs_or_now;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
+use crate::time::secs_or_now;
 
 const DAY: i64 = 86_400;
 

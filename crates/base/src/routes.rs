@@ -2,6 +2,7 @@
 //! router owns the list; `tests/checks/routes.check.ts` checks each name here
 //! against `src/app/providers/router`, so a renamed route fails `mise run check`.
 
+#[macro_export]
 macro_rules! routes {
     ($($const_name:ident = $value:literal,)+) => {
         $(

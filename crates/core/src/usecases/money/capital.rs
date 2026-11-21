@@ -22,11 +22,7 @@ const ALL_BALANCES: i64 = i64::MAX;
 /// USD value of one unit of a hand-priced asset, read at the present moment.
 #[cfg(test)]
 pub(crate) fn manual_price_usd(books: &Books<'_>, asset_key: &str) -> Option<Amount> {
-    crate::money::worth::manual_price_usd(
-        books,
-        asset_key,
-        crate::pricing::history::secs_or_now(""),
-    )
+    crate::money::worth::manual_price_usd(books, asset_key, crate::time::secs_or_now(""))
 }
 
 /// Set the value of one unit of a property asset.

@@ -17,7 +17,7 @@ use crate::model::transaction::{Leg, LegRole, Transaction};
 use crate::money::rates::RateBook;
 use crate::money::shared_ratios::SharedExtra;
 use crate::money::worth::{FlowClass, classify_flow, spending};
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Flow {

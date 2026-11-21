@@ -5,9 +5,9 @@ use crate::model::notify::NoticeCategory;
 use crate::model::planning::{Reminder, ReminderSourceKind};
 use crate::model::planning::{RepeatUnit, UtilityKind};
 use crate::model::store::StoreKind;
-use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
+use crate::time::secs_or_now;
 use chrono::NaiveDate;
 
 use crate::model::store::{LiabilityKind, LiabilityTerms, PropertyInfo};

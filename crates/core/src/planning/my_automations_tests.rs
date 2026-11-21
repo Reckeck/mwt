@@ -3,7 +3,7 @@
 use super::my_automations::*;
 use crate::model::planning::AlertCondition;
 use crate::model::transaction::Transaction;
-use crate::pricing::history::unix_secs;
+use crate::time::unix_secs;
 use serde_json::json;
 
 use crate::model::planning::{Schedule, TransactionDraft};

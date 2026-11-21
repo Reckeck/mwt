@@ -8,9 +8,9 @@ use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::Leg;
 use crate::model::transaction::{PriceStamp, Transaction};
 use crate::model::vault::FxPoint;
-use crate::pricing::history::secs_or_now;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
+use crate::time::secs_or_now;
 fn fx(currency: &str, per_usd: &str, ts: &str) -> FxPoint {
     FxPoint {
         currency: currency.into(),

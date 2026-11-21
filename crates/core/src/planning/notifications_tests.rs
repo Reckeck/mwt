@@ -18,7 +18,7 @@ fn a_notice_shows_money_rounded_and_grouped() {
 }
 
 use crate::model::notify::NoticeCategoryCfg;
-use crate::pricing::history::secs_or_now;
+use crate::time::secs_or_now;
 
 #[test]
 fn a_due_reminder_is_told_once_and_survives_in_the_log() {
