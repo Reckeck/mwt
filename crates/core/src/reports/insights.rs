@@ -11,7 +11,7 @@ use crate::calendar::{self, first_of_month};
 use crate::error::Result;
 use crate::model::category::CategoryGroup;
 
-use crate::kernel::books::Books;
+use crate::money::books::Books;
 use crate::money::portfolio::realized_pnl_filtered;
 use crate::planning::budget::budget_currency;
 use crate::reports::health::lifestyle_creep;

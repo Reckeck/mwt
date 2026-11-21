@@ -1,0 +1,677 @@
+//! Price & FX fetching with provider fallback and an in-vault cache.
+//!
+//! Provider chain (all free, no keys):
+//!   crypto spot:  CoinGecko (keyless) -> CoinCap -> Binance ticker
+//!   tokens (ERC-20 etc.): CoinGecko `/simple/token_price/{platform}`
+//!   fiat FX:      open.er-api.com (latest); by date: Frankfurter/ECB -> ЦБ РФ,
+//!                 walking back up to a week (see [`fx_sources`])
+//!
+//! Rate limits are mitigated server-side by batching (one call per asset
+//! group) and client-side by an aggressive refresh cadence driven from the
+//! app layer (debounce + periodic timer).
+
+use std::collections::{HashMap, HashSet};
+
+pub(crate) mod fx_sources;
+pub(crate) mod history;
+#[cfg(test)]
+mod history_props;
+pub(crate) mod inflation;
+pub(crate) mod key_rate;
+pub(crate) mod llama;
+pub(crate) mod page;
+
+use reqwest::Client;
+use reqwest::header::{ACCEPT, USER_AGENT};
+use rust_decimal::Decimal;
+
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result};
+use mwt_model::AssetRef;
+use mwt_model::Chain;
+use mwt_model::TokenId;
+use mwt_model::{FxPoint, PricePoint, VaultDoc};
+
+const COINGECKO_V3: &str = "https://api.coingecko.com/api/v3";
+
+/// One provider's answer for one asset.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Quote {
+    pub usd: Amount,
+    /// Percent over the last 24 hours, when the provider says it.
+    pub change_24h_pct: Option<Amount>,
+    /// Which provider answered (`PricePoint::source`).
+    pub source: &'static str,
+}
+
+/// CoinGecko `/simple/price` with `include_24hr_change`: id → (USD, 24 h %).
+fn parse_simple_price(
+    body: &HashMap<String, serde_json::Value>,
+) -> HashMap<String, (Amount, Option<Amount>)> {
+    body.iter()
+        .filter_map(|(id, quote)| {
+            let usd = quote.get("usd").and_then(|value| value.as_f64())?;
+            let change = quote
+                .get("usd_24h_change")
+                .and_then(|value| value.as_f64())
+                .map(|pct| Amount::from_f64(pct).round(2));
+            Some((id.clone(), (Amount::from_f64(usd), change)))
+        })
+        .collect()
+}
+/// Whether a miss may be answered by a price found by SYMBOL. Never for a
+/// token with a contract: symbols are free to borrow, so a scam token named
+/// USDC would get the real USDC price.
+fn symbol_fallback_allowed(asset: &AssetRef) -> bool {
+    asset
+        .contract
+        .as_deref()
+        .is_none_or(|contract| contract.trim().is_empty())
+}
+
+/// The USD price of `contract` in a CoinGecko token-price answer. Providers
+/// key by the lowercase address while the caller may hold the checksummed one.
+fn token_price_in(body: &HashMap<String, HashMap<String, f64>>, contract: &str) -> Option<Amount> {
+    let wanted = contract.trim().to_lowercase();
+    body.iter()
+        .find(|(key, _)| key.to_lowercase() == wanted)
+        .and_then(|(_, quote)| quote.get("usd"))
+        .copied()
+        .map(Amount::from_f64)
+}
+
+/// Whether the current or the historic price path may send this asset's
+/// contract to a price source (`N1`): with consent always, without it only for
+/// a token on the built-in list. `llama::fetch_historic` calls it too.
+pub(super) fn contract_lookup_allowed(
+    consent: bool,
+    is_known: impl Fn(&TokenId) -> bool,
+    chain: Chain,
+    contract: &str,
+) -> bool {
+    consent || is_known(&TokenId::new(chain, contract))
+}
+
+const COINCAP_V2: &str = "https://api.coincap.io/v2";
+const BINANCE_API: &str = "https://api.binance.com/api/v3";
+const ER_API: &str = "https://open.er-api.com/v6";
+
+#[derive(Debug, Clone)]
+pub struct PricingService {
+    client: Client,
+    /// Open question 5 (`N1`): may a token contract be sent to a price
+    /// source. Off until the user turns it on.
+    lookup_contracts: bool,
+    /// The built-in token list (`N1`): those tokens are asked by contract
+    /// even without consent. The app layer owns the list and injects it.
+    is_known: fn(&TokenId) -> bool,
+}
+
+impl Default for PricingService {
+    fn default() -> Self {
+        Self {
+            client: Client::builder()
+                .timeout(std::time::Duration::from_secs(15))
+                .build()
+                .expect("reqwest client"),
+            lookup_contracts: false,
+            is_known: |_| false,
+        }
+    }
+}
+
+impl PricingService {
+    /// The consent setting of Open question 5: look unknown tokens up by
+    /// contract. The default is off.
+    #[must_use]
+    pub fn with_contract_lookup(mut self, allowed: bool) -> Self {
+        self.lookup_contracts = allowed;
+        self
+    }
+
+    /// Names the built-in tokens, which are priced by contract even without
+    /// consent, as on the historic path (`N1`). Default: none.
+    #[must_use]
+    pub fn with_known_tokens(mut self, is_known: fn(&TokenId) -> bool) -> Self {
+        self.is_known = is_known;
+        self
+    }
+
+    /// Whether a token contract may be sent to a price source (Open question 5).
+    #[must_use]
+    pub fn looks_up_contracts(&self) -> bool {
+        self.lookup_contracts
+    }
+
+    /// Network-only price fetch (no cache mutation) — usable across `.await`
+    /// without borrowing the vault.
+    ///
+    /// Without consent only the built-in tokens ([`Self::with_known_tokens`])
+    /// are asked by contract, as on the historic path (`N1`).
+    pub async fn fetch_prices(&self, assets: &[AssetRef]) -> Result<Vec<PricePoint>> {
+        self.fetch_prices_via(self, assets).await
+    }
+
+    /// [`Self::fetch_prices`] with the contract lookup going through `api`.
+    async fn fetch_prices_via<A: llama::CoinsApi>(
+        &self,
+        api: &A,
+        assets: &[AssetRef],
+    ) -> Result<Vec<PricePoint>> {
+        if assets.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        let mut last_err = None;
+
+        for asset in assets {
+            if asset.is_fiat() || seen.contains(&asset.key()) {
+                continue;
+            }
+            seen.insert(asset.key());
+            // One coin no provider quotes must not cost the rest their prices.
+            let quote = match self.price_usd(api, asset).await {
+                Ok(quote) => quote,
+                Err(err) => {
+                    last_err = Some(err);
+                    continue;
+                }
+            };
+            out.push(PricePoint {
+                asset_key: asset.key(),
+                value_usd: quote.usd,
+                source: quote.source.into(),
+                change_24h_pct: quote.change_24h_pct,
+                ts: mwt_model::now_iso(),
+            });
+        }
+        // Nothing priced at all is an outage worth reporting.
+        match last_err {
+            Some(err) if out.is_empty() => Err(err),
+            _ => Ok(out),
+        }
+    }
+
+    /// Insert fetched price points into the vault cache, keeping history
+    /// (plan §6.1).
+    pub fn apply_prices(doc: &mut VaultDoc, fresh: &[PricePoint]) {
+        history::merge_prices(&mut doc.price_cache, fresh);
+    }
+
+    /// Network-only FX fetch (no cache mutation): the whole table, every
+    /// currency the provider knows, as units per 1 USD.
+    pub async fn fetch_fx(&self) -> Result<Vec<FxPoint>> {
+        let rates = self.fx_table().await?;
+        let ts = mwt_model::now_iso();
+        let mut out: Vec<FxPoint> = rates
+            .into_iter()
+            .filter(|(_, per_usd)| per_usd.is_positive())
+            .map(|(currency, per_usd)| FxPoint {
+                currency,
+                per_usd,
+                ts: ts.clone(),
+                source: "open.er-api".into(),
+            })
+            .collect();
+        out.sort_by(|left, right| left.currency.cmp(&right.currency));
+        Ok(out)
+    }
+
+    /// Search crypto assets for the UI autocomplete (CoinGecko `/search`).
+    pub async fn search_assets(&self, query: &str, limit: usize) -> Result<Vec<AssetSearchHit>> {
+        let url = format!("{COINGECKO_V3}/search");
+        let resp = self
+            .client
+            .get(url)
+            .query(&[("query", query)])
+            .header(USER_AGENT, "multi-wallet-tracker")
+            .header(ACCEPT, "application/json")
+            .send()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+
+        let mut hits = Vec::new();
+        if let Some(coins) = body.get("coins").and_then(|list| list.as_array()) {
+            for coin in coins.iter().take(limit) {
+                let id = coin["id"].as_str().unwrap_or_default();
+                let symbol = coin["symbol"].as_str().unwrap_or_default().to_uppercase();
+                let name = coin["name"].as_str().unwrap_or_default();
+                let platform = coin
+                    .pointer("/market_cap_rank")
+                    .and_then(|rank| rank.as_u64());
+                if !id.is_empty() {
+                    hits.push(AssetSearchHit {
+                        symbol,
+                        name: name.to_string(),
+                        coingecko_id: Some(id.to_string()),
+                        chain: None,
+                        contract: None,
+                        rank: platform.unwrap_or(0),
+                    });
+                }
+            }
+        }
+        hits.sort_by_key(|hit| hit.rank);
+        Ok(hits)
+    }
+
+    // -- provider chain ----------------------------------------------------
+
+    /// Every FX rate the public provider knows, keyed by lowercase currency
+    /// code (units per 1 USD).
+    ///
+    /// One call returns the whole table, so this is also how the settings
+    /// pickers learn which fiat currencies exist at all.
+    pub async fn fx_rates(&self) -> Result<HashMap<String, Amount>> {
+        self.fx_table().await
+    }
+
+    /// Every coin symbol CoinGecko lists, lowercased.
+    ///
+    /// Backs the crypto half of the currency catalog. A failure here is not
+    /// fatal for callers: the fiat half and the built-in fallback still stand.
+    pub async fn coin_symbols(&self) -> Result<Vec<String>> {
+        let url = format!("{COINGECKO_V3}/coins/list");
+        let resp = self
+            .client
+            .get(url)
+            .header(USER_AGENT, "multi-wallet-tracker")
+            .header(ACCEPT, "application/json")
+            .send()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Pricing(format!(
+                "coingecko http {:?}",
+                resp.status()
+            )));
+        }
+        let coins: Vec<CoinListEntry> = resp
+            .json()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        let mut out: Vec<String> = coins
+            .into_iter()
+            .filter_map(|coin| {
+                let symbol = coin.symbol.trim().to_lowercase();
+                (!symbol.is_empty()).then_some(symbol)
+            })
+            .collect();
+        out.sort();
+        out.dedup();
+        Ok(out)
+    }
+
+    async fn price_usd<A: llama::CoinsApi>(&self, api: &A, asset: &AssetRef) -> Result<Quote> {
+        // 1) CoinGecko by id
+        if let Some(id) = &asset.coingecko_id
+            && let Ok(prices) = self
+                .coingecko_id_prices(&[(id.clone(), &asset.symbol)])
+                .await
+            && let Some((usd, change)) = prices.get(id).filter(|(price, _)| !price.is_zero())
+        {
+            return Ok(Quote {
+                usd: *usd,
+                change_24h_pct: *change,
+                source: "coingecko",
+            });
+        }
+        // 2) CoinGecko token by contract
+        if let (Some(chain), Some(contract)) = (asset.chain, &asset.contract)
+            && contract_lookup_allowed(self.lookup_contracts, self.is_known, chain, contract)
+            && let Ok(price) = coingecko_token_price(api, chain, contract, &asset.symbol).await
+        {
+            return Ok(Quote {
+                usd: price,
+                change_24h_pct: None,
+                source: "coingecko-token",
+            });
+        }
+        // A token is its contract: when the contract is unknown to the
+        // provider the answer is "no price", never the price of another coin
+        // that happens to share the symbol.
+        if !symbol_fallback_allowed(asset) {
+            return Err(Error::Pricing(format!(
+                "no price for token {} by contract",
+                asset.symbol
+            )));
+        }
+        // 3) CoinCap search
+        if let Ok((usd, change)) = self.coincap_symbol(asset).await {
+            return Ok(Quote {
+                usd,
+                change_24h_pct: change,
+                source: "coincap",
+            });
+        }
+        // 4) Binance ticker
+        self.binance_ticker(&asset.symbol).await.map(|usd| Quote {
+            usd,
+            change_24h_pct: None,
+            source: "binance",
+        })
+    }
+
+    async fn coingecko_id_prices(
+        &self,
+        ids_symbols: &[(String, &str)],
+    ) -> Result<HashMap<String, (Amount, Option<Amount>)>> {
+        let ids: Vec<&str> = ids_symbols.iter().map(|(id, _)| id.as_str()).collect();
+        let url = format!("{COINGECKO_V3}/simple/price");
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[
+                ("ids", ids.join(",")),
+                ("vs_currencies", "usd".into()),
+                ("include_24hr_change", "true".into()),
+            ])
+            .header(USER_AGENT, "multi-wallet-tracker")
+            .header(ACCEPT, "application/json")
+            .send()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Pricing(format!(
+                "coingecko http {:?}",
+                resp.status()
+            )));
+        }
+        let body: HashMap<String, serde_json::Value> = resp
+            .json()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        Ok(parse_simple_price(&body))
+    }
+
+    async fn coincap_symbol(&self, asset: &AssetRef) -> Result<(Amount, Option<Amount>)> {
+        let url = format!("{COINCAP_V2}/assets");
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("search", asset.symbol.to_ascii_lowercase())])
+            .header(USER_AGENT, "multi-wallet-tracker")
+            .header(ACCEPT, "application/json")
+            .send()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Pricing(format!("coincap http {:?}", resp.status())));
+        }
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        let arr = body
+            .get("data")
+            .and_then(|data| data.as_array())
+            .cloned()
+            .unwrap_or_default();
+        for item in arr {
+            let sym = item["symbol"].as_str().unwrap_or_default().to_uppercase();
+            if sym == asset.symbol
+                && let Some(raw) = item["priceUsd"]
+                    .as_str()
+                    .and_then(|text| Decimal::from_str_exact(text).ok())
+            {
+                let change = item["changePercent24Hr"]
+                    .as_str()
+                    .and_then(|text| Decimal::from_str_exact(text).ok())
+                    .map(|pct| Amount(pct).round(2));
+                return Ok((Amount(raw), change));
+            }
+        }
+        Err(Error::Pricing(format!(
+            "no coincap price for {}",
+            asset.symbol
+        )))
+    }
+
+    async fn binance_ticker(&self, symbol: &str) -> Result<Amount> {
+        let pair = format!("{symbol}USDT");
+        let url = format!("{BINANCE_API}/ticker/price");
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("symbol", pair)])
+            .header(USER_AGENT, "multi-wallet-tracker")
+            .header(ACCEPT, "application/json")
+            .send()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Pricing(format!("binance http {:?}", resp.status())));
+        }
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        body.get("price")
+            .and_then(|price| price.as_str())
+            .and_then(|text| Decimal::from_str_exact(text).ok())
+            .map(Amount)
+            .ok_or_else(|| Error::Pricing(format!("no binance price for {symbol}")))
+    }
+
+    async fn fx_table(&self) -> Result<HashMap<String, Amount>> {
+        let url = format!("{ER_API}/latest/USD");
+        let resp = self
+            .client
+            .get(&url)
+            .header(USER_AGENT, "multi-wallet-tracker")
+            .header(ACCEPT, "application/json")
+            .send()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        if !resp.status().is_success() {
+            return Err(Error::Pricing(format!("er-api http {:?}", resp.status())));
+        }
+        let body: HashMap<String, serde_json::Value> = resp
+            .json()
+            .await
+            .map_err(|err| Error::Network(err.without_url().to_string()))?;
+        let rates = body
+            .get("rates")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+        let pairs = match rates {
+            serde_json::Value::Object(map) => map,
+            _ => return Err(Error::Pricing("er-api: no rates".into())),
+        };
+        let mut out = HashMap::new();
+        for (ccy, rate) in pairs {
+            if let Some(rate) = rate.as_f64() {
+                out.insert(ccy.to_lowercase(), Amount::from_f64(rate));
+            }
+        }
+        Ok(out)
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+pub struct AssetSearchHit {
+    pub symbol: String,
+    pub name: String,
+    pub coingecko_id: Option<String>,
+    pub chain: Option<Chain>,
+    pub contract: Option<String>,
+    /// CoinGecko market-cap rank (0 = unknown).
+    pub rank: u64,
+}
+
+/// One row of CoinGecko `/coins/list`; only the symbol is of interest here.
+#[derive(serde::Deserialize)]
+struct CoinListEntry {
+    symbol: String,
+}
+
+/// CoinGecko `/simple/token_price/{platform}` for one contract, through `api`.
+async fn coingecko_token_price<A: llama::CoinsApi>(
+    api: &A,
+    chain: Chain,
+    contract: &str,
+    symbol: &str,
+) -> Result<Amount> {
+    let platform = chain
+        .info()
+        .cg_platform
+        .ok_or_else(|| Error::Pricing("chain has no coingecko platform".into()))?;
+    let base = format!("{COINGECKO_V3}/simple/token_price/{platform}");
+    let url = reqwest::Url::parse_with_params(
+        &base,
+        [("contract_addresses", contract), ("vs_currencies", "usd")],
+    )
+    .map_err(|err| Error::Pricing(err.to_string()))?;
+    let body = api.get_json(url.as_str()).await?;
+    let body: HashMap<String, HashMap<String, f64>> =
+        serde_json::from_value(body).map_err(|err| Error::Pricing(err.to_string()))?;
+    token_price_in(&body, contract)
+        .ok_or_else(|| Error::Pricing(format!("no price for {symbol} token")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const UNKNOWN: &str = "0x0000000000000000000000000000000000000bad";
+    const USDC: &str = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+
+    #[test]
+    fn simple_price_reads_the_24h_change() {
+        let body: HashMap<String, serde_json::Value> = serde_json::from_str(
+            r#"{"bitcoin":{"usd":50000.5,"usd_24h_change":-1.23456},"tether":{"usd":1.0},"broken":{"eur":3}}"#,
+        )
+        .unwrap();
+        let parsed = parse_simple_price(&body);
+        let (usd, change) = parsed["bitcoin"];
+        assert_eq!(usd, Amount::parse("50000.5").unwrap());
+        assert_eq!(change, Some(Amount::parse("-1.23").unwrap()));
+        assert_eq!(parsed["tether"].1, None);
+        assert!(!parsed.contains_key("broken"));
+    }
+
+    #[test]
+    fn native_coin_ids_are_the_gas_coin_not_the_governance_token() {
+        // Confirmed against CoinGecko /simple/price on 2026-11-11: `arbitrum`
+        // and `optimism` are the ARB and OP governance tokens (about $0.16 and
+        // $0.10), `matic-network` is the legacy MATIC token, while Polygon PoS
+        // pays gas in POL (`polygon-ecosystem-token`). Arbitrum One and
+        // Optimism pay gas in ETH.
+        assert_eq!(
+            Chain::Polygon.info().cg_coin_id,
+            Some("polygon-ecosystem-token")
+        );
+        assert_eq!(Chain::Arbitrum.info().cg_coin_id, Some("ethereum"));
+        assert_eq!(Chain::Optimism.info().cg_coin_id, Some("ethereum"));
+    }
+
+    #[test]
+    fn contract_lookup_ignores_case() {
+        let body: HashMap<String, HashMap<String, f64>> =
+            serde_json::from_str(r#"{"0xabcdef0000000000000000000000000000000001":{"usd":1.5}}"#)
+                .unwrap();
+        let checksummed = "0xAbCdEf0000000000000000000000000000000001";
+        assert_eq!(
+            token_price_in(&body, checksummed),
+            Some(Amount::from_f64(1.5))
+        );
+        assert_eq!(token_price_in(&body, "0xdead"), None);
+    }
+
+    fn only_usdc(token: &TokenId) -> bool {
+        token.contract.eq_ignore_ascii_case(USDC)
+    }
+
+    #[test]
+    fn without_consent_an_unknown_contract_is_not_looked_up() {
+        assert!(!contract_lookup_allowed(
+            false,
+            only_usdc,
+            Chain::Ethereum,
+            UNKNOWN
+        ));
+    }
+
+    #[test]
+    fn without_consent_a_known_token_is_still_looked_up() {
+        assert!(contract_lookup_allowed(
+            false,
+            only_usdc,
+            Chain::Ethereum,
+            USDC
+        ));
+    }
+
+    #[test]
+    fn with_consent_an_unknown_contract_is_looked_up() {
+        assert!(contract_lookup_allowed(
+            true,
+            |_| false,
+            Chain::Ethereum,
+            UNKNOWN
+        ));
+    }
+
+    #[test]
+    fn a_contract_miss_never_falls_back_to_the_symbol() {
+        let mut scam = AssetRef::crypto("USDC", "Fake USDC", None, Chain::Ethereum);
+        scam.contract = Some(UNKNOWN.into());
+        assert!(!symbol_fallback_allowed(&scam));
+        // A plain coin without a contract may still be found by its symbol.
+        let coin = AssetRef::crypto("BTC", "Bitcoin", None, Chain::Bitcoin);
+        assert!(symbol_fallback_allowed(&coin));
+    }
+
+    /// Records every requested URL; answers with no prices.
+    struct Recording(std::sync::Mutex<Vec<String>>);
+
+    impl llama::CoinsApi for Recording {
+        async fn get_json(&self, url: &str) -> Result<serde_json::Value> {
+            self.0.lock().unwrap().push(url.to_owned());
+            Ok(serde_json::json!({}))
+        }
+    }
+
+    /// The URLs asked for `contract`; no URL names it unless it is allowed.
+    async fn requests_made(consent: bool, contract: &str) -> usize {
+        let api = Recording(Default::default());
+        let service = PricingService::default()
+            .with_contract_lookup(consent)
+            .with_known_tokens(only_usdc);
+        let mut token = AssetRef::crypto("TKN", "Token", None, Chain::Ethereum);
+        token.contract = Some(contract.into());
+        let _ = service.fetch_prices_via(&api, &[token]).await;
+        let urls = api.0.lock().unwrap();
+        let allowed = consent || only_usdc(&TokenId::new(Chain::Ethereum, contract));
+        let needle = contract.to_ascii_lowercase();
+        assert!(
+            allowed
+                || urls
+                    .iter()
+                    .all(|url| !url.to_ascii_lowercase().contains(&needle)),
+            "contract named without consent: {urls:?}"
+        );
+        urls.len()
+    }
+
+    #[tokio::test]
+    async fn fetch_prices_without_consent_never_sends_an_unknown_contract() {
+        assert_eq!(requests_made(false, UNKNOWN).await, 0);
+    }
+
+    #[tokio::test]
+    async fn fetch_prices_without_consent_still_asks_a_known_token() {
+        assert_eq!(requests_made(false, USDC).await, 1);
+    }
+
+    #[tokio::test]
+    async fn fetch_prices_with_consent_asks_an_unknown_contract() {
+        assert_eq!(requests_made(true, UNKNOWN).await, 1);
+    }
+}

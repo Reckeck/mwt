@@ -2,8 +2,8 @@
 //! is committed. It grows by the strangler rule; the first step only pins the
 //! write path as it is, so the later moves can be checked against it.
 
-pub mod books;
 pub mod collection;
+pub mod crypto_data;
 pub mod events;
 #[cfg(test)]
 mod golden_tests;

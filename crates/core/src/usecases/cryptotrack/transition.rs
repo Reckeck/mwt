@@ -77,9 +77,9 @@ use crate::ipc_contract::cryptotrack::transition::{
     CryptoArchiveReport, CryptoRetiredWallet, CryptoTransitionPlan,
 };
 use crate::ipc_contract::security::SecurityLevel;
-use crate::kernel::books::Books;
 use crate::model::store::StoreKind;
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::money::tree::{find_store, root_of};
 use crate::service::UnlockedVault;
 use crate::usecases::planning::emergency::prune_emergency_fund;

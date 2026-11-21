@@ -223,7 +223,7 @@ The design — `docs/sync.md`. Works while the vault is unlocked and sync is on.
 | `allow_merging` | `AllowMergingInput { target: transaction/reminder, id }` | `()`; "Allow merging": clears the `keep` mark that undoing a sync put on a copy, so the next sync may fold it into its twin again (a local edit, it goes to the other devices) |
 | `sync_restore_backup` | — | `()`; the vault as before the first batch of the last session (`<vault>.presync.bak`) |
 
-### updates (`crates/app/src/commands/updates.rs`, logic `crates/app/src/updates.rs`, core `crates/core/src/updates`)
+### updates (`crates/app/src/commands/updates.rs`, logic `crates/app/src/updates.rs`, core `crates/net/src/updates`)
 
 | Command | Input | Output |
 |---|---|---|

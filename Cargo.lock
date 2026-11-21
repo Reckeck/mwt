@@ -3133,6 +3133,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-net"
+version = "0.1.0"
+dependencies = [
+ "calamine",
+ "chrono",
+ "csv",
+ "ego-tree",
+ "hmac 0.13.0",
+ "mwt-base",
+ "mwt-model",
+ "proptest",
+ "reqwest 0.12.28",
+ "rust_decimal",
+ "scraper",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "time",
+ "tokio",
+ "ts-rs",
+]
+
+[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6383,16 +6406,14 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "blake2 0.11.0",
- "calamine",
  "chrono",
  "chrono-tz",
- "csv",
- "ego-tree",
  "hmac 0.13.0",
  "insta",
  "mwt-base",
  "mwt-crypto",
  "mwt-model",
+ "mwt-net",
  "pretty_assertions",
  "proptest",
  "rand 0.10.4",
@@ -6401,7 +6422,6 @@ dependencies = [
  "rmp-serde",
  "rust_decimal",
  "schemars 1.2.3",
- "scraper",
  "serde",
  "serde_bytes",
  "serde_json",

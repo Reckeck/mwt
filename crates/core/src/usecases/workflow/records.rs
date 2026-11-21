@@ -9,11 +9,11 @@ use rust_decimal::Decimal;
 
 use crate::Amount;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::kernel::tx::Tx;
 use crate::model::notify::NoticeCategory;
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
+use crate::money::books::Books;
 use crate::money::tree::find_store;
 use crate::planning::notifications as notices;
 use crate::service::UnlockedVault;

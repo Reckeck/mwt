@@ -10,11 +10,11 @@ use std::collections::{BTreeMap, HashSet};
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::household::shared_events::view::{shared_debts, shared_tx_links};
-use crate::kernel::books::Books;
 use crate::model::VaultDoc;
 use crate::model::contact::{Contact, ContactAccount, ContactKind, DebtTerms};
 use crate::model::store::AssetRef;
 use crate::model::transaction::{AccountRef, DebtEffect, LegRole, Transaction};
+use crate::money::books::Books;
 use crate::money::tree::root_of;
 use crate::time::secs_or_now;
 

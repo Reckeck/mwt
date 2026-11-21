@@ -3,9 +3,9 @@
 
 use crate::Amount;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::planning::UtilityItem;
 use crate::model::store::{PropertyCategory, Store, StoreKind};
+use crate::money::books::Books;
 use crate::money::tree::find_store;
 
 use crate::household::property_links::property_year;

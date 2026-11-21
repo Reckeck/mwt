@@ -20,7 +20,6 @@ use super::exchange_sync::{
 };
 use crate::Amount;
 use crate::error::{Error, Result, WalletRule};
-use crate::kernel::books::Books;
 use crate::model::chain::Chain;
 use crate::model::store::{AssetRef, Binding, ExchangeProfile, MarketKind, TerminalState};
 use crate::model::transaction::{
@@ -29,6 +28,7 @@ use crate::model::transaction::{
     TxOrigin,
 };
 use crate::model::vault::{ExchangeKeys, ImportKind, PendingImport, VaultDoc};
+use crate::money::books::Books;
 
 /// Most drawings JSON a terminal keeps per symbol is bounded by the model;
 /// the number of watched symbols is bounded here.
@@ -96,7 +96,7 @@ pub(crate) fn bybit_account_store(
 /// futures trades are booked.
 pub fn unified_account_of(books: &Books<'_>, store_id: &str) -> Option<String> {
     let root = root_of(books, store_id);
-    bybit_account_store(books, &root, crate::exchange::bybit::ACCOUNT_UNIFIED)
+    bybit_account_store(books, &root, crate::model::vault::ACCOUNT_UNIFIED)
 }
 
 /// Where a fill of this category is booked: the sub-account picked for
@@ -104,7 +104,7 @@ pub fn unified_account_of(books: &Books<'_>, store_id: &str) -> Option<String> {
 /// bound to that market, else the key's own store.
 pub(crate) fn import_target(books: &Books<'_>, imp: &PendingImport) -> String {
     if imp.kind == ImportKind::EarnIncome {
-        return bybit_account_store(books, &imp.store_id, crate::exchange::bybit::ACCOUNT_EARN)
+        return bybit_account_store(books, &imp.store_id, crate::model::vault::ACCOUNT_EARN)
             .unwrap_or_else(|| imp.store_id.clone());
     }
     let futures = imp.category != "spot";
@@ -127,13 +127,7 @@ pub(crate) fn import_target(books: &Books<'_>, imp: &PendingImport) -> String {
             }
         })
         // Bybit trades spot and derivatives in one unified account.
-        .or_else(|| {
-            bybit_account_store(
-                books,
-                &imp.store_id,
-                crate::exchange::bybit::ACCOUNT_UNIFIED,
-            )
-        })
+        .or_else(|| bybit_account_store(books, &imp.store_id, crate::model::vault::ACCOUNT_UNIFIED))
         .or_else(|| bound_child(books, &imp.store_id, market))
         .unwrap_or_else(|| imp.store_id.clone())
 }
@@ -162,7 +156,7 @@ pub(crate) fn asset_for_import(doc: &VaultDoc, symbol: &str) -> AssetRef {
         // priced like one picked by hand); the chain stays unresolved so
         // the user can bind it later, rather than guessing a network.
         None => {
-            let known = crate::exchange::well_known_coin(&upper);
+            let known = crate::model::coins::well_known_coin(&upper);
             let name = known.map_or(upper.as_str(), |(_, name)| name);
             let mut asset = AssetRef::crypto(&upper, name, known.map(|(id, _)| id), Chain::Fiat);
             asset.chain = None;

@@ -17,8 +17,8 @@ use crate::model::store::AssetRef;
 use crate::model::vault::now_iso;
 use crate::time::secs_or_now;
 
-use crate::kernel::books::Books;
 use crate::model::notify::{notice, notice_title};
+use crate::money::books::Books;
 use crate::planning::agenda::UpcomingKind;
 use crate::planning::agenda::{next_occurrence, reminder_secs};
 use crate::planning::auto_reminders::category_of;

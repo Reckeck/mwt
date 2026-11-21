@@ -6,7 +6,8 @@
 //!   address); the real one is [`crate::cryptotrack::rpc::RpcClient`].
 //! * [`PriceSource`]: historic prices of assets, with the consent policy of
 //!   token contracts (`N1`); the real one is
-//!   [`crate::pricing::PricingService`].
+//!   [`crate::pricing::PricingService`] (the impl sits in
+//!   the facade, `service/ports.rs`).
 //! * [`ExchangeClient`]: the read-only API of an exchange account; every
 //!   transport of [`crate::cryptotrack::sources::bybit::Fills`] is one.
 //!
@@ -23,7 +24,6 @@ use crate::cryptotrack::sources::bybit::{Fills, FillsPage, PageRequest};
 use crate::error::Result;
 use crate::exchange::{EarnYield, InterTransfer};
 use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint};
-use crate::pricing::PricingService;
 
 /// A chain node or explorer.
 pub trait ChainSource: Send + Sync {
@@ -60,21 +60,6 @@ pub trait PriceSource: Send + Sync {
         &self,
         wanted: &[(CryptoAsset, NaiveDate)],
     ) -> impl Future<Output = Result<Vec<CryptoPricePoint>>> + Send;
-}
-
-/// The DeFiLlama adapter. It lives here, not in `pricing`, so the port stays in
-/// `cryptotrack` and `pricing` (a lower layer) does not depend on it.
-impl PriceSource for PricingService {
-    fn may_lookup_contract(&self) -> bool {
-        self.looks_up_contracts()
-    }
-
-    async fn historic_prices(
-        &self,
-        wanted: &[(CryptoAsset, NaiveDate)],
-    ) -> Result<Vec<CryptoPricePoint>> {
-        self.fetch_historic_prices(wanted).await
-    }
 }
 
 /// The read-only API of one exchange account.

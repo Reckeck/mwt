@@ -26,7 +26,6 @@ use std::collections::HashSet;
 
 use super::service::legacy_bybit::bybit_event_ids;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::category::{Category, CategoryGroup, EXCHANGE_IMPORT_CATEGORY};
 use crate::model::store::{ImportSettings, Store};
 use crate::model::transaction::{Transaction, TxOrigin};
@@ -34,12 +33,13 @@ use crate::model::vault::{
     ImportKind, ImportRun, ImportSource, MAX_DISCARDED_IMPORTS, MAX_IMPORT_RUNS, PendingImport,
     VaultDoc,
 };
+use crate::money::books::Books;
 
 /// The exchange accounts an import knows: Bybit's Funding, Unified Trading, Earn.
 pub const IMPORT_ACCOUNTS: [&str; 3] = [
-    crate::exchange::bybit::ACCOUNT_FUND,
-    crate::exchange::bybit::ACCOUNT_UNIFIED,
-    crate::exchange::bybit::ACCOUNT_EARN,
+    crate::model::vault::ACCOUNT_FUND,
+    crate::model::vault::ACCOUNT_UNIFIED,
+    crate::model::vault::ACCOUNT_EARN,
 ];
 
 /// Most records a preview lists; the counts cover them all.
@@ -97,8 +97,8 @@ pub(crate) fn children_of<'books>(books: &Books<'books>, parent_id: &str) -> Vec
 /// The account type an account name stands for, as the settings store it.
 pub(crate) fn account_key(account: &str) -> String {
     match account.trim().to_ascii_uppercase().as_str() {
-        "SPOT" | "CONTRACT" | "UNIFIED" => crate::exchange::bybit::ACCOUNT_UNIFIED.to_string(),
-        "INVESTMENT" | "EARN" => crate::exchange::bybit::ACCOUNT_EARN.to_string(),
+        "SPOT" | "CONTRACT" | "UNIFIED" => crate::model::vault::ACCOUNT_UNIFIED.to_string(),
+        "INVESTMENT" | "EARN" => crate::model::vault::ACCOUNT_EARN.to_string(),
         other => other.to_string(),
     }
 }

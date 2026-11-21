@@ -15,18 +15,17 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+mod frozen;
+
 use super::{PendingImportV4, VaultDocV4};
 use crate::Amount;
-use crate::cryptotrack::engine::math;
-use crate::cryptotrack::prices;
-use crate::cryptotrack::sources::bybit;
-use crate::cryptotrack::validate::Validate;
 use crate::model::cryptotrack::{
     CryptoAccount, CryptoAsset, CryptoPricePoint, CryptoToken, TokenId, TokenVerdict,
 };
 use crate::model::store::{Store, StoreKind};
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::PendingImport;
+use frozen::{bybit, date_ts, day, math, validate_account};
 
 /// What the one-time conversion of the old queue did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -173,7 +172,7 @@ fn bybit_account(doc: &mut VaultDocV4, store_id: &str, earliest: &str) -> Option
             let mut account =
                 CryptoAccount::new(&account_id, &name, bybit::EXCHANGE_CHAIN, &handle, earliest);
             account.source = Some(bybit::SOURCE_ID.to_owned());
-            account.validate().ok()?;
+            validate_account(&account).ok()?;
             doc.crypto_accounts.push(account);
         }
     }
@@ -289,7 +288,7 @@ fn register_coin(doc: &mut VaultDocV4, symbol: &str) {
         return;
     }
     let token = TokenId::new(bybit::EXCHANGE_CHAIN, &symbol);
-    let known = crate::exchange::well_known_coin(&symbol);
+    let known = crate::model::coins::well_known_coin(&symbol);
     if let Some(record) = doc
         .crypto_tokens
         .iter_mut()
@@ -337,7 +336,7 @@ fn day_prices(records: &[&PendingImport]) -> Vec<CryptoPricePoint> {
     // (asset key, day) -> (asset, sum of quantity x price, sum of quantity)
     let mut sums: BTreeMap<(String, String), (CryptoAsset, Amount, Amount)> = BTreeMap::new();
     for record in records {
-        let day = crate::cryptotrack::engine::ids::day(&record.occurred_at);
+        let day = day(&record.occurred_at);
         if day.len() != 10 {
             continue;
         }
@@ -362,7 +361,7 @@ fn day_prices(records: &[&PendingImport]) -> Vec<CryptoPricePoint> {
             unit.is_positive().then(|| CryptoPricePoint {
                 token_key: key,
                 value_usd: unit,
-                ts: prices::date_ts(date),
+                ts: date_ts(date),
                 source: bybit::SOURCE_ID.to_owned(),
             })
         })

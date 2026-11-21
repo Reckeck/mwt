@@ -6,6 +6,7 @@ mod adjustments_tests;
 pub mod asset_holdings;
 #[cfg(test)]
 mod asset_holdings_tests;
+pub mod books;
 pub mod bulk;
 #[cfg(test)]
 mod bulk_tests;

@@ -52,12 +52,12 @@ use crate::cryptotrack::sources::evm::{RawAsset, SourceBatch};
 use crate::cryptotrack::tokens;
 use crate::cryptotrack::validate::Validate;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::{
     CryptoAsset, CryptoDirection, CryptoSnapshot, CryptoTx, TokenId, normalize_address,
 };
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 
 /// What to do with one batch of a source.
 #[derive(Debug, Clone, Copy)]

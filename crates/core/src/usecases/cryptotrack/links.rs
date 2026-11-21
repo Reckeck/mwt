@@ -12,10 +12,10 @@ use crate::ipc_contract::cryptotrack::links::{
     CryptoPairsInput, CryptoUnlinkInput,
 };
 use crate::ipc_contract::cryptotrack::operations::{CryptoOpRow, CryptoOperationDetailInput};
-use crate::kernel::books::Books;
 use crate::model::cryptotrack::CryptoOverride;
 use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
+use crate::money::books::Books;
 use crate::money::rates::convert_at;
 use crate::service::UnlockedVault;
 use crate::usecases::cryptotrack::operations::crypto_operation_detail;

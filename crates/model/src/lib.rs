@@ -13,6 +13,7 @@ mod contact;
 mod cryptotrack;
 mod datasource;
 mod deposit;
+mod device_secrets;
 mod enrichment;
 mod entity_ref;
 mod ids;
@@ -45,13 +46,14 @@ pub use cryptotrack::{
     normalize_address,
 };
 pub use datasource::{
-    AssetPriceSource, BROKEN_AFTER, DataSource, DepositRateSource, FileFormat, JUMP_FACTOR,
-    MAX_SOURCE_HISTORY, NumberFormat, SeriesPoint, SourceInterval, SourceMethod, SourceOutput,
-    SourceStatus, SourceValue, TableRow,
+    AssetPriceSource, BROKEN_AFTER, DataSource, DepositRateSource, Extracted, FileFormat,
+    JUMP_FACTOR, MAX_SOURCE_HISTORY, NumberFormat, SeriesPoint, SourceInterval, SourceMethod,
+    SourceOutput, SourceStatus, SourceValue, TableRow,
 };
 pub use deposit::{
     Capitalization, DepositTerms, IncomeBracket, KeyRatePoint, PdsTerms, RatePeriod,
 };
+pub use device_secrets::{BlockscoutKey, DeviceKey, DeviceSecrets, NetworkEndpoints};
 pub use enrichment::{EnrichmentData, EnrichmentRecord, EnrichmentSource, EnrichmentStatus};
 pub use entity_ref::{EntityKind, EntityRef, Pinned};
 pub use ids::StoreId;
@@ -104,8 +106,8 @@ pub use transaction::{
 #[cfg(feature = "schema")]
 pub use vault::json_schema;
 pub use vault::{
-    ACCOUNT_EARN, ACCOUNT_UNIFIED, DailyBudgetMode, DashPeriod, DashboardWidgetCfg, ExchangeKeys,
-    Exchanges, FxPoint, ImportKind, ImportRun, ImportSource, MAX_DISCARDED_IMPORTS,
+    ACCOUNT_EARN, ACCOUNT_FUND, ACCOUNT_UNIFIED, DailyBudgetMode, DashPeriod, DashboardWidgetCfg,
+    ExchangeKeys, Exchanges, FxPoint, ImportKind, ImportRun, ImportSource, MAX_DISCARDED_IMPORTS,
     MAX_IMPORT_RUNS, ManualPrice, PendingImport, PricePoint, Settings, TxProperty,
     VAULT_FORMAT_VERSION, Valuation, VaultDoc, default_fx_interval, default_minimize_to_tray,
     iso_to_millis, now_iso, unix_to_iso,

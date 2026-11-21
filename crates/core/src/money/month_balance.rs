@@ -11,7 +11,7 @@ use chrono::{Duration, NaiveDate};
 use crate::calendar::{self, first_of_month, next_month};
 use crate::error::{Error, Result};
 
-use crate::kernel::books::Books;
+use crate::money::books::Books;
 
 /// One month of the balance.
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]

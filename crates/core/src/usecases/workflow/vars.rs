@@ -2,8 +2,8 @@
 //! core-strangler, Z6): the balance of an account and the live accounts.
 
 use crate::Amount;
-use crate::kernel::books::Books;
 use crate::model::store::AssetRef;
+use crate::money::books::Books;
 use crate::workflow::types::WfValue;
 
 /// The balance of an account with its sub-accounts: of one asset, or the

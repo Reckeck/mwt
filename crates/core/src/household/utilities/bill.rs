@@ -6,11 +6,11 @@ use std::collections::BTreeMap;
 use crate::Amount;
 use crate::calendar::{self, Calendar, first_of_month};
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::VaultDoc;
 use crate::model::planning::{UtilityItem, UtilityKind};
 use crate::model::store::AssetRef;
 use crate::model::transaction::{KindDetails, PaymentTx, PriceStamp, Transaction, TxMeta};
+use crate::money::books::Books;
 
 use super::items::utility_item;
 use super::month::{

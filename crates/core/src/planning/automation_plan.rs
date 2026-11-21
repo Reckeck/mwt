@@ -8,12 +8,12 @@ use std::collections::HashSet;
 use crate::Amount;
 use crate::calendar;
 use crate::calendar::Calendar;
-use crate::kernel::books::Books;
 use crate::model::planning::{
     AmountMode, Automation, AutomationOutcome, AutomationRun, RejectReason, draft_to_transaction,
 };
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::planning::automations::{self as rules, automation_draft, main_amount, outflow};
 use crate::time::unix_secs;
 use crate::workflow::automation::{self as graph_of, ESTIMATE_OF};

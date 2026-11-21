@@ -4,10 +4,10 @@
 //! cash waiting, not an investment, and stay out.
 
 use crate::Amount;
-use crate::exchange::is_usd_stablecoin;
+use crate::model::coins::is_usd_stablecoin;
 use crate::model::store::{AssetRef, Store, StoreKind, SubType};
 
-use crate::kernel::books::Books;
+use crate::money::books::Books;
 use crate::money::portfolio::{StorePosition, store_positions};
 use crate::money::tree::ancestors_of;
 

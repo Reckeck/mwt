@@ -6,8 +6,8 @@ use crate::Amount;
 use crate::model::transaction::LegRole;
 use crate::time::secs_or_now;
 
-use crate::kernel::books::Books;
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::money::rates::{latest_fx_point, per_usd};
 
 /// How long ago the price a 24-hour change is measured against may be.
@@ -128,7 +128,7 @@ fn price_quote(doc: &VaultDoc, asset_key: &str, manual_usd: Option<Amount>) -> P
             change_24h_pct: None,
         };
     }
-    if crate::exchange::is_usd_stablecoin(asset_key) {
+    if crate::model::coins::is_usd_stablecoin(asset_key) {
         return PriceQuote {
             usd: Amount::new(rust_decimal::Decimal::ONE),
             info: PriceInfo {

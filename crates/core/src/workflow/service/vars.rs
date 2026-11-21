@@ -5,10 +5,10 @@
 
 use crate::Amount;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::workflow::model::{VarScope, WorkflowVar};
 use crate::workflow::types::WfValue;
 

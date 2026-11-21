@@ -4,10 +4,10 @@
 use std::collections::BTreeMap;
 
 use crate::Amount;
-use crate::kernel::books::Books;
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::{FuturesAction, FuturesDirection, Transaction};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::money::portfolio::price_usd_for;
 use crate::money::rates::{per_usd, value_at};
 use crate::money::tree::find_store;

@@ -9,8 +9,8 @@ use std::collections::HashSet;
 use crate::Amount;
 use crate::calendar::{self, Calendar};
 use crate::error::Result;
-use crate::kernel::books::Books;
 use crate::model::planning::{Budget, BudgetTarget};
+use crate::money::books::Books;
 use crate::money::worth::FlowClass;
 use crate::planning::automation_plan::automation_runs;
 use crate::planning::budget::{

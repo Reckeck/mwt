@@ -28,9 +28,9 @@ use reqwest::Url;
 use crate::cryptotrack::chains;
 use crate::cryptotrack::tracking::{ExplorerSettings, normalize_explorer};
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::chain::Chain;
-use crate::vault_io::device_secrets::{BlockscoutKey, DeviceSecrets, NetworkEndpoints};
+use crate::model::device_secrets::{BlockscoutKey, DeviceSecrets, NetworkEndpoints};
+use crate::money::books::Books;
 
 /// What a reader of a network uses; `None` is the preset.
 #[derive(Debug, Default)]

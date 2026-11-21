@@ -141,11 +141,11 @@ use crate::cryptotrack::engine::position_value::held_by_account;
 use crate::cryptotrack::engine::{Ledger, math};
 use crate::cryptotrack::service::recompute::fold;
 use crate::cryptotrack::{chains, tokens};
-use crate::kernel::books::Books;
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::CryptoAsset;
 use crate::model::store::{AssetRef, Holding, StoreKind};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::money::price_info::price_quote_for;
 use crate::time::unix_secs;
 
@@ -508,8 +508,8 @@ fn native_ref(chain: Chain) -> AssetRef {
     if let Some(row) = chains::evm_chain(chain) {
         return AssetRef::crypto(row.native.symbol, row.native.name, coin, chain);
     }
-    if let Some((ticker, _, name)) =
-        coin.and_then(|id| crate::exchange::well_known_coins().find(|(_, known, _)| *known == id))
+    if let Some((ticker, _, name)) = coin
+        .and_then(|id| crate::model::coins::well_known_coins().find(|(_, known, _)| *known == id))
     {
         return AssetRef::crypto(ticker, name, coin, chain);
     }

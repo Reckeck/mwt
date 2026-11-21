@@ -22,7 +22,7 @@ use crate::time::secs_or_now;
 use super::where_went::where_report;
 use crate::household::contacts::contact_balances_until;
 use crate::household::losses::{LossWindow, MonthLosses, Valuation, month_losses};
-use crate::kernel::books::Books;
+use crate::money::books::Books;
 use crate::money::portfolio::realized_pnl_filtered;
 use crate::money::rates::RateBook;
 pub(crate) use crate::money::rates::value_at;

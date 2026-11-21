@@ -70,7 +70,6 @@ use crate::cryptotrack::engine::ids;
 use crate::cryptotrack::source::{FetchPage, FetchRequest, Source};
 use crate::cryptotrack::validate::Validate;
 use crate::error::{Error, Result};
-use crate::exchange::bybit::{ACCOUNT_EARN, ACCOUNT_UNIFIED};
 use crate::exchange::staging::PendingImportExt;
 use crate::exchange::{BybitClient, Category, EarnYield, Execution, InterTransfer};
 use crate::model::chain::Chain;
@@ -78,6 +77,7 @@ use crate::model::cryptotrack::{
     CryptoAsset, CryptoDirection, CryptoFee, CryptoLeg, CryptoTx, CryptoTxKind, TokenId,
     TrackingRef,
 };
+use crate::model::vault::{ACCOUNT_EARN, ACCOUNT_UNIFIED};
 use crate::model::vault::{ImportKind, PendingImport};
 
 /// Stable id, as it is written into a cursor record and an account's
@@ -128,7 +128,7 @@ pub fn asset_ticker(asset: &CryptoAsset) -> Option<&str> {
 /// Whether a ticker is a dollar stablecoin, so one unit of it is one dollar.
 /// Asks the exchange module's own list rather than keeping a second one.
 pub fn is_usd_coin(symbol: &str) -> bool {
-    crate::exchange::is_usd_stablecoin(&format!("asset:{}", symbol.trim().to_ascii_uppercase()))
+    crate::model::coins::is_usd_stablecoin(&format!("asset:{}", symbol.trim().to_ascii_uppercase()))
 }
 
 /// The account handle of an exchange wallet: what stands where an address

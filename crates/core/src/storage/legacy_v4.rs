@@ -25,6 +25,7 @@
 
 mod adopt;
 pub(crate) mod graph;
+mod graph_kinds;
 
 use serde::Deserialize;
 

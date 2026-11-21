@@ -9,7 +9,7 @@ use crate::household::debts::{
     DTI_MONTHS, DebtLoad, IncomeBasis, LoanContext, LoanInputs, debt_load_of, finished_months,
     loan_status, loan_stores,
 };
-use crate::kernel::books::Books;
+use crate::money::books::Books;
 use crate::money::inflation::inflation_on;
 use crate::money::interest::key_rate_on;
 use crate::planning::budget::{budget_currency, income_basis, store_currency};

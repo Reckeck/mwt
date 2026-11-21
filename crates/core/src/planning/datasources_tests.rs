@@ -1,7 +1,7 @@
 //! Tests of the datasources area: the old inline tests (names and bodies unchanged).
 
 use super::datasources::*;
-use crate::datasource::Extracted;
+use crate::model::datasource::Extracted;
 use crate::model::datasource::{DataSource, TableRow};
 use crate::model::datasource::{
     NumberFormat, SourceInterval, SourceMethod, SourceOutput, SourceStatus,

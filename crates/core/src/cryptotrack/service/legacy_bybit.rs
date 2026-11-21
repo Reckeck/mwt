@@ -248,7 +248,7 @@ fn register_coin(doc: &mut VaultDoc, symbol: &str) {
         return;
     }
     let token = TokenId::new(bybit::EXCHANGE_CHAIN, &symbol);
-    let known = crate::exchange::well_known_coin(&symbol);
+    let known = crate::model::coins::well_known_coin(&symbol);
     if let Some(record) = doc
         .crypto_tokens
         .iter_mut()

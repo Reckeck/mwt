@@ -478,7 +478,7 @@ Security guarantees:
 - `Drop` zeroes all fields through `zeroize`.
 - `#[ts(skip)]` — the type does not get into the generated TS types, it never
   leaves the backend.
-- The client (`crates/core/src/exchange/bybit.rs`) contains **only** `GET`
+- The client (`crates/net/src/exchange/bybit.rs`) contains **only** `GET`
   (`/v5/execution/list`). There are no code paths for placing, changing or canceling
   orders, so even a leaked key cannot move funds.
 

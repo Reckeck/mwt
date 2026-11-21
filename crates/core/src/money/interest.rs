@@ -17,12 +17,12 @@ use rust_decimal::Decimal;
 use crate::Amount;
 use crate::calendar::Calendar;
 use crate::error::{Error, Result};
-use crate::kernel::books::Books;
 use crate::model::deposit::{Capitalization, DepositTerms, IncomeBracket, KeyRatePoint};
 use crate::model::ids::StoreId;
 use crate::model::store::{AssetRef, Binding, Store, StoreKind, SubType};
 use crate::model::transaction::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta, TxOrigin};
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::time::secs_or_now;
 
 /// Category of posted interest and of the programme's co-financing.

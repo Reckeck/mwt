@@ -13,7 +13,7 @@
 //! and a shared gate remembers the newest revision written, so a slow older
 //! job that finishes after a newer one is dropped instead of overwriting it.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use zeroize::Zeroizing;
@@ -22,6 +22,7 @@ use crate::error::{Error, Result};
 use crate::storage::encode;
 
 use crate::kernel::events::DomainEvent;
+pub use crate::kernel::persistence::Flushed;
 use crate::kernel::persistence::{Persistence, SealedWrite};
 use crate::kernel::session::Commit;
 pub use crate::kernel::session::SaveHook;
@@ -41,15 +42,6 @@ impl std::fmt::Debug for FlushJob {
             .field("revision", &self.write.revision)
             .finish_non_exhaustive()
     }
-}
-
-/// A job that went to disk (or was dropped as older than what is there).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Flushed {
-    pub path: PathBuf,
-    pub revision: u64,
-    /// The bytes that went out; `None` when nothing was written.
-    pub sealed: Option<Vec<u8>>,
 }
 
 impl FlushJob {

@@ -8,9 +8,9 @@
 
 use crate::Amount;
 use crate::calendar::{self, Calendar};
-use crate::kernel::books::Books;
 use crate::model::VaultDoc;
 use crate::model::store::{LiabilityKind, Store};
+use crate::money::books::Books;
 use crate::time::secs_or_now;
 
 /// Points over inflation a rate may reach before it counts as costly, for a

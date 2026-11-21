@@ -6,10 +6,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::Amount;
-use crate::kernel::books::Books;
 use crate::model::store::AssetRef;
 use crate::model::transaction::{Leg, Transaction};
 use crate::model::vault::{FxPoint, VaultDoc};
+use crate::money::books::Books;
 use crate::pricing::history::RateIndex;
 use crate::time::secs_or_now;
 
@@ -59,7 +59,7 @@ impl RateBook {
         }
         // A favourite coin the vault does not hold is still convertible once
         // its quote is cached.
-        for (ticker, coingecko_id, _) in crate::exchange::well_known_coins() {
+        for (ticker, coingecko_id, _) in crate::model::coins::well_known_coins() {
             keys_by_symbol
                 .entry(ticker.to_string())
                 .or_insert_with(|| format!("coin:{coingecko_id}"));
@@ -393,7 +393,7 @@ pub fn is_crypto_code(doc: &VaultDoc, code: &str) -> bool {
     if doc.fx_cache.iter().any(|point| point.currency == lower) {
         return false;
     }
-    held_coin(doc, &lower).is_some() || crate::exchange::well_known_coin(&lower).is_some()
+    held_coin(doc, &lower).is_some() || crate::model::coins::well_known_coin(&lower).is_some()
 }
 
 /// The asset a crypto favourite is priced as: the identity the vault
@@ -406,7 +406,7 @@ pub fn favorite_asset(doc: &VaultDoc, code: &str) -> Option<AssetRef> {
         return Some(asset.clone());
     }
     let upper = code.trim().to_uppercase();
-    let (coingecko_id, name) = crate::exchange::well_known_coin(&upper)?;
+    let (coingecko_id, name) = crate::model::coins::well_known_coin(&upper)?;
     Some(AssetRef {
         chain: None,
         ..AssetRef::crypto(

@@ -8,8 +8,8 @@ use crate::Amount;
 use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
 use crate::time::secs_or_now;
 
-use crate::kernel::books::Books;
 use crate::model::vault::VaultDoc;
+use crate::money::books::Books;
 use crate::money::rates::RateBook;
 use crate::money::tree::find_store;
 use crate::money::worth::FlowClass;

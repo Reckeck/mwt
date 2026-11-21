@@ -4,7 +4,7 @@
 use crate::Amount;
 use crate::model::store::AssetRef;
 
-use crate::kernel::books::Books;
+use crate::money::books::Books;
 use crate::money::portfolio::store_positions;
 use crate::money::price_info::{PriceInfo, PriceOrigin};
 use crate::money::tree::{ancestors_of, root_of};

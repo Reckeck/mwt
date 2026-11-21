@@ -4,8 +4,8 @@
 use crate::Amount;
 use crate::calendar::Calendar;
 use crate::error::Result;
-use crate::kernel::books::Books;
 use crate::model::planning::UtilityKind;
+use crate::money::books::Books;
 
 use super::items::utility_item;
 use super::month::{metered_amount, monthly_readings, out_of_order_ids, readings_of};
