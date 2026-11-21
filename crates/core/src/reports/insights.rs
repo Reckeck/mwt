@@ -14,7 +14,7 @@ use crate::model::category::CategoryGroup;
 use crate::kernel::books::Books;
 use crate::money::portfolio::realized_pnl_filtered;
 use crate::planning::budget::budget_currency;
-use crate::usecases::planning::health::lifestyle_creep;
+use crate::reports::health::lifestyle_creep;
 
 use super::overview::{
     CashflowReport, CategoriesReport, InflationReport, LossReport, NetworthReport, PnlReport,

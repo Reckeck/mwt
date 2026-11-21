@@ -863,3 +863,43 @@ files = [
   "crates/core/src/service/reports.rs",
   "crates/xtask/src/arch/",
 ]
+
+[[foundation]]
+# T230 (z11): dashboard and overview reads take &Books; the Books delegates and their service forwards go.
+task = "T230"
+files = [
+  "crates/core/src/kernel/books.rs",
+  "crates/core/src/planning/",
+  "crates/core/src/reports/",
+  "crates/core/src/household/",
+  "crates/core/src/money/",
+  "crates/core/src/workflow/automation.rs",
+  "crates/core/src/usecases/planning/agenda.rs",
+  "crates/core/src/usecases/planning/budget.rs",
+  "crates/core/src/usecases/planning/health.rs",
+  "crates/core/src/usecases/planning/notifications.rs",
+  "crates/core/src/usecases/planning/automations.rs",
+  "crates/core/src/usecases/planning/automation_rules.rs",
+  "crates/core/src/usecases/planning/emergency.rs",
+  "crates/core/src/usecases/planning/mod.rs",
+  "crates/core/src/usecases/household/mod.rs",
+  "crates/core/src/service/emergency.rs",
+  "crates/core/src/service/interest.rs",
+  "crates/core/src/service/cryptotrack/totals.rs",
+  "crates/core/src/usecases/household/contacts.rs",
+  "crates/core/src/service/automations.rs",
+  "crates/core/src/service/contacts.rs",
+  "crates/core/src/usecases/household/utilities.rs",
+  "crates/core/src/usecases/household/debts.rs",
+  "crates/core/src/service/agenda.rs",
+  "crates/core/src/service/budget.rs",
+  "crates/core/src/service/utilities.rs",
+  "crates/core/src/service/health.rs",
+  "crates/core/src/service/reports.rs",
+  "crates/core/src/service/debts.rs",
+  "crates/core/src/service/mod.rs",
+  "crates/app/src/commands/planning.rs",
+  "crates/app/src/commands/analytics.rs",
+  "crates/xtask/arch-allow.toml",
+  "crates/xtask/src/arch/",
+]

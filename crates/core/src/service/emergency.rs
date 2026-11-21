@@ -24,7 +24,7 @@ impl UnlockedVault {
             => crate::usecases::planning::emergency::emergency_fund_toggle;
         /// The fund's value, coverage and hints.
         pub fn emergency_fund_status(&self, now: i64, zone: &str) -> EmergencyStatus
-            => crate::usecases::planning::emergency::emergency_fund_status @books;
+            => crate::planning::emergency::emergency_fund_status @books;
     }
     // forward:end
 

@@ -6,10 +6,14 @@ use crate::kernel::books::Books;
 use crate::model::planning::EmergencyFund;
 use crate::model::store::{Purpose, Store};
 use crate::model::vault::VaultDoc;
+use crate::money::interest::INTEREST_CATEGORY;
+use crate::pricing::history::secs_or_now;
 use crate::{Amount, Error, Result};
 
-use super::budget::{MonthAvg, budget_currency};
+use super::budget::{MonthAvg, budget_currency, income_basis};
 use super::goals::{resolve_scope, store_values_usd};
+
+const YEAR_SECS: i64 = 365 * 86_400;
 
 /// The longest target and averaging window the fund accepts, months.
 pub const MAX_FUND_MONTHS: u8 = 24;
@@ -224,4 +228,45 @@ fn goals_counting(books: &Books<'_>, store_id: &str) -> Vec<String> {
         .filter(|goal| resolve_scope(books, &goal.scope).contains(store_id))
         .map(|goal| goal.id.clone())
         .collect()
+}
+
+/// The fund's value, coverage and hints.
+pub fn emergency_fund_status(books: &Books<'_>, now: i64, zone: &str) -> EmergencyStatus {
+    let basis = income_basis(
+        books,
+        books.doc().emergency_fund.avg_months as usize,
+        now,
+        zone,
+    );
+    fund_status(
+        books,
+        basis,
+        |store_id, currency| interest_since(books, store_id, currency, now - YEAR_SECS, now),
+        now,
+        zone,
+    )
+}
+
+/// Interest booked into a store in `[from, to)`, in `currency`.
+fn interest_since(books: &Books<'_>, store_id: &str, currency: &str, from: i64, to: i64) -> Amount {
+    let book = books.rate_book();
+    books
+        .doc()
+        .transactions
+        .iter()
+        .filter(|tx| {
+            tx.meta()
+                .categories
+                .iter()
+                .any(|key| key == INTEREST_CATEGORY)
+        })
+        .filter_map(|tx| {
+            let secs = secs_or_now(&tx.meta().timestamp);
+            (secs >= from && secs < to).then_some((tx, secs))
+        })
+        .flat_map(|(tx, secs)| tx.legs().into_iter().map(move |leg| (leg, secs)))
+        .filter(|(leg, _)| leg.store_id == store_id && leg.amount.is_positive())
+        .filter_map(|(leg, secs)| book.convert(leg.amount, &leg.asset.symbol, currency, secs))
+        .fold(Amount::ZERO, |sum, value| sum + value)
+        .round(2)
 }

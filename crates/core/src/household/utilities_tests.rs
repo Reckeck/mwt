@@ -4,6 +4,7 @@
 
 use super::utilities::*;
 use crate::Amount;
+use crate::calendar::now_secs;
 use crate::error::Result;
 use crate::model::VaultDoc;
 use crate::model::planning::{MeterReading, UtilityItem, UtilityKind};
@@ -86,7 +87,7 @@ fn a_month_without_a_reading_bills_the_last_unpaid_one() {
         .unwrap();
     assert_eq!(draft.consumption, Some(amount("150")));
     // The month's bill picks up the same readings.
-    let bill = vault.utility_bill(&flat, "2026-03", "UTC").unwrap();
+    let bill = utility_bill(&vault.books(), &flat, "2026-03", "UTC", now_secs()).unwrap();
     let line = bill
         .lines
         .iter()
@@ -269,7 +270,7 @@ fn the_bill_estimates_an_unread_meter_and_compares_with_its_average() {
             .unwrap();
     }
     // April not read yet: the meter is estimated, the internet is fixed.
-    let bill = vault.utility_bill(&flat, "2026-04", "UTC").unwrap();
+    let bill = utility_bill(&vault.books(), &flat, "2026-04", "UTC", now_secs()).unwrap();
     let line = bill
         .lines
         .iter()
@@ -293,7 +294,7 @@ fn a_whole_bill_is_paid_at_once_and_linked_to_its_items() {
         .add_meter_reading(&meter.id, amount("1000"), "2026-01", None, None)
         .unwrap();
 
-    let bill = vault.utility_bill(&flat, "2026-02", "UTC").unwrap();
+    let bill = utility_bill(&vault.books(), &flat, "2026-02", "UTC", now_secs()).unwrap();
     assert_eq!(bill.lines.len(), 2);
     let meter_line = bill
         .lines
@@ -333,7 +334,7 @@ fn a_whole_bill_is_paid_at_once_and_linked_to_its_items() {
     assert_eq!(paid.len(), 2);
     assert!(paid.iter().all(|tx| tx.meta().utility_item_id.is_some()));
     // The comment no longer has to match: the link counts.
-    let after = vault.utility_bill(&flat, "2026-02", "UTC").unwrap();
+    let after = utility_bill(&vault.books(), &flat, "2026-02", "UTC", now_secs()).unwrap();
     let internet_line = after
         .lines
         .iter()
@@ -437,8 +438,7 @@ fn a_move_mid_month_bills_each_flat_from_its_own_readings() {
     // Before the month ends the new flat has only its start: nothing used yet.
     let line = |vault: &UnlockedVault, item: &UtilityItem| {
         let property = item.property_id.clone();
-        vault
-            .utility_bill(&property, "2026-10", "UTC")
+        utility_bill(&vault.books(), &property, "2026-10", "UTC", now_secs())
             .unwrap()
             .lines
             .into_iter()
@@ -662,9 +662,14 @@ fn a_two_rate_meter_reads_and_bills_per_zone() {
     assert_eq!(february.zones[0].consumption, Some(amount("200")));
 
     // February is unpaid: March's bill offers it, zone by zone.
-    let bill = vault
-        .utility_bill(&item.property_id, "2026-03", "UTC")
-        .unwrap();
+    let bill = utility_bill(
+        &vault.books(),
+        &item.property_id,
+        "2026-03",
+        "UTC",
+        now_secs(),
+    )
+    .unwrap();
     let line = &bill.lines[0];
     assert_eq!(line.amount, Some(amount("1600")));
     let zones: Vec<_> = line

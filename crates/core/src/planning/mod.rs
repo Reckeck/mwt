@@ -12,15 +12,18 @@ mod auto_reminders_tests;
 pub mod automation_card;
 #[cfg(test)]
 mod automation_card_tests;
+pub mod automation_plan;
 pub mod automations;
 #[cfg(test)]
 mod automations_tests;
 pub mod budget;
 #[cfg(test)]
 mod budget_tests;
+pub mod daily_budget;
 pub mod datasources;
 #[cfg(test)]
 mod datasources_tests;
+pub mod debt_load;
 pub mod emergency;
 #[cfg(test)]
 mod emergency_tests;
@@ -51,3 +54,4 @@ pub mod scenarios;
 #[cfg(test)]
 mod scenarios_tests;
 pub mod schedule;
+pub mod upcoming;

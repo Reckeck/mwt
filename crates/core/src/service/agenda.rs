@@ -68,7 +68,7 @@ impl UnlockedVault {
         /// What is coming up in the next `days` days, oldest first, plus rejected
         /// automation runs still waiting for a decision.
         pub fn upcoming(&self, days: u32, now: i64, zone: &str) -> Vec<UpcomingItem>
-            => crate::usecases::planning::agenda::upcoming;
+            => crate::planning::upcoming::upcoming @books;
     }
     // forward:end
 }

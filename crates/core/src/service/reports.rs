@@ -10,9 +10,7 @@ pub use crate::reports::overview::{
 };
 pub(crate) use crate::reports::overview::{Ctx, csv_text};
 
-use crate::Amount;
 use crate::error::Result;
-use crate::model::store::AssetRef;
 
 use super::UnlockedVault;
 use super::budget::Flow;
@@ -38,21 +36,4 @@ impl UnlockedVault {
             => crate::reports::overview::cashflow_report @books;
     }
     // forward:end
-}
-
-/// What the crypto module was worth at each cutoff in USD (`None`: no record that month) and
-/// whether it already counts a replayed wallet's coins. `CryptoHistory` and its readers are
-/// visible only inside `service`, so this adapter stays here until stream E opens them.
-pub(crate) fn crypto_module(
-    vault: &UnlockedVault,
-    cutoffs: &[i64],
-    in_scope: impl Fn(&str) -> bool,
-) -> (Vec<Option<Amount>>, impl Fn(&str, &AssetRef) -> bool) {
-    let history = vault.crypto_history(cutoffs, in_scope);
-    let values = (0..cutoffs.len())
-        .map(|index| history.value_usd(index))
-        .collect();
-    (values, move |store_id, asset| {
-        history.supersedes(store_id, asset)
-    })
 }

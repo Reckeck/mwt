@@ -1,7 +1,6 @@
 //! Shim of the `budget` area: the rules moved to `crate::planning::budget`, the scenarios and the
 //! flow queries to `crate::planning::flows` (spec core-strangler, D1).
 
-pub(crate) use crate::planning::budget::MonthAllowance;
 pub use crate::planning::budget::{
     BudgetDraft, BudgetStatus, DailyBudget, MIN_HISTORY_MONTHS, MonthAvg, MonthSummary,
 };
@@ -9,9 +8,8 @@ pub(crate) use crate::planning::flows::Flow;
 
 use std::collections::HashSet;
 
-use chrono::NaiveDate;
-
 use crate::Amount;
+#[cfg(test)]
 use crate::calendar::Calendar;
 use crate::error::Result;
 use crate::kernel::books::Books;
@@ -65,7 +63,7 @@ impl UnlockedVault {
             => crate::planning::budget::income_basis @books;
         /// How much can be spent today (plan §7.3), in the budget currency.
         pub fn daily_budget(&self, now: i64, zone: &str) -> DailyBudget
-            => crate::usecases::planning::budget::daily_budget;
+            => crate::planning::daily_budget::daily_budget @books;
     }
     // forward:end
 
@@ -80,15 +78,6 @@ impl UnlockedVault {
         /// rate (Currency-1 · 7, "Show").
         pub(crate) fn unpriced_tx_ids(&self) -> HashSet<String>
             => crate::usecases::planning::budget::unpriced_tx_ids @books;
-        /// The currency a store mostly holds, for terms entered without one.
-        pub(crate) fn store_currency(&self, store_id: &str) -> String
-            => crate::planning::budget::store_currency @books;
-        /// Planned income and mandatory spending of the month containing `date`.
-        pub(crate) fn month_plan(&self, cal: &Calendar, date: NaiveDate, currency: &str) -> (Amount, Amount)
-            => crate::usecases::planning::budget::month_plan_of;
-        /// The month-mode allowance of the month containing `date`.
-        pub(crate) fn month_allowance(&self, cal: &Calendar, date: NaiveDate, currency: &str, flows: &[Flow]) -> MonthAllowance
-            => crate::usecases::planning::budget::month_allowance_of;
     }
 
     /// [`Self::month_summary`] over the books of one request.

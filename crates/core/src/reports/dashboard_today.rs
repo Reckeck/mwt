@@ -7,10 +7,12 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use super::dashboard_tiles::net_worth_trend;
+use super::health::capital_health;
 use crate::Amount;
 use crate::calc::invest;
 use crate::calendar::{Calendar, clamp_day, first_of_month, month_key};
 use crate::error::{Error, Result};
+use crate::household::utilities::utility_bill;
 use crate::ipc_contract::Comparison;
 use crate::kernel::books::Books;
 use crate::model::planning::HealthColor;
@@ -18,8 +20,10 @@ use crate::model::store::StoreScope;
 use crate::model::vault::DashPeriod;
 use crate::money::tree::{find_store, resolve_scope};
 use crate::planning::agenda::UpcomingKind;
+use crate::planning::daily_budget::daily_budget;
 use crate::planning::goals::store_values_usd;
 use crate::planning::scenarios::{find_calc_scenario, planned_balance};
+use crate::planning::upcoming::upcoming;
 
 /// The strip lists at most this many things to do.
 pub const TODAY_TODOS: usize = 3;
@@ -172,7 +176,7 @@ pub(crate) fn all_today_todos(
         NaiveDate::parse_from_str(date, "%Y-%m-%d").is_ok_and(|day| day >= today && day <= horizon)
     };
     let mut todos = Vec::new();
-    for item in books.upcoming(TODAY_HORIZON_DAYS, now, zone) {
+    for item in upcoming(books, TODAY_HORIZON_DAYS, now, zone) {
         let kind = match item.kind {
             UpcomingKind::RejectedRun => TodayTodoKind::RejectedRun,
             UpcomingKind::UnconfirmedRun => TodayTodoKind::UnconfirmedRun,
@@ -282,7 +286,7 @@ fn overdue_utilities(
         if due >= today {
             continue;
         }
-        let Ok(bill) = books.utility_bill(&store.id, &month_key(today), zone) else {
+        let Ok(bill) = utility_bill(books, &store.id, &month_key(today), zone, now) else {
             continue;
         };
         let unpaid: Vec<_> = bill
@@ -313,14 +317,13 @@ fn overdue_utilities(
 /// Everything "Today" shows, in one request (plan H5).
 pub fn dashboard_today(books: &Books, period: DashPeriod, now: i64, zone: &str) -> DashboardToday {
     let trend = net_worth_trend(books, period, now, zone);
-    let budget = books.daily_budget(now, zone);
+    let budget = daily_budget(books, now, zone);
     let todos = all_today_todos(books, now, zone, Some(&budget.currency));
     DashboardToday {
         period,
         currency: trend.currency,
         net_worth: trend.change,
-        health: books
-            .capital_health(now, zone)
+        health: capital_health(books, now, zone)
             .ok()
             .map(|report| report.color),
         left_today: budget.left_today,

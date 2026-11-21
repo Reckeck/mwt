@@ -7,6 +7,7 @@ use crate::model::notify::NoticeRecord;
 pub use crate::model::notify::notice;
 use crate::model::vault::now_iso;
 use crate::planning::notifications as rules;
+use crate::planning::upcoming::upcoming;
 use crate::service::UnlockedVault;
 
 /// Mark notices read: the ones named, or all of them.
@@ -48,7 +49,7 @@ pub fn due_notices(
         rules::reminder_notices(vault.reminders_in(now, zone, ru), now, ru, &delivered_at);
     let lead = rules::shortfall_lead_days(&vault.doc);
     out.extend(rules::shortfall_notices(
-        vault.upcoming(lead, now, zone),
+        upcoming(&vault.books(), lead, now, zone),
         ru,
         &delivered_at,
     ));

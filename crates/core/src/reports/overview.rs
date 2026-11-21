@@ -29,7 +29,9 @@ pub(crate) use crate::money::rates::value_at;
 use crate::money::worth::FlowClass;
 use crate::planning::agenda::UpcomingItem;
 use crate::planning::budget::{budget_currency, manual_day_limit};
+use crate::planning::daily_budget::{month_allowance, month_plan};
 use crate::planning::flows::{Flow, flows_between, leg_value_in};
+use crate::planning::upcoming::upcoming;
 
 /// Longest range a report covers.
 pub const MAX_REPORT_MONTHS: usize = 120;
@@ -1023,7 +1025,7 @@ pub(crate) fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {
     // see it: an earlier point takes its value from the snapshots the
     // module wrote on every read (spec E8, `cryptotrack::totals`).
     let (module_values, module_supersedes) =
-        books.crypto_module(&cutoffs, |store_id| ctx.in_scope(store_id));
+        super::crypto_module::crypto_module(books, &cutoffs, |store_id| ctx.in_scope(store_id));
     // The current point is today's valuation, the same function and rates
     // as `net_worth_base`, so every screen shows one capital.
     let current = (ctx.scope.is_none() && ctx.currency.eq_ignore_ascii_case(base))
@@ -1472,7 +1474,7 @@ pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Resul
     let currency = budget_currency(books);
     let (from, to) = cal.month_bounds(first);
     let flows = flows_between(books, &cal, &currency, from, to);
-    let month = books.month_allowance(&cal, first, &currency, &flows);
+    let month = month_allowance(books, &cal, first, &currency, &flows);
     let planned = month.per_day.is_positive().then_some(month.per_day);
     let manual = manual_day_limit(books, &currency, now);
     let allowance = match (planned, manual) {
@@ -1503,7 +1505,7 @@ pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Resul
     // The running balance's pool. Mandatory spending does not count in it: only the
     // *planned* mandatory is set aside, so paying rent or a bill (above plan or with no
     // plan at all) never moves the balance; everyday spending alone draws it down.
-    let (_, planned_fixed) = books.month_plan(&cal, first, &currency);
+    let (_, planned_fixed) = month_plan(books, &cal, first, &currency);
     // It exists whenever the month has income, even when mandatory spending above
     // plan leaves no day allowance.
     let pool = (!by_limit && month.income.is_positive()).then_some(CalendarPool {
@@ -1623,8 +1625,7 @@ pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Resul
     }
     let upcoming = if end > today {
         let days_left = (end - today).num_days().max(0) as u32;
-        books
-            .upcoming(days_left, now, zone)
+        upcoming(books, days_left, now, zone)
             .into_iter()
             .filter(|item| {
                 calendar::parse_month(item.date.get(..7).unwrap_or_default()) == Some(first)

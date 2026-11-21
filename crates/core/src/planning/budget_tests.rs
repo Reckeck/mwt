@@ -1,6 +1,7 @@
 //! Tests of the budget area: the old inline tests (names and bodies unchanged).
 
 use super::budget::*;
+use super::daily_budget::daily_budget;
 use crate::Amount;
 use crate::model::planning::Schedule;
 use crate::model::planning::TransactionDraft;
@@ -194,13 +195,13 @@ fn month_mode_carries_what_was_left_and_resets_next_month() {
         .add_transaction(spend(&card, "180", "2026-03-02T12:00:00Z"))
         .unwrap();
 
-    let day3 = vault.daily_budget(secs("2026-03-03T12:00:00Z"), "UTC");
+    let day3 = daily_budget(&vault.books(), secs("2026-03-03T12:00:00Z"), "UTC");
     assert_eq!(day3.per_day, amount("100"));
     // +60 left on the 1st, −80 overspent on the 2nd.
     assert_eq!(day3.carry, amount("-20"));
     assert_eq!(day3.available, amount("80"));
 
-    let april = vault.daily_budget(secs("2026-04-01T12:00:00Z"), "UTC");
+    let april = daily_budget(&vault.books(), secs("2026-04-01T12:00:00Z"), "UTC");
     assert_eq!(april.carry, Amount::ZERO);
     assert_eq!(april.income, Amount::ZERO);
 }
@@ -227,7 +228,7 @@ fn planned_income_counts_until_the_salary_arrives_and_savings_rate_applies() {
             property_id: None,
         })
         .unwrap();
-    let early = vault.daily_budget(secs("2026-06-03T12:00:00Z"), "UTC");
+    let early = daily_budget(&vault.books(), secs("2026-06-03T12:00:00Z"), "UTC");
     assert_eq!(early.income, amount("3000"));
     assert_eq!(early.savings_plan, amount("300"));
     assert_eq!(early.per_day, amount("90"));
@@ -236,7 +237,7 @@ fn planned_income_counts_until_the_salary_arrives_and_savings_rate_applies() {
     vault
         .add_transaction(earn(&card, "4500", "2026-06-04T08:00:00Z"))
         .unwrap();
-    let after = vault.daily_budget(secs("2026-06-05T12:00:00Z"), "UTC");
+    let after = daily_budget(&vault.books(), secs("2026-06-05T12:00:00Z"), "UTC");
     assert_eq!(after.income, amount("4500"));
 }
 
@@ -248,7 +249,7 @@ fn until_income_mode_without_salary_spreads_to_month_end() {
         .add_transaction(earn(&card, "1100", "2026-03-01T08:00:00Z"))
         .unwrap();
     // The 21st: 11 days left in March.
-    let today = vault.daily_budget(secs("2026-03-21T12:00:00Z"), "UTC");
+    let today = daily_budget(&vault.books(), secs("2026-03-21T12:00:00Z"), "UTC");
     assert_eq!(today.days, 11);
     assert_eq!(today.per_day, amount("100"));
     assert_eq!(today.next_income, None);
@@ -267,7 +268,7 @@ fn spending_off_budget_stores_does_not_touch_the_daily_budget() {
     vault
         .add_transaction(spend(&exchange, "300", "2026-03-01T12:00:00Z"))
         .unwrap();
-    let day = vault.daily_budget(secs("2026-03-01T13:00:00Z"), "UTC");
+    let day = daily_budget(&vault.books(), secs("2026-03-01T13:00:00Z"), "UTC");
     assert_eq!(day.spent_today, Amount::ZERO);
 }
 
@@ -281,12 +282,12 @@ fn the_day_is_cut_at_local_midnight() {
     vault
         .add_transaction(spend(&card, "50", "2026-03-01T20:00:00Z"))
         .unwrap();
-    let utc = vault.daily_budget(secs("2026-03-01T21:00:00Z"), "UTC");
-    let bangkok = vault.daily_budget(secs("2026-03-01T21:00:00Z"), "Asia/Bangkok");
+    let utc = daily_budget(&vault.books(), secs("2026-03-01T21:00:00Z"), "UTC");
+    let bangkok = daily_budget(&vault.books(), secs("2026-03-01T21:00:00Z"), "Asia/Bangkok");
     assert_eq!(utc.spent_today, amount("50"));
     assert_eq!(bangkok.date, "2026-03-02");
     assert_eq!(bangkok.spent_today, amount("50"));
-    let bangkok_first = vault.daily_budget(secs("2026-03-01T15:00:00Z"), "Asia/Bangkok");
+    let bangkok_first = daily_budget(&vault.books(), secs("2026-03-01T15:00:00Z"), "Asia/Bangkok");
     assert_eq!(bangkok_first.spent_today, Amount::ZERO);
 }
 

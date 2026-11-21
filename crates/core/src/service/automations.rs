@@ -62,7 +62,7 @@ impl UnlockedVault {
             => crate::usecases::planning::automations::confirm_estimated_amount;
         /// Run history, newest planned date first.
         pub fn automation_runs(&self, automation_id: Option<&str>) -> Vec<AutomationRun>
-            => crate::usecases::planning::automation_rules::automation_runs @doc;
+            => crate::planning::automation_plan::automation_runs @books;
     }
     // forward:end
 
@@ -86,14 +86,13 @@ impl UnlockedVault {
         after: i64,
         until: i64,
     ) -> Vec<(i64, Transaction)> {
-        crate::usecases::planning::automation_rules::automation_occurrences(
-            automation, cal, after, until,
-        )
+        crate::planning::automation_plan::automation_occurrences(automation, cal, after, until)
     }
 
     // Not in the baseline (crate-private), so outside the regenerated block.
     forward! {
         /// Quantity of an asset on one store from transactions up to `secs`.
+        #[cfg(test)]
         pub(crate) fn balance_at(&self, store_id: &str, asset_key: &str, secs: i64) -> Amount
             => crate::planning::automations::balance_at @doc;
         /// Whether the source of a transaction can pay for it at `secs`; `None` when it can.

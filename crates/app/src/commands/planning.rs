@@ -23,7 +23,10 @@ use trade_core::model::planning::{
 use trade_core::model::store::Store;
 use trade_core::model::transaction::Transaction;
 use trade_core::money::interest as interest_reads;
-use trade_core::planning::{agenda as agenda_reads, budget as budget_reads, goals as goal_reads};
+use trade_core::planning::{
+    agenda as agenda_reads, budget as budget_reads, daily_budget as daily_reads,
+    goals as goal_reads, upcoming as upcoming_reads,
+};
 use trade_core::service::{
     AutomationSimulation, BudgetStatus, CashbackReport, DailyBudget, DepositReport,
     EmergencyStatus, GoalCalendar, GoalDeleted, GoalProgress, InterestTaxReport, MonthSummary,
@@ -217,7 +220,7 @@ pub async fn get_daily_budget(
 ) -> Result<DailyBudget, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        Ok(budget::daily_budget(vault, now_secs(), &zone))
+        Ok(daily_reads::daily_budget(&vault.books(), now_secs(), &zone))
     })
 }
 
@@ -324,7 +327,7 @@ pub async fn emergency_fund_get(
 ) -> Result<EmergencyStatus, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        Ok(emergency::emergency_fund_status(
+        Ok(trade_core::planning::emergency::emergency_fund_status(
             &vault.books(),
             now_secs(),
             &zone,
@@ -474,8 +477,8 @@ pub async fn get_upcoming(
 ) -> Result<Vec<UpcomingItem>, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        Ok(agenda::upcoming(
-            vault,
+        Ok(upcoming_reads::upcoming(
+            &vault.books(),
             days.unwrap_or(30).min(366),
             now_secs(),
             &zone,
@@ -725,7 +728,13 @@ pub async fn get_utility_bill(
         )
     });
     with_vault(&state, |vault| {
-        utilities::utility_bill(vault, &property_id, &period, &zone)
+        trade_core::household::utilities::utility_bill(
+            &vault.books(),
+            &property_id,
+            &period,
+            &zone,
+            now_secs(),
+        )
     })
 }
 
