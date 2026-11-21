@@ -27,6 +27,8 @@ pub mod testkit;
 pub mod txinfo;
 pub mod updates;
 pub mod usecases;
+#[cfg(test)]
+mod vault_facade_tests;
 pub mod vault_io;
 pub mod workflow;
 

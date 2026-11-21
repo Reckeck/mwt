@@ -41,9 +41,12 @@ pub trait SyncTap: Send + Sync {
     fn changed(&self, keys: &[String]);
 }
 
-impl<T: SyncTap + ?Sized> crate::kernel::events::ChangeSink for T {
+/// A [`SyncTap`] as the kernel's change sink (the kernel crate cannot name `SyncTap`).
+struct TapSink(Arc<dyn SyncTap>);
+
+impl crate::kernel::events::ChangeSink for TapSink {
     fn changed(&self, keys: &[String]) {
-        SyncTap::changed(self, keys);
+        self.0.changed(keys);
     }
 }
 
@@ -271,7 +274,8 @@ impl UnlockedVault {
     pub fn set_sync_tap(&mut self, tap: Option<Arc<dyn SyncTap>>) {
         if !self.sandbox {
             self.sync_tap = tap.clone();
-            self.session.set_change_sink(tap);
+            self.session
+                .set_change_sink(tap.map(|tap| Arc::new(TapSink(tap))));
         }
     }
 
@@ -1579,8 +1583,8 @@ mod tests {
     #[test]
     fn a_sync_tap_is_a_change_sink() {
         use crate::kernel::events::ChangeSink;
-        let tap = Announced::default();
-        ChangeSink::changed(&tap, &["a:1".to_string()]);
+        let tap = Arc::new(Announced::default());
+        ChangeSink::changed(&TapSink(tap.clone()), &["a:1".to_string()]);
         assert_eq!(tap.0.lock().unwrap().clone(), vec!["a:1".to_string()]);
     }
 

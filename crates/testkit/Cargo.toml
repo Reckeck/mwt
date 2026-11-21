@@ -1,0 +1,22 @@
+[package]
+name = "mwt-testkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker test kit: property strategies, an in-memory persistence and model-only record builders (dev-only: no crate lists it under [dependencies]; depends on mwt-base, mwt-model and mwt-vault)"
+
+[lints]
+workspace = true
+
+[dependencies]
+mwt-base = { path = "../base" }
+mwt-model = { path = "../model" }
+mwt-vault = { path = "../vault" }
+chrono.workspace = true
+proptest.workspace = true
+rust_decimal.workspace = true
+time.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

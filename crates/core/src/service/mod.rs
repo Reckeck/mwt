@@ -2150,8 +2150,14 @@ mod tests {
 
     const V4_PASSWORD: &str = "v4-fixture-password";
     const V4_FIXTURES: [(&str, &[u8]); 2] = [
-        ("json", include_bytes!("../storage/fixtures/v4.json.wallet")),
-        ("pack", include_bytes!("../storage/fixtures/v4.pack.wallet")),
+        (
+            "json",
+            include_bytes!("../../../vault/src/storage/fixtures/v4.json.wallet"),
+        ),
+        (
+            "pack",
+            include_bytes!("../../../vault/src/storage/fixtures/v4.pack.wallet"),
+        ),
     ];
 
     fn v4_vault_at(dir: &std::path::Path, bytes: &[u8]) -> PathBuf {
@@ -2183,8 +2189,10 @@ mod tests {
             assert_eq!(container_of(&path), 2, "{name}");
             let (reread, _) = VaultFile::open(&path, V4_PASSWORD).unwrap();
             assert_eq!(reread.version, crate::VAULT_FORMAT_VERSION, "{name}");
-            let expected: serde_json::Value =
-                serde_json::from_str(include_str!("../storage/fixtures/v4.expected.json")).unwrap();
+            let expected: serde_json::Value = serde_json::from_str(include_str!(
+                "../../../vault/src/storage/fixtures/v4.expected.json"
+            ))
+            .unwrap();
             let keys = &expected["exchanges"]["bybit"];
             assert!(
                 keys.as_array().is_some_and(|list| !list.is_empty()),

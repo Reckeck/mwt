@@ -10,8 +10,8 @@ description = "Multi Wallet Tracker core: domain model, encrypted vault, pricing
 workspace = true
 
 [features]
-# Test kit (`crate::testkit`); becomes its own crate later.
-testkit = []
+# Test kit (`crate::testkit`): the facade module plus a re-export of the dev-only crate `mwt-testkit`.
+testkit = ["dep:mwt-testkit", "mwt-vault/testing"]
 # Forwarded to every extracted crate that has them (`mwt-base`, `mwt-crypto` and `mwt-model` are always built with them here).
 ts = ["mwt-model/ts"]
 schema = ["mwt-model/schema"]
@@ -25,6 +25,10 @@ mwt-model = { path = "../model", features = ["ts", "schema"] }
 mwt-base = { path = "../base", features = ["ts", "schema"] }
 # The network layer: pricing, exchanges, data sources, market, updates, external links.
 mwt-net = { path = "../net" }
+# The vault: file codec, kernel (`Session`, `Tx`, `Collection<T>`), vault files and copies, frozen v1-v4 schemas.
+mwt-vault = { path = "../vault" }
+# Test support: reached only through the `testkit` feature (and the dev-dependency below); no other crate lists it.
+mwt-testkit = { path = "../testkit", optional = true }
 # `SecurityLevel` / `RaiseStage` are TS types of the IPC contract.
 mwt-crypto = { path = "../crypto", features = ["ts"] }
 serde.workspace = true
@@ -52,6 +56,8 @@ spake2.workspace = true
 serde_bytes.workspace = true
 
 [dev-dependencies]
+mwt-vault = { path = "../vault", features = ["testing"] }
+mwt-testkit = { path = "../testkit" }
 mwt-crypto = { path = "../crypto", features = ["ts", "testing"] }
 tempfile = "3"
 insta.workspace = true

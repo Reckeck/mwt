@@ -1,75 +1,17 @@
 //! Test kit: a vault that lives in memory. No Argon2 runs and no file is
 //! created, so a test that only needs a document is fast. Compiled under
 //! `cfg(any(test, feature = "testkit"))` only.
+//!
+//! The model-only part (properties, builders, `InMemoryPersistence`, `FixedClock`) is the
+//! dev-only crate `mwt-testkit`, re-exported here so the old `testkit::*` paths keep
+//! working; what needs `UnlockedVault` stays in this module.
 
-#[cfg(test)]
-pub mod builders;
-#[cfg(test)]
-pub mod props;
+use std::sync::Arc;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
-
-use crate::error::Result;
-use crate::kernel::persistence::{Persistence, SealedWrite};
 use crate::model::VaultDoc;
-use crate::service::{Flushed, UnlockedVault};
+use crate::service::UnlockedVault;
 
-/// The money-blockers' clock: the one from `crate::time`, not a copy.
-pub use crate::time::FixedClock;
-
-/// A store that keeps every snapshot it is given and writes no file. Like the
-/// file store it drops a job older than the newest written.
-#[derive(Default)]
-pub struct InMemoryPersistence {
-    writes: AtomicUsize,
-    snapshots: Mutex<Vec<Vec<u8>>>,
-}
-
-impl InMemoryPersistence {
-    /// How many snapshots were written.
-    pub fn write_count(&self) -> usize {
-        self.writes.load(Ordering::SeqCst)
-    }
-
-    /// The encoded snapshots, oldest first.
-    pub fn snapshots(&self) -> Vec<Vec<u8>> {
-        self.snapshots
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
-    }
-}
-
-impl Persistence for InMemoryPersistence {
-    fn write(&self, job: SealedWrite) -> Result<Flushed> {
-        let mut newest = job.gate.lock().unwrap_or_else(PoisonError::into_inner);
-        let mut sealed = None;
-        if job.revision > *newest {
-            let bytes = job.plaintext.to_vec();
-            self.snapshots
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .push(bytes.clone());
-            self.writes.fetch_add(1, Ordering::SeqCst);
-            *newest = job.revision;
-            sealed = Some(bytes);
-        }
-        Ok(Flushed {
-            path: job.path,
-            revision: job.revision,
-            sealed,
-        })
-    }
-
-    fn writes(&self) -> bool {
-        true
-    }
-
-    fn has_mirror(&self) -> bool {
-        false
-    }
-}
+pub use mwt_testkit::*;
 
 impl UnlockedVault {
     /// A vault over `doc` kept in memory: plain key, detached lock, saves
@@ -127,9 +69,7 @@ mod tests {
                 .any(|tx| tx.meta().id == added.meta().id)
         );
         let last = store.snapshots().pop().unwrap();
-        let doc = crate::storage::decode_versioned(&last, vault.fmt)
-            .unwrap()
-            .doc;
+        let doc = crate::storage::decode(&last, vault.fmt).unwrap();
         assert!(
             doc.transactions
                 .iter()
@@ -146,5 +86,19 @@ mod tests {
         assert_eq!(kit.now_unix(), own.now_unix());
         let same: crate::time::FixedClock = FixedClock(1);
         assert_eq!(same.0, 1);
+    }
+
+    #[test]
+    fn built_records_sit_in_an_in_memory_vault() {
+        let wallet = builders::store("Bank", StoreKind::Bank);
+        let income = builders::topup(&wallet.id, "25");
+        let mut doc = VaultDoc::default();
+        doc.stores.push(wallet);
+        doc.transactions.push(income);
+        doc.goals.push(builders::goal("Trip", "500"));
+        let vault = UnlockedVault::in_memory(doc);
+        assert_eq!(vault.doc.stores.len(), 1);
+        assert_eq!(vault.doc.transactions.len(), 1);
+        assert_eq!(vault.doc.goals[0].name, "Trip");
     }
 }
