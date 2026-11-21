@@ -3008,6 +3008,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "mwt-macros",
  "rust_decimal",
  "schemars 1.2.3",
  "serde",
@@ -3016,6 +3017,16 @@ dependencies = [
  "time",
  "ts-rs",
  "zeroize",
+]
+
+[[package]]
+name = "mwt-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.119",
 ]
 
 [[package]]

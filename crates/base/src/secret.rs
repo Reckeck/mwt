@@ -43,6 +43,7 @@ impl fmt::Debug for Hidden {
 }
 
 /// A value that is wiped on drop and prints as `Secret(..)`.
+#[mwt_macros::dto(manual(serde, ts, schema))]
 #[derive(Clone, PartialEq, Eq)]
 pub struct Secret<T: Zeroize>(Zeroizing<T>);
 

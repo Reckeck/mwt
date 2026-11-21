@@ -1,0 +1,22 @@
+[package]
+name = "mwt-macros"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The #[dto] attribute: serde derives plus feature-gated ts-rs / schemars derives (syn, quote, proc-macro2 only)"
+publish = false
+
+[lib]
+proc-macro = true
+
+[lints]
+workspace = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
+
+[dev-dependencies]
+serde.workspace = true
