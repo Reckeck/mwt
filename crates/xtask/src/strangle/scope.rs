@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 
 use super::Workspace;
-use super::home::{allowed_files, core_dir};
+use super::home::{allowed_files, core_dir, group_dir};
 use super::map::{ExtraStub, Foundation};
 
 /// The findings for `changed`: every file no task allows, and a diff that no single task covers.
@@ -57,13 +57,13 @@ impl<'run> Owners<'run> {
         scope.extend(
             map.areas
                 .iter()
-                .map(|area| format!("{core}/{}/", area.group)),
+                .map(|area| format!("{}/", group_dir(map, &area.group))),
         );
         scope.extend(
             map.areas
                 .iter()
                 .flat_map(|area| area.homes.values())
-                .map(|group| format!("{core}/{group}/")),
+                .map(|group| format!("{}/", group_dir(map, group))),
         );
         scope.extend(map.guarded.iter().cloned());
         Self {
@@ -132,6 +132,22 @@ mod tests {
 
     fn changed(paths: &[&str]) -> Vec<String> {
         paths.iter().map(|path| (*path).to_string()).collect()
+    }
+
+    #[test]
+    fn a_sync_crate_file_with_another_area_is_red() {
+        let found = findings(
+            &real_workspace(),
+            &changed(&[
+                "crates/sync/src/sync_ids.rs",
+                "crates/core/src/service/loyalty.rs",
+            ]),
+            None,
+        );
+        assert!(
+            found.iter().any(|line| line.contains("no single task")),
+            "{FIX_MAP}: {found:?}"
+        );
     }
 
     #[test]

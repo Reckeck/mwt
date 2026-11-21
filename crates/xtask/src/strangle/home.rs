@@ -129,17 +129,26 @@ pub(super) fn core_dir(map: &Map) -> String {
         .map_or_else(String::new, |dir| dir.to_string_lossy().into_owned())
 }
 
+/// The directory of a group's modules: the `group_dirs` entry of its top segment (`sync/repair`
+/// resolves under `sync`), else `<core src>/<group>`.
+pub(super) fn group_dir(map: &Map, group: &str) -> String {
+    let (top, rest) = group
+        .split_once('/')
+        .map_or((group, None), |(top, rest)| (top, Some(rest)));
+    match (map.group_dirs.get(top), rest) {
+        (Some(dir), Some(rest)) => format!("{dir}/{rest}"),
+        (Some(dir), None) => dir.clone(),
+        (None, _) => format!("{}/{group}", core_dir(map)),
+    }
+}
+
 pub fn homes(map: &Map, area: &Area) -> Vec<Home> {
     let core = core_dir(map);
     stems(area)
         .into_iter()
         .map(|stem| {
             let group = area.homes.get(&stem).unwrap_or(&area.group).clone();
-            let group_dir = map
-                .group_dirs
-                .get(&group)
-                .cloned()
-                .unwrap_or_else(|| format!("{core}/{group}"));
+            let group_dir = group_dir(map, &group);
             Home {
                 source: source_of(area, &stem),
                 group,
@@ -254,6 +263,19 @@ mod tests {
         assert!(
             home.scenario_file()
                 .starts_with("crates/core/src/usecases/")
+        );
+    }
+
+    #[test]
+    fn a_nested_group_resolves_under_its_top_segment_dir() {
+        let map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
+        assert_eq!(group_dir(&map, "sync"), "crates/sync/src");
+        assert_eq!(group_dir(&map, "sync/repair"), "crates/sync/src/repair");
+        let area = &map.areas[map.area_index("sync_repair").expect(FIX_MAP)];
+        let home = homes(&map, area).remove(0);
+        assert_eq!(
+            home.pure_file(),
+            format!("crates/sync/src/repair/{}.rs", home.stem)
         );
     }
 }
