@@ -3020,6 +3020,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-crypto"
+version = "0.1.0"
+dependencies = [
+ "aes 0.9.4",
+ "argon2",
+ "blake2 0.11.0",
+ "chacha20poly1305 0.11.0",
+ "hmac 0.13.0",
+ "mwt-base",
+ "rand 0.10.4",
+ "serde",
+ "sha2 0.11.1",
+ "tempfile",
+ "ts-rs",
+ "zeroize",
+]
+
+[[package]]
 name = "mwt-macros"
 version = "0.1.0"
 dependencies = [
@@ -6127,18 +6145,16 @@ dependencies = [
 name = "trade-core"
 version = "0.1.0"
 dependencies = [
- "aes 0.9.4",
- "argon2",
  "base64 0.23.1",
  "blake2 0.11.0",
  "calamine",
- "chacha20poly1305 0.11.0",
  "chrono",
  "chrono-tz",
  "csv",
  "ego-tree",
  "hmac 0.13.0",
  "mwt-base",
+ "mwt-crypto",
  "rand 0.10.4",
  "regex",
  "reqwest 0.12.28",

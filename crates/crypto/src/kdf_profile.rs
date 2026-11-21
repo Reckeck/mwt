@@ -11,9 +11,9 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::crypto::header::VaultHeader;
-use crate::crypto::{self, KDF_ITERS, KDF_MEM_KIB, KDF_PAR, SALT_LEN};
-use crate::error::{Error, Result};
+use crate::header::VaultHeader;
+use crate::{KDF_ITERS, KDF_MEM_KIB, KDF_PAR, SALT_LEN};
+use mwt_base::error::{Error, Result};
 
 const MIB: u32 = 1024;
 const GIB: u32 = 1024 * MIB;
@@ -205,7 +205,7 @@ impl KdfProfile {
 
 fn time_one_derivation(kdf: &KdfParams) -> Result<Duration> {
     let started = Instant::now();
-    crypto::derive_key(b"calibration", &[0u8; SALT_LEN], kdf)?;
+    crate::derive_key(b"calibration", &[0u8; SALT_LEN], kdf)?;
     Ok(started.elapsed())
 }
 

@@ -4,10 +4,10 @@
 
 use super::format::SnapshotFormat;
 use crate::VAULT_MAGIC;
-use crate::crypto::kdf_profile::KdfParams;
-use crate::crypto::level::SecurityLevel;
-use crate::crypto::{NONCE_LEN, SALT_LEN};
-use crate::error::{Error, Result};
+use crate::kdf_profile::KdfParams;
+use crate::level::SecurityLevel;
+use crate::{NONCE_LEN, SALT_LEN};
+use mwt_base::error::{Error, Result};
 
 /// Fixed header length excluding the 8-byte magic prefix.
 /// 4(version)+1(kdf)+4(mem)+4(iters)+1(par)+16(salt)+24(nonce)+1(fmt) = 55

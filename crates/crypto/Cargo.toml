@@ -1,0 +1,33 @@
+[package]
+name = "mwt-crypto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker crypto: vault container codec, key derivation, AEAD seal and open, KDF profiles (depends on mwt-base only)"
+
+[lints]
+workspace = true
+
+[features]
+# `ts-rs` derive of `SecurityLevel` / `RaiseStage`; off by default, `trade-core` turns it on.
+ts = ["dep:ts-rs"]
+
+# Test support (`random_header`, `seal_plain_in_container`) for the tests of `trade-core`.
+testing = []
+
+[dependencies]
+mwt-base = { path = "../base" }
+serde.workspace = true
+zeroize.workspace = true
+argon2.workspace = true
+chacha20poly1305.workspace = true
+aes.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+blake2.workspace = true
+rand.workspace = true
+ts-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = "3"

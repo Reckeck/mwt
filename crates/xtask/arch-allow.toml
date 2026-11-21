@@ -3,10 +3,6 @@
 # A back edge outside this list fails with file:line; an entry that matches nothing fails too: delete it.
 # To allow a new edge, add an entry with `until` and a reason in the PR.
 allow = [
-    { from = "crypto/format.rs", to = "model", until = "T5", reason = "false edge: `crate::error` now resolves through the facade re-export, which the scanner reads as `model`; the file moves to mwt-crypto in T5 and names mwt-base directly" },
-    { from = "crypto/header.rs", to = "model", until = "T5", reason = "false edge: `crate::error` now resolves through the facade re-export, which the scanner reads as `model`; the file moves to mwt-crypto in T5 and names mwt-base directly" },
-    { from = "crypto/kdf_profile.rs", to = "model", until = "T5", reason = "false edge: `crate::error` now resolves through the facade re-export, which the scanner reads as `model`; the file moves to mwt-crypto in T5 and names mwt-base directly" },
-    { from = "crypto/mod.rs", to = "model", until = "T5", reason = "false edge: `crate::error` now resolves through the facade re-export, which the scanner reads as `model`; the file moves to mwt-crypto in T5 and names mwt-base directly" },
     { from = "cryptotrack/exchange_import.rs", to = "exchange", until = "T20", reason = "cryptotrack may use money, model and base only; the exchange path moves to model, the facade adapters or net" },
     { from = "cryptotrack/exchange_import.rs", to = "kernel", until = "T20", reason = "cryptotrack may use money, model and base only; the kernel path moves to model, the facade adapters or net" },
     { from = "cryptotrack/exchange_sync.rs", to = "exchange", until = "T20", reason = "cryptotrack may use money, model and base only; the exchange path moves to model, the facade adapters or net" },
@@ -22,7 +18,6 @@ allow = [
     { from = "cryptotrack/service/totals.rs", to = "exchange", until = "T20", reason = "cryptotrack may use money, model and base only; the exchange path moves to model, the facade adapters or net" },
     { from = "cryptotrack/service/totals.rs", to = "kernel", until = "T20", reason = "cryptotrack may use money, model and base only; the kernel path moves to model, the facade adapters or net" },
     { from = "cryptotrack/sources/bybit.rs", to = "exchange", until = "T20", reason = "cryptotrack may use money, model and base only; the exchange path moves to model, the facade adapters or net" },
-    { from = "household/attachments.rs", to = "crypto", until = "T15", reason = "household may use money, model and base only; the crypto path is replaced by model or base items" },
     { from = "household/contacts.rs", to = "kernel", until = "T8", reason = "Books moves to money/books.rs, so this path becomes a legal household -> money one" },
     { from = "household/debts.rs", to = "kernel", until = "T8", reason = "Books moves to money/books.rs, so this path becomes a legal household -> money one" },
     { from = "household/loyalty.rs", to = "kernel", until = "T8", reason = "Books moves to money/books.rs, so this path becomes a legal household -> money one" },
@@ -42,7 +37,6 @@ allow = [
     { from = "ipc_contract.rs", to = "updates", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach updates" },
     { from = "ipc_contract.rs", to = "vault_io", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach vault_io" },
     { from = "ipc_contract/events.rs", to = "kernel", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach kernel" },
-    { from = "ipc_contract/security.rs", to = "crypto", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach crypto" },
     { from = "kernel/books.rs", to = "money", until = "T8", reason = "Books computes the shared-event ratios and extras through money::shared_ratios (T33) until the kernel is re-layered" },
     { from = "kernel/books.rs", to = "service", until = "T8", reason = "the kernel still calls service while the write path moves out of it" },
     { from = "kernel/persistence.rs", to = "service", until = "T8", reason = "the kernel still calls service while the write path moves out of it" },

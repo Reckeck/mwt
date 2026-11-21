@@ -4,7 +4,6 @@
 
 pub mod app_dirs;
 pub mod appconfig;
-pub mod crypto;
 pub mod cryptotrack;
 pub mod datasource;
 pub mod exchange;
@@ -36,24 +35,11 @@ pub use mwt_base::{
     Amount, Error, Result, amount, calc, calendar, error, limits, routes, secret, time,
     utilities_formula,
 };
-pub use storage::{SnapshotFormat, VaultFile};
-
-/// Version of the encrypted *container* layout: magic, header fields, KDF
-/// parameters and cipher, and the one number that tells an old payload from a
-/// new one.
-///
-/// 1: the files of every build before the format reset of 2026-11-19; the
-/// payload `version` there counts 1 to 4. 2: every file written since; the
-/// payload `version` counts again from 1. The reader accepts both (container 1
-/// only for the one-time transition of a payload v4, see
-/// `storage::decode_file`); every write is container 2. A build that
-/// predates the reset refuses a container 2 file at the header, so it cannot
-/// misread a new payload v1 as an old one.
-pub const VAULT_CONTAINER_VERSION: u32 = 2;
-
-/// The container version of the files before the format reset; read, never
-/// written.
-pub const VAULT_LEGACY_CONTAINER_VERSION: u32 = 1;
+pub use mwt_crypto as crypto;
+pub use mwt_crypto::{
+    SnapshotFormat, VAULT_CONTAINER_VERSION, VAULT_LEGACY_CONTAINER_VERSION, VAULT_MAGIC,
+};
+pub use storage::VaultFile;
 
 /// Version of the plaintext *payload* schema (`VaultDoc`), stored in the
 /// document's own `version` field. It is read together with the container
@@ -70,9 +56,7 @@ pub const VAULT_LEGACY_CONTAINER_VERSION: u32 = 1;
 /// Note this is unrelated to [`VAULT_CONTAINER_VERSION`], which versions the
 /// encrypted envelope and only moves when the on-disk bytes change.
 pub const VAULT_FORMAT_VERSION: u32 = 1;
-/// Magic bytes prefix of a vault file. Kept from the TradeApp days: changing
-/// them would make every existing vault unreadable.
-pub const VAULT_MAGIC: &[u8; 8] = b"TRDWVLT\x00";
+
 #[cfg(test)]
 mod base_facade_tests {
     //! The paths of `mwt-base` that other modules of the facade still reach: the
@@ -103,5 +87,21 @@ mod base_facade_tests {
             time::date_secs(day)
         );
         assert_eq!(crate::cryptotrack::prices::date_ts(day), time::date_ts(day));
+    }
+}
+
+#[cfg(test)]
+mod crypto_facade_tests {
+    //! The paths of `mwt-crypto` that `ipc_contract` still names.
+
+    use crate::crypto::level;
+    use crate::ipc_contract::security;
+
+    #[test]
+    fn security_types_keep_their_old_paths() {
+        let security_level: level::SecurityLevel = security::SecurityLevel::Pin;
+        let stage: level::RaiseStage = security::RaiseStage::Verify;
+        assert_eq!(security_level, level::SecurityLevel::Pin);
+        assert_eq!(stage, level::RaiseStage::Verify);
     }
 }

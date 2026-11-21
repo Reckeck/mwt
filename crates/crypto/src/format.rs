@@ -1,15 +1,15 @@
 //! The snapshot payload encodings a vault container can carry.
 
 use super::header::VaultHeader;
-use crate::error::Error;
+use mwt_base::error::Error;
 
 /// The last release that still reads the formats of before the reset; the
 /// refusal names it. Fixed at release time.
-pub(crate) const LAST_LEGACY_BUILD: &str = "Multi Wallet Tracker 0.X.Y";
+pub const LAST_LEGACY_BUILD: &str = "Multi Wallet Tracker 0.X.Y";
 
 /// The refusal of a file in a format this build no longer reads (D6): the
-/// format number comes from the payload when it can be read.
-pub(crate) fn legacy_refusal(version: Option<u32>, encoding: &str) -> Error {
+/// format number comes from the payload when it can be read. Used by `storage`.
+pub fn legacy_refusal(version: Option<u32>, encoding: &str) -> Error {
     let number = version.map_or_else(
         || "an unknown format".to_owned(),
         |found| format!("format {found}"),
