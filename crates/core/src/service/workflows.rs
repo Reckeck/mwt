@@ -143,7 +143,7 @@ impl UnlockedVault {
         /// The balance of an account with its sub-accounts: of one asset, or the
         /// whole value in the base currency.
         pub(crate) fn wf_balance(&self, store_id: &str, asset: Option<&AssetRef>) -> std::result::Result<WfValue, String>
-            => crate::workflow::service::vars::balance @books;
+            => crate::usecases::workflow::vars::balance @books;
         /// Price of one unit of an asset in a currency.
         pub(crate) fn wf_price(&self, asset: &AssetRef, currency: &str, secs: i64) -> Option<Amount>
             => crate::workflow::service::vars::price @books;
@@ -158,7 +158,7 @@ impl UnlockedVault {
         /// Live accounts under a wallet, or every live wallet: id, name and value
         /// in the base currency.
         pub(crate) fn wf_accounts(&self, parent: Option<&str>) -> Vec<(String, String, Amount)>
-            => crate::workflow::service::vars::accounts @books;
+            => crate::usecases::workflow::vars::accounts @books;
         /// What an operation takes out of an account, in the base currency.
         pub(crate) fn wf_outflow_base(&self, tx: &Transaction) -> Amount
             => crate::usecases::workflow::runs::wf_outflow_base @books;

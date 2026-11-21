@@ -14,7 +14,7 @@ use crate::model::vault::VaultDoc;
 use crate::money::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratios};
 use crate::vault_io::device_secrets::DeviceSecrets;
 
-use crate::service::{MonthSummary, RateBook, StoreOverview, UnlockedVault};
+use crate::service::{MonthSummary, RateBook, UnlockedVault};
 
 #[cfg(test)]
 thread_local! {
@@ -136,20 +136,6 @@ impl Books<'_> {
         self.vault.device_secrets_for_request()
     }
 
-    /// The store and all stores below it.
-    pub(crate) fn subtree_ids(&self, root_id: &str) -> Vec<String> {
-        self.vault.subtree_ids(root_id)
-    }
-
-    /// One store with its positions and values.
-    pub(crate) fn store_overview(
-        &self,
-        store_id: &str,
-        include_children: bool,
-    ) -> Result<StoreOverview> {
-        self.vault.store_overview(store_id, include_children)
-    }
-
     /// The budget of one month over this context.
     pub(crate) fn month_summary_in(&self, month: &str, zone: &str) -> Result<MonthSummary> {
         self.vault.month_summary_in(self, month, zone)
@@ -235,8 +221,6 @@ mod tests {
         "earmarked",
         "keys_on_device",
         "device_secrets_for_request",
-        "subtree_ids",
-        "store_overview",
         "month_summary_in",
     ];
 
@@ -297,12 +281,12 @@ mod tests {
         );
         assert_eq!(unfrozen_and_stale(&added).0, vec!["dummy_read".to_string()]);
         let removed = source.replace(
-            "    pub(crate) fn subtree_ids(&self",
-            "    fn subtree_ids(&self",
+            "    pub(crate) fn earmarked(&self",
+            "    fn earmarked(&self",
         );
         assert_eq!(
             unfrozen_and_stale(&removed).1,
-            vec!["subtree_ids".to_string()]
+            vec!["earmarked".to_string()]
         );
     }
 }

@@ -49,9 +49,6 @@ impl UnlockedVault {
         #[cfg(test)]
         pub(crate) fn children_of(&self, parent_id: &str) -> Vec<&Store>
             => crate::money::tree::children_of @doc;
-        /// Every descendant id of `root_id`, without `root_id` itself.
-        pub(crate) fn subtree_ids(&self, root_id: &str) -> Vec<String>
-            => crate::money::tree::subtree_ids @doc;
         /// The whole wallet tree with own and rolled-up values. Roots (and
         /// orphans whose parent is gone) come first; live before archived,
         /// alphabetical inside each group.
