@@ -903,3 +903,20 @@ files = [
   "crates/xtask/arch-allow.toml",
   "crates/xtask/src/arch/",
 ]
+
+[[foundation]]
+# T241 (z12): the last kernel reads (net_worth, subtree_ids, store_overview, month_summary_in) leave Books.
+task = "T241"
+files = [
+  "crates/core/src/kernel/books.rs",
+  "crates/core/src/money/",
+  "crates/core/src/planning/",
+  "crates/core/src/workflow/",
+  "crates/core/src/usecases/money/",
+  "crates/core/src/usecases/workflow/",
+  "crates/core/src/usecases/cryptotrack/",
+  "crates/core/src/service/",
+  "crates/app/src/commands/",
+  "crates/xtask/arch-allow.toml",
+  "crates/xtask/src/arch/",
+]
