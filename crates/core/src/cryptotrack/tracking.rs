@@ -124,15 +124,20 @@ fn is_hex_word(text: &str, digits: Option<usize>) -> bool {
     })
 }
 
-impl TrackingRef {
+pub(crate) trait TrackingRefExt: Sized {
     /// The page this reference points at, `https` only. A user's own explorer
     /// for the network overrides the preset. `None` when no safe link exists.
-    pub fn url(&self, settings: &ExplorerSettings) -> Option<String> {
+    fn url(&self, settings: &ExplorerSettings) -> Option<String>;
+    /// Like [`TrackingRef::url`], with the note to show next to the link.
+    fn link(&self, settings: &ExplorerSettings) -> Option<TrackingLink>;
+}
+
+impl TrackingRefExt for TrackingRef {
+    fn url(&self, settings: &ExplorerSettings) -> Option<String> {
         self.link(settings).map(|link| link.url)
     }
 
-    /// Like [`TrackingRef::url`], with the note to show next to the link.
-    pub fn link(&self, settings: &ExplorerSettings) -> Option<TrackingLink> {
+    fn link(&self, settings: &ExplorerSettings) -> Option<TrackingLink> {
         let plain = |url: String| Some(TrackingLink { url, note: None });
         match self {
             Self::ChainTx { chain, hash } => {

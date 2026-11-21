@@ -8,6 +8,6 @@ pub mod events;
 #[cfg(test)]
 mod golden_tests;
 pub mod persistence;
-pub mod record;
+pub use crate::model::record;
 pub mod session;
 pub mod tx;

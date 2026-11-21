@@ -182,6 +182,7 @@ mod tests {
     use super::*;
     use crate::cryptotrack::engine::basis::{Doubt, Inputs, Prices, Quote, fold};
     use crate::cryptotrack::engine::overrides;
+    use crate::cryptotrack::validate::Validate;
     use crate::model::cryptotrack::TokenId;
 
     const ME: &str = "0x1111111111111111111111111111111111111111";

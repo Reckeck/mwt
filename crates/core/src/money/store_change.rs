@@ -724,7 +724,11 @@ fn store_rule_violation(doc: &VaultDoc, tx: &Transaction) -> Option<String> {
     None
 }
 
-impl Store {
+trait StoreExt: Sized {
+    fn kind_label(&self) -> &'static str;
+}
+
+impl StoreExt for Store {
     fn kind_label(&self) -> &'static str {
         match self.kind {
             StoreKind::Cash => "cash",

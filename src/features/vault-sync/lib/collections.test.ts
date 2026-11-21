@@ -19,7 +19,7 @@ function locale(lang: 'en' | 'ru'): Record<string, string> {
 
 /** Names of the collections in the Rust registry, read from its source. */
 function registryNames(): string[] {
-  const source = readFileSync(resolve(__dirname, '../../../../crates/core/src/model/registry.rs'), 'utf8')
+  const source = readFileSync(resolve(__dirname, '../../../../crates/model/src/registry.rs'), 'utf8')
   const found = [...source.matchAll(/(?:records|single|log)\(\s*"([a-z_]+)"|\bname:\s*"([a-z_]+)"/g)]
   return found.map((match) => match[1] ?? match[2])
 }

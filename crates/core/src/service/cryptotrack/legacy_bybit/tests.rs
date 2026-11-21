@@ -1,5 +1,6 @@
 use crate::Amount;
 use crate::cryptotrack::sources::bybit::exchange_asset;
+use crate::exchange::staging::PendingImportExt;
 use crate::exchange::{Execution, InterTransfer};
 use crate::model::store::ExchangeProvider;
 use crate::model::store::StoreKind;

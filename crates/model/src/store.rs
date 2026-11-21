@@ -1,13 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use crate::model::chain::Chain;
-use schemars::JsonSchema;
+use crate::chain::Chain;
 
 /// What kind of container a store represents. The sidebar groups wallets by
 /// it, and it decides which sub-accounts, settings and automations apply.
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum StoreKind {
     /// The single cash wallet, created with the vault.
@@ -84,8 +83,8 @@ impl StoreKind {
     }
 
     /// Ready-made automations a wallet of this kind offers.
-    pub fn automation_presets(self) -> &'static [crate::model::planning::AutomationPreset] {
-        use crate::model::planning::AutomationPreset::*;
+    pub fn automation_presets(self) -> &'static [crate::planning::AutomationPreset] {
+        use crate::planning::AutomationPreset::*;
         match self {
             Self::Cash => &[Expense, TopUp],
             Self::Bank => &[Salary, CardPayment, ToSavings, DepositInterest],
@@ -108,9 +107,9 @@ impl StoreKind {
     }
 }
 
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Custody {
     #[default]
@@ -120,7 +119,9 @@ pub enum Custody {
 
 /// A sub-account template. Which ones a wallet offers depends on its kind,
 /// see [`StoreKind::sub_types`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SubType {
     /// Cash in one currency.
@@ -174,7 +175,9 @@ impl SubType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum MarketKind {
     Spot,
@@ -193,7 +196,9 @@ pub enum BindingShape {
 }
 
 /// What a sub-account is locked to. A top-level wallet is always `Any`.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Binding {
     #[default]
@@ -248,9 +253,9 @@ fn same_asset(left: &AssetRef, right: &AssetRef) -> bool {
 
 /// What the money in a wallet is for. Replaces the old «count in budget»
 /// switch: only everyday money is in the daily budget.
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Purpose {
     /// Money to live on: its spending and income are in the daily budget.
@@ -265,7 +270,9 @@ pub enum Purpose {
     Transit,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LiabilityKind {
     Mortgage,
@@ -277,21 +284,23 @@ pub enum LiabilityKind {
 
 /// Terms of a `liability` store or a credit card. Informational, except
 /// `limit`, which caps what an automation may charge to a credit card.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct LiabilityTerms {
     pub kind: LiabilityKind,
     /// Annual interest rate in percent.
-    pub rate: Option<crate::Amount>,
+    pub rate: Option<mwt_base::Amount>,
     /// Credit limit, in the store's currency.
-    pub limit: Option<crate::Amount>,
+    pub limit: Option<mwt_base::Amount>,
     /// Day of the month the mandatory payment is due (1–31).
     pub due_day: Option<u8>,
-    pub monthly_payment: Option<crate::Amount>,
+    pub monthly_payment: Option<mwt_base::Amount>,
 }
 
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum PropertyCategory {
     /// A home: a flat or a house. New records write this one.
@@ -311,8 +320,8 @@ impl PropertyCategory {
     }
 
     /// Ready-made automations an object of this type offers.
-    pub fn automation_presets(self) -> &'static [crate::model::planning::AutomationPreset] {
-        use crate::model::planning::AutomationPreset::*;
+    pub fn automation_presets(self) -> &'static [crate::planning::AutomationPreset] {
+        use crate::planning::AutomationPreset::*;
         match self {
             Self::Flat | Self::House => &[RentIncome, Insurance, Utilities],
             Self::Car => &[Insurance, VehicleService, Fuel],
@@ -323,7 +332,9 @@ impl PropertyCategory {
 }
 
 /// What the app knows about a car: its papers, insurance and service.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct CarInfo {
     /// Make and model, free text.
@@ -362,9 +373,9 @@ impl CarInfo {
 }
 
 /// What a programme's points are called on screen: "1 240 points", "2 coupons".
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LoyaltyUnit {
     #[default]
@@ -374,18 +385,20 @@ pub enum LoyaltyUnit {
 }
 
 /// A bonus programme: its points and what one point is worth.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct LoyaltyInfo {
     /// Ticker of the points, unique among the user's programmes (`СПАСИБО`, `МИЛИ`).
     pub points_symbol: String,
     /// What one point is worth in `currency`.
-    pub point_value: crate::Amount,
+    pub point_value: mwt_base::Amount,
     pub currency: String,
     /// `YYYY-MM-DD` the next batch of points burns, if the programme has one.
     #[serde(default)]
     pub expires_at: Option<String>,
     #[serde(default)]
-    pub expiring_points: Option<crate::Amount>,
+    pub expiring_points: Option<mwt_base::Amount>,
     /// What the programme knows the user by: a phone, a card number, an account.
     #[serde(default)]
     pub login: Option<String>,
@@ -414,49 +427,55 @@ impl LoyaltyInfo {
 
 /// What a property is. Its value comes from manual prices; expenses
 /// (utilities) point at it through `UtilityItem.property_id`.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PropertyInfo {
     pub category: PropertyCategory,
     pub address: String,
     /// Square metres, informational.
-    pub area: Option<crate::Amount>,
+    pub area: Option<mwt_base::Amount>,
     /// YYYY-MM-DD.
     pub purchased_at: Option<String>,
-    pub purchase_price: Option<crate::Amount>,
+    pub purchase_price: Option<mwt_base::Amount>,
     pub currency: String,
     /// Day of the month the utilities are usually paid (1–31), all at once.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub utilities_pay_day: Option<u8>,
     /// A car's papers, insurance and service; only for [`PropertyCategory::Car`].
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub car: Option<CarInfo>,
     /// How the value moves after the last valuation (plan G3); none = it stays.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub revalue: Option<RevalueRule>,
 }
 
 /// Automatic revaluation from the last valuation onwards, month by month.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RevalueRule {
     /// Percent a year; none = the inflation of the valuation's currency.
     #[serde(default)]
-    pub pct_per_year: Option<crate::Amount>,
+    pub pct_per_year: Option<mwt_base::Amount>,
     /// The value the rule stops at; required when the percent is negative.
     #[serde(default)]
     pub floor: Option<RevalueFloor>,
 }
 
 /// Where depreciation stops.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RevalueFloor {
     /// A unit price in the property's currency.
-    Amount { amount: crate::Amount },
+    Amount { amount: mwt_base::Amount },
     /// Percent of the purchase price.
-    PctOfPurchase { pct: crate::Amount },
+    PctOfPurchase { pct: mwt_base::Amount },
 }
 
 impl RevalueRule {
@@ -466,9 +485,9 @@ impl RevalueRule {
     pub fn default_for(category: PropertyCategory) -> Option<Self> {
         match category {
             PropertyCategory::Car => Some(Self {
-                pct_per_year: Some(crate::Amount::new(rust_decimal::Decimal::from(-10))),
+                pct_per_year: Some(mwt_base::Amount::new(rust_decimal::Decimal::from(-10))),
                 floor: Some(RevalueFloor::PctOfPurchase {
-                    pct: crate::Amount::new(rust_decimal::Decimal::from(20)),
+                    pct: mwt_base::Amount::new(rust_decimal::Decimal::from(20)),
                 }),
             }),
             PropertyCategory::Flat | PropertyCategory::House | PropertyCategory::Land => {
@@ -482,9 +501,9 @@ impl RevalueRule {
     }
 }
 
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ExchangeProvider {
     #[default]
@@ -501,7 +520,9 @@ impl ExchangeProvider {
 }
 
 /// One indicator on the terminal chart.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct IndicatorCfg {
     /// e.g. `ema`, `sma`, `rsi`.
     pub kind: String,
@@ -509,7 +530,9 @@ pub struct IndicatorCfg {
 }
 
 /// Terminal panels' layout, as the UI left it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TerminalLayout {
     pub show_watchlist: bool,
     /// Watchlist width in pixels.
@@ -527,7 +550,9 @@ impl Default for TerminalLayout {
 
 /// Everything the trading terminal of one exchange remembers. It lives in the
 /// exchange wallet, so two exchanges keep two independent terminals.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TerminalState {
     pub watchlist: Vec<String>,
     pub active_symbol: Option<String>,
@@ -557,7 +582,9 @@ pub const MAX_DRAWINGS_JSON: usize = 256 * 1024;
 
 /// The exchange a wallet stands for, plus its terminal. Keys are kept apart in
 /// `VaultDoc.exchange_keys` so secrets never travel with the store.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ExchangeProfile {
     pub provider: ExchangeProvider,
     /// Background import interval; 0 = off.
@@ -575,7 +602,9 @@ fn yes() -> bool {
 
 /// What an exchange import brings in and where it books it: set up after the
 /// key is saved. The defaults are what the import did before these settings.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ImportSettings {
     /// Spot and futures fills.
     #[serde(default = "yes")]
@@ -624,7 +653,9 @@ impl Default for ImportSettings {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ImportCategories {
     #[serde(default)]
     pub trades: Option<String>,
@@ -636,18 +667,22 @@ pub struct ImportCategories {
 
 /// One exchange account (Bybit `FUND`, `UNIFIED`, `EARN`) and the wallet it
 /// books in; `store_id: None` = this account is not imported at all.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ImportAccountRoute {
     pub account: String,
     #[serde(default)]
     pub store_id: Option<String>,
 }
 
-pub use crate::limits::MAX_STORE_DEPTH;
+pub use mwt_base::limits::MAX_STORE_DEPTH;
 
 /// A "store"/"platform" (a vault-level container) — a portfolio container.
 /// Important: a store is NOT an asset — it holds holdings (`Holding`).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Store {
     pub id: String,
     pub name: String,
@@ -688,19 +723,19 @@ pub struct Store {
     /// An exchange's futures sub-account: the coin its margin is kept in
     /// (USDT for linear contracts, the coin itself for inverse ones).
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub margin: Option<AssetRef>,
     /// Loyalty wallets: the programme's points and what a point is worth.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub loyalty: Option<LoyaltyInfo>,
     /// Savings accounts, term deposits and ПДС: rate history and terms.
     #[serde(default)]
-    #[ts(optional)]
-    pub deposit: Option<crate::model::deposit::DepositTerms>,
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub deposit: Option<crate::deposit::DepositTerms>,
     /// Portfolio basket of everything held here unless an asset has its own (plan F).
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub asset_class: Option<String>,
     /// The crypto module's account this wallet shows, when the wallet is driven
     /// by the engine: a connected public address (`StoreKind::Crypto`) or an
@@ -712,7 +747,7 @@ pub struct Store {
     /// field is what tells every screen and check which wallets those are
     /// (decision P5 of 2026-11-11).
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub crypto_account_id: Option<String>,
 }
 
@@ -747,7 +782,9 @@ impl Store {
 }
 
 /// Which stores a query covers. The one way every report filters by wallet.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct StoreScope {
     /// Empty = every store.
     pub store_ids: Vec<String>,
@@ -774,17 +811,21 @@ impl StoreScope {
 }
 
 /// A position of one asset inside one store (a store is not an asset).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Holding {
     pub id: String,
     pub store_id: String,
     pub asset: AssetRef,
-    pub quantity: crate::Amount,
+    pub quantity: mwt_base::Amount,
     /// Optional manual average cost basis per unit (in base currency).
-    pub avg_cost: Option<crate::Amount>,
+    pub avg_cost: Option<mwt_base::Amount>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AssetRef {
     pub symbol: String,
     pub name: String,

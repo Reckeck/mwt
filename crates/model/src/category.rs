@@ -1,11 +1,10 @@
 //! Spending and income categories, grouped the way the budget reads them.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum CategoryGroup {
     Income,
@@ -19,7 +18,9 @@ pub enum CategoryGroup {
     Service,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Category {
     /// Stable key stored on transactions; never changes.
     pub key: String,

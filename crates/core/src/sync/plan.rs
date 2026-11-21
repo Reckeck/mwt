@@ -17,14 +17,19 @@ pub use crate::model::sync_state::{
     ChangeItem, ChangeKind, CollectionChanges, FieldChange, OverwrittenField, SyncSummary,
 };
 
-impl SyncSummary {
-    pub fn is_empty(&self) -> bool {
+pub trait SyncSummaryExt: Sized {
+    fn is_empty(&self) -> bool;
+    /// Blank the labels and values of secret collections (summaries written
+    /// before they were hidden). `true` when something changed.
+    fn scrub_secrets(&mut self) -> bool;
+}
+
+impl SyncSummaryExt for SyncSummary {
+    fn is_empty(&self) -> bool {
         self.total == 0
     }
 
-    /// Blank the labels and values of secret collections (summaries written
-    /// before they were hidden). `true` when something changed.
-    pub fn scrub_secrets(&mut self) -> bool {
+    fn scrub_secrets(&mut self) -> bool {
         let mut changed = false;
         for changes in &mut self.collections {
             if !super::registry::is_secret(&changes.collection) {
@@ -217,6 +222,7 @@ fn plan_with(
 
 #[cfg(test)]
 mod tests {
+    use crate::sync::journal::SyncJournalEntryExt;
     use serde_json::json;
 
     use super::*;

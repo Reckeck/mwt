@@ -7,19 +7,20 @@
 //! renaming or removing a field or variant needs a payload version bump with
 //! a migration (see `storage`).
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::model::chain::Chain;
-use crate::model::store::{AssetRef, StoreKind};
-use crate::model::vault::now_iso;
+use crate::chain::Chain;
+use crate::store::{AssetRef, StoreKind};
+use crate::vault::now_iso;
+use mwt_base::Amount;
 
 /// Price stamps a money movement can carry.
 ///
 /// Pricing is a property of an asset at a moment, not of the kind of
 /// movement, so every priced side of a transaction carries one of these.
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PriceStamp {
     /// Price of one unit of the asset in USD.
     #[serde(default)]
@@ -61,7 +62,9 @@ impl PriceStamp {
 }
 
 /// How a transaction came to exist.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TxOrigin {
     /// Entered by the user.
@@ -84,10 +87,10 @@ pub enum TxOrigin {
         planned_at: Option<String>,
         /// The local date it was planned for, in the schedule's zone; an old
         /// record goes by the local date of `planned_at`.
-        #[serde(default, with = "crate::model::iso_date")]
-        #[ts(type = "string | null", optional)]
-        #[schemars(with = "Option<String>")]
-        planned_date: Option<crate::time::LocalDate>,
+        #[serde(default, with = "crate::iso_date")]
+        #[cfg_attr(feature = "ts", ts(type = "string | null", optional))]
+        #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+        planned_date: Option<mwt_base::time::LocalDate>,
         /// Booked with an approximate amount (a salary that differs every
         /// time); cleared when the user puts in the real one. Lives here, not
         /// in `TxMeta`.
@@ -115,7 +118,9 @@ impl TxOrigin {
 }
 
 /// Fields every transaction carries, whatever it is.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TxMeta {
     pub id: String,
     /// RFC3339 UTC, lexicographically sortable — a real sort key, not a label.
@@ -132,13 +137,13 @@ pub struct TxMeta {
     /// The utility bill (`UtilityItem.id`) this payment settles; older
     /// payments are matched by comment and category instead.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub utility_item_id: Option<String>,
     /// Kept by hand: the user got this copy back by undoing a sync that had
     /// merged it away, so the dedupe never removes it again. Synced like any
     /// other field; only «Allow merging» (or deleting the record) clears it.
     #[serde(default)]
-    #[ts(as = "Option<bool>", optional)]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
     pub keep: bool,
 }
 
@@ -160,7 +165,9 @@ impl TxMeta {
 
 /// A fee paid in some asset. It is booked as its own outgoing leg, so holdings
 /// shrink by it — before this model fees were recorded and then ignored.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Fee {
     pub asset: AssetRef,
     pub amount: Amount,
@@ -170,7 +177,9 @@ pub struct Fee {
 
 /// One side of a movement: one of the user's own stores, a saved contact (and
 /// optionally one of its accounts), or free text.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AccountRef {
     Store(String),
@@ -198,7 +207,9 @@ impl AccountRef {
 }
 
 /// What a leg represents inside its transaction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LegRole {
     /// The movement itself.
@@ -285,14 +296,18 @@ fn push_fee(legs: &mut Vec<Leg>, store_id: Option<&str>, fee: &Option<Fee>) {
 }
 
 /// One banknote line of a cash count.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CashNote {
     pub denomination: Amount,
     pub count: u32,
 }
 
 /// Facts that only some store kinds have. Validated against `store.kind`.
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct KindDetails {
     /// `cash` only; must add up to the amount.
     pub cash_breakdown: Option<Vec<CashNote>>,
@@ -303,12 +318,12 @@ pub struct KindDetails {
     pub tx_hash: Option<String>,
     /// Cashback and bonus points: the card or account whose purchases earned them.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub source_store_id: Option<String>,
     /// Income only: the month it is for, «YYYY-MM», when that is not the month
     /// of its date (a salary paid on the 5th for the month before).
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month: Option<String>,
 }
 
@@ -324,7 +339,9 @@ impl KindDetails {
 // -- the eight variants ------------------------------------------------------
 
 /// "Top up": money comes into a store from outside (salary, cashback, buying an asset).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TopupTx {
     pub meta: TxMeta,
     pub store_id: String,
@@ -338,7 +355,9 @@ pub struct TopupTx {
 }
 
 /// "Pay": money leaves a store for good (a purchase, a bill, interest).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PaymentTx {
     pub meta: TxMeta,
     pub store_id: String,
@@ -352,7 +371,9 @@ pub struct PaymentTx {
 }
 
 /// Effect of a transfer on a personal debt with a contact.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum DebtEffect {
     /// Lent money (store → contact): they owe me more.
@@ -373,7 +394,9 @@ impl DebtEffect {
 }
 
 /// "Transfer": one asset moves between two places, at least one of them mine.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TransferTx {
     pub meta: TxMeta,
     pub from: AccountRef,
@@ -390,7 +413,9 @@ pub struct TransferTx {
 }
 
 /// One side of a conversion.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ConvertSide {
     pub account: AccountRef,
     pub asset: AssetRef,
@@ -400,7 +425,9 @@ pub struct ConvertSide {
 }
 
 /// "Exchange": give one asset, receive another (bank FX, an exchanger, P2P).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ConvertTx {
     pub meta: TxMeta,
     pub from: ConvertSide,
@@ -411,7 +438,9 @@ pub struct ConvertTx {
 }
 
 /// One side of a spot trade.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TradeSide {
     pub asset: AssetRef,
     pub qty: Amount,
@@ -419,7 +448,9 @@ pub struct TradeSide {
     pub price: PriceStamp,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Liquidity {
     Maker,
@@ -427,7 +458,9 @@ pub enum Liquidity {
 }
 
 /// A spot trade on an exchange.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TradeSpotTx {
     pub meta: TxMeta,
     pub store_id: String,
@@ -438,21 +471,27 @@ pub struct TradeSpotTx {
     pub order_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum FuturesDirection {
     Long,
     Short,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum FuturesAction {
     Open,
     Close,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum FuturesCategory {
     Linear,
@@ -464,7 +503,9 @@ pub enum FuturesCategory {
 /// The position is a holding of `contract` (a derivative, see
 /// [`AssetRef::perp`]); it is excluded from portfolio value. Realized PnL is
 /// the `closed_pnl` the exchange settled, booked in `settle`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TradeFuturesTx {
     pub meta: TxMeta,
     pub store_id: String,
@@ -486,7 +527,9 @@ pub struct TradeFuturesTx {
     pub price: PriceStamp,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum DefiAction {
     Stake,
@@ -503,7 +546,9 @@ impl DefiAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DefiTx {
     pub meta: TxMeta,
     pub store_id: String,
@@ -519,7 +564,9 @@ pub struct DefiTx {
 }
 
 /// Selling a non-financial asset (a flat, a car) out of an `asset` store.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AssetSellTx {
     pub meta: TxMeta,
     pub store_id: String,
@@ -537,7 +584,9 @@ pub struct AssetSellTx {
 
 /// Kind of a transaction, without its data — what a store accepts, what a form shows.
 /// One asset of a correction: what the ledger held and what is really there.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AdjustmentLine {
     pub asset: AssetRef,
     /// The ledger balance just before the correction.
@@ -557,7 +606,9 @@ impl AdjustmentLine {
 
 /// "Reality sync": the balances of one account set to what is
 /// really there. `before` is worked out from the ledger when it is saved.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AdjustmentTx {
     pub meta: TxMeta,
     pub store_id: String,
@@ -566,9 +617,9 @@ pub struct AdjustmentTx {
     pub fee: Option<Fee>,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TxKind {
     Topup,
@@ -664,7 +715,9 @@ pub fn default_kind(kind: StoreKind) -> TxKind {
 }
 
 /// One thing the user did with money.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Transaction {
     Topup(TopupTx),

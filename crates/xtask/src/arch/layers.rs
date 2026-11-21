@@ -36,7 +36,7 @@ pub const GROUPS: &[Group] = &[
     },
     Group {
         name: "model",
-        modules: &["model"],
+        modules: &["model", "model_tests"],
         may_use: &["base", "crypto"],
     },
     Group {

@@ -7,6 +7,7 @@
 /// Defines one newtype per name. Every path in the expansion is fully
 /// qualified (`::std::`, `::serde::`, `::ts_rs::`), so the macro expands the
 /// same wherever it is invoked (ADR-03 rule 4).
+#[macro_export]
 macro_rules! id_types {
     ($($(#[$meta:meta])* $name:ident;)+) => {$(
         $(#[$meta])*
@@ -24,6 +25,7 @@ macro_rules! id_types {
             }
         }
 
+        #[cfg(feature = "ts")]
         impl ::ts_rs::TS for $name {
             type WithoutGenerics = Self;
             type OptionInnerType = Self;
@@ -92,7 +94,7 @@ id_types! {
     StoreId;
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "ts"))]
 mod tests {
     use super::*;
     use ts_rs::TS;

@@ -20,6 +20,7 @@ use crate::Amount;
 use crate::cryptotrack::engine::math;
 use crate::cryptotrack::prices;
 use crate::cryptotrack::sources::bybit;
+use crate::cryptotrack::validate::Validate;
 use crate::model::cryptotrack::{
     CryptoAccount, CryptoAsset, CryptoPricePoint, CryptoToken, TokenId, TokenVerdict,
 };

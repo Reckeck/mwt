@@ -39,23 +39,8 @@ pub use mwt_crypto as crypto;
 pub use mwt_crypto::{
     SnapshotFormat, VAULT_CONTAINER_VERSION, VAULT_LEGACY_CONTAINER_VERSION, VAULT_MAGIC,
 };
+pub use mwt_model::{VAULT_FORMAT_VERSION, id_types, records};
 pub use storage::VaultFile;
-
-/// Version of the plaintext *payload* schema (`VaultDoc`), stored in the
-/// document's own `version` field. It is read together with the container
-/// version: payload 1 in container 2 is this format.
-///
-/// The payload carries field names (JSON or MessagePack), so a field added
-/// with `#[serde(default)]` needs no bump. Bump only for a change older files
-/// cannot be read with (a renamed or re-typed field, a removed variant): freeze
-/// the current shape in a module of its own, convert it into the new document
-/// on open after the untouched file is copied to `<vault>.v<N>.bak`, and test
-/// it with a committed file. A bump without a transition is never acceptable;
-/// a version from the future is refused.
-///
-/// Note this is unrelated to [`VAULT_CONTAINER_VERSION`], which versions the
-/// encrypted envelope and only moves when the on-disk bytes change.
-pub const VAULT_FORMAT_VERSION: u32 = 1;
 
 #[cfg(test)]
 mod base_facade_tests {

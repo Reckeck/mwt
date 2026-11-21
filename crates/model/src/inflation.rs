@@ -5,13 +5,14 @@
 //! Russia for RUB, BLS CPI-U for USD, Eurostat HICP for EUR); a currency
 //! may instead keep the user's own flat rate.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
+use mwt_base::Amount;
 
 /// Who published a reading.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum InflationSource {
     /// Bank of Russia, "Inflation and key rate" table.
@@ -50,7 +51,9 @@ impl InflationSource {
 }
 
 /// One month of one currency's inflation.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct InflationReading {
     /// Lowercase currency code (`rub`).
     pub currency: String,
@@ -62,7 +65,9 @@ pub struct InflationReading {
 }
 
 /// Where a currency's inflation comes from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum InflationMode {
     /// The fetched monthly series (falls back to the manual rate before the

@@ -5,15 +5,16 @@
 //! the vault ([`AttachmentKey`]): a new password does not touch the files, and
 //! sync carries the keys with the records.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::model::entity_ref::EntityRef;
+use crate::entity_ref::EntityRef;
 
 /// The biggest file one attachment may hold.
 pub const MAX_ATTACHMENT_BYTES: usize = 25 * 1024 * 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AttachmentKind {
     File,
@@ -21,7 +22,9 @@ pub enum AttachmentKind {
 }
 
 /// One file or link of an entity.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Attachment {
     pub id: String,
     /// The operation or goal it belongs to.
@@ -37,7 +40,7 @@ pub struct Attachment {
     pub mime: Option<String>,
     /// A file's size in bytes, before sealing.
     #[serde(default)]
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size: u64,
     /// SHA-256 of the file, hex: the same check is added once.
     #[serde(default)]
@@ -50,7 +53,8 @@ pub struct Attachment {
 }
 
 /// The key a file is sealed with, base64. Never leaves the vault.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AttachmentKey {
     pub id: String,
     pub key: String,

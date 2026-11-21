@@ -5,11 +5,29 @@ use crate::Amount;
 use crate::exchange::{EarnYield, Execution, InterTransfer};
 use crate::model::vault::{ACCOUNT_EARN, ImportKind, PendingImport};
 
-impl PendingImport {
+pub trait PendingImportExt: Sized {
     /// Shape a Bybit fill for staging. Returns `None` for fills we cannot make
     /// sense of (no execution id, or an unparseable quantity/price) — a garbled
     /// fill must never reach the user's transactions.
-    pub fn from_execution(store_id: &str, category: &str, exec: &Execution) -> Option<Self> {
+    fn from_execution(store_id: &str, category: &str, exec: &Execution) -> Option<Self>;
+    /// Stage a move between the user's own Bybit accounts. The amount sits on
+    /// both sides (`*_sold` leaves `from_account`, `*_bought` reaches `to_account`).
+    fn from_transfer(store_id: &str, row: &InterTransfer) -> Option<Self>;
+    /// Stage an Earn payout as income of the Earn account.
+    fn from_earn_yield(store_id: &str, row: &EarnYield) -> Option<Self>;
+    /// Everything one Bybit sweep stages for an exchange wallet: fills,
+    /// moves between its accounts and Earn payouts. Rows that cannot be read
+    /// are dropped, never guessed at.
+    fn bybit_batch(
+        root_id: &str,
+        fills: &[Execution],
+        transfers: &[InterTransfer],
+        yields: &[EarnYield],
+    ) -> Vec<Self>;
+}
+
+impl PendingImportExt for PendingImport {
+    fn from_execution(store_id: &str, category: &str, exec: &Execution) -> Option<Self> {
         let exec_id = exec.exec_id.trim();
         if exec_id.is_empty() {
             return None;
@@ -57,9 +75,7 @@ impl PendingImport {
         })
     }
 
-    /// Stage a move between the user's own Bybit accounts. The amount sits on
-    /// both sides (`*_sold` leaves `from_account`, `*_bought` reaches `to_account`).
-    pub fn from_transfer(store_id: &str, row: &InterTransfer) -> Option<Self> {
+    fn from_transfer(store_id: &str, row: &InterTransfer) -> Option<Self> {
         let id = row.transfer_id.trim();
         let amount = Amount::parse(row.amount.trim())
             .ok()
@@ -88,8 +104,7 @@ impl PendingImport {
         })
     }
 
-    /// Stage an Earn payout as income of the Earn account.
-    pub fn from_earn_yield(store_id: &str, row: &EarnYield) -> Option<Self> {
+    fn from_earn_yield(store_id: &str, row: &EarnYield) -> Option<Self> {
         let amount = Amount::parse(row.amount.trim())
             .ok()
             .filter(|value| value.is_positive())?;
@@ -118,10 +133,7 @@ impl PendingImport {
         })
     }
 
-    /// Everything one Bybit sweep stages for an exchange wallet: fills,
-    /// moves between its accounts and Earn payouts. Rows that cannot be read
-    /// are dropped, never guessed at.
-    pub fn bybit_batch(
+    fn bybit_batch(
         root_id: &str,
         fills: &[Execution],
         transfers: &[InterTransfer],

@@ -50,6 +50,7 @@ use crate::cryptotrack::prices;
 use crate::cryptotrack::service::tokens::counts_asset;
 use crate::cryptotrack::sources::evm::{RawAsset, SourceBatch};
 use crate::cryptotrack::tokens;
+use crate::cryptotrack::validate::Validate;
 use crate::error::{Error, Result};
 use crate::kernel::books::Books;
 use crate::model::chain::Chain;

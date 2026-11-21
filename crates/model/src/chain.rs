@@ -1,13 +1,12 @@
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Supported blockchain networks + a pseudo `Fiat` variant.
 ///
 /// Metadata (CoinGecko identifiers and explorer templates) lives in
 /// `ChainInfo`. Adding a network = adding one variant here + one match arm.
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Chain {
     Bitcoin,

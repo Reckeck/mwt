@@ -3115,6 +3115,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-model"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "mwt-base",
+ "rmp-serde",
+ "rust_decimal",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "time",
+ "ts-rs",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6374,6 +6392,7 @@ dependencies = [
  "insta",
  "mwt-base",
  "mwt-crypto",
+ "mwt-model",
  "pretty_assertions",
  "proptest",
  "rand 0.10.4",

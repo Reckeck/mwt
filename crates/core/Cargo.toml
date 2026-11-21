@@ -12,10 +12,15 @@ workspace = true
 [features]
 # Test kit (`crate::testkit`); becomes its own crate later.
 testkit = []
+# Forwarded to every extracted crate that has them (`mwt-base`, `mwt-crypto` and `mwt-model` are always built with them here).
+ts = ["mwt-model/ts"]
+schema = ["mwt-model/schema"]
 # Marks every `forward!` delegate `#[deprecated]` so the remaining callers can be listed (`cargo clippy --features deprecated-forwards`).
 deprecated-forwards = []
 
 [dependencies]
+# The model: its derives are always on here, like base.
+mwt-model = { path = "../model", features = ["ts", "schema"] }
 # The DTO derives of base are always on here: this crate derives `TS`/`JsonSchema` over `Amount`.
 mwt-base = { path = "../base", features = ["ts", "schema"] }
 # `SecurityLevel` / `RaiseStage` are TS types of the IPC contract.

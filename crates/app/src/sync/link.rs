@@ -25,6 +25,7 @@ use trade_core::service::PeerRef;
 use trade_core::sync::RecordState;
 use trade_core::sync::journal::SyncJournalOutcome;
 use trade_core::sync::manifest::Manifest;
+use trade_core::sync::plan::SyncSummaryExt;
 use trade_core::sync::protocol::{
     Hello, Identity, MANIFEST_PER_MESSAGE, Message, RECORDS_PER_MESSAGE, decode, encode,
 };

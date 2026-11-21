@@ -1789,13 +1789,20 @@ mod wire_tests {
         let json = serde_json::to_value(&points).unwrap();
         assert_eq!(json["delta"], serde_json::json!("-12.50"));
 
-        let date = crate::time::LocalDate::from_ymd_opt(2026, 3, 15);
-        let mut serialized = serde_json::Map::new();
-        serialized.insert(
-            "date".into(),
-            crate::model::iso_date::serialize(&date, serde_json::value::Serializer).unwrap(),
-        );
-        assert_eq!(serialized["date"], serde_json::json!("2026-03-15"));
+        let run = crate::model::workflow::WorkflowRun {
+            id: "run".into(),
+            workflow_id: "flow".into(),
+            trigger: String::new(),
+            started_at: String::new(),
+            outcome: crate::model::workflow::RunOutcome::Done,
+            created: Vec::new(),
+            queued: 0,
+            trace: Vec::new(),
+            dry_run: false,
+            planned_date: crate::time::LocalDate::from_ymd_opt(2026, 3, 15),
+        };
+        let serialized = serde_json::to_value(&run).unwrap();
+        assert_eq!(serialized["planned_date"], serde_json::json!("2026-03-15"));
     }
 }
 

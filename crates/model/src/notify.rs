@@ -1,15 +1,14 @@
 //! Notifications (plan §14): what the user wants to be told about, and the
 //! log of what was already told, so a restart never repeats a notice.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::model::vault::now_iso;
+use crate::vault::now_iso;
 
 /// A kind of notice. Each one can be turned off and told ahead of time.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum NoticeCategory {
     Reminder,
@@ -71,7 +70,9 @@ impl NoticeCategory {
 }
 
 /// One category's switches.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct NoticeCategoryCfg {
     pub category: NoticeCategory,
     pub enabled: bool,
@@ -81,7 +82,9 @@ pub struct NoticeCategoryCfg {
     pub auto_reminders: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct NotificationSettings {
     /// Show notices from the system as well as inside the app.
     pub system: bool,
@@ -124,7 +127,9 @@ impl NotificationSettings {
 pub const MAX_NOTICE_LOG: usize = 500;
 
 /// A notice that was shown.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct NoticeRecord {
     /// Source and occurrence, e.g. `reminder:<id>:2026-11-01T07:00:00Z`.
     pub key: String,
@@ -194,7 +199,7 @@ pub fn notice_at(
     delivered_at: String,
 ) -> NoticeRecord {
     debug_assert!(
-        link.as_deref().is_none_or(crate::routes::is_known_link),
+        link.as_deref().is_none_or(mwt_base::routes::is_known_link),
         "unknown notice link {link:?}"
     );
     NoticeRecord {

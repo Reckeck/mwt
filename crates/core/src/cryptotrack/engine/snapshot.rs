@@ -129,6 +129,7 @@ mod tests {
     use super::*;
     use crate::cryptotrack::engine::basis::{Inputs, Quote, fold};
     use crate::cryptotrack::engine::overrides;
+    use crate::cryptotrack::validate::Validate;
     use crate::model::chain::Chain;
     use crate::model::cryptotrack::{
         CryptoAsset, CryptoDirection, CryptoLeg, CryptoPosition, CryptoTx, CryptoTxKind, TokenId,

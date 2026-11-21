@@ -383,6 +383,7 @@ pub fn net_of(event: &CryptoTx, asset: &CryptoAsset) -> Amount {
 mod tests {
     use super::*;
     use crate::cryptotrack::sources::evm::Uint256;
+    use crate::cryptotrack::validate::Validate;
 
     const ME: &str = "0x1111111111111111111111111111111111111111";
     const OTHER: &str = "0x2222222222222222222222222222222222222222";

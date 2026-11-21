@@ -2298,6 +2298,7 @@ mod tests {
 mod import_tests {
     use super::*;
     use crate::exchange::Execution;
+    use crate::exchange::staging::PendingImportExt;
     use tempfile::tempdir;
 
     fn setup() -> (tempfile::TempDir, UnlockedVault) {

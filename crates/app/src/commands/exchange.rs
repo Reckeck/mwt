@@ -11,6 +11,7 @@ use trade_core::calendar::now_secs;
 use trade_core::cryptotrack::{exchange_import as import_reads, exchange_sync as sync_reads};
 use trade_core::error::Error;
 use trade_core::exchange::bybit::KeyCheck;
+use trade_core::exchange::staging::PendingImportExt;
 use trade_core::exchange::{BybitClient, Category};
 use trade_core::ipc_contract::{
     BybitExecution, BybitExecutionsInput, BybitExecutionsResult, ClearExchangeKeyInput,
