@@ -16,6 +16,11 @@ use crate::amount::Amount;
 
 pub mod invest;
 
+#[cfg(test)]
+mod invest_props;
+#[cfg(test)]
+mod mod_props;
+
 /// Percent scaling constant (`fee_pct` / `roi_pct` are percentages).
 const HUNDRED: Amount = Amount(Decimal::ONE_HUNDRED);
 
