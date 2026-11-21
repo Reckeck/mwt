@@ -18,10 +18,8 @@ use super::view::split_key;
 
 /// Collections whose records are crypto-module data: every synced
 /// `crypto_*` field of the document. `crypto_cursors` is not here because it
-/// never travels at all (`registry::LOCAL`). The list stays here because the
-/// record kinds (`kernel::record`) sit beside sync in the layer table, not
-/// below it; `the_gate_agrees_with_the_record_kinds` pins the two together
-/// until the kinds move below sync (core crate split, Ф6).
+/// never travels at all (`registry::LOCAL`). `the_gate_agrees_with_the_record_kinds`
+/// pins the list to the record kinds of `model::record`.
 pub const CRYPTO_COLLECTIONS: &[&str] = &[
     "crypto_accounts",
     "crypto_events",
@@ -189,7 +187,7 @@ mod tests {
             .as_object()
             .expect("object")
             .keys()
-            .filter(|name| crate::kernel::record::level3_collections().any(|known| known == *name))
+            .filter(|name| crate::model::record::level3_collections().any(|known| known == *name))
             .filter(|name| !crate::sync::registry::LOCAL.contains(&name.as_str()))
             .cloned()
             .collect();
@@ -215,7 +213,7 @@ mod tests {
     /// kinds less the device-local ones.
     #[test]
     fn the_gate_agrees_with_the_record_kinds() {
-        let mut from_kinds: Vec<&str> = crate::kernel::record::level3_collections()
+        let mut from_kinds: Vec<&str> = crate::model::record::level3_collections()
             .filter(|name| !crate::sync::registry::LOCAL.contains(name))
             .collect();
         let mut listed = CRYPTO_COLLECTIONS.to_vec();
@@ -231,7 +229,7 @@ mod tests {
         let old_rule = |name: &str| {
             name.starts_with("crypto_") && !crate::sync::registry::LOCAL.contains(&name)
         };
-        let names = crate::kernel::record::record_kinds()
+        let names = crate::model::record::record_kinds()
             .iter()
             .map(|kind| kind.collection)
             .chain(

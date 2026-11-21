@@ -569,8 +569,7 @@ pub fn accounts_in_use(balances: &[(String, Vec<CoinBalance>)]) -> [bool; 3] {
 }
 
 pub const ACCOUNT_FUND: &str = "FUND";
-pub const ACCOUNT_UNIFIED: &str = "UNIFIED";
-pub use crate::model::vault::ACCOUNT_EARN;
+pub use crate::model::vault::{ACCOUNT_EARN, ACCOUNT_UNIFIED};
 
 /// A move between the user's own Bybit accounts (`/v5/asset/transfer/query-inter-transfer-list`).
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]

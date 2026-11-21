@@ -393,6 +393,9 @@ pub struct PendingImport {
 /// Not a Bybit transfer account type: Earn products, as this app names them.
 pub const ACCOUNT_EARN: &str = "EARN";
 
+/// The Bybit unified trading account type.
+pub const ACCOUNT_UNIFIED: &str = "UNIFIED";
+
 impl PendingImport {
     /// Assets referenced by this fill, for the staging UI summary.
     pub fn symbols(&self) -> [String; 2] {

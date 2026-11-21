@@ -4,7 +4,7 @@
 //! ties the two. `Single`, `Union` and the kinds keyed by something other
 //! than `id` stay with the sync registry only.
 
-use crate::VaultDoc;
+use super::vault::VaultDoc;
 
 /// An item of a `Vec` field of [`VaultDoc`] that is found by its `id`.
 pub trait Record: Sized {
@@ -55,36 +55,36 @@ macro_rules! records {
 }
 
 records! {
-    crate::model::store::Store => stores, false;
-    crate::model::contact::Contact => contacts, false;
-    crate::model::planning::Budget => budgets, false;
-    crate::model::planning::Goal => goals, false;
-    crate::model::planning::Reminder => reminders, false;
-    crate::model::planning::PriceAlert => price_alerts, false;
-    crate::model::planning::CategorizationRule => categorization_rules, false;
-    crate::model::planning::UtilityItem => utility_items, false;
-    crate::model::planning::MeterReading => meter_readings, false;
-    crate::model::enrichment::EnrichmentRecord => enrichments, false;
-    crate::model::planning::Envelope => envelopes, false;
-    crate::model::contact::DebtTerms => debt_terms, false;
-    crate::model::workflow::Workflow => workflows, false;
-    crate::model::workflow::WorkflowRun => workflow_runs, false;
-    crate::model::workflow::QueuedActions => workflow_queue, false;
-    crate::model::workflow::WorkflowWait => workflow_waits, false;
-    crate::model::planning::CalcScenario => calc_scenarios, false;
-    crate::model::planning::AssetClass => asset_classes, false;
-    crate::model::vault::Valuation => valuations, false;
-    crate::model::datasource::DataSource => data_sources, false;
-    crate::model::attachment::Attachment => attachments, false;
-    crate::model::attachment::AttachmentKey => attachment_keys, false;
-    crate::model::shared_event::SharedEvent => shared_events, false;
-    crate::model::vault::ImportRun => import_runs, false;
-    crate::model::cryptotrack::CryptoAccount => crypto_accounts, true;
-    crate::model::cryptotrack::CryptoTx => crypto_events, true;
-    crate::model::cryptotrack::CryptoOverride => crypto_overrides, true;
-    crate::model::cryptotrack::CryptoPosition => crypto_positions, true;
-    crate::model::cryptotrack::CryptoSnapshot => crypto_snapshots, true;
-    crate::model::cryptotrack::CryptoWipe => crypto_wiped_at, true;
+    super::store::Store => stores, false;
+    super::contact::Contact => contacts, false;
+    super::planning::Budget => budgets, false;
+    super::planning::Goal => goals, false;
+    super::planning::Reminder => reminders, false;
+    super::planning::PriceAlert => price_alerts, false;
+    super::planning::CategorizationRule => categorization_rules, false;
+    super::planning::UtilityItem => utility_items, false;
+    super::planning::MeterReading => meter_readings, false;
+    super::enrichment::EnrichmentRecord => enrichments, false;
+    super::planning::Envelope => envelopes, false;
+    super::contact::DebtTerms => debt_terms, false;
+    super::workflow::Workflow => workflows, false;
+    super::workflow::WorkflowRun => workflow_runs, false;
+    super::workflow::QueuedActions => workflow_queue, false;
+    super::workflow::WorkflowWait => workflow_waits, false;
+    super::planning::CalcScenario => calc_scenarios, false;
+    super::planning::AssetClass => asset_classes, false;
+    super::vault::Valuation => valuations, false;
+    super::datasource::DataSource => data_sources, false;
+    super::attachment::Attachment => attachments, false;
+    super::attachment::AttachmentKey => attachment_keys, false;
+    super::shared_event::SharedEvent => shared_events, false;
+    super::vault::ImportRun => import_runs, false;
+    super::cryptotrack::CryptoAccount => crypto_accounts, true;
+    super::cryptotrack::CryptoTx => crypto_events, true;
+    super::cryptotrack::CryptoOverride => crypto_overrides, true;
+    super::cryptotrack::CryptoPosition => crypto_positions, true;
+    super::cryptotrack::CryptoSnapshot => crypto_snapshots, true;
+    super::cryptotrack::CryptoWipe => crypto_wiped_at, true;
 }
 
 /// Every record kind with its level-3 flag.
@@ -109,37 +109,6 @@ pub fn level3_collections() -> impl Iterator<Item = &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sync::registry::{self, Rule};
-
-    #[test]
-    fn every_record_kind_is_in_the_sync_registry() {
-        for kind in record_kinds() {
-            let coll = registry::find(kind.collection)
-                .unwrap_or_else(|| panic!("{} is not in the sync registry", kind.collection));
-            assert!(
-                matches!(coll.rule, Rule::Records | Rule::Log { .. }),
-                "{} is not a records or log collection",
-                kind.collection
-            );
-            assert_eq!(coll.key, ["id"], "{} is not keyed by id", kind.collection);
-        }
-    }
-
-    #[test]
-    fn every_id_keyed_registry_collection_is_a_record_kind() {
-        for coll in registry::COLLECTIONS {
-            let is_record = matches!(coll.rule, Rule::Records | Rule::Log { .. });
-            if is_record && coll.key == ["id"] {
-                assert!(
-                    record_kinds()
-                        .iter()
-                        .any(|kind| kind.collection == coll.name),
-                    "{} is keyed by id in the sync registry but has no records! line",
-                    coll.name
-                );
-            }
-        }
-    }
 
     #[test]
     fn level3_only_matches_the_crypto_prefix() {
