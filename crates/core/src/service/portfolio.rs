@@ -49,9 +49,6 @@ impl UnlockedVault {
         #[cfg(test)]
         pub(crate) fn children_of(&self, parent_id: &str) -> Vec<&Store>
             => crate::money::tree::children_of @doc;
-        /// Every descendant id of `root_id`, without `root_id` itself.
-        pub(crate) fn subtree_ids(&self, root_id: &str) -> Vec<String>
-            => crate::money::tree::subtree_ids @doc;
         /// The whole wallet tree with own and rolled-up values. Roots (and
         /// orphans whose parent is gone) come first; live before archived,
         /// alphabetical inside each group.
@@ -72,7 +69,7 @@ impl UnlockedVault {
         pub fn prices_as_of(&self) -> Option<String>
             => crate::money::portfolio::prices_as_of @doc;
         pub fn portfolio_summary(&self) -> PortfolioSummary
-            => crate::money::portfolio::portfolio_summary @books;
+            => crate::usecases::money::capital::portfolio_summary @books;
         /// Portfolio value over time using transaction timestamps as event
         /// boundaries and the nearest cached price (≤ event ts) per asset.
         pub fn history_series(&self, base_currency: &str) -> Vec<HistoryPoint>

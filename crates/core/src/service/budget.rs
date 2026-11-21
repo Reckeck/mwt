@@ -12,7 +12,6 @@ use crate::Amount;
 #[cfg(test)]
 use crate::calendar::Calendar;
 use crate::error::Result;
-use crate::kernel::books::Books;
 use crate::model::planning::Budget;
 use crate::model::store::StoreScope;
 use crate::model::transaction::Leg;
@@ -78,16 +77,6 @@ impl UnlockedVault {
         /// rate (Currency-1 · 7, "Show").
         pub(crate) fn unpriced_tx_ids(&self) -> HashSet<String>
             => crate::usecases::planning::budget::unpriced_tx_ids @books;
-    }
-
-    /// [`Self::month_summary`] over the books of one request.
-    pub(crate) fn month_summary_in(
-        &self,
-        books: &Books,
-        month: &str,
-        zone: &str,
-    ) -> Result<MonthSummary> {
-        crate::usecases::planning::budget::month_summary(books, month, zone)
     }
 
     /// Value of one leg in `currency` at `secs`; `None` without a rate.

@@ -16,6 +16,7 @@ use crate::money::cost_basis::{self, CostStrategy, PositionKey, Replayed, positi
 use crate::money::price_info::{PriceInfo, PriceOrigin, PriceQuote, price_quote_for};
 use crate::money::rates::{RateBook, is_fiat_of, per_usd};
 use crate::money::tree::{ancestors_of, children_of, find_store, resolve_scope, subtree_ids};
+use crate::money::worth::NetWorth;
 use crate::pricing::history::secs_or_now;
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -820,7 +821,7 @@ fn change_24h_of(doc: &VaultDoc, asset_key: &str) -> Option<Amount> {
         .and_then(|point| point.change_24h_pct)
 }
 
-pub fn portfolio_summary(books: &Books<'_>) -> PortfolioSummary {
+pub fn portfolio_summary(books: &Books<'_>, worth: &NetWorth) -> PortfolioSummary {
     let doc = books.doc();
     let (base, fx) = books.base_and_fx();
     let mut total_usd = Amount::ZERO;
@@ -875,7 +876,6 @@ pub fn portfolio_summary(books: &Books<'_>) -> PortfolioSummary {
         }
     };
 
-    let worth = books.net_worth();
     PortfolioSummary {
         prices_as_of: prices_as_of(doc),
         base_fx_as_of: base_fx_as_of(books),
