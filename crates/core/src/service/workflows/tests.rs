@@ -8,6 +8,7 @@ use crate::model::store::StoreKind;
 use crate::model::transaction::TxOrigin;
 use crate::service::test_support::*;
 use crate::workflow::RunOutcome;
+use pretty_assertions::assert_eq;
 
 fn node(id: &str, kind: &str, params: Value) -> Value {
     json!({ "id": id, "kind": kind, "params": params })
@@ -2661,10 +2662,8 @@ fn a_refused_run_waits_for_retry_or_skip() {
         .unwrap();
     assert_eq!(pass.runs.len(), 1);
     let refused = pass.runs[0].clone();
-    let RunOutcome::Rejected { planned_at, .. } = &refused.outcome else {
-        panic!("{:?}", refused.outcome);
-    };
-    assert_eq!(planned_at.as_deref(), Some("2026-12-01T09:00:00Z"));
+    // The refusal, pinned: what was planned, and why it was turned down.
+    insta::assert_json_snapshot!(refused, { ".id" => "[id]", ".workflow_id" => "[id]" });
     assert!(pass.created.is_empty());
 
     // Still short: the error says so and the refusal stays.
@@ -2718,12 +2717,7 @@ fn a_refused_run_waits_for_retry_or_skip() {
         .unwrap();
     assert!(matches!(pass.runs[0].outcome, RunOutcome::Rejected { .. }));
     let skipped = vault.skip_workflow_run(&pass.runs[0].id).unwrap();
-    assert_eq!(
-        skipped.outcome,
-        RunOutcome::Dropped {
-            reason: "skipped".into()
-        }
-    );
+    insta::assert_json_snapshot!(skipped, { ".id" => "[id]", ".workflow_id" => "[id]" });
     assert!(vault.skip_workflow_run(&pass.runs[0].id).is_err());
 }
 

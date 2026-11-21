@@ -2563,7 +2563,34 @@ pub fn node_def(kind: &str) -> Option<&'static NodeDef> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use std::collections::HashSet;
+
+    /// The wiring of every node, pinned: group, ports with their types and
+    /// the parameter names. Titles and help are left out (the browser mock
+    /// test pins the whole catalog); a new or changed port shows here.
+    #[test]
+    fn the_catalog_shape_is_pinned() {
+        let shape: Vec<serde_json::Value> = catalog()
+            .iter()
+            .map(|def| {
+                let ports = |ports: &[PortDef]| {
+                    ports
+                        .iter()
+                        .map(|port| serde_json::json!([port.name, port.ty]))
+                        .collect::<Vec<_>>()
+                };
+                serde_json::json!({
+                    "kind": def.kind,
+                    "group": def.group,
+                    "inputs": ports(&def.inputs),
+                    "outputs": ports(&def.outputs),
+                    "params": def.params.iter().map(|param| param.name).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        insta::assert_json_snapshot!(shape);
+    }
 
     #[test]
     fn every_required_param_has_an_empty_default() {

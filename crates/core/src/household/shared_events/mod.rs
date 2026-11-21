@@ -32,6 +32,8 @@ pub mod purchases;
 mod purchases_tests;
 pub mod settle;
 pub mod split;
+#[cfg(test)]
+mod split_props;
 pub mod text;
 #[cfg(test)]
 mod text_tests;

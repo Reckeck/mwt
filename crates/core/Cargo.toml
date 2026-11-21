@@ -51,6 +51,9 @@ ego-tree.workspace = true
 [dev-dependencies]
 mwt-crypto = { path = "../crypto", features = ["ts", "testing"] }
 tempfile = "3"
+insta.workspace = true
+proptest.workspace = true
+pretty_assertions.workspace = true
 
 [[bin]]
 name = "gen-types"

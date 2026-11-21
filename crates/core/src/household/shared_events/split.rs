@@ -105,7 +105,7 @@ pub(crate) fn round_places(value: Amount, places: u32) -> Amount {
     )
 }
 
-fn round_to_step(value: Amount, step: Amount) -> Amount {
+pub(crate) fn round_to_step(value: Amount, step: Amount) -> Amount {
     if !step.is_positive() {
         return round_places(value, 2);
     }
@@ -187,7 +187,11 @@ fn weights(event: &SharedEvent, split: &ItemSplit, pool: &[String]) -> Vec<(Stri
 
 /// Spread `cost` over `weights` to the cent; the leftover cents go to `taker`
 /// when they share, else to the first sharer.
-fn spread(cost: Amount, weights: &[(String, Amount)], taker: &str) -> BTreeMap<String, Amount> {
+pub(crate) fn spread(
+    cost: Amount,
+    weights: &[(String, Amount)],
+    taker: &str,
+) -> BTreeMap<String, Amount> {
     let mut parts = BTreeMap::new();
     let total_weight = weights
         .iter()

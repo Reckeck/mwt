@@ -14,6 +14,8 @@ use std::collections::{HashMap, HashSet};
 
 pub mod fx_sources;
 pub mod history;
+#[cfg(test)]
+mod history_props;
 pub mod inflation;
 pub mod key_rate;
 pub mod llama;

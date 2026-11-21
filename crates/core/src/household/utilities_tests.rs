@@ -12,6 +12,7 @@ use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::Transaction;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
+use pretty_assertions::assert_eq;
 
 fn metered(vault: &mut UnlockedVault) -> UtilityItem {
     metered_in(vault, "Flat")

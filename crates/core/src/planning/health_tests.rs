@@ -11,6 +11,7 @@ use crate::service::StoreExtras;
 use crate::service::test_support::*;
 use crate::service::{Insight, InsightCode, LoanClass, UnlockedVault};
 use crate::time::secs_or_now;
+use pretty_assertions::assert_eq;
 
 fn pct(raw: &str) -> Amount {
     Amount::parse(raw).unwrap()
@@ -255,24 +256,16 @@ fn the_checkup_reads_the_vault_and_notices_only_changes() {
     );
     let may = secs_or_now("2026-05-03T10:00:00Z");
     let report = vault.capital_health(may, "UTC").unwrap();
-    assert_eq!(report.savings.len(), 12);
-    assert_eq!(report.savings_avg_pct, Some(pct("5")));
     assert_eq!(report.color, HealthColor::Yellow);
-    let found: Vec<HealthReasonCode> = report.reasons.iter().map(|item| item.code).collect();
-    assert_eq!(
-        found,
-        vec![
-            HealthReasonCode::FundNotSet,
-            HealthReasonCode::SavingsBelowPlan
-        ]
-    );
+    // The whole report, pinned: the twelve savings months, the average and the
+    // two reasons (fund not set, savings below plan).
+    insta::assert_json_snapshot!(report);
     let sent = vault
         .health_notice(may, "UTC", true)
         .unwrap()
         .expect("sent");
-    assert_eq!(sent.key, "health:2026-05");
-    assert_eq!(sent.link.as_deref(), Some(crate::routes::MONEY_HEALTH));
-    assert!(sent.body.contains("жёлтый"), "{}", sent.body);
+    // The notice, pinned: key, link and the yellow body; the delivery is the wall clock.
+    insta::assert_json_snapshot!(sent, { ".delivered_at" => "[now]" });
     assert_eq!(vault.health_notice(may, "UTC", true).unwrap(), None);
 
     let june = secs_or_now("2026-06-03T10:00:00Z");

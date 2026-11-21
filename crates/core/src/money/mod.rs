@@ -18,8 +18,12 @@ pub mod enrichment;
 mod enrichment_tests;
 pub mod inflation;
 #[cfg(test)]
+mod inflation_props;
+#[cfg(test)]
 mod inflation_tests;
 pub mod interest;
+#[cfg(test)]
+mod interest_props;
 #[cfg(test)]
 mod interest_tests;
 pub mod investments;
@@ -64,6 +68,8 @@ pub mod transactions;
 mod transactions_tests;
 pub mod tree;
 pub mod txinfo;
+#[cfg(test)]
+mod txinfo_props;
 pub mod validate;
 #[cfg(test)]
 mod validate_tests;

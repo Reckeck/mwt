@@ -240,6 +240,26 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
 - No secrets in the repository; `.gitignore` ignores `data/`, `*.wallet`,
   `.rust-target/`, `node_modules/`, `dist/`, `src-tauri/target/`.
 
+## Testing
+
+- **Snapshot or explicit assert.** An explicit `assert_eq!` states one fact
+  (a rule, a boundary, an invariant) and stays next to the test name. A snapshot
+  (`insta::assert_json_snapshot!`) pins a whole value (a month, a report, a
+  payload) where listing every field would be noise; keep the invariants as
+  asserts and add the snapshot on top. Use `pretty_assertions` for readable diffs.
+- **Properties** (`proptest`) check a law over generated input, not one example.
+  Case budget: the default 256 cases locally; set `ProptestConfig::with_cases`
+  lower (at least 32) only for a slow body, never zero. A failing property on
+  current code gets `#[ignore = "bug: ..."]` and is reported, not hidden.
+- **Accepting snapshots, locally only:** `cargo insta review`, or
+  `INSTA_UPDATE=always cargo test -p <crate> ...`; read the diff before committing.
+- **Commit** the `.snap` files and `proptest-regressions/` (the shrunk failing
+  inputs). Never commit `*.snap.new`.
+- **CI never writes snapshots:** a changed snapshot fails the run
+  (`INSTA_UPDATE=no`); the fix is a reviewed `.snap` in the commit.
+- The libraries are `[dev-dependencies]` only; `trade-core` has none of them in its
+  normal dependency tree.
+
 ## CI/CD (GitHub Actions)
 
 CI and releases are workflows in `.github/workflows/` (`ci.yml` — checks on PRs and

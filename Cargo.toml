@@ -54,6 +54,10 @@ scraper = { version = "0.29", default-features = false }
 csv = "1"
 calamine = { version = "0.38", default-features = false }
 ego-tree = "0.11"
+# Tests: snapshots, properties, readable diffs (dev-dependencies only).
+insta = { version = "1", features = ["json", "redactions"] }
+proptest = "1"
+pretty_assertions = "1"
 
 [profile.release]
 codegen-units = 1

@@ -4,6 +4,8 @@
 
 #[cfg(test)]
 pub mod builders;
+#[cfg(test)]
+pub mod props;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};

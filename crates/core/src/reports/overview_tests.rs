@@ -634,6 +634,8 @@ fn the_calendar_keeps_a_running_balance_and_the_days_notices() {
     assert_eq!(month.days[19].per_day_left, Some(Amount::ZERO));
     assert_eq!(month.days[25].left, Some(amount("-360")));
     assert_eq!(month.days[30].left, Some(amount("-360")));
+    // The whole month, pinned: every day's balance, forecast flag and notices.
+    insta::assert_json_snapshot!(month);
 }
 
 #[test]
