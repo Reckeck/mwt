@@ -7,7 +7,7 @@ use syn::{Expr, Meta, Token};
 
 /// What the argument list asks for.
 #[derive(Default)]
-pub struct Options {
+pub(crate) struct Options {
     pub serde_derive: bool,
     pub ts_derive: bool,
     pub schema_derive: bool,
@@ -20,7 +20,7 @@ pub struct Options {
 }
 
 impl Options {
-    pub fn parse(args: TokenStream) -> syn::Result<Self> {
+    pub(crate) fn parse(args: TokenStream) -> syn::Result<Self> {
         let metas = Punctuated::<Meta, Token![,]>::parse_terminated.parse2(args)?;
         let mut options = Options {
             serde_derive: true,

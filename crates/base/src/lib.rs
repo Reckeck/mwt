@@ -1,3 +1,4 @@
+#![warn(unreachable_pub)]
 //! `mwt-base`: the leaf of the workspace. `Amount`, `Error`, limits, time and
 //! calendar helpers, the calculators, `Secret` and the UI route names. It depends
 //! on no other workspace crate; `trade-core` re-exports every module under its

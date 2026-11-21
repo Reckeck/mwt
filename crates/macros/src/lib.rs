@@ -1,3 +1,4 @@
+#![warn(unreachable_pub)]
 //! `#[dto]`: one attribute for a data-transfer type.
 //!
 //! It expands to `#[derive(Serialize, Deserialize)]` plus

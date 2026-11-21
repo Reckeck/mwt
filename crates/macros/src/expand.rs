@@ -5,7 +5,7 @@ use quote::quote;
 
 use crate::options::Options;
 
-pub fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
+pub(crate) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
     let options = Options::parse(args)?;
     let serde_derive = options.serde_derive.then(|| {
         quote! { #[derive(::serde::Serialize, ::serde::Deserialize)] }

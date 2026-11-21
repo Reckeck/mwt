@@ -1,3 +1,4 @@
+#![warn(unreachable_pub)]
 //! Encrypted vault container.
 //!
 //! File layout (all integers little-endian):
