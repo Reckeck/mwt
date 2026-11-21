@@ -123,6 +123,7 @@ pub const GROUPS: &[Group] = &[
             "sandbox",
             "appconfig",
             "vault_facade_tests",
+            "sync_facade_tests",
         ],
         may_use: &[
             "base",
