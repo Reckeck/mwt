@@ -3,17 +3,18 @@
 
 use std::collections::BTreeMap;
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::model::transaction::Transaction;
+use crate::transaction::Transaction;
 
 /// Upper bound on stored runs over all workflows; the oldest are dropped.
 pub const MAX_WORKFLOW_RUNS: usize = 1000;
 /// Earlier versions of a graph kept to restore.
 pub const MAX_GRAPH_VERSIONS: usize = 20;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Workflow {
     pub id: String,
     pub name: String,
@@ -30,7 +31,7 @@ pub struct Workflow {
     pub react_to_workflows: bool,
     /// Most one run may move, in `max_amount_currency`; `None` = no cap.
     #[serde(default)]
-    pub max_amount: Option<crate::Amount>,
+    pub max_amount: Option<mwt_base::Amount>,
     /// Lowercase currency code of `max_amount`, the base of the device that
     /// set the cap. `None` on a cap from before the label: that one is read
     /// in the base of the device that runs the workflow.
@@ -45,18 +46,20 @@ pub struct Workflow {
     /// Edits left unsaved in the editor, kept to come back to; the saved
     /// graph (and the runs) are not touched by them.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub draft: Option<GraphVersion>,
     /// Set on a workflow made by the automation form: its graph is built
     /// from this and edited there, not in the editor.
     #[serde(default)]
-    #[ts(optional)]
-    pub automation: Option<crate::model::planning::AutomationSpec>,
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub automation: Option<crate::planning::AutomationSpec>,
 }
 
 /// An expectation checked by emulation: run the workflow as at a moment and
 /// compare what it did with what it should do.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WorkflowTest {
     pub id: String,
     pub name: String,
@@ -69,13 +72,15 @@ pub struct WorkflowTest {
     /// Answers to "Wait for confirmation" questions, by node id; a question
     /// without one ends the emulation as `waiting`.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub answers: Option<BTreeMap<String, bool>>,
     pub expect: TestExpect,
 }
 
 /// What a test expects; `None` = not checked.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TestExpect {
     /// `done`, `stopped`, `failed` or `waiting`.
     pub outcome: String,
@@ -87,13 +92,17 @@ pub struct TestExpect {
     pub notices: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct GraphVersion {
     pub saved_at: String,
     pub graph: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum RunOutcome {
     /// Ran to the end.
@@ -119,7 +128,7 @@ pub enum RunOutcome {
     /// nothing was kept; the run waits for "Retry" or "Skip".
     /// `trigger_node` and `planned_at` let a retry fire it the same way.
     Rejected {
-        reason: crate::model::planning::RejectReason,
+        reason: crate::planning::RejectReason,
         trigger_node: String,
         #[serde(default)]
         planned_at: Option<String>,
@@ -132,7 +141,9 @@ pub enum RunOutcome {
 }
 
 /// One run of a workflow, with its trace for the journal.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WorkflowRun {
     pub id: String,
     pub workflow_id: String,
@@ -149,13 +160,15 @@ pub struct WorkflowRun {
     #[serde(default)]
     pub dry_run: bool,
     /// Local date an automation run was planned for; `None` on older records.
-    #[serde(default, with = "crate::model::iso_date")]
-    #[ts(type = "string | null", optional)]
-    #[schemars(with = "Option<String>")]
-    pub planned_date: Option<crate::time::LocalDate>,
+    #[serde(default, with = "crate::iso_date")]
+    #[cfg_attr(feature = "ts", ts(type = "string | null", optional))]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub planned_date: Option<mwt_base::time::LocalDate>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum VarScope {
     /// Shared by every workflow.
@@ -165,7 +178,9 @@ pub enum VarScope {
 }
 
 /// A variable that outlives a run. The value is a `WfValue` in JSON.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WorkflowVar {
     pub scope: VarScope,
     pub name: String,
@@ -174,7 +189,9 @@ pub struct WorkflowVar {
 }
 
 /// Operations a workflow prepared behind a "Wait for confirmation" node.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct QueuedActions {
     pub id: String,
     pub workflow_id: String,
@@ -186,7 +203,9 @@ pub struct QueuedActions {
 }
 
 /// What a workflow's triggers last saw, so each fires once per occasion.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WorkflowState {
     pub workflow_id: String,
     /// Trigger node id → last moment it fired (RFC3339) or last side of a
@@ -202,9 +221,9 @@ pub struct WorkflowState {
 }
 
 /// What a sleeping run waits for.
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum WaitKind {
     /// "Wait": goes on from "Next" at `resume_at`.
@@ -217,7 +236,9 @@ pub enum WaitKind {
 
 /// A run asleep at a "Wait" or "Wait for confirmation" node: where it goes
 /// on, when, and the data it had worked out by then.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WorkflowWait {
     pub id: String,
     pub workflow_id: String,
@@ -241,11 +262,13 @@ pub struct WorkflowWait {
     /// on along it even if the workflow was edited since. Empty for a wait
     /// from an older app, which goes on along the current graph.
     #[serde(default)]
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub graph: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum StepStatus {
     Ok,
@@ -260,7 +283,9 @@ pub enum StepStatus {
 }
 
 /// One node of a run, in words.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TraceStep {
     pub node_id: String,
     pub kind: String,

@@ -5,13 +5,14 @@
 //! rate — and kept as a history, so a rate change does not rewrite what was
 //! earned before it.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
+use mwt_base::Amount;
 
 /// A rate in force from a day on.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RatePeriod {
     /// `YYYY-MM-DD`.
     pub from: String,
@@ -20,9 +21,9 @@ pub struct RatePeriod {
 }
 
 /// When earned interest joins the balance.
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Capitalization {
     /// Paid out, never compounded.
@@ -35,9 +36,9 @@ pub enum Capitalization {
 }
 
 /// Monthly income bracket of the ПДС co-financing ratio.
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum IncomeBracket {
     /// Up to 80 000 ₽ a month: the state adds 1 ₽ per 1 ₽.
@@ -51,7 +52,9 @@ pub enum IncomeBracket {
 
 /// The long-term savings programme (ПДС): state co-financing of
 /// contributions for ten years from the first one.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PdsTerms {
     /// `YYYY-MM-DD` of the first contribution; the ten years run from it.
     pub first_contribution_at: String,
@@ -59,7 +62,9 @@ pub struct PdsTerms {
 }
 
 /// Terms of a savings account or a term deposit.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DepositTerms {
     /// Oldest first; the last one with `from` ≤ a day is that day's rate.
     pub rates: Vec<RatePeriod>,
@@ -89,7 +94,9 @@ impl DepositTerms {
 }
 
 /// The Bank of Russia key rate from a day on, percent.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct KeyRatePoint {
     /// `YYYY-MM-DD`.
     pub date: String,

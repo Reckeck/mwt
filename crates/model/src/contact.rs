@@ -1,14 +1,13 @@
 //! Contacts: the outside parties money moves to and from, with any number of
 //! saved accounts each.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::model::chain::Chain;
+use crate::chain::Chain;
 
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ContactKind {
     #[default]
@@ -18,9 +17,9 @@ pub enum ContactKind {
     Exchanger,
 }
 
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum DetailKind {
     Iban,
@@ -34,7 +33,9 @@ pub enum DetailKind {
 }
 
 /// One saved account of a contact: an IBAN, a card, a USDT address.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ContactAccount {
     pub id: String,
     /// Grouping label in the UI ("My bank", "Exchange").
@@ -53,7 +54,9 @@ pub struct ContactAccount {
 
 /// When and why a debt with a contact is due. The amount is never stored: it
 /// is what the debt operations with the contact add up to (`DebtEffect`).
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DebtTerms {
     pub id: String,
     pub contact_id: String,
@@ -65,7 +68,9 @@ pub struct DebtTerms {
     pub created_at: String,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Contact {
     pub id: String,
     pub name: String,

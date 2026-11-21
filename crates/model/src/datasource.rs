@@ -2,10 +2,9 @@
 //! from a web page, a JSON answer or a CSV/XLSX file, refreshed in the
 //! background and used for inflation, an asset's price or a workflow.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
+use mwt_base::Amount;
 
 /// Values kept per source for its chart and for monthly series.
 pub const MAX_SOURCE_HISTORY: usize = 400;
@@ -16,7 +15,9 @@ pub const BROKEN_AFTER: u8 = 3;
 pub const JUMP_FACTOR: u32 = 10;
 
 /// How to find the value in what the address returns.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SourceMethod {
     /// One element of an HTML page by CSS selector. `text_hint` is the text
@@ -50,7 +51,9 @@ pub enum SourceMethod {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TableRow {
     First,
@@ -59,7 +62,9 @@ pub enum TableRow {
     ByDate,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum FileFormat {
     Csv,
@@ -67,7 +72,9 @@ pub enum FileFormat {
 }
 
 /// What the source gives.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SourceOutput {
     Number,
@@ -77,7 +84,9 @@ pub enum SourceOutput {
 }
 
 /// How to read a number written for people: «6,35 %», «1 234,5».
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct NumberFormat {
     /// `,` separates the fraction (Russian style); otherwise it groups
     /// thousands.
@@ -105,7 +114,9 @@ impl Default for NumberFormat {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SourceInterval {
     Hour,
@@ -123,7 +134,9 @@ impl SourceInterval {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SourceStatus {
     /// Not fetched yet, or the last refresh worked.
@@ -136,14 +149,18 @@ pub enum SourceStatus {
 }
 
 /// One row of a series value.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct SeriesPoint {
     pub label: String,
     pub value: Amount,
 }
 
 /// One fetched value.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct SourceValue {
     /// RFC3339: when it was fetched.
     pub at: String,
@@ -156,7 +173,9 @@ pub struct SourceValue {
 }
 
 /// A source the user set up.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DataSource {
     pub id: String,
     pub name: String,
@@ -194,7 +213,9 @@ fn status_ok() -> SourceStatus {
 
 /// An asset priced by a source (plan I2): the source's number is the price
 /// of one unit in `currency`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AssetPriceSource {
     /// `AssetRef::key()`.
     pub asset_key: String,
@@ -204,7 +225,9 @@ pub struct AssetPriceSource {
 }
 
 /// A deposit whose rate a source follows: a change is announced, not applied.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DepositRateSource {
     pub store_id: String,
     pub source_id: String,

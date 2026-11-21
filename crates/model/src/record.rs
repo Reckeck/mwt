@@ -25,28 +25,29 @@ pub struct RecordKind {
     pub level3_only: bool,
 }
 
+#[macro_export]
 macro_rules! records {
     ($($item:ty => $field:ident, $level3_only:literal;)*) => {
         $(
-            impl Record for $item {
+            impl $crate::Record for $item {
                 const COLLECTION: &'static str = stringify!($field);
 
                 fn id(&self) -> &str {
                     &self.id
                 }
 
-                fn slot(doc: &mut VaultDoc) -> &mut Vec<Self> {
+                fn slot(doc: &mut $crate::VaultDoc) -> &mut Vec<Self> {
                     &mut doc.$field
                 }
 
-                fn slot_ref(doc: &VaultDoc) -> &Vec<Self> {
+                fn slot_ref(doc: &$crate::VaultDoc) -> &Vec<Self> {
                     &doc.$field
                 }
             }
         )*
 
-        const RECORD_KINDS: &[RecordKind] = &[
-            $(RecordKind {
+        const RECORD_KINDS: &[$crate::RecordKind] = &[
+            $($crate::RecordKind {
                 collection: stringify!($field),
                 level3_only: $level3_only,
             },)*
@@ -145,11 +146,8 @@ mod tests {
         for kind in record_kinds() {
             assert!(value.get(kind.collection).is_some(), "{}", kind.collection);
         }
-        assert_eq!(
-            <crate::model::planning::Budget as Record>::COLLECTION,
-            "budgets"
-        );
-        assert!(<crate::model::planning::Budget as Record>::slot(&mut doc).is_empty());
-        assert!(<crate::model::planning::Budget as Record>::slot_ref(&doc).is_empty());
+        assert_eq!(<crate::planning::Budget as Record>::COLLECTION, "budgets");
+        assert!(<crate::planning::Budget as Record>::slot(&mut doc).is_empty());
+        assert!(<crate::planning::Budget as Record>::slot_ref(&doc).is_empty());
     }
 }

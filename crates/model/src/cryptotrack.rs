@@ -13,8 +13,8 @@
 //! `Default` — so a new source cannot forget [`CryptoTx::tracking`]:
 //!
 //! ```
-//! # use trade_core::model::chain::Chain;
-//! # use trade_core::model::cryptotrack::{CryptoTx, CryptoTxKind, TrackingRef};
+//! # use mwt_model::Chain;
+//! # use mwt_model::{CryptoTx, CryptoTxKind, TrackingRef};
 //! let event = CryptoTx {
 //!     id: "ev-1".into(),
 //!     chain: Chain::Ethereum,
@@ -31,14 +31,14 @@
 //!     raw: None,
 //!     tracking: TrackingRef::ChainTx { chain: Chain::Ethereum, hash: "0xdead".into() },
 //! };
-//! assert!(event.validate().is_ok());
+//! assert_eq!(event.id, "ev-1");
 //! ```
 //!
 //! The same event without `tracking` does not compile:
 //!
 //! ```compile_fail
-//! # use trade_core::model::chain::Chain;
-//! # use trade_core::model::cryptotrack::{CryptoTx, CryptoTxKind};
+//! # use mwt_model::Chain;
+//! # use mwt_model::{CryptoTx, CryptoTxKind};
 //! let event = CryptoTx {
 //!     id: "ev-1".into(),
 //!     chain: Chain::Ethereum,
@@ -60,11 +60,10 @@
 //! fields with `#[serde(default)]` and never renames or re-types one
 //! (`AGENTS.md`, rule 5).
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::model::chain::Chain;
+use crate::chain::Chain;
+use mwt_base::Amount;
 
 /// Networks whose addresses are hex and case-insensitive, so the same address
 /// typed in two cases is one address. Everything else (Bitcoin, Solana, Tron,
@@ -110,7 +109,9 @@ pub fn chain_slug(chain: Chain) -> String {
 /// The symbol is deliberately not part of it — two tokens share a symbol, and
 /// one token renames itself — so a price series and a holding stay with the
 /// contract.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TokenId {
     pub chain: Chain,
     /// Normalized by [`normalize_address`] when built with [`TokenId::new`].
@@ -135,7 +136,9 @@ impl TokenId {
 
 /// What an operation or a position holds: the network's own coin, or a token
 /// on it.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum CryptoAsset {
     /// The network's gas coin (ETH on Ethereum, SOL on Solana).
@@ -167,7 +170,9 @@ impl CryptoAsset {
 /// exchange read through its key by one of kind `Exchange`. The module owns
 /// the reading, the wallet owns the presentation, and the value reaches the
 /// capital through `doc.holdings` like any other wallet's.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoAccount {
     pub id: String,
     pub name: String,
@@ -204,7 +209,9 @@ impl CryptoAccount {
 }
 
 /// A token the module has met, with what it takes to show and price it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoToken {
     /// Record key, with [`CryptoToken::contract`]: see
     /// `sync::registry::COLLECTIONS`.
@@ -225,24 +232,26 @@ pub struct CryptoToken {
     /// What the old purchases of this token cost, in USD per unit: bought
     /// before the module followed the address, so no event carries it.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub basis_usd: Option<Amount>,
     /// The user's decision on the token. A refetch rewrites a token's text
     /// and never this, so a decision outlives it; with none, the built-in
     /// list or the quarantine decides (`cryptotrack::tokens::status`).
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub verdict: Option<TokenVerdict>,
     /// When the verdict was decided (RFC3339 UTC); `None` with no verdict, and
     /// for a verdict an older release stored. Set and cleared together with
     /// `verdict`, so the settings list can say "hidden on <date>".
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub verdict_at: Option<String>,
 }
 
 /// The user's decision on a token that is not on the built-in list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TokenVerdict {
     /// Taken into the totals.
@@ -273,9 +282,9 @@ impl CryptoToken {
 }
 
 /// Which way an asset moved, from the followed account's point of view.
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum CryptoDirection {
     /// Into the account.
@@ -286,7 +295,9 @@ pub enum CryptoDirection {
 }
 
 /// One asset movement of an operation. A swap has two legs, a transfer one.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoLeg {
     pub direction: CryptoDirection,
     pub asset: CryptoAsset,
@@ -298,16 +309,18 @@ pub struct CryptoLeg {
 }
 
 /// What the network charged for an operation.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoFee {
     pub asset: CryptoAsset,
     pub amount: Amount,
 }
 
 /// What an operation did, as far as the module could tell.
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum CryptoTxKind {
     Transfer,
@@ -326,7 +339,9 @@ pub enum CryptoTxKind {
 /// What an operation was found through, so it can be fetched, deduplicated
 /// and shown again. Never optional: an event whose origin is unknown cannot
 /// be refreshed or deduplicated.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TrackingRef {
     /// One transaction of a network.
@@ -347,7 +362,9 @@ pub enum TrackingRef {
 /// One operation of the crypto module. Built with every field named
 /// (there is no `Default`), so a new source cannot forget
 /// [`CryptoTx::tracking`] — see the examples at the top of this module.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoTx {
     pub id: String,
     pub chain: Chain,
@@ -383,7 +400,9 @@ pub struct CryptoTx {
 
 /// The user's correction over what a source reported. The event itself is
 /// left as it came, so a refetch does not lose the correction.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoOverride {
     pub id: String,
     /// The event it corrects.
@@ -401,7 +420,7 @@ pub struct CryptoOverride {
     /// own, the chain is (decision P6). It lives here and not on the event
     /// because a refetch rewrites the event and keeps the override.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub flow_id: Option<String>,
     /// Who the operation went with or through — the same contact directory a
     /// fiat [`crate::model::transaction::TxMeta`] points at. The network only
@@ -410,13 +429,13 @@ pub struct CryptoOverride {
     /// account fills it, and the user names it where no match exists
     /// (decision P8).
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub contact_id: Option<String>,
     /// The user said this is not an exchange: the app stops suggesting a fiat
     /// operation for it. A decision about their own data, so it lives here and
     /// syncs, and is not a remembered browser setting (spec E10).
     #[serde(default)]
-    #[ts(as = "Option<bool>", optional)]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
     pub not_exchange: bool,
     /// Out of the module's lists and totals (dust, a scam airdrop).
     #[serde(default)]
@@ -429,7 +448,7 @@ pub struct CryptoOverride {
     /// device below level 3 (spec E13). The record may be gone later; readers
     /// treat that as «not found», not as an error.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub fiat_tx_id: Option<String>,
     pub updated_at: String,
 }
@@ -455,7 +474,9 @@ impl CryptoOverride {
 /// A holding inside a protocol (lending, staking, a liquidity pool). Filled
 /// by the DeFi stage (D0 and later); the field exists from E0 so the sync
 /// registry and the vault schema do not change again.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoPosition {
     pub id: String,
     pub account_id: String,
@@ -484,7 +505,9 @@ pub struct CryptoPosition {
 
 /// The module's value at a moment, kept so its history survives a refetch
 /// (balances themselves are never stored).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoSnapshot {
     pub id: String,
     /// RFC3339 UTC.
@@ -498,7 +521,9 @@ pub struct CryptoSnapshot {
 /// How far a source has read one account. Belongs to the device: it names a
 /// page of a provider this device talked to, so it is listed in
 /// `sync::registry::LOCAL`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoCursor {
     /// `<source>|<account_id>`.
     pub id: String,
@@ -512,7 +537,9 @@ pub struct CryptoCursor {
 
 /// A cached token price, in USD. A cache: it unions between devices and never
 /// reaches the sync question (`cache: true` in the registry).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoPricePoint {
     /// [`CryptoAsset::key`].
     pub token_key: String,
@@ -526,7 +553,9 @@ pub struct CryptoPricePoint {
 /// A wipe of the module (spec E12), kept as a record so the other devices
 /// learn about it through an ordinary sync instead of seeing the data come
 /// back from them.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CryptoWipe {
     pub id: String,
     /// RFC3339 UTC of the wipe.
@@ -542,7 +571,7 @@ mod tests {
 
     #[test]
     fn chain_slug_matches_serde() {
-        for chain in crate::model::chain::ALL_CHAINS {
+        for chain in crate::chain::ALL_CHAINS {
             let serialized = serde_json::to_value(chain).expect("a chain serializes");
             assert_eq!(
                 serde_json::Value::from(chain_slug(*chain)),

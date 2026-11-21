@@ -122,11 +122,16 @@ mod json_text {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde_json::Value;
 
-    pub fn serialize<S: Serializer>(value: &Option<Value>, out: S) -> Result<S::Ok, S::Error> {
+    pub(super) fn serialize<S: Serializer>(
+        value: &Option<Value>,
+        out: S,
+    ) -> Result<S::Ok, S::Error> {
         value.as_ref().map(Value::to_string).serialize(out)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(input: D) -> Result<Option<Value>, D::Error> {
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        input: D,
+    ) -> Result<Option<Value>, D::Error> {
         Option::<String>::deserialize(input)?
             .map(|text| serde_json::from_str(&text).map_err(serde::de::Error::custom))
             .transpose()
@@ -268,7 +273,8 @@ pub struct SyncState {
 }
 
 /// Why another device refused this one on purpose (`Bye` reasons).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncCutReason {
     /// It paused the exchange with this device ("Decline" there).
@@ -446,7 +452,8 @@ pub fn is_own_device(own: &str, device_id: &str) -> bool {
     !tag.is_empty() && tag == device_tag(device_id)
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum ChangeKind {
     #[default]
@@ -455,7 +462,8 @@ pub enum ChangeKind {
     Deleted,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ChangeItem {
     pub kind: ChangeKind,
     /// Readable name of the record (never its raw key); may be empty.
@@ -469,7 +477,8 @@ pub struct ChangeItem {
 }
 
 /// One user-meaningful field of an updated record, as display-ready text.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct FieldChange {
     /// Dotted field name (`meta.comment`); the UI maps it to a label.
     pub field: String,
@@ -482,7 +491,8 @@ pub struct FieldChange {
 }
 
 /// Changes to one collection (`transactions`, `stores`, …).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CollectionChanges {
     pub collection: String,
     pub added: u32,
@@ -493,7 +503,8 @@ pub struct CollectionChanges {
 }
 
 /// A field edited on both devices where the other device's later edit won.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct OverwrittenField {
     pub collection: String,
     pub label: String,
@@ -502,7 +513,8 @@ pub struct OverwrittenField {
     pub after: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncSummary {
     pub total: u32,
     pub collections: Vec<CollectionChanges>,
@@ -515,7 +527,8 @@ pub struct SyncSummary {
 }
 
 /// How a batch ended.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncJournalOutcome {
     #[default]
@@ -527,14 +540,16 @@ pub enum SyncJournalOutcome {
 }
 
 /// How many records of one collection a batch touched.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncJournalCount {
     pub collection: String,
     pub count: u32,
 }
 
 /// One batch, as the journal tells it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncJournalEntry {
     pub id: String,
     /// RFC3339.

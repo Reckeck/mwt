@@ -1,0 +1,31 @@
+[package]
+name = "mwt-model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker model: the vault document and the types it holds, ids, record kinds, coin tables (depends on mwt-base only)"
+
+[lints]
+workspace = true
+
+[features]
+# `ts-rs` / `schemars` derives of the model types; off by default, `trade-core` turns them on.
+ts = ["dep:ts-rs", "mwt-base/ts"]
+schema = ["dep:schemars", "mwt-base/schema"]
+
+[dependencies]
+mwt-base = { path = "../base" }
+serde.workspace = true
+serde_json.workspace = true
+zeroize.workspace = true
+rust_decimal.workspace = true
+uuid.workspace = true
+time.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+ts-rs = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+
+[dev-dependencies]
+rmp-serde.workspace = true

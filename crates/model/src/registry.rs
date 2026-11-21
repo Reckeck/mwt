@@ -418,14 +418,14 @@ pub static COLLECTIONS: &[Collection] = &[
     log(
         "notification_log",
         &["key"],
-        crate::model::notify::MAX_NOTICE_LOG,
+        crate::notify::MAX_NOTICE_LOG,
         "delivered_at",
     ),
     records("workflows", ID),
     log(
         "workflow_runs",
         ID,
-        crate::model::workflow::MAX_WORKFLOW_RUNS,
+        crate::workflow::MAX_WORKFLOW_RUNS,
         "started_at",
     ),
     Collection {
@@ -467,12 +467,7 @@ pub static COLLECTIONS: &[Collection] = &[
         secret: true,
         ..records("attachment_keys", ID)
     },
-    log(
-        "import_runs",
-        ID,
-        crate::model::vault::MAX_IMPORT_RUNS,
-        "at",
-    ),
+    log("import_runs", ID, crate::vault::MAX_IMPORT_RUNS, "at"),
     // -- the crypto module (stage 2) ---------------------------------------
     //
     // One rule per top-level field: records by id, so one edited operation
@@ -508,7 +503,7 @@ pub static COLLECTIONS: &[Collection] = &[
     Collection {
         name: "discarded_imports",
         rule: Rule::Union {
-            cap: Some(crate::model::vault::MAX_DISCARDED_IMPORTS),
+            cap: Some(crate::vault::MAX_DISCARDED_IMPORTS),
         },
         key: &[],
         flatten: &[],

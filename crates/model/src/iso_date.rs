@@ -2,16 +2,21 @@
 
 use serde::{Deserialize, Deserializer, Serializer};
 
-use crate::time::LocalDate;
+use mwt_base::time::LocalDate;
 
-pub fn serialize<S: Serializer>(date: &Option<LocalDate>, out: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn serialize<S: Serializer>(
+    date: &Option<LocalDate>,
+    out: S,
+) -> Result<S::Ok, S::Error> {
     match date {
         Some(date) => out.serialize_some(&date.to_string()),
         None => out.serialize_none(),
     }
 }
 
-pub fn deserialize<'de, D: Deserializer<'de>>(input: D) -> Result<Option<LocalDate>, D::Error> {
+pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+    input: D,
+) -> Result<Option<LocalDate>, D::Error> {
     let text = Option::<String>::deserialize(input)?;
     text.map(|text| text.parse().map_err(serde::de::Error::custom))
         .transpose()

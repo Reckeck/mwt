@@ -5,11 +5,10 @@
 
 use std::collections::BTreeMap;
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::model::contact::ContactAccount;
+use crate::contact::ContactAccount;
+use mwt_base::Amount;
 
 /// The id that stands for the vault owner wherever a participant id is
 /// expected (buyer, organizer, share owner). Participant ids are UUIDs, so it
@@ -20,7 +19,9 @@ pub const ME: &str = "me";
 pub const ROUNDING_STEPS: [&str; 5] = ["0.01", "1", "10", "50", "100"];
 
 /// What a guest (a participant without a contact) is reachable by.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct GuestDetails {
     #[serde(default)]
     pub phone: String,
@@ -44,7 +45,9 @@ impl GuestDetails {
 
 /// A person in the event: a contact of the directory, or a guest (no
 /// `contact_id`). The owner is not listed; they are [`ME`].
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Participant {
     pub id: String,
     pub name: String,
@@ -55,9 +58,9 @@ pub struct Participant {
     pub details: Option<GuestDetails>,
 }
 
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum PriceMode {
     #[default]
@@ -66,7 +69,9 @@ pub enum PriceMode {
 }
 
 /// What was meant to be bought. The price is in the event currency.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ItemPlan {
     pub qty: Amount,
     pub price: Amount,
@@ -84,7 +89,9 @@ impl ItemPlan {
 }
 
 /// Who shares an item.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ItemSplit {
     /// Equally between the listed people; an empty list means everyone.
@@ -100,7 +107,9 @@ impl Default for ItemSplit {
 }
 
 /// One real purchase of an item.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Purchase {
     pub id: String,
     /// [`ME`] or a participant id.
@@ -148,7 +157,9 @@ impl Purchase {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct EventItem {
     pub id: String,
     pub title: String,
@@ -167,15 +178,17 @@ pub struct EventItem {
 }
 
 /// A person's total fixed by hand; the rest is spread over the others.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ShareOverride {
     pub participant_id: String,
     pub total: Amount,
 }
 
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SettlementKind {
     /// Money moved between the participant and the organizer (a debt
@@ -191,9 +204,9 @@ pub enum SettlementKind {
 }
 
 /// Which way the money of a settlement went, relative to the organizer.
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SettleDirection {
     /// The participant gave the organizer money (reduces what they owe).
@@ -203,7 +216,9 @@ pub enum SettleDirection {
     FromOrganizer,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Settlement {
     pub id: String,
     pub kind: SettlementKind,
@@ -222,11 +237,13 @@ pub struct Settlement {
     pub to: Vec<String>,
     /// The event organizer when this was recorded ([`ME`] or a participant
     /// id). `None` when unknown; a missing key reads as `None` (`Option`).
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub organizer: Option<String>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct SharedEvent {
     pub id: String,
     pub title: String,
@@ -264,13 +281,14 @@ pub struct SharedEvent {
     /// with it; a part the user took out of the event by hand is never here.
     /// Backend only: the frontend does not see it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub removed_with_payment: Vec<RemovedWithPayment>,
 }
 
 /// A purchase or a settlement kept until its payment is either back or gone
 /// for good.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RemovedWithPayment {
     /// Of the purchase or the settlement.
     pub id: String,
@@ -286,7 +304,9 @@ pub struct RemovedWithPayment {
 
 /// The link from a vault payment or debt transfer back to the event that made
 /// (or adopted) it.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct SharedLink {
     pub event_id: String,
     #[serde(default)]
@@ -296,9 +316,9 @@ pub struct SharedLink {
 }
 
 /// Where an event stands; worked out, never stored.
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SharedEventStatus {
     /// Nothing bought yet.

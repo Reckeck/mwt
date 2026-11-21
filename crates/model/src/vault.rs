@@ -1,21 +1,22 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::model::category::{Category, default_categories};
-use crate::model::chain::ChainInfo;
-use crate::model::contact::Contact;
-use crate::model::enrichment::EnrichmentRecord;
-use crate::model::planning::{
+use crate::category::{Category, default_categories};
+use crate::chain::ChainInfo;
+use crate::contact::Contact;
+use crate::enrichment::EnrichmentRecord;
+use crate::planning::{
     Budget, CategorizationRule, Goal, MeterReading, PriceAlert, Reminder, UtilityItem,
 };
-use crate::model::store::{AssetRef, Holding, Store};
-use crate::model::transaction::Transaction;
-use crate::secret::Hidden;
-use schemars::JsonSchema;
+use crate::store::{AssetRef, Holding, Store};
+use crate::transaction::Transaction;
+use mwt_base::Amount;
+use mwt_base::secret::Hidden;
 
 /// One widget on the dashboard grid (12 columns). A widget not in the list is
 /// not on the dashboard; the grid compacts upwards, so `y` is only an order.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DashboardWidgetCfg {
     pub id: String,
     /// Left column, 0-based.
@@ -41,9 +42,9 @@ pub struct DashboardWidgetCfg {
 }
 
 /// The window a dashboard widget measures (plan H1, decision 54).
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum DashPeriod {
     #[default]
@@ -68,11 +69,15 @@ impl Default for DashboardWidgetCfg {
     }
 }
 
-pub(crate) fn default_fx_interval() -> u32 {
+/// Serde default shared with the v4 vault reader of `trade-core`.
+#[doc(hidden)]
+pub fn default_fx_interval() -> u32 {
     300
 }
 
-pub(crate) fn default_minimize_to_tray() -> bool {
+/// Serde default shared with the v4 vault reader of `trade-core`.
+#[doc(hidden)]
+pub fn default_minimize_to_tray() -> bool {
     true
 }
 
@@ -81,7 +86,9 @@ pub(crate) fn default_minimize_to_tray() -> bool {
 /// The preferences that describe the *user* rather than this particular vault
 /// (theme, language, base currency, favourite currencies) live outside the
 /// encrypted doc — see [`crate::appconfig::AppSettings`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Settings {
     /// Decimal places used to render balances.
     pub display_decimals: u32,
@@ -98,7 +105,7 @@ pub struct Settings {
     pub budget_currency: String,
     /// What to be told about and how far ahead.
     #[serde(default)]
-    pub notifications: crate::model::notify::NotificationSettings,
+    pub notifications: crate::notify::NotificationSettings,
     /// The budget settings were saved at least once: the checklist step
     /// "Savings rate" is done even when 10 % was the right answer.
     #[serde(default)]
@@ -109,7 +116,7 @@ pub struct Settings {
     /// Where each currency's inflation comes from; a currency missing here
     /// reads as [`crate::service::inflation`] decides.
     #[serde(default)]
-    pub inflation_mode: std::collections::BTreeMap<String, crate::model::inflation::InflationMode>,
+    pub inflation_mode: std::collections::BTreeMap<String, crate::inflation::InflationMode>,
     /// The data source of each currency in `InflationMode::Source`.
     #[serde(default)]
     pub inflation_source: std::collections::BTreeMap<String, String>,
@@ -144,7 +151,7 @@ pub struct Settings {
     pub carry_since: Option<String>,
     /// The sidebar's «Pinned» block, in its order (plan J2).
     #[serde(default)]
-    pub pinned: Vec<crate::model::entity_ref::Pinned>,
+    pub pinned: Vec<crate::entity_ref::Pinned>,
     /// The period every dashboard widget measures unless it has its own.
     #[serde(default)]
     pub dashboard_period: DashPeriod,
@@ -168,9 +175,9 @@ pub struct Settings {
 }
 
 /// How the daily budget is computed (plan D18).
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum DailyBudgetMode {
     /// Month's free money spread over its days; what is left carries over.
@@ -182,7 +189,9 @@ pub enum DailyBudgetMode {
 
 /// A hand-set value of a non-financial asset; applies to its whole history
 /// (plan D24), so revaluing a flat does not make the net-worth chart jump.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ManualPrice {
     /// `AssetRef::key()` of the asset.
     pub asset_key: String,
@@ -194,7 +203,9 @@ pub struct ManualPrice {
 
 /// A dated value of one unit of a property asset (plan G3). Between two
 /// valuations the price runs in a straight line.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Valuation {
     pub id: String,
     pub store_id: String,
@@ -210,7 +221,9 @@ pub struct Valuation {
 /// An operation that belongs to a property (plan G4): rent received for a
 /// flat, fuel or insurance for a car. Kept beside the operations, not in
 /// them, so the operation shape stays unchanged.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TxProperty {
     pub tx_id: String,
     /// Id of a `StoreKind::Property` store.
@@ -227,7 +240,7 @@ impl Default for Settings {
             savings_rate: Amount::parse("0.10").unwrap_or(Amount::ZERO),
             daily_budget_mode: DailyBudgetMode::Month,
             budget_currency: String::new(),
-            notifications: crate::model::notify::NotificationSettings::default(),
+            notifications: crate::notify::NotificationSettings::default(),
             budget_configured: false,
             onboarding_skipped: Vec::new(),
             inflation_mode: std::collections::BTreeMap::new(),
@@ -236,7 +249,7 @@ impl Default for Settings {
             inflation_adopted: false,
             manual_income: None,
             manual_expenses: None,
-            categories_rev: crate::model::category::CATEGORIES_REV,
+            categories_rev: crate::category::CATEGORIES_REV,
             freedom_rate: None,
             carry_since: None,
             pinned: Vec::new(),
@@ -249,7 +262,9 @@ impl Default for Settings {
 }
 
 /// A cached price: one unit of an asset in USD.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PricePoint {
     /// `AssetRef::key()`.
     pub asset_key: String,
@@ -264,7 +279,9 @@ pub struct PricePoint {
 }
 
 /// A cached FX rate: units of `currency` per 1 USD.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct FxPoint {
     pub currency: String,
     pub per_usd: Amount,
@@ -283,7 +300,8 @@ pub struct FxPoint {
 /// - both fields are zeroized when the value is dropped.
 /// - `ts(skip)` on the `VaultDoc` field keeps it out of the generated
 ///   TypeScript bindings entirely.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ExchangeKeys {
     pub store_id: String,
     pub api_key: String,
@@ -327,9 +345,9 @@ impl Drop for ExchangeKeys {
 }
 
 /// What an import stages.
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ImportKind {
     /// A trade fill; becomes a spot or futures trade.
@@ -347,7 +365,9 @@ pub enum ImportKind {
 /// Fills land here first and never touch `transactions` until the user
 /// confirms them, so a background import can never silently rewrite history.
 /// Deduplication key is Bybit's `execId`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub struct PendingImport {
     /// Bybit's execution ID (`execId`) — the deduplication key.
@@ -404,16 +424,17 @@ impl PendingImport {
 }
 
 /// Exchange credentials grouped by exchange name.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Exchanges {
     #[serde(default)]
     pub bybit: Vec<ExchangeKeys>,
 }
 
 /// What started a sync with an exchange.
-#[derive(
-    Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ImportSource {
     /// The background poll.
@@ -424,7 +445,9 @@ pub enum ImportSource {
 }
 
 /// One sync with an exchange, for its history in the wallet settings.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ImportRun {
     pub id: String,
     /// The exchange wallet (root store).
@@ -462,7 +485,9 @@ pub const MAX_IMPORT_RUNS: usize = 500;
 pub const MAX_DISCARDED_IMPORTS: usize = 20_000;
 
 /// Full plaintext vault document. Serialized as JSON (dev) or MessagePack (prod).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct VaultDoc {
     pub version: u32,
     pub id: String,
@@ -482,7 +507,7 @@ pub struct VaultDoc {
     /// in an older file move to the device file at the first level-3 open;
     /// below level 3 they are kept as they were and not used.
     #[serde(default)]
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub exchanges: Exchanges,
     /// Staged Bybit fills awaiting user confirmation (D2.4).
     #[serde(default)]
@@ -499,31 +524,31 @@ pub struct VaultDoc {
     pub manual_prices: Vec<ManualPrice>,
     /// Virtual envelopes: earmarked parts of a store's balance.
     #[serde(default)]
-    pub envelopes: Vec<crate::model::planning::Envelope>,
+    pub envelopes: Vec<crate::planning::Envelope>,
     /// Due dates and notes of debts with contacts.
     #[serde(default)]
-    pub debt_terms: Vec<crate::model::contact::DebtTerms>,
+    pub debt_terms: Vec<crate::contact::DebtTerms>,
     /// Bank of Russia key rate history, for the deposit-interest tax limit.
     #[serde(default)]
-    pub key_rates: Vec<crate::model::deposit::KeyRatePoint>,
+    pub key_rates: Vec<crate::deposit::KeyRatePoint>,
     /// Notices already shown, newest last (payload v2).
     #[serde(default)]
-    pub notification_log: Vec<crate::model::notify::NoticeRecord>,
+    pub notification_log: Vec<crate::notify::NoticeRecord>,
     /// Node workflows: their graphs, runs, variables, the operations waiting
     /// for confirmation and what their triggers last saw.
     #[serde(default)]
-    pub workflows: Vec<crate::model::workflow::Workflow>,
+    pub workflows: Vec<crate::workflow::Workflow>,
     #[serde(default)]
-    pub workflow_runs: Vec<crate::model::workflow::WorkflowRun>,
+    pub workflow_runs: Vec<crate::workflow::WorkflowRun>,
     #[serde(default)]
-    pub workflow_vars: Vec<crate::model::workflow::WorkflowVar>,
+    pub workflow_vars: Vec<crate::workflow::WorkflowVar>,
     #[serde(default)]
-    pub workflow_queue: Vec<crate::model::workflow::QueuedActions>,
+    pub workflow_queue: Vec<crate::workflow::QueuedActions>,
     #[serde(default)]
-    pub workflow_state: Vec<crate::model::workflow::WorkflowState>,
+    pub workflow_state: Vec<crate::workflow::WorkflowState>,
     /// Runs asleep at a "Wait" node.
     #[serde(default)]
-    pub workflow_waits: Vec<crate::model::workflow::WorkflowWait>,
+    pub workflow_waits: Vec<crate::workflow::WorkflowWait>,
     /// Syncs with exchanges, newest last.
     #[serde(default)]
     pub import_runs: Vec<ImportRun>,
@@ -532,22 +557,22 @@ pub struct VaultDoc {
     pub discarded_imports: Vec<String>,
     /// Saved investment calculator scenarios (plan A).
     #[serde(default)]
-    pub calc_scenarios: Vec<crate::model::planning::CalcScenario>,
+    pub calc_scenarios: Vec<crate::planning::CalcScenario>,
     /// Inflation by currency and month, fetched in the background (plan I1).
     #[serde(default)]
-    pub inflation_points: Vec<crate::model::inflation::InflationReading>,
+    pub inflation_points: Vec<crate::inflation::InflationReading>,
     /// The emergency fund; an empty store list means none (plan C1).
     #[serde(default)]
-    pub emergency_fund: crate::model::planning::EmergencyFund,
+    pub emergency_fund: crate::planning::EmergencyFund,
     /// The last monthly checkup notice, so the next one comes only on a change.
     #[serde(default)]
-    pub health_last: Option<crate::model::planning::HealthSnapshot>,
+    pub health_last: Option<crate::planning::HealthSnapshot>,
     /// Portfolio baskets with target shares (plan F); empty = the preset.
     #[serde(default)]
-    pub asset_classes: Vec<crate::model::planning::AssetClass>,
+    pub asset_classes: Vec<crate::planning::AssetClass>,
     /// Assets placed in a basket by hand, by `AssetRef::key()`.
     #[serde(default)]
-    pub asset_class_of: Vec<crate::model::planning::AssetClassLink>,
+    pub asset_class_of: Vec<crate::planning::AssetClassLink>,
     /// Dated valuations of property (plan G3).
     #[serde(default)]
     pub valuations: Vec<Valuation>,
@@ -556,30 +581,30 @@ pub struct VaultDoc {
     pub tx_properties: Vec<TxProperty>,
     /// The user's own data sources (plan I2).
     #[serde(default)]
-    pub data_sources: Vec<crate::model::datasource::DataSource>,
+    pub data_sources: Vec<crate::datasource::DataSource>,
     /// Assets priced by a data source, by `AssetRef::key()`.
     #[serde(default)]
-    pub asset_price_sources: Vec<crate::model::datasource::AssetPriceSource>,
+    pub asset_price_sources: Vec<crate::datasource::AssetPriceSource>,
     /// Deposits whose rate a data source follows.
     #[serde(default)]
-    pub deposit_rate_sources: Vec<crate::model::datasource::DepositRateSource>,
+    pub deposit_rate_sources: Vec<crate::datasource::DepositRateSource>,
     /// Device-to-device sync bookkeeping: change stamps, deletions, trusted
     /// devices, batches kept for undo (docs/sync.md). Managed by the vault
     /// itself; the JSON editor's copy is ignored on save.
     #[serde(default)]
-    #[ts(skip)]
-    #[schemars(with = "serde_json::Value")]
+    #[cfg_attr(feature = "ts", ts(skip))]
+    #[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
     pub sync: super::sync_state::SyncState,
     /// Files and links of operations and goals (Full-New-Attach).
     #[serde(default)]
-    pub attachments: Vec<crate::model::attachment::Attachment>,
+    pub attachments: Vec<crate::attachment::Attachment>,
     /// The keys the attachments' files are sealed with.
     #[serde(default)]
-    #[ts(skip)]
-    pub attachment_keys: Vec<crate::model::attachment::AttachmentKey>,
+    #[cfg_attr(feature = "ts", ts(skip))]
+    pub attachment_keys: Vec<crate::attachment::AttachmentKey>,
     /// Shared events: things bought together and split between people.
     #[serde(default)]
-    pub shared_events: Vec<crate::model::shared_event::SharedEvent>,
+    pub shared_events: Vec<crate::shared_event::SharedEvent>,
     // -- the crypto module (stage 2, decision P1 of 2026-11-10) ------------
     //
     // Sibling top-level fields instead of one nested object: a sync stamp, a
@@ -590,34 +615,50 @@ pub struct VaultDoc {
     // `every_vault_field_has_a_sync_rule` sees it.
     /// Addresses the crypto module follows.
     #[serde(default)]
-    pub crypto_accounts: Vec<crate::model::cryptotrack::CryptoAccount>,
+    pub crypto_accounts: Vec<crate::cryptotrack::CryptoAccount>,
     /// Operations the module read from its sources.
     #[serde(default)]
-    pub crypto_events: Vec<crate::model::cryptotrack::CryptoTx>,
+    pub crypto_events: Vec<crate::cryptotrack::CryptoTx>,
     /// The user's corrections over what a source reported.
     #[serde(default)]
-    pub crypto_overrides: Vec<crate::model::cryptotrack::CryptoOverride>,
+    pub crypto_overrides: Vec<crate::cryptotrack::CryptoOverride>,
     /// Tokens the module has met, with what it takes to show and price them.
     #[serde(default)]
-    pub crypto_tokens: Vec<crate::model::cryptotrack::CryptoToken>,
+    pub crypto_tokens: Vec<crate::cryptotrack::CryptoToken>,
     /// Holdings inside protocols (the DeFi stage fills them).
     #[serde(default)]
-    pub crypto_positions: Vec<crate::model::cryptotrack::CryptoPosition>,
+    pub crypto_positions: Vec<crate::cryptotrack::CryptoPosition>,
     /// The module's value over time, so its history survives a refetch.
     #[serde(default)]
-    pub crypto_snapshots: Vec<crate::model::cryptotrack::CryptoSnapshot>,
+    pub crypto_snapshots: Vec<crate::cryptotrack::CryptoSnapshot>,
     /// How far each source has read each account: this device's own progress,
     /// never synced (`sync::registry::LOCAL`).
     #[serde(default)]
-    pub crypto_cursors: Vec<crate::model::cryptotrack::CryptoCursor>,
+    pub crypto_cursors: Vec<crate::cryptotrack::CryptoCursor>,
     /// Cached token prices; a cache, so it unions silently between devices.
     #[serde(default)]
-    pub crypto_prices: Vec<crate::model::cryptotrack::CryptoPricePoint>,
+    pub crypto_prices: Vec<crate::cryptotrack::CryptoPricePoint>,
     /// Wipes of the module, so the other devices learn about one through an
     /// ordinary sync instead of sending the data back.
     #[serde(default)]
-    pub crypto_wiped_at: Vec<crate::model::cryptotrack::CryptoWipe>,
+    pub crypto_wiped_at: Vec<crate::cryptotrack::CryptoWipe>,
 }
+
+/// Version of the plaintext *payload* schema (`VaultDoc`), stored in the
+/// document's own `version` field. It is read together with the container
+/// version: payload 1 in container 2 is this format.
+///
+/// The payload carries field names (JSON or MessagePack), so a field added
+/// with `#[serde(default)]` needs no bump. Bump only for a change older files
+/// cannot be read with (a renamed or re-typed field, a removed variant): freeze
+/// the current shape in a module of its own, convert it into the new document
+/// on open after the untouched file is copied to `<vault>.v<N>.bak`, and test
+/// it with a committed file. A bump without a transition is never acceptable;
+/// a version from the future is refused.
+///
+/// Note this is unrelated to `VAULT_CONTAINER_VERSION`, which versions the
+/// encrypted envelope and only moves when the on-disk bytes change.
+pub const VAULT_FORMAT_VERSION: u32 = 1;
 
 /// JSON Schema of the decrypted document.
 ///
@@ -626,6 +667,7 @@ pub struct VaultDoc {
 /// serialized in. This is also why `#[serde]` attributes — not `#[ts]` ones —
 /// decide the field names: the editor shows the bytes on disk, and those come
 /// from serde.
+#[cfg(feature = "schema")]
 pub fn json_schema() -> serde_json::Value {
     schemars::schema_for!(VaultDoc).into()
 }
@@ -633,7 +675,7 @@ pub fn json_schema() -> serde_json::Value {
 impl Default for VaultDoc {
     fn default() -> Self {
         Self {
-            version: crate::VAULT_FORMAT_VERSION,
+            version: VAULT_FORMAT_VERSION,
             id: uuid::Uuid::new_v4().to_string(),
             created_at: now_iso(),
             settings: Settings::default(),
@@ -706,7 +748,7 @@ impl VaultDoc {
     }
 
     pub fn chain_list() -> Vec<ChainInfo> {
-        crate::model::chain::ALL_CHAINS
+        crate::chain::ALL_CHAINS
             .iter()
             .map(|chain| chain.info())
             .collect()
@@ -737,7 +779,7 @@ pub fn unix_to_iso(secs: i64) -> String {
         .unwrap_or_default()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "schema"))]
 mod json_schema_tests {
     use super::*;
 
@@ -809,7 +851,7 @@ mod json_schema_tests {
             "Transaction must be a union of tagged variants"
         );
         let tags = tx_schema.to_string();
-        for kind in crate::model::transaction::TxKind::ALL {
+        for kind in crate::transaction::TxKind::ALL {
             assert!(
                 tags.contains(kind.tag()),
                 "schema is missing `{}`",

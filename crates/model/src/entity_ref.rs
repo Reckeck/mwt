@@ -1,13 +1,12 @@
 //! The address of any entity the app can open a card of (plan J1), and what
 //! the sidebar keeps pinned (plan J2).
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// A kind of thing the app can open a card of.
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum EntityKind {
     #[default]
@@ -28,9 +27,9 @@ pub enum EntityKind {
 }
 
 /// The address of one entity: what the `?open=kind:id` link carries.
-#[derive(
-    Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct EntityRef {
     pub kind: EntityKind,
     pub id: String,
@@ -46,7 +45,9 @@ impl EntityRef {
 }
 
 /// One line of the sidebar's «Pinned» block.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Pinned {
     /// Any entity: opens its card (or its page).

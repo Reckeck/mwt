@@ -2,18 +2,19 @@
 //! utilities. Defined now so the vault schema breaks once (plan D11); the
 //! features that use most of it arrive in later phases.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::model::store::{AssetRef, StoreScope};
-use crate::model::transaction::{
+use crate::store::{AssetRef, StoreScope};
+use crate::transaction::{
     ConvertTx, PaymentTx, PriceStamp, TopupTx, Transaction, TransferTx, TxOrigin,
 };
+use mwt_base::Amount;
 
-pub use crate::calendar::workdays::WorkdayShift;
+pub use mwt_base::calendar::workdays::WorkdayShift;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Schedule {
     /// Day of the month; a shorter month uses its last day.
@@ -31,7 +32,9 @@ pub enum Schedule {
 
 /// The transaction an automation creates. `meta.id`, `meta.timestamp`,
 /// `meta.origin` and the price stamps are ignored and filled in when it runs.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TransactionDraft {
     Topup(TopupTx),
@@ -42,7 +45,9 @@ pub enum TransactionDraft {
 
 /// A ready-made automation a wallet offers: it decides the operation kind and
 /// the category, the user fills in only the amount and the date.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationPreset {
     /// A regular spending (rent of a parking spot, a subscription).
@@ -69,8 +74,8 @@ pub enum AutomationPreset {
 }
 
 impl AutomationPreset {
-    pub fn tx_kind(self) -> crate::model::transaction::TxKind {
-        use crate::model::transaction::TxKind;
+    pub fn tx_kind(self) -> crate::transaction::TxKind {
+        use crate::transaction::TxKind;
         match self {
             Self::Salary | Self::DepositInterest | Self::StakingReward | Self::RentIncome => {
                 TxKind::Topup
@@ -111,9 +116,9 @@ impl AutomationPreset {
 }
 
 /// Whether an automation books the same amount each time.
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AmountMode {
     /// The template's amount, every time.
@@ -126,7 +131,9 @@ pub enum AmountMode {
 
 /// What the user set in the automation form. Stored on the workflow the
 /// automation runs as (`Workflow::automation`); the graph is built from it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AutomationSpec {
     /// The ready-made kind it was created from, for the wallet's list.
     #[serde(default)]
@@ -152,13 +159,15 @@ pub struct AutomationSpec {
     /// An income only: the month it is for, in months from the one it is
     /// planned in (-1 — the previous, 0 — this one); `None` — not set.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month_offset: Option<i8>,
 }
 
 /// An automation as the app shows it: a workflow built from an
 /// [`AutomationSpec`]. Not stored as such (the vault keeps the workflow).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Automation {
     /// The workflow's id.
     pub id: String,
@@ -194,11 +203,13 @@ pub struct Automation {
     /// An income only: the month it is for, in months from the one it is
     /// planned in (-1 — the previous, 0 — this one); `None` — not set.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month_offset: Option<i8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum RejectReason {
     InsufficientFunds {
@@ -216,7 +227,9 @@ pub enum RejectReason {
     Invalid { message: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationOutcome {
     Created {
@@ -231,7 +244,9 @@ pub enum AutomationOutcome {
 
 /// One processed planned date of an automation. Never retried automatically;
 /// doubles as the automation's history.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AutomationRun {
     /// The workflow run's id.
     pub id: String,
@@ -249,7 +264,9 @@ pub struct AutomationRun {
     pub symbol: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum BudgetTarget {
     Total,
@@ -257,7 +274,9 @@ pub enum BudgetTarget {
     Store(StoreScope),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum BudgetPeriod {
     Day,
@@ -265,7 +284,9 @@ pub enum BudgetPeriod {
     Month,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Budget {
     pub id: String,
     pub active: bool,
@@ -277,7 +298,9 @@ pub struct Budget {
     pub warn: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Goal {
     pub id: String,
     pub name: String,
@@ -302,7 +325,9 @@ pub struct Goal {
 }
 
 /// Where a calculator scenario takes its numbers from (plan A, "From your data").
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ScenarioSource {
     /// The wallets whose value is the start amount and whose deposit terms
     /// give the rate.
@@ -315,11 +340,13 @@ pub struct ScenarioSource {
 
 /// A saved investment calculation, comparable with others and followed by
 /// goals made from it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CalcScenario {
     pub id: String,
     pub name: String,
-    pub input: crate::calc::invest::InvestInput,
+    pub input: mwt_base::calc::invest::InvestInput,
     #[serde(default)]
     pub source: Option<ScenarioSource>,
     /// RFC3339 of the last "Refresh from data": the numbers are a snapshot.
@@ -330,19 +357,9 @@ pub struct CalcScenario {
 }
 
 /// The capital checkup's light (plan C4), worst first in `Ord` terms last.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    ts_rs::TS,
-    JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum HealthColor {
     /// Too little history to judge: no finished month and no hand-entered month.
@@ -353,19 +370,9 @@ pub enum HealthColor {
 }
 
 /// Why the checkup shows its colour; each comes with a first step.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    ts_rs::TS,
-    JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum HealthReasonCode {
     /// No finished month of history and no hand-entered month.
@@ -391,7 +398,9 @@ pub enum HealthReasonCode {
 }
 
 /// What the last monthly checkup notice said (plan C4, decision 28).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct HealthSnapshot {
     /// `YYYY-MM` of the check.
     pub month: String,
@@ -401,7 +410,9 @@ pub struct HealthSnapshot {
 
 /// The emergency fund (plan C1): savings accounts set aside for bad times,
 /// measured in months of mandatory spending. No stores = no fund.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct EmergencyFund {
     /// An explicit list of `Purpose::Savings` stores, `include_children`
@@ -434,7 +445,9 @@ impl EmergencyFund {
 
 /// A basket of the portfolio with its target share (plan F). The shares of
 /// all baskets sum to 100.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AssetClass {
     pub id: String,
     /// Empty on a preset basket nobody renamed yet: the UI shows its own name.
@@ -446,7 +459,9 @@ pub struct AssetClass {
 }
 
 /// An asset placed in a basket by hand; beats the store's basket.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AssetClassLink {
     /// `AssetRef::key()`.
     pub asset_key: String,
@@ -454,7 +469,9 @@ pub struct AssetClassLink {
 }
 
 /// Unit of a reminder's repeat interval.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum RepeatUnit {
     Day,
@@ -464,7 +481,9 @@ pub enum RepeatUnit {
 }
 
 /// «Every `every` `unit`s»: a monthly bill is `{ every: 1, unit: month }`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ReminderRepeat {
     pub every: u16,
     pub unit: RepeatUnit,
@@ -501,9 +520,9 @@ impl ReminderRepeat {
 
 /// What an automatic reminder is made from (plan §15). Its `id` is the id of
 /// the store, utility item, contact debt or goal it follows.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ReminderSourceKind {
     LoanPayment,
@@ -525,13 +544,17 @@ pub enum ReminderSourceKind {
     VehicleService,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ReminderSource {
     pub kind: ReminderSourceKind,
     pub id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Reminder {
     pub id: String,
     pub text: String,
@@ -566,12 +589,14 @@ pub struct Reminder {
     pub pay: Option<ReminderPay>,
     /// Kept by hand: see `TxMeta::keep`.
     #[serde(default)]
-    #[ts(as = "Option<bool>", optional)]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
     pub keep: bool,
 }
 
 /// What "Pay" in a reminder fills the payment form with.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ReminderPay {
     #[serde(default)]
     pub store_id: Option<String>,
@@ -598,14 +623,18 @@ impl Reminder {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AlertCondition {
     Above,
     Below,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PriceAlert {
     pub id: String,
     pub asset: AssetRef,
@@ -616,11 +645,11 @@ pub struct PriceAlert {
     pub triggered_at: Option<String>,
     /// The threshold `triggered_at` belongs to ([`PriceAlert::fingerprint`] when it
     /// fired). `None` counts as fired.
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub triggered_for: Option<String>,
     /// The exchange whose terminal set the alert; `None` for a vault-wide one.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub store_id: Option<String>,
     /// Fires again each time the price crosses back: re-armed once the
     /// condition stops holding. Off — fires once and stays triggered.
@@ -656,7 +685,9 @@ impl PriceAlert {
 }
 
 /// «If the comment or the contact name contains `pattern`, use `category`.»
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct CategorizationRule {
     pub id: String,
     /// Case-insensitive substring.
@@ -668,7 +699,9 @@ pub struct CategorizationRule {
     pub order: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum UtilityKind {
     /// Billed by meter: consumption × tariff, or the user's own formula.
@@ -694,7 +727,9 @@ pub enum UtilityKind {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct UtilityItem {
     pub id: String,
     pub name: String,
@@ -710,7 +745,9 @@ pub struct UtilityItem {
     pub category: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct MeterReading {
     pub id: String,
     pub item_id: String,
@@ -751,7 +788,9 @@ impl MeterReading {
 
 /// One entry of an envelope's journal: how much was put in (positive) or
 /// taken out (negative).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct EnvelopeMove {
     /// Unique per entry. Two kinds are derived, so devices that make them
     /// independently make the same entry: `open:<envelope id>` (what the
@@ -818,7 +857,9 @@ impl Envelope {
 /// An envelope: a named, earmarked part of one asset's balance in one store
 /// ("vacation", "Taxes"). Nothing physically moves — the store still holds the
 /// money; envelopes only mark how much of it is spoken for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Envelope {
     pub id: String,
     pub store_id: String,
@@ -862,7 +903,8 @@ pub fn describe_reject(reason: &RejectReason) -> String {
 
 /// A transaction from a template, dated `ts`; prices are left to the stamp.
 /// It names the automation and the planned moment it was made for.
-pub(crate) fn draft_to_transaction(
+/// Used by `planning` (automations, daily budget) of the facade.
+pub fn draft_to_transaction(
     draft: &TransactionDraft,
     automation_id: &str,
     planned_at: &str,
