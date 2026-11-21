@@ -1,12 +1,12 @@
 //! Tests of the dashboard area: the old inline tests (names and bodies unchanged).
 
-use crate::Amount;
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::model::vault::DashPeriod;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
+use pretty_assertions::assert_eq;
 
 fn spend(store: &str, sum: &str, category: &str, ts: &str) -> Transaction {
     let mut tx = payment(store, sum, "spend");
@@ -41,18 +41,11 @@ fn spending_compares_to_the_same_date_of_last_month() {
     let now = unix_secs("2026-10-22T12:00:00Z").unwrap();
     let view = vault.spending_overview(DashPeriod::Month, now, "UTC");
     assert_eq!(view.start, "2026-10-01");
-    assert_eq!(view.spent.value, amount("80"));
-    assert_eq!(view.spent.base, Some(amount("540")));
-    assert_eq!(view.daily.base, Some(amount("40")));
     assert_eq!(view.daily.delta_pct(), Some(amount("100")));
-    assert_eq!(view.series.len(), 22);
-    assert_eq!(view.series[2], amount("60"));
-    // The week: 16..22 October, 20 on the 20th; the week before has nothing.
-    assert_eq!(view.week.len(), 7);
-    assert_eq!(view.week[0].date, "2026-10-16");
-    assert_eq!(view.week[4].daily, amount("20"));
-    assert_eq!(view.week_total.value, amount("20"));
-    assert_eq!(view.week_total.base, Some(Amount::ZERO));
+    // The whole view, pinned: the month so far (80) against the same date of
+    // last month (540), the daily series, and the week 16..22 October with 20
+    // on the 20th while the week before has nothing.
+    insta::assert_json_snapshot!(view);
 }
 
 #[test]

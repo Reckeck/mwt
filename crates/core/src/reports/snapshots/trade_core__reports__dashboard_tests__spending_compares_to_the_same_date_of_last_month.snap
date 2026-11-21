@@ -1,0 +1,86 @@
+---
+source: crates/core/src/reports/dashboard_tests.rs
+expression: view
+---
+{
+  "currency": "usd",
+  "period": "month",
+  "start": "2026-10-01",
+  "spent": {
+    "value": "80",
+    "base": "540",
+    "base_kind": "prev_period"
+  },
+  "daily": {
+    "value": "80",
+    "base": "40",
+    "base_kind": "prev_period"
+  },
+  "series": [
+    "0",
+    "0",
+    "60",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "20",
+    "0",
+    "0"
+  ],
+  "week": [
+    {
+      "date": "2026-10-16",
+      "daily": "0",
+      "over": false
+    },
+    {
+      "date": "2026-10-17",
+      "daily": "0",
+      "over": false
+    },
+    {
+      "date": "2026-10-18",
+      "daily": "0",
+      "over": false
+    },
+    {
+      "date": "2026-10-19",
+      "daily": "0",
+      "over": false
+    },
+    {
+      "date": "2026-10-20",
+      "daily": "20",
+      "over": false
+    },
+    {
+      "date": "2026-10-21",
+      "daily": "0",
+      "over": false
+    },
+    {
+      "date": "2026-10-22",
+      "daily": "0",
+      "over": false
+    }
+  ],
+  "week_total": {
+    "value": "20",
+    "base": "0",
+    "base_kind": "prev_period"
+  },
+  "allowance": null
+}

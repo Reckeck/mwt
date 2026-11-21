@@ -6,6 +6,7 @@ use crate::Amount;
 use crate::model::shared_event::{
     ItemSplit, ME, Purchase, SettlementKind, SharedEvent, SharedEventStatus,
 };
+use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 
 mod fixtures {
@@ -100,38 +101,21 @@ fn share_of(split: &Split, id: &str) -> Amount {
 fn the_skewers_board_adds_up_to_the_cent() {
     let event = skewers();
     let split = compute(&event);
-    assert_eq!(split.planned, amount("9400"));
-    assert_eq!(split.spent, amount("7100"));
-    assert_eq!(share_of(&split, ME), amount("1060"));
-    assert_eq!(share_of(&split, "petya"), amount("1735"));
-    assert_eq!(share_of(&split, "vasya"), amount("2185"));
-    assert_eq!(share_of(&split, "anya"), amount("1060"));
-    assert_eq!(share_of(&split, "olya"), amount("1060"));
     let shares = split
         .people
         .iter()
         .fold(Amount::ZERO, |sum, row| sum + row.share);
     assert_eq!(shares, split.spent);
-    // me: paid 6600, share 1060 -> they owe me 5540
-    assert_eq!(split.person(ME).unwrap().paid, amount("6600"));
-    assert_eq!(split.person(ME).unwrap().saldo, amount("-5540"));
-    assert_eq!(split.person("petya").unwrap().saldo, amount("1735"));
-    assert_eq!(split.person("vasya").unwrap().saldo, amount("1685"));
-    assert_eq!(split.person("anya").unwrap().saldo, amount("1060"));
     let saldo_sum = split
         .people
         .iter()
         .fold(Amount::ZERO, |sum, row| sum + row.saldo);
     assert!(saldo_sum.is_zero());
     assert_eq!(status(&event, &split), SharedEventStatus::InProgress);
-    // beer: 8 bought against 6 planned, 600 over
-    let beer = split
-        .items
-        .iter()
-        .find(|row| row.item_id == "beer")
-        .unwrap();
-    assert_eq!(beer.cost - beer.plan_total.unwrap(), amount("600"));
-    assert_eq!(beer.qty, amount("8"));
+    // The whole board, pinned: totals, every person's share, paid and saldo
+    // (me paid 6600 for a share of 1060), every item's cost against its plan
+    // (beer: 8 bought against 6 planned, 600 over) and the purchase lines.
+    insta::assert_debug_snapshot!(split);
 }
 
 #[test]

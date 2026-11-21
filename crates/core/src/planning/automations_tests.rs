@@ -26,6 +26,7 @@ use crate::usecases::planning::automation_rules::{
 };
 use crate::workflow::automation as graph_of;
 use crate::workflow::model::RunOutcome;
+use pretty_assertions::assert_eq;
 use std::collections::HashSet;
 
 fn secs(iso: &str) -> i64 {
