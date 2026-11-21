@@ -159,7 +159,7 @@ const LAST_LEGACY_VERSION: u32 = 3;
 ///
 /// The stored number is the old counter's, so it is never compared with the live one except when
 /// the two counters still agree on version 3.
-pub fn migrate_graph_json(json: &str) -> Option<String> {
+pub(crate) fn migrate_graph(json: &str) -> Option<String> {
     if json.trim().is_empty() {
         return None;
     }
@@ -176,6 +176,12 @@ pub fn migrate_graph_json(json: &str) -> Option<String> {
     }
     graph.version = GRAPH_VERSION;
     serde_json::to_string(&graph).ok()
+}
+
+/// The test seam of [`migrate_graph`]; production goes through `legacy_v4::migrate_export_graph`.
+#[cfg(any(test, feature = "testing"))]
+pub fn migrate_graph_json(json: &str) -> Option<String> {
+    migrate_graph(json)
 }
 
 /// Version 2: "Wait for confirmation" answers "Yes"/"No"; a wire from its old "Next" leaves "Yes".

@@ -185,12 +185,20 @@ fn parse<T: DeserializeOwned>(bytes: &[u8], fmt: SnapshotFormat) -> Result<T> {
 /// Read-only helpers applied to a vault file on disk.
 pub struct VaultFile;
 
-/// The points of a re-encryption a test can break (named by the fault-injection tests of the facade).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReencryptStep {
-    Written,
-    Verified,
+mod reencrypt_step {
+    /// The points of a re-encryption a test can break (named by the fault-injection tests of the facade).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg_attr(not(any(test, feature = "testing")), allow(unreachable_pub))]
+    pub enum ReencryptStep {
+        Written,
+        Verified,
+    }
 }
+
+#[cfg(any(test, feature = "testing"))]
+pub use reencrypt_step::ReencryptStep;
+#[cfg(not(any(test, feature = "testing")))]
+use reencrypt_step::ReencryptStep;
 
 impl VaultFile {
     /// Create a brand new encrypted vault at `path` (refuses to overwrite).
@@ -272,12 +280,25 @@ impl VaultFile {
         kdf: KdfParams,
         on_stage: impl FnMut(RaiseStage),
     ) -> Result<SealKey> {
-        Self::reencrypt_with_faults(path, doc, fmt, password, kdf, on_stage, |_, _| Ok(()))
+        Self::reencrypt_inner(path, doc, fmt, password, kdf, on_stage, |_, _| Ok(()))
     }
 
     /// [`Self::reencrypt_verified`] with a `fault` called after each step, so
     /// a test can break the run exactly there (called by the facade's tests).
+    #[cfg(any(test, feature = "testing"))]
     pub fn reencrypt_with_faults(
+        path: &Path,
+        doc: &VaultDoc,
+        fmt: SnapshotFormat,
+        password: &str,
+        kdf: KdfParams,
+        on_stage: impl FnMut(RaiseStage),
+        fault: impl FnMut(ReencryptStep, &Path) -> Result<()>,
+    ) -> Result<SealKey> {
+        Self::reencrypt_inner(path, doc, fmt, password, kdf, on_stage, fault)
+    }
+
+    fn reencrypt_inner(
         path: &Path,
         doc: &VaultDoc,
         fmt: SnapshotFormat,

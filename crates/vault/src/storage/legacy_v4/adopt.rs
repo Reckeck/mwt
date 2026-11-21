@@ -40,6 +40,7 @@ pub struct LegacyAdoption {
 
 /// What storing a batch of exchange records did (read by the facade's tests of the conversion).
 #[derive(Debug, Default)]
+#[cfg_attr(not(any(test, feature = "testing")), allow(unreachable_pub))]
 pub struct Stored {
     added: u32,
     rewritten: u32,
@@ -51,6 +52,7 @@ pub struct Stored {
 
 impl Stored {
     /// How many records were added or rewritten.
+    #[cfg_attr(not(any(test, feature = "testing")), allow(unreachable_pub))]
     pub fn recorded(&self) -> u32 {
         self.added + self.rewritten
     }
@@ -120,6 +122,7 @@ fn root_of(stores: &[Store], id: &str) -> String {
 
 /// `exec_id`s of the exchange operations the module already holds (also read by the facade's
 /// tests of the conversion).
+#[cfg_attr(not(any(test, feature = "testing")), allow(unreachable_pub))]
 pub fn event_ids(doc: &VaultDocV4) -> BTreeSet<String> {
     doc.crypto_events
         .iter()
@@ -187,6 +190,7 @@ fn bybit_account(doc: &mut VaultDocV4, store_id: &str, earliest: &str) -> Option
 
 /// Store exchange records of one wallet as operations of the module (also called by the
 /// facade's tests of the conversion).
+#[cfg_attr(not(any(test, feature = "testing")), allow(unreachable_pub))]
 pub fn store_batch(doc: &mut VaultDocV4, store_id: &str, records: &[PendingImport]) -> Stored {
     let mut out = Stored::default();
     let decided = decided_ids(doc);

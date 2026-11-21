@@ -6,8 +6,10 @@
 //! the end (T17). It is deleted together with the one-time transition from payload v4 (container 1) to payload v1 (container 2); until then it is the only
 //! place that still reads a v4 file.
 //!
-//! `graph::migrate_graph_json` has a second user outside the transition: `import_workflow`
-//! (`service/workflows.rs`) runs the graph of an export file of version 1 through it.
+//! The graph steps have a second user outside the transition: `import_workflow`
+//! (`service/records.rs`) runs the graph of an export file of version 1 through
+//! [`migrate_export_graph`]. `graph::migrate_graph_json` is only its test seam
+//! (`cfg(any(test, feature = "testing"))`).
 //!
 //! [`VaultDocV4`] is a copy of the live `VaultDoc` as it was written by the last build that
 //! produced v4. Types the format reset changes are copied here (`SettingsV4` with `crypto`,
@@ -29,7 +31,15 @@ mod graph_kinds;
 
 use serde::Deserialize;
 
-pub use adopt::{LegacyAdoption, Stored, adopt_bybit, event_ids, store_batch};
+/// The graph JSON of an old workflow export brought to the live version, or `None` when it needs
+/// nothing.
+pub fn migrate_export_graph(json: &str) -> Option<String> {
+    graph::migrate_graph(json)
+}
+
+pub use adopt::{LegacyAdoption, adopt_bybit};
+#[cfg(any(test, feature = "testing"))]
+pub use adopt::{Stored, event_ids, store_batch};
 
 use mwt_base::Amount;
 use mwt_model::Contact;
@@ -597,7 +607,7 @@ fn migrated_workflow(mut workflow: Workflow) -> Workflow {
 }
 
 fn migrate_graph(json: &mut String) {
-    if let Some(migrated) = graph::migrate_graph_json(json) {
+    if let Some(migrated) = graph::migrate_graph(json) {
         *json = migrated;
     }
 }
@@ -844,7 +854,7 @@ mod tests {
             serde_json::from_str(include_str!("fixtures/v4.expected.json")).unwrap();
         let migrate = |holder: &mut serde_json::Value| {
             let graph = holder["graph"].as_str().unwrap().to_owned();
-            if let Some(migrated) = graph::migrate_graph_json(&graph) {
+            if let Some(migrated) = graph::migrate_graph(&graph) {
                 holder["graph"] = migrated.into();
             }
         };
