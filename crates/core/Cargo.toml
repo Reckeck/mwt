@@ -23,6 +23,8 @@ deprecated-forwards = []
 mwt-model = { path = "../model", features = ["ts", "schema"] }
 # The DTO derives of base are always on here: this crate derives `TS`/`JsonSchema` over `Amount`.
 mwt-base = { path = "../base", features = ["ts", "schema"] }
+# The network layer: pricing, exchanges, data sources, market, updates, external links.
+mwt-net = { path = "../net" }
 # `SecurityLevel` / `RaiseStage` are TS types of the IPC contract.
 mwt-crypto = { path = "../crypto", features = ["ts"] }
 serde.workspace = true
@@ -48,10 +50,6 @@ regex.workspace = true
 snow.workspace = true
 spake2.workspace = true
 serde_bytes.workspace = true
-scraper.workspace = true
-csv.workspace = true
-calamine.workspace = true
-ego-tree.workspace = true
 
 [dev-dependencies]
 mwt-crypto = { path = "../crypto", features = ["ts", "testing"] }

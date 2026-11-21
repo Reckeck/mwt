@@ -12,25 +12,25 @@
 
 use std::collections::{HashMap, HashSet};
 
-pub mod fx_sources;
-pub mod history;
+pub(crate) mod fx_sources;
+pub(crate) mod history;
 #[cfg(test)]
 mod history_props;
-pub mod inflation;
-pub mod key_rate;
-pub mod llama;
-pub mod page;
+pub(crate) mod inflation;
+pub(crate) mod key_rate;
+pub(crate) mod llama;
+pub(crate) mod page;
 
 use reqwest::Client;
 use reqwest::header::{ACCEPT, USER_AGENT};
 use rust_decimal::Decimal;
 
-use crate::Amount;
-use crate::error::{Error, Result};
-use crate::model::chain::Chain;
-use crate::model::cryptotrack::TokenId;
-use crate::model::store::AssetRef;
-use crate::model::vault::{FxPoint, PricePoint, VaultDoc};
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result};
+use mwt_model::AssetRef;
+use mwt_model::Chain;
+use mwt_model::TokenId;
+use mwt_model::{FxPoint, PricePoint, VaultDoc};
 
 const COINGECKO_V3: &str = "https://api.coingecko.com/api/v3";
 
@@ -183,7 +183,7 @@ impl PricingService {
                 value_usd: quote.usd,
                 source: quote.source.into(),
                 change_24h_pct: quote.change_24h_pct,
-                ts: crate::model::vault::now_iso(),
+                ts: mwt_model::now_iso(),
             });
         }
         // Nothing priced at all is an outage worth reporting.
@@ -203,7 +203,7 @@ impl PricingService {
     /// currency the provider knows, as units per 1 USD.
     pub async fn fetch_fx(&self) -> Result<Vec<FxPoint>> {
         let rates = self.fx_table().await?;
-        let ts = crate::model::vault::now_iso();
+        let ts = mwt_model::now_iso();
         let mut out: Vec<FxPoint> = rates
             .into_iter()
             .filter(|(_, per_usd)| per_usd.is_positive())

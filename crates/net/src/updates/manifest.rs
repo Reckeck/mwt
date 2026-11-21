@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::kind::{Channel, InstallKind, ManualHint};
 use super::version::AppVersion;
-use crate::error::{Error, Result};
+use mwt_base::error::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlatformEntry {

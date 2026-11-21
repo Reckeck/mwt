@@ -8,10 +8,10 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use crate::Amount;
-use crate::model::cryptotrack::CryptoPricePoint;
-use crate::model::vault::{FxPoint, PricePoint};
-pub use crate::time::{secs_or_now, unix_secs};
+use mwt_base::Amount;
+pub use mwt_base::time::{secs_or_now, unix_secs};
+use mwt_model::CryptoPricePoint;
+use mwt_model::{FxPoint, PricePoint};
 
 /// Most points one currency or asset keeps (≈ 83 days hourly, years daily).
 pub const HISTORY_CAP: usize = 2000;

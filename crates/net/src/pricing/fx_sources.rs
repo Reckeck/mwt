@@ -17,19 +17,19 @@ use reqwest::header::{ACCEPT, USER_AGENT};
 use rust_decimal::Decimal;
 
 use super::PricingService;
-use crate::Amount;
-use crate::error::{Error, Result};
-use crate::model::vault::FxPoint;
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result};
+use mwt_model::FxPoint;
 
 const FRANKFURTER: &str = "https://api.frankfurter.app";
 const CBR_DAILY: &str = "https://www.cbr.ru/scripts/XML_daily.asp";
 
 /// How many days back the chain walks before giving up on a currency.
-pub const FX_LOOKBACK_DAYS: i64 = 7;
+pub(crate) const FX_LOOKBACK_DAYS: i64 = 7;
 
 /// Rates of one source for one day: units per 1 USD, keyed by lowercase code.
 #[derive(Debug, Clone, PartialEq)]
-pub struct FxDay {
+pub(crate) struct FxDay {
     /// The day the source says the rates are for (may precede the one asked).
     pub date: NaiveDate,
     pub source: &'static str,
@@ -55,7 +55,7 @@ impl FxDay {
 }
 
 /// Frankfurter `/{date}?from=USD`: `{"base":"USD","date":"…","rates":{"EUR":0.9}}`.
-pub fn parse_frankfurter(body: &serde_json::Value) -> Result<FxDay> {
+pub(crate) fn parse_frankfurter(body: &serde_json::Value) -> Result<FxDay> {
     let date = body["date"]
         .as_str()
         .and_then(|raw| NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok())
@@ -84,7 +84,7 @@ pub fn parse_frankfurter(body: &serde_json::Value) -> Result<FxDay> {
 ///
 /// The payload is windows-1251, but every field read here is ASCII, so a lossy
 /// UTF-8 view is enough and no codec dependency is needed.
-pub fn parse_cbr(xml: &str) -> Result<FxDay> {
+pub(crate) fn parse_cbr(xml: &str) -> Result<FxDay> {
     let date = attr(xml, "ValCurs", "Date")
         .and_then(|raw| NaiveDate::parse_from_str(&raw, "%d.%m.%Y").ok())
         .ok_or_else(|| Error::Pricing("cbr: no date".into()))?;

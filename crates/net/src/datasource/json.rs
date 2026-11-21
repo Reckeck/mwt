@@ -6,8 +6,8 @@ use serde_json::Value;
 
 use super::number::scaled;
 use super::{Extracted, parse_number};
-use crate::Amount;
-use crate::model::datasource::{NumberFormat, SeriesPoint, SourceOutput};
+use mwt_base::Amount;
+use mwt_model::{NumberFormat, SeriesPoint, SourceOutput};
 
 /// `path` split into keys and array indexes; `items[0].rate` == `items.0.rate`.
 fn segments(path: &str) -> Vec<String> {
@@ -21,7 +21,7 @@ fn segments(path: &str) -> Vec<String> {
 }
 
 /// The value at `path`, or `None` when a step is missing.
-pub fn at_path<'doc>(root: &'doc Value, path: &str) -> Option<&'doc Value> {
+pub(crate) fn at_path<'doc>(root: &'doc Value, path: &str) -> Option<&'doc Value> {
     segments(path)
         .iter()
         .try_fold(root, |node, key| match node {
@@ -50,7 +50,7 @@ fn text_of(value: &Value) -> String {
     }
 }
 
-pub fn extract(
+pub(crate) fn extract(
     body: &[u8],
     path: &str,
     output: SourceOutput,

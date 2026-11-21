@@ -2,7 +2,7 @@
 
 use std::cmp::Ordering;
 
-use crate::error::{Error, Result};
+use mwt_base::error::{Error, Result};
 
 /// A parsed app version. A pre-release (`X.Y.Z-N`) precedes the release `X.Y.Z`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

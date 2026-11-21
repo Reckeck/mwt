@@ -14,16 +14,16 @@ use reqwest::header::{ACCEPT, USER_AGENT};
 use rust_decimal::Decimal;
 
 use super::{PricingService, contract_lookup_allowed};
-use crate::Amount;
-use crate::error::{Error, Result};
-use crate::model::chain::Chain;
-use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint, TokenId};
-use crate::time::{date_secs, date_ts};
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result};
+use mwt_base::time::{date_secs, date_ts};
+use mwt_model::Chain;
+use mwt_model::{CryptoAsset, CryptoPricePoint, TokenId};
 
-pub const DEFILLAMA_COINS: &str = "https://coins.llama.fi";
+pub(crate) const DEFILLAMA_COINS: &str = "https://coins.llama.fi";
 
 /// The `source` of a point this module produced.
-pub const SOURCE: &str = "defillama";
+pub(crate) const SOURCE: &str = "defillama";
 
 /// DeFiLlama's name for a network; `None` for one it does not price by contract.
 fn llama_chain(chain: Chain) -> Option<&'static str> {
@@ -58,7 +58,7 @@ pub fn llama_coin(asset: &CryptoAsset) -> Option<String> {
 }
 
 /// `…/prices/historical/<unix>/<coin>[,<coin>…]`.
-pub fn historical_url(base: &str, secs: i64, coins: &[String]) -> String {
+pub(crate) fn historical_url(base: &str, secs: i64, coins: &[String]) -> String {
     format!("{base}/prices/historical/{secs}/{}", coins.join(","))
 }
 
@@ -76,7 +76,7 @@ fn parse_price(value: &serde_json::Value) -> Option<Amount> {
 
 /// Reads `{"coins": {"<coin>": {"price": …}}}` into points of `requested`
 /// (coin identifier → token key); what the answer lacks stays missing.
-pub fn parse_historical(
+pub(crate) fn parse_historical(
     body: &serde_json::Value,
     requested: &BTreeMap<String, String>,
     date: NaiveDate,

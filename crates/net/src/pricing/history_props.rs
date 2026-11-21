@@ -3,8 +3,8 @@
 use proptest::prelude::*;
 
 use super::history::{merge_fx, merge_prices, thin_fx, thin_prices, unix_secs};
-use crate::model::vault::{FxPoint, PricePoint};
-use crate::testkit::props::{amount, iso};
+use crate::props::{amount, iso};
+use mwt_model::{FxPoint, PricePoint};
 
 const START: i64 = 1_700_000_000;
 

@@ -13,9 +13,9 @@ use chrono::{Datelike, NaiveDate};
 use reqwest::header::{ACCEPT, USER_AGENT};
 
 use super::PricingService;
-use crate::Amount;
-use crate::error::{Error, Result};
-use crate::model::inflation::{InflationReading, InflationSource};
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result};
+use mwt_model::{InflationReading, InflationSource};
 
 const CBR_INFLATION: &str = "https://www.cbr.ru/hd_base/infl/";
 const BLS_CPI: &str = "https://api.bls.gov/publicAPI/v1/timeseries/data/CUUR0000SA0";
@@ -64,7 +64,7 @@ fn cells<'text>(row: &'text str, tag: &str) -> Vec<&'text str> {
 
 /// The Bank of Russia table → readings, oldest first. The inflation column
 /// is found by its header, so a reordered table still reads right.
-pub fn parse_inflation_cbr(html: &str) -> Result<Vec<InflationReading>> {
+pub(crate) fn parse_inflation_cbr(html: &str) -> Result<Vec<InflationReading>> {
     let table = html
         .find("<table class=\"data\"")
         .map(|start| &html[start..])
@@ -91,7 +91,7 @@ pub fn parse_inflation_cbr(html: &str) -> Result<Vec<InflationReading>> {
 
 /// BLS CPI-U index levels → annual rates, oldest first. A month whose index
 /// or year-before index is missing (`"-"`) gets no reading.
-pub fn parse_inflation_bls(json: &str) -> Result<Vec<InflationReading>> {
+pub(crate) fn parse_inflation_bls(json: &str) -> Result<Vec<InflationReading>> {
     let body: serde_json::Value =
         serde_json::from_str(json).map_err(|err| Error::Pricing(format!("bls: {err}")))?;
     let data = body
@@ -141,7 +141,7 @@ pub fn parse_inflation_bls(json: &str) -> Result<Vec<InflationReading>> {
 /// Eurostat JSON-stat → readings, oldest first. The query fixes every
 /// dimension but time to one value, so a value's flat index steps by the
 /// time dimension's stride.
-pub fn parse_inflation_eurostat(json: &str) -> Result<Vec<InflationReading>> {
+pub(crate) fn parse_inflation_eurostat(json: &str) -> Result<Vec<InflationReading>> {
     let body: serde_json::Value =
         serde_json::from_str(json).map_err(|err| Error::Pricing(format!("eurostat: {err}")))?;
     let dims: Vec<&str> = body

@@ -2,7 +2,7 @@
 
 use scraper::{ElementRef, Html, Node, Selector};
 
-use crate::model::datasource::TableRow;
+use mwt_model::TableRow;
 
 /// Elements dropped with everything inside them: they run code, submit,
 /// embed other pages or redirect.
@@ -18,12 +18,12 @@ const RAW_TEXT: &[&str] = &["style"];
 
 /// The picker's policy: nothing runs, nothing connects, nothing submits;
 /// pictures and styles still load so the page looks like itself.
-pub const PREVIEW_CSP: &str = "default-src 'none'; img-src * data:; style-src * 'unsafe-inline'; font-src * data:; \
+pub(crate) const PREVIEW_CSP: &str = "default-src 'none'; img-src * data:; style-src * 'unsafe-inline'; font-src * data:; \
      script-src 'none'; connect-src 'none'; form-action 'none'; frame-src 'none'";
 
 /// The page without scripts, event handlers, `javascript:` links, forms and
 /// frames, with the CSP above and a `<base>` so relative pictures load.
-pub fn sanitize(html: &str, base_url: &str) -> String {
+pub(crate) fn sanitize(html: &str, base_url: &str) -> String {
     let doc = Html::parse_document(html);
     let mut out = String::with_capacity(html.len());
     out.push_str("<!doctype html>");
@@ -131,18 +131,18 @@ fn text_of(element: ElementRef<'_>) -> String {
 }
 
 /// The text of the first element matching `css`.
-pub fn select_text(doc: &Html, css: &str) -> Result<Option<String>, String> {
+pub(crate) fn select_text(doc: &Html, css: &str) -> Result<Option<String>, String> {
     let selector = selector(css)?;
     Ok(doc.select(&selector).next().map(text_of))
 }
 
 /// The whole page text, for the label search and the `text_hint` fallback.
-pub fn page_text(doc: &Html) -> String {
+pub(crate) fn page_text(doc: &Html) -> String {
     text_of(doc.root_element())
 }
 
 /// The text right after `label` (case-insensitive), up to 80 characters.
-pub fn text_after(page: &str, label: &str) -> Option<String> {
+pub(crate) fn text_after(page: &str, label: &str) -> Option<String> {
     let label = label.trim();
     if label.is_empty() {
         return None;
@@ -156,7 +156,7 @@ pub fn text_after(page: &str, label: &str) -> Option<String> {
 }
 
 /// The cells of the first table matching `css`: header row and body rows.
-pub fn table_rows(doc: &Html, css: &str) -> Result<Vec<Vec<String>>, String> {
+pub(crate) fn table_rows(doc: &Html, css: &str) -> Result<Vec<Vec<String>>, String> {
     let table_selector = selector(css)?;
     let row_selector = selector("tr")?;
     let cell_selector = selector("th, td")?;
@@ -172,7 +172,7 @@ pub fn table_rows(doc: &Html, css: &str) -> Result<Vec<Vec<String>>, String> {
 }
 
 /// Which body row a [`TableRow`] means. `by_date` reads the first cell.
-pub fn pick_row(rows: &[Vec<String>], row: TableRow) -> Option<&Vec<String>> {
+pub(crate) fn pick_row(rows: &[Vec<String>], row: TableRow) -> Option<&Vec<String>> {
     match row {
         TableRow::First => rows.first(),
         TableRow::Last => rows.last(),

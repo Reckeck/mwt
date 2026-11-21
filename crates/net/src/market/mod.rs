@@ -13,7 +13,7 @@
 use reqwest::Client;
 use time::format_description::well_known::Rfc3339;
 
-use crate::error::{Error, Result};
+use mwt_base::error::{Error, Result};
 
 /// A single OHLC candle.
 ///

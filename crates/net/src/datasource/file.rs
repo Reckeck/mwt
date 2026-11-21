@@ -5,10 +5,14 @@ use std::io::Cursor;
 use calamine::{Data, Reader};
 use chrono::{Duration, NaiveDate};
 
-use crate::model::datasource::FileFormat;
+use mwt_model::FileFormat;
 
 /// The rows of the file; `sheet` picks an XLSX sheet by name (empty: the first).
-pub fn rows(format: FileFormat, sheet: &str, body: &[u8]) -> Result<Vec<Vec<String>>, String> {
+pub(crate) fn rows(
+    format: FileFormat,
+    sheet: &str,
+    body: &[u8],
+) -> Result<Vec<Vec<String>>, String> {
     match format {
         FileFormat::Csv => csv_rows(body),
         FileFormat::Xlsx => xlsx_rows(sheet, body),

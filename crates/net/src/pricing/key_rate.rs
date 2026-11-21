@@ -7,15 +7,15 @@ use chrono::NaiveDate;
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 
 use super::PricingService;
-use crate::Amount;
-use crate::error::{Error, Result};
-use crate::model::deposit::KeyRatePoint;
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result};
+use mwt_model::KeyRatePoint;
 
 const CBR_DAILY_INFO: &str = "https://www.cbr.ru/DailyInfoWebServ/DailyInfo.asmx";
 
 /// `<KR><DT>2026-03-20T00:00:00+03:00</DT><Rate>21.00</Rate></KR>` rows →
 /// points, one per day the rate changed (consecutive equal days collapse).
-pub fn parse_key_rates(xml: &str) -> Result<Vec<KeyRatePoint>> {
+pub(crate) fn parse_key_rates(xml: &str) -> Result<Vec<KeyRatePoint>> {
     let mut rows: Vec<KeyRatePoint> = Vec::new();
     for block in xml.split("<KR").skip(1) {
         let (Some(day), Some(rate)) = (inner(block, "DT"), inner(block, "Rate")) else {

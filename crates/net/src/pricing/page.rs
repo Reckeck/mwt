@@ -4,11 +4,11 @@
 use reqwest::header::{ACCEPT, USER_AGENT};
 
 use super::PricingService;
-use crate::error::{Error, Result};
+use mwt_base::error::{Error, Result};
 
 /// Larger pages are refused: a value is never that far down, and the vault
 /// keeps only the value.
-pub const MAX_PAGE_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_PAGE_BYTES: usize = 8 * 1024 * 1024;
 
 impl PricingService {
     /// The body of `url`. Only `http(s)`; redirects are followed by reqwest.

@@ -20,7 +20,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
-use crate::error::{Error, Result};
+use mwt_base::error::{Error, Result};
 
 const MAINNET: &str = "https://api.bybit.com";
 const TESTNET: &str = "https://api-testnet.bybit.com";
@@ -188,7 +188,7 @@ impl Execution {
                 .exec_time
                 .parse::<i64>()
                 .ok()
-                .map(|ms| crate::model::vault::unix_to_iso(ms / 1000)),
+                .map(|ms| mwt_model::unix_to_iso(ms / 1000)),
             comment: Some(format!(
                 "bybit {} {} · {} @ {}",
                 self.category_label(),
@@ -568,7 +568,7 @@ pub fn accounts_in_use(balances: &[(String, Vec<CoinBalance>)]) -> [bool; 3] {
     [holds(ACCOUNT_FUND), true, holds(ACCOUNT_EARN)]
 }
 
-pub use crate::model::vault::{ACCOUNT_EARN, ACCOUNT_FUND, ACCOUNT_UNIFIED};
+pub(crate) use mwt_model::{ACCOUNT_EARN, ACCOUNT_FUND, ACCOUNT_UNIFIED};
 
 /// A move between the user's own Bybit accounts (`/v5/asset/transfer/query-inter-transfer-list`).
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -624,7 +624,7 @@ struct ListPage<T> {
 }
 
 /// `/v5/account/wallet-balance`: `result.list[0].coin[{coin, walletBalance}]`.
-pub fn parse_unified_balances(body: &serde_json::Value) -> Vec<CoinBalance> {
+pub(crate) fn parse_unified_balances(body: &serde_json::Value) -> Vec<CoinBalance> {
     body.pointer("/list/0/coin")
         .and_then(serde_json::Value::as_array)
         .map(|coins| {
@@ -637,7 +637,7 @@ pub fn parse_unified_balances(body: &serde_json::Value) -> Vec<CoinBalance> {
 }
 
 /// `/v5/asset/transfer/query-account-coins-balance`: `result.balance[{coin, walletBalance}]`.
-pub fn parse_funding_balances(body: &serde_json::Value) -> Vec<CoinBalance> {
+pub(crate) fn parse_funding_balances(body: &serde_json::Value) -> Vec<CoinBalance> {
     body.get("balance")
         .and_then(serde_json::Value::as_array)
         .map(|coins| {
@@ -650,7 +650,7 @@ pub fn parse_funding_balances(body: &serde_json::Value) -> Vec<CoinBalance> {
 }
 
 /// `/v5/earn/position`: `result.list[{coin, amount}]`, one row per product; summed per coin.
-pub fn parse_earn_positions(body: &serde_json::Value) -> Vec<CoinBalance> {
+pub(crate) fn parse_earn_positions(body: &serde_json::Value) -> Vec<CoinBalance> {
     let mut sums: std::collections::BTreeMap<String, rust_decimal::Decimal> =
         std::collections::BTreeMap::new();
     for row in body
@@ -887,7 +887,7 @@ pub enum KeyCheck {
 /// neither trade nor withdraw. `readOnly` is 1 for a read-only key; a
 /// withdrawal right is listed under `permissions.Wallet`. Anything missing
 /// or unexpected counts as not read-only.
-pub fn key_is_read_only(info: &serde_json::Value) -> bool {
+pub(crate) fn key_is_read_only(info: &serde_json::Value) -> bool {
     let read_only = info.get("readOnly").and_then(serde_json::Value::as_i64) == Some(1);
     let withdraws = info
         .get("permissions")

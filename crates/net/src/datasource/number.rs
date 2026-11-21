@@ -2,8 +2,8 @@
 
 use std::str::FromStr;
 
-use crate::Amount;
-use crate::model::datasource::NumberFormat;
+use mwt_base::Amount;
+use mwt_model::NumberFormat;
 
 /// A space that groups thousands: plain, no-break or thin.
 fn is_group_space(ch: char) -> bool {

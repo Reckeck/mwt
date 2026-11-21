@@ -3,9 +3,9 @@
 use proptest::prelude::*;
 
 use super::number::parse_number;
-use crate::Amount;
-use crate::model::datasource::NumberFormat;
-use crate::testkit::props::amount;
+use crate::props::amount;
+use mwt_base::Amount;
+use mwt_model::NumberFormat;
 
 fn format() -> impl Strategy<Value = NumberFormat> {
     (

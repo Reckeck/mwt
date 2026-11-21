@@ -2,18 +2,18 @@
 //! returned goes in, the number, series or text the method points at comes
 //! out. Fetching lives in `pricing`, applying in `service::datasources`.
 
-pub mod file;
-pub mod html;
-pub mod json;
-pub mod number;
+pub(crate) mod file;
+pub(crate) mod html;
+pub(crate) mod json;
+pub(crate) mod number;
 #[cfg(test)]
 mod number_props;
 
 use chrono::NaiveDate;
 use scraper::Html;
 
-pub use crate::model::datasource::Extracted;
-use crate::model::datasource::{NumberFormat, SeriesPoint, SourceMethod, SourceOutput, TableRow};
+pub(crate) use mwt_model::Extracted;
+use mwt_model::{NumberFormat, SeriesPoint, SourceMethod, SourceOutput, TableRow};
 
 pub use number::parse_number;
 
@@ -57,7 +57,7 @@ pub fn preview(url: &str, body: &[u8]) -> Result<SourcePreview, String> {
         rows: Vec::new(),
     };
     if body.starts_with(b"PK") || path.ends_with(".xlsx") {
-        let mut rows = file::rows(crate::model::datasource::FileFormat::Xlsx, "", body)?;
+        let mut rows = file::rows(mwt_model::FileFormat::Xlsx, "", body)?;
         rows.truncate(PREVIEW_ROWS);
         return Ok(SourcePreview {
             kind: PreviewKind::Xlsx,
@@ -75,7 +75,7 @@ pub fn preview(url: &str, body: &[u8]) -> Result<SourcePreview, String> {
         });
     }
     if path.ends_with(".csv") {
-        let mut rows = file::rows(crate::model::datasource::FileFormat::Csv, "", body)?;
+        let mut rows = file::rows(mwt_model::FileFormat::Csv, "", body)?;
         rows.truncate(PREVIEW_ROWS);
         return Ok(SourcePreview {
             kind: PreviewKind::Csv,
@@ -376,8 +376,8 @@ mod tests {
     }
 
     use super::*;
-    use crate::Amount;
-    use crate::model::datasource::FileFormat;
+    use mwt_base::Amount;
+    use mwt_model::FileFormat;
     use std::str::FromStr;
 
     fn amount(text: &str) -> Amount {
