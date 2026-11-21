@@ -13,6 +13,7 @@ use crate::Amount;
 use crate::cryptotrack::protocols::LegToken;
 use crate::cryptotrack::tokens::text::{sanitize_name, sanitize_symbol};
 use crate::cryptotrack::tokens::{self, TokenStatus, known};
+use crate::cryptotrack::validate::Validate;
 use crate::error::{Error, Result};
 use crate::model::cryptotrack::{CryptoAsset, CryptoToken, TokenId, TokenVerdict};
 use crate::model::vault::VaultDoc;

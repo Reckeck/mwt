@@ -5,6 +5,7 @@
 use super::tests::{settle, two_devices};
 use super::*;
 use crate::exchange::Execution;
+use crate::exchange::staging::PendingImportExt;
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::PendingImport;
 use crate::service::WorkflowDraft;

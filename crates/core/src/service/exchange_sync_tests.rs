@@ -1,5 +1,6 @@
 use super::*;
 use crate::Amount;
+use crate::exchange::staging::PendingImportExt;
 use crate::exchange::{CoinBalance, Execution};
 use crate::model::store::ImportAccountRoute;
 use crate::model::transaction::TxKind;

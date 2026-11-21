@@ -16,6 +16,11 @@ use crate::model::cryptotrack::{
 };
 use crate::model::vault::VaultDoc;
 
+/// What a stored crypto record refuses: an empty key or blank identifying field.
+pub(crate) trait Validate {
+    fn validate(&self) -> Result<()>;
+}
+
 fn invalid(message: impl Into<String>) -> Error {
     Error::InvalidInput(message.into())
 }
@@ -28,10 +33,10 @@ fn present(value: &str, what: &str) -> Result<()> {
     Ok(())
 }
 
-impl TrackingRef {
+impl Validate for TrackingRef {
     /// Refuse an origin that names nothing: an empty hash, address, position
     /// or fill id cannot be fetched again or deduplicated.
-    pub fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         match self {
             TrackingRef::ChainTx { hash, .. } => present(hash, "a transaction hash"),
             TrackingRef::Address { address, .. } => present(address, "an address"),
@@ -47,8 +52,8 @@ impl TrackingRef {
     }
 }
 
-impl CryptoLeg {
-    pub fn validate(&self) -> Result<()> {
+impl Validate for CryptoLeg {
+    fn validate(&self) -> Result<()> {
         if let crate::model::cryptotrack::CryptoAsset::Token(token) = &self.asset {
             present(&token.contract, "a token contract")?;
         }
@@ -56,9 +61,9 @@ impl CryptoLeg {
     }
 }
 
-impl CryptoTx {
+impl Validate for CryptoTx {
     /// Refuse an operation that cannot be identified or re-read.
-    pub fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         present(&self.id, "an operation id")?;
         present(&self.account_id, "an operation's account")?;
         present(&self.time, "an operation's time")?;
@@ -70,30 +75,30 @@ impl CryptoTx {
     }
 }
 
-impl CryptoAccount {
-    pub fn validate(&self) -> Result<()> {
+impl Validate for CryptoAccount {
+    fn validate(&self) -> Result<()> {
         present(&self.id, "an account id")?;
         present(&self.name, "an account name")?;
         present(&self.address, "an address")
     }
 }
 
-impl CryptoToken {
-    pub fn validate(&self) -> Result<()> {
+impl Validate for CryptoToken {
+    fn validate(&self) -> Result<()> {
         present(&self.contract, "a token contract")?;
         present(&self.symbol, "a token symbol")
     }
 }
 
-impl CryptoOverride {
-    pub fn validate(&self) -> Result<()> {
+impl Validate for CryptoOverride {
+    fn validate(&self) -> Result<()> {
         present(&self.id, "a correction id")?;
         present(&self.event_id, "the operation a correction belongs to")
     }
 }
 
-impl CryptoPosition {
-    pub fn validate(&self) -> Result<()> {
+impl Validate for CryptoPosition {
+    fn validate(&self) -> Result<()> {
         present(&self.id, "a position id")?;
         present(&self.account_id, "a position's account")?;
         present(&self.protocol, "a protocol")?;
@@ -104,23 +109,23 @@ impl CryptoPosition {
     }
 }
 
-impl CryptoSnapshot {
-    pub fn validate(&self) -> Result<()> {
+impl Validate for CryptoSnapshot {
+    fn validate(&self) -> Result<()> {
         present(&self.id, "a snapshot id")?;
         present(&self.at, "a snapshot's time")
     }
 }
 
-impl CryptoCursor {
-    pub fn validate(&self) -> Result<()> {
+impl Validate for CryptoCursor {
+    fn validate(&self) -> Result<()> {
         present(&self.id, "a cursor id")?;
         present(&self.source, "a cursor's source")?;
         present(&self.account_id, "a cursor's account")
     }
 }
 
-impl CryptoWipe {
-    pub fn validate(&self) -> Result<()> {
+impl Validate for CryptoWipe {
+    fn validate(&self) -> Result<()> {
         present(&self.id, "a wipe id")?;
         present(&self.at, "a wipe's time")
     }

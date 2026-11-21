@@ -10,6 +10,7 @@ use crate::ipc_contract::MergeTarget;
 use crate::model::notify::NoticeCategory;
 use crate::model::vault::now_iso;
 use crate::service::{CASH_WALLET_ID, UnlockedVault, notice};
+use crate::sync::journal::SyncJournalEntryExt;
 use crate::sync::journal::{SyncJournalEntry, SyncJournalOutcome};
 use crate::sync::repair::bad_record::journal_has;
 use crate::sync::repair::keep::{self, KeepTarget};

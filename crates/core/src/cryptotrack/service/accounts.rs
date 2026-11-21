@@ -18,6 +18,7 @@
 //! log line, and the input's `Debug` hides the field.
 
 use crate::cryptotrack::chains;
+use crate::cryptotrack::validate::Validate;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::{CryptoAccount, normalize_address};

@@ -5,6 +5,7 @@ use super::exchange_import::{
     transaction_for_import,
 };
 use crate::exchange::Execution;
+use crate::exchange::staging::PendingImportExt;
 use crate::model::store::{StoreKind, TerminalState};
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::PendingImport;

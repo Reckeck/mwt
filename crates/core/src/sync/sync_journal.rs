@@ -3,7 +3,8 @@
 //! the clock and saving are in `usecases::sync::sync_journal`.
 
 use super::SyncSummary;
-use super::journal::{SyncJournalEntry, SyncJournalOutcome, push};
+use super::journal::{SyncJournalEntry, SyncJournalEntryExt, SyncJournalOutcome, push};
+use super::plan::SyncSummaryExt;
 use super::state::SyncState;
 
 /// Add a line about `summary` to the journal (oldest first, capped); `id` and `at` are set by the caller.

@@ -10,10 +10,16 @@ pub const MAX_JOURNAL: usize = 200;
 
 pub use crate::model::sync_state::{SyncJournalCount, SyncJournalEntry, SyncJournalOutcome};
 
-impl SyncJournalEntry {
+pub(crate) trait SyncJournalEntryExt: Sized {
     /// Drop the label of a line about a secret collection (written before
     /// they were hidden). `true` when something changed.
-    pub fn scrub_secrets(&mut self) -> bool {
+    fn scrub_secrets(&mut self) -> bool;
+    /// A line for `summary`, without the id and time (the vault sets them).
+    fn of(peer_name: &str, summary: &SyncSummary, outcome: SyncJournalOutcome) -> Self;
+}
+
+impl SyncJournalEntryExt for SyncJournalEntry {
+    fn scrub_secrets(&mut self) -> bool {
         let secret = self
             .counts
             .iter()
@@ -21,8 +27,7 @@ impl SyncJournalEntry {
         secret && self.label.take().is_some()
     }
 
-    /// A line for `summary`, without the id and time (the vault sets them).
-    pub fn of(peer_name: &str, summary: &SyncSummary, outcome: SyncJournalOutcome) -> Self {
+    fn of(peer_name: &str, summary: &SyncSummary, outcome: SyncJournalOutcome) -> Self {
         let counts = summary
             .collections
             .iter()

@@ -9,6 +9,7 @@
 
 use super::convergence_tests::{Edit, Ledger, Rng, event_ids, guest, pick};
 use super::*;
+use crate::exchange::staging::PendingImportExt;
 use crate::ipc_contract::{
     AttachPaymentInput, SharedEventDraft, SharedItemDraft, SharedPurchaseDraft,
 };
