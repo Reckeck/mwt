@@ -268,7 +268,8 @@ pub fn record_and_deliver(app: &AppHandle, records: Vec<NoticeRecord>) {
         let Some(vault) = guard.as_mut() else {
             return;
         };
-        vault.log_notices(records).unwrap_or_default()
+        trade_core::usecases::planning::notifications::log_notices(vault, records)
+            .unwrap_or_default()
     };
     deliver(app, fresh, false);
 }
@@ -301,7 +302,12 @@ pub fn snapshot_tick(app: &AppHandle, force: bool) {
         let Some(vault) = guard.as_ref() else {
             return;
         };
-        let mut snapshot = vault.notification_snapshot(now_secs(), &zone, ru);
+        let mut snapshot = trade_core::reports::notify_snapshot::notification_snapshot(
+            &vault.books(),
+            now_secs(),
+            &zone,
+            ru,
+        );
         snapshot.role_client = matches!(crate::sync::current_role(app), Some(SyncRole::Client));
         snapshot
     };
@@ -357,7 +363,12 @@ fn merge_findings(vault: &mut UnlockedVault, found: LockedFindings, runs_jobs: b
     if !runs_jobs || vault.doc.id != found.vault_id {
         return false;
     }
-    let _ = vault.apply_locked_deliveries_seen(found.shown, &found.fired, &found.bases);
+    let _ = trade_core::usecases::reports::notify_snapshot::apply_locked_deliveries_seen(
+        vault,
+        found.shown,
+        &found.fired,
+        &found.bases,
+    );
     true
 }
 
@@ -549,7 +560,9 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
             };
             guard
                 .as_ref()
-                .map(|vault| vault.import_schedule())
+                .map(|vault| {
+                    trade_core::usecases::cryptotrack::exchange_import::import_schedule(vault)
+                })
                 .unwrap_or_default()
         },
         |key| key.keys.store_id.as_str(),
@@ -665,17 +678,22 @@ fn workflows_tick(app: &AppHandle) {
             return;
         };
         vault.set_notice_language(ru);
-        let Ok(pass) = vault.run_due_workflows_at(&trade_core::time::SystemClock, &zone) else {
+        let Ok(pass) = trade_core::usecases::workflow::runs::run_due_workflows_at(
+            vault,
+            &trade_core::time::SystemClock,
+            &zone,
+        ) else {
             return;
         };
         // Savings accounts that ask for it get last month's interest booked.
         let today = trade_core::calendar::Calendar::new(&zone).date_of(now_secs());
-        let interest = vault.post_due_interest(today).unwrap_or(0);
-        let names: std::collections::HashMap<String, String> = vault
-            .automations()
-            .into_iter()
-            .map(|automation| (automation.id, automation.name))
-            .collect();
+        let interest =
+            trade_core::usecases::money::interest::post_due_interest(vault, today).unwrap_or(0);
+        let names: std::collections::HashMap<String, String> =
+            trade_core::usecases::planning::automations::automations(vault)
+                .into_iter()
+                .map(|automation| (automation.id, automation.name))
+                .collect();
         let mut news = AutomationNews {
             created: Vec::new(),
             rejected: Vec::new(),
@@ -868,7 +886,7 @@ fn alerts_tick(app: &AppHandle, memory: &mut Memory) {
         let Some(vault) = guard.as_ref() else {
             return;
         };
-        vault.alert_assets()
+        trade_core::planning::agenda::alert_assets(&vault.doc)
     };
     if assets.is_empty() {
         return;
@@ -890,10 +908,10 @@ fn alerts_tick(app: &AppHandle, memory: &mut Memory) {
         let Some(vault) = guard.as_mut() else {
             return;
         };
-        vault.apply_prices(&prices);
-        vault.restamp_missing();
+        trade_core::usecases::money::rates::apply_prices(vault, &prices);
+        trade_core::usecases::money::rates::restamp_missing(vault);
         let _ = vault.persist();
-        vault.check_alerts(now_secs()).unwrap_or_default()
+        trade_core::usecases::planning::agenda::check_alerts(vault, now_secs()).unwrap_or_default()
     };
     let ru = russian(app);
     let records = fired
@@ -947,11 +965,21 @@ fn reminders_tick(app: &AppHandle, _memory: &mut Memory) {
             return;
         };
         // Automatic reminders follow the data: a new loan, a moved payment day.
-        let synced = vault
-            .sync_auto_reminders(now_secs(), &zone, ru)
-            .unwrap_or(false);
+        let synced = trade_core::usecases::planning::auto_reminders::sync_auto_reminders(
+            vault,
+            now_secs(),
+            &zone,
+            ru,
+        )
+        .unwrap_or(false);
         // Reminders whose time came, money that will run short, budgets.
-        let fresh = vault.due_notices(now_secs(), &zone, ru).unwrap_or_default();
+        let fresh = trade_core::usecases::planning::notifications::due_notices(
+            vault,
+            now_secs(),
+            &zone,
+            ru,
+        )
+        .unwrap_or_default();
         (fresh, synced)
     };
     if synced {

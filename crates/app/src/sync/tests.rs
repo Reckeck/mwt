@@ -281,7 +281,7 @@ fn seed(host: &TestHost, comment: &str) {
                 ..PriceStamp::default()
             },
         });
-        vault.add_transaction(tx)?;
+        trade_core::usecases::money::transactions::add_transaction(vault, tx)?;
         Ok(())
     })
     .unwrap();

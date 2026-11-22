@@ -157,18 +157,22 @@ fn dated(mut tx: Transaction, ts: &str) -> Transaction {
 /// Income and spending for each `(month, income, spent)`.
 fn months(vault: &mut UnlockedVault, store: &str, rows: &[(&str, &str, &str)]) {
     for (month, earned, spent) in rows {
-        vault
-            .add_transaction(dated(
+        crate::usecases::money::transactions::add_transaction(
+            vault,
+            dated(
                 income(store, earned, "pay"),
                 &format!("{month}-05T10:00:00Z"),
-            ))
-            .unwrap();
-        vault
-            .add_transaction(dated(
+            ),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            vault,
+            dated(
                 payment(store, spent, "food"),
                 &format!("{month}-10T10:00:00Z"),
-            ))
-            .unwrap();
+            ),
+        )
+        .unwrap();
     }
 }
 
@@ -191,7 +195,7 @@ fn creep_compares_with_the_same_months_a_year_back() {
         ],
     );
     let now = secs_or_now("2026-06-15T10:00:00Z");
-    let creep = vault.lifestyle_creep(now, "UTC").expect("creep");
+    let creep = mwt_reports::health::lifestyle_creep(&vault.books(), now, "UTC").expect("creep");
     assert_eq!(creep.subject.as_deref(), Some("year"));
     assert_eq!(creep.amount, Some(pct("200")));
     assert_eq!(creep.pct, Some(pct("100")));
@@ -216,16 +220,22 @@ fn creep_without_a_year_takes_the_months_before() {
         ],
     );
     let now = secs_or_now("2026-07-02T10:00:00Z");
-    assert_eq!(vault.lifestyle_creep(now, "UTC"), None, "spent grew slower");
+    assert_eq!(
+        mwt_reports::health::lifestyle_creep(&vault.books(), now, "UTC"),
+        None,
+        "spent grew slower"
+    );
     for month in ["2026-04", "2026-05", "2026-06"] {
-        vault
-            .add_transaction(dated(
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            dated(
                 payment(&cash, "100", "extra"),
                 &format!("{month}-20T10:00:00Z"),
-            ))
-            .unwrap();
+            ),
+        )
+        .unwrap();
     }
-    let creep = vault.lifestyle_creep(now, "UTC").expect("creep");
+    let creep = mwt_reports::health::lifestyle_creep(&vault.books(), now, "UTC").expect("creep");
     assert_eq!(creep.subject.as_deref(), Some("previous"));
     assert_eq!(creep.amount, Some(pct("150")));
 }
@@ -237,9 +247,12 @@ fn the_checkup_reads_the_vault_and_notices_only_changes() {
     vault.set_base_currency("usd");
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let start = secs_or_now("2026-04-02T10:00:00Z");
-    let report = vault.capital_health(start, "UTC").unwrap();
+    let report = mwt_reports::health::capital_health(&vault.books(), start, "UTC").unwrap();
     assert_eq!(report.color, HealthColor::NoData);
-    assert_eq!(vault.health_notice(start, "UTC", true).unwrap(), None);
+    assert_eq!(
+        crate::usecases::planning::health::health_notice(&mut vault, start, "UTC", true).unwrap(),
+        None
+    );
     assert_eq!(
         vault.doc.health_last.as_ref().map(|last| last.color),
         Some(HealthColor::NoData)
@@ -255,22 +268,27 @@ fn the_checkup_reads_the_vault_and_notices_only_changes() {
         ],
     );
     let may = secs_or_now("2026-05-03T10:00:00Z");
-    let report = vault.capital_health(may, "UTC").unwrap();
+    let report = mwt_reports::health::capital_health(&vault.books(), may, "UTC").unwrap();
     assert_eq!(report.color, HealthColor::Yellow);
     // The whole report, pinned: the twelve savings months, the average and the
     // two reasons (fund not set, savings below plan).
     insta::assert_json_snapshot!(report);
-    let sent = vault
-        .health_notice(may, "UTC", true)
+    let sent = crate::usecases::planning::health::health_notice(&mut vault, may, "UTC", true)
         .unwrap()
         .expect("sent");
     // The notice, pinned: key, link and the yellow body; the delivery is the wall clock.
     insta::assert_json_snapshot!(sent, { ".delivered_at" => "[now]" });
-    assert_eq!(vault.health_notice(may, "UTC", true).unwrap(), None);
+    assert_eq!(
+        crate::usecases::planning::health::health_notice(&mut vault, may, "UTC", true).unwrap(),
+        None
+    );
 
     let june = secs_or_now("2026-06-03T10:00:00Z");
     months(&mut vault, &cash, &[("2026-05", "1000", "950")]);
-    assert_eq!(vault.health_notice(june, "UTC", true).unwrap(), None);
+    assert_eq!(
+        crate::usecases::planning::health::health_notice(&mut vault, june, "UTC", true).unwrap(),
+        None
+    );
 
     let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
     let extras = StoreExtras {
@@ -278,22 +296,30 @@ fn the_checkup_reads_the_vault_and_notices_only_changes() {
         binding: Some(crate::model::store::Binding::Asset(usd())),
         ..StoreExtras::default()
     };
-    let savings = vault
-        .create_store_with("Reserve", StoreKind::Bank, "#000", "", Some(bank), extras)
-        .unwrap()
-        .id;
-    vault
-        .set_emergency_fund(EmergencyFund {
+    let savings = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Reserve",
+        StoreKind::Bank,
+        "#000",
+        "",
+        Some(bank),
+        extras,
+    )
+    .unwrap()
+    .id;
+    crate::usecases::planning::emergency::set_emergency_fund(
+        &mut vault,
+        EmergencyFund {
             scope: StoreScope {
                 store_ids: vec![savings],
                 include_children: false,
             },
             ..EmergencyFund::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let july = secs_or_now("2026-07-03T10:00:00Z");
-    let sent = vault
-        .health_notice(july, "UTC", false)
+    let sent = crate::usecases::planning::health::health_notice(&mut vault, july, "UTC", false)
         .unwrap()
         .expect("sent");
     assert!(sent.body.contains("red"), "{}", sent.body);
@@ -305,7 +331,7 @@ fn the_checkup_reads_the_vault_and_notices_only_changes() {
 fn savings_series_lists_twelve_finished_months_oldest_first() {
     let (_dir, vault) = empty_vault();
     let now = secs_or_now("2026-06-15T10:00:00Z");
-    let series = vault.savings_series(now, "UTC").unwrap();
+    let series = crate::planning::health::savings_series(&vault.books(), now, "UTC").unwrap();
     assert_eq!(series.len(), SAVINGS_MONTHS);
     assert_eq!(
         series.first().map(|row| row.month.as_str()),
@@ -318,11 +344,13 @@ fn savings_series_lists_twelve_finished_months_oldest_first() {
 #[test]
 fn the_freedom_rate_is_saved_cleared_and_never_negative() {
     let (_dir, mut vault) = empty_vault();
-    vault.set_freedom_rate(Some(pct("7.5"))).unwrap();
+    crate::usecases::planning::health::set_freedom_rate(&mut vault, Some(pct("7.5"))).unwrap();
     assert_eq!(vault.doc.settings.freedom_rate, Some(pct("7.5")));
-    assert!(vault.set_freedom_rate(Some(pct("-1"))).is_err());
+    assert!(
+        crate::usecases::planning::health::set_freedom_rate(&mut vault, Some(pct("-1"))).is_err()
+    );
     assert_eq!(vault.doc.settings.freedom_rate, Some(pct("7.5")));
-    vault.set_freedom_rate(None).unwrap();
+    crate::usecases::planning::health::set_freedom_rate(&mut vault, None).unwrap();
     assert_eq!(vault.doc.settings.freedom_rate, None);
 }
 
@@ -363,7 +391,7 @@ fn the_average_of_months_needs_flow_in_every_one() {
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     let mut salary = income(&card, "1000", "salary");
     at(&mut salary, "2026-01-10T00:00:00Z");
-    vault.add_transaction(salary).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
     let january = chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
     let february = chrono::NaiveDate::from_ymd_opt(2026, 2, 1).unwrap();
     let books = vault.books();
@@ -378,14 +406,15 @@ fn the_health_delegates_equal_the_scenarios() {
     use crate::usecases::planning::health as case;
     let (_a, mut by_method) = empty_vault();
     let (_b, mut by_case) = empty_vault();
-    by_method.set_freedom_rate(Some(pct("7.5"))).unwrap();
+    crate::usecases::planning::health::set_freedom_rate(&mut by_method, Some(pct("7.5"))).unwrap();
     case::set_freedom_rate(&mut by_case, Some(pct("7.5"))).unwrap();
     assert_eq!(
         by_method.doc.settings.freedom_rate,
         by_case.doc.settings.freedom_rate
     );
     let now = secs_or_now("2026-04-02T10:00:00Z");
-    let first = by_method.health_notice(now, "UTC", true).unwrap();
+    let first =
+        crate::usecases::planning::health::health_notice(&mut by_method, now, "UTC", true).unwrap();
     let second = case::health_notice(&mut by_case, now, "UTC", true).unwrap();
     assert_eq!(first, second);
     assert_eq!(by_method.doc.health_last, by_case.doc.health_last);

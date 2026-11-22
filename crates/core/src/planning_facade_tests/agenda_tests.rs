@@ -24,13 +24,14 @@ fn upcoming_flags_a_payment_the_balance_will_not_cover() {
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     let mut seed = income(&card, "500", "seed");
     at(&mut seed, "2026-03-01T00:00:00Z");
-    vault.add_transaction(seed).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, seed).unwrap();
     let Transaction::Payment(mut rent) = payment(&card, "800", "rent") else {
         unreachable!()
     };
     rent.meta.categories = vec!["rent_mortgage".into()];
-    vault
-        .create_automation(AutomationDraft {
+    crate::usecases::planning::automations::create_automation(
+        &mut vault,
+        AutomationDraft {
             time: None,
             asks: false,
             for_month_offset: None,
@@ -43,13 +44,15 @@ fn upcoming_flags_a_payment_the_balance_will_not_cover() {
             amount_mode: Default::default(),
             workday_shift: Default::default(),
             property_id: None,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let Transaction::Topup(salary) = income(&card, "1000", "salary") else {
         unreachable!()
     };
-    vault
-        .create_automation(AutomationDraft {
+    crate::usecases::planning::automations::create_automation(
+        &mut vault,
+        AutomationDraft {
             time: None,
             asks: false,
             for_month_offset: None,
@@ -62,8 +65,9 @@ fn upcoming_flags_a_payment_the_balance_will_not_cover() {
             amount_mode: Default::default(),
             workday_shift: Default::default(),
             property_id: None,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let items = crate::planning::upcoming::upcoming(
         &vault.books(),
         45,
@@ -96,8 +100,9 @@ fn an_alert_fires_once() {
         source: "test".into(),
         change_24h_pct: None,
     });
-    vault
-        .create_price_alert(PriceAlertDraft {
+    crate::usecases::planning::agenda::create_price_alert(
+        &mut vault,
+        PriceAlertDraft {
             asset: btc(),
             condition: AlertCondition::Above,
             price: amount("95000"),
@@ -105,12 +110,22 @@ fn an_alert_fires_once() {
             active: true,
             store_id: None,
             repeats: false,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let now = secs("2026-03-02T00:00:00Z");
-    assert_eq!(vault.check_alerts(now).unwrap().len(), 1);
-    assert!(vault.check_alerts(now).unwrap().is_empty());
-    assert!(vault.alert_assets().is_empty());
+    assert_eq!(
+        crate::usecases::planning::agenda::check_alerts(&mut vault, now)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        crate::usecases::planning::agenda::check_alerts(&mut vault, now)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(crate::planning::agenda::alert_assets(&vault.doc).is_empty());
 }
 
 #[test]
@@ -121,35 +136,35 @@ fn a_reminder_keeps_what_pay_fills_in_and_drops_an_empty_button() {
         store_id: store_id.map(str::to_string),
         category: Some(category.to_string()),
     };
-    let reminder = vault
-        .create_reminder_paying(
-            "ЖКХ",
-            "2026-03-10T10:00:00Z",
-            None,
-            Some(pay(Some(&card), " utilities ")),
-        )
-        .unwrap();
+    let reminder = crate::usecases::planning::agenda::create_reminder_paying(
+        &mut vault,
+        "ЖКХ",
+        "2026-03-10T10:00:00Z",
+        None,
+        Some(pay(Some(&card), " utilities ")),
+    )
+    .unwrap();
     assert_eq!(reminder.pay, Some(pay(Some(&card), "utilities")));
 
-    let edited = vault
-        .update_reminder_paying(
-            &reminder.id,
-            "ЖКХ",
-            "2026-03-10T10:00:00Z",
-            None,
-            Some(pay(None, " ")),
-        )
-        .unwrap();
+    let edited = crate::usecases::planning::agenda::update_reminder_paying(
+        &mut vault,
+        &reminder.id,
+        "ЖКХ",
+        "2026-03-10T10:00:00Z",
+        None,
+        Some(pay(None, " ")),
+    )
+    .unwrap();
     assert_eq!(edited.pay, None);
     assert!(
-        vault
-            .create_reminder_paying(
-                "x",
-                "2026-03-10T10:00:00Z",
-                None,
-                Some(pay(Some("nope"), "food"))
-            )
-            .is_err()
+        crate::usecases::planning::agenda::create_reminder_paying(
+            &mut vault,
+            "x",
+            "2026-03-10T10:00:00Z",
+            None,
+            Some(pay(Some("nope"), "food"))
+        )
+        .is_err()
     );
 }
 
@@ -166,8 +181,9 @@ fn a_repeating_alert_rearms_after_the_price_crosses_back() {
         })
     };
     price(&mut vault, "100000", "2026-03-01T00:00:00Z");
-    vault
-        .create_price_alert(PriceAlertDraft {
+    crate::usecases::planning::agenda::create_price_alert(
+        &mut vault,
+        PriceAlertDraft {
             asset: btc(),
             condition: AlertCondition::Above,
             price: amount("95000"),
@@ -175,34 +191,31 @@ fn a_repeating_alert_rearms_after_the_price_crosses_back() {
             active: true,
             store_id: None,
             repeats: true,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(
-        vault
-            .check_alerts(secs("2026-03-01T01:00:00Z"))
+        crate::usecases::planning::agenda::check_alerts(&mut vault, secs("2026-03-01T01:00:00Z"))
             .unwrap()
             .len(),
         1
     );
     assert!(
-        vault
-            .check_alerts(secs("2026-03-01T02:00:00Z"))
+        crate::usecases::planning::agenda::check_alerts(&mut vault, secs("2026-03-01T02:00:00Z"))
             .unwrap()
             .is_empty()
     );
-    assert_eq!(vault.alert_assets().len(), 1);
+    assert_eq!(crate::planning::agenda::alert_assets(&vault.doc).len(), 1);
     price(&mut vault, "90000", "2026-03-02T00:00:00Z");
     assert!(
-        vault
-            .check_alerts(secs("2026-03-02T01:00:00Z"))
+        crate::usecases::planning::agenda::check_alerts(&mut vault, secs("2026-03-02T01:00:00Z"))
             .unwrap()
             .is_empty()
     );
     assert!(vault.doc.price_alerts[0].triggered_at.is_none());
     price(&mut vault, "96000", "2026-03-03T00:00:00Z");
     assert_eq!(
-        vault
-            .check_alerts(secs("2026-03-03T01:00:00Z"))
+        crate::usecases::planning::agenda::check_alerts(&mut vault, secs("2026-03-03T01:00:00Z"))
             .unwrap()
             .len(),
         1
@@ -223,14 +236,15 @@ fn an_alert_belongs_to_an_exchange_only() {
         store_id: Some(store_id.to_string()),
         repeats: false,
     };
-    let alert = vault.create_price_alert(draft(&exchange)).unwrap();
+    let alert = crate::usecases::planning::agenda::create_price_alert(&mut vault, draft(&exchange))
+        .unwrap();
     assert_eq!(alert.store_id.as_deref(), Some(exchange.as_str()));
     assert!(matches!(
-        vault.create_price_alert(draft(&bank)),
+        crate::usecases::planning::agenda::create_price_alert(&mut vault, draft(&bank)),
         Err(Error::InvalidInput(_))
     ));
     assert!(matches!(
-        vault.create_price_alert(draft("nope")),
+        crate::usecases::planning::agenda::create_price_alert(&mut vault, draft("nope")),
         Err(Error::Missing(_))
     ));
 }
@@ -238,13 +252,24 @@ fn an_alert_belongs_to_an_exchange_only() {
 #[test]
 fn reminders_come_due_and_can_be_done() {
     let (_dir, mut vault) = empty_vault();
-    let reminder = vault
-        .create_reminder("Pay the nanny", "2026-03-05T09:00:00Z", None)
-        .unwrap();
-    assert!(vault.due_reminders(secs("2026-03-04T00:00:00Z")).is_empty());
-    assert_eq!(vault.due_reminders(secs("2026-03-05T10:00:00Z")).len(), 1);
-    vault.set_reminder_done(&reminder.id, true).unwrap();
-    assert!(vault.due_reminders(secs("2026-03-05T10:00:00Z")).is_empty());
+    let reminder = crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Pay the nanny",
+        "2026-03-05T09:00:00Z",
+        None,
+    )
+    .unwrap();
+    assert!(
+        crate::planning::agenda::due_reminders(&vault.doc, secs("2026-03-04T00:00:00Z")).is_empty()
+    );
+    assert_eq!(
+        crate::planning::agenda::due_reminders(&vault.doc, secs("2026-03-05T10:00:00Z")).len(),
+        1
+    );
+    crate::usecases::planning::agenda::set_reminder_done(&mut vault, &reminder.id, true).unwrap();
+    assert!(
+        crate::planning::agenda::due_reminders(&vault.doc, secs("2026-03-05T10:00:00Z")).is_empty()
+    );
 }
 
 #[test]
@@ -263,30 +288,53 @@ fn a_monthly_reminder_moves_on_when_done_and_keeps_its_day() {
     assert_eq!(next.as_deref(), Some("2020-04-30T07:30:00Z"));
 
     let (_dir, mut vault) = empty_vault();
-    let reminder = vault
-        .create_reminder("Rent", "2020-01-31T07:30:00Z", Some(monthly))
-        .unwrap();
-    let moved = vault.set_reminder_done(&reminder.id, true).unwrap();
+    let reminder = crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Rent",
+        "2020-01-31T07:30:00Z",
+        Some(monthly),
+    )
+    .unwrap();
+    let moved =
+        crate::usecases::planning::agenda::set_reminder_done(&mut vault, &reminder.id, true)
+            .unwrap();
     assert!(!moved.done, "a repeating reminder stays open");
     assert!(secs(&moved.due_at) > secs("2026-01-01T00:00:00Z"));
     assert_eq!(&moved.due_at[11..], "07:30:00Z", "the time stays");
 
-    let finished = vault.finish_reminder_series(&reminder.id).unwrap();
+    let finished =
+        crate::usecases::planning::agenda::finish_reminder_series(&mut vault, &reminder.id)
+            .unwrap();
     assert!(finished.done && finished.repeat.is_none());
 }
 
 #[test]
 fn a_snoozed_reminder_waits_until_its_snooze_ends() {
     let (_dir, mut vault) = empty_vault();
-    let reminder = vault
-        .create_reminder("Call", "2026-03-05T09:00:00Z", None)
-        .unwrap();
-    vault
-        .snooze_reminder(&reminder.id, "2026-03-05T12:00:00Z")
-        .unwrap();
-    assert!(vault.due_reminders(secs("2026-03-05T10:00:00Z")).is_empty());
-    assert_eq!(vault.due_reminders(secs("2026-03-05T12:30:00Z")).len(), 1);
-    assert!(vault.snooze_reminder(&reminder.id, "soon").is_err());
+    let reminder = crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Call",
+        "2026-03-05T09:00:00Z",
+        None,
+    )
+    .unwrap();
+    crate::usecases::planning::agenda::snooze_reminder(
+        &mut vault,
+        &reminder.id,
+        "2026-03-05T12:00:00Z",
+    )
+    .unwrap();
+    assert!(
+        crate::planning::agenda::due_reminders(&vault.doc, secs("2026-03-05T10:00:00Z")).is_empty()
+    );
+    assert_eq!(
+        crate::planning::agenda::due_reminders(&vault.doc, secs("2026-03-05T12:30:00Z")).len(),
+        1
+    );
+    assert!(
+        crate::usecases::planning::agenda::snooze_reminder(&mut vault, &reminder.id, "soon")
+            .is_err()
+    );
 }
 
 // -- pins of the methods no old test named, and the pure rules ------------------
@@ -294,16 +342,34 @@ fn a_snoozed_reminder_waits_until_its_snooze_ends() {
 #[test]
 fn update_reminder_rewrites_the_reminder_and_a_missing_one_is_refused() {
     let (_dir, mut vault) = empty_vault();
-    let made = vault
-        .create_reminder("Call", "2026-03-05T09:00:00Z", None)
-        .unwrap();
-    let edited = vault
-        .update_reminder(&made.id, " Call the bank ", "2026-03-06T09:00:00Z", None)
-        .unwrap();
+    let made = crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Call",
+        "2026-03-05T09:00:00Z",
+        None,
+    )
+    .unwrap();
+    let edited = crate::usecases::planning::agenda::update_reminder(
+        &mut vault,
+        &made.id,
+        " Call the bank ",
+        "2026-03-06T09:00:00Z",
+        None,
+    )
+    .unwrap();
     assert_eq!(edited.text, "Call the bank");
-    assert_eq!(vault.reminders()[0].due_at, "2026-03-06T09:00:00Z");
+    assert_eq!(
+        crate::planning::agenda::reminders(&vault.doc)[0].due_at,
+        "2026-03-06T09:00:00Z"
+    );
     assert!(matches!(
-        vault.update_reminder("nope", "x", "2026-03-06T09:00:00Z", None),
+        crate::usecases::planning::agenda::update_reminder(
+            &mut vault,
+            "nope",
+            "x",
+            "2026-03-06T09:00:00Z",
+            None
+        ),
         Err(Error::Missing(_))
     ));
 }
@@ -311,8 +377,9 @@ fn update_reminder_rewrites_the_reminder_and_a_missing_one_is_refused() {
 #[test]
 fn delete_price_alert_removes_it_and_a_missing_one_is_refused() {
     let (_dir, mut vault) = empty_vault();
-    let alert = vault
-        .create_price_alert(PriceAlertDraft {
+    let alert = crate::usecases::planning::agenda::create_price_alert(
+        &mut vault,
+        PriceAlertDraft {
             asset: btc(),
             condition: AlertCondition::Above,
             price: amount("95000"),
@@ -320,12 +387,13 @@ fn delete_price_alert_removes_it_and_a_missing_one_is_refused() {
             active: true,
             store_id: None,
             repeats: false,
-        })
-        .unwrap();
-    vault.delete_price_alert(&alert.id).unwrap();
-    assert!(vault.price_alerts().is_empty());
+        },
+    )
+    .unwrap();
+    crate::usecases::planning::agenda::delete_price_alert(&mut vault, &alert.id).unwrap();
+    assert!(crate::planning::agenda::price_alerts(&vault.doc).is_empty());
     assert!(matches!(
-        vault.delete_price_alert(&alert.id),
+        crate::usecases::planning::agenda::delete_price_alert(&mut vault, &alert.id),
         Err(Error::Missing(_))
     ));
 }
@@ -355,7 +423,10 @@ fn the_reminder_scenarios_equal_their_delegates() {
         None,
     )
     .unwrap();
-    assert_eq!(vault.reminders(), reminders(&vault.doc));
+    assert_eq!(
+        crate::planning::agenda::reminders(&vault.doc),
+        reminders(&vault.doc)
+    );
     let snoozed = crate::usecases::planning::agenda::snooze_reminder(
         &mut vault,
         &made.id,
@@ -367,7 +438,7 @@ fn the_reminder_scenarios_equal_their_delegates() {
         Some("2026-03-07T09:00:00Z")
     );
     assert_eq!(
-        vault.due_reminders(secs("2026-03-08T00:00:00Z")),
+        crate::planning::agenda::due_reminders(&vault.doc, secs("2026-03-08T00:00:00Z")),
         due_reminders(&vault.doc, secs("2026-03-08T00:00:00Z"))
     );
 }

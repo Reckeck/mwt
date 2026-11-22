@@ -1,6 +1,7 @@
 //! Tests of the goals area: the old inline tests (names and bodies unchanged).
 
 use crate::Amount;
+use crate::model::ids::StoreId;
 use crate::model::store::StoreScope;
 use crate::planning::goals::*;
 use crate::service::UnlockedVault;
@@ -47,7 +48,7 @@ fn goal(name: &str, target: &str, stores: &[&str], priority: u8) -> GoalDraft {
 fn deposit(vault: &mut UnlockedVault, store: &str, sum: &str, ts: &str) {
     let mut tx = income(store, sum, "salary");
     at(&mut tx, ts);
-    vault.add_transaction(tx).unwrap();
+    crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
 }
 
 fn setup_savings() -> (tempfile::TempDir, UnlockedVault, String) {
@@ -63,13 +64,18 @@ fn two_goals_on_one_account_split_it_and_never_exceed_their_target() {
     let (_dir, mut vault, savings) = setup_savings();
     deposit(&mut vault, &savings, "3000", "2026-02-01T00:00:00Z");
     // Same months: weights 1200 : 2400 → shares 1 : 2.
-    vault
-        .create_goal(goal("Laptop", "1200", &[&savings], 3))
+    crate::usecases::planning::goals::create_goal(
+        &mut vault,
+        goal("Laptop", "1200", &[&savings], 3),
+    )
+    .unwrap();
+    crate::usecases::planning::goals::create_goal(&mut vault, goal("Trip", "2400", &[&savings], 3))
         .unwrap();
-    vault
-        .create_goal(goal("Trip", "2400", &[&savings], 3))
-        .unwrap();
-    let progress = vault.goal_progress(secs("2026-03-01T00:00:00Z"), "UTC");
+    let progress = crate::usecases::planning::goals::goal_progress(
+        &vault.books(),
+        secs("2026-03-01T00:00:00Z"),
+        "UTC",
+    );
     let by_name = |name: &str| progress.iter().find(|item| item.goal.name == name).unwrap();
     assert_eq!(by_name("Laptop").saved, amount("1000"));
     assert_eq!(by_name("Trip").saved, amount("2000"));
@@ -77,7 +83,11 @@ fn two_goals_on_one_account_split_it_and_never_exceed_their_target() {
     // 4000 is more than both need: each is capped at its target.
     deposit(&mut vault, &savings, "1000", "2026-02-02T00:00:00Z");
     deposit(&mut vault, &savings, "2000", "2026-02-03T00:00:00Z");
-    let capped = vault.goal_progress(secs("2026-03-01T00:00:00Z"), "UTC");
+    let capped = crate::usecases::planning::goals::goal_progress(
+        &vault.books(),
+        secs("2026-03-01T00:00:00Z"),
+        "UTC",
+    );
     let laptop = capped
         .iter()
         .find(|item| item.goal.name == "Laptop")
@@ -96,13 +106,17 @@ fn need_per_month_and_both_realism_reasons() {
     deposit(&mut vault, &card, "1000", "2026-01-05T00:00:00Z");
     let mut spend = payment(&card, "900", "food");
     at(&mut spend, "2026-01-06T00:00:00Z");
-    vault.add_transaction(spend).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, spend).unwrap();
 
     let mut draft = goal("Car", "12000", &[&savings], 5);
     draft.monthly_commitment = Some(amount("500"));
-    vault.create_goal(draft).unwrap();
+    crate::usecases::planning::goals::create_goal(&mut vault, draft).unwrap();
     // February: 11 months left (Feb–Dec), nothing saved.
-    let progress = vault.goal_progress(secs("2026-02-10T00:00:00Z"), "UTC");
+    let progress = crate::usecases::planning::goals::goal_progress(
+        &vault.books(),
+        secs("2026-02-10T00:00:00Z"),
+        "UTC",
+    );
     let car = &progress[0];
     assert_eq!(car.months_total, Some(12));
     assert_eq!(car.months_left, Some(11));
@@ -123,7 +137,7 @@ fn crypto_goal_contributed_stays_while_saved_follows_the_rate() {
     let wallet = store(&mut vault, "Cold", StoreKind::Crypto, None);
     let mut buy = income_of(&wallet, btc(), "1", "50000", "bought");
     at(&mut buy, "2026-01-10T00:00:00Z");
-    vault.add_transaction(buy).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
     vault.doc.price_cache.push(PricePoint {
         asset_key: btc().key(),
         value_usd: amount("80000"),
@@ -131,10 +145,16 @@ fn crypto_goal_contributed_stays_while_saved_follows_the_rate() {
         source: "test".into(),
         change_24h_pct: None,
     });
-    vault
-        .create_goal(goal("House", "100000", &[&wallet], 3))
-        .unwrap();
-    let progress = vault.goal_progress(secs("2026-02-10T00:00:00Z"), "UTC");
+    crate::usecases::planning::goals::create_goal(
+        &mut vault,
+        goal("House", "100000", &[&wallet], 3),
+    )
+    .unwrap();
+    let progress = crate::usecases::planning::goals::goal_progress(
+        &vault.books(),
+        secs("2026-02-10T00:00:00Z"),
+        "UTC",
+    );
     assert_eq!(progress[0].contributed, amount("50000"));
     assert_eq!(progress[0].saved, amount("80000"));
     assert_eq!(progress[0].fx_gain, amount("30000"));
@@ -175,28 +195,44 @@ fn expected_return_lowers_the_need_and_dates_the_forecast() {
     deposit(&mut vault, &savings, "1000", "2026-01-02T00:00:00Z");
     let mut draft = goal("House", "13000", &[&savings], 3);
     draft.monthly_commitment = Some(amount("1000"));
-    let id = vault.create_goal(draft.clone()).unwrap().id;
+    let id = crate::usecases::planning::goals::create_goal(&mut vault, draft.clone())
+        .unwrap()
+        .id;
     let now = secs("2026-01-15T00:00:00Z");
-    let flat = vault.goal_progress(now, "UTC")[0].need_per_month.unwrap();
+    let flat = crate::usecases::planning::goals::goal_progress(&vault.books(), now, "UTC")[0]
+        .need_per_month
+        .unwrap();
     draft.expected_return = Some(amount("12"));
-    vault.update_goal(&id, draft.clone()).unwrap();
-    let with_return = &vault.goal_progress(now, "UTC")[0];
+    crate::usecases::planning::goals::update_goal(&mut vault, &id, draft.clone()).unwrap();
+    let with_return =
+        &crate::usecases::planning::goals::goal_progress(&vault.books(), now, "UTC")[0];
     assert!(with_return.need_per_month.unwrap() < flat);
     // 1000 now plus 1000 a month at 1 %: twelve months to 13 000.
     assert_eq!(with_return.forecast.as_deref(), Some("2027-01-15"));
     draft.expected_return = Some(amount("101"));
-    assert!(vault.update_goal(&id, draft).is_err());
+    assert!(crate::usecases::planning::goals::update_goal(&mut vault, &id, draft).is_err());
 }
 
 #[test]
 fn hand_entered_month_stands_in_for_a_short_history() {
     let (_dir, mut vault, savings) = setup_savings();
     let now = secs("2026-04-10T00:00:00Z");
-    assert_eq!(vault.free_surplus_avg(now, "UTC"), None);
+    assert_eq!(
+        crate::usecases::planning::goals::free_surplus_avg(&vault.books(), now, "UTC"),
+        None
+    );
     vault.doc.settings.manual_income = Some(amount("3000"));
     vault.doc.settings.manual_expenses = Some(amount("2200"));
-    assert_eq!(vault.free_surplus_avg(now, "UTC"), Some(amount("800")));
-    assert_eq!(vault.income_basis(3, now, "UTC").unwrap().months, 0);
+    assert_eq!(
+        crate::usecases::planning::goals::free_surplus_avg(&vault.books(), now, "UTC"),
+        Some(amount("800"))
+    );
+    assert_eq!(
+        crate::planning::budget::income_basis(&vault.books(), 3, now, "UTC")
+            .unwrap()
+            .months,
+        0
+    );
     // Three finished months of flows: the history wins.
     for ts in [
         "2026-01-05T00:00:00Z",
@@ -205,8 +241,16 @@ fn hand_entered_month_stands_in_for_a_short_history() {
     ] {
         deposit(&mut vault, &savings, "500", ts);
     }
-    assert_eq!(vault.free_surplus_avg(now, "UTC"), Some(amount("500")));
-    assert_eq!(vault.income_basis(3, now, "UTC").unwrap().months, 3);
+    assert_eq!(
+        crate::usecases::planning::goals::free_surplus_avg(&vault.books(), now, "UTC"),
+        Some(amount("500"))
+    );
+    assert_eq!(
+        crate::planning::budget::income_basis(&vault.books(), 3, now, "UTC")
+            .unwrap()
+            .months,
+        3
+    );
 }
 
 #[test]
@@ -215,10 +259,13 @@ fn deposits_count_incoming_operations_since_the_start() {
     deposit(&mut vault, &savings, "500", "2025-06-01T00:00:00Z");
     deposit(&mut vault, &savings, "100", "2026-02-01T00:00:00Z");
     deposit(&mut vault, &savings, "100", "2026-03-01T00:00:00Z");
-    vault
-        .create_goal(goal("Trip", "1000", &[&savings], 3))
+    crate::usecases::planning::goals::create_goal(&mut vault, goal("Trip", "1000", &[&savings], 3))
         .unwrap();
-    let progress = vault.goal_progress(secs("2026-04-01T00:00:00Z"), "UTC");
+    let progress = crate::usecases::planning::goals::goal_progress(
+        &vault.books(),
+        secs("2026-04-01T00:00:00Z"),
+        "UTC",
+    );
     assert_eq!(progress[0].deposits, 2);
 }
 
@@ -227,39 +274,47 @@ fn deleting_a_goal_frees_its_envelopes_and_stops_its_saver_until_undone() {
     let (_dir, mut vault, savings) = setup_savings();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     deposit(&mut vault, &savings, "500", "2026-01-01T00:00:00Z");
-    let trip = vault
-        .create_goal(goal("Trip", "1000", &[&savings], 3))
-        .unwrap();
-    vault.fund_goal(&trip.id, &savings, amount("200")).unwrap();
+    let trip = crate::usecases::planning::goals::create_goal(
+        &mut vault,
+        goal("Trip", "1000", &[&savings], 3),
+    )
+    .unwrap();
+    crate::usecases::household::envelopes::fund_goal(
+        &mut vault,
+        &trip.id,
+        &StoreId::from(&savings),
+        amount("200"),
+    )
+    .unwrap();
     let params = |pairs: &[(&str, &str)]| -> std::collections::BTreeMap<String, String> {
         pairs
             .iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect()
     };
-    let saver = vault
-        .workflow_from_template(
-            "pay_yourself_first",
-            &params(&[("category", "salary"), ("pct", "10"), ("target", &savings)]),
-            "en",
-            secs("2026-01-02T00:00:00Z"),
-        )
-        .unwrap()
-        .workflow;
-    let other = vault
-        .workflow_from_template(
-            "round_up",
-            &params(&[
-                ("from", &savings),
-                ("to", &card),
-                ("step", "100"),
-                ("weekday", "6"),
-            ]),
-            "en",
-            secs("2026-01-02T00:00:00Z"),
-        )
-        .unwrap()
-        .workflow;
+    let saver = crate::usecases::workflow::records::workflow_from_template(
+        &mut vault,
+        "pay_yourself_first",
+        &params(&[("category", "salary"), ("pct", "10"), ("target", &savings)]),
+        "en",
+        secs("2026-01-02T00:00:00Z"),
+    )
+    .unwrap()
+    .workflow;
+    let other = crate::usecases::workflow::records::workflow_from_template(
+        &mut vault,
+        "round_up",
+        &params(&[
+            ("from", &savings),
+            ("to", &card),
+            ("step", "100"),
+            ("weekday", "6"),
+        ]),
+        "en",
+        secs("2026-01-02T00:00:00Z"),
+    )
+    .unwrap()
+    .workflow;
     let active = |vault: &UnlockedVault, id: &str| {
         vault
             .doc
@@ -270,10 +325,13 @@ fn deleting_a_goal_frees_its_envelopes_and_stops_its_saver_until_undone() {
             .active
     };
 
-    let deleted = vault
-        .delete_goal(&trip.id, secs("2026-02-01T00:00:00Z"))
-        .unwrap();
-    assert!(vault.goals().is_empty());
+    let deleted = crate::usecases::planning::goals::delete_goal(
+        &mut vault,
+        &trip.id,
+        secs("2026-02-01T00:00:00Z"),
+    )
+    .unwrap();
+    assert!(crate::planning::goals::goals(&vault.doc).is_empty());
     assert!(vault.doc.envelopes.is_empty());
     assert_eq!(deleted.workflow_ids, vec![saver.id.clone()]);
     assert!(!active(&vault, &saver.id));
@@ -282,10 +340,13 @@ fn deleting_a_goal_frees_its_envelopes_and_stops_its_saver_until_undone() {
         "money out of the wallet is not the goal's"
     );
 
-    vault
-        .restore_goal(deleted, secs("2026-02-01T00:00:01Z"))
-        .unwrap();
-    assert_eq!(vault.goals().len(), 1);
+    crate::usecases::planning::goals::restore_goal(
+        &mut vault,
+        deleted,
+        secs("2026-02-01T00:00:01Z"),
+    )
+    .unwrap();
+    assert_eq!(crate::planning::goals::goals(&vault.doc).len(), 1);
     assert_eq!(vault.doc.envelopes.len(), 1);
     assert!(active(&vault, &saver.id));
 }
@@ -294,10 +355,13 @@ fn deleting_a_goal_frees_its_envelopes_and_stops_its_saver_until_undone() {
 fn a_flat_or_falling_trend_has_no_forecast() {
     let (_dir, mut vault, savings) = setup_savings();
     deposit(&mut vault, &savings, "500", "2025-06-01T00:00:00Z");
-    vault
-        .create_goal(goal("Sofa", "1000", &[&savings], 2))
+    crate::usecases::planning::goals::create_goal(&mut vault, goal("Sofa", "1000", &[&savings], 2))
         .unwrap();
-    let flat = vault.goal_progress(secs("2026-02-10T00:00:00Z"), "UTC");
+    let flat = crate::usecases::planning::goals::goal_progress(
+        &vault.books(),
+        secs("2026-02-10T00:00:00Z"),
+        "UTC",
+    );
     assert!(!flat[0].accumulating);
     assert_eq!(flat[0].forecast, None);
 
@@ -305,7 +369,11 @@ fn a_flat_or_falling_trend_has_no_forecast() {
     for day in ["2026-01-01", "2026-01-15", "2026-02-01"] {
         deposit(&mut vault, &savings, "100", &format!("{day}T00:00:00Z"));
     }
-    let growing = vault.goal_progress(secs("2026-02-10T00:00:00Z"), "UTC");
+    let growing = crate::usecases::planning::goals::goal_progress(
+        &vault.books(),
+        secs("2026-02-10T00:00:00Z"),
+        "UTC",
+    );
     assert!(growing[0].accumulating);
     assert!(growing[0].forecast.is_some());
 }
@@ -314,9 +382,11 @@ fn a_flat_or_falling_trend_has_no_forecast() {
 fn calendar_compares_planned_and_put_aside_by_month() {
     let (_dir, mut vault, savings) = setup_savings();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    vault
-        .create_goal(goal("Laptop", "1200", &[&savings], 3))
-        .unwrap();
+    crate::usecases::planning::goals::create_goal(
+        &mut vault,
+        goal("Laptop", "1200", &[&savings], 3),
+    )
+    .unwrap();
     deposit(&mut vault, &card, "5000", "2026-01-01T00:00:00Z");
     let mut put_aside = transfer_between(
         AccountRef::Store(card.clone()),
@@ -325,7 +395,7 @@ fn calendar_compares_planned_and_put_aside_by_month() {
         "150",
     );
     at(&mut put_aside, "2026-01-20T00:00:00Z");
-    vault.add_transaction(put_aside).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, put_aside).unwrap();
     let mut little = transfer_between(
         AccountRef::Store(card.clone()),
         AccountRef::Store(savings.clone()),
@@ -333,11 +403,15 @@ fn calendar_compares_planned_and_put_aside_by_month() {
         "40",
     );
     at(&mut little, "2026-02-20T00:00:00Z");
-    vault.add_transaction(little).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, little).unwrap();
 
-    let calendar = vault
-        .goal_calendar(2026, secs("2026-03-01T00:00:00Z"), "UTC")
-        .unwrap();
+    let calendar = crate::usecases::planning::goals::goal_calendar(
+        &vault.books(),
+        2026,
+        secs("2026-03-01T00:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     let jan = &calendar.months[0];
     assert_eq!(
         (jan.need, jan.saved, jan.done),
@@ -502,7 +576,7 @@ fn contributions_net_the_money_put_into_a_scope_inside_a_window() {
     deposit(&mut vault, &savings, "200", "2026-02-10T00:00:00Z");
     let mut spend = payment(&savings, "50", "coffee");
     at(&mut spend, "2026-01-20T00:00:00Z");
-    vault.add_transaction(spend).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, spend).unwrap();
     let scope = std::collections::HashSet::from([savings.clone()]);
     let books = vault.books();
     let total = |from: &str, to: &str| {
@@ -566,32 +640,43 @@ fn the_goal_delegates_equal_the_scenarios() {
     let (_a, mut by_method, wallet_a) = setup_savings();
     let (_b, mut by_scenario, wallet_b) = setup_savings();
     let draft = |wallet: &str, name: &str| goal(name, "1000", &[wallet], 3);
-    let method = by_method.create_goal(draft(&wallet_a, "Trip")).unwrap();
+    let method =
+        crate::usecases::planning::goals::create_goal(&mut by_method, draft(&wallet_a, "Trip"))
+            .unwrap();
     let made = scenario::create_goal(&mut by_scenario, draft(&wallet_b, "Trip")).unwrap();
     let blank = |goal: &crate::model::planning::Goal, wallet: &str| {
         super::automations_tests::without_ids(goal, &[goal.id.as_str(), wallet])
     };
     assert_eq!(blank(&method, &wallet_a), blank(&made, &wallet_b));
-    let method = by_method
-        .update_goal(&method.id, draft(&wallet_a, "Home"))
-        .unwrap();
+    let method = crate::usecases::planning::goals::update_goal(
+        &mut by_method,
+        &method.id,
+        draft(&wallet_a, "Home"),
+    )
+    .unwrap();
     let made = scenario::update_goal(&mut by_scenario, &made.id, draft(&wallet_b, "Home")).unwrap();
     assert_eq!(blank(&method, &wallet_a), blank(&made, &wallet_b));
     let now = secs("2026-02-01T00:00:00Z");
-    let gone_by_method = by_method.delete_goal(&method.id, now).unwrap();
+    let gone_by_method =
+        crate::usecases::planning::goals::delete_goal(&mut by_method, &method.id, now).unwrap();
     let gone_by_case = scenario::delete_goal(&mut by_scenario, &made.id, now).unwrap();
     assert_eq!(gone_by_method.workflow_ids, gone_by_case.workflow_ids);
     assert_eq!(
         blank(&gone_by_method.goal, &wallet_a),
         blank(&gone_by_case.goal, &wallet_b)
     );
-    let back_by_method = by_method.restore_goal(gone_by_method, now + 1).unwrap();
+    let back_by_method =
+        crate::usecases::planning::goals::restore_goal(&mut by_method, gone_by_method, now + 1)
+            .unwrap();
     let back_by_case = scenario::restore_goal(&mut by_scenario, gone_by_case, now + 1).unwrap();
     assert_eq!(
         blank(&back_by_method, &wallet_a),
         blank(&back_by_case, &wallet_b)
     );
-    assert_eq!(by_method.goals().len(), by_scenario.goals().len());
+    assert_eq!(
+        crate::planning::goals::goals(&by_method.doc).len(),
+        crate::planning::goals::goals(&by_scenario.doc).len()
+    );
 }
 
 struct NoWake;
@@ -617,16 +702,27 @@ pub(super) fn flush(vault: &mut UnlockedVault) {
 fn deleting_a_goal_leaves_a_tombstone_for_each_of_its_envelopes() {
     let (_dir, mut vault, savings) = setup_savings();
     deposit(&mut vault, &savings, "500", "2026-01-01T00:00:00Z");
-    let trip = vault
-        .create_goal(goal("Trip", "1000", &[&savings], 3))
-        .unwrap();
-    vault.fund_goal(&trip.id, &savings, amount("200")).unwrap();
+    let trip = crate::usecases::planning::goals::create_goal(
+        &mut vault,
+        goal("Trip", "1000", &[&savings], 3),
+    )
+    .unwrap();
+    crate::usecases::household::envelopes::fund_goal(
+        &mut vault,
+        &trip.id,
+        &StoreId::from(&savings),
+        amount("200"),
+    )
+    .unwrap();
     let envelope = vault.doc.envelopes[0].id.clone();
     flush(&mut vault);
     assert!(has_key(vault.doc.sync.stamps.keys(), &envelope));
-    vault
-        .delete_goal(&trip.id, secs("2026-02-01T00:00:00Z"))
-        .unwrap();
+    crate::usecases::planning::goals::delete_goal(
+        &mut vault,
+        &trip.id,
+        secs("2026-02-01T00:00:00Z"),
+    )
+    .unwrap();
     flush(&mut vault);
     assert!(has_key(vault.doc.sync.tombstones.keys(), &envelope));
     assert!(!has_key(vault.doc.sync.stamps.keys(), &envelope));

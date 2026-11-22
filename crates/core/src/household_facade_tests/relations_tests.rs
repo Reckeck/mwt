@@ -42,7 +42,10 @@ fn a_wallet_lists_its_goals_and_operations() {
         .transactions
         .push(income(&binance, "100", "зарплата"));
     vault.doc.goals.push(goal_on(&binance));
-    let card = vault.entity_card(&EntityRef::new(EntityKind::Store, &binance));
+    let card = crate::usecases::household::relations::entity_card(
+        &vault,
+        &EntityRef::new(EntityKind::Store, &binance),
+    );
     assert!(!card.missing);
     let goals = card
         .groups
@@ -66,7 +69,10 @@ fn a_goal_over_every_wallet_is_not_listed_on_each() {
     let mut goal = goal_on(&binance);
     goal.scope.store_ids.clear();
     vault.doc.goals.push(goal);
-    let groups = vault.relations(&EntityRef::new(EntityKind::Store, &binance));
+    let groups = crate::household::relations::relations(
+        &vault.doc,
+        &EntityRef::new(EntityKind::Store, &binance),
+    );
     assert!(!kinds(&groups).contains(&RelationKind::Goals));
 }
 
@@ -84,7 +90,10 @@ fn a_category_lists_its_rules_and_operations() {
     let mut tx = payment(&binance, "10", "хлеб");
     tx.meta_mut().id = "t-food".into();
     vault.doc.transactions.push(tx);
-    let groups = vault.relations(&EntityRef::new(EntityKind::Category, "groceries"));
+    let groups = crate::household::relations::relations(
+        &vault.doc,
+        &EntityRef::new(EntityKind::Category, "groceries"),
+    );
     assert_eq!(
         kinds(&groups),
         vec![RelationKind::Rules, RelationKind::Transactions]
@@ -128,7 +137,8 @@ fn an_operation_leads_to_the_workflow_that_made_it_and_its_flow() {
     second.meta_mut().id = "t2".into();
     vault.doc.transactions.extend([first, second]);
 
-    let groups = vault.relations(&EntityRef::new(EntityKind::Tx, "t1"));
+    let groups =
+        crate::household::relations::relations(&vault.doc, &EntityRef::new(EntityKind::Tx, "t1"));
     let origin = &groups[0];
     assert_eq!(origin.kind, RelationKind::Origin);
     assert_eq!(
@@ -142,7 +152,10 @@ fn an_operation_leads_to_the_workflow_that_made_it_and_its_flow() {
     assert_eq!(flow.total, 1);
     assert_eq!(flow.items[0].target.id, "t2");
 
-    let made = vault.relations(&EntityRef::new(EntityKind::Workflow, "wf"));
+    let made = crate::household::relations::relations(
+        &vault.doc,
+        &EntityRef::new(EntityKind::Workflow, "wf"),
+    );
     let created = made
         .iter()
         .find(|group| group.kind == RelationKind::Created)
@@ -153,7 +166,10 @@ fn an_operation_leads_to_the_workflow_that_made_it_and_its_flow() {
 #[test]
 fn a_link_to_nothing_is_a_missing_card() {
     let (_dir, vault) = setup();
-    let card = vault.entity_card(&EntityRef::new(EntityKind::Goal, "gone"));
+    let card = crate::usecases::household::relations::entity_card(
+        &vault,
+        &EntityRef::new(EntityKind::Goal, "gone"),
+    );
     assert!(card.missing);
     assert!(card.groups.is_empty());
 }
@@ -168,7 +184,10 @@ fn groups_are_capped_but_count_everything() {
         tx.meta_mut().id = format!("bulk-{index}");
         vault.doc.transactions.push(tx);
     }
-    let groups = vault.relations(&EntityRef::new(EntityKind::Store, &binance));
+    let groups = crate::household::relations::relations(
+        &vault.doc,
+        &EntityRef::new(EntityKind::Store, &binance),
+    );
     let txs = groups
         .iter()
         .find(|group| group.kind == RelationKind::Transactions)
@@ -208,8 +227,11 @@ fn the_delegates_equal_the_scenarios() {
     vault.doc.goals.push(goal_on(&binance));
     let target = EntityRef::new(EntityKind::Store, &binance);
     assert_eq!(
-        vault.entity_card(&target),
+        crate::usecases::household::relations::entity_card(&vault, &target),
         crate::usecases::household::relations::entity_card(&vault, &target)
     );
-    assert_eq!(vault.relations(&target), relations(&vault.doc, &target));
+    assert_eq!(
+        crate::household::relations::relations(&vault.doc, &target),
+        relations(&vault.doc, &target)
+    );
 }

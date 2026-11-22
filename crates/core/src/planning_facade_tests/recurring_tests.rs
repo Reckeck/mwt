@@ -15,7 +15,10 @@ fn subscription(raw: &str, stamp: &str) -> Transaction {
 #[test]
 fn first_payment_is_new() {
     let (_dir, vault) = empty_vault();
-    let check = vault.recurring_check(&subscription("5", "2026-05-10T10:00:00Z"));
+    let check = crate::planning::recurring::recurring_check(
+        &vault.doc,
+        &subscription("5", "2026-05-10T10:00:00Z"),
+    );
     assert!(check.new);
     assert!(!check.grew);
     assert_eq!(check.previous, None);
@@ -28,7 +31,10 @@ fn dearer_payment_is_seen() {
         .doc
         .transactions
         .push(subscription("5", "2026-04-10T10:00:00Z"));
-    let check = vault.recurring_check(&subscription("6", "2026-05-10T10:00:00Z"));
+    let check = crate::planning::recurring::recurring_check(
+        &vault.doc,
+        &subscription("6", "2026-05-10T10:00:00Z"),
+    );
     assert!(!check.new);
     assert!(check.grew);
     assert_eq!(check.previous, Some(amount("5")));
@@ -42,7 +48,10 @@ fn same_amount_did_not_grow() {
         .doc
         .transactions
         .push(subscription("5", "2026-04-10T10:00:00Z"));
-    let check = vault.recurring_check(&subscription("5", "2026-05-10T10:00:00Z"));
+    let check = crate::planning::recurring::recurring_check(
+        &vault.doc,
+        &subscription("5", "2026-05-10T10:00:00Z"),
+    );
     assert!(!check.new);
     assert!(!check.grew);
 }
@@ -57,7 +66,10 @@ fn old_or_other_payee_does_not_count() {
     let mut other = subscription("5", "2026-05-01T10:00:00Z");
     other.meta_mut().comment = "Cinema".into();
     vault.doc.transactions.push(other);
-    let check = vault.recurring_check(&subscription("6", "2026-05-10T10:00:00Z"));
+    let check = crate::planning::recurring::recurring_check(
+        &vault.doc,
+        &subscription("6", "2026-05-10T10:00:00Z"),
+    );
     assert!(check.new);
 }
 
@@ -71,7 +83,7 @@ fn a_bare_document_gives_the_same_answer_as_the_vault() {
     let next = subscription("6", "2026-05-10T10:00:00Z");
     assert_eq!(
         recurring_check(&vault.doc, &next),
-        vault.recurring_check(&next)
+        crate::planning::recurring::recurring_check(&vault.doc, &next)
     );
     assert_eq!(
         recurring_check(&crate::model::VaultDoc::default(), &next),

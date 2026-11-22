@@ -9,8 +9,6 @@ pub(crate) use crate::planning::flows::Flow;
 use std::collections::HashSet;
 
 use crate::Amount;
-#[cfg(test)]
-use crate::calendar::Calendar;
 use crate::error::Result;
 use crate::model::planning::Budget;
 use crate::model::store::StoreScope;
@@ -69,10 +67,6 @@ impl UnlockedVault {
     // Read by other areas until they move; not in the baseline (crate-private), so outside the
     // regenerated block.
     forward! {
-        /// Classified flows in `[from, to)`, valued in `currency`.
-        #[cfg(test)]
-        pub(crate) fn flows_between(&self, cal: &Calendar, currency: &str, from: i64, to: i64) -> Vec<Flow>
-            => crate::planning::flows::flows_between @books;
         /// Operations the budget could not value in its currency: a side had no
         /// rate (Currency-1 · 7, "Show").
         pub(crate) fn unpriced_tx_ids(&self) -> HashSet<String>

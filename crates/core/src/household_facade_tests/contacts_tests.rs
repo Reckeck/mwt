@@ -10,8 +10,9 @@ use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 
 fn ann(vault: &mut UnlockedVault) -> Contact {
-    vault
-        .create_contact(ContactDraft {
+    crate::usecases::household::contacts::create_contact(
+        vault,
+        ContactDraft {
             group: String::new(),
             name: "Ann".into(),
             kind: ContactKind::Person,
@@ -21,8 +22,9 @@ fn ann(vault: &mut UnlockedVault) -> Contact {
                 kind: DetailKind::Iban,
                 ..ContactAccount::default()
             }],
-        })
-        .unwrap()
+        },
+    )
+    .unwrap()
 }
 
 fn with_debt(tx: Transaction, effect: DebtEffect) -> Transaction {
@@ -47,25 +49,29 @@ fn debts_add_up_per_contact_and_count_in_net_worth() {
         contact_id: contact.id.clone(),
         account_id: None,
     };
-    vault
-        .add_transaction(income(&store, "10000", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&store, "10000", "salary"),
+    )
+    .unwrap();
     for (from, to, raw, effect) in [
         (mine(), theirs(), "5000", DebtEffect::Lend),
         (theirs(), mine(), "2000", DebtEffect::Collect),
         (theirs(), mine(), "700", DebtEffect::Borrow),
         (mine(), theirs(), "200", DebtEffect::Repay),
     ] {
-        vault
-            .add_transaction(with_debt(transfer_between(from, to, usd(), raw), effect))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            with_debt(transfer_between(from, to, usd(), raw), effect),
+        )
+        .unwrap();
     }
-    let balances = vault.contact_balances();
+    let balances = crate::usecases::household::contacts::contact_balances(&vault);
     assert_eq!(balances.len(), 1);
     assert_eq!(balances[0].receivable, amount("3000"));
     assert_eq!(balances[0].payable, amount("500"));
 
-    let worth = vault.net_worth();
+    let worth = crate::usecases::money::capital::net_worth(&vault.books());
     // 10000 − 5000 + 2000 + 700 − 200 on the exchange
     assert_eq!(worth.financial, amount("7500"));
     assert_eq!(worth.receivables, amount("3000"));
@@ -73,7 +79,10 @@ fn debts_add_up_per_contact_and_count_in_net_worth() {
     assert_eq!(worth.net, amount("10000"));
     // a debt is neither income nor spending
     for tx in &vault.doc.transactions[1..] {
-        assert_eq!(vault.classify_flow(tx), crate::service::FlowClass::Ignored);
+        assert_eq!(
+            crate::money::worth::classify_flow(&vault.doc, tx),
+            crate::service::FlowClass::Ignored
+        );
     }
 }
 
@@ -81,33 +90,39 @@ fn debts_add_up_per_contact_and_count_in_net_worth() {
 fn turnover_counts_sent_and_received_but_not_internal_moves() {
     let (_dir, mut vault) = setup();
     let store = vault.doc.stores[1].id.clone();
-    let sub = vault
-        .create_store("Sub", StoreKind::Exchange, "", "", Some(store.clone()))
-        .unwrap()
-        .id;
+    let sub = crate::usecases::money::stores::create_store(
+        &mut vault,
+        "Sub",
+        StoreKind::Exchange,
+        "",
+        "",
+        Some(store.clone()),
+    )
+    .unwrap()
+    .id;
     let contact = ann(&mut vault);
     let account = contact.accounts[0].id.clone();
     let theirs = |account_id: Option<String>| AccountRef::Contact {
         contact_id: contact.id.clone(),
         account_id,
     };
-    vault.add_transaction(income(&store, "1000", "in")).unwrap();
-    vault
-        .add_transaction(transfer_between(
+    crate::usecases::money::transactions::add_transaction(&mut vault, income(&store, "1000", "in"))
+        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        transfer_between(
             AccountRef::Store(store.clone()),
             theirs(Some(account.clone())),
             usd(),
             "300",
-        ))
-        .unwrap();
-    vault
-        .add_transaction(transfer_between(
-            theirs(None),
-            AccountRef::Store(store.clone()),
-            usd(),
-            "50",
-        ))
-        .unwrap();
+        ),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        transfer_between(theirs(None), AccountRef::Store(store.clone()), usd(), "50"),
+    )
+    .unwrap();
     // internal, but tagged with the contact: still not turnover
     let mut internal = transfer_between(
         AccountRef::Store(store.clone()),
@@ -116,19 +131,21 @@ fn turnover_counts_sent_and_received_but_not_internal_moves() {
         "10",
     );
     internal.meta_mut().contact_id = Some(contact.id.clone());
-    vault.add_transaction(internal).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, internal).unwrap();
 
-    let all = vault.contact_turnover(&contact.id, None).unwrap();
+    let all =
+        crate::usecases::household::contacts::contact_turnover(&vault, &contact.id, None).unwrap();
     assert_eq!(all.tx_count, 2);
     assert_eq!(all.rows[0].sent, amount("300"));
     assert_eq!(all.rows[0].received, amount("50"));
-    let one = vault.contact_turnover(&contact.id, Some(&account)).unwrap();
+    let one =
+        crate::usecases::household::contacts::contact_turnover(&vault, &contact.id, Some(&account))
+            .unwrap();
     assert_eq!(one.tx_count, 1);
 }
 
 fn summary_of(vault: &UnlockedVault, contact_id: &str) -> ContactSummary {
-    vault
-        .contact_summaries()
+    crate::usecases::household::contacts::contact_summaries(vault)
         .unwrap()
         .into_iter()
         .find(|summary| summary.contact_id == contact_id)
@@ -161,10 +178,16 @@ fn summary_converts_debts_both_ways_and_skips_internal_moves() {
         source: "test".into(),
     });
     let store = vault.doc.stores[1].id.clone();
-    let sub = vault
-        .create_store("Sub", StoreKind::Exchange, "", "", Some(store.clone()))
-        .unwrap()
-        .id;
+    let sub = crate::usecases::money::stores::create_store(
+        &mut vault,
+        "Sub",
+        StoreKind::Exchange,
+        "",
+        "",
+        Some(store.clone()),
+    )
+    .unwrap()
+    .id;
     let contact = ann(&mut vault);
     let mine = || AccountRef::Store(store.clone());
     let theirs = || AccountRef::Contact {
@@ -172,25 +195,31 @@ fn summary_converts_debts_both_ways_and_skips_internal_moves() {
         account_id: None,
     };
     let eur = crate::model::store::AssetRef::fiat("EUR", "Euro");
-    vault
-        .add_transaction(income(&store, "10000", "in"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&store, "10000", "in"),
+    )
+    .unwrap();
     // they owe me 100 USD; I owe them 50 EUR (= 100 USD at 0.5 EUR per USD)
-    vault
-        .add_transaction(with_debt(
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        with_debt(
             transfer_between(mine(), theirs(), usd(), "100"),
             DebtEffect::Lend,
-        ))
-        .unwrap();
-    vault
-        .add_transaction(with_debt(
+        ),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        with_debt(
             transfer_between(theirs(), mine(), eur, "50"),
             DebtEffect::Borrow,
-        ))
-        .unwrap();
+        ),
+    )
+    .unwrap();
     let mut internal = transfer_between(mine(), AccountRef::Store(sub), usd(), "10");
     internal.meta_mut().contact_id = Some(contact.id.clone());
-    vault.add_transaction(internal).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, internal).unwrap();
 
     let summary = summary_of(&vault, &contact.id);
     assert_eq!(summary.tx_count, 2);
@@ -210,9 +239,11 @@ fn summary_flags_a_debt_currency_without_a_rate() {
     let store = vault.doc.stores[1].id.clone();
     let contact = ann(&mut vault);
     let eur = crate::model::store::AssetRef::fiat("EUR", "Euro");
-    vault.add_transaction(income(&store, "1000", "in")).unwrap();
-    vault
-        .add_transaction(with_debt(
+    crate::usecases::money::transactions::add_transaction(&mut vault, income(&store, "1000", "in"))
+        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        with_debt(
             transfer_between(
                 AccountRef::Store(store),
                 AccountRef::Contact {
@@ -223,8 +254,9 @@ fn summary_flags_a_debt_currency_without_a_rate() {
                 "30",
             ),
             DebtEffect::Lend,
-        ))
-        .unwrap();
+        ),
+    )
+    .unwrap();
     let summary = summary_of(&vault, &contact.id);
     assert!(summary.missing_rate);
     assert_eq!(summary.receivable_base, Amount::ZERO);
@@ -237,8 +269,9 @@ fn used_contacts_are_archived_and_used_accounts_deactivated() {
     let store = vault.doc.stores[1].id.clone();
     let contact = ann(&mut vault);
     let account = contact.accounts[0].clone();
-    vault
-        .add_transaction(transfer_between(
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        transfer_between(
             AccountRef::Store(store),
             AccountRef::Contact {
                 contact_id: contact.id.clone(),
@@ -246,58 +279,77 @@ fn used_contacts_are_archived_and_used_accounts_deactivated() {
             },
             usd(),
             "1",
-        ))
-        .unwrap();
-    let refused = vault.delete_contact(&contact.id).unwrap_err();
+        ),
+    )
+    .unwrap();
+    let refused =
+        crate::usecases::household::contacts::delete_contact(&mut vault, &contact.id).unwrap_err();
     assert_eq!(refused.code(), "CONTACT_IN_USE");
-    let updated = vault
-        .update_contact(
-            &contact.id,
-            ContactDraft {
-                name: "Ann B.".into(),
-                ..ContactDraft::default()
-            },
-        )
-        .unwrap();
+    let updated = crate::usecases::household::contacts::update_contact(
+        &mut vault,
+        &contact.id,
+        ContactDraft {
+            name: "Ann B.".into(),
+            ..ContactDraft::default()
+        },
+    )
+    .unwrap();
     assert_eq!(updated.accounts.len(), 1);
     assert!(!updated.accounts[0].active);
-    vault.archive_contact(&contact.id, true).unwrap();
+    crate::usecases::household::contacts::archive_contact(&mut vault, &contact.id, true).unwrap();
 
-    let unused = vault
-        .create_contact(ContactDraft {
+    let unused = crate::usecases::household::contacts::create_contact(
+        &mut vault,
+        ContactDraft {
             name: "Bob".into(),
             ..ContactDraft::default()
-        })
-        .unwrap();
-    vault.delete_contact(&unused.id).unwrap();
+        },
+    )
+    .unwrap();
+    crate::usecases::household::contacts::delete_contact(&mut vault, &unused.id).unwrap();
 }
 
 #[test]
 fn debt_terms_are_set_replaced_and_cleared() {
     let (_dir, mut vault) = crate::service::test_support::empty_vault();
-    let friend = vault
-        .create_contact(ContactDraft {
+    let friend = crate::usecases::household::contacts::create_contact(
+        &mut vault,
+        ContactDraft {
             name: "Friend".into(),
             ..ContactDraft::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let draft = |due: Option<&str>, note: &str| DebtTermsDraft {
         contact_id: friend.id.clone(),
         asset: "usd".into(),
         due_at: due.map(str::to_string),
         note: note.into(),
     };
-    assert!(vault.set_debt_terms(draft(Some("31.12.2026"), "")).is_err());
-    vault
-        .set_debt_terms(draft(Some("2026-12-31"), "for the car"))
+    assert!(
+        crate::usecases::household::contacts::set_debt_terms(
+            &mut vault,
+            draft(Some("31.12.2026"), "")
+        )
+        .is_err()
+    );
+    crate::usecases::household::contacts::set_debt_terms(
+        &mut vault,
+        draft(Some("2026-12-31"), "for the car"),
+    )
+    .unwrap();
+    crate::usecases::household::contacts::set_debt_terms(&mut vault, draft(Some("2027-01-15"), ""))
         .unwrap();
-    vault.set_debt_terms(draft(Some("2027-01-15"), "")).unwrap();
-    let terms = vault.debt_terms(Some(&friend.id));
+    let terms = crate::household::contacts::debt_terms(&vault.doc, Some(&friend.id));
     assert_eq!(terms.len(), 1);
     assert_eq!(terms[0].asset, "USD");
     assert_eq!(terms[0].due_at.as_deref(), Some("2027-01-15"));
-    assert!(vault.set_debt_terms(draft(None, "")).unwrap().is_none());
-    assert!(vault.debt_terms(None).is_empty());
+    assert!(
+        crate::usecases::household::contacts::set_debt_terms(&mut vault, draft(None, ""))
+            .unwrap()
+            .is_none()
+    );
+    assert!(crate::household::contacts::debt_terms(&vault.doc, None).is_empty());
 }
 
 #[test]
@@ -332,25 +384,29 @@ fn a_bare_document_decides_deletes_and_terms_without_a_vault() {
 #[test]
 fn deleting_a_contact_unlinks_its_debt_terms_in_one_transaction() {
     let (_dir, mut vault) = empty_vault();
-    let friend = vault
-        .create_contact(ContactDraft {
+    let friend = crate::usecases::household::contacts::create_contact(
+        &mut vault,
+        ContactDraft {
             name: "Friend".into(),
             ..ContactDraft::default()
-        })
-        .unwrap();
-    vault
-        .set_debt_terms(DebtTermsDraft {
+        },
+    )
+    .unwrap();
+    crate::usecases::household::contacts::set_debt_terms(
+        &mut vault,
+        DebtTermsDraft {
             contact_id: friend.id.clone(),
             asset: "usd".into(),
             due_at: Some("2026-12-31".into()),
             note: String::new(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let before = vault.doc.debt_terms.len();
     assert_eq!(before, 1);
     let commits = std::sync::Arc::new(Commits::default());
     vault.set_write_behind(Some(commits.clone()));
-    vault.delete_contact(&friend.id).unwrap();
+    crate::usecases::household::contacts::delete_contact(&mut vault, &friend.id).unwrap();
     assert!(vault.doc.contacts.is_empty());
     assert!(vault.doc.debt_terms.is_empty());
     assert_eq!(
@@ -405,15 +461,23 @@ fn the_delegates_equal_the_scenarios() {
     let (_dir_a, mut by_method) = empty_vault();
     let (_dir_b, mut by_scenario) = empty_vault();
 
-    let method = by_method.create_contact(draft(" Ann ")).unwrap();
+    let method =
+        crate::usecases::household::contacts::create_contact(&mut by_method, draft(" Ann "))
+            .unwrap();
     let planned = scenario::create_contact(&mut by_scenario, draft(" Ann ")).unwrap();
     assert_eq!(without_ids(&method), without_ids(&planned));
 
-    let method = by_method.update_contact(&method.id, draft("Anna")).unwrap();
+    let method = crate::usecases::household::contacts::update_contact(
+        &mut by_method,
+        &method.id,
+        draft("Anna"),
+    )
+    .unwrap();
     let planned = scenario::update_contact(&mut by_scenario, &planned.id, draft("Anna")).unwrap();
     assert_eq!(without_ids(&method), without_ids(&planned));
 
-    by_method.archive_contact(&method.id, true).unwrap();
+    crate::usecases::household::contacts::archive_contact(&mut by_method, &method.id, true)
+        .unwrap();
     scenario::archive_contact(&mut by_scenario, &planned.id, true).unwrap();
     assert_eq!(
         without_ids(&by_method.doc.contacts),
@@ -426,7 +490,9 @@ fn the_delegates_equal_the_scenarios() {
         due_at: Some("2026-12-31".into()),
         note: "back".into(),
     };
-    let by_delegate = by_method.set_debt_terms(terms(&method.id)).unwrap();
+    let by_delegate =
+        crate::usecases::household::contacts::set_debt_terms(&mut by_method, terms(&method.id))
+            .unwrap();
     let by_usecase = scenario::set_debt_terms(&mut by_scenario, terms(&planned.id)).unwrap();
     assert_eq!(without_ids(&by_delegate), without_ids(&by_usecase));
     assert_eq!(
@@ -434,7 +500,7 @@ fn the_delegates_equal_the_scenarios() {
         by_scenario.doc.debt_terms.len()
     );
 
-    by_method.delete_contact(&method.id).unwrap();
+    crate::usecases::household::contacts::delete_contact(&mut by_method, &method.id).unwrap();
     scenario::delete_contact(&mut by_scenario, &planned.id).unwrap();
     assert!(by_method.doc.contacts.is_empty() && by_scenario.doc.contacts.is_empty());
     assert_eq!(
