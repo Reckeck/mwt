@@ -1,5 +1,6 @@
 //! `xtask arch`: the module graph of `crates/core/src`, read from the non-test `crate::` paths.
 
+mod crates;
 mod domain;
 mod layers;
 mod manifests;
@@ -65,12 +66,18 @@ pub struct Report {
     pub domain: domain::Findings,
     /// Crates that list a dev-only crate as a normal dependency (`manifests.rs`).
     pub manifests: Vec<String>,
+    /// Workspace crate edges and external crates the crate table forbids (`crates.rs`).
+    pub crates: Vec<String>,
 }
 
 impl Report {
     /// How many findings fail the check.
     pub fn failures(&self) -> usize {
-        self.violations.len() + self.stale.len() + self.domain.failures() + self.manifests.len()
+        self.violations.len()
+            + self.stale.len()
+            + self.domain.failures()
+            + self.manifests.len()
+            + self.crates.len()
     }
 
     /// The log lines: every violation as `file:line`, every stale entry as an error.
@@ -93,6 +100,7 @@ impl Report {
         }));
         lines.extend(self.domain.lines(CORE_SRC));
         lines.extend(self.manifests.iter().cloned());
+        lines.extend(self.crates.iter().cloned());
         lines
     }
 }
@@ -118,6 +126,7 @@ fn evaluate(edges: &[Edge], allow: &[AllowEntry], domain: domain::Findings) -> R
         stale,
         domain,
         manifests: Vec::new(),
+        crates: Vec::new(),
     }
 }
 
@@ -130,6 +139,7 @@ pub fn check(root: &Path) -> Result<Report> {
     let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     let mut report = evaluate(&edges, &parse_allowlist(&text)?, domain);
     report.manifests = manifests::check(&root.join("crates"))?;
+    report.crates = crates::check(root)?;
     Ok(report)
 }
 
@@ -271,8 +281,17 @@ fn sources(root: &Path) -> Result<Vec<Source>> {
     Ok(found)
 }
 
+/// The names a `crate::<name>` path may resolve to: the directory modules plus every module of the
+/// table, so names re-exported from extracted crates (`pub use mwt_workflow as workflow;`) stay visible.
 fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
-    let modules = module_names(root)?;
+    let mut modules = module_names(root)?;
+    modules.extend(
+        layers::GROUPS
+            .iter()
+            .flat_map(|group| group.modules.iter())
+            .filter(|name| **name != "lib")
+            .map(|name| (*name).to_string()),
+    );
     Ok(sources
         .iter()
         .flat_map(|source| scan::read_edges(&source.file, &source.module, &source.text, &modules))
@@ -319,6 +338,62 @@ mod tests {
             .filter(|name| layers::group_of(name).is_none())
             .collect();
         assert!(missing.is_empty(), "not in layers.rs: {missing:?}");
+    }
+
+    /// `name` of every `pub use mwt_<crate> as <name>;` and every lowercase item of `pub use mwt_base::{..}`.
+    fn reexported_modules(lib: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        for statement in lib.split(';') {
+            let statement = statement.trim().trim_start_matches(|ch: char| ch != 'p');
+            let Some(rest) = statement.strip_prefix("pub use mwt_") else {
+                continue;
+            };
+            if let Some((_, alias)) = rest.split_once(" as ") {
+                names.push(alias.trim().to_string());
+            } else if let Some(items) = rest.strip_prefix("base::{") {
+                names.extend(
+                    items
+                        .trim_end_matches('}')
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|item| item.starts_with(|ch: char| ch.is_ascii_lowercase()))
+                        .map(str::to_string),
+                );
+            }
+        }
+        names
+    }
+
+    #[test]
+    fn every_reexported_module_of_lib_is_a_module_of_the_table() {
+        let lib = fs::read_to_string(repo_root().join(CORE_SRC).join("lib.rs")).unwrap();
+        let names = reexported_modules(&lib);
+        assert!(names.len() > 10, "{names:?}");
+        let missing: Vec<_> = names
+            .iter()
+            .filter(|name| layers::group_of(name).is_none())
+            .collect();
+        assert!(missing.is_empty(), "not in layers.rs: {missing:?}");
+    }
+
+    #[test]
+    fn a_name_reexported_from_an_extracted_crate_resolves_to_its_own_module() {
+        let modules: BTreeSet<String> = layers::GROUPS
+            .iter()
+            .flat_map(|group| group.modules.iter())
+            .map(|name| (*name).to_string())
+            .collect();
+        let edges = scan::read_edges(
+            "planning/x.rs",
+            "planning",
+            "use crate::workflow::W;\nuse crate::Amount;\n",
+            &modules,
+        );
+        let targets: Vec<&str> = edges.iter().map(|item| item.to_module.as_str()).collect();
+        assert_eq!(targets, ["workflow", "amount"]);
+        let report = evaluate(&edges, &[], domain::Findings::default());
+        assert_eq!(report.violations.len(), 1);
+        assert_eq!(report.violations[0].to_module, "workflow");
     }
 
     #[test]

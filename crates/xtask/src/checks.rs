@@ -206,7 +206,7 @@ fn arch() -> Task {
         match report.failures() + floats.len() {
             0 => Outcome::Ok,
             count => Outcome::Fail(format!(
-                "{count} back edge(s), stale allowlist entries or f64 in money code, see the log"
+                "{count} back edge(s), stale allowlist entries, crate-table violations or f64 in money code, see the log"
             )),
         }
     })
