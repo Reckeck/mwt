@@ -44,39 +44,38 @@ fn credit_card_story(vault: &mut UnlockedVault) -> (String, Transaction, Transac
     vault.set_base_currency("usd");
     quote_usd(vault);
     let bank = store(vault, "Bank", StoreKind::Bank, None);
-    let card = vault
-        .create_store_with(
-            "Card",
-            StoreKind::Liability,
-            "",
-            "",
-            None,
-            StoreExtras {
-                liability: Some(LiabilityTerms {
-                    kind: LiabilityKind::CreditCard,
-                    rate: None,
-                    limit: Some(amount("1000")),
-                    due_day: Some(25),
-                    monthly_payment: None,
-                }),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
+    let card = crate::usecases::money::stores::create_store_with(
+        vault,
+        "Card",
+        StoreKind::Liability,
+        "",
+        "",
+        None,
+        StoreExtras {
+            liability: Some(LiabilityTerms {
+                kind: LiabilityKind::CreditCard,
+                rate: None,
+                limit: Some(amount("1000")),
+                due_day: Some(25),
+                monthly_payment: None,
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
     let loan = transfer_between(
         AccountRef::Store(card.clone()),
         AccountRef::Store(bank.clone()),
         usd(),
         "500",
     );
-    vault.add_transaction(loan).unwrap();
-    vault
-        .add_transaction(payment(&card, "200", "shop"))
+    crate::usecases::money::transactions::add_transaction(vault, loan).unwrap();
+    crate::usecases::money::transactions::add_transaction(vault, payment(&card, "200", "shop"))
         .unwrap();
     let mut interest = payment(&card, "10", "interest");
     interest.meta_mut().categories = vec!["loan_interest".into()];
-    vault.add_transaction(interest.clone()).unwrap();
+    crate::usecases::money::transactions::add_transaction(vault, interest.clone()).unwrap();
     let mut repay = transfer_between(
         AccountRef::Store(bank),
         AccountRef::Store(card.clone()),
@@ -86,7 +85,7 @@ fn credit_card_story(vault: &mut UnlockedVault) -> (String, Transaction, Transac
     if let Transaction::Transfer(transfer) = &mut repay {
         transfer.price = usd_price("1");
     }
-    vault.add_transaction(repay.clone()).unwrap();
+    crate::usecases::money::transactions::add_transaction(vault, repay.clone()).unwrap();
     (card, interest, repay)
 }
 
@@ -97,7 +96,7 @@ fn a_loan_is_a_negative_balance_and_a_liability() {
     let (card, interest, repay) = credit_card_story(&mut vault);
 
     assert_eq!(holding_of(&vault, &card, &usd()), amount("-410"));
-    let worth = vault.net_worth();
+    let worth = crate::usecases::money::capital::net_worth(&vault.books());
     assert_eq!(worth.financial, amount("200"));
     assert_eq!(worth.liabilities, amount("410"));
     assert_eq!(
@@ -108,13 +107,19 @@ fn a_loan_is_a_negative_balance_and_a_liability() {
         }]
     );
     assert_eq!(worth.net, amount("-210"));
-    let summary = vault.portfolio_summary();
+    let summary = crate::usecases::money::capital::portfolio_summary(&vault.books());
     assert_eq!(summary.liabilities_base, amount("410"));
     assert_eq!(summary.net_worth_base, amount("-210"));
 
     // paying the loan off is a mandatory cost; the card is outside the budget
-    assert_eq!(vault.classify_flow(&repay), FlowClass::Fixed);
-    assert_eq!(vault.classify_flow(&interest), FlowClass::Ignored);
+    assert_eq!(
+        crate::money::worth::classify_flow(&vault.doc, &repay),
+        FlowClass::Fixed
+    );
+    assert_eq!(
+        crate::money::worth::classify_flow(&vault.doc, &interest),
+        FlowClass::Ignored
+    );
 }
 
 /// A fiat card is never a position: no profit, no cost, no unrealized
@@ -126,7 +131,7 @@ fn a_liability_store_books_no_profit() {
     let (_dir, mut vault) = empty_vault();
     let (card, _interest, _repay) = credit_card_story(&mut vault);
 
-    let pnl = vault.realized_pnl();
+    let pnl = crate::money::portfolio::realized_pnl(&vault.books());
     assert_eq!(pnl.total_base, Amount::ZERO);
     assert!(pnl.legs.is_empty());
     let holding = vault
@@ -138,18 +143,19 @@ fn a_liability_store_books_no_profit() {
     assert_eq!(holding.quantity, amount("-410"));
     assert_eq!(holding.avg_cost, None);
     assert_eq!(
-        vault.store_overview(&card, true).unwrap().unrealized_base,
+        crate::money::portfolio::store_overview(&vault.books(), &card, true)
+            .unwrap()
+            .unrealized_base,
         Amount::ZERO
     );
-    let Report::Pnl(report) = vault
-        .report(
-            ReportKind::Pnl,
-            &ReportFilter::default(),
-            secs("2026-03-01T12:00:00Z"),
-            "UTC",
-        )
-        .unwrap()
-    else {
+    let Report::Pnl(report) = crate::reports::overview::report(
+        &vault.books(),
+        ReportKind::Pnl,
+        &ReportFilter::default(),
+        secs("2026-03-01T12:00:00Z"),
+        "UTC",
+    )
+    .unwrap() else {
         panic!("a pnl report")
     };
     assert!(!report.has_data);
@@ -158,8 +164,12 @@ fn a_liability_store_books_no_profit() {
         realized: true,
         ..TxFilter::default()
     };
-    assert!(vault.list_transactions(&filter, "UTC").unwrap().is_empty());
-    let worth = vault.net_worth();
+    assert!(
+        crate::usecases::household::ledger::list_transactions(&vault, &filter, "UTC")
+            .unwrap()
+            .is_empty()
+    );
+    let worth = crate::usecases::money::capital::net_worth(&vault.books());
     assert_eq!(worth.liabilities, amount("410"));
     assert_eq!(worth.net, amount("-210"));
 }
@@ -172,20 +182,20 @@ fn flows_are_classified_for_the_budget() {
     let usd_account = store(&mut vault, "USD", StoreKind::Bank, Some(&bank));
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let exchange = store(&mut vault, "Bybit", StoreKind::Exchange, None);
-    let piggy = vault
-        .create_store_with(
-            "Piggy",
-            StoreKind::Bank,
-            "",
-            "",
-            None,
-            StoreExtras {
-                purpose: Some(crate::model::store::Purpose::Investment),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
+    let piggy = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Piggy",
+        StoreKind::Bank,
+        "",
+        "",
+        None,
+        StoreExtras {
+            purpose: Some(crate::model::store::Purpose::Investment),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
     vault.doc.goals.push(Goal {
         id: "goal".into(),
         name: "Car".into(),
@@ -278,7 +288,7 @@ fn flows_are_classified_for_the_budget() {
     ];
     for (index, (tx, expected)) in cases.into_iter().enumerate() {
         assert_eq!(
-            vault.classify_flow(&tx),
+            crate::money::worth::classify_flow(&vault.doc, &tx),
             expected,
             "case {index}: {}",
             tx.meta().comment
@@ -314,15 +324,20 @@ fn derivatives_never_count_in_value() {
         category: crate::model::transaction::FuturesCategory::Linear,
         price: crate::model::transaction::PriceStamp::default(),
     });
-    vault.add_transaction(open).unwrap();
-    assert_eq!(vault.portfolio_summary().total_usd, Amount::ZERO);
-    assert_eq!(vault.net_worth().net, Amount::ZERO);
-    let overview = vault.store_overview(&store, true).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, open).unwrap();
+    assert_eq!(
+        crate::usecases::money::capital::portfolio_summary(&vault.books()).total_usd,
+        Amount::ZERO
+    );
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).net,
+        Amount::ZERO
+    );
+    let overview = crate::money::portfolio::store_overview(&vault.books(), &store, true).unwrap();
     assert!(overview.positions.is_empty());
     assert_eq!(overview.open_positions.len(), 1);
     assert!(
-        vault
-            .history_series("usd")
+        crate::money::portfolio::history_series(&vault.books(), "usd")
             .iter()
             .all(|point| point.value_usd.is_zero())
     );
@@ -337,7 +352,7 @@ fn fees_do_not_fake_a_profit() {
     let store = vault.doc.stores[1].id.clone();
     let mut deposit = income(&store, "1000", "in");
     at(&mut deposit, "2026-01-01T00:00:00Z");
-    vault.add_transaction(deposit).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, deposit).unwrap();
     let Transaction::TradeSpot(mut buy) = trade(&store, "500", "0.01", "buy") else {
         unreachable!()
     };
@@ -346,16 +361,16 @@ fn fees_do_not_fake_a_profit() {
     buy.fee = fee_usd("2");
     let mut buy = Transaction::TradeSpot(buy);
     at(&mut buy, "2026-01-02T00:00:00Z");
-    vault.add_transaction(buy).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
     let Transaction::TradeSpot(mut sell) = sell_btc(&store, "0.01", "500", "50000") else {
         unreachable!()
     };
     sell.fee = fee_usd("2");
     let mut sell = Transaction::TradeSpot(sell);
     at(&mut sell, "2026-01-03T00:00:00Z");
-    vault.add_transaction(sell).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, sell).unwrap();
 
-    let pnl = vault.realized_pnl();
+    let pnl = crate::money::portfolio::realized_pnl(&vault.books());
     assert_eq!(pnl.total_base, Amount::ZERO);
     assert_eq!(pnl.fees_base, amount("4"));
     assert_eq!(holding_of(&vault, &store, &usd()), amount("996"));
@@ -383,9 +398,13 @@ fn set_manual_price_through_the_delegate_equals_the_usecase() {
     };
     let (_dir_a, mut via_delegate, thing) = build();
     let (_dir_b, mut via_usecase, _) = build();
-    let first = via_delegate
-        .set_manual_price(&thing.key(), amount("7"), "usd")
-        .unwrap();
+    let first = crate::usecases::money::capital::set_manual_price(
+        &mut via_delegate,
+        &thing.key(),
+        amount("7"),
+        "usd",
+    )
+    .unwrap();
     let second = crate::usecases::money::capital::set_manual_price(
         &mut via_usecase,
         &thing.key(),
@@ -397,5 +416,8 @@ fn set_manual_price_through_the_delegate_equals_the_usecase() {
     assert_eq!(first.currency, second.currency);
     assert_eq!(via_delegate.doc.manual_prices.len(), 1);
     assert_eq!(via_usecase.doc.manual_prices.len(), 1);
-    assert_eq!(via_delegate.net_worth(), via_usecase.net_worth());
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&via_delegate.books()),
+        crate::usecases::money::capital::net_worth(&via_usecase.books())
+    );
 }

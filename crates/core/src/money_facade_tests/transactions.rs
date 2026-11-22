@@ -24,7 +24,9 @@ fn workflow_origin(estimated: bool) -> TxOrigin {
 fn a_taken_or_empty_id_is_replaced_by_a_fresh_one() {
     let (_dir, mut vault) = empty_vault();
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
-    let saved = vault.add_transaction(income(&cash, "1", "a")).unwrap();
+    let saved =
+        crate::usecases::money::transactions::add_transaction(&mut vault, income(&cash, "1", "a"))
+            .unwrap();
     let mut twin = income(&cash, "2", "b");
     twin.meta_mut().id = saved.meta().id.clone();
     ensure_fresh_id(&vault.doc, &mut twin);
@@ -64,12 +66,12 @@ fn an_edit_keeps_the_id_origin_keep_mark_and_bill() {
 fn add_linked_transactions_joins_one_chain_or_saves_nothing() {
     let (_dir, mut vault) = empty_vault();
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
-    let saved = vault
-        .add_linked_transactions(
-            vec![income(&cash, "1", "a"), income(&cash, "2", "b")],
-            Some(" chain "),
-        )
-        .unwrap();
+    let saved = crate::usecases::money::transactions::add_linked_transactions(
+        &mut vault,
+        vec![income(&cash, "1", "a"), income(&cash, "2", "b")],
+        Some(" chain "),
+    )
+    .unwrap();
     assert_eq!(saved.len(), 2);
     assert!(
         saved
@@ -80,11 +82,15 @@ fn add_linked_transactions_joins_one_chain_or_saves_nothing() {
     let before = vault.doc.transactions.len();
     let mut bad = income(&cash, "3", "c");
     bad.meta_mut().categories = vec!["no-such-category".into()];
-    let refused = vault.add_linked_transactions(vec![income(&cash, "3", "ok"), bad], None);
+    let refused = crate::usecases::money::transactions::add_linked_transactions(
+        &mut vault,
+        vec![income(&cash, "3", "ok"), bad],
+        None,
+    );
     assert!(refused.is_err());
     assert_eq!(vault.doc.transactions.len(), before);
     assert!(matches!(
-        vault.add_linked_transactions(Vec::new(), None),
+        crate::usecases::money::transactions::add_linked_transactions(&mut vault, Vec::new(), None),
         Err(Error::InvalidInput(_))
     ));
 }
@@ -93,11 +99,13 @@ fn add_linked_transactions_joins_one_chain_or_saves_nothing() {
 fn deleting_removes_the_operation_and_refuses_an_unknown_one() {
     let (_dir, mut vault) = empty_vault();
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
-    let saved = vault.add_transaction(income(&cash, "5", "a")).unwrap();
-    vault.delete_transaction(&saved.meta().id).unwrap();
+    let saved =
+        crate::usecases::money::transactions::add_transaction(&mut vault, income(&cash, "5", "a"))
+            .unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut vault, &saved.meta().id).unwrap();
     assert!(vault.doc.transactions.is_empty());
     assert!(matches!(
-        vault.delete_transaction(&saved.meta().id),
+        crate::usecases::money::transactions::delete_transaction(&mut vault, &saved.meta().id),
         Err(Error::Missing(_))
     ));
 }
@@ -108,7 +116,7 @@ fn an_edit_of_an_unknown_operation_is_refused() {
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let edit: Transaction = income(&cash, "1", "a");
     assert!(matches!(
-        vault.update_transaction("nope", edit),
+        crate::usecases::money::transactions::update_transaction(&mut vault, "nope", edit),
         Err(Error::Missing(_))
     ));
 }
@@ -121,9 +129,9 @@ fn history_comes_newest_first() {
     old.meta_mut().timestamp = "2025-01-01T00:00:00Z".into();
     let mut new = income(&cash, "1", "new");
     new.meta_mut().timestamp = "2025-02-01T00:00:00Z".into();
-    vault.add_transaction(old).unwrap();
-    vault.add_transaction(new).unwrap();
-    let history = vault.transactions(&Default::default());
+    crate::usecases::money::transactions::add_transaction(&mut vault, old).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, new).unwrap();
+    let history = crate::usecases::money::transactions::transactions(&vault, &Default::default());
     assert_eq!(history[0].meta().comment, "new");
 }
 
@@ -134,7 +142,7 @@ fn linked_operation(vault: &mut crate::service::UnlockedVault, cash: &str) -> Tr
     tx.meta_mut().origin = TxOrigin::Import {
         exec_id: "exec-1".into(),
     };
-    vault.add_transaction(tx).unwrap()
+    crate::usecases::money::transactions::add_transaction(vault, tx).unwrap()
 }
 
 #[test]
@@ -186,9 +194,12 @@ fn a_replacing_edit_never_drops_the_flow_link() {
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let saved = linked_operation(&mut vault, &cash);
 
-    let updated = vault
-        .update_transaction(&saved.meta().id, income(&cash, "120", "water"))
-        .unwrap();
+    let updated = crate::usecases::money::transactions::update_transaction(
+        &mut vault,
+        &saved.meta().id,
+        income(&cash, "120", "water"),
+    )
+    .unwrap();
 
     assert_eq!(updated.meta().flow_id.as_deref(), Some("flow-1"));
 }

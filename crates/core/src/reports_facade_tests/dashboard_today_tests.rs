@@ -27,9 +27,11 @@ fn a_scenario_shows_its_plan_to_date_against_its_wallets() {
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    vault.add_transaction(income(&card, "1500", "pay")).unwrap();
-    let scenario = vault
-        .save_calc_scenario(CalcScenarioDraft {
+    crate::usecases::money::transactions::add_transaction(&mut vault, income(&card, "1500", "pay"))
+        .unwrap();
+    let scenario = crate::usecases::planning::scenarios::save_calc_scenario(
+        &mut vault,
+        CalcScenarioDraft {
             id: None,
             name: "Plan".into(),
             input: InvestInput {
@@ -59,15 +61,21 @@ fn a_scenario_shows_its_plan_to_date_against_its_wallets() {
                 income_pct: amount("10"),
             }),
             prefilled_at: None,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let now = unix_secs("2026-04-10T10:00:00Z").unwrap();
-    let status = vault.scenario_status(&scenario.id, now, "UTC").unwrap();
+    let status =
+        crate::reports::dashboard_today::scenario_status(&vault.books(), &scenario.id, now, "UTC")
+            .unwrap();
     assert_eq!(status.elapsed_months, 3);
     assert_eq!(status.planned_now, amount("1300"));
     assert_eq!(status.final_nominal, amount("2200"));
     assert_eq!(status.fact, Some(amount("1500")));
-    assert!(vault.scenario_status("missing", now, "UTC").is_err());
+    assert!(
+        crate::reports::dashboard_today::scenario_status(&vault.books(), "missing", now, "UTC")
+            .is_err()
+    );
 }
 
 #[test]
@@ -107,7 +115,12 @@ fn the_strip_keeps_three_todos_due_first() {
             .all(|todo| todo.kind == TodayTodoKind::PointsExpire)
     );
 
-    let today = vault.dashboard_today(DashPeriod::Month, now, "UTC");
+    let today = crate::reports::dashboard_today::dashboard_today(
+        &vault.books(),
+        DashPeriod::Month,
+        now,
+        "UTC",
+    );
     assert_eq!(today.todos.len(), TODAY_TODOS);
     assert_eq!(today.todos_total, 3);
 }
@@ -116,24 +129,25 @@ fn the_strip_keeps_three_todos_due_first() {
 fn unpaid_utilities_past_the_pay_day_and_todays_reminder_are_things_to_do() {
     let (_dir, mut vault) = empty_vault();
     let now = unix_secs("2026-04-10T10:00:00Z").unwrap();
-    let flat = vault
-        .create_store_with(
-            "Квартира",
-            StoreKind::Property,
-            "#555",
-            "",
-            None,
-            StoreExtras {
-                property: Some(PropertyInfo {
-                    utilities_pay_day: Some(5),
-                    ..PropertyInfo::default()
-                }),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap();
-    vault
-        .create_utility_item(UtilityDraft {
+    let flat = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Квартира",
+        StoreKind::Property,
+        "#555",
+        "",
+        None,
+        StoreExtras {
+            property: Some(PropertyInfo {
+                utilities_pay_day: Some(5),
+                ..PropertyInfo::default()
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap();
+    crate::usecases::household::utilities::create_utility_item(
+        &mut vault,
+        UtilityDraft {
             name: "ЖКХ".into(),
             active: true,
             kind: UtilityKind::Static {
@@ -143,14 +157,23 @@ fn unpaid_utilities_past_the_pay_day_and_todays_reminder_are_things_to_do() {
             property_id: flat.id.clone(),
             store_id: None,
             category: "utilities".into(),
-        })
-        .unwrap();
-    vault
-        .create_reminder("Зарплата", "2026-04-10T08:00:00Z", None)
-        .unwrap();
-    vault
-        .create_reminder("Потом", "2026-04-12T08:00:00Z", None)
-        .unwrap();
+        },
+    )
+    .unwrap();
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Зарплата",
+        "2026-04-10T08:00:00Z",
+        None,
+    )
+    .unwrap();
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Потом",
+        "2026-04-12T08:00:00Z",
+        None,
+    )
+    .unwrap();
 
     let todos = vault.all_today_todos(now, "UTC", Some("usd"));
     let kinds: Vec<_> = todos

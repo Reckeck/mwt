@@ -24,21 +24,26 @@ const AT: &str = "2023-11-15T00:00:00Z";
 fn bybit_wallet() -> (tempfile::TempDir, UnlockedVault, String) {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
-    let wallet = vault
-        .create_store_with(
-            "Bybit",
-            StoreKind::Exchange,
-            "#f0b90b",
-            "",
-            None,
-            crate::service::StoreExtras {
-                provider: Some(ExchangeProvider::Bybit),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
-    vault.ensure_bybit_accounts(&wallet, ACCOUNT_NAMES).unwrap();
+    let wallet = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Bybit",
+        StoreKind::Exchange,
+        "#f0b90b",
+        "",
+        None,
+        crate::service::StoreExtras {
+            provider: Some(ExchangeProvider::Bybit),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
+    crate::usecases::cryptotrack::exchange_import::ensure_bybit_accounts(
+        &mut vault,
+        &wallet,
+        ACCOUNT_NAMES,
+    )
+    .unwrap();
     (dir, vault, wallet)
 }
 
@@ -116,13 +121,15 @@ fn event_id_list(doc: &VaultDocV4) -> Vec<String> {
 #[test]
 fn converting_twice_writes_the_same_records() {
     let (_dir, mut vault, wallet) = bybit_wallet();
-    vault
-        .stage_imports(vec![
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![
             bought(&wallet, "exec-1", "60000", DAY_MS),
             bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
             moved(&wallet, "t-1", DAY_MS + 120_000),
-        ])
-        .unwrap();
+        ],
+    )
+    .unwrap();
     let mut doc = v4_of(&vault);
 
     let first = adopt_bybit(&mut doc);
@@ -159,13 +166,15 @@ fn converting_twice_writes_the_same_records() {
 #[test]
 fn two_devices_convert_the_same_file_to_the_same_records() {
     let (_dir, mut vault, wallet) = bybit_wallet();
-    vault
-        .stage_imports(vec![
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![
             bought(&wallet, "exec-1", "60000", DAY_MS),
             bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
             moved(&wallet, "t-1", DAY_MS + 120_000),
-        ])
-        .unwrap();
+        ],
+    )
+    .unwrap();
     // The same file read on two devices.
     let mut first = v4_of(&vault);
     let mut second = v4_of(&vault);
@@ -184,22 +193,28 @@ fn an_old_queue_loses_not_one_operation() {
     // waiting, and one the module cannot read.
     let mut broken = bought(&wallet, "exec-broken", "60000", DAY_MS);
     broken.occurred_at = String::new();
-    vault
-        .stage_imports(vec![
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![
             bought(&wallet, "exec-booked", "50000", DAY_MS),
             bought(&wallet, "exec-refused", "55000", DAY_MS),
             bought(&wallet, "exec-1", "60000", DAY_MS),
             bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
             moved(&wallet, "t-1", DAY_MS + 120_000),
             broken,
-        ])
-        .unwrap();
-    vault
-        .confirm_pending_imports(&["exec-booked".to_owned()])
-        .unwrap();
-    vault
-        .discard_pending_imports(&["exec-refused".to_owned()])
-        .unwrap();
+        ],
+    )
+    .unwrap();
+    crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(
+        &mut vault,
+        &["exec-booked".to_owned()],
+    )
+    .unwrap();
+    crate::usecases::cryptotrack::exchange_import::discard_pending_imports(
+        &mut vault,
+        &["exec-refused".to_owned()],
+    )
+    .unwrap();
     let mut doc = v4_of(&vault);
     let origins = |doc: &VaultDocV4| -> Vec<String> {
         doc.transactions
@@ -248,15 +263,19 @@ fn an_old_queue_loses_not_one_operation() {
 #[test]
 fn a_record_is_never_in_the_ledger_and_in_the_module_at_once() {
     let (_dir, mut vault, wallet) = bybit_wallet();
-    vault
-        .stage_imports(vec![
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![
             bought(&wallet, "exec-booked", "50000", DAY_MS),
             bought(&wallet, "exec-1", "60000", DAY_MS),
-        ])
-        .unwrap();
-    vault
-        .confirm_pending_imports(&["exec-booked".to_owned()])
-        .unwrap();
+        ],
+    )
+    .unwrap();
+    crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(
+        &mut vault,
+        &["exec-booked".to_owned()],
+    )
+    .unwrap();
     let mut doc = v4_of(&vault);
     adopt_bybit(&mut doc);
 
@@ -276,7 +295,7 @@ fn a_record_is_never_in_the_ledger_and_in_the_module_at_once() {
     // In the totals: the module counts the one bitcoin it was given and not the one the ledger
     // already holds.
     let (_dir_converted, converted) = vault_of(doc);
-    let totals = converted.crypto_totals(AT);
+    let totals = crate::cryptotrack::service::recompute::crypto_totals(&converted.books(), AT);
     let bitcoin = totals
         .assets
         .iter()
@@ -294,17 +313,19 @@ fn the_cost_pool_costs_what_the_fills_cost() {
     let (_dir, mut vault, wallet) = bybit_wallet();
     // Two buys of one bitcoin on one day, at different prices. The engine can only price a day,
     // so the day's point is their weighted mean, and the pool must still cost 60000 + 70000.
-    vault
-        .stage_imports(vec![
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![
             bought(&wallet, "exec-1", "60000", DAY_MS),
             bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
-        ])
-        .unwrap();
+        ],
+    )
+    .unwrap();
     let mut doc = v4_of(&vault);
     adopt_bybit(&mut doc);
 
     let (_dir_converted, converted) = vault_of(doc);
-    let totals = converted.crypto_totals(AT);
+    let totals = crate::cryptotrack::service::recompute::crypto_totals(&converted.books(), AT);
     let bitcoin = totals
         .assets
         .iter()
@@ -322,14 +343,23 @@ fn the_cost_pool_costs_what_the_fills_cost() {
 fn a_wallet_the_engine_drives_is_not_archivable() {
     let (_dir, mut vault, wallet) = bybit_wallet();
     // Before anything is followed, nothing claims the wallet.
-    assert!(!vault.exchange_is_engine_driven(&wallet));
-    vault
-        .stage_imports(vec![bought(&wallet, "exec-1", "60000", DAY_MS)])
-        .unwrap();
+    assert!(
+        !crate::usecases::cryptotrack::legacy_bybit::exchange_is_engine_driven(&vault.doc, &wallet)
+    );
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![bought(&wallet, "exec-1", "60000", DAY_MS)],
+    )
+    .unwrap();
     let mut doc = v4_of(&vault);
     adopt_bybit(&mut doc);
     let (_dir_converted, converted) = vault_of(doc);
-    assert!(converted.exchange_is_engine_driven(&wallet));
+    assert!(
+        crate::usecases::cryptotrack::legacy_bybit::exchange_is_engine_driven(
+            &converted.doc,
+            &wallet
+        )
+    );
     // A sub-account of it answers the same, because archiving reaches the whole wallet.
     let unified = converted
         .doc
@@ -339,15 +369,22 @@ fn a_wallet_the_engine_drives_is_not_archivable() {
         .expect("the wallet has its exchange accounts")
         .id
         .clone();
-    assert!(converted.exchange_is_engine_driven(&unified));
+    assert!(
+        crate::usecases::cryptotrack::legacy_bybit::exchange_is_engine_driven(
+            &converted.doc,
+            &unified
+        )
+    );
 }
 
 #[test]
 fn a_record_of_a_wallet_that_is_gone_stays_in_the_queue() {
     let (_dir, mut vault, wallet) = bybit_wallet();
-    vault
-        .stage_imports(vec![bought(&wallet, "exec-1", "60000", DAY_MS)])
-        .unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![bought(&wallet, "exec-1", "60000", DAY_MS)],
+    )
+    .unwrap();
     let mut doc = v4_of(&vault);
     doc.stores
         .retain(|store| store.id != wallet && store.parent_id.as_deref() != Some(wallet.as_str()));

@@ -34,12 +34,15 @@ fn spending_compares_to_the_same_date_of_last_month() {
         ("60", "groceries", "2026-10-03T10:00:00Z"),
         ("20", "groceries", "2026-10-20T10:00:00Z"),
     ] {
-        vault
-            .add_transaction(spend(&card, sum, category, ts))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            spend(&card, sum, category, ts),
+        )
+        .unwrap();
     }
     let now = unix_secs("2026-10-22T12:00:00Z").unwrap();
-    let view = vault.spending_overview(DashPeriod::Month, now, "UTC");
+    let view =
+        crate::reports::dashboard::spending_overview(&vault.books(), DashPeriod::Month, now, "UTC");
     assert_eq!(view.start, "2026-10-01");
     assert_eq!(view.daily.delta_pct(), Some(amount("100")));
     // The whole view, pinned: the month so far (80) against the same date of
@@ -51,11 +54,14 @@ fn spending_compares_to_the_same_date_of_last_month() {
 #[test]
 fn a_new_vault_has_nothing_to_compare_with() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(spend(&card, "15", "groceries", "2026-10-21T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "15", "groceries", "2026-10-21T10:00:00Z"),
+    )
+    .unwrap();
     let now = unix_secs("2026-10-22T12:00:00Z").unwrap();
-    let view = vault.spending_overview(DashPeriod::Year, now, "UTC");
+    let view =
+        crate::reports::dashboard::spending_overview(&vault.books(), DashPeriod::Year, now, "UTC");
     assert_eq!(view.start, "2026-01-01");
     assert_eq!(view.spent.base, None);
     assert_eq!(view.series.len(), 10);

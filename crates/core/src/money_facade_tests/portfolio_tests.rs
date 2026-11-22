@@ -9,9 +9,11 @@ use crate::service::test_support::*;
 fn compute_holdings_matches_the_stored_holdings_and_writes_nothing() {
     let (_dir, mut vault) = empty_vault();
     let cold = store(&mut vault, "Cold", StoreKind::Crypto, None);
-    vault
-        .add_transaction(income_of(&cold, btc(), "2", "50000", "buy"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&cold, btc(), "2", "50000", "buy"),
+    )
+    .unwrap();
     let before = vault.doc.clone();
     let folded = compute_holdings(&vault.books());
     assert_eq!(vault.doc, before, "the fold is a query");
@@ -28,19 +30,30 @@ fn compute_holdings_matches_the_stored_holdings_and_writes_nothing() {
 fn queries_over_books_equal_the_delegates() {
     let (_dir, mut vault) = empty_vault();
     let cold = store(&mut vault, "Cold", StoreKind::Crypto, None);
-    vault
-        .add_transaction(income_of(&cold, btc(), "1", "50000", "buy"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&cold, btc(), "1", "50000", "buy"),
+    )
+    .unwrap();
     let books = vault.books();
-    assert_eq!(store_tree(&books), vault.store_tree());
+    assert_eq!(
+        store_tree(&books),
+        crate::money::portfolio::store_tree(&vault.books())
+    );
     assert_eq!(
         crate::usecases::money::capital::portfolio_summary(&books),
-        vault.portfolio_summary()
+        crate::usecases::money::capital::portfolio_summary(&vault.books())
     );
-    assert_eq!(realized_pnl(&books), vault.realized_pnl());
+    assert_eq!(
+        realized_pnl(&books),
+        crate::money::portfolio::realized_pnl(&vault.books())
+    );
     assert_eq!(
         store_overview(&books, &cold, true).unwrap(),
-        vault.store_overview(&cold, true).unwrap()
+        crate::money::portfolio::store_overview(&vault.books(), &cold, true).unwrap()
     );
-    assert_eq!(store_pnl(&books, &cold, true), vault.store_pnl(&cold, true));
+    assert_eq!(
+        store_pnl(&books, &cold, true),
+        crate::money::portfolio::store_pnl(&vault.books(), &cold, true)
+    );
 }

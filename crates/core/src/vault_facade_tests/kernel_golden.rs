@@ -205,7 +205,9 @@ fn sync_stamps_are_made_at_flush_and_announced_once() {
     vault.set_write_behind(Some(Arc::new(Wakes::default())));
 
     let stamped_before = vault.doc.sync.stamps.clone();
-    let id = vault.create_contact(contact("Stamped")).unwrap().id;
+    let id = crate::usecases::household::contacts::create_contact(&mut vault, contact("Stamped"))
+        .unwrap()
+        .id;
     assert_eq!(
         vault.doc.sync.stamps, stamped_before,
         "persist stamps nothing"
@@ -227,9 +229,9 @@ fn sync_stamps_are_made_at_flush_and_announced_once() {
 
     // A sync call between two saves stamps the edit itself; the next flush
     // still announces it, once.
-    vault.archive_contact(&id, true).unwrap();
+    crate::usecases::household::contacts::archive_contact(&mut vault, &id, true).unwrap();
     let stamps_at_edit = vault.doc.sync.stamps.clone();
-    vault.sync_manifest(None).unwrap();
+    crate::usecases::sync::read::sync_manifest(&mut vault, None).unwrap();
     assert_ne!(
         vault.doc.sync.stamps, stamps_at_edit,
         "the sync call stamped the pending edit"
@@ -248,10 +250,12 @@ fn deleting_a_record_leaves_a_tombstone_and_trimming_a_log_does_not() {
     vault.set_write_behind(Some(Arc::new(Wakes::default())));
 
     // A record: delete it, and its stamps go and a tombstone appears.
-    let id = vault.create_contact(contact("Gone")).unwrap().id;
+    let id = crate::usecases::household::contacts::create_contact(&mut vault, contact("Gone"))
+        .unwrap()
+        .id;
     flush(&mut vault);
     assert!(vault.doc.sync.stamps.keys().any(|key| key.contains(&id)));
-    vault.delete_contact(&id).unwrap();
+    crate::usecases::household::contacts::delete_contact(&mut vault, &id).unwrap();
     flush(&mut vault);
     assert!(
         vault
@@ -268,13 +272,13 @@ fn deleting_a_record_leaves_a_tombstone_and_trimming_a_log_does_not() {
     let first: Vec<NoticeRecord> = (0..MAX_NOTICE_LOG)
         .map(|index| notice(&format!("log:{index:04}")))
         .collect();
-    vault.log_notices(first).unwrap();
+    crate::usecases::planning::notifications::log_notices(&mut vault, first).unwrap();
     flush(&mut vault);
     let tombstones_before = vault.doc.sync.tombstones.clone();
     let more: Vec<NoticeRecord> = (MAX_NOTICE_LOG..MAX_NOTICE_LOG + 5)
         .map(|index| notice(&format!("log:{index:04}")))
         .collect();
-    vault.log_notices(more).unwrap();
+    crate::usecases::planning::notifications::log_notices(&mut vault, more).unwrap();
     assert_eq!(vault.doc.notification_log.len(), MAX_NOTICE_LOG);
     assert!(
         vault

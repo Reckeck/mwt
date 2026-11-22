@@ -29,9 +29,11 @@ fn found(fee: &str) -> TxInfo {
 fn setup_transfer() -> (tempfile::TempDir, UnlockedVault, String) {
     let (dir, mut vault) = empty_vault();
     let wallet = store(&mut vault, "Hot", StoreKind::Crypto, None);
-    vault
-        .add_transaction(income_of(&wallet, eth(), "2", "3000", "in"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&wallet, eth(), "2", "3000", "in"),
+    )
+    .unwrap();
     let mut out = transfer_between(
         AccountRef::Store(wallet.clone()),
         AccountRef::Raw("0xabc".into()),
@@ -42,7 +44,11 @@ fn setup_transfer() -> (tempfile::TempDir, UnlockedVault, String) {
         inner.tx_hash = Some(format!("0x{}", "a".repeat(64)));
         inner.network = Some(Chain::Ethereum);
     }
-    let id = vault.add_transaction(out).unwrap().meta().id.clone();
+    let id = crate::usecases::money::transactions::add_transaction(&mut vault, out)
+        .unwrap()
+        .meta()
+        .id
+        .clone();
     (dir, vault, id)
 }
 
@@ -50,12 +56,20 @@ fn setup_transfer() -> (tempfile::TempDir, UnlockedVault, String) {
 fn applying_merges_the_fee_and_passes_validation() {
     let (_dir, mut vault, id) = setup_transfer();
     assert_eq!(
-        vault.enrichment_request(&id).unwrap().1,
+        crate::money::enrichment::enrichment_request(&vault.doc, &id)
+            .unwrap()
+            .1,
         Some(Chain::Ethereum)
     );
-    let record = vault.apply_enrichment_result(&id, &found("0.002")).unwrap();
+    let record = crate::usecases::money::enrichment::apply_enrichment_result(
+        &mut vault,
+        &id,
+        &found("0.002"),
+    )
+    .unwrap();
     assert_eq!(record.found.confirmed, Some(true));
-    let applied = vault.apply_enrichment(&record.id).unwrap();
+    let applied =
+        crate::usecases::money::enrichment::apply_enrichment(&mut vault, &record.id).unwrap();
     assert_eq!(applied.status, EnrichmentStatus::Applied);
     let tx = vault
         .doc
@@ -68,15 +82,21 @@ fn applying_merges_the_fee_and_passes_validation() {
     // The fee came off the wallet.
     let wallet = tx.legs()[0].store_id.clone();
     assert_eq!(holding_of(&vault, &wallet, &eth()), amount("0.998"));
-    assert!(vault.apply_enrichment(&record.id).is_err());
+    assert!(crate::usecases::money::enrichment::apply_enrichment(&mut vault, &record.id).is_err());
 }
 
 #[test]
 fn rejecting_leaves_the_transaction_alone() {
     let (_dir, mut vault, id) = setup_transfer();
     let before = vault.doc.transactions.clone();
-    let record = vault.apply_enrichment_result(&id, &found("0.002")).unwrap();
-    let rejected = vault.reject_enrichment(&record.id).unwrap();
+    let record = crate::usecases::money::enrichment::apply_enrichment_result(
+        &mut vault,
+        &id,
+        &found("0.002"),
+    )
+    .unwrap();
+    let rejected =
+        crate::usecases::money::enrichment::reject_enrichment(&mut vault, &record.id).unwrap();
     assert_eq!(rejected.status, EnrichmentStatus::Rejected);
     assert_eq!(vault.doc.transactions, before);
 }
@@ -84,19 +104,24 @@ fn rejecting_leaves_the_transaction_alone() {
 #[test]
 fn a_new_finding_replaces_the_pending_one_and_nothing_found_records_nothing() {
     let (_dir, mut vault, id) = setup_transfer();
-    vault.apply_enrichment_result(&id, &found("0.002")).unwrap();
-    vault.apply_enrichment_result(&id, &found("0.003")).unwrap();
-    assert_eq!(vault.enrichments(Some(&id)).len(), 1);
+    crate::usecases::money::enrichment::apply_enrichment_result(&mut vault, &id, &found("0.002"))
+        .unwrap();
+    crate::usecases::money::enrichment::apply_enrichment_result(&mut vault, &id, &found("0.003"))
+        .unwrap();
+    assert_eq!(
+        crate::money::enrichment::enrichments(&vault.doc, Some(&id)).len(),
+        1
+    );
     assert!(
-        vault
-            .apply_enrichment_result(
-                &id,
-                &TxInfo {
-                    network: Some(Chain::Ethereum),
-                    ..TxInfo::default()
-                }
-            )
-            .is_none()
+        crate::usecases::money::enrichment::apply_enrichment_result(
+            &mut vault,
+            &id,
+            &TxInfo {
+                network: Some(Chain::Ethereum),
+                ..TxInfo::default()
+            }
+        )
+        .is_none()
     );
 }
 
@@ -160,12 +185,17 @@ fn a_finding_is_planned_without_touching_the_document() {
 fn keeping_a_finding_writes_nothing_and_rejecting_one_writes_once() {
     let (_dir, mut vault, id) = setup_transfer();
     let commits = super::bulk::Commits::watch(&mut vault);
-    let record = vault.apply_enrichment_result(&id, &found("0.002")).unwrap();
+    let record = crate::usecases::money::enrichment::apply_enrichment_result(
+        &mut vault,
+        &id,
+        &found("0.002"),
+    )
+    .unwrap();
     assert_eq!(commits.count(), 0);
-    vault.reject_enrichment(&record.id).unwrap();
+    crate::usecases::money::enrichment::reject_enrichment(&mut vault, &record.id).unwrap();
     assert_eq!(commits.count(), 1);
     assert!(
-        vault.reject_enrichment(&record.id).is_err(),
+        crate::usecases::money::enrichment::reject_enrichment(&mut vault, &record.id).is_err(),
         "already handled"
     );
     assert_eq!(commits.count(), 1);

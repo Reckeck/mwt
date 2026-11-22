@@ -31,29 +31,49 @@ fn a_new_vault_has_the_default_categories() {
 fn renaming_keeps_transactions_and_deleting_needs_it_unused() {
     let (_dir, mut vault) = setup();
     let store = vault.doc.stores[1].id.clone();
-    let coffee = vault
-        .create_category(None, "Coffee", CategoryGroup::Daily)
-        .unwrap();
+    let coffee = crate::usecases::household::categories::create_category(
+        &mut vault,
+        None,
+        "Coffee",
+        CategoryGroup::Daily,
+    )
+    .unwrap();
     assert_eq!(coffee.key, "coffee");
-    let again = vault
-        .create_category(None, "coffee", CategoryGroup::Daily)
-        .unwrap();
+    let again = crate::usecases::household::categories::create_category(
+        &mut vault,
+        None,
+        "coffee",
+        CategoryGroup::Daily,
+    )
+    .unwrap();
     assert_eq!(again.key, "coffee_2");
 
     let mut tx = payment(&store, "3", "latte");
     tx.meta_mut().categories = vec!["coffee".into()];
-    vault.add_transaction(tx).unwrap();
-    vault
-        .update_category("coffee", Some("Кофе"), CategoryGroup::Fixed, None, None)
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
+    crate::usecases::household::categories::update_category(
+        &mut vault,
+        "coffee",
+        Some("Кофе"),
+        CategoryGroup::Fixed,
+        None,
+        None,
+    )
+    .unwrap();
     assert_eq!(vault.doc.transactions[0].meta().categories, vec!["coffee"]);
 
-    assert!(vault.delete_category("coffee").is_err());
-    vault.delete_category("coffee_2").unwrap();
+    assert!(crate::usecases::household::categories::delete_category(&mut vault, "coffee").is_err());
+    crate::usecases::household::categories::delete_category(&mut vault, "coffee_2").unwrap();
     // an empty name returns to the built-in label
-    let reset = vault
-        .update_category("taxi", Some("  "), CategoryGroup::Daily, None, None)
-        .unwrap();
+    let reset = crate::usecases::household::categories::update_category(
+        &mut vault,
+        "taxi",
+        Some("  "),
+        CategoryGroup::Daily,
+        None,
+        None,
+    )
+    .unwrap();
     assert_eq!(reset.name, None);
 }
 
@@ -61,22 +81,42 @@ fn renaming_keeps_transactions_and_deleting_needs_it_unused() {
 fn system_categories_cannot_be_changed() {
     let (_dir, mut vault) = setup();
     assert!(
-        vault
-            .update_category("trading", Some("Mine"), CategoryGroup::Service, None, None)
-            .is_err()
+        crate::usecases::household::categories::update_category(
+            &mut vault,
+            "trading",
+            Some("Mine"),
+            CategoryGroup::Service,
+            None,
+            None
+        )
+        .is_err()
     );
-    assert!(vault.archive_category("fee", true).is_err());
-    assert!(vault.delete_category("exchange").is_err());
     assert!(
-        vault
-            .create_category(None, "Sneaky", CategoryGroup::Service)
-            .is_err()
+        crate::usecases::household::categories::archive_category(&mut vault, "fee", true).is_err()
+    );
+    assert!(
+        crate::usecases::household::categories::delete_category(&mut vault, "exchange").is_err()
+    );
+    assert!(
+        crate::usecases::household::categories::create_category(
+            &mut vault,
+            None,
+            "Sneaky",
+            CategoryGroup::Service
+        )
+        .is_err()
     );
     // a user's category cannot be moved into the service group either
     assert!(
-        vault
-            .update_category("taxi", None, CategoryGroup::Service, None, None)
-            .is_err()
+        crate::usecases::household::categories::update_category(
+            &mut vault,
+            "taxi",
+            None,
+            CategoryGroup::Service,
+            None,
+            None
+        )
+        .is_err()
     );
     assert!(
         vault
@@ -169,43 +209,82 @@ fn rules_are_checked_ordered_and_reordered_on_a_bare_document() {
 fn the_rule_delegates_equal_the_scenarios_and_reordering_is_one_write() {
     let (_first_dir, mut delegated) = empty_vault();
     let (_second_dir, mut direct) = empty_vault();
-    let first = delegated
-        .create_categorization_rule("uber", "taxi")
-        .unwrap();
+    let first = crate::usecases::household::categories::create_categorization_rule(
+        &mut delegated,
+        "uber",
+        "taxi",
+    )
+    .unwrap();
     let second = scenarios::create_categorization_rule(&mut direct, "uber", "taxi").unwrap();
     assert_eq!((first.pattern, first.order), (second.pattern, second.order));
-    let other = delegated
-        .create_categorization_rule("metro", "taxi")
-        .unwrap();
-    delegated
-        .update_categorization_rule(&other.id, " bus ", "taxi", false)
-        .unwrap();
-    assert_eq!(delegated.categorization_rules()[1].pattern, "bus");
-    delegated
-        .reorder_categorization_rules(std::slice::from_ref(&other.id))
-        .unwrap();
-    assert_eq!(delegated.categorization_rules()[0].id, other.id);
-    delegated.delete_categorization_rule(&other.id).unwrap();
-    assert!(delegated.delete_categorization_rule(&other.id).is_err());
-    assert!(
-        delegated
-            .update_categorization_rule("nope", "x", "taxi", true)
-            .is_err()
+    let other = crate::usecases::household::categories::create_categorization_rule(
+        &mut delegated,
+        "metro",
+        "taxi",
+    )
+    .unwrap();
+    crate::usecases::household::categories::update_categorization_rule(
+        &mut delegated,
+        &other.id,
+        " bus ",
+        "taxi",
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        crate::money::categories::categorization_rules(&delegated.doc)[1].pattern,
+        "bus"
     );
-    assert_eq!(delegated.categorization_rules().len(), 1);
+    crate::usecases::household::categories::reorder_categorization_rules(
+        &mut delegated,
+        std::slice::from_ref(&other.id),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::money::categories::categorization_rules(&delegated.doc)[0].id,
+        other.id
+    );
+    crate::usecases::household::categories::delete_categorization_rule(&mut delegated, &other.id)
+        .unwrap();
+    assert!(
+        crate::usecases::household::categories::delete_categorization_rule(
+            &mut delegated,
+            &other.id
+        )
+        .is_err()
+    );
+    assert!(
+        crate::usecases::household::categories::update_categorization_rule(
+            &mut delegated,
+            "nope",
+            "x",
+            "taxi",
+            true
+        )
+        .is_err()
+    );
+    assert_eq!(
+        crate::money::categories::categorization_rules(&delegated.doc).len(),
+        1
+    );
 }
 
 #[test]
 fn the_category_delegates_equal_the_scenarios() {
     let (_first_dir, mut delegated) = empty_vault();
     let (_second_dir, mut direct) = empty_vault();
-    let made = delegated
-        .create_category(None, "Coffee", CategoryGroup::Daily)
-        .unwrap();
+    let made = crate::usecases::household::categories::create_category(
+        &mut delegated,
+        None,
+        "Coffee",
+        CategoryGroup::Daily,
+    )
+    .unwrap();
     let made_directly =
         scenarios::create_category(&mut direct, None, "Coffee", CategoryGroup::Daily).unwrap();
     assert_eq!(made, made_directly);
-    delegated.archive_category("coffee", true).unwrap();
+    crate::usecases::household::categories::archive_category(&mut delegated, "coffee", true)
+        .unwrap();
     scenarios::archive_category(&mut direct, "coffee", true).unwrap();
     assert_eq!(delegated.doc.categories, direct.doc.categories);
     assert!(
@@ -215,8 +294,10 @@ fn the_category_delegates_equal_the_scenarios() {
             .iter()
             .any(|category| category.key == "coffee" && category.archived)
     );
-    delegated.delete_category("coffee").unwrap();
+    crate::usecases::household::categories::delete_category(&mut delegated, "coffee").unwrap();
     scenarios::delete_category(&mut direct, "coffee").unwrap();
     assert_eq!(delegated.doc.categories, direct.doc.categories);
-    assert!(delegated.delete_category("coffee").is_err());
+    assert!(
+        crate::usecases::household::categories::delete_category(&mut delegated, "coffee").is_err()
+    );
 }

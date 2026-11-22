@@ -11,18 +11,22 @@ use crate::service::test_support::*;
 fn two_payments() -> (tempfile::TempDir, UnlockedVault, String, Vec<String>) {
     let (dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&card, "100", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "100", "salary"),
+    )
+    .unwrap();
     let ids = ["food", "taxi"]
         .iter()
         .map(|comment| {
-            vault
-                .add_transaction(payment(&card, "10", comment))
-                .unwrap()
-                .meta()
-                .id
-                .clone()
+            crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                payment(&card, "10", comment),
+            )
+            .unwrap()
+            .meta()
+            .id
+            .clone()
         })
         .collect();
     (dir, vault, card, ids)
@@ -31,10 +35,10 @@ fn two_payments() -> (tempfile::TempDir, UnlockedVault, String, Vec<String>) {
 #[test]
 fn delete_and_restore_round_trip() {
     let (_dir, mut vault, card, ids) = two_payments();
-    let deleted = vault.delete_transactions(&ids).unwrap();
+    let deleted = crate::usecases::money::bulk::delete_transactions(&mut vault, &ids).unwrap();
     assert_eq!(deleted.len(), 2);
     assert_eq!(holding_of(&vault, &card, &usd()), amount("100"));
-    vault.restore_transactions(deleted).unwrap();
+    crate::usecases::money::bulk::restore_transactions(&mut vault, deleted).unwrap();
     assert_eq!(holding_of(&vault, &card, &usd()), amount("80"));
     let restored: Vec<_> = vault
         .doc
@@ -49,7 +53,7 @@ fn delete_and_restore_round_trip() {
 fn an_unknown_id_deletes_nothing() {
     let (_dir, mut vault, _card, mut ids) = two_payments();
     ids.push("nope".into());
-    assert!(vault.delete_transactions(&ids).is_err());
+    assert!(crate::usecases::money::bulk::delete_transactions(&mut vault, &ids).is_err());
     assert_eq!(vault.doc.transactions.len(), 3);
 }
 
@@ -63,7 +67,8 @@ fn categories_are_set_and_given_back() {
             categories: vec!["transport".into()],
         })
         .collect();
-    let before = vault.set_transaction_categories(changes).unwrap();
+    let before =
+        crate::usecases::money::bulk::set_transaction_categories(&mut vault, changes).unwrap();
     assert!(before.iter().all(|entry| entry.categories == ["groceries"]));
     let now = vault
         .doc
@@ -72,7 +77,7 @@ fn categories_are_set_and_given_back() {
         .find(|tx| tx.meta().id == ids[0])
         .unwrap();
     assert_eq!(now.meta().categories, ["transport"]);
-    vault.set_transaction_categories(before).unwrap();
+    crate::usecases::money::bulk::set_transaction_categories(&mut vault, before).unwrap();
     let back = vault
         .doc
         .transactions
@@ -86,33 +91,40 @@ fn categories_are_set_and_given_back() {
 fn payments_move_but_transfers_do_not() {
     let (_dir, mut vault, card, ids) = two_payments();
     let other = store(&mut vault, "Other", StoreKind::Bank, None);
-    let before = vault
-        .move_transactions(vec![TxStore {
+    let before = crate::usecases::money::bulk::move_transactions(
+        &mut vault,
+        vec![TxStore {
             id: ids[0].clone(),
             store_id: other.clone(),
-        }])
-        .unwrap();
+        }],
+    )
+    .unwrap();
     assert_eq!(before[0].store_id, card);
     assert_eq!(holding_of(&vault, &other, &usd()), amount("-10"));
 
-    let moved = vault
-        .add_transaction(transfer_between(
+    let moved = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        transfer_between(
             crate::model::transaction::AccountRef::Store(card.clone()),
             crate::model::transaction::AccountRef::Store(other.clone()),
             usd(),
             "5",
-        ))
-        .unwrap();
-    let refused = vault.move_transactions(vec![
-        TxStore {
-            id: ids[1].clone(),
-            store_id: other.clone(),
-        },
-        TxStore {
-            id: moved.meta().id.clone(),
-            store_id: card.clone(),
-        },
-    ]);
+        ),
+    )
+    .unwrap();
+    let refused = crate::usecases::money::bulk::move_transactions(
+        &mut vault,
+        vec![
+            TxStore {
+                id: ids[1].clone(),
+                store_id: other.clone(),
+            },
+            TxStore {
+                id: moved.meta().id.clone(),
+                store_id: card.clone(),
+            },
+        ],
+    );
     assert!(refused.is_err());
     // All or nothing: the payment stayed where it was.
     let second = vault
@@ -168,9 +180,9 @@ fn document_json(vault: &UnlockedVault) -> String {
 fn a_bulk_call_is_one_commit() {
     let (_dir, mut vault, _card, ids) = two_payments();
     let commits = Commits::watch(&mut vault);
-    let deleted = vault.delete_transactions(&ids).unwrap();
+    let deleted = crate::usecases::money::bulk::delete_transactions(&mut vault, &ids).unwrap();
     assert_eq!(commits.count(), 1);
-    vault.restore_transactions(deleted).unwrap();
+    crate::usecases::money::bulk::restore_transactions(&mut vault, deleted).unwrap();
     assert_eq!(commits.count(), 2);
     let changes = ids
         .iter()
@@ -179,7 +191,7 @@ fn a_bulk_call_is_one_commit() {
             categories: vec!["taxi".into()],
         })
         .collect();
-    vault.set_transaction_categories(changes).unwrap();
+    crate::usecases::money::bulk::set_transaction_categories(&mut vault, changes).unwrap();
     assert_eq!(commits.count(), 3);
 }
 
@@ -190,7 +202,7 @@ fn a_bulk_call_is_one_commit() {
 fn a_delete_changes_the_operations_and_the_holdings_only() {
     let (_dir, mut vault, card, ids) = two_payments();
     let before: serde_json::Value = serde_json::to_value(&vault.doc).unwrap();
-    vault.delete_transactions(&ids).unwrap();
+    crate::usecases::money::bulk::delete_transactions(&mut vault, &ids).unwrap();
     let after: serde_json::Value = serde_json::to_value(&vault.doc).unwrap();
     let changed: Vec<&str> = before
         .as_object()
@@ -216,12 +228,14 @@ fn a_bulk_that_fails_on_the_fifth_item_leaves_nothing_behind() {
     let (_dir, mut vault, card, _) = two_payments();
     let mut ids: Vec<String> = (0..4)
         .map(|index| {
-            vault
-                .add_transaction(payment(&card, "1", &format!("extra {index}")))
-                .unwrap()
-                .meta()
-                .id
-                .clone()
+            crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                payment(&card, "1", &format!("extra {index}")),
+            )
+            .unwrap()
+            .meta()
+            .id
+            .clone()
         })
         .collect();
     ids.push("missing".into());
@@ -235,12 +249,13 @@ fn a_bulk_that_fails_on_the_fifth_item_leaves_nothing_behind() {
             categories: vec!["taxi".into()],
         })
         .collect();
-    let err = vault.set_transaction_categories(changes).unwrap_err();
+    let err =
+        crate::usecases::money::bulk::set_transaction_categories(&mut vault, changes).unwrap_err();
     assert!(matches!(err, Error::Missing(_)), "{err}");
     assert_eq!(document_json(&vault), before);
     assert_eq!(commits.count(), 0);
 
-    let err = vault.delete_transactions(&ids).unwrap_err();
+    let err = crate::usecases::money::bulk::delete_transactions(&mut vault, &ids).unwrap_err();
     assert!(matches!(err, Error::Missing(_)), "{err}");
     assert_eq!(document_json(&vault), before);
     assert_eq!(commits.count(), 0);
@@ -250,17 +265,19 @@ fn a_bulk_that_fails_on_the_fifth_item_leaves_nothing_behind() {
 fn a_move_that_fails_on_a_transfer_leaves_the_payments_where_they_were() {
     let (_dir, mut vault, card, ids) = two_payments();
     let cash = store(&mut vault, "Cash2", StoreKind::Bank, None);
-    let two_sided = vault
-        .add_transaction(transfer_between(
+    let two_sided = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        transfer_between(
             AccountRef::Store(card.clone()),
             AccountRef::Store(cash.clone()),
             usd(),
             "1",
-        ))
-        .unwrap()
-        .meta()
-        .id
-        .clone();
+        ),
+    )
+    .unwrap()
+    .meta()
+    .id
+    .clone();
     let before = document_json(&vault);
     let changes = ids
         .iter()
@@ -270,6 +287,6 @@ fn a_move_that_fails_on_a_transfer_leaves_the_payments_where_they_were() {
             store_id: cash.clone(),
         })
         .collect();
-    assert!(vault.move_transactions(changes).is_err());
+    assert!(crate::usecases::money::bulk::move_transactions(&mut vault, changes).is_err());
     assert_eq!(document_json(&vault), before);
 }

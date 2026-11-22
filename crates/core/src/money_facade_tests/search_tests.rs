@@ -19,27 +19,36 @@ fn numbers_compare_without_spaces_and_commas() {
 fn operations_are_found_by_comment_amount_and_wallet() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Tinkoff", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&card, "1000", "salary"))
-        .unwrap();
-    vault
-        .add_transaction(payment(&card, "230", "Coffee"))
-        .unwrap();
-    let by_comment = vault.search_transactions("coff", &[], 10);
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "1000", "salary"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        payment(&card, "230", "Coffee"),
+    )
+    .unwrap();
+    let by_comment = crate::money::search::search_transactions(&vault.doc, "coff", &[], 10);
     assert_eq!(by_comment.len(), 1);
-    let by_amount = vault.search_transactions("23", &[], 10);
+    let by_amount = crate::money::search::search_transactions(&vault.doc, "23", &[], 10);
     assert_eq!(by_amount.len(), 1);
-    assert_eq!(vault.search_transactions("tink", &[], 10).len(), 2);
-    assert!(vault.search_transactions("  ", &[], 10).is_empty());
+    assert_eq!(
+        crate::money::search::search_transactions(&vault.doc, "tink", &[], 10).len(),
+        2
+    );
+    assert!(crate::money::search::search_transactions(&vault.doc, "  ", &[], 10).is_empty());
 }
 
 #[test]
 fn pins_are_deduplicated_and_valued() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&card, "500", "opening"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "500", "opening"),
+    )
+    .unwrap();
     let wallet = Pinned::Entity {
         target: EntityRef::new(EntityKind::Store, &card),
     };
@@ -48,10 +57,12 @@ fn pins_are_deduplicated_and_valued() {
         name: " Food ".into(),
         query: "?category=groceries".into(),
     };
-    vault
-        .set_pinned(vec![wallet.clone(), wallet.clone(), filter])
-        .unwrap();
-    let pins = vault.pinned(now_secs(), "UTC");
+    crate::usecases::household::search::set_pinned(
+        &mut vault,
+        vec![wallet.clone(), wallet.clone(), filter],
+    )
+    .unwrap();
+    let pins = crate::usecases::household::search::pinned(&vault, now_secs(), "UTC");
     assert_eq!(pins.len(), 2);
     assert_eq!(pins[0].title, "Card");
     assert!(pins[0].value.is_some());
@@ -65,15 +76,15 @@ fn pins_are_deduplicated_and_valued() {
     let gone = Pinned::Entity {
         target: EntityRef::new(EntityKind::Goal, "nope"),
     };
-    vault.set_pinned(vec![gone]).unwrap();
-    assert!(vault.pinned(now_secs(), "UTC")[0].missing);
+    crate::usecases::household::search::set_pinned(&mut vault, vec![gone]).unwrap();
+    assert!(crate::usecases::household::search::pinned(&vault, now_secs(), "UTC")[0].missing);
     let unnamed = Pinned::Filter {
         id: String::new(),
         name: "  ".into(),
         query: String::new(),
     };
     assert!(matches!(
-        vault.set_pinned(vec![unnamed]),
+        crate::usecases::household::search::set_pinned(&mut vault, vec![unnamed]),
         Err(Error::InvalidInput(_))
     ));
 }
@@ -147,21 +158,26 @@ fn the_pins_are_capped() {
 fn the_delegates_equal_the_scenarios() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Tinkoff", StoreKind::Bank, None);
-    vault
-        .add_transaction(payment(&card, "230", "Coffee"))
-        .unwrap();
-    assert_eq!(vault.search_index(), search_index(&vault.doc));
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        payment(&card, "230", "Coffee"),
+    )
+    .unwrap();
     assert_eq!(
-        vault.search_transactions("coff", &[], 10),
+        crate::money::search::search_index(&vault.doc),
+        search_index(&vault.doc)
+    );
+    assert_eq!(
+        crate::money::search::search_transactions(&vault.doc, "coff", &[], 10),
         search_transactions(&vault.doc, "coff", &[], 10)
     );
     let wallet = Pinned::Entity {
         target: EntityRef::new(EntityKind::Store, &card),
     };
-    vault.set_pinned(vec![wallet.clone()]).unwrap();
+    crate::usecases::household::search::set_pinned(&mut vault, vec![wallet.clone()]).unwrap();
     assert_eq!(vault.doc.settings.pinned, vec![wallet.clone()]);
     assert_eq!(
-        vault.pinned(now_secs(), "UTC"),
+        crate::usecases::household::search::pinned(&vault, now_secs(), "UTC"),
         crate::usecases::household::search::pinned(&vault, now_secs(), "UTC")
     );
     crate::usecases::household::search::set_pinned(&mut vault, Vec::new()).unwrap();

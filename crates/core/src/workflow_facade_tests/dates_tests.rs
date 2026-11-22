@@ -27,18 +27,18 @@ fn outcome_of(params: serde_json::Value) -> RunOutcome {
     })
     .to_string();
     let now = crate::calendar::now_secs() + 5;
-    vault
-        .dry_run_workflow(
-            &graph,
-            None,
-            None,
-            std::collections::BTreeMap::new(),
-            now,
-            "UTC",
-        )
-        .unwrap()
-        .run
-        .outcome
+    crate::usecases::workflow::runs::dry_run_workflow(
+        &vault,
+        &graph,
+        None,
+        None,
+        std::collections::BTreeMap::new(),
+        now,
+        "UTC",
+    )
+    .unwrap()
+    .run
+    .outcome
 }
 
 #[test]

@@ -67,25 +67,33 @@ fn range(from: &str, to: &str) -> ReportFilter {
 const NOW: &str = "2026-06-15T12:00:00Z";
 
 fn run(vault: &UnlockedVault, kind: ReportKind, filter: &ReportFilter) -> Report {
-    vault.report(kind, filter, secs(NOW), "UTC").unwrap()
+    crate::reports::overview::report(&vault.books(), kind, filter, secs(NOW), "UTC").unwrap()
 }
 
 #[test]
 fn where_lists_spending_moves_and_what_is_left() {
     let (_dir, mut vault, card) = vault_with_card();
     let other = store(&mut vault, "Exchange", StoreKind::Bank, None);
-    vault
-        .add_transaction(earn(&card, "1000", "2026-03-01T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "100", "groceries", "2026-03-02T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(usd_move(&card, &other, "300", "2026-03-03T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "50", "groceries", "2026-04-02T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-03-01T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "100", "groceries", "2026-03-02T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        usd_move(&card, &other, "300", "2026-03-03T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "50", "groceries", "2026-04-02T10:00:00Z"),
+    )
+    .unwrap();
     let Report::Where(report) = run(&vault, ReportKind::Where, &range("2026-03", "2026-03")) else {
         panic!()
     };
@@ -103,15 +111,21 @@ fn where_lists_spending_moves_and_what_is_left() {
 fn cashflow_leaves_internal_moves_out() {
     let (_dir, mut vault, card) = vault_with_card();
     let pocket = store(&mut vault, "Pocket", StoreKind::Bank, Some(&card));
-    vault
-        .add_transaction(earn(&card, "1000", "2026-03-01T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(usd_move(&card, &pocket, "300", "2026-03-02T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "100", "groceries", "2026-04-02T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-03-01T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        usd_move(&card, &pocket, "300", "2026-03-02T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "100", "groceries", "2026-04-02T10:00:00Z"),
+    )
+    .unwrap();
     let Report::Cashflow(report) = run(&vault, ReportKind::Cashflow, &range("2026-03", "2026-04"))
     else {
         panic!()
@@ -126,16 +140,22 @@ fn cashflow_leaves_internal_moves_out() {
 #[test]
 fn categories_compare_with_the_previous_period_and_keep_ties_stable() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(spend(&card, "100", "groceries", "2026-02-10T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "150", "groceries", "2026-03-10T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "100", "groceries", "2026-02-10T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "150", "groceries", "2026-03-10T10:00:00Z"),
+    )
+    .unwrap();
     for key in ["taxi", "fuel", "sport", "pets", "gifts", "beauty"] {
-        vault
-            .add_transaction(spend(&card, "50", key, "2026-03-11T10:00:00Z"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            spend(&card, "50", key, "2026-03-11T10:00:00Z"),
+        )
+        .unwrap();
     }
     let Report::Categories(report) =
         run(&vault, ReportKind::Categories, &range("2026-03", "2026-03"))
@@ -170,16 +190,18 @@ fn categories_compare_with_the_previous_period_and_keep_ties_stable() {
 #[test]
 fn categories_name_the_spending_left_out_without_a_rate() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(spend(&card, "100", "groceries", "2026-10-02T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "100", "groceries", "2026-10-02T10:00:00Z"),
+    )
+    .unwrap();
     for day in ["2026-10-03", "2026-10-05"] {
         let mut tx = spend(&card, "500", "groceries", &format!("{day}T10:00:00Z"));
         if let Transaction::Payment(inner) = &mut tx {
             inner.asset = AssetRef::fiat("THB", "Thai Baht");
             inner.price = PriceStamp::default();
         }
-        vault.add_transaction(tx).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
     }
     let Report::Categories(report) =
         run(&vault, ReportKind::Categories, &range("2026-10", "2026-10"))
@@ -196,25 +218,38 @@ fn categories_name_the_spending_left_out_without_a_rate() {
         unpriced: true,
         ..TxFilter::default()
     };
-    assert_eq!(vault.list_transactions(&filter, "UTC").unwrap().len(), 2);
+    assert_eq!(
+        crate::usecases::household::ledger::list_transactions(&vault, &filter, "UTC")
+            .unwrap()
+            .len(),
+        2
+    );
 }
 
 #[test]
 fn year_average_skips_empty_months_and_names_the_best_and_worst() {
     let (_dir, mut vault, card) = vault_with_card();
     vault.doc.settings.savings_rate = Amount::ZERO;
-    vault
-        .add_transaction(earn(&card, "1000", "2026-01-05T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "900", "groceries", "2026-01-06T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(earn(&card, "1000", "2026-03-05T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "200", "groceries", "2026-03-06T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-01-05T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "900", "groceries", "2026-01-06T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-03-05T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "200", "groceries", "2026-03-06T10:00:00Z"),
+    )
+    .unwrap();
     let filter = ReportFilter {
         year: Some(2026),
         ..ReportFilter::default()
@@ -234,42 +269,48 @@ fn year_average_skips_empty_months_and_names_the_best_and_worst() {
 #[test]
 fn net_worth_counts_loans_and_debts() {
     let (_dir, mut vault, card) = vault_with_card();
-    let loan = vault
-        .create_store_with(
-            "Loan",
-            StoreKind::Liability,
-            "",
-            "",
-            None,
-            StoreExtras {
-                liability: Some(LiabilityTerms {
-                    kind: LiabilityKind::Loan,
-                    rate: None,
-                    limit: None,
-                    due_day: None,
-                    monthly_payment: None,
-                }),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
-    vault
-        .add_transaction(earn(&card, "1000", "2026-03-01T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(usd_move(&loan, &card, "400", "2026-04-01T10:00:00Z"))
-        .unwrap();
-    let friend = vault
-        .create_contact(ContactDraft {
+    let loan = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Loan",
+        StoreKind::Liability,
+        "",
+        "",
+        None,
+        StoreExtras {
+            liability: Some(LiabilityTerms {
+                kind: LiabilityKind::Loan,
+                rate: None,
+                limit: None,
+                due_day: None,
+                monthly_payment: None,
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-03-01T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        usd_move(&loan, &card, "400", "2026-04-01T10:00:00Z"),
+    )
+    .unwrap();
+    let friend = crate::usecases::household::contacts::create_contact(
+        &mut vault,
+        ContactDraft {
             group: String::new(),
             name: "Friend".into(),
             kind: crate::model::contact::ContactKind::Person,
             note: String::new(),
             accounts: Vec::new(),
-        })
-        .unwrap()
-        .id;
+        },
+    )
+    .unwrap()
+    .id;
     let mut lend = transfer_between(
         AccountRef::Store(card.clone()),
         AccountRef::Contact {
@@ -282,9 +323,11 @@ fn net_worth_counts_loans_and_debts() {
     if let Transaction::Transfer(tx) = &mut lend {
         tx.debt = Some(DebtEffect::Lend);
     }
-    vault
-        .add_transaction(dated(lend, "2026-05-01T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        dated(lend, "2026-05-01T10:00:00Z"),
+    )
+    .unwrap();
 
     let Report::Networth(report) = run(&vault, ReportKind::Networth, &range("2026-03", "2026-05"))
     else {
@@ -308,15 +351,19 @@ fn net_worth_counts_loans_and_debts() {
 fn portfolio_shares_add_up_to_a_hundred() {
     let (_dir, mut vault, card) = vault_with_card();
     let wallet = store(&mut vault, "Cold", StoreKind::Crypto, None);
-    vault
-        .add_transaction(earn(&card, "1000", "2026-03-01T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(dated(
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-03-01T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        dated(
             income_of(&wallet, btc(), "0.02", "60000", "bought"),
             "2026-03-02T10:00:00Z",
-        ))
-        .unwrap();
+        ),
+    )
+    .unwrap();
     let Report::Portfolio(report) =
         run(&vault, ReportKind::Portfolio, &range("2026-05", "2026-06"))
     else {
@@ -335,9 +382,11 @@ fn portfolio_shares_add_up_to_a_hundred() {
 #[test]
 fn real_terms_restate_old_months_in_todays_money() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(earn(&card, "1000", "2025-06-05T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2025-06-05T10:00:00Z"),
+    )
+    .unwrap();
     vault
         .update_settings(crate::ipc_contract::UpdateSettingsInput {
             inflation_manual: Some(BTreeMap::from([("usd".to_string(), amount("10"))])),
@@ -348,19 +397,27 @@ fn real_terms_restate_old_months_in_todays_money() {
         real_terms: true,
         ..range("2025-06", "2026-06")
     };
-    let Report::Cashflow(report) = vault
-        .report(ReportKind::Cashflow, &filter, secs(NOW), "UTC")
-        .unwrap()
-    else {
+    let Report::Cashflow(report) = crate::reports::overview::report(
+        &vault.books(),
+        ReportKind::Cashflow,
+        &filter,
+        secs(NOW),
+        "UTC",
+    )
+    .unwrap() else {
         panic!()
     };
     // A year ago: 1000 × 1.1.
     assert_eq!(report.rows[0].income, amount("1100"));
     assert_eq!(report.meta.inflation_rate, Some(amount("10")));
-    let Report::Inflation(inflation_report) = vault
-        .report(ReportKind::Inflation, &filter, secs(NOW), "UTC")
-        .unwrap()
-    else {
+    let Report::Inflation(inflation_report) = crate::reports::overview::report(
+        &vault.books(),
+        ReportKind::Inflation,
+        &filter,
+        secs(NOW),
+        "UTC",
+    )
+    .unwrap() else {
         panic!()
     };
     assert_eq!(inflation_report.points[0].coefficient, amount("1.1"));
@@ -380,7 +437,7 @@ fn pnl_real_terms_round_once_per_month() {
         if let Transaction::Payment(inner) = &mut tx {
             inner.fee = fee_usd("0.333");
         }
-        vault.add_transaction(tx).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
     }
     vault
         .update_settings(crate::ipc_contract::UpdateSettingsInput {
@@ -392,10 +449,14 @@ fn pnl_real_terms_round_once_per_month() {
         real_terms: true,
         ..range("2025-06", "2025-06")
     };
-    let Report::Pnl(report) = vault
-        .report(ReportKind::Pnl, &filter, secs(NOW), "UTC")
-        .unwrap()
-    else {
+    let Report::Pnl(report) = crate::reports::overview::report(
+        &vault.books(),
+        ReportKind::Pnl,
+        &filter,
+        secs(NOW),
+        "UTC",
+    )
+    .unwrap() else {
         panic!()
     };
     // 0.999 × 1.1 = 1.0989 → 1.10; rounding each fee first gave 3 × 0.37 = 1.11.
@@ -427,15 +488,21 @@ fn networth_splits_out_what_sits_in_crypto_wallets_and_exchanges() {
     let (_dir, mut vault, card) = vault_with_card();
     let exchange = store(&mut vault, "Bybit", StoreKind::Exchange, None);
     let ledger = store(&mut vault, "Ledger", StoreKind::Crypto, None);
-    vault
-        .add_transaction(earn(&card, "1000", "2026-03-01T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(earn(&exchange, "300", "2026-03-02T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(earn(&ledger, "200", "2026-03-03T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-03-01T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&exchange, "300", "2026-03-02T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&ledger, "200", "2026-03-03T10:00:00Z"),
+    )
+    .unwrap();
     let Report::Networth(networth) =
         run(&vault, ReportKind::Networth, &range("2026-03", "2026-03"))
     else {
@@ -451,12 +518,16 @@ fn networth_splits_out_what_sits_in_crypto_wallets_and_exchanges() {
 fn the_current_networth_point_equals_the_summary_net_worth() {
     let (_dir, mut vault, card) = vault_with_card();
     let exchange = store(&mut vault, "Bybit", StoreKind::Exchange, None);
-    vault
-        .add_transaction(earn(&card, "1000", "2026-05-01T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(earn(&exchange, "300", "2026-06-02T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-05-01T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&exchange, "300", "2026-06-02T10:00:00Z"),
+    )
+    .unwrap();
     let Report::Networth(networth) =
         run(&vault, ReportKind::Networth, &range("2026-04", "2026-06"))
     else {
@@ -464,7 +535,12 @@ fn the_current_networth_point_equals_the_summary_net_worth() {
     };
     let last = networth.points.last().unwrap();
     assert_eq!(last.month, "2026-06");
-    assert_eq!(last.net, vault.portfolio_summary().net_worth_base.round(2));
+    assert_eq!(
+        last.net,
+        crate::usecases::money::capital::portfolio_summary(&vault.books())
+            .net_worth_base
+            .round(2)
+    );
     assert_eq!(last.crypto, amount("300"));
 }
 
@@ -472,12 +548,16 @@ fn the_current_networth_point_equals_the_summary_net_worth() {
 fn the_year_report_follows_the_wallet_scope() {
     let (_dir, mut vault, card) = vault_with_card();
     let other = store(&mut vault, "Other", StoreKind::Bank, None);
-    vault
-        .add_transaction(earn(&card, "1000", "2026-01-05T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(earn(&other, "500", "2026-01-05T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-01-05T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&other, "500", "2026-01-05T10:00:00Z"),
+    )
+    .unwrap();
     let filter = ReportFilter {
         year: Some(2026),
         scope: StoreScope {
@@ -515,18 +595,23 @@ fn csv_has_a_bom_semicolons_and_quotes_what_needs_it() {
 #[test]
 fn the_calendar_cuts_days_in_the_local_zone() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(earn(&card, "3100", "2026-03-01T08:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "3100", "2026-03-01T08:00:00Z"),
+    )
+    .unwrap();
     // 20:00 UTC on the 1st is the 2nd in Bangkok.
-    vault
-        .add_transaction(spend(&card, "150", "groceries", "2026-03-01T20:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "150", "groceries", "2026-03-01T20:00:00Z"),
+    )
+    .unwrap();
     let now = secs("2026-03-20T12:00:00Z");
-    let utc = vault.calendar_month("2026-03", now, "UTC").unwrap();
-    let bangkok = vault
-        .calendar_month("2026-03", now, "Asia/Bangkok")
-        .unwrap();
+    let utc =
+        crate::reports::overview::calendar_month(&vault.books(), "2026-03", now, "UTC").unwrap();
+    let bangkok =
+        crate::reports::overview::calendar_month(&vault.books(), "2026-03", now, "Asia/Bangkok")
+            .unwrap();
     assert_eq!(utc.days[0].daily, amount("150"));
     assert_eq!(bangkok.days[0].daily, Amount::ZERO);
     assert_eq!(bangkok.days[1].daily, amount("150"));
@@ -549,12 +634,16 @@ fn the_calendar_cuts_days_in_the_local_zone() {
 #[test]
 fn the_calendar_keeps_a_running_balance_and_the_days_notices() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(earn(&card, "3100", "2026-03-01T08:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "150", "groceries", "2026-03-01T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "3100", "2026-03-01T08:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "150", "groceries", "2026-03-01T10:00:00Z"),
+    )
+    .unwrap();
     vault
         .doc
         .notification_log
@@ -569,23 +658,30 @@ fn the_calendar_keeps_a_running_balance_and_the_days_notices() {
             read: false,
         });
     let now = secs("2026-03-20T12:00:00Z");
-    let month = vault.calendar_month("2026-03", now, "UTC").unwrap();
+    let month =
+        crate::reports::overview::calendar_month(&vault.books(), "2026-03", now, "UTC").unwrap();
     // 90 a day × 31 days = the pool; 150 spent on the 1st.
     assert_eq!(month.budget, Some(amount("2790")));
     assert_eq!(month.days[0].left, Some(amount("2640")));
     assert_eq!(month.days[0].per_day_left, Some(amount("88")));
     // A mandatory payment (utilities) does not count in the balance.
-    vault
-        .add_transaction(spend(&card, "1000", "utilities", "2026-03-03T10:00:00Z"))
-        .unwrap();
-    let month = vault.calendar_month("2026-03", now, "UTC").unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "1000", "utilities", "2026-03-03T10:00:00Z"),
+    )
+    .unwrap();
+    let month =
+        crate::reports::overview::calendar_month(&vault.books(), "2026-03", now, "UTC").unwrap();
     assert_eq!(month.budget, Some(amount("2790")));
     assert_eq!(month.days[2].left, Some(amount("2640")));
     // Nor does one above the income: no day allowance is left, the balance stays.
-    vault
-        .add_transaction(spend(&card, "5000", "utilities", "2026-03-04T10:00:00Z"))
-        .unwrap();
-    let month = vault.calendar_month("2026-03", now, "UTC").unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "5000", "utilities", "2026-03-04T10:00:00Z"),
+    )
+    .unwrap();
+    let month =
+        crate::reports::overview::calendar_month(&vault.books(), "2026-03", now, "UTC").unwrap();
     assert_eq!(month.allowance, None);
     assert_eq!(month.budget, Some(amount("2790")));
     assert_eq!(month.days[3].left, Some(amount("2640")));
@@ -607,14 +703,18 @@ fn the_calendar_keeps_a_running_balance_and_the_days_notices() {
         })
     );
     // A month wholly ahead with no income yet has no pool: nothing to forecast.
-    let april = vault.calendar_month("2026-04", now, "UTC").unwrap();
+    let april =
+        crate::reports::overview::calendar_month(&vault.books(), "2026-04", now, "UTC").unwrap();
     assert!(april.days[0].forecast);
     assert_eq!(april.days[0].left, None);
     // With income booked ahead, the pool is spread evenly from its first day.
-    vault
-        .add_transaction(earn(&card, "3000", "2026-04-01T08:00:00Z"))
-        .unwrap();
-    let april = vault.calendar_month("2026-04", now, "UTC").unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "3000", "2026-04-01T08:00:00Z"),
+    )
+    .unwrap();
+    let april =
+        crate::reports::overview::calendar_month(&vault.books(), "2026-04", now, "UTC").unwrap();
     let pool = april.budget.unwrap();
     assert_eq!(april.days[0].left, Some(pool - april.allowance.unwrap()));
     assert_eq!(april.days[0].per_day_left, april.allowance);
@@ -626,10 +726,13 @@ fn the_calendar_keeps_a_running_balance_and_the_days_notices() {
     );
     assert!(month.days[3].notices.is_empty());
     // Past the pool: nothing to spend per day, and the forecast stays where it is.
-    vault
-        .add_transaction(spend(&card, "3000", "groceries", "2026-03-19T10:00:00Z"))
-        .unwrap();
-    let month = vault.calendar_month("2026-03", now, "UTC").unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "3000", "groceries", "2026-03-19T10:00:00Z"),
+    )
+    .unwrap();
+    let month =
+        crate::reports::overview::calendar_month(&vault.books(), "2026-03", now, "UTC").unwrap();
     assert_eq!(month.days[19].left, Some(amount("-360")));
     assert_eq!(month.days[19].per_day_left, Some(Amount::ZERO));
     assert_eq!(month.days[25].left, Some(amount("-360")));
@@ -641,7 +744,8 @@ fn the_calendar_keeps_a_running_balance_and_the_days_notices() {
 #[test]
 fn a_range_over_the_report_limit_is_refused_not_cut() {
     let (_dir, vault, _card) = vault_with_card();
-    let result = vault.report(
+    let result = crate::reports::overview::report(
+        &vault.books(),
         ReportKind::Cashflow,
         &range("2010-01", "2026-05"),
         secs(NOW),
@@ -659,15 +763,21 @@ fn a_range_over_the_report_limit_is_refused_not_cut() {
 #[test]
 fn an_operation_at_the_next_periods_first_second_is_in_neither_the_value_nor_the_flows() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(earn(&card, "1000", "2026-03-10T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(earn(&card, "20", "2026-03-31T23:59:59Z"))
-        .unwrap();
-    vault
-        .add_transaction(earn(&card, "500", "2026-04-01T00:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-03-10T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "20", "2026-03-31T23:59:59Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "500", "2026-04-01T00:00:00Z"),
+    )
+    .unwrap();
     let Report::Stores(report) = run(&vault, ReportKind::Stores, &range("2026-03", "2026-03"))
     else {
         panic!()
@@ -692,10 +802,10 @@ fn pnl_without_a_rate_to_the_report_currency_is_marked_not_taken_one_to_one() {
     let wallet = vault.doc.stores[1].id.clone();
     let mut buy = income_of(&wallet, btc(), "1", "40000", "buy");
     at(&mut buy, "2026-01-01T00:00:00Z");
-    vault.add_transaction(buy).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
     let mut sale = sell_btc(&wallet, "1", "60000", "60000");
     at(&mut sale, "2026-02-03T00:00:00Z");
-    vault.add_transaction(sale).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, sale).unwrap();
     let filter = ReportFilter {
         currency: Some("eur".into()),
         ..range("2026-01", "2026-02")
@@ -725,21 +835,29 @@ fn with_flat_inflation(vault: &mut UnlockedVault, percent: &str) {
 #[test]
 fn categories_in_real_terms_compare_with_the_previous_period_in_real_terms() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(spend(&card, "100", "groceries", "2026-02-10T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "100", "groceries", "2026-03-10T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "100", "groceries", "2026-02-10T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "100", "groceries", "2026-03-10T10:00:00Z"),
+    )
+    .unwrap();
     with_flat_inflation(&mut vault, "10");
     let filter = ReportFilter {
         real_terms: true,
         ..range("2026-03", "2026-03")
     };
-    let Report::Categories(report) = vault
-        .report(ReportKind::Categories, &filter, secs(NOW), "UTC")
-        .unwrap()
-    else {
+    let Report::Categories(report) = crate::reports::overview::report(
+        &vault.books(),
+        ReportKind::Categories,
+        &filter,
+        secs(NOW),
+        "UTC",
+    )
+    .unwrap() else {
         panic!()
     };
     let row = &report.groups[0].rows[0];
@@ -752,14 +870,16 @@ fn categories_in_real_terms_compare_with_the_previous_period_in_real_terms() {
 fn real_terms_cash_flow_and_categories_round_after_summing() {
     let (_dir, mut vault, card) = vault_with_card();
     for day in ["10", "11", "12"] {
-        vault
-            .add_transaction(spend(
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            spend(
                 &card,
                 "0.30",
                 "groceries",
                 &format!("2026-03-{day}T10:00:00Z"),
-            ))
-            .unwrap();
+            ),
+        )
+        .unwrap();
     }
     with_flat_inflation(&mut vault, "10");
     let filter = ReportFilter {
@@ -767,17 +887,25 @@ fn real_terms_cash_flow_and_categories_round_after_summing() {
         ..range("2026-03", "2026-03")
     };
     // 0.90 × 1.0241 = 0.9217 → 0.92; rounding each flow first gave 3 × 0.31 = 0.93.
-    let Report::Cashflow(cash) = vault
-        .report(ReportKind::Cashflow, &filter, secs(NOW), "UTC")
-        .unwrap()
-    else {
+    let Report::Cashflow(cash) = crate::reports::overview::report(
+        &vault.books(),
+        ReportKind::Cashflow,
+        &filter,
+        secs(NOW),
+        "UTC",
+    )
+    .unwrap() else {
         panic!()
     };
     assert_eq!(cash.rows[0].daily, amount("0.92"));
-    let Report::Categories(categories) = vault
-        .report(ReportKind::Categories, &filter, secs(NOW), "UTC")
-        .unwrap()
-    else {
+    let Report::Categories(categories) = crate::reports::overview::report(
+        &vault.books(),
+        ReportKind::Categories,
+        &filter,
+        secs(NOW),
+        "UTC",
+    )
+    .unwrap() else {
         panic!()
     };
     assert_eq!(categories.groups[0].rows[0].cells[0], amount("0.92"));
@@ -791,12 +919,16 @@ fn memory_vault() -> UnlockedVault {
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    vault
-        .add_transaction(earn(&card, "1000", "2026-02-01T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "100", "groceries", "2026-02-10T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-02-01T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "100", "groceries", "2026-02-10T10:00:00Z"),
+    )
+    .unwrap();
     vault
 }
 
@@ -915,7 +1047,7 @@ fn pnl_counts_a_fee_without_a_rate_as_unpriced() {
             price: PriceStamp::default(),
         });
     }
-    vault.add_transaction(tx).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
     let books = vault.books();
     let ctx = report_ctx(&books, &range("2025-06", "2025-06"), secs(NOW), "UTC").unwrap();
     let report = pnl_report(&books, &ctx);

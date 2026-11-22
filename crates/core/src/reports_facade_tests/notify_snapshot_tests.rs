@@ -12,18 +12,19 @@ use mwt_reports::notify_snapshot::*;
 #[test]
 fn a_snapshot_holds_every_repeat_and_reminds_once_without_the_vault() {
     let (_dir, mut vault) = empty_vault();
-    vault
-        .create_reminder(
-            "Аренда",
-            "2026-03-05T09:00:00Z",
-            Some(ReminderRepeat {
-                every: 1,
-                unit: RepeatUnit::Month,
-            }),
-        )
-        .unwrap();
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Аренда",
+        "2026-03-05T09:00:00Z",
+        Some(ReminderRepeat {
+            every: 1,
+            unit: RepeatUnit::Month,
+        }),
+    )
+    .unwrap();
     let now = secs_or_now("2026-03-01T00:00:00Z");
-    let snapshot = vault.notification_snapshot(now, "UTC", true);
+    let snapshot =
+        crate::reports::notify_snapshot::notification_snapshot(&vault.books(), now, "UTC", true);
     // March 5, April 5 within 60 days.
     assert_eq!(snapshot.notices.len(), 2);
 
@@ -35,11 +36,11 @@ fn a_snapshot_holds_every_repeat_and_reminds_once_without_the_vault() {
     assert!(snapshot.due(april + 60, &shown).is_empty());
 
     // At unlock the vault takes them in: the same notices are not told again.
-    vault.apply_locked_deliveries(due, &[]).unwrap();
+    crate::usecases::reports::notify_snapshot::apply_locked_deliveries(&mut vault, due, &[])
+        .unwrap();
     vault.doc.reminders[0].due_at = "2026-04-05T09:00:00Z".into();
     assert!(
-        vault
-            .due_notices(april + 120, "UTC", true)
+        crate::usecases::planning::notifications::due_notices(&mut vault, april + 120, "UTC", true)
             .unwrap()
             .is_empty()
     );
@@ -48,9 +49,13 @@ fn a_snapshot_holds_every_repeat_and_reminds_once_without_the_vault() {
 #[test]
 fn a_locked_client_snapshot_fires_nothing() {
     let (_dir, mut vault) = empty_vault();
-    vault
-        .create_reminder("Аренда", "2026-03-05T09:00:00Z", None)
-        .unwrap();
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Аренда",
+        "2026-03-05T09:00:00Z",
+        None,
+    )
+    .unwrap();
     vault
         .doc
         .price_alerts
@@ -66,8 +71,12 @@ fn a_locked_client_snapshot_fires_nothing() {
             store_id: None,
             repeats: false,
         });
-    let mut snapshot =
-        vault.notification_snapshot(secs_or_now("2026-03-01T00:00:00Z"), "UTC", true);
+    let mut snapshot = crate::reports::notify_snapshot::notification_snapshot(
+        &vault.books(),
+        secs_or_now("2026-03-01T00:00:00Z"),
+        "UTC",
+        true,
+    );
     let later = secs_or_now("2026-03-05T10:00:00Z");
     let prices = HashMap::from([(btc().key(), amount("61000"))]);
     assert_eq!(snapshot.due(later, &HashSet::new()).len(), 1);
@@ -84,10 +93,19 @@ fn a_locked_client_snapshot_fires_nothing() {
 #[test]
 fn an_old_snapshot_without_role_still_fires() {
     let (_dir, mut vault) = empty_vault();
-    vault
-        .create_reminder("Аренда", "2026-03-05T09:00:00Z", None)
-        .unwrap();
-    let snapshot = vault.notification_snapshot(secs_or_now("2026-03-01T00:00:00Z"), "UTC", true);
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Аренда",
+        "2026-03-05T09:00:00Z",
+        None,
+    )
+    .unwrap();
+    let snapshot = crate::reports::notify_snapshot::notification_snapshot(
+        &vault.books(),
+        secs_or_now("2026-03-01T00:00:00Z"),
+        "UTC",
+        true,
+    );
     let mut value = serde_json::to_value(&snapshot).unwrap();
     value.as_object_mut().unwrap().remove("role_client");
     let old: NotificationSnapshot = serde_json::from_value(value).unwrap();
@@ -103,9 +121,13 @@ fn an_old_snapshot_without_role_still_fires() {
 fn hidden_details_and_an_alert_checked_in_another_currency() {
     let (_dir, mut vault) = empty_vault();
     vault.doc.settings.notifications.hide_details_when_locked = true;
-    vault
-        .create_reminder("Секретный платёж", "2026-03-05T09:00:00Z", None)
-        .unwrap();
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Секретный платёж",
+        "2026-03-05T09:00:00Z",
+        None,
+    )
+    .unwrap();
     vault.doc.fx_cache.push(crate::model::vault::FxPoint {
         currency: "rub".into(),
         per_usd: amount("100"),
@@ -127,7 +149,12 @@ fn hidden_details_and_an_alert_checked_in_another_currency() {
             store_id: None,
             repeats: false,
         });
-    let snapshot = vault.notification_snapshot(secs_or_now("2026-03-01T00:00:00Z"), "UTC", true);
+    let snapshot = crate::reports::notify_snapshot::notification_snapshot(
+        &vault.books(),
+        secs_or_now("2026-03-01T00:00:00Z"),
+        "UTC",
+        true,
+    );
     let due = snapshot.due(secs_or_now("2026-03-05T10:00:00Z"), &HashSet::new());
     assert!(!due[0].body.contains("Секретный"));
 
@@ -141,9 +168,12 @@ fn hidden_details_and_an_alert_checked_in_another_currency() {
     let hits = snapshot.alert_hits(&prices, &HashSet::new(), true);
     assert_eq!(hits.len(), 1);
 
-    vault
-        .apply_locked_deliveries(vec![hits[0].1.clone()], &[(hits[0].0.clone(), now_iso())])
-        .unwrap();
+    crate::usecases::reports::notify_snapshot::apply_locked_deliveries(
+        &mut vault,
+        vec![hits[0].1.clone()],
+        &[(hits[0].0.clone(), now_iso())],
+    )
+    .unwrap();
     assert!(vault.doc.price_alerts[0].triggered_at.is_some());
     assert_eq!(vault.doc.notification_log.len(), 1);
 }
@@ -166,7 +196,12 @@ fn a_locked_firing_does_not_override_a_newer_threshold() {
             store_id: None,
             repeats: false,
         });
-    let snapshot = vault.notification_snapshot(secs_or_now("2026-03-01T00:00:00Z"), "UTC", true);
+    let snapshot = crate::reports::notify_snapshot::notification_snapshot(
+        &vault.books(),
+        secs_or_now("2026-03-01T00:00:00Z"),
+        "UTC",
+        true,
+    );
     let prices = HashMap::from([(btc().key(), amount("61000"))]);
     let hits = snapshot.alert_hits(&prices, &HashSet::new(), true);
     let fired = [(hits[0].0.clone(), now_iso())];
@@ -177,9 +212,13 @@ fn a_locked_firing_does_not_override_a_newer_threshold() {
 
     // A newer threshold arrived by sync before the unlock merged the firing.
     vault.doc.price_alerts[0].price = amount("70000");
-    vault
-        .apply_locked_deliveries_seen(vec![hits[0].1.clone()], &fired, &seen)
-        .unwrap();
+    crate::usecases::reports::notify_snapshot::apply_locked_deliveries_seen(
+        &mut vault,
+        vec![hits[0].1.clone()],
+        &fired,
+        &seen,
+    )
+    .unwrap();
     assert!(
         vault.doc.price_alerts[0].triggered_at.is_none(),
         "the old firing switched the new threshold off"
@@ -189,8 +228,12 @@ fn a_locked_firing_does_not_override_a_newer_threshold() {
 
     // Unchanged since it was seen: marked as before.
     vault.doc.price_alerts[0].price = amount("60000");
-    vault
-        .apply_locked_deliveries_seen(vec![], &fired, &seen)
-        .unwrap();
+    crate::usecases::reports::notify_snapshot::apply_locked_deliveries_seen(
+        &mut vault,
+        vec![],
+        &fired,
+        &seen,
+    )
+    .unwrap();
     assert!(vault.doc.price_alerts[0].triggered_at.is_some());
 }

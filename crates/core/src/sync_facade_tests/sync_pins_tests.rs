@@ -28,10 +28,10 @@ fn cash_id(vault: &UnlockedVault) -> String {
 
 /// What `from` holds that `into` lacks or has older, as a session sends it.
 fn batch_for(into: &mut UnlockedVault, from: &mut UnlockedVault) -> BTreeMap<String, RecordState> {
-    let mine = into.sync_manifest(None).unwrap();
-    let theirs = from.sync_manifest(None).unwrap();
-    let (wanted, _) = into.sync_diff(&mine, &theirs);
-    from.sync_records(&wanted).unwrap()
+    let mine = crate::usecases::sync::read::sync_manifest(into, None).unwrap();
+    let theirs = crate::usecases::sync::read::sync_manifest(from, None).unwrap();
+    let (wanted, _) = crate::usecases::sync::read::sync_diff(into, &mine, &theirs);
+    crate::usecases::sync::read::sync_records(from, &wanted).unwrap()
 }
 
 fn peer() -> crate::service::PeerRef {
@@ -45,28 +45,45 @@ fn peer() -> crate::service::PeerRef {
 fn sync_manifest_digests_records_and_is_stable_between_calls() {
     let (_dir, mut left, _right) = two_devices();
     let cash = cash_id(&left);
-    let first = left.sync_manifest(None).unwrap();
+    let first = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
     assert!(first.contains_key(&format!("stores:{cash}")));
-    assert_eq!(left.sync_manifest(None).unwrap(), first);
+    assert_eq!(
+        crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap(),
+        first
+    );
 }
 
 #[test]
 fn sync_manifest_lists_a_deletion_by_its_key() {
     let (_dir, mut left, _right) = two_devices();
     let cash = cash_id(&left);
-    let tx = left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    let tx = crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&cash, "10", "salary"),
+    )
+    .unwrap();
     let key = format!("transactions:{}", tx.meta().id);
-    assert!(left.sync_manifest(None).unwrap().contains_key(&key));
-    left.delete_transaction(&tx.meta().id).unwrap();
-    assert!(left.sync_manifest(None).unwrap().contains_key(&key));
+    assert!(
+        crate::usecases::sync::read::sync_manifest(&mut left, None)
+            .unwrap()
+            .contains_key(&key)
+    );
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx.meta().id).unwrap();
+    assert!(
+        crate::usecases::sync::read::sync_manifest(&mut left, None)
+            .unwrap()
+            .contains_key(&key)
+    );
     assert!(left.doc.sync.tombstones.contains_key(&key));
 }
 
 #[test]
 fn sync_manifest_for_a_full_peer_withholds_nothing() {
     let (_dir, mut left, _right) = two_devices();
-    let plain = left.sync_manifest(None).unwrap();
-    let (manifest, withheld) = left.sync_manifest_for(None, SecurityLevel::Crypto).unwrap();
+    let plain = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
+    let (manifest, withheld) =
+        crate::usecases::sync::read::sync_manifest_for(&mut left, None, SecurityLevel::Crypto)
+            .unwrap();
     assert_eq!(manifest, plain);
     assert_eq!(withheld, 0);
 }
@@ -74,8 +91,10 @@ fn sync_manifest_for_a_full_peer_withholds_nothing() {
 #[test]
 fn sync_manifest_for_a_lower_peer_counts_only_crypto_records() {
     let (_dir, mut left, _right) = two_devices();
-    let plain = left.sync_manifest(None).unwrap();
-    let (manifest, withheld) = left.sync_manifest_for(None, SecurityLevel::Pin).unwrap();
+    let plain = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
+    let (manifest, withheld) =
+        crate::usecases::sync::read::sync_manifest_for(&mut left, None, SecurityLevel::Pin)
+            .unwrap();
     assert_eq!(manifest, plain);
     assert_eq!(withheld, 0);
 }
@@ -85,7 +104,10 @@ fn sync_manifest_marked_carries_the_clock_of_the_moment() {
     let (_dir, mut left, _right) = two_devices();
     let (manifest, mark) = left.sync_manifest_marked(None).unwrap();
     let (again, same_mark) = left.sync_manifest_marked(None).unwrap();
-    assert_eq!(manifest, left.sync_manifest(None).unwrap());
+    assert_eq!(
+        manifest,
+        crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap()
+    );
     assert_eq!((again, same_mark), (manifest, mark));
 }
 
@@ -95,7 +117,10 @@ fn sync_manifest_marked_for_adds_the_withheld_count() {
     let (manifest, mark, withheld) = left
         .sync_manifest_marked_for(None, SecurityLevel::Crypto)
         .unwrap();
-    assert_eq!(manifest, left.sync_manifest(None).unwrap());
+    assert_eq!(
+        manifest,
+        crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap()
+    );
     assert_eq!(mark, left.sync_manifest_marked(None).unwrap().1);
     assert_eq!(withheld, 0);
 }
@@ -104,14 +129,18 @@ fn sync_manifest_marked_for_adds_the_withheld_count() {
 fn sync_diff_asks_for_what_differs_and_offers_what_the_other_lacks() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    let tx = left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    let tx = crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&cash, "10", "salary"),
+    )
+    .unwrap();
     let key = format!("transactions:{}", tx.meta().id);
-    let mine = left.sync_manifest(None).unwrap();
-    let theirs = right.sync_manifest(None).unwrap();
-    let (request, send) = right.sync_diff(&theirs, &mine);
+    let mine = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
+    let theirs = crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
+    let (request, send) = crate::usecases::sync::read::sync_diff(&right, &theirs, &mine);
     assert!(request.contains(&key));
     assert!(send.is_empty() || !send.contains(&key));
-    let (request, send) = left.sync_diff(&mine, &theirs);
+    let (request, send) = crate::usecases::sync::read::sync_diff(&left, &mine, &theirs);
     assert!(!request.contains(&key));
     assert!(send.contains(&key));
 }
@@ -123,7 +152,7 @@ fn sync_diff_skips_a_rate_point_this_device_would_thin_away() {
     let mut theirs = BTreeMap::new();
     theirs.insert("fx_cache:zzz|2020-01-01".to_string(), 1u64);
     theirs.insert("stores:other".to_string(), 2u64);
-    let (request, _) = left.sync_diff(&mine, &theirs);
+    let (request, _) = crate::usecases::sync::read::sync_diff(&left, &mine, &theirs);
     assert_eq!(request, vec!["stores:other".to_string()]);
 }
 
@@ -132,9 +161,11 @@ fn sync_records_answers_asked_keys_and_leaves_malformed_ones_out() {
     let (_dir, mut left, _right) = two_devices();
     let cash = cash_id(&left);
     let key = format!("stores:{cash}");
-    let records = left
-        .sync_records(&[key.clone(), "no-colon".to_string()])
-        .unwrap();
+    let records = crate::usecases::sync::read::sync_records(
+        &mut left,
+        &[key.clone(), "no-colon".to_string()],
+    )
+    .unwrap();
     assert_eq!(records.len(), 1);
     let state = &records[&key];
     assert!(state.value.is_some());
@@ -145,10 +176,15 @@ fn sync_records_answers_asked_keys_and_leaves_malformed_ones_out() {
 fn sync_records_gives_a_deleted_record_as_its_tombstone() {
     let (_dir, mut left, _right) = two_devices();
     let cash = cash_id(&left);
-    let tx = left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    let tx = crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&cash, "10", "salary"),
+    )
+    .unwrap();
     let key = format!("transactions:{}", tx.meta().id);
-    left.delete_transaction(&tx.meta().id).unwrap();
-    let records = left.sync_records(std::slice::from_ref(&key)).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx.meta().id).unwrap();
+    let records =
+        crate::usecases::sync::read::sync_records(&mut left, std::slice::from_ref(&key)).unwrap();
     assert!(records[&key].value.is_none());
     assert!(records[&key].tombstone.is_some());
 }
@@ -159,8 +195,9 @@ fn sync_records_for_answers_a_full_peer_as_sync_records_does() {
     let key = format!("stores:{}", cash_id(&left));
     let keys = [key];
     assert_eq!(
-        left.sync_records_for(&keys, SecurityLevel::Crypto).unwrap(),
-        left.sync_records(&keys).unwrap()
+        crate::usecases::sync::read::sync_records_for(&mut left, &keys, SecurityLevel::Crypto)
+            .unwrap(),
+        crate::usecases::sync::read::sync_records(&mut left, &keys).unwrap()
     );
 }
 
@@ -168,10 +205,11 @@ fn sync_records_for_answers_a_full_peer_as_sync_records_does() {
 fn sync_preview_lists_what_a_batch_would_add_and_changes_nothing() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))
+        .unwrap();
     let incoming = batch_for(&mut right, &mut left);
     let before = right.doc.transactions.len();
-    let summary = right.sync_preview(&incoming).unwrap();
+    let summary = crate::usecases::sync::read::sync_preview(&mut right, &incoming).unwrap();
     let group = summary
         .collections
         .iter()
@@ -185,11 +223,12 @@ fn sync_preview_lists_what_a_batch_would_add_and_changes_nothing() {
 fn sync_preview_from_matches_the_plain_preview_for_an_unknown_device() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))
+        .unwrap();
     let incoming = batch_for(&mut right, &mut left);
     assert_eq!(
-        right.sync_preview_from(&incoming, "nobody").unwrap(),
-        right.sync_preview(&incoming).unwrap()
+        crate::usecases::sync::read::sync_preview_from(&mut right, &incoming, "nobody").unwrap(),
+        crate::usecases::sync::read::sync_preview(&mut right, &incoming).unwrap()
     );
 }
 
@@ -197,23 +236,27 @@ fn sync_preview_from_matches_the_plain_preview_for_an_unknown_device() {
 fn sync_preview_refuses_a_record_filed_under_another_key() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    let tx = left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    let tx = crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&cash, "10", "salary"),
+    )
+    .unwrap();
     let mut incoming = batch_for(&mut right, &mut left);
     let key = format!("transactions:{}", tx.meta().id);
     let state = incoming.remove(&key).unwrap();
     incoming.insert("transactions:another-id".to_string(), state);
-    assert!(right.sync_preview(&incoming).is_err());
-    assert!(right.sync_preview_after(&incoming).is_err());
+    assert!(crate::usecases::sync::read::sync_preview(&mut right, &incoming).is_err());
+    assert!(crate::usecases::sync::read::sync_preview_after(&mut right, &incoming).is_err());
 }
 
 #[test]
 fn sync_preview_after_reports_the_balance_a_batch_would_leave() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))
+        .unwrap();
     let incoming = batch_for(&mut right, &mut left);
-    let after = right
-        .sync_preview_after(&incoming)
+    let after = crate::usecases::sync::read::sync_preview_after(&mut right, &incoming)
         .unwrap()
         .expect("the batch changes something");
     assert_eq!(after.stores.len(), 1);
@@ -226,8 +269,7 @@ fn sync_preview_after_reports_the_balance_a_batch_would_leave() {
 fn sync_preview_after_is_none_for_an_empty_batch() {
     let (_dir, _left, mut right) = two_devices();
     assert!(
-        right
-            .sync_preview_after(&BTreeMap::new())
+        crate::usecases::sync::read::sync_preview_after(&mut right, &BTreeMap::new())
             .unwrap()
             .is_none()
     );
@@ -237,14 +279,18 @@ fn sync_preview_after_is_none_for_an_empty_batch() {
 fn sync_history_lists_an_applied_batch_and_a_transfer_newest_first() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))
+        .unwrap();
     let incoming = batch_for(&mut right, &mut left);
     let applied = right.sync_apply(&incoming, &peer()).unwrap().unwrap();
-    assert_eq!(right.sync_history(), vec![applied.clone()]);
+    assert_eq!(
+        crate::sync::history::history(&right.doc),
+        vec![applied.clone()]
+    );
     right
         .sync_record_transfer("dev-c", "Tablet", "cc", false)
         .unwrap();
-    let history = right.sync_history();
+    let history = crate::sync::history::history(&right.doc);
     assert_eq!(history.len(), 2);
     let transfer = history
         .iter()
@@ -259,12 +305,16 @@ fn sync_history_lists_an_applied_batch_and_a_transfer_newest_first() {
 fn sync_batch_keys_and_collections_name_what_a_batch_changed() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    let tx = left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    let tx = crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&cash, "10", "salary"),
+    )
+    .unwrap();
     let incoming = batch_for(&mut right, &mut left);
     let applied = right.sync_apply(&incoming, &peer()).unwrap().unwrap();
-    let keys = right.sync_batch_keys(&applied.id);
+    let keys = crate::sync::history::batch_keys(&right.doc, &applied.id);
     assert!(keys.contains(&format!("transactions:{}", tx.meta().id)));
-    let collections = right.sync_batch_collections(&applied.id);
+    let collections = crate::sync::history::batch_collections(&right.doc, &applied.id);
     assert!(collections.contains(&"transactions".to_string()));
     let mut sorted = collections.clone();
     sorted.sort();
@@ -275,25 +325,24 @@ fn sync_batch_keys_and_collections_name_what_a_batch_changed() {
 #[test]
 fn sync_batch_methods_answer_empty_for_an_unknown_batch() {
     let (_dir, left, _right) = two_devices();
-    assert!(left.sync_batch_keys("nope").is_empty());
-    assert!(left.sync_batch_collections("nope").is_empty());
-    assert!(left.sync_batch_notices("nope").is_empty());
+    assert!(crate::sync::history::batch_keys(&left.doc, "nope").is_empty());
+    assert!(crate::sync::history::batch_collections(&left.doc, "nope").is_empty());
+    assert!(crate::sync::history::batch_notices(&left.doc, "nope").is_empty());
 }
 
 #[test]
 fn sync_batch_notices_hands_back_the_notices_a_batch_added() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))
+        .unwrap();
     let incoming = batch_for(&mut right, &mut left);
     let applied = right.sync_apply(&incoming, &peer()).unwrap().unwrap();
-    let added: Vec<String> = right
-        .sync_batch_notices(&applied.id)
+    let added: Vec<String> = crate::sync::history::batch_notices(&right.doc, &applied.id)
         .iter()
         .map(|record| record.key.clone())
         .collect();
-    let from_keys: Vec<String> = right
-        .sync_batch_keys(&applied.id)
+    let from_keys: Vec<String> = crate::sync::history::batch_keys(&right.doc, &applied.id)
         .iter()
         .filter_map(|key| key.strip_prefix("notification_log:"))
         .map(str::to_string)
@@ -304,7 +353,7 @@ fn sync_batch_notices_hands_back_the_notices_a_batch_added() {
 #[test]
 fn sync_trust_peer_adds_a_device_and_pairs_a_known_one_afresh() {
     let (_dir, mut left, _right) = two_devices();
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     let state = left.sync_state();
     assert_eq!(state.peers.len(), 1);
     let peer = &state.peers[0];
@@ -315,7 +364,7 @@ fn sync_trust_peer_adds_a_device_and_pairs_a_known_one_afresh() {
     assert!(peer.last_synced_at.is_none());
     let first_stamp = peer.stamp.clone();
     left.sync_pause_peer("dev-c").unwrap();
-    left.sync_trust_peer("dev-c", "Tablet 2", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet 2", "cc").unwrap();
     let state = left.sync_state();
     assert_eq!(state.peers.len(), 1);
     assert_eq!(state.peers[0].name, "Tablet 2");
@@ -326,13 +375,13 @@ fn sync_trust_peer_adds_a_device_and_pairs_a_known_one_afresh() {
 #[test]
 fn sync_forget_peer_revokes_a_device_and_refuses_an_unknown_one() {
     let (_dir, mut left, _right) = two_devices();
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     left.sync_pause_peer("dev-c").unwrap();
-    left.sync_forget_peer("dev-c").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
     let peer = &left.sync_state().peers[0];
     assert_eq!(peer.revoked.as_ref(), Some(&peer.stamp));
     assert!(!left.sync_is_paused("dev-c"));
-    let error = left.sync_forget_peer("ghost").unwrap_err();
+    let error = crate::usecases::sync::trust::sync_forget_peer(&mut left, "ghost").unwrap_err();
     assert!(matches!(error, crate::error::Error::NotFound(_)));
 }
 
@@ -353,7 +402,7 @@ fn sync_forget_peer_observes_the_stamps_of_every_entry_with_the_device_id() {
     };
     let (_dir, mut left, _right) = two_devices();
     left.doc.sync.peers = vec![peer("dev-c", 10), peer("other", 99), peer("dev-c", 50)];
-    left.sync_forget_peer("dev-c").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
     let revoked = left
         .sync_state()
         .peers

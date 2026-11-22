@@ -46,9 +46,13 @@ fn balance(vault: &UnlockedVault, from: &str, to: &str) -> MonthBalance {
         to: Some(to.into()),
         ..ReportFilter::default()
     };
-    vault
-        .month_balance(&filter, unix_secs(NOW).unwrap(), "UTC")
-        .unwrap()
+    crate::usecases::household::month_balance::month_balance(
+        vault,
+        &filter,
+        unix_secs(NOW).unwrap(),
+        "UTC",
+    )
+    .unwrap()
 }
 
 fn vault_with_months() -> (tempfile::TempDir, UnlockedVault) {
@@ -57,18 +61,22 @@ fn vault_with_months() -> (tempfile::TempDir, UnlockedVault) {
     quote_usd(&mut vault);
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     for (month, spent) in [("03", "700"), ("04", "1200"), ("05", "900"), ("06", "100")] {
-        vault
-            .add_transaction(dated(
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            dated(
                 income(&card, "1000", "salary"),
                 &format!("2026-{month}-05T10:00:00Z"),
-            ))
-            .unwrap();
-        vault
-            .add_transaction(dated(
+            ),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            dated(
                 payment(&card, spent, "shop"),
                 &format!("2026-{month}-10T10:00:00Z"),
-            ))
-            .unwrap();
+            ),
+        )
+        .unwrap();
     }
     (dir, vault)
 }
@@ -93,7 +101,7 @@ fn without_carry_each_month_stands_alone() {
 #[test]
 fn the_carry_starts_where_it_was_turned_on_even_before_the_period() {
     let (_dir, mut vault) = vault_with_months();
-    vault.set_carry_over(Some("2026-04")).unwrap();
+    crate::usecases::household::month_balance::set_carry_over(&mut vault, Some("2026-04")).unwrap();
     let report = balance(&vault, "2026-05", "2026-06");
     assert_eq!(report.carry_since.as_deref(), Some("2026-04"));
     // April −200 carries into May; May +100 on top makes −100 for June.
@@ -102,7 +110,7 @@ fn the_carry_starts_where_it_was_turned_on_even_before_the_period() {
     assert_eq!(report.rows[1].carried_in, amount("-100"));
     assert_eq!(report.rows[1].total, amount("800"));
     assert_eq!(report.total.total, amount("800"));
-    vault.set_carry_over(None).unwrap();
+    crate::usecases::household::month_balance::set_carry_over(&mut vault, None).unwrap();
     assert_eq!(
         balance(&vault, "2026-05", "2026-06").rows[1].carried_in,
         Amount::ZERO
@@ -137,7 +145,10 @@ fn the_last_month_goes_day_by_day_and_ends_at_its_total() {
 #[test]
 fn a_bad_month_is_refused() {
     let (_dir, mut vault) = vault_with_months();
-    assert!(vault.set_carry_over(Some("June")).is_err());
+    assert!(
+        crate::usecases::household::month_balance::set_carry_over(&mut vault, Some("June"))
+            .is_err()
+    );
 }
 
 #[test]
@@ -213,7 +224,8 @@ fn golden_vault() -> (tempfile::TempDir, UnlockedVault) {
         (income(&card, "1000", "salary"), "2026-02-05T00:00:00Z"),
         (payment(&card, "250", "shop"), "2026-02-10T00:00:00Z"),
     ] {
-        vault.add_transaction(dated(tx, stamp)).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, dated(tx, stamp))
+            .unwrap();
     }
     (dir, vault)
 }
@@ -227,7 +239,9 @@ fn the_golden_vault_balance_is_pinned_and_the_delegate_equals_the_scenario() {
         ..ReportFilter::default()
     };
     let now = unix_secs(NOW).unwrap();
-    let report = vault.month_balance(&filter, now, "UTC").unwrap();
+    let report =
+        crate::usecases::household::month_balance::month_balance(&vault, &filter, now, "UTC")
+            .unwrap();
     assert_eq!(
         report,
         crate::usecases::household::month_balance::month_balance(&vault, &filter, now, "UTC")
@@ -242,17 +256,18 @@ fn the_golden_vault_balance_is_pinned_and_the_delegate_equals_the_scenario() {
 #[test]
 fn the_carry_delegate_equals_the_scenario_and_a_no_op_writes_nothing() {
     let (_dir, mut vault) = empty_vault();
-    vault.set_carry_over(Some("2026-04")).unwrap();
+    crate::usecases::household::month_balance::set_carry_over(&mut vault, Some("2026-04")).unwrap();
     assert_eq!(vault.doc.settings.carry_since.as_deref(), Some("2026-04"));
     let written = std::fs::read(&vault.path).unwrap();
     // The same month again, and the scenario itself: nothing is saved.
-    vault.set_carry_over(Some(" 2026-04 ")).unwrap();
+    crate::usecases::household::month_balance::set_carry_over(&mut vault, Some(" 2026-04 "))
+        .unwrap();
     crate::usecases::household::month_balance::set_carry_over(&mut vault, Some("2026-04")).unwrap();
     assert_eq!(std::fs::read(&vault.path).unwrap(), written);
     // A different month is a write and the scenario reaches the same state.
     let (_twin_dir, mut twin) = empty_vault();
     crate::usecases::household::month_balance::set_carry_over(&mut twin, Some("2026-05")).unwrap();
-    vault.set_carry_over(Some("2026-05")).unwrap();
+    crate::usecases::household::month_balance::set_carry_over(&mut vault, Some("2026-05")).unwrap();
     assert_ne!(std::fs::read(&vault.path).unwrap(), written);
     assert_eq!(
         vault.doc.settings.carry_since,

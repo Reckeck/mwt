@@ -21,21 +21,21 @@ mod tests {
         sub_type: SubType,
         binding: Binding,
     ) -> String {
-        vault
-            .create_store_with(
-                name,
-                StoreKind::Bank,
-                "#000",
-                "",
-                Some(parent.into()),
-                StoreExtras {
-                    sub_type: Some(sub_type),
-                    binding: Some(binding),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id
+        crate::usecases::money::stores::create_store_with(
+            vault,
+            name,
+            StoreKind::Bank,
+            "#000",
+            "",
+            Some(parent.into()),
+            StoreExtras {
+                sub_type: Some(sub_type),
+                binding: Some(binding),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id
     }
 
     fn change(store_id: &str, change: StoreChange) -> StoreChangeInput {
@@ -63,9 +63,11 @@ mod tests {
             SubType::Deposit,
             Binding::Asset(rub()),
         );
-        vault
-            .add_transaction(income_of(&card, rub(), "100", "0.01", "salary"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of(&card, rub(), "100", "0.01", "salary"),
+        )
+        .unwrap();
 
         let input = change(
             &bank,
@@ -73,24 +75,31 @@ mod tests {
                 kind: StoreKind::Crypto,
             },
         );
-        let plan = vault.plan_store_change(&input);
+        let plan = crate::usecases::money::store_change::plan_store_change(&vault, &input);
         assert_eq!(plan.error, None);
         assert!(plan.conflicts.is_empty(), "{:?}", plan.conflicts);
         assert_eq!(plan.kept.len(), 2);
         assert_eq!(plan.kept[1].sub_type_after, Some(SubType::Token));
         assert_eq!(plan.archived.len(), 1);
         assert_eq!(
-            vault.find_store(&bank).unwrap().kind,
+            crate::money::tree::find_store(&vault.doc, &bank)
+                .unwrap()
+                .kind,
             StoreKind::Bank,
             "a plan changes nothing"
         );
 
-        vault.apply_store_change(&input).unwrap();
-        assert_eq!(vault.find_store(&bank).unwrap().kind, StoreKind::Crypto);
-        let card_after = vault.find_store(&card).unwrap();
+        crate::usecases::money::store_change::apply_store_change(&mut vault, &input).unwrap();
+        assert_eq!(
+            crate::money::tree::find_store(&vault.doc, &bank)
+                .unwrap()
+                .kind,
+            StoreKind::Crypto
+        );
+        let card_after = crate::money::tree::find_store(&vault.doc, &card).unwrap();
         assert_eq!(card_after.kind, StoreKind::Crypto);
         assert_eq!(card_after.sub_type, Some(SubType::Token));
-        let split = vault.find_store(&deposit).unwrap();
+        let split = crate::money::tree::find_store(&vault.doc, &deposit).unwrap();
         assert!(split.archived && split.parent_id.is_none());
         assert_eq!(split.kind, StoreKind::Bank);
         assert_eq!(holding_of(&vault, &card, &rub()), amount("100"));
@@ -101,19 +110,28 @@ mod tests {
     fn a_wallet_holding_tokens_cannot_become_a_bank() {
         let (_dir, mut vault) = setup();
         let cold = vault.doc.stores[2].id.clone();
-        vault
-            .add_transaction(income_of(&cold, btc(), "1", "30000", "bought"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of(&cold, btc(), "1", "30000", "bought"),
+        )
+        .unwrap();
         let input = change(
             &cold,
             StoreChange::ChangeKind {
                 kind: StoreKind::Bank,
             },
         );
-        let plan = vault.plan_store_change(&input);
+        let plan = crate::usecases::money::store_change::plan_store_change(&vault, &input);
         assert_eq!(plan.conflicts.len(), 1);
-        assert!(vault.apply_store_change(&input).is_err());
-        assert_eq!(vault.find_store(&cold).unwrap().kind, StoreKind::Crypto);
+        assert!(
+            crate::usecases::money::store_change::apply_store_change(&mut vault, &input).is_err()
+        );
+        assert_eq!(
+            crate::money::tree::find_store(&vault.doc, &cold)
+                .unwrap()
+                .kind,
+            StoreKind::Crypto
+        );
     }
 
     #[test]
@@ -128,30 +146,37 @@ mod tests {
             SubType::Card,
             Binding::Asset(rub()),
         );
-        vault
-            .apply_store_change(&change(
+        crate::usecases::money::store_change::apply_store_change(
+            &mut vault,
+            &change(
                 &card,
                 StoreChange::MoveTo {
                     parent_id: second.clone(),
                 },
-            ))
-            .unwrap();
+            ),
+        )
+        .unwrap();
         assert_eq!(
-            vault.find_store(&card).unwrap().parent_id.as_deref(),
+            crate::money::tree::find_store(&vault.doc, &card)
+                .unwrap()
+                .parent_id
+                .as_deref(),
             Some(second.as_str())
         );
 
         // A card bound to rubles under a crypto wallet becomes a token account.
         let wallet = store(&mut vault, "Wallet", StoreKind::Crypto, None);
-        vault
-            .apply_store_change(&change(
+        crate::usecases::money::store_change::apply_store_change(
+            &mut vault,
+            &change(
                 &card,
                 StoreChange::MoveTo {
                     parent_id: wallet.clone(),
                 },
-            ))
-            .unwrap();
-        let moved = vault.find_store(&card).unwrap();
+            ),
+        )
+        .unwrap();
+        let moved = crate::money::tree::find_store(&vault.doc, &card).unwrap();
         assert_eq!(
             (moved.kind, moved.sub_type),
             (StoreKind::Crypto, Some(SubType::Token))
@@ -169,24 +194,30 @@ mod tests {
             SubType::Card,
             Binding::Asset(rub()),
         );
-        vault
-            .apply_store_change(&change(&card, StoreChange::Detach))
-            .unwrap();
-        let alone = vault.find_store(&card).unwrap();
+        crate::usecases::money::store_change::apply_store_change(
+            &mut vault,
+            &change(&card, StoreChange::Detach),
+        )
+        .unwrap();
+        let alone = crate::money::tree::find_store(&vault.doc, &card).unwrap();
         assert!(alone.parent_id.is_none() && alone.sub_type.is_none());
 
-        vault
-            .add_transaction(income_of(&card, rub(), "10", "0.01", "salary"))
-            .unwrap();
-        vault
-            .apply_store_change(&change(
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of(&card, rub(), "10", "0.01", "salary"),
+        )
+        .unwrap();
+        crate::usecases::money::store_change::apply_store_change(
+            &mut vault,
+            &change(
                 &card,
                 StoreChange::MoveTo {
                     parent_id: bank.clone(),
                 },
-            ))
-            .unwrap();
-        let back = vault.find_store(&card).unwrap();
+            ),
+        )
+        .unwrap();
+        let back = crate::money::tree::find_store(&vault.doc, &card).unwrap();
         assert_eq!(back.sub_type, Some(SubType::Card));
         assert_eq!(back.binding, Binding::Asset(rub()));
     }
@@ -209,22 +240,28 @@ mod tests {
             SubType::Card,
             Binding::Asset(rub()),
         );
-        vault
-            .add_transaction(income_of(&first, rub(), "100", "0.01", "salary"))
-            .unwrap();
-        vault
-            .add_transaction(income_of(&second, rub(), "50", "0.01", "salary"))
-            .unwrap();
-        let plan = vault
-            .apply_store_change(&change(
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of(&first, rub(), "100", "0.01", "salary"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of(&second, rub(), "50", "0.01", "salary"),
+        )
+        .unwrap();
+        let plan = crate::usecases::money::store_change::apply_store_change(
+            &mut vault,
+            &change(
                 &first,
                 StoreChange::MergeInto {
                     target_id: second.clone(),
                 },
-            ))
-            .unwrap();
+            ),
+        )
+        .unwrap();
         assert_eq!(plan.moved_transactions, 1);
-        assert!(vault.find_store(&first).is_none());
+        assert!(crate::money::tree::find_store(&vault.doc, &first).is_none());
         assert_eq!(holding_of(&vault, &second, &rub()), amount("150"));
 
         // A transfer between the two would land on one account: refused.
@@ -235,18 +272,20 @@ mod tests {
             SubType::Card,
             Binding::Asset(rub()),
         );
-        vault
-            .add_transaction(transfer_between(
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            transfer_between(
                 crate::model::transaction::AccountRef::Store(second.clone()),
                 crate::model::transaction::AccountRef::Store(third.clone()),
                 rub(),
                 "10",
-            ))
-            .unwrap();
-        let plan = vault.plan_store_change(&change(
-            &third,
-            StoreChange::MergeInto { target_id: second },
-        ));
+            ),
+        )
+        .unwrap();
+        let plan = crate::usecases::money::store_change::plan_store_change(
+            &vault,
+            &change(&third, StoreChange::MergeInto { target_id: second }),
+        );
         assert_eq!(plan.conflicts.len(), 1);
     }
 
@@ -295,28 +334,29 @@ mod merge_correction_tests {
     }
 
     fn card(vault: &mut UnlockedVault, bank: &str, name: &str) -> String {
-        vault
-            .create_store_with(
-                name,
-                StoreKind::Bank,
-                "#000",
-                "",
-                Some(bank.into()),
-                crate::service::StoreExtras {
-                    sub_type: Some(SubType::Card),
-                    binding: Some(Binding::Asset(rub())),
-                    ..crate::service::StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id
+        crate::usecases::money::stores::create_store_with(
+            vault,
+            name,
+            StoreKind::Bank,
+            "#000",
+            "",
+            Some(bank.into()),
+            crate::service::StoreExtras {
+                sub_type: Some(SubType::Card),
+                binding: Some(Binding::Asset(rub())),
+                ..crate::service::StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id
     }
 
     fn correct(vault: &mut UnlockedVault, store_id: &str, after: &str, timestamp: &str) -> String {
         let mut meta = TxMeta::new("count");
         meta.timestamp = timestamp.into();
-        let saved = vault
-            .add_transaction(Transaction::Adjustment(AdjustmentTx {
+        let saved = crate::usecases::money::transactions::add_transaction(
+            vault,
+            Transaction::Adjustment(AdjustmentTx {
                 meta,
                 store_id: store_id.into(),
                 lines: vec![AdjustmentLine {
@@ -326,15 +366,16 @@ mod merge_correction_tests {
                     price: PriceStamp::default(),
                 }],
                 fee: None,
-            }))
-            .unwrap();
+            }),
+        )
+        .unwrap();
         saved.meta().id.clone()
     }
 
     fn topup_at(vault: &mut UnlockedVault, store_id: &str, raw: &str, timestamp: &str) {
         let mut tx = income_of(store_id, rub(), raw, "0.01", "in");
         at(&mut tx, timestamp);
-        vault.add_transaction(tx).unwrap();
+        crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
     }
 
     /// `(before, after)` of the correction line.
@@ -392,7 +433,11 @@ mod merge_correction_tests {
         let target_delta = delta(&vault, &target_fix);
         let sum = holding_of(&vault, &first, &rub()) + holding_of(&vault, &second, &rub());
 
-        let plan = vault.apply_store_change(&merge(&first, &second)).unwrap();
+        let plan = crate::usecases::money::store_change::apply_store_change(
+            &mut vault,
+            &merge(&first, &second),
+        )
+        .unwrap();
 
         assert_eq!(plan.corrections.len(), 2);
         assert_eq!(plan.corrections[0].after_old, amount("80"));
@@ -404,7 +449,14 @@ mod merge_correction_tests {
         assert_eq!(line_of(&vault, &source_fix).1, amount("1080"));
         assert_eq!(holding_of(&vault, &second, &rub()), sum);
         assert_eq!(sum, amount("1330"));
-        let balance_on = |stamp: &str| vault.balance_at(&second, &rub().key(), secs_or_now(stamp));
+        let balance_on = |stamp: &str| {
+            crate::planning::automations::balance_at(
+                &vault.doc,
+                &second,
+                &rub().key(),
+                secs_or_now(stamp),
+            )
+        };
         assert_eq!(balance_on("2026-03-01T00:00:00Z"), amount("1080"));
         assert_eq!(balance_on("2026-03-10T00:00:00Z"), amount("1130"));
     }
@@ -423,7 +475,11 @@ mod merge_correction_tests {
         let second_delta = delta(&vault, &second_fix);
         let sum = holding_of(&vault, &first, &rub()) + holding_of(&vault, &second, &rub());
 
-        vault.apply_store_change(&merge(&first, &second)).unwrap();
+        crate::usecases::money::store_change::apply_store_change(
+            &mut vault,
+            &merge(&first, &second),
+        )
+        .unwrap();
 
         assert_eq!(delta(&vault, &first_fix), first_delta);
         assert_eq!(delta(&vault, &second_fix), second_delta);
@@ -434,11 +490,18 @@ mod merge_correction_tests {
     fn the_plan_shows_what_apply_does() {
         let (_dir, mut vault, first, second, source_fix, _target_fix) = scenario();
         let document = serde_json::to_value(&vault.doc).unwrap();
-        let planned = vault.plan_store_change(&merge(&first, &second));
+        let planned = crate::usecases::money::store_change::plan_store_change(
+            &vault,
+            &merge(&first, &second),
+        );
         assert_eq!(serde_json::to_value(&vault.doc).unwrap(), document);
         assert_eq!(line_of(&vault, &source_fix).1, amount("80"));
 
-        let applied = vault.apply_store_change(&merge(&first, &second)).unwrap();
+        let applied = crate::usecases::money::store_change::apply_store_change(
+            &mut vault,
+            &merge(&first, &second),
+        )
+        .unwrap();
         assert_eq!(planned.corrections, applied.corrections);
     }
 }

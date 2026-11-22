@@ -261,7 +261,9 @@ fn apply_batch_delegates_to_the_scenario() {
         balances_complete: false,
     };
     let batch = SourceBatch::default();
-    let left = method.crypto_apply_batch(&request, &batch).unwrap();
+    let left =
+        crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut method, &request, &batch)
+            .unwrap();
     let right = recompute::crypto_apply_batch(&mut scenario, &request, &batch).unwrap();
     assert_eq!(left, right);
     assert_eq!(method.doc.crypto_events, scenario.doc.crypto_events);
@@ -278,7 +280,9 @@ fn apply_pages_delegates_to_the_scenario() {
         refresh: false,
     };
     let batch = SourceBatch::default();
-    let left = method.crypto_apply_pages(&request, &batch).unwrap();
+    let left =
+        crate::usecases::cryptotrack::apply::crypto_apply_pages(&mut method, &request, &batch)
+            .unwrap();
     let right = apply::crypto_apply_pages(&mut scenario, &request, &batch).unwrap();
     assert_eq!(left, right);
     assert_eq!(
@@ -290,7 +294,7 @@ fn apply_pages_delegates_to_the_scenario() {
 #[test]
 fn sync_holdings_delegates_to_the_scenario() {
     let (mut method, mut scenario) = twin();
-    method.crypto_sync_holdings().unwrap();
+    crate::usecases::cryptotrack::recompute::crypto_sync_holdings(&mut method).unwrap();
     recompute::crypto_sync_holdings(&mut scenario).unwrap();
     assert_eq!(method.doc.holdings.len(), scenario.doc.holdings.len());
 }
@@ -303,7 +307,8 @@ fn set_override_delegates_to_the_scenario() {
         hidden: Some(true),
         ..Default::default()
     };
-    let left = method.crypto_set_override(&input).unwrap();
+    let left =
+        crate::usecases::cryptotrack::operations::crypto_set_override(&mut method, &input).unwrap();
     let right = operations::crypto_set_override(&mut scenario, &input).unwrap();
     assert_eq!(left, right);
     assert_eq!(method.doc.crypto_overrides.len(), 1);

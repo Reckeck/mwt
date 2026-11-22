@@ -53,10 +53,10 @@ fn the_month_pace_compares_with_the_same_date_and_names_growth() {
             "2026-10-08T10:00:00Z",
         ),
     ] {
-        vault.add_transaction(tx).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
     }
     let now = unix_secs("2026-10-10T12:00:00Z").unwrap();
-    let pace = vault.month_pace(now, "UTC");
+    let pace = crate::reports::dashboard_tiles::month_pace(&vault.books(), now, "UTC");
     assert_eq!(pace.month, "2026-10");
     assert_eq!((pace.day, pace.days), (10, 31));
     assert_eq!(pace.income.base, Some(amount("1000")));
@@ -80,14 +80,20 @@ fn a_new_vault_has_no_base_and_no_growth() {
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    vault
-        .add_transaction(dated(
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        dated(
             payment(&card, "40", "food"),
             "groceries",
             "2026-10-03T10:00:00Z",
-        ))
-        .unwrap();
-    let pace = vault.month_pace(unix_secs("2026-10-10T12:00:00Z").unwrap(), "UTC");
+        ),
+    )
+    .unwrap();
+    let pace = crate::reports::dashboard_tiles::month_pace(
+        &vault.books(),
+        unix_secs("2026-10-10T12:00:00Z").unwrap(),
+        "UTC",
+    );
     assert_eq!(pace.spent.base, None);
     assert!(pace.growth.is_empty());
     assert_eq!(pace.spend_plan_to_date, None);
@@ -103,11 +109,14 @@ fn the_capital_trend_starts_from_the_value_before_the_period() {
         ("500", "2026-09-20T10:00:00Z"),
         ("200", "2026-10-04T10:00:00Z"),
     ] {
-        vault
-            .add_transaction(dated(income(&card, sum, "pay"), "salary", ts))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            dated(income(&card, sum, "pay"), "salary", ts),
+        )
+        .unwrap();
     }
-    let trend = vault.net_worth_trend(
+    let trend = crate::reports::dashboard_tiles::net_worth_trend(
+        &vault.books(),
         DashPeriod::Month,
         unix_secs("2026-10-10T12:00:00Z").unwrap(),
         "UTC",
@@ -139,7 +148,7 @@ mod rate_change_tests {
                 source: "test".into(),
             });
         }
-        let table = vault.fx_table(&[]);
+        let table = crate::usecases::household::losses::fx_table(&vault, &[]);
         let rub = table.rows.iter().find(|row| row.currency == "rub").unwrap();
         // One rouble went from 0.01 to 0.0125 dollars.
         assert_eq!(rub.change_pct, Some(amount("25")));
@@ -152,7 +161,7 @@ mod rate_change_tests {
             source: "test".into(),
             change_24h_pct: Some(amount("-3.5")),
         });
-        let summary = vault.portfolio_summary();
+        let summary = crate::usecases::money::capital::portfolio_summary(&vault.books());
         if let Some(stat) = summary.assets.iter().find(|stat| stat.asset.key() == key) {
             assert_eq!(stat.change_24h_pct, Some(amount("-3.5")));
         }

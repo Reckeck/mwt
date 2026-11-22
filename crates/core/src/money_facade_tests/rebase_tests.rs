@@ -117,22 +117,28 @@ fn goal_input(wallet: &str, name: &str, priority: u8) -> GoalInput {
 fn patch_update_keeps_remote_field_goal() {
     let (_dir, mut vault) = empty_vault();
     let wallet = store(&mut vault, "Savings", StoreKind::Bank, None);
-    let created = vault
-        .create_goal(goal_input(&wallet, "Trip", 3).into())
-        .unwrap();
+    let created = crate::usecases::planning::goals::create_goal(
+        &mut vault,
+        goal_input(&wallet, "Trip", 3).into(),
+    )
+    .unwrap();
     let base = goal_input(&wallet, "Trip", 3);
     // Sync applies a remote edit of the priority while the form is open.
     let mut remote = goal_input(&wallet, "Trip", 5);
     remote.target_amount = amount("1000");
-    vault.update_goal(&created.id, remote.into()).unwrap();
-    let input = vault
-        .rebase_goal_input(UpdateGoalInput {
+    crate::usecases::planning::goals::update_goal(&mut vault, &created.id, remote.into()).unwrap();
+    let input = crate::usecases::money::rebase::rebase_goal_input(
+        &vault.doc,
+        UpdateGoalInput {
             id: created.id.clone(),
             goal: goal_input(&wallet, "Trip 2026", 3),
             base: Some(base),
-        })
-        .unwrap();
-    let saved = vault.update_goal(&input.id, input.goal.into()).unwrap();
+        },
+    )
+    .unwrap();
+    let saved =
+        crate::usecases::planning::goals::update_goal(&mut vault, &input.id, input.goal.into())
+            .unwrap();
     assert_eq!(saved.name, "Trip 2026");
     assert_eq!(saved.priority, 5);
 }
@@ -141,20 +147,29 @@ fn patch_update_keeps_remote_field_goal() {
 fn update_without_base_overwrites_like_before() {
     let (_dir, mut vault) = empty_vault();
     let wallet = store(&mut vault, "Savings", StoreKind::Bank, None);
-    let created = vault
-        .create_goal(goal_input(&wallet, "Trip", 3).into())
-        .unwrap();
-    vault
-        .update_goal(&created.id, goal_input(&wallet, "Trip", 5).into())
-        .unwrap();
-    let input = vault
-        .rebase_goal_input(UpdateGoalInput {
+    let created = crate::usecases::planning::goals::create_goal(
+        &mut vault,
+        goal_input(&wallet, "Trip", 3).into(),
+    )
+    .unwrap();
+    crate::usecases::planning::goals::update_goal(
+        &mut vault,
+        &created.id,
+        goal_input(&wallet, "Trip", 5).into(),
+    )
+    .unwrap();
+    let input = crate::usecases::money::rebase::rebase_goal_input(
+        &vault.doc,
+        UpdateGoalInput {
             id: created.id.clone(),
             goal: goal_input(&wallet, "Trip 2026", 3),
             base: None,
-        })
-        .unwrap();
-    let saved = vault.update_goal(&input.id, input.goal.into()).unwrap();
+        },
+    )
+    .unwrap();
+    let saved =
+        crate::usecases::planning::goals::update_goal(&mut vault, &input.id, input.goal.into())
+            .unwrap();
     assert_eq!(saved.priority, 3);
 }
 
@@ -168,23 +183,28 @@ fn patch_update_keeps_remote_field_contact() {
         accounts: Vec::new(),
         group: String::new(),
     };
-    let created = vault.create_contact(draft.clone()).unwrap();
+    let created =
+        crate::usecases::household::contacts::create_contact(&mut vault, draft.clone()).unwrap();
     let remote = ContactDraft {
         note: "remote note".into(),
         ..draft.clone()
     };
-    vault.update_contact(&created.id, remote).unwrap();
-    let input = vault
-        .rebase_contact_input(UpdateContactInput {
+    crate::usecases::household::contacts::update_contact(&mut vault, &created.id, remote).unwrap();
+    let input = crate::usecases::money::rebase::rebase_contact_input(
+        &vault.doc,
+        UpdateContactInput {
             id: created.id.clone(),
             contact: ContactDraft {
                 name: "Anna K".into(),
                 ..draft.clone()
             },
             base: Some(draft),
-        })
-        .unwrap();
-    let saved = vault.update_contact(&input.id, input.contact).unwrap();
+        },
+    )
+    .unwrap();
+    let saved =
+        crate::usecases::household::contacts::update_contact(&mut vault, &input.id, input.contact)
+            .unwrap();
     assert_eq!(saved.name, "Anna K");
     assert_eq!(saved.note, "remote note");
 }
@@ -193,7 +213,9 @@ fn patch_update_keeps_remote_field_contact() {
 fn patch_update_keeps_remote_field_store() {
     let (_dir, mut vault) = empty_vault();
     let id = store(&mut vault, "Bank", StoreKind::Bank, None);
-    let base = vault.find_store(&id).unwrap().clone();
+    let base = crate::money::tree::find_store(&vault.doc, &id)
+        .unwrap()
+        .clone();
     vault
         .doc
         .stores
@@ -201,25 +223,27 @@ fn patch_update_keeps_remote_field_store() {
         .find(|item| item.id == id)
         .unwrap()
         .note = "remote note".into();
-    let input = vault
-        .rebase_store_input(UpdateStoreInput {
+    let input = crate::usecases::money::rebase::rebase_store_input(
+        &vault.doc,
+        UpdateStoreInput {
             id: id.clone(),
             name: "Bank 2".into(),
             color: base.color.clone(),
             note: base.note.clone(),
             base: Some(base),
             ..Default::default()
-        })
-        .unwrap();
-    let saved = vault
-        .update_store(
-            &input.id,
-            &input.name,
-            &input.color,
-            &input.note,
-            Default::default(),
-        )
-        .unwrap();
+        },
+    )
+    .unwrap();
+    let saved = crate::usecases::money::stores::update_store(
+        &mut vault,
+        &input.id,
+        &input.name,
+        &input.color,
+        &input.note,
+        Default::default(),
+    )
+    .unwrap();
     assert_eq!(saved.name, "Bank 2");
     assert_eq!(saved.note, "remote note");
 }
@@ -228,22 +252,26 @@ fn patch_update_keeps_remote_field_store() {
 fn patch_update_keeps_remote_field_transaction() {
     let (_dir, mut vault) = empty_vault();
     let wallet = store(&mut vault, "Bank", StoreKind::Bank, None);
-    let first = vault
-        .add_transaction(income(&wallet, "100", "salary"))
-        .unwrap();
+    let first = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&wallet, "100", "salary"),
+    )
+    .unwrap();
     let id = first.meta().id.clone();
     let base = first.clone();
     // Remote edit of the comment.
     let mut remote = base.clone();
     remote.meta_mut().comment = "remote comment".into();
-    vault.update_transaction(&id, remote).unwrap();
+    crate::usecases::money::transactions::update_transaction(&mut vault, &id, remote).unwrap();
     // The form changed only the amount.
     let mut edited = base.clone();
     if let Transaction::Topup(tx) = &mut edited {
         tx.amount = amount("150");
     }
-    let merged = vault.rebase_transaction(&id, Some(&base), edited).unwrap();
-    let saved = vault.update_transaction(&id, merged).unwrap();
+    let merged =
+        crate::money::rebase::rebase_transaction(&vault.doc, &id, Some(&base), edited).unwrap();
+    let saved =
+        crate::usecases::money::transactions::update_transaction(&mut vault, &id, merged).unwrap();
     assert_eq!(saved.meta().comment, "remote comment");
     let Transaction::Topup(tx) = saved else {
         panic!("a top-up stays a top-up")

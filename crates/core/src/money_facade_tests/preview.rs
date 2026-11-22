@@ -11,12 +11,18 @@ use crate::service::test_support::{amount, income, payment, store};
 fn shows_before_and_after_without_writing() {
     let (_dir, mut vault) = crate::service::test_support::empty_vault();
     let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
-    vault
-        .add_transaction(income(&cash, "100", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&cash, "100", "salary"),
+    )
+    .unwrap();
     let count = vault.doc.transactions.len();
 
-    let preview = vault.preview_transaction(payment(&cash, "30", "food"), None);
+    let preview = crate::money::preview::preview_transaction(
+        &vault.books(),
+        payment(&cash, "30", "food"),
+        None,
+    );
     assert_eq!(preview.error, None);
     assert_eq!(preview.changes.len(), 1);
     assert_eq!(preview.changes[0].before, amount("100"));
@@ -41,8 +47,9 @@ fn a_sale_shows_the_book_value_and_the_gain() {
         contract: None,
         quote: "CAR".into(),
     };
-    vault
-        .add_transaction(Transaction::Topup(TopupTx {
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        Transaction::Topup(TopupTx {
             meta: meta("bought", &["income_other"]),
             store_id: things.clone(),
             asset: car.clone(),
@@ -54,8 +61,9 @@ fn a_sale_shows_the_book_value_and_the_gain() {
                 ..KindDetails::default()
             },
             price: Default::default(),
-        }))
-        .unwrap();
+        }),
+    )
+    .unwrap();
     let sell = Transaction::AssetSell(AssetSellTx {
         meta: TxMeta::new("car"),
         store_id: things,
@@ -78,7 +86,11 @@ fn a_sale_shows_the_book_value_and_the_gain() {
 fn warns_about_going_negative() {
     let (_dir, mut vault) = crate::service::test_support::empty_vault();
     let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
-    let preview = vault.preview_transaction(payment(&cash, "5", "food"), None);
+    let preview = crate::money::preview::preview_transaction(
+        &vault.books(),
+        payment(&cash, "5", "food"),
+        None,
+    );
     assert!(matches!(
         preview.warnings.as_slice(),
         [PreviewWarning::NegativeBalance { .. }]
@@ -89,14 +101,21 @@ fn warns_about_going_negative() {
 fn edit_shows_the_net_change() {
     let (_dir, mut vault) = crate::service::test_support::empty_vault();
     let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
-    vault
-        .add_transaction(income(&cash, "100", "salary"))
-        .unwrap();
-    let spent = vault.add_transaction(payment(&cash, "30", "food")).unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&cash, "100", "salary"),
+    )
+    .unwrap();
+    let spent = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        payment(&cash, "30", "food"),
+    )
+    .unwrap();
 
     let mut edited = payment(&cash, "50", "food");
     edited.meta_mut().id = spent.meta().id.clone();
-    let preview = vault.preview_transaction(edited, Some(&spent.meta().id));
+    let preview =
+        crate::money::preview::preview_transaction(&vault.books(), edited, Some(&spent.meta().id));
     assert_eq!(preview.changes[0].before, amount("70"));
     assert_eq!(preview.changes[0].after, amount("50"));
 }
@@ -104,7 +123,11 @@ fn edit_shows_the_net_change() {
 #[test]
 fn invalid_draft_reports_the_error() {
     let (_dir, vault) = crate::service::test_support::empty_vault();
-    let preview = vault.preview_transaction(payment("missing", "5", "food"), None);
+    let preview = crate::money::preview::preview_transaction(
+        &vault.books(),
+        payment("missing", "5", "food"),
+        None,
+    );
     assert!(preview.error.is_some());
 }
 
@@ -114,9 +137,11 @@ fn invalid_draft_reports_the_error() {
 fn a_preview_over_the_books_writes_nothing() {
     let (_dir, mut vault) = crate::service::test_support::empty_vault();
     let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
-    vault
-        .add_transaction(income(&cash, "100", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&cash, "100", "salary"),
+    )
+    .unwrap();
     let before = serde_json::to_string(&vault.doc).unwrap();
     let commits = super::bulk::Commits::watch(&mut vault);
 
@@ -134,12 +159,14 @@ fn a_preview_over_the_books_writes_nothing() {
 fn the_free_function_and_the_delegate_agree() {
     let (_dir, mut vault) = crate::service::test_support::empty_vault();
     let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
-    vault
-        .add_transaction(income(&cash, "100", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&cash, "100", "salary"),
+    )
+    .unwrap();
     let draft = payment(&cash, "30", "food");
     assert_eq!(
         preview_transaction(&vault.books(), draft.clone(), None),
-        vault.preview_transaction(draft, None)
+        crate::money::preview::preview_transaction(&vault.books(), draft, None)
     );
 }

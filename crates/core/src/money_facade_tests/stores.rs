@@ -24,7 +24,10 @@ fn the_merge_scenario_does_what_apply_store_change_does() {
         },
     };
     let via_scenario = crate::usecases::money::stores::merge(&mut by_scenario, &first, &second);
-    let via_apply = by_apply.apply_store_change(&input(&first_apply, &second_apply));
+    let via_apply = crate::usecases::money::store_change::apply_store_change(
+        &mut by_apply,
+        &input(&first_apply, &second_apply),
+    );
     assert_eq!(via_scenario.is_ok(), via_apply.is_ok());
     assert_eq!(by_scenario.doc.stores.len(), by_apply.doc.stores.len());
 }
