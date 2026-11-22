@@ -100,10 +100,12 @@ pub const GROUPS: &[Group] = &[
         modules: &["cryptotrack"],
         may_use: &["base", "model", "money"],
     },
-    // The IPC contract sits on top of the domain crates (spec fact 2); nothing below may name it.
+    // The IPC contract crate `mwt-contract` sits on top of the domain crates (spec fact 2); nothing below may
+    // name it. No module of `crates/core/src` belongs to it any more (`ipc_contract.rs` is the facade shim), so
+    // the group only records which crates the contract may depend on (checked by `cargo tree`, T24).
     Group {
         name: "contract",
-        modules: &["ipc_contract"],
+        modules: &[],
         may_use: &[
             "base",
             "model",
@@ -113,12 +115,17 @@ pub const GROUPS: &[Group] = &[
             "planning",
             "reports",
             "cryptotrack",
+            "sync",
+            "crypto",
+            "vault",
+            "net",
         ],
     },
     // The facade (`trade-core`): scenarios, the service shim, sandbox and config; it uses every crate.
     Group {
         name: "facade",
         modules: &[
+            "ipc_contract",
             "service",
             "usecases",
             "sandbox",
@@ -208,7 +215,33 @@ mod tests {
             assert!(is_legal("ipc_contract", domain_module), "{domain_module}");
             assert!(!is_legal(domain_module, "ipc_contract"), "{domain_module}");
         }
-        assert!(!is_legal("ipc_contract", "service"));
+        let contract = GROUPS
+            .iter()
+            .find(|group| group.name == "contract")
+            .unwrap();
+        assert_eq!(
+            contract.may_use,
+            [
+                "base",
+                "model",
+                "money",
+                "household",
+                "workflow",
+                "planning",
+                "reports",
+                "cryptotrack",
+                "sync",
+                "crypto",
+                "vault",
+                "net"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_contract_shim_is_part_of_the_facade() {
+        assert!(is_legal("ipc_contract", "appconfig"));
+        assert!(is_legal("ipc_contract", "service"));
     }
 
     #[test]

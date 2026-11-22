@@ -10,9 +10,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::model::chain::Chain;
-use crate::model::cryptotrack::{CryptoDirection, CryptoFee, CryptoTxKind, TrackingRef};
+use mwt_base::Amount;
+use mwt_model::Chain;
+use mwt_model::{CryptoDirection, CryptoFee, CryptoTxKind, TrackingRef};
 
 /// Rows of one page of the list: what one `Show more` adds.
 pub const OPERATIONS_PAGE: usize = 100;

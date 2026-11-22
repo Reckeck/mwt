@@ -3,11 +3,5 @@
 # A back edge outside this list fails with file:line; an entry that matches nothing fails too: delete it.
 # To allow a new edge, add an entry with `until` and a reason in the PR.
 allow = [
-    { from = "ipc_contract.rs", to = "appconfig", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach appconfig" },
-    { from = "ipc_contract.rs", to = "exchange", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach exchange" },
-    { from = "ipc_contract.rs", to = "service", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach service" },
-    { from = "ipc_contract.rs", to = "updates", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach updates" },
-    { from = "ipc_contract.rs", to = "vault_io", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach vault_io" },
-    { from = "ipc_contract/events.rs", to = "kernel", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach kernel" },
     { from = "testkit/mod.rs", to = "service", until = "F7", reason = "the facade half of the test kit holds the `UnlockedVault` helpers (`in_memory`); they go with `UnlockedVault` (phase 7), the model-only half is the crate mwt-testkit" },
 ]

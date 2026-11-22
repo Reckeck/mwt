@@ -3,16 +3,16 @@
 //!
 //! Owner: spec E2 (its browser mock comes with E9). A token's identity is its
 //! network and contract, never its symbol
-//! (`crate::model::cryptotrack::TokenId`), and a name that came from a chain
+//! (`mwt_model::TokenId`), and a name that came from a chain
 //! is untrusted text.
 //!
 //! Commands: `crates/app/src/commands/cryptotrack/tokens.rs`.
 
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-pub use crate::cryptotrack::tokens::TokenStatus;
-use crate::model::chain::Chain;
+use mwt_base::Amount;
+pub use mwt_cryptotrack::tokens::TokenStatus;
+use mwt_model::Chain;
 
 /// Why a token's text deserves a second look.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
@@ -39,6 +39,8 @@ pub struct TokenView {
     pub warnings: Vec<TokenWarning>,
     /// When the user confirmed or rejected it (RFC3339 UTC); `None` with no
     /// verdict. The hidden-token list reads it for "hidden on <date>".
+    // The doc text is exported to TypeScript as is.
+    #[allow(rustdoc::invalid_html_tags)]
     #[ts(optional)]
     pub decided_at: Option<String>,
 }

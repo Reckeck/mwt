@@ -5,7 +5,7 @@
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::kernel::events::LockReason;
+use mwt_vault::kernel::events::LockReason;
 
 /// Payload of `bybit-import-pending`: how many records the poll recorded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

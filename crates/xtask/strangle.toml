@@ -12,7 +12,7 @@
 
 service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
-scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src", "crates/planning/src", "crates/reports/src", "crates/cryptotrack/src"]
+scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src", "crates/planning/src", "crates/reports/src", "crates/cryptotrack/src", "crates/contract/src"]
 
 # Files every area task may change besides its own (spec D5).
 grants = ["crates/core/src/bin/gen_types.rs"]
@@ -21,6 +21,7 @@ grants = ["crates/core/src/bin/gen_types.rs"]
 guarded = [
     "crates/core/src/lib.rs",
     "crates/core/src/ipc_contract.rs",
+    "crates/contract/src/lib.rs",
     "crates/vault/src/kernel/events.rs",
     "crates/core/src/service/golden_tests.rs",
     "crates/core/src/service/test_support.rs",
@@ -37,6 +38,7 @@ workflow = "crates/workflow/src"
 planning = "crates/planning/src"
 reports = "crates/reports/src"
 cryptotrack = "crates/cryptotrack/src"
+contract = "crates/contract/src"
 
 # Groups whose stems keep their facade tests in a directory of their own.
 [facade_test_dirs]
@@ -90,7 +92,7 @@ files = [
 [[foundation]]
 # T50 (`N5`): the Blockscout key becomes `Secret<String>`; the IPC inputs that carry a password or a key get a closed `Debug`.
 task = "E"
-files = ["crates/core/src/cryptotrack/rpc/client.rs", "crates/core/src/ipc_contract.rs"]
+files = ["crates/core/src/cryptotrack/rpc/client.rs", "crates/core/src/ipc_contract.rs", "crates/contract/src/lib.rs"]
 
 [[foundation]]
 # T51: the exchange sync and import logic leaves `service/`, so the `use` block of `service/mod.rs` drops what only it
@@ -143,6 +145,7 @@ task = "T6"
 files = [
     "crates/core/src/lib.rs",
     "crates/core/src/ipc_contract.rs",
+    "crates/contract/src/lib.rs",
     "crates/core/src/usecases/mod.rs",
     "crates/cryptotrack/src/lib.rs",
     "crates/household/src/lib.rs",

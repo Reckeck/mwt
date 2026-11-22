@@ -9,8 +9,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ipc_contract::cryptotrack::links::CryptoPairFiat;
-use crate::ipc_contract::cryptotrack::operations::CryptoOpFilter;
+use crate::cryptotrack::links::CryptoPairFiat;
+use crate::cryptotrack::operations::CryptoOpFilter;
 
 /// Whose relations to read: one followed account (the wallet's own).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]

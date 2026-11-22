@@ -18,8 +18,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::model::store::StoreKind;
+use mwt_base::Amount;
+use mwt_model::StoreKind;
 
 /// One wallet the move retires. It is archived and nothing in it is deleted:
 /// its operations, holdings and history stay readable in the archive.

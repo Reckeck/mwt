@@ -12,8 +12,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::model::chain::Chain;
+use mwt_base::Amount;
+use mwt_model::Chain;
 
 /// The message of the refusal when a pasted string looks like a seed phrase or
 /// a private key. The text never carries the string itself, and the browser

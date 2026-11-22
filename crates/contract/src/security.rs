@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-pub use crate::crypto::level::{RaiseStage, SecurityLevel};
+pub use mwt_crypto::level::{RaiseStage, SecurityLevel};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
