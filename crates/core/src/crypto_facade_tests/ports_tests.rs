@@ -17,6 +17,7 @@ use crate::error::Result;
 use crate::exchange::{EarnYield, InterTransfer};
 use crate::model::chain::Chain;
 use crate::pricing::PricingService;
+use crate::service::LlamaPrices;
 
 const ADDRESS: &str = "0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe";
 
@@ -64,7 +65,7 @@ impl<C: ChainSource> ExplorerApi for Explorer<'_, C> {
 
 fn recorded_page() -> Value {
     let path = format!(
-        "{}/src/cryptotrack/sources/evm/fixtures/blockscout.transactions.1.json",
+        "{}/../cryptotrack/src/sources/evm/fixtures/blockscout.transactions.1.json",
         env!("CARGO_MANIFEST_DIR")
     );
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
@@ -103,10 +104,10 @@ async fn the_engine_normalizes_a_page_read_through_a_fake_chain_source() {
 fn the_price_adapter_reports_its_consent() {
     let service = PricingService::default();
     assert!(!service.looks_up_contracts());
-    assert!(!service.may_lookup_contract());
+    assert!(!LlamaPrices(&service).may_lookup_contract());
     let consenting = service.with_contract_lookup(true);
     assert!(consenting.looks_up_contracts());
-    assert!(consenting.may_lookup_contract());
+    assert!(LlamaPrices(&consenting).may_lookup_contract());
 }
 
 /// An exchange that answers nothing, to check the port is implementable.

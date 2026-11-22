@@ -7,3 +7,4 @@ mod exchange_sync_intake_tests;
 mod ports_tests;
 mod service_tests;
 mod volume_tests;
+mod wipe_tests;

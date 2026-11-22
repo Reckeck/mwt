@@ -7,7 +7,6 @@ pub mod appconfig;
 pub mod chain;
 #[cfg(test)]
 mod crypto_facade_tests;
-pub mod cryptotrack;
 pub mod datasource;
 pub mod exchange;
 pub mod external_url;
@@ -50,6 +49,7 @@ pub use mwt_crypto as crypto;
 pub use mwt_crypto::{
     SnapshotFormat, VAULT_CONTAINER_VERSION, VAULT_LEGACY_CONTAINER_VERSION, VAULT_MAGIC,
 };
+pub use mwt_cryptotrack as cryptotrack;
 pub use mwt_household as household;
 pub use mwt_model::{VAULT_FORMAT_VERSION, id_types, records};
 pub use mwt_money as money;
