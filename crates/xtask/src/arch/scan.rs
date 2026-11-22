@@ -3,6 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use anyhow::{Context, Result, ensure};
+
 use super::Edge;
 
 const CFG_TEST: &str = "#[cfg(test)]";
@@ -12,15 +14,16 @@ const CRATE_PATH: &str = "crate::";
 /// The names `crate::<name>` may stand for: the modules of the tree and the table, and the names
 /// `lib.rs` re-exports (`pub use mwt_x as name;`, `pub use mwt_x::{Item, ..};`), each with the module it
 /// counts as. Anything else after `crate::` is reached through `pub use model::*`.
+#[derive(Debug)]
 pub struct Names {
     modules: BTreeSet<String>,
     reexports: BTreeMap<String, String>,
 }
 
 impl Names {
-    pub fn new(modules: BTreeSet<String>, lib_text: &str) -> Self {
-        let reexports = reexports(lib_text, &modules);
-        Self { modules, reexports }
+    pub fn new(modules: BTreeSet<String>, lib_text: &str) -> Result<Self> {
+        let reexports = reexports(lib_text, &modules)?;
+        Ok(Self { modules, reexports })
     }
 
     /// The module a name after `crate::` stands for.
@@ -36,39 +39,107 @@ impl Names {
     }
 }
 
-/// Every name a `pub use` of `lib.rs` brings in from another path, with its module: an alias or a
-/// lowercase item that is a module counts as itself; any other item as the module named like its crate
-/// (`mwt_crypto` -> `crypto`), else like itself in lowercase (`Amount` -> `amount`), else as `lib`.
-fn reexports(lib_text: &str, modules: &BTreeSet<String>) -> BTreeMap<String, String> {
+/// Every name a `pub use` of `lib.rs` brings in from another path, with its module: an alias of a
+/// whole crate or a lowercase item that is a module counts as itself; any other item as the module
+/// named like its crate (`mwt_crypto` -> `crypto`, the first segment of the path), else like itself in
+/// lowercase (`Amount` -> `amount`), else as `lib`. An aliased item (`Amount as Money`) is keyed by its
+/// alias and homed by its original name. A statement that is not a flat path with an optional
+/// `{A, B as C}` group, `*`, or `as` is an error naming it.
+fn reexports(lib_text: &str, modules: &BTreeSet<String>) -> Result<BTreeMap<String, String>> {
     let mut found = BTreeMap::new();
     for statement in strip_comments(lib_text).split(';') {
         let Some(start) = statement.find("pub use ") else {
             continue;
         };
         let rest = statement[start + "pub use ".len()..].trim();
-        let (path, items) = match rest.split_once("::") {
-            Some((path, items)) => (path.trim(), items.trim()),
-            None => (rest.split(" as ").next().unwrap_or(rest).trim(), ""),
-        };
-        let krate = path.strip_prefix("mwt_").unwrap_or(path);
-        if let Some((_, alias)) = rest.split_once(" as ") {
-            found.insert(alias.trim().to_string(), alias.trim().to_string());
-            continue;
-        }
-        for item in items.trim_matches(|ch| ch == '{' || ch == '}').split(',') {
-            let item = item.trim();
-            if item.is_empty() || item == "*" {
-                continue;
-            }
-            let lowercase = item.to_lowercase();
-            let home = [item, krate, lowercase.as_str()]
-                .into_iter()
-                .find(|candidate| modules.contains(*candidate))
-                .unwrap_or("lib");
-            found.insert(item.to_string(), home.to_string());
+        let import = read_use(rest)
+            .with_context(|| format!("cannot read the statement `pub use {rest};`"))?;
+        let krate = import.krate.strip_prefix("mwt_").unwrap_or(&import.krate);
+        for (original, key) in import.items {
+            let lowercase = original.to_lowercase();
+            let home = if import.crate_alias {
+                key.clone()
+            } else {
+                [original.as_str(), krate, lowercase.as_str()]
+                    .into_iter()
+                    .find(|candidate| modules.contains(*candidate))
+                    .unwrap_or("lib")
+                    .to_string()
+            };
+            found.insert(key, home);
         }
     }
-    found
+    Ok(found)
+}
+
+/// What one `pub use` statement (the text after `pub use `) names.
+struct Import {
+    krate: String,
+    /// `(original name, name it is reached by)` of each item; `*` is left out.
+    items: Vec<(String, String)>,
+    /// `pub use mwt_x as name;`: the whole crate under a new name.
+    crate_alias: bool,
+}
+
+fn read_use(rest: &str) -> Result<Import> {
+    let (path, items, crate_alias) = if let Some(open) = rest.find('{') {
+        let inner = rest[open + 1..]
+            .strip_suffix('}')
+            .context("the group is not closed at the end")?;
+        let path = rest[..open]
+            .trim()
+            .strip_suffix("::")
+            .context("the group does not follow a path")?;
+        (path, inner.split(',').collect::<Vec<_>>(), false)
+    } else if let Some((path, last)) = rest.rsplit_once("::") {
+        (path, vec![last], false)
+    } else {
+        let (name, alias) = split_alias(rest)?;
+        return Ok(Import {
+            krate: name.to_string(),
+            items: vec![(name.to_string(), alias.to_string())],
+            crate_alias: alias != name,
+        });
+    };
+    let mut segments = path.split("::").map(str::trim);
+    let krate = segments.next().unwrap_or_default();
+    for segment in std::iter::once(krate).chain(segments) {
+        ensure!(is_name(segment), "`{segment}` is not a path segment");
+    }
+    let mut read = Vec::new();
+    for item in items
+        .into_iter()
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+    {
+        if item == "*" {
+            continue;
+        }
+        let (name, alias) = split_alias(item)?;
+        read.push((name.to_string(), alias.to_string()));
+    }
+    Ok(Import {
+        krate: krate.to_string(),
+        items: read,
+        crate_alias,
+    })
+}
+
+/// `Name` or `Name as Alias`, as `(name, alias)`.
+fn split_alias(item: &str) -> Result<(&str, &str)> {
+    let (name, alias) = match item.split_once(" as ") {
+        Some((name, alias)) => (name.trim(), alias.trim()),
+        None => (item.trim(), item.trim()),
+    };
+    ensure!(
+        is_name(name) && is_name(alias),
+        "`{item}` is not a name, `name as alias` or `*`"
+    );
+    Ok((name, alias))
+}
+
+fn is_name(text: &str) -> bool {
+    !text.is_empty() && text.chars().all(is_ident_char)
 }
 
 /// The text without `//` comments (strings are respected); line breaks stay, so offsets keep their lines.
@@ -269,7 +340,7 @@ mod tests {
         .into_iter()
         .map(String::from)
         .collect();
-        Names::new(modules, LIB)
+        Names::new(modules, LIB).unwrap()
     }
 
     fn pairs(text: &str) -> Vec<(usize, String)> {
@@ -351,6 +422,37 @@ mod tests {
         let text = "#[cfg(any(test, feature = \"testkit\"))]\npub mod fixtures;\n#[cfg(test)]\nmod tests;\n";
         assert_eq!(testkit_modules(text), vec!["fixtures".to_string()]);
         assert_eq!(test_modules(text), vec!["tests".to_string()]);
+    }
+
+    fn names_from(lib: &str) -> Result<Names> {
+        let modules = ["model", "amount", "base", "money"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        Names::new(modules, lib)
+    }
+
+    #[test]
+    fn a_group_after_a_nested_path_maps_each_item_to_its_crate() {
+        let names = names_from("pub use mwt_model::records::{A, B};\n").unwrap();
+        assert_eq!(names.resolve("A"), "model");
+        assert_eq!(names.resolve("B"), "model");
+    }
+
+    #[test]
+    fn an_aliased_item_is_keyed_by_its_alias() {
+        let names = names_from("pub use mwt_base::{Amount as Money, Error};\n").unwrap();
+        assert_eq!(names.resolve("Money"), "base");
+        assert_eq!(names.resolve("Error"), "base");
+    }
+
+    #[test]
+    fn a_statement_that_cannot_be_read_is_an_error_naming_it() {
+        let error = names_from("pub use mwt_base::{A, nested::{B}};\n").unwrap_err();
+        assert!(
+            format!("{error:#}").contains("pub use mwt_base::{A, nested::{B}};"),
+            "{error:#}"
+        );
     }
 
     #[test]

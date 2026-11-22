@@ -1,8 +1,9 @@
 //! `strangle rewire <area> <files>`: best effort. Replaces a call `x.name(args)` of a moved method
 //! by the call of its new function, cut by text span, then runs `rustfmt` on the changed files
 //! (spec D3, Interfaces). Only a call on a receiver proven to be an `UnlockedVault` is touched:
-//! `self` inside `impl UnlockedVault`, or a parameter typed `&UnlockedVault` / `&mut UnlockedVault`.
-//! Every other call of a moved name is skipped and listed. A moved call inside the arguments of a
+//! `self` inside `impl UnlockedVault`, a parameter typed with it, or a local bound from it (see
+//! `receivers`). Every other call of a moved name is skipped and listed with file:line.
+//! `--dry-run` prints the rewrites and the skipped calls and writes nothing. A moved call inside the arguments of a
 //! rewritten one stays for the next run.
 
 use std::collections::BTreeMap;
@@ -13,13 +14,17 @@ use anyhow::{Context, Result, bail};
 use clap::Args;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
-use syn::{Expr, ExprMethodCall, FnArg, ImplItemFn, ItemFn, ItemImpl, Macro, Pat, Type};
+use syn::{
+    Arm, Block, Expr, ExprClosure, ExprForLoop, ExprIf, ExprLet, ExprMethodCall, ExprWhile,
+    ImplItemFn, ItemFn, ItemImpl, Local, Macro, Pat,
+};
 
 use super::baseline::Baseline;
 use super::fileset::FileSet;
 use super::forward::delegate_target;
 use super::home::{DOC_MARKER, core_dir, homes};
 use super::map::Map;
+use super::receivers::{Bindings, Held, Shapes};
 use super::scan::{macro_arguments, macro_line};
 use super::source::{LineIndex, Splice, apply, is_vault_impl};
 
@@ -30,6 +35,9 @@ pub struct RewireArgs {
     /// Source files to rewrite, relative to the workspace root.
     #[arg(required = true)]
     pub files: Vec<String>,
+    /// Print the rewrites and the skipped calls; write no file.
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 pub fn run(root: &Path, args: &RewireArgs) -> Result<()> {
@@ -37,8 +45,21 @@ pub fn run(root: &Path, args: &RewireArgs) -> Result<()> {
     let baseline = Baseline::load(root)?;
     let mut files = FileSet::new(root);
     let report = rewire(root, &mut files, &map, &baseline, args)?;
+    if args.dry_run {
+        for line in &report.rewrites {
+            println!("rewire: would rewrite {line}");
+        }
+    }
     for line in &report.skipped {
         println!("rewire: skipped {line}");
+    }
+    if args.dry_run {
+        println!(
+            "rewire: dry run, {} call(s) would be replaced, {} skipped",
+            report.replaced,
+            report.skipped.len()
+        );
+        return Ok(());
     }
     println!("rewire: {} call(s) replaced", report.replaced);
     let changed: Vec<String> = files.changed().iter().map(ToString::to_string).collect();
@@ -49,6 +70,8 @@ pub fn run(root: &Path, args: &RewireArgs) -> Result<()> {
 #[derive(Default)]
 struct Report {
     replaced: usize,
+    /// `file:line: name()`.
+    rewrites: Vec<String>,
     skipped: Vec<String>,
 }
 
@@ -59,6 +82,8 @@ struct Target {
     /// `@books`: the function takes `&recv.books()`; `@doc`: not rewritten, listed as skipped;
     /// none: it takes the vault itself.
     marker: Option<&'static str>,
+    /// The function takes `&mut UnlockedVault`.
+    mutable: bool,
 }
 
 fn rewire(
@@ -78,9 +103,17 @@ fn rewire(
         }
         let prefix = crate_prefix(root, map, path)?;
         let file = syn::parse_file(&source).with_context(|| format!("parse {path}"))?;
-        let mut rewriter = Rewriter::new(&source, &targets, &prefix);
+        let helpers = helper_files(files, map, path)?;
+        let shapes = Shapes::of(std::iter::once(&file).chain(&helpers));
+        let mut rewriter = Rewriter::new(&source, &targets, &prefix, &shapes);
         rewriter.visit_file(&file);
         report.replaced += rewriter.splices.len();
+        report.rewrites.extend(
+            rewriter
+                .rewrites
+                .iter()
+                .map(|done| format!("{path}:{done}")),
+        );
         report
             .skipped
             .extend(rewriter.skipped.iter().map(|skip| format!("{path}:{skip}")));
@@ -88,6 +121,16 @@ fn rewire(
         files.set(path, updated)?;
     }
     Ok(report)
+}
+
+/// The parsed shared helper files of the map, but not the file being rewired itself.
+fn helper_files(files: &mut FileSet, map: &Map, current: &str) -> Result<Vec<syn::File>> {
+    let mut parsed = Vec::new();
+    for path in map.helper_files.iter().filter(|path| *path != current) {
+        let source = files.read(path)?.to_string();
+        parsed.push(syn::parse_file(&source).with_context(|| format!("parse {path}"))?);
+    }
+    Ok(parsed)
 }
 
 /// The moved methods of the area by name, found in the pure and scenario files of its stems.
@@ -114,6 +157,7 @@ fn targets_of(
                 targets.entry(name.clone()).or_insert(Target {
                     path: format!("{module}::{name}"),
                     marker: receiver.marker,
+                    mutable: receiver.text == "&mut self",
                 });
             }
         }
@@ -150,37 +194,48 @@ struct Rewriter<'run> {
     index: LineIndex<'run>,
     targets: &'run BTreeMap<String, Target>,
     prefix: &'run str,
+    shapes: &'run Shapes,
     in_vault_impl: bool,
-    /// Parameters of the enclosing functions typed `&UnlockedVault` / `&mut UnlockedVault`.
-    vault_params: Vec<String>,
+    /// The names in scope that are, or are not, provably the vault.
+    bindings: Bindings,
     splices: Vec<Splice>,
+    /// `line: name()`.
+    rewrites: Vec<String>,
     /// `line: name(): reason`.
     skipped: Vec<String>,
 }
 
 impl<'run> Rewriter<'run> {
-    fn new(source: &'run str, targets: &'run BTreeMap<String, Target>, prefix: &'run str) -> Self {
+    fn new(
+        source: &'run str,
+        targets: &'run BTreeMap<String, Target>,
+        prefix: &'run str,
+        shapes: &'run Shapes,
+    ) -> Self {
         Self {
             source,
             index: LineIndex::new(source),
             targets,
             prefix,
+            shapes,
             in_vault_impl: false,
-            vault_params: Vec::new(),
+            bindings: Bindings::default(),
             splices: Vec::new(),
+            rewrites: Vec::new(),
             skipped: Vec::new(),
         }
     }
 
-    fn is_vault_receiver(&self, receiver: &Expr) -> bool {
+    /// What the receiver holds when it is provably the vault.
+    fn vault_receiver(&self, receiver: &Expr) -> Option<Held> {
         let Expr::Path(path) = receiver else {
-            return false;
+            return None;
         };
-        let Some(ident) = path.path.get_ident() else {
-            return false;
-        };
-        (ident == "self" && self.in_vault_impl)
-            || self.vault_params.iter().any(|param| ident == param)
+        let ident = path.path.get_ident()?;
+        if ident == "self" {
+            return self.in_vault_impl.then_some(Held::Borrowed);
+        }
+        self.bindings.held(&ident.to_string())
     }
 
     fn text_of(&self, node: &impl Spanned) -> &'run str {
@@ -188,11 +243,13 @@ impl<'run> Rewriter<'run> {
         &self.source[self.index.offset(span.start())..self.index.offset(span.end())]
     }
 
-    fn replacement(&self, target: &Target, node: &ExprMethodCall) -> String {
+    fn replacement(&self, target: &Target, node: &ExprMethodCall, held: Held) -> String {
         let receiver = self.text_of(&*node.receiver);
-        let first = match target.marker {
-            Some(_) => format!("&{receiver}.books()"),
-            None => receiver.to_string(),
+        let first = match (target.marker, held) {
+            (Some(_), _) => format!("&{receiver}.books()"),
+            (None, Held::Borrowed) => receiver.to_string(),
+            (None, Held::Owned) if target.mutable => format!("&mut {receiver}"),
+            (None, Held::Owned) => format!("&{receiver}"),
         };
         let module_path = target.path.replacen("crate", self.prefix, 1);
         let rest: Vec<&str> = node.args.iter().map(|arg| self.text_of(arg)).collect();
@@ -202,29 +259,20 @@ impl<'run> Rewriter<'run> {
         format!("{module_path}({})", arguments.join(", "))
     }
 
-    fn with_params(
-        &mut self,
-        inputs: &syn::punctuated::Punctuated<FnArg, syn::Token![,]>,
-        body: impl FnOnce(&mut Self),
-    ) {
-        let before = self.vault_params.len();
-        self.vault_params
-            .extend(inputs.iter().filter_map(vault_param));
+    /// Visits an item with the parameters bound and the locals of the items around it hidden.
+    fn in_item(&mut self, inputs: &[&syn::FnArg], body: impl FnOnce(&mut Self)) {
+        let outer = self.bindings.take();
+        self.bindings.bind_inputs(inputs.iter().copied());
         body(self);
-        self.vault_params.truncate(before);
+        self.bindings.restore(outer);
     }
-}
 
-/// The name of a parameter typed `&UnlockedVault` or `&mut UnlockedVault`.
-fn vault_param(arg: &FnArg) -> Option<String> {
-    let FnArg::Typed(typed) = arg else {
-        return None;
-    };
-    let (Pat::Ident(name), Type::Reference(reference)) = (&*typed.pat, &*typed.ty) else {
-        return None;
-    };
-    super::scan::names_type(&reference.elem, super::scan::VAULT_TYPE)
-        .then(|| name.ident.to_string())
+    /// Visits what a binding covers, then drops the names it bound.
+    fn scoped(&mut self, body: impl FnOnce(&mut Self)) {
+        let mark = self.bindings.mark();
+        body(self);
+        self.bindings.reset(mark);
+    }
 }
 
 impl<'ast> Visit<'ast> for Rewriter<'_> {
@@ -235,12 +283,79 @@ impl<'ast> Visit<'ast> for Rewriter<'_> {
     }
 
     fn visit_item_fn(&mut self, node: &'ast ItemFn) {
-        self.with_params(&node.sig.inputs, |this| visit::visit_item_fn(this, node));
+        let inputs: Vec<_> = node.sig.inputs.iter().collect();
+        self.in_item(&inputs, |this| visit::visit_item_fn(this, node));
     }
 
     fn visit_impl_item_fn(&mut self, node: &'ast ImplItemFn) {
-        self.with_params(&node.sig.inputs, |this| {
-            visit::visit_impl_item_fn(this, node)
+        let inputs: Vec<_> = node.sig.inputs.iter().collect();
+        self.in_item(&inputs, |this| visit::visit_impl_item_fn(this, node));
+    }
+
+    fn visit_block(&mut self, node: &'ast Block) {
+        self.scoped(|this| visit::visit_block(this, node));
+    }
+
+    fn visit_local(&mut self, node: &'ast Local) {
+        if let Some(init) = &node.init {
+            self.visit_expr(&init.expr);
+            if let Some((_, diverge)) = &init.diverge {
+                self.visit_expr(diverge);
+            }
+        }
+        let init = node.init.as_ref().map(|init| &*init.expr);
+        self.bindings.bind_let(&node.pat, init, self.shapes);
+    }
+
+    fn visit_expr_closure(&mut self, node: &'ast ExprClosure) {
+        self.scoped(|this| {
+            for input in &node.inputs {
+                match input {
+                    Pat::Type(typed) => this.bindings.bind_typed(&typed.pat, Some(&typed.ty)),
+                    other => this.bindings.bind_typed(other, None),
+                }
+            }
+            this.visit_expr(&node.body);
+        });
+    }
+
+    fn visit_arm(&mut self, node: &'ast Arm) {
+        self.scoped(|this| {
+            this.bindings.shadow(&node.pat);
+            if let Some((_, guard)) = &node.guard {
+                this.visit_expr(guard);
+            }
+            this.visit_expr(&node.body);
+        });
+    }
+
+    fn visit_expr_for_loop(&mut self, node: &'ast ExprForLoop) {
+        self.visit_expr(&node.expr);
+        self.scoped(|this| {
+            this.bindings.shadow(&node.pat);
+            this.visit_block(&node.body);
+        });
+    }
+
+    fn visit_expr_let(&mut self, node: &'ast ExprLet) {
+        self.visit_expr(&node.expr);
+        self.bindings.shadow(&node.pat);
+    }
+
+    fn visit_expr_if(&mut self, node: &'ast ExprIf) {
+        self.scoped(|this| {
+            this.visit_expr(&node.cond);
+            this.visit_block(&node.then_branch);
+        });
+        if let Some((_, other)) = &node.else_branch {
+            self.visit_expr(other);
+        }
+    }
+
+    fn visit_expr_while(&mut self, node: &'ast ExprWhile) {
+        self.scoped(|this| {
+            this.visit_expr(&node.cond);
+            this.visit_block(&node.body);
         });
     }
 
@@ -269,13 +384,14 @@ impl<'ast> Visit<'ast> for Rewriter<'_> {
                 "{line}: {name}(): `@doc` target is not rewritten (no `&VaultDoc` accessor)"
             ));
             visit::visit_expr_method_call(self, node);
-        } else if self.is_vault_receiver(&node.receiver) {
+        } else if let Some(held) = self.vault_receiver(&node.receiver) {
             let span = node.span();
             self.splices.push(Splice {
                 start: self.index.offset(span.start()),
                 end: self.index.offset(span.end()),
-                text: self.replacement(target, node),
+                text: self.replacement(target, node, held),
             });
+            self.rewrites.push(format!("{line}: {name}()"));
             // The arguments are copied as written; a moved call inside them waits for the next run.
         } else {
             self.skipped.push(format!(
@@ -340,6 +456,7 @@ impl Other {
         let args = RewireArgs {
             area: "loyalty".into(),
             files: vec![USER.into()],
+            dry_run: false,
         };
         run(tree.root(), &args).unwrap();
         let text = std::fs::read_to_string(tree.root().join(USER)).unwrap();
@@ -384,6 +501,7 @@ impl Other {
         let args = RewireArgs {
             area: "loyalty".into(),
             files: vec![USER.into()],
+            dry_run: false,
         };
         let report = rewire(tree.root(), &mut files, &map, &baseline, &args).unwrap();
         assert_eq!(report.replaced, 0);
@@ -408,6 +526,7 @@ impl Other {
         let args = RewireArgs {
             area: "loyalty".into(),
             files: vec![USER.into()],
+            dry_run: false,
         };
         let report = rewire(tree.root(), &mut files, &map, &baseline, &args).unwrap();
         assert_eq!(report.replaced, 3);
@@ -427,11 +546,156 @@ impl Other {
         let args = RewireArgs {
             area: "loyalty".into(),
             files: vec![USER.into()],
+            dry_run: false,
         };
         let report = rewire(tree.root(), &mut files, &map, &baseline, &args).unwrap();
         assert_eq!(report.replaced, 3);
         assert_eq!(report.skipped.len(), 2, "{:?}", report.skipped);
         assert!(report.skipped[0].starts_with(&format!("{USER}:4: set_info()")));
         assert!(report.skipped[1].starts_with(&format!("{USER}:10: set_info()")));
+    }
+
+    fn rewired(source: &str) -> (Report, String) {
+        let tree = fixture();
+        std::fs::write(tree.root().join(USER), source).unwrap();
+        let map = Map::load(tree.root()).unwrap();
+        let baseline = Baseline::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        let args = RewireArgs {
+            area: "loyalty".into(),
+            files: vec![USER.into()],
+            dry_run: false,
+        };
+        let report = rewire(tree.root(), &mut files, &map, &baseline, &args).unwrap();
+        (report, files.read(USER).unwrap().to_string())
+    }
+
+    #[test]
+    fn a_local_bound_by_each_constructor_is_rewired() {
+        for call in [
+            "UnlockedVault::create(path, key)",
+            "UnlockedVault::open(path, key).await?",
+            "UnlockedVault::create_with(path, key, opts).unwrap()",
+            "UnlockedVault::in_memory()",
+        ] {
+            let source = format!(
+                "fn t() {{\n    let mut vault = {call};\n    vault.set_info(\"a\", info);\n}}\n"
+            );
+            let (report, text) = rewired(&source);
+            assert_eq!(report.replaced, 1, "{call}: {:?}", report.skipped);
+            assert!(
+                text.contains("household::loyalty::set_info(&mut vault, \"a\", info)"),
+                "{call}: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn tuple_and_struct_patterns_from_a_vault_returning_function_are_rewired() {
+        let source = "struct Fixture { dir: Dir, vault: UnlockedVault }
+fn open_vault() -> (Dir, UnlockedVault) { todo!() }
+fn fixture() -> Fixture { todo!() }
+fn t() {
+    let (dir, mut vault) = open_vault();
+    vault.set_info(\"a\", info);
+    dir.set_info(\"b\", info);
+    let Fixture { dir: other, vault: held } = fixture();
+    held.set_info(\"c\", info);
+    other.set_info(\"d\", info);
+}
+";
+        let (report, text) = rewired(source);
+        assert_eq!(report.replaced, 2, "{:?}", report.skipped);
+        assert!(text.contains("set_info(&mut vault, \"a\", info)"), "{text}");
+        assert!(text.contains("set_info(&mut held, \"c\", info)"), "{text}");
+        assert_eq!(report.skipped.len(), 2, "{:?}", report.skipped);
+        assert!(report.skipped[0].starts_with(&format!("{USER}:7: set_info()")));
+    }
+
+    #[test]
+    fn a_tuple_from_a_helper_of_a_shared_file_is_rewired_and_a_duplicate_is_not() {
+        let helper = "crates/core/src/service/test_support.rs";
+        let tree = fixture();
+        std::fs::create_dir_all(tree.root().join(helper).parent().unwrap()).unwrap();
+        std::fs::write(
+            tree.root().join(helper),
+            "pub fn empty_vault() -> (Dir, UnlockedVault) { todo!() }\npub fn twice() -> (Dir, UnlockedVault) { todo!() }\n",
+        )
+        .unwrap();
+        let mut map_text =
+            std::fs::read_to_string(tree.root().join(crate::strangle::map::MAP_FILE)).unwrap();
+        map_text = format!("helper_files = [\"{helper}\"]\n{map_text}");
+        std::fs::write(tree.root().join(crate::strangle::map::MAP_FILE), map_text).unwrap();
+        let source = "use super::test_support::*;
+fn twice() -> (Dir, Thing) { todo!() }
+fn t() {
+    let (dir, mut vault) = empty_vault();
+    vault.set_info(\"a\", info);
+    let (_dir, other) = twice();
+    other.set_info(\"b\", info);
+}
+";
+        std::fs::write(tree.root().join(USER), source).unwrap();
+        let map = Map::load(tree.root()).unwrap();
+        let baseline = Baseline::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        let args = RewireArgs {
+            area: "loyalty".into(),
+            files: vec![USER.into()],
+            dry_run: false,
+        };
+        let report = rewire(tree.root(), &mut files, &map, &baseline, &args).unwrap();
+        assert_eq!(report.replaced, 1, "{:?}", report.skipped);
+        assert!(
+            files
+                .read(USER)
+                .unwrap()
+                .contains("set_info(&mut vault, \"a\", info)")
+        );
+        assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
+    }
+
+    #[test]
+    fn typed_parameters_and_closure_parameters_are_rewired() {
+        let source = "fn a(vault: UnlockedVault) { vault.set_info(\"a\", info); }
+fn b(vault: &UnlockedVault) { vault.set_info(\"b\", info); }
+fn c(vault: &mut UnlockedVault) { vault.set_info(\"c\", info); }
+fn d() {
+    let run = |vault: &mut UnlockedVault| vault.set_info(\"e\", info);
+    let bad = |vault| vault.set_info(\"f\", info);
+}
+";
+        let (report, text) = rewired(source);
+        assert_eq!(report.replaced, 4, "{:?}", report.skipped);
+        assert!(text.contains("set_info(&mut vault, \"a\", info)"), "{text}");
+        assert!(text.contains("set_info(vault, \"e\", info)"), "{text}");
+        assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
+        assert!(report.skipped[0].starts_with(&format!("{USER}:6: set_info()")));
+    }
+
+    #[test]
+    fn a_shadowing_binding_is_not_proven() {
+        let source = "fn t() {
+    let mut vault = UnlockedVault::in_memory();
+    let vault = other();
+    vault.set_info(\"a\", info);
+}
+";
+        let (report, _) = rewired(source);
+        assert_eq!(report.replaced, 0);
+        assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
+    }
+
+    #[test]
+    fn dry_run_writes_nothing() {
+        let tree = fixture();
+        let args = RewireArgs {
+            area: "loyalty".into(),
+            files: vec![USER.into()],
+            dry_run: true,
+        };
+        run(tree.root(), &args).unwrap();
+        let text = std::fs::read_to_string(tree.root().join(USER)).unwrap();
+        assert_eq!(text, USER_SOURCE);
     }
 }
