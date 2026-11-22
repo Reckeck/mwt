@@ -13,8 +13,8 @@ workspace = true
 # Test kit (`crate::testkit`): the facade module plus a re-export of the dev-only crate `mwt-testkit`.
 testkit = ["dep:mwt-testkit", "mwt-vault/testing"]
 # Forwarded to every extracted crate that has them (`mwt-base`, `mwt-crypto` and `mwt-model` are always built with them here).
-ts = ["mwt-model/ts", "mwt-sync/ts"]
-schema = ["mwt-model/schema"]
+ts = ["mwt-model/ts", "mwt-sync/ts", "mwt-money/ts"]
+schema = ["mwt-model/schema", "mwt-money/schema"]
 # Marks every `forward!` delegate `#[deprecated]` so the remaining callers can be listed (`cargo clippy --features deprecated-forwards`).
 deprecated-forwards = []
 
@@ -29,6 +29,8 @@ mwt-net = { path = "../net" }
 mwt-vault = { path = "../vault" }
 # Device-to-device sync: merge, Noise channel, pairing code.
 mwt-sync = { path = "../sync", features = ["ts"] }
+# Money rules: the books, ledger, valuation, cost basis, validation.
+mwt-money = { path = "../money", features = ["ts", "schema"] }
 # Test support: reached only through the `testkit` feature (and the dev-dependency below); no other crate lists it.
 mwt-testkit = { path = "../testkit", optional = true }
 # `SecurityLevel` / `RaiseStage` are TS types of the IPC contract.
@@ -56,6 +58,7 @@ regex.workspace = true
 serde_bytes.workspace = true
 
 [dev-dependencies]
+mwt-money = { path = "../money", features = ["ts", "schema", "testing"] }
 mwt-sync = { path = "../sync", features = ["ts", "testing"] }
 mwt-vault = { path = "../vault", features = ["testing"] }
 mwt-testkit = { path = "../testkit" }

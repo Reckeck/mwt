@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn money_tree_is_owned_by_the_t8_foundation() {
-        let file = changed(&["crates/core/src/money/tree.rs"]);
+        let file = changed(&["crates/money/src/tree.rs"]);
         let owner = findings(&real_workspace(), &file, Some("T8"));
         assert!(owner.is_empty(), "{FIX_MAP}: {owner:?}");
         let other = findings(&real_workspace(), &file, Some("T26"));

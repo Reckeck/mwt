@@ -1,0 +1,36 @@
+[package]
+name = "mwt-money"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker money: pure money rules, the books, ledger, valuation, cost basis and validation (depends on mwt-base and mwt-model only)"
+
+[lints]
+workspace = true
+
+[features]
+# `ts-rs` derives of the money view types; off by default, `trade-core` turns them on.
+ts = ["dep:ts-rs", "mwt-model/ts", "mwt-base/ts"]
+schema = ["mwt-model/schema", "mwt-base/schema"]
+
+# Test support for the tests of `trade-core`: the counter `books::BUILDS`.
+testing = []
+
+[dependencies]
+mwt-base = { path = "../base" }
+mwt-model = { path = "../model" }
+serde.workspace = true
+serde_json.workspace = true
+rust_decimal.workspace = true
+uuid.workspace = true
+time.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+ts-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+mwt-testkit = { path = "../testkit" }
+proptest.workspace = true
+pretty_assertions.workspace = true
+insta.workspace = true

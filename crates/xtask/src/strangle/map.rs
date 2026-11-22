@@ -30,6 +30,10 @@ pub struct Map {
     /// crate than the core one (`sync = "crates/sync/src"`); the default is the core `src`.
     #[serde(default)]
     pub group_dirs: BTreeMap<String, String>,
+    /// Group to the directory of the facade tests of its stems (`<dir>/<stem>.rs` and
+    /// `<dir>/<stem>_tests.rs`), keyed by the top segment like `group_dirs`.
+    #[serde(default)]
+    pub facade_test_dirs: BTreeMap<String, String>,
     /// The foundation tasks (no area) and the files they own in the shared tree.
     #[serde(default, rename = "foundation")]
     pub foundations: Vec<Foundation>,

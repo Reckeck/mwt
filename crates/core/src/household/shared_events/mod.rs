@@ -51,16 +51,7 @@ mod split_tests;
 #[path = "../../service/shared_events/testing.rs"]
 pub(crate) mod testing;
 
-/// The category a payment of the event gets when nobody chose one.
-pub(crate) const FALLBACK_CATEGORY: &str = "other";
-
-/// The category of an item's spending: its own, the event's, else «other».
-pub(crate) fn item_category(event: &SharedEvent, item: &EventItem) -> String {
-    item.category_id
-        .clone()
-        .or_else(|| event.category_id.clone())
-        .unwrap_or_else(|| FALLBACK_CATEGORY.to_string())
-}
+pub(crate) use crate::money::shared_split::item_category;
 
 /// An instant for a date or an RFC3339 time typed by the user.
 pub(crate) fn normalize_moment(raw: &str) -> Result<String> {

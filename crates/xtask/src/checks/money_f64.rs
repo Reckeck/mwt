@@ -1,7 +1,7 @@
 //! Rule `no-f64-in-money`: money code does its arithmetic in `Amount`/`Decimal`, never in `f64`.
 //! `clippy::disallowed_types` can name `f64`, but its list is workspace-wide; scoping it to the
 //! money module would need allow attributes on every other crate root, so a text rule that reads
-//! `crates/core/src/money` is simpler.
+//! `crates/money/src` is simpler.
 //!
 //! A line with `f64` in non-test code fails unless it carries the marker `// allowed: display only`
 //! (a share or percentage that only feeds a chart, never a balance).
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-const MONEY_DIR: &str = "crates/core/src/money";
+const MONEY_DIR: &str = "crates/money/src";
 const MARKER: &str = "// allowed: display only";
 const CFG_TEST: &str = "#[cfg(test)]";
 
