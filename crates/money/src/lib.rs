@@ -8,7 +8,6 @@ pub mod categories;
 #[cfg(test)]
 mod categories_tests;
 pub mod cost_basis;
-pub mod date_label;
 pub mod enrichment;
 pub mod inflation;
 #[cfg(test)]
@@ -26,7 +25,6 @@ mod month_balance_tests;
 pub mod portfolio;
 pub mod preview;
 pub mod price_info;
-pub mod rate_index;
 pub mod rates;
 pub mod rebase;
 pub mod search;

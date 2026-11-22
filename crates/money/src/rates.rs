@@ -5,11 +5,10 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use super::rate_index::RateIndex;
 use crate::books::Books;
 use mwt_base::Amount;
 use mwt_base::time::secs_or_now;
-use mwt_model::AssetRef;
+use mwt_model::{AssetRef, RateIndex};
 use mwt_model::{FxPoint, VaultDoc};
 use mwt_model::{Leg, Transaction};
 

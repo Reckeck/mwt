@@ -3,10 +3,10 @@
 
 use std::collections::HashMap;
 
+use crate::CryptoPricePoint;
+use crate::{FxPoint, PricePoint};
 use mwt_base::Amount;
 use mwt_base::time::unix_secs;
-use mwt_model::CryptoPricePoint;
-use mwt_model::{FxPoint, PricePoint};
 
 /// The newest-point lookups over the FX, price and crypto-price caches.
 #[derive(Debug, Default, Clone)]

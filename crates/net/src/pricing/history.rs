@@ -6,11 +6,11 @@
 //! one per series per hour, the newest week at that resolution, older points
 //! thinned to one a day, and never more than [`HISTORY_CAP`] per series.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
-use mwt_base::Amount;
 pub use mwt_base::time::{secs_or_now, unix_secs};
 use mwt_model::CryptoPricePoint;
+pub use mwt_model::RateIndex;
 use mwt_model::{FxPoint, PricePoint};
 
 /// Most points one currency or asset keeps (≈ 83 days hourly, years daily).
@@ -25,7 +25,6 @@ const DAY: i64 = 86_400;
 trait Point: Clone {
     fn series(&self) -> &str;
     fn ts(&self) -> &str;
-    fn value(&self) -> Amount;
 }
 
 impl Point for FxPoint {
@@ -34,9 +33,6 @@ impl Point for FxPoint {
     }
     fn ts(&self) -> &str {
         &self.ts
-    }
-    fn value(&self) -> Amount {
-        self.per_usd
     }
 }
 
@@ -47,9 +43,6 @@ impl Point for CryptoPricePoint {
     fn ts(&self) -> &str {
         &self.ts
     }
-    fn value(&self) -> Amount {
-        self.value_usd
-    }
 }
 
 impl Point for PricePoint {
@@ -58,9 +51,6 @@ impl Point for PricePoint {
     }
     fn ts(&self) -> &str {
         &self.ts
-    }
-    fn value(&self) -> Amount {
-        self.value_usd
     }
 }
 
@@ -152,85 +142,10 @@ fn last_per_bucket<P>(points: Vec<(i64, P)>, width: i64) -> Vec<(i64, P)> {
     out
 }
 
-/// Parsed, sorted series for repeated lookups — a replay asks thousands of
-/// times, and parsing the cache on each ask would dominate it.
-#[derive(Debug, Default, Clone)]
-pub struct RateIndex {
-    series: HashMap<String, Vec<(i64, Amount)>>,
-}
-
-impl RateIndex {
-    pub fn of_fx(cache: &[FxPoint]) -> Self {
-        Self::of(cache)
-    }
-
-    pub fn of_prices(cache: &[PricePoint]) -> Self {
-        Self::of(cache)
-    }
-
-    /// The historic crypto prices of `crypto_prices`, never thinned.
-    pub fn of_crypto(cache: &[CryptoPricePoint]) -> Self {
-        Self::of(cache)
-    }
-
-    fn of<P: Point>(cache: &[P]) -> Self {
-        let mut index = Self::default();
-        for point in cache {
-            if let Some(secs) = unix_secs(point.ts()) {
-                index.insert(point.series(), secs, point.value());
-            }
-        }
-        index.sort();
-        index
-    }
-
-    /// Add a point; call [`RateIndex::sort`] before asking.
-    pub fn insert(&mut self, key: &str, secs: i64, value: Amount) {
-        if value.is_zero() {
-            return;
-        }
-        self.series
-            .entry(key.to_string())
-            .or_default()
-            .push((secs, value));
-    }
-
-    pub fn sort(&mut self) {
-        for points in self.series.values_mut() {
-            points.sort_by_key(|(secs, _)| *secs);
-        }
-    }
-
-    /// The newest point at or before `secs`.
-    pub fn at_or_before(&self, key: &str, secs: i64) -> Option<Amount> {
-        self.point_before(key, secs).map(|(_, value)| value)
-    }
-
-    /// The nearest point at or before `secs`, else the first one after it.
-    pub fn at(&self, key: &str, secs: i64) -> Option<Amount> {
-        self.point_at(key, secs).map(|(_, value)| value)
-    }
-
-    /// Like [`RateIndex::at`], with the moment the point was taken.
-    pub fn point_at(&self, key: &str, secs: i64) -> Option<(i64, Amount)> {
-        self.point_before(key, secs)
-            .or_else(|| self.series.get(key)?.first().copied())
-    }
-
-    fn point_before(&self, key: &str, secs: i64) -> Option<(i64, Amount)> {
-        let points = self.series.get(key)?;
-        let after = points.partition_point(|(point, _)| *point <= secs);
-        after.checked_sub(1).map(|idx| points[idx])
-    }
-
-    pub fn latest(&self, key: &str) -> Option<Amount> {
-        self.series.get(key)?.last().map(|(_, value)| *value)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mwt_base::Amount;
 
     fn fx(currency: &str, per_usd: &str, ts: &str) -> FxPoint {
         FxPoint {

@@ -119,7 +119,7 @@ pub fn source_inflation(doc: &VaultDoc, currency: &str) -> Vec<InflationReading>
     let values = source.history.iter().chain(source.last.iter());
     for value in values {
         for point in &value.series {
-            if let Some(date) = super::date_label::parse_date_label(&point.label) {
+            if let Some(date) = mwt_base::calendar::date_label::parse_date_label(&point.label) {
                 by_month.insert(date.format("%Y-%m").to_string(), point.value);
             }
         }

@@ -21,6 +21,7 @@ mod inflation;
 mod iso_date;
 mod notify;
 mod planning;
+mod rate_index;
 mod record;
 mod registry;
 mod run_key;
@@ -71,6 +72,7 @@ pub use planning::{
     Schedule, TransactionDraft, UtilityItem, UtilityKind, WorkdayShift, describe_reject,
     draft_to_transaction,
 };
+pub use rate_index::RateIndex;
 pub use record::{Record, RecordKind, level3_collections, record_kinds};
 pub use registry::{
     COLLECTIONS, Collection, DEVICE_SETTINGS, InnerEntry, LOCAL, Rule, SETTINGS_SCOPE, Scope,
