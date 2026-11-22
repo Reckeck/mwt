@@ -5,22 +5,21 @@
 use std::collections::{BTreeMap, HashMap};
 
 use super::budget::{budget_currency, income_basis};
-use crate::calendar::{self, Calendar};
-use crate::model::category::{
-    CATEGORIES_REV, CATEGORY_ADDITIONS, Category, default_categories, is_passive_key,
-};
-use crate::model::store::Purpose;
-use crate::model::transaction::Transaction;
-use crate::model::vault::VaultDoc;
-use crate::money::books::Books;
-use crate::time::secs_or_now;
-use crate::{Amount, Result};
+use mwt_base::calendar::{self, Calendar};
+use mwt_base::time::secs_or_now;
+use mwt_base::{Amount, Result};
+use mwt_model::Purpose;
+use mwt_model::Transaction;
+use mwt_model::VaultDoc;
+use mwt_model::{CATEGORIES_REV, CATEGORY_ADDITIONS, Category, default_categories, is_passive_key};
+use mwt_money::books::Books;
 
 /// Finished months the passive income and the fact index are measured over.
 const PASSIVE_MONTHS: u32 = 12;
 
 /// Passive income booked in one finished month.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PassiveMonth {
     /// `YYYY-MM`.
     pub month: String,
@@ -28,13 +27,15 @@ pub struct PassiveMonth {
 }
 
 /// Passive income from one category over the year.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PassiveShare {
     pub category: String,
     pub amount: Amount,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PassiveIncome {
     /// The budget currency every amount is in.
     pub currency: String,
@@ -181,7 +182,7 @@ pub fn passive_income(
         .fold(Amount::ZERO, |sum, value| sum + value)
         .round(2);
     let expected_pct =
-        expected_pct.or_else(|| crate::money::interest::key_rate_on(books.doc(), today));
+        expected_pct.or_else(|| mwt_money::interest::key_rate_on(books.doc(), today));
     let freedom_potential_pct = match (positive, expected_pct) {
         (Some(value), Some(rate)) => {
             Some((invested * rate / hundred / twelve / value * hundred).round(1))
@@ -209,7 +210,7 @@ pub fn passive_income(
 /// renamed ones stay as they are, and a category deleted after its batch
 /// arrived (here or on another device, by its tombstone) does not come
 /// back. Returns whether the doc changed.
-pub(crate) fn ensure_default_categories(doc: &mut VaultDoc) -> bool {
+pub fn ensure_default_categories(doc: &mut VaultDoc) -> bool {
     let seen = doc.settings.categories_rev;
     if seen >= CATEGORIES_REV {
         return false;

@@ -4,9 +4,9 @@ use chrono::{Datelike, NaiveDate};
 use proptest::prelude::*;
 
 use super::period::{months_back, period_window};
-use crate::calendar::days_in_month;
-use crate::model::vault::DashPeriod;
-use crate::testkit::props::day;
+use mwt_base::calendar::days_in_month;
+use mwt_model::DashPeriod;
+use mwt_testkit::props::day;
 
 fn period() -> impl Strategy<Value = DashPeriod> {
     prop_oneof![

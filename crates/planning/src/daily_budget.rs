@@ -5,22 +5,22 @@ use std::collections::HashSet;
 
 use chrono::{Duration, NaiveDate};
 
-use crate::Amount;
-use crate::calendar::{self, AUTOMATION_HOUR, Calendar, first_of_month};
-use crate::model::planning::draft_to_transaction;
-use crate::model::planning::{Automation, UtilityKind};
-use crate::model::store::StoreKind;
-use crate::model::transaction::Transaction;
-use crate::model::vault::DailyBudgetMode;
-use crate::money::books::Books;
-use crate::money::worth::FlowClass;
-use crate::planning::automation_plan::{automation_occurrences, automations};
-use crate::planning::automations::automation_draft;
-use crate::planning::budget::{
+use crate::automation_plan::{automation_occurrences, automations};
+use crate::automations::automation_draft;
+use crate::budget::{
     DailyBudget, MonthAllowance, allowance_of, amount_of_days, budget_balance, budget_currency,
     manual_day_limit, store_currency,
 };
-use crate::planning::flows::{Flow, classify, flow_value, flows_between};
+use crate::flows::{Flow, classify, flow_value, flows_between};
+use mwt_base::Amount;
+use mwt_base::calendar::{self, AUTOMATION_HOUR, Calendar, first_of_month};
+use mwt_model::DailyBudgetMode;
+use mwt_model::StoreKind;
+use mwt_model::Transaction;
+use mwt_model::draft_to_transaction;
+use mwt_model::{Automation, UtilityKind};
+use mwt_money::books::Books;
+use mwt_money::worth::FlowClass;
 
 /// A probe of what an automation books on its next run.
 fn probe_of(automation: &Automation, id: &str, at: &str) -> Transaction {
@@ -38,7 +38,7 @@ fn paid_loan(probe: &Transaction) -> Option<String> {
 /// Planned income and mandatory spending of the month containing `date`:
 /// active automations by their class, rent (`Housing`) and loan payments
 /// that no automation already covers.
-pub(crate) fn month_plan(
+pub fn month_plan(
     books: &Books<'_>,
     cal: &Calendar,
     date: NaiveDate,
@@ -121,7 +121,7 @@ fn month_plan_with(
 
 /// The month-mode allowance of the month containing `date` (plan §7.3).
 /// `flows` are that month's.
-pub(crate) fn month_allowance(
+pub fn month_allowance(
     books: &Books<'_>,
     cal: &Calendar,
     date: NaiveDate,

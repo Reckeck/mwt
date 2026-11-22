@@ -4,18 +4,18 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::Amount;
-use crate::calendar::{self, Calendar};
-use crate::household::contacts::contact_balances_until;
-use crate::model::planning::Automation;
-use crate::model::store::StoreKind;
-use crate::model::transaction::Transaction;
-use crate::money::books::Books;
-use crate::money::tree::find_store;
-use crate::planning::agenda::{self as rules, UpcomingItem, UpcomingKind, Window};
-use crate::planning::automation_plan::{automation_occurrences, automation_runs, automations};
-use crate::planning::automations::{balance_at, outflow};
-use crate::time::secs_or_now;
+use crate::agenda::{self as rules, UpcomingItem, UpcomingKind, Window};
+use crate::automation_plan::{automation_occurrences, automation_runs, automations};
+use crate::automations::{balance_at, outflow};
+use mwt_base::Amount;
+use mwt_base::calendar::{self, Calendar};
+use mwt_base::time::secs_or_now;
+use mwt_household::contacts::contact_balances_until;
+use mwt_model::Automation;
+use mwt_model::StoreKind;
+use mwt_model::Transaction;
+use mwt_money::books::Books;
+use mwt_money::tree::find_store;
 
 /// A forecast balance, seeded from the real one on first use.
 fn forecast_balance(

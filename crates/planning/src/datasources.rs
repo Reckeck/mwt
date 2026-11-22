@@ -4,20 +4,21 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::error::{Error, Result};
-use crate::model::datasource::Extracted;
-use crate::model::datasource::{
+use crate::notifications::{notice_at, notice_title};
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result};
+use mwt_model::Extracted;
+use mwt_model::InflationMode;
+use mwt_model::{
     AssetPriceSource, BROKEN_AFTER, DataSource, DepositRateSource, JUMP_FACTOR, MAX_SOURCE_HISTORY,
     NumberFormat, SourceInterval, SourceMethod, SourceOutput, SourceStatus, SourceValue,
 };
-use crate::model::inflation::InflationMode;
-use crate::model::notify::{NoticeCategory, NoticeRecord};
-use crate::model::vault::{PricePoint, VaultDoc};
-use crate::planning::notifications::{notice_at, notice_title};
+use mwt_model::{NoticeCategory, NoticeRecord};
+use mwt_model::{PricePoint, VaultDoc};
 
 /// Where a source's value goes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SourceUse {
     /// The currency's inflation, `InflationMode::Source`.
@@ -31,7 +32,8 @@ pub enum SourceUse {
 }
 
 /// A source with the places that use it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DataSourceView {
     pub source: DataSource,
     pub used_by: Vec<SourceUse>,
@@ -39,7 +41,8 @@ pub struct DataSourceView {
 
 /// What the form sends. `uses` replaces the inflation, price and deposit uses
 /// of the source; workflow uses are ignored.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DataSourceDraft {
     #[serde(default)]
     pub id: Option<String>,
@@ -477,7 +480,7 @@ fn broken_notice(source: &DataSource, at: &str, ru: bool) -> NoticeRecord {
         format!("source:{}:broken:{at}", source.id),
         notice_title(NoticeCategory::Rates, ru),
         body,
-        Some(crate::routes::AUTOMATIONS_SOURCES.into()),
+        Some(mwt_base::routes::AUTOMATIONS_SOURCES.into()),
         at.to_string(),
         at.to_string(),
     )
@@ -506,7 +509,7 @@ fn pending_notice(
         format!("source:{}:pending:{at}", source.id),
         notice_title(NoticeCategory::Rates, ru),
         body,
-        Some(crate::routes::AUTOMATIONS_SOURCES.into()),
+        Some(mwt_base::routes::AUTOMATIONS_SOURCES.into()),
         at.to_string(),
         at.to_string(),
     )

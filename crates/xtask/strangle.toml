@@ -12,7 +12,7 @@
 
 service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
-scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src"]
+scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src", "crates/planning/src"]
 
 # Files every area task may change besides its own (spec D5).
 grants = ["crates/core/src/bin/gen_types.rs"]
@@ -34,6 +34,7 @@ sync = "crates/sync/src"
 money = "crates/money/src"
 household = "crates/household/src"
 workflow = "crates/workflow/src"
+planning = "crates/planning/src"
 
 # Groups whose stems keep their facade tests in a directory of their own.
 [facade_test_dirs]
@@ -131,7 +132,7 @@ files = ["crates/core/src/usecases/react_tests.rs"]
 [[foundation]]
 # Stream D: tests that the planning scenarios emit the automation and goal events (observed through the reactions).
 task = "D"
-files = ["crates/core/src/planning/events_tests.rs"]
+files = ["crates/core/src/planning_facade_tests/events_tests.rs"]
 
 [[foundation]]
 # The module wiring `scaffold` writes; the area stubs belong to their area tasks.
@@ -143,7 +144,7 @@ files = [
     "crates/core/src/cryptotrack/mod.rs",
     "crates/household/src/lib.rs",
     "crates/core/src/money/mod.rs",
-    "crates/core/src/planning/mod.rs",
+    "crates/planning/src/lib.rs",
     "crates/core/src/reports/mod.rs",
     "crates/core/src/sync/mod.rs",
     "crates/core/src/vault/mod.rs",
@@ -212,7 +213,7 @@ files = [
 # deleted from kernel/books.rs. Call sites only; area modules keep their shape.
 task = "T58"
 files = [
-    "crates/core/src/money/", "crates/household/src/", "crates/core/src/planning/",
+    "crates/core/src/money/", "crates/household/src/", "crates/planning/src/",
     "crates/core/src/reports/", "crates/core/src/cryptotrack/", "crates/workflow/src/",
     "crates/core/src/usecases/", "crates/core/src/kernel/books.rs",
     # Forwards in service/ that lose their last caller are deleted (orchestrator decision 2026-11-20).
@@ -789,7 +790,7 @@ files = [
     "crates/core/src/usecases/planning/automation_rules.rs",
     "crates/core/src/usecases/planning/automations.rs",
     "crates/core/src/usecases/planning/budget.rs",
-    "crates/core/src/planning/",
+    "crates/planning/src/",
     "crates/core/src/model/",
     "crates/core/src/reports/notify_snapshot.rs",
     "crates/workflow/src/nodes/actions.rs",
@@ -804,9 +805,9 @@ files = [
 task = "T226"
 files = [
   "crates/core/src/money/",
-  "crates/core/src/planning/goals.rs",
-  "crates/core/src/planning/emergency.rs",
-  "crates/core/src/planning/passive.rs",
+  "crates/planning/src/goals.rs",
+  "crates/planning/src/emergency.rs",
+  "crates/planning/src/passive.rs",
   "crates/workflow/src/service/vars.rs",
   "crates/core/src/reports/overview.rs",
   "crates/core/src/kernel/books.rs",
@@ -853,7 +854,7 @@ files = [
 # T227/T229/T125 (z10): budget and household reads move down and take &Books; T125 counts unpriced fees.
 task = "T227"
 files = [
-  "crates/core/src/planning/",
+  "crates/planning/src/",
   "crates/core/src/reports/",
   "crates/household/src/",
   "crates/core/src/money/portfolio.rs",
@@ -884,7 +885,7 @@ files = [
 task = "T230"
 files = [
   "crates/core/src/kernel/books.rs",
-  "crates/core/src/planning/",
+  "crates/planning/src/",
   "crates/core/src/reports/",
   "crates/household/src/",
   "crates/core/src/money/",
@@ -925,7 +926,7 @@ task = "T241"
 files = [
   "crates/core/src/kernel/books.rs",
   "crates/core/src/money/",
-  "crates/core/src/planning/",
+  "crates/planning/src/",
   "crates/workflow/src/",
   "crates/core/src/usecases/money/",
   "crates/core/src/usecases/workflow/",

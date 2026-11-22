@@ -3196,6 +3196,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-planning"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "mwt-base",
+ "mwt-household",
+ "mwt-model",
+ "mwt-money",
+ "mwt-testkit",
+ "proptest",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
 name = "mwt-sync"
 version = "0.1.0"
 dependencies = [
@@ -6533,6 +6550,7 @@ dependencies = [
  "mwt-model",
  "mwt-money",
  "mwt-net",
+ "mwt-planning",
  "mwt-sync",
  "mwt-testkit",
  "mwt-vault",

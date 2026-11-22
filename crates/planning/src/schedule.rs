@@ -2,8 +2,8 @@
 
 use std::collections::HashSet;
 
-use crate::calendar::Calendar;
-use crate::time::LocalDate;
+use mwt_base::calendar::Calendar;
+use mwt_base::time::LocalDate;
 
 /// A processed planned moment: `(workflow id, stored local date, RFC3339 moment)`.
 pub type Processed = (String, Option<LocalDate>, String);
@@ -35,7 +35,7 @@ pub fn fresh_moments(moments: &[i64], done: &HashSet<LocalDate>, cal: &Calendar)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::calendar::iso;
+    use mwt_base::calendar::iso;
 
     // 2026-03-15 02:00:00Z
     const BANGKOK_9AM: i64 = 1_773_540_000;

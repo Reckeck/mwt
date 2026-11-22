@@ -11,19 +11,19 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{Datelike, Duration, NaiveDate};
 
-use crate::Amount;
-use crate::calendar::{self, Calendar, clamp_day, first_of_month, next_month};
-use crate::model::contact::DebtTerms;
-use crate::model::notify::NoticeCategory;
-use crate::model::planning::{
+use mwt_base::Amount;
+use mwt_base::calendar::{self, Calendar, clamp_day, first_of_month, next_month};
+use mwt_base::time::secs_or_now;
+use mwt_model::DebtTerms;
+use mwt_model::NoticeCategory;
+use mwt_model::{LegRole, Transaction};
+use mwt_model::{PropertyCategory, StoreKind, SubType};
+use mwt_model::{
     Reminder, ReminderRepeat, ReminderSource, ReminderSourceKind, RepeatUnit, UtilityKind,
 };
-use crate::model::store::{PropertyCategory, StoreKind, SubType};
-use crate::model::transaction::{LegRole, Transaction};
-use crate::time::secs_or_now;
 
-use crate::model::vault::VaultDoc;
-use crate::planning::agenda::next_occurrence;
+use crate::agenda::next_occurrence;
+use mwt_model::VaultDoc;
 
 /// When a source's event happens.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -48,7 +48,7 @@ pub(crate) struct Spec {
 /// The text of the automatic reminders in the reader's language and in the
 /// other one, by source. The stored text is in the language of the device that
 /// wrote it, so a text equal to either rendering is still the generated one.
-pub(crate) struct Renderings {
+pub struct Renderings {
     mine: HashMap<ReminderSource, String>,
     other: HashMap<ReminderSource, String>,
 }
@@ -86,7 +86,7 @@ pub fn category_of(kind: ReminderSourceKind) -> NoticeCategory {
 
 /// The part of a source that never changes with its schedule: its kind and
 /// the id of the entity (loan, property, deposit...) behind it.
-pub(crate) fn source_identity(source: &ReminderSource) -> String {
+pub fn source_identity(source: &ReminderSource) -> String {
     let kind = serde_json::to_value(source.kind)
         .ok()
         .and_then(|value| value.as_str().map(str::to_string))
@@ -457,7 +457,7 @@ pub(crate) fn auto_specs(
 }
 
 /// Both renderings of every automatic reminder's text, by source.
-pub(crate) fn auto_renderings(
+pub fn auto_renderings(
     doc: &VaultDoc,
     open_debt: impl Fn(&DebtTerms) -> Amount,
     today: NaiveDate,
@@ -480,7 +480,7 @@ pub(crate) fn auto_renderings(
 /// wrote it; when it is one of the two renderings of its source it is
 /// shown in the reader's language, otherwise (the user typed it, or the
 /// data moved on) as it is. Nothing is written.
-pub(crate) fn localized(mut reminders: Vec<Reminder>, renderings: &Renderings) -> Vec<Reminder> {
+pub fn localized(mut reminders: Vec<Reminder>, renderings: &Renderings) -> Vec<Reminder> {
     for reminder in &mut reminders {
         if let Some(text) = renderings.shown(reminder) {
             reminder.text = text.to_string();
@@ -492,7 +492,7 @@ pub(crate) fn localized(mut reminders: Vec<Reminder>, renderings: &Renderings) -
 /// The reminders as they must be after a sync at `now`, so they match the
 /// data: the automatic ones created, moved and removed. `None` when nothing
 /// changes.
-pub(crate) fn synced_reminders(
+pub fn synced_reminders(
     doc: &VaultDoc,
     open_debt: impl Fn(&DebtTerms) -> Amount,
     now: i64,

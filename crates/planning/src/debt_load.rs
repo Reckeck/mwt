@@ -3,17 +3,17 @@
 //! the pure functions of `household::debts`. It sits in `planning` because the
 //! income basis does; `household` may not call up.
 
-use crate::calendar::{self, Calendar};
-use crate::error::Result;
-use crate::household::debts::{
+use crate::budget::{budget_currency, income_basis, store_currency};
+use crate::goals::store_values_usd;
+use mwt_base::calendar::{self, Calendar};
+use mwt_base::error::Result;
+use mwt_household::debts::{
     DTI_MONTHS, DebtLoad, IncomeBasis, LoanContext, LoanInputs, debt_load_of, finished_months,
     loan_status, loan_stores,
 };
-use crate::money::books::Books;
-use crate::money::inflation::inflation_on;
-use crate::money::interest::key_rate_on;
-use crate::planning::budget::{budget_currency, income_basis, store_currency};
-use crate::planning::goals::store_values_usd;
+use mwt_money::books::Books;
+use mwt_money::inflation::inflation_on;
+use mwt_money::interest::key_rate_on;
 
 /// Every live loan and credit card with a debt or a payment, their class
 /// and DTI. `manual` is the hand-entered inflation table.

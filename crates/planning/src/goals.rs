@@ -5,15 +5,15 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{Datelike, NaiveDate};
 
-use crate::Amount;
-use crate::calendar::Calendar;
-use crate::error::{Error, Result};
-use crate::model::planning::{Envelope, Goal};
-use crate::model::store::StoreScope;
-use crate::model::transaction::LegRole;
-use crate::model::vault::VaultDoc;
-use crate::money::books::Books;
-use crate::time::secs_or_now;
+use mwt_base::Amount;
+use mwt_base::calendar::Calendar;
+use mwt_base::error::{Error, Result};
+use mwt_base::time::secs_or_now;
+use mwt_model::LegRole;
+use mwt_model::StoreScope;
+use mwt_model::VaultDoc;
+use mwt_model::{Envelope, Goal};
+use mwt_money::books::Books;
 
 use super::scenarios::{find_calc_scenario, planned_balance};
 
@@ -80,7 +80,8 @@ pub fn months_to_target(
 }
 
 /// Why a goal is marked "Revise".
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum RealismIssue {
     /// Needs more a month than the user said they can put aside.
@@ -95,7 +96,8 @@ pub enum RealismIssue {
 }
 
 /// A deleted goal and what went with it: enough to undo.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct GoalDeleted {
     pub goal: Goal,
     pub envelopes: Vec<Envelope>,
@@ -103,7 +105,8 @@ pub struct GoalDeleted {
     pub workflow_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct GoalProgress {
     pub goal: Goal,
     /// Current value of the goal's share of its stores, in the goal currency.
@@ -134,7 +137,8 @@ pub struct GoalProgress {
     pub deposits: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct GoalCalendarMonth {
     /// `YYYY-MM`.
     pub month: String,
@@ -146,7 +150,8 @@ pub struct GoalCalendarMonth {
     pub done: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct GoalCalendar {
     pub year: i32,
     pub currency: String,
@@ -353,12 +358,12 @@ pub fn plan_restore_goal(doc: &VaultDoc, deleted: &GoalDeleted) -> Result<Vec<St
 // -- shares of shared stores ----------------------------------------------
 
 /// Every store id a scope covers.
-pub(crate) fn resolve_scope(books: &Books<'_>, scope: &StoreScope) -> HashSet<String> {
-    crate::money::tree::resolve_scope(books.doc(), scope)
+pub fn resolve_scope(books: &Books<'_>, scope: &StoreScope) -> HashSet<String> {
+    mwt_money::tree::resolve_scope(books.doc(), scope)
 }
 
 /// Current USD value of each store.
-pub(crate) fn store_values_usd(books: &Books<'_>) -> HashMap<String, Amount> {
+pub fn store_values_usd(books: &Books<'_>) -> HashMap<String, Amount> {
     let mut out: HashMap<String, Amount> = HashMap::new();
     for holding in &books.doc().holdings {
         if holding.asset.is_derivative() {
@@ -392,7 +397,7 @@ pub(crate) fn planned_usd(books: &Books<'_>, goal: &Goal, cal: &Calendar, now: i
 /// proportion to their planned monthly contribution. No goal gets more
 /// than its target; the excess goes to the next goal by importance.
 /// Returns `(allocated, scope value)` per goal id.
-pub(crate) fn goal_allocations(
+pub fn goal_allocations(
     books: &Books<'_>,
     cal: &Calendar,
     now: i64,

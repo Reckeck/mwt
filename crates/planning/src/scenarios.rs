@@ -2,14 +2,14 @@
 //! The scenarios that write them, and the goal a scenario makes, live in
 //! `usecases::planning::scenarios`.
 
-use crate::Amount;
-use crate::calc::invest::{self, CapFreq, ContributionStage, Freq, InvestInput};
-use crate::calendar::{self, Calendar};
-use crate::error::{Error, Result};
-use crate::model::deposit::Capitalization;
-use crate::model::planning::{CalcScenario, ScenarioSource};
-use crate::model::vault::VaultDoc;
-use crate::money::books::Books;
+use mwt_base::Amount;
+use mwt_base::calc::invest::{self, CapFreq, ContributionStage, Freq, InvestInput};
+use mwt_base::calendar::{self, Calendar};
+use mwt_base::error::{Error, Result};
+use mwt_model::Capitalization;
+use mwt_model::VaultDoc;
+use mwt_model::{CalcScenario, ScenarioSource};
+use mwt_money::books::Books;
 
 use super::budget::income_basis;
 use super::goals::{resolve_scope, store_values_usd};
@@ -20,7 +20,8 @@ pub const INCOME_MONTHS: [u8; 3] = [3, 6, 12];
 pub const SCENARIO_GOAL_PRIORITY: u8 = 3;
 
 /// What the user saves: `id = None` makes a new scenario.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CalcScenarioDraft {
     pub id: Option<String>,
     pub name: String,
@@ -30,14 +31,16 @@ pub struct CalcScenarioDraft {
 }
 
 /// A deleted scenario and the goals it was unlinked from: enough to undo.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CalcScenarioDeleted {
     pub scenario: CalcScenario,
     pub goal_ids: Vec<String>,
 }
 
 /// Numbers "From your data" puts into the calculator, with where they came from.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ScenarioPrefill {
     /// Value of the source wallets in the scenario currency.
     pub initial: Amount,

@@ -3,6 +3,9 @@
 //! (crate-split T17). The files are named `<stem>_tests.rs`.
 
 mod agenda_tests;
+// Stays under `service/agenda/`: `strangle.toml` still lists that directory in the agenda area.
+#[path = "../service/agenda/alert_tests.rs"]
+mod alert_tests;
 mod allocation_tests;
 mod auto_reminders_tests;
 mod automation_card_tests;

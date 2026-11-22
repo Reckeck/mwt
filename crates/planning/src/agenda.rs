@@ -8,24 +8,24 @@ use std::collections::HashSet;
 
 use chrono::{Duration, NaiveDate};
 
-use crate::Amount;
-use crate::calendar::{self, AUTOMATION_HOUR, Calendar, clamp_day, first_of_month, next_month};
-use crate::error::{Error, Result};
-use crate::model::contact::DebtTerms;
-use crate::model::planning::{
+use crate::automations::outflow;
+use mwt_base::Amount;
+use mwt_base::calendar::{self, AUTOMATION_HOUR, Calendar, clamp_day, first_of_month, next_month};
+use mwt_base::error::{Error, Result};
+use mwt_base::time::{secs_or_now, unix_secs};
+use mwt_model::DebtTerms;
+use mwt_model::VaultDoc;
+use mwt_model::{
     AlertCondition, Automation, AutomationOutcome, AutomationRun, PriceAlert, Reminder,
     ReminderPay, ReminderRepeat, UtilityKind,
 };
-use crate::model::store::{AssetRef, StoreKind};
-use crate::model::vault::VaultDoc;
-use crate::planning::automations::outflow;
-use crate::time::{secs_or_now, unix_secs};
+use mwt_model::{AssetRef, StoreKind};
 
 /// How many dates of one repeating reminder the agenda lists at most.
 const MAX_REPEATS_LISTED: usize = 60;
 
 /// When a reminder is due: its date, or the end of its snooze if later.
-pub(crate) fn reminder_secs(reminder: &Reminder) -> i64 {
+pub fn reminder_secs(reminder: &Reminder) -> i64 {
     let due = secs_or_now(&reminder.due_at);
     reminder
         .snoozed_until
@@ -39,7 +39,7 @@ pub(crate) fn reminder_is_due(reminder: &Reminder, now: i64) -> bool {
 }
 
 /// The first date of a repeat after both `due_at` and `now`, RFC3339.
-pub(crate) fn next_occurrence(repeat: ReminderRepeat, due_at: &str, now: i64) -> Option<String> {
+pub fn next_occurrence(repeat: ReminderRepeat, due_at: &str, now: i64) -> Option<String> {
     let anchor = chrono::DateTime::parse_from_rfc3339(due_at)
         .ok()?
         .with_timezone(&chrono::Utc);
@@ -65,7 +65,8 @@ pub struct PriceAlertDraft {
     pub repeats: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum UpcomingKind {
     Automation,
@@ -82,7 +83,8 @@ pub enum UpcomingKind {
 }
 
 /// One thing on the agenda.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpcomingItem {
     pub kind: UpcomingKind,
     /// Automation, utility item, store, reminder or run id.
@@ -626,7 +628,3 @@ pub fn run_items(
 pub fn local_day(cal: &Calendar, secs: i64) -> String {
     day_text(cal.date_of(secs))
 }
-
-#[path = "../service/agenda/alert_tests.rs"]
-#[cfg(test)]
-mod alert_tests;
