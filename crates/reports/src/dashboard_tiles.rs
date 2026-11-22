@@ -7,21 +7,22 @@ use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use super::comparison::{BaseKind, Comparison};
-use crate::Amount;
-use crate::calendar::{self, Calendar};
-use crate::model::vault::DashPeriod;
-use crate::money::books::Books;
-use crate::money::portfolio::history_series;
-use crate::money::worth::FlowClass;
-use crate::planning::budget::budget_currency;
-use crate::planning::flows::flows_between;
-use crate::planning::period::{PeriodWindow, months_back, period_window};
+use mwt_base::Amount;
+use mwt_base::calendar::{self, Calendar};
+use mwt_model::DashPeriod;
+use mwt_money::books::Books;
+use mwt_money::portfolio::history_series;
+use mwt_money::worth::FlowClass;
+use mwt_planning::budget::budget_currency;
+use mwt_planning::flows::flows_between;
+use mwt_planning::period::{PeriodWindow, months_back, period_window};
 
 /// How many growing categories "This month" names.
 const TOP_GROWTH: usize = 3;
 
 /// A spending category that grew against the same date of the last month.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CategoryGrowth {
     /// `Category::key`.
     pub category: String,
@@ -30,7 +31,8 @@ pub struct CategoryGrowth {
 }
 
 /// The month so far against the previous month to the same date.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MonthPace {
     pub currency: String,
     /// `YYYY-MM`.
@@ -54,7 +56,8 @@ pub struct MonthPace {
 }
 
 /// The capital over a period: now against the period's first day.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct NetWorthTrend {
     pub currency: String,
     pub period: DashPeriod,
@@ -113,7 +116,7 @@ pub fn month_pace(books: &Books, now: i64, zone: &str) -> MonthPace {
     let current = pace_totals(books, &cal, &currency, first, today);
     let previous = pace_totals(books, &cal, &currency, prev_first, prev_today);
     let has_history = books.doc().transactions.iter().any(|tx| {
-        crate::time::unix_secs(&tx.meta().timestamp)
+        mwt_base::time::unix_secs(&tx.meta().timestamp)
             .is_some_and(|secs| cal.date_of(secs) <= prev_today)
     });
     let base = |value: Amount| has_history.then_some(value);

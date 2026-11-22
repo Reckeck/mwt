@@ -8,25 +8,26 @@
 
 use chrono::NaiveDate;
 
-use crate::Amount;
-use crate::calendar::Calendar;
-use crate::error::Result;
-use crate::household::debts::{DebtLoad, LoanClass};
-use crate::model::planning::{HealthColor, HealthReasonCode};
-use crate::money::books::Books;
-use crate::planning::budget::budget_currency;
-use crate::planning::debt_load::debt_load;
-use crate::planning::emergency::{EmergencyStatus, emergency_fund_status};
-use crate::planning::health::{
+use crate::insights::{Insight, InsightCode};
+use mwt_base::Amount;
+use mwt_base::calendar::Calendar;
+use mwt_base::error::Result;
+use mwt_household::debts::{DebtLoad, LoanClass};
+use mwt_model::{HealthColor, HealthReasonCode};
+use mwt_money::books::Books;
+use mwt_planning::budget::budget_currency;
+use mwt_planning::debt_load::debt_load;
+use mwt_planning::emergency::{EmergencyStatus, emergency_fund_status};
+use mwt_planning::health::{
     DTI_ELEVATED_PCT, DTI_HIGH_PCT, FUND_MIN_MONTHS, FUND_SAFE_MONTHS, HealthReason, RECENT_MONTHS,
     SavingsMonth, finished_months, months_average, percent, savings_figures, savings_series,
     years_back,
 };
-use crate::planning::passive::{PassiveIncome, passive_income};
-use crate::reports::insights::{Insight, InsightCode};
+use mwt_planning::passive::{PassiveIncome, passive_income};
 
 /// The whole checkup (plan C4).
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct HealthReport {
     pub color: HealthColor,
     /// Worst first.
@@ -49,7 +50,7 @@ pub struct HealthReport {
 
 /// What the light is judged from; built by [`capital_health`].
 #[derive(Debug, Clone, Default)]
-pub(crate) struct HealthFacts {
+pub struct HealthFacts {
     /// A finished month of history or a hand-entered month exists.
     pub has_history: bool,
     /// `(store id, class, owed, rate)` of each loan.
@@ -77,7 +78,7 @@ fn reason(code: HealthReasonCode, level: HealthColor) -> HealthReason {
 }
 
 /// The light and its reasons, worst first.
-pub(crate) fn judge(facts: &HealthFacts) -> (HealthColor, Vec<HealthReason>) {
+pub fn judge(facts: &HealthFacts) -> (HealthColor, Vec<HealthReason>) {
     use HealthColor::{Green, NoData, Red, Yellow};
     use HealthReasonCode as Code;
     let mut out = Vec::new();

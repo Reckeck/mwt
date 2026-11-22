@@ -1,8 +1,8 @@
 //! The crypto module's capital history as the reports read it (spec core-strangler, D1).
 
-use crate::Amount;
-use crate::model::store::AssetRef;
-use crate::money::books::Books;
+use mwt_base::Amount;
+use mwt_model::AssetRef;
+use mwt_money::books::Books;
 
 /// What the crypto module was worth at each cutoff in USD (`None`: no record that month) and
 /// whether it already counts a replayed wallet's coins.

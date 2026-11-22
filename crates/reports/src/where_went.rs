@@ -4,22 +4,23 @@
 
 use std::collections::BTreeMap;
 
-use crate::Amount;
-use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
-use crate::time::secs_or_now;
+use mwt_base::Amount;
+use mwt_base::time::secs_or_now;
+use mwt_model::{AccountRef, DebtEffect, Transaction};
 
-use crate::model::vault::VaultDoc;
-use crate::money::books::Books;
-use crate::money::rates::RateBook;
-use crate::money::tree::find_store;
-use crate::money::worth::FlowClass;
+use mwt_model::VaultDoc;
+use mwt_money::books::Books;
+use mwt_money::rates::RateBook;
+use mwt_money::tree::find_store;
+use mwt_money::worth::FlowClass;
 
 use super::overview::{Ctx, ReportMeta, loss_report, report_flows};
 
 /// Items a row lists by name; the rest only counts.
 pub const WHERE_ITEMS: usize = 6;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum WhereKind {
     Spending,
@@ -30,7 +31,8 @@ pub enum WhereKind {
 }
 
 /// One thing behind a row: a category, a loan, a move, a buy.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WhereItem {
     /// A category key (spending), a contact (lent), the source wallet (moved,
     /// invested).
@@ -51,7 +53,8 @@ pub struct WhereItem {
     pub at: String,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WhereRow {
     pub kind: WhereKind,
     /// In the report currency: the priced part when `partial`.
@@ -63,7 +66,8 @@ pub struct WhereRow {
     pub partial: bool,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WhereReport {
     pub meta: ReportMeta,
     pub income: Amount,
@@ -114,7 +118,7 @@ pub(crate) fn where_report(books: &Books, ctx: &Ctx) -> WhereReport {
     let mut income = Amount::ZERO;
     let mut categories: BTreeMap<String, (Amount, u32)> = BTreeMap::new();
     for flow in report_flows(books, ctx, from, to) {
-        let month = crate::calendar::first_of_month(flow.date);
+        let month = mwt_base::calendar::first_of_month(flow.date);
         let value = ctx.shown(flow.value, month);
         match flow.class {
             FlowClass::Income => income += value,

@@ -6,15 +6,15 @@
 
 use chrono::{Datelike, Duration, NaiveDate};
 
-use crate::Amount;
-use crate::calendar::{self, first_of_month};
-use crate::error::Result;
-use crate::model::category::CategoryGroup;
+use mwt_base::Amount;
+use mwt_base::calendar::{self, first_of_month};
+use mwt_base::error::Result;
+use mwt_model::CategoryGroup;
 
-use crate::money::books::Books;
-use crate::money::portfolio::realized_pnl_filtered;
-use crate::planning::budget::budget_currency;
-use crate::reports::health::lifestyle_creep;
+use crate::health::lifestyle_creep;
+use mwt_money::books::Books;
+use mwt_money::portfolio::realized_pnl_filtered;
+use mwt_planning::budget::budget_currency;
 
 use super::overview::{
     CashflowReport, CategoriesReport, InflationReport, LossReport, NetworthReport, PnlReport,
@@ -27,7 +27,8 @@ const NOTABLE_GROWTH_PCT: i64 = 10;
 /// Net worth moving less than this (percent) reads as «about the same».
 const FLAT_PCT: i64 = 1;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum InsightCode {
     /// Spent more than earned: `pct` over the income, `amount` the gap.
@@ -81,7 +82,8 @@ pub enum InsightCode {
 }
 
 /// One fact a report states; which fields are set depends on the code.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Insight {
     pub code: InsightCode,
     #[serde(default)]
@@ -149,7 +151,7 @@ pub fn report_insights(report: &Report) -> Vec<Insight> {
 }
 
 /// Earned against spent over a period.
-pub(crate) fn balance_insight(income: Amount, spent: Amount) -> Option<Insight> {
+pub fn balance_insight(income: Amount, spent: Amount) -> Option<Insight> {
     if income.is_zero() && spent.is_zero() {
         return None;
     }
@@ -250,7 +252,7 @@ pub(crate) fn categories_insights(report: &CategoriesReport) -> Vec<Insight> {
 }
 
 /// Net worth from its first point to its last.
-pub(crate) fn wealth_change(first: Amount, last: Amount) -> Insight {
+pub fn wealth_change(first: Amount, last: Amount) -> Insight {
     let change = last - first;
     let pct = share(change, first);
     let flat = pct.map_or(change.is_zero(), |pct| pct.abs() < whole(FLAT_PCT));
@@ -362,7 +364,8 @@ pub(crate) fn loss_insights(report: &LossReport) -> Vec<Insight> {
 // -- overview ------------------------------------------------------------------
 
 /// «Income and spending» card: the month against the one before.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct OverviewFlow {
     pub income: Amount,
     pub spent: Amount,
@@ -375,7 +378,8 @@ pub struct OverviewFlow {
 }
 
 /// «How much I have» card: net worth now and over the month.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct OverviewWealth {
     pub net: Amount,
     pub change: Amount,
@@ -384,7 +388,8 @@ pub struct OverviewWealth {
 }
 
 /// «Investments» card: since the start of the year — a month is too short.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct OverviewInvestments {
     pub realized: Amount,
     pub fees: Amount,
@@ -394,7 +399,8 @@ pub struct OverviewInvestments {
 }
 
 /// «Year» card: what the year kept so far.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct OverviewYear {
     pub saved: Amount,
     pub saved_pct: Amount,
@@ -405,7 +411,8 @@ pub struct OverviewYear {
 }
 
 /// The analytics start screen: one card per question.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ReportOverview {
     pub currency: String,
     /// The month the cards are about, `YYYY-MM`.

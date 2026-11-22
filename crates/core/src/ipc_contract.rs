@@ -1739,7 +1739,7 @@ pub struct LinkTransactionsInput {
 
 pub use crate::model::vault::DashPeriod;
 
-pub use crate::reports::comparison::{BaseKind, Comparison};
+pub use mwt_reports::comparison::{BaseKind, Comparison};
 
 #[cfg(test)]
 mod wire_tests {

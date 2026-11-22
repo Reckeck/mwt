@@ -1,0 +1,27 @@
+[package]
+name = "mwt-reports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker reports: overview, dashboard, insights, health, comparison, where-went and notification snapshot (depends on mwt-planning, mwt-household, mwt-money, mwt-model and mwt-base only)"
+
+[lints]
+workspace = true
+
+[features]
+# `ts-rs` derives of the report types (`schema` only forwards; no report type derives `JsonSchema`); off by default, `trade-core` turns them on.
+ts = ["dep:ts-rs", "mwt-model/ts", "mwt-base/ts", "mwt-money/ts", "mwt-household/ts", "mwt-planning/ts"]
+schema = ["mwt-model/schema", "mwt-money/schema", "mwt-base/schema", "mwt-planning/schema"]
+
+[dependencies]
+mwt-base = { path = "../base" }
+mwt-model = { path = "../model" }
+mwt-money = { path = "../money" }
+mwt-household = { path = "../household" }
+mwt-planning = { path = "../planning" }
+serde.workspace = true
+serde_json.workspace = true
+rust_decimal.workspace = true
+chrono.workspace = true
+ts-rs = { workspace = true, optional = true }

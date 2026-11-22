@@ -6,11 +6,11 @@ use crate::model::planning::{HealthColor, HealthReasonCode};
 use crate::model::store::{StoreKind, StoreScope, SubType};
 use crate::model::transaction::Transaction;
 use crate::planning::health::{SAVINGS_MONTHS, SavingsMonth, savings_figures};
-use crate::reports::health::*;
 use crate::service::StoreExtras;
 use crate::service::test_support::*;
 use crate::service::{Insight, InsightCode, LoanClass, UnlockedVault};
 use crate::time::secs_or_now;
+use mwt_reports::health::*;
 use pretty_assertions::assert_eq;
 
 fn pct(raw: &str) -> Amount {

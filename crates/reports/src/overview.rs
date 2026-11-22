@@ -11,27 +11,27 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use chrono::{Datelike, Duration, NaiveDate};
 
-use crate::Amount;
-use crate::calendar::{self, Calendar, first_of_month, month_index, next_month};
-use crate::error::{Error, Result};
-use crate::model::category::CategoryGroup;
-use crate::model::store::{AssetRef, StoreKind, StoreScope};
-use crate::model::transaction::{Leg, LegRole};
-use crate::time::secs_or_now;
+use mwt_base::Amount;
+use mwt_base::calendar::{self, Calendar, first_of_month, month_index, next_month};
+use mwt_base::error::{Error, Result};
+use mwt_base::time::secs_or_now;
+use mwt_model::CategoryGroup;
+use mwt_model::{AssetRef, StoreKind, StoreScope};
+use mwt_model::{Leg, LegRole};
 
 use super::where_went::where_report;
-use crate::household::contacts::contact_balances_until;
-use crate::household::losses::{LossWindow, MonthLosses, Valuation, month_losses};
-use crate::money::books::Books;
-use crate::money::portfolio::realized_pnl_filtered;
-use crate::money::rates::RateBook;
-pub(crate) use crate::money::rates::value_at;
-use crate::money::worth::FlowClass;
-use crate::planning::agenda::UpcomingItem;
-use crate::planning::budget::{budget_currency, manual_day_limit};
-use crate::planning::daily_budget::{month_allowance, month_plan};
-use crate::planning::flows::{Flow, flows_between, leg_value_in};
-use crate::planning::upcoming::upcoming;
+use mwt_household::contacts::contact_balances_until;
+use mwt_household::losses::{LossWindow, MonthLosses, Valuation, month_losses};
+use mwt_money::books::Books;
+use mwt_money::portfolio::realized_pnl_filtered;
+use mwt_money::rates::RateBook;
+pub(crate) use mwt_money::rates::value_at;
+use mwt_money::worth::FlowClass;
+use mwt_planning::agenda::UpcomingItem;
+use mwt_planning::budget::{budget_currency, manual_day_limit};
+use mwt_planning::daily_budget::{month_allowance, month_plan};
+use mwt_planning::flows::{Flow, flows_between, leg_value_in};
+use mwt_planning::upcoming::upcoming;
 
 /// Longest range a report covers.
 pub const MAX_REPORT_MONTHS: usize = 120;
@@ -40,7 +40,8 @@ pub const PORTFOLIO_TOP: usize = 8;
 /// Above this many days the portfolio report samples monthly, else weekly.
 pub const PORTFOLIO_MONTHLY_AFTER_DAYS: i64 = 180;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum ReportKind {
     Cashflow,
@@ -56,7 +57,8 @@ pub enum ReportKind {
 }
 
 /// What every report is asked for.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ReportFilter {
     /// Wallets to cover; empty = everything.
     #[serde(default)]
@@ -79,7 +81,8 @@ pub struct ReportFilter {
 }
 
 /// What a report covers, for its header.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ReportMeta {
     pub currency: String,
     /// `YYYY-MM`, oldest first.
@@ -89,20 +92,21 @@ pub struct ReportMeta {
     pub inflation_rate: Option<Amount>,
     /// What the report says in words; filled once the report is built.
     #[serde(default)]
-    pub insights: Vec<crate::reports::insights::Insight>,
+    pub insights: Vec<crate::insights::Insight>,
 }
 
 // Losses by month and by kind, wallet, contact and chain, under the report header.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct LossReport {
     pub meta: ReportMeta,
     #[serde(flatten)]
-    #[ts(flatten)]
+    #[cfg_attr(feature = "ts", ts(flatten))]
     pub losses: MonthLosses,
 }
 
 /// The book of one request as the loss functions' valuation.
-pub(crate) struct BookValues<'book>(pub(crate) &'book RateBook);
+pub struct BookValues<'book>(pub &'book RateBook);
 
 impl Valuation for BookValues<'_> {
     fn leg_value_in(&self, leg: &Leg, currency: &str, secs: i64) -> Option<Amount> {
@@ -134,7 +138,8 @@ pub(crate) fn loss_report(books: &Books, ctx: &Ctx) -> LossReport {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CashflowRow {
     pub month: String,
     pub income: Amount,
@@ -147,14 +152,16 @@ pub struct CashflowRow {
     pub net: Amount,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CashflowReport {
     pub meta: ReportMeta,
     pub rows: Vec<CashflowRow>,
     pub total: CashflowRow,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct YearRow {
     pub month: String,
     pub income: Amount,
@@ -168,7 +175,8 @@ pub struct YearRow {
     pub empty: bool,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct YearReport {
     pub meta: ReportMeta,
     pub year: i32,
@@ -181,7 +189,8 @@ pub struct YearReport {
     pub worst_month: Option<String>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CategoryRow {
     /// Category key; empty = without a category.
     pub key: String,
@@ -200,7 +209,8 @@ pub struct CategoryRow {
     pub unpriced: u32,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CategoryGroupBlock {
     pub group: Option<CategoryGroup>,
     pub rows: Vec<CategoryRow>,
@@ -209,7 +219,8 @@ pub struct CategoryGroupBlock {
     pub total: Amount,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CategoriesReport {
     pub meta: ReportMeta,
     pub groups: Vec<CategoryGroupBlock>,
@@ -221,7 +232,8 @@ pub struct CategoriesReport {
 }
 
 /// Spending without a rate: it counts as zero, so the total is a lower bound.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UnpricedSpending {
     pub count: u32,
     /// `YYYY-MM-DD`, ascending, each once.
@@ -230,7 +242,8 @@ pub struct UnpricedSpending {
     pub currencies: Vec<String>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct NetworthPoint {
     pub month: String,
     pub financial: Amount,
@@ -245,7 +258,8 @@ pub struct NetworthPoint {
     pub net: Amount,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct NetworthReport {
     pub meta: ReportMeta,
     /// Value at the end of each month (today for this month).
@@ -256,7 +270,8 @@ pub struct NetworthReport {
     pub has_data: bool,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct StoreReportRow {
     pub store_id: String,
     pub name: String,
@@ -273,20 +288,23 @@ pub struct StoreReportRow {
     pub tx_count: u32,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct StoresReport {
     pub meta: ReportMeta,
     pub rows: Vec<StoreReportRow>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PnlRow {
     pub month: String,
     pub realized: Amount,
     pub fees: Amount,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PnlReport {
     pub meta: ReportMeta,
     pub rows: Vec<PnlRow>,
@@ -298,11 +316,12 @@ pub struct PnlReport {
     /// Realized results left out because no rate converts them to the report
     /// currency. Core-side only: it does not cross the wire.
     #[serde(skip)]
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub unpriced: u32,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PortfolioPoint {
     /// `YYYY-MM-DD`.
     pub date: String,
@@ -313,7 +332,8 @@ pub struct PortfolioPoint {
     pub shares: Vec<Amount>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PortfolioReport {
     pub meta: ReportMeta,
     /// Asset symbols, the biggest first; the last may be `""` for «other».
@@ -324,7 +344,8 @@ pub struct PortfolioReport {
     pub has_data: bool,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct InflationPoint {
     pub month: String,
     /// What one unit of that month is worth in today's money.
@@ -333,7 +354,8 @@ pub struct InflationPoint {
     pub real_net: Amount,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct InflationReport {
     pub meta: ReportMeta,
     pub points: Vec<InflationPoint>,
@@ -342,10 +364,11 @@ pub struct InflationReport {
     pub real_change_pct: Option<Amount>,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 // `Report` is a DOM type in TypeScript; a different name keeps them apart.
-#[ts(rename = "AnalyticsReport")]
+#[cfg_attr(feature = "ts", ts(rename = "AnalyticsReport"))]
 pub enum Report {
     Cashflow(CashflowReport),
     Year(Box<YearReport>),
@@ -356,7 +379,7 @@ pub enum Report {
     Portfolio(PortfolioReport),
     Inflation(InflationReport),
     Losses(LossReport),
-    Where(crate::reports::where_went::WhereReport),
+    Where(crate::where_went::WhereReport),
 }
 
 impl Report {
@@ -377,7 +400,8 @@ impl Report {
 }
 
 /// How one day of the calendar went against its allowance.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum DayStatus {
     /// No allowance to compare with.
@@ -389,7 +413,8 @@ pub enum DayStatus {
     Future,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CalendarDay {
     /// `YYYY-MM-DD`.
     pub date: String,
@@ -418,14 +443,15 @@ pub struct CalendarDay {
     pub lead_category: Option<String>,
     /// The kind of the day's first transaction: the label when no category leads.
     #[serde(default)]
-    pub lead_kind: Option<crate::model::transaction::TxKind>,
+    pub lead_kind: Option<mwt_model::TxKind>,
 }
 
 /// One notification of the log, placed on the day it was due.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CalendarNotice {
     pub key: String,
-    pub category: crate::model::notify::NoticeCategory,
+    pub category: mwt_model::NoticeCategory,
     pub title: String,
     /// RFC3339: when it was due.
     pub at: String,
@@ -433,7 +459,8 @@ pub struct CalendarNotice {
     pub link: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CalendarMonth {
     /// `YYYY-MM`.
     pub month: String,
@@ -451,7 +478,8 @@ pub struct CalendarMonth {
 }
 
 /// The month's pool, part by part: `budget = income − planned_fixed − savings`.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CalendarPool {
     /// The month's income: booked, or planned when the plan is bigger.
     pub income: Amount,
@@ -462,12 +490,12 @@ pub struct CalendarPool {
 }
 
 /// Everything a report needs to know about its range.
-pub(crate) struct Ctx {
-    pub(crate) cal: Calendar,
-    pub(crate) currency: String,
+pub struct Ctx {
+    pub cal: Calendar,
+    pub currency: String,
     /// First days of the report months.
-    pub(crate) months: Vec<NaiveDate>,
-    pub(crate) today: NaiveDate,
+    pub months: Vec<NaiveDate>,
+    pub today: NaiveDate,
     pub(crate) now: i64,
     pub(crate) rate: Option<Amount>,
     /// Today's-money coefficient per month from the monthly inflation
@@ -546,7 +574,7 @@ impl Ctx {
 
     /// `amount` of `month` as the report shows it. Pass a sum, not its parts: the rounding
     /// of real terms happens here, once.
-    pub(crate) fn shown(&self, amount: Amount, month: NaiveDate) -> Amount {
+    pub fn shown(&self, amount: Amount, month: NaiveDate) -> Amount {
         let restated = self.restated(amount, month);
         if self.real {
             restated.round(2)
@@ -597,12 +625,7 @@ type CategoryCells = (Vec<Amount>, Amount, Option<CategoryGroup>, u32);
 /// Positions per (store, asset key) at each cutoff, cutoffs ascending.
 type Positions = HashMap<(String, String), (AssetRef, Amount)>;
 
-pub(crate) fn report_ctx(
-    books: &Books,
-    filter: &ReportFilter,
-    now: i64,
-    zone: &str,
-) -> Result<Ctx> {
+pub fn report_ctx(books: &Books, filter: &ReportFilter, now: i64, zone: &str) -> Result<Ctx> {
     let cal = Calendar::new(zone);
     let today = cal.date_of(now);
     let parse = |raw: &Option<String>| -> Result<Option<NaiveDate>> {
@@ -650,16 +673,16 @@ pub(crate) fn report_ctx(
         .filter(|code| !code.is_empty())
         .unwrap_or_else(|| budget_currency(books));
     let scope = (!filter.scope.store_ids.is_empty())
-        .then(|| crate::money::tree::resolve_scope(books.doc(), &filter.scope));
+        .then(|| mwt_money::tree::resolve_scope(books.doc(), &filter.scope));
     let rate =
-        crate::money::inflation::inflation_on(books.doc(), &currency, &calendar::month_key(today));
+        mwt_money::inflation::inflation_on(books.doc(), &currency, &calendar::month_key(today));
     // The inflation report reads coefficients even in nominal terms.
     // From the start of the previous period: the categories report compares with it.
     let coefficients = months
         .first()
         .and_then(|first| {
             let earliest = previous_period_start(*first, months.len());
-            crate::money::inflation::real_coefficients(books.doc(), &currency, earliest, today)
+            mwt_money::inflation::real_coefficients(books.doc(), &currency, earliest, today)
         })
         .unwrap_or_default();
     Ok(Ctx {
@@ -704,13 +727,13 @@ pub fn report(
         ReportKind::Losses => Report::Losses(loss_report(books, &ctx)),
         ReportKind::Where => Report::Where(where_report(books, &ctx)),
     };
-    let insights = crate::reports::insights::report_insights(&report);
+    let insights = crate::insights::report_insights(&report);
     report.meta_mut().insights = insights;
     Ok(report)
 }
 
 /// Classified flows of the report range (or `[from, to)`), in scope.
-pub(crate) fn report_flows(books: &Books, ctx: &Ctx, from: i64, to: i64) -> Vec<Flow> {
+pub fn report_flows(books: &Books, ctx: &Ctx, from: i64, to: i64) -> Vec<Flow> {
     flows_between(books, &ctx.cal, &ctx.currency, from, to)
         .into_iter()
         .filter(|flow| {
@@ -723,7 +746,7 @@ pub(crate) fn report_flows(books: &Books, ctx: &Ctx, from: i64, to: i64) -> Vec<
 
 // -- cash flow --------------------------------------------------------------
 
-pub(crate) fn cashflow_report(books: &Books, ctx: &Ctx) -> CashflowReport {
+pub fn cashflow_report(books: &Books, ctx: &Ctx) -> CashflowReport {
     let mut rows: Vec<CashflowRow> = ctx
         .months
         .iter()
@@ -784,7 +807,7 @@ pub(crate) fn cashflow_report(books: &Books, ctx: &Ctx) -> CashflowReport {
 
 // -- the year -------------------------------------------------------------------
 
-pub(crate) fn year_report(books: &Books, ctx: &Ctx) -> YearReport {
+pub fn year_report(books: &Books, ctx: &Ctx) -> YearReport {
     let rate = books.doc().settings.savings_rate;
     let cash = cashflow_report(books, ctx);
     let finish = |row: &mut YearRow| {
@@ -852,7 +875,7 @@ pub(crate) fn year_report(books: &Books, ctx: &Ctx) -> YearReport {
 
 // -- categories ---------------------------------------------------------------
 
-pub(crate) fn categories_report(books: &Books, ctx: &Ctx) -> CategoriesReport {
+pub fn categories_report(books: &Books, ctx: &Ctx) -> CategoriesReport {
     let span = ctx.months.len();
     let previous_start = ctx.previous_start();
     let flows = report_flows(books, ctx, ctx.cal.start_of(previous_start), ctx.end());
@@ -1006,7 +1029,7 @@ pub(crate) fn positions_at(books: &Books, cutoffs: &[i64]) -> Vec<Positions> {
     out
 }
 
-pub(crate) fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {
+pub fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {
     let book = books.rate_book();
     let kinds: HashMap<&str, StoreKind> = books
         .doc()
@@ -1125,7 +1148,7 @@ pub(crate) fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {
         .collect()
 }
 
-pub(crate) fn networth_report(books: &Books, ctx: &Ctx) -> NetworthReport {
+pub fn networth_report(books: &Books, ctx: &Ctx) -> NetworthReport {
     let points = networth_points(books, ctx);
     let has_data = points.iter().any(|point| {
         [
@@ -1147,7 +1170,7 @@ pub(crate) fn networth_report(books: &Books, ctx: &Ctx) -> NetworthReport {
 
 // -- wallets ----------------------------------------------------------------------
 
-pub(crate) fn stores_report(books: &Books, ctx: &Ctx) -> StoresReport {
+pub fn stores_report(books: &Books, ctx: &Ctx) -> StoresReport {
     let book = books.rate_book();
     // The period closes at its last second (or now): the closing value and the flows
     // count the same operations.
@@ -1167,7 +1190,7 @@ pub(crate) fn stores_report(books: &Books, ctx: &Ctx) -> StoresReport {
         .iter()
         .filter(|store| ctx.in_scope(&store.id))
         .map(|store| {
-            let path: Vec<String> = crate::money::tree::ancestors_of(books.doc(), &store.id)
+            let path: Vec<String> = mwt_money::tree::ancestors_of(books.doc(), &store.id)
                 .iter()
                 .map(|parent| parent.name.clone())
                 .chain(std::iter::once(store.name.clone()))
@@ -1233,7 +1256,7 @@ pub(crate) fn stores_report(books: &Books, ctx: &Ctx) -> StoresReport {
 
 // -- PnL --------------------------------------------------------------------------
 
-pub(crate) fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
+pub fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
     let book = books.rate_book();
     let base = books.base_and_fx().0;
     let mut has_data = false;
@@ -1298,7 +1321,7 @@ pub(crate) fn pnl_report(books: &Books, ctx: &Ctx) -> PnlReport {
 
 // -- portfolio ----------------------------------------------------------------------
 
-pub(crate) fn portfolio_report(books: &Books, ctx: &Ctx) -> PortfolioReport {
+pub fn portfolio_report(books: &Books, ctx: &Ctx) -> PortfolioReport {
     let book = books.rate_book();
     let first = ctx.months[0];
     let last = (ctx
@@ -1422,7 +1445,7 @@ pub(crate) fn portfolio_report(books: &Books, ctx: &Ctx) -> PortfolioReport {
 
 // -- inflation ------------------------------------------------------------------------
 
-pub(crate) fn inflation_report(books: &Books, ctx: &Ctx) -> InflationReport {
+pub fn inflation_report(books: &Books, ctx: &Ctx) -> InflationReport {
     let nominal_ctx = Ctx {
         real: false,
         scope: ctx.scope.clone(),
@@ -1488,8 +1511,7 @@ pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Resul
         _ => false,
     };
     let mut tx_counts: HashMap<NaiveDate, u32> = HashMap::new();
-    let mut first_kinds: HashMap<NaiveDate, (i64, crate::model::transaction::TxKind)> =
-        HashMap::new();
+    let mut first_kinds: HashMap<NaiveDate, (i64, mwt_model::TxKind)> = HashMap::new();
     for tx in &books.doc().transactions {
         let secs = secs_or_now(&tx.meta().timestamp);
         if secs >= from && secs < to {
@@ -1938,7 +1960,7 @@ pub fn report_csv(report: &Report) -> String {
 }
 
 /// Lines joined as a spreadsheet file: a BOM first, `;` fields, CRLF lines.
-pub(crate) fn csv_text(lines: Vec<Vec<String>>) -> String {
+pub fn csv_text(lines: Vec<Vec<String>>) -> String {
     let mut out = String::from("\u{feff}");
     for line in lines {
         out.push_str(&csv_line(&line));
