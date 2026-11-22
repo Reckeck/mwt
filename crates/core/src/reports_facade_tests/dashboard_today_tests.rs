@@ -106,7 +106,7 @@ fn the_strip_keeps_three_todos_due_first() {
             unit: Default::default(),
         });
     }
-    let todos = vault.all_today_todos(now, "UTC", None);
+    let todos = mwt_reports::dashboard_today::all_today_todos(&vault.books(), now, "UTC", None);
     let titles: Vec<_> = todos.iter().map(|todo| todo.title.as_str()).collect();
     assert_eq!(titles, ["Soon", "Mid", "Late"]);
     assert!(
@@ -175,7 +175,8 @@ fn unpaid_utilities_past_the_pay_day_and_todays_reminder_are_things_to_do() {
     )
     .unwrap();
 
-    let todos = vault.all_today_todos(now, "UTC", Some("usd"));
+    let todos =
+        mwt_reports::dashboard_today::all_today_todos(&vault.books(), now, "UTC", Some("usd"));
     let kinds: Vec<_> = todos
         .iter()
         .map(|todo| (todo.kind, todo.title.as_str()))

@@ -214,9 +214,9 @@ fn a_constant_series_matches_the_flat_rate() {
         .map(|month| reading("rub", &format!("2025-{month:02}"), "8"))
         .collect();
     crate::usecases::money::inflation::apply_inflation(&mut vault, &rows);
-    let table = vault
-        .real_coefficients("rub", day("2024-10-01"), today)
-        .unwrap();
+    let table =
+        crate::money::inflation::real_coefficients(&vault.doc, "rub", day("2024-10-01"), today)
+            .unwrap();
     assert_eq!(table[&day("2026-10-01")], Amount::from(1));
     for (month, coefficient) in &table {
         let elapsed =
@@ -240,22 +240,34 @@ fn coefficients_follow_the_months() {
             reading("rub", "2026-09", "0"),
         ],
     );
-    let table = vault
-        .real_coefficients("rub", day("2026-08-01"), day("2026-10-05"))
-        .unwrap();
+    let table = crate::money::inflation::real_coefficients(
+        &vault.doc,
+        "rub",
+        day("2026-08-01"),
+        day("2026-10-05"),
+    )
+    .unwrap();
     // September at 0 % and October carrying it: September's money kept its value.
     assert_eq!(table[&day("2026-09-01")], Amount::from(1));
     assert_eq!(table[&day("2026-08-01")], Amount::from(1));
-    let table = vault
-        .real_coefficients("rub", day("2026-07-01"), day("2026-09-05"))
-        .unwrap();
+    let table = crate::money::inflation::real_coefficients(
+        &vault.doc,
+        "rub",
+        day("2026-07-01"),
+        day("2026-09-05"),
+    )
+    .unwrap();
     // August at 12 %: one month of it on July's money.
     let month_of_twelve = amount("1.12").root_n(12);
     assert_eq!(table[&day("2026-07-01")], month_of_twelve);
     assert!(
-        vault
-            .real_coefficients("thb", day("2026-07-01"), day("2026-09-05"))
-            .is_none()
+        crate::money::inflation::real_coefficients(
+            &vault.doc,
+            "thb",
+            day("2026-07-01"),
+            day("2026-09-05")
+        )
+        .is_none()
     );
 }
 

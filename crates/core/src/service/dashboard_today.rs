@@ -21,11 +21,4 @@ impl UnlockedVault {
             => mwt_reports::dashboard_today::dashboard_today @books;
     }
     // forward:end
-
-    // The tool forwards public methods only; the crate-private delegate is kept by hand, for the tests.
-    #[cfg(test)]
-    forward! {
-        pub(crate) fn all_today_todos(&self, now: i64, zone: &str, currency: Option<&str>) -> Vec<TodayTodo>
-            => mwt_reports::dashboard_today::all_today_todos @books;
-    }
 }

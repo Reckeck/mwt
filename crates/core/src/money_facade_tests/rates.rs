@@ -587,7 +587,7 @@ fn base_currency_cash_without_a_rate_is_not_one_usd_per_unit() {
     )
     .unwrap();
     let (_, fx) = crate::usecases::money::portfolio::base_and_fx(&vault);
-    let positions = vault.store_positions(&card, fx);
+    let positions = crate::money::portfolio::store_positions(&vault.books(), &card, fx);
     assert_eq!(positions.len(), 1);
     assert_eq!(positions[0].value_base, amount("10000"));
     assert_eq!(positions[0].value_usd, Amount::ZERO);

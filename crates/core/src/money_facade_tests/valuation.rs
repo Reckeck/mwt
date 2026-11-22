@@ -250,8 +250,11 @@ fn loyalty_prices_stay_as_they_were() {
         currency: "usd".into(),
         updated_at: String::new(),
     });
-    assert_eq!(vault.manual_price_usd("asset:POINTS"), Some(amount("0.5")));
-    assert!(vault.valuation_curve("asset:POINTS").is_none());
+    assert_eq!(
+        crate::usecases::money::capital::manual_price_usd(&vault.books(), "asset:POINTS"),
+        Some(amount("0.5"))
+    );
+    assert!(crate::money::valuation::valuation_curve(&vault.books(), "asset:POINTS").is_none());
 }
 
 /// A purchase priced by another device is signed with the currency that

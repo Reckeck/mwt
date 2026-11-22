@@ -75,11 +75,14 @@ fn a_sale_shows_the_book_value_and_the_gain() {
         fee: None,
         price: Default::default(),
     });
-    let sale = vault.sale_preview(&sell).unwrap();
+    let sale = crate::money::preview::sale_preview(&vault.books(), &sell).unwrap();
     assert_eq!(sale.currency, "usd");
     assert_eq!(sale.book_value, amount("10000"));
     assert_eq!(sale.gain, amount("2000"));
-    assert_eq!(vault.sale_preview(&payment("cash", "1", "food")), None);
+    assert_eq!(
+        crate::money::preview::sale_preview(&vault.books(), &payment("cash", "1", "food")),
+        None
+    );
 }
 
 #[test]
