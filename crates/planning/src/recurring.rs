@@ -1,9 +1,9 @@
 //! Recurring payments: was the same payment made before, and did it get dearer.
 
-use crate::Amount;
-use crate::model::VaultDoc;
-use crate::model::transaction::{AccountRef, PaymentTx, Transaction};
-use crate::time::unix_secs;
+use mwt_base::Amount;
+use mwt_base::time::unix_secs;
+use mwt_model::VaultDoc;
+use mwt_model::{AccountRef, PaymentTx, Transaction};
 
 /// How far back an earlier payment still counts as the same subscription.
 const WINDOW_DAYS: i64 = 45;

@@ -5,12 +5,12 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::Duration;
 
-use crate::calendar::{self, Calendar};
-use crate::model::planning::{AssetClass, AssetClassLink};
-use crate::model::store::{Holding, StoreKind};
-use crate::model::vault::VaultDoc;
-use crate::money::books::Books;
-use crate::{Amount, Error, Result};
+use mwt_base::calendar::{self, Calendar};
+use mwt_base::{Amount, Error, Result};
+use mwt_model::VaultDoc;
+use mwt_model::{AssetClass, AssetClassLink};
+use mwt_model::{Holding, StoreKind};
+use mwt_money::books::Books;
 
 /// Ids of the preset baskets; an empty name on one of them means «the UI's
 /// own name for it».
@@ -36,7 +36,8 @@ pub fn preset_classes() -> Vec<AssetClass> {
 }
 
 /// The baskets as the editor shows them.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AssetClassesView {
     pub classes: Vec<AssetClass>,
     /// Nothing is saved yet: these are the preset ones.
@@ -46,7 +47,8 @@ pub struct AssetClassesView {
 }
 
 /// What a basket is assigned to.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AssetClassTarget {
     /// An asset by `AssetRef::key()`, wherever it is held.
@@ -56,7 +58,8 @@ pub enum AssetClassTarget {
 }
 
 /// One basket in the top-up advice, in the base currency.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TopupRow {
     pub class: AssetClass,
     pub value: Amount,
@@ -70,7 +73,8 @@ pub struct TopupRow {
 }
 
 /// Where the free money of the month should go (plan F).
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TopupAdvice {
     pub currency: String,
     /// The amount split; last month's savings unless given.
@@ -90,7 +94,7 @@ pub struct TopupAdvice {
 
 /// Which part of the financial capital a holding belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Slot {
+pub enum Slot {
     /// An emergency fund account.
     Fund,
     /// A basket, or `None` for «no basket».
@@ -98,7 +102,7 @@ pub(crate) enum Slot {
 }
 
 /// The baskets in force: the saved ones or the preset.
-pub(crate) fn effective_classes(doc: &VaultDoc) -> Vec<AssetClass> {
+pub fn effective_classes(doc: &VaultDoc) -> Vec<AssetClass> {
     if doc.asset_classes.is_empty() {
         preset_classes()
     } else {
@@ -198,7 +202,7 @@ pub(crate) fn fund_store_ids(doc: &VaultDoc) -> HashSet<String> {
 
 /// The slot of every financial holding: asset basket, else the store's,
 /// else none; fund accounts apart.
-pub(crate) fn slot_resolver(doc: &VaultDoc) -> impl Fn(&Holding) -> Slot + '_ {
+pub fn slot_resolver(doc: &VaultDoc) -> impl Fn(&Holding) -> Slot + '_ {
     let fund = fund_store_ids(doc);
     let known: HashSet<String> = effective_classes(doc)
         .into_iter()
@@ -327,7 +331,7 @@ pub(crate) fn last_month_savings(
     let today = cal.date_of(now);
     let first = today - Duration::days(i64::from(chrono::Datelike::day(&today)) - 1);
     let month = calendar::month_key(first - Duration::days(1));
-    let saved = crate::planning::budget::month_summary(books, &month, zone)
+    let saved = crate::budget::month_summary(books, &month, zone)
         .map(|summary| {
             books
                 .rate_book()
@@ -341,7 +345,7 @@ pub(crate) fn last_month_savings(
 /// How much of `amount` each basket gets, and whether it was left out as a
 /// capped basket above its target. Positive deficits share the amount
 /// pro rata; with none, the targets do. Sums to `amount` to the cent.
-pub(crate) fn split_topup(
+pub fn split_topup(
     classes: &[AssetClass],
     values: &[Amount],
     amount: Amount,

@@ -1,0 +1,30 @@
+[package]
+name = "mwt-planning"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker planning: budgets, envelopes, goals, allocation, agenda, automations, health, notifications and scenarios (depends on mwt-household, mwt-money, mwt-model and mwt-base only)"
+
+[lints]
+workspace = true
+
+[features]
+# `ts-rs` derives of the planning view and input types; off by default, `trade-core` turns them on.
+ts = ["dep:ts-rs", "mwt-model/ts", "mwt-base/ts", "mwt-money/ts", "mwt-household/ts"]
+schema = ["mwt-model/schema", "mwt-money/schema", "mwt-base/schema"]
+
+[dependencies]
+mwt-base = { path = "../base" }
+mwt-model = { path = "../model" }
+mwt-money = { path = "../money" }
+mwt-household = { path = "../household" }
+serde.workspace = true
+serde_json.workspace = true
+rust_decimal.workspace = true
+chrono.workspace = true
+ts-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+mwt-testkit = { path = "../testkit" }
+proptest.workspace = true

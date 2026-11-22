@@ -8,19 +8,19 @@ use std::collections::HashMap;
 
 use chrono::NaiveDate;
 
-use crate::Amount;
-use crate::calendar::Calendar;
-use crate::household::shared_events::analytics::{category_group, extras_between, value_in};
-use crate::model::VaultDoc;
-use crate::model::transaction::{Leg, LegRole, Transaction};
-use crate::money::books::Books;
-use crate::money::rates::RateBook;
-use crate::money::shared_ratios::SharedExtra;
-use crate::money::worth::{FlowClass, classify_flow, spending};
-use crate::time::secs_or_now;
+use mwt_base::Amount;
+use mwt_base::calendar::Calendar;
+use mwt_base::time::secs_or_now;
+use mwt_household::shared_events::analytics::{category_group, extras_between, value_in};
+use mwt_model::VaultDoc;
+use mwt_model::{Leg, LegRole, Transaction};
+use mwt_money::books::Books;
+use mwt_money::rates::RateBook;
+use mwt_money::shared_ratios::SharedExtra;
+use mwt_money::worth::{FlowClass, classify_flow, spending};
 
 #[derive(Debug, Clone)]
-pub(crate) struct Flow {
+pub struct Flow {
     pub date: NaiveDate,
     pub class: FlowClass,
     /// In the requested currency.
@@ -44,12 +44,7 @@ pub(crate) fn classify(books: &Books<'_>, tx: &Transaction) -> FlowClass {
 }
 
 /// Value of one leg in `currency` at `secs`; `None` without a rate.
-pub(crate) fn leg_value_in(
-    book: &RateBook,
-    leg: &Leg,
-    currency: &str,
-    secs: i64,
-) -> Option<Amount> {
+pub fn leg_value_in(book: &RateBook, leg: &Leg, currency: &str, secs: i64) -> Option<Amount> {
     let qty = leg.amount.abs();
     if leg.asset.is_fiat() && leg.asset.symbol.eq_ignore_ascii_case(currency) {
         return Some(qty);
@@ -180,7 +175,7 @@ pub(crate) fn extra_flows_from(
 /// Classified flows in `[from, to)`, valued in `currency`, over the books of
 /// one request: the rates and the shared-event figures are built once and
 /// shared.
-pub(crate) fn flows_between(
+pub fn flows_between(
     books: &Books<'_>,
     cal: &Calendar,
     currency: &str,

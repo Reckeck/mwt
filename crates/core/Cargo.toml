@@ -13,8 +13,8 @@ workspace = true
 # Test kit (`crate::testkit`): the facade module plus a re-export of the dev-only crate `mwt-testkit`.
 testkit = ["dep:mwt-testkit", "mwt-vault/testing"]
 # Forwarded to every extracted crate that has them (`mwt-base`, `mwt-crypto` and `mwt-model` are always built with them here).
-ts = ["mwt-model/ts", "mwt-sync/ts", "mwt-money/ts", "mwt-household/ts"]
-schema = ["mwt-model/schema", "mwt-money/schema"]
+ts = ["mwt-model/ts", "mwt-sync/ts", "mwt-money/ts", "mwt-household/ts", "mwt-planning/ts"]
+schema = ["mwt-model/schema", "mwt-money/schema", "mwt-planning/schema"]
 # Marks every `forward!` delegate `#[deprecated]` so the remaining callers can be listed (`cargo clippy --features deprecated-forwards`).
 deprecated-forwards = []
 
@@ -33,6 +33,8 @@ mwt-sync = { path = "../sync", features = ["ts"] }
 mwt-money = { path = "../money", features = ["ts", "schema"] }
 # Household rules: attachments, contacts, debts, losses, loyalty, property links, relations, shared events, utilities, vehicles.
 mwt-household = { path = "../household", features = ["ts"] }
+# Planning rules: budgets, envelopes, goals, allocation, agenda, automations, health, notifications, scenarios.
+mwt-planning = { path = "../planning", features = ["ts", "schema"] }
 # Workflow: the node catalog, graph, validation, executor and the pure record, run, mark and variable rules.
 mwt-workflow = { path = "../workflow" }
 # Test support: reached only through the `testkit` feature (and the dev-dependency below); no other crate lists it.

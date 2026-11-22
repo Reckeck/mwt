@@ -7,16 +7,17 @@
 //! Pure part of the area: reads and decisions over a document or a read
 //! context. The writes are the scenarios in `usecases::household::envelopes`.
 
-use crate::Amount;
-use crate::error::{Error, Result, WalletRule};
-use crate::model::ids::StoreId;
-use crate::model::planning::Envelope;
-use crate::model::store::{AssetRef, Store};
-use crate::model::vault::VaultDoc;
-use crate::money::books::Books;
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result, WalletRule};
+use mwt_model::Envelope;
+use mwt_model::StoreId;
+use mwt_model::VaultDoc;
+use mwt_model::{AssetRef, Store};
+use mwt_money::books::Books;
 
 /// What creating or editing an envelope takes.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EnvelopeDraft {
     pub store_id: String,
     pub name: String,
@@ -26,7 +27,8 @@ pub struct EnvelopeDraft {
 }
 
 /// An envelope with what its store can still give it.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EnvelopeView {
     pub envelope: Envelope,
     /// Balance of the asset in the store not earmarked by any envelope; may

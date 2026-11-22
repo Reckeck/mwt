@@ -9,16 +9,16 @@
 //! operation is booked at the average of the latest corrected amounts and
 //! marked approximate until the user puts in the real one.
 
-use crate::Amount;
-use crate::error::{Error, Result};
-use crate::model::planning::{
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result};
+use mwt_base::time::secs_or_now;
+use mwt_model::VaultDoc;
+use mwt_model::{
     AmountMode, Automation, AutomationOutcome, AutomationPreset, AutomationSpec, RejectReason,
     Schedule, TransactionDraft, WorkdayShift, draft_to_transaction,
 };
-use crate::model::store::{AssetRef, Store, StoreKind};
-use crate::model::transaction::{Transaction, TxOrigin};
-use crate::model::vault::VaultDoc;
-use crate::time::secs_or_now;
+use mwt_model::{AssetRef, Store, StoreKind};
+use mwt_model::{Transaction, TxOrigin};
 
 /// Most planned dates one pass creates per automation; older missed dates
 /// are recorded as skipped, so a long time away does not flood the history
@@ -78,7 +78,8 @@ pub fn spec_of(automation: &Automation) -> AutomationSpec {
 pub const MAX_SIMULATION_DAYS: u32 = 366;
 
 /// One planned date as the emulation saw it.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SimulatedRun {
     pub automation_id: String,
     pub automation_name: String,
@@ -89,7 +90,8 @@ pub struct SimulatedRun {
 }
 
 /// One balance the emulated runs change.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SimulatedBalance {
     pub store_id: String,
     pub asset: AssetRef,
@@ -99,7 +101,8 @@ pub struct SimulatedBalance {
 
 /// What the automations would do over the next days, worked out on a copy
 /// of the vault: nothing is written.
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AutomationSimulation {
     pub from: String,
     pub until: String,
@@ -110,7 +113,7 @@ pub struct AutomationSimulation {
 }
 
 /// The amount a top-up, a payment or a transfer moves (an exchange: what it gives).
-pub(crate) fn main_amount(tx: &Transaction) -> Option<Amount> {
+pub fn main_amount(tx: &Transaction) -> Option<Amount> {
     match tx {
         Transaction::Topup(inner) => Some(inner.amount),
         Transaction::Payment(inner) => Some(inner.amount),
@@ -179,7 +182,7 @@ pub fn outflow(tx: &Transaction) -> Option<Outflow> {
     })
 }
 
-pub use crate::model::planning::describe_reject;
+pub use mwt_model::describe_reject;
 
 /// The template the next run books: with an amount that differs, at the
 /// current estimate.

@@ -17,7 +17,6 @@ pub mod market;
 pub mod model;
 #[cfg(test)]
 mod money_facade_tests;
-pub mod planning;
 #[cfg(test)]
 mod planning_facade_tests;
 pub mod pricing;
@@ -52,6 +51,7 @@ pub use mwt_crypto::{
 pub use mwt_household as household;
 pub use mwt_model::{VAULT_FORMAT_VERSION, id_types, records};
 pub use mwt_money as money;
+pub use mwt_planning as planning;
 pub use mwt_sync as sync;
 pub use mwt_workflow as workflow;
 pub use storage::VaultFile;

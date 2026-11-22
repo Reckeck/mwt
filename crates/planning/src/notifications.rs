@@ -7,15 +7,15 @@
 
 use std::collections::HashSet;
 
-use crate::Amount;
-use crate::calendar;
-use crate::model::notify::{MAX_NOTICE_LOG, NoticeCategory, NoticeRecord};
-pub use crate::model::notify::{notice_at, notice_title};
-use crate::model::planning::Reminder;
-use crate::model::vault::VaultDoc;
-use crate::planning::agenda::{UpcomingItem, reminder_is_due, reminder_secs};
-use crate::planning::auto_reminders::category_of;
-use crate::planning::budget::BudgetStatus;
+use crate::agenda::{UpcomingItem, reminder_is_due, reminder_secs};
+use crate::auto_reminders::category_of;
+use crate::budget::BudgetStatus;
+use mwt_base::Amount;
+use mwt_base::calendar;
+use mwt_model::Reminder;
+use mwt_model::VaultDoc;
+use mwt_model::{MAX_NOTICE_LOG, NoticeCategory, NoticeRecord};
+pub use mwt_model::{notice_at, notice_title};
 
 /// A reminder older than this is not announced any more: after a long time
 /// away the user gets the list, not a flood.
@@ -26,7 +26,7 @@ const BUDGET_WARN_PERCENT: i64 = 90;
 
 /// An amount for a notice text: at most two decimals, thousands apart
 /// (`22767.9636…` is `22 767,96`, `15000` is `15 000`).
-pub(crate) fn money_text(amount: Amount, ru: bool) -> String {
+pub fn money_text(amount: Amount, ru: bool) -> String {
     let rounded = amount.0.round_dp(2).normalize().to_string();
     let (sign, digits) = rounded
         .strip_prefix('-')
@@ -168,7 +168,7 @@ pub fn shortfall_notices(
             notice_title(NoticeCategory::Shortfall, ru),
             body,
             item.store_id
-                .map(|id| format!("{}:{id}", crate::routes::WALLET)),
+                .map(|id| format!("{}:{id}", mwt_base::routes::WALLET)),
             item.at.clone(),
             delivered_at.to_string(),
         ));

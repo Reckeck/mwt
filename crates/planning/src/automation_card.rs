@@ -7,20 +7,21 @@
 
 use serde_json::{Map, Value};
 
-use crate::Amount;
-use crate::calendar;
-use crate::model::notify::{NoticeCategory, NoticeRecord};
-use crate::model::planning::{Automation, Schedule, TransactionDraft, WorkdayShift};
-use crate::model::transaction::{AccountRef, Transaction};
-use crate::model::vault::VaultDoc;
-use crate::model::workflow::{RunOutcome, Workflow, WorkflowRun, WorkflowWait};
-use crate::planning::my_automations::MineKind;
+use crate::my_automations::MineKind;
+use mwt_base::Amount;
+use mwt_base::calendar;
+use mwt_model::VaultDoc;
+use mwt_model::{AccountRef, Transaction};
+use mwt_model::{Automation, Schedule, TransactionDraft, WorkdayShift};
+use mwt_model::{NoticeCategory, NoticeRecord};
+use mwt_model::{RunOutcome, Workflow, WorkflowRun, WorkflowWait};
 
 /// "Last runs" on the card.
 pub const CARD_RUNS: usize = 5;
 
 /// The money of one operation, made or about to be made.
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CardMoney {
     /// What arrives (or leaves, for a payment), without a sign.
     pub amount: Option<Amount>,
@@ -49,8 +50,8 @@ impl CardMoney {
     }
 
     /// What the operation template says, for what the node itself leaves empty.
-    pub(crate) fn fill_from(&mut self, draft: &TransactionDraft) {
-        let probe = crate::model::planning::draft_to_transaction(draft, "", "", "");
+    pub fn fill_from(&mut self, draft: &TransactionDraft) {
+        let probe = mwt_model::draft_to_transaction(draft, "", "", "");
         let from_template = Self::of(&probe);
         self.currency = self.currency.take().or(from_template.currency);
         self.from_store = self.from_store.take().or(from_template.from_store);
@@ -60,7 +61,8 @@ impl CardMoney {
 }
 
 /// "If": what starts it.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CardTrigger {
     /// Only the time: nothing more to say than "When".
@@ -80,7 +82,8 @@ pub enum CardTrigger {
 }
 
 /// "Do": one action of it.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CardAction {
     /// The operation kind (`transfer`, `payment` …), `distribute`, `notify`,
     /// `reminder`, or another action node's kind.
@@ -93,7 +96,8 @@ pub struct CardAction {
 }
 
 /// How a run ended, as the journal says it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum JournalStatus {
     Done,
@@ -112,7 +116,8 @@ pub enum JournalStatus {
 }
 
 /// One row of the journal: a run or a notice shown.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct JournalEntry {
     /// The run id, or the notice key.
     pub id: String,
@@ -132,7 +137,8 @@ pub struct JournalEntry {
 }
 
 /// The card of a scheme or a repeat.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AutomationCard {
     pub kind: MineKind,
     pub id: String,
@@ -153,7 +159,7 @@ pub struct AutomationCard {
     pub runs: Vec<JournalEntry>,
 }
 
-pub(crate) fn text(params: &Map<String, Value>, name: &str) -> Option<String> {
+pub fn text(params: &Map<String, Value>, name: &str) -> Option<String> {
     match params.get(name)? {
         Value::String(raw) if !raw.trim().is_empty() => Some(raw.trim().to_string()),
         Value::Number(number) => Some(number.to_string()),
@@ -165,12 +171,12 @@ pub(crate) fn whole(params: &Map<String, Value>, name: &str) -> Option<i64> {
     text(params, name)?.parse().ok()
 }
 
-pub(crate) fn store_of(value: Option<&Value>) -> Option<String> {
+pub fn store_of(value: Option<&Value>) -> Option<String> {
     let account: AccountRef = serde_json::from_value(value?.clone()).ok()?;
     account.store_id().map(str::to_string)
 }
 
-pub(crate) fn workday_of(params: &Map<String, Value>) -> WorkdayShift {
+pub fn workday_of(params: &Map<String, Value>) -> WorkdayShift {
     match text(params, "workday").as_deref() {
         Some("back") => WorkdayShift::Back,
         Some("forward") => WorkdayShift::Forward,
@@ -179,7 +185,7 @@ pub(crate) fn workday_of(params: &Map<String, Value>) -> WorkdayShift {
 }
 
 /// "on schedule" read back as the form's schedule.
-pub(crate) fn schedule_of(params: &Map<String, Value>) -> Option<Schedule> {
+pub fn schedule_of(params: &Map<String, Value>) -> Option<Schedule> {
     let clamp = |value: i64, low: i64, high: i64| value.clamp(low, high);
     match text(params, "every").as_deref()? {
         "month" => Some(Schedule::Monthly {
@@ -195,7 +201,7 @@ pub(crate) fn schedule_of(params: &Map<String, Value>) -> Option<Schedule> {
     }
 }
 
-pub(crate) fn first_store(params: &Map<String, Value>) -> Option<String> {
+pub fn first_store(params: &Map<String, Value>) -> Option<String> {
     store_of(params.get("store")).or_else(|| text(params, "store"))
 }
 

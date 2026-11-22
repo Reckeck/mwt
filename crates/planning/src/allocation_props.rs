@@ -3,9 +3,9 @@
 use proptest::prelude::*;
 
 use super::allocation::split_topup;
-use crate::Amount;
-use crate::model::planning::AssetClass;
-use crate::testkit::props::{amount, money};
+use mwt_base::Amount;
+use mwt_model::AssetClass;
+use mwt_testkit::props::{amount, money};
 
 fn classes_with_values() -> impl Strategy<Value = (Vec<AssetClass>, Vec<Amount>)> {
     prop::collection::vec((1..=100u32, any::<bool>(), money()), 1..6).prop_map(|rows| {

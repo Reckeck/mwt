@@ -4,9 +4,9 @@ use chrono::{Datelike, Duration, Weekday};
 use proptest::prelude::*;
 
 use super::budget::{MonthSummary, period_dates, settle_month};
-use crate::Amount;
-use crate::model::planning::BudgetPeriod;
-use crate::testkit::props::{amount, day, money};
+use mwt_base::Amount;
+use mwt_model::BudgetPeriod;
+use mwt_testkit::props::{amount, day, money};
 
 fn budget_period() -> impl Strategy<Value = BudgetPeriod> {
     prop_oneof![

@@ -1,14 +1,14 @@
 //! The emergency fund (plan C1): savings accounts set aside for bad times,
 //! measured in months of mandatory spending `E_mand`.
 
-use crate::calendar::{self, Calendar};
-use crate::model::planning::EmergencyFund;
-use crate::model::store::{Purpose, Store};
-use crate::model::vault::VaultDoc;
-use crate::money::books::Books;
-use crate::money::interest::INTEREST_CATEGORY;
-use crate::time::secs_or_now;
-use crate::{Amount, Error, Result};
+use mwt_base::calendar::{self, Calendar};
+use mwt_base::time::secs_or_now;
+use mwt_base::{Amount, Error, Result};
+use mwt_model::EmergencyFund;
+use mwt_model::VaultDoc;
+use mwt_model::{Purpose, Store};
+use mwt_money::books::Books;
+use mwt_money::interest::INTEREST_CATEGORY;
 
 use super::budget::{MonthAvg, budget_currency, income_basis};
 use super::goals::{resolve_scope, store_values_usd};
@@ -19,7 +19,8 @@ const YEAR_SECS: i64 = 365 * 86_400;
 pub const MAX_FUND_MONTHS: u8 = 24;
 
 /// One account of the fund, in the budget currency.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EmergencyStore {
     pub store_id: String,
     pub value: Amount,
@@ -36,7 +37,8 @@ pub struct EmergencyStore {
 }
 
 /// The fund at a glance (plan C1).
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EmergencyStatus {
     pub fund: EmergencyFund,
     /// The budget currency every amount here is in.
@@ -112,7 +114,7 @@ pub fn toggled_fund(doc: &VaultDoc, store_id: &str, on: bool) -> EmergencyFund {
 
 /// Drop accounts that stopped being live savings (decision 36). The caller
 /// saves.
-pub(crate) fn prune_emergency_fund(doc: &mut VaultDoc) {
+pub fn prune_emergency_fund(doc: &mut VaultDoc) {
     let keep: Vec<String> = doc
         .emergency_fund
         .scope
@@ -165,8 +167,8 @@ pub fn fund_status(
                 .deposit
                 .as_ref()
                 .and_then(|terms| terms.rate_on(&today_raw));
-            let own_currency = crate::money::interest::deposit_asset(books, store).symbol.to_lowercase();
-            let inflation = crate::money::inflation::inflation_on(books.doc(), &own_currency, &month);
+            let own_currency = mwt_money::interest::deposit_asset(books, store).symbol.to_lowercase();
+            let inflation = mwt_money::inflation::inflation_on(books.doc(), &own_currency, &month);
             EmergencyStore {
                 store_id: store.id.clone(),
                 value: to_budget(values.get(&store.id).copied().unwrap_or_default()),

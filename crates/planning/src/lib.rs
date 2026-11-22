@@ -1,4 +1,5 @@
 //! Pure planning rules (no vault, no I/O).
+#![warn(unreachable_pub)]
 
 pub mod agenda;
 pub mod allocation;
@@ -16,7 +17,7 @@ pub mod datasources;
 pub mod debt_load;
 pub mod emergency;
 pub mod envelopes;
-pub(crate) mod flows;
+pub mod flows;
 pub mod goals;
 pub mod health;
 pub mod my_automations;

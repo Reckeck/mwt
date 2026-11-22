@@ -12,17 +12,15 @@ use std::collections::HashSet;
 
 use chrono::{Datelike, Duration, NaiveDate};
 
-use crate::Amount;
-use crate::calendar::{self, Calendar, days_in_month, first_of_month};
-use crate::error::{Error, Result};
-use crate::model::planning::{
-    AutomationOutcome, AutomationRun, Budget, BudgetPeriod, BudgetTarget,
-};
-use crate::model::store::StoreScope;
-use crate::model::vault::{DailyBudgetMode, VaultDoc};
-use crate::money::books::Books;
-use crate::money::worth::FlowClass;
-use crate::time::secs_or_now;
+use mwt_base::Amount;
+use mwt_base::calendar::{self, Calendar, days_in_month, first_of_month};
+use mwt_base::error::{Error, Result};
+use mwt_base::time::secs_or_now;
+use mwt_model::StoreScope;
+use mwt_model::{AutomationOutcome, AutomationRun, Budget, BudgetPeriod, BudgetTarget};
+use mwt_model::{DailyBudgetMode, VaultDoc};
+use mwt_money::books::Books;
+use mwt_money::worth::FlowClass;
 
 use super::flows::flows_between;
 
@@ -40,7 +38,8 @@ pub struct BudgetDraft {
 }
 
 /// A limit and how much of it the current period used.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct BudgetStatus {
     pub budget: Budget,
     /// Spent in the current period, in the budget's own currency.
@@ -58,7 +57,8 @@ pub struct BudgetStatus {
 }
 
 /// Totals of one calendar month in the budget currency.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MonthSummary {
     /// `YYYY-MM`.
     pub month: String,
@@ -90,7 +90,8 @@ pub struct MonthSummary {
 }
 
 /// Monthly averages over finished calendar months, in the budget currency.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MonthAvg {
     pub income: Amount,
     pub fixed: Amount,
@@ -108,7 +109,8 @@ pub(crate) const AVG_LOOKBACK_MONTHS: usize = 24;
 pub const MIN_HISTORY_MONTHS: u32 = 3;
 
 /// The daily budget for today (plan §7.3, D18).
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DailyBudget {
     pub mode: DailyBudgetMode,
     pub currency: String,
@@ -139,7 +141,7 @@ pub struct DailyBudget {
 
 /// What the month mode allows per day of one month.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct MonthAllowance {
+pub struct MonthAllowance {
     pub income: Amount,
     pub fixed: Amount,
     pub savings_plan: Amount,
@@ -277,7 +279,7 @@ pub fn plan_delete_budget(doc: &VaultDoc, id: &str) -> Result<Vec<String>> {
 // -- limits -----------------------------------------------------------------
 
 /// `[start, end)` dates of the period containing `today`; weeks start on Monday.
-pub(crate) fn period_dates(period: BudgetPeriod, today: NaiveDate) -> (NaiveDate, NaiveDate) {
+pub fn period_dates(period: BudgetPeriod, today: NaiveDate) -> (NaiveDate, NaiveDate) {
     match period {
         BudgetPeriod::Day => (today, today + Duration::days(1)),
         BudgetPeriod::Week => {
@@ -292,7 +294,7 @@ pub(crate) fn period_dates(period: BudgetPeriod, today: NaiveDate) -> (NaiveDate
 }
 
 /// `spent / limit`, 0 when the limit is zero.
-pub(crate) fn used_of(spent: Amount, limit: Amount) -> Amount {
+pub fn used_of(spent: Amount, limit: Amount) -> Amount {
     if limit.is_zero() {
         Amount::ZERO
     } else {
@@ -315,7 +317,7 @@ pub(crate) fn settle_month(out: &mut MonthSummary, savings_rate: Amount) {
 }
 
 /// Automation runs planned in `[from, to)` that created nothing.
-pub(crate) fn not_executed(runs: &[AutomationRun], from: i64, to: i64) -> u32 {
+pub fn not_executed(runs: &[AutomationRun], from: i64, to: i64) -> u32 {
     runs.iter()
         .filter(|run| !matches!(run.outcome, AutomationOutcome::Created { .. }))
         .filter(|run| {
@@ -464,7 +466,7 @@ pub(crate) fn allowance_of(
 }
 
 /// The smallest active `Total / Day` limit, in `currency`.
-pub(crate) fn manual_day_limit(books: &Books<'_>, currency: &str, now: i64) -> Option<Amount> {
+pub fn manual_day_limit(books: &Books<'_>, currency: &str, now: i64) -> Option<Amount> {
     let book = books.rate_book();
     books
         .doc()

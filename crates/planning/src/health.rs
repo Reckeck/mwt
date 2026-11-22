@@ -5,11 +5,11 @@
 
 use chrono::{Duration, NaiveDate};
 
-use crate::Amount;
-use crate::calendar::{self, Calendar};
-use crate::error::{Error, Result};
-use crate::model::planning::{HealthColor, HealthReasonCode};
-use crate::money::books::Books;
+use mwt_base::Amount;
+use mwt_base::calendar::{self, Calendar};
+use mwt_base::error::{Error, Result};
+use mwt_model::{HealthColor, HealthReasonCode};
+use mwt_money::books::Books;
 
 /// DTI above this (percent) is red.
 pub const DTI_HIGH_PCT: u32 = 50;
@@ -20,14 +20,15 @@ pub const FUND_MIN_MONTHS: u32 = 1;
 /// A fund under this many months is yellow.
 pub const FUND_SAFE_MONTHS: u32 = 3;
 /// The savings-rate chart's length, finished months.
-pub(crate) const SAVINGS_MONTHS: usize = 12;
+pub const SAVINGS_MONTHS: usize = 12;
 /// Finished months the savings rate and creep are judged over.
-pub(crate) const RECENT_MONTHS: usize = 3;
+pub const RECENT_MONTHS: usize = 3;
 /// The savings rate the chart points to (PDF 2.1), percent.
 pub const SAVINGS_BENCHMARK_PCT: u32 = 20;
 
 /// One reason for the light, with what its first step needs.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct HealthReason {
     pub code: HealthReasonCode,
     /// The colour this reason alone would give; `Green` marks a hint.
@@ -45,7 +46,8 @@ pub struct HealthReason {
 }
 
 /// The savings rate of one finished month.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SavingsMonth {
     /// `YYYY-MM`.
     pub month: String,
@@ -57,7 +59,7 @@ pub struct SavingsMonth {
 }
 
 /// `count` finished month starts before the month of `today`, oldest first.
-pub(crate) fn finished_months(today: NaiveDate, count: usize) -> Vec<NaiveDate> {
+pub fn finished_months(today: NaiveDate, count: usize) -> Vec<NaiveDate> {
     let mut month = calendar::first_of_month(today);
     let mut out = Vec::with_capacity(count);
     for _ in 0..count {
@@ -69,7 +71,7 @@ pub(crate) fn finished_months(today: NaiveDate, count: usize) -> Vec<NaiveDate> 
 }
 
 /// The same month `years` back.
-pub(crate) fn years_back(month: NaiveDate, years: i32) -> NaiveDate {
+pub fn years_back(month: NaiveDate, years: i32) -> NaiveDate {
     NaiveDate::from_ymd_opt(
         chrono::Datelike::year(&month) - years,
         chrono::Datelike::month(&month),
@@ -78,13 +80,13 @@ pub(crate) fn years_back(month: NaiveDate, years: i32) -> NaiveDate {
     .unwrap_or(month)
 }
 
-pub(crate) fn percent(part: Amount, whole: Amount) -> Option<Amount> {
+pub fn percent(part: Amount, whole: Amount) -> Option<Amount> {
     (whole.is_positive()).then(|| (part / whole * Amount::from(100u32)).round(1))
 }
 
 /// Average income and spending (`fixed + daily`) of the given months;
 /// `None` when any of them had no flow at all.
-pub(crate) fn months_average(
+pub fn months_average(
     books: &Books<'_>,
     months: &[NaiveDate],
     zone: &str,
@@ -93,8 +95,7 @@ pub(crate) fn months_average(
     let mut spent = Amount::ZERO;
     for month in months {
         let summary =
-            crate::planning::budget::month_summary(books, &calendar::month_key(*month), zone)
-                .ok()?;
+            crate::budget::month_summary(books, &calendar::month_key(*month), zone).ok()?;
         if summary.income.is_zero() && summary.fixed.is_zero() && summary.daily.is_zero() {
             return None;
         }
@@ -111,8 +112,7 @@ pub fn savings_series(books: &Books<'_>, now: i64, zone: &str) -> Result<Vec<Sav
     finished_months(today, SAVINGS_MONTHS)
         .into_iter()
         .map(|month| {
-            let summary =
-                crate::planning::budget::month_summary(books, &calendar::month_key(month), zone)?;
+            let summary = crate::budget::month_summary(books, &calendar::month_key(month), zone)?;
             Ok(SavingsMonth {
                 saved_pct: percent(summary.savings_fact, summary.income),
                 month: summary.month,
@@ -155,7 +155,7 @@ pub fn check_freedom_rate(rate: Option<Amount>) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn color_text(color: HealthColor, ru: bool) -> &'static str {
+pub fn color_text(color: HealthColor, ru: bool) -> &'static str {
     match (color, ru) {
         (HealthColor::NoData, true) => "мало данных",
         (HealthColor::NoData, false) => "not enough data",
@@ -168,7 +168,7 @@ pub(crate) fn color_text(color: HealthColor, ru: bool) -> &'static str {
     }
 }
 
-pub(crate) fn reason_text(code: HealthReasonCode, ru: bool) -> &'static str {
+pub fn reason_text(code: HealthReasonCode, ru: bool) -> &'static str {
     use HealthReasonCode as Code;
     match (code, ru) {
         (Code::NoHistory, true) => "Нет истории за полный месяц",

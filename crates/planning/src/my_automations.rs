@@ -7,14 +7,14 @@
 
 use chrono::Duration;
 
-use crate::Amount;
-use crate::calendar;
-use crate::error::{Error, Result};
-use crate::model::planning::{AlertCondition, Automation, PriceAlert, Reminder};
-use crate::model::store::AssetRef;
-use crate::model::transaction::Transaction;
-use crate::model::vault::VaultDoc;
-use crate::time::unix_secs;
+use mwt_base::Amount;
+use mwt_base::calendar;
+use mwt_base::error::{Error, Result};
+use mwt_base::time::unix_secs;
+use mwt_model::AssetRef;
+use mwt_model::Transaction;
+use mwt_model::VaultDoc;
+use mwt_model::{AlertCondition, Automation, PriceAlert, Reminder};
 
 /// How far ahead "Next time" looks: a yearly schedule still has a date.
 const LOOKAHEAD_DAYS: i64 = 400;
@@ -25,7 +25,8 @@ pub fn lookahead_until(now: i64) -> i64 {
 }
 
 /// What kind of thing fires.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum MineKind {
     /// A workflow the user drew.
@@ -37,7 +38,8 @@ pub enum MineKind {
 }
 
 /// One row of "Mine".
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MineItem {
     pub kind: MineKind,
     /// The workflow, automation, reminder or alert id.

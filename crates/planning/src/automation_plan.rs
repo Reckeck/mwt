@@ -5,21 +5,21 @@
 
 use std::collections::HashSet;
 
-use crate::Amount;
-use crate::calendar;
-use crate::calendar::Calendar;
-use crate::model::planning::{
+use crate::automations::{self as rules, automation_draft, main_amount, outflow};
+use mwt_base::Amount;
+use mwt_base::calendar;
+use mwt_base::calendar::Calendar;
+use mwt_base::time::unix_secs;
+use mwt_model::VaultDoc;
+use mwt_model::{
     AmountMode, Automation, AutomationOutcome, AutomationRun, RejectReason, draft_to_transaction,
 };
-use crate::model::transaction::{Transaction, TxOrigin};
-use crate::model::vault::VaultDoc;
-use crate::money::books::Books;
-use crate::planning::automations::{self as rules, automation_draft, main_amount, outflow};
-use crate::time::unix_secs;
 use mwt_model::{
     ESTIMATE_OF, RunOutcome, Workflow, WorkflowRun, recent_average, schedule_key,
     schedule_moments_limited, schedule_params, start_mark, workflow_mark,
 };
+use mwt_model::{Transaction, TxOrigin};
+use mwt_money::books::Books;
 
 /// The automation a workflow is in the books, or `None` for an ordinary
 /// workflow: the estimate and the schedule mark come from the document.
