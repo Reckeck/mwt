@@ -26,8 +26,7 @@ tauri-plugin-opener = "2"
 base64 = "0.23"
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-fs = { workspace = true }
-# until T23b: app still prints TS types and serves vault_schema
-trade-core = { path = "../core", features = ["ts", "schema"] }
+trade-core = { path = "../core" }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -36,8 +35,7 @@ time.workspace = true
 chrono.workspace = true
 zeroize.workspace = true
 reqwest.workspace = true
-schemars.workspace = true
-ts-rs.workspace = true
+ts-rs = { workspace = true, optional = true }
 tauri-plugin-notification = "2"
 iana-time-zone = "0.1"
 chacha20poly1305.workspace = true
@@ -74,7 +72,15 @@ auto-launch = "0.6"
 # Self-update of AppImage / NSIS / MSI / .app builds (src/updates.rs).
 tauri-plugin-updater = "2"
 
+[features]
+# Off by default: TypeScript printing (ts-rs) and the vault JSON schema (schemars).
+ts = ["dep:ts-rs", "trade-core/ts"]
+schema = ["trade-core/schema"]
+
 [dev-dependencies]
+# The feature-gated tests (client_gen, events, vault_schema) keep running in
+# workspace test and clippy runs.
+trade-app = { path = ".", features = ["ts", "schema"] }
 tempfile = "3"
 tokio = { workspace = true, features = ["test-util"] }
 insta.workspace = true

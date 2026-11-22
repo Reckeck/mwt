@@ -152,6 +152,7 @@ pub async fn dev_apply_vault_json(
 ///
 /// The schema is derived from `VaultDoc` in core, so the editor never carries
 /// its own copy of the document shape.
+#[cfg(all(debug_assertions, feature = "schema"))]
 #[tauri::command]
 pub async fn vault_schema() -> Result<serde_json::Value, IpcError> {
     Ok(trade_core::model::vault::json_schema())
@@ -200,4 +201,4 @@ pub async fn dev_reload_vault_json_from_editor() -> Result<String, IpcError> {
     std::fs::read_to_string(&path).map_err(|err| IpcError::from(format!("IO_ERROR: {err}")))
 }
 
-ipc_commands!(settings_commands, SETTINGS_NAMES, commands::settings: [get_settings, update_settings, #[cfg(debug_assertions)] dev_dump_vault, #[cfg(debug_assertions)] dev_export_vault, #[cfg(debug_assertions)] dev_apply_vault_json, vault_schema, #[cfg(debug_assertions)] dev_open_vault_json_in_editor, #[cfg(debug_assertions)] dev_reload_vault_json_from_editor]);
+ipc_commands!(settings_commands, SETTINGS_NAMES, commands::settings: [get_settings, update_settings, #[cfg(debug_assertions)] dev_dump_vault, #[cfg(debug_assertions)] dev_export_vault, #[cfg(debug_assertions)] dev_apply_vault_json, #[cfg(all(debug_assertions, feature = "schema"))] vault_schema, #[cfg(debug_assertions)] dev_open_vault_json_in_editor, #[cfg(debug_assertions)] dev_reload_vault_json_from_editor]);

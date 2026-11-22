@@ -42,7 +42,7 @@ Always use `mise run …` (the `mise.toml` task file), do not hardcode versions:
 | `mise run check` | `cargo xtask check --quick`: lint + typecheck + test-frontend + static checks (vitest `checks`: onboarding/routes/forms/ui/fsd) + ci + fmt + clippy + tests + gen-types + platforms in parallel, then one at a time test-e2e, layout and links (`--quick`); fail-fast — the first error stops the rest; logs in `.cache/xtask/<task>.log`; task names and groups (`@static @browser @frontend @rust @platforms`, `checks/groups.rs`) select, `--exclude` removes, `--keep-going` does not stop on the first error, `--list` / `--dry-run` show the graph / the commands, `--output auto\|tty\|plain\|github` and `-v`/`-q` shape the output (GitHub: a group per task, `::error` at file:line, a Job Summary); plain `cargo xtask check` runs layout and links in full; a second run in the same working copy attaches to the running one |
 | `mise run build` | tests + typecheck + `pnpm tauri build` (deb/rpm/AppImage) |
 | `mise run build:all` | `cargo xtask build`: bundles for every platform (linux, pacman, flatpak, android, windows without MSI, macos on a Mac) in CI images via podman, frontend built once, fail-fast, `--channel prod`, into `.cache/build-all/builds/<channel>/` (`docs/ci.md`, "Locally") |
-| `mise run dev` | Tauri dev (`pnpm tauri dev`; the Tauri v2 CLI finds `crates/app/tauri.conf.json` from the workspace root by itself) |
+| `mise run dev` | Tauri dev (`pnpm tauri dev --features schema`; the Tauri v2 CLI finds `crates/app/tauri.conf.json` from the workspace root by itself) |
 | `pnpm dev` | Vite frontend without Tauri |
 
 Also useful directly: `cargo build --workspace`, `cargo test -p trade-core`.
