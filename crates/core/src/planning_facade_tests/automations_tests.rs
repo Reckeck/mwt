@@ -1432,7 +1432,7 @@ fn the_funds_check_reads_a_bare_document_and_the_delegates_agree() {
     let key = crate::model::store::AssetRef::fiat("USD", "USD").key();
     assert_eq!(
         balance_at(&vault.doc, &cash, &key, secs),
-        vault.balance_at(&cash, &key, secs)
+        crate::planning::automations::balance_at(&vault.doc, &cash, &key, secs)
     );
     let text = describe_shortfall(&vault.doc, &reason.unwrap());
     assert!(text.starts_with("Cash:"), "{text}");

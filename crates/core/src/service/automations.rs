@@ -91,10 +91,6 @@ impl UnlockedVault {
 
     // Not in the baseline (crate-private), so outside the regenerated block.
     forward! {
-        /// Quantity of an asset on one store from transactions up to `secs`.
-        #[cfg(test)]
-        pub(crate) fn balance_at(&self, store_id: &str, asset_key: &str, secs: i64) -> Amount
-            => crate::planning::automations::balance_at @doc;
         /// Whether the source of a transaction can pay for it at `secs`; `None` when it can.
         pub(crate) fn funds_shortfall(&self, tx: &Transaction, secs: i64) -> Option<RejectReason>
             => crate::planning::automations::funds_shortfall @doc;

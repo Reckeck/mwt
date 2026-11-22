@@ -339,7 +339,7 @@
     "crates/core/src/service/attachments_cleanup.rs": 2,
     "crates/core/src/service/auto_reminders.rs": 2,
     "crates/core/src/service/automation_card.rs": 2,
-    "crates/core/src/service/automations.rs": 16,
+    "crates/core/src/service/automations.rs": 15,
     "crates/core/src/service/budget.rs": 13,
     "crates/core/src/service/bulk.rs": 4,
     "crates/core/src/service/categories.rs": 9,
