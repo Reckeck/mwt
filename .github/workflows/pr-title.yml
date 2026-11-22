@@ -6,7 +6,7 @@ name: pr-title
 
 on:
   pull_request:
-    branches: [development, main]
+    branches: [development, main, "feat/**"]
     types: [opened, edited, reopened, synchronize]
 
 concurrency:

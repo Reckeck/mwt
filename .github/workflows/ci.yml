@@ -1,4 +1,5 @@
-# Checks of every PR into development/main. A push to them is checked by release.yml, which
+# Checks of every PR into development/main and into an integration branch feat/** (feat/rework-ui:
+# UI PRs land there, it merges into development with a merge commit). A push to development/main is checked by release.yml, which
 # calls this workflow (workflow_call) before it builds anything: the same lanes, run once.
 #
 #   images          the CI images in ghcr (images.yml), built only when their tag is new
@@ -31,7 +32,7 @@ name: ci
 
 on:
   pull_request:
-    branches: [development, main]
+    branches: [development, main, "feat/**"]
   workflow_dispatch:
   workflow_call:
     outputs:
