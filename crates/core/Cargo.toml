@@ -13,7 +13,7 @@ workspace = true
 # Test kit (`crate::testkit`): the facade module plus a re-export of the dev-only crate `mwt-testkit`.
 testkit = ["dep:mwt-testkit", "mwt-vault/testing"]
 # Forwarded to every extracted crate that has them (`mwt-base`, `mwt-crypto` and `mwt-model` are always built with them here).
-ts = ["mwt-model/ts", "mwt-sync/ts", "mwt-money/ts"]
+ts = ["mwt-model/ts", "mwt-sync/ts", "mwt-money/ts", "mwt-household/ts"]
 schema = ["mwt-model/schema", "mwt-money/schema"]
 # Marks every `forward!` delegate `#[deprecated]` so the remaining callers can be listed (`cargo clippy --features deprecated-forwards`).
 deprecated-forwards = []
@@ -31,6 +31,8 @@ mwt-vault = { path = "../vault" }
 mwt-sync = { path = "../sync", features = ["ts"] }
 # Money rules: the books, ledger, valuation, cost basis, validation.
 mwt-money = { path = "../money", features = ["ts", "schema"] }
+# Household rules: attachments, contacts, debts, losses, loyalty, property links, relations, shared events, utilities, vehicles.
+mwt-household = { path = "../household", features = ["ts"] }
 # Test support: reached only through the `testkit` feature (and the dev-dependency below); no other crate lists it.
 mwt-testkit = { path = "../testkit", optional = true }
 # `SecurityLevel` / `RaiseStage` are TS types of the IPC contract.

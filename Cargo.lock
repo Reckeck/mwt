@@ -3105,6 +3105,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-household"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "chrono",
+ "insta",
+ "mwt-base",
+ "mwt-model",
+ "mwt-money",
+ "mwt-testkit",
+ "pretty_assertions",
+ "proptest",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "time",
+ "ts-rs",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "mwt-macros"
 version = "0.1.0"
 dependencies = [
@@ -3137,12 +3160,9 @@ name = "mwt-money"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "chrono-tz",
- "insta",
  "mwt-base",
  "mwt-model",
  "mwt-testkit",
- "pretty_assertions",
  "proptest",
  "rust_decimal",
  "serde",
@@ -6491,6 +6511,7 @@ dependencies = [
  "insta",
  "mwt-base",
  "mwt-crypto",
+ "mwt-household",
  "mwt-model",
  "mwt-money",
  "mwt-net",

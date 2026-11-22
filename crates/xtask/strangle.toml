@@ -12,7 +12,7 @@
 
 service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
-scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src"]
+scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src"]
 
 # Files every area task may change besides its own (spec D5).
 grants = ["crates/core/src/bin/gen_types.rs"]
@@ -32,10 +32,12 @@ guarded = [
 [group_dirs]
 sync = "crates/sync/src"
 money = "crates/money/src"
+household = "crates/household/src"
 
 # Groups whose stems keep their facade tests in a directory of their own.
 [facade_test_dirs]
 money = "crates/core/src/money_facade_tests"
+household = "crates/core/src/household_facade_tests"
 
 # The foundation tasks that change files inside `service/`, the group dirs or `usecases/`.
 [[foundation]]
@@ -135,7 +137,7 @@ files = [
     "crates/core/src/ipc_contract.rs",
     "crates/core/src/usecases/mod.rs",
     "crates/core/src/cryptotrack/mod.rs",
-    "crates/core/src/household/mod.rs",
+    "crates/household/src/lib.rs",
     "crates/core/src/money/mod.rs",
     "crates/core/src/planning/mod.rs",
     "crates/core/src/reports/mod.rs",
@@ -206,7 +208,7 @@ files = [
 # deleted from kernel/books.rs. Call sites only; area modules keep their shape.
 task = "T58"
 files = [
-    "crates/core/src/money/", "crates/core/src/household/", "crates/core/src/planning/",
+    "crates/core/src/money/", "crates/household/src/", "crates/core/src/planning/",
     "crates/core/src/reports/", "crates/core/src/cryptotrack/", "crates/core/src/workflow/",
     "crates/core/src/usecases/", "crates/core/src/kernel/books.rs",
     # Forwards in service/ that lose their last caller are deleted (orchestrator decision 2026-11-20).
@@ -268,7 +270,7 @@ files = [
 # The household stub `shared_events.rs` becomes the directory `shared_events/` (mod.rs) and its scenario file is filled.
 task = "C"
 files = [
-    "crates/core/src/household/shared_events.rs", "crates/core/src/household/shared_events/mod.rs",
+    "crates/household/src/shared_events.rs", "crates/household/src/shared_events/mod.rs",
     "crates/core/src/usecases/household/shared_events.rs",
 ]
 
@@ -279,7 +281,7 @@ files = [
 # below both layers (household must not use reports).
 task = "C"
 files = [
-    "crates/core/src/household/losses.rs", "crates/core/src/household/losses_tests.rs",
+    "crates/household/src/losses.rs", "crates/core/src/household_facade_tests/losses_tests.rs",
     "crates/core/src/usecases/household/losses.rs", "crates/core/src/reports/overview.rs",
     "crates/core/src/calendar.rs",
     # T203: without Deref on LossReport its readers in reports/ read `report.losses` (orchestrator decision 2026-11-20).
@@ -849,7 +851,7 @@ task = "T227"
 files = [
   "crates/core/src/planning/",
   "crates/core/src/reports/",
-  "crates/core/src/household/",
+  "crates/household/src/",
   "crates/core/src/money/portfolio.rs",
   "crates/core/src/kernel/books.rs",
   "crates/core/src/usecases/planning/budget.rs",
@@ -880,7 +882,7 @@ files = [
   "crates/core/src/kernel/books.rs",
   "crates/core/src/planning/",
   "crates/core/src/reports/",
-  "crates/core/src/household/",
+  "crates/household/src/",
   "crates/core/src/money/",
   "crates/core/src/workflow/automation.rs",
   "crates/core/src/usecases/planning/agenda.rs",

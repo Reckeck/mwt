@@ -1,4 +1,5 @@
 //! Pure money rules: no vault, clock or I/O.
+#![warn(unreachable_pub)]
 
 pub mod adjustments;
 pub mod asset_holdings;
