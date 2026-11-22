@@ -85,8 +85,16 @@ impl<'run> Rewriter<'run> {
         parts.join("::")
     }
 
-    fn resolve(&self, name: &str) -> Resolution {
-        self.shims.resolve(name)
+    /// The shim name of a path and where it ends: the segments after `service` go down into the shim
+    /// modules (`service::ids::x_id`) and the first one that is no module is the name.
+    fn locate(&self, segments: &[String]) -> Option<(usize, Resolution)> {
+        let mut end = self.name_at(segments)?;
+        let mut module: Vec<String> = Vec::new();
+        while end + 1 < segments.len() && self.shims.has_module(&module, &segments[end]) {
+            module.push(segments[end].clone());
+            end += 1;
+        }
+        Some((end, self.shims.resolve_in(&module, &segments[end])))
     }
 
     fn skip(&mut self, line: usize, path: &str, reason: &str) {
@@ -113,12 +121,12 @@ impl<'run> Rewriter<'run> {
             .iter()
             .map(|part| part.ident.to_string())
             .collect();
-        let Some(at) = self.name_at(&segments) else {
+        let Some((at, resolution)) = self.locate(&segments) else {
             return;
         };
         let line = node.span().start().line;
         let written = segments[..=at].join("::");
-        match self.resolve(&segments[at]) {
+        match resolution {
             Ok(owner) => {
                 let text = self.owner_text(&owner);
                 let first = node.segments[0].ident.span();
@@ -144,10 +152,7 @@ impl<'run> Rewriter<'run> {
         let line = node.span().start().line;
         for leaf in &all {
             let written = leaf_text(leaf, &leaf.path);
-            let outcome = self
-                .name_at(&leaf.path)
-                .map(|at| (at, self.resolve(&leaf.path[at])));
-            match outcome {
+            match self.locate(&leaf.path) {
                 Some((at, Ok(owner))) => {
                     let mut path = vec![self.owner_text(&owner)];
                     path.extend(leaf.path[at + 1..].iter().cloned());

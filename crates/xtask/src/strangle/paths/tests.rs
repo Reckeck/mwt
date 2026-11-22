@@ -20,7 +20,7 @@ const USER: &str = "crates/core/src/usecases/user.rs";
 const OUTSIDE: &str = "crates/app/src/main.rs";
 
 fn tree(user: &str) -> TempTree {
-    let modules = "mod datasources;\nmod budget;\nmod dup_a;\nmod dup_b;\nmod own;\nmod globbed;\nmod sibling;\n\
+    let modules = "mod datasources;\nmod budget;\nmod dup_a;\nmod dup_b;\nmod own;\nmod globbed;\nmod sibling;\nmod ids;\nmod real;\n\
 pub use datasources::{DataSourceDraft, is_due as source_is_due};\n\
 pub(crate) use budget::MIN_HISTORY_MONTHS;\n\
 pub use dup_a::Both;\npub use dup_b::Both;\npub use own::Draft;\npub use globbed::Wild;\n";
@@ -37,6 +37,11 @@ pub use dup_a::Both;\npub use dup_b::Both;\npub use own::Draft;\npub use globbed
         ),
         (&format!("{SERVICE}/dup_a.rs"), "pub use mwt_a::Both;\n"),
         (&format!("{SERVICE}/dup_b.rs"), "pub use mwt_b::Both;\n"),
+        (
+            &format!("{SERVICE}/ids.rs"),
+            "pub use mwt_ids::{x_id, Other};\n",
+        ),
+        (&format!("{SERVICE}/real.rs"), "pub fn y() {}\n"),
         (&format!("{SERVICE}/own.rs"), "pub struct Draft;\n"),
         (&format!("{SERVICE}/globbed.rs"), "pub use mwt_wild::*;\n"),
         (
@@ -144,6 +149,21 @@ fn a_path_in_an_expression_and_a_type_is_rewritten() {
         "{text}"
     );
     assert_eq!(report.rewrites.len(), 3);
+}
+
+#[test]
+fn a_path_into_a_reexport_submodule_is_resolved_and_one_into_real_code_is_listed() {
+    let (report, text) = planned(
+        USER,
+        "use crate::service::ids::x_id;\nfn f() { crate::service::ids::Other::new(); crate::service::real::y(); }\n",
+    );
+    assert!(text.contains("use mwt_ids::x_id;"), "{text}");
+    assert!(text.contains("mwt_ids::Other::new()"), "{text}");
+    assert!(text.contains("crate::service::real::y()"), "{text}");
+    assert_eq!(report.rewrites.len(), 2, "{:?}", report.rewrites);
+    assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
+    assert!(report.skipped[0].contains("service::real::y"));
+    assert!(report.skipped[0].contains("defined inside service/"));
 }
 
 #[test]

@@ -103,7 +103,8 @@ fn rewire(
         }
         let prefix = crate_prefix(root, map, path)?;
         let file = syn::parse_file(&source).with_context(|| format!("parse {path}"))?;
-        let shapes = Shapes::of(&file);
+        let helpers = helper_files(files, map, path)?;
+        let shapes = Shapes::of(std::iter::once(&file).chain(&helpers));
         let mut rewriter = Rewriter::new(&source, &targets, &prefix, &shapes);
         rewriter.visit_file(&file);
         report.replaced += rewriter.splices.len();
@@ -120,6 +121,16 @@ fn rewire(
         files.set(path, updated)?;
     }
     Ok(report)
+}
+
+/// The parsed shared helper files of the map, but not the file being rewired itself.
+fn helper_files(files: &mut FileSet, map: &Map, current: &str) -> Result<Vec<syn::File>> {
+    let mut parsed = Vec::new();
+    for path in map.helper_files.iter().filter(|path| *path != current) {
+        let source = files.read(path)?.to_string();
+        parsed.push(syn::parse_file(&source).with_context(|| format!("parse {path}"))?);
+    }
+    Ok(parsed)
 }
 
 /// The moved methods of the area by name, found in the pure and scenario files of its stems.
@@ -599,6 +610,49 @@ fn t() {
         assert!(text.contains("set_info(&mut held, \"c\", info)"), "{text}");
         assert_eq!(report.skipped.len(), 2, "{:?}", report.skipped);
         assert!(report.skipped[0].starts_with(&format!("{USER}:7: set_info()")));
+    }
+
+    #[test]
+    fn a_tuple_from_a_helper_of_a_shared_file_is_rewired_and_a_duplicate_is_not() {
+        let helper = "crates/core/src/service/test_support.rs";
+        let tree = fixture();
+        std::fs::create_dir_all(tree.root().join(helper).parent().unwrap()).unwrap();
+        std::fs::write(
+            tree.root().join(helper),
+            "pub fn empty_vault() -> (Dir, UnlockedVault) { todo!() }\npub fn twice() -> (Dir, UnlockedVault) { todo!() }\n",
+        )
+        .unwrap();
+        let mut map_text =
+            std::fs::read_to_string(tree.root().join(crate::strangle::map::MAP_FILE)).unwrap();
+        map_text = format!("helper_files = [\"{helper}\"]\n{map_text}");
+        std::fs::write(tree.root().join(crate::strangle::map::MAP_FILE), map_text).unwrap();
+        let source = "use super::test_support::*;
+fn twice() -> (Dir, Thing) { todo!() }
+fn t() {
+    let (dir, mut vault) = empty_vault();
+    vault.set_info(\"a\", info);
+    let (_dir, other) = twice();
+    other.set_info(\"b\", info);
+}
+";
+        std::fs::write(tree.root().join(USER), source).unwrap();
+        let map = Map::load(tree.root()).unwrap();
+        let baseline = Baseline::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        let args = RewireArgs {
+            area: "loyalty".into(),
+            files: vec![USER.into()],
+            dry_run: false,
+        };
+        let report = rewire(tree.root(), &mut files, &map, &baseline, &args).unwrap();
+        assert_eq!(report.replaced, 1, "{:?}", report.skipped);
+        assert!(
+            files
+                .read(USER)
+                .unwrap()
+                .contains("set_info(&mut vault, \"a\", info)")
+        );
+        assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
     }
 
     #[test]

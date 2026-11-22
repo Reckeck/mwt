@@ -40,7 +40,8 @@ pub(super) fn held_of_type(ty: &Type) -> Option<Held> {
     }
 }
 
-/// The return types of the functions of one file and the vault fields of its structs.
+/// The return types of the functions of a file and of the shared helper files, and the vault fields
+/// of their structs.
 #[derive(Default)]
 pub(super) struct Shapes {
     structs: BTreeMap<String, Vec<(String, Held)>>,
@@ -49,9 +50,11 @@ pub(super) struct Shapes {
 }
 
 impl Shapes {
-    pub(super) fn of(file: &syn::File) -> Self {
+    pub(super) fn of<'file>(files: impl IntoIterator<Item = &'file syn::File>) -> Self {
         let mut shapes = Self::default();
-        shapes.visit_file(file);
+        for file in files {
+            shapes.visit_file(file);
+        }
         shapes
     }
 

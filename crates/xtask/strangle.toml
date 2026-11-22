@@ -14,6 +14,9 @@ service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
 scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src", "crates/planning/src", "crates/reports/src", "crates/cryptotrack/src", "crates/contract/src"]
 
+# Shared test helper files: `rewire` reads the return types of their functions (`empty_vault()` and the like).
+helper_files = ["crates/core/src/service/test_support.rs", "crates/core/src/testkit/mod.rs"]
+
 # `strangle remaining` counts the `.rs` files under `remaining_dirs`, less `remaining_exclude` (the tool and
 # its fixtures name the words it counts; they go with the tool).
 remaining_dirs = ["crates"]

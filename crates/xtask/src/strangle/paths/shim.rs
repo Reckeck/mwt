@@ -72,9 +72,14 @@ impl ShimMap {
         Ok(Self { modules })
     }
 
-    /// The owner of `service::name`.
-    pub fn resolve(&self, name: &str) -> Resolution {
-        self.lookup(&[], name, 0)
+    /// The owner of `service::<module>::name` (`module` empty: `service::name`).
+    pub fn resolve_in(&self, module: &[String], name: &str) -> Resolution {
+        self.lookup(module, name, 0)
+    }
+
+    /// Whether `name` is a module of the shim dir below `parent`.
+    pub fn has_module(&self, parent: &[String], name: &str) -> bool {
+        self.is_module(parent, name)
     }
 
     fn lookup(&self, module: &[String], name: &str, depth: usize) -> Resolution {
@@ -322,7 +327,7 @@ mod tests {
     use super::*;
 
     fn owner(map: &ShimMap, name: &str) -> String {
-        map.resolve(name).unwrap().join("::")
+        map.resolve_in(&[], name).unwrap().join("::")
     }
 
     #[test]
@@ -346,7 +351,7 @@ mod tests {
             (&["own"], "pub struct Draft;\n"),
         ])
         .unwrap();
-        assert_eq!(map.resolve("Draft"), Err(Skip::Defined));
+        assert_eq!(map.resolve_in(&[], "Draft"), Err(Skip::Defined));
     }
 
     #[test]
@@ -359,8 +364,8 @@ mod tests {
             ),
         ])
         .unwrap();
-        assert_eq!(map.resolve("Glob"), Err(Skip::Glob));
-        assert_eq!(map.resolve("Gated"), Err(Skip::Gated));
+        assert_eq!(map.resolve_in(&[], "Glob"), Err(Skip::Glob));
+        assert_eq!(map.resolve_in(&[], "Gated"), Err(Skip::Gated));
     }
 
     #[test]
@@ -371,7 +376,7 @@ mod tests {
             (&["b"], "pub use mwt_b::Both;\n"),
         ])
         .unwrap();
-        let Err(Skip::TwoOwners(owners)) = map.resolve("Both") else {
+        let Err(Skip::TwoOwners(owners)) = map.resolve_in(&[], "Both") else {
             panic!("expected two owners");
         };
         assert_eq!(owners, "mwt_a::Both | mwt_b::Both");
