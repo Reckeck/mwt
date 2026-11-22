@@ -13,9 +13,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+use crate::chain::{RpcClient, RpcConfig};
 use crate::cryptotrack::chains::{self, EvmChain};
-use crate::cryptotrack::ports::ChainSource;
-use crate::cryptotrack::rpc::{RpcClient, RpcConfig};
+use crate::cryptotrack::ports::{ChainCall, ChainSource};
 use crate::cryptotrack::service::network::{
     self as rules, host_of, network_secrets, normalize_blockscout, normalize_rpc, same_instance,
 };
@@ -204,6 +204,15 @@ impl ChainSource for NetworkProbe {
         params: Value,
     ) -> impl Future<Output = Result<Value>> + Send {
         ChainSource::call(&self.0, url, subject, method, params)
+    }
+
+    fn batch(
+        &self,
+        url: &str,
+        subject: &str,
+        calls: &[ChainCall],
+    ) -> impl Future<Output = Result<Vec<Result<Value>>>> + Send {
+        ChainSource::batch(&self.0, url, subject, calls)
     }
 }
 

@@ -3,10 +3,6 @@
 # A back edge outside this list fails with file:line; an entry that matches nothing fails too: delete it.
 # To allow a new edge, add an entry with `until` and a reason in the PR.
 allow = [
-    { from = "cryptotrack/exchange_sync.rs", to = "exchange", until = "T20", reason = "cryptotrack may use money, model and base only; the exchange path moves to model, the facade adapters or net" },
-    { from = "cryptotrack/ports.rs", to = "exchange", until = "T20", reason = "cryptotrack may use money, model and base only; the exchange path moves to model, the facade adapters or net" },
-    { from = "cryptotrack/prices.rs", to = "pricing", until = "T20", reason = "cryptotrack may use money, model and base only; the pricing path moves to model, the facade adapters or net" },
-    { from = "cryptotrack/sources/bybit.rs", to = "exchange", until = "T20", reason = "cryptotrack may use money, model and base only; the exchange path moves to model, the facade adapters or net" },
     { from = "ipc_contract.rs", to = "appconfig", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach appconfig" },
     { from = "ipc_contract.rs", to = "exchange", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach exchange" },
     { from = "ipc_contract.rs", to = "service", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach service" },

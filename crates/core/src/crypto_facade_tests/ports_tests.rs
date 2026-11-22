@@ -9,8 +9,8 @@ use std::sync::Mutex;
 
 use serde_json::{Value, json};
 
-use super::{ChainSource, ExchangeClient, PriceSource};
 use crate::cryptotrack::engine::{Followed, normalize};
+use crate::cryptotrack::ports::{ChainCall, ChainSource, ExchangeClient, PriceSource};
 use crate::cryptotrack::sources::bybit::{FillsPage, PageRequest};
 use crate::cryptotrack::sources::evm::{ExplorerApi, HistoryRequest, fetch_page};
 use crate::error::Result;
@@ -41,6 +41,15 @@ impl ChainSource for FakeChain {
     ) -> Result<Value> {
         self.subjects.lock().unwrap().push(subject.to_owned());
         Ok(json!("0x0"))
+    }
+
+    async fn batch(
+        &self,
+        _url: &str,
+        _subject: &str,
+        _calls: &[ChainCall],
+    ) -> Result<Vec<Result<Value>>> {
+        Ok(Vec::new())
     }
 }
 

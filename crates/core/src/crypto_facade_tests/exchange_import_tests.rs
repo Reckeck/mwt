@@ -1,6 +1,6 @@
 //! Pins of the pure rules of `exchange_import`.
 
-use super::exchange_import::{
+use crate::cryptotrack::exchange_import::{
     clamp_interval, normalize_watchlist, plan_staging, set_drawings, terminal_symbol,
     transaction_for_import,
 };

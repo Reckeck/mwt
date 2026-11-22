@@ -86,7 +86,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::cryptotrack::rpc::RpcClient;
+use crate::cryptotrack::ports::ChainSource;
 use crate::cryptotrack::sources::evm::abi;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
@@ -209,8 +209,8 @@ const MAX_POSITIONS: usize = 10_000;
 
 /// The Uniswap v4 adapter. Holds the node client of the pass and builds a
 /// [`Node`] per request.
-pub struct UniswapV4 {
-    client: RpcClient,
+pub struct UniswapV4<C> {
+    client: C,
     /// The log windows one pass may read before it stops with a partial
     /// answer ([`MAX_SCAN_WINDOWS`] outside the tests).
     windows_per_pass: u32,
@@ -218,7 +218,7 @@ pub struct UniswapV4 {
 
 /// The adapter for [`super::Registry::builtin`]:
 /// `uniswap_v4::adapter(node.clone())`.
-pub fn adapter(node: RpcClient) -> Box<dyn ProtocolAdapter> {
+pub fn adapter<C: ChainSource + 'static>(node: C) -> Box<dyn ProtocolAdapter> {
     Box::new(UniswapV4 {
         client: node,
         windows_per_pass: MAX_SCAN_WINDOWS,
@@ -233,7 +233,7 @@ pub fn receipt_tokens(chain: Chain) -> Vec<CryptoAsset> {
         .unwrap_or_default()
 }
 
-impl ProtocolAdapter for UniswapV4 {
+impl<C: ChainSource + 'static> ProtocolAdapter for UniswapV4<C> {
     fn protocol(&self) -> &'static str {
         PROTOCOL
     }
@@ -425,7 +425,7 @@ struct Filters {
     outgoing: Vec<Value>,
 }
 
-impl UniswapV4 {
+impl<C: ChainSource> UniswapV4<C> {
     /// The positions alone, for a caller with no way to take a partial
     /// answer: a scan that did not reach the start is an error here, never a
     /// short list.
@@ -502,7 +502,7 @@ impl UniswapV4 {
     /// than was found. One pass reads at most `windows_per_pass` windows.
     async fn walk(
         &self,
-        node: &Node<'_>,
+        node: &Node<'_, C>,
         deployment: &Deployment,
         filters: &Filters,
         count: usize,
@@ -598,7 +598,7 @@ impl UniswapV4 {
     /// of it must be answered or nothing is.
     async fn read_state(
         &self,
-        node: &Node<'_>,
+        node: &Node<'_, C>,
         deployment: &Deployment,
         stored: &StoredPosition,
         pool_id: &[u8; 32],
@@ -765,8 +765,8 @@ impl UniswapV4 {
 /// The transfers to and from the wallet in one range, merged into `newest`:
 /// a transfer replaces the one a token has only when it is later in the
 /// chain, whatever order the ranges are read in.
-async fn read_window(
-    node: &Node<'_>,
+async fn read_window<C: ChainSource>(
+    node: &Node<'_, C>,
     deployment: &Deployment,
     filters: &Filters,
     (from, to): (u64, u64),
@@ -1242,14 +1242,14 @@ mod tests {
         }
     }
 
-    fn adapter_for_tests() -> UniswapV4 {
+    fn adapter_for_tests() -> UniswapV4<stub::Loopback> {
         UniswapV4 {
             client: stub::client(),
             windows_per_pass: MAX_SCAN_WINDOWS,
         }
     }
 
-    fn adapter_with_windows(windows_per_pass: u32) -> UniswapV4 {
+    fn adapter_with_windows(windows_per_pass: u32) -> UniswapV4<stub::Loopback> {
         UniswapV4 {
             client: stub::client(),
             windows_per_pass,

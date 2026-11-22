@@ -3,10 +3,11 @@
 //! the scenarios run against fakes with no network.
 //!
 //! * [`ChainSource`]: a node or an explorer, read for one *subject* (an
-//!   address); the real one is [`crate::cryptotrack::rpc::RpcClient`].
+//!   address); the real one is the shared RPC client
+//!   of the network crate (the impl sits in the facade, `service/ports.rs`).
 //! * [`PriceSource`]: historic prices of assets, with the consent policy of
 //!   token contracts (`N1`); the real one is
-//!   [`crate::pricing::PricingService`] (the impl sits in
+//!   `PricingService` of `mwt-net` (the impl sits in
 //!   the facade, `service/ports.rs`).
 //! * [`ExchangeClient`]: the read-only API of an exchange account; every
 //!   transport of [`crate::cryptotrack::sources::bybit::Fills`] is one.
@@ -22,8 +23,25 @@ use serde_json::Value;
 
 use crate::cryptotrack::sources::bybit::{Fills, FillsPage, PageRequest};
 use crate::error::Result;
-use crate::exchange::{EarnYield, InterTransfer};
+use crate::model::bybit::{EarnYield, InterTransfer};
 use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint};
+
+/// One JSON-RPC call of a batch: plain data, so the port does not name the
+/// transport.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChainCall {
+    pub method: String,
+    pub params: Value,
+}
+
+impl ChainCall {
+    pub fn new(method: &str, params: Value) -> Self {
+        Self {
+            method: method.to_owned(),
+            params,
+        }
+    }
+}
 
 /// A chain node or explorer.
 pub trait ChainSource: Send + Sync {
@@ -43,6 +61,16 @@ pub trait ChainSource: Send + Sync {
         method: &str,
         params: Value,
     ) -> impl Future<Output = Result<Value>> + Send;
+
+    /// Several calls for ONE subject as one batch. The outer error is a
+    /// failed transport; each inner result is one call's `result` or its
+    /// JSON-RPC error.
+    fn batch(
+        &self,
+        url: &str,
+        subject: &str,
+        calls: &[ChainCall],
+    ) -> impl Future<Output = Result<Vec<Result<Value>>>> + Send;
 }
 
 /// A provider of historic prices.
@@ -93,7 +121,3 @@ impl<T: Fills + Send + Sync> ExchangeClient for T {
         Fills::payouts(self, limit)
     }
 }
-
-#[cfg(test)]
-#[path = "ports_tests.rs"]
-mod tests;

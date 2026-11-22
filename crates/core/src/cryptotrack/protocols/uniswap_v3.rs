@@ -40,7 +40,7 @@
 //!   transaction receipts (gas) are not something [`Node`] reads. `events`
 //!   answers an honest empty list rather than an invented path.
 
-use crate::cryptotrack::rpc::RpcClient;
+use crate::cryptotrack::ports::ChainSource;
 use crate::cryptotrack::sources::evm::abi;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
@@ -189,14 +189,14 @@ const MAX_POSITIONS: usize = 10_000;
 
 /// The Uniswap v3 adapter. Holds the node client of the pass and builds a
 /// [`Node`] per request.
-pub struct UniswapV3 {
-    client: RpcClient,
+pub struct UniswapV3<C> {
+    client: C,
     decimals_selector: Option<&'static str>,
 }
 
 /// The adapter for [`super::Registry::builtin`]:
 /// `uniswap_v3::adapter(node.clone())`.
-pub fn adapter(node: RpcClient) -> Box<dyn ProtocolAdapter> {
+pub fn adapter<C: ChainSource + 'static>(node: C) -> Box<dyn ProtocolAdapter> {
     Box::new(UniswapV3 {
         client: node,
         decimals_selector: DECIMALS_SELECTOR,
@@ -213,7 +213,7 @@ pub fn receipt_tokens(chain: Chain) -> Vec<CryptoAsset> {
         .unwrap_or_default()
 }
 
-impl ProtocolAdapter for UniswapV3 {
+impl<C: ChainSource + 'static> ProtocolAdapter for UniswapV3<C> {
     fn protocol(&self) -> &'static str {
         PROTOCOL
     }
@@ -252,7 +252,7 @@ impl ProtocolAdapter for UniswapV3 {
     }
 }
 
-impl UniswapV3 {
+impl<C: ChainSource> UniswapV3<C> {
     /// Every NFT the address holds in the manager.
     ///
     /// **A position with no liquidity and nothing owed is still returned.**
@@ -352,7 +352,7 @@ impl UniswapV3 {
     /// Multicall3 batch: all of it must be answered or nothing is.
     async fn read_pool(
         &self,
-        node: &Node<'_>,
+        node: &Node<'_, C>,
         pool: &str,
         stored: &StoredPosition,
         decimals_selector: &str,
@@ -847,7 +847,7 @@ mod tests {
         }
     }
 
-    fn adapter_for_tests() -> UniswapV3 {
+    fn adapter_for_tests() -> UniswapV3<stub::Loopback> {
         UniswapV3 {
             client: stub::client(),
             decimals_selector: Some(TEST_DECIMALS),

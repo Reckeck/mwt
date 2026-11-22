@@ -22,8 +22,8 @@ use serde_json::{Value, json};
 
 use crate::Amount;
 use crate::cryptotrack::chains;
+use crate::cryptotrack::ports::{ChainCall, ChainSource};
 use crate::cryptotrack::protocols::{ProtocolRequest, U256};
-use crate::cryptotrack::rpc::{RpcCall, RpcClient};
 use crate::cryptotrack::sources::evm::abi;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
@@ -46,8 +46,8 @@ const CALLS_PER_REQUEST: usize = 40;
 
 /// What an adapter talks to: one network, one address, the endpoints of that
 /// network and the shared client.
-pub struct Node<'req> {
-    client: &'req RpcClient,
+pub struct Node<'req, C: ChainSource> {
+    client: &'req C,
     chain: Chain,
     /// The address every request of this node is about: the limiter's
     /// subject, so two addresses are never mixed in one batch.
@@ -56,10 +56,10 @@ pub struct Node<'req> {
     urls: Vec<&'req str>,
 }
 
-impl<'req> Node<'req> {
+impl<'req, C: ChainSource> Node<'req, C> {
     /// The node of one request. `Err` when the network is not an EVM one or
     /// the address is not an address — neither is worth a request.
-    pub fn new(client: &'req RpcClient, request: &ProtocolRequest<'req>) -> Result<Self> {
+    pub fn new(client: &'req C, request: &ProtocolRequest<'req>) -> Result<Self> {
         let row = chains::evm_chain(request.chain).ok_or(Error::Unsupported)?;
         let subject = normalize_address(request.chain, request.address);
         let urls = match request.rpc {
@@ -207,9 +207,11 @@ impl<'req> Node<'req> {
     /// Kept for an adapter that needs the two shapes side by side (spec D2
     /// reads `StateView` on networks where Multicall3 is not deployed).
     pub async fn batch(&self, calls: &[(String, String)]) -> Result<Vec<Result<Answer>>> {
-        let requests: Vec<RpcCall> = calls
+        let requests: Vec<ChainCall> = calls
             .iter()
-            .map(|(to, data)| RpcCall::new("eth_call", json!([{"to": to, "data": data}, "latest"])))
+            .map(|(to, data)| {
+                ChainCall::new("eth_call", json!([{"to": to, "data": data}, "latest"]))
+            })
             .collect();
         let mut last = Error::Network("no RPC endpoint".into());
         for url in &self.urls {
@@ -348,38 +350,24 @@ fn unhex_calldata(text: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// A node on the loopback interface, for the tests of the adapters: the same
-/// shape as the stub of [`crate::cryptotrack::rpc`]'s own tests, so a wave-1
-/// spec writes fixtures and not a server.
+/// A node for the tests of the adapters, behind the [`ChainSource`] port:
+/// a spec writes fixtures and not a server.
 #[cfg(test)]
 pub(crate) mod stub {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
 
     use serde_json::{Value, json};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
 
-    use crate::cryptotrack::rpc::{RpcClient, RpcConfig};
+    use crate::cryptotrack::test_chain::serve_raw;
+    pub(crate) use crate::cryptotrack::test_chain::{Loopback, Seen};
 
-    /// The bodies the stub was asked, in order.
-    pub(crate) type Seen = Arc<Mutex<Vec<Value>>>;
-
-    /// A client that may talk to the loopback interface and waits for
-    /// nothing: a test is not a rate limit.
-    pub(crate) fn client() -> RpcClient {
-        RpcClient::new(RpcConfig {
-            allow_loopback_http: true,
-            max_retries: 0,
-            min_interval: std::time::Duration::ZERO,
-            subject_gap_min: std::time::Duration::ZERO,
-            subject_gap_max: std::time::Duration::ZERO,
-            ..RpcConfig::default()
-        })
-        .expect("a loopback client")
+    /// A chain source that waits for nothing: a test is not a rate limit.
+    pub(crate) fn client() -> Loopback {
+        Loopback::default()
     }
 
     /// Serve `answer(method, params, call_index) -> Value` (the `result` of
-    /// each call) on a loopback port. Returns the URL and what was asked.
+    /// each call). Returns the URL and what was asked.
     ///
     /// `Value::Null` means the node refused that call: the reply carries a
     /// JSON-RPC error instead of a result, which is how a public endpoint
@@ -387,74 +375,33 @@ pub(crate) mod stub {
     pub(crate) async fn serve(
         answer: impl Fn(&str, &Value, usize) -> Value + Send + Sync + 'static,
     ) -> (String, Seen) {
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
-        let url = format!("http://{}", listener.local_addr().expect("an address"));
-        let seen: Seen = Arc::default();
-        let log = Arc::clone(&seen);
-        let answer = Arc::new(answer);
-        tokio::spawn(async move {
-            let mut calls = 0usize;
-            loop {
-                let Ok((mut stream, _)) = listener.accept().await else {
-                    return;
-                };
-                let log = Arc::clone(&log);
-                let answer = Arc::clone(&answer);
-                let mut buffer = Vec::new();
-                let mut chunk = [0u8; 4096];
-                let body = loop {
-                    let Ok(read) = stream.read(&mut chunk).await else {
-                        break Value::Null;
+        let calls = Mutex::new(0usize);
+        serve_raw(move |body| {
+            let replies: Vec<Value> = body
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .map(|call| {
+                    let method = call["method"].as_str().unwrap_or_default();
+                    let index = {
+                        let mut count = calls.lock().expect("the count");
+                        *count += 1;
+                        *count - 1
                     };
-                    if read == 0 {
-                        break Value::Null;
+                    let result = answer(method, &call["params"], index);
+                    if result.is_null() {
+                        return json!({
+                            "jsonrpc": "2.0",
+                            "id": call["id"].clone(),
+                            "error": {"code": -32000, "message": "refused"},
+                        });
                     }
-                    buffer.extend_from_slice(&chunk[..read]);
-                    let Some(end) = buffer.windows(4).position(|window| window == b"\r\n\r\n")
-                    else {
-                        continue;
-                    };
-                    let head = String::from_utf8_lossy(&buffer[..end]).to_ascii_lowercase();
-                    let length = head
-                        .lines()
-                        .find_map(|line| line.strip_prefix("content-length:"))
-                        .and_then(|value| value.trim().parse::<usize>().ok())
-                        .unwrap_or(0);
-                    if buffer.len() >= end + 4 + length {
-                        break serde_json::from_slice::<Value>(&buffer[end + 4..end + 4 + length])
-                            .unwrap_or(Value::Null);
-                    }
-                };
-                log.lock().expect("the log").push(body.clone());
-                let replies: Vec<Value> = body
-                    .as_array()
-                    .cloned()
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|call| {
-                        let method = call["method"].as_str().unwrap_or_default();
-                        let result = answer(method, &call["params"], calls);
-                        calls += 1;
-                        if result.is_null() {
-                            return json!({
-                                "jsonrpc": "2.0",
-                                "id": call["id"].clone(),
-                                "error": {"code": -32000, "message": "refused"},
-                            });
-                        }
-                        json!({"jsonrpc": "2.0", "id": call["id"].clone(), "result": result})
-                    })
-                    .collect();
-                let payload = Value::Array(replies).to_string();
-                let response = format!(
-                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{payload}",
-                    payload.len()
-                );
-                let _ = stream.write_all(response.as_bytes()).await;
-                let _ = stream.flush().await;
-            }
-        });
-        (url, seen)
+                    json!({"jsonrpc": "2.0", "id": call["id"].clone(), "result": result})
+                })
+                .collect();
+            Value::Array(replies)
+        })
     }
 }
 
@@ -658,16 +605,9 @@ mod tests {
             json!([{"blockNumber": filter["fromBlock"]}])
         })
         .await;
-        let client = RpcClient::new(crate::cryptotrack::rpc::RpcConfig {
-            allow_loopback_http: true,
-            max_retries: 0,
-            min_interval: std::time::Duration::ZERO,
-            subject_gap_min: std::time::Duration::ZERO,
-            subject_gap_max: std::time::Duration::ZERO,
-            max_response_bytes: 2_048,
-            ..crate::cryptotrack::rpc::RpcConfig::default()
-        })
-        .expect("a client");
+        let client = stub::Loopback {
+            max_response_bytes: Some(2_048),
+        };
         let node = Node::new(&client, &request(&url)).expect("a node");
         let logs = node
             .logs(CONTRACT, vec![Value::Null], 1, 5_000)

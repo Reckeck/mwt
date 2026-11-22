@@ -4,6 +4,9 @@
 
 pub mod app_dirs;
 pub mod appconfig;
+pub mod chain;
+#[cfg(test)]
+mod crypto_facade_tests;
 pub mod cryptotrack;
 pub mod datasource;
 pub mod exchange;
@@ -90,7 +93,7 @@ mod base_facade_tests {
 }
 
 #[cfg(test)]
-mod crypto_facade_tests {
+mod crypto_crate_facade_tests {
     //! The paths of `mwt-crypto` that `ipc_contract` still names.
 
     use crate::crypto::level;

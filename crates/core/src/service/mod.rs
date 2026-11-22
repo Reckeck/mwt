@@ -94,6 +94,7 @@ mod exchange_import;
 mod golden_tests;
 mod portfolio;
 mod ports;
+pub use ports::BybitApi;
 mod preview;
 mod price_info;
 mod rates;

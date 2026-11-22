@@ -1,4 +1,5 @@
-//! A JSON-RPC client for chain nodes and explorers (stage 2, spec E1).
+//! A JSON-RPC client for chain nodes and explorers (stage 2, spec E1). The crypto module's
+//! `ChainSource` port is implemented for it in the facade (`trade-core`, `service/ports.rs`).
 //!
 //! What it guarantees, beyond "sends requests":
 //!
@@ -19,7 +20,6 @@
 
 mod client;
 mod limiter;
-mod port;
 
 pub use client::{RpcCall, RpcClient, RpcConfig};
 pub use limiter::HostLimiter;

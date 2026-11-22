@@ -31,8 +31,8 @@
 //!
 //! ## Transport
 //!
-//! Balances use [`RpcClient`] directly. Blockscout v2 is a REST API (GET), and
-//! [`RpcClient`] only sends JSON-RPC POSTs, so history is read through the
+//! Balances use the RPC client directly. Blockscout v2 is a REST API (GET), and
+//! the RPC client only sends JSON-RPC POSTs, so history is read through the
 //! [`ExplorerApi`] trait; its production implementation is a rate-limited GET
 //! on the same client (same host limiter, same subject rule).
 
@@ -55,20 +55,20 @@ pub use cursor::{Cursor, Stream};
 pub use model::{BalanceSource, RawAsset, RawBalance, RawEvent, RawKind, Rejected, SourceBatch};
 pub use uint::Uint256;
 
-use crate::cryptotrack::rpc::RpcClient;
+use crate::cryptotrack::ports::ChainSource;
 use crate::error::Result;
 
 /// Stable id, as it is written into a cursor record and a settings record.
 pub const SOURCE_ID: &str = "evm";
 
 /// The source with its transports.
-pub struct EvmSource<A: ExplorerApi> {
+pub struct EvmSource<A: ExplorerApi, C: ChainSource> {
     explorer: A,
-    rpc: RpcClient,
+    rpc: C,
 }
 
-impl<A: ExplorerApi> EvmSource<A> {
-    pub fn new(explorer: A, rpc: RpcClient) -> Self {
+impl<A: ExplorerApi, C: ChainSource> EvmSource<A, C> {
+    pub fn new(explorer: A, rpc: C) -> Self {
         Self { explorer, rpc }
     }
 

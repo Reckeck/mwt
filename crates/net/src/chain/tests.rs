@@ -461,7 +461,7 @@ async fn an_answer_over_the_cap_is_an_error_and_is_not_retried() {
         .await
         .expect_err("over the cap");
     assert!(
-        matches!(&err, crate::error::Error::Network(text) if text.contains("larger than the limit")),
+        matches!(&err, mwt_base::error::Error::Network(text) if text.contains("larger than the limit")),
         "{err:?}"
     );
     assert_eq!(seen.lock().unwrap().len(), 1, "no retry");

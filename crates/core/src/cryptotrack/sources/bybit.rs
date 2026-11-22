@@ -57,21 +57,21 @@
 //!
 //! The key and the secret live only in
 //! [`crate::vault_io::device_secrets::DeviceSecrets`] and, for the length of a
-//! pass, inside the transport ([`BybitApi`]). They are in no request type, no
+//! pass, inside the transport (`BybitApi`, in the facade, `service/ports.rs`). They are in no request type, no
 //! `Debug`, no cursor, no event and no error message.
 
 use std::future::Future;
 
 use serde::{Deserialize, Serialize};
-use zeroize::Zeroizing;
 
 use crate::Amount;
 use crate::cryptotrack::engine::ids;
 use crate::cryptotrack::source::{FetchPage, FetchRequest, Source};
 use crate::cryptotrack::validate::Validate;
 use crate::error::{Error, Result};
-use crate::exchange::staging::PendingImportExt;
-use crate::exchange::{BybitClient, Category, EarnYield, Execution, InterTransfer};
+use crate::model::bybit::{
+    BybitCategory as Category, EarnYield, Execution, InterTransfer, PendingImportExt,
+};
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::{
     CryptoAsset, CryptoDirection, CryptoFee, CryptoLeg, CryptoTx, CryptoTxKind, TokenId,
@@ -491,66 +491,6 @@ pub trait Fills {
 
     /// Earn payouts, newest first.
     fn payouts(&self, limit: usize) -> impl Future<Output = Result<Vec<EarnYield>>> + Send;
-}
-
-/// The real transport: signed read-only GETs against Bybit V5. The key and
-/// the secret are held zeroizing and are in no `Debug` and in no log.
-pub struct BybitApi {
-    client: BybitClient,
-    api_key: Zeroizing<String>,
-    api_secret: Zeroizing<String>,
-}
-
-impl BybitApi {
-    pub fn new(client: BybitClient, api_key: &str, api_secret: &str) -> Self {
-        Self {
-            client,
-            api_key: Zeroizing::new(api_key.to_owned()),
-            api_secret: Zeroizing::new(api_secret.to_owned()),
-        }
-    }
-}
-
-impl std::fmt::Debug for BybitApi {
-    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        out.debug_struct("BybitApi")
-            .field("api_key", &"<redacted>")
-            .field("api_secret", &"<redacted>")
-            .finish()
-    }
-}
-
-impl Fills for BybitApi {
-    async fn page(&self, request: PageRequest<'_>) -> Result<FillsPage> {
-        let page = self
-            .client
-            .executions_page(
-                &self.api_key,
-                &self.api_secret,
-                request.product,
-                request.start_ms,
-                request.end_ms,
-                request.page,
-                request.limit,
-            )
-            .await?;
-        Ok(FillsPage {
-            fills: page.fills,
-            next_page: page.next_page,
-        })
-    }
-
-    async fn transfers(&self, limit: usize) -> Result<Vec<InterTransfer>> {
-        self.client
-            .inter_transfers(&self.api_key, &self.api_secret, limit)
-            .await
-    }
-
-    async fn payouts(&self, limit: usize) -> Result<Vec<EarnYield>> {
-        self.client
-            .earn_yields(&self.api_key, &self.api_secret, limit)
-            .await
-    }
 }
 
 // -- the source --------------------------------------------------------------

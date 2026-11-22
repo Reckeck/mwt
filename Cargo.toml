@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/base", "crates/crypto", "crates/macros", "crates/model", "crates/net", "crates/vault", "crates/sync", "crates/money", "crates/household", "crates/planning", "crates/reports", "crates/workflow", "crates/testkit", "crates/core", "crates/app", "crates/app-macros", "crates/plugin-saf", "crates/plugin-biometric", "crates/plugin-net", "crates/plugin-insets", "crates/xtask"]
+members = ["crates/*"]
 
 [workspace.package]
 version = "0.1.0"
@@ -54,6 +54,7 @@ scraper = { version = "0.29", default-features = false }
 csv = "1"
 calamine = { version = "0.38", default-features = false }
 ego-tree = "0.11"
+url = "2"
 # Tests: snapshots, properties, readable diffs (dev-dependencies only).
 insta = { version = "1", features = ["json", "redactions"] }
 proptest = "1"

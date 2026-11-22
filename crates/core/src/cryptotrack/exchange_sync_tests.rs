@@ -27,7 +27,7 @@ fn settings_are_normalized_and_a_bad_account_is_refused() {
     assert_eq!(kept.coins, ["SOL"]);
     assert_eq!(
         kept.accounts[0].account,
-        crate::exchange::bybit::ACCOUNT_UNIFIED
+        crate::model::vault::ACCOUNT_UNIFIED
     );
 
     for accounts in [

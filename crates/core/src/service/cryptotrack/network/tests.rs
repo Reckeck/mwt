@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use serde_json::{Value, json};
 
 use crate::cryptotrack::chains;
-use crate::cryptotrack::ports::ChainSource;
+use crate::cryptotrack::ports::{ChainCall, ChainSource};
 use crate::cryptotrack::service::network::{normalize_blockscout, normalize_rpc};
 use crate::error::{Error, Result};
 use crate::ipc_contract::cryptotrack::network::{
@@ -55,6 +55,15 @@ impl ChainSource for Stub {
             "eth_chainId" => json!(self.chain_id),
             _ => json!("0x1676c1e"),
         })
+    }
+
+    async fn batch(
+        &self,
+        _url: &str,
+        _subject: &str,
+        _calls: &[ChainCall],
+    ) -> Result<Vec<Result<Value>>> {
+        Ok(Vec::new())
     }
 }
 

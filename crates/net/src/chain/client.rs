@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 use tokio::time::Instant;
 
 use super::limiter::HostLimiter;
-use crate::error::{Error, Result};
-use crate::secret::Secret;
+use mwt_base::error::{Error, Result};
+use mwt_base::secret::Secret;
 
 /// Knobs of the client. The defaults suit public endpoints.
 #[derive(Debug, Clone)]

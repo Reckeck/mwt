@@ -65,7 +65,7 @@
 //! left out; another network has one market.
 
 use crate::Amount;
-use crate::cryptotrack::rpc::RpcClient;
+use crate::cryptotrack::ports::ChainSource;
 use crate::cryptotrack::sources::evm::abi;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
@@ -367,16 +367,16 @@ fn health_factor_of(answer: &Answer) -> Result<Option<Amount>> {
 
 /// The Aave v3 adapter: holds the node client and builds a [`Node`] per
 /// request.
-pub struct AaveV3 {
-    client: RpcClient,
+pub struct AaveV3<C> {
+    client: C,
 }
 
 /// The adapter of this protocol, for [`super::Registry::builtin`].
-pub fn adapter(node: RpcClient) -> Box<dyn ProtocolAdapter> {
+pub fn adapter<C: ChainSource + 'static>(node: C) -> Box<dyn ProtocolAdapter> {
     Box::new(AaveV3 { client: node })
 }
 
-impl AaveV3 {
+impl<C: ChainSource> AaveV3<C> {
     /// The health factor of the address in the Core market of the network:
     /// **for display only**, account-wide and not money. `None` when the
     /// address has no debt (no finite factor).
@@ -541,7 +541,7 @@ impl AaveV3 {
     }
 }
 
-impl ProtocolAdapter for AaveV3 {
+impl<C: ChainSource + 'static> ProtocolAdapter for AaveV3<C> {
     fn protocol(&self) -> &'static str {
         PROTOCOL
     }

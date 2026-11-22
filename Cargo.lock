@@ -3184,6 +3184,7 @@ dependencies = [
  "mwt-base",
  "mwt-model",
  "proptest",
+ "rand 0.10.4",
  "reqwest 0.12.28",
  "rust_decimal",
  "scraper",
@@ -6589,6 +6590,7 @@ dependencies = [
  "time",
  "tokio",
  "ts-rs",
+ "url",
  "uuid",
  "zeroize",
 ]

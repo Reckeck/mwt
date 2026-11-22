@@ -59,6 +59,7 @@ sha2.workspace = true
 blake2.workspace = true
 rand.workspace = true
 reqwest.workspace = true
+url.workspace = true
 tokio.workspace = true
 schemars.workspace = true
 ts-rs.workspace = true
