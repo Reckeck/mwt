@@ -43,6 +43,7 @@ pub const GROUPS: &[Group] = &[
         name: "net",
         modules: &[
             "pricing",
+            "chain",
             "exchange",
             "datasource",
             "market",
@@ -129,6 +130,7 @@ pub const GROUPS: &[Group] = &[
             "workflow_facade_tests",
             "planning_facade_tests",
             "reports_facade_tests",
+            "crypto_facade_tests",
         ],
         may_use: &[
             "base",

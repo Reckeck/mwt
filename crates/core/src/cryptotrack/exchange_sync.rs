@@ -218,7 +218,7 @@ pub(crate) fn import_wanted(
     imp: &PendingImport,
     settings: &ImportSettings,
 ) -> bool {
-    use crate::exchange::bybit::{ACCOUNT_EARN, ACCOUNT_UNIFIED};
+    use crate::model::vault::{ACCOUNT_EARN, ACCOUNT_UNIFIED};
     let (kind_on, accounts) = match imp.kind {
         ImportKind::Fill => (settings.trades, vec![Some(ACCOUNT_UNIFIED)]),
         ImportKind::Transfer => (
@@ -465,40 +465,5 @@ pub fn imported_transactions(
             .take(limit)
             .cloned()
             .collect(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::service::UnlockedVault;
-
-    fn fill(exec_id: &str) -> PendingImport {
-        PendingImport {
-            exec_id: exec_id.into(),
-            kind: ImportKind::Fill,
-            ..PendingImport::default()
-        }
-    }
-
-    #[test]
-    fn a_preview_counts_a_repeated_exec_id_once_like_the_import() {
-        let dir = tempfile::tempdir().unwrap();
-        let vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
-        let books = vault.books();
-        let batch = vec![fill("twice"), fill("twice"), fill(""), fill("other")];
-        let settings = ImportSettings::default();
-        let preview = preview_exchange_sync(&books, batch.clone(), &settings);
-        let taken = intake(&books, batch, &settings, known_import_ids(books.doc()));
-        assert_eq!(
-            (
-                preview.fetched,
-                preview.known,
-                preview.filtered,
-                preview.new
-            ),
-            (4, 2, 0, 2)
-        );
-        assert_eq!(preview.items, taken.fresh);
     }
 }

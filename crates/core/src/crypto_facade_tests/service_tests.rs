@@ -1,17 +1,20 @@
-//! The pure rules of the module on a bare `VaultDoc`, no vault in sight, and
-//! one test per mutating method family that the vault's method does what the
+//! The service rules of the module on a bare `VaultDoc` and, with the vault, one test per mutating method family that the vault's method does what the
 //! scenario in `usecases::cryptotrack` does (spec core-strangler, Tests).
 
-use super::apply::{
+use crate::cryptotrack::service::apply::{
     cursor_of, has_account, next_list_after, protocol_memory, remember_protocols, reset_cursor,
     restore_cursor, set_cursor, store_prices,
 };
-use super::operations::{
+use crate::cryptotrack::service::operations::{
     crypto_account_name, crypto_event_ref, crypto_join_chain, crypto_release_chain, crypto_symbol,
     day_of, native_symbol, other_side, secs, short,
 };
-use super::recompute::{CryptoBatch, batch_target, has_opening, store_adjustments};
-use super::totals::{crypto_retired_wallets, holdings_differ, supersede_holdings};
+use crate::cryptotrack::service::recompute::{
+    CryptoBatch, batch_target, has_opening, store_adjustments,
+};
+use crate::cryptotrack::service::totals::{
+    crypto_retired_wallets, holdings_differ, supersede_holdings,
+};
 use crate::cryptotrack::sources::evm::{Cursor, SourceBatch, Stream};
 use crate::error::Error;
 use crate::ipc_contract::cryptotrack::operations::CryptoSetOverrideInput;

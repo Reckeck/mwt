@@ -7,16 +7,13 @@
 
 use std::collections::HashSet;
 use std::sync::Mutex;
-use std::time::Duration;
 
 use serde_json::{Value, json};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
 
 use super::abi::{self, Call3};
 use super::cursor::{Cursor, Stream};
 use super::*;
-use crate::cryptotrack::rpc::RpcConfig;
+use crate::cryptotrack::test_chain::{Loopback, serve_raw};
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
 
@@ -484,74 +481,15 @@ async fn unsupported_networks_and_addresses_are_refused() {
 
 // ---- balances ---------------------------------------------------------------
 
-/// Serve JSON-RPC bodies on a loopback port; the closure sees the parsed body.
+/// Serve JSON-RPC bodies from a fake node; the closure sees the parsed body.
 async fn rpc_stub(
     handler: impl Fn(&Value) -> String + Send + Sync + 'static,
 ) -> (String, std::sync::Arc<Mutex<Vec<Value>>>) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = format!("http://{}", listener.local_addr().unwrap());
-    let seen = std::sync::Arc::new(Mutex::new(Vec::new()));
-    let log = std::sync::Arc::clone(&seen);
-    let handler = std::sync::Arc::new(handler);
-    tokio::spawn(async move {
-        loop {
-            let Ok((mut stream, _)) = listener.accept().await else {
-                return;
-            };
-            let (log, handler) = (std::sync::Arc::clone(&log), std::sync::Arc::clone(&handler));
-            tokio::spawn(async move {
-                let mut buf = Vec::new();
-                let mut chunk = [0u8; 4096];
-                let body = loop {
-                    let Ok(read) = stream.read(&mut chunk).await else {
-                        return;
-                    };
-                    if read == 0 {
-                        return;
-                    }
-                    buf.extend_from_slice(&chunk[..read]);
-                    let Some(end) = buf.windows(4).position(|win| win == b"\r\n\r\n") else {
-                        continue;
-                    };
-                    let head = String::from_utf8_lossy(&buf[..end]).to_ascii_lowercase();
-                    let len = head
-                        .lines()
-                        .find_map(|line| line.strip_prefix("content-length:"))
-                        .and_then(|val| val.trim().parse::<usize>().ok())
-                        .unwrap_or(0);
-                    if buf.len() >= end + 4 + len {
-                        break serde_json::from_slice::<Value>(&buf[end + 4..end + 4 + len])
-                            .unwrap_or(Value::Null);
-                    }
-                };
-                log.lock().unwrap().push(body.clone());
-                let text = handler(&body);
-                let reply = format!(
-                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{text}",
-                    text.len()
-                );
-                let _ = stream.write_all(reply.as_bytes()).await;
-                let _ = stream.shutdown().await;
-            });
-        }
-    });
-    (url, seen)
+    serve_raw(move |body| serde_json::from_str(&handler(body)).unwrap_or(Value::Null))
 }
 
-fn client() -> RpcClient {
-    RpcClient::new(RpcConfig {
-        timeout: Duration::from_millis(500),
-        max_retries: 0,
-        backoff_base: Duration::from_millis(5),
-        backoff_max: Duration::from_millis(5),
-        min_interval: Duration::ZERO,
-        subject_gap_min: Duration::ZERO,
-        subject_gap_max: Duration::ZERO,
-        max_batch: 50,
-        allow_loopback_http: true,
-        max_response_bytes: 16 * 1024 * 1024,
-    })
-    .unwrap()
+fn client() -> Loopback {
+    Loopback::default()
 }
 
 fn token(contract: &str, symbol: &str, decimals: u8) -> RawAsset {

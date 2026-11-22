@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Multi Wallet Tracker net: price and FX sources, exchange clients, data-source extraction, market candles, update manifest, external-link checks (depends on mwt-base and mwt-model only)"
+description = "Multi Wallet Tracker net: price and FX sources, exchange clients, data-source extraction, market candles, update manifest, external-link checks, the chain RPC client (depends on mwt-base and mwt-model only)"
 
 [lints]
 workspace = true
@@ -20,6 +20,8 @@ time.workspace = true
 hmac.workspace = true
 sha2.workspace = true
 reqwest.workspace = true
+tokio.workspace = true
+rand.workspace = true
 ts-rs.workspace = true
 scraper.workspace = true
 csv.workspace = true
@@ -27,5 +29,4 @@ calamine.workspace = true
 ego-tree.workspace = true
 
 [dev-dependencies]
-tokio.workspace = true
 proptest.workspace = true

@@ -12,7 +12,7 @@ use super::abi::{self, Call3, MULTICALL3};
 use super::blockscout::is_address;
 use super::model::{BalanceSource, RawAsset, RawBalance, Rejected, SourceBatch};
 use crate::cryptotrack::chains;
-use crate::cryptotrack::rpc::{RpcCall, RpcClient};
+use crate::cryptotrack::ports::{ChainCall, ChainSource};
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::normalize_address;
@@ -32,7 +32,10 @@ pub struct BalanceRequest<'req> {
 }
 
 /// Read the native and token balances of an address from a node.
-pub async fn read_balances(rpc: &RpcClient, request: &BalanceRequest<'_>) -> Result<SourceBatch> {
+pub async fn read_balances(
+    rpc: &impl ChainSource,
+    request: &BalanceRequest<'_>,
+) -> Result<SourceBatch> {
     let row = chains::evm_chain(request.chain).ok_or(Error::Unsupported)?;
     let address = normalize_address(request.chain, request.address);
     if !is_address(&address) {
@@ -67,7 +70,7 @@ pub async fn read_balances(rpc: &RpcClient, request: &BalanceRequest<'_>) -> Res
 }
 
 async fn multicall(
-    rpc: &RpcClient,
+    rpc: &impl ChainSource,
     url: &str,
     address: &str,
     native: &RawAsset,
@@ -128,16 +131,16 @@ async fn multicall(
 }
 
 async fn plain_batch(
-    rpc: &RpcClient,
+    rpc: &impl ChainSource,
     url: &str,
     address: &str,
     native: &RawAsset,
     tokens: &[&RawAsset],
 ) -> Result<SourceBatch> {
-    let mut calls = vec![RpcCall::new("eth_getBalance", json!([address, "latest"]))];
+    let mut calls = vec![ChainCall::new("eth_getBalance", json!([address, "latest"]))];
     for asset in tokens {
         let data = abi::balance_of_calldata(address)?;
-        calls.push(RpcCall::new(
+        calls.push(ChainCall::new(
             "eth_call",
             json!([{"to": contract_of(asset)?, "data": data}, "latest"]),
         ));

@@ -14,6 +14,12 @@ pub mod attachment {
     pub use mwt_model::{Attachment, AttachmentKey, AttachmentKind, MAX_ATTACHMENT_BYTES};
 }
 
+pub mod bybit {
+    pub use mwt_model::{
+        BybitCategory, EarnYield, Execution, InterTransfer, PendingImportExt, TradePrefill,
+    };
+}
+
 pub mod category {
     pub use mwt_model::{
         CATEGORIES_REV, CATEGORY_ADDITIONS, Category, CategoryGroup, DEFAULT_ESSENTIAL,
@@ -164,4 +170,8 @@ pub mod workflow {
         TestExpect, TraceStep, VarScope, WaitKind, Workflow, WorkflowRun, WorkflowState,
         WorkflowTest, WorkflowVar, WorkflowWait,
     };
+}
+
+pub mod llama_coin {
+    pub use mwt_model::llama_coin;
 }

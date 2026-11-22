@@ -104,7 +104,7 @@ pub fn missing_for_account(doc: &VaultDoc, account_id: &str) -> Vec<(CryptoAsset
         for asset in assets {
             let key = asset.key();
             if have.contains(&(key.as_str(), stamp.as_str()))
-                || crate::pricing::llama::llama_coin(asset).is_none()
+                || crate::model::llama_coin::llama_coin(asset).is_none()
             {
                 continue;
             }

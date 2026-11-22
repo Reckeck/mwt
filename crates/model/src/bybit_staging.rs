@@ -1,9 +1,9 @@
-//! Staging of Bybit rows as `PendingImport`s.
+//! Staging of Bybit rows as `PendingImport`s: pure mapping of the port data of `bybit`.
 // These become free functions when mwt-net is cut.
 
-use crate::exchange::{EarnYield, Execution, InterTransfer};
+use crate::bybit::{EarnYield, Execution, InterTransfer};
+use crate::vault::{ACCOUNT_EARN, ImportKind, PendingImport};
 use mwt_base::Amount;
-use mwt_model::{ACCOUNT_EARN, ImportKind, PendingImport};
 
 pub trait PendingImportExt: Sized {
     /// Shape a Bybit fill for staging. Returns `None` for fills we cannot make

@@ -45,11 +45,11 @@ use trade_core::ipc_contract::events::CryptoUpdatedPayload;
 
 use chrono::NaiveDate;
 use tauri::{AppHandle, Manager};
+use trade_core::chain::{RpcClient, RpcConfig};
 use trade_core::cryptotrack::prices;
 use trade_core::cryptotrack::protocols::{
     PositionReading, ProtocolRequest, ProtocolReview, Registry,
 };
-use trade_core::cryptotrack::rpc::{RpcClient, RpcConfig};
 use trade_core::cryptotrack::sources::evm::{
     BalanceRequest, Cursor, EvmSource, HistoryRequest, RawAsset, SourceBatch, Stream,
 };

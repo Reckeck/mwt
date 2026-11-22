@@ -60,7 +60,7 @@ pub mod wide;
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::cryptotrack::rpc::RpcClient;
+use crate::cryptotrack::ports::ChainSource;
 use crate::error::Result;
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::{CryptoAsset, CryptoTx};
@@ -232,7 +232,7 @@ impl Registry {
     ///
     /// An adapter keeps the client and builds a [`node::Node`] per request:
     /// the endpoints depend on the network and on what the user set for it.
-    pub fn builtin(node: RpcClient) -> Self {
+    pub fn builtin<C: ChainSource + Clone + 'static>(node: C) -> Self {
         Self::new(vec![
             lido::adapter(node.clone()),
             aave_v3::adapter(node.clone()),

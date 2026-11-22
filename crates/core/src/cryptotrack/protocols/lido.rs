@@ -37,7 +37,7 @@
 //! than making it and handling the revert) also saves a request per read.
 
 use crate::Amount;
-use crate::cryptotrack::rpc::RpcClient;
+use crate::cryptotrack::ports::ChainSource;
 use crate::cryptotrack::sources::evm::abi;
 use crate::error::{Error, Result};
 use crate::model::chain::Chain;
@@ -213,25 +213,25 @@ pub fn split_period(
 
 /// The Lido adapter. Keeps the shared client and builds a [`Node`] per
 /// request.
-pub struct Lido {
-    client: RpcClient,
+pub struct Lido<C> {
+    client: C,
 }
 
 /// The adapter for [`super::Registry::builtin`]:
 /// `lido::adapter(node)`.
-pub fn adapter(node: RpcClient) -> Box<dyn ProtocolAdapter> {
+pub fn adapter<C: ChainSource + 'static>(node: C) -> Box<dyn ProtocolAdapter> {
     Box::new(Lido { client: node })
 }
 
-impl Lido {
-    async fn balance(node: &Node<'_>, token: &Token) -> Result<U256> {
+impl<C: ChainSource> Lido<C> {
+    async fn balance(node: &Node<'_, C>, token: &Token) -> Result<U256> {
         let owner = abi::address_word(node.address())?;
         node.call(token.contract, BALANCE_OF, &[owner])
             .await?
             .u256(0)
     }
 
-    async fn rate(node: &Node<'_>, token: &Token) -> Result<U256> {
+    async fn rate(node: &Node<'_, C>, token: &Token) -> Result<U256> {
         let rate = node
             .call(token.contract, ST_ETH_PER_TOKEN, &[])
             .await?
@@ -243,7 +243,7 @@ impl Lido {
     }
 }
 
-impl ProtocolAdapter for Lido {
+impl<C: ChainSource + 'static> ProtocolAdapter for Lido<C> {
     fn protocol(&self) -> &'static str {
         PROTOCOL
     }
@@ -427,7 +427,7 @@ mod tests {
         }
     }
 
-    fn adapter_under_test() -> Lido {
+    fn adapter_under_test() -> Lido<stub::Loopback> {
         Lido {
             client: stub::client(),
         }

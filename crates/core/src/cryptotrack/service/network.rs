@@ -23,7 +23,7 @@
 //! - Changing the settings needs protection level 3 (where the device file
 //!   lives); below it the presets are shown and used.
 
-use reqwest::Url;
+use url::Url;
 
 use crate::cryptotrack::chains;
 use crate::cryptotrack::tracking::{ExplorerSettings, normalize_explorer};

@@ -17,45 +17,13 @@ use super::{PricingService, contract_lookup_allowed};
 use mwt_base::Amount;
 use mwt_base::error::{Error, Result};
 use mwt_base::time::{date_secs, date_ts};
-use mwt_model::Chain;
+pub use mwt_model::llama_coin;
 use mwt_model::{CryptoAsset, CryptoPricePoint, TokenId};
 
 pub(crate) const DEFILLAMA_COINS: &str = "https://coins.llama.fi";
 
 /// The `source` of a point this module produced.
 pub(crate) const SOURCE: &str = "defillama";
-
-/// DeFiLlama's name for a network; `None` for one it does not price by contract.
-fn llama_chain(chain: Chain) -> Option<&'static str> {
-    Some(match chain {
-        Chain::Ethereum => "ethereum",
-        Chain::Bsc => "bsc",
-        Chain::Polygon => "polygon",
-        Chain::Arbitrum => "arbitrum",
-        Chain::Optimism => "optimism",
-        Chain::Avalanche => "avax",
-        Chain::Base => "base",
-        Chain::Solana => "solana",
-        Chain::Tron => "tron",
-        _ => return None,
-    })
-}
-
-/// The coin identifier of a request: `<chain>:<contract>` for a token,
-/// `coingecko:<id>` for a network's own coin. `None` when the asset has no
-/// identifier DeFiLlama understands.
-pub fn llama_coin(asset: &CryptoAsset) -> Option<String> {
-    match asset {
-        CryptoAsset::Native { chain } => chain
-            .info()
-            .cg_coin_id
-            .map(|coin_id| format!("coingecko:{coin_id}")),
-        CryptoAsset::Token(token) => {
-            let chain = llama_chain(token.chain)?;
-            (!token.contract.is_empty()).then(|| format!("{chain}:{}", token.contract))
-        }
-    }
-}
 
 /// `…/prices/historical/<unix>/<coin>[,<coin>…]`.
 pub(crate) fn historical_url(base: &str, secs: i64, coins: &[String]) -> String {
@@ -194,6 +162,7 @@ impl CoinsApi for PricingService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mwt_model::Chain;
 
     const WALLET: &str = "0x00000000000000000000000000000000deadbeef";
     const USDC: &str = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
