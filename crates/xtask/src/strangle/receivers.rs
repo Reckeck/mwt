@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use syn::visit::{self, Visit};
-use syn::{Expr, FnArg, ImplItemFn, ItemFn, ItemStruct, Pat, ReturnType, Type};
+use syn::{Expr, FnArg, ImplItemFn, ItemFn, ItemImpl, ItemStruct, Pat, ReturnType, Type};
 
 use super::scan::{VAULT_TYPE, names_type};
 
@@ -45,8 +45,19 @@ pub(super) fn held_of_type(ty: &Type) -> Option<Held> {
 #[derive(Default)]
 pub(super) struct Shapes {
     structs: BTreeMap<String, Vec<(String, Held)>>,
-    /// `None`: the name is declared more than once, so it is not proven.
-    returns: BTreeMap<String, Option<Type>>,
+    /// Keyed by (self type, name): a free function has no self type. `None`: the key is declared
+    /// more than once, so it is not proven.
+    returns: BTreeMap<(Option<String>, String), Option<Type>>,
+    /// The self type of the impl being visited.
+    current_impl: Option<String>,
+}
+
+/// The last segment of the self type of an impl, as `impl Name` writes it.
+pub(super) fn impl_type_name(node: &ItemImpl) -> Option<String> {
+    match &*node.self_ty {
+        Type::Path(path) => Some(path.path.segments.last()?.ident.to_string()),
+        _ => None,
+    }
 }
 
 impl Shapes {
@@ -58,13 +69,14 @@ impl Shapes {
         shapes
     }
 
-    fn note_fn(&mut self, name: String, output: &ReturnType) {
+    fn note_fn(&mut self, owner: Option<String>, name: String, output: &ReturnType) {
         let ty = match output {
             ReturnType::Type(_, ty) => Some((**ty).clone()),
             ReturnType::Default => None,
         };
-        let known = self.returns.contains_key(&name);
-        self.returns.insert(name, if known { None } else { ty });
+        let key = (owner, name);
+        let known = self.returns.contains_key(&key);
+        self.returns.insert(key, if known { None } else { ty });
     }
 
     fn resolve(&self, ty: &Type) -> Option<Shape> {
@@ -100,13 +112,13 @@ impl Shapes {
         }
     }
 
-    fn shape_of(&self, init: &Expr) -> Option<Shape> {
+    fn shape_of(&self, init: &Expr, self_type: Option<&str>) -> Option<Shape> {
         match init {
-            Expr::Paren(inner) => self.shape_of(&inner.expr),
-            Expr::Try(inner) => self.shape_of(&inner.expr),
-            Expr::Await(inner) => self.shape_of(&inner.base),
+            Expr::Paren(inner) => self.shape_of(&inner.expr, self_type),
+            Expr::Try(inner) => self.shape_of(&inner.expr, self_type),
+            Expr::Await(inner) => self.shape_of(&inner.base, self_type),
             Expr::MethodCall(call) if call.method == "unwrap" || call.method == "expect" => {
-                self.shape_of(&call.receiver)
+                self.shape_of(&call.receiver, self_type)
             }
             Expr::Call(call) => {
                 let Expr::Path(path) = &*call.func else {
@@ -118,17 +130,20 @@ impl Shapes {
                     .iter()
                     .map(|segment| segment.ident.to_string())
                     .collect();
-                let (last, before) = match names.as_slice() {
-                    [.., before, last] => (last, Some(before)),
-                    [last] => (last, None),
-                    [] => return None,
+                // Only a single-segment call or `Self::`/`Type::` proves a callee: any longer path
+                // (`other::setup()`) may name a different function of the same name.
+                let key = match names.as_slice() {
+                    [last] => (None, last.clone()),
+                    [before, last] => {
+                        let owner = if before == "Self" { self_type? } else { before };
+                        if owner == VAULT_TYPE && CONSTRUCTORS.contains(&last.as_str()) {
+                            return Some(Shape::Vault(Held::Owned));
+                        }
+                        (Some(owner.to_string()), last.clone())
+                    }
+                    _ => return None,
                 };
-                if before.is_some_and(|before| before == VAULT_TYPE)
-                    && CONSTRUCTORS.contains(&last.as_str())
-                {
-                    return Some(Shape::Vault(Held::Owned));
-                }
-                self.resolve(self.returns.get(last)?.as_ref()?)
+                self.resolve(self.returns.get(&key)?.as_ref()?)
             }
             _ => None,
         }
@@ -150,13 +165,20 @@ impl<'ast> Visit<'ast> for Shapes {
     }
 
     fn visit_item_fn(&mut self, node: &'ast ItemFn) {
-        self.note_fn(node.sig.ident.to_string(), &node.sig.output);
+        self.note_fn(None, node.sig.ident.to_string(), &node.sig.output);
         visit::visit_item_fn(self, node);
     }
 
     fn visit_impl_item_fn(&mut self, node: &'ast ImplItemFn) {
-        self.note_fn(node.sig.ident.to_string(), &node.sig.output);
+        let owner = self.current_impl.clone();
+        self.note_fn(owner, node.sig.ident.to_string(), &node.sig.output);
         visit::visit_impl_item_fn(self, node);
+    }
+
+    fn visit_item_impl(&mut self, node: &'ast ItemImpl) {
+        let outer = std::mem::replace(&mut self.current_impl, impl_type_name(node));
+        visit::visit_item_impl(self, node);
+        self.current_impl = outer;
     }
 }
 
@@ -286,13 +308,22 @@ impl Bindings {
     }
 
     /// A `let`: the names the initializer proves, the rest shadow.
-    pub(super) fn bind_let(&mut self, pat: &Pat, init: Option<&Expr>, shapes: &Shapes) {
+    pub(super) fn bind_let(
+        &mut self,
+        pat: &Pat,
+        init: Option<&Expr>,
+        shapes: &Shapes,
+        self_type: Option<&str>,
+    ) {
         self.shadow(pat);
         let declared = match pat {
             Pat::Type(typed) => held_of_type(&typed.ty),
             _ => None,
         };
-        let proven = match (declared, init.and_then(|init| shapes.shape_of(init))) {
+        let proven = match (
+            declared,
+            init.and_then(|init| shapes.shape_of(init, self_type)),
+        ) {
             (Some(held), _) => ident_of(pat).map(|name| (name, held)).into_iter().collect(),
             (None, Some(shape)) => proven_names(pat, &shape),
             (None, None) => Vec::new(),
