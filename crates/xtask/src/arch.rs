@@ -283,7 +283,7 @@ fn sources(root: &Path) -> Result<Vec<Source>> {
 
 /// The names a `crate::<name>` path may resolve to: the directory modules plus every module of the
 /// table, so names re-exported from extracted crates (`pub use mwt_workflow as workflow;`) stay visible.
-fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
+fn table_modules(root: &Path) -> Result<BTreeSet<String>> {
     let mut modules = module_names(root)?;
     modules.extend(
         layers::GROUPS
@@ -292,6 +292,11 @@ fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
             .filter(|name| **name != "lib")
             .map(|name| (*name).to_string()),
     );
+    Ok(modules)
+}
+
+fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
+    let modules = table_modules(root)?;
     Ok(sources
         .iter()
         .flat_map(|source| scan::read_edges(&source.file, &source.module, &source.text, &modules))
@@ -344,10 +349,11 @@ mod tests {
     fn reexported_modules(lib: &str) -> Vec<String> {
         let mut names = Vec::new();
         for statement in lib.split(';') {
-            let statement = statement.trim().trim_start_matches(|ch: char| ch != 'p');
-            let Some(rest) = statement.strip_prefix("pub use mwt_") else {
+            const MARKER: &str = "pub use mwt_";
+            let Some(start) = statement.find(MARKER) else {
                 continue;
             };
+            let rest = &statement[start + MARKER.len()..];
             if let Some((_, alias)) = rest.split_once(" as ") {
                 names.push(alias.trim().to_string());
             } else if let Some(items) = rest.strip_prefix("base::{") {
@@ -365,6 +371,14 @@ mod tests {
     }
 
     #[test]
+    fn reexported_modules_skip_nothing_after_other_text_and_ignore_restricted_use() {
+        let lib = "/// plain docs, with a p\n#[cfg(test)]\npub use mwt_a as alpha;\n\
+                   pub(crate) use mwt_x as hidden;\n\
+                   // pending\npub use mwt_base::{beta, Gamma};\n";
+        assert_eq!(reexported_modules(lib), ["alpha", "beta"]);
+    }
+
+    #[test]
     fn every_reexported_module_of_lib_is_a_module_of_the_table() {
         let lib = fs::read_to_string(repo_root().join(CORE_SRC).join("lib.rs")).unwrap();
         let names = reexported_modules(&lib);
@@ -378,11 +392,7 @@ mod tests {
 
     #[test]
     fn a_name_reexported_from_an_extracted_crate_resolves_to_its_own_module() {
-        let modules: BTreeSet<String> = layers::GROUPS
-            .iter()
-            .flat_map(|group| group.modules.iter())
-            .map(|name| (*name).to_string())
-            .collect();
+        let modules = table_modules(&repo_root().join(CORE_SRC)).unwrap();
         let edges = scan::read_edges(
             "planning/x.rs",
             "planning",
