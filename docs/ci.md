@@ -15,13 +15,13 @@ only a mirror without CI.
 
 | File | When it runs | What it does |
 |---|---|---|
-| `ci.yml` | PR into `development`/`main`, manually, `workflow_call` from `release.yml` | checks: Rust, frontend, layout/links in shards, Android, clippy for Windows/macOS, the `ci-ok` summary |
+| `ci.yml` | PR into `development`/`main` or an integration branch `feat/**`, manually, `workflow_call` from `release.yml` | checks: Rust, frontend, layout/links in shards, Android, clippy for Windows/macOS, the `ci-ok` summary |
 | `images.yml` | called from `ci.yml`, manually | builds and pushes the CI images to ghcr if the tag does not exist yet |
 | `release.yml` | push to `development` (pre-release `X.Y.Z-N`) and `main` (release `X.Y.Z`), manually | version, checks, builds, packages, GitHub Release publication |
 | `release-start.yml` | manually (on `development`, no inputs) | `cargo xtask release-start`: branch `release/vX.Y.Z`, bump, tag `release-base/vX.Y.Z`, PR into `main` with auto-merge (squash) |
 | `audit.yml` | PR, push to `development`/`main`, daily, manually | dependency audit (`cargo xtask audit`) |
 | `dependabot-merge.yml` | Sunday, manually | merges green Dependabot updates |
-| `pr-title.yml` | PR into `development`/`main`: opened, renamed, pushed | the title is a Conventional Commits subject of at most 72 characters (`.github/scripts/check-pr-title.sh`; the squash makes it the commit subject, git-cliff drops anything else); required by branch protection next to `ci-ok` |
+| `pr-title.yml` | PR into `development`/`main`/`feat/**`: opened, renamed, pushed | the title is a Conventional Commits subject of at most 72 characters (`.github/scripts/check-pr-title.sh`; the squash makes it the commit subject, git-cliff drops anything else); required by branch protection next to `ci-ok` |
 | `cache-cleanup.yml` | PR closed, branch deleted | deletes the branch's caches |
 
 The macOS jobs (`clippy-macos` in `ci.yml`, `build-macos` in `release.yml`) are paused. Setting the repo variable `MACOS_ENABLED=true` is not enough on its own: also apply the steps written in the job comments (for `clippy-macos`, restore the `deps-native` matrix entry; for `build-macos`, pass `--macos` to `xtask check-release-files`).
@@ -29,7 +29,11 @@ The macOS jobs (`clippy-macos` in `ci.yml`, `build-macos` in `release.yml`) are 
 Feature branches and hotfixes get only checks (through a PR); builds and
 releases belong only to `development` and `main`, and only after the checks are
 green. The `vX.Y.Z` tags are created by the `publish` job together with the
-release. The workflows are checked with
+release. An integration branch `feat/<name>` (now `feat/rework-ui`, the UI rework) collects several PRs:
+they get the same checks as PRs into `development` and are squash-merged into it; the branch is under
+the same ruleset (`ci-ok` + `pr-title`, no force-push), is kept up to date by merging `development`
+into it, and lands in `development` with a merge commit (not squash), so each PR stays a commit.
+The workflows are checked with
 `mise x actionlint@1.7.12 -- actionlint`.
 
 ## Speed
@@ -304,7 +308,7 @@ would be merged. The logic is in `.github/scripts/dependabot-merge.sh`.
 (`pnpm audit --audit-level high`). Vulnerabilities, `unsound` and `yanked` fail
 for Rust, and `high`/`critical` for npm; `unmaintained` and minor npm findings
 are only printed. The audit is not part of `mise run check`. The separate
-workflow `audit.yml` runs on PRs into `development`/`main`, on pushes to them,
+workflow `audit.yml` runs on PRs into `development`/`main`/`feat/**`, on pushes to them,
 daily (cron) and manually; it is not part of `ci-ok`: a new finding in an
 untouched dependency must not block other people's PRs.
 
