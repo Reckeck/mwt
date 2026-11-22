@@ -63,8 +63,7 @@ use trade_core::model::chain::Chain;
 use trade_core::model::cryptotrack::{CryptoAsset, CryptoPricePoint, CryptoTx};
 use trade_core::model::vault::now_iso;
 use trade_core::pricing::PricingService;
-use trade_core::service::NetworkRequest;
-use trade_core::service::UnlockedVault;
+use trade_core::service::{NetworkRequest, RpcChain, UnlockedVault};
 use trade_core::sync::stamp::now_ms;
 use trade_core::vault_io::device_secrets::BlockscoutKey;
 
@@ -755,10 +754,10 @@ struct EvmReader {
     /// Talks to the explorer: the history and the token list. The per-network
     /// key is added to a copy of it for one request, so a network without a key
     /// never sends another network's.
-    explorer: RpcClient,
+    explorer: RpcChain,
     /// Talks to the node: balances. It never carries the Blockscout key, and it
     /// accepts a loopback address, because the user's own node is often one.
-    node: RpcClient,
+    node: RpcChain,
     /// Historic prices: DeFiLlama, no key.
     pricing: PricingService,
 }
@@ -767,11 +766,11 @@ impl EvmReader {
     fn new(app: AppHandle) -> Result<Self> {
         Ok(Self {
             app,
-            explorer: RpcClient::new(RpcConfig::default())?,
-            node: RpcClient::new(RpcConfig {
+            explorer: RpcChain::new(RpcClient::new(RpcConfig::default())?),
+            node: RpcChain::new(RpcClient::new(RpcConfig {
                 allow_loopback_http: true,
                 ..RpcConfig::default()
-            })?,
+            })?),
             pricing: PricingService::default().with_known_tokens(known::is_known),
         })
     }

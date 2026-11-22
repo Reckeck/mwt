@@ -1,0 +1,28 @@
+[package]
+name = "mwt-cryptotrack"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker crypto module: chains, protocols, engine, sources, tokens and the pure service rules over the books (depends on mwt-money, mwt-model and mwt-base only)"
+
+[lints]
+workspace = true
+
+[features]
+# `ts-rs` derives of the exchange-sync preview types; off by default, `trade-core` turns them on.
+ts = ["dep:ts-rs", "mwt-model/ts", "mwt-base/ts", "mwt-money/ts"]
+schema = ["mwt-model/schema", "mwt-money/schema", "mwt-base/schema"]
+
+[dependencies]
+mwt-base = { path = "../base" }
+mwt-model = { path = "../model" }
+mwt-money = { path = "../money" }
+serde.workspace = true
+serde_json.workspace = true
+rust_decimal.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+url.workspace = true
+tokio.workspace = true
+ts-rs = { workspace = true, optional = true }

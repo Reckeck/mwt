@@ -12,7 +12,7 @@
 
 service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
-scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src", "crates/planning/src", "crates/reports/src"]
+scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src", "crates/planning/src", "crates/reports/src", "crates/cryptotrack/src"]
 
 # Files every area task may change besides its own (spec D5).
 grants = ["crates/core/src/bin/gen_types.rs"]
@@ -36,6 +36,7 @@ household = "crates/household/src"
 workflow = "crates/workflow/src"
 planning = "crates/planning/src"
 reports = "crates/reports/src"
+cryptotrack = "crates/cryptotrack/src"
 
 # Groups whose stems keep their facade tests in a directory of their own.
 [facade_test_dirs]
@@ -143,7 +144,7 @@ files = [
     "crates/core/src/lib.rs",
     "crates/core/src/ipc_contract.rs",
     "crates/core/src/usecases/mod.rs",
-    "crates/core/src/cryptotrack/mod.rs",
+    "crates/cryptotrack/src/lib.rs",
     "crates/household/src/lib.rs",
     "crates/core/src/money/mod.rs",
     "crates/planning/src/lib.rs",
@@ -216,7 +217,7 @@ files = [
 task = "T58"
 files = [
     "crates/core/src/money/", "crates/household/src/", "crates/planning/src/",
-    "crates/reports/src/", "crates/core/src/cryptotrack/", "crates/workflow/src/",
+    "crates/reports/src/", "crates/cryptotrack/src/", "crates/workflow/src/",
     "crates/core/src/usecases/", "crates/core/src/kernel/books.rs",
     # Forwards in service/ that lose their last caller are deleted (orchestrator decision 2026-11-20).
     "crates/core/src/service/allocation.rs", "crates/core/src/service/budget.rs",
@@ -843,7 +844,7 @@ files = [
   "crates/core/src/service/exchange_import.rs",
   "crates/core/src/service/cryptotrack/transition/tests.rs",
   "crates/core/src/service/cryptotrack/operations.rs",
-  "crates/core/src/cryptotrack/",
+  "crates/cryptotrack/src/",
   "crates/core/src/usecases/cryptotrack/",
   "crates/core/src/storage/fixtures_gen.rs",
   "crates/core/src/storage/legacy_v4.rs",

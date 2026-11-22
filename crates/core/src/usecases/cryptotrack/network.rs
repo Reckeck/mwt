@@ -27,6 +27,7 @@ use crate::ipc_contract::cryptotrack::network::{
 };
 use crate::model::chain::Chain;
 use crate::money::books::Books;
+use crate::service::RpcChain;
 use crate::service::UnlockedVault;
 use crate::vault_io::device_secrets::{self, BlockscoutKey, NetworkEndpoints};
 
@@ -172,7 +173,7 @@ const SUBJECT: &str = "network-test";
 
 /// The production [`Probe`]: one try, a short timeout, loopback `http` allowed
 /// (the user's own node).
-pub struct NetworkProbe(RpcClient);
+pub struct NetworkProbe(RpcChain);
 
 impl NetworkProbe {
     pub fn new() -> Result<Self> {
@@ -182,7 +183,7 @@ impl NetworkProbe {
             allow_loopback_http: true,
             ..RpcConfig::default()
         })
-        .map(Self)
+        .map(|client| Self(RpcChain::new(client)))
     }
 }
 

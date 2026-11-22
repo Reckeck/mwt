@@ -1,5 +1,6 @@
 //! Glue between the ports of the crypto module and the network adapters: an impl of a trait of
-//! one layer for a type of another sits here, in the facade that sees both.
+//! one layer for a type of another sits here, in the facade that sees both (as newtypes: the ports
+//! live in `mwt-cryptotrack`, the clients in `mwt-net`).
 
 use chrono::NaiveDate;
 use mwt_net::{BybitClient, RpcCall, RpcClient};
@@ -13,14 +14,31 @@ use crate::model::bybit::{EarnYield, InterTransfer};
 use crate::model::cryptotrack::{CryptoAsset, CryptoPricePoint};
 use crate::pricing::PricingService;
 
-/// The shared rate-limited client is the production [`ChainSource`].
-impl ChainSource for RpcClient {
+/// The shared rate-limited client as the production [`ChainSource`]. A newtype, because the port
+/// lives in `mwt-cryptotrack` and the client in `mwt-net`: neither crate may name the other, and
+/// the orphan rule forbids the impl for the bare type.
+#[derive(Debug, Clone)]
+pub struct RpcChain(RpcClient);
+
+impl RpcChain {
+    pub fn new(client: RpcClient) -> Self {
+        Self(client)
+    }
+
+    /// A copy that sends `key` (the Blockscout key) in a header; see [`RpcClient::with_api_key`].
+    #[must_use]
+    pub fn with_api_key(&self, key: Option<&str>) -> Self {
+        Self(self.0.with_api_key(key))
+    }
+}
+
+impl ChainSource for RpcChain {
     async fn get_json(&self, base: &str, path_and_query: &str, subject: &str) -> Result<Value> {
-        Self::get_json(self, base, path_and_query, subject).await
+        self.0.get_json(base, path_and_query, subject).await
     }
 
     async fn call(&self, url: &str, subject: &str, method: &str, params: Value) -> Result<Value> {
-        Self::call(self, url, subject, method, params).await
+        self.0.call(url, subject, method, params).await
     }
 
     async fn batch(
@@ -33,22 +51,25 @@ impl ChainSource for RpcClient {
             .iter()
             .map(|call| RpcCall::new(&call.method, call.params.clone()))
             .collect();
-        Self::batch(self, url, subject, &calls).await
+        self.0.batch(url, subject, &calls).await
     }
 }
 
-/// The DeFiLlama adapter. It lives here, not in `pricing`, so the port stays in
-/// `cryptotrack` and `pricing` (a lower layer) does not depend on it.
-impl PriceSource for PricingService {
+/// The DeFiLlama adapter: a borrowed newtype over [`PricingService`] (the port lives in
+/// `mwt-cryptotrack`, the service in `mwt-net`), so `pricing` does not depend on the port.
+#[derive(Debug, Clone, Copy)]
+pub struct LlamaPrices<'pricing>(pub &'pricing PricingService);
+
+impl PriceSource for LlamaPrices<'_> {
     fn may_lookup_contract(&self) -> bool {
-        self.looks_up_contracts()
+        self.0.looks_up_contracts()
     }
 
     async fn historic_prices(
         &self,
         wanted: &[(CryptoAsset, NaiveDate)],
     ) -> Result<Vec<CryptoPricePoint>> {
-        self.fetch_historic_prices(wanted).await
+        self.0.fetch_historic_prices(wanted).await
     }
 }
 
@@ -111,3 +132,7 @@ impl Fills for BybitApi {
             .await
     }
 }
+
+#[cfg(test)]
+#[path = "ports_tests.rs"]
+mod tests;

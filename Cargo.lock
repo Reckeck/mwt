@@ -3105,6 +3105,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-cryptotrack"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "mwt-base",
+ "mwt-model",
+ "mwt-money",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "tokio",
+ "ts-rs",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "mwt-household"
 version = "0.1.0"
 dependencies = [
@@ -6563,6 +6580,7 @@ dependencies = [
  "insta",
  "mwt-base",
  "mwt-crypto",
+ "mwt-cryptotrack",
  "mwt-household",
  "mwt-model",
  "mwt-money",
