@@ -12,7 +12,7 @@
 
 service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
-scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src"]
+scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src"]
 
 # Files every area task may change besides its own (spec D5).
 grants = ["crates/core/src/bin/gen_types.rs"]
@@ -33,11 +33,13 @@ guarded = [
 sync = "crates/sync/src"
 money = "crates/money/src"
 household = "crates/household/src"
+workflow = "crates/workflow/src"
 
 # Groups whose stems keep their facade tests in a directory of their own.
 [facade_test_dirs]
 money = "crates/core/src/money_facade_tests"
 household = "crates/core/src/household_facade_tests"
+workflow = "crates/core/src/workflow_facade_tests"
 
 # The foundation tasks that change files inside `service/`, the group dirs or `usecases/`.
 [[foundation]]
@@ -54,7 +56,7 @@ files = ["crates/core/src/usecases/mod.rs", "crates/core/src/usecases/workflow/m
 # and the run and record scenarios that the `workflows.rs` shim forwards to.
 task = "E"
 files = [
-    "crates/core/src/workflow/",
+    "crates/workflow/src/",
     "crates/core/src/usecases/workflow/host.rs",
     "crates/core/src/usecases/workflow/records.rs",
     "crates/core/src/usecases/workflow/runs.rs",
@@ -143,7 +145,7 @@ files = [
     "crates/core/src/reports/mod.rs",
     "crates/core/src/sync/mod.rs",
     "crates/core/src/vault/mod.rs",
-    "crates/core/src/workflow/mod.rs",
+    "crates/workflow/src/lib.rs",
     "crates/core/src/usecases/cryptotrack/mod.rs",
     "crates/core/src/usecases/household/mod.rs",
     "crates/core/src/usecases/money/mod.rs",
@@ -209,7 +211,7 @@ files = [
 task = "T58"
 files = [
     "crates/core/src/money/", "crates/household/src/", "crates/core/src/planning/",
-    "crates/core/src/reports/", "crates/core/src/cryptotrack/", "crates/core/src/workflow/",
+    "crates/core/src/reports/", "crates/core/src/cryptotrack/", "crates/workflow/src/",
     "crates/core/src/usecases/", "crates/core/src/kernel/books.rs",
     # Forwards in service/ that lose their last caller are deleted (orchestrator decision 2026-11-20).
     "crates/core/src/service/allocation.rs", "crates/core/src/service/budget.rs",
@@ -788,7 +790,7 @@ files = [
     "crates/core/src/planning/",
     "crates/core/src/model/",
     "crates/core/src/reports/notify_snapshot.rs",
-    "crates/core/src/workflow/nodes/actions.rs",
+    "crates/workflow/src/nodes/actions.rs",
     "crates/core/src/service/mod.rs",
     "crates/core/src/service/automations.rs",
     "crates/core/src/service/notifications.rs",
@@ -803,7 +805,7 @@ files = [
   "crates/core/src/planning/goals.rs",
   "crates/core/src/planning/emergency.rs",
   "crates/core/src/planning/passive.rs",
-  "crates/core/src/workflow/service/vars.rs",
+  "crates/workflow/src/service/vars.rs",
   "crates/core/src/reports/overview.rs",
   "crates/core/src/kernel/books.rs",
   "crates/core/src/service/worth.rs",
@@ -884,7 +886,7 @@ files = [
   "crates/core/src/reports/",
   "crates/household/src/",
   "crates/core/src/money/",
-  "crates/core/src/workflow/automation.rs",
+  "crates/workflow/src/automation.rs",
   "crates/core/src/usecases/planning/agenda.rs",
   "crates/core/src/usecases/planning/budget.rs",
   "crates/core/src/usecases/planning/health.rs",
@@ -922,7 +924,7 @@ files = [
   "crates/core/src/kernel/books.rs",
   "crates/core/src/money/",
   "crates/core/src/planning/",
-  "crates/core/src/workflow/",
+  "crates/workflow/src/",
   "crates/core/src/usecases/money/",
   "crates/core/src/usecases/workflow/",
   "crates/core/src/usecases/cryptotrack/",

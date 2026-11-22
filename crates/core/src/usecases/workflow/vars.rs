@@ -55,3 +55,20 @@ pub fn accounts(books: &Books<'_>, parent: Option<&str>) -> Vec<(String, String,
         })
         .collect()
 }
+
+/// Price of one unit of an asset in a currency.
+pub fn price(books: &Books<'_>, asset: &AssetRef, currency: &str, secs: i64) -> Option<Amount> {
+    let book = books.rate_book();
+    let usd = book.price_at(&asset.key(), secs)?;
+    book.convert(usd, "usd", currency, secs)
+}
+
+pub fn convert(
+    books: &Books<'_>,
+    amount: Amount,
+    from: &str,
+    to: &str,
+    secs: i64,
+) -> Option<Amount> {
+    books.rate_book().convert(amount, from, to, secs)
+}

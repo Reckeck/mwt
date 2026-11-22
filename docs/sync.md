@@ -76,7 +76,7 @@ and events).
 | The encrypted channel, the pairing code, the vault proof, the clock check | `crates/core/src/sync/session.rs`, `protocol.rs` |
 | Vault transfer protocol (SPAKE2, file check) | `crates/core/src/sync/transfer.rs` |
 | Vault side: stamping on save, `sync_apply`, `sync_undo`, dedupe, backups, peers | `crates/core/src/service/peer_sync.rs` |
-| Run keys, waits, schedule moments, marks | `crates/core/src/workflow/run_key.rs`, `crates/core/src/service/workflows.rs` |
+| Run keys, waits, schedule moments, marks | `crates/workflow/src/run_key.rs`, `crates/core/src/service/workflows.rs` |
 | Reminder ids and sources | `crates/core/src/service/auto_reminders.rs` |
 | Network: mDNS, TCP, roles, sessions | `crates/app/src/sync/`: `discovery`, `link`, `mod` (hub), `keystore`, `host`, `firewall`, `handover`, `transfer`, `pending` |
 | Who runs background jobs | `crates/app/src/scheduler.rs`, `sync::runs_jobs` |

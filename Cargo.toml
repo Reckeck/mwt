@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/base", "crates/crypto", "crates/macros", "crates/model", "crates/net", "crates/vault", "crates/sync", "crates/money", "crates/household", "crates/testkit", "crates/core", "crates/app", "crates/app-macros", "crates/plugin-saf", "crates/plugin-biometric", "crates/plugin-net", "crates/plugin-insets", "crates/xtask"]
+members = ["crates/base", "crates/crypto", "crates/macros", "crates/model", "crates/net", "crates/vault", "crates/sync", "crates/money", "crates/household", "crates/workflow", "crates/testkit", "crates/core", "crates/app", "crates/app-macros", "crates/plugin-saf", "crates/plugin-biometric", "crates/plugin-net", "crates/plugin-insets", "crates/xtask"]
 
 [workspace.package]
 version = "0.1.0"

@@ -203,7 +203,7 @@ pub fn import_workflow(
     stores: &HashMap<String, String>,
     now: i64,
 ) -> Result<SavedWorkflow> {
-    let draft = import_draft(&vault.doc, json, stores)?;
+    let draft = import_draft(&vault.doc, &*vault, json, stores)?;
     save_workflow(vault, None, draft, now)
 }
 

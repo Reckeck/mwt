@@ -3255,6 +3255,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-workflow"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "insta",
+ "mwt-base",
+ "mwt-model",
+ "pretty_assertions",
+ "regex",
+ "rust_decimal",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6518,6 +6536,7 @@ dependencies = [
  "mwt-sync",
  "mwt-testkit",
  "mwt-vault",
+ "mwt-workflow",
  "pretty_assertions",
  "proptest",
  "rand 0.10.4",

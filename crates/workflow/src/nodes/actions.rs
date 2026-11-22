@@ -1,0 +1,812 @@
+//! Actions: operations, distribution, notices, reminders, the confirmation
+//! queue, stop, events and waits.
+
+use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
+use serde_json::Value;
+
+use crate::catalog::NodeDef;
+use crate::effect::Effect;
+use crate::exec::{
+    EmittedEvent, Executor, Fault, Halt, MAX_ACTIONS, MAX_CALL_DEPTH, RunContext, RunMode, Step,
+};
+use crate::graph::Graph;
+use crate::graph::Node;
+use crate::model::{QueuedActions, WaitKind, WorkflowWait};
+use crate::types::WfValue;
+use mwt_base::Amount;
+use mwt_base::calendar::Calendar;
+use mwt_model::AssetRef;
+use mwt_model::NoticeCategory;
+use mwt_model::{
+    AccountRef, ConvertSide, ConvertTx, PaymentTx, TopupTx, Transaction, TransferTx, TxMeta,
+    TxOrigin,
+};
+use mwt_model::{Reminder, TransactionDraft};
+
+use super::{json_account, json_number};
+
+/// A planned moment this close to the run still dates the operation.
+const SAME_RUN_WINDOW_SECS: i64 = 24 * 3600;
+
+fn places_for(asset: &AssetRef) -> u32 {
+    if asset.is_fiat() { 2 } else { 8 }
+}
+
+/// The longest wait a node may ask for: 100 years of hours.
+const MAX_WAIT_HOURS: i64 = 876_000;
+
+/// Whole seconds in a wait of `hours`; a wait beyond the limit is an error.
+fn wait_seconds(hours: Amount) -> Result<i64, String> {
+    let hours = hours.into_inner();
+    if hours < Decimal::ZERO {
+        return Err("the wait cannot be negative".into());
+    }
+    if hours > Decimal::from(MAX_WAIT_HOURS) {
+        return Err("the wait is too long".into());
+    }
+    (hours * Decimal::from(3600))
+        .trunc()
+        .to_i64()
+        .ok_or_else(|| "the wait is too long".to_string())
+}
+
+fn positive(amount: Option<Amount>, what: &str) -> Result<Amount, String> {
+    match amount {
+        Some(value) if value.is_positive() => Ok(value),
+        Some(value) => Err(format!("{what} must be above zero, not {value}")),
+        None => Err(format!("set {what}")),
+    }
+}
+
+fn store_of(account: Option<AccountRef>, what: &str) -> Result<String, String> {
+    match account {
+        Some(AccountRef::Store(id)) => Ok(id),
+        Some(_) => Err(format!("{what} must be one of your accounts")),
+        None => Err(format!("choose {what}")),
+    }
+}
+
+impl Executor<'_> {
+    fn account_name(&self, account: &AccountRef) -> String {
+        match account {
+            AccountRef::Store(id) => self.host.store_name(id).unwrap_or_else(|| id.clone()),
+            AccountRef::Contact { contact_id, .. } => self
+                .host
+                .contact_name(contact_id)
+                .unwrap_or_else(|| contact_id.clone()),
+            AccountRef::Raw(text) => text.clone(),
+        }
+    }
+
+    /// An operation in a few words, in both languages.
+    fn describe(&self, tx: &Transaction) -> (String, String) {
+        let store = |id: &str| self.account_name(&AccountRef::Store(id.to_string()));
+        match tx {
+            Transaction::Topup(inner) => {
+                let what = format!("{} {}", inner.amount, inner.asset.symbol);
+                (
+                    format!("пополнение «{}» на {what}", store(&inner.store_id)),
+                    format!("top-up of «{}» by {what}", store(&inner.store_id)),
+                )
+            }
+            Transaction::Payment(inner) => {
+                let what = format!("{} {}", inner.amount, inner.asset.symbol);
+                (
+                    format!("оплата {what} с «{}»", store(&inner.store_id)),
+                    format!("payment of {what} from «{}»", store(&inner.store_id)),
+                )
+            }
+            Transaction::Transfer(inner) => {
+                let what = format!("{} {}", inner.amount, inner.asset.symbol);
+                let (from, to) = (self.account_name(&inner.from), self.account_name(&inner.to));
+                (
+                    format!("перевод {what}: «{from}» → «{to}»"),
+                    format!("transfer of {what}: «{from}» → «{to}»"),
+                )
+            }
+            Transaction::Convert(inner) => {
+                let give = format!("{} {}", inner.from.amount, inner.from.asset.symbol);
+                let get = format!("{} {}", inner.to.amount, inner.to.asset.symbol);
+                (
+                    format!("обмен {give} → {get}"),
+                    format!("exchange {give} → {get}"),
+                )
+            }
+            other => (format!("{:?}", other.kind()), format!("{:?}", other.kind())),
+        }
+    }
+
+    /// The id of a wait this node makes: derived from the run key when the
+    /// run has one (every device makes the same), else a fresh one.
+    fn wait_id(&self, node: &Node) -> String {
+        match &self.ctx.run_key {
+            Some(key) => crate::run_key::wait_id(key, &node.id),
+            None => uuid::Uuid::new_v4().to_string(),
+        }
+    }
+
+    fn meta(&self, comment: &str, category: Option<String>) -> TxMeta {
+        self.meta_at(comment, category, None)
+    }
+
+    /// [`Self::meta`] dated `planned` (a moment the schedule planned) when
+    /// given, else the run's own moment.
+    fn meta_at(&self, comment: &str, category: Option<String>, planned: Option<i64>) -> TxMeta {
+        let comment = if comment.trim().is_empty() {
+            self.ctx.workflow_name.clone()
+        } else {
+            comment.to_string()
+        };
+        let mut meta = TxMeta::new(&comment);
+        // The run's own moment, not the emulated clock: a sandbox operation
+        // dated after a long "Wait" would fail the future-date check,
+        // which the real run (made at that later moment) passes. A planned
+        // moment after the run is not taken either.
+        // A run made long after its planned day (confirmed later, started by hand,
+        // caught up) is dated when it ran: its day is the one the money moved.
+        let moment = planned
+            .filter(|moment| {
+                *moment <= self.ctx.now
+                    && !self.ctx.retry
+                    && self.ctx.now - *moment < SAME_RUN_WINDOW_SECS
+            })
+            .unwrap_or(self.ctx.now);
+        meta.timestamp = mwt_base::calendar::iso(moment);
+        meta.categories = category.into_iter().collect();
+        meta.origin = TxOrigin::Workflow {
+            workflow_id: self.ctx.workflow_id.clone(),
+            run_id: self.ctx.run_id.clone(),
+            planned_at: planned.map(mwt_base::calendar::iso),
+            planned_date: None,
+            estimated: false,
+            run_key: self.ctx.run_key.clone(),
+        };
+        meta
+    }
+
+    /// The moment wired into "Transaction date", if any.
+    fn date_input(&mut self, node: &Node) -> Result<Option<i64>, String> {
+        Ok(match self.input(node, "date")? {
+            WfValue::Date(text) | WfValue::Text(text) if !text.trim().is_empty() => {
+                let cal = mwt_base::calendar::Calendar::new(&self.ctx.zone);
+                let moment = mwt_base::time::unix_secs(&text).or_else(|| {
+                    super::data::parse_date(&text, &cal)
+                        .map(|date| cal.at_local(date, mwt_base::calendar::AUTOMATION_HOUR))
+                });
+                Some(moment.ok_or_else(|| format!("«{text}» is not a date"))?)
+            }
+            _ => None,
+        })
+    }
+
+    fn category_input(&mut self, node: &Node) -> Result<Option<String>, String> {
+        Ok(match self.input(node, "category")? {
+            WfValue::Category(key) | WfValue::Text(key) if !key.trim().is_empty() => Some(key),
+            _ => None,
+        })
+    }
+
+    /// What the operations take out, in the cap's currency; refused when the
+    /// run would move more than its cap (or the value is unknown under a cap).
+    fn check_cap(&self, txs: &[Transaction]) -> Result<Amount, Fault> {
+        Ok(match self.ctx.max_amount {
+            // With a cap, a move whose value is unknown is refused, never counted as nothing.
+            Some(cap) => {
+                let currency = self
+                    .ctx
+                    .max_amount_currency
+                    .clone()
+                    .unwrap_or_else(|| self.host.base_currency().to_string());
+                let mut sum = Amount::ZERO;
+                for tx in txs {
+                    let Some(part) = self.host.wf_outflow_in(tx, &currency) else {
+                        return Err(Halt::Fail(format!(
+                            "no price or rate to check the cap of {cap} {}",
+                            currency.to_uppercase()
+                        ))
+                        .into());
+                    };
+                    sum += part;
+                }
+                if self.moved + sum > cap {
+                    return Err(Halt::Fail(format!(
+                        "the run would move {} {code}, over its cap of {cap} {code}",
+                        (self.moved + sum).round(2),
+                        code = currency.to_uppercase()
+                    ))
+                    .into());
+                }
+                sum
+            }
+            None => txs
+                .iter()
+                .fold(Amount::ZERO, |sum, tx| sum + self.host.wf_outflow_base(tx)),
+        })
+    }
+
+    /// Make the operations: all of them are kept or none.
+    fn commit(&mut self, txs: Vec<Transaction>) -> Result<Vec<Transaction>, Fault> {
+        self.actions += 1;
+        if self.actions > MAX_ACTIONS {
+            return Err(Halt::Fail(format!("more than {MAX_ACTIONS} actions in one run")).into());
+        }
+        let value = self.check_cap(&txs)?;
+        let now = self.now();
+        let saved = self.perform(Effect::Insert { txs, now })?;
+        self.moved += value;
+        Ok(saved)
+    }
+
+    /// An operation from "Transaction template" (what the automation form keeps,
+    /// fee, contact and all): the amount and the date still come from the
+    /// node.
+    fn build_from_template(&mut self, node: &Node, raw: &str) -> Result<Transaction, String> {
+        let draft: TransactionDraft = serde_json::from_str(raw)
+            .map_err(|err| format!("the template does not read: {err}"))?;
+        let amount = positive(self.input(node, "amount")?.as_number(), "the amount")?;
+        let planned = self.date_input(node)?;
+        let comment = self.text_param(node, "comment");
+        let fresh = self.meta_at(&comment, None, planned);
+        let mut tx = mwt_model::draft_to_transaction(&draft, "", "", &fresh.timestamp);
+        match &mut tx {
+            Transaction::Topup(inner) => inner.amount = amount,
+            Transaction::Payment(inner) => inner.amount = amount,
+            Transaction::Transfer(inner) => inner.amount = amount,
+            Transaction::Convert(inner) => inner.from.amount = amount,
+            _ => {}
+        }
+        let meta = tx.meta_mut();
+        meta.origin = fresh.origin;
+        if meta.comment.trim().is_empty() {
+            meta.comment = fresh.comment;
+        }
+        if let TxOrigin::Workflow { estimated, .. } = &mut meta.origin {
+            *estimated = self.bool_param(node, "estimated");
+        }
+        if let Transaction::Topup(inner) = &mut tx
+            && let Some(offset) = self.raw_param(node, "for_month_offset").as_i64()
+        {
+            let day = self.raw_param(node, "for_month_day").as_u64();
+            let cal = mwt_base::calendar::Calendar::new(&self.ctx.zone);
+            let moment = planned.unwrap_or(self.ctx.now);
+            inner.details.for_month = Some(mwt_base::calendar::for_month::for_month_key(
+                cal.date_of(moment),
+                day.and_then(|day| u8::try_from(day).ok()),
+                i8::try_from(offset).unwrap_or(0),
+            ));
+        }
+        Ok(tx)
+    }
+
+    fn build_transaction(&mut self, node: &Node) -> Result<Transaction, String> {
+        let template = self.text_param(node, "template");
+        if !template.trim().is_empty() {
+            return self.build_from_template(node, &template);
+        }
+        let kind = self.text_param(node, "tx_kind");
+        let account = self.account_input(node, "account")?;
+        let to = self.account_input(node, "to")?;
+        let amount_value = self.input(node, "amount")?;
+        let amount = positive(amount_value.as_number(), "the amount")?;
+        let asset = match self.asset_input(node, "asset")? {
+            Some(asset) => asset,
+            None => match amount_value.currency() {
+                Some(code) => self.host.wf_asset(&code),
+                None => return Err("choose the asset".into()),
+            },
+        };
+        let category = self.category_input(node)?;
+        let comment = self.input(node, "comment")?.as_text();
+        let planned = self.date_input(node)?;
+        let mut meta = self.meta_at(&comment, category, planned);
+        if let TxOrigin::Workflow { estimated, .. } = &mut meta.origin {
+            *estimated = self.bool_param(node, "estimated");
+        }
+        Ok(match kind.as_str() {
+            "topup" => Transaction::Topup(TopupTx {
+                meta,
+                store_id: store_of(account, "the account to top up")?,
+                asset,
+                amount,
+                fee: None,
+                from: to,
+                details: Default::default(),
+                price: Default::default(),
+            }),
+            "payment" => Transaction::Payment(PaymentTx {
+                meta,
+                store_id: store_of(account, "the account to pay from")?,
+                asset,
+                amount,
+                fee: None,
+                to,
+                details: Default::default(),
+                price: Default::default(),
+            }),
+            "convert" => {
+                let from = account.ok_or("choose the account to exchange from")?;
+                let to_asset = self
+                    .asset_input(node, "to_asset")?
+                    .ok_or("choose what to receive")?;
+                let to_amount =
+                    positive(self.number_input(node, "to_amount")?, "the amount received")?;
+                Transaction::Convert(ConvertTx {
+                    meta,
+                    from: ConvertSide {
+                        account: from.clone(),
+                        asset,
+                        amount,
+                        price: Default::default(),
+                    },
+                    to: ConvertSide {
+                        account: to.unwrap_or(from),
+                        asset: to_asset,
+                        amount: to_amount,
+                        price: Default::default(),
+                    },
+                    fee: None,
+                    rate_override: None,
+                })
+            }
+            _ => Transaction::Transfer(TransferTx {
+                meta,
+                from: account.ok_or("choose where the money comes from")?,
+                to: to.ok_or("choose where the money goes")?,
+                asset,
+                amount,
+                fee: None,
+                network: None,
+                tx_hash: None,
+                debt: None,
+                price: Default::default(),
+            }),
+        })
+    }
+
+    fn build_distribution(&mut self, node: &Node) -> Result<Vec<Transaction>, String> {
+        let amount_value = self.input(node, "amount")?;
+        let total = positive(amount_value.as_number(), "the amount")?;
+        let asset = match amount_value.currency() {
+            Some(code) => self.host.wf_asset(&code),
+            None => return Err("wire an amount with its currency".into()),
+        };
+        let from = self
+            .account_input(node, "from")?
+            .ok_or("choose where the money comes from")?;
+        let places = places_for(&asset);
+        let fixed = self.text_param(node, "mode") == "fixed";
+        let targets: Vec<(AccountRef, Amount)> = match self.raw_param(node, "targets") {
+            Value::Array(items) => items
+                .iter()
+                .filter_map(|item| {
+                    let account = json_account(item.get("account")?)?;
+                    let share = item.get("share").and_then(json_number)?;
+                    share.is_positive().then_some((account, share))
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        if targets.is_empty() {
+            return Err("add where the money goes".into());
+        }
+        let hundred = Amount::new(Decimal::ONE_HUNDRED);
+        let shares_total = targets
+            .iter()
+            .fold(Amount::ZERO, |sum, (_, share)| sum + *share);
+        let whole = !fixed && shares_total == hundred;
+        let mut parts: Vec<(AccountRef, Amount)> = Vec::new();
+        let mut given = Amount::ZERO;
+        let last = targets.len() - 1;
+        for (index, (account, share)) in targets.into_iter().enumerate() {
+            let part = if fixed {
+                share
+            } else if whole && index == last {
+                total - given
+            } else {
+                (total * share / hundred).round(places)
+            };
+            given += part;
+            if part.is_positive() {
+                parts.push((account, part));
+            }
+        }
+        if given > total {
+            return Err(format!("the parts add up to {given}, more than {total}"));
+        }
+        let category = match self.param(node, "category") {
+            WfValue::Category(key) => Some(key),
+            _ => None,
+        };
+        let comment = self.text_param(node, "comment");
+        Ok(parts
+            .into_iter()
+            .map(|(to, amount)| {
+                Transaction::Transfer(TransferTx {
+                    meta: self.meta(&comment, category.clone()),
+                    from: from.clone(),
+                    to,
+                    asset: asset.clone(),
+                    amount,
+                    fee: None,
+                    network: None,
+                    tx_hash: None,
+                    debt: None,
+                    price: Default::default(),
+                })
+            })
+            .collect())
+    }
+
+    /// An operation refused for lack of money after a question was answered:
+    /// the run cannot be started again from its trigger (that would ask
+    /// again), so the operation waits in the queue and a retry books it. Only
+    /// an operation within the cap is queued.
+    fn queue_refused(&mut self, tx: &Transaction) -> Result<(), Fault> {
+        if self.ctx.resume.is_none() {
+            return Ok(());
+        }
+        self.check_cap(std::slice::from_ref(tx))?;
+        let batch = QueuedActions {
+            id: uuid::Uuid::new_v4().to_string(),
+            workflow_id: self.ctx.workflow_id.clone(),
+            run_id: self.ctx.run_id.clone(),
+            created_at: mwt_base::calendar::iso(self.now()),
+            summary: self.describe(tx).1,
+            transactions: vec![tx.clone()],
+        };
+        self.perform(Effect::Queue(batch))
+            .map(|_| ())
+            .map_err(Fault::from)
+    }
+
+    fn said_commit(&self, def: &NodeDef, txs: &[Transaction]) -> Step {
+        let (ru, en): (Vec<String>, Vec<String>) = txs.iter().map(|tx| self.describe(tx)).unzip();
+        let (ru, en) = (ru.join("; "), en.join("; "));
+        Step::next(
+            "out",
+            format!("«{}»: {ru}", def.title.ru),
+            format!("«{}»: {en}", def.title.en),
+        )
+    }
+
+    pub(crate) fn run_action(&mut self, node: &Node, def: &NodeDef) -> Result<Step, Fault> {
+        let now = self.now();
+        match node.kind.as_str() {
+            "action.transaction" => {
+                let tx = self.build_transaction(node)?;
+                if self.text_param(node, "on_shortfall") == "reject"
+                    && let Some(reason) = self
+                        .host
+                        .funds_shortfall(&tx, secs_of(&tx.meta().timestamp, now))
+                {
+                    self.queue_refused(&tx)?;
+                    return Err(Fault::Halt(Halt::Reject(Box::new(reason))));
+                }
+                let saved = self.commit(vec![tx])?;
+                if let Some(first) = saved.first() {
+                    self.set_output(
+                        node,
+                        "transaction",
+                        WfValue::Transaction(Box::new(first.clone())),
+                    );
+                }
+                Ok(self.said_commit(def, &saved))
+            }
+            "action.distribute" => {
+                let txs = self.build_distribution(node)?;
+                let saved = self.commit(txs)?;
+                let list = saved
+                    .iter()
+                    .map(|tx| WfValue::Transaction(Box::new(tx.clone())))
+                    .collect();
+                self.set_output(node, "created", WfValue::List(list));
+                Ok(self.said_commit(def, &saved))
+            }
+            "action.notify" => {
+                let text = self.input(node, "text")?.as_text();
+                if text.trim().is_empty() {
+                    return Err(Fault::Error("write the notice's text".into()));
+                }
+                let title = self.text_param(node, "title");
+                let title = if title.trim().is_empty() {
+                    self.ctx.workflow_name.clone()
+                } else {
+                    title
+                };
+                let key = format!("wf:{}:{}:{}", self.ctx.run_id, node.id, self.notices.len());
+                self.perform(Effect::Notify(mwt_model::notice(
+                    NoticeCategory::Automation,
+                    key,
+                    &title,
+                    text.clone(),
+                    Some(format!(
+                        "{}:{}",
+                        mwt_base::routes::WORKFLOW_EDIT,
+                        self.ctx.workflow_id
+                    )),
+                    mwt_base::calendar::iso(now),
+                )))?;
+                Ok(Step::next(
+                    "out",
+                    format!("«{}»: {text}", def.title.ru),
+                    format!("«{}»: {text}", def.title.en),
+                ))
+            }
+            "action.reminder" => {
+                let text = self.input(node, "text")?.as_text();
+                if text.trim().is_empty() {
+                    return Err(Fault::Error("write what to remind about".into()));
+                }
+                let days = json_number(&self.raw_param(node, "days"))
+                    .and_then(|days| days.into_inner().trunc().to_string().parse::<i64>().ok())
+                    .unwrap_or(0)
+                    .clamp(0, 3650);
+                let time = self.text_param(node, "time");
+                let mut parts = time.splitn(2, ':');
+                let hour = parts
+                    .next()
+                    .and_then(|part| part.trim().parse().ok())
+                    .unwrap_or(10u32)
+                    .min(23);
+                let minute = parts
+                    .next()
+                    .and_then(|part| part.trim().parse().ok())
+                    .unwrap_or(0u32)
+                    .min(59);
+                let cal = Calendar::new(&self.ctx.zone);
+                let date = match self.input(node, "date")? {
+                    WfValue::Date(text) | WfValue::Text(text) if !text.trim().is_empty() => {
+                        super::data::parse_date(&text, &cal)
+                            .ok_or_else(|| Fault::Error(format!("«{text}» is not a date")))?
+                    }
+                    _ => cal.date_of(now) + chrono::Duration::days(days),
+                };
+                let due = mwt_base::calendar::iso(cal.at_local_hm(date, hour, minute));
+                let reminder = Reminder::new(&text, &due);
+                self.perform(Effect::Remind(reminder))?;
+                Ok(Step::next(
+                    "out",
+                    format!("«{}»: «{text}» на {due}", def.title.ru),
+                    format!("«{}»: «{text}» for {due}", def.title.en),
+                ))
+            }
+            "action.confirm" => {
+                // Left empty when the node asks nothing in particular: the
+                // app words it in its own language ("Continue" / «Go on?»).
+                let question = self.input(node, "question")?.as_text().trim().to_string();
+                let (asked_ru, asked_en) = crate::exec::asked(&question);
+                if self.ctx.mode == RunMode::DryRun
+                    && let Some(&answer) = self.ctx.answers.get(&node.id)
+                {
+                    let (port, ru, en) = if answer {
+                        ("true", "Да", "Yes")
+                    } else {
+                        ("false", "Нет", "No")
+                    };
+                    return Ok(Step::next(
+                        port,
+                        format!(
+                            "«{}»: «{asked_ru}» — в эмуляции вы ответили «{ru}»",
+                            def.title.ru
+                        ),
+                        format!(
+                            "«{}»: «{asked_en}»: you answered «{en}» in emulation",
+                            def.title.en
+                        ),
+                    ));
+                }
+                let hours = self
+                    .number_param(node, "timeout_hours")?
+                    .unwrap_or(Amount::ZERO)
+                    .max(Amount::ZERO);
+                let resume_at = if hours.is_zero() {
+                    String::new()
+                } else {
+                    mwt_base::calendar::iso(now + wait_seconds(hours)?)
+                };
+                Err(Halt::Wait(Box::new(WorkflowWait {
+                    id: self.wait_id(node),
+                    workflow_id: self.ctx.workflow_id.clone(),
+                    run_id: self.ctx.run_id.clone(),
+                    node_id: node.id.clone(),
+                    resume_at,
+                    memo: self.memo_json(),
+                    graph: self.graph.to_json(),
+                    trigger: self.ctx.trigger_label.clone(),
+                    kind: WaitKind::Confirm,
+                    question,
+                    created_at: mwt_base::calendar::iso(now),
+                }))
+                .into())
+            }
+            "action.stop" => {
+                let reason = self.text_param(node, "reason");
+                let reason = if reason.trim().is_empty() {
+                    "stopped by the «Stop» node".to_string()
+                } else {
+                    reason
+                };
+                Err(Halt::Stop(reason).into())
+            }
+            "action.emit" => {
+                let name = self.text_param(node, "name").trim().to_string();
+                if name.is_empty() {
+                    return Err(Fault::Error("name the event".into()));
+                }
+                let payload = self.input(node, "payload")?;
+                self.perform(Effect::Emit(EmittedEvent {
+                    name: name.clone(),
+                    payload,
+                }))?;
+                Ok(Step::next(
+                    "out",
+                    format!("«{}»: «{name}»", def.title.ru),
+                    format!("«{}»: «{name}»", def.title.en),
+                ))
+            }
+            "action.wait" => {
+                let hours = self.number_input(node, "hours")?.unwrap_or(Amount::ZERO);
+                let wait = wait_seconds(hours)?;
+                let resume_at = mwt_base::calendar::iso(now + wait);
+                if self.ctx.mode == RunMode::DryRun {
+                    // The emulation goes on at once, but as at the moment the
+                    // real run would wake: dates and reminders after it see that.
+                    self.advance_clock(wait);
+                    return Ok(Step::next(
+                        "out",
+                        format!(
+                            "«{}»: запуск уснул бы до {resume_at}; эмуляция идёт дальше сразу, как будто это время уже наступило",
+                            def.title.ru
+                        ),
+                        format!(
+                            "«{}»: the run would sleep until {resume_at}; the emulation goes on at once as if that time had come",
+                            def.title.en
+                        ),
+                    ));
+                }
+                Err(Halt::Wait(Box::new(WorkflowWait {
+                    id: self.wait_id(node),
+                    workflow_id: self.ctx.workflow_id.clone(),
+                    run_id: self.ctx.run_id.clone(),
+                    node_id: node.id.clone(),
+                    resume_at,
+                    memo: self.memo_json(),
+                    graph: self.graph.to_json(),
+                    trigger: self.ctx.trigger_label.clone(),
+                    kind: WaitKind::Timer,
+                    question: String::new(),
+                    created_at: mwt_base::calendar::iso(now),
+                }))
+                .into())
+            }
+            "action.call" => self.call_workflow(node, def),
+            "action.return" => {
+                let value = self.input(node, "value")?;
+                Err(Halt::Return(Box::new(value)).into())
+            }
+            other => Err(Fault::Error(format!("unknown node {other}"))),
+        }
+    }
+
+    /// "Call scheme": run a helper workflow inside this run and take its answer.
+    fn call_workflow(&mut self, node: &Node, def: &NodeDef) -> Result<Step, Fault> {
+        if self.ctx.call_depth >= MAX_CALL_DEPTH {
+            return Err(Fault::Error(format!(
+                "calls go deeper than {MAX_CALL_DEPTH}"
+            )));
+        }
+        let target = self.text_param(node, "workflow");
+        let callee = self
+            .host
+            .callee(&target)
+            .ok_or("choose the workflow to call")?;
+        let graph = Graph::parse(&callee.graph).map_err(|err| err.to_string())?;
+        let entry = graph
+            .nodes
+            .iter()
+            .find(|candidate| candidate.kind == "trigger.called" && !candidate.disabled)
+            .map(|candidate| candidate.id.clone())
+            .ok_or_else(|| format!("«{}» has no «Called by a workflow» trigger", callee.name))?;
+        let payload = self.input(node, "payload")?;
+        let mut ctx = RunContext::new(&callee.id, &callee.name, &entry, self.now(), &self.ctx.zone);
+        ctx.run_id.clone_from(&self.ctx.run_id);
+        ctx.mode = self.ctx.mode;
+        ctx.max_amount = self.ctx.max_amount;
+        ctx.max_amount_currency
+            .clone_from(&self.ctx.max_amount_currency);
+        ctx.call_depth = self.ctx.call_depth + 1;
+        ctx.trigger_label = format!("call from {}", self.ctx.workflow_name);
+        ctx.trigger_values = std::collections::BTreeMap::from([("payload".to_string(), payload)]);
+
+        let (actions, moved) = (self.actions, self.moved);
+        let mut child = Executor::new(&mut *self.host, &graph, &ctx);
+        child.actions = actions;
+        child.moved = moved;
+        let result = child.start();
+        let steps = child.take_trace();
+        let Executor {
+            actions,
+            moved,
+            created,
+            queued,
+            notices,
+            events,
+            reminders,
+            branch_errors,
+            ..
+        } = child;
+        self.branch_errors.extend(branch_errors);
+        self.actions = actions;
+        self.moved = moved;
+        self.created.extend(created);
+        self.queued.extend(queued);
+        self.notices.extend(notices);
+        self.events.extend(events);
+        self.reminders.extend(reminders);
+        // The helper's steps show under the calling node.
+        let prefix = (
+            format!("↳ «{}»: ", callee.name),
+            format!("↳ «{}»: ", callee.name),
+        );
+        self.extend_trace(
+            steps
+                .into_iter()
+                .map(|mut step| {
+                    step.node_id.clone_from(&node.id);
+                    step.text_ru = format!("{}{}", prefix.0, step.text_ru);
+                    step.text_en = format!("{}{}", prefix.1, step.text_en);
+                    step
+                })
+                .collect(),
+        );
+        let answer = match result {
+            Ok(()) => WfValue::Null,
+            Err(Halt::Return(value)) => *value,
+            Err(Halt::Stop(_) | Halt::Break) => WfValue::Null,
+            Err(Halt::Fail(message)) => {
+                return Err(Fault::Error(format!("«{}»: {message}", callee.name)));
+            }
+            Err(Halt::Wait(_)) => return Err(Fault::Error("a called workflow cannot wait".into())),
+            // The caller's own "Create transaction" decides how to refuse.
+            Err(Halt::Reject(reason)) => {
+                return Err(Fault::Error(format!(
+                    "«{}»: {}",
+                    callee.name,
+                    mwt_model::describe_reject(&reason)
+                )));
+            }
+        };
+        let text = answer.as_text();
+        self.set_output(node, "result", answer);
+        Ok(Step::next(
+            "out",
+            format!("«{}»: «{}» ответила {text}", def.title.ru, callee.name),
+            format!("«{}»: «{}» answered {text}", def.title.en, callee.name),
+        ))
+    }
+}
+
+fn secs_of(timestamp: &str, fallback: i64) -> i64 {
+    mwt_base::time::unix_secs(timestamp).unwrap_or(fallback)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_day_wait_is_exactly_86400_seconds() {
+        assert_eq!(
+            super::wait_seconds(mwt_base::Amount::parse("24").unwrap()),
+            Ok(86_400)
+        );
+        assert_eq!(
+            super::wait_seconds(mwt_base::Amount::parse("876000").unwrap()),
+            Ok(876_000 * 3600)
+        );
+    }
+
+    #[test]
+    fn a_negative_wait_is_an_error() {
+        assert!(super::wait_seconds(mwt_base::Amount::parse("-1").unwrap()).is_err());
+    }
+}

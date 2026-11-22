@@ -205,6 +205,10 @@ impl WorkflowHost for UnlockedVault {
         self.doc.reminders.push(reminder);
     }
 
+    fn migrate_export_graph(&self, json: &str) -> Option<String> {
+        crate::storage::legacy_v4::migrate_export_graph(json)
+    }
+
     fn checkpoint(&self) -> Checkpoint {
         Checkpoint(self.doc.clone())
     }
