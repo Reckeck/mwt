@@ -1,6 +1,7 @@
 #![warn(unreachable_pub)]
 //! IPC command boundary types shared with the frontend.
-//! These are exported to TypeScript by the `gen-types` binary (see `src/bin`).
+//! These are exported to TypeScript by the `gen-types` binary of `trade-core`
+//! (`crates/core/src/bin/gen_types.rs`).
 //! Commands in the `app` crate only translate between these DTOs and the
 //! domain services — never expose internal model directly.
 
@@ -45,7 +46,8 @@ pub mod security;
 
 // -- auth --------------------------------------------------------------------
 
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CreateVaultInput {
     pub path: String,
     /// `None` makes a vault without a password (its file is not encrypted);
@@ -67,7 +69,8 @@ impl fmt::Debug for CreateVaultInput {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UnlockInput {
     pub path: String,
     pub password: String,
@@ -82,7 +85,8 @@ impl fmt::Debug for UnlockInput {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ChangePasswordInput {
     pub current_password: String,
     pub new_password: String,
@@ -103,7 +107,8 @@ fn yes() -> bool {
 }
 
 /// Set a password on the open vault that has none.
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetVaultPasswordInput {
     pub new_password: String,
     /// Also delete this vault's `.bak` copies that are not encrypted.
@@ -120,14 +125,16 @@ impl fmt::Debug for SetVaultPasswordInput {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetVaultPasswordResult {
     /// How many unencrypted copies were deleted.
     pub removed_copies: u32,
 }
 
 /// Take the password off the open vault.
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RemoveVaultPasswordInput {
     pub current_password: String,
     /// The user agreed that the external copy loses its password too. Without
@@ -145,7 +152,8 @@ impl fmt::Debug for RemoveVaultPasswordInput {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct VaultInfo {
     pub path: String,
     pub doc_version: u32,
@@ -159,7 +167,8 @@ pub struct VaultInfo {
 }
 
 /// How vault files are kept on this platform.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum VaultStorage {
     /// Desktop: a vault is any file the user picks, opened where it lies.
@@ -171,7 +180,8 @@ pub enum VaultStorage {
 }
 
 /// What the unlock screen needs to know about the app.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct VaultStatus {
     pub path: String,
     pub exists: bool,
@@ -191,7 +201,8 @@ pub struct VaultStatus {
 
 // -- stores ------------------------------------------------------------------
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CreateStoreInput {
     pub name: String,
     /// Ignored for a sub-account: it always has its wallet's kind.
@@ -236,7 +247,8 @@ pub struct CreateStoreInput {
     pub card: Option<mwt_money::stores::FirstCard>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateEnvelopeInput {
     pub id: String,
     pub draft: mwt_planning::envelopes::EnvelopeDraft,
@@ -244,46 +256,52 @@ pub struct UpdateEnvelopeInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<mwt_planning::envelopes::EnvelopeDraft>,
 }
 
 /// `amount > 0` earmarks from the free balance, `< 0` releases.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct FundEnvelopeInput {
     pub id: String,
     pub amount: Amount,
 }
 
 /// Put aside `amount` (goal currency) for a goal in one of its wallets.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct FundGoalInput {
     pub goal_id: String,
     pub store_id: String,
     pub amount: Amount,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MoveEnvelopeInput {
     pub from: String,
     pub to: String,
     pub amount: Amount,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetImportIntervalInput {
     pub store_id: String,
     /// Seconds; `0` turns the background import off.
     pub interval_sec: u32,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateTerminalStateInput {
     pub store_id: String,
     pub patch: mwt_cryptotrack::exchange_sync::TerminalPatch,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SaveTerminalDrawingsInput {
     pub store_id: String,
     pub symbol: String,
@@ -291,7 +309,8 @@ pub struct SaveTerminalDrawingsInput {
     pub json: String,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateStoreInput {
     pub id: String,
     pub name: String,
@@ -323,12 +342,13 @@ pub struct UpdateStoreInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<mwt_model::Store>,
 }
 
 /// Re-hang a sub-account; `parent_id: None` makes it a top-level wallet.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MoveStoreInput {
     pub id: String,
     #[serde(default)]
@@ -343,7 +363,8 @@ pub struct MoveStoreInput {
 
 /// Shared asset identification, so each variant does not repeat five
 /// optional fields it does not always need.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AssetIdent {
     pub symbol: String,
     pub name: String,
@@ -371,7 +392,8 @@ impl AssetIdent {
 }
 
 /// Fields every transaction input carries.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TxCommonInput {
     /// RFC3339 UTC. Empty means "now".
     pub timestamp: Option<String>,
@@ -392,15 +414,15 @@ pub struct TxCommonInput {
     pub price_currency: Option<String>,
     /// Set by the service when `price` was given in the base currency.
     #[serde(default)]
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub price_base: Option<Amount>,
     /// Set together with `price_base`: the base currency it is in.
     #[serde(default)]
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub price_base_currency: Option<String>,
     /// The property the operation belongs to (plan G4); empty — none.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub property_id: Option<String>,
 }
 
@@ -429,7 +451,8 @@ impl TxCommonInput {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct FeeInput {
     pub asset: AssetIdent,
     pub amount: Amount,
@@ -452,21 +475,24 @@ fn fee_of(input: &Option<FeeInput>) -> Option<Fee> {
         .map(FeeInput::to_fee)
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConvertSideInput {
     pub account: AccountRef,
     pub asset: AssetIdent,
     pub amount: Amount,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TradeSideInput {
     pub asset: AssetIdent,
     pub qty: Amount,
 }
 
 /// What the form sends for any kind of transaction.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TransactionInput {
     Topup {
@@ -564,7 +590,8 @@ pub enum TransactionInput {
 
 /// One asset of a correction: the balance really there. What the ledger
 /// held is worked out when it is saved.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AdjustmentLineInput {
     pub asset: AssetIdent,
     pub actual: Amount,
@@ -572,7 +599,8 @@ pub struct AdjustmentLineInput {
 
 /// What the correction screen opens with: every asset of the account and
 /// its ledger balance at `at`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AdjustmentDraftInput {
     pub store_id: String,
     /// RFC3339; empty = now.
@@ -831,7 +859,8 @@ impl TransactionInput {
 }
 
 /// Several operations saved as one chain: all or none.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AddLinkedTransactionsInput {
     pub transactions: Vec<TransactionInput>,
     /// Join this chain; `None` starts a new one.
@@ -840,7 +869,8 @@ pub struct AddLinkedTransactionsInput {
 }
 
 /// Replace a stored transaction with a new version of it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateTransactionInput {
     pub id: String,
     pub transaction: TransactionInput,
@@ -848,12 +878,13 @@ pub struct UpdateTransactionInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<mwt_model::Transaction>,
 }
 
 /// A draft to preview; `replaces` is the id of the transaction being edited.
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PreviewTransactionInput {
     pub transaction: TransactionInput,
     pub replaces: Option<String>,
@@ -861,7 +892,8 @@ pub struct PreviewTransactionInput {
 
 /// Which transaction kinds a wallet of one kind accepts, split the way the
 /// form presents them, with the kind to pre-select.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TransactionKinds {
     /// Of the four everyday verbs, the ones this wallet accepts.
     pub verbs: Vec<TxKind>,
@@ -928,7 +960,8 @@ mod transaction_kinds_tests {
 // -- wallet catalog -------------------------------------------------------------
 
 /// Binding shape of a sub-account type, as the creation form needs it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum BindingShapeName {
     Asset,
@@ -936,7 +969,8 @@ pub enum BindingShapeName {
     Market,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SubTypeInfo {
     pub sub_type: SubType,
     pub shape: BindingShapeName,
@@ -945,14 +979,16 @@ pub struct SubTypeInfo {
     pub credit: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PresetInfo {
     pub preset: mwt_model::AutomationPreset,
     pub tx_kind: TxKind,
     pub category: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WalletKindInfo {
     pub kind: StoreKind,
     pub presets: Vec<PresetInfo>,
@@ -964,7 +1000,8 @@ pub struct WalletKindInfo {
     pub sub_types: Vec<SubTypeInfo>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ExchangeProviderInfo {
     pub provider: ExchangeProvider,
     /// The app can connect to it; others are shown as «soon».
@@ -973,7 +1010,8 @@ pub struct ExchangeProviderInfo {
 
 /// What every wallet kind allows, in sidebar order. Static domain data, so the
 /// UI never duplicates these rules.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WalletCatalog {
     pub kinds: Vec<WalletKindInfo>,
     pub providers: Vec<ExchangeProviderInfo>,
@@ -982,7 +1020,8 @@ pub struct WalletCatalog {
 }
 
 /// Ready-made automations of one property type.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PropertyPresetsInfo {
     pub category: mwt_model::PropertyCategory,
     pub presets: Vec<PresetInfo>,
@@ -1062,7 +1101,8 @@ impl WalletCatalog {
 
 // -- contacts ------------------------------------------------------------------
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateContactInput {
     pub id: String,
     pub contact: ContactDraft,
@@ -1070,11 +1110,12 @@ pub struct UpdateContactInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<ContactDraft>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ContactTurnoverInput {
     pub contact_id: String,
     pub account_id: Option<String>,
@@ -1082,13 +1123,15 @@ pub struct ContactTurnoverInput {
 
 // -- attachments (Full-New-Attach) ------------------------------------------------
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ListAttachmentsInput {
     /// One operation or goal; `None` lists every attachment.
     pub owner: Option<EntityRef>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AddAttachmentLinkInput {
     pub owner: EntityRef,
     pub url: String,
@@ -1097,7 +1140,8 @@ pub struct AddAttachmentLinkInput {
     pub title: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AddAttachmentFileInput {
     pub owner: EntityRef,
     pub name: String,
@@ -1106,12 +1150,14 @@ pub struct AddAttachmentFileInput {
     pub data_base64: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AttachmentIdInput {
     pub id: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RenameAttachmentInput {
     pub id: String,
     pub title: String,
@@ -1119,7 +1165,8 @@ pub struct RenameAttachmentInput {
 
 // -- categories and rules --------------------------------------------------------
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CreateCategoryInput {
     /// Wanted key; derived from the name when empty.
     pub key: Option<String>,
@@ -1127,7 +1174,8 @@ pub struct CreateCategoryInput {
     pub group: CategoryGroup,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateCategoryInput {
     pub key: String,
     /// Empty = the built-in label.
@@ -1143,17 +1191,19 @@ pub struct UpdateCategoryInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<mwt_model::Category>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CreateRuleInput {
     pub pattern: String,
     pub category: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateRuleInput {
     pub id: String,
     pub pattern: String,
@@ -1163,7 +1213,8 @@ pub struct UpdateRuleInput {
 
 // -- property value --------------------------------------------------------------
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetManualPriceInput {
     pub asset_key: String,
     pub unit_price: Amount,
@@ -1172,7 +1223,8 @@ pub struct SetManualPriceInput {
 
 // -- pricing -----------------------------------------------------------------
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RefreshResult {
     pub prices: usize,
     pub fx: usize,
@@ -1183,7 +1235,8 @@ pub struct RefreshResult {
 
 /// Loose asset identification: enough to rebuild an [`AssetRef`] cache key
 /// without making the frontend construct a full `quote` field.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AssetPriceInput {
     pub symbol: String,
     pub coingecko_id: Option<String>,
@@ -1214,7 +1267,8 @@ impl AssetPriceInput {
 /// Cached USD quote nearest the asked moment. `ts` is when that rate was
 /// taken, empty when the asset was never priced; a hand-set price and USD
 /// itself hold for all time and carry the asked moment.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CachedPrice {
     pub price_usd: Amount,
     pub ts: String,
@@ -1222,7 +1276,8 @@ pub struct CachedPrice {
 
 /// Whether the "+ Transaction" key can be registered by the app, and the command
 /// a compositor binding runs instead when it cannot (Wayland).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ShortcutSupport {
     pub global_keys: bool,
     /// The running executable with `--quick-add`.
@@ -1230,14 +1285,16 @@ pub struct ShortcutSupport {
 }
 
 /// Set up a bonus programme.
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetLoyaltyInfoInput {
     pub store_id: String,
     pub info: mwt_model::LoyaltyInfo,
 }
 
 /// Create a bonus programme with its points in one action.
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CreateLoyaltyProgramInput {
     pub name: String,
     pub color: String,
@@ -1247,23 +1304,26 @@ pub struct CreateLoyaltyProgramInput {
 }
 
 /// The odometer of a car, read today.
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct VehicleMileageInput {
     pub store_id: String,
     pub km: u32,
 }
 
 /// A car's service done on `date` (`YYYY-MM-DD`), at `km` if read.
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct VehicleServiceDoneInput {
     pub store_id: String,
-    #[ts(type = "LocalDate")]
+    #[cfg_attr(feature = "ts", ts(type = "LocalDate"))]
     pub date: String,
     pub km: Option<u32>,
 }
 
 /// Credit (positive) or spend (negative) points of a programme.
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AdjustPointsInput {
     pub store_id: String,
     pub delta: Amount,
@@ -1275,14 +1335,16 @@ pub struct AdjustPointsInput {
 }
 
 /// Set or clear the interest terms of a savings account, deposit or PDS (a Russian long-term savings programme).
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetDepositTermsInput {
     pub store_id: String,
     pub terms: Option<mwt_model::DepositTerms>,
 }
 
 /// Create the missing Funding / Unified / Earn sub-accounts of a Bybit wallet.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CreateBybitAccountsInput {
     pub store_id: String,
     /// Names in the UI language, for the ones that get created.
@@ -1296,7 +1358,8 @@ pub struct CreateBybitAccountsInput {
 }
 
 /// One coin of one exchange account: the exchange's figure next to the ledger's.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ExchangeCoinRow {
     pub coin: String,
     pub exchange: Amount,
@@ -1306,7 +1369,8 @@ pub struct ExchangeCoinRow {
 }
 
 /// A Bybit account (`FUND`, `UNIFIED`, `EARN`) and the sub-account standing for it.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ExchangeAccountBalance {
     pub account: String,
     /// `None` when the wallet has no sub-account of that kind yet.
@@ -1316,17 +1380,19 @@ pub struct ExchangeAccountBalance {
 
 /// Make sure the FX cache has a rate of each currency for a day, fetching from
 /// the public sources (and earlier days) what it lacks.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EnsureFxInput {
     /// Lowercase codes; USD and unknown codes are ignored.
     pub currencies: Vec<String>,
     /// `YYYY-MM-DD` (UTC); empty or absent means today.
     #[serde(default)]
-    #[ts(type = "LocalDate | null")]
+    #[cfg_attr(feature = "ts", ts(type = "LocalDate | null"))]
     pub date: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EnsureFxOutput {
     /// Rates fetched just now; a point's `ts` is the day its source had, which
     /// may be before the day asked for.
@@ -1336,7 +1402,8 @@ pub struct EnsureFxOutput {
 }
 
 /// Convert an amount between two currency codes at a moment (plan D20).
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConvertAmountInput {
     pub from: String,
     pub to: String,
@@ -1347,7 +1414,8 @@ pub struct ConvertAmountInput {
 }
 
 /// `amount` is `None` when a rate of either currency is unknown.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConvertedAmount {
     pub amount: Option<Amount>,
 }
@@ -1356,7 +1424,8 @@ pub struct ConvertedAmount {
 
 /// An automation as the form edits it. The template is an ordinary
 /// transaction input of one of the four verbs.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AutomationInput {
     pub name: String,
     pub active: bool,
@@ -1381,7 +1450,7 @@ pub struct AutomationInput {
     /// An income only: the month it is for, in months from the one it is
     /// planned in (-1 — the previous, 0 — this one); `None` — not set.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month_offset: Option<i8>,
 }
 
@@ -1416,7 +1485,8 @@ impl AutomationInput {
 }
 
 /// When a new automation would fire: the form asks for its next dates.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AutomationDatesInput {
     pub schedule: Schedule,
     /// RFC3339, the first planned date.
@@ -1446,14 +1516,16 @@ impl AutomationDatesInput {
 }
 
 /// The real amount of an operation booked approximately.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConfirmEstimatedInput {
     pub tx_id: String,
     /// A decimal string, like every amount the app takes.
     pub amount: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateAutomationInput {
     pub id: String,
     pub automation: AutomationInput,
@@ -1461,11 +1533,12 @@ pub struct UpdateAutomationInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<AutomationInput>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct BudgetInput {
     pub active: bool,
     pub target: BudgetTarget,
@@ -1474,7 +1547,7 @@ pub struct BudgetInput {
     pub currency: String,
     /// Notify near the limit; on when the caller does not say.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub warn: Option<bool>,
 }
 
@@ -1491,7 +1564,8 @@ impl From<BudgetInput> for BudgetDraft {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateBudgetInput {
     pub id: String,
     pub budget: BudgetInput,
@@ -1499,11 +1573,12 @@ pub struct UpdateBudgetInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<BudgetInput>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct GoalInput {
     pub name: String,
     pub active: bool,
@@ -1541,7 +1616,8 @@ impl From<GoalInput> for GoalDraft {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateGoalInput {
     pub id: String,
     pub goal: GoalInput,
@@ -1549,11 +1625,12 @@ pub struct UpdateGoalInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<GoalInput>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ReminderInput {
     pub text: String,
     /// RFC3339: the date and the time.
@@ -1563,12 +1640,13 @@ pub struct ReminderInput {
     pub repeat: Option<mwt_model::ReminderRepeat>,
     /// "Pay" in the reminder; `None` — no button.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub pay: Option<mwt_model::ReminderPay>,
 }
 
 /// Emulate the automations ahead: one of them, or all.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SimulateAutomationsInput {
     #[serde(default)]
     pub automation_id: Option<String>,
@@ -1577,7 +1655,8 @@ pub struct SimulateAutomationsInput {
 }
 
 /// Which kind of record carries the «keep» mark.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum MergeTarget {
     Transaction,
@@ -1585,20 +1664,23 @@ pub enum MergeTarget {
 }
 
 /// «Allow merging»: clear the «keep» mark of one record.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AllowMergingInput {
     pub target: MergeTarget,
     pub id: String,
 }
 
 /// Put a reminder off until a moment (RFC3339).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SnoozeReminderInput {
     pub id: String,
     pub until: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateReminderInput {
     pub id: String,
     pub reminder: ReminderInput,
@@ -1606,11 +1688,12 @@ pub struct UpdateReminderInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<ReminderInput>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PriceAlertInput {
     pub asset: AssetIdent,
     pub condition: AlertCondition,
@@ -1619,7 +1702,7 @@ pub struct PriceAlertInput {
     pub active: bool,
     /// The exchange whose terminal sets the alert.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub store_id: Option<String>,
     /// Fires on every crossing instead of once.
     #[serde(default)]
@@ -1640,7 +1723,8 @@ impl From<PriceAlertInput> for PriceAlertDraft {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdatePriceAlertInput {
     pub id: String,
     pub alert: PriceAlertInput,
@@ -1648,11 +1732,12 @@ pub struct UpdatePriceAlertInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<PriceAlertInput>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UtilityInput {
     pub name: String,
     pub active: bool,
@@ -1679,7 +1764,8 @@ impl From<UtilityInput> for mwt_household::utilities::UtilityDraft {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateUtilityInput {
     pub id: String,
     pub item: UtilityInput,
@@ -1687,11 +1773,12 @@ pub struct UpdateUtilityInput {
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub base: Option<UtilityInput>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MeterReadingInput {
     pub item_id: String,
     pub value: Amount,
@@ -1706,7 +1793,8 @@ pub struct MeterReadingInput {
 }
 
 /// Correct a recorded meter reading.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateMeterReadingInput {
     pub id: String,
     pub value: Amount,
@@ -1718,7 +1806,8 @@ pub struct UpdateMeterReadingInput {
 }
 
 /// Payload of `automation-rejected`: one run the scheduler could not create.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AutomationRejectedEvent {
     pub run_id: String,
     pub automation_id: String,
@@ -1731,7 +1820,8 @@ pub struct AutomationRejectedEvent {
 
 /// Put transactions into one chain: `flow_id`, else the chain one of them is
 /// already in, else a new one.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct LinkTransactionsInput {
     pub ids: Vec<String>,
     #[serde(default)]
@@ -1785,7 +1875,8 @@ pub use mwt_base::calc::{CalcInput, CalcResult};
 // -- settings ----------------------------------------------------------------
 
 /// Partial update of the **vault-scoped** settings.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateSettingsInput {
     pub display_decimals: Option<u32>,
     pub dashboard_widgets: Option<Vec<mwt_model::DashboardWidgetCfg>>,
@@ -1826,7 +1917,8 @@ pub use mwt_money::txinfo::TxInfo;
 
 /// Chain the user picked when the hash alone was ambiguous. Without it the
 /// backend never guesses an EVM network.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct InspectTxInput {
     pub tx_hash: String,
@@ -1838,7 +1930,8 @@ pub struct InspectTxInput {
 ///
 /// Everything is optional and unvalidated on purpose: the form only fills in
 /// what the provider actually returned.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct TxFieldHint {
     pub field: String,
@@ -1847,7 +1940,8 @@ pub struct TxFieldHint {
 
 /// Result of a best-effort lookup. `fetched` tells the UI whether to say
 /// anything at all; a `false` with no `notice` means "stay silent".
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct InspectTxResult {
     /// `false` when the provider could not be reached or the hash is unusable.
@@ -1863,7 +1957,8 @@ pub struct InspectTxResult {
 use mwt_net::{Category, TradePrefill};
 
 /// A fill as offered in the "recent trades" dropdown.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct BybitExecution {
     pub symbol: String,
@@ -1880,7 +1975,8 @@ pub struct BybitExecution {
 }
 
 /// Never fails: an unconfigured or unreachable key yields an empty list.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct BybitExecutionsResult {
     pub executions: Vec<BybitExecution>,
@@ -1904,7 +2000,8 @@ impl From<mwt_net::Execution> for BybitExecution {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct BybitExecutionsInput {
     pub category: Category,
@@ -1914,7 +2011,8 @@ pub struct BybitExecutionsInput {
 }
 
 /// Whether a key is stored. The secret is never part of this response.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ExchangeKeyStatus {
     pub configured: bool,
@@ -1927,7 +2025,8 @@ pub struct ExchangeKeyStatus {
 }
 
 /// Input to query key status for a specific store.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ExchangeKeyStatusInput {
     pub store_id: String,
@@ -1935,7 +2034,8 @@ pub struct ExchangeKeyStatusInput {
 
 /// Stores a read-only key for a specific store. Both fields are written to the
 /// encrypted vault and are never echoed back to the frontend.
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct SetExchangeKeyInput {
     pub store_id: String,
@@ -1954,7 +2054,8 @@ impl fmt::Debug for SetExchangeKeyInput {
 }
 
 /// Which sub-accounts imported spot and futures fills land on.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct SetExchangeTargetsInput {
     pub store_id: String,
@@ -1963,7 +2064,8 @@ pub struct SetExchangeTargetsInput {
 }
 
 /// Input to clear a key for a specific store.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ClearExchangeKeyInput {
     pub store_id: String,
@@ -1972,7 +2074,8 @@ pub struct ClearExchangeKeyInput {
 // -- bybit import (D2.4) -----------------------------------------------------
 
 /// Fetch every Bybit fill for a store and stage it for user confirmation.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ImportBybitHistoryInput {
     pub store_id: String,
@@ -1982,7 +2085,8 @@ pub struct ImportBybitHistoryInput {
 }
 
 /// How many fills this run newly staged (already-known ids are skipped).
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ImportBybitHistoryOutput {
     pub staged: u32,
@@ -1994,7 +2098,8 @@ pub struct ImportBybitHistoryOutput {
     pub run: Option<mwt_model::ImportRun>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetImportSettingsInput {
     pub store_id: String,
     pub settings: mwt_model::ImportSettings,
@@ -2002,13 +2107,15 @@ pub struct SetImportSettingsInput {
 
 /// What a sync would bring; `notice` (`no_key`, `unreachable`, …) when the
 /// exchange could not be asked.
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ImportPreviewOutput {
     pub preview: Option<mwt_cryptotrack::exchange_sync::ImportPreview>,
     pub notice: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ListImportedTransactionsInput {
     pub store_id: String,
     /// Default 50, at most 500.
@@ -2018,42 +2125,48 @@ pub struct ListImportedTransactionsInput {
     pub offset: Option<u32>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ListPendingImportsOutput {
     pub imports: Vec<mwt_model::PendingImport>,
 }
 
 /// Turn staged fills into real trades (two legs each, like `add_trade`).
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ConfirmPendingImportsInput {
     /// Empty = confirm everything currently staged.
     pub exec_ids: Vec<String>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ConfirmPendingImportsOutput {
     pub confirmed: u32,
 }
 
 /// Drop staged fills without creating transactions.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct DiscardPendingImportsInput {
     /// Empty = discard everything currently staged.
     pub exec_ids: Vec<String>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct DiscardPendingImportsOutput {
     pub discarded: u32,
 }
 
 /// A recently opened vault file.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct RecentVault {
     pub path: String,
@@ -2075,14 +2188,16 @@ pub struct RecentVault {
 }
 
 /// Input to select or pick a vault file.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct SelectVaultInput {
     pub path: String,
 }
 
 /// Input to put a forgotten vault back into recents.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct RestoreRecentVaultInput {
     pub path: String,
@@ -2091,7 +2206,8 @@ pub struct RestoreRecentVaultInput {
 }
 
 /// Input to point a recents row at the file found in a new place.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct RelocateRecentVaultInput {
     /// The path the row has now (the file is not there any more).
@@ -2101,14 +2217,16 @@ pub struct RelocateRecentVaultInput {
 }
 
 /// Input to delete a vault from the app's folder.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct DeleteVaultFileInput {
     pub path: String,
 }
 
 /// What `delete_vault_file` removed.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct DeleteVaultFileOutput {
     /// Name of the deleted vault file.
@@ -2118,7 +2236,8 @@ pub struct DeleteVaultFileOutput {
 }
 
 /// Input to save a copy of a vault file elsewhere.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ExportVaultCopyInput {
     /// The vault to copy.
@@ -2126,7 +2245,8 @@ pub struct ExportVaultCopyInput {
 }
 
 /// A vault file chosen in the system dialog.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct PickedVault {
     /// Local path to open or create (a copy in app storage on mobile).
@@ -2137,7 +2257,8 @@ pub struct PickedVault {
 }
 
 /// Keep a copy of the unlocked vault in an external document.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct LinkVaultInput {
     /// Pick an existing file (it gets replaced by the vault) instead of
@@ -2146,7 +2267,8 @@ pub struct LinkVaultInput {
 }
 
 /// The external copy of the unlocked vault, if any.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct VaultLinkStatus {
     pub linked: bool,
@@ -2158,14 +2280,15 @@ pub struct VaultLinkStatus {
 }
 
 /// A backup copy of the vault file, next to it.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct VaultBackup {
     /// File name inside the vault's folder (`vault.wallet.v2.bak`).
     pub name: String,
     /// RFC 3339 time the copy was written.
     pub modified_at: String,
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size_bytes: u64,
 }
 
@@ -2180,7 +2303,8 @@ impl From<mwt_vault::vault_io::backups::BackupFile> for VaultBackup {
 }
 
 /// Which backup `restore_vault_backup` puts back.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct RestoreVaultBackupInput {
     /// A name from `list_vault_backups`; anything else is refused.
@@ -2188,7 +2312,8 @@ pub struct RestoreVaultBackupInput {
 }
 
 /// Which copy wins after `SYNC_CONFLICT`.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum ConflictSide {
     #[default]
@@ -2196,7 +2321,8 @@ pub enum ConflictSide {
     Remote,
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct ResolveVaultConflictInput {
     pub path: String,
@@ -2217,7 +2343,8 @@ impl fmt::Debug for ResolveVaultConflictInput {
 }
 
 /// Output of the dev dump vault command (DEV only).
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct DevDumpVaultOutput {
     pub json: String,
@@ -2226,7 +2353,8 @@ pub struct DevDumpVaultOutput {
 // -- market data (candles) --------------------------------------------------
 
 /// Single OHLCV candle point for charting.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct CandlePoint {
     pub ts: String,
@@ -2237,7 +2365,8 @@ pub struct CandlePoint {
     pub volume: String,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct GetCandlesInput {
     pub symbol: String,
@@ -2245,7 +2374,8 @@ pub struct GetCandlesInput {
     pub limit: u32,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub struct GetCandlesOutput {
     pub candles: Vec<CandlePoint>,
@@ -2254,7 +2384,8 @@ pub struct GetCandlesOutput {
 // -- node workflows (plan §16) -------------------------------------------------
 
 /// Create (`id` empty) or update a workflow.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SaveWorkflowInput {
     #[serde(default)]
     pub id: Option<String>,
@@ -2262,7 +2393,8 @@ pub struct SaveWorkflowInput {
 }
 
 /// A workflow from a gallery template: the form's fields by key.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WorkflowFromTemplateInput {
     pub template_id: String,
     #[serde(default)]
@@ -2270,21 +2402,24 @@ pub struct WorkflowFromTemplateInput {
 }
 
 /// A workflow file's text and the wallet swaps (file id to this vault's id).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ImportWorkflowInput {
     pub json: String,
     #[serde(default)]
     pub stores: std::collections::HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetWorkflowActiveInput {
     pub id: String,
     pub active: bool,
 }
 
 /// The "On" switch of a "Mine" row.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetMyAutomationActiveInput {
     pub kind: mwt_planning::my_automations::MineKind,
     pub id: String,
@@ -2292,7 +2427,8 @@ pub struct SetMyAutomationActiveInput {
 }
 
 /// Emulate a graph — saved or still in the editor — on a copy of the vault.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DryRunWorkflowInput {
     /// The graph as JSON.
     pub graph: String,
@@ -2304,32 +2440,36 @@ pub struct DryRunWorkflowInput {
     /// Answers to "Wait for confirmation" given so far, by node id; a question
     /// without one pauses the emulation (outcome `asking`).
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub answers: Option<std::collections::BTreeMap<String, bool>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SaveWorkflowDraftInput {
     pub id: String,
     /// The editor's graph as JSON.
     pub graph: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AnswerWorkflowWaitInput {
     pub id: String,
     /// "Yes" (true) or "No" (false).
     pub yes: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RunWorkflowInput {
     pub id: String,
     #[serde(default)]
     pub trigger_node: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ListWorkflowRunsInput {
     #[serde(default)]
     pub workflow_id: Option<String>,
@@ -2338,40 +2478,46 @@ pub struct ListWorkflowRunsInput {
     pub limit: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RestoreWorkflowVersionInput {
     pub id: String,
     pub saved_at: String,
 }
 
 /// Set a variable by hand; `value` is a `WfValue` in JSON.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetWorkflowVarInput {
     pub scope: mwt_workflow::VarScope,
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DeleteWorkflowVarInput {
     pub scope: mwt_workflow::VarScope,
     pub name: String,
 }
 
 /// A graph and what is wrong with it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ValidateWorkflowInput {
     pub graph: String,
 }
 
 /// Add a test to a workflow (empty `test.id`) or replace one.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SaveWorkflowTestInput {
     pub workflow_id: String,
     pub test: mwt_workflow::WorkflowTest,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DeleteWorkflowTestInput {
     pub workflow_id: String,
     pub test_id: String,
@@ -2380,7 +2526,8 @@ pub struct DeleteWorkflowTestInput {
 // -- device sync (docs/sync.md) ---------------------------------------------------
 
 /// This device's place in the sync group.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncRole {
     /// Sync is off, or the vault is locked.
@@ -2394,7 +2541,8 @@ pub enum SyncRole {
     Client,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncPhase {
     #[default]
@@ -2411,14 +2559,16 @@ pub enum SyncPhase {
     Live,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncProgress {
     pub received: u32,
     pub total: u32,
 }
 
 /// One connection to another device.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncSessionView {
     pub session_id: String,
     pub device_id: String,
@@ -2427,7 +2577,7 @@ pub struct SyncSessionView {
     /// Its clock jumped this session: every batch from it waits for confirmation.
     pub unreliable: bool,
     /// Its clock minus ours, ms (shown when beyond 5 minutes).
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub clock_offset_ms: i64,
     pub progress: Option<SyncProgress>,
     /// The other device's window has focus.
@@ -2436,13 +2586,14 @@ pub struct SyncSessionView {
     pub pairing_code: Option<String>,
     /// While pairing: when the code stops being valid (Unix ms), for the countdown.
     #[serde(default)]
-    #[ts(type = "number | null")]
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub pairing_expires_ms: Option<u64>,
     /// The list of changes waiting for the user, if any.
     pub plan: Option<SyncPendingPlan>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncPendingPlan {
     pub reason: SyncConfirmReason,
     pub summary: mwt_sync::SyncSummary,
@@ -2453,7 +2604,8 @@ pub struct SyncPendingPlan {
 
 /// What the vault would show after a batch is applied, worked out on an
 /// in-memory copy (nothing is written).
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AfterApply {
     /// The base currency of both net worths and every store balance.
     pub currency: String,
@@ -2463,7 +2615,8 @@ pub struct AfterApply {
     pub stores: Vec<StoreBalanceChange>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct StoreBalanceChange {
     pub id: String,
     pub name: String,
@@ -2472,7 +2625,8 @@ pub struct StoreBalanceChange {
     pub currency: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncStatus {
     pub enabled: bool,
     pub role: SyncRole,
@@ -2498,7 +2652,8 @@ pub struct SyncStatus {
 }
 
 /// How a firewall that drops incoming sync connections can be opened here.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncFirewallFix {
     /// Nothing to open (Android, iOS, macOS asks by itself).
@@ -2512,7 +2667,8 @@ pub enum SyncFirewallFix {
 }
 
 /// The diagnostics of sync on the local network.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncNetworkView {
     /// The TCP port this device listens on while sync runs.
     pub port: Option<u16>,
@@ -2521,7 +2677,7 @@ pub struct SyncNetworkView {
     /// Devices with this vault seen nearby right now.
     pub seen: u32,
     /// When this device started looking (ms since the epoch).
-    #[ts(type = "number | null")]
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub since_ms: Option<i64>,
     /// Another device could not connect here: a firewall drops incoming connections.
     pub inbound_blocked: bool,
@@ -2536,7 +2692,8 @@ pub struct SyncNetworkView {
 }
 
 /// Where handing a vault to a new device stands (either side).
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum TransferPhase {
     #[default]
@@ -2554,20 +2711,21 @@ pub enum TransferPhase {
 }
 
 /// The receiving side (`transfer-receive` event, `transfer_receive_*`).
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TransferReceiveView {
     pub phase: TransferPhase,
     /// The name other devices see this one by.
     pub device_name: String,
     /// When this device stops being visible (ms since the epoch).
-    #[ts(type = "number | null")]
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub expires_ms: Option<i64>,
     pub sender_name: Option<String>,
     /// The six digits to type on the sending device.
     pub code: Option<String>,
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub done_bytes: u64,
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub total_bytes: u64,
     /// Where the received vault was saved (to open it).
     pub saved_path: Option<String>,
@@ -2576,7 +2734,8 @@ pub struct TransferReceiveView {
 }
 
 /// The sending side (`transfer-send` event, `transfer_send*`).
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TransferSendView {
     pub phase: TransferPhase,
     /// The receiving device.
@@ -2585,15 +2744,16 @@ pub struct TransferSendView {
     pub attempts_left: u32,
     /// The last code typed was wrong.
     pub wrong_code: bool,
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub done_bytes: u64,
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub total_bytes: u64,
     pub error: Option<String>,
 }
 
 /// A device nearby waiting to receive a vault (`transfer-nearby` event).
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TransferNearby {
     pub id: String,
     pub name: String,
@@ -2602,7 +2762,8 @@ pub struct TransferNearby {
 }
 
 /// "Send": to whom, and the vault password typed again.
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TransferSendInput {
     pub id: String,
     pub password: String,
@@ -2620,7 +2781,8 @@ impl fmt::Debug for TransferSendInput {
 pub use mwt_model::SyncCutReason;
 
 /// A trusted device as the settings list shows it.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncPeerView {
     pub device_id: String,
     pub name: String,
@@ -2639,7 +2801,8 @@ pub struct SyncPeerView {
 }
 
 /// Partial update of this device's sync settings.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncSettingsInput {
     #[serde(default)]
     pub enabled: Option<bool>,
@@ -2656,21 +2819,24 @@ pub struct SyncSettingsInput {
 }
 
 /// `sync-offer`: a device with this vault the user has not paired with.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncOfferEvent {
     pub session_id: String,
     pub peer_name: String,
 }
 
 /// `sync-pairing`: show the code; both screens must show the same one.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncPairingEvent {
     pub session_id: String,
     pub peer_name: String,
     pub code: String,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncConfirmReason {
     /// "Ask before syncing" is on: the first batch of a session.
@@ -2683,7 +2849,8 @@ pub enum SyncConfirmReason {
 }
 
 /// `sync-plan-ready`: what a batch would change, waiting for the user.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncPlanEvent {
     pub session_id: String,
     pub peer_name: String,
@@ -2694,7 +2861,8 @@ pub struct SyncPlanEvent {
 }
 
 /// `vault-synced`: a batch was applied here.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct VaultSyncedEvent {
     pub session_id: String,
     pub batch: mwt_sync::history::AppliedBatch,
@@ -2706,7 +2874,8 @@ pub struct VaultSyncedEvent {
 }
 
 /// `sync-error`: a session ended or refused to start; `code` is a `SYNC_*` code.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncErrorEvent {
     pub code: String,
     pub message: String,
@@ -2721,16 +2890,18 @@ pub struct SyncErrorEvent {
 }
 
 /// `sync-clock`: the other device's clock differs or jumped.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncClockEvent {
     pub session_id: String,
     pub peer_name: String,
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub offset_ms: i64,
     pub unreliable: bool,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncDecisionInput {
     pub session_id: String,
     pub accept: bool,
@@ -2738,88 +2909,102 @@ pub struct SyncDecisionInput {
 
 // -- shared events (shared sit-down events) ----------------------------------------------------
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateSharedEventInput {
     pub id: String,
     pub event: SharedEventDraft,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SharedEventFilter {
     #[serde(default)]
     pub include_archived: bool,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SharedParticipantInput {
     pub event_id: String,
     pub participant: SharedParticipantDraft,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateSharedParticipantInput {
     pub event_id: String,
     pub participant_id: String,
     pub participant: SharedParticipantDraft,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SharedParticipantRef {
     pub event_id: String,
     pub participant_id: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SharedItemInput {
     pub event_id: String,
     pub item: SharedItemDraft,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateSharedItemInput {
     pub event_id: String,
     pub item_id: String,
     pub item: SharedItemDraft,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SharedItemRef {
     pub event_id: String,
     pub item_id: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AddSharedPurchaseInput {
     pub event_id: String,
     pub purchase: SharedPurchaseDraft,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateSharedPurchaseInput {
     pub event_id: String,
     pub purchase_id: String,
     pub purchase: SharedPurchaseDraft,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SharedPurchaseRef {
     pub event_id: String,
     pub purchase_id: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SharedSettlementRef {
     pub event_id: String,
     pub settlement_id: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ArchiveSharedEventInput {
     pub id: String,
     pub archived: bool,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SharedShareTextInput {
     pub event_id: String,
     /// `ru` or `en`; empty: `ru`.
@@ -2831,7 +3016,8 @@ pub struct SharedShareTextInput {
 
 /// Where the update check stands (event `update-state` carries the whole
 /// [`UpdateStatusDto`]).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum UpdatePhase {
     Idle,
@@ -2854,7 +3040,8 @@ pub enum UpdatePhase {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateStatusDto {
     pub phase: UpdatePhase,
     pub current_version: String,

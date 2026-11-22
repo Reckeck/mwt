@@ -18,7 +18,8 @@ use mwt_cryptotrack::sources::evm::RawAsset;
 use mwt_model::Chain;
 
 /// What an account's last read did.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum CryptoSyncState {
     /// Not read in this session yet.
@@ -32,7 +33,8 @@ pub enum CryptoSyncState {
 }
 
 /// One followed account's reading.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoSyncAccountStatus {
     pub account_id: String,
     pub state: CryptoSyncState,
@@ -45,7 +47,8 @@ pub struct CryptoSyncAccountStatus {
 }
 
 /// What the module is doing in the background.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoSyncStatus {
     /// The user's answer to "may the module talk to the providers": `None`
     /// until asked. Without a yes there is no network call at all.

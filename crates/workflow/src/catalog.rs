@@ -12,8 +12,9 @@ use super::types::PortType;
 use super::types::PortType as Ty;
 
 /// A text in both languages.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, ts_rs::TS)]
-#[ts(rename = "LocalizedText")]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(rename = "LocalizedText"))]
 pub struct Text {
     pub ru: &'static str,
     pub en: &'static str,
@@ -23,7 +24,8 @@ pub(super) const fn txt(ru: &'static str, en: &'static str) -> Text {
     Text { ru, en }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum NodeGroup {
     Trigger,
@@ -38,7 +40,8 @@ pub enum NodeGroup {
     Text,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PortDef {
     pub name: &'static str,
     #[serde(rename = "type")]
@@ -47,7 +50,8 @@ pub struct PortDef {
 }
 
 /// What kind of field edits a parameter.
-#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum ParamKind {
     Number,
@@ -81,13 +85,14 @@ pub enum ParamKind {
     Targets,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ParamDef {
     pub name: &'static str,
     pub kind: ParamKind,
     pub label: Text,
     /// JSON of the default value.
-    #[ts(type = "unknown")]
+    #[cfg_attr(feature = "ts", ts(type = "unknown"))]
     pub default: serde_json::Value,
     /// An input of the same name exists: the field can be «taken from a wire».
     pub wirable: bool,
@@ -96,7 +101,8 @@ pub struct ParamDef {
     pub required: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct NodeDef {
     pub kind: &'static str,
     pub group: NodeGroup,

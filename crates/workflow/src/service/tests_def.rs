@@ -11,7 +11,8 @@ use mwt_base::time::unix_secs;
 const OUTCOMES: [&str; 5] = ["done", "stopped", "failed", "waiting", "partial"];
 
 /// How a test went.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WorkflowTestResult {
     pub test_id: String,
     pub name: String,

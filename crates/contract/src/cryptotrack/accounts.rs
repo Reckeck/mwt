@@ -24,7 +24,8 @@ pub const SECRET_REFUSED: &str =
 /// A token of the account that waits for the user's decision, with how much
 /// of it arrived. The symbol, the contract's warnings and the status come from
 /// `crypto_list_tokens`: this is only what that list cannot say.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct QuarantinedHolding {
     pub chain: Chain,
     pub contract: String,
@@ -40,19 +41,21 @@ pub struct QuarantinedHolding {
 /// Only ever made from two real snapshots of the account: the latest one, and the latest one at
 /// or before 30 days ago (no more than 7 days older than that day). With no snapshot that old a
 /// number would come from a short window, so there is no `MonthChange` at all.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MonthChange {
     /// Value now minus value then, USD.
     pub change_usd: Amount,
     /// The same as a percent of the value then; `None` when that was zero.
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub change_pct: Option<Amount>,
     /// The day of the older snapshot (RFC3339 UTC).
     pub since: String,
 }
 
 /// One followed account as the wallet page reads it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoAccountView {
     pub id: String,
     pub name: String,
@@ -70,14 +73,15 @@ pub struct CryptoAccountView {
     /// Tokens of this account that wait for a decision.
     pub quarantine: Vec<QuarantinedHolding>,
     /// The month's change in its value; `None` when the snapshots do not reach back far enough.
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub month_change: Option<MonthChange>,
 }
 
 /// Connect a public address, read-only. There is no field for a seed phrase
 /// or a private key anywhere in this contract, and a string that looks like
 /// one is refused (`SECRET_REFUSED`) and never stored.
-#[derive(Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConnectAddressInput {
     pub chain: Chain,
     pub address: String,
@@ -86,7 +90,7 @@ pub struct ConnectAddressInput {
     /// `YYYY-MM-DD`: operations before it are not loaded and the balance of
     /// that day is written as one opening adjustment. `None` reads the whole
     /// history.
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub start_date: Option<String>,
 }
 
@@ -106,26 +110,29 @@ impl fmt::Debug for ConnectAddressInput {
 }
 
 /// What connecting created: the account and the wallet that shows it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConnectAddressResult {
     pub account_id: String,
     pub store_id: String,
 }
 
 /// Rename an account, change its note or stop counting it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateAccountInput {
     pub account_id: String,
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub name: Option<String>,
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub note: Option<String>,
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub archived: Option<bool>,
 }
 
 /// Which account a command is about.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoAccountRefInput {
     pub account_id: String,
 }

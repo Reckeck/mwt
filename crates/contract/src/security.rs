@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 
 pub use mwt_crypto::level::{RaiseStage, SecurityLevel};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum BiometricState {
     Unavailable,
@@ -16,13 +17,15 @@ pub enum BiometricState {
 }
 
 /// Sleep and the lock screen always close the vault, so there is no field for them.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AutolockSettings {
     pub enabled: bool,
     pub minutes: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SecurityState {
     pub level: SecurityLevel,
     pub min_allowed_level: SecurityLevel,
@@ -32,31 +35,36 @@ pub struct SecurityState {
     pub pin_retry_after_secs: Option<u32>,
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RaiseToCryptoInput {
     pub current_password: String,
     pub new_password: String,
     pub backup_path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RaiseToCryptoReport {
     pub level: SecurityLevel,
     pub backup_path: String,
 }
 
 /// Payload of the `security-raise-progress` event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RaiseProgress {
     pub stage: RaiseStage,
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ValidatePasswordStrengthInput {
     pub password: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum PasswordStrength {
     Weak,
@@ -64,26 +72,30 @@ pub enum PasswordStrength {
     Strong,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PasswordStrengthReport {
     pub strength: PasswordStrength,
     /// The password has the minimum length the crypto level requires.
     pub long_enough: bool,
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct BiometricEnableInput {
     pub password: String,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct BiometricUnlockInput {
     pub path: String,
 }
 
 /// What this device knows about the exchange key of a store. The key itself never
 /// leaves the device file; `exchange_key_status` keeps the hint and the sub-accounts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum ExchangeKeyState {
     /// No key on this device, even if another device imports for this store.

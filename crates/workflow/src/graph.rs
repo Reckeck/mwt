@@ -12,8 +12,9 @@ use super::types::PortType;
 /// `storage::legacy_v4` transition, not here.
 pub const GRAPH_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-#[ts(rename = "WorkflowPosition")]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(rename = "WorkflowPosition"))]
 pub struct Position {
     #[serde(rename = "x")]
     pub left: f64,
@@ -21,15 +22,16 @@ pub struct Position {
     pub top: f64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-#[ts(rename = "WorkflowNode")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(rename = "WorkflowNode"))]
 pub struct Node {
     pub id: String,
     /// Catalog kind, e.g. `trigger.schedule`.
     pub kind: String,
     /// Parameter values by name; a connected input of the same name wins.
     #[serde(default)]
-    #[ts(type = "Record<string, unknown>")]
+    #[cfg_attr(feature = "ts", ts(type = "Record<string, unknown>"))]
     pub params: serde_json::Map<String, serde_json::Value>,
     #[serde(default)]
     pub position: Position,
@@ -41,8 +43,9 @@ pub struct Node {
     pub label: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-#[ts(rename = "WorkflowEdge")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(rename = "WorkflowEdge"))]
 pub struct Edge {
     pub id: String,
     pub from: String,
@@ -52,8 +55,9 @@ pub struct Edge {
 }
 
 /// A note or a frame on the canvas: no effect on a run.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-#[ts(rename = "WorkflowComment")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(rename = "WorkflowComment"))]
 pub struct Comment {
     pub id: String,
     pub text: String,
@@ -67,8 +71,9 @@ pub struct Comment {
     pub color: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
-#[ts(rename = "WorkflowGraph")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(rename = "WorkflowGraph"))]
 pub struct Graph {
     #[serde(default = "graph_version")]
     pub version: u32,

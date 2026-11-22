@@ -10,7 +10,8 @@ pub use crate::appconfig::{
 pub use mwt_contract::*;
 
 /// Catalog of currencies the base/favourite pickers may offer.
-#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CurrencyCatalogOutput {
     pub catalog: SupportedCurrencies,
     /// Machine code describing where the list came from: `builtin` when it is

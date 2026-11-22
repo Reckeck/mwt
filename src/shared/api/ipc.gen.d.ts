@@ -2065,7 +2065,7 @@ receipts: Array<CryptoAsset>, updated_at: string, };
  */
 type CryptoPositionAsset = { 
 /**
- * The module's own key ([`crate::model::cryptotrack::CryptoAsset::key`]).
+ * The module's own key (`trade_core::model::cryptotrack::CryptoAsset::key`).
  */
 asset_key: string, symbol: string, 
 /**
@@ -2563,7 +2563,7 @@ prices: number, };
 /**
  * The word the user types to confirm. The window asks for it in the user's
  * language; what reaches the vault is the one fixed token `WIPE_CONFIRM`
- * (`crate::service::cryptotrack::wipe`), so a stray call with no argument
+ * (`trade_core::service::cryptotrack::wipe`), so a stray call with no argument
  * cannot wipe anything.
  */
 type CryptoWipeInput = { confirm: string, };

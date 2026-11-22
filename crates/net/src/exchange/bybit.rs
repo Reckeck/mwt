@@ -399,7 +399,8 @@ pub fn accounts_in_use(balances: &[(String, Vec<CoinBalance>)]) -> [bool; 3] {
 
 pub(crate) use mwt_model::{ACCOUNT_EARN, ACCOUNT_FUND, ACCOUNT_UNIFIED};
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CoinBalance {
     pub coin: String,
     pub amount: String,

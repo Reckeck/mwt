@@ -22,7 +22,8 @@ use crate::service::UnlockedVault;
 use crate::service::{CASH_WALLET_ID, FirstCard, OpeningBalance, StoreExtras, StoreTreeNode};
 
 /// Allowed destinations for moving a sub-account.
-#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct StoreMoveTargets {
     /// Flat (no `children`), in tree order; the current parent is left out.
     pub parents: Vec<StoreTreeNode>,
