@@ -9,20 +9,20 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::Amount;
-use crate::calendar;
-use crate::model::notify::{NoticeCategory, NoticeRecord};
-use crate::model::planning::AlertCondition;
-use crate::model::store::AssetRef;
-use crate::model::vault::now_iso;
-use crate::time::secs_or_now;
+use mwt_base::Amount;
+use mwt_base::calendar;
+use mwt_base::time::secs_or_now;
+use mwt_model::AlertCondition;
+use mwt_model::AssetRef;
+use mwt_model::now_iso;
+use mwt_model::{NoticeCategory, NoticeRecord};
 
-use crate::model::notify::{notice, notice_title};
-use crate::money::books::Books;
-use crate::planning::agenda::UpcomingKind;
-use crate::planning::agenda::{next_occurrence, reminder_secs};
-use crate::planning::auto_reminders::category_of;
-use crate::planning::upcoming::upcoming;
+use mwt_model::{notice, notice_title};
+use mwt_money::books::Books;
+use mwt_planning::agenda::UpcomingKind;
+use mwt_planning::agenda::{next_occurrence, reminder_secs};
+use mwt_planning::auto_reminders::category_of;
+use mwt_planning::upcoming::upcoming;
 
 /// How far ahead a snapshot looks.
 pub const SNAPSHOT_DAYS: u32 = 60;
@@ -155,7 +155,7 @@ impl NotificationSnapshot {
                         &format!("alert:{}:{at}", alert.alert_id),
                         notice_title(NoticeCategory::PriceAlert, ru),
                         &alert.body,
-                        Some(crate::routes::AUTOMATIONS_ALERTS.into()),
+                        Some(mwt_base::routes::AUTOMATIONS_ALERTS.into()),
                         &at,
                     );
                     (alert.alert_id.clone(), record)
@@ -218,7 +218,7 @@ pub fn notification_snapshot(
                 category,
                 title: notice_title(category, ru).to_string(),
                 body: reminder.text.clone(),
-                link: Some(crate::routes::AUTOMATIONS_REMINDERS.into()),
+                link: Some(mwt_base::routes::AUTOMATIONS_REMINDERS.into()),
                 at: at.clone(),
             });
             let Some(next) = reminder
@@ -249,7 +249,7 @@ pub fn notification_snapshot(
                 } else {
                     format!("«{}» is waiting: unlock the vault to run it", item.title)
                 },
-                link: Some(crate::routes::AUTOMATIONS.into()),
+                link: Some(mwt_base::routes::AUTOMATIONS.into()),
                 at: item.at.clone(),
             });
         }

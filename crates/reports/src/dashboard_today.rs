@@ -9,21 +9,21 @@ use serde::{Deserialize, Serialize};
 use super::comparison::Comparison;
 use super::dashboard_tiles::net_worth_trend;
 use super::health::capital_health;
-use crate::Amount;
-use crate::calc::invest;
-use crate::calendar::{Calendar, clamp_day, first_of_month, month_key};
-use crate::error::{Error, Result};
-use crate::household::utilities::utility_bill;
-use crate::model::planning::HealthColor;
-use crate::model::store::StoreScope;
-use crate::model::vault::DashPeriod;
-use crate::money::books::Books;
-use crate::money::tree::{find_store, resolve_scope};
-use crate::planning::agenda::UpcomingKind;
-use crate::planning::daily_budget::daily_budget;
-use crate::planning::goals::store_values_usd;
-use crate::planning::scenarios::{find_calc_scenario, planned_balance};
-use crate::planning::upcoming::upcoming;
+use mwt_base::Amount;
+use mwt_base::calc::invest;
+use mwt_base::calendar::{Calendar, clamp_day, first_of_month, month_key};
+use mwt_base::error::{Error, Result};
+use mwt_household::utilities::utility_bill;
+use mwt_model::DashPeriod;
+use mwt_model::HealthColor;
+use mwt_model::StoreScope;
+use mwt_money::books::Books;
+use mwt_money::tree::{find_store, resolve_scope};
+use mwt_planning::agenda::UpcomingKind;
+use mwt_planning::daily_budget::daily_budget;
+use mwt_planning::goals::store_values_usd;
+use mwt_planning::scenarios::{find_calc_scenario, planned_balance};
+use mwt_planning::upcoming::upcoming;
 
 /// The strip lists at most this many things to do.
 pub const TODAY_TODOS: usize = 3;
@@ -31,7 +31,8 @@ pub const TODAY_TODOS: usize = 3;
 const TODAY_HORIZON_DAYS: u32 = 14;
 
 /// What the strip asks the user to do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum TodayTodoKind {
     /// A payment the accounts will not cover by its date.
@@ -55,7 +56,8 @@ pub enum TodayTodoKind {
 }
 
 /// One thing to do, with what it is about.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TodayTodo {
     pub kind: TodayTodoKind,
     /// `YYYY-MM-DD` it is due; `None` sorts first: it is due already.
@@ -69,7 +71,8 @@ pub struct TodayTodo {
 }
 
 /// The strip above the dashboard grid.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DashboardToday {
     pub period: DashPeriod,
     /// Base currency of `net_worth`.
@@ -89,7 +92,8 @@ pub struct DashboardToday {
 }
 
 /// A calculator scenario against what really happened (plan H4, decision 12).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ScenarioStatus {
     pub id: String,
     pub name: String,
@@ -109,7 +113,7 @@ pub struct ScenarioStatus {
 }
 
 /// Months from `start` (`YYYY-MM`) to the month of `today`; zero before it.
-pub(crate) fn months_since(start: &str, today: NaiveDate) -> u32 {
+pub fn months_since(start: &str, today: NaiveDate) -> u32 {
     let Some(first) = NaiveDate::parse_from_str(&format!("{start}-01"), "%Y-%m-%d").ok() else {
         return 0;
     };
@@ -164,7 +168,7 @@ pub fn scenario_status(books: &Books, id: &str, now: i64, zone: &str) -> Result<
 }
 
 /// Everything waiting for the user, the earliest first; utility sums in `currency`.
-pub(crate) fn all_today_todos(
+pub fn all_today_todos(
     books: &Books,
     now: i64,
     zone: &str,

@@ -1,6 +1,6 @@
-//! Shim of the `insights` area: moved to `crate::reports::insights` (spec core-strangler, D1).
+//! Shim of the `insights` area: moved to `mwt_reports::insights` (spec core-strangler, D1).
 
-pub use crate::reports::insights::{
+pub use mwt_reports::insights::{
     Insight, InsightCode, OverviewFlow, OverviewInvestments, OverviewWealth, OverviewYear,
     ReportOverview, report_insights,
 };
@@ -17,7 +17,7 @@ impl UnlockedVault {
         /// The overview for the filter's scope and currency. Its month is
         /// `filter.to` (this month by default), compared with the one before.
         pub fn report_overview(&self, filter: &ReportFilter, now: i64, zone: &str) -> Result<ReportOverview>
-            => crate::reports::insights::report_overview @books;
+            => mwt_reports::insights::report_overview @books;
     }
     // forward:end
 }

@@ -7,11 +7,11 @@ use crate::model::planning::UtilityKind;
 use crate::model::store::StoreScope;
 use crate::model::store::{LoyaltyInfo, PropertyInfo, StoreKind};
 use crate::model::vault::DashPeriod;
-use crate::reports::dashboard_today::*;
 use crate::service::test_support::*;
 use crate::service::{CalcScenarioDraft, StoreExtras, UtilityDraft};
 use crate::time::unix_secs;
 use chrono::NaiveDate;
+use mwt_reports::dashboard_today::*;
 
 #[test]
 fn months_since_counts_whole_months_from_the_start() {

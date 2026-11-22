@@ -1,6 +1,6 @@
-//! Shim of the `notify_snapshot` area: moved to `crate::reports::notify_snapshot` (spec core-strangler, D1).
+//! Shim of the `notify_snapshot` area: moved to `mwt_reports::notify_snapshot` (spec core-strangler, D1).
 
-pub use crate::reports::notify_snapshot::{
+pub use mwt_reports::notify_snapshot::{
     AlertBase, NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert,
 };
 
@@ -17,7 +17,7 @@ impl UnlockedVault {
         /// Every notice ahead for the next [`SNAPSHOT_DAYS`], to be told while
         /// the vault is locked.
         pub fn notification_snapshot(&self, now: i64, zone: &str, ru: bool) -> NotificationSnapshot
-            => crate::reports::notify_snapshot::notification_snapshot @books;
+            => mwt_reports::notify_snapshot::notification_snapshot @books;
         /// [`apply_locked_deliveries_seen`] with no record of what the alerts looked
         /// like: every firing applies.
         pub fn apply_locked_deliveries(&mut self, records: Vec<NoticeRecord>, fired_alerts: &[(String, String)]) -> crate::Result<()>

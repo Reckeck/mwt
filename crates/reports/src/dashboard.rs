@@ -6,17 +6,18 @@ use serde::{Deserialize, Serialize};
 
 use super::comparison::{BaseKind, Comparison};
 use super::overview::{DayStatus, calendar_month};
-use crate::Amount;
-use crate::calendar::{self, Calendar};
-use crate::model::vault::DashPeriod;
-use crate::money::books::Books;
-use crate::money::worth::FlowClass;
-use crate::planning::budget::budget_currency;
-use crate::planning::flows::flows_between;
-use crate::planning::period::{PeriodWindow, period_window};
+use mwt_base::Amount;
+use mwt_base::calendar::{self, Calendar};
+use mwt_model::DashPeriod;
+use mwt_money::books::Books;
+use mwt_money::worth::FlowClass;
+use mwt_planning::budget::budget_currency;
+use mwt_planning::flows::flows_between;
+use mwt_planning::period::{PeriodWindow, period_window};
 
 /// One day of the "Spending" week strip.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SpendingDay {
     /// `YYYY-MM-DD`.
     pub date: String,
@@ -26,7 +27,8 @@ pub struct SpendingDay {
 }
 
 /// The "Spending" widget: the period, the week and a series for the sparkline.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SpendingOverview {
     pub currency: String,
     pub period: DashPeriod,
@@ -102,7 +104,7 @@ pub fn spending_overview(
     let (current, days) = spending_totals(books, &cal, &currency, start, end);
     let (previous, _) = spending_totals(books, &cal, &currency, prev_start, prev_end);
     let has_history = books.doc().transactions.iter().any(|tx| {
-        crate::time::unix_secs(&tx.meta().timestamp)
+        mwt_base::time::unix_secs(&tx.meta().timestamp)
             .is_some_and(|secs| cal.date_of(secs) <= prev_end)
     });
     let base = |value: Amount| has_history.then_some(value);

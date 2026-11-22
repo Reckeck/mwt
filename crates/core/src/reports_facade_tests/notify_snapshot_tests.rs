@@ -5,9 +5,9 @@ use std::collections::{HashMap, HashSet};
 use crate::model::planning::AlertCondition;
 use crate::model::planning::{ReminderRepeat, RepeatUnit};
 use crate::model::vault::now_iso;
-use crate::reports::notify_snapshot::*;
 use crate::service::test_support::*;
 use crate::time::secs_or_now;
+use mwt_reports::notify_snapshot::*;
 
 #[test]
 fn a_snapshot_holds_every_repeat_and_reminds_once_without_the_vault() {

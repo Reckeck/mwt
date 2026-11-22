@@ -2,11 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
+use mwt_base::Amount;
 
 /// What a dashboard number is measured against (plan H1, decision 57): the
 /// plan where there is one, else the previous period up to the same date.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum BaseKind {
     Plan,
@@ -14,7 +15,8 @@ pub enum BaseKind {
 }
 
 /// A number with its base; `base` is `None` when there is nothing to compare.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Comparison {
     pub value: Amount,
     pub base: Option<Amount>,

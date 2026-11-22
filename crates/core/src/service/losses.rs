@@ -3,7 +3,7 @@
 pub use crate::household::losses::{
     FlowAmount, FlowLink, FlowSummary, FxRow, FxTable, LossBucket, LossRow, TxLoss,
 };
-pub use crate::reports::overview::LossReport;
+pub use mwt_reports::overview::LossReport;
 
 use std::collections::BTreeMap;
 

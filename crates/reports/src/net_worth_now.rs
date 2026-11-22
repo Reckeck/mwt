@@ -4,12 +4,12 @@
 
 use std::collections::HashMap;
 
-use crate::Amount;
-use crate::household::contacts::contact_balances_until;
-use crate::model::store::{LiabilityKind, StoreKind};
-use crate::money::books::Books;
-use crate::money::worth::{ClassShare, LiabilityShare, NetWorth};
-use crate::planning::allocation::{Slot, slot_resolver};
+use mwt_base::Amount;
+use mwt_household::contacts::contact_balances_until;
+use mwt_model::{LiabilityKind, StoreKind};
+use mwt_money::books::Books;
+use mwt_money::worth::{ClassShare, LiabilityShare, NetWorth};
+use mwt_planning::allocation::{Slot, slot_resolver};
 
 /// The bound that takes every contact balance, however late.
 const ALL_BALANCES: i64 = i64::MAX;
@@ -17,7 +17,7 @@ const ALL_BALANCES: i64 = i64::MAX;
 /// Today's valuation plus the part of `financial` held in crypto wallets
 /// and exchanges. The one source of the current capital: the networth
 /// report's current point is taken from here too.
-pub(crate) fn net_worth_with_crypto(books: &Books<'_>) -> (NetWorth, Amount) {
+pub fn net_worth_with_crypto(books: &Books<'_>) -> (NetWorth, Amount) {
     let doc = books.doc();
     let (base, _) = books.base_and_fx();
     let kinds: HashMap<&str, StoreKind> = doc
