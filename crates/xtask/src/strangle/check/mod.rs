@@ -6,6 +6,8 @@
 //! 4. every baseline test name is still in the area (new tests are welcome, none may be dropped);
 //! 5. (`--diff <base>`) the changed files are inside the task's allowed set.
 //!
+//! `check --all` also holds the tree against `remaining.json` (module `remaining`).
+//!
 //! `check <area>` runs every rule on that area. `check --all` runs rules 1-4 only on the areas that
 //! have moved (a shim with the forward markers, `stubs = true`) and rule 5 once, per task (module
 //! `scope`: the diff must fit one task, or the one named by `--task`): it is the CI gate, so an
@@ -23,6 +25,7 @@ use super::baseline::{self, AreaBaseline, Baseline};
 use super::forward::forwarded_entries;
 use super::home::{allowed_files, homes};
 use super::map::Area;
+use super::remaining;
 use super::scope;
 
 mod rules;
@@ -69,7 +72,7 @@ pub fn run(root: &Path, args: &CheckArgs) -> Result<()> {
         .as_deref()
         .map(|base| changed_files(root, base))
         .transpose()?;
-    let findings = findings(
+    let mut findings = findings(
         root,
         &workspace,
         &baseline,
@@ -77,6 +80,9 @@ pub fn run(root: &Path, args: &CheckArgs) -> Result<()> {
         changed.as_deref(),
         args.task.as_deref(),
     )?;
+    if args.all {
+        findings.extend(remaining::findings(root, &workspace.map)?);
+    }
     if findings.is_empty() {
         println!("check: ok");
         return Ok(());
@@ -89,7 +95,7 @@ pub fn run(root: &Path, args: &CheckArgs) -> Result<()> {
 }
 
 /// Every finding for one area (`only`) or for the moved areas, and rule 5 for the changed files.
-fn findings(
+pub(in crate::strangle) fn findings(
     root: &Path,
     workspace: &Workspace,
     baseline: &Baseline,

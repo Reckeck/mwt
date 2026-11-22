@@ -34,6 +34,13 @@ pub struct Map {
     /// `<dir>/<stem>_tests.rs`), keyed by the top segment like `group_dirs`.
     #[serde(default)]
     pub facade_test_dirs: BTreeMap<String, String>,
+    /// Directories whose `.rs` files `strangle remaining` counts, relative to the workspace root.
+    #[serde(default)]
+    pub remaining_dirs: Vec<String>,
+    /// Paths (a trailing `/` takes the whole directory) `strangle remaining` leaves out: the tool
+    /// and its fixtures name the words it counts.
+    #[serde(default)]
+    pub remaining_exclude: Vec<String>,
     /// The foundation tasks (no area) and the files they own in the shared tree.
     #[serde(default, rename = "foundation")]
     pub foundations: Vec<Foundation>,
@@ -93,6 +100,9 @@ pub struct Area {
     /// The area needs its own `ipc_contract/<area>.rs` stub for new DTOs.
     #[serde(default)]
     pub ipc_contract: bool,
+    /// The delegates are deleted (`strangle retire`): rule 1 then wants no `forward!` entry at all.
+    #[serde(default)]
+    pub retired: bool,
 }
 
 fn yes() -> bool {

@@ -1,7 +1,7 @@
 //! Reads one source text: which `crate::<module>` paths it names, and which modules it declares
 //! under `#[cfg(test)]`. A line scanner over `std`; no parser.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::Edge;
 
@@ -9,25 +9,66 @@ const CFG_TEST: &str = "#[cfg(test)]";
 const CFG_TESTKIT: &str = "#[cfg(any(test, feature = \"testkit\"))]";
 const CRATE_PATH: &str = "crate::";
 
-/// Root items of `lib.rs` that are not modules, with the module they count as.
-/// Anything else after `crate::` is reached through `pub use model::*`.
-fn root_item_module(name: &str) -> &'static str {
-    match name {
-        "Amount" => "amount",
-        "Error" | "Result" => "error",
-        "SnapshotFormat" | "VaultFile" => "storage",
-        _ if name.starts_with("VAULT_") => "lib",
-        _ => "model",
+/// The names `crate::<name>` may stand for: the modules of the tree and the table, and the names
+/// `lib.rs` re-exports (`pub use mwt_x as name;`, `pub use mwt_x::{Item, ..};`), each with the module it
+/// counts as. Anything else after `crate::` is reached through `pub use model::*`.
+pub struct Names {
+    modules: BTreeSet<String>,
+    reexports: BTreeMap<String, String>,
+}
+
+impl Names {
+    pub fn new(modules: BTreeSet<String>, lib_text: &str) -> Self {
+        let reexports = reexports(lib_text, &modules);
+        Self { modules, reexports }
+    }
+
+    /// The module a name after `crate::` stands for.
+    fn resolve(&self, name: &str) -> String {
+        if self.modules.contains(name) {
+            name.to_string()
+        } else {
+            self.reexports
+                .get(name)
+                .cloned()
+                .unwrap_or_else(|| "model".to_string())
+        }
     }
 }
 
-/// The module a name after `crate::` stands for.
-fn resolve(name: &str, modules: &BTreeSet<String>) -> String {
-    if modules.contains(name) {
-        name.to_string()
-    } else {
-        root_item_module(name).to_string()
+/// Every name a `pub use` of `lib.rs` brings in from another path, with its module: an alias or a
+/// lowercase item that is a module counts as itself; any other item as the module named like its crate
+/// (`mwt_crypto` -> `crypto`), else like itself in lowercase (`Amount` -> `amount`), else as `lib`.
+fn reexports(lib_text: &str, modules: &BTreeSet<String>) -> BTreeMap<String, String> {
+    let mut found = BTreeMap::new();
+    for statement in strip_comments(lib_text).split(';') {
+        let Some(start) = statement.find("pub use ") else {
+            continue;
+        };
+        let rest = statement[start + "pub use ".len()..].trim();
+        let (path, items) = match rest.split_once("::") {
+            Some((path, items)) => (path.trim(), items.trim()),
+            None => (rest.split(" as ").next().unwrap_or(rest).trim(), ""),
+        };
+        let krate = path.strip_prefix("mwt_").unwrap_or(path);
+        if let Some((_, alias)) = rest.split_once(" as ") {
+            found.insert(alias.trim().to_string(), alias.trim().to_string());
+            continue;
+        }
+        for item in items.trim_matches(|ch| ch == '{' || ch == '}').split(',') {
+            let item = item.trim();
+            if item.is_empty() || item == "*" {
+                continue;
+            }
+            let lowercase = item.to_lowercase();
+            let home = [item, krate, lowercase.as_str()]
+                .into_iter()
+                .find(|candidate| modules.contains(*candidate))
+                .unwrap_or("lib");
+            found.insert(item.to_string(), home.to_string());
+        }
     }
+    found
 }
 
 /// The text without `//` comments (strings are respected); line breaks stay, so offsets keep their lines.
@@ -199,12 +240,7 @@ pub(super) fn production_text(text: &str) -> String {
 }
 
 /// Every `crate::` path of the non-test part of `text`, as edges from `from_file` (module `from_module`).
-pub fn read_edges(
-    from_file: &str,
-    from_module: &str,
-    text: &str,
-    modules: &BTreeSet<String>,
-) -> Vec<Edge> {
+pub fn read_edges(from_file: &str, from_module: &str, text: &str, names: &Names) -> Vec<Edge> {
     let cleaned = production_text(text);
     name_offsets(&cleaned)
         .into_iter()
@@ -214,7 +250,7 @@ pub fn read_edges(
                 from_file: from_file.to_string(),
                 line: cleaned[..offset].matches('\n').count() + 1,
                 from_module: from_module.to_string(),
-                to_module: resolve(name, modules),
+                to_module: names.resolve(name),
             })
         })
         .collect()
@@ -224,11 +260,16 @@ pub fn read_edges(
 mod tests {
     use super::*;
 
-    fn modules() -> BTreeSet<String> {
-        ["model", "service", "storage", "amount"]
-            .into_iter()
-            .map(String::from)
-            .collect()
+    const LIB: &str = "pub use model::*;\npub use mwt_base::{Amount, Result, amount};\npub use mwt_crypto::{SnapshotFormat, VAULT_MAGIC};\npub use mwt_money as money;\npub use storage::VaultFile;\n";
+
+    fn modules() -> Names {
+        let modules = [
+            "model", "service", "storage", "amount", "crypto", "money", "workflow",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+        Names::new(modules, LIB)
     }
 
     fn pairs(text: &str) -> Vec<(usize, String)> {
@@ -272,14 +313,16 @@ mod tests {
 
     #[test]
     fn a_name_that_is_not_a_module_counts_as_model() {
-        let text = "use crate::VaultDoc;\nlet _ = crate::Amount::ZERO;\nuse crate::VAULT_MAGIC;\nuse crate::VaultFile;\n";
+        let text = "use crate::VaultDoc;\nlet _ = crate::Amount::ZERO;\nuse crate::VAULT_MAGIC;\nuse crate::VaultFile;\nuse crate::SnapshotFormat;\nuse crate::Result;\n";
         assert_eq!(
             pairs(text),
             vec![
                 (1, "model".to_string()),
                 (2, "amount".to_string()),
-                (3, "lib".to_string()),
-                (4, "storage".to_string())
+                (3, "crypto".to_string()),
+                (4, "storage".to_string()),
+                (5, "crypto".to_string()),
+                (6, "lib".to_string())
             ]
         );
     }
