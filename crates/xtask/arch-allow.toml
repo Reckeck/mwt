@@ -13,13 +13,10 @@ allow = [
     { from = "ipc_contract.rs", to = "updates", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach updates" },
     { from = "ipc_contract.rs", to = "vault_io", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach vault_io" },
     { from = "ipc_contract/events.rs", to = "kernel", until = "T22", reason = "the contract crate may name only the domain crates, model and base; the owner crates take the types (or expose a function) that reach kernel" },
-    { from = "model/fixtures.rs", to = "workflow", until = "T10", reason = "test support of mwt-testkit may use model and base only; the fixtures and builders that reach workflow move to the facade or are cut down" },
-    { from = "planning/automation_plan.rs", to = "workflow", until = "T17", reason = "planning may use only the crates below it in the domain chain, model and base; the workflow path is replaced by model/base items or moved" },
     { from = "reports/crypto_module.rs", to = "cryptotrack", until = "T17", reason = "reports may use only the crates below it in the domain chain, model and base; the cryptotrack path is replaced by model/base items or moved" },
     { from = "reports/dashboard.rs", to = "ipc_contract", until = "T17", reason = "dashboard figures carry Comparison and BaseKind from ipc_contract until the comparison type moves to a lower layer" },
     { from = "reports/dashboard_tiles.rs", to = "ipc_contract", until = "T17", reason = "dashboard figures carry Comparison and BaseKind from ipc_contract until the comparison type moves to a lower layer" },
     { from = "reports/dashboard_today.rs", to = "ipc_contract", until = "T17", reason = "dashboard figures carry Comparison and BaseKind from ipc_contract until the comparison type moves to a lower layer" },
     { from = "reports/overview.rs", to = "usecases", until = "T17", reason = "leg_value_in lives in usecases/planning/budget.rs (stream D); reports read it until the pricing helper moves to a lower layer" },
     { from = "testkit/mod.rs", to = "service", until = "F7", reason = "the facade half of the test kit holds the `UnlockedVault` helpers (`in_memory`); they go with `UnlockedVault` (phase 7), the model-only half is the crate mwt-testkit" },
-    { from = "workflow/service/records.rs", to = "storage", until = "T16", reason = "workflow may use model and base only; the storage site is rewritten through model or the WorkflowHost port" },
 ]

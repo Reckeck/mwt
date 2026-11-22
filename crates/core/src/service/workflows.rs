@@ -146,9 +146,9 @@ impl UnlockedVault {
             => crate::usecases::workflow::vars::balance @books;
         /// Price of one unit of an asset in a currency.
         pub(crate) fn wf_price(&self, asset: &AssetRef, currency: &str, secs: i64) -> Option<Amount>
-            => crate::workflow::service::vars::price @books;
+            => crate::usecases::workflow::vars::price @books;
         pub(crate) fn wf_convert(&self, amount: Amount, from: &str, to: &str, secs: i64) -> Option<Amount>
-            => crate::workflow::service::vars::convert @books;
+            => crate::usecases::workflow::vars::convert @books;
         /// Income or spending of the current period, in the base currency.
         pub(crate) fn wf_sum(&self, period: &str, flow: &str, category: Option<&str>, now: i64, zone: &str) -> Amount
             => crate::usecases::workflow::runs::wf_sum @books;

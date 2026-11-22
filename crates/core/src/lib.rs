@@ -33,7 +33,8 @@ pub mod usecases;
 #[cfg(test)]
 mod vault_facade_tests;
 pub mod vault_io;
-pub mod workflow;
+#[cfg(test)]
+mod workflow_facade_tests;
 
 pub use model::*;
 pub use mwt_base::{
@@ -48,6 +49,7 @@ pub use mwt_household as household;
 pub use mwt_model::{VAULT_FORMAT_VERSION, id_types, records};
 pub use mwt_money as money;
 pub use mwt_sync as sync;
+pub use mwt_workflow as workflow;
 pub use storage::VaultFile;
 
 #[cfg(test)]
