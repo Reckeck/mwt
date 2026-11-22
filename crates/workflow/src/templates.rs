@@ -9,7 +9,8 @@ use serde_json::{Value, json};
 use super::graph::GRAPH_VERSION;
 
 /// What a form field picks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum TemplateFieldKind {
     Store,
@@ -21,7 +22,8 @@ pub enum TemplateFieldKind {
     Day,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TemplateField {
     /// Key in the params and in `workflowTemplates.<id>.field.<key>`.
     pub key: String,
@@ -32,7 +34,8 @@ pub struct TemplateField {
 }
 
 /// One template of the gallery; titles live in the locales.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WorkflowTemplateInfo {
     pub id: String,
     pub fields: Vec<TemplateField>,

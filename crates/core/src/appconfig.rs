@@ -44,7 +44,8 @@ pub const FALLBACK_CRYPTO: &[&str] = &[
 
 // -- enums ---------------------------------------------------------------------
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum Theme {
     #[default]
@@ -53,7 +54,8 @@ pub enum Theme {
     Dark,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum Locale {
     #[default]
@@ -66,7 +68,8 @@ pub enum Locale {
 
 /// Preferences that follow the *user*, not the vault: they must survive opening
 /// a different vault, so they are stored next to the app, not inside the doc.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AppSettings {
     pub theme: Theme,
     pub locale: Locale,
@@ -98,13 +101,13 @@ pub struct AppSettings {
     /// part of the vault and not synced. Not sent to the frontend; the
     /// tracking status carries it.
     #[serde(default)]
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub crypto_tracking_consent: Option<bool>,
     /// When the consent above was given (RFC 3339), on this device; cleared
     /// when it is withdrawn, so a later yes records its own date. `None` for a
     /// consent given before the date was kept. Per device, like the consent.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub crypto_tracking_consent_at: Option<String>,
     /// System-wide key combination that opens "+ Transaction", in the
     /// `CmdOrCtrl+Shift+Space` form; `None` = off, so it never fights the
@@ -161,17 +164,17 @@ pub struct AppSettings {
     /// not in memory, so a process kill (Android) between receiving and the
     /// first unlock does not lose the pairing.
     #[serde(default)]
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub pending_trusts: Vec<PendingTrustPref>,
     /// Autolock of this device (vault protection, `crate::ipc_contract::security`);
     /// `None` = the defaults ([`Self::autolock`]).
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub autolock: Option<AutolockSettings>,
     /// Wrong PINs in a row per level-2 vault file (the path), for the delay
     /// before the next try. Kept here so a restart does not reset it.
     #[serde(default)]
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub pin_failures: BTreeMap<String, PinFailures>,
 }
 
@@ -259,7 +262,8 @@ pub struct PendingTrustPref {
 
 /// Vault sync preferences of this device. Everything is off until the user
 /// turns it on: an enabled device listens on the local network.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SyncPrefs {
     #[serde(default)]
     pub enabled: bool,
@@ -592,7 +596,8 @@ fn is_ticker(code: &str) -> bool {
 }
 
 /// Partial update: only the fields present in the payload are touched.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateAppSettingsInput {
     pub theme: Option<Theme>,
     pub locale: Option<Locale>,
@@ -661,7 +666,8 @@ fn dedup(items: &[String]) -> Vec<String> {
 ///
 /// Built from the public providers at runtime and cached on disk; see
 /// [`fallback`] for the degraded case.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SupportedCurrencies {
     /// ISO 4217 codes, lowercase.
     #[serde(default)]

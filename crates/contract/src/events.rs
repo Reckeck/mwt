@@ -3,73 +3,82 @@
 //! literal built, so the frontend sees no change.
 
 use serde::Serialize;
-use ts_rs::TS;
 
 use mwt_vault::kernel::events::LockReason;
 
 /// Payload of `bybit-import-pending`: how many records the poll recorded.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct BybitImportPendingPayload {
     pub staged: u32,
     pub recorded: u32,
 }
 
 /// Payload of `crypto-updated`: the account whose records changed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoUpdatedPayload {
     pub account_id: String,
 }
 
 /// Payload of `automation-created`: the transactions the run created.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AutomationCreatedPayload {
     pub tx_ids: Vec<String>,
 }
 
 /// Payload of `automation-skipped`: how many runs were skipped.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AutomationSkippedPayload {
     pub count: usize,
 }
 
 /// Payload of `workflows-ran`: empty after a manual run, the counts after a
 /// scheduled pass.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WorkflowsRanPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub runs: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub queued: Option<u32>,
 }
 
 /// Payload of `price-alert`: the alert that fired.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PriceAlertPayload {
     pub alert_id: String,
 }
 
 /// Payload of `reminder-due` and `reminders-changed`: nothing but the signal.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EmptyPayload {}
 
 /// Payload of `enrichment-ready`: the transaction that was enriched.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EnrichmentReadyPayload {
     pub tx_id: String,
 }
 
 /// Payload of `vault-locked`: why the vault was locked and whether it
 /// closed (`false` when the flush failed and the vault stayed open).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct VaultLockedPayload {
     pub reason: VaultLockedReason,
     pub closed: bool,
 }
 
 /// Why the vault was locked, as the `vault-locked` event names it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "kebab-case")]
 pub enum VaultLockedReason {
     Manual,
@@ -93,7 +102,8 @@ impl From<LockReason> for VaultLockedReason {
 
 /// Payload of `vault-save-failed`: the message, or the reason with
 /// `exiting` when the app was closing.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(untagged)]
 pub enum VaultSaveFailedPayload {
     Message(String),

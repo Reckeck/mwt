@@ -13,13 +13,15 @@ use crate::cryptotrack::links::CryptoPairFiat;
 use crate::cryptotrack::operations::CryptoOpFilter;
 
 /// Whose relations to read: one followed account (the wallet's own).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoRelationsInput {
     pub account_id: String,
 }
 
 /// One counterparty or protocol, with the filter that lists its operations.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoRelationRow {
     /// Unique within its group.
     pub key: String,
@@ -27,7 +29,7 @@ pub struct CryptoRelationRow {
     pub label: String,
     /// The address behind the row, for an address row.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub address: Option<String>,
     /// How many visible operations the filter lists.
     pub count: u32,
@@ -38,7 +40,8 @@ pub struct CryptoRelationRow {
 }
 
 /// A fiat record paired with one operation of the account.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoFiatRelation {
     pub event_id: String,
     pub fiat: CryptoPairFiat,
@@ -53,21 +56,24 @@ pub struct CryptoFiatRelation {
 /// many there are in all. The screen names the rest with the same
 /// `entity.more` phrase — a list cut in silence tells the user something
 /// untrue about their own data.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoRelationGroup {
     pub items: Vec<CryptoRelationRow>,
     pub total: u32,
 }
 
 /// The fiat group, capped and counted the same way.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoFiatGroup {
     pub items: Vec<CryptoFiatRelation>,
     pub total: u32,
 }
 
 /// What an account dealt with. Never stored.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoRelations {
     /// The user's other followed addresses it moved coins with.
     pub own_addresses: CryptoRelationGroup,

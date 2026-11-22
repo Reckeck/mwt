@@ -10,25 +10,25 @@ description = "Multi Wallet Tracker IPC contract: the command input/output types
 workspace = true
 
 [features]
-# Forwarded from `trade-core`; the derives stay unconditional here until T23.
-ts = ["mwt-model/ts", "mwt-sync/ts", "mwt-money/ts", "mwt-household/ts", "mwt-planning/ts", "mwt-reports/ts", "mwt-cryptotrack/ts", "mwt-crypto/ts"]
-schema = ["mwt-model/schema", "mwt-money/schema", "mwt-planning/schema", "mwt-reports/schema", "mwt-cryptotrack/schema"]
+# The derives of this crate name types of every crate below, so both features forward to them.
+ts = ["dep:ts-rs", "mwt-base/ts", "mwt-model/ts", "mwt-sync/ts", "mwt-money/ts", "mwt-household/ts", "mwt-planning/ts", "mwt-reports/ts", "mwt-cryptotrack/ts", "mwt-crypto/ts", "mwt-workflow/ts", "mwt-net/ts"]
+schema = ["mwt-base/schema", "mwt-model/schema", "mwt-money/schema", "mwt-planning/schema", "mwt-reports/schema", "mwt-cryptotrack/schema", "mwt-workflow/schema"]
 
 [dependencies]
-mwt-base = { path = "../base", features = ["ts", "schema"] }
-mwt-model = { path = "../model", features = ["ts", "schema"] }
-mwt-money = { path = "../money", features = ["ts", "schema"] }
-mwt-household = { path = "../household", features = ["ts"] }
-mwt-planning = { path = "../planning", features = ["ts", "schema"] }
-mwt-reports = { path = "../reports", features = ["ts", "schema"] }
-mwt-cryptotrack = { path = "../cryptotrack", features = ["ts", "schema"] }
+mwt-base = { path = "../base" }
+mwt-model = { path = "../model" }
+mwt-money = { path = "../money" }
+mwt-household = { path = "../household" }
+mwt-planning = { path = "../planning" }
+mwt-reports = { path = "../reports" }
+mwt-cryptotrack = { path = "../cryptotrack" }
 mwt-workflow = { path = "../workflow" }
-mwt-sync = { path = "../sync", features = ["ts"] }
-mwt-crypto = { path = "../crypto", features = ["ts"] }
+mwt-sync = { path = "../sync" }
+mwt-crypto = { path = "../crypto" }
 mwt-vault = { path = "../vault" }
 mwt-net = { path = "../net" }
 serde.workspace = true
-ts-rs.workspace = true
+ts-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

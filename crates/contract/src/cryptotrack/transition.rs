@@ -23,7 +23,8 @@ use mwt_model::StoreKind;
 
 /// One wallet the move retires. It is archived and nothing in it is deleted:
 /// its operations, holdings and history stay readable in the archive.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoRetiredWallet {
     pub store_id: String,
     pub name: String,
@@ -38,7 +39,8 @@ pub struct CryptoRetiredWallet {
 /// nowhere: which hand-kept wallets the move archives and how much capital
 /// leaves the totals with them. This is the number the wizard warns with
 /// before the password is typed.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoTransitionPlan {
     /// The currency `leaving_base` and every `leaving_base` below are in.
     pub base_currency: String,
@@ -53,7 +55,8 @@ pub struct CryptoTransitionPlan {
 /// What the archiving did. A second run reports `changed: false` and an empty
 /// list: the step is idempotent, so the wizard, the raise and the next open
 /// can all run it.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoArchiveReport {
     /// Whether this call archived anything at all.
     pub changed: bool,

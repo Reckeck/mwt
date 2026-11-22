@@ -10,7 +10,8 @@ use mwt_model::{AccountRef, Transaction};
 
 /// What a port carries. Each has its colour in the editor; a wire joins only
 /// compatible ports (see [`PortType::accepts`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum PortType {
     /// Execution order, not a value.
@@ -52,7 +53,8 @@ impl PortType {
 
 /// A value on a data edge. Money keeps its currency so different currencies
 /// are never added up by accident.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
 pub enum WfValue {
     #[default]

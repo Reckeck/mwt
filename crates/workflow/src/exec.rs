@@ -56,7 +56,8 @@ pub const FREE_RUNNING: [&str; 5] = [
     "action.emit",
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum RunMode {
     /// For real: operations are made, notices shown.
@@ -149,7 +150,8 @@ impl RunContext {
 }
 
 /// An event a run sent with "Send event".
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EmittedEvent {
     pub name: String,
     pub payload: WfValue,
@@ -157,7 +159,8 @@ pub struct EmittedEvent {
 
 /// Everything a run did. The vault already holds its operations; the caller
 /// keeps the run, the queue, the notices and the wait.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct RunReport {
     pub run: WorkflowRun,
     /// Operations made (or, in emulation, that would be made).
@@ -172,7 +175,7 @@ pub struct RunReport {
     /// same copy of the vault.
     #[serde(default)]
     pub event_runs: Vec<WorkflowRun>,
-    #[ts(skip)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     #[serde(skip)]
     pub wait: Option<WorkflowWait>,
     /// Data wire id → the value that went along it, for the editor.

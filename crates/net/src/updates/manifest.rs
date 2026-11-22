@@ -33,7 +33,8 @@ pub struct UpdateManifest {
 }
 
 /// What the UI shows when a newer version exists.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateOffer {
     pub version: String,
     pub notes: Option<String>,

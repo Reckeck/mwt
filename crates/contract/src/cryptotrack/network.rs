@@ -15,7 +15,8 @@ use serde::{Deserialize, Serialize};
 use mwt_model::Chain;
 
 /// Which endpoint of a network a command is about.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum EndpointKind {
     /// The JSON-RPC node (balances).
@@ -26,7 +27,8 @@ pub enum EndpointKind {
 
 /// One endpoint as the screen shows it: what is used now and what the presets
 /// are.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct EndpointView {
     /// The address in use: the user's own, else the first preset. Empty when
     /// the network has no preset and the user set none (a Blockscout instance
@@ -42,12 +44,13 @@ pub struct EndpointView {
 }
 
 /// One network's endpoints.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct NetworkView {
     pub chain: Chain,
     pub label: String,
     /// EIP-155 chain id; a node answering with another one is the wrong network.
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub chain_id: u64,
     pub rpc: EndpointView,
     pub blockscout: EndpointView,
@@ -58,7 +61,8 @@ pub struct NetworkView {
 }
 
 /// The endpoints of every network.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct NetworkSettings {
     /// They can be changed here: protection level 3 on a real vault. Below it
     /// the presets are shown and used, read-only.
@@ -66,15 +70,16 @@ pub struct NetworkSettings {
     pub networks: Vec<NetworkView>,
     /// When the tracking consent was given on this device (RFC 3339); filled
     /// by the command from the app settings, not by the vault.
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub consent_at: Option<String>,
     /// The name of this device if one is set; the screen shows it next to the date.
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub consent_device: Option<String>,
 }
 
 /// Save one network. An empty address goes back to the preset.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetNetworkSettingsInput {
     pub chain: Chain,
     pub rpc: String,
@@ -83,22 +88,23 @@ pub struct SetNetworkSettingsInput {
     /// The optional Blockscout key: `None` leaves the stored key as it is, an
     /// empty text removes it, any other text replaces it. Empty means keyless
     /// reads, the module works the same, only slower.
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub blockscout_key: Option<String>,
 }
 
 /// Ask one endpoint whether it answers.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TestNetworkInput {
     pub chain: Chain,
     pub kind: EndpointKind,
     /// The address typed in the field, not yet saved; `None` tests the one in use.
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub url: Option<String>,
     /// A key typed in the field, not yet saved. `None` or empty uses the stored
     /// key only when the address under test is the instance that key belongs
     /// to; any other address is tested without a key.
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub blockscout_key: Option<String>,
 }
 
@@ -136,7 +142,8 @@ impl fmt::Debug for TestNetworkInput {
 }
 
 /// How a connection test ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum NetworkTestOutcome {
     Ok,
@@ -149,15 +156,16 @@ pub enum NetworkTestOutcome {
 }
 
 /// The result of a connection test. Carries no text from the provider.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct NetworkTestResult {
     pub chain: Chain,
     pub kind: EndpointKind,
     pub outcome: NetworkTestOutcome,
-    #[ts(type = "number")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub latency_ms: u64,
     /// The latest block, from a node that answered.
-    #[ts(optional, type = "number")]
+    #[cfg_attr(feature = "ts", ts(optional, type = "number"))]
     pub block: Option<u64>,
 }
 

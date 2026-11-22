@@ -279,7 +279,15 @@ fn gen_types(_root: &Path) -> Task {
     Task::func("gen-types", Class::Heavy, &[], |ctx: Ctx| async move {
         let path = ctx.root.join(GEN_TYPES_FILE);
         let before = std::fs::read(&path).ok();
-        let cmd = Cmd::new("cargo").args(["run", "-p", "trade-core", "--bin", "gen-types"]);
+        let cmd = Cmd::new("cargo").args([
+            "run",
+            "-p",
+            "trade-core",
+            "--features",
+            "ts",
+            "--bin",
+            "gen-types",
+        ]);
         let end = ctx.exec(&cmd).await;
         // A killed generator leaves its scratch directory behind.
         let _ = std::fs::remove_dir_all(ctx.root.join("src/shared/api/.ts-tmp"));

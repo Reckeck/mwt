@@ -14,7 +14,8 @@ use mwt_base::Amount;
 
 /// How many records each collection of the module holds, so the confirmation
 /// says what goes in numbers rather than in words.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoWipeCounts {
     /// Followed addresses.
     pub accounts: u32,
@@ -40,14 +41,16 @@ pub struct CryptoWipeCounts {
 /// A wipe does not delete it. The wallet loses the link to the module and is
 /// archived, because a wallet carries history and other records point at it,
 /// so deleting one would take fiat operations and holdings with it.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoWipedWallet {
     pub store_id: String,
     pub name: String,
 }
 
 /// What a wipe would remove, counted on demand and stored nowhere.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoWipePreview {
     pub counts: CryptoWipeCounts,
     /// The wallets that lose their link to the module and are archived.
@@ -72,15 +75,17 @@ pub struct CryptoWipePreview {
 
 /// The word the user types to confirm. The window asks for it in the user's
 /// language; what reaches the vault is the one fixed token `WIPE_CONFIRM`
-/// (`crate::service::cryptotrack::wipe`), so a stray call with no argument
+/// (`trade_core::service::cryptotrack::wipe`), so a stray call with no argument
 /// cannot wipe anything.
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoWipeInput {
     pub confirm: String,
 }
 
 /// What the wipe did.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoWipeReport {
     /// Records removed, per collection.
     pub counts: CryptoWipeCounts,

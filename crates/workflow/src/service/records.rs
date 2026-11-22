@@ -22,7 +22,8 @@ pub const EXPORT_FORMAT: &str = "trade-app-workflow";
 const EXPORT_VERSION: u32 = 2;
 
 /// What the user edits of a workflow.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WorkflowDraft {
     pub name: String,
     #[serde(default)]
@@ -39,7 +40,8 @@ pub struct WorkflowDraft {
 }
 
 /// A saved workflow with what is wrong with its graph.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SavedWorkflow {
     pub workflow: Workflow,
     pub issues: Vec<GraphIssue>,
@@ -60,14 +62,16 @@ struct ExportedWorkflow {
 }
 
 /// A wallet an exported workflow mentions: its id there and its name.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ExportedStore {
     pub id: String,
     pub name: String,
 }
 
 /// What a workflow file holds, before it is added.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WorkflowImportPreview {
     pub name: String,
     /// Nodes that are not triggers.

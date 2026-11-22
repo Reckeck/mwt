@@ -4,14 +4,15 @@
 
 use std::collections::{HashMap, HashSet};
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::catalog::{NodeDef, ParamDef, node_def};
 use super::graph::{Graph, Node};
 use super::types::PortType;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum IssueLevel {
     Error,
@@ -19,7 +20,9 @@ pub enum IssueLevel {
 }
 
 /// One problem of a graph, pinned to the node or the wire it is about.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct GraphIssue {
     pub level: IssueLevel,
     /// Machine code: `unknown_node`, `no_trigger`, `type_mismatch`, …

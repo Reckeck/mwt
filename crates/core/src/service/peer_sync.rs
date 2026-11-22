@@ -58,7 +58,8 @@ pub struct PeerRef {
 }
 
 /// What an undo did.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UndoReport {
     pub restored: u32,
     /// Labels of records changed again since the batch: left as they are.

@@ -15,7 +15,8 @@ pub use mwt_cryptotrack::tokens::TokenStatus;
 use mwt_model::Chain;
 
 /// Why a token's text deserves a second look.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum TokenWarning {
     /// Mixed scripts or fullwidth letters: it may not read the way it looks.
@@ -26,7 +27,8 @@ pub enum TokenWarning {
 
 /// One token as the list shows it. `symbol` and `name` are already cleaned
 /// (length, control characters, links) and are plain text, never markup.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TokenView {
     pub chain: Chain,
     pub contract: String,
@@ -41,19 +43,21 @@ pub struct TokenView {
     /// verdict. The hidden-token list reads it for "hidden on <date>".
     // The doc text is exported to TypeScript as is.
     #[allow(rustdoc::invalid_html_tags)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub decided_at: Option<String>,
 }
 
 /// Which token a command is about.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct TokenRefInput {
     pub chain: Chain,
     pub contract: String,
 }
 
 /// Set (`Some`) or clear (`None`) the cost basis of a token.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetTokenBasisInput {
     pub chain: Chain,
     pub contract: String,

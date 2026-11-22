@@ -17,22 +17,24 @@ use mwt_base::Amount;
 /// What the fiat record being edited looks like, so the picker can offer the
 /// crypto operations that look like the same movement of money. The record may
 /// not be saved yet, so this is a draft and not an id.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoLinkCandidatesInput {
     /// RFC3339 of the fiat record.
     pub time: String,
     /// The fiat sum, when the form has one (the sign does not matter).
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub amount: Option<Amount>,
     /// The currency of `amount`.
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub currency: Option<String>,
 }
 
 /// One suggestion. Never applied by the application itself.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoLinkOption {
     pub row: CryptoOpRow,
     /// How many days apart the two are.
@@ -42,31 +44,35 @@ pub struct CryptoLinkOption {
 }
 
 /// Point a crypto operation at a fiat record.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoLinkInput {
     pub event_id: String,
     pub fiat_tx_id: String,
 }
 
 /// Remove the pointer of a crypto operation.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoUnlinkInput {
     pub event_id: String,
 }
 
 /// Which pointers to read: the ones of one operation, or of one fiat record.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoPairsInput {
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub event_id: Option<String>,
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub fiat_tx_id: Option<String>,
 }
 
 /// The fiat side of a pointer, as much as a row needs.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoPairFiat {
     pub id: String,
     /// The wallet it belongs to.
@@ -80,14 +86,15 @@ pub struct CryptoPairFiat {
 
 /// One pointer with both ends resolved. An end that no longer exists is
 /// `None`: a calm «not found» for the screen, never an error.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CryptoPair {
     pub event_id: String,
     pub fiat_tx_id: String,
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub event: Option<CryptoOpRow>,
     #[serde(default)]
-    #[ts(optional)]
+    #[cfg_attr(feature = "ts", ts(optional))]
     pub fiat: Option<CryptoPairFiat>,
 }

@@ -19,7 +19,7 @@ RUST_LOG = "info"
 "lint" = { description = "Biome lint + format check (frontend)", run = "pnpm exec biome check ." }
 "format" = { description = "Biome autofix (lint + format)", run = "pnpm exec biome check --write ." }
 "clippy" = { description = "Clippy lints (deny warnings)", run = "cargo clippy --workspace --all-targets -- -D warnings" }
-"gen-types" = { description = "Regenerate ipc.gen.d.ts from Rust (ts-rs)", run = "cargo run -p trade-core --bin gen-types" }
+"gen-types" = { description = "Regenerate ipc.gen.d.ts from Rust (ts-rs)", run = "cargo run -p trade-core --features ts --bin gen-types" }
 "test-frontend" = { description = "Frontend unit tests (vitest, project unit: happy-dom, ipc and i18n mocked in src/test/setup.ts)", run = "pnpm exec vitest run --project unit" }
 "test-e2e" = { description = "End-to-end tests (vitest, project e2e): the app on the mock in headless Chromium; screenshots of failures in .cache/e2e/", run = "pnpm exec vitest run --project e2e" }
 "check-onboarding" = { description = "Every screen has a tour; tour, whats-new and learning texts exist (AGENTS.md rule 12)", run = "node scripts/run-check.mjs onboarding" }

@@ -9,9 +9,12 @@ description = "Multi Wallet Tracker net: price and FX sources, exchange clients,
 [lints]
 workspace = true
 
+[features]
+ts = ["dep:ts-rs", "mwt-base/ts", "mwt-model/ts"]
+
 [dependencies]
-mwt-base = { path = "../base", features = ["ts"] }
-mwt-model = { path = "../model", features = ["ts"] }
+mwt-base = { path = "../base" }
+mwt-model = { path = "../model" }
 serde.workspace = true
 serde_json.workspace = true
 rust_decimal.workspace = true
@@ -22,7 +25,7 @@ sha2.workspace = true
 reqwest.workspace = true
 tokio.workspace = true
 rand.workspace = true
-ts-rs.workspace = true
+ts-rs = { workspace = true, optional = true }
 scraper.workspace = true
 csv.workspace = true
 calamine.workspace = true

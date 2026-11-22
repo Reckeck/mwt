@@ -32,7 +32,8 @@ pub const MAX_EVENT_DEPTH: u32 = 5;
 pub type Booked = (String, Option<LocalDate>, String);
 
 /// What one scheduler pass did.
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct WorkflowPass {
     pub runs: Vec<WorkflowRun>,
     /// Operations made.

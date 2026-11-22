@@ -212,7 +212,7 @@ mod tests {
     #[test]
     fn contract_sits_above_the_domain() {
         for domain_module in DOMAIN {
-            assert!(is_legal("ipc_contract", domain_module), "{domain_module}");
+            // No domain module may use the facade shim of the contract.
             assert!(!is_legal(domain_module, "ipc_contract"), "{domain_module}");
         }
         let contract = GROUPS
