@@ -1,7 +1,5 @@
 //! Tests of the budget area: the old inline tests (names and bodies unchanged).
 
-use super::budget::*;
-use super::daily_budget::daily_budget;
 use crate::Amount;
 use crate::model::planning::Schedule;
 use crate::model::planning::TransactionDraft;
@@ -12,6 +10,8 @@ use crate::model::transaction::Transaction;
 use crate::model::transaction::{AccountRef, PriceStamp};
 use crate::model::vault::DailyBudgetMode;
 use crate::model::vault::FxPoint;
+use crate::planning::budget::*;
+use crate::planning::daily_budget::daily_budget;
 use crate::service::AutomationDraft;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;

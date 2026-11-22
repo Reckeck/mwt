@@ -1,8 +1,8 @@
 //! Tests of the notifications area: the old inline tests (names and bodies unchanged).
 
-use super::notifications::*;
 use crate::model::notify::{MAX_NOTICE_LOG, NoticeCategory, NoticeRecord};
 use crate::model::vault::now_iso;
+use crate::planning::notifications::*;
 use crate::service::test_support::*;
 use crate::usecases::planning::notifications::notice;
 

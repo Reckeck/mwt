@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use super::comparison::{BaseKind, Comparison};
 use crate::Amount;
 use crate::calendar::{self, Calendar};
-use crate::ipc_contract::{BaseKind, Comparison};
 use crate::model::vault::DashPeriod;
 use crate::money::books::Books;
 use crate::money::portfolio::history_series;

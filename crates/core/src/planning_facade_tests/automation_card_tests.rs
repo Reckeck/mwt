@@ -1,8 +1,8 @@
 //! Tests of the automation_card area: the old inline tests (names and bodies unchanged).
 
-use super::automation_card::*;
 use crate::model::planning::{Schedule, TransactionDraft, WorkdayShift};
 use crate::model::workflow::{RunOutcome, WorkflowRun};
+use crate::planning::automation_card::*;
 use crate::planning::my_automations::MineKind;
 use crate::workflow::types::WfValue;
 use serde_json::json;

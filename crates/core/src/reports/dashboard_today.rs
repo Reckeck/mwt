@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use super::comparison::Comparison;
 use super::dashboard_tiles::net_worth_trend;
 use super::health::capital_health;
 use crate::Amount;
@@ -13,7 +14,6 @@ use crate::calc::invest;
 use crate::calendar::{Calendar, clamp_day, first_of_month, month_key};
 use crate::error::{Error, Result};
 use crate::household::utilities::utility_bill;
-use crate::ipc_contract::Comparison;
 use crate::model::planning::HealthColor;
 use crate::model::store::StoreScope;
 use crate::model::vault::DashPeriod;

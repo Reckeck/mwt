@@ -1,6 +1,5 @@
 //! Tests of the agenda area: the old inline tests (names and bodies unchanged).
 
-use super::agenda::*;
 use crate::Amount;
 use crate::error::Error;
 use crate::model::planning::{AlertCondition, PriceAlert};
@@ -9,6 +8,7 @@ use crate::model::planning::{Schedule, TransactionDraft};
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::model::vault::PricePoint;
+use crate::planning::agenda::*;
 use crate::service::AutomationDraft;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;

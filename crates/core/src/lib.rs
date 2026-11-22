@@ -18,8 +18,12 @@ pub mod model;
 #[cfg(test)]
 mod money_facade_tests;
 pub mod planning;
+#[cfg(test)]
+mod planning_facade_tests;
 pub mod pricing;
 pub mod reports;
+#[cfg(test)]
+mod reports_facade_tests;
 pub mod sandbox;
 pub mod service;
 pub mod storage;

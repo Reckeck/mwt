@@ -2,10 +2,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::notify_snapshot::*;
 use crate::model::planning::AlertCondition;
 use crate::model::planning::{ReminderRepeat, RepeatUnit};
 use crate::model::vault::now_iso;
+use crate::reports::notify_snapshot::*;
 use crate::service::test_support::*;
 use crate::time::secs_or_now;
 

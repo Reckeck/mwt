@@ -1,12 +1,12 @@
 //! Tests of the envelopes area: the old inline tests (names and bodies unchanged),
 //! then the pure functions on a bare document and the delegate and one-transact pins.
 
-use super::envelopes::*;
 use crate::Amount;
 use crate::error::Error;
 use crate::model::ids::StoreId;
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::vault::VaultDoc;
+use crate::planning::envelopes::*;
 use crate::service::UnlockedVault;
 use crate::service::test_support::{amount, empty_vault, income, payment, store, usd};
 use crate::usecases::household::envelopes as scenarios;

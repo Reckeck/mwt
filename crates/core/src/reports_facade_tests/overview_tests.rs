@@ -1,6 +1,6 @@
 //! Tests of the reports area: the old inline tests (names and bodies unchanged).
 
-use super::overview::*;
+use crate::reports::overview::*;
 use std::collections::BTreeMap;
 
 use crate::Amount;

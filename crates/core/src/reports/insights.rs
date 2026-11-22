@@ -149,7 +149,7 @@ pub fn report_insights(report: &Report) -> Vec<Insight> {
 }
 
 /// Earned against spent over a period.
-pub(super) fn balance_insight(income: Amount, spent: Amount) -> Option<Insight> {
+pub(crate) fn balance_insight(income: Amount, spent: Amount) -> Option<Insight> {
     if income.is_zero() && spent.is_zero() {
         return None;
     }
@@ -250,7 +250,7 @@ pub(crate) fn categories_insights(report: &CategoriesReport) -> Vec<Insight> {
 }
 
 /// Net worth from its first point to its last.
-pub(super) fn wealth_change(first: Amount, last: Amount) -> Insight {
+pub(crate) fn wealth_change(first: Amount, last: Amount) -> Insight {
     let change = last - first;
     let pct = share(change, first);
     let flat = pct.map_or(change.is_zero(), |pct| pct.abs() < whole(FLAT_PCT));

@@ -5,13 +5,9 @@
 
 use crate::model::{VarScope, WorkflowVar};
 use crate::types::WfValue;
-use mwt_base::Amount;
 use mwt_base::error::{Error, Result};
 use mwt_model::AssetRef;
-use mwt_model::Transaction;
 use mwt_model::VaultDoc;
-
-use super::runs::made_by;
 
 /// A stored variable value (a `WfValue` in JSON); an unreadable one is empty.
 pub fn value_of(json: &str) -> WfValue {
@@ -86,32 +82,7 @@ pub fn asset(doc: &VaultDoc, symbol: &str) -> AssetRef {
         .unwrap_or_else(|| AssetRef::fiat(symbol, &symbol.to_uppercase()))
 }
 
-/// The average amount of the latest `count` operations a workflow made (or the
-/// automation it was before, which kept its id), leaving out the ones still
-/// booked with an approximate amount; with the asset symbol.
-pub fn recent_average(doc: &VaultDoc, workflow_id: &str, count: usize) -> Option<(Amount, String)> {
-    let mut made: Vec<&Transaction> = doc
-        .transactions
-        .iter()
-        .filter(|tx| !tx.meta().origin.is_estimated() && made_by(tx, workflow_id))
-        .collect();
-    made.sort_by(|left, right| right.meta().timestamp.cmp(&left.meta().timestamp));
-    made.truncate(count.max(1));
-    let first = made.first()?;
-    let (_, asset, _) = crate::nodes::triggers::tx_main(first);
-    let symbol = match asset {
-        WfValue::Asset(asset) => asset.symbol,
-        _ => String::new(),
-    };
-    let total = made.iter().fold(Amount::ZERO, |sum, tx| {
-        sum + crate::nodes::triggers::tx_main(tx)
-            .0
-            .as_number()
-            .unwrap_or(Amount::ZERO)
-    });
-    let len = Amount::new(rust_decimal::Decimal::from(made.len()));
-    Some(((total / len).round(2), symbol))
-}
+pub use mwt_model::recent_average;
 
 #[cfg(test)]
 mod tests {

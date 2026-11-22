@@ -1,7 +1,6 @@
 //! The crypto module's capital history as the reports read it (spec core-strangler, D1).
 
 use crate::Amount;
-use crate::cryptotrack::service::totals::crypto_history;
 use crate::model::store::AssetRef;
 use crate::money::books::Books;
 
@@ -15,7 +14,7 @@ pub(crate) fn crypto_module<InScope: Fn(&str) -> bool>(
     Vec<Option<Amount>>,
     impl Fn(&str, &AssetRef) -> bool + use<InScope>,
 ) {
-    let history = crypto_history(books, cutoffs, in_scope);
+    let history = books.crypto_history(cutoffs, &in_scope);
     let values = (0..cutoffs.len())
         .map(|index| history.value_usd(index))
         .collect();

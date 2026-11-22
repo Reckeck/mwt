@@ -6,89 +6,23 @@
 use serde_json::{Map, Value, json};
 
 use mwt_model::AccountRef;
-use mwt_model::{AmountMode, AutomationSpec, Schedule, TransactionDraft, WorkdayShift};
+use mwt_model::{AmountMode, AutomationSpec, Schedule, TransactionDraft};
+
+use mwt_model::TRIGGER_NODE;
+pub use mwt_model::{
+    ESTIMATE_OF, When, fire_time, parse_time, schedule_key, schedule_params, start_mark,
+    when_params,
+};
 
 use super::graph::{Edge, GRAPH_VERSION, Graph, Node, Position};
 
 /// Node ids of the built graph.
-pub const TRIGGER: &str = "t";
+pub const TRIGGER: &str = TRIGGER_NODE;
 pub const AVERAGE: &str = "avg";
 pub const ACTION: &str = "tx";
 pub const ASK: &str = "ask";
 /// How long "yes" is waited for before the run gives up.
 const ASK_HOURS: u32 = 72;
-/// How many latest corrected amounts make the estimate.
-pub const ESTIMATE_OF: usize = 3;
-
-/// The mark key of the schedule in `WorkflowState::marks`.
-pub fn schedule_key() -> String {
-    format!("schedule:{TRIGGER}")
-}
-
-/// The mark a new automation starts from: nothing planned before its start.
-pub fn start_mark(spec: &AutomationSpec) -> String {
-    mwt_base::time::unix_secs(&spec.starts_at).map_or_else(
-        || spec.starts_at.clone(),
-        |secs| mwt_base::calendar::iso(secs - 1),
-    )
-}
-
-/// «HH:MM» as hours and minutes, or `None` when it is not a time of day.
-pub fn parse_time(time: &str) -> Option<(u32, u32)> {
-    let (hours, minutes) = time.split_once(':')?;
-    let (hours, minutes) = (hours.parse::<u32>().ok()?, minutes.parse::<u32>().ok()?);
-    (hours < 24 && minutes < 60 && time.len() == 5).then_some((hours, minutes))
-}
-
-/// The local time an automation fires, «HH:MM»: 09:00 unless set.
-pub fn fire_time(time: Option<&str>) -> String {
-    time.filter(|time| parse_time(time).is_some()).map_or_else(
-        || format!("{:02}:00", mwt_base::calendar::AUTOMATION_HOUR),
-        str::to_string,
-    )
-}
-
-/// The schedule's parameters, as "on schedule" reads them.
-pub fn schedule_params(spec: &AutomationSpec) -> Map<String, Value> {
-    when_params(&When {
-        schedule: spec.schedule,
-        starts_at: &spec.starts_at,
-        workday_shift: spec.workday_shift,
-        time: spec.time.as_deref(),
-    })
-}
-
-/// When an automation fires, without what it does: enough to list its dates.
-pub struct When<'a> {
-    pub schedule: Schedule,
-    /// RFC3339, the first planned date.
-    pub starts_at: &'a str,
-    pub workday_shift: WorkdayShift,
-    pub time: Option<&'a str>,
-}
-
-/// "on schedule" parameters of a [`When`].
-pub fn when_params(when: &When<'_>) -> Map<String, Value> {
-    let time = fire_time(when.time);
-    let mut params = match when.schedule {
-        Schedule::Monthly { day } => json!({ "every": "month", "day": day, "time": time }),
-        Schedule::Weekly { weekday } => {
-            json!({ "every": "week", "weekday": weekday, "time": time })
-        }
-        // Counted from the first date, as the form means it.
-        Schedule::EveryNDays { days } => json!({
-            "every": "day",
-            "interval": days.max(1).to_string(),
-            "anchor": when.starts_at.get(..10).unwrap_or(when.starts_at),
-            "time": time,
-        }),
-    }
-    .as_object()
-    .cloned()
-    .unwrap_or_default();
-    params.insert("workday".into(), json!(when.workday_shift.param()));
-    params
-}
 
 /// The first `count` dates a schedule fires on after `now`, not before its
 /// start: "Next: 2 Nov (Mon), 1 Dec (Tue), 31 Dec (Thu)" under the form.

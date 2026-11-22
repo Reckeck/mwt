@@ -1,10 +1,10 @@
 //! Tests of the auto_reminders area: the old inline tests (names and bodies unchanged).
 
-use super::auto_reminders::*;
 use crate::model::notify::NoticeCategory;
 use crate::model::planning::{Reminder, ReminderSourceKind};
 use crate::model::planning::{RepeatUnit, UtilityKind};
 use crate::model::store::StoreKind;
+use crate::planning::auto_reminders::*;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::time::secs_or_now;

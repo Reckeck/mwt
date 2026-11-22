@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use mwt_base::Amount;
 use mwt_base::error::Result;
+use mwt_model::CryptoHistory;
 use mwt_model::DeviceSecrets;
 use mwt_model::Transaction;
 use mwt_model::VaultDoc;
@@ -39,6 +40,8 @@ pub trait BooksSource {
     fn keys_on_device(&self) -> bool;
     /// The whole device secrets file for one request.
     fn device_secrets_for_request(&self) -> Result<DeviceSecrets>;
+    /// What the crypto module was worth at each cutoff, for the wallets `in_scope` accepts.
+    fn crypto_history(&self, cutoffs: &[i64], in_scope: &dyn Fn(&str) -> bool) -> CryptoHistory;
 }
 
 #[cfg(any(test, feature = "testing"))]
@@ -121,6 +124,15 @@ impl<'vault> Books<'vault> {
     pub fn shared_extras(&self) -> &[SharedExtra] {
         self.shared_extras
             .get_or_init(|| shared_extra_flows(self.doc()))
+    }
+
+    /// What the crypto module was worth at each cutoff, for the wallets `in_scope` accepts.
+    pub fn crypto_history(
+        &self,
+        cutoffs: &[i64],
+        in_scope: &dyn Fn(&str) -> bool,
+    ) -> CryptoHistory {
+        self.vault.crypto_history(cutoffs, in_scope)
     }
 
     /// The base currency code, lower case.

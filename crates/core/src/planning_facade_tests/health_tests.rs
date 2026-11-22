@@ -1,11 +1,11 @@
 //! Tests of the capital checkup: the old inline tests (names and bodies unchanged).
 
-use super::health::{SAVINGS_MONTHS, SavingsMonth, savings_figures};
 use crate::Amount;
 use crate::model::planning::EmergencyFund;
 use crate::model::planning::{HealthColor, HealthReasonCode};
 use crate::model::store::{StoreKind, StoreScope, SubType};
 use crate::model::transaction::Transaction;
+use crate::planning::health::{SAVINGS_MONTHS, SavingsMonth, savings_figures};
 use crate::reports::health::*;
 use crate::service::StoreExtras;
 use crate::service::test_support::*;

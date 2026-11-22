@@ -6,10 +6,12 @@
 //! re-exports of the same items.
 
 mod attachment;
+mod automation_facts;
 mod category;
 mod chain;
 mod coins;
 mod contact;
+mod crypto_history;
 mod cryptotrack;
 mod datasource;
 mod deposit;
@@ -19,12 +21,14 @@ mod entity_ref;
 mod ids;
 mod inflation;
 mod iso_date;
+mod json_value;
 mod notify;
 mod planning;
 mod rate_index;
 mod record;
 mod registry;
 mod run_key;
+mod schedule_moments;
 mod shared_event;
 mod store;
 mod sync_state;
@@ -33,6 +37,10 @@ mod vault;
 mod workflow;
 
 pub use attachment::{Attachment, AttachmentKey, AttachmentKind, MAX_ATTACHMENT_BYTES};
+pub use automation_facts::{
+    ESTIMATE_OF, TRIGGER_NODE, When, fire_time, made_by, main_leg, parse_time, recent_average,
+    schedule_key, schedule_params, start_mark, when_params, workflow_mark,
+};
 pub use category::{
     CATEGORIES_REV, CATEGORY_ADDITIONS, Category, CategoryGroup, DEFAULT_ESSENTIAL,
     DEFAULT_PASSIVE, EXCHANGE_IMPORT_CATEGORY, default_categories, is_passive_key,
@@ -40,6 +48,7 @@ pub use category::{
 pub use chain::{ALL_CHAINS, Chain, ChainInfo};
 pub use coins::{is_usd_stablecoin, well_known_coin, well_known_coins};
 pub use contact::{Contact, ContactAccount, ContactKind, DebtTerms, DetailKind};
+pub use crypto_history::CryptoHistory;
 pub use cryptotrack::{
     CryptoAccount, CryptoAsset, CryptoCursor, CryptoDirection, CryptoFee, CryptoLeg,
     CryptoOverride, CryptoPosition, CryptoPricePoint, CryptoSnapshot, CryptoToken, CryptoTx,
@@ -59,6 +68,7 @@ pub use enrichment::{EnrichmentData, EnrichmentRecord, EnrichmentSource, Enrichm
 pub use entity_ref::{EntityKind, EntityRef, Pinned};
 pub use ids::StoreId;
 pub use inflation::{InflationMode, InflationReading, InflationSource};
+pub use json_value::{json_field, json_number, json_text};
 pub use notify::{
     MAX_NOTICE_LOG, NoticeCategory, NoticeCategoryCfg, NoticeRecord, NotificationSettings, notice,
     notice_at, notice_title,
@@ -79,6 +89,7 @@ pub use registry::{
     UNION_DAYS, find, is_secret, is_secret_field,
 };
 pub use run_key::RunKey;
+pub use schedule_moments::schedule_moments_limited;
 pub use shared_event::{
     EventItem, GuestDetails, ItemPlan, ItemSplit, ME, Participant, PriceMode, Purchase,
     ROUNDING_STEPS, RemovedWithPayment, SettleDirection, Settlement, SettlementKind, ShareOverride,
