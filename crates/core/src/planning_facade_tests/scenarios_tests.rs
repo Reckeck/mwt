@@ -1,6 +1,5 @@
 //! Tests of the saved-calculations area: the old inline tests (names and bodies unchanged).
 
-use super::scenarios::*;
 use crate::Amount;
 use crate::calc::invest;
 use crate::calc::invest::{CapFreq, ContributionStage, Freq, InvestInput};
@@ -11,6 +10,7 @@ use crate::model::planning::ScenarioSource;
 use crate::model::store::StoreScope;
 use crate::model::store::{Binding, StoreKind, SubType};
 use crate::model::transaction::{AccountRef, Transaction};
+use crate::planning::scenarios::*;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::service::{EntityKind, EntityRef, RelationKind, StoreExtras};

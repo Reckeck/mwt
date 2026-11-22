@@ -26,14 +26,8 @@ use super::types::WfValue;
 
 pub(crate) type Outputs = BTreeMap<&'static str, WfValue>;
 
-/// A number from a field: a JSON number or a string with one.
-pub fn json_number(value: &Value) -> Option<Amount> {
-    match value {
-        Value::Number(number) => Amount::parse(&number.to_string()).ok(),
-        Value::String(text) => Amount::parse(text.trim().replace(',', ".").as_str()).ok(),
-        _ => None,
-    }
-}
+pub(crate) use mwt_model::json_text;
+pub use mwt_model::{json_field, json_number};
 
 /// Like `json_number`, but a valid number beyond the input bound is an
 /// error, not an absent value: callers must not read it as zero.
@@ -49,14 +43,6 @@ pub(crate) fn json_number_checked(value: &Value) -> Result<Option<Amount>, Strin
             Err("number out of range".to_string())
         }
         Err(_) => Ok(None),
-    }
-}
-
-pub(crate) fn json_text(value: &Value) -> String {
-    match value {
-        Value::Null => String::new(),
-        Value::String(text) => text.clone(),
-        other => other.to_string(),
     }
 }
 

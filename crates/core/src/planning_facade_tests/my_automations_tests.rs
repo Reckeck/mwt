@@ -1,8 +1,8 @@
 //! Tests of the my_automations area: the old inline tests (names and bodies unchanged).
 
-use super::my_automations::*;
 use crate::model::planning::AlertCondition;
 use crate::model::transaction::Transaction;
+use crate::planning::my_automations::*;
 use crate::time::unix_secs;
 use serde_json::json;
 

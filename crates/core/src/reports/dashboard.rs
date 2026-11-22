@@ -4,10 +4,10 @@
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use super::comparison::{BaseKind, Comparison};
 use super::overview::{DayStatus, calendar_month};
 use crate::Amount;
 use crate::calendar::{self, Calendar};
-use crate::ipc_contract::{BaseKind, Comparison};
 use crate::model::vault::DashPeriod;
 use crate::money::books::Books;
 use crate::money::worth::FlowClass;

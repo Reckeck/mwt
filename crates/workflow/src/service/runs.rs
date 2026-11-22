@@ -58,21 +58,6 @@ impl WorkflowPass {
     }
 }
 
-/// Whether a workflow (or the automation it was migrated from, which kept its
-/// id) made the operation.
-pub(crate) fn made_by(tx: &Transaction, workflow_id: &str) -> bool {
-    match &tx.meta().origin {
-        TxOrigin::Workflow {
-            workflow_id: maker, ..
-        }
-        | TxOrigin::Automation {
-            automation_id: maker,
-            ..
-        } => maker == workflow_id,
-        _ => false,
-    }
-}
-
 /// What fired a run, for the journal: `schedule 2026-11-01T09:00:00Z`.
 pub fn trigger_label(kind: &str, detail: &str) -> String {
     let short = kind.strip_prefix("trigger.").unwrap_or(kind);

@@ -16,10 +16,10 @@ use crate::model::vault::VaultDoc;
 use crate::money::books::Books;
 use crate::planning::automations::{self as rules, automation_draft, main_amount, outflow};
 use crate::time::unix_secs;
-use crate::workflow::automation::{self as graph_of, ESTIMATE_OF};
-use crate::workflow::model::{RunOutcome, Workflow, WorkflowRun};
-use crate::workflow::nodes::triggers::schedule_moments_limited;
-use crate::workflow::service::{marks, vars};
+use mwt_model::{
+    ESTIMATE_OF, RunOutcome, Workflow, WorkflowRun, recent_average, schedule_key,
+    schedule_moments_limited, schedule_params, start_mark, workflow_mark,
+};
 
 /// The automation a workflow is in the books, or `None` for an ordinary
 /// workflow: the estimate and the schedule mark come from the document.
@@ -27,8 +27,8 @@ pub fn automation_in(books: &Books<'_>, workflow: &Workflow) -> Option<Automatio
     let doc = books.doc();
     automation_of(
         workflow,
-        |id| vars::recent_average(doc, id, ESTIMATE_OF).map(|(average, _)| average),
-        marks::mark(doc, &workflow.id, &graph_of::schedule_key()),
+        |id| recent_average(doc, id, ESTIMATE_OF).map(|(average, _)| average),
+        workflow_mark(doc, &workflow.id, &schedule_key()),
     )
 }
 
@@ -56,7 +56,7 @@ pub fn automation_of(
     let estimate = (spec.amount_mode == AmountMode::Varies)
         .then(|| recent_average(&workflow.id))
         .flatten();
-    let last_planned_at = mark.filter(|mark| *mark != graph_of::start_mark(spec));
+    let last_planned_at = mark.filter(|mark| *mark != start_mark(spec));
     Some(Automation {
         id: workflow.id.clone(),
         name: workflow.name.clone(),
@@ -87,9 +87,9 @@ pub fn automation_occurrences(
     until: i64,
 ) -> Vec<(i64, Transaction)> {
     let spec = rules::spec_of(automation);
-    let start = unix_secs(&graph_of::start_mark(&spec)).unwrap_or(after);
+    let start = unix_secs(&start_mark(&spec)).unwrap_or(after);
     let (moments, _) = schedule_moments_limited(
-        &graph_of::schedule_params(&spec),
+        &schedule_params(&spec),
         cal,
         after.max(start),
         until,

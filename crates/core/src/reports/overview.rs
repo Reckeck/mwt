@@ -1029,7 +1029,7 @@ pub(crate) fn networth_points(books: &Books, ctx: &Ctx) -> Vec<NetworthPoint> {
     // The current point is today's valuation, the same function and rates
     // as `net_worth_base`, so every screen shows one capital.
     let current = (ctx.scope.is_none() && ctx.currency.eq_ignore_ascii_case(base))
-        .then(|| crate::usecases::money::capital::net_worth_with_crypto(books));
+        .then(|| super::net_worth_now::net_worth_with_crypto(books));
     ctx.months
         .iter()
         .zip(cutoffs.iter().zip(snapshots))

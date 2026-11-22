@@ -148,6 +148,7 @@ use crate::model::vault::VaultDoc;
 use crate::money::books::Books;
 use crate::money::price_info::price_quote_for;
 use crate::time::unix_secs;
+use mwt_model::CryptoHistory;
 
 /// Why something the module knows about stays out of the capital.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,36 +180,6 @@ pub struct CryptoOutsideTotals {
     /// counts, so there is no honest quantity to name.
     pub quantity: Option<Amount>,
     pub reason: CryptoLeftOut,
-}
-
-/// The module's own capital history: what it was worth at the cutoffs of a
-/// report, and which replayed wallets that record speaks for.
-#[derive(Debug, Default)]
-pub(crate) struct CryptoHistory {
-    /// USD at each cutoff, in the order they were given. `None` is a month the
-    /// module has no record of — a gap in tracking, never a zero.
-    values_usd: Vec<Option<Amount>>,
-    /// Archived hand-kept wallets whose coins a followed address now holds.
-    retired: HashSet<String>,
-    /// What the engine accounts for today, to recognize a replayed position of
-    /// one of those wallets.
-    engine_assets: Vec<AssetRef>,
-}
-
-impl CryptoHistory {
-    /// The module's value at the `index`-th cutoff, in USD; `None` for a month
-    /// it has no record of.
-    pub(crate) fn value_usd(&self, index: usize) -> Option<Amount> {
-        self.values_usd.get(index).copied().flatten()
-    }
-
-    /// Whether a replayed position is the same coins the module's record
-    /// already counts: the past half of the rule in `apply_crypto_holdings`.
-    /// The caller asks only for a point that has a record.
-    pub(crate) fn supersedes(&self, store_id: &str, asset: &AssetRef) -> bool {
-        self.retired.contains(store_id)
-            && self.engine_assets.iter().any(|known| known.same_as(asset))
-    }
 }
 
 /// The engine's balances as holdings, and what had to be left out.
@@ -264,11 +235,7 @@ pub(crate) fn crypto_history(
     in_scope: impl Fn(&str) -> bool,
 ) -> CryptoHistory {
     let doc = books.doc();
-    let mut out = CryptoHistory {
-        values_usd: vec![None; cutoffs.len()],
-        retired: HashSet::new(),
-        engine_assets: Vec::new(),
-    };
+    let mut out = CryptoHistory::new(cutoffs.len());
     if doc.crypto_accounts.is_empty() {
         return out;
     }

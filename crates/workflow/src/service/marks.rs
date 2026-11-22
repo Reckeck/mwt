@@ -27,13 +27,7 @@ pub fn state_mut<'doc>(doc: &'doc mut VaultDoc, workflow_id: &str) -> &'doc mut 
     &mut doc.workflow_state[index]
 }
 
-/// One mark of a workflow.
-pub fn mark(doc: &VaultDoc, workflow_id: &str, key: &str) -> Option<String> {
-    doc.workflow_state
-        .iter()
-        .find(|state| state.workflow_id == workflow_id)
-        .and_then(|state| state.marks.get(key).cloned())
-}
+pub use mwt_model::workflow_mark as mark;
 
 pub fn set_mark(doc: &mut VaultDoc, workflow_id: &str, key: &str, value: &str) {
     state_mut(doc, workflow_id)

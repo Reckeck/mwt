@@ -8,7 +8,8 @@ use crate::error::Result;
 use crate::model::device_secrets::DeviceSecrets;
 use crate::model::transaction::Transaction;
 use crate::model::vault::VaultDoc;
-use crate::money::books::BooksSource;
+use crate::money::books::{Books, BooksSource};
+use mwt_model::CryptoHistory;
 
 use super::UnlockedVault;
 use super::valuation::ValuationCurve;
@@ -48,6 +49,10 @@ impl BooksSource for UnlockedVault {
 
     fn device_secrets_for_request(&self) -> Result<DeviceSecrets> {
         UnlockedVault::device_secrets_for_request(self)
+    }
+
+    fn crypto_history(&self, cutoffs: &[i64], in_scope: &dyn Fn(&str) -> bool) -> CryptoHistory {
+        crate::cryptotrack::service::totals::crypto_history(&Books::new(self), cutoffs, in_scope)
     }
 }
 

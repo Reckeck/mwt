@@ -1,6 +1,5 @@
 //! Tests of the automations area: the old inline tests (names and bodies unchanged).
 
-use super::automations::*;
 use crate::calendar::{self, Calendar};
 use crate::model::planning::draft_to_transaction;
 use crate::model::planning::{
@@ -15,6 +14,7 @@ use crate::model::vault::now_iso;
 use crate::planning::automation_plan::{
     automation_occurrences, automation_of, automation_run_of, automation_runs,
 };
+use crate::planning::automations::*;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::WorkflowPass;

@@ -1,10 +1,10 @@
 //! Tests of the asset-classes area: the old inline tests (names and bodies unchanged).
 
-use super::allocation::*;
 use crate::model::planning::AssetClass;
 use crate::model::store::StoreKind;
 use crate::model::store::{AssetRef, Purpose, StoreScope};
 use crate::model::vault::PricePoint;
+use crate::planning::allocation::*;
 use crate::service::UnlockedVault;
 use crate::service::test_support::{amount, empty_vault, income_of, store};
 use crate::{Amount, Error};

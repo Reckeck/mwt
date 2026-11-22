@@ -1,9 +1,9 @@
 //! Tests of the insights area: the old inline tests (names and bodies unchanged).
 
-use super::insights::*;
 use crate::Amount;
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
+use crate::reports::insights::*;
 use crate::service::ReportKind;
 use crate::service::test_support::*;
 use crate::service::{Report, ReportFilter, UnlockedVault};

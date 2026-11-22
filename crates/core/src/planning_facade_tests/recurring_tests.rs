@@ -1,8 +1,8 @@
 //! Tests of the recurring-payment check: the old inline tests (names and bodies
 //! unchanged), then the pure function on a bare document.
 
-use super::recurring::*;
 use crate::model::transaction::Transaction;
+use crate::planning::recurring::*;
 use crate::service::test_support::{amount, at, empty_vault, payment};
 
 fn subscription(raw: &str, stamp: &str) -> Transaction {

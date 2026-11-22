@@ -40,6 +40,8 @@ workflow = "crates/workflow/src"
 money = "crates/core/src/money_facade_tests"
 household = "crates/core/src/household_facade_tests"
 workflow = "crates/core/src/workflow_facade_tests"
+planning = "crates/core/src/planning_facade_tests"
+reports = "crates/core/src/reports_facade_tests"
 
 # The foundation tasks that change files inside `service/`, the group dirs or `usecases/`.
 [[foundation]]

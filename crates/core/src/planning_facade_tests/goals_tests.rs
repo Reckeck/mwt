@@ -1,8 +1,8 @@
 //! Tests of the goals area: the old inline tests (names and bodies unchanged).
 
-use super::goals::*;
 use crate::Amount;
 use crate::model::store::StoreScope;
+use crate::planning::goals::*;
 use crate::service::UnlockedVault;
 
 #[test]

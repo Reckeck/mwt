@@ -1,6 +1,5 @@
 //! Tests of the dashboard_today area: the old inline tests (names and bodies unchanged).
 
-use super::dashboard_today::*;
 use crate::Amount;
 use crate::calc::invest::{CapFreq, ContributionStage, Freq, InvestInput, TaxRule, Timing};
 use crate::model::planning::ScenarioSource;
@@ -8,6 +7,7 @@ use crate::model::planning::UtilityKind;
 use crate::model::store::StoreScope;
 use crate::model::store::{LoyaltyInfo, PropertyInfo, StoreKind};
 use crate::model::vault::DashPeriod;
+use crate::reports::dashboard_today::*;
 use crate::service::test_support::*;
 use crate::service::{CalcScenarioDraft, StoreExtras, UtilityDraft};
 use crate::time::unix_secs;
