@@ -36,7 +36,8 @@ pub(super) fn without_binding_mut(signature: &str) -> String {
     text
 }
 
-/// Rule 1: the baseline methods and the forward entries are the same set, with the same signatures.
+/// Rule 1: the baseline methods and the forward entries are the same set, with the same signatures;
+/// for a retired area the set is empty.
 pub(super) fn parity(subject: &Subject) -> Result<Vec<String>> {
     let mut forwarded = BTreeMap::new();
     for home in homes(&subject.workspace.map, subject.area) {
@@ -47,12 +48,17 @@ pub(super) fn parity(subject: &Subject) -> Result<Vec<String>> {
             }
         }
     }
-    let wanted: BTreeMap<String, String> = subject
-        .baseline
-        .methods
-        .iter()
-        .map(|method| (method.name.clone(), method.signature.clone()))
-        .collect();
+    // A retired area has no delegates: any forward entry is one too many.
+    let wanted: BTreeMap<String, String> = if subject.area.retired {
+        BTreeMap::new()
+    } else {
+        subject
+            .baseline
+            .methods
+            .iter()
+            .map(|method| (method.name.clone(), method.signature.clone()))
+            .collect()
+    };
     let (wanted_names, forwarded_names) = (names(&wanted), names(&forwarded));
     let differing = wanted.iter().filter_map(|(name, old)| {
         let new = forwarded.get(name)?;

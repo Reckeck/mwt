@@ -11,6 +11,8 @@
 //! - `check`: holds an area against `baseline.json` (parity, logic, `persist()`, tests, files).
 //! - `callers`: lists the remaining calls of an area's delegates and of `Books::vault()`.
 //! - `rewire`: best effort replacement of delegate calls by the new function.
+//! - `remaining`: the per-file counts of `UnlockedVault`, `forward!` entries and `service::` paths, held by `check --all`.
+//! - `retire`: marks an area whose delegates are deleted.
 
 mod baseline;
 mod callers;
@@ -22,6 +24,8 @@ mod forward;
 mod home;
 mod map;
 mod relocate;
+mod remaining;
+mod retire;
 mod rewire;
 mod scaffold;
 mod scan;
@@ -65,6 +69,10 @@ pub enum StrangleCommand {
     Callers(callers::CallersArgs),
     /// Best effort: replaces delegate calls on a proven `UnlockedVault` receiver by the new function.
     Rewire(rewire::RewireArgs),
+    /// The per-file counts of `UnlockedVault`, `forward!` entries and `service::` paths.
+    Remaining(remaining::RemainingArgs),
+    /// Marks an area `retired = true`: its delegates are deleted, rule 1 wants none.
+    Retire(retire::RetireArgs),
 }
 
 pub fn run(root: &Path, args: &StrangleArgs) -> Result<()> {
@@ -78,6 +86,8 @@ pub fn run(root: &Path, args: &StrangleArgs) -> Result<()> {
         StrangleCommand::Check(check_args) => check::run(root, check_args),
         StrangleCommand::Callers(callers_args) => callers::run(root, callers_args),
         StrangleCommand::Rewire(rewire_args) => rewire::run(root, rewire_args),
+        StrangleCommand::Remaining(remaining_args) => remaining::run(root, remaining_args),
+        StrangleCommand::Retire(retire_args) => retire::run(root, retire_args),
     }
 }
 
