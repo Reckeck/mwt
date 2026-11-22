@@ -6,7 +6,6 @@
 
 use serde::Serialize;
 use tauri::{Emitter, Runtime};
-use ts_rs::TS;
 
 pub use trade_core::ipc_contract::events::VaultLockedPayload;
 
@@ -14,13 +13,14 @@ pub use trade_core::ipc_contract::events::VaultLockedPayload;
 pub struct EventMeta {
     pub name: &'static str,
     /// The TypeScript type of the payload.
+    #[cfg(feature = "ts")]
     pub payload_ts: fn() -> String,
 }
 
 /// A backend-to-frontend event. Implemented by the types `app_events!` makes.
 pub trait AppEvent {
     const NAME: &'static str;
-    type Payload: Serialize + Clone + TS;
+    type Payload: Serialize + Clone + TsPayload;
 
     /// Sends the event to every window.
     fn emit<R: Runtime>(app: &impl Emitter<R>, payload: &Self::Payload) -> tauri::Result<()> {
@@ -28,8 +28,22 @@ pub trait AppEvent {
     }
 }
 
+/// What an event payload must be besides serializable: a `ts-rs` type when the
+/// `ts` feature is on (the generators print it), nothing otherwise.
+#[cfg(feature = "ts")]
+pub(crate) trait TsPayload: ts_rs::TS {}
+#[cfg(feature = "ts")]
+impl<T: ts_rs::TS> TsPayload for T {}
+
+/// Without the `ts` feature a payload has no extra bound.
+#[cfg(not(feature = "ts"))]
+pub(crate) trait TsPayload {}
+#[cfg(not(feature = "ts"))]
+impl<T> TsPayload for T {}
+
 /// The TypeScript name of a payload type, for the [`EVENTS`] table.
-pub fn payload_ts<P: TS>() -> String {
+#[cfg(feature = "ts")]
+pub fn payload_ts<P: ts_rs::TS>() -> String {
     P::name(&ts_rs::Config::new())
 }
 
@@ -50,6 +64,7 @@ macro_rules! app_events {
         pub const EVENTS: &[$crate::ipc::events::EventMeta] = &[
             $( $crate::ipc::events::EventMeta {
                 name: <$marker as $crate::ipc::events::AppEvent>::NAME,
+                #[cfg(feature = "ts")]
                 payload_ts: $crate::ipc::events::payload_ts::<$payload>,
             }, )*
         ];

@@ -12,7 +12,7 @@ RUST_LOG = "info"
 [tasks]
 "setup" = "mise dependencies"
 "dependencies" = { description = "Install all deps (pnpm + cargo)", run = "pnpm install && cargo fetch" }
-"dev" = { description = "Run Tauri dev (frontend + core)", run = "pnpm tauri dev" }
+"dev" = { description = "Run Tauri dev (frontend + core)", run = "pnpm tauri dev --features schema" }
 "dev:ui" = { description = "Run Vite frontend standalone", run = "pnpm dev" }
 "test" = { description = "Rust workspace tests", run = "cargo test --workspace" }
 "typecheck" = { description = "Vue TS strict typecheck", run = "pnpm exec vue-tsc --noEmit" }

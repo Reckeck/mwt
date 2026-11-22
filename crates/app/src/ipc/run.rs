@@ -38,6 +38,7 @@ pub struct Gate {
 #[derive(Debug, Clone, Copy)]
 pub struct ArgMeta {
     pub name: &'static str,
+    #[cfg(feature = "ts")]
     pub ts: fn() -> String,
 }
 
@@ -46,6 +47,7 @@ pub struct ArgMeta {
 pub struct CommandMeta {
     pub name: &'static str,
     pub args: &'static [ArgMeta],
+    #[cfg(feature = "ts")]
     pub ret: fn() -> String,
 }
 
@@ -160,6 +162,7 @@ mod tests {
     const META: CommandMeta = CommandMeta {
         name: "test_command",
         args: &[],
+        #[cfg(feature = "ts")]
         ret: String::new,
     };
     const OPEN: Gate = Gate {

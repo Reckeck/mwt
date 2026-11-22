@@ -510,8 +510,9 @@ fn meta_item(command: &Command) -> TokenStream {
         pub const #meta_name: crate::ipc::run::CommandMeta = crate::ipc::run::CommandMeta {
             name: stringify!(#name),
             args: &[
-                #( crate::ipc::run::ArgMeta { name: stringify!(#names), ts: #printers } ),*
+                #( crate::ipc::run::ArgMeta { name: stringify!(#names), #[cfg(feature = "ts")] ts: #printers } ),*
             ],
+            #[cfg(feature = "ts")]
             ret: #ret_printer,
         };
     }
@@ -558,6 +559,13 @@ mod tests {
 
     const READ_ITEM: &str =
         "fn list(vault: &UnlockedVault, id: String) -> Result<Vec<Store>> { todo!() }";
+
+    #[test]
+    fn the_ts_printers_are_behind_the_ts_feature() {
+        let out = expanded("read", READ_ITEM);
+        assert!(out.contains("# [cfg (feature = \"ts\")] ts :"));
+        assert!(out.contains("# [cfg (feature = \"ts\")] ret :"));
+    }
 
     #[test]
     fn read_expands_to_a_tauri_command_through_run_read() {
