@@ -3133,6 +3133,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-money"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "insta",
+ "mwt-base",
+ "mwt-model",
+ "mwt-testkit",
+ "pretty_assertions",
+ "proptest",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "time",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
 name = "mwt-net"
 version = "0.1.0"
 dependencies = [
@@ -6472,6 +6492,7 @@ dependencies = [
  "mwt-base",
  "mwt-crypto",
  "mwt-model",
+ "mwt-money",
  "mwt-net",
  "mwt-sync",
  "mwt-testkit",

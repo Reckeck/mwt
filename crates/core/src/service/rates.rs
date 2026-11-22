@@ -13,11 +13,9 @@ use crate::ipc_contract::CachedPrice;
 use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
 use crate::model::vault::{FxPoint, PricePoint};
-use crate::money::rates::ValueCurve;
 
 use super::UnlockedVault;
 use super::forward::forward;
-use super::valuation::ValuationCurve;
 
 impl UnlockedVault {
     // forward:begin
@@ -90,17 +88,5 @@ impl UnlockedVault {
     /// Give every unpriced side the USD price of its moment (plan §6.2).
     pub(crate) fn stamp_prices(book: &RateBook, tx: &mut Transaction) -> usize {
         crate::money::rates::stamp_prices(book, tx)
-    }
-}
-
-/// The valuation curves feed the book through its own trait, so `money::rates`
-/// never names the valuation module.
-impl ValueCurve for ValuationCurve {
-    fn currency(&self) -> &str {
-        &self.currency
-    }
-
-    fn value_at(&self, secs: i64) -> Option<Amount> {
-        ValuationCurve::value_at(self, secs)
     }
 }

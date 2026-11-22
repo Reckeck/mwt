@@ -12,7 +12,7 @@
 
 service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
-scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src"]
+scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src"]
 
 # Files every area task may change besides its own (spec D5).
 grants = ["crates/core/src/bin/gen_types.rs"]
@@ -31,6 +31,7 @@ guarded = [
 # Groups whose modules live in another crate than the core one: the directory replaces `<core src>/<group>`.
 [group_dirs]
 sync = "crates/sync/src"
+money = "crates/money/src"
 
 # Groups whose stems keep their facade tests in a directory of their own.
 [facade_test_dirs]
@@ -157,7 +158,7 @@ files = ["crates/core/src/service/mod.rs"]
 
 [[foundation]]
 task = "T8"
-files = ["crates/core/src/service/mod.rs", "crates/core/src/money/tree.rs"]
+files = ["crates/core/src/service/mod.rs", "crates/money/src/tree.rs"]
 
 [[foundation]]
 task = "T9"

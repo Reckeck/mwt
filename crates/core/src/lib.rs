@@ -14,7 +14,6 @@ pub mod jsonstore;
 pub mod kernel;
 pub mod market;
 pub mod model;
-pub mod money;
 #[cfg(test)]
 mod money_facade_tests;
 pub mod planning;
@@ -45,6 +44,7 @@ pub use mwt_crypto::{
     SnapshotFormat, VAULT_CONTAINER_VERSION, VAULT_LEGACY_CONTAINER_VERSION, VAULT_MAGIC,
 };
 pub use mwt_model::{VAULT_FORMAT_VERSION, id_types, records};
+pub use mwt_money as money;
 pub use mwt_sync as sync;
 pub use storage::VaultFile;
 
