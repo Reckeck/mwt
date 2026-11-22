@@ -171,7 +171,7 @@ pub fn is_legal(from: &str, to: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{AllowEntry, Edge, domain, evaluate};
+    use super::super::{AllowEntry, Edge, crates, domain, evaluate};
     use super::*;
 
     /// The domain crates the contract may sit on top of.
@@ -189,6 +189,29 @@ mod tests {
         for group in GROUPS {
             for used in group.may_use {
                 assert!(GROUPS.iter().any(|other| other.name == *used), "{used}");
+            }
+        }
+    }
+
+    /// The crate of the crate table that a module group stands for.
+    fn crate_of(group: &str) -> String {
+        match group {
+            "facade" => "trade-core".to_string(),
+            other => format!("mwt-{other}"),
+        }
+    }
+
+    #[test]
+    fn a_group_may_use_only_what_its_crate_row_allows() {
+        for group in GROUPS {
+            let name = crate_of(group.name);
+            let row = crates::TABLE
+                .iter()
+                .find(|row| row.name == name)
+                .unwrap_or_else(|| panic!("no row for {name}"));
+            for used in group.may_use {
+                let used = crate_of(used);
+                assert!(row.uses.contains(&used.as_str()), "{name} -> {used}");
             }
         }
     }
