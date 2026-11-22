@@ -328,7 +328,7 @@
     "crates/vault/src/kernel/tx.rs": 1,
     "crates/vault/src/storage/legacy_v4.rs": 3,
     "crates/vault/src/storage/legacy_v4/adopt.rs": 1,
-    "crates/xtask/src/arch/domain.rs": 6,
+    "crates/xtask/src/arch/domain.rs": 5,
     "crates/xtask/src/cli.rs": 1
   },
   "forward": {

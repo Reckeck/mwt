@@ -98,7 +98,7 @@ impl Report {
                 entry.from, entry.to, entry.until
             )
         }));
-        lines.extend(self.domain.lines(CORE_SRC));
+        lines.extend(self.domain.lines());
         lines.extend(self.manifests.iter().cloned());
         lines.extend(self.crates.iter().cloned());
         lines
@@ -134,7 +134,7 @@ fn evaluate(edges: &[Edge], allow: &[AllowEntry], domain: domain::Findings) -> R
 pub fn check(root: &Path) -> Result<Report> {
     let sources = sources(&root.join(CORE_SRC))?;
     let edges = edges_of(&root.join(CORE_SRC), &sources)?;
-    let domain = domain::check(&sources, domain::EXEMPTIONS);
+    let domain = domain::check(&domain_sources(root)?, domain::EXEMPTIONS);
     let path = root.join(ALLOW_FILE);
     let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     let mut report = evaluate(&edges, &parse_allowlist(&text)?, domain);
@@ -277,6 +277,21 @@ fn sources(root: &Path) -> Result<Vec<Source>> {
             module,
             text,
         });
+    }
+    Ok(found)
+}
+
+/// The non-test files of the domain crates (`crates/<name>/src`), each with the crate as its module.
+fn domain_sources(root: &Path) -> Result<Vec<Source>> {
+    let mut found = Vec::new();
+    for name in domain::DOMAIN_CRATES {
+        for source in sources(&root.join("crates").join(name).join("src"))? {
+            found.push(Source {
+                file: format!("{name}/src/{}", source.file),
+                module: (*name).to_string(),
+                text: source.text,
+            });
+        }
     }
     Ok(found)
 }
@@ -439,6 +454,7 @@ mod tests {
     fn the_baseline_matches_the_tree() {
         let report = check(&repo_root()).unwrap();
         assert_eq!(report.failures(), 0, "{:#?}", report.lines());
+        assert!(report.domain.scanned > 150, "{}", report.domain.scanned);
     }
 
     #[test]
