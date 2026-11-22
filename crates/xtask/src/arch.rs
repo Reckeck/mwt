@@ -308,7 +308,7 @@ fn table_modules(root: &Path) -> Result<scan::Names> {
             .map(|name| (*name).to_string()),
     );
     let lib = fs::read_to_string(root.join("lib.rs"))?;
-    Ok(scan::Names::new(modules, &lib))
+    scan::Names::new(modules, &lib)
 }
 
 fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {

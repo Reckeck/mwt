@@ -445,3 +445,49 @@ fn a_stem_override_renames_the_new_home_only_and_the_shim_stays() {
     );
     assert_eq!(found.unwrap(), Vec::<String>::new());
 }
+
+/// The moved fixture with a `remaining_dirs` tree: `crates/other/x.rs` names `UnlockedVault`
+/// `recorded` times in `remaining.json` and `now` times on disk.
+fn ratchet_tree(recorded: usize, now: usize) -> TempTree {
+    let before = original_tree();
+    let baseline =
+        baseline::capture(before.root(), &Workspace::load(before.root()).unwrap()).unwrap();
+    let words = |count: usize| vec!["UnlockedVault"; count].join(" ");
+    let tree = moved_tree(|file, text| {
+        if file == MAP_FILE {
+            text.replace(
+                "scan_dirs",
+                "remaining_dirs = [\"crates/other\"]\nscan_dirs",
+            )
+        } else {
+            text
+        }
+    });
+    let other = tree.root().join("crates/other");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(other.join("x.rs"), words(recorded)).unwrap();
+    baseline.write(tree.root()).unwrap();
+    std::fs::create_dir_all(tree.root().join("crates/xtask/strangle")).unwrap();
+    remaining::run(tree.root(), &remaining::RemainingArgs { write: true }).unwrap();
+    std::fs::write(other.join("x.rs"), words(now)).unwrap();
+    tree
+}
+
+fn check_args(all: bool) -> CheckArgs {
+    CheckArgs {
+        area: (!all).then(|| "loyalty".to_string()),
+        all,
+        diff: None,
+        task: None,
+        write_baseline: false,
+    }
+}
+
+#[test]
+fn check_all_holds_the_remaining_record_and_check_of_one_area_does_not() {
+    let tree = ratchet_tree(1, 2);
+    let error = run(tree.root(), &check_args(true)).unwrap_err();
+    assert!(format!("{error:#}").contains("remaining:"), "{error:#}");
+    assert!(format!("{error:#}").contains("increased from 1 to 2"));
+    run(tree.root(), &check_args(false)).unwrap();
+}
