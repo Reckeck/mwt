@@ -1,19 +1,39 @@
-//! Tests of the ledger area: the old inline tests (names and bodies unchanged),
-//! then the pure functions on a read context and the delegate pins.
-
-use super::ledger::*;
-use std::collections::HashMap;
+//! Tests of the ledger area that need the vault (`UnlockedVault`): moved from
+//! `money/ledger_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::store::StoreKind;
 use crate::model::store::StoreScope;
 use crate::model::transaction::AccountRef;
 use crate::model::transaction::{Transaction, TxKind, TxOrigin};
+use crate::money::ledger::*;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
+use std::collections::HashMap;
 
 fn at(mut tx: Transaction, iso: &str) -> Transaction {
     tx.meta_mut().timestamp = iso.into();
     tx
+}
+
+/// A filter without a realized, attachment or unpriced term asks nothing of
+/// the areas that have not moved.
+struct NoSources;
+
+impl FilterSources for NoSources {
+    fn realized_tx_ids(
+        &self,
+        _scope: Option<&std::collections::HashSet<String>>,
+    ) -> std::collections::HashSet<String> {
+        unreachable!("the filter does not ask for realized operations")
+    }
+
+    fn tx_ids_with_attachments(&self) -> Vec<String> {
+        unreachable!("the filter does not ask for attachments")
+    }
+
+    fn unpriced_tx_ids(&self) -> std::collections::HashSet<String> {
+        unreachable!("the filter does not ask for unpriced operations")
+    }
 }
 
 /// Card with a sub-account «Savings», an exchange, four operations.
@@ -369,27 +389,6 @@ fn graph_refuses_more_than_the_cap() {
         .tx_graph(&TxFilter::default(), &[], "UTC")
         .unwrap_err();
     assert_eq!(err.code(), "TOO_LARGE");
-}
-
-/// A filter without a realized, attachment or unpriced term asks nothing of
-/// the areas that have not moved.
-struct NoSources;
-
-impl FilterSources for NoSources {
-    fn realized_tx_ids(
-        &self,
-        _scope: Option<&std::collections::HashSet<String>>,
-    ) -> std::collections::HashSet<String> {
-        unreachable!("the filter does not ask for realized operations")
-    }
-
-    fn tx_ids_with_attachments(&self) -> Vec<String> {
-        unreachable!("the filter does not ask for attachments")
-    }
-
-    fn unpriced_tx_ids(&self) -> std::collections::HashSet<String> {
-        unreachable!("the filter does not ask for unpriced operations")
-    }
 }
 
 #[test]

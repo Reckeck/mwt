@@ -5,12 +5,12 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use super::rate_index::RateIndex;
 use crate::Amount;
 use crate::model::store::AssetRef;
 use crate::model::transaction::{Leg, Transaction};
 use crate::model::vault::{FxPoint, VaultDoc};
 use crate::money::books::Books;
-use crate::pricing::history::RateIndex;
 use crate::time::secs_or_now;
 
 const FIAT_PREFIX: &str = "fiat:";

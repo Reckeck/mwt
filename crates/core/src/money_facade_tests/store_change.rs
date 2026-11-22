@@ -1,5 +1,5 @@
-//! Tests of the store change area: the old inline tests (names kept), which
-//! drive the same rules through the `UnlockedVault` delegates.
+//! Tests of the store_change area that need the vault (`UnlockedVault`): moved from
+//! `money/store_change_tests.rs` with their assertions unchanged (crate-split T13).
 
 #[cfg(test)]
 mod tests {

@@ -1,10 +1,11 @@
-//! Tests of the price_info area: the old inline tests (names and bodies unchanged),
-//! which drive the rule through `UnlockedVault::price_quote_for`.
+//! Tests of the price_info area that need the vault (`UnlockedVault`): moved from
+//! `money/price_info_tests.rs` with their assertions unchanged (crate-split T13).
 
-use super::price_info::*;
 use crate::model::store::StoreKind;
 use crate::model::vault::PricePoint;
+use crate::money::price_info::*;
 use crate::service::test_support::*;
+
 fn point(key: &str, usd: &str, ts: &str, source: &str, change: Option<&str>) -> PricePoint {
     PricePoint {
         asset_key: key.into(),

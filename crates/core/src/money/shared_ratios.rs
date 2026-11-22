@@ -14,9 +14,8 @@
 
 use std::collections::HashMap;
 
+use super::shared_split::{self as split, FALLBACK_CATEGORY, item_category};
 use crate::Amount;
-use crate::household::shared_events::split;
-use crate::household::shared_events::{FALLBACK_CATEGORY, item_category};
 use crate::model::VaultDoc;
 use crate::model::shared_event::{ME, SettlementKind};
 use crate::time::secs_or_now;

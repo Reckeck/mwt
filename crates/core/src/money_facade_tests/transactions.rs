@@ -1,11 +1,11 @@
-//! Tests of the transactions area: the pure rules on a read context, and the
-//! scenarios against the delegates they replace.
+//! Tests of the transactions area that need the vault (`UnlockedVault`): moved from
+//! `money/transactions_tests.rs` with their assertions unchanged (crate-split T13).
 
-use super::transactions::*;
 use crate::error::Error;
 use crate::model::store::StoreKind;
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
+use crate::money::transactions::*;
 use crate::service::test_support::*;
 use crate::usecases::money::transactions::patch_transaction;
 

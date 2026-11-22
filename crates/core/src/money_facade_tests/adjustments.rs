@@ -1,6 +1,6 @@
-//! Tests of the adjustments area: corrections over a document and a vault.
+//! Tests of the adjustments area that need the vault (`UnlockedVault`): moved from
+//! `money/adjustments_tests.rs` with their assertions unchanged (crate-split T13).
 
-use super::adjustments::{balances_at, complete_adjustment};
 use crate::Amount;
 use crate::ipc_contract::AdjustmentDraftInput;
 use crate::model::store::AssetRef;
@@ -8,6 +8,7 @@ use crate::model::store::StoreKind;
 use crate::model::transaction::{AdjustmentLine, PriceStamp, Transaction};
 use crate::model::transaction::{AdjustmentTx, TxMeta};
 use crate::model::vault::now_iso;
+use crate::money::adjustments::{balances_at, complete_adjustment};
 use crate::money::worth::FlowClass;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
@@ -369,7 +370,7 @@ fn rebasing_the_corrections_writes_nothing() {
     vault
         .add_transaction(income(&card, "100", "salary"))
         .unwrap();
-    let commits = super::bulk_tests::Commits::watch(&mut vault);
+    let commits = super::bulk::Commits::watch(&mut vault);
     vault.rebase_adjustments();
     assert_eq!(commits.count(), 0);
 }

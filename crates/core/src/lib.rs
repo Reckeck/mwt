@@ -15,6 +15,8 @@ pub mod kernel;
 pub mod market;
 pub mod model;
 pub mod money;
+#[cfg(test)]
+mod money_facade_tests;
 pub mod planning;
 pub mod pricing;
 pub mod reports;

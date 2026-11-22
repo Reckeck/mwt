@@ -1,16 +1,17 @@
-//! Tests of the rates area: the old inline tests (names and bodies unchanged),
-//! which drive the same rules through the `UnlockedVault` delegates.
+//! Tests of the rates area that need the vault (`UnlockedVault`): moved from
+//! `money/rates_tests.rs` with their assertions unchanged (crate-split T13).
 
-use super::rates::*;
 use crate::Amount;
 use crate::ipc_contract::{CachedPrice, PricePoint};
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::Leg;
 use crate::model::transaction::{PriceStamp, Transaction};
 use crate::model::vault::FxPoint;
+use crate::money::rates::*;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::time::secs_or_now;
+
 fn fx(currency: &str, per_usd: &str, ts: &str) -> FxPoint {
     FxPoint {
         currency: currency.into(),
@@ -32,6 +33,30 @@ fn rub_income(store_id: &str, sum: &str, ts: &str) -> Transaction {
     }
     at(&mut tx, ts);
     tx
+}
+
+/// A stamp whose base price was written by a device with base `label`.
+fn labelled_stamp(usd: &str, in_base: &str, label: Option<&str>) -> PriceStamp {
+    PriceStamp {
+        price_usd: Some(amount(usd)),
+        price_base: Some(amount(in_base)),
+        price_base_currency: label.map(str::to_string),
+        fx_override: None,
+    }
+}
+
+fn priced_payment(price: &str, currency: &str, ts: &str) -> crate::ipc_contract::TransactionInput {
+    serde_json::from_value(serde_json::json!({
+        "type": "payment",
+        "common": {
+            "timestamp": ts, "comment": "", "categories": [], "flow_id": null, "contact_id": null,
+            "price_usd": null, "fx_override": null, "price": price, "price_currency": currency,
+        },
+        "store_id": "s", "asset": {"symbol": "BTC", "name": "", "coingecko_id": null, "chain": null, "contract": null},
+        "amount": "1", "fee": null, "to": null,
+        "details": {"cash_breakdown": null, "unit_price": null, "network": null, "tx_hash": null},
+    }))
+    .unwrap()
 }
 
 fn first_price(vault: &mut UnlockedVault) -> Option<Amount> {
@@ -136,16 +161,6 @@ fn leg_price_in_base_uses_the_rate_of_the_moment() {
     let jul = secs_or_now("2026-07-01T00:00:00Z");
     assert_eq!(book.leg_price_in_base(&leg, "rub", feb), amount("80"));
     assert_eq!(book.leg_price_in_base(&leg, "rub", jul), amount("100"));
-}
-
-/// A stamp whose base price was written by a device with base `label`.
-fn labelled_stamp(usd: &str, in_base: &str, label: Option<&str>) -> PriceStamp {
-    PriceStamp {
-        price_usd: Some(amount(usd)),
-        price_base: Some(amount(in_base)),
-        price_base_currency: label.map(str::to_string),
-        fx_override: None,
-    }
 }
 
 #[test]
@@ -324,20 +339,6 @@ fn favorite_asset_prefers_the_held_identity() {
         .add_transaction(income_of(&wallet, held.clone(), "5", "3", "gift"))
         .unwrap();
     assert_eq!(vault.favorite_asset("ton"), Some(held));
-}
-
-fn priced_payment(price: &str, currency: &str, ts: &str) -> crate::ipc_contract::TransactionInput {
-    serde_json::from_value(serde_json::json!({
-        "type": "payment",
-        "common": {
-            "timestamp": ts, "comment": "", "categories": [], "flow_id": null, "contact_id": null,
-            "price_usd": null, "fx_override": null, "price": price, "price_currency": currency,
-        },
-        "store_id": "s", "asset": {"symbol": "BTC", "name": "", "coingecko_id": null, "chain": null, "contract": null},
-        "amount": "1", "fee": null, "to": null,
-        "details": {"cash_breakdown": null, "unit_price": null, "network": null, "tx_hash": null},
-    }))
-    .unwrap()
 }
 
 /// A price typed in rubles is stored as USD at the rate of the moment,

@@ -18,7 +18,7 @@ use super::shared_ratios::{SharedExtra, shared_extra_flows, shared_payment_ratio
 use super::valuation::ValuationCurve;
 
 /// What a [`Books`] reads from the open vault. The vault itself
-/// (`service::UnlockedVault`) implements it in the facade (`service/books.rs`),
+/// (the vault of the facade) implements it in the facade (`service/books.rs`),
 /// so this module names no vault type and the money rules stay below the vault.
 pub(crate) trait BooksSource {
     /// The vault document.

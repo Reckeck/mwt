@@ -124,6 +124,7 @@ pub const GROUPS: &[Group] = &[
             "appconfig",
             "vault_facade_tests",
             "sync_facade_tests",
+            "money_facade_tests",
         ],
         may_use: &[
             "base",

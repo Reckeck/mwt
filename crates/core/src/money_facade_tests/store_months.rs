@@ -1,9 +1,9 @@
-//! Tests of the store_months area: the old inline test (name and body unchanged),
-//! then the pure function on a read context and the delegate pin.
+//! Tests of the store_months area that need the vault (`UnlockedVault`): moved from
+//! `money/store_months_tests.rs` with their assertions unchanged (crate-split T13).
 
-use super::store_months::*;
 use crate::model::ids::StoreId;
 use crate::model::store::StoreKind;
+use crate::money::store_months::*;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 

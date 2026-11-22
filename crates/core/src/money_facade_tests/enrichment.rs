@@ -1,17 +1,28 @@
-//! Tests of the enrichment area: findings kept, applied and rejected.
+//! Tests of the enrichment area that need the vault (`UnlockedVault`): moved from
+//! `money/enrichment_tests.rs` with their assertions unchanged (crate-split T13).
 
-use super::enrichment::*;
 use crate::model::chain::Chain;
 use crate::model::enrichment::EnrichmentStatus;
 use crate::model::store::AssetRef;
 use crate::model::store::StoreKind;
 use crate::model::transaction::{AccountRef, Transaction};
+use crate::money::enrichment::*;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::txinfo::TxInfo;
 
 fn eth() -> AssetRef {
     AssetRef::crypto("ETH", "Ethereum", Some("ethereum"), Chain::Ethereum)
+}
+
+fn found(fee: &str) -> TxInfo {
+    TxInfo {
+        network: Some(Chain::Ethereum),
+        status: Some("success".into()),
+        fee: Some(fee.into()),
+        fee_asset: Some("ETH".into()),
+        ..TxInfo::default()
+    }
 }
 
 /// A wallet funded with ETH and a transfer out with a hash, no fee.
@@ -33,16 +44,6 @@ fn setup_transfer() -> (tempfile::TempDir, UnlockedVault, String) {
     }
     let id = vault.add_transaction(out).unwrap().meta().id.clone();
     (dir, vault, id)
-}
-
-fn found(fee: &str) -> TxInfo {
-    TxInfo {
-        network: Some(Chain::Ethereum),
-        status: Some("success".into()),
-        fee: Some(fee.into()),
-        fee_asset: Some("ETH".into()),
-        ..TxInfo::default()
-    }
 }
 
 #[test]
@@ -158,7 +159,7 @@ fn a_finding_is_planned_without_touching_the_document() {
 #[test]
 fn keeping_a_finding_writes_nothing_and_rejecting_one_writes_once() {
     let (_dir, mut vault, id) = setup_transfer();
-    let commits = super::bulk_tests::Commits::watch(&mut vault);
+    let commits = super::bulk::Commits::watch(&mut vault);
     let record = vault.apply_enrichment_result(&id, &found("0.002")).unwrap();
     assert_eq!(commits.count(), 0);
     vault.reject_enrichment(&record.id).unwrap();

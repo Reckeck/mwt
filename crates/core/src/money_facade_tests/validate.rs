@@ -1,5 +1,5 @@
-//! Tests of the validate area: the old inline tests (names and bodies unchanged),
-//! then the pure rules on a bare document and the delegate pins.
+//! Tests of the validate area that need the vault (`UnlockedVault`): moved from
+//! `money/validate_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::chain::Chain;
 use crate::model::contact::{ContactAccount, ContactKind, DetailKind};
@@ -14,6 +14,9 @@ fn rejected(result: crate::Result<Transaction>) -> String {
         Ok(tx) => panic!("expected a rejection, got {}", tx.tag()),
     }
 }
+
+/// Mid-2026: after every timestamp the helpers write.
+const NOW_MS: i64 = 1_800_000_000_000;
 
 /// V2: a kind the store does not accept.
 #[test]
@@ -307,9 +310,6 @@ fn a_wallet_the_crypto_module_reads_takes_no_hand_made_entry() {
     assert_eq!(vault.doc.transactions.len(), 1);
 }
 
-/// Mid-2026: after every timestamp the helpers write.
-const NOW_MS: i64 = 1_800_000_000_000;
-
 #[test]
 fn the_rules_run_on_a_bare_document_and_the_delegate_agrees() {
     let (_dir, mut vault) = empty_vault();
@@ -318,14 +318,14 @@ fn the_rules_run_on_a_bare_document_and_the_delegate_agrees() {
     let mut empty = payment(&card, "50", "coffee");
     empty.meta_mut().categories.clear();
     for tx in [&good, &empty] {
-        let pure = super::validate::validate_transaction_at(&vault.doc, tx, NOW_MS)
+        let pure = crate::money::validate::validate_transaction_at(&vault.doc, tx, NOW_MS)
             .map_err(|err| err.to_string());
         let delegate = vault
             .validate_transaction(tx)
             .map_err(|err| err.to_string());
         assert_eq!(pure, delegate);
     }
-    assert!(super::validate::validate_transaction_at(&vault.doc, &empty, NOW_MS).is_err());
+    assert!(crate::money::validate::validate_transaction_at(&vault.doc, &empty, NOW_MS).is_err());
 }
 
 #[test]
@@ -334,7 +334,7 @@ fn category_keys_are_trimmed_lowercased_and_deduplicated() {
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     let mut tx = payment(&card, "5", "coffee");
     tx.meta_mut().categories = vec![" Coffee ".into(), "coffee".into(), "  ".into()];
-    super::validate::normalize_categories(&mut tx);
+    crate::money::validate::normalize_categories(&mut tx);
     assert_eq!(tx.meta().categories, vec!["coffee"]);
     assert_eq!(
         crate::service::UnlockedVault::store_sides(&tx),
