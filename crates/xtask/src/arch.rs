@@ -283,7 +283,7 @@ fn sources(root: &Path) -> Result<Vec<Source>> {
 
 /// The names a `crate::<name>` path may resolve to: the directory modules plus every module of the
 /// table, so names re-exported from extracted crates (`pub use mwt_workflow as workflow;`) stay visible.
-fn table_modules(root: &Path) -> Result<BTreeSet<String>> {
+fn table_modules(root: &Path) -> Result<scan::Names> {
     let mut modules = module_names(root)?;
     modules.extend(
         layers::GROUPS
@@ -292,7 +292,8 @@ fn table_modules(root: &Path) -> Result<BTreeSet<String>> {
             .filter(|name| **name != "lib")
             .map(|name| (*name).to_string()),
     );
-    Ok(modules)
+    let lib = fs::read_to_string(root.join("lib.rs"))?;
+    Ok(scan::Names::new(modules, &lib))
 }
 
 fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
@@ -396,14 +397,42 @@ mod tests {
         let edges = scan::read_edges(
             "planning/x.rs",
             "planning",
-            "use crate::workflow::W;\nuse crate::Amount;\n",
+            "use crate::workflow::W;\nuse crate::Amount;\nuse crate::money::M;\n",
             &modules,
         );
         let targets: Vec<&str> = edges.iter().map(|item| item.to_module.as_str()).collect();
-        assert_eq!(targets, ["workflow", "amount"]);
+        assert_eq!(targets, ["workflow", "amount", "money"]);
         let report = evaluate(&edges, &[], domain::Findings::default());
         assert_eq!(report.violations.len(), 1);
         assert_eq!(report.violations[0].to_module, "workflow");
+        let money_edge = scan::read_edges(
+            "workflow/x.rs",
+            "workflow",
+            "use crate::money::M;\n",
+            &modules,
+        );
+        assert_eq!(money_edge[0].to_module, "money");
+        assert_eq!(
+            evaluate(&money_edge, &[], domain::Findings::default())
+                .violations
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn the_reexport_table_is_derived_from_lib_rs() {
+        let names = table_modules(&repo_root().join(CORE_SRC)).unwrap();
+        let resolved = |text: &str| {
+            let edges = scan::read_edges("x.rs", "facade", text, &names);
+            edges[0].to_module.clone()
+        };
+        assert_eq!(resolved("use crate::cryptotrack::X;"), "cryptotrack");
+        assert_eq!(resolved("use crate::SnapshotFormat;"), "crypto");
+        assert_eq!(resolved("use crate::VAULT_FORMAT_VERSION;"), "model");
+        assert_eq!(resolved("use crate::VaultFile;"), "storage");
+        assert_eq!(resolved("use crate::Error;"), "error");
+        assert_eq!(resolved("use crate::VaultDoc;"), "model");
     }
 
     #[test]
