@@ -3156,6 +3156,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-sync"
+version = "0.1.0"
+dependencies = [
+ "blake2 0.11.0",
+ "chrono",
+ "hmac 0.13.0",
+ "mwt-base",
+ "mwt-crypto",
+ "mwt-model",
+ "rand 0.10.4",
+ "rmp-serde",
+ "rust_decimal",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.11.1",
+ "snow",
+ "spake2",
+ "tempfile",
+ "time",
+ "ts-rs",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "mwt-testkit"
 version = "0.1.0"
 dependencies = [
@@ -6447,6 +6473,7 @@ dependencies = [
  "mwt-crypto",
  "mwt-model",
  "mwt-net",
+ "mwt-sync",
  "mwt-testkit",
  "mwt-vault",
  "pretty_assertions",
@@ -6461,8 +6488,6 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "sha2 0.11.1",
- "snow",
- "spake2",
  "tempfile",
  "thiserror 2.0.21",
  "time",

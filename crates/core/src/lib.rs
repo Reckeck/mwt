@@ -21,7 +21,8 @@ pub mod reports;
 pub mod sandbox;
 pub mod service;
 pub mod storage;
-pub mod sync;
+#[cfg(test)]
+mod sync_facade_tests;
 #[cfg(any(test, feature = "testkit"))]
 pub mod testkit;
 pub mod txinfo;
@@ -42,6 +43,7 @@ pub use mwt_crypto::{
     SnapshotFormat, VAULT_CONTAINER_VERSION, VAULT_LEGACY_CONTAINER_VERSION, VAULT_MAGIC,
 };
 pub use mwt_model::{VAULT_FORMAT_VERSION, id_types, records};
+pub use mwt_sync as sync;
 pub use storage::VaultFile;
 
 #[cfg(test)]

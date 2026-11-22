@@ -1,0 +1,41 @@
+[package]
+name = "mwt-sync"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker sync: device-to-device merge of one vault, the Noise channel and the pairing code (depends on mwt-base, mwt-crypto and mwt-model only)"
+
+[lints]
+workspace = true
+
+[features]
+# The `ts-rs` derive of `AppliedBatch`; off by default, `trade-core` turns it on.
+ts = ["dep:ts-rs", "mwt-model/ts"]
+
+# Test support for the tests of `trade-core`: `crypto_gate::override_for_tests`, `view::item_key_for_tests`, `repair_restore::{event_names_participant, money_names_record}`.
+testing = []
+
+[dependencies]
+mwt-base = { path = "../base" }
+mwt-crypto = { path = "../crypto" }
+mwt-model = { path = "../model" }
+serde.workspace = true
+serde_json.workspace = true
+rmp-serde.workspace = true
+serde_bytes.workspace = true
+uuid.workspace = true
+time.workspace = true
+chrono.workspace = true
+rust_decimal.workspace = true
+zeroize.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+blake2.workspace = true
+rand.workspace = true
+ts-rs = { workspace = true, optional = true }
+snow.workspace = true
+spake2.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

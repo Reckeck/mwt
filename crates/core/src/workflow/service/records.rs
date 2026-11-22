@@ -346,7 +346,7 @@ pub fn import_draft(
     replace_strings(&mut exported.graph, stores);
     let graph = if exported.version < EXPORT_VERSION {
         let text = exported.graph.to_string();
-        crate::storage::legacy_v4::graph::migrate_graph_json(&text).unwrap_or(text)
+        crate::storage::legacy_v4::migrate_export_graph(&text).unwrap_or(text)
     } else {
         exported.graph.to_string()
     };
