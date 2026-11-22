@@ -27,6 +27,8 @@ pub struct Home {
     core_dir: String,
     /// The directory of the group's modules: the map's `group_dirs` entry, else `<core_dir>/<group>`.
     group_dir: String,
+    /// The group's `facade_test_dirs` entry, when it has one.
+    facade_test_dir: Option<String>,
 }
 
 impl Home {
@@ -59,23 +61,24 @@ impl Home {
     }
 
     /// The test files that belong to the stem, in the service dir and in the group.
-    pub fn test_files(&self) -> [String; 2] {
-        [
+    /// A group with a facade test dir adds `<dir>/<stem>.rs` and `<dir>/<stem>_tests.rs`.
+    pub fn test_files(&self) -> Vec<String> {
+        let mut files = vec![
             format!("{}/{}_tests.rs", self.service_dir, self.source),
             format!("{}/{}_tests.rs", self.group_dir, self.stem),
-        ]
+        ];
+        if let Some(dir) = &self.facade_test_dir {
+            files.push(format!("{dir}/{}.rs", self.stem));
+            files.push(format!("{dir}/{}_tests.rs", self.stem));
+        }
+        files
     }
 
     /// Every file of the stem; the ones that do not exist are skipped by the readers.
     pub fn files(&self) -> Vec<String> {
-        let [service_tests, group_tests] = self.test_files();
-        vec![
-            self.shim(),
-            self.pure_file(),
-            self.scenario_file(),
-            service_tests,
-            group_tests,
-        ]
+        let mut files = vec![self.shim(), self.pure_file(), self.scenario_file()];
+        files.extend(self.test_files());
+        files
     }
 
     /// `service/<source>/<child>.rs`: an out-of-line child module of the old file.
@@ -142,6 +145,12 @@ pub(super) fn group_dir(map: &Map, group: &str) -> String {
     }
 }
 
+/// The facade test directory of a group: the `facade_test_dirs` entry of its top segment.
+fn facade_test_dir(map: &Map, group: &str) -> Option<String> {
+    let top = group.split_once('/').map_or(group, |(top, _)| top);
+    map.facade_test_dirs.get(top).cloned()
+}
+
 pub fn homes(map: &Map, area: &Area) -> Vec<Home> {
     let core = core_dir(map);
     stems(area)
@@ -149,6 +158,7 @@ pub fn homes(map: &Map, area: &Area) -> Vec<Home> {
         .map(|stem| {
             let group = area.homes.get(&stem).unwrap_or(&area.group).clone();
             let group_dir = group_dir(map, &group);
+            let facade_test_dir = facade_test_dir(map, &group);
             Home {
                 source: source_of(area, &stem),
                 group,
@@ -156,6 +166,7 @@ pub fn homes(map: &Map, area: &Area) -> Vec<Home> {
                 service_dir: map.service_dir.clone(),
                 core_dir: core.clone(),
                 group_dir,
+                facade_test_dir,
                 stem,
             }
         })
@@ -264,6 +275,19 @@ mod tests {
             home.scenario_file()
                 .starts_with("crates/core/src/usecases/")
         );
+    }
+
+    #[test]
+    fn a_money_stem_owns_its_facade_test_file() {
+        let map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
+        let leaves = &map.areas[map.area_index("leaves").expect(FIX_MAP)];
+        let home = homes(&map, leaves)
+            .into_iter()
+            .find(|home| home.stem == "ledger")
+            .expect(FIX_MAP);
+        let tests = home.test_files();
+        assert!(tests.contains(&"crates/core/src/money_facade_tests/ledger.rs".to_string()));
+        assert!(tests.contains(&"crates/core/src/money_facade_tests/ledger_tests.rs".to_string()));
     }
 
     #[test]

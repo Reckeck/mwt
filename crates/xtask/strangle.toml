@@ -32,6 +32,10 @@ guarded = [
 [group_dirs]
 sync = "crates/sync/src"
 
+# Groups whose stems keep their facade tests in a directory of their own.
+[facade_test_dirs]
+money = "crates/core/src/money_facade_tests"
+
 # The foundation tasks that change files inside `service/`, the group dirs or `usecases/`.
 [[foundation]]
 task = "T5"
