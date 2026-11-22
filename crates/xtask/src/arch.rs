@@ -283,7 +283,7 @@ fn sources(root: &Path) -> Result<Vec<Source>> {
 
 /// The names a `crate::<name>` path may resolve to: the directory modules plus every module of the
 /// table, so names re-exported from extracted crates (`pub use mwt_workflow as workflow;`) stay visible.
-fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
+fn table_modules(root: &Path) -> Result<BTreeSet<String>> {
     let mut modules = module_names(root)?;
     modules.extend(
         layers::GROUPS
@@ -292,6 +292,11 @@ fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
             .filter(|name| **name != "lib")
             .map(|name| (*name).to_string()),
     );
+    Ok(modules)
+}
+
+fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
+    let modules = table_modules(root)?;
     Ok(sources
         .iter()
         .flat_map(|source| scan::read_edges(&source.file, &source.module, &source.text, &modules))
@@ -387,11 +392,7 @@ mod tests {
 
     #[test]
     fn a_name_reexported_from_an_extracted_crate_resolves_to_its_own_module() {
-        let modules: BTreeSet<String> = layers::GROUPS
-            .iter()
-            .flat_map(|group| group.modules.iter())
-            .map(|name| (*name).to_string())
-            .collect();
+        let modules = table_modules(&repo_root().join(CORE_SRC)).unwrap();
         let edges = scan::read_edges(
             "planning/x.rs",
             "planning",
