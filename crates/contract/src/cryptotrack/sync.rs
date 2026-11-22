@@ -14,8 +14,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::cryptotrack::sources::evm::RawAsset;
-use crate::model::chain::Chain;
+use mwt_cryptotrack::sources::evm::RawAsset;
+use mwt_model::Chain;
 
 /// What an account's last read did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]

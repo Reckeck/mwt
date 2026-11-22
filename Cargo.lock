@@ -3087,6 +3087,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-contract"
+version = "0.1.0"
+dependencies = [
+ "mwt-base",
+ "mwt-crypto",
+ "mwt-cryptotrack",
+ "mwt-household",
+ "mwt-model",
+ "mwt-money",
+ "mwt-net",
+ "mwt-planning",
+ "mwt-reports",
+ "mwt-sync",
+ "mwt-vault",
+ "mwt-workflow",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
 name = "mwt-crypto"
 version = "0.1.0"
 dependencies = [
@@ -6579,6 +6600,7 @@ dependencies = [
  "hmac 0.13.0",
  "insta",
  "mwt-base",
+ "mwt-contract",
  "mwt-crypto",
  "mwt-cryptotrack",
  "mwt-household",

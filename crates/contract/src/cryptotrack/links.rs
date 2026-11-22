@@ -11,8 +11,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::ipc_contract::cryptotrack::operations::CryptoOpRow;
+use crate::cryptotrack::operations::CryptoOpRow;
+use mwt_base::Amount;
 
 /// What the fiat record being edited looks like, so the picker can offer the
 /// crypto operations that look like the same movement of money. The record may

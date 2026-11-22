@@ -32,7 +32,7 @@ use mwt_model::{
     VaultDoc,
 };
 use mwt_model::{ImportSettings, Store};
-use mwt_model::{Transaction, TxOrigin};
+use mwt_model::{IndicatorCfg, TerminalLayout, Transaction, TxOrigin};
 use mwt_money::books::Books;
 
 /// The exchange accounts an import knows: Bybit's Funding, Unified Trading, Earn.
@@ -41,6 +41,22 @@ pub const IMPORT_ACCOUNTS: [&str; 3] = [
     mwt_model::ACCOUNT_UNIFIED,
     mwt_model::ACCOUNT_EARN,
 ];
+
+/// A partial update of an exchange terminal; `None` keeps the field.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct TerminalPatch {
+    #[serde(default)]
+    pub watchlist: Option<Vec<String>>,
+    #[serde(default)]
+    pub active_symbol: Option<String>,
+    #[serde(default)]
+    pub timeframe: Option<String>,
+    #[serde(default)]
+    pub indicators: Option<Vec<IndicatorCfg>>,
+    #[serde(default)]
+    pub layout: Option<TerminalLayout>,
+}
 
 /// Most records a preview lists; the counts cover them all.
 pub const MAX_PREVIEW_ITEMS: usize = 200;

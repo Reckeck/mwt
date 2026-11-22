@@ -1,5 +1,5 @@
 //! The request inputs of the shared events commands: what the user types in the dialogs and what the
-//! plan functions take. They are part of the IPC contract (`trade_core::ipc_contract` re-exports them).
+//! plan functions take. They are part of the IPC contract (`mwt_contract` re-exports them).
 
 use mwt_base::Amount;
 use serde::{Deserialize, Serialize};

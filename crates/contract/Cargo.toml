@@ -1,0 +1,34 @@
+[package]
+name = "mwt-contract"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker IPC contract: the command input/output types shared with the frontend (sits on top of the domain crates; nothing below names it)"
+
+[lints]
+workspace = true
+
+[features]
+# Forwarded from `trade-core`; the derives stay unconditional here until T23.
+ts = ["mwt-model/ts", "mwt-sync/ts", "mwt-money/ts", "mwt-household/ts", "mwt-planning/ts", "mwt-reports/ts", "mwt-cryptotrack/ts", "mwt-crypto/ts"]
+schema = ["mwt-model/schema", "mwt-money/schema", "mwt-planning/schema", "mwt-reports/schema", "mwt-cryptotrack/schema"]
+
+[dependencies]
+mwt-base = { path = "../base", features = ["ts", "schema"] }
+mwt-model = { path = "../model", features = ["ts", "schema"] }
+mwt-money = { path = "../money", features = ["ts", "schema"] }
+mwt-household = { path = "../household", features = ["ts"] }
+mwt-planning = { path = "../planning", features = ["ts", "schema"] }
+mwt-reports = { path = "../reports", features = ["ts", "schema"] }
+mwt-cryptotrack = { path = "../cryptotrack", features = ["ts", "schema"] }
+mwt-workflow = { path = "../workflow" }
+mwt-sync = { path = "../sync", features = ["ts"] }
+mwt-crypto = { path = "../crypto", features = ["ts"] }
+mwt-vault = { path = "../vault" }
+mwt-net = { path = "../net" }
+serde.workspace = true
+ts-rs.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

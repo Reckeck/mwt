@@ -9,8 +9,7 @@ use crate::Amount;
 use crate::crypto::SealKey;
 use crate::error::{Error, Result};
 use crate::model::store::{
-    AssetRef, Binding, Custody, ExchangeProvider, IndicatorCfg, LiabilityTerms, PropertyInfo,
-    Purpose, SubType, TerminalLayout,
+    AssetRef, Binding, Custody, ExchangeProvider, LiabilityTerms, PropertyInfo, Purpose, SubType,
 };
 use crate::model::vault::{Settings, VaultDoc};
 // What the inline tests reach through `super::*` since the exchange sync and import moved out.
@@ -67,6 +66,7 @@ mod password;
 mod property_links;
 pub mod security_level;
 pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
+pub use mwt_cryptotrack::exchange_sync::TerminalPatch;
 mod goals;
 mod health;
 mod inflation;
@@ -114,6 +114,7 @@ mod valuation;
 mod workflow_templates;
 mod workflows;
 mod worth;
+pub use mwt_money::stores::{FirstCard, OpeningBalance};
 pub use portfolio::{
     AssetBalance, AssetStat, HistoryPoint, NamedValue, PnlLeg, PortfolioSummary, RealizedPnl,
     StoreChildRow, StoreCrumb, StoreOverview, StorePosition, StoreTreeNode, StoreValue,
@@ -243,42 +244,6 @@ pub struct StoreExtras {
     pub opening: Option<OpeningBalance>,
     /// Create only: an exchange's futures sub-account keeps its margin in it.
     pub margin: Option<AssetRef>,
-}
-
-/// The first card of a new bank: a sub-account bound to one currency.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-pub struct FirstCard {
-    pub name: String,
-    /// Lowercase currency code, e.g. `rub`.
-    pub currency: String,
-}
-
-/// What a new wallet already holds. Booked as a top-up in the service
-/// category `opening_balance`, so it is neither income nor spending.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-pub struct OpeningBalance {
-    pub asset: AssetRef,
-    pub amount: Amount,
-    /// The day it was there (ISO 8601); `None` = now. A past date keeps the
-    /// wallet's history from starting with today's balance.
-    #[serde(default)]
-    #[ts(optional)]
-    pub at: Option<String>,
-}
-
-/// A partial update of an exchange terminal; `None` keeps the field.
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-pub struct TerminalPatch {
-    #[serde(default)]
-    pub watchlist: Option<Vec<String>>,
-    #[serde(default)]
-    pub active_symbol: Option<String>,
-    #[serde(default)]
-    pub timeframe: Option<String>,
-    #[serde(default)]
-    pub indicators: Option<Vec<IndicatorCfg>>,
-    #[serde(default)]
-    pub layout: Option<TerminalLayout>,
 }
 
 /// Upper bound on staged imports held in the vault. A background poll must not

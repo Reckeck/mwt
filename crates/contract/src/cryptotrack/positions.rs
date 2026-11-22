@@ -1,7 +1,7 @@
 //! IPC types of the DeFi positions an address holds inside a protocol.
 //!
 //! Owner: spec D0 (stage 3). The stored shape
-//! ([`crate::model::cryptotrack::CryptoPosition`]) and its sync rule exist
+//! ([`mwt_model::CryptoPosition`]) and its sync rule exist
 //! from E0 so that the vault schema does not change again for DeFi.
 //!
 //! Commands: `crates/app/src/commands/cryptotrack/positions.rs`.
@@ -17,24 +17,26 @@
 //!
 //! # What must not be added up twice
 //!
-//! [`CryptoPositionView::il_usd`] and [`CryptoPositionView::accrued_usd`] are
+//! [`PositionView::il_usd`] and [`PositionView::accrued_usd`] are
 //! **informational**: both are already inside
 //! `value_usd - invested_usd`, which is itself already inside
-//! [`CryptoPositionView::net_usd`]. A screen that adds either of them to the
+//! [`PositionView::net_usd`]. A screen that adds either of them to the
 //! net result counts it twice. The identity is written out in
-//! [`crate::cryptotrack::protocols::fees`].
+//! [`mwt_cryptotrack::protocols::fees`].
 
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
-use crate::model::chain::Chain;
-use crate::model::cryptotrack::{CryptoDirection, TrackingRef};
+use mwt_base::Amount;
+use mwt_model::Chain;
+use mwt_model::{CryptoDirection, TrackingRef};
 
 /// One asset a position holds or owes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ts_rs::TS)]
 #[ts(rename = "CryptoPositionAsset")]
 pub struct PositionAssetView {
     /// The module's own key ([`crate::model::cryptotrack::CryptoAsset::key`]).
+    // The doc text is exported to TypeScript as is: its link names the old facade path.
+    #[allow(rustdoc::broken_intra_doc_links)]
     pub asset_key: String,
     pub symbol: String,
     /// A supply is `in`, a debt `out`.
@@ -136,7 +138,7 @@ pub struct PositionView {
 
 /// What sort of position it is; re-exported from the protocol layer so the
 /// generated TypeScript carries one name for it.
-pub type CryptoPositionKind = crate::cryptotrack::protocols::PositionKind;
+pub type CryptoPositionKind = mwt_cryptotrack::protocols::PositionKind;
 
 /// Whether the position is still open.
-pub type CryptoPositionStatus = crate::cryptotrack::protocols::PositionStatus;
+pub type CryptoPositionStatus = mwt_cryptotrack::protocols::PositionStatus;

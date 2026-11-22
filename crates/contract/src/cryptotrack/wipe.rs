@@ -4,13 +4,13 @@
 //! Owner: spec E12. A wipe clears every `crypto_*` field of the document,
 //! marks `crypto_wiped_at` so another device cannot hand the data back, and
 //! only then may the vault's protection go below level 3
-//! (`crate::service::security_level::doc_carries_crypto_data`).
+//! (`doc_carries_crypto_data` of `mwt-vault`).
 //!
 //! Commands: `crates/app/src/commands/cryptotrack/wipe.rs`.
 
 use serde::{Deserialize, Serialize};
 
-use crate::Amount;
+use mwt_base::Amount;
 
 /// How many records each collection of the module holds, so the confirmation
 /// says what goes in numbers rather than in words.

@@ -6,12 +6,36 @@
 //! (reads stay lenient so a hand-edited vault still opens).
 
 use crate::tree::{children_of, depth, find_store, subtree_ids};
+use mwt_base::Amount;
 use mwt_base::error::{Error, Result, StoreTreeViolation, WalletRule};
 use mwt_model::Chain;
 use mwt_model::VaultDoc;
 use mwt_model::{
     AssetRef, Binding, BindingShape, LiabilityTerms, MAX_STORE_DEPTH, Store, StoreKind, SubType,
 };
+
+/// The first card of a new bank: a sub-account bound to one currency.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct FirstCard {
+    pub name: String,
+    /// Lowercase currency code, e.g. `rub`.
+    pub currency: String,
+}
+
+/// What a new wallet already holds. Booked as a top-up in the service
+/// category `opening_balance`, so it is neither income nor spending.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct OpeningBalance {
+    pub asset: AssetRef,
+    pub amount: Amount,
+    /// The day it was there (ISO 8601); `None` = now. A past date keeps the
+    /// wallet's history from starting with today's balance.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub at: Option<String>,
+}
 
 /// The fields of a wallet form, beyond its name, that the placement rules
 /// look at. Built by the scenario from its own form type.
