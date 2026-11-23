@@ -26,8 +26,8 @@ pub const CURRENCIES_FILE: &str = "currencies.json";
 /// currency lists change rarely, and the pickers should open instantly.
 pub const CURRENCIES_FRESH_FOR: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
 
-/// Portfolio base until the user picks another one.
-pub const DEFAULT_BASE_CURRENCY: &str = "usd";
+/// Portfolio base until the user picks another one (the vault owns it).
+pub use crate::kernel::session::DEFAULT_BASE_CURRENCY;
 
 /// Last-resort fiat catalog, used only when the providers are unreachable *and*
 /// no successful fetch was ever cached. Keeps the pickers usable offline.

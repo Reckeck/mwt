@@ -2,6 +2,7 @@
 //! save, describing the records to another device, applying and undoing what
 //! comes back (docs/sync.md). The pure parts live in [`crate::sync`].
 
+#[cfg(test)]
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -29,19 +30,9 @@ use {
     std::collections::BTreeMap,
 };
 
-/// Told the keys of every local save, so a live session can send them on.
-pub trait SyncTap: Send + Sync {
-    fn changed(&self, keys: &[String]);
-}
-
-/// A [`SyncTap`] as the kernel's change sink (the kernel crate cannot name `SyncTap`).
-pub(crate) struct TapSink(pub(crate) Arc<dyn SyncTap>);
-
-impl crate::kernel::events::ChangeSink for TapSink {
-    fn changed(&self, keys: &[String]) {
-        self.0.changed(keys);
-    }
-}
+/// Told the keys of every local save, so a live session can send them on
+/// (the vault kernel's change sink).
+pub use crate::kernel::events::ChangeSink as SyncTap;
 
 /// The device a batch came from.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -295,7 +286,7 @@ mod tests {
     fn a_sync_tap_is_a_change_sink() {
         use crate::kernel::events::ChangeSink;
         let tap = Arc::new(Announced::default());
-        ChangeSink::changed(&TapSink(tap.clone()), &["a:1".to_string()]);
+        ChangeSink::changed(&*tap, &["a:1".to_string()]);
         assert_eq!(tap.0.lock().unwrap().clone(), vec!["a:1".to_string()]);
     }
 

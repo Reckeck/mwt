@@ -741,6 +741,11 @@ impl Default for VaultDoc {
 }
 
 impl VaultDoc {
+    /// The store with this id.
+    pub fn store(&self, id: &str) -> Option<&Store> {
+        self.stores.iter().find(|store| store.id == id)
+    }
+
     /// ISO-8601 UTC now (RFC3339, lexicographically sortable).
     pub fn timestamp() -> String {
         now_iso()
@@ -755,6 +760,23 @@ impl VaultDoc {
             .iter()
             .map(|chain| chain.info())
             .collect()
+    }
+}
+
+/// The Bybit key that serves a store: its own, else its wallet's. A
+/// sub-account never borrows another wallet's key.
+pub fn bybit_key_for<'doc>(doc: &'doc VaultDoc, store_id: &str) -> Option<&'doc ExchangeKeys> {
+    let mut current = doc.store(store_id)?;
+    loop {
+        if let Some(keys) = doc
+            .exchanges
+            .bybit
+            .iter()
+            .find(|keys| keys.store_id == current.id)
+        {
+            return Some(keys);
+        }
+        current = doc.store(current.parent_id.as_deref()?)?;
     }
 }
 
@@ -920,5 +942,50 @@ mod secret_debug_tests {
         assert!(!shown.contains(&key[..4]), "{shown}");
         assert!(!shown.contains(&secret), "{shown}");
         assert!(shown.contains("Secret(..)"), "{shown}");
+    }
+}
+
+#[cfg(test)]
+mod key_lookup_tests {
+    use super::*;
+    use crate::store::StoreKind;
+
+    fn doc_with_keys() -> VaultDoc {
+        let mut parent = Store::new("parent", StoreKind::Exchange, "#000");
+        parent.id = "parent".into();
+        let mut sub = Store::new("sub", StoreKind::Exchange, "#000").with_parent("parent".into());
+        sub.id = "sub".into();
+        let mut own = Store::new("own", StoreKind::Exchange, "#000").with_parent("parent".into());
+        own.id = "own".into();
+        let key = |store_id: &str| ExchangeKeys {
+            store_id: store_id.into(),
+            api_key: String::new(),
+            api_secret: String::new(),
+            spot_store_id: None,
+            futures_store_id: None,
+        };
+        let mut doc = VaultDoc {
+            stores: vec![parent, sub, own],
+            ..VaultDoc::default()
+        };
+        doc.exchanges.bybit = vec![key("parent"), key("own")];
+        doc
+    }
+
+    #[test]
+    fn a_store_is_found_by_id() {
+        let doc = doc_with_keys();
+        assert_eq!(doc.store("sub").map(|store| store.id.as_str()), Some("sub"));
+        assert!(doc.store("nope").is_none());
+    }
+
+    #[test]
+    fn a_sub_account_takes_the_key_of_its_wallet_unless_it_has_its_own() {
+        let doc = doc_with_keys();
+        let owner = |id: &str| bybit_key_for(&doc, id).map(|keys| keys.store_id.as_str());
+        assert_eq!(owner("sub"), Some("parent"));
+        assert_eq!(owner("own"), Some("own"));
+        assert_eq!(owner("parent"), Some("parent"));
+        assert_eq!(owner("nope"), None);
     }
 }

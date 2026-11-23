@@ -7,6 +7,9 @@ use std::sync::{Arc, Mutex};
 use super::events::{ChangeSink, Committed, DomainEvent, EventBus, KeysChanged, Subscription};
 use super::persistence::{FileStore, Mirrored, Persistence, SandboxStore};
 
+/// Portfolio base until the user picks another one.
+pub const DEFAULT_BASE_CURRENCY: &str = "usd";
+
 /// Told that the vault has unsaved changes (the app's writer thread).
 pub trait SaveHook: Send + Sync {
     fn dirty(&self);

@@ -34,6 +34,7 @@ use crate::crypto::{self, SealKey};
 use crate::error::{Error, Result};
 use crate::ipc_contract::security::SecurityLevel;
 use crate::storage::{SnapshotFormat, VaultFile, decode_file};
+#[cfg(test)]
 use crate::usecases::sync::peer_sync;
 use crate::vault_io::backups;
 use crate::vault_io::copies::{self, CopyKind, CopySeal, VaultCopy};
@@ -282,7 +283,7 @@ impl UnlockedVault {
         self.rekey(Arc::new(SealKey::plain()), "")?;
         // The pre-sync copies are sealed under the password just removed: the
         // restore button would offer a copy nothing can open.
-        peer_sync::remove_sync_backups(self);
+        crate::vault_io::backups::remove_presync(&self.path);
         Ok(())
     }
 

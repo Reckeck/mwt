@@ -44,19 +44,7 @@ pub fn bybit_key_for<'books>(
     books: &Books<'books>,
     store_id: &str,
 ) -> Option<&'books ExchangeKeys> {
-    let mut current = find_store(books, store_id)?;
-    loop {
-        if let Some(keys) = books
-            .doc()
-            .exchanges
-            .bybit
-            .iter()
-            .find(|keys| keys.store_id == current.id)
-        {
-            return Some(keys);
-        }
-        current = find_store(books, current.parent_id.as_deref()?)?;
-    }
+    mwt_model::bybit_key_for(books.doc(), store_id)
 }
 
 /// The live sub-account of `parent_id` that stands for a market.
