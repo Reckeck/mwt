@@ -4,10 +4,10 @@
 
 use crate::error::Result;
 use crate::household::property_links::{replace_link, require_property};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// A link may point only at a live property.
-pub fn check_property_link(vault: &UnlockedVault, property_id: Option<&str>) -> Result<()> {
+pub fn check_property_link(vault: &Session, property_id: Option<&str>) -> Result<()> {
     let Some(id) = property_id else {
         return Ok(());
     };
@@ -16,6 +16,6 @@ pub fn check_property_link(vault: &UnlockedVault, property_id: Option<&str>) -> 
 
 /// Link the operation to a property, or unlink it with `None`. Not persisted:
 /// the operation that carries the link is.
-pub fn set_property_link(vault: &mut UnlockedVault, tx_id: &str, property_id: Option<&str>) {
+pub fn set_property_link(vault: &mut Session, tx_id: &str, property_id: Option<&str>) {
     replace_link(&mut vault.doc, tx_id, property_id);
 }

@@ -185,7 +185,7 @@ fn the_switch_delegate_equals_the_scenario() {
         .unwrap();
     scenario::set_my_automation_active(&mut by_scenario, MineKind::Alert, &ids[1].1, false, now)
         .unwrap();
-    let rows = |vault: &crate::service::UnlockedVault| -> Vec<(MineKind, bool)> {
+    let rows = |vault: &crate::service::Session| -> Vec<(MineKind, bool)> {
         scenario::my_automations(vault, now, "UTC")
             .iter()
             .map(|item| (item.kind, item.active))

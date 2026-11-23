@@ -5,7 +5,7 @@
 use crate::Result;
 use crate::model::chain::Chain;
 use crate::model::store::{AssetRef, Binding, Custody, Store, StoreKind, SubType};
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 
 use super::ids;
 
@@ -26,7 +26,7 @@ pub fn usdt() -> AssetRef {
 }
 
 /// Point the store `old` (and the children that name it) at the id `new`.
-fn assign_id(vault: &mut UnlockedVault, old: &str, new: &str) {
+fn assign_id(vault: &mut Session, old: &str, new: &str) {
     for store in &mut vault.doc.stores {
         if store.id == old {
             store.id = new.to_string();
@@ -38,7 +38,7 @@ fn assign_id(vault: &mut UnlockedVault, old: &str, new: &str) {
 }
 
 fn create(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     (name, kind, color): (&str, StoreKind, &str),
     parent: Option<&Store>,
     extras: StoreExtras,
@@ -57,7 +57,7 @@ fn create(
     Ok(Store { id, ..made })
 }
 
-pub fn create_all(vault: &mut UnlockedVault) -> Result<Wallets> {
+pub fn create_all(vault: &mut Session) -> Result<Wallets> {
     crate::usecases::money::stores::ensure_cash_wallet(vault, "Наличные")?;
     let cash = vault
         .doc

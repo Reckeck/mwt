@@ -11,14 +11,14 @@ use crate::model::vault::{iso_to_millis, now_iso};
 use crate::money::transactions::{
     TransactionPatch, complete_transaction, ensure_fresh_id, patched, replacing,
 };
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::usecases::household::property_links::{check_property_link, set_property_link};
 use crate::usecases::household::shared_events::cascade_shared_delete;
 
 use super::stores::rebase_and_commit;
 
 /// Transaction history, newest first, limited to a scope.
-pub fn transactions(vault: &UnlockedVault, scope: &StoreScope) -> Vec<Transaction> {
+pub fn transactions(vault: &Session, scope: &StoreScope) -> Vec<Transaction> {
     let ids =
         (!scope.store_ids.is_empty()).then(|| crate::money::tree::resolve_scope(&vault.doc, scope));
     let mut out: Vec<Transaction> = match ids {
@@ -30,7 +30,7 @@ pub fn transactions(vault: &UnlockedVault, scope: &StoreScope) -> Vec<Transactio
 }
 
 /// Fill what the user does not type, at the moment a write happens.
-pub fn prepare_transaction(vault: &UnlockedVault, tx: &mut Transaction) -> Result<()> {
+pub fn prepare_transaction(vault: &Session, tx: &mut Transaction) -> Result<()> {
     prepare_transaction_at(vault, tx, iso_to_millis(&now_iso()))
 }
 
@@ -38,28 +38,24 @@ pub fn prepare_transaction(vault: &UnlockedVault, tx: &mut Transaction) -> Resul
 /// auto-filled, property prices completed, unpriced sides stamped, every
 /// rule checked. The future-date rule (V11) is measured from `now_ms` — the
 /// scheduler's clock for automation runs.
-pub fn prepare_transaction_at(
-    vault: &UnlockedVault,
-    tx: &mut Transaction,
-    now_ms: i64,
-) -> Result<()> {
-    UnlockedVault::normalize_categories(tx);
+pub fn prepare_transaction_at(vault: &Session, tx: &mut Transaction, now_ms: i64) -> Result<()> {
+    Session::normalize_categories(tx);
     crate::money::validate::apply_categorization_rules(&vault.doc, tx);
     complete_transaction(&vault.books(), tx);
     crate::money::adjustments::complete_adjustment(&vault.doc, tx)?;
-    UnlockedVault::stamp_prices(&crate::money::rates::rate_book(&vault.books()), tx);
+    Session::stamp_prices(&crate::money::rates::rate_book(&vault.books()), tx);
     crate::usecases::household::validate::validate_transaction_at(vault, tx, now_ms)
 }
 
 /// Validate and append a transaction of any variant (plan §4.5, §8.1):
 /// categories are normalized and auto-filled, then every rule is checked.
-pub fn add_transaction(vault: &mut UnlockedVault, tx: Transaction) -> Result<Transaction> {
+pub fn add_transaction(vault: &mut Session, tx: Transaction) -> Result<Transaction> {
     add_transaction_for(vault, tx, None)
 }
 
 /// [`add_transaction`], linked to a property (plan G4).
 pub fn add_transaction_for(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     mut tx: Transaction,
     property_id: Option<&str>,
 ) -> Result<Transaction> {
@@ -79,7 +75,7 @@ pub fn add_transaction_for(
 /// between recipients, a P2P deal): all join one chain — `flow_id`, or a
 /// new one — and either all are saved or none is.
 pub fn add_linked_transactions(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     txs: Vec<Transaction>,
     flow_id: Option<&str>,
 ) -> Result<Vec<Transaction>> {
@@ -105,11 +101,7 @@ pub fn add_linked_transactions(
     }
 }
 
-fn book_linked(
-    vault: &mut UnlockedVault,
-    txs: Vec<Transaction>,
-    flow: &str,
-) -> Result<Vec<Transaction>> {
+fn book_linked(vault: &mut Session, txs: Vec<Transaction>, flow: &str) -> Result<Vec<Transaction>> {
     let mut saved = Vec::with_capacity(txs.len());
     for mut tx in txs {
         tx.meta_mut().flow_id = Some(flow.to_string());
@@ -129,11 +121,7 @@ fn book_linked(
 /// Replace a transaction entirely. Its id and origin are kept: an edit
 /// changes what happened, not where the record came from, and never drops a
 /// link the form has no field for.
-pub fn update_transaction(
-    vault: &mut UnlockedVault,
-    id: &str,
-    tx: Transaction,
-) -> Result<Transaction> {
+pub fn update_transaction(vault: &mut Session, id: &str, tx: Transaction) -> Result<Transaction> {
     let property =
         crate::household::property_links::property_of_tx(&vault.doc, id).map(str::to_string);
     edit(vault, id, replacing(tx), property.as_deref(), true)
@@ -143,7 +131,7 @@ pub fn update_transaction(
 /// does not name keeps its stored value, the property link included. A scenario
 /// only: it is new, so the vault has no delegate for it.
 pub fn patch_transaction(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     patch: TransactionPatch,
 ) -> Result<Transaction> {
@@ -155,7 +143,7 @@ pub fn patch_transaction(
 /// [`update_transaction`] for the shared event that owns the operation: the
 /// event has changed its own side already.
 pub(crate) fn update_transaction_unsynced(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     tx: Transaction,
 ) -> Result<Transaction> {
@@ -167,7 +155,7 @@ pub(crate) fn update_transaction_unsynced(
 /// [`update_transaction`] that also sets the operation's property; `None`
 /// unlinks it.
 pub fn update_transaction_for(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     tx: Transaction,
     property_id: Option<&str>,
@@ -178,7 +166,7 @@ pub fn update_transaction_for(
 /// `follow_events`: an operation a shared event owns drags the event's
 /// purchase or settlement along (or is refused).
 fn edit(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     patch: TransactionPatch,
     property_id: Option<&str>,
@@ -210,7 +198,7 @@ fn position_of(transactions: &[Transaction], id: &str) -> Result<usize> {
         .ok_or_else(|| Error::Missing("transaction".into()))
 }
 
-pub fn delete_transaction(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_transaction(vault: &mut Session, id: &str) -> Result<()> {
     let index = position_of(&vault.doc.transactions, id)?;
     vault.run(|run| {
         run.doc_mut().transactions.remove(index);

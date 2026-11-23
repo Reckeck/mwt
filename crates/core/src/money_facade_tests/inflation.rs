@@ -1,4 +1,4 @@
-//! Tests of the inflation area that need the vault (`UnlockedVault`): moved from
+//! Tests of the inflation area that need the vault (`Session`): moved from
 //! `money/inflation_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::Amount;
@@ -6,7 +6,7 @@ use crate::model::deposit::KeyRatePoint;
 use crate::model::inflation::{InflationMode, InflationReading, InflationSource};
 use crate::model::notify::NoticeCategory;
 use crate::money::inflation::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::{amount, empty_vault};
 use chrono::{Datelike, NaiveDate};
 use std::collections::BTreeMap;
@@ -271,7 +271,7 @@ fn coefficients_follow_the_months() {
     );
 }
 
-fn set_rates(vault: &mut UnlockedVault, pairs: &[(&str, &str)]) {
+fn set_rates(vault: &mut Session, pairs: &[(&str, &str)]) {
     vault
         .update_settings(crate::ipc_contract::UpdateSettingsInput {
             inflation_manual: Some(table(pairs)),
@@ -341,7 +341,7 @@ fn adoption_survives_a_reopen_and_does_not_write_twice() {
     let (_dir, mut vault) = empty_vault();
     let local = table(&[("rub", "10")]);
     assert!(crate::usecases::money::inflation::adopt_flat_inflation(&mut vault, &local).unwrap());
-    let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
+    let reopened = Session::open(vault.path.clone(), "pw").unwrap();
     assert!(reopened.doc.settings.inflation_adopted);
     assert_eq!(
         crate::money::inflation::flat_inflation(&reopened.doc).get("rub"),

@@ -11,7 +11,7 @@ use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::AccountRef;
 use crate::model::transaction::{ConvertSide, ConvertTx, Leg, PriceStamp, Transaction, TxMeta};
 use crate::model::vault::{FxPoint, PricePoint, VaultDoc};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use mwt_reports::overview::{Report, ReportFilter, ReportKind};
 
@@ -51,7 +51,7 @@ fn convert(
 }
 
 /// USD base; 100 RUB and 35 THB per USD; USDT at 1.
-fn setup() -> (tempfile::TempDir, UnlockedVault, String, String, String) {
+fn setup() -> (tempfile::TempDir, Session, String, String, String) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     let card = store(&mut vault, "RUB card", StoreKind::Bank, None);

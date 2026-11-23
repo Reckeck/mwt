@@ -1,4 +1,4 @@
-//! Tests of the ledger area that need the vault (`UnlockedVault`): moved from
+//! Tests of the ledger area that need the vault (`Session`): moved from
 //! `money/ledger_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::store::StoreKind;
@@ -6,7 +6,7 @@ use crate::model::store::StoreScope;
 use crate::model::transaction::AccountRef;
 use crate::model::transaction::{Transaction, TxKind, TxOrigin};
 use crate::money::ledger::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use std::collections::HashMap;
 
@@ -37,7 +37,7 @@ impl FilterSources for NoSources {
 }
 
 /// Card with a sub-account «Savings», an exchange, four operations.
-fn ledger() -> (tempfile::TempDir, UnlockedVault, [String; 3]) {
+fn ledger() -> (tempfile::TempDir, Session, [String; 3]) {
     let (dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     let savings = store(&mut vault, "Savings", StoreKind::Bank, Some(&card));
@@ -155,7 +155,7 @@ fn csv_has_a_line_per_leg_of_what_the_filter_keeps() {
 #[test]
 fn filters_by_value_origin_and_debt() {
     let (_dir, mut vault, [card, _savings, _exchange]) = ledger();
-    let list = |vault: &UnlockedVault, filter: TxFilter| {
+    let list = |vault: &Session, filter: TxFilter| {
         crate::usecases::household::ledger::list_transactions(vault, &filter, "UTC")
             .unwrap()
             .len()

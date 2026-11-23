@@ -3,7 +3,7 @@
 //! dev-only crate: no crate lists it as a normal dependency (the facade `trade-core` reaches
 //! it through its `testkit` feature and its dev-dependencies).
 //!
-//! The helpers that need `UnlockedVault` or `service::test_support` stay in the facade's
+//! The helpers that need `Session` or `service::test_support` stay in the facade's
 //! `testkit` module, which re-exports this crate.
 
 pub mod builders;

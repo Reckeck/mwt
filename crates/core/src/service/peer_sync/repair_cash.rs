@@ -3,7 +3,7 @@
 #[cfg(test)]
 use crate::service::CASH_WALLET_ID;
 #[cfg(test)]
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 #[cfg(test)]
 mod tests {
@@ -17,7 +17,7 @@ mod tests {
     use crate::usecases::sync::peer_sync;
 
     /// A vault as an older build made it: the Cash wallet has a random id.
-    fn old_build(vault: &mut UnlockedVault) -> String {
+    fn old_build(vault: &mut Session) -> String {
         let old = uuid::Uuid::new_v4().to_string();
         // Nothing refers to the wallet yet, so renaming the record is enough.
         for node in &mut vault.doc.stores {
@@ -42,14 +42,14 @@ mod tests {
         old
     }
 
-    fn device(name: &str) -> (tempfile::TempDir, UnlockedVault) {
+    fn device(name: &str) -> (tempfile::TempDir, Session) {
         let (dir, mut vault) = empty_vault();
         peer_sync::set_device(&mut vault, name);
         vault.persist().unwrap();
         (dir, vault)
     }
 
-    fn roots(vault: &UnlockedVault) -> Vec<String> {
+    fn roots(vault: &Session) -> Vec<String> {
         vault
             .doc
             .stores
@@ -59,7 +59,7 @@ mod tests {
             .collect()
     }
 
-    fn pocket(vault: &mut UnlockedVault, parent: &str, name: &str) -> String {
+    fn pocket(vault: &mut Session, parent: &str, name: &str) -> String {
         crate::usecases::money::stores::create_store_with(
             vault,
             name,

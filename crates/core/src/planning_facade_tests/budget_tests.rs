@@ -13,8 +13,8 @@ use crate::model::vault::FxPoint;
 use crate::planning::automations::AutomationDraft;
 use crate::planning::budget::*;
 use crate::planning::daily_budget::daily_budget;
+use crate::service::Session;
 use crate::service::StoreExtras;
-use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 
@@ -49,7 +49,7 @@ fn earn(store: &str, sum: &str, ts: &str) -> Transaction {
 }
 
 /// A bank card in the budget, USD everywhere.
-fn budget_vault() -> (tempfile::TempDir, UnlockedVault, String) {
+fn budget_vault() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     quote_usd(&mut vault);

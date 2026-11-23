@@ -3,12 +3,12 @@
 
 use crate::model::ids::StoreId;
 use crate::money::store_months::{StoreMonthRow, store_months as monthly_rows};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// The last `months` local months up to the one holding `now`, oldest first.
 /// Moves between two stores of the scope are left out: they are neither.
 pub fn store_months(
-    vault: &UnlockedVault,
+    vault: &Session,
     store_id: &StoreId,
     include_children: bool,
     months: u32,
@@ -23,6 +23,6 @@ pub fn store_months(
         months,
         now,
         zone,
-        |leg, currency, secs| UnlockedVault::leg_value_in(books.rate_book(), leg, currency, secs),
+        |leg, currency, secs| Session::leg_value_in(books.rate_book(), leg, currency, secs),
     )
 }

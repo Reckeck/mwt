@@ -7,11 +7,11 @@ use crate::error::{Error, Result};
 use crate::household::vehicle::{plan_service_done, plan_update_mileage};
 use crate::model::ids::StoreId;
 use crate::model::store::{CarInfo, Store};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// The odometer read today.
 pub fn vehicle_update_mileage(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &StoreId,
     km: u32,
     today: NaiveDate,
@@ -23,7 +23,7 @@ pub fn vehicle_update_mileage(
 /// The service was done on `date` (at `km`, if read): the next one moves
 /// by the intervals; without an interval that side is cleared.
 pub fn vehicle_service_done(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &StoreId,
     date: NaiveDate,
     km: Option<u32>,
@@ -32,7 +32,7 @@ pub fn vehicle_service_done(
     write_car(vault, store_id, car)
 }
 
-fn write_car(vault: &mut UnlockedVault, store_id: &StoreId, car: CarInfo) -> Result<Store> {
+fn write_car(vault: &mut Session, store_id: &StoreId, car: CarInfo) -> Result<Store> {
     vault.transact(|tx| {
         tx.collection::<Store>()
             .update(store_id.as_str(), |store| {

@@ -20,7 +20,7 @@ pub struct Tx<'a> {
 }
 
 impl<'a> Tx<'a> {
-    /// A transaction over `doc`; opened by the facade's `UnlockedVault` commit.
+    /// A transaction over `doc`; opened by the facade's `Session` commit.
     pub fn new(doc: &'a mut VaultDoc) -> Self {
         Self {
             doc,

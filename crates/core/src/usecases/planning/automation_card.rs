@@ -14,7 +14,7 @@ use crate::planning::automation_card::{
     first_store, schedule_of, store_of, text, workday_of,
 };
 use crate::planning::my_automations::{MineKind, lookahead_until};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::workflow::graph::{Graph, Node};
 use crate::workflow::nodes::triggers::schedule_moments_limited;
 use crate::workflow::types::WfValue;
@@ -153,7 +153,7 @@ fn asked_money(graph: &Graph, memo: &str) -> CardMoney {
 }
 
 /// One run as a journal row; a sleeping run's money is read from its graph.
-fn journal_entry(vault: &UnlockedVault, workflow: &Workflow, run: &WorkflowRun) -> JournalEntry {
+fn journal_entry(vault: &Session, workflow: &Workflow, run: &WorkflowRun) -> JournalEntry {
     rules::journal_entry(&vault.doc, workflow, run, |source, memo| {
         Graph::parse(source)
             .map(|graph| asked_money(&graph, memo))
@@ -162,7 +162,7 @@ fn journal_entry(vault: &UnlockedVault, workflow: &Workflow, run: &WorkflowRun) 
 }
 
 /// Every run and every reminder or alert shown, the newest first.
-pub fn automation_journal(vault: &UnlockedVault, limit: usize) -> Vec<JournalEntry> {
+pub fn automation_journal(vault: &Session, limit: usize) -> Vec<JournalEntry> {
     let mut out: Vec<JournalEntry> = vault
         .doc
         .workflow_runs
@@ -184,12 +184,7 @@ pub fn automation_journal(vault: &UnlockedVault, limit: usize) -> Vec<JournalEnt
 }
 
 /// The card of a scheme or a repeat (both are workflows).
-pub fn automation_card(
-    vault: &UnlockedVault,
-    id: &str,
-    now: i64,
-    zone: &str,
-) -> Result<AutomationCard> {
+pub fn automation_card(vault: &Session, id: &str, now: i64, zone: &str) -> Result<AutomationCard> {
     let workflow = vault
         .doc
         .workflows
@@ -272,7 +267,7 @@ pub fn automation_card(
 /// A scheme on an income fires when that income comes: "When" and
 /// "Next time" follow the soonest repeat that books its category.
 fn follow_income(
-    vault: &UnlockedVault,
+    vault: &Session,
     card: &mut AutomationCard,
     category: &str,
     cal: &Calendar,

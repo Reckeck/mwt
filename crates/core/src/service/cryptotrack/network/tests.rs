@@ -11,7 +11,7 @@ use crate::ipc_contract::cryptotrack::network::{
     EndpointKind, NetworkTestOutcome, SetNetworkSettingsInput, TestNetworkInput,
 };
 use crate::model::chain::Chain;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::empty_vault;
 use crate::usecases::cryptotrack::network::{Probe, test_endpoint};
 use crate::vault_io::device_secrets::BlockscoutKey;
@@ -85,7 +85,7 @@ fn input(chain: Chain) -> SetNetworkSettingsInput {
     }
 }
 
-fn level3() -> (tempfile::TempDir, UnlockedVault) {
+fn level3() -> (tempfile::TempDir, Session) {
     let (dir, mut vault) = empty_vault();
     vault.raise_to_level3_for_tests();
     (dir, vault)

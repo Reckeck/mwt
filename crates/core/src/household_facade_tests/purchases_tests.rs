@@ -6,12 +6,12 @@ use crate::model::shared_event::{ItemPlan, SharedEventStatus};
 use crate::model::store::AssetRef;
 use crate::model::store::StoreKind;
 use crate::model::transaction::{PaymentTx, Transaction};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 
 struct Setup {
     _dir: tempfile::TempDir,
-    vault: UnlockedVault,
+    vault: Session,
     wallet: String,
     event: String,
     petya: String,

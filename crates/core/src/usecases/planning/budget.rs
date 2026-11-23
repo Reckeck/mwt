@@ -19,11 +19,11 @@ use crate::planning::budget::{
 };
 use crate::planning::flows::{Flow, flows_between};
 use crate::planning::goals::resolve_scope;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 // -- CRUD -------------------------------------------------------------------
 
-pub fn create_budget(vault: &mut UnlockedVault, draft: BudgetDraft) -> Result<Budget> {
+pub fn create_budget(vault: &mut Session, draft: BudgetDraft) -> Result<Budget> {
     let budget = plan_create_budget(&vault.doc, draft, uuid::Uuid::new_v4().to_string())?;
     vault.transact(|tx| {
         tx.collection::<Budget>().insert(budget.clone())?;
@@ -31,7 +31,7 @@ pub fn create_budget(vault: &mut UnlockedVault, draft: BudgetDraft) -> Result<Bu
     })
 }
 
-pub fn update_budget(vault: &mut UnlockedVault, id: &str, draft: BudgetDraft) -> Result<Budget> {
+pub fn update_budget(vault: &mut Session, id: &str, draft: BudgetDraft) -> Result<Budget> {
     let budget = plan_update_budget(&vault.doc, id, draft)?;
     vault.transact(|tx| {
         tx.collection::<Budget>()
@@ -42,7 +42,7 @@ pub fn update_budget(vault: &mut UnlockedVault, id: &str, draft: BudgetDraft) ->
 
 /// Delete a limit; its notices go with it, each with a tombstone, or another
 /// device would send them back.
-pub fn delete_budget(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_budget(vault: &mut Session, id: &str) -> Result<()> {
     let gone = plan_delete_budget(&vault.doc, id)?;
     vault.transact(|tx| {
         tx.collection::<Budget>().remove(id)?;

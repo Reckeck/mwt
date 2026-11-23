@@ -4,16 +4,16 @@
 //!
 //! The model-only part (properties, builders, `InMemoryPersistence`, `FixedClock`) is the
 //! dev-only crate `mwt-testkit`, re-exported here so the old `testkit::*` paths keep
-//! working; what needs `UnlockedVault` stays in this module.
+//! working; what needs `Session` stays in this module.
 
 use std::sync::Arc;
 
 use crate::model::VaultDoc;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 pub use mwt_testkit::*;
 
-impl UnlockedVault {
+impl Session {
     /// A vault over `doc` kept in memory: plain key, detached lock, saves
     /// recorded by a fresh [`InMemoryPersistence`].
     pub fn in_memory(doc: VaultDoc) -> Self {
@@ -52,7 +52,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let before = std::fs::read_dir(dir.path()).unwrap().count();
         let store = Arc::new(InMemoryPersistence::default());
-        let mut vault = UnlockedVault::with_persistence(VaultDoc::default(), store.clone());
+        let mut vault = Session::with_persistence(VaultDoc::default(), store.clone());
         vault.path = dir.path().join("vault.bin");
         assert_eq!(store.write_count(), 0, "building the vault writes nothing");
         let wallet = crate::usecases::money::stores::create_store(
@@ -104,7 +104,7 @@ mod tests {
         doc.stores.push(wallet);
         doc.transactions.push(income);
         doc.goals.push(builders::goal("Trip", "500"));
-        let vault = UnlockedVault::in_memory(doc);
+        let vault = Session::in_memory(doc);
         assert_eq!(vault.doc.stores.len(), 1);
         assert_eq!(vault.doc.transactions.len(), 1);
         assert_eq!(vault.doc.goals[0].name, "Trip");

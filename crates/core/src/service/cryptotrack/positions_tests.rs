@@ -55,7 +55,7 @@ fn leg(direction: CryptoDirection, asset: CryptoAsset, quantity: &str) -> Crypto
 }
 
 /// A followed address with the wallet that shows it (decision P5).
-fn followed() -> (tempfile::TempDir, UnlockedVault, String) {
+fn followed() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     vault.doc.crypto_accounts.push(CryptoAccount::new(
         ACCOUNT,
@@ -77,7 +77,7 @@ fn followed() -> (tempfile::TempDir, UnlockedVault, String) {
 
 /// A token the module knows and counts (spec E2), so nothing here is left out
 /// of a total for being in quarantine.
-fn known(vault: &mut UnlockedVault, contract: &str, symbol: &str) {
+fn known(vault: &mut Session, contract: &str, symbol: &str) {
     vault.doc.crypto_tokens.push(CryptoToken {
         verdict: Some(TokenVerdict::Confirmed),
         verdict_at: Some("2026-02-01T00:00:00Z".into()),
@@ -88,7 +88,7 @@ fn known(vault: &mut UnlockedVault, contract: &str, symbol: &str) {
 
 /// What the module knows a unit cost on every day of March 2026 (spec E4):
 /// the prices "at the deposit".
-fn priced_then(vault: &mut UnlockedVault, asset: &CryptoAsset, usd: &str) {
+fn priced_then(vault: &mut Session, asset: &CryptoAsset, usd: &str) {
     for day in 1..=31 {
         vault.doc.crypto_prices.push(CryptoPricePoint {
             token_key: asset.key(),
@@ -101,7 +101,7 @@ fn priced_then(vault: &mut UnlockedVault, asset: &CryptoAsset, usd: &str) {
 
 /// The ordinary price cache: what every holding, and so every position leg,
 /// is valued at now.
-fn priced_now(vault: &mut UnlockedVault, asset: &CryptoAsset, usd: &str) {
+fn priced_now(vault: &mut Session, asset: &CryptoAsset, usd: &str) {
     let key = crate::cryptotrack::service::totals::crypto_asset_ref(&vault.doc, asset).key();
     vault.doc.price_cache.push(PricePoint {
         asset_key: key,
@@ -194,7 +194,7 @@ fn reading(
     }
 }
 
-fn only(vault: &UnlockedVault, live: &[PositionReading]) -> PositionView {
+fn only(vault: &Session, live: &[PositionReading]) -> PositionView {
     let rows =
         crate::usecases::cryptotrack::positions::crypto_list_positions(&vault.books(), live, LATER);
     assert_eq!(rows.len(), 1, "exactly one position was stored");
@@ -330,12 +330,7 @@ fn a_debt_position_is_the_collateral_minus_the_loan_and_has_no_loss() {
 // -- a pool ---------------------------------------------------------------------
 
 /// The hand-worked pool of `protocols::fees`, stored and read back.
-fn pool_vault() -> (
-    tempfile::TempDir,
-    UnlockedVault,
-    PositionKey,
-    PositionReading,
-) {
+fn pool_vault() -> (tempfile::TempDir, Session, PositionKey, PositionReading) {
     let (dir, mut vault, _wallet) = followed();
     known(&mut vault, USDC, "USDC");
     priced_then(&mut vault, &token(USDC), "1");
@@ -1054,7 +1049,7 @@ fn a_position_survives_a_save_and_a_reopen() {
     vault.flush_pending().expect("the write lands");
     let path = vault.path.clone();
     drop(vault);
-    let reopened = UnlockedVault::open(path, "pw").expect("the vault reopens");
+    let reopened = Session::open(path, "pw").expect("the vault reopens");
     assert_eq!(reopened.doc.crypto_positions, vec![live.stored()]);
     let _ = dir;
 }
@@ -1308,7 +1303,7 @@ fn a_closed_position_opens_again_when_the_protocol_reports_it() {
 
 const SECOND: &str = "cacc-2";
 
-fn follow_second(vault: &mut UnlockedVault) {
+fn follow_second(vault: &mut Session) {
     vault.doc.crypto_accounts.push(CryptoAccount::new(
         SECOND,
         "Hot EVM",
@@ -1529,7 +1524,7 @@ fn foo_reading(quantity: &str) -> PositionReading {
     }
 }
 
-fn record_of<'a>(vault: &'a UnlockedVault, id: &TokenId) -> &'a CryptoToken {
+fn record_of<'a>(vault: &'a Session, id: &TokenId) -> &'a CryptoToken {
     vault
         .doc
         .crypto_tokens

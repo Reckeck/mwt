@@ -1,4 +1,4 @@
-//! Tests of the enrichment area that need the vault (`UnlockedVault`): moved from
+//! Tests of the enrichment area that need the vault (`Session`): moved from
 //! `money/enrichment_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::chain::Chain;
@@ -7,7 +7,7 @@ use crate::model::store::AssetRef;
 use crate::model::store::StoreKind;
 use crate::model::transaction::{AccountRef, Transaction};
 use crate::money::enrichment::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::txinfo::TxInfo;
 
@@ -26,7 +26,7 @@ fn found(fee: &str) -> TxInfo {
 }
 
 /// A wallet funded with ETH and a transfer out with a hash, no fee.
-fn setup_transfer() -> (tempfile::TempDir, UnlockedVault, String) {
+fn setup_transfer() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     let wallet = store(&mut vault, "Hot", StoreKind::Crypto, None);
     crate::usecases::money::transactions::add_transaction(

@@ -16,7 +16,7 @@ use crate::ipc_contract::cryptotrack::wipe::{
 use crate::ipc_contract::security::SecurityLevel;
 use crate::model::cryptotrack::CryptoWipe;
 use crate::model::vault::{VaultDoc, now_iso};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::security_level::level_rank;
 use crate::usecases::money::capital::net_worth;
 use crate::usecases::planning::emergency::prune_emergency_fund;
@@ -25,7 +25,7 @@ use crate::vault_io::{backups, device_secrets};
 /// What a wipe would remove: the records per collection, the wallets that
 /// would be unlinked and archived, what the capital would lose and which
 /// backup the user has already.
-pub fn crypto_wipe_preview(vault: &UnlockedVault) -> CryptoWipePreview {
+pub fn crypto_wipe_preview(vault: &Session) -> CryptoWipePreview {
     let counts = crypto_counts_of(&vault.doc);
     let wallets = engine_wallets(&vault.doc);
     let books = vault.books();
@@ -50,7 +50,7 @@ pub fn crypto_wipe_preview(vault: &UnlockedVault) -> CryptoWipePreview {
 /// Nothing is removed while the backup cannot be taken and read back, and
 /// a vault that holds nothing of the module takes no backup at all: there
 /// is nothing to risk and nothing to mark.
-pub fn crypto_wipe_module(vault: &mut UnlockedVault, confirm: &str) -> Result<CryptoWipeReport> {
+pub fn crypto_wipe_module(vault: &mut Session, confirm: &str) -> Result<CryptoWipeReport> {
     wipe_inner(vault, confirm, backup_before_wipe)
 }
 
@@ -58,9 +58,9 @@ pub fn crypto_wipe_module(vault: &mut UnlockedVault, confirm: &str) -> Result<Cr
 /// what a failed backup leaves behind: the answer must be "everything,
 /// untouched".
 pub(crate) fn wipe_inner(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     confirm: &str,
-    backup: impl FnOnce(&mut UnlockedVault) -> Result<String>,
+    backup: impl FnOnce(&mut Session) -> Result<String>,
 ) -> Result<CryptoWipeReport> {
     if confirm != WIPE_CONFIRM {
         return Err(Error::InvalidInput(
@@ -111,7 +111,7 @@ pub(crate) fn wipe_inner(
 }
 
 /// Whether the vault may go below level 3 once the module is gone.
-fn can_lower_level(vault: &UnlockedVault) -> bool {
+fn can_lower_level(vault: &Session) -> bool {
     level_rank(vault.min_allowed_level()) < level_rank(SecurityLevel::Crypto)
 }
 
@@ -121,7 +121,7 @@ fn can_lower_level(vault: &UnlockedVault) -> bool {
 ///
 /// A copy that cannot be opened, or that does not hold the module's data,
 /// is no backup at all: the wipe stops and the document is still whole.
-pub(crate) fn backup_before_wipe(vault: &mut UnlockedVault) -> Result<String> {
+pub(crate) fn backup_before_wipe(vault: &mut Session) -> Result<String> {
     let backup = vault.create_backup()?;
     let path = backups::resolve(&vault.path, &backup.name)?;
     let saved = vault.read_back_backup(&path)?;
@@ -136,7 +136,7 @@ pub(crate) fn backup_before_wipe(vault: &mut UnlockedVault) -> Result<String> {
 /// Everything the wipe does to the document itself, and nothing else: no
 /// file is touched and no mark is left, so the preview can run it on a
 /// copy in memory to see what the capital becomes. The caller writes.
-pub(crate) fn wipe_crypto_document(vault: &mut UnlockedVault) -> CryptoWipeCounts {
+pub(crate) fn wipe_crypto_document(vault: &mut Session) -> CryptoWipeCounts {
     let on_device = vault.keys_on_device();
     let counts = crypto_counts_of(&vault.doc);
     rules::clear_module(&mut vault.doc, on_device);
@@ -159,7 +159,7 @@ pub(crate) fn wipe_crypto_document(vault: &mut UnlockedVault) -> CryptoWipeCount
 /// hand that the move archived yield their coins to the module
 /// (`cryptotrack::service::transition`), and once the module is gone they
 /// count again. Only running the wipe on a copy answers that.
-fn crypto_wipe_value_delta(vault: &UnlockedVault) -> Amount {
+fn crypto_wipe_value_delta(vault: &Session) -> Amount {
     let before = net_worth(&vault.books()).net;
     let mut copy = vault.sandbox();
     wipe_crypto_document(&mut copy);
@@ -167,13 +167,13 @@ fn crypto_wipe_value_delta(vault: &UnlockedVault) -> Amount {
 }
 
 /// Whether this device keeps a secrets file next to the vault.
-fn device_secrets_present(vault: &UnlockedVault) -> bool {
+fn device_secrets_present(vault: &Session) -> bool {
     !vault.sandbox && device_secrets::secrets_path(&vault.path).exists()
 }
 
 /// RFC 3339 of the newest backup next to the vault, if the folder can be
 /// read at all.
-fn newest_backup_at(vault: &UnlockedVault) -> Option<String> {
+fn newest_backup_at(vault: &Session) -> Option<String> {
     vault
         .list_backups()
         .ok()?

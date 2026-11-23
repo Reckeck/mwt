@@ -1,13 +1,13 @@
 //! Saving the open vault: right away, or batched (write-behind).
 //!
-//! Every mutation ends in [`UnlockedVault::persist`]. Without a [`SaveHook`]
+//! Every mutation ends in [`Session::persist`]. Without a [`SaveHook`]
 //! (tests, tools) that writes the file at once, as it always did. The app
 //! installs a hook: `persist` then only marks the document dirty and wakes the
 //! app's writer, which batches the changes of a burst into one write
-//! ([`UnlockedVault::prepare_flush`] under the vault lock, [`FlushJob::write`]
-//! outside it, [`UnlockedVault::finish_flush`] back under it). Whatever must be
+//! ([`Session::prepare_flush`] under the vault lock, [`FlushJob::write`]
+//! outside it, [`Session::finish_flush`] back under it). Whatever must be
 //! on disk *now* (a new password, a backup copy, closing the vault) calls
-//! [`UnlockedVault::persist_now`].
+//! [`Session::persist_now`].
 //!
 //! Writes never go backwards: every job carries the revision it snapshotted,
 //! and a shared gate remembers the newest revision written, so a slow older
@@ -29,7 +29,7 @@ use crate::kernel::session::Commit;
 pub use crate::kernel::session::SaveHook;
 use crate::kernel::tx::Tx;
 
-use super::UnlockedVault;
+use super::Session;
 
 /// One snapshot of the document on its way to disk, sealed off the vault lock.
 pub struct FlushJob {
@@ -52,7 +52,7 @@ impl FlushJob {
     }
 }
 
-impl UnlockedVault {
+impl Session {
     /// Run `body` over the document and commit if it touched it: at once, or
     /// — once the app installed a hook — mark it dirty for the next batched
     /// write. An untouched transaction writes nothing and bumps nothing; on
@@ -222,7 +222,7 @@ impl UnlockedVault {
     }
 }
 
-impl Drop for UnlockedVault {
+impl Drop for Session {
     /// Closing (lock, switch, exit) must not lose batched changes. The app
     /// flushes before it gets here; this is the last line, so it says so.
     fn drop(&mut self) {
@@ -254,14 +254,14 @@ mod tests {
         }
     }
 
-    fn batched() -> (tempfile::TempDir, UnlockedVault, Arc<Wakes>) {
+    fn batched() -> (tempfile::TempDir, Session, Arc<Wakes>) {
         let (dir, mut vault) = empty_vault();
         let wakes = Arc::new(Wakes::default());
         vault.set_write_behind(Some(wakes.clone()));
         (dir, vault, wakes)
     }
 
-    fn change(vault: &mut UnlockedVault, decimals: u32) {
+    fn change(vault: &mut Session, decimals: u32) {
         vault.doc.settings.display_decimals = decimals;
         vault.persist().unwrap();
     }
@@ -274,7 +274,7 @@ mod tests {
             .display_decimals
     }
 
-    fn flush(vault: &mut UnlockedVault) -> Option<Flushed> {
+    fn flush(vault: &mut Session) -> Option<Flushed> {
         let job = vault.prepare_flush().unwrap()?;
         let done = job.write().unwrap();
         vault.finish_flush(&done);
@@ -474,7 +474,7 @@ mod tests {
         assert_eq!(std::fs::read(&vault.path).unwrap(), before);
     }
 
-    fn count_events(vault: &UnlockedVault) -> Arc<AtomicUsize> {
+    fn count_events(vault: &Session) -> Arc<AtomicUsize> {
         let count = Arc::new(AtomicUsize::new(0));
         let seen = count.clone();
         // The wake-up of a hooked commit is an event too; it is not the
@@ -500,7 +500,7 @@ mod tests {
         delivered_with: Option<(Option<u64>, u32)>,
     }
 
-    fn watch_delivery(vault: &UnlockedVault) -> Arc<std::sync::Mutex<Seen>> {
+    fn watch_delivery(vault: &Session) -> Arc<std::sync::Mutex<Seen>> {
         let seen = Arc::new(std::sync::Mutex::new(Seen::default()));
         let record = seen.clone();
         let path = vault.path.clone();

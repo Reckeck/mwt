@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::household::contacts::ContactDraft;
 use crate::kernel::persistence::Flushed;
-use crate::service::{FlushJob, SyncTap, UnlockedVault};
+use crate::service::{FlushJob, Session, SyncTap};
 use mwt_model::{MAX_NOTICE_LOG, NoticeCategory, NoticeRecord};
 use mwt_vault::kernel::session::SaveHook;
 use mwt_vault::vault_io::VaultMirror;
@@ -73,14 +73,14 @@ impl Announcements {
     }
 }
 
-fn open_vault() -> (tempfile::TempDir, UnlockedVault) {
+fn open_vault() -> (tempfile::TempDir, Session) {
     let dir = tempfile::tempdir().unwrap();
-    let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+    let mut vault = Session::create(dir.path().join("test.wallet"), "pw").unwrap();
     peer_sync::set_device(&mut vault, "aaaaaaaa-golden");
     (dir, vault)
 }
 
-fn flush(vault: &mut UnlockedVault) -> Option<Flushed> {
+fn flush(vault: &mut Session) -> Option<Flushed> {
     let job: FlushJob = vault.prepare_flush().unwrap()?;
     let done = job.write().unwrap();
     vault.finish_flush(&done);
@@ -109,7 +109,7 @@ fn notice(key: &str) -> NoticeRecord {
 
 /// The revision the next batched save would carry: one batched `persist`
 /// (revision plus one), flushed, then back to write-through.
-fn probe_revision(vault: &mut UnlockedVault) -> u64 {
+fn probe_revision(vault: &mut Session) -> u64 {
     vault.set_write_behind(Some(Arc::new(Wakes::default())));
     vault.persist().unwrap();
     let done = flush(vault).expect("the probe left the vault dirty");

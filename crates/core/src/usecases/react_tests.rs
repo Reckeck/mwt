@@ -9,7 +9,7 @@ use crate::model::store::{StoreKind, StoreScope};
 use crate::model::transaction::{PaymentTx, Transaction};
 use crate::planning::automations::AutomationDraft;
 use crate::planning::goals::GoalDraft;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 
 use super::react::{Reaction, react, run};
@@ -34,7 +34,7 @@ fn goal_on(store_id: &str) -> GoalDraft {
 }
 
 /// A vault with a goal on a wallet and a workflow that saves into it.
-fn saving_vault() -> (tempfile::TempDir, UnlockedVault, String, String) {
+fn saving_vault() -> (tempfile::TempDir, Session, String, String) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
@@ -60,7 +60,7 @@ fn saving_vault() -> (tempfile::TempDir, UnlockedVault, String, String) {
     (dir, vault, goal.id, saver.id)
 }
 
-fn active(vault: &UnlockedVault, workflow_id: &str) -> bool {
+fn active(vault: &Session, workflow_id: &str) -> bool {
     crate::workflow::service::records::workflow(&vault.doc, workflow_id)
         .unwrap()
         .active
@@ -184,16 +184,16 @@ fn a_failing_reaction_is_reported_and_keeps_the_first_commit() {
     assert!(vault.doc.goals.iter().any(|each| each.id == committed.id));
 }
 
-fn first(vault: &mut UnlockedVault, _event: &DomainEvent) -> Result<()> {
+fn first(vault: &mut Session, _event: &DomainEvent) -> Result<()> {
     vault.doc.settings.schedule_timezone = Some("first".into());
     Ok(())
 }
 
-fn failing(_vault: &mut UnlockedVault, _event: &DomainEvent) -> Result<()> {
+fn failing(_vault: &mut Session, _event: &DomainEvent) -> Result<()> {
     Err(Error::InvalidInput("boom".into()))
 }
 
-fn second(vault: &mut UnlockedVault, _event: &DomainEvent) -> Result<()> {
+fn second(vault: &mut Session, _event: &DomainEvent) -> Result<()> {
     let seen = vault.doc.settings.schedule_timezone.clone();
     vault.doc.settings.schedule_timezone = Some(format!("{}+second", seen.unwrap_or_default()));
     Ok(())

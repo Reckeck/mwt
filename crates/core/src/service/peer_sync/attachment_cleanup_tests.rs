@@ -7,11 +7,11 @@ use crate::model::entity_ref::{EntityKind, EntityRef};
 use crate::model::store::StoreKind;
 use crate::service::test_support::*;
 
-fn reopen(vault: &UnlockedVault) -> UnlockedVault {
-    UnlockedVault::open(vault.path.clone(), "pw").unwrap()
+fn reopen(vault: &Session) -> Session {
+    Session::open(vault.path.clone(), "pw").unwrap()
 }
 
-fn tx_of(vault: &mut UnlockedVault) -> String {
+fn tx_of(vault: &mut Session) -> String {
     let card = store(vault, "Card", StoreKind::Bank, None);
     crate::usecases::money::transactions::add_transaction(vault, income(&card, "100", "salary"))
         .unwrap()
@@ -20,7 +20,7 @@ fn tx_of(vault: &mut UnlockedVault) -> String {
         .clone()
 }
 
-fn attach(vault: &mut UnlockedVault, tx_id: &str) -> String {
+fn attach(vault: &mut Session, tx_id: &str) -> String {
     crate::usecases::household::attachments::add_attachment_file(
         vault,
         EntityRef::new(EntityKind::Tx, tx_id),

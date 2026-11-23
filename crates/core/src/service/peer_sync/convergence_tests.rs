@@ -187,13 +187,13 @@ enum Start {
     Separate,
 }
 
-fn three_devices(start: Start) -> (Vec<tempfile::TempDir>, Vec<UnlockedVault>) {
+fn three_devices(start: Start) -> (Vec<tempfile::TempDir>, Vec<Session>) {
     match start {
         Start::Copied => {
             let (dir, left, right) = two_devices();
             let copy = dir.path().join("third.wallet");
             std::fs::copy(&left.path, &copy).unwrap();
-            let mut third = UnlockedVault::open(copy, "pw").unwrap();
+            let mut third = Session::open(copy, "pw").unwrap();
             peer_sync::set_device(&mut third, "cccccccc-third");
             (vec![dir], vec![left, right, third])
         }
@@ -213,7 +213,7 @@ fn three_devices(start: Start) -> (Vec<tempfile::TempDir>, Vec<UnlockedVault>) {
 }
 
 /// `from` sends what `to` lacks; only `to` changes. Whether `to` applied.
-pub(super) fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) -> bool {
+pub(super) fn pull(devices: &mut [Session], from: usize, to: usize) -> bool {
     let from_manifest =
         crate::usecases::sync::read::sync_manifest(&mut devices[from], None).unwrap();
     let to_manifest = crate::usecases::sync::read::sync_manifest(&mut devices[to], None).unwrap();
@@ -278,7 +278,7 @@ pub(super) fn pick<'items, Item>(rng: &mut Rng, items: &'items [Item]) -> Option
     }
 }
 
-fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+fn apply_edit(kind: Edit, vault: &mut Session, rng: &mut Rng, ledger: &mut Ledger) {
     match kind {
         Edit::CreateTx => {
             let store = vault.doc.stores[0].id.clone();
@@ -457,7 +457,7 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
     }
 }
 
-pub(super) fn event_ids(vault: &UnlockedVault) -> Vec<String> {
+pub(super) fn event_ids(vault: &Session) -> Vec<String> {
     vault
         .doc
         .shared_events
@@ -475,7 +475,7 @@ pub(super) fn guest(name: String) -> SharedParticipantDraft {
 
 /// Shared-event edits. A refusal of the core (a busy participant, a
 /// settlement over the debt) is a normal outcome of a random edit.
-fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+fn apply_shared(kind: Edit, vault: &mut Session, rng: &mut Rng, ledger: &mut Ledger) {
     let number = ledger.fresh();
     let Some(event) = pick(rng, &event_ids(vault)).cloned() else {
         if matches!(kind, Edit::SharedCreateEvent | Edit::SharedAddParticipant) {
@@ -621,7 +621,7 @@ fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &m
     }
 }
 
-fn envelope_ids(vault: &UnlockedVault) -> Vec<String> {
+fn envelope_ids(vault: &Session) -> Vec<String> {
     vault
         .doc
         .envelopes
@@ -632,7 +632,7 @@ fn envelope_ids(vault: &UnlockedVault) -> Vec<String> {
 
 /// Envelope journal edits. A refusal (nothing free, nothing to release) is a
 /// normal outcome of a random edit.
-fn apply_envelope(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+fn apply_envelope(kind: Edit, vault: &mut Session, rng: &mut Rng, ledger: &mut Ledger) {
     let number = ledger.fresh();
     let ids = envelope_ids(vault);
     match kind {
@@ -688,7 +688,7 @@ fn apply_envelope(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: 
     }
 }
 
-fn savings_ids(vault: &UnlockedVault) -> Vec<String> {
+fn savings_ids(vault: &Session) -> Vec<String> {
     vault
         .doc
         .stores
@@ -699,7 +699,7 @@ fn savings_ids(vault: &UnlockedVault) -> Vec<String> {
 }
 
 /// Emergency-fund scope and per-currency inflation modes.
-fn apply_fund(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+fn apply_fund(kind: Edit, vault: &mut Session, rng: &mut Rng, ledger: &mut Ledger) {
     let number = ledger.fresh();
     match kind {
         Edit::CreateSavings => {
@@ -753,7 +753,7 @@ const MOMENTS: &[&str] = &[
     "2026-03-03T10:00:00Z",
 ];
 
-fn adjustment_ids(vault: &UnlockedVault) -> Vec<String> {
+fn adjustment_ids(vault: &Session) -> Vec<String> {
     vault
         .doc
         .transactions
@@ -763,7 +763,7 @@ fn adjustment_ids(vault: &UnlockedVault) -> Vec<String> {
         .collect()
 }
 
-fn apply_adjustment(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+fn apply_adjustment(kind: Edit, vault: &mut Session, rng: &mut Rng, ledger: &mut Ledger) {
     let store_id = vault.doc.stores[0].id.clone();
     match kind {
         Edit::CountBalance => {
@@ -814,7 +814,7 @@ fn apply_adjustment(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger
 /// An exchange (its terminal is device-local, its import settings sync) and a
 /// car (mileage and insurance are separate fields), made on device 0 and
 /// pulled by the others before the random edits start.
-fn add_shared_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
+fn add_shared_stores(devices: &mut [Session], ledger: &mut Ledger) {
     ledger.exchange_id = crate::usecases::money::stores::create_store_with(
         &mut devices[0],
         "conv exchange",
@@ -873,7 +873,7 @@ fn add_shared_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
 /// Exchange API keys (dummy strings): add or replace, retarget, clear. The
 /// clear mirrors `clear_exchange_key` in the app crate. Keys are local to a
 /// device, so these edits must leave the synced state untouched.
-fn apply_exchange_key(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+fn apply_exchange_key(kind: Edit, vault: &mut Session, rng: &mut Rng, ledger: &mut Ledger) {
     // Keys live on the device (level 3 only) and never travel: each device
     // is raised once, the first time it edits a key.
     if vault.security_level() != crate::ipc_contract::security::SecurityLevel::Crypto {
@@ -929,7 +929,7 @@ const TIMEFRAMES: &[&str] = &["1m", "15m", "1h", "4h", "1d"];
 const INSURED_UNTIL: &[&str] = &["2027-01-01", "2027-02-01", "2027-03-01"];
 
 /// The terminal edit is device-local: it must never reach another device.
-fn apply_device_and_car(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+fn apply_device_and_car(kind: Edit, vault: &mut Session, rng: &mut Rng, ledger: &mut Ledger) {
     match kind {
         Edit::TerminalTimeframe => {
             let patch = crate::service::TerminalPatch {
@@ -967,7 +967,7 @@ fn apply_device_and_car(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, le
     }
 }
 
-fn created_categories(vault: &UnlockedVault) -> Vec<String> {
+fn created_categories(vault: &Session) -> Vec<String> {
     vault
         .doc
         .categories
@@ -977,7 +977,7 @@ fn created_categories(vault: &UnlockedVault) -> Vec<String> {
         .collect()
 }
 
-fn view_of(vault: &mut UnlockedVault) -> BTreeMap<String, Value> {
+fn view_of(vault: &mut Session) -> BTreeMap<String, Value> {
     let value = peer_sync::doc_value(vault).unwrap();
     view::records(&value)
 }
@@ -1265,7 +1265,7 @@ fn a_payment_revived_by_a_later_edit_stays_in_its_event() {
     assert_eq!(catalog::payment_revived_after_its_deletion(), (true, 1));
 }
 
-fn violations_of(items: &[Item], vault: &UnlockedVault) -> Vec<String> {
+fn violations_of(items: &[Item], vault: &Session) -> Vec<String> {
     catalog::invariants(vault, &Ledger::default())
         .into_iter()
         .filter(|violation| items.contains(&violation.item))

@@ -7,13 +7,13 @@ use crate::planning::allocation::{
     AssetClassTarget, AssetClassesUpdate, AssetClassesView, asset_classes,
     check_assign_asset_class, plan_set_asset_classes, preset_classes,
 };
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::sync::sync_ids::asset_class_id;
 
 /// Replace the baskets. Shares must add up to 100; a basket that is gone
 /// takes its assignments with it. An empty list brings the preset back.
 pub fn set_asset_classes(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     classes: Vec<AssetClass>,
 ) -> Result<AssetClassesView> {
     let named = classes
@@ -70,7 +70,7 @@ pub fn set_asset_classes(
 /// Put an asset or a store in a basket, or take it out with `None`.
 /// Assigning to a preset basket saves the preset first.
 pub fn assign_asset_class(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     target: AssetClassTarget,
     class_id: Option<String>,
 ) -> Result<AssetClassesView> {

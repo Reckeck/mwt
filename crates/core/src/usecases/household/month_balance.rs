@@ -11,13 +11,13 @@ use crate::money::month_balance::{
     month_balance as balance, parse_carry_since,
 };
 use crate::money::worth::FlowClass;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use mwt_reports::overview::ReportFilter;
 
 /// The vault as the month balance's source for the reports area: it holds the
 /// filter, the moment and the zone the balance was asked for.
 struct VaultReports<'ask> {
-    vault: &'ask UnlockedVault,
+    vault: &'ask Session,
     filter: &'ask ReportFilter,
     now: i64,
     zone: &'ask str,
@@ -93,7 +93,7 @@ impl ReportSource for VaultReports<'_> {
 /// The balance of the filter's months (the last twelve by default). The
 /// carry starts at `settings.carry_since`, even before the period does.
 pub fn month_balance(
-    vault: &UnlockedVault,
+    vault: &Session,
     filter: &ReportFilter,
     now: i64,
     zone: &str,
@@ -108,7 +108,7 @@ pub fn month_balance(
 }
 
 /// Carry the unspent over from `month` (`YYYY-MM`), or stop carrying (`None`).
-pub fn set_carry_over(vault: &mut UnlockedVault, month: Option<&str>) -> Result<()> {
+pub fn set_carry_over(vault: &mut Session, month: Option<&str>) -> Result<()> {
     let since = parse_carry_since(month)?;
     if vault.doc.settings.carry_since == since {
         return Ok(());

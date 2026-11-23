@@ -23,7 +23,7 @@ fn peer(name: &str) -> PeerRef {
 }
 
 /// `to` takes what `from` has and `to` lacks; nothing flows back.
-fn pull_one_way(from: &mut UnlockedVault, to: &mut UnlockedVault) {
+fn pull_one_way(from: &mut Session, to: &mut Session) {
     let from_manifest = crate::usecases::sync::read::sync_manifest(from, None).unwrap();
     let to_manifest = crate::usecases::sync::read::sync_manifest(to, None).unwrap();
     let (to_wants, _) = crate::usecases::sync::read::sync_diff(to, &to_manifest, &from_manifest);
@@ -32,11 +32,11 @@ fn pull_one_way(from: &mut UnlockedVault, to: &mut UnlockedVault) {
 }
 
 /// Close the vault and open it again as the same device, as the app does.
-fn reopen(mut vault: UnlockedVault, device: &str) -> UnlockedVault {
+fn reopen(mut vault: Session, device: &str) -> Session {
     vault.persist().unwrap();
     let path = vault.path.clone();
     drop(vault);
-    UnlockedVault::open_as(path, "pw", Some(device)).unwrap()
+    Session::open_as(path, "pw", Some(device)).unwrap()
 }
 
 const LEFT: &str = "aaaaaaaa-left";
@@ -61,7 +61,7 @@ fn incomplete_graph() -> String {
 }
 
 /// Both devices hold the same active workflow that a required field now stops.
-fn devices_with_incomplete_workflow() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
+fn devices_with_incomplete_workflow() -> (tempfile::TempDir, Session, Session, String) {
     let (dir, mut left, mut right) = two_devices();
     let saved = crate::usecases::workflow::records::save_workflow(
         &mut left,
@@ -86,7 +86,7 @@ fn devices_with_incomplete_workflow() -> (tempfile::TempDir, UnlockedVault, Unlo
     (dir, left, right, id)
 }
 
-fn off_runs(vault: &UnlockedVault) -> Vec<String> {
+fn off_runs(vault: &Session) -> Vec<String> {
     vault
         .doc
         .workflow_runs
@@ -128,7 +128,7 @@ fn opening_again_does_not_grow_the_run_list() {
 
 // -- 125: a built-in category deleted elsewhere --------------------------------
 
-fn has_category(vault: &UnlockedVault, key: &str) -> bool {
+fn has_category(vault: &Session, key: &str) -> bool {
     vault
         .doc
         .categories
@@ -179,7 +179,7 @@ fn staged(store: &str, exec_id: &str) -> PendingImport {
 }
 
 /// An exchange wallet both devices hold.
-fn exchange_store(left: &mut UnlockedVault, right: &mut UnlockedVault) -> String {
+fn exchange_store(left: &mut Session, right: &mut Session) -> String {
     let id = crate::usecases::money::stores::create_store_with(
         left,
         "Bybit",
@@ -198,7 +198,7 @@ fn exchange_store(left: &mut UnlockedVault, right: &mut UnlockedVault) -> String
     id
 }
 
-fn pending_ids(vault: &UnlockedVault) -> Vec<String> {
+fn pending_ids(vault: &Session) -> Vec<String> {
     let mut ids: Vec<String> = vault
         .doc
         .pending_imports
@@ -209,7 +209,7 @@ fn pending_ids(vault: &UnlockedVault) -> Vec<String> {
     ids
 }
 
-fn booked(vault: &UnlockedVault, exec_id: &str) -> usize {
+fn booked(vault: &Session, exec_id: &str) -> usize {
     vault
         .doc
         .transactions
@@ -331,7 +331,7 @@ fn the_queue_rule_is_idempotent_and_undone_with_its_batch() {
 
 // -- 99: a whole edited document against the base the user saw ------------------
 
-fn new_contact(vault: &mut UnlockedVault, name: &str) -> String {
+fn new_contact(vault: &mut Session, name: &str) -> String {
     crate::usecases::household::contacts::create_contact(
         vault,
         crate::household::contacts::ContactDraft {
@@ -346,7 +346,7 @@ fn new_contact(vault: &mut UnlockedVault, name: &str) -> String {
     .id
 }
 
-fn contact_names(vault: &UnlockedVault) -> Vec<String> {
+fn contact_names(vault: &Session) -> Vec<String> {
     let mut names: Vec<String> = vault
         .doc
         .contacts
@@ -501,7 +501,7 @@ fn a_setting_changed_by_the_editor_does_not_undo_a_peers_other_setting() {
 
 // -- 99: restoring a copy in a group ------------------------------------------
 
-fn live_peer(vault: &mut UnlockedVault) {
+fn live_peer(vault: &mut Session) {
     crate::usecases::sync::trust::sync_trust_peer(vault, "dev-b", "Phone", "aa").unwrap();
 }
 

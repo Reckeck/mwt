@@ -5,8 +5,8 @@
 //! says so and the payload is not encrypted. Setting, changing or removing
 //! the password rewrites the file at once, atomically.
 //!
-//! A new key ([`UnlockedVault::set_password_with`],
-//! [`UnlockedVault::change_password_with`]) goes through these steps, each of
+//! A new key ([`Session::set_password_with`],
+//! [`Session::change_password_with`]) goes through these steps, each of
 //! which leaves files one of the two passwords opens if the process dies
 //! right after it:
 //!
@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 use zeroize::Zeroizing;
 
-use super::UnlockedVault;
+use super::Session;
 use super::security_level;
 use crate::crypto::{self, SealKey};
 use crate::error::{Error, Result};
@@ -133,7 +133,7 @@ pub(crate) enum RotateStep {
     CopyDone,
 }
 
-impl UnlockedVault {
+impl Session {
     /// Whether the file is encrypted (the vault has a password).
     pub fn is_encrypted(&self) -> bool {
         self.key.as_ref().is_none_or(|key| !key.is_plain())
@@ -494,9 +494,9 @@ mod tests {
     use crate::crypto::file_is_encrypted;
     use tempfile::tempdir;
 
-    fn plain_vault() -> (tempfile::TempDir, UnlockedVault) {
+    fn plain_vault() -> (tempfile::TempDir, Session) {
         let dir = tempdir().unwrap();
-        let vault = UnlockedVault::create_with(dir.path().join("v.wallet"), None).unwrap();
+        let vault = Session::create_with(dir.path().join("v.wallet"), None).unwrap();
         (dir, vault)
     }
 
@@ -510,7 +510,7 @@ mod tests {
         drop(vault);
         // Whatever is typed opens it; the reopened vault stays without one.
         for typed in ["", "anything"] {
-            let reopened = UnlockedVault::open(dir.path().join("v.wallet"), typed).unwrap();
+            let reopened = Session::open(dir.path().join("v.wallet"), typed).unwrap();
             assert_eq!(reopened.doc.id, id);
             assert!(!reopened.is_encrypted());
             assert!(reopened.check_password("whatever").is_ok());
@@ -533,7 +533,7 @@ mod tests {
         bytes[middle] ^= 1;
         std::fs::write(&path, bytes).unwrap();
         assert!(matches!(
-            UnlockedVault::open(path, ""),
+            Session::open(path, ""),
             Err(Error::Deserialize(_))
         ));
         drop(dir);
@@ -558,10 +558,10 @@ mod tests {
         vault.set_password("three", false).unwrap();
         drop(vault);
         assert!(matches!(
-            UnlockedVault::open(path.clone(), "one"),
+            Session::open(path.clone(), "one"),
             Err(Error::Secret)
         ));
-        assert!(UnlockedVault::open(path, "three").unwrap().is_encrypted());
+        assert!(Session::open(path, "three").unwrap().is_encrypted());
         drop(dir);
     }
 
@@ -639,14 +639,14 @@ mod tests {
         vault.persist_now().unwrap();
         assert!(file_is_encrypted(&vault.path));
         drop(vault);
-        assert!(UnlockedVault::open(dir.path().join("test.wallet"), "pw").is_ok());
+        assert!(Session::open(dir.path().join("test.wallet"), "pw").is_ok());
     }
 
     #[test]
     fn an_empty_password_is_refused_everywhere() {
         let dir = tempdir().unwrap();
         assert!(matches!(
-            UnlockedVault::create_with(dir.path().join("a.wallet"), Some("")),
+            Session::create_with(dir.path().join("a.wallet"), Some("")),
             Err(Error::InvalidInput(_))
         ));
         let (_dir, mut vault) = plain_vault();
@@ -728,7 +728,7 @@ mod tests {
     use crate::model::store::{ExchangeProvider, StoreKind};
     use crate::service::StoreExtras;
 
-    fn bybit(vault: &mut UnlockedVault) -> String {
+    fn bybit(vault: &mut Session) -> String {
         crate::usecases::money::stores::create_store_with(
             vault,
             "Bybit",
@@ -749,7 +749,7 @@ mod tests {
     const STRONG: &str = "Tr0ub4dor&3-Horse-Battery!";
 
     /// A level-3 vault (password "pw") with an exchange key on this device.
-    fn level3_with_key() -> (tempfile::TempDir, UnlockedVault, String) {
+    fn level3_with_key() -> (tempfile::TempDir, Session, String) {
         let (dir, mut vault) = empty_vault();
         vault.raise_to_level3_for_tests();
         let store = bybit(&mut vault);
@@ -858,8 +858,7 @@ mod tests {
         assert_ne!(first.name, second.name);
         let ancient = {
             let other_dir = tempdir().unwrap();
-            let other =
-                UnlockedVault::create(other_dir.path().join("a.wallet"), "ancient").unwrap();
+            let other = Session::create(other_dir.path().join("a.wallet"), "ancient").unwrap();
             let bytes = std::fs::read(&other.path).unwrap();
             drop(other);
             bytes
@@ -927,10 +926,10 @@ mod tests {
         drop(vault);
         let path = dir.path().join("test.wallet");
         assert!(matches!(
-            UnlockedVault::open(path.clone(), "pw"),
+            Session::open(path.clone(), "pw"),
             Err(Error::Secret)
         ));
-        let reopened = UnlockedVault::open(path, STRONG).unwrap();
+        let reopened = Session::open(path, STRONG).unwrap();
         assert_eq!(reopened.security_level(), SecurityLevel::Crypto);
         let key = reopened.device_key(&store).unwrap().expect("the key stays");
         assert_eq!(key.keys.api_key, "KEYKEYKEY123");
@@ -1013,8 +1012,7 @@ mod tests {
         let (dir, mut vault) = empty_vault();
         let foreign = {
             let other_dir = tempdir().unwrap();
-            let other =
-                UnlockedVault::create(other_dir.path().join("a.wallet"), "ancient").unwrap();
+            let other = Session::create(other_dir.path().join("a.wallet"), "ancient").unwrap();
             std::fs::read(&other.path).unwrap()
         };
         let presync = dir.path().join("test.wallet.presync.bak");
@@ -1081,8 +1079,7 @@ mod tests {
         // A copy from before a sync under a key nobody here knows.
         let foreign = {
             let other_dir = tempdir().unwrap();
-            let other =
-                UnlockedVault::create(other_dir.path().join("a.wallet"), "ancient").unwrap();
+            let other = Session::create(other_dir.path().join("a.wallet"), "ancient").unwrap();
             std::fs::read(&other.path).unwrap()
         };
         let presync = dir.path().join("test.wallet.presync.bak");
@@ -1165,8 +1162,8 @@ mod tests {
         assert!(result.is_err(), "{step:?}");
         drop(vault);
 
-        let reopened = UnlockedVault::open(path.clone(), "pw")
-            .or_else(|_| UnlockedVault::open(path.clone(), "new"))
+        let reopened = Session::open(path.clone(), "pw")
+            .or_else(|_| Session::open(path.clone(), "new"))
             .unwrap_or_else(|err| panic!("{step:?}: the vault opens with neither: {err}"));
         let key = reopened
             .device_key(&store)

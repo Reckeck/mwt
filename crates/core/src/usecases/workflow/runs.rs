@@ -22,7 +22,7 @@ use crate::money::worth::FlowClass;
 use crate::planning::automations::{MAX_CATCH_UP, outflow};
 use crate::planning::flows::flows_between;
 use crate::planning::schedule::{fresh_moments, processed_dates};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::time::{Clock, FixedClock, secs_or_now, unix_secs};
 use crate::usecases::planning::notifications::notice;
 use crate::usecases::sync::peer_sync;
@@ -55,18 +55,18 @@ use crate::workflow::{RunKey, automation};
 
 /// Set one mark of a workflow. Applied to the document at once: the run or
 /// the caller that asked commits.
-pub fn wf_set_mark(vault: &mut UnlockedVault, workflow_id: &str, key: &str, value: &str) {
+pub fn wf_set_mark(vault: &mut Session, workflow_id: &str, key: &str, value: &str) {
     marks::set_mark(&mut vault.doc, workflow_id, key, value);
 }
 
 /// Set a variable. Applied to the document at once, like the marks.
-pub fn wf_set_var(vault: &mut UnlockedVault, scope: VarScope, name: &str, value: &WfValue) {
+pub fn wf_set_var(vault: &mut Session, scope: VarScope, name: &str, value: &WfValue) {
     set_var(&mut vault.doc, scope, name, value, now_iso());
 }
 
 /// A schedule mark never stays below a moment whose run key is booked:
 /// whatever moved it back (an undo), the booked moments do not fire again.
-pub fn keep_schedule_marks(vault: &mut UnlockedVault) {
+pub fn keep_schedule_marks(vault: &mut Session) {
     for (workflow_id, key, moment) in marks::raised_schedule_marks(&vault.doc) {
         marks::set_mark(&mut vault.doc, &workflow_id, &key, &moment);
     }
@@ -75,7 +75,7 @@ pub fn keep_schedule_marks(vault: &mut UnlockedVault) {
 /// Check money and rules, then add the operations; all of them or none.
 /// Not persisted: the run's caller writes once.
 pub fn wf_insert(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     txs: Vec<Transaction>,
     now: i64,
 ) -> std::result::Result<Vec<Transaction>, String> {
@@ -93,7 +93,7 @@ enum InsertRefusal {
 }
 
 fn insert_checked(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     txs: Vec<Transaction>,
     now: i64,
 ) -> std::result::Result<Vec<Transaction>, InsertRefusal> {
@@ -182,7 +182,7 @@ pub fn wf_outflow_in(books: &Books<'_>, tx: &Transaction, currency: &str) -> Opt
 
 /// The host applied the run's effects straight to the document: one touched
 /// transaction commits them.
-fn commit_applied(vault: &mut UnlockedVault) -> Result<()> {
+fn commit_applied(vault: &mut Session) -> Result<()> {
     vault.transact(|tx| {
         tx.touch();
         Ok(())
@@ -191,14 +191,14 @@ fn commit_applied(vault: &mut UnlockedVault) -> Result<()> {
 
 /// Take a run out of the journal as a deletion that reaches the other devices
 /// (a tombstone). Not committed: the caller's commit writes it.
-fn forget_run(vault: &mut UnlockedVault, run_id: &str) -> Result<()> {
+fn forget_run(vault: &mut Session, run_id: &str) -> Result<()> {
     vault
         .run(|tx| tx.collection::<WorkflowRun>().remove(run_id).map(drop))
         .map(drop)
 }
 
 /// Take a wait out. Not committed: the caller's commit writes it.
-fn forget_wait(vault: &mut UnlockedVault, wait_id: &str) -> Result<()> {
+fn forget_wait(vault: &mut Session, wait_id: &str) -> Result<()> {
     vault
         .run(|tx| tx.collection::<WorkflowWait>().remove(wait_id).map(drop))
         .map(drop)
@@ -251,7 +251,7 @@ fn write_run(tx: &mut Tx<'_>, report: &RunReport, pass: &mut WorkflowPass, ru: b
 
 /// Keep what a live run left: its journal entry, queue, wait and notices.
 pub(crate) fn keep_run(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     report: &RunReport,
     pass: &mut WorkflowPass,
 ) -> Result<()> {
@@ -262,7 +262,7 @@ pub(crate) fn keep_run(
 /// A run that never happened, in the journal with its reason, so nothing is
 /// lost without a trace.
 fn keep_dropped(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     workflow_id: &str,
     trigger: &str,
     reason: &str,
@@ -282,7 +282,7 @@ fn keep_dropped(
 }
 
 /// Log the notices a pass made; the ones that are new come back.
-fn log_pass_notices(vault: &mut UnlockedVault, pass: &mut WorkflowPass) -> Result<()> {
+fn log_pass_notices(vault: &mut Session, pass: &mut WorkflowPass) -> Result<()> {
     if !pass.notices.is_empty() {
         pass.notices = crate::usecases::planning::notifications::log_notices(
             vault,
@@ -296,7 +296,7 @@ fn log_pass_notices(vault: &mut UnlockedVault, pass: &mut WorkflowPass) -> Resul
 
 /// Run one trigger for real and keep the result. Returns the events sent.
 fn fire(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     workflow: &Workflow,
     graph: &Graph,
     mut ctx: RunContext,
@@ -326,7 +326,7 @@ fn fire(
 /// Several firings of one trigger in a pass: with a "Queue" in the workflow,
 /// one run that hands them on one by one; otherwise a run each.
 fn fire_all(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     workflow: &Workflow,
     graph: &Graph,
     mut firings: Vec<RunContext>,
@@ -352,7 +352,7 @@ fn fire_all(
 
 /// Run the workflows listening for events, as deep as `MAX_EVENT_DEPTH`.
 pub(crate) fn run_events(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     mut events: Vec<EmittedEvent>,
     now: i64,
     zone: &str,
@@ -409,7 +409,7 @@ pub(crate) fn run_events(
 /// refused entry gives way to the new run; still short, it stays and the
 /// error says why.
 pub fn retry_workflow_run(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     run_id: &str,
     now: i64,
     zone: &str,
@@ -487,7 +487,7 @@ pub fn retry_workflow_run(
 /// Retry a refused run from its queued operations: they are dated now and the
 /// money checked now. Still short, the refusal and the queue stay.
 fn retry_queued_refusal(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     batch: QueuedActions,
     now: i64,
 ) -> Result<WorkflowPass> {
@@ -512,7 +512,7 @@ fn retry_queued_refusal(
 }
 
 /// Dismiss a refused run: it stays in the journal as skipped.
-pub fn skip_workflow_run(vault: &mut UnlockedVault, run_id: &str) -> Result<WorkflowRun> {
+pub fn skip_workflow_run(vault: &mut Session, run_id: &str) -> Result<WorkflowRun> {
     vault.transact(|tx| {
         let is_refused = match tx.collection::<WorkflowRun>().get(run_id) {
             Some(run) => matches!(run.outcome, RunOutcome::Rejected { .. }),
@@ -542,7 +542,7 @@ pub fn skip_workflow_run(vault: &mut UnlockedVault, run_id: &str) -> Result<Work
 
 /// Run a workflow now from a trigger (a "Run manually" one by default).
 pub fn run_workflow_now(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     trigger_node: Option<&str>,
     now: i64,
@@ -589,7 +589,7 @@ pub fn run_workflow_now(
 
 /// Emulate a graph — saved or still in the editor — on a copy of the vault.
 pub fn dry_run_workflow(
-    vault: &UnlockedVault,
+    vault: &Session,
     graph_json: &str,
     workflow_id: Option<&str>,
     trigger_node: Option<&str>,
@@ -632,7 +632,7 @@ pub fn dry_run_workflow(
 
 /// Run every test of a workflow by emulation; nothing is written.
 pub fn run_workflow_tests(
-    vault: &UnlockedVault,
+    vault: &Session,
     workflow_id: &str,
     now: i64,
     zone: &str,
@@ -662,7 +662,7 @@ pub fn run_workflow_tests(
 /// Answer a "Wait for confirmation" question: the run goes on from "Yes" or
 /// "No" right away.
 pub fn answer_workflow_wait(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     yes: bool,
     now: i64,
@@ -732,13 +732,13 @@ pub fn answer_workflow_wait(
 
 /// Fire every trigger that is due: waits that are over, schedules, new
 /// operations, thresholds crossed, then the events they sent.
-pub fn run_due_workflows(vault: &mut UnlockedVault, now: i64, zone: &str) -> Result<WorkflowPass> {
+pub fn run_due_workflows(vault: &mut Session, now: i64, zone: &str) -> Result<WorkflowPass> {
     run_due_workflows_at(vault, &FixedClock(now), zone)
 }
 
 /// [`run_due_workflows`] at the moment `clock` reads.
 pub fn run_due_workflows_at(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     clock: &dyn Clock,
     zone: &str,
 ) -> Result<WorkflowPass> {
@@ -763,7 +763,7 @@ pub fn run_due_workflows_at(
 /// Continue the runs whose wait is over: a timer goes on, a question nobody
 /// answered in time counts as «No».
 fn resume_due_waits(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     now: i64,
     zone: &str,
     pass: &mut WorkflowPass,
@@ -834,7 +834,7 @@ fn resume_due_waits(
 /// in the journal as skipped. Automations are not held to the hourly limit of
 /// workflows: a catch-up after a month away is expected to book many at once.
 fn fire_due_automations(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     now: i64,
     zone: &str,
     pass: &mut WorkflowPass,
@@ -905,7 +905,7 @@ fn fire_due_automations(
 
 /// What an automation books belongs to its property (plan G4): the operations
 /// added since `before` get the link.
-fn link_to_property(vault: &mut UnlockedVault, workflow: &Workflow, before: usize) {
+fn link_to_property(vault: &mut Session, workflow: &Workflow, before: usize) {
     let Some(property) = workflow
         .automation
         .as_ref()
@@ -937,7 +937,7 @@ struct Firing<'run> {
 
 /// Fire the triggers of an ordinary workflow that are due.
 fn fire_triggers(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     workflow: &Workflow,
     now: i64,
     zone: &str,
@@ -979,7 +979,7 @@ fn fire_triggers(
 }
 
 fn fire_schedule(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     firing: &Firing<'_>,
     trigger: &Node,
     pass: &mut WorkflowPass,
@@ -1036,7 +1036,7 @@ fn fire_schedule(
 }
 
 fn fire_transactions(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     firing: &Firing<'_>,
     trigger: &Node,
     pass: &mut WorkflowPass,
@@ -1076,7 +1076,7 @@ fn fire_transactions(
 }
 
 fn fire_source(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     firing: &Firing<'_>,
     trigger: &Node,
     pass: &mut WorkflowPass,
@@ -1149,7 +1149,7 @@ fn fire_source(
 }
 
 fn fire_threshold(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     firing: &Firing<'_>,
     trigger: &Node,
     pass: &mut WorkflowPass,

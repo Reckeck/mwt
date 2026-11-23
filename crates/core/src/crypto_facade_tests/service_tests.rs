@@ -26,7 +26,7 @@ use crate::model::cryptotrack::{
 };
 use crate::model::store::{AssetRef, Holding, Store, StoreKind};
 use crate::model::vault::VaultDoc;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::amount;
 use crate::usecases::cryptotrack::{apply, operations, recompute};
 
@@ -241,13 +241,10 @@ fn a_retired_wallet_is_an_archived_crypto_store_no_address_drives() {
     assert!(!set.contains("live"));
 }
 
-fn twin() -> (UnlockedVault, UnlockedVault) {
+fn twin() -> (Session, Session) {
     let mut doc = doc_with_account();
     doc.crypto_events.push(event("e1"));
-    (
-        UnlockedVault::in_memory(doc.clone()),
-        UnlockedVault::in_memory(doc),
-    )
+    (Session::in_memory(doc.clone()), Session::in_memory(doc))
 }
 
 #[test]

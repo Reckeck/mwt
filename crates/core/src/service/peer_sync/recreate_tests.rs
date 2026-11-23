@@ -12,7 +12,7 @@ use crate::money::valuation::ValuationInput;
 use crate::planning::goals::GoalDraft;
 use crate::service::test_support::{amount, income, store};
 
-fn pair() -> (tempfile::TempDir, Vec<UnlockedVault>, Ledger) {
+fn pair() -> (tempfile::TempDir, Vec<Session>, Ledger) {
     let (dir, left, right) = two_devices();
     let mut devices = vec![left, right];
     let mut ledger = Ledger::default();
@@ -20,7 +20,7 @@ fn pair() -> (tempfile::TempDir, Vec<UnlockedVault>, Ledger) {
     (dir, devices, ledger)
 }
 
-fn meet(devices: &mut [UnlockedVault]) {
+fn meet(devices: &mut [Session]) {
     let (left, right) = devices.split_at_mut(1);
     settle(&mut left[0], &mut right[0]);
 }
@@ -38,7 +38,7 @@ fn terms(contact: &str, note: &str) -> DebtTermsDraft {
     }
 }
 
-fn notes(vault: &UnlockedVault) -> Vec<String> {
+fn notes(vault: &Session) -> Vec<String> {
     vault
         .doc
         .debt_terms
@@ -211,13 +211,7 @@ fn a_valuation_deleted_on_one_device_and_replaced_on_the_other_end_equal() {
     assert_eq!(devices[0].doc.valuations, devices[1].doc.valuations);
 }
 
-fn goal_setup() -> (
-    tempfile::TempDir,
-    UnlockedVault,
-    UnlockedVault,
-    String,
-    String,
-) {
+fn goal_setup() -> (tempfile::TempDir, Session, Session, String, String) {
     let (dir, mut left, mut right) = two_devices();
     let wallet = store(&mut left, "Cash", StoreKind::Cash, None);
     crate::usecases::money::transactions::add_transaction(

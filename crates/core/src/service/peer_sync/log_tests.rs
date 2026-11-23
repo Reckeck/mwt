@@ -21,7 +21,7 @@ fn notice(key: &str, delivered_at: &str) -> NoticeRecord {
     }
 }
 
-fn keys(vault: &UnlockedVault) -> Vec<String> {
+fn keys(vault: &Session) -> Vec<String> {
     let mut keys: Vec<String> = vault
         .doc
         .notification_log
@@ -40,7 +40,7 @@ fn peer(name: &str) -> PeerRef {
 }
 
 /// Pull right's records into left and return the id of the batch it made.
-fn exchange_batch(left: &mut UnlockedVault, right: &mut UnlockedVault) -> String {
+fn exchange_batch(left: &mut Session, right: &mut Session) -> String {
     let (applied_left, _) = exchange(left, right);
     applied_left.expect("left applied a batch").id
 }
@@ -113,7 +113,7 @@ fn a_deleted_budget_does_not_bring_its_notices_back() {
     assert!(keys(&right).is_empty(), "{:?}", keys(&right));
 }
 
-fn fill(vault: &mut UnlockedVault, prefix: &str, count: usize) {
+fn fill(vault: &mut Session, prefix: &str, count: usize) {
     for index in 0..count {
         // Every record shares one delivery time: only the key can tell them apart.
         vault.doc.notification_log.push(notice(

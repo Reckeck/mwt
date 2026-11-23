@@ -8,12 +8,12 @@ use crate::model::transaction::Transaction;
 use crate::model::transaction::{KindDetails, PriceStamp, TopupTx};
 use crate::model::vault::now_iso;
 use crate::planning::automations::AutomationDraft;
+use crate::service::Session;
 use crate::service::StoreExtras;
-use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 
-fn property(vault: &mut UnlockedVault, category: PropertyCategory) -> String {
+fn property(vault: &mut Session, category: PropertyCategory) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         &format!("{category:?}"),
@@ -44,7 +44,7 @@ fn thing(symbol: &str) -> AssetRef {
     }
 }
 
-fn buy(vault: &mut UnlockedVault, store_id: &str, symbol: &str, price: &str, when: &str) {
+fn buy(vault: &mut Session, store_id: &str, symbol: &str, price: &str, when: &str) {
     let mut tx = Transaction::Topup(TopupTx {
         meta: meta("bought", &["income_other"]),
         store_id: store_id.to_string(),

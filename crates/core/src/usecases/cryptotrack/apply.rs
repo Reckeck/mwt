@@ -16,7 +16,7 @@ use crate::error::{Error, Result};
 use crate::ipc_contract::cryptotrack::sync::{CryptoPages, CryptoPagesApplied, CryptoSyncTarget};
 use crate::model::cryptotrack::{CryptoPricePoint, normalize_address};
 use crate::model::vault::{VaultDoc, iso_to_millis, now_iso};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 use super::recompute::apply_batch_unsaved;
 
@@ -66,7 +66,7 @@ pub fn crypto_sync_targets(doc: &VaultDoc) -> Vec<CryptoSyncTarget> {
 /// a block a scan has reached names this device's own reading. Saves
 /// only when something differs.
 pub fn crypto_remember_protocols(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     account_id: &str,
     memory: &[(String, Option<String>)],
 ) -> Result<()> {
@@ -84,7 +84,7 @@ pub fn crypto_remember_protocols(
 /// A failed store puts the cursor back, so the next pass reads the same
 /// pages again.
 pub fn crypto_apply_pages(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     request: &CryptoPages<'_>,
     batch: &SourceBatch,
 ) -> Result<CryptoPagesApplied> {
@@ -153,7 +153,7 @@ pub fn crypto_apply_pages(
 
 /// Forget where an account's read stands, so the next pass starts over
 /// (the user asked to read it again).
-pub fn crypto_reset_cursor(vault: &mut UnlockedVault, account_id: &str) -> Result<()> {
+pub fn crypto_reset_cursor(vault: &mut Session, account_id: &str) -> Result<()> {
     let changed = rules::reset_cursor(&mut vault.doc, account_id);
     vault.transact(|tx| {
         tx.touch_if(changed);
@@ -164,7 +164,7 @@ pub fn crypto_reset_cursor(vault: &mut UnlockedVault, account_id: &str) -> Resul
 /// Store the historic prices a pass fetched (spec D7, wave 0), saving
 /// once and only if something changed. Returns how many points are new or
 /// different.
-pub fn crypto_apply_prices(vault: &mut UnlockedVault, fresh: &[CryptoPricePoint]) -> Result<usize> {
+pub fn crypto_apply_prices(vault: &mut Session, fresh: &[CryptoPricePoint]) -> Result<usize> {
     let changed = rules::store_prices(&mut vault.doc, fresh);
     vault.transact(|tx| {
         tx.touch_if(changed > 0);
@@ -354,7 +354,7 @@ mod tests {
             &page(1, None),
         )
         .unwrap();
-        let remember = |vault: &mut UnlockedVault, account: &str, text: Option<&str>| {
+        let remember = |vault: &mut Session, account: &str, text: Option<&str>| {
             crate::usecases::cryptotrack::apply::crypto_remember_protocols(
                 vault,
                 account,
@@ -423,7 +423,7 @@ mod price_tests {
     #[test]
     fn prices_are_stored_once_and_a_repeat_changes_nothing() {
         let dir = tempfile::tempdir().unwrap();
-        let mut vault = UnlockedVault::create(dir.path().join("p.wallet"), "pw").unwrap();
+        let mut vault = Session::create(dir.path().join("p.wallet"), "pw").unwrap();
         let asset = CryptoAsset::Token(TokenId::new(Chain::Ethereum, "0xabc"));
         let point = CryptoPricePoint {
             token_key: asset.key(),

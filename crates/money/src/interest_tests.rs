@@ -1,5 +1,5 @@
 //! Tests of the interest area: the old inline tests (names kept), which drive
-//! the same rules through the `UnlockedVault` delegates.
+//! the same rules through the `Session` delegates.
 
 use super::interest::*;
 use mwt_base::Amount;

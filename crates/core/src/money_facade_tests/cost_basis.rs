@@ -1,4 +1,4 @@
-//! Tests of the cost_basis area that need the vault (`UnlockedVault`): moved from
+//! Tests of the cost_basis area that need the vault (`Session`): moved from
 //! `money/cost_basis_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::store::StoreKind;
@@ -30,7 +30,7 @@ fn move_carries_the_source_cost_and_the_later_sale_realizes_the_gain() {
     at(&mut moved, "2026-01-02T00:00:00Z");
     crate::usecases::money::transactions::add_transaction(&mut vault, moved).unwrap();
 
-    let held = |vault: &crate::service::UnlockedVault| {
+    let held = |vault: &crate::service::Session| {
         let holding = vault
             .doc
             .holdings

@@ -1,4 +1,4 @@
-//! Tests of the price_info area that need the vault (`UnlockedVault`): moved from
+//! Tests of the price_info area that need the vault (`Session`): moved from
 //! `money/price_info_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::store::StoreKind;

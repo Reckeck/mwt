@@ -21,14 +21,14 @@ use crate::model::transaction::{
 };
 use crate::model::vault::{ImportRun, ImportSource, PendingImport};
 use crate::money::validate::live_store;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::usecases::cryptotrack::exchange_import::bybit_reconcile;
 use crate::usecases::cryptotrack::legacy_bybit::exchange_is_engine_driven;
 use crate::usecases::cryptotrack::recompute::crypto_sync_holdings;
 
 /// Change what an import brings in and where it books it: one `transact`.
 pub fn set_import_settings(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     settings: ImportSettings,
 ) -> Result<ImportSettings> {
@@ -53,7 +53,7 @@ pub fn set_import_settings(
 /// want and what was seen before, record the rest as operations of the
 /// crypto module, and keep the sync in the history.
 pub fn sync_exchange(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     imports: Vec<PendingImport>,
     source: ImportSource,
@@ -93,7 +93,7 @@ pub fn sync_exchange(
 
 /// A sync that did not go through, for the history.
 pub fn record_import_error(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     source: ImportSource,
     error: &str,
@@ -121,7 +121,7 @@ pub fn record_import_error(
 /// same coins twice. The old queue is what this was for, and it is still
 /// served while one exists.
 pub fn reconcile_exchange(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     balances: &[(String, Vec<CoinBalance>)],
     now: i64,

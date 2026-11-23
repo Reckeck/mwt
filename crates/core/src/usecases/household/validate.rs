@@ -6,18 +6,18 @@ use crate::error::{Error, Result};
 use crate::model::transaction::Transaction;
 use crate::model::vault::{iso_to_millis, now_iso};
 use crate::money::validate::validate_transaction_at as check_rules;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::txinfo::{HashShape, hash_shape};
 
 /// Plan §4.5, V1–V14 (V13 — negative balances — is a warning, not an error).
-pub fn validate_transaction(vault: &UnlockedVault, tx: &Transaction) -> Result<()> {
+pub fn validate_transaction(vault: &Session, tx: &Transaction) -> Result<()> {
     validate_transaction_at(vault, tx, iso_to_millis(&now_iso()))
 }
 
 /// The same rules, with V11 measured from `now_ms` instead of the wall
 /// clock: an automation run is checked against the scheduler's clock,
 /// which runs ahead of it in a simulation.
-pub fn validate_transaction_at(vault: &UnlockedVault, tx: &Transaction, now_ms: i64) -> Result<()> {
+pub fn validate_transaction_at(vault: &Session, tx: &Transaction, now_ms: i64) -> Result<()> {
     check_rules(&vault.doc, tx, now_ms)?;
     check_on_chain_refs(tx)
 }

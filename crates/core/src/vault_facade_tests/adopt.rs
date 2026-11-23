@@ -11,7 +11,7 @@ use mwt_vault::storage::legacy_v4::*;
 use crate::cryptotrack::sources::bybit::exchange_asset;
 use crate::exchange::staging::PendingImportExt;
 use crate::exchange::{Execution, InterTransfer};
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 use mwt_model::ExchangeProvider;
 use mwt_model::VaultDoc;
 
@@ -21,9 +21,9 @@ const DAY_MS: u64 = 1_700_000_000_000;
 const AT: &str = "2023-11-15T00:00:00Z";
 
 /// A Bybit wallet as an older build left it: `(dir, vault, wallet)`.
-fn bybit_wallet() -> (tempfile::TempDir, UnlockedVault, String) {
+fn bybit_wallet() -> (tempfile::TempDir, Session, String) {
     let dir = tempfile::tempdir().unwrap();
-    let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+    let mut vault = Session::create(dir.path().join("test.wallet"), "pw").unwrap();
     let wallet = crate::usecases::money::stores::create_store_with(
         &mut vault,
         "Bybit",
@@ -87,14 +87,14 @@ fn moved(store: &str, transfer_id: &str, at: u64) -> PendingImport {
 }
 
 /// The vault's document as a v4 file would hold it.
-fn v4_of(vault: &UnlockedVault) -> VaultDocV4 {
+fn v4_of(vault: &Session) -> VaultDocV4 {
     serde_json::from_value(serde_json::to_value(&vault.doc).unwrap()).unwrap()
 }
 
 /// A vault that holds the converted document, to ask the engine about it.
-fn vault_of(old: VaultDocV4) -> (tempfile::TempDir, UnlockedVault) {
+fn vault_of(old: VaultDocV4) -> (tempfile::TempDir, Session) {
     let dir = tempfile::tempdir().unwrap();
-    let mut vault = UnlockedVault::create(dir.path().join("converted.wallet"), "pw").unwrap();
+    let mut vault = Session::create(dir.path().join("converted.wallet"), "pw").unwrap();
     vault.replace_doc(VaultDoc::from(old)).unwrap();
     (dir, vault)
 }

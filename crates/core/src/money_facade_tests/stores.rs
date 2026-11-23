@@ -1,14 +1,14 @@
-//! Tests of the stores area that need the vault (`UnlockedVault`): moved from
+//! Tests of the stores area that need the vault (`Session`): moved from
 //! `money/stores_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::store::StoreKind;
 use crate::money::store_change::{StoreChange, StoreChangeInput};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 
 #[test]
 fn the_merge_scenario_does_what_apply_store_change_does() {
-    let build = |vault: &mut UnlockedVault| {
+    let build = |vault: &mut Session| {
         let first = store(vault, "First", StoreKind::Cash, None);
         let second = store(vault, "Second", StoreKind::Cash, None);
         (first, second)

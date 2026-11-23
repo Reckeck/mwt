@@ -1,14 +1,14 @@
-//! Tests of the bulk area that need the vault (`UnlockedVault`): moved from
+//! Tests of the bulk area that need the vault (`Session`): moved from
 //! `money/bulk_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::error::Error;
 use crate::model::store::StoreKind;
 use crate::model::transaction::AccountRef;
 use crate::money::bulk::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 
-fn two_payments() -> (tempfile::TempDir, UnlockedVault, String, Vec<String>) {
+fn two_payments() -> (tempfile::TempDir, Session, String, Vec<String>) {
     let (dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     crate::usecases::money::transactions::add_transaction(
@@ -144,7 +144,7 @@ pub(super) struct Commits(std::sync::atomic::AtomicUsize);
 
 impl Commits {
     /// Make `vault` batch its writes and count each commit it marks from now on.
-    pub(super) fn watch(vault: &mut UnlockedVault) -> std::sync::Arc<Self> {
+    pub(super) fn watch(vault: &mut Session) -> std::sync::Arc<Self> {
         let commits = std::sync::Arc::new(Self::default());
         vault.set_write_behind(Some(commits.clone()));
         commits
@@ -164,7 +164,7 @@ impl crate::kernel::session::SaveHook for Commits {
 /// The document as JSON. The holdings are derived: they get fresh ids and no
 /// fixed order at every rebuild (today's behaviour, also on the way back from
 /// a failed call), so they are compared by what they hold, sorted.
-fn document_json(vault: &UnlockedVault) -> String {
+fn document_json(vault: &Session) -> String {
     let mut doc = serde_json::to_value(&vault.doc).unwrap();
     let holdings = doc["holdings"].as_array_mut().unwrap();
     for holding in holdings.iter_mut() {

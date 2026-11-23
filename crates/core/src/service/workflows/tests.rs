@@ -48,7 +48,7 @@ fn draft(name: &str, graph: String) -> WorkflowDraft {
     }
 }
 
-fn save(vault: &mut UnlockedVault, name: &str, graph: String) -> Workflow {
+fn save(vault: &mut Session, name: &str, graph: String) -> Workflow {
     crate::usecases::workflow::records::save_workflow(vault, None, draft(name, graph), now_secs())
         .unwrap()
         .workflow
@@ -59,7 +59,7 @@ fn store_ref(id: &str) -> Value {
 }
 
 /// A card and a savings account, 1000 USD on the card.
-fn wallets() -> (tempfile::TempDir, UnlockedVault, String, String) {
+fn wallets() -> (tempfile::TempDir, Session, String, String) {
     let (dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Cash, None);
     let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
@@ -571,7 +571,7 @@ fn a_source_trigger_fires_on_a_new_value_and_on_crossing() {
     .unwrap()
     .source
     .id;
-    let fetch = |vault: &mut UnlockedVault, value: &str| {
+    let fetch = |vault: &mut Session, value: &str| {
         crate::usecases::planning::datasources::apply_source_fetch(
             vault,
             &source,
@@ -763,7 +763,7 @@ fn rub_point(per_usd: &str) -> crate::model::vault::FxPoint {
 
 /// Save a workflow with one transfer of `sum` USD and a cap, run it once.
 fn run_capped(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     (card, savings): (&str, &str),
     sum: &str,
     cap: (&str, Option<&str>),
@@ -1546,7 +1546,7 @@ fn tests_compare_an_emulation_with_what_is_expected() {
     );
 }
 
-fn count_of(vault: &UnlockedVault, workflow: &Workflow, name: &str) -> Option<Amount> {
+fn count_of(vault: &Session, workflow: &Workflow, name: &str) -> Option<Amount> {
     crate::workflow::service::vars::var(&vault.doc, &VarScope::Workflow(workflow.id.clone()), name)
         .and_then(|value| value.as_number())
 }
@@ -2483,7 +2483,7 @@ fn run_now_from_a_schedule_takes_its_latest_moment_and_says_by_hand() {
 
 /// Salary → "Queue" → send the salary's amount from savings to the card.
 /// Savings hold 500; the card gets the salaries.
-fn queue_vault(mode: Option<&str>) -> (tempfile::TempDir, UnlockedVault, String, Workflow) {
+fn queue_vault(mode: Option<&str>) -> (tempfile::TempDir, Session, String, Workflow) {
     let (dir, mut vault, card, savings) = wallets();
     crate::usecases::money::transactions::add_transaction(
         &mut vault,
@@ -2521,14 +2521,14 @@ fn queue_vault(mode: Option<&str>) -> (tempfile::TempDir, UnlockedVault, String,
     (dir, vault, savings, workflow)
 }
 
-fn salaries(vault: &mut UnlockedVault, card: &str, amounts: &[&str]) {
+fn salaries(vault: &mut Session, card: &str, amounts: &[&str]) {
     for value in amounts {
         crate::usecases::money::transactions::add_transaction(vault, income(card, value, "salary"))
             .unwrap();
     }
 }
 
-fn card_of(vault: &UnlockedVault, savings: &str) -> String {
+fn card_of(vault: &Session, savings: &str) -> String {
     vault
         .doc
         .stores
@@ -2728,7 +2728,7 @@ fn opening_a_vault_turns_off_workflows_missing_a_required_field() {
     vault.persist().unwrap();
     drop(vault);
 
-    let reopened = UnlockedVault::open(dir.path().join("test.wallet"), "pw").unwrap();
+    let reopened = Session::open(dir.path().join("test.wallet"), "pw").unwrap();
     let workflow = crate::workflow::service::records::workflow(&reopened.doc, &on.id).unwrap();
     assert!(!workflow.active);
     assert!(reopened.doc.workflow_runs.iter().any(|run| {
@@ -2869,7 +2869,7 @@ fn tx_amount(tx: &Transaction) -> Amount {
     }
 }
 
-fn correct(vault: &mut UnlockedVault, id: &str, value: &str) {
+fn correct(vault: &mut Session, id: &str, value: &str) {
     let tx = vault
         .doc
         .transactions
@@ -2903,13 +2903,7 @@ fn rent_graph(card: &str, savings: &str) -> String {
 }
 
 /// A rent workflow whose first run is refused for lack of money.
-fn refused_rent() -> (
-    tempfile::TempDir,
-    UnlockedVault,
-    String,
-    Workflow,
-    WorkflowRun,
-) {
+fn refused_rent() -> (tempfile::TempDir, Session, String, Workflow, WorkflowRun) {
     let (dir, mut vault, card, savings) = wallets();
     let workflow = save(&mut vault, "Rent", rent_graph(&card, &savings));
     crate::usecases::workflow::runs::wf_set_mark(
@@ -2930,7 +2924,7 @@ fn refused_rent() -> (
 }
 
 /// What another device leaves when it posts the refused moment.
-fn post_elsewhere(vault: &mut UnlockedVault, card: &str, workflow: &Workflow) {
+fn post_elsewhere(vault: &mut Session, card: &str, workflow: &Workflow) {
     let mut tx = income(card, "10", "posted by the other device");
     if let Transaction::Topup(inner) = &mut tx {
         inner.meta.origin = TxOrigin::Workflow {
@@ -3134,7 +3128,7 @@ fn a_refused_run_waits_for_retry_or_skip() {
 }
 
 /// A workflow that pays from `from` and notifies, saved in the vault.
-fn paying_workflow(vault: &mut UnlockedVault, from: &str) -> Workflow {
+fn paying_workflow(vault: &mut Session, from: &str) -> Workflow {
     let nodes = vec![
         node("t", "trigger.manual", json!({})),
         node(
@@ -3302,10 +3296,10 @@ fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
     left.persist().unwrap();
     let copy = dir.path().join("copy.wallet");
     std::fs::copy(&left.path, &copy).unwrap();
-    let mut right = UnlockedVault::open(copy, "pw").unwrap();
+    let mut right = Session::open(copy, "pw").unwrap();
     peer_sync::set_device(&mut right, "bbbbbbbb-right");
     let run_key = format!("workflow_runs:{}", refused.id);
-    let has_run = |vault: &UnlockedVault| {
+    let has_run = |vault: &Session| {
         vault
             .doc
             .workflow_runs
@@ -3362,7 +3356,7 @@ fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
         )
         .is_err()
     );
-    let booked = |vault: &UnlockedVault| {
+    let booked = |vault: &Session| {
         vault
             .doc
             .transactions
@@ -3374,7 +3368,7 @@ fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
 }
 
 /// The notice text a manual run of "inflation of `currency`" produces.
-fn inflation_notice(vault: &mut UnlockedVault, currency: &str) -> String {
+fn inflation_notice(vault: &mut Session, currency: &str) -> String {
     let nodes = vec![
         node("t", "trigger.manual", json!({})),
         node("i", "data.inflation", json!({ "currency": currency })),

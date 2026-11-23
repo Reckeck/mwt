@@ -40,7 +40,7 @@
 //! down by hand and no connected address holds is a coin the module cannot
 //! vouch for, and leaving it in the capital would quietly keep a number the
 //! user has stopped maintaining. This is what the wizard warns about before
-//! the move, and what `UnlockedVault::crypto_transition_plan` counts.
+//! the move, and what `Session::crypto_transition_plan` counts.
 //! Fiat is untouched by all of this: only `Crypto` and `Exchange` wallets
 //! yield, so an archived bank or cash wallet keeps counting exactly as before.
 //!
@@ -162,7 +162,7 @@ pub enum CryptoLeftOut {
     /// The receipt a protocol handed over for a position (an aToken, stETH, a
     /// position NFT). The money is already counted as the position, so
     /// counting the receipt too would double it (spec D0,
-    /// `positions::UnlockedVault::crypto_position_receipts`).
+    /// `positions::Session::crypto_position_receipts`).
     InPosition,
 }
 

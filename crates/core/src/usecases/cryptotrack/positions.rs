@@ -16,7 +16,7 @@ use crate::error::Result;
 use crate::ipc_contract::cryptotrack::positions::{PositionAssetView, PositionView};
 use crate::model::cryptotrack::{CryptoLeg, CryptoPosition, CryptoTx};
 use crate::money::books::Books;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Store what the protocol adapters read for one account: the positions
 /// and their operations. Saves once, and re-derives the holdings, because
@@ -33,7 +33,7 @@ use crate::service::UnlockedVault;
 /// the account it was started for. A pass with nothing to change saves
 /// nothing.
 pub fn crypto_apply_positions(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     account_id: &str,
     readings: &[PositionReading],
     events: &[CryptoTx],

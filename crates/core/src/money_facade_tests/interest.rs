@@ -1,4 +1,4 @@
-//! Tests of the interest area that need the vault (`UnlockedVault`): moved from
+//! Tests of the interest area that need the vault (`Session`): moved from
 //! `money/interest_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::Amount;
@@ -8,8 +8,8 @@ use crate::model::deposit::{
 use crate::model::ids::StoreId;
 use crate::model::store::{AssetRef, Binding, StoreKind, SubType};
 use crate::money::interest::*;
+use crate::service::Session;
 use crate::service::StoreExtras;
-use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use chrono::NaiveDate;
 
@@ -39,7 +39,7 @@ fn amount_str(raw: &str) -> Amount {
 }
 
 /// A ruble savings account with no money in it.
-fn empty_savings(vault: &mut UnlockedVault, sub_type: SubType) -> String {
+fn empty_savings(vault: &mut Session, sub_type: SubType) -> String {
     let bank = store(vault, "Bank", StoreKind::Bank, None);
     crate::usecases::money::stores::create_store_with(
         vault,
@@ -59,7 +59,7 @@ fn empty_savings(vault: &mut UnlockedVault, sub_type: SubType) -> String {
 }
 
 /// A ruble savings account with 100 000 ₽ from the 1st of January 2026.
-fn savings(vault: &mut UnlockedVault, sub_type: SubType) -> String {
+fn savings(vault: &mut Session, sub_type: SubType) -> String {
     let account = empty_savings(vault, sub_type);
     let mut seed = income_of(
         &account,

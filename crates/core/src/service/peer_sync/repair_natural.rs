@@ -1,7 +1,7 @@
 //! Shim of the `peer_sync/repair_natural` area: moved to `crate::sync::repair::repair_natural` (spec core-strangler, D1).
 
 #[cfg(test)]
-use crate::service::UnlockedVault;
+use crate::service::Session;
 #[cfg(test)]
 use crate::sync::sync_ids;
 
@@ -19,7 +19,7 @@ mod tests {
     use crate::service::test_support::{amount, income, store};
     use crate::usecases::sync::peer_sync;
 
-    fn pair() -> (tempfile::TempDir, Vec<UnlockedVault>, Ledger) {
+    fn pair() -> (tempfile::TempDir, Vec<Session>, Ledger) {
         let (dir, left, right) = two_devices();
         let mut devices = vec![left, right];
         let mut ledger = Ledger::default();
@@ -27,7 +27,7 @@ mod tests {
         (dir, devices, ledger)
     }
 
-    fn meet(devices: &mut [UnlockedVault]) {
+    fn meet(devices: &mut [Session]) {
         let (left, right) = devices.split_at_mut(1);
         settle(&mut left[0], &mut right[0]);
     }

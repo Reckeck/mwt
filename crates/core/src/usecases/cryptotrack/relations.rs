@@ -118,7 +118,7 @@ mod tests {
         CryptoTxKind, TrackingRef,
     };
     use crate::model::store::StoreKind;
-    use crate::service::UnlockedVault;
+    use crate::service::Session;
     use crate::service::test_support::{amount, at, empty_vault, payment, store};
 
     const MINE: &str = "0x00000000000000000000000000000000000000a1";
@@ -155,7 +155,7 @@ mod tests {
         }
     }
 
-    fn setup() -> (tempfile::TempDir, UnlockedVault) {
+    fn setup() -> (tempfile::TempDir, Session) {
         let (dir, mut vault) = empty_vault();
         for (id, name, address) in [("acc-1", "Main", MINE), ("acc-2", "Savings", OTHER)] {
             vault.doc.crypto_accounts.push(CryptoAccount::new(
@@ -190,7 +190,7 @@ mod tests {
         (dir, vault)
     }
 
-    fn relations(vault: &UnlockedVault) -> CryptoRelations {
+    fn relations(vault: &Session) -> CryptoRelations {
         crate::usecases::cryptotrack::relations::crypto_relations(
             &vault.books(),
             &CryptoRelationsInput {

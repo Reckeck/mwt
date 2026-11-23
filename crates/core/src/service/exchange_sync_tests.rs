@@ -14,9 +14,9 @@ use crate::service::*;
 const ACCOUNT_NAMES: [&str; 3] = ["Funding", "Unified", "Earn"];
 
 /// A Bybit wallet with its three accounts: `(dir, vault, wallet, unified)`.
-fn bybit() -> (tempfile::TempDir, UnlockedVault, String, String) {
+fn bybit() -> (tempfile::TempDir, Session, String, String) {
     let dir = tempfile::tempdir().unwrap();
-    let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+    let mut vault = Session::create(dir.path().join("test.wallet"), "pw").unwrap();
     let wallet = crate::usecases::money::stores::create_store_with(
         &mut vault,
         "Bybit",

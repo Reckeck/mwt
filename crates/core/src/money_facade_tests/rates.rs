@@ -1,4 +1,4 @@
-//! Tests of the rates area that need the vault (`UnlockedVault`): moved from
+//! Tests of the rates area that need the vault (`Session`): moved from
 //! `money/rates_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::Amount;
@@ -8,7 +8,7 @@ use crate::model::transaction::Leg;
 use crate::model::transaction::{PriceStamp, Transaction};
 use crate::model::vault::FxPoint;
 use crate::money::rates::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::time::secs_or_now;
 
@@ -59,13 +59,13 @@ fn priced_payment(price: &str, currency: &str, ts: &str) -> crate::ipc_contract:
     .unwrap()
 }
 
-fn first_price(vault: &mut UnlockedVault) -> Option<Amount> {
+fn first_price(vault: &mut Session) -> Option<Amount> {
     vault.doc.transactions[0].stamps_mut()[0].1.price_usd
 }
 
 /// RUB is 80 per USD in January and 100 from June. RUB is the base and
 /// THB the budget currency, so both keep their history.
-fn with_rub_history(vault: &mut UnlockedVault) {
+fn with_rub_history(vault: &mut Session) {
     vault.set_base_currency("rub");
     vault.doc.settings.budget_currency = "thb".into();
     crate::usecases::money::rates::apply_fx(
@@ -443,7 +443,7 @@ fn a_price_in_any_currency_becomes_usd_at_the_moment_rate() {
 }
 
 /// A vault with a rate history, a quote and a hand-set price, as pinned.
-fn priced_vault() -> (tempfile::TempDir, UnlockedVault) {
+fn priced_vault() -> (tempfile::TempDir, Session) {
     let (dir, mut vault) = empty_vault();
     with_rub_history(&mut vault);
     crate::usecases::money::rates::apply_fx(

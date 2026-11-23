@@ -10,15 +10,15 @@ use crate::model::VaultDoc;
 use crate::model::planning::{MeterReading, UtilityItem, UtilityKind};
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::Transaction;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use pretty_assertions::assert_eq;
 
-fn metered(vault: &mut UnlockedVault) -> UtilityItem {
+fn metered(vault: &mut Session) -> UtilityItem {
     metered_in(vault, "Flat")
 }
 
-fn metered_in(vault: &mut UnlockedVault, flat: &str) -> UtilityItem {
+fn metered_in(vault: &mut Session, flat: &str) -> UtilityItem {
     let flat = store(vault, flat, StoreKind::Property, None);
     crate::usecases::household::utilities::create_utility_item(
         vault,
@@ -269,7 +269,7 @@ fn a_utility_needs_a_property_and_the_summary_adds_it_up() {
 }
 
 /// A funded card and a flat with a meter and a fixed bill.
-fn flat_with_bills(vault: &mut UnlockedVault) -> (String, UtilityItem, UtilityItem, String) {
+fn flat_with_bills(vault: &mut Session) -> (String, UtilityItem, UtilityItem, String) {
     let card = store(vault, "Card", StoreKind::Bank, None);
     let mut seed = income_of(
         &card,
@@ -554,7 +554,7 @@ fn a_move_mid_month_bills_each_flat_from_its_own_readings() {
     .unwrap();
 
     // Before the month ends the new flat has only its start: nothing used yet.
-    let line = |vault: &UnlockedVault, item: &UtilityItem| {
+    let line = |vault: &Session, item: &UtilityItem| {
         let property = item.property_id.clone();
         utility_bill(&vault.books(), &property, "2026-10", "UTC", now_secs())
             .unwrap()
@@ -730,7 +730,7 @@ fn a_second_reading_the_same_day_corrects_the_first() {
     assert_eq!(readings[0].value, amount("101"));
 }
 
-fn meter_with(vault: &mut UnlockedVault, formula: &str, zones: &[&str]) -> Result<UtilityItem> {
+fn meter_with(vault: &mut Session, formula: &str, zones: &[&str]) -> Result<UtilityItem> {
     let name = format!("Dacha {}", vault.doc.stores.len());
     let flat = store(vault, &name, StoreKind::Property, None);
     crate::usecases::household::utilities::create_utility_item(
@@ -752,7 +752,7 @@ fn meter_with(vault: &mut UnlockedVault, formula: &str, zones: &[&str]) -> Resul
     )
 }
 
-fn draft_amount(vault: &UnlockedVault, item: &UtilityItem, period: &str) -> Amount {
+fn draft_amount(vault: &Session, item: &UtilityItem, period: &str) -> Amount {
     let draft = crate::usecases::household::utilities::utility_payment_draft(
         vault, &item.id, period, "UTC",
     )

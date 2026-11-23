@@ -12,7 +12,7 @@ use crate::ipc_contract::{
 use crate::model::contact::Contact;
 use crate::model::shared_event::{ItemPlan, ItemSplit, PriceMode};
 use crate::model::store::{AssetRef, StoreKind};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support;
 
 pub use crate::model::shared_event::ME;
@@ -20,7 +20,7 @@ pub use crate::service::test_support::amount;
 
 pub struct Scenario {
     pub _dir: tempfile::TempDir,
-    pub vault: UnlockedVault,
+    pub vault: Session,
     pub wallet: String,
     pub event: String,
     pub contacts: HashMap<String, String>,
@@ -46,12 +46,7 @@ pub fn rub() -> AssetRef {
     AssetRef::fiat("RUB", "RUB")
 }
 
-fn new_vault() -> (
-    tempfile::TempDir,
-    UnlockedVault,
-    String,
-    HashMap<String, String>,
-) {
+fn new_vault() -> (tempfile::TempDir, Session, String, HashMap<String, String>) {
     let (dir, mut vault) = test_support::empty_vault();
     vault.set_base_currency("rub");
     let wallet = test_support::store(&mut vault, "Тинькофф", StoreKind::Bank, None);

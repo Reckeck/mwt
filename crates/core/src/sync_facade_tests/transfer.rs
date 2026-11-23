@@ -1,13 +1,13 @@
-//! The transfer test that needs a real vault file (`UnlockedVault::create`). It moved here
+//! The transfer test that needs a real vault file (`Session::create`). It moved here
 //! from `mwt-sync` with its assertions unchanged (crate-split D6).
 
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::sync::transfer::{Assembler, Offer, TRANSFER_PROTOCOL, TransferMessage, chunks, sha256};
 
 fn vault_bytes() -> Vec<u8> {
     let dir = tempfile::tempdir().expect("dir");
     let path = dir.path().join("a.wallet");
-    UnlockedVault::create(path.clone(), "pw").expect("vault");
+    Session::create(path.clone(), "pw").expect("vault");
     std::fs::read(path).expect("read")
 }
 

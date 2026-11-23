@@ -91,9 +91,9 @@ fn the_crypto_password_is_graded_weak_medium_strong() {
 fn an_old_four_digit_password_still_opens_at_level_two() {
     let dir = tempfile::tempdir().unwrap();
     let path = wallet(&dir);
-    let vault = UnlockedVault::create(path.clone(), "1234").unwrap();
+    let vault = Session::create(path.clone(), "1234").unwrap();
     drop(vault);
-    let reopened = UnlockedVault::open(path.clone(), "1234").unwrap();
+    let reopened = Session::open(path.clone(), "1234").unwrap();
     assert_eq!(reopened.security_level(), SecurityLevel::Pin);
     assert_eq!(level_of_vault_file(&path).unwrap(), SecurityLevel::Pin);
 }
@@ -110,7 +110,7 @@ fn the_raise_reaches_level_three_and_leaves_no_cheaper_copy() {
     std::fs::copy(&vault.path, dir.path().join("test.wallet.v1.bak")).unwrap();
     peer_sync::sync_backup(&mut vault).unwrap();
     let stranger = tempfile::tempdir().unwrap();
-    let other = UnlockedVault::create(stranger.path().join("o.wallet"), "9999").unwrap();
+    let other = Session::create(stranger.path().join("o.wallet"), "9999").unwrap();
     std::fs::copy(&other.path, dir.path().join("test.wallet.v9.bak")).unwrap();
 
     let mirror = Arc::new(RecordingMirror::default());
@@ -147,10 +147,10 @@ fn the_raise_reaches_level_three_and_leaves_no_cheaper_copy() {
     }
     drop(vault);
     assert!(matches!(
-        UnlockedVault::open(wallet(&dir), "pw"),
+        Session::open(wallet(&dir), "pw"),
         Err(Error::Secret)
     ));
-    let reopened = UnlockedVault::open(wallet(&dir), STRONG).unwrap();
+    let reopened = Session::open(wallet(&dir), STRONG).unwrap();
     assert_eq!(reopened.security_level(), SecurityLevel::Crypto);
     assert_eq!(reopened.doc.stores.len(), stores);
 }
@@ -185,8 +185,8 @@ fn a_crash_at_any_step_leaves_one_level_and_the_data() {
         drop(vault);
 
         let path = wallet(&dir);
-        let old = UnlockedVault::open(path.clone(), "pw");
-        let new = UnlockedVault::open(path.clone(), STRONG);
+        let old = Session::open(path.clone(), "pw");
+        let new = Session::open(path.clone(), STRONG);
         assert!(old.is_ok() != new.is_ok(), "{step:?}: opens at one level");
         let (reopened, level) = match (old, new) {
             (Ok(vault), _) => (vault, SecurityLevel::Pin),
@@ -260,9 +260,9 @@ fn a_wrong_pin_or_a_weak_password_changes_nothing() {
 }
 
 /// A plain (level-1) vault with a store and plain copies of every kind.
-fn plain_vault_with_copies() -> (tempfile::TempDir, UnlockedVault) {
+fn plain_vault_with_copies() -> (tempfile::TempDir, Session) {
     let dir = tempfile::tempdir().unwrap();
-    let mut vault = UnlockedVault::create_with(wallet(&dir), None).unwrap();
+    let mut vault = Session::create_with(wallet(&dir), None).unwrap();
     crate::usecases::money::stores::create_store(
         &mut vault,
         "Cold",
@@ -310,8 +310,8 @@ fn a_plain_vault_goes_straight_to_level_three_and_keeps_no_plain_copy() {
         assert!(!opens(&copy, ""), "{copy:?}");
     }
     drop(vault);
-    assert!(UnlockedVault::open(wallet(&dir), "").is_err());
-    let reopened = UnlockedVault::open(wallet(&dir), STRONG).unwrap();
+    assert!(Session::open(wallet(&dir), "").is_err());
+    let reopened = Session::open(wallet(&dir), STRONG).unwrap();
     assert_eq!(reopened.security_level(), SecurityLevel::Crypto);
     assert_eq!(reopened.doc.stores.len(), stores);
 }
@@ -357,7 +357,7 @@ fn a_crash_at_any_step_from_plain_leaves_the_vault_opening_with_its_data() {
         } else {
             STRONG
         };
-        let reopened = UnlockedVault::open(path, secret).unwrap();
+        let reopened = Session::open(path, secret).unwrap();
         assert_eq!(reopened.security_level(), expected, "{step:?}");
         assert_eq!(reopened.doc.id, id, "{step:?}");
         assert_eq!(reopened.doc.stores.len(), stores, "{step:?}");
@@ -400,7 +400,7 @@ fn a_linked_vault_raises_with_the_phone_profile() {
 
 // -- no way down --------------------------------------------------------
 
-fn level3_with_key() -> (tempfile::TempDir, UnlockedVault) {
+fn level3_with_key() -> (tempfile::TempDir, Session) {
     let (dir, mut vault) = empty_vault();
     vault.raise_to_level3_for_tests();
     let store = crate::usecases::money::stores::create_store_with(
@@ -448,7 +448,7 @@ fn a_vault_with_crypto_data_does_not_go_below_level_three() {
 #[test]
 fn a_secrets_file_keeps_a_plain_vault_from_taking_a_pin() {
     let dir = tempfile::tempdir().unwrap();
-    let mut plain = UnlockedVault::create_with(dir.path().join("p.wallet"), None).unwrap();
+    let mut plain = Session::create_with(dir.path().join("p.wallet"), None).unwrap();
     std::fs::write(device_secrets::secrets_path(&plain.path), b"sealed").unwrap();
     assert_eq!(plain.min_allowed_level(), SecurityLevel::Crypto);
     assert!(matches!(

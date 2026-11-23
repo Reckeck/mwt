@@ -1,4 +1,4 @@
-//! Tests of the vault file codec that need the full fixture document or `UnlockedVault`: both
+//! Tests of the vault file codec that need the full fixture document or `Session`: both
 //! live in the facade, so these moved here from `mwt-vault` with their assertions unchanged.
 
 use std::path::{Path, PathBuf};
@@ -11,7 +11,7 @@ use crate::crypto::{self, SealKey};
 use crate::error::{Error, Result};
 use crate::model::VaultDoc;
 use crate::model::fixtures::full_doc;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::storage::{
     ReencryptStep, SnapshotFormat, VaultFile, decode, decode_in_container, encode,
 };
@@ -296,10 +296,10 @@ fn opening_the_vault_sweeps_what_a_crashed_reencryption_left() {
     let (path, _, _) = old_vault(dir.path());
     let leftover = foreign_reencrypt_leftover(&path);
     std::fs::write(&leftover, b"half a file").unwrap();
-    let wrong = UnlockedVault::open(path.clone(), "wrong");
+    let wrong = Session::open(path.clone(), "wrong");
     assert!(matches!(wrong, Err(Error::Secret)));
     assert!(leftover.exists(), "a wrong password touches nothing");
-    let vault = UnlockedVault::open(path.clone(), "pw").unwrap();
+    let vault = Session::open(path.clone(), "pw").unwrap();
     assert!(!leftover.exists());
     drop(vault);
 }
@@ -363,7 +363,7 @@ fn a_vault_stays_at_its_cost_through_saves_and_reopening() {
     VaultFile::reencrypt_verified(&path, &doc, SnapshotFormat::Pack, "pw", TEST_KDF, |_| {})
         .unwrap();
 
-    let mut vault = UnlockedVault::open(path.clone(), "pw").unwrap();
+    let mut vault = Session::open(path.clone(), "pw").unwrap();
     vault.switch_format(SnapshotFormat::Json).unwrap();
     drop(vault);
 

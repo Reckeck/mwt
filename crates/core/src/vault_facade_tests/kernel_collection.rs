@@ -1,4 +1,4 @@
-//! Tests of `Collection<T>` that commit through `UnlockedVault`: it lives in the facade, so
+//! Tests of `Collection<T>` that commit through `Session`: it lives in the facade, so
 //! these moved here from `mwt-vault` with their assertions unchanged.
 
 use crate::usecases::sync::peer_sync;
@@ -8,7 +8,7 @@ use mwt_vault::kernel::session::SaveHook;
 
 use crate::model::contact::Contact;
 use crate::model::vault::ImportRun;
-use crate::service::{FlushJob, UnlockedVault};
+use crate::service::{FlushJob, Session};
 
 struct NoWake;
 
@@ -31,15 +31,15 @@ fn run(id: &str) -> ImportRun {
     }
 }
 
-fn batched_vault() -> (tempfile::TempDir, UnlockedVault) {
+fn batched_vault() -> (tempfile::TempDir, Session) {
     let dir = tempfile::tempdir().unwrap();
-    let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+    let mut vault = Session::create(dir.path().join("test.wallet"), "pw").unwrap();
     peer_sync::set_device(&mut vault, "aaaaaaaa-collection");
     vault.set_write_behind(Some(Arc::new(NoWake)));
     (dir, vault)
 }
 
-fn flush(vault: &mut UnlockedVault) {
+fn flush(vault: &mut Session) {
     let job: Option<FlushJob> = vault.prepare_flush().unwrap();
     if let Some(job) = job {
         let done = job.write().unwrap();

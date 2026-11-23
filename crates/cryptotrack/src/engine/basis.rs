@@ -51,7 +51,7 @@ use super::overrides::EventView;
 
 /// What a unit of an asset was worth. Implemented over the document's price
 /// cache (and over a linked fiat operation, which outranks the market) by
-/// `crate::service::UnlockedVault`.
+/// `crate::service::Session`.
 pub trait Prices {
     /// USD for one unit of `asset` at `time` for that operation. `None` is
     /// "not known", never zero.

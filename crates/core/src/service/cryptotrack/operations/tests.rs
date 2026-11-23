@@ -16,7 +16,7 @@ use crate::model::cryptotrack::{
     CryptoAsset, CryptoDirection, CryptoOverride, CryptoTx, TrackingRef,
 };
 use crate::model::store::StoreKind;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::{amount, at, empty_vault, payment, store};
 
 const USDT: &str = "0xdac17f958d2ee523a2206206994597c13d831ec7";
@@ -49,7 +49,7 @@ fn event(id: &str, time: &str, direction: CryptoDirection, qty: &str) -> CryptoT
     }
 }
 
-fn vault_with(events: Vec<CryptoTx>) -> (tempfile::TempDir, UnlockedVault) {
+fn vault_with(events: Vec<CryptoTx>) -> (tempfile::TempDir, Session) {
     let (dir, mut vault) = empty_vault();
     vault.doc.crypto_accounts.push(CryptoAccount::new(
         "acc-1",
@@ -70,7 +70,7 @@ fn vault_with(events: Vec<CryptoTx>) -> (tempfile::TempDir, UnlockedVault) {
     (dir, vault)
 }
 
-fn page(vault: &UnlockedVault, filter: CryptoOpFilter) -> CryptoOpsPage {
+fn page(vault: &Session, filter: CryptoOpFilter) -> CryptoOpsPage {
     crate::usecases::cryptotrack::operations::crypto_list_operations(
         &vault.books(),
         &CryptoListOperationsInput {
@@ -80,7 +80,7 @@ fn page(vault: &UnlockedVault, filter: CryptoOpFilter) -> CryptoOpsPage {
     )
 }
 
-fn pin_usdt_price(vault: &mut UnlockedVault, day: NaiveDate) {
+fn pin_usdt_price(vault: &mut Session, day: NaiveDate) {
     vault.doc.crypto_prices.push(CryptoPricePoint {
         token_key: CryptoAsset::Token(TokenId::new(Chain::Ethereum, USDT)).key(),
         value_usd: amount("1"),
@@ -250,7 +250,7 @@ fn an_explorer_of_the_users_own_choosing_builds_the_link() {
         "500",
     )]);
     vault.raise_to_level3_for_tests();
-    fn ask(vault: &UnlockedVault) -> Option<String> {
+    fn ask(vault: &Session) -> Option<String> {
         crate::usecases::cryptotrack::operations::crypto_operation_detail(
             &vault.books(),
             &CryptoOperationDetailInput {
@@ -400,7 +400,7 @@ fn an_unknown_category_contact_or_operation_is_refused() {
         CryptoDirection::In,
         "1",
     )]);
-    let ask = |input: CryptoSetOverrideInput, vault: &mut UnlockedVault| {
+    let ask = |input: CryptoSetOverrideInput, vault: &mut Session| {
         crate::usecases::cryptotrack::operations::crypto_set_override(vault, &input)
     };
     assert!(
@@ -478,7 +478,7 @@ fn a_pointer_at_a_fiat_record_is_not_a_correction() {
         updated_at: "2026-03-02T00:00:00Z".into(),
     };
     vault.doc.crypto_overrides.push(pointer.clone());
-    let row = |vault: &UnlockedVault| page(vault, CryptoOpFilter::default()).items.remove(0);
+    let row = |vault: &Session| page(vault, CryptoOpFilter::default()).items.remove(0);
     assert!(
         !row(&vault).corrected,
         "a pointer alone leaves the operation as the chain reported it"
@@ -682,7 +682,7 @@ fn a_contract_rule_classifies_what_arrives_tomorrow_and_can_be_removed() {
         event("b", "2026-03-02T10:00:00Z", CryptoDirection::In, "2"),
         other,
     ]);
-    let detail = |vault: &UnlockedVault| {
+    let detail = |vault: &Session| {
         crate::usecases::cryptotrack::operations::crypto_operation_detail(
             &vault.books(),
             &CryptoOperationDetailInput {
@@ -871,7 +871,7 @@ impl crate::service::SaveHook for NoWake {
     fn dirty(&self) {}
 }
 
-fn flush(vault: &mut UnlockedVault) {
+fn flush(vault: &mut Session) {
     if let Some(job) = vault.prepare_flush().unwrap() {
         let done = job.write().unwrap();
         vault.finish_flush(&done);

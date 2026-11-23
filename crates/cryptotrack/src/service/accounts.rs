@@ -5,7 +5,7 @@
 //! `Store::crypto_account_id` points at its [`CryptoAccount`] (decision P5 of
 //! 2026-11-11). The scenarios that write sit in
 //! `usecases::cryptotrack::accounts`; every change there ends in
-//! `UnlockedVault::crypto_sync_holdings` and not in a bare save: the capital is
+//! `Session::crypto_sync_holdings` and not in a bare save: the capital is
 //! read from `doc.holdings`, which a save does not re-derive, so without it the
 //! wallet would list the address and count nothing until the next poll
 //! (spec E8).

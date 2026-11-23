@@ -7,11 +7,11 @@ use crate::calendar::Calendar;
 use crate::model::contact::DebtTerms;
 use crate::model::planning::Reminder;
 use crate::planning::auto_reminders as rules;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// What is still open on a debt's contact and asset: what they owe minus
 /// what is owed to them. The balances are read once, then looked up per debt.
-pub(crate) fn open_debt(vault: &UnlockedVault) -> impl Fn(&DebtTerms) -> Amount {
+pub(crate) fn open_debt(vault: &Session) -> impl Fn(&DebtTerms) -> Amount {
     let balances = crate::usecases::household::contacts::contact_balances(vault);
     move |terms| {
         balances
@@ -29,7 +29,7 @@ pub(crate) fn open_debt(vault: &UnlockedVault) -> impl Fn(&DebtTerms) -> Amount 
 /// wrote it; when it is one of the two renderings of its source it is
 /// shown in the reader's language, otherwise (the user typed it, or the
 /// data moved on) as it is. Nothing is written.
-pub fn reminders_in(vault: &UnlockedVault, now: i64, zone: &str, ru: bool) -> Vec<Reminder> {
+pub fn reminders_in(vault: &Session, now: i64, zone: &str, ru: bool) -> Vec<Reminder> {
     let today = Calendar::new(zone).date_of(now);
     let renderings = rules::auto_renderings(&vault.doc, open_debt(vault), today, ru);
     rules::localized(crate::planning::agenda::reminders(&vault.doc), &renderings)
@@ -38,7 +38,7 @@ pub fn reminders_in(vault: &UnlockedVault, now: i64, zone: &str, ru: bool) -> Ve
 /// Create, move and remove the automatic reminders so they match the data.
 /// Returns whether anything changed (and was written).
 pub fn sync_auto_reminders(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     now: i64,
     zone: &str,
     ru: bool,

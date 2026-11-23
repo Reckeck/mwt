@@ -1,10 +1,10 @@
-//! Tests of the store_months area that need the vault (`UnlockedVault`): moved from
+//! Tests of the store_months area that need the vault (`Session`): moved from
 //! `money/store_months_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::ids::StoreId;
 use crate::model::store::StoreKind;
 use crate::money::store_months::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 
 #[test]
@@ -39,7 +39,7 @@ fn store_months_split_inflow_and_outflow_by_month() {
 }
 
 fn rows(
-    vault: &UnlockedVault,
+    vault: &Session,
     store_id: &str,
     include_children: bool,
     months: u32,
@@ -53,11 +53,11 @@ fn rows(
         months,
         now,
         "UTC",
-        |leg, currency, secs| UnlockedVault::leg_value_in(books.rate_book(), leg, currency, secs),
+        |leg, currency, secs| Session::leg_value_in(books.rate_book(), leg, currency, secs),
     )
 }
 
-fn two_wallets() -> (tempfile::TempDir, UnlockedVault, String, String) {
+fn two_wallets() -> (tempfile::TempDir, Session, String, String) {
     let (dir, mut vault) = empty_vault();
     let parent = store(&mut vault, "Bank", StoreKind::Bank, None);
     let child = store(&mut vault, "Card", StoreKind::Bank, Some(&parent));

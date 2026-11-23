@@ -17,7 +17,7 @@ use crate::sync::stamp::Clock;
 use crate::sync::state::SyncState;
 use crate::sync::track::Tracker;
 
-fn exchange_store(vault: &mut UnlockedVault) -> String {
+fn exchange_store(vault: &mut Session) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         "Bybit",
@@ -34,11 +34,11 @@ fn exchange_store(vault: &mut UnlockedVault) -> String {
     .id
 }
 
-fn terminal(vault: &UnlockedVault, id: &str) -> TerminalState {
+fn terminal(vault: &Session, id: &str) -> TerminalState {
     crate::cryptotrack::exchange_import::terminal_state(&vault.doc, id).unwrap()
 }
 
-fn set_timeframe(vault: &mut UnlockedVault, id: &str, timeframe: &str) {
+fn set_timeframe(vault: &mut Session, id: &str, timeframe: &str) {
     crate::usecases::cryptotrack::exchange_import::update_terminal_state(
         vault,
         id,
@@ -50,7 +50,7 @@ fn set_timeframe(vault: &mut UnlockedVault, id: &str, timeframe: &str) {
     .unwrap();
 }
 
-fn set_watchlist(vault: &mut UnlockedVault, id: &str, symbol: &str) {
+fn set_watchlist(vault: &mut Session, id: &str, symbol: &str) {
     crate::usecases::cryptotrack::exchange_import::update_terminal_state(
         vault,
         id,
@@ -62,13 +62,13 @@ fn set_watchlist(vault: &mut UnlockedVault, id: &str, symbol: &str) {
     .unwrap();
 }
 
-fn coins_of(vault: &UnlockedVault, id: &str) -> Vec<String> {
+fn coins_of(vault: &Session, id: &str) -> Vec<String> {
     crate::cryptotrack::exchange_sync::import_settings(&vault.books(), id)
         .unwrap()
         .coins
 }
 
-fn set_coins(vault: &mut UnlockedVault, id: &str, coins: &[&str]) {
+fn set_coins(vault: &mut Session, id: &str, coins: &[&str]) {
     let mut settings =
         crate::cryptotrack::exchange_sync::import_settings(&vault.books(), id).unwrap();
     settings.coins = coins.iter().map(|coin| (*coin).to_string()).collect();
@@ -208,7 +208,7 @@ fn a_new_store_from_a_peer_gets_a_default_terminal() {
     );
 }
 
-fn car_store(vault: &mut UnlockedVault) -> String {
+fn car_store(vault: &mut Session) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         "Octavia",
@@ -229,7 +229,7 @@ fn car_store(vault: &mut UnlockedVault) -> String {
     .id
 }
 
-fn car_of(vault: &UnlockedVault, id: &str) -> CarInfo {
+fn car_of(vault: &Session, id: &str) -> CarInfo {
     crate::money::tree::find_store(&vault.doc, id)
         .unwrap()
         .property

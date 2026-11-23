@@ -5,30 +5,30 @@
 use std::collections::BTreeMap;
 
 use crate::crypto::level::SecurityLevel;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::{empty_vault, income};
 use crate::sync::plan::ChangeKind;
 use crate::sync::{RecordState, SyncSummary};
 use crate::usecases::sync::peer_sync;
 
 /// The same vault on two devices: a copy of one file, opened twice.
-fn two_devices() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
+fn two_devices() -> (tempfile::TempDir, Session, Session) {
     let (dir, mut left) = empty_vault();
     peer_sync::set_device(&mut left, "aaaaaaaa-left");
     left.persist().unwrap();
     let copy = dir.path().join("copy.wallet");
     std::fs::copy(&left.path, &copy).unwrap();
-    let mut right = UnlockedVault::open(copy, "pw").unwrap();
+    let mut right = Session::open(copy, "pw").unwrap();
     peer_sync::set_device(&mut right, "bbbbbbbb-right");
     (dir, left, right)
 }
 
-fn cash_id(vault: &UnlockedVault) -> String {
+fn cash_id(vault: &Session) -> String {
     vault.doc.stores[0].id.clone()
 }
 
 /// What `from` holds that `into` lacks or has older, as a session sends it.
-fn batch_for(into: &mut UnlockedVault, from: &mut UnlockedVault) -> BTreeMap<String, RecordState> {
+fn batch_for(into: &mut Session, from: &mut Session) -> BTreeMap<String, RecordState> {
     let mine = crate::usecases::sync::read::sync_manifest(into, None).unwrap();
     let theirs = crate::usecases::sync::read::sync_manifest(from, None).unwrap();
     let (wanted, _) = crate::usecases::sync::read::sync_diff(into, &mine, &theirs);

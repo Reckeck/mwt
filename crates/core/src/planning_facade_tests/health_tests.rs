@@ -8,7 +8,7 @@ use crate::model::store::{StoreKind, StoreScope, SubType};
 use crate::model::transaction::Transaction;
 use crate::planning::health::{SAVINGS_MONTHS, SavingsMonth, savings_figures};
 use crate::service::test_support::*;
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 use crate::time::secs_or_now;
 use mwt_reports::health::*;
 use mwt_reports::insights::{Insight, InsightCode};
@@ -156,7 +156,7 @@ fn dated(mut tx: Transaction, ts: &str) -> Transaction {
 }
 
 /// Income and spending for each `(month, income, spent)`.
-fn months(vault: &mut UnlockedVault, store: &str, rows: &[(&str, &str, &str)]) {
+fn months(vault: &mut Session, store: &str, rows: &[(&str, &str, &str)]) {
     for (month, earned, spent) in rows {
         crate::usecases::money::transactions::add_transaction(
             vault,

@@ -6417,12 +6417,12 @@ inflation_source: { [key in string]: string },
 /**
  * Flat annual inflation, percent, by lowercase currency code, where the
  * group differs from the shipped table (`default_inflation`); read through
- * `UnlockedVault::flat_inflation`. Group data: every device sees one table.
+ * `Session::flat_inflation`. Group data: every device sees one table.
  */
 inflation_manual: { [key in string]: Amount }, 
 /**
  * The device-local rates of the app config were copied into
- * `inflation_manual` once (`UnlockedVault::adopt_flat_inflation`).
+ * `inflation_manual` once (`Session::adopt_flat_inflation`).
  */
 inflation_adopted: boolean, 
 /**

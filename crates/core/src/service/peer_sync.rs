@@ -17,7 +17,7 @@ use crate::usecases::sync::peer_sync;
 // What the test modules below reach through `use super::*`.
 #[cfg(test)]
 use {
-    super::UnlockedVault,
+    super::Session,
     crate::error::Error,
     crate::ipc_contract::SyncCutReason,
     crate::ipc_contract::security::SecurityLevel,
@@ -141,13 +141,13 @@ mod tests {
     use crate::sync::manifest::diff;
 
     /// The same vault on two devices: a copy of one file, opened twice.
-    pub(super) fn two_devices() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
+    pub(super) fn two_devices() -> (tempfile::TempDir, Session, Session) {
         let (dir, mut left) = empty_vault();
         peer_sync::set_device(&mut left, "aaaaaaaa-left");
         left.persist().unwrap();
         let copy = dir.path().join("copy.wallet");
         std::fs::copy(&left.path, &copy).unwrap();
-        let mut right = UnlockedVault::open(copy, "pw").unwrap();
+        let mut right = Session::open(copy, "pw").unwrap();
         peer_sync::set_device(&mut right, "bbbbbbbb-right");
         (dir, left, right)
     }
@@ -161,8 +161,8 @@ mod tests {
 
     /// One exchange as a session runs it; returns what each side applied.
     pub(super) fn exchange(
-        left: &mut UnlockedVault,
-        right: &mut UnlockedVault,
+        left: &mut Session,
+        right: &mut Session,
     ) -> (Option<AppliedBatch>, Option<AppliedBatch>) {
         let left_manifest = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
         let right_manifest = crate::usecases::sync::read::sync_manifest(right, None).unwrap();
@@ -178,7 +178,7 @@ mod tests {
     }
 
     /// Exchange until nothing moves; both sides must then agree.
-    pub(super) fn settle(left: &mut UnlockedVault, right: &mut UnlockedVault) {
+    pub(super) fn settle(left: &mut Session, right: &mut Session) {
         for _ in 0..4 {
             if exchange(left, right) == (None, None) {
                 break;
@@ -300,7 +300,7 @@ mod tests {
     }
 
     /// How many cache records the next exchange would move, both ways.
-    fn cache_records_moving(left: &mut UnlockedVault, right: &mut UnlockedVault) -> usize {
+    fn cache_records_moving(left: &mut Session, right: &mut Session) -> usize {
         let left_manifest = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
         let right_manifest = crate::usecases::sync::read::sync_manifest(right, None).unwrap();
         let (left_wants, _) =
@@ -472,11 +472,11 @@ mod tests {
         assert_eq!(exchange(&mut left, &mut right), (None, None));
     }
 
-    fn cash_id(vault: &UnlockedVault) -> String {
+    fn cash_id(vault: &Session) -> String {
         vault.doc.stores[0].id.clone()
     }
 
-    fn comments(vault: &UnlockedVault) -> Vec<String> {
+    fn comments(vault: &Session) -> Vec<String> {
         let mut out: Vec<String> = vault
             .doc
             .transactions
@@ -505,7 +505,7 @@ mod tests {
             .collect()
     }
 
-    fn price_keys(vault: &UnlockedVault) -> Vec<String> {
+    fn price_keys(vault: &Session) -> Vec<String> {
         let mut keys: Vec<String> = vault
             .doc
             .price_cache
@@ -516,18 +516,18 @@ mod tests {
         keys
     }
 
-    fn set_prices(vault: &mut UnlockedVault, points: Vec<crate::model::vault::PricePoint>) {
+    fn set_prices(vault: &mut Session, points: Vec<crate::model::vault::PricePoint>) {
         vault.doc.price_cache = points;
         vault.persist().unwrap();
     }
 
-    fn within_caps(vault: &UnlockedVault) -> bool {
+    fn within_caps(vault: &Session) -> bool {
         use crate::pricing::history::{HISTORY_CAP, HOURLY_KEEP};
         vault.doc.price_cache.len() <= HISTORY_CAP
             && vault.doc.price_cache.len() < 2 * HOURLY_KEEP + 400
     }
 
-    fn file_bytes(vault: &UnlockedVault) -> Vec<u8> {
+    fn file_bytes(vault: &Session) -> Vec<u8> {
         std::fs::read(&vault.path).unwrap()
     }
 
@@ -551,7 +551,7 @@ mod tests {
         assert_eq!(batch.peer_name, COPY);
         assert_eq!(comments(&left), ["X", "Y"]);
         // What a push would now send holds both.
-        let reopened = UnlockedVault::open(left.path.clone(), "pw").unwrap();
+        let reopened = Session::open(left.path.clone(), "pw").unwrap();
         assert_eq!(comments(&reopened), ["X", "Y"]);
     }
 
@@ -692,12 +692,12 @@ mod tests {
         );
         assert_eq!(left.doc.sync.batches, local_sync.batches);
         assert_eq!(left.doc.sync.journal, local_sync.journal);
-        let reopened = UnlockedVault::open(left.path.clone(), "pw").unwrap();
+        let reopened = Session::open(left.path.clone(), "pw").unwrap();
         assert_eq!(comments(&reopened), ["theirs"]);
         assert!(!reopened.doc.sync.paused.contains("foreign-device"));
     }
 
-    fn tx_key(vault: &mut UnlockedVault) -> String {
+    fn tx_key(vault: &mut Session) -> String {
         crate::usecases::sync::read::sync_manifest(vault, None)
             .unwrap()
             .keys()
@@ -706,7 +706,7 @@ mod tests {
             .expect("a transaction record")
     }
 
-    fn set_comment(vault: &mut UnlockedVault, comment: &str) {
+    fn set_comment(vault: &mut Session, comment: &str) {
         let mut tx = vault.doc.transactions[0].clone();
         let id = tx.meta().id.clone();
         tx.meta_mut().comment = comment.into();
@@ -714,7 +714,7 @@ mod tests {
     }
 
     /// One shared transaction on both sides.
-    fn shared_transaction() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
+    fn shared_transaction() -> (tempfile::TempDir, Session, Session, String) {
         let (dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
         crate::usecases::money::transactions::add_transaction(
@@ -1014,7 +1014,7 @@ mod tests {
     }
 
     /// An automation's operation for one planned moment; its id.
-    fn rent(vault: &mut UnlockedVault, comment: &str) -> String {
+    fn rent(vault: &mut Session, comment: &str) -> String {
         let cash = cash_id(vault);
         let mut tx = income(&cash, "100", comment);
         if let Transaction::Topup(topup) = &mut tx {
@@ -1030,7 +1030,7 @@ mod tests {
             .clone()
     }
 
-    fn edit_comment(vault: &mut UnlockedVault, id: &str, text: &str) {
+    fn edit_comment(vault: &mut Session, id: &str, text: &str) {
         for tx in &mut vault.doc.transactions {
             if let Transaction::Topup(topup) = tx
                 && topup.meta.id == id
@@ -1046,7 +1046,7 @@ mod tests {
     }
 
     /// [`exchange`] with the right side still running the earlier dedupe.
-    fn exchange_with_old_right(left: &mut UnlockedVault, right: &mut UnlockedVault) -> bool {
+    fn exchange_with_old_right(left: &mut Session, right: &mut Session) -> bool {
         let left_manifest = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
         let right_manifest = crate::usecases::sync::read::sync_manifest(right, None).unwrap();
         let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
@@ -1212,7 +1212,7 @@ mod tests {
     }
 
     /// A workflow transaction of `run`, planned for `moment`.
-    fn workflow_tx(vault: &mut UnlockedVault, run: &str, comment: &str) {
+    fn workflow_tx(vault: &mut Session, run: &str, comment: &str) {
         let cash = cash_id(vault);
         let mut tx = income(&cash, "100", comment);
         if let Transaction::Topup(topup) = &mut tx {
@@ -1229,7 +1229,7 @@ mod tests {
     }
 
     /// Makes both devices apply something, so the dedupe runs on each.
-    fn touch_and_settle(left: &mut UnlockedVault, right: &mut UnlockedVault) {
+    fn touch_and_settle(left: &mut Session, right: &mut Session) {
         left.doc.stores[0].name = "Left".into();
         left.persist().unwrap();
         right.doc.stores[0].color = "#123456".into();
@@ -1594,7 +1594,7 @@ mod tests {
         vault.persist().unwrap();
         let path = vault.path.clone();
         drop(vault);
-        let mut reopened = UnlockedVault::open(path, "pw").unwrap();
+        let mut reopened = Session::open(path, "pw").unwrap();
         assert!(peer_sync::sync_state(&reopened).stamps.is_empty());
         reopened.doc.stores[0].name = "X".into();
         reopened.persist().unwrap();
@@ -1643,14 +1643,14 @@ mod tests {
         peer_sync::sync_pause_peer(&mut vault, "dev-a").unwrap();
         assert!(peer_sync::sync_is_paused(&vault, "dev-a"));
         assert!(!peer_sync::sync_is_paused(&vault, "dev-b"));
-        let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
+        let reopened = Session::open(vault.path.clone(), "pw").unwrap();
         assert!(peer_sync::sync_is_paused(&reopened, "dev-a"));
         // The list that goes to other devices does not carry it.
         assert!(peer_sync::sync_state(&reopened).peers.is_empty());
         let mut reopened = reopened;
         peer_sync::sync_resume_peer(&mut reopened, "dev-a").unwrap();
         assert!(!peer_sync::sync_is_paused(&reopened, "dev-a"));
-        let again = UnlockedVault::open(reopened.path.clone(), "pw").unwrap();
+        let again = Session::open(reopened.path.clone(), "pw").unwrap();
         assert!(!peer_sync::sync_is_paused(&again, "dev-a"));
         drop(dir);
     }
@@ -1681,7 +1681,7 @@ mod tests {
         assert!(peer_sync::sync_cut_by(&mut vault, "dev-a", SyncCutReason::Paused).unwrap());
         // The same news again changes nothing; another reason does.
         assert!(!peer_sync::sync_cut_by(&mut vault, "dev-a", SyncCutReason::Paused).unwrap());
-        let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
+        let reopened = Session::open(vault.path.clone(), "pw").unwrap();
         assert_eq!(
             peer_sync::sync_cut_reason(&reopened, "dev-a"),
             Some(SyncCutReason::Paused)
@@ -1743,7 +1743,7 @@ mod level_pair_tests {
 
     /// A level-3 `left` that follows an address and has a wallet of its own,
     /// and a level-2 `right` with another wallet.
-    fn pair() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
+    fn pair() -> (tempfile::TempDir, Session, Session) {
         let (dir, mut left, mut right) = two_devices();
         left.raise_to_level3_for_tests();
         assert_eq!(left.security_level(), SecurityLevel::Crypto);
@@ -1791,7 +1791,7 @@ mod level_pair_tests {
         (dir, left, right)
     }
 
-    fn has_store(vault: &UnlockedVault, name: &str) -> bool {
+    fn has_store(vault: &Session, name: &str) -> bool {
         vault.doc.stores.iter().any(|store| store.name == name)
     }
 

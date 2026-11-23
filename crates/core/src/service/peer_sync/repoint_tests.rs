@@ -16,7 +16,7 @@ fn pause() {
     std::thread::sleep(std::time::Duration::from_millis(5));
 }
 
-fn cash_id(vault: &UnlockedVault) -> String {
+fn cash_id(vault: &Session) -> String {
     vault
         .doc
         .stores
@@ -28,7 +28,7 @@ fn cash_id(vault: &UnlockedVault) -> String {
 }
 
 /// The monthly rent automation booked for the same planned moment.
-fn rent(vault: &mut UnlockedVault) -> String {
+fn rent(vault: &mut Session) -> String {
     let cash = cash_id(vault);
     let mut tx = income(&cash, "100", "rent");
     if let Transaction::Topup(topup) = &mut tx {
@@ -55,7 +55,7 @@ fn enrichment(tx_id: &str) -> EnrichmentRecord {
     }
 }
 
-fn tx_ids(vault: &UnlockedVault) -> Vec<String> {
+fn tx_ids(vault: &Session) -> Vec<String> {
     vault
         .doc
         .transactions
@@ -64,8 +64,8 @@ fn tx_ids(vault: &UnlockedVault) -> Vec<String> {
         .collect()
 }
 
-fn reopen(vault: &UnlockedVault) -> UnlockedVault {
-    UnlockedVault::open(vault.path.clone(), "pw").unwrap()
+fn reopen(vault: &Session) -> Session {
+    Session::open(vault.path.clone(), "pw").unwrap()
 }
 
 #[test]

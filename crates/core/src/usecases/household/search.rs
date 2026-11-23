@@ -12,18 +12,13 @@ use crate::money::worth::FlowClass;
 use crate::planning::budget::BudgetStatus;
 use crate::planning::flows::flows_between;
 use crate::planning::goals::GoalProgress;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 use super::relations::store_worth;
 
 /// Spending (or income, for an income category) of the current month in
 /// the budget currency.
-fn category_month_spent(
-    vault: &UnlockedVault,
-    key: &str,
-    now: i64,
-    zone: &str,
-) -> (Amount, String) {
+fn category_month_spent(vault: &Session, key: &str, now: i64, zone: &str) -> (Amount, String) {
     let cal = Calendar::new(zone);
     let (from, to) = cal.month_bounds(cal.date_of(now));
     let currency = crate::planning::budget::budget_currency(&vault.books());
@@ -42,7 +37,7 @@ fn category_month_spent(
 
 /// One pin with its head from the card and what its kind adds.
 fn pinned_view(
-    vault: &UnlockedVault,
+    vault: &Session,
     pin: &Pinned,
     goals: &[GoalProgress],
     budgets: &[BudgetStatus],
@@ -93,7 +88,7 @@ fn pinned_view(
 }
 
 /// The pins with their short values.
-pub fn pinned(vault: &UnlockedVault, now: i64, zone: &str) -> Vec<PinnedView> {
+pub fn pinned(vault: &Session, now: i64, zone: &str) -> Vec<PinnedView> {
     let goals = crate::usecases::planning::goals::goal_progress(&vault.books(), now, zone);
     let budgets = crate::usecases::planning::budget::budget_status(&vault.books(), now, zone);
     vault
@@ -107,7 +102,7 @@ pub fn pinned(vault: &UnlockedVault, now: i64, zone: &str) -> Vec<PinnedView> {
 
 /// Replaces the pins: blanks and repeats are dropped, a filter without an
 /// id gets one, the list is capped.
-pub fn set_pinned(vault: &mut UnlockedVault, pins: Vec<Pinned>) -> Result<()> {
+pub fn set_pinned(vault: &mut Session, pins: Vec<Pinned>) -> Result<()> {
     let Some(kept) = plan_pins(&vault.doc, pins)? else {
         return Ok(());
     };

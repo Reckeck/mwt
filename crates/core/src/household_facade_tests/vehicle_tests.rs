@@ -6,7 +6,7 @@ use crate::household::vehicle::*;
 use crate::model::ids::StoreId;
 use crate::model::store::{CarInfo, PropertyCategory, PropertyInfo, StoreKind};
 use crate::service::test_support::*;
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 use crate::usecases::household::vehicle as scenarios;
 use chrono::NaiveDate;
 
@@ -14,7 +14,7 @@ fn day(raw: &str) -> NaiveDate {
     NaiveDate::parse_from_str(raw, "%Y-%m-%d").unwrap()
 }
 
-fn car(vault: &mut UnlockedVault, category: PropertyCategory) -> String {
+fn car(vault: &mut Session, category: PropertyCategory) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         "Октавия",
@@ -39,7 +39,7 @@ fn car(vault: &mut UnlockedVault, category: PropertyCategory) -> String {
     .id
 }
 
-fn info(vault: &UnlockedVault, id: &str) -> CarInfo {
+fn info(vault: &Session, id: &str) -> CarInfo {
     crate::money::tree::find_store(&vault.doc, id)
         .unwrap()
         .property

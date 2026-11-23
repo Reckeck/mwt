@@ -8,10 +8,10 @@ pub use crate::model::notify::notice;
 use crate::model::vault::now_iso;
 use crate::planning::notifications as rules;
 use crate::planning::upcoming::upcoming;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Mark notices read: the ones named, or all of them.
-pub fn mark_notifications_read(vault: &mut UnlockedVault, keys: Option<&[String]>) -> Result<()> {
+pub fn mark_notifications_read(vault: &mut Session, keys: Option<&[String]>) -> Result<()> {
     vault.transact(|tx| {
         rules::mark_read(&mut tx.doc_mut().notification_log, keys);
         Ok(())
@@ -20,10 +20,7 @@ pub fn mark_notifications_read(vault: &mut UnlockedVault, keys: Option<&[String]
 
 /// Add notices to the log, skipping known keys and switched-off kinds.
 /// Returns the ones that are new; writes once.
-pub fn log_notices(
-    vault: &mut UnlockedVault,
-    records: Vec<NoticeRecord>,
-) -> Result<Vec<NoticeRecord>> {
+pub fn log_notices(vault: &mut Session, records: Vec<NoticeRecord>) -> Result<Vec<NoticeRecord>> {
     let fresh = rules::fresh_notices(&vault.doc, records);
     if fresh.is_empty() {
         return Ok(fresh);
@@ -39,7 +36,7 @@ pub fn log_notices(
 /// time came, planned money going out the balance will not cover, budgets
 /// near or over their limit. They are logged before being returned.
 pub fn due_notices(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     now: i64,
     zone: &str,
     ru: bool,
@@ -71,7 +68,7 @@ pub fn due_notices(
 
 /// A notice shown elsewhere (an alert fired while locked, an automation
 /// run, a Bybit import): logged so it is not shown again.
-pub fn record_notice(vault: &mut UnlockedVault, record: NoticeRecord) -> Result<bool> {
+pub fn record_notice(vault: &mut Session, record: NoticeRecord) -> Result<bool> {
     if record.key.trim().is_empty() {
         return Err(Error::InvalidInput("a notice needs a key".into()));
     }

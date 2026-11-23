@@ -22,7 +22,7 @@ fn draft(store_id: &str) -> EnvelopeDraft {
 }
 
 /// An envelope in a funded wallet that both devices hold: `(store, envelope)`.
-fn shared_envelope(left: &mut UnlockedVault, right: &mut UnlockedVault) -> (String, String) {
+fn shared_envelope(left: &mut Session, right: &mut Session) -> (String, String) {
     let cash = store(left, "Cash", StoreKind::Cash, None);
     crate::usecases::money::transactions::add_transaction(left, income(&cash, "1000", "pay"))
         .unwrap();
@@ -32,7 +32,7 @@ fn shared_envelope(left: &mut UnlockedVault, right: &mut UnlockedVault) -> (Stri
     (cash, envelope.id)
 }
 
-fn envelope_of(vault: &UnlockedVault, id: &str) -> Envelope {
+fn envelope_of(vault: &Session, id: &str) -> Envelope {
     vault
         .doc
         .envelopes
@@ -42,13 +42,13 @@ fn envelope_of(vault: &UnlockedVault, id: &str) -> Envelope {
         .unwrap()
 }
 
-fn allocated(vault: &UnlockedVault, id: &str) -> crate::Amount {
+fn allocated(vault: &Session, id: &str) -> crate::Amount {
     envelope_of(vault, id).allocated
 }
 
 /// The journal adds up to `allocated`, the stored stamp of `allocated` is the
 /// stamp of the newest entry.
-fn assert_derived(vault: &UnlockedVault, id: &str) {
+fn assert_derived(vault: &Session, id: &str) {
     let envelope = envelope_of(vault, id);
     assert_eq!(envelope.allocated, envelope.moves_sum(), "allocated = sum");
     let stamps = vault
@@ -72,7 +72,7 @@ fn assert_derived(vault: &UnlockedVault, id: &str) {
     }
 }
 
-fn corrections(vault: &UnlockedVault, id: &str) -> Vec<EnvelopeMove> {
+fn corrections(vault: &Session, id: &str) -> Vec<EnvelopeMove> {
     envelope_of(vault, id)
         .moves
         .into_iter()
@@ -80,7 +80,7 @@ fn corrections(vault: &UnlockedVault, id: &str) -> Vec<EnvelopeMove> {
         .collect()
 }
 
-fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) {
+fn pull(devices: &mut [Session], from: usize, to: usize) {
     let from_manifest =
         crate::usecases::sync::read::sync_manifest(&mut devices[from], None).unwrap();
     let to_manifest = crate::usecases::sync::read::sync_manifest(&mut devices[to], None).unwrap();
@@ -94,11 +94,11 @@ fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) {
     peer_sync::sync_apply(&mut devices[to], &records, &peer).unwrap();
 }
 
-fn three_devices() -> (tempfile::TempDir, Vec<UnlockedVault>) {
+fn three_devices() -> (tempfile::TempDir, Vec<Session>) {
     let (dir, left, right) = two_devices();
     let copy = dir.path().join("third.wallet");
     std::fs::copy(&left.path, &copy).unwrap();
-    let mut third = UnlockedVault::open(copy, "pw").unwrap();
+    let mut third = Session::open(copy, "pw").unwrap();
     peer_sync::set_device(&mut third, "cccccccc-third");
     (dir, vec![left, right, third])
 }
@@ -118,7 +118,7 @@ fn as_old_peer(mut state: RecordState, allocated: &str, edited: Option<Stamp>) -
     state
 }
 
-fn later(vault: &mut UnlockedVault) -> Stamp {
+fn later(vault: &mut Session) -> Stamp {
     let mut stamp = vault.clock.tick();
     stamp.wall += 5_000;
     stamp.device = "oldpeer".into();
@@ -219,7 +219,7 @@ fn opening_entry_is_shared_by_two_devices() {
     let path = left.path.clone();
     drop(left);
     // The first device opens it (upgrade), the second gets the record by sync.
-    let mut left = UnlockedVault::open_as(path, "pw", Some("aaaaaaaa-left")).unwrap();
+    let mut left = Session::open_as(path, "pw", Some("aaaaaaaa-left")).unwrap();
     settle(&mut left, &mut right);
     let opening = vec![EnvelopeMove {
         id: format!("open:{id}"),
@@ -231,7 +231,7 @@ fn opening_entry_is_shared_by_two_devices() {
     // And the same entry made by a device that opens its own copy: no news.
     let right_path = right.path.clone();
     drop(right);
-    let mut right = UnlockedVault::open_as(right_path, "pw", Some("bbbbbbbb-right")).unwrap();
+    let mut right = Session::open_as(right_path, "pw", Some("bbbbbbbb-right")).unwrap();
     assert_eq!(envelope_of(&right, &id).moves, opening);
     let key = format!("envelopes:{id}");
     assert_eq!(
@@ -252,7 +252,7 @@ fn old_peer_allocated_edit_becomes_one_correction() {
     settle(&mut left, &mut right);
     let key = format!("envelopes:{id}");
     let stamp = later(&mut left);
-    let from_old = |vault: &mut UnlockedVault, allocated: &str, stamp: Stamp| {
+    let from_old = |vault: &mut Session, allocated: &str, stamp: Stamp| {
         let mut records =
             crate::usecases::sync::read::sync_records(vault, std::slice::from_ref(&key)).unwrap();
         let state = records.remove(&key).unwrap();
@@ -412,7 +412,7 @@ fn a_deleted_envelope_stays_deleted() {
 
 /// What an old device forwards of a new device's envelope: the value without
 /// `moves`, `allocated` with the new device's stamp and no stamp of the array.
-fn stripped_relay(from: &mut UnlockedVault, key: &str, allocated: &str) -> RecordState {
+fn stripped_relay(from: &mut Session, key: &str, allocated: &str) -> RecordState {
     let mut records =
         crate::usecases::sync::read::sync_records(from, std::slice::from_ref(&key.to_string()))
             .unwrap();
@@ -464,7 +464,7 @@ fn a_correction_from_a_stripped_relay_is_withdrawn_when_the_real_move_arrives() 
         assert!(corrections(vault, &id).is_empty());
         assert_derived(vault, &id);
     }
-    let digest = |vault: &mut UnlockedVault| {
+    let digest = |vault: &mut Session| {
         crate::usecases::sync::read::sync_manifest(vault, None).unwrap()[&key]
     };
     let first = digest(&mut devices[0]);

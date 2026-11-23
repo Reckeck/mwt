@@ -11,10 +11,10 @@ use crate::model::vault::VaultDoc;
 use crate::money::books::{Books, BooksSource};
 use mwt_model::CryptoHistory;
 
-use super::UnlockedVault;
+use super::Session;
 use crate::money::valuation::ValuationCurve;
 
-impl BooksSource for UnlockedVault {
+impl BooksSource for Session {
     fn doc(&self) -> &VaultDoc {
         &self.doc
     }
@@ -48,11 +48,11 @@ impl BooksSource for UnlockedVault {
     }
 
     fn keys_on_device(&self) -> bool {
-        UnlockedVault::keys_on_device(self)
+        Session::keys_on_device(self)
     }
 
     fn device_secrets_for_request(&self) -> Result<DeviceSecrets> {
-        UnlockedVault::device_secrets_for_request(self)
+        Session::device_secrets_for_request(self)
     }
 
     fn crypto_history(&self, cutoffs: &[i64], in_scope: &dyn Fn(&str) -> bool) -> CryptoHistory {
@@ -66,9 +66,9 @@ mod tests {
 
     use super::*;
 
-    fn open_vault() -> (tempfile::TempDir, UnlockedVault) {
+    fn open_vault() -> (tempfile::TempDir, Session) {
         let dir = tempfile::tempdir().unwrap();
-        let vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+        let vault = Session::create(dir.path().join("test.wallet"), "pw").unwrap();
         (dir, vault)
     }
 

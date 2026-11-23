@@ -10,7 +10,7 @@ use crate::error::Result;
 use crate::ipc_contract::MergeTarget;
 use crate::model::notify::{NoticeCategory, notice};
 use crate::model::vault::now_iso;
-use crate::service::{CASH_WALLET_ID, UnlockedVault};
+use crate::service::{CASH_WALLET_ID, Session};
 use crate::sync::journal::{SyncJournalEntry, SyncJournalEntryExt, SyncJournalOutcome};
 use crate::sync::repair::bad_record::journal_has;
 use crate::sync::repair::keep::{self, KeepTarget};
@@ -36,7 +36,7 @@ use crate::sync::{BatchEntry, RecordState, SyncSummary, view};
 /// whose merge is being settled (the repair is recorded in it for undo);
 /// `None` when a vault opens (the change is only stamped).
 pub(crate) fn repair_invariants(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     batch_id: Option<&str>,
 ) -> Result<RepairReport> {
     let (mut report, changed) = tracked_edit(vault, batch_id, run_rules)?;
@@ -48,7 +48,7 @@ pub(crate) fn repair_invariants(
 /// tracked edit of this device: the records it changed are stamped (so the other devices get
 /// them) and recorded in the batch for its undo.
 pub(crate) fn repoint_removed_copies(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     pairs: &[(String, String)],
     batch_id: &str,
 ) -> Result<()> {
@@ -65,18 +65,18 @@ pub(crate) fn repoint_removed_copies(
 
 /// [`repoint_references`] over the open vault, for the tests that pin it.
 #[cfg(test)]
-pub(crate) fn repoint_tx(vault: &mut UnlockedVault, old: &str, new: &str) -> bool {
+pub(crate) fn repoint_tx(vault: &mut Session, old: &str, new: &str) -> bool {
     repoint_references(&mut vault.doc, old, new)
 }
 
 /// A payment is back after its deletion: what left the shared event with it returns.
-pub(crate) fn restore_removed_with_payment(vault: &mut UnlockedVault) {
+pub(crate) fn restore_removed_with_payment(vault: &mut Session) {
     restore_payment_parts(&mut vault.doc);
 }
 
 /// «Allow merging»: clear the mark, so the next sync may fold the record
 /// into its twin again. A local edit like any other.
-pub fn allow_merging(vault: &mut UnlockedVault, target: MergeTarget, id: &str) -> Result<()> {
+pub fn allow_merging(vault: &mut Session, target: MergeTarget, id: &str) -> Result<()> {
     let target = match target {
         MergeTarget::Transaction => KeepTarget::Transaction,
         MergeTarget::Reminder => KeepTarget::Reminder,
@@ -94,11 +94,7 @@ pub fn allow_merging(vault: &mut UnlockedVault, target: MergeTarget, id: &str) -
 /// there: the peer offers them again every session, and the journal must
 /// not fill with one line per session. True when a line was added (the
 /// caller saves).
-pub(crate) fn journal_skipped(
-    vault: &mut UnlockedVault,
-    peer_name: &str,
-    summary: &SyncSummary,
-) -> bool {
+pub(crate) fn journal_skipped(vault: &mut Session, peer_name: &str, summary: &SyncSummary) -> bool {
     let line = SyncJournalEntry::of(peer_name, summary, SyncJournalOutcome::Failed);
     if journal_has(&vault.doc.sync.journal, &line) {
         return false;
@@ -115,7 +111,7 @@ pub(crate) fn journal_skipped(
 
 /// The rules in the order they run (see `sync::repair::repair`); the rules that need another
 /// area ask the vault for it between the steps.
-fn run_rules(vault: &mut UnlockedVault) -> RepairReport {
+fn run_rules(vault: &mut Session) -> RepairReport {
     let mut report = RepairReport::default();
     repair_restored(vault, &mut report);
     let decided: HashSet<String> =
@@ -147,7 +143,7 @@ fn run_rules(vault: &mut UnlockedVault) -> RepairReport {
 }
 
 /// R3, the first rule: a deleted record that live money still points to comes back.
-fn repair_restored(vault: &mut UnlockedVault, report: &mut RepairReport) {
+fn repair_restored(vault: &mut Session, report: &mut RepairReport) {
     // First: a purchase that comes back names its buyer, looked at next.
     restore_payment_parts(&mut vault.doc);
     restore_participants(&mut vault.doc, report);
@@ -161,7 +157,7 @@ fn repair_restored(vault: &mut UnlockedVault, report: &mut RepairReport) {
 }
 
 /// The notice of a repair, added to the (synced) log under a key the repair itself decides.
-fn announce_repair(vault: &mut UnlockedVault, report: &RepairReport) {
+fn announce_repair(vault: &mut Session, report: &RepairReport) {
     let ru = peer_sync::notice_in_russian(vault);
     let Some(body) = report.notice_body(ru) else {
         return;
@@ -181,9 +177,9 @@ fn announce_repair(vault: &mut UnlockedVault, report: &RepairReport) {
 /// changed records (so the other devices get them) and, given a batch, record them in it for its
 /// undo. The keys of the records it changed (none when it changed nothing).
 fn tracked_edit<R>(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     batch_id: Option<&str>,
-    edit: impl FnOnce(&mut UnlockedVault) -> R,
+    edit: impl FnOnce(&mut Session) -> R,
 ) -> Result<(R, Vec<String>)> {
     let before = peer_sync::doc_value(vault)?;
     let out = edit(vault);

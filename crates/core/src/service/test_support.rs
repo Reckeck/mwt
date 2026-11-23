@@ -5,7 +5,7 @@
 #[cfg(test)]
 use tempfile::tempdir;
 
-use super::UnlockedVault;
+use super::Session;
 use crate::Amount;
 use crate::model::chain::Chain;
 use crate::model::store::{AssetRef, StoreKind};
@@ -31,15 +31,15 @@ pub fn usd_price(raw: &str) -> PriceStamp {
 }
 
 #[cfg(test)]
-pub fn empty_vault() -> (tempfile::TempDir, UnlockedVault) {
+pub fn empty_vault() -> (tempfile::TempDir, Session) {
     let dir = tempdir().unwrap();
-    let vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+    let vault = Session::create(dir.path().join("test.wallet"), "pw").unwrap();
     (dir, vault)
 }
 
 /// A vault with an exchange (`Binance`) and a cold wallet (`Cold`).
 #[cfg(test)]
-pub fn setup() -> (tempfile::TempDir, UnlockedVault) {
+pub fn setup() -> (tempfile::TempDir, Session) {
     let (dir, mut vault) = empty_vault();
     crate::usecases::money::stores::create_store_with(
         &mut vault,
@@ -66,12 +66,7 @@ pub fn setup() -> (tempfile::TempDir, UnlockedVault) {
     (dir, vault)
 }
 
-pub fn store(
-    vault: &mut UnlockedVault,
-    name: &str,
-    kind: StoreKind,
-    parent: Option<&str>,
-) -> String {
+pub fn store(vault: &mut Session, name: &str, kind: StoreKind, parent: Option<&str>) -> String {
     // The vault comes with its one cash wallet: reuse it under the asked name.
     if kind == StoreKind::Cash && parent.is_none() {
         let cash = vault
@@ -225,7 +220,7 @@ pub fn at(tx: &mut Transaction, stamp: &str) {
     tx.meta_mut().timestamp = stamp.into();
 }
 
-pub fn holding_of(vault: &UnlockedVault, store: &str, asset: &AssetRef) -> Amount {
+pub fn holding_of(vault: &Session, store: &str, asset: &AssetRef) -> Amount {
     vault
         .doc
         .holdings
@@ -236,7 +231,7 @@ pub fn holding_of(vault: &UnlockedVault, store: &str, asset: &AssetRef) -> Amoun
 }
 
 /// A USD quote in the price cache, so holdings have a value.
-pub fn quote_usd(vault: &mut UnlockedVault) {
+pub fn quote_usd(vault: &mut Session) {
     vault.doc.price_cache.push(crate::model::vault::PricePoint {
         asset_key: usd().key(),
         value_usd: amount("1"),

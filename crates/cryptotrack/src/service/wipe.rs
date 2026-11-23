@@ -9,7 +9,7 @@
 //!
 //! 1. the word the user typed is checked — nothing else happens without it;
 //! 2. there is a **backup**: the vault file as it is now, copied through the
-//!    same `UnlockedVault::create_backup` the level-3 raise uses, then
+//!    same `Session::create_backup` the level-3 raise uses, then
 //!    **opened again** with this session's password and read back. A copy
 //!    that does not decrypt, or whose document no longer holds what this one
 //!    holds, ends the wipe right there, with nothing touched;

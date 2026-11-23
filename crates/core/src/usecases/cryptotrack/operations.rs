@@ -41,7 +41,7 @@ use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::money::books::Books;
 use crate::money::rates::convert_at;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::usecases::cryptotrack::recompute::refold_holdings;
 
 /// How far apart the two sides of an exchange may be dated, in days.
@@ -555,7 +555,7 @@ fn crypto_chain_members(doc: &VaultDoc, flow: &str, this: &str) -> Vec<CryptoCha
 /// Lay a correction over an operation (see [`CryptoSetOverrideInput`]).
 /// The event is left as it came; the correction survives a refetch.
 pub fn crypto_set_override(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: &CryptoSetOverrideInput,
 ) -> Result<CryptoSetOverrideResult> {
     let now = now_iso();

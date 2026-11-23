@@ -8,10 +8,10 @@ use crate::error::Result;
 use crate::model::transaction::Transaction;
 use crate::money::ledger::{self, FilterSources, TxFilter, TxGraph, TxPage, WalletRow};
 use crate::money::portfolio::StoreTreeNode;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// The vault as the filter's source for the areas that have not moved.
-struct VaultSources<'vault>(&'vault UnlockedVault);
+struct VaultSources<'vault>(&'vault Session);
 
 impl FilterSources for VaultSources<'_> {
     fn realized_tx_ids(&self, scope: Option<&HashSet<String>>) -> HashSet<String> {
@@ -49,7 +49,7 @@ fn wallet_rows(tree: &[StoreTreeNode]) -> Vec<WalletRow> {
 
 /// The filtered transactions, newest first.
 pub fn list_transactions(
-    vault: &UnlockedVault,
+    vault: &Session,
     filter: &TxFilter,
     zone: &str,
 ) -> Result<Vec<Transaction>> {
@@ -58,7 +58,7 @@ pub fn list_transactions(
 
 /// The filtered operations as CSV, oldest first, one line per leg: the
 /// "Export ▾ › Transactions by filter" of the list.
-pub fn transactions_csv(vault: &UnlockedVault, filter: &TxFilter, zone: &str) -> Result<String> {
+pub fn transactions_csv(vault: &Session, filter: &TxFilter, zone: &str) -> Result<String> {
     ledger::transaction_lines(&vault.books(), &VaultSources(vault), filter, zone)
         .map(mwt_reports::overview::csv_text)
 }
@@ -66,7 +66,7 @@ pub fn transactions_csv(vault: &UnlockedVault, filter: &TxFilter, zone: &str) ->
 /// `limit` operations from `offset`, newest first: a long journal goes to
 /// the screen a page at a time instead of whole on every refresh.
 pub fn list_transactions_page(
-    vault: &UnlockedVault,
+    vault: &Session,
     filter: &TxFilter,
     offset: u32,
     limit: u32,
@@ -85,7 +85,7 @@ pub fn list_transactions_page(
 /// The filtered transactions as lanes and edges. `collapsed` lists stores
 /// whose sub-accounts fold into the store's own lane.
 pub fn tx_graph(
-    vault: &UnlockedVault,
+    vault: &Session,
     filter: &TxFilter,
     collapsed: &[String],
     zone: &str,

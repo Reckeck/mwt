@@ -6,7 +6,7 @@ use crate::household::loyalty::*;
 use crate::model::ids::StoreId;
 use crate::model::store::{AssetRef, LoyaltyInfo, StoreKind};
 use crate::model::vault::FxPoint;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 
 fn info(symbol: &str) -> LoyaltyInfo {
@@ -164,7 +164,7 @@ fn programmes_saved_before_the_login_field_still_open() {
 }
 
 /// Two devices chose one symbol before a sync: both programmes exist.
-fn clashing_pair(vault: &mut UnlockedVault) -> (String, String) {
+fn clashing_pair(vault: &mut Session) -> (String, String) {
     let first = store(vault, "A", StoreKind::Loyalty, None);
     let second = store(vault, "B", StoreKind::Loyalty, None);
     crate::usecases::household::loyalty::set_loyalty_info(

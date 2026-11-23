@@ -13,7 +13,7 @@ use crate::error::{Error, Result};
 use crate::ipc_contract::SyncCutReason;
 use crate::ipc_contract::security::SecurityLevel;
 use crate::model::vault::{VaultDoc, now_iso};
-use crate::service::{AppliedBatch, ExternalMerge, PeerRef, SyncTap, UndoReport, UnlockedVault};
+use crate::service::{AppliedBatch, ExternalMerge, PeerRef, Session, SyncTap, UndoReport};
 use crate::storage::VaultFile;
 use crate::sync::history::applied_of;
 use crate::sync::journal::SyncJournalOutcome;
@@ -53,7 +53,7 @@ fn reminder_identity(reminder: &crate::model::planning::Reminder) -> Option<Stri
 /// A stamp that sorts after every entry held for this device (and key): the
 /// clock lives here, so the trust scenarios ask the vault for it.
 pub(crate) fn stamp_past_known_peer(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     device_id: &str,
     public_key: Option<&str>,
 ) -> Stamp {
@@ -65,12 +65,12 @@ pub(crate) fn stamp_past_known_peer(
 
 /// Whether notices made inside the core are in Russian: the repair scenario
 /// asks the vault, the field is private to `service`.
-pub(crate) fn notice_in_russian(vault: &UnlockedVault) -> bool {
+pub(crate) fn notice_in_russian(vault: &Session) -> bool {
     vault.notice_ru
 }
 
 /// The document without the sync bookkeeping, serialized.
-pub(crate) fn doc_value(vault: &mut UnlockedVault) -> Result<Value> {
+pub(crate) fn doc_value(vault: &mut Session) -> Result<Value> {
     let sync = std::mem::take(&mut vault.doc.sync);
     let value = serde_json::to_value(&vault.doc);
     vault.doc.sync = sync;
@@ -78,7 +78,7 @@ pub(crate) fn doc_value(vault: &mut UnlockedVault) -> Result<Value> {
 }
 
 /// Start stamping changes from the document as it is now.
-pub(crate) fn start_tracking(vault: &mut UnlockedVault) -> Result<()> {
+pub(crate) fn start_tracking(vault: &mut Session) -> Result<()> {
     if vault.sandbox {
         return Ok(());
     }
@@ -96,7 +96,7 @@ pub(crate) fn start_tracking(vault: &mut UnlockedVault) -> Result<()> {
 /// Our own peer entries (a revocation or trust made while the clock was
 /// poisoned) stamped beyond the limit would be skipped by every peer.
 /// Give them a fresh bounded stamp. True when something changed.
-pub(crate) fn restamp_poisoned_peers(vault: &mut UnlockedVault) -> bool {
+pub(crate) fn restamp_poisoned_peers(vault: &mut Session) -> bool {
     let now = crate::sync::stamp::now_ms();
     let limit = now.saturating_add(crate::sync::stamp::MAX_FUTURE_MS);
     let mine = vault.clock.device().to_string();
@@ -121,7 +121,7 @@ pub(crate) fn restamp_poisoned_peers(vault: &mut UnlockedVault) -> bool {
 /// that a poisoned clock pushed beyond the limit, here (the single exit
 /// toward peers) and not only at open, because the device id is set after
 /// open and an entry can also arrive in a copy.
-pub fn sync_peers_to_send(vault: &mut UnlockedVault) -> Result<Vec<TrustedPeer>> {
+pub fn sync_peers_to_send(vault: &mut Session) -> Result<Vec<TrustedPeer>> {
     if restamp_poisoned_peers(vault) {
         vault.persist()?;
     }
@@ -129,12 +129,12 @@ pub fn sync_peers_to_send(vault: &mut UnlockedVault) -> Result<Vec<TrustedPeer>>
 }
 
 /// Stamp what changed since the last save; the changed keys.
-pub(crate) fn track_changes(vault: &mut UnlockedVault) -> Result<Vec<String>> {
+pub(crate) fn track_changes(vault: &mut Session) -> Result<Vec<String>> {
     if vault.sandbox {
         return Ok(Vec::new());
     }
     let value = doc_value(vault)?;
-    let UnlockedVault {
+    let Session {
         tracker,
         doc,
         clock,
@@ -157,7 +157,7 @@ pub(crate) fn track_changes(vault: &mut UnlockedVault) -> Result<Vec<String>> {
 /// A deletion in a capped log (the change tracker reads a missing
 /// entry there as a trim): drops its stamps, leaves a tombstone, and
 /// offers the key to a live session.
-pub(crate) fn sync_forget_log_record(vault: &mut UnlockedVault, key: &str) -> Result<()> {
+pub(crate) fn sync_forget_log_record(vault: &mut Session, key: &str) -> Result<()> {
     if vault.sandbox {
         return Ok(());
     }
@@ -170,12 +170,12 @@ pub(crate) fn sync_forget_log_record(vault: &mut UnlockedVault, key: &str) -> Re
 }
 
 /// This installation's id, for the stamps of its changes.
-pub fn set_device(vault: &mut UnlockedVault, device_id: &str) {
+pub fn set_device(vault: &mut Session, device_id: &str) {
     vault.clock.set_device(device_id);
 }
 
 /// Report every later save's changed keys to `tap` (`None` stops).
-pub fn set_sync_tap(vault: &mut UnlockedVault, tap: Option<Arc<dyn SyncTap>>) {
+pub fn set_sync_tap(vault: &mut Session, tap: Option<Arc<dyn SyncTap>>) {
     if !vault.sandbox {
         vault.sync_tap = tap.clone();
         vault.session.set_change_sink(tap);
@@ -183,7 +183,7 @@ pub fn set_sync_tap(vault: &mut UnlockedVault, tap: Option<Arc<dyn SyncTap>>) {
 }
 
 /// The vault's sync bookkeeping (peers, batches).
-pub fn sync_state(vault: &UnlockedVault) -> &crate::sync::SyncState {
+pub fn sync_state(vault: &Session) -> &crate::sync::SyncState {
     &vault.doc.sync
 }
 
@@ -191,7 +191,7 @@ pub fn sync_state(vault: &UnlockedVault) -> &crate::sync::SyncState {
 /// that moment: what the peer will have seen once this exchange is applied
 /// (see [`sync_mark_synced`]).
 pub fn sync_manifest_marked(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     union_since_ms: Option<u64>,
 ) -> Result<(Manifest, Stamp)> {
     let manifest = crate::usecases::sync::read::sync_manifest(vault, union_since_ms)?;
@@ -201,7 +201,7 @@ pub fn sync_manifest_marked(
 /// [`sync_manifest_marked`] for a peer protected at `peer` (see
 /// [`sync_manifest_for`]); the third item counts the records left out.
 pub fn sync_manifest_marked_for(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     union_since_ms: Option<u64>,
     peer: SecurityLevel,
 ) -> Result<(Manifest, Stamp, usize)> {
@@ -213,7 +213,7 @@ pub fn sync_manifest_marked_for(
 /// Merge records from another device and save. `None` when nothing
 /// changed here; otherwise the batch, kept for undo.
 pub fn sync_apply(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     incoming: &BTreeMap<String, RecordState>,
     peer: &PeerRef,
 ) -> Result<Option<AppliedBatch>> {
@@ -224,7 +224,7 @@ pub fn sync_apply(
 /// made later goes with its edits), which the tests keep as the other
 /// side of a pair of different versions.
 pub(crate) fn apply_batch(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     incoming: &BTreeMap<String, RecordState>,
     peer: &PeerRef,
     carry: bool,
@@ -236,7 +236,7 @@ pub(crate) fn apply_batch(
 /// (`merge_from`): fields without a stamp on either side are reported.
 /// Which value is picked does not depend on it.
 pub(crate) fn apply_batch_from(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     incoming: &BTreeMap<String, RecordState>,
     peer: &PeerRef,
     carry: bool,
@@ -367,14 +367,14 @@ pub(crate) fn apply_batch_from(
 
 /// Put `doc` in place of the open document; the old one comes back. It
 /// cannot fail, so a rollback never hides the error that caused it.
-pub(crate) fn swap_doc(vault: &mut UnlockedVault, doc: VaultDoc) -> VaultDoc {
+pub(crate) fn swap_doc(vault: &mut Session, doc: VaultDoc) -> VaultDoc {
     std::mem::replace(&mut vault.doc, doc)
 }
 
 /// What follows the swap of a merged document: settle it, journal the
 /// batch, repair, save once.
 fn finish_batch(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     plan: crate::sync::SyncPlan,
     peer: &PeerRef,
     carry: bool,
@@ -450,7 +450,7 @@ fn finish_batch(
 /// after `persist` succeeds, to the sync tap if one is set. Batched
 /// (dirty, a hook waits), they join the queue and go with the next save.
 fn persist_then_announce(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     queued: &std::collections::BTreeSet<String>,
 ) -> Result<()> {
     let batch_keys: Vec<String> = vault.announce.difference(queued).cloned().collect();
@@ -468,7 +468,7 @@ fn persist_then_announce(
 /// only, older than `TOMBSTONE_DAYS`, for a key with no value and no
 /// tombstone here.
 pub(crate) fn without_compacted(
-    vault: &UnlockedVault,
+    vault: &Session,
     incoming: &BTreeMap<String, RecordState>,
     records: &BTreeMap<String, Value>,
 ) -> BTreeMap<String, RecordState> {
@@ -502,7 +502,7 @@ pub(crate) fn without_compacted(
 /// Silently: a peer handing over its old records is the normal course of
 /// a wipe, not a fault to report.
 pub(crate) fn after_wipe(
-    vault: &UnlockedVault,
+    vault: &Session,
     incoming: BTreeMap<String, RecordState>,
 ) -> BTreeMap<String, RecordState> {
     let wipes = vault
@@ -519,10 +519,7 @@ pub(crate) fn after_wipe(
 /// Whether an external copy fully opens under this open vault's key (no
 /// KDF runs): a truncated, foreign or cheaper copy is refused. Nothing is
 /// written.
-pub fn probe_external(
-    vault: &UnlockedVault,
-    remote: &[u8],
-) -> Result<crate::storage::SnapshotFormat> {
+pub fn probe_external(vault: &Session, remote: &[u8]) -> Result<crate::storage::SnapshotFormat> {
     let key = vault
         .key
         .as_deref()
@@ -532,14 +529,10 @@ pub fn probe_external(
 
 /// Read another copy of this vault (its sealed bytes) without locking,
 /// writing or syncing anything. Only for reading records out of it.
-pub(crate) fn open_copy(
-    vault: &UnlockedVault,
-    remote: &[u8],
-    password: &str,
-) -> Result<UnlockedVault> {
+pub(crate) fn open_copy(vault: &Session, remote: &[u8], password: &str) -> Result<Session> {
     let (plaintext, fmt, _key) = crate::crypto::open_bytes_keyed(remote, password.as_bytes())?;
     let decoded = crate::storage::decode_file(remote, &plaintext, fmt)?;
-    Ok(UnlockedVault {
+    Ok(Session {
         path: vault.path.clone(),
         fmt,
         doc: decoded.doc,
@@ -564,8 +557,8 @@ pub(crate) fn open_copy(
 /// arrives, what only this vault has stays. Only records travel: `other`'s
 /// batches, journal, peers and pauses are never taken.
 pub fn merge_from(
-    vault: &mut UnlockedVault,
-    other: &mut UnlockedVault,
+    vault: &mut Session,
+    other: &mut Session,
     name: &str,
 ) -> Result<Option<AppliedBatch>> {
     if vault.doc.id != other.doc.id {
@@ -587,7 +580,7 @@ pub fn merge_from(
 /// Merge an external copy (sealed bytes, same password) in; the result is
 /// written. `Unmergeable` when it does not open or is another vault.
 pub fn merge_external_copy(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     remote: &[u8],
     password: &str,
     name: &str,
@@ -608,7 +601,7 @@ pub fn merge_external_copy(
 /// bookkeeping stays this device's own: the copy may come from a device
 /// with other batches, a journal and pauses.
 pub fn take_external_copy(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     remote: &[u8],
     password: &str,
 ) -> Result<ExternalMerge> {
@@ -644,7 +637,7 @@ pub fn take_external_copy(
 /// in the history and leave a notice every linked device shows (so a
 /// transfer the owner did not make does not go unseen). Returns the notice.
 pub fn sync_record_transfer(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     device_id: &str,
     device_name: &str,
     public_key: &str,
@@ -706,7 +699,7 @@ pub fn sync_record_transfer(
 
 /// Put back what a batch changed, for every record nobody changed since.
 /// The undo is a new local change: it reaches the other devices too.
-pub fn sync_undo(vault: &mut UnlockedVault, batch_id: &str) -> Result<UndoReport> {
+pub fn sync_undo(vault: &mut Session, batch_id: &str) -> Result<UndoReport> {
     track_changes(vault)?;
     let Some(index) = vault
         .doc
@@ -775,7 +768,7 @@ pub fn sync_undo(vault: &mut UnlockedVault, batch_id: &str) -> Result<UndoReport
     Ok(report)
 }
 
-pub(crate) fn prune_batches(vault: &mut UnlockedVault) {
+pub(crate) fn prune_batches(vault: &mut Session) {
     let cutoff = crate::sync::stamp::now_ms().saturating_sub(day_ms(BATCH_DAYS as u64));
     vault.doc.sync.batches.retain(|batch| {
         u64::try_from(crate::model::vault::iso_to_millis(&batch.applied_at)).unwrap_or(0) >= cutoff
@@ -790,7 +783,7 @@ pub(crate) fn prune_batches(vault: &mut UnlockedVault) {
 /// Counting devices are the trusted ones and those forgotten less than
 /// `REVOKED_GATE_DAYS` ago; each must have acked the deletion (its manifest
 /// held it, see `sync_ack_tombstones`). No ack yet means keep.
-pub(crate) fn compact_tombstones(vault: &mut UnlockedVault) {
+pub(crate) fn compact_tombstones(vault: &mut Session) {
     let now = crate::sync::stamp::now_ms();
     let cutoff = now.saturating_sub(day_ms(TOMBSTONE_DAYS));
     let revoked_cutoff = now.saturating_sub(day_ms(REVOKED_GATE_DAYS));
@@ -823,7 +816,7 @@ pub(crate) fn compact_tombstones(vault: &mut UnlockedVault) {
         .retain(|key, _| tombstones.contains_key(key));
 }
 
-pub(crate) fn created_of(vault: &UnlockedVault, key: &str) -> Stamp {
+pub(crate) fn created_of(vault: &Session, key: &str) -> Stamp {
     vault
         .doc
         .sync
@@ -846,11 +839,7 @@ pub(crate) fn created_of(vault: &UnlockedVault, key: &str) -> Stamp {
 ///
 /// Removals and carried fields are saved in the batch `batch_id`, so its
 /// undo puts them back. `carry` off is the earlier rule (tests only).
-pub(crate) fn dedupe_generated(
-    vault: &mut UnlockedVault,
-    batch_id: &str,
-    carry: bool,
-) -> Result<()> {
+pub(crate) fn dedupe_generated(vault: &mut Session, batch_id: &str, carry: bool) -> Result<()> {
     struct Winner {
         rank: (Stamp, String),
         run_id: Option<String>,
@@ -970,7 +959,7 @@ pub(crate) fn dedupe_generated(
 /// to a live session; the change tracker is rebased so none of it is
 /// stamped a second time.
 pub(crate) fn remove_duplicates(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     removals: Vec<(String, Option<String>)>,
     batch_id: &str,
     carry: bool,
@@ -1087,7 +1076,7 @@ pub(crate) fn remove_duplicates(
 /// bookkeeping verbatim. Keep the record metadata and the trusted devices,
 /// drop everything device-local (undo batches, journal, transfers,
 /// pauses, cut-offs, deletion arrival times) and the peers' last-sync times.
-pub fn adopt_received_copy(vault: &mut UnlockedVault) -> Result<()> {
+pub fn adopt_received_copy(vault: &mut Session) -> Result<()> {
     let received = std::mem::take(&mut vault.doc.sync);
     let mut fresh = crate::sync::SyncState::default();
     fresh.take_records_from(received, crate::sync::stamp::now_ms());
@@ -1099,7 +1088,7 @@ pub fn adopt_received_copy(vault: &mut UnlockedVault) -> Result<()> {
 }
 
 /// Take in another device's list of trusted devices.
-pub fn sync_merge_peers(vault: &mut UnlockedVault, remote: &[TrustedPeer]) -> Result<bool> {
+pub fn sync_merge_peers(vault: &mut Session, remote: &[TrustedPeer]) -> Result<bool> {
     let now = crate::sync::stamp::now_ms();
     for peer in remote {
         vault.clock.observe_at(&peer.stamp, now);
@@ -1113,7 +1102,7 @@ pub fn sync_merge_peers(vault: &mut UnlockedVault, remote: &[TrustedPeer]) -> Re
 
 /// Pause exchange with a device (the user declined its list of changes).
 /// Kept in this vault only; it is never sent to other devices.
-pub fn sync_pause_peer(vault: &mut UnlockedVault, device_id: &str) -> Result<()> {
+pub fn sync_pause_peer(vault: &mut Session, device_id: &str) -> Result<()> {
     if vault.doc.sync.paused.insert(device_id.to_string()) {
         vault.persist()?;
     }
@@ -1121,24 +1110,20 @@ pub fn sync_pause_peer(vault: &mut UnlockedVault, device_id: &str) -> Result<()>
 }
 
 /// "Resume": exchange with the device may run again.
-pub fn sync_resume_peer(vault: &mut UnlockedVault, device_id: &str) -> Result<()> {
+pub fn sync_resume_peer(vault: &mut Session, device_id: &str) -> Result<()> {
     if vault.doc.sync.paused.remove(device_id) {
         vault.persist()?;
     }
     Ok(())
 }
 
-pub fn sync_is_paused(vault: &UnlockedVault, device_id: &str) -> bool {
+pub fn sync_is_paused(vault: &Session, device_id: &str) -> bool {
     vault.doc.sync.paused.contains(device_id)
 }
 
 /// The device told us it cut this one off (`reason`). Returns whether this
 /// is news (a new device or another reason); only news is saved.
-pub fn sync_cut_by(
-    vault: &mut UnlockedVault,
-    device_id: &str,
-    reason: SyncCutReason,
-) -> Result<bool> {
+pub fn sync_cut_by(vault: &mut Session, device_id: &str, reason: SyncCutReason) -> Result<bool> {
     if vault
         .doc
         .sync
@@ -1161,7 +1146,7 @@ pub fn sync_cut_by(
 
 /// The way back was taken (an exchange, a pairing): the device may be
 /// dialed again. Returns whether there was anything to clear.
-pub fn sync_clear_cut(vault: &mut UnlockedVault, device_id: &str) -> Result<bool> {
+pub fn sync_clear_cut(vault: &mut Session, device_id: &str) -> Result<bool> {
     if vault.doc.sync.cut_by.remove(device_id).is_none() {
         return Ok(false);
     }
@@ -1169,18 +1154,14 @@ pub fn sync_clear_cut(vault: &mut UnlockedVault, device_id: &str) -> Result<bool
     Ok(true)
 }
 
-pub fn sync_cut_reason(vault: &UnlockedVault, device_id: &str) -> Option<SyncCutReason> {
+pub fn sync_cut_reason(vault: &Session, device_id: &str) -> Option<SyncCutReason> {
     vault.doc.sync.cut_by.get(device_id).map(|cut| cut.reason)
 }
 
 /// Record what the manifest `theirs` of `device_id` vouches for: how far
 /// our deletions are all in it. Call it only for an exchange that was
 /// applied: a declined or failed one proves nothing. Never goes down.
-pub fn sync_ack_tombstones(
-    vault: &mut UnlockedVault,
-    device_id: &str,
-    theirs: &Manifest,
-) -> Result<()> {
+pub fn sync_ack_tombstones(vault: &mut Session, device_id: &str, theirs: &Manifest) -> Result<()> {
     let ours = crate::usecases::sync::read::sync_manifest(vault, None)?;
     let sync = &vault.doc.sync;
     let deletions: Vec<(u64, &str, u64)> = sync
@@ -1210,11 +1191,7 @@ pub fn sync_ack_tombstones(
 /// is the clock stamp taken with the manifest of that exchange
 /// ([`sync_manifest_marked`]): the device has seen our edits up to it.
 /// Only an applied exchange may pass it. Never goes down.
-pub fn sync_mark_synced(
-    vault: &mut UnlockedVault,
-    device_id: &str,
-    mark: Option<&Stamp>,
-) -> Result<()> {
+pub fn sync_mark_synced(vault: &mut Session, device_id: &str, mark: Option<&Stamp>) -> Result<()> {
     if let Some(mark) = mark {
         let seen = vault
             .doc
@@ -1242,7 +1219,7 @@ pub fn sync_mark_synced(
 
 /// Copy the vault file aside before the first batch of a session,
 /// keeping the last [`PRESYNC_BACKUPS`].
-pub fn sync_backup(vault: &mut UnlockedVault) -> Result<PathBuf> {
+pub fn sync_backup(vault: &mut Session) -> Result<PathBuf> {
     if vault.sandbox {
         return Ok(presync_path(&vault.path, 0));
     }
@@ -1262,7 +1239,7 @@ pub fn sync_backup(vault: &mut UnlockedVault) -> Result<PathBuf> {
 
 /// Whether a pre-sync backup exists that can be restored: a copy sealed
 /// under a password cannot be opened by a vault that has none now.
-pub fn has_sync_backup(vault: &UnlockedVault) -> bool {
+pub fn has_sync_backup(vault: &Session) -> bool {
     let path = presync_path(&vault.path, 0);
     path.exists() && (vault.is_encrypted() || !crate::crypto::file_is_encrypted(&path))
 }
@@ -1270,7 +1247,7 @@ pub fn has_sync_backup(vault: &UnlockedVault) -> bool {
 /// The emergency exit: the whole vault as it was before the last
 /// session's first batch. Saved as new local changes, so it reaches the
 /// other devices like any edit.
-pub fn sync_restore_backup(vault: &mut UnlockedVault) -> Result<()> {
+pub fn sync_restore_backup(vault: &mut Session) -> Result<()> {
     let path = presync_path(&vault.path, 0);
     if !has_sync_backup(vault) {
         return Err(Error::NotFound("no backup from before a sync".into()));

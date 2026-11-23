@@ -1,4 +1,4 @@
-//! Tests of the valuation area that need the vault (`UnlockedVault`): moved from
+//! Tests of the valuation area that need the vault (`Session`): moved from
 //! `money/valuation_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::ids::StoreId;
@@ -8,8 +8,8 @@ use crate::model::transaction::Transaction;
 use crate::model::transaction::{AssetSellTx, KindDetails, PriceStamp, TopupTx};
 use crate::model::vault::ManualPrice;
 use crate::money::valuation::*;
+use crate::service::Session;
 use crate::service::StoreExtras;
-use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::time::secs_or_now;
 
@@ -24,7 +24,7 @@ fn thing() -> AssetRef {
     }
 }
 
-fn property(vault: &mut UnlockedVault, category: PropertyCategory) -> String {
+fn property(vault: &mut Session, category: PropertyCategory) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         &format!("{category:?}"),
@@ -44,7 +44,7 @@ fn property(vault: &mut UnlockedVault, category: PropertyCategory) -> String {
     .id
 }
 
-fn buy(vault: &mut UnlockedVault, store_id: &str, price: &str, when: &str) {
+fn buy(vault: &mut Session, store_id: &str, price: &str, when: &str) {
     let mut tx = Transaction::Topup(TopupTx {
         meta: meta("bought", &["income_other"]),
         store_id: store_id.to_string(),
@@ -63,7 +63,7 @@ fn buy(vault: &mut UnlockedVault, store_id: &str, price: &str, when: &str) {
 }
 
 /// An object from before this change: no rule, a hand-set price.
-fn old_flat(vault: &mut UnlockedVault) -> String {
+fn old_flat(vault: &mut Session) -> String {
     vault.set_base_currency("usd");
     let flat = property(vault, PropertyCategory::Flat);
     buy(vault, &flat, "100000", "2020-01-10T00:00:00Z");

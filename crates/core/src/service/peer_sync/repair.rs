@@ -3,7 +3,7 @@
 #[cfg(test)]
 use crate::model::store::Binding;
 #[cfg(test)]
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 #[cfg(test)]
 mod tests {
@@ -16,7 +16,7 @@ mod tests {
     use crate::service::test_support::{amount, holding_of, income, store, usd};
     use crate::usecases::sync::peer_sync;
 
-    fn sub_account(vault: &mut UnlockedVault, name: &str, parent: &str) -> String {
+    fn sub_account(vault: &mut Session, name: &str, parent: &str) -> String {
         crate::usecases::money::stores::create_store_with(
             vault,
             name,
@@ -34,7 +34,7 @@ mod tests {
         .id
     }
 
-    fn set_parent(vault: &mut UnlockedVault, id: &str, parent: &str) {
+    fn set_parent(vault: &mut Session, id: &str, parent: &str) {
         vault
             .doc
             .stores
@@ -45,11 +45,11 @@ mod tests {
         vault.persist().unwrap();
     }
 
-    fn parent_of(vault: &UnlockedVault, id: &str) -> Option<String> {
+    fn parent_of(vault: &Session, id: &str) -> Option<String> {
         crate::money::tree::find_store(&vault.doc, id).and_then(|node| node.parent_id.clone())
     }
 
-    fn goal(vault: &mut UnlockedVault, wallet: &str) -> String {
+    fn goal(vault: &mut Session, wallet: &str) -> String {
         crate::usecases::planning::goals::create_goal(
             vault,
             GoalDraft {

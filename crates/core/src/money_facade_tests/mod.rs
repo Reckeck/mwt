@@ -1,4 +1,4 @@
-//! Tests of `money/` items that need the vault (`UnlockedVault` and its fixtures). They moved
+//! Tests of `money/` items that need the vault (`Session` and its fixtures). They moved
 //! here from `money/` with their assertions unchanged so `money/` holds pure tests only (crate-split T13).
 
 mod adjustments;

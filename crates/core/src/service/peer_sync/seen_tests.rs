@@ -20,8 +20,8 @@ fn peer_of(name: &str) -> PeerRef {
 /// One exchange as a live session runs it: the clock mark is taken with the
 /// manifest, and an applied exchange records it as what the peer has seen.
 fn exchange_marked(
-    left: &mut UnlockedVault,
-    right: &mut UnlockedVault,
+    left: &mut Session,
+    right: &mut Session,
 ) -> (Vec<OverwrittenField>, Vec<OverwrittenField>) {
     let (left_manifest, left_mark) = peer_sync::sync_manifest_marked(left, None).unwrap();
     let (right_manifest, right_mark) = peer_sync::sync_manifest_marked(right, None).unwrap();
@@ -49,7 +49,7 @@ fn later() {
     std::thread::sleep(Duration::from_millis(3));
 }
 
-fn comment_edit(vault: &mut UnlockedVault, id: &str, comment: &str) {
+fn comment_edit(vault: &mut Session, id: &str, comment: &str) {
     let mut edited = vault
         .doc
         .transactions
@@ -61,7 +61,7 @@ fn comment_edit(vault: &mut UnlockedVault, id: &str, comment: &str) {
     crate::usecases::money::transactions::update_transaction(vault, id, edited).unwrap();
 }
 
-fn seeded() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
+fn seeded() -> (tempfile::TempDir, Session, Session, String) {
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
     crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))

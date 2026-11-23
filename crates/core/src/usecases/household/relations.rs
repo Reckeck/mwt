@@ -4,10 +4,10 @@
 
 use crate::Amount;
 use crate::household::relations::{self, EntityCard, EntityRef};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// A wallet's base value with its sub-accounts and the currency, for a card.
-pub fn store_worth(vault: &UnlockedVault) -> impl Fn(&str) -> Option<(Amount, String)> {
+pub fn store_worth(vault: &Session) -> impl Fn(&str) -> Option<(Amount, String)> {
     |id| {
         crate::money::portfolio::store_overview(&vault.books(), id, true)
             .ok()
@@ -16,6 +16,6 @@ pub fn store_worth(vault: &UnlockedVault) -> impl Fn(&str) -> Option<(Amount, St
 }
 
 /// The card of `target`: its head and every non-empty group of links.
-pub fn entity_card(vault: &UnlockedVault, target: &EntityRef) -> EntityCard {
+pub fn entity_card(vault: &Session, target: &EntityRef) -> EntityCard {
     relations::card_of(&vault.doc, target, &store_worth(vault))
 }

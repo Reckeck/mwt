@@ -8,7 +8,7 @@ use crate::planning::agenda::PriceAlertDraft;
 use crate::service::test_support::{amount, btc};
 use crate::time::unix_secs;
 
-fn price(vault: &mut UnlockedVault, value: &str, ts: &str) {
+fn price(vault: &mut Session, value: &str, ts: &str) {
     vault.doc.price_cache.push(PricePoint {
         asset_key: btc().key(),
         value_usd: amount(value),

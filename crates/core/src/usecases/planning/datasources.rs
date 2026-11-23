@@ -14,7 +14,7 @@ use crate::planning::datasources::{
     self as rules, DataSourceDraft, DataSourceView, SourceUse, Spread,
 };
 use crate::pricing::history::merge_prices;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::workflow::graph::Graph;
 
 /// Every place that reads the source.
@@ -57,16 +57,13 @@ pub fn data_sources_list(doc: &VaultDoc) -> Vec<DataSourceView> {
 
 /// Drop the inflation choices that point at a source that no longer
 /// exists. Callers persist.
-pub fn prune_inflation_sources(vault: &mut UnlockedVault) {
+pub fn prune_inflation_sources(vault: &mut Session) {
     rules::prune_inflation_sources(&mut vault.doc);
 }
 
 /// Create or change a source. A changed address or method starts the
 /// count of failures over; the history stays.
-pub fn save_data_source(
-    vault: &mut UnlockedVault,
-    draft: DataSourceDraft,
-) -> Result<DataSourceView> {
+pub fn save_data_source(vault: &mut Session, draft: DataSourceDraft) -> Result<DataSourceView> {
     rules::check_draft(&draft)?;
     let (id, source) = match &draft.id {
         Some(id) => {
@@ -103,7 +100,7 @@ pub fn save_data_source(
 
 /// Delete a source and every use of it; inflation in source mode goes
 /// back to its default.
-pub fn delete_data_source(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_data_source(vault: &mut Session, id: &str) -> Result<()> {
     vault.transact(|tx| {
         tx.collection::<DataSource>()
             .remove(id)
@@ -115,7 +112,7 @@ pub fn delete_data_source(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 
 /// The prices and notices the latest value of `source` leads to, read
 /// from the vault as it is.
-fn spread(vault: &UnlockedVault, source: &DataSource, ru: bool, delivered_at: &str) -> Spread {
+fn spread(vault: &Session, source: &DataSource, ru: bool, delivered_at: &str) -> Spread {
     rules::spread_value(
         &vault.doc,
         source,
@@ -126,7 +123,7 @@ fn spread(vault: &UnlockedVault, source: &DataSource, ru: bool, delivered_at: &s
 }
 
 /// Write a changed source and merge the prices it sets: one transact.
-fn store_source(vault: &mut UnlockedVault, source: DataSource, spread: &Spread) -> Result<()> {
+fn store_source(vault: &mut Session, source: DataSource, spread: &Spread) -> Result<()> {
     vault.transact(|tx| {
         let id = source.id.clone();
         tx.collection::<DataSource>()
@@ -144,7 +141,7 @@ fn store_source(vault: &mut UnlockedVault, source: DataSource, spread: &Spread) 
 /// [`JUMP_FACTOR`](crate::model::datasource::JUMP_FACTOR) times waits for
 /// confirmation; any other value becomes the latest and goes to its uses.
 pub fn apply_source_fetch(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     fetched: std::result::Result<crate::datasource::Extracted, String>,
     ru: bool,
@@ -166,7 +163,7 @@ pub fn apply_source_fetch(
 
 /// Take or drop the value waiting after a jump.
 pub fn confirm_source_value(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     accept: bool,
     ru: bool,

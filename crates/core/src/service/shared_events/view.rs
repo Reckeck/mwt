@@ -7,7 +7,7 @@ pub use crate::household::shared_events::view::{
 };
 
 #[cfg(test)]
-use super::super::UnlockedVault;
+use super::super::Session;
 #[cfg(test)]
 use crate::error::Result;
 #[cfg(test)]
@@ -15,7 +15,7 @@ use crate::model::shared_event::SharedEvent;
 
 /// The accessors the tests of the area use on the vault.
 #[cfg(test)]
-impl UnlockedVault {
+impl Session {
     pub(crate) fn find_shared_event(&self, id: &str) -> Result<&SharedEvent> {
         crate::household::shared_events::find_event(&self.doc, id)
     }

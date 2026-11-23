@@ -2,9 +2,9 @@
 
 use crate::model::transaction::Transaction;
 
-use super::UnlockedVault;
+use super::Session;
 
-impl UnlockedVault {
+impl Session {
     /// Trim, lowercase and deduplicate category keys, keeping their order.
     pub(crate) fn normalize_categories(tx: &mut Transaction) {
         crate::money::validate::normalize_categories(tx);

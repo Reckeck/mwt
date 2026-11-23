@@ -8,13 +8,13 @@
 
 use serde_json::{Value, json};
 
-use super::UnlockedVault;
+use super::Session;
 use crate::error::{Error, Result};
 use crate::model::vault::VaultDoc;
 use crate::sync::view;
 use crate::usecases::sync::peer_sync;
 
-impl UnlockedVault {
+impl Session {
     /// Three-way apply of an editor save: a record `edited` changes, adds or
     /// removes against `base` is written to the current document; a record
     /// equal to its base is left as it is now (what a peer sent after the

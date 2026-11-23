@@ -12,15 +12,15 @@ use crate::household::attachments::{
 use crate::model::attachment::{Attachment, AttachmentKey, AttachmentKind};
 use crate::model::entity_ref::EntityRef;
 use crate::model::vault::now_iso;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Where the sealed files live: `vault.wallet` → `vault.wallet.files/`.
-pub fn attachments_dir(vault: &UnlockedVault) -> PathBuf {
+pub fn attachments_dir(vault: &Session) -> PathBuf {
     dir_of(&vault.path)
 }
 
 pub fn add_attachment_link(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     owner: EntityRef,
     url: &str,
     title: &str,
@@ -37,7 +37,7 @@ pub fn add_attachment_link(
 /// Seal the file next to the vault and keep its record. The same file
 /// added to the same entity again gives back the one already there.
 pub fn add_attachment_file(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     owner: EntityRef,
     file: NewFile<'_>,
 ) -> Result<Attachment> {
@@ -75,7 +75,7 @@ pub fn add_attachment_file(
 }
 
 /// The file's bytes, opened; a link has none.
-pub fn read_attachment(vault: &UnlockedVault, id: &str) -> Result<(Attachment, Vec<u8>)> {
+pub fn read_attachment(vault: &Session, id: &str) -> Result<(Attachment, Vec<u8>)> {
     let item = find_attachment(&vault.doc, id)?.clone();
     if item.kind != AttachmentKind::File {
         return Err(Error::InvalidInput("a link has no file".into()));
@@ -94,7 +94,7 @@ pub fn read_attachment(vault: &UnlockedVault, id: &str) -> Result<(Attachment, V
 
 /// Hide the attachment; [`restore_attachment`] brings it back until the vault
 /// is opened next, when the cleanup deletes the file.
-pub fn remove_attachment(vault: &mut UnlockedVault, id: &str) -> Result<Attachment> {
+pub fn remove_attachment(vault: &mut Session, id: &str) -> Result<Attachment> {
     vault.transact(|tx| {
         let out = mark_removed(tx.doc_mut(), id, &now_iso())?;
         tx.touch();
@@ -102,7 +102,7 @@ pub fn remove_attachment(vault: &mut UnlockedVault, id: &str) -> Result<Attachme
     })
 }
 
-pub fn rename_attachment(vault: &mut UnlockedVault, id: &str, title: &str) -> Result<Attachment> {
+pub fn rename_attachment(vault: &mut Session, id: &str, title: &str) -> Result<Attachment> {
     vault.transact(|tx| {
         let out = mark_renamed(tx.doc_mut(), id, title)?;
         tx.touch();
@@ -110,7 +110,7 @@ pub fn rename_attachment(vault: &mut UnlockedVault, id: &str, title: &str) -> Re
     })
 }
 
-pub fn restore_attachment(vault: &mut UnlockedVault, id: &str) -> Result<Attachment> {
+pub fn restore_attachment(vault: &mut Session, id: &str) -> Result<Attachment> {
     vault.transact(|tx| {
         let out = mark_restored(tx.doc_mut(), id)?;
         tx.touch();

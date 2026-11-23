@@ -7,7 +7,7 @@ use crate::model::ids::StoreId;
 use crate::model::store::RevalueRule;
 use crate::model::vault::Valuation;
 use crate::money::valuation::{ValuationInput, plan_revalue_rule, plan_valuation};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::sync::sync_ids::valuation_id;
 
 /// The record of a planned valuation, under its deterministic sync id.
@@ -23,7 +23,7 @@ fn valuation_record(input: ValuationInput) -> Valuation {
 }
 
 /// Add a dated valuation; one on the same day replaces it.
-pub fn add_valuation(vault: &mut UnlockedVault, input: ValuationInput) -> Result<Valuation> {
+pub fn add_valuation(vault: &mut Session, input: ValuationInput) -> Result<Valuation> {
     let valuation = valuation_record(plan_valuation(&vault.doc, input)?);
     vault.transact(|tx| {
         let valuations = &mut tx.doc_mut().valuations;
@@ -35,7 +35,7 @@ pub fn add_valuation(vault: &mut UnlockedVault, input: ValuationInput) -> Result
 }
 
 /// Remove a valuation; returns it so the UI can put it back.
-pub fn delete_valuation(vault: &mut UnlockedVault, id: &str) -> Result<Valuation> {
+pub fn delete_valuation(vault: &mut Session, id: &str) -> Result<Valuation> {
     vault.transact(|tx| {
         let index = tx
             .doc()
@@ -51,7 +51,7 @@ pub fn delete_valuation(vault: &mut UnlockedVault, id: &str) -> Result<Valuation
 /// valued yet first values every asset at today's price, so the value
 /// continues from where it is instead of jumping (plan §11.4).
 pub fn set_revalue_rule(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &StoreId,
     rule: Option<RevalueRule>,
     zone: &str,

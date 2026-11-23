@@ -19,7 +19,7 @@ use chrono::NaiveDate;
 
 use crate::Result;
 use crate::kernel::session::SaveHook;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// The seed of the generator; changing it changes every amount.
 const SEED: u64 = 20_261_023;
@@ -32,7 +32,7 @@ impl SaveHook for Deferred {
 }
 
 /// Fill a new (empty) vault with the demo wallets and twelve months up to `today`.
-pub fn fill(vault: &mut UnlockedVault, today: NaiveDate) -> Result<()> {
+pub fn fill(vault: &mut Session, today: NaiveDate) -> Result<()> {
     vault.set_write_behind(Some(Arc::new(Deferred)));
     let result = book(vault, today);
     vault.set_write_behind(None);
@@ -40,7 +40,7 @@ pub fn fill(vault: &mut UnlockedVault, today: NaiveDate) -> Result<()> {
     vault.persist_now()
 }
 
-fn book(vault: &mut UnlockedVault, today: NaiveDate) -> Result<()> {
+fn book(vault: &mut Session, today: NaiveDate) -> Result<()> {
     vault.doc.id = ids::vault();
     vault.doc.created_at = format!("{}T00:00:00Z", today - chrono::Duration::days(365));
     let wallets = wallets::create_all(vault)?;
@@ -57,7 +57,7 @@ fn book(vault: &mut UnlockedVault, today: NaiveDate) -> Result<()> {
 
 /// The holdings are worked out from the history in hash order with random
 /// ids; put them in a fixed order with fixed ids.
-fn fix_holdings(vault: &mut UnlockedVault) {
+fn fix_holdings(vault: &mut Session) {
     vault
         .doc
         .holdings

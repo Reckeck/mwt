@@ -17,7 +17,7 @@ use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::money::books::Books;
 use crate::money::rates::convert_at;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::usecases::cryptotrack::operations::crypto_operation_detail;
 
 /// Crypto operations that look like the same movement of money as a fiat
@@ -78,7 +78,7 @@ fn value_fits(books: &Books<'_>, input: &CryptoLinkCandidatesInput, row: &Crypto
 }
 
 /// Point a crypto operation at a fiat record. Both must exist now.
-pub fn crypto_link_fiat(vault: &mut UnlockedVault, input: &CryptoLinkInput) -> Result<()> {
+pub fn crypto_link_fiat(vault: &mut Session, input: &CryptoLinkInput) -> Result<()> {
     let now = now_iso();
     match rules::plan_link(&vault.doc, &input.event_id, &input.fiat_tx_id, &now)? {
         LinkPlan::Unchanged => Ok(()),
@@ -93,7 +93,7 @@ pub fn crypto_link_fiat(vault: &mut UnlockedVault, input: &CryptoLinkInput) -> R
 }
 
 /// Remove the pointer. Nothing to remove is not an error.
-pub fn crypto_unlink_fiat(vault: &mut UnlockedVault, input: &CryptoUnlinkInput) -> Result<()> {
+pub fn crypto_unlink_fiat(vault: &mut Session, input: &CryptoUnlinkInput) -> Result<()> {
     let Some(id) = rules::pointer_of(&vault.doc, &input.event_id) else {
         return Ok(());
     };
@@ -195,7 +195,7 @@ mod tests {
     }
 
     /// A vault with two operations and one fiat payment near them.
-    fn setup() -> (tempfile::TempDir, UnlockedVault, String) {
+    fn setup() -> (tempfile::TempDir, Session, String) {
         let (dir, mut vault) = empty_vault();
         vault.doc.crypto_accounts.push(CryptoAccount::new(
             "acc-1",
@@ -224,7 +224,7 @@ mod tests {
         (dir, vault, id)
     }
 
-    fn link(vault: &mut UnlockedVault, event_id: &str, fiat_tx_id: &str) {
+    fn link(vault: &mut Session, event_id: &str, fiat_tx_id: &str) {
         crate::usecases::cryptotrack::links::crypto_link_fiat(
             vault,
             &CryptoLinkInput {
@@ -333,7 +333,7 @@ mod tests {
     fn a_pointer_changes_no_amount_no_total_and_no_chain() {
         let (_dir, mut vault, id) = setup();
         let at_time = "2026-11-12T00:00:00Z";
-        let snapshot = |vault: &UnlockedVault| {
+        let snapshot = |vault: &Session| {
             (
                 format!(
                     "{:?}",

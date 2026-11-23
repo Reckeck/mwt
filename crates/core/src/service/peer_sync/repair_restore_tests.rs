@@ -22,7 +22,7 @@ fn peer(name: &str) -> PeerRef {
 }
 
 /// `to` takes what `from` has and `to` lacks; nothing flows back.
-fn pull_one_way(from: &mut UnlockedVault, to: &mut UnlockedVault) {
+fn pull_one_way(from: &mut Session, to: &mut Session) {
     let from_manifest = crate::usecases::sync::read::sync_manifest(from, None).unwrap();
     let to_manifest = crate::usecases::sync::read::sync_manifest(to, None).unwrap();
     let (to_wants, _) = crate::usecases::sync::read::sync_diff(to, &to_manifest, &from_manifest);
@@ -30,7 +30,7 @@ fn pull_one_way(from: &mut UnlockedVault, to: &mut UnlockedVault) {
     peer_sync::sync_apply(to, &records, &peer("from")).unwrap();
 }
 
-fn contact(vault: &mut UnlockedVault, name: &str) -> String {
+fn contact(vault: &mut Session, name: &str) -> String {
     crate::usecases::household::contacts::create_contact(
         vault,
         ContactDraft {
@@ -45,7 +45,7 @@ fn contact(vault: &mut UnlockedVault, name: &str) -> String {
     .id
 }
 
-fn categories_of(vault: &UnlockedVault, key: &str) -> Vec<crate::model::category::Category> {
+fn categories_of(vault: &Session, key: &str) -> Vec<crate::model::category::Category> {
     vault
         .doc
         .categories
@@ -55,7 +55,7 @@ fn categories_of(vault: &UnlockedVault, key: &str) -> Vec<crate::model::category
         .collect()
 }
 
-fn pay_with_category(vault: &mut UnlockedVault, wallet: &str, key: &str) {
+fn pay_with_category(vault: &mut Session, wallet: &str, key: &str) {
     let mut tx = income(wallet, "10", "uses it");
     tx.meta_mut().categories = vec![key.to_string()];
     crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
@@ -285,15 +285,15 @@ fn the_restore_is_told_to_the_user() {
 }
 
 /// A third device sharing the vault of `left` as it is now.
-fn third_device(dir: &tempfile::TempDir, left: &UnlockedVault) -> UnlockedVault {
+fn third_device(dir: &tempfile::TempDir, left: &Session) -> Session {
     let copy = dir.path().join("third.wallet");
     std::fs::copy(&left.path, &copy).unwrap();
-    let mut third = UnlockedVault::open(copy, "pw").unwrap();
+    let mut third = Session::open(copy, "pw").unwrap();
     peer_sync::set_device(&mut third, "cccccccc-third");
     third
 }
 
-fn rename(vault: &mut UnlockedVault, key: &str, name: &str) {
+fn rename(vault: &mut Session, key: &str, name: &str) {
     crate::usecases::household::categories::update_category(
         vault,
         key,

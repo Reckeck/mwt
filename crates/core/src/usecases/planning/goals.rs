@@ -31,7 +31,7 @@ use crate::planning::goals::{
     plan_create_goal, plan_delete_goal, plan_restore_goal, plan_update_goal, planned_now,
     resolve_scope, slope,
 };
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::time::secs_or_now;
 use crate::usecases::react::react;
 
@@ -70,7 +70,7 @@ pub fn goal_savers(doc: &VaultDoc, goal: &Goal) -> Vec<String> {
         .collect()
 }
 
-pub fn create_goal(vault: &mut UnlockedVault, draft: GoalDraft) -> Result<Goal> {
+pub fn create_goal(vault: &mut Session, draft: GoalDraft) -> Result<Goal> {
     let goal = plan_create_goal(
         &vault.doc,
         draft,
@@ -83,7 +83,7 @@ pub fn create_goal(vault: &mut UnlockedVault, draft: GoalDraft) -> Result<Goal> 
     })
 }
 
-pub fn update_goal(vault: &mut UnlockedVault, id: &str, draft: GoalDraft) -> Result<Goal> {
+pub fn update_goal(vault: &mut Session, id: &str, draft: GoalDraft) -> Result<Goal> {
     let goal = plan_update_goal(&vault.doc, id, draft)?;
     vault.transact(|tx| {
         tx.collection::<Goal>()
@@ -96,7 +96,7 @@ pub fn update_goal(vault: &mut UnlockedVault, id: &str, draft: GoalDraft) -> Res
 /// envelopes go back to "safe to spend", the workflows that only put
 /// money aside into it stop. Its files go with the next open of the vault
 /// unless [`restore_goal`] brings it back first.
-pub fn delete_goal(vault: &mut UnlockedVault, id: &str, now: i64) -> Result<GoalDeleted> {
+pub fn delete_goal(vault: &mut Session, id: &str, now: i64) -> Result<GoalDeleted> {
     let deleted = plan_delete_goal(&vault.doc, id, |goal| goal_savers(&vault.doc, goal))?;
     let paused = DomainEvent::from(GoalPaused {
         id: id.to_string(),
@@ -118,7 +118,7 @@ pub fn delete_goal(vault: &mut UnlockedVault, id: &str, now: i64) -> Result<Goal
 }
 
 /// Undo [`delete_goal`]: the goal, its envelopes and its workflows.
-pub fn restore_goal(vault: &mut UnlockedVault, deleted: GoalDeleted, now: i64) -> Result<Goal> {
+pub fn restore_goal(vault: &mut Session, deleted: GoalDeleted, now: i64) -> Result<Goal> {
     let switch_on = plan_restore_goal(&vault.doc, &deleted)?;
     let GoalDeleted {
         goal, envelopes, ..
@@ -163,7 +163,7 @@ pub(crate) fn contributions(
             if leg.role != LegRole::Principal || !scope.contains(&leg.store_id) {
                 continue;
             }
-            let Some(value) = UnlockedVault::leg_value_in(book, &leg, currency, secs) else {
+            let Some(value) = Session::leg_value_in(book, &leg, currency, secs) else {
                 continue;
             };
             if leg.amount.is_negative() {
