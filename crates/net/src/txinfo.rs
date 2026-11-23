@@ -50,6 +50,8 @@ pub struct BtcTx {
 #[serde(rename_all = "camelCase")]
 pub struct SolTokenAmount {
     pub amount: Option<String>,
+    pub decimals: Option<u8>,
+    pub ui_amount_string: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -166,10 +168,10 @@ mod tests {
         assert_eq!(meta.fee, Some(5000));
         assert_eq!(meta.pre_balances, Some(vec![100, 2]));
         let balance = &meta.pre_token_balances.unwrap()[0];
-        assert_eq!(
-            balance.ui_token_amount.as_ref().unwrap().amount.as_deref(),
-            Some("7")
-        );
+        let amount = balance.ui_token_amount.as_ref().unwrap();
+        assert_eq!(amount.amount.as_deref(), Some("7"));
+        assert_eq!(amount.decimals, Some(6));
+        assert_eq!(amount.ui_amount_string.as_deref(), Some("0.000007"));
     }
 
     #[test]

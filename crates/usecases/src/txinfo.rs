@@ -2,7 +2,7 @@
 //! `mwt-net` owns the HTTP client and the providers' wire types): optional enrichment from keyless
 //! public explorers for Bitcoin and Solana.
 
-use mwt_net::{BtcTx, SolTx, TxInfoClient};
+use mwt_net::{BtcTx, SolTokenAmount, SolTokenBalance, SolTx, TxInfoClient};
 
 use crate::error::Result;
 pub use mwt_money::txinfo::*;
@@ -112,12 +112,43 @@ fn bitcoin_info(tx: BtcTx, tx_hash: &str) -> TxInfo {
     }
 }
 
+/// Decimal-adjusted token amount: `uiAmountString`, else `amount` shifted by `decimals`
+/// with string arithmetic (no floats).
+fn token_amount(token: &SolTokenAmount) -> Option<String> {
+    if let Some(ui) = &token.ui_amount_string {
+        return Some(ui.clone());
+    }
+    let raw = token.amount.as_deref()?;
+    if raw.is_empty() || !raw.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let decimals = usize::from(token.decimals?);
+    if decimals == 0 {
+        return Some(raw.to_string());
+    }
+    let padded = format!("{raw:0>width$}", width = decimals + 1);
+    let (whole, fraction) = padded.split_at(padded.len() - decimals);
+    let whole = whole.trim_start_matches('0');
+    let whole = if whole.is_empty() { "0" } else { whole };
+    let fraction = fraction.trim_end_matches('0');
+    Some(if fraction.is_empty() {
+        whole.to_string()
+    } else {
+        format!("{whole}.{fraction}")
+    })
+}
+
+/// Amount of the first token balance; the SOL lamport balance only when there is no token balance.
+fn balance_amount(token: Option<&SolTokenBalance>, lamports: Option<i64>) -> Option<String> {
+    match token {
+        Some(balance) => balance.ui_token_amount.as_ref().and_then(token_amount),
+        None => lamports.map(lamports_to_sol),
+    }
+}
+
 /// `None` when the transaction carries no `meta`.
 fn solana_info(value: SolTx, tx_hash: &str) -> Option<TxInfo> {
     let meta = value.meta?;
-
-    // lamports -> SOL
-    let sol = |value: Option<i64>| value.map(lamports_to_sol);
 
     let token_before = meta
         .pre_token_balances
@@ -127,6 +158,8 @@ fn solana_info(value: SolTx, tx_hash: &str) -> Option<TxInfo> {
         .post_token_balances
         .as_ref()
         .and_then(|balances| balances.first());
+    let first =
+        |balances: &Option<Vec<i64>>| balances.as_ref().and_then(|list| list.first().copied());
 
     Some(TxInfo {
         tx_hash: tx_hash.to_string(),
@@ -135,24 +168,10 @@ fn solana_info(value: SolTx, tx_hash: &str) -> Option<TxInfo> {
         occurred_at: value.block_time.map(mwt_model::unix_to_iso),
         status: Some("confirmed".to_string()),
         asset_in: token_before.and_then(|balance| balance.mint.clone()),
-        amount_in: token_before
-            .and_then(|balance| balance.ui_token_amount.as_ref())
-            .and_then(|token| token.amount.clone())
-            .or_else(|| {
-                sol(meta
-                    .pre_balances
-                    .and_then(|balances| balances.first().copied()))
-            }),
+        amount_in: balance_amount(token_before, first(&meta.pre_balances)),
         asset_out: token_after.and_then(|balance| balance.mint.clone()),
-        amount_out: token_after
-            .and_then(|balance| balance.ui_token_amount.as_ref())
-            .and_then(|token| token.amount.clone())
-            .or_else(|| {
-                sol(meta
-                    .post_balances
-                    .and_then(|balances| balances.first().copied()))
-            }),
-        fee: sol(meta.fee),
+        amount_out: balance_amount(token_after, first(&meta.post_balances)),
+        fee: meta.fee.map(lamports_to_sol),
         fee_asset: Some("SOL".to_string()),
         ..Default::default()
     })
@@ -221,21 +240,16 @@ mod tests {
 
     #[test]
     fn solana_info_maps_date_amounts_fee_and_status() {
-        use mwt_net::{SolMeta, SolTokenAmount, SolTokenBalance};
-        let balance = |amount: &str| SolTokenBalance {
-            mint: Some("mint".into()),
-            ui_token_amount: Some(SolTokenAmount {
-                amount: Some(amount.into()),
-            }),
-        };
+        use mwt_net::SolMeta;
+        let balance = |amount: &str, ui: &str| token_balance(amount, 6, Some(ui));
         let tx = SolTx {
             block_time: Some(1_700_000_000),
             meta: Some(SolMeta {
                 fee: Some(5000),
                 pre_balances: None,
                 post_balances: None,
-                pre_token_balances: Some(vec![balance("7")]),
-                post_token_balances: Some(vec![balance("5")]),
+                pre_token_balances: Some(vec![balance("7", "0.000007")]),
+                post_token_balances: Some(vec![balance("5", "0.000005")]),
             }),
         };
         let info = solana_info(tx, "sig").expect("meta present");
@@ -244,8 +258,64 @@ mod tests {
             Some(mwt_model::unix_to_iso(1_700_000_000))
         );
         assert_eq!(info.status.as_deref(), Some("confirmed"));
-        assert_eq!(info.amount_in.as_deref(), Some("7"));
-        assert_eq!(info.amount_out.as_deref(), Some("5"));
+        assert_eq!(info.amount_in.as_deref(), Some("0.000007"));
+        assert_eq!(info.amount_out.as_deref(), Some("0.000005"));
         assert_eq!(info.fee.as_deref(), Some("0.000005"));
+    }
+
+    fn token_balance(amount: &str, decimals: u8, ui: Option<&str>) -> SolTokenBalance {
+        SolTokenBalance {
+            mint: Some("mint".into()),
+            ui_token_amount: Some(SolTokenAmount {
+                amount: Some(amount.into()),
+                decimals: Some(decimals),
+                ui_amount_string: ui.map(String::from),
+            }),
+        }
+    }
+
+    #[test]
+    fn token_amount_is_decimal_adjusted() {
+        let balance = token_balance("7", 6, Some("0.000007"));
+        let amount = balance.ui_token_amount.as_ref().and_then(token_amount);
+        assert_eq!(amount.as_deref(), Some("0.000007"));
+    }
+
+    #[test]
+    fn token_amount_shifts_decimals_without_ui_string() {
+        for (raw, expected) in [("7", "0.000007"), ("1500000", "1.5"), ("2000000", "2")] {
+            let balance = token_balance(raw, 6, None);
+            let amount = balance.ui_token_amount.as_ref().and_then(token_amount);
+            assert_eq!(amount.as_deref(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn token_balance_never_falls_back_to_sol() {
+        use mwt_net::SolMeta;
+        let tx = SolTx {
+            block_time: None,
+            meta: Some(SolMeta {
+                fee: None,
+                pre_balances: Some(vec![1_000_000_000]),
+                post_balances: Some(vec![1_000_000_000]),
+                pre_token_balances: Some(vec![SolTokenBalance {
+                    mint: Some("mint".into()),
+                    ui_token_amount: None,
+                }]),
+                post_token_balances: None,
+            }),
+        };
+        let info = solana_info(tx, "sig").expect("meta present");
+        assert_eq!(info.asset_in.as_deref(), Some("mint"));
+        assert_eq!(info.amount_in, None);
+        assert_eq!(info.amount_out.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn token_amount_keeps_integer_for_zero_decimals() {
+        let balance = token_balance("5", 0, None);
+        let amount = balance.ui_token_amount.as_ref().and_then(token_amount);
+        assert_eq!(amount.as_deref(), Some("5"));
     }
 }
