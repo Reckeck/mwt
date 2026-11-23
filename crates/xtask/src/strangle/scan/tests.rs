@@ -265,3 +265,16 @@ fn json_body_with_a_method_turbofish_call_it_cannot_parse_is_unscanned() {
     let source = "fn f(vault: V) {\n    let v = json!({\"a\": vault.foo::<u8>(), \"b\": @});\n}\n";
     assert_eq!(scan_source(source).unwrap().unscanned, [2]);
 }
+
+#[test]
+fn an_impl_of_the_renamed_facade_type_holds_facade_methods() {
+    let facts = scan_source("impl Session {\n    pub fn renamed(&self) { self.inner(); }\n}\nimpl Other {\n    pub fn not_ours(&self) {}\n}\n").unwrap();
+    assert!(find(&facts, "renamed").public);
+    assert!(facts.methods.iter().all(|method| method.name != "not_ours"));
+    assert!(
+        facts
+            .calls
+            .iter()
+            .any(|call| call.name == "inner" && call.on_vault)
+    );
+}

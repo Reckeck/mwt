@@ -29,7 +29,7 @@ fn thing(title: &str) -> SharedItemDraft {
 }
 
 /// An event both devices hold, with one guest.
-fn shared_event(left: &mut UnlockedVault, right: &mut UnlockedVault) -> String {
+fn shared_event(left: &mut Session, right: &mut Session) -> String {
     let event = crate::usecases::household::shared_events::create_shared_event(
         left,
         SharedEventDraft {
@@ -44,7 +44,7 @@ fn shared_event(left: &mut UnlockedVault, right: &mut UnlockedVault) -> String {
     event.event.id
 }
 
-fn titles(vault: &UnlockedVault, event: &str) -> Vec<String> {
+fn titles(vault: &Session, event: &str) -> Vec<String> {
     let mut titles: Vec<String> = vault
         .doc
         .shared_events
@@ -59,7 +59,7 @@ fn titles(vault: &UnlockedVault, event: &str) -> Vec<String> {
     titles
 }
 
-fn names(vault: &UnlockedVault, event: &str) -> Vec<String> {
+fn names(vault: &Session, event: &str) -> Vec<String> {
     let mut names: Vec<String> = vault
         .doc
         .shared_events
@@ -225,7 +225,7 @@ fn concurrent_settlements_are_both_kept() {
     }
 }
 
-fn exchange_store(vault: &mut UnlockedVault, name: &str) -> String {
+fn exchange_store(vault: &mut Session, name: &str) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         name,
@@ -326,7 +326,7 @@ fn inflation_modes_of_two_currencies_both_kept() {
     }
 }
 
-fn savings(vault: &mut UnlockedVault, name: &str) -> String {
+fn savings(vault: &mut Session, name: &str) -> String {
     let bank = store(vault, &format!("{name} bank"), StoreKind::Bank, None);
     let extras = StoreExtras {
         sub_type: Some(SubType::Savings),
@@ -346,7 +346,7 @@ fn savings(vault: &mut UnlockedVault, name: &str) -> String {
     .id
 }
 
-fn fund_ids(vault: &UnlockedVault) -> Vec<String> {
+fn fund_ids(vault: &Session) -> Vec<String> {
     let mut ids = vault.doc.emergency_fund.scope.store_ids.clone();
     ids.sort();
     ids

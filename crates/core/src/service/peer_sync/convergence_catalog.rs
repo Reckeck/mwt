@@ -108,7 +108,7 @@ fn flat_topup(property: &str) -> Transaction {
 
 /// A property with a flat in it and a metered utility, made on device 0 and
 /// pulled by the others, so valuations and readings have something to hang on.
-pub(super) fn add_catalog_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
+pub(super) fn add_catalog_stores(devices: &mut [Session], ledger: &mut Ledger) {
     let property = crate::usecases::money::stores::create_store_with(
         &mut devices[0],
         "conv flat",
@@ -176,10 +176,7 @@ fn pick_early(rng: &mut Rng, mut ids: Vec<String>, limit: usize) -> Option<Strin
     pick(rng, &ids).cloned()
 }
 
-fn pick_event(
-    vault: &UnlockedVault,
-    rng: &mut Rng,
-) -> Option<crate::model::shared_event::SharedEvent> {
+fn pick_event(vault: &Session, rng: &mut Rng) -> Option<crate::model::shared_event::SharedEvent> {
     let id = pick_early(rng, event_ids(vault), 2)?;
     vault
         .doc
@@ -189,7 +186,7 @@ fn pick_event(
         .cloned()
 }
 
-fn purchase_ids(vault: &UnlockedVault, event_id: &str) -> BTreeSet<(String, String)> {
+fn purchase_ids(vault: &Session, event_id: &str) -> BTreeSet<(String, String)> {
     vault
         .doc
         .shared_events
@@ -208,7 +205,7 @@ fn purchase_ids(vault: &UnlockedVault, event_id: &str) -> BTreeSet<(String, Stri
 /// random edit, as in the other appliers.
 pub(super) fn apply_catalog_edit(
     kind: Edit,
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     rng: &mut Rng,
     ledger: &mut Ledger,
 ) {
@@ -536,12 +533,12 @@ const RUB_PER_USD: i64 = 100;
 
 /// The language of a device follows its base currency: the device with the
 /// ruble base is the Russian one (`run` gives device 1 that base).
-fn device_is_ru(vault: &UnlockedVault) -> bool {
+fn device_is_ru(vault: &Session) -> bool {
     vault.base_currency() == "rub"
 }
 
 /// A rate for the second base currency, so a price can be read in either.
-pub(super) fn seed_rub_rate(vault: &mut UnlockedVault) {
+pub(super) fn seed_rub_rate(vault: &mut Session) {
     crate::usecases::money::rates::apply_fx(
         vault,
         &[crate::model::vault::FxPoint {
@@ -560,7 +557,7 @@ const NOTICE_CATEGORIES: [crate::model::notify::NoticeCategory; 6] = {
     [Reminder, Loan, Rent, Utilities, Debt, Goal]
 };
 
-fn notice_leads(vault: &UnlockedVault) -> Vec<u16> {
+fn notice_leads(vault: &Session) -> Vec<u16> {
     NOTICE_CATEGORIES
         .iter()
         .map(|category| {
@@ -574,7 +571,7 @@ fn notice_leads(vault: &UnlockedVault) -> Vec<u16> {
         .collect()
 }
 
-fn set_notice_category(vault: &mut UnlockedVault, ledger: &mut Ledger, number: usize) {
+fn set_notice_category(vault: &mut Session, ledger: &mut Ledger, number: usize) {
     let category = NOTICE_CATEGORIES[number % NOTICE_CATEGORIES.len()];
     let mut config = vault.doc.settings.notifications.clone();
     let mut entry = config.category(category);
@@ -598,7 +595,7 @@ fn set_notice_category(vault: &mut UnlockedVault, ledger: &mut Ledger, number: u
 }
 
 /// 121: the two switches belong to the device that sets them.
-fn toggle_system_notices(vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut Ledger) {
+fn toggle_system_notices(vault: &mut Session, rng: &mut Rng, ledger: &mut Ledger) {
     let mut config = vault.doc.settings.notifications.clone();
     config.system = rng.below(2) == 0;
     config.hide_details_when_locked = rng.below(2) == 0;
@@ -614,7 +611,7 @@ fn toggle_system_notices(vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut 
 
 /// 100: a flat rate of one currency; the form sends the whole table, so the
 /// other currencies go back as they were on this device.
-fn set_flat_inflation(vault: &mut UnlockedVault, rng: &mut Rng) {
+fn set_flat_inflation(vault: &mut Session, rng: &mut Rng) {
     let currency = ["rub", "usd", "eur", "thb", "gbp"][rng.below(5)];
     let mut table = vault.doc.settings.inflation_manual.clone();
     table.insert(
@@ -628,7 +625,7 @@ fn set_flat_inflation(vault: &mut UnlockedVault, rng: &mut Rng) {
 }
 
 /// 100: once the devices have met they compute with one table of flat rates.
-pub(super) fn check_flat_inflation_agrees(devices: &[UnlockedVault]) -> Vec<Violation> {
+pub(super) fn check_flat_inflation_agrees(devices: &[Session]) -> Vec<Violation> {
     let mut out = Vec::new();
     let first = crate::money::inflation::flat_inflation(&devices[0].doc);
     for (index, device) in devices.iter().enumerate().skip(1) {
@@ -646,7 +643,7 @@ pub(super) fn check_flat_inflation_agrees(devices: &[UnlockedVault]) -> Vec<Viol
 
 /// 26: an income whose price in the base currency is written in the base of
 /// the device that entered it.
-fn tx_with_base_price(vault: &mut UnlockedVault, ledger: &mut Ledger, number: usize) {
+fn tx_with_base_price(vault: &mut Session, ledger: &mut Ledger, number: usize) {
     let store_id = vault.doc.stores[0].id.clone();
     let usd_price = 2 + number % 5;
     let in_base = if vault.base_currency() == "rub" {
@@ -670,7 +667,7 @@ fn tx_with_base_price(vault: &mut UnlockedVault, ledger: &mut Ledger, number: us
 /// 33: every device opens the reminder list in its own language, twice, with
 /// an exchange after each opening. The second opening must find nothing to
 /// rewrite and the second exchange nothing to send.
-pub(super) fn reminder_text_ping_pong(devices: &mut [UnlockedVault]) -> Vec<Violation> {
+pub(super) fn reminder_text_ping_pong(devices: &mut [Session]) -> Vec<Violation> {
     let mut out = Vec::new();
     for cycle in 0..2 {
         let mut rewrote = false;
@@ -706,7 +703,7 @@ pub(super) fn reminder_text_ping_pong(devices: &mut [UnlockedVault]) -> Vec<Viol
 }
 
 fn remember_purchases(
-    vault: &UnlockedVault,
+    vault: &Session,
     event_id: &str,
     before: &BTreeSet<(String, String)>,
     ledger: &mut Ledger,
@@ -736,7 +733,7 @@ fn alert_draft(price: usize) -> crate::planning::agenda::PriceAlertDraft {
 /// Prices sit on a small pool of hours, so the cache stays far below its caps
 /// (thinning a bigger one is a different test's business). A price depends
 /// only on its hour: two devices never write one cache record differently.
-fn fire_alert(vault: &mut UnlockedVault, number: usize) {
+fn fire_alert(vault: &mut Session, number: usize) {
     const HOURS: usize = 20;
     let base = unix_secs("2026-03-01T00:00:00Z").unwrap();
     let hour = i64::try_from(number % HOURS).unwrap_or(0);
@@ -760,7 +757,7 @@ fn fire_alert(vault: &mut UnlockedVault, number: usize) {
 /// Queues a fill from a small pool of exec ids on the exchange wallet and
 /// then, more often than not, books or discards it. Two devices reach for the
 /// same id, so one decides while the other has not seen it (29).
-fn confirm_import(vault: &mut UnlockedVault, rng: &mut Rng, ledger: &Ledger) {
+fn confirm_import(vault: &mut Session, rng: &mut Rng, ledger: &Ledger) {
     let exec_id = format!("imp-{}", rng.below(4));
     let fill = crate::exchange::Execution {
         exec_id: exec_id.clone(),
@@ -793,7 +790,7 @@ fn confirm_import(vault: &mut UnlockedVault, rng: &mut Rng, ledger: &Ledger) {
 }
 
 /// Creates the one alert the harness plays with, then moves its threshold.
-fn edit_alert(vault: &mut UnlockedVault, rng: &mut Rng) {
+fn edit_alert(vault: &mut Session, rng: &mut Rng) {
     let price = 90_000 + rng.below(40_000);
     let id = vault
         .doc
@@ -816,7 +813,7 @@ fn edit_alert(vault: &mut UnlockedVault, rng: &mut Rng) {
 /// An alert counts as fired on every device or on none. (A firing recorded
 /// for an older threshold stays in `triggered_at`: that is the normal merged
 /// state, `is_triggered` is what must agree.)
-pub(super) fn check_alerts_agree(devices: &[UnlockedVault], context: &str) {
+pub(super) fn check_alerts_agree(devices: &[Session], context: &str) {
     for other in &devices[1..] {
         for alert in &devices[0].doc.price_alerts {
             let twin = other
@@ -833,7 +830,7 @@ pub(super) fn check_alerts_agree(devices: &[UnlockedVault], context: &str) {
     }
 }
 
-fn set_asset_classes(vault: &mut UnlockedVault, rng: &mut Rng) {
+fn set_asset_classes(vault: &mut Session, rng: &mut Rng) {
     let ids = ["cls-a", "cls-b", "cls-c"];
     let count = 1 + rng.below(ids.len());
     let first = rng.below(ids.len());
@@ -905,7 +902,7 @@ fn purchase_present(
 
 /// Undo the newest batch this device applied. Undo brings records back, so
 /// everything the batch touched is exempt from the "deleted stays deleted" check.
-fn undo_last_batch(vault: &mut UnlockedVault, ledger: &mut Ledger) {
+fn undo_last_batch(vault: &mut Session, ledger: &mut Ledger) {
     let Some(batch) = vault
         .doc
         .sync
@@ -974,7 +971,7 @@ pub(super) fn unrepaired_rate_one(
         .collect()
 }
 
-pub(super) fn invariants(vault: &UnlockedVault, ledger: &Ledger) -> Vec<Violation> {
+pub(super) fn invariants(vault: &Session, ledger: &Ledger) -> Vec<Violation> {
     let mut out = Vec::new();
     check_cash_and_tree(vault, &mut out);
     check_references(vault, &mut out);
@@ -989,7 +986,7 @@ pub(super) fn invariants(vault: &UnlockedVault, ledger: &Ledger) -> Vec<Violatio
 /// 121: a switch written on one device is still there once the devices met,
 /// whatever other devices saved around it; the two per-device switches are the
 /// ones that device set.
-fn check_notice_settings(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Violation>) {
+fn check_notice_settings(vault: &Session, ledger: &Ledger, out: &mut Vec<Violation>) {
     let config = &vault.doc.settings.notifications;
     let categories: BTreeSet<String> = ledger
         .notice_writes
@@ -1034,7 +1031,7 @@ fn check_notice_settings(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<V
 
 /// 26: the price of a unit in the reader's base currency is the USD price
 /// converted, not the number another device wrote in its own base.
-fn check_base_prices(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Violation>) {
+fn check_base_prices(vault: &Session, ledger: &Ledger, out: &mut Vec<Violation>) {
     let book = crate::money::rates::rate_book(&vault.books());
     let base = vault.base_currency().to_string();
     let rate = if base == "rub" { RUB_PER_USD } else { 1 };
@@ -1065,7 +1062,7 @@ fn check_base_prices(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Viola
 }
 
 /// 29: nothing in the queue names a fill that is already booked or discarded.
-fn check_staged_imports(vault: &UnlockedVault, out: &mut Vec<Violation>) {
+fn check_staged_imports(vault: &Session, out: &mut Vec<Violation>) {
     let decided = crate::cryptotrack::exchange_sync::decided_import_ids(&vault.doc);
     for pending in &vault.doc.pending_imports {
         if decided.contains(&pending.exec_id) {
@@ -1081,7 +1078,7 @@ fn check_staged_imports(vault: &UnlockedVault, out: &mut Vec<Violation>) {
     }
 }
 
-fn check_cash_and_tree(vault: &UnlockedVault, out: &mut Vec<Violation>) {
+fn check_cash_and_tree(vault: &Session, out: &mut Vec<Violation>) {
     let roots = vault
         .doc
         .stores
@@ -1137,7 +1134,7 @@ fn check_cash_and_tree(vault: &UnlockedVault, out: &mut Vec<Violation>) {
     }
 }
 
-fn check_references(vault: &UnlockedVault, out: &mut Vec<Violation>) {
+fn check_references(vault: &Session, out: &mut Vec<Violation>) {
     let doc = &vault.doc;
     let stores: BTreeSet<&str> = doc.stores.iter().map(|node| node.id.as_str()).collect();
     let categories: BTreeSet<&str> = doc.categories.iter().map(|cat| cat.key.as_str()).collect();
@@ -1249,7 +1246,7 @@ fn check_references(vault: &UnlockedVault, out: &mut Vec<Violation>) {
     }
 }
 
-fn check_natural_keys(vault: &UnlockedVault, out: &mut Vec<Violation>) {
+fn check_natural_keys(vault: &Session, out: &mut Vec<Violation>) {
     let doc = &vault.doc;
     let mut seen = BTreeSet::new();
     for terms in &doc.debt_terms {
@@ -1329,7 +1326,7 @@ fn check_natural_keys(vault: &UnlockedVault, out: &mut Vec<Violation>) {
     }
 }
 
-fn check_shared_events(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Violation>) {
+fn check_shared_events(vault: &Session, ledger: &Ledger, out: &mut Vec<Violation>) {
     let doc = &vault.doc;
     let contacts: BTreeSet<&str> = doc
         .contacts

@@ -16,7 +16,7 @@ fn limit() -> u64 {
 
 /// A contact whose every stamp lies thirty days ahead (a device with a wrong
 /// date made it). Returns the record key.
-fn poisoned_contact(vault: &mut UnlockedVault) -> String {
+fn poisoned_contact(vault: &mut Session) -> String {
     let contact = crate::usecases::household::contacts::create_contact(
         vault,
         ContactDraft {
@@ -72,7 +72,7 @@ fn a_poisoned_vault_reopens_with_a_bounded_clock() {
     poisoned_contact(&mut left);
     let path = left.path.clone();
     drop(left);
-    let mut reopened = UnlockedVault::open(path, "pw").unwrap();
+    let mut reopened = Session::open(path, "pw").unwrap();
     peer_sync::set_device(&mut reopened, "aaaaaaaa-left");
     crate::usecases::sync::trust::sync_trust_peer(&mut reopened, "dev-c", "Tablet", "cc").unwrap();
     let stamp = &peer_sync::sync_state(&reopened)
@@ -131,7 +131,7 @@ fn an_edit_of_a_record_poisoned_beyond_the_limit_is_stamped_now() {
     assert_eq!(stamp.device, "bbbbbbbb");
     exchange(&mut left, &mut right);
     // The poisoned stamp on the left must not beat the edit from now.
-    let name_of = |vault: &UnlockedVault| {
+    let name_of = |vault: &Session| {
         vault
             .doc
             .contacts
@@ -145,11 +145,11 @@ fn an_edit_of_a_record_poisoned_beyond_the_limit_is_stamped_now() {
     assert_eq!(name_of(&right), "Edited on the right");
 }
 
-fn has_contact(vault: &UnlockedVault, id: &str) -> bool {
+fn has_contact(vault: &Session, id: &str) -> bool {
     vault.doc.contacts.iter().any(|contact| contact.id == id)
 }
 
-fn plain_contact(vault: &mut UnlockedVault) -> crate::model::contact::Contact {
+fn plain_contact(vault: &mut Session) -> crate::model::contact::Contact {
     crate::usecases::household::contacts::create_contact(
         vault,
         ContactDraft {
@@ -201,7 +201,7 @@ fn recreating_over_a_poisoned_tombstone_survives() {
     assert!(has_contact(&right, &contact.id));
 }
 
-fn name_of(vault: &UnlockedVault, id: &str) -> String {
+fn name_of(vault: &Session, id: &str) -> String {
     vault
         .doc
         .contacts
@@ -212,7 +212,7 @@ fn name_of(vault: &UnlockedVault, id: &str) -> String {
         .clone()
 }
 
-fn rename(vault: &mut UnlockedVault, id: &str, name: &str) {
+fn rename(vault: &mut Session, id: &str, name: &str) {
     let draft = ContactDraft {
         name: name.into(),
         kind: ContactKind::Person,

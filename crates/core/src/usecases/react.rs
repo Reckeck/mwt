@@ -1,17 +1,17 @@
 //! Reactions: what a scenario does to the vault after its own commit because
 //! of an event it announced. The bus keeps the observers (a subscriber gets
-//! the event only, never the vault); a reaction gets `&mut UnlockedVault` and
+//! the event only, never the vault); a reaction gets `&mut Session` and
 //! makes its own write, a second transaction like the second `persist()` of
 //! the direct calls today (spec core-strangler, Open question 2).
 
 use crate::error::Error;
 use crate::kernel::events::DomainEvent;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 use super::workflow::reactions;
 
 /// One reaction. It ignores events it does not know and returns `Ok(())`.
-pub type Reaction = fn(&mut UnlockedVault, &DomainEvent) -> Result<(), Error>;
+pub type Reaction = fn(&mut Session, &DomainEvent) -> Result<(), Error>;
 
 /// A reaction that failed. The commit that announced the event stays.
 #[derive(Debug)]
@@ -29,7 +29,7 @@ pub const REGISTERED: &[Reaction] = &[
 ];
 
 /// Run the registered reactions for `events`, after the commit that made them.
-pub fn react(vault: &mut UnlockedVault, events: Vec<DomainEvent>) -> Vec<ReactionFailure> {
+pub fn react(vault: &mut Session, events: Vec<DomainEvent>) -> Vec<ReactionFailure> {
     run(vault, events, REGISTERED)
 }
 
@@ -37,7 +37,7 @@ pub fn react(vault: &mut UnlockedVault, events: Vec<DomainEvent>) -> Vec<Reactio
 /// A failure is collected and the rest still run: the first commit is neither
 /// undone nor hidden by a later one failing.
 pub fn run(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     events: Vec<DomainEvent>,
     reactions: &[Reaction],
 ) -> Vec<ReactionFailure> {

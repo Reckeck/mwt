@@ -16,7 +16,7 @@ use super::forward::{FORWARD_BEGIN, FORWARD_END};
 use super::home::{Home, homes};
 use super::map::Map;
 use super::scaffold::PLACEHOLDER;
-use super::scan::{VAULT_RECEIVERS, VAULT_TYPE};
+use super::scan::{FACADE_TYPES, VAULT_RECEIVERS, VAULT_TYPE};
 use super::source::{self, LineIndex, Splice};
 
 #[derive(Args)]
@@ -85,16 +85,17 @@ fn refuse_private_vault_fields(
     moved: &str,
     source: &str,
 ) -> Result<()> {
-    if !source.contains(VAULT_TYPE) {
+    if !FACADE_TYPES.iter().any(|name| source.contains(name)) {
         return Ok(());
     }
     let definition = format!("{service_dir}/mod.rs");
     let reads = field_reads(source, &VAULT_RECEIVERS)?;
-    let hidden: Vec<String> = hidden_fields(files.read(&definition)?, VAULT_TYPE)
-        .with_context(|| definition.clone())?
-        .into_iter()
-        .filter(|field| reads.contains(field))
-        .collect();
+    let definition_text = files.read(&definition)?;
+    let mut hidden = Vec::new();
+    for name in FACADE_TYPES {
+        let fields = hidden_fields(definition_text, name).with_context(|| definition.clone())?;
+        hidden.extend(fields.into_iter().filter(|field| reads.contains(field)));
+    }
     if hidden.is_empty() {
         return Ok(());
     }

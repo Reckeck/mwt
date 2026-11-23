@@ -50,7 +50,7 @@ fn usdc() -> CryptoAsset {
 }
 
 /// A vault with one followed address and a price for every day of March.
-fn followed() -> (tempfile::TempDir, UnlockedVault) {
+fn followed() -> (tempfile::TempDir, Session) {
     let (dir, mut vault) = empty_vault();
     vault.doc.crypto_accounts.push(CryptoAccount::new(
         "cacc-1",
@@ -430,7 +430,7 @@ fn junk_batch(tokens: u64) -> SourceBatch {
 /// A followed vault whose saves are counted.
 fn counted_vault() -> (
     tempfile::TempDir,
-    crate::service::UnlockedVault,
+    crate::service::Session,
     std::sync::Arc<CountSaves>,
 ) {
     let (dir, mut vault) = followed();
@@ -1006,7 +1006,7 @@ fn token_in() -> RawEvent {
     )
 }
 
-fn apply_pages(vault: &mut UnlockedVault, pages: &[Vec<RawEvent>]) {
+fn apply_pages(vault: &mut Session, pages: &[Vec<RawEvent>]) {
     for page in pages {
         let mut step = request();
         step.history_done = false;
@@ -1019,7 +1019,7 @@ fn apply_pages(vault: &mut UnlockedVault, pages: &[Vec<RawEvent>]) {
     }
 }
 
-fn only_event(vault: &UnlockedVault) -> CryptoTx {
+fn only_event(vault: &Session) -> CryptoTx {
     assert_eq!(vault.doc.crypto_events.len(), 1, "one operation");
     vault.doc.crypto_events[0].clone()
 }

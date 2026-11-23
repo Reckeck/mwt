@@ -4,7 +4,7 @@ use crate::model::store::AssetRef;
 use crate::model::store::StoreKind;
 use crate::model::store::{ExchangeProfile, ExchangeProvider};
 use crate::model::vault::{ExchangeKeys, PricePoint};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 
 fn eth_ref() -> AssetRef {
@@ -12,7 +12,7 @@ fn eth_ref() -> AssetRef {
 }
 
 /// What every holding is valued from.
-fn quote(vault: &mut UnlockedVault, asset: &AssetRef, usd: &str) {
+fn quote(vault: &mut Session, asset: &AssetRef, usd: &str) {
     vault.doc.price_cache.push(PricePoint {
         asset_key: asset.key(),
         value_usd: amount(usd),
@@ -25,7 +25,7 @@ fn quote(vault: &mut UnlockedVault, asset: &AssetRef, usd: &str) {
 /// The provider of an exchange wallet: `Bybit` is one the module reads,
 /// `Binance` is one it cannot, which is what makes a wallet hand-kept
 /// beyond doubt (no device can hold a key for it).
-fn provider(vault: &mut UnlockedVault, store_id: &str, provider: ExchangeProvider) {
+fn provider(vault: &mut Session, store_id: &str, provider: ExchangeProvider) {
     store_mut(vault, store_id).exchange = Some(ExchangeProfile {
         provider,
         ..ExchangeProfile::default()
@@ -36,7 +36,7 @@ fn provider(vault: &mut UnlockedVault, store_id: &str, provider: ExchangeProvide
 /// At level 3 the secret itself lives in the device file and the document
 /// keeps this pointer only; the open chain rebuilds it
 /// (`adopt_device_secrets`) before the archiving below looks at it.
-fn keyed(vault: &mut UnlockedVault, store_id: &str) {
+fn keyed(vault: &mut Session, store_id: &str) {
     vault.doc.exchanges.bybit.push(ExchangeKeys {
         store_id: store_id.to_string(),
         api_key: "abcd1234wxyz".into(),
@@ -48,7 +48,7 @@ fn keyed(vault: &mut UnlockedVault, store_id: &str) {
 
 /// A wallet with 2 ETH at 2000 in it, kept the way it was before the
 /// module existed.
-fn hand_kept(vault: &mut UnlockedVault, name: &str, kind: StoreKind) -> String {
+fn hand_kept(vault: &mut Session, name: &str, kind: StoreKind) -> String {
     let wallet = store(vault, name, kind, None);
     crate::usecases::money::transactions::add_transaction(
         vault,
@@ -59,7 +59,7 @@ fn hand_kept(vault: &mut UnlockedVault, name: &str, kind: StoreKind) -> String {
 }
 
 fn store_mut<'vault>(
-    vault: &'vault mut UnlockedVault,
+    vault: &'vault mut Session,
     store_id: &str,
 ) -> &'vault mut crate::model::store::Store {
     vault
@@ -70,7 +70,7 @@ fn store_mut<'vault>(
         .expect("the wallet exists")
 }
 
-fn archived(vault: &UnlockedVault, store_id: &str) -> bool {
+fn archived(vault: &Session, store_id: &str) -> bool {
     crate::money::tree::find_store(&vault.doc, store_id)
         .expect("the wallet exists")
         .archived
@@ -285,7 +285,7 @@ fn cut_short_raise() -> (tempfile::TempDir, std::path::PathBuf, String) {
 fn an_open_finishes_an_archiving_the_raise_did_not_reach() {
     let (_dir, path, old) = cut_short_raise();
 
-    let reopened = UnlockedVault::open(path, "pw").expect("the level-3 file opens");
+    let reopened = Session::open(path, "pw").expect("the level-3 file opens");
 
     assert!(
         archived(&reopened, &old),
@@ -307,14 +307,14 @@ fn an_open_finishes_an_archiving_the_raise_did_not_reach() {
 #[test]
 fn a_finished_archiving_is_not_repeated_by_the_next_open() {
     let (_dir, path, old) = cut_short_raise();
-    let mut reopened = UnlockedVault::open(path.clone(), "pw").expect("opens");
+    let mut reopened = Session::open(path.clone(), "pw").expect("opens");
     assert!(archived(&reopened, &old));
     store_mut(&mut reopened, &old).archived = false;
     crate::usecases::money::portfolio::recompute_holdings(&mut reopened);
     reopened.persist().expect("the restored wallet is saved");
     drop(reopened);
 
-    let again = UnlockedVault::open(path, "pw").expect("opens again");
+    let again = Session::open(path, "pw").expect("opens again");
 
     assert!(!again.doc.settings.crypto_raise_pending);
     assert!(!archived(&again, &old), "nothing archives it a second time");
@@ -347,7 +347,7 @@ fn a_level_3_vault_without_the_mark_keeps_its_hand_kept_wallets() {
     assert_eq!(capital, amount("6000"));
     drop(vault);
 
-    let reopened = UnlockedVault::open(path.clone(), "pw").expect("opens");
+    let reopened = Session::open(path.clone(), "pw").expect("opens");
 
     assert!(!archived(&reopened, &old));
     assert!(!archived(&reopened, &binance));
@@ -358,7 +358,7 @@ fn a_level_3_vault_without_the_mark_keeps_its_hand_kept_wallets() {
     );
     // A second open changes nothing either.
     drop(reopened);
-    let again = UnlockedVault::open(path, "pw").expect("opens");
+    let again = Session::open(path, "pw").expect("opens");
     assert!(!archived(&again, &old));
     assert_eq!(
         crate::usecases::money::capital::net_worth(&again.books()).financial,

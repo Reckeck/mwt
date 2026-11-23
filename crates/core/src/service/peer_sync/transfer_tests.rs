@@ -7,7 +7,7 @@ use crate::service::test_support::income;
 use crate::sync::state::{CutBy, TransferRecord};
 use crate::usecases::sync::peer_sync;
 
-fn cash_id(vault: &UnlockedVault) -> String {
+fn cash_id(vault: &Session) -> String {
     vault.doc.stores[0].id.clone()
 }
 
@@ -43,7 +43,7 @@ fn a_received_copy_drops_the_senders_bookkeeping() {
 
     let received = dir.path().join("received.wallet");
     std::fs::copy(&left.path, &received).unwrap();
-    let mut mine = UnlockedVault::open(received.clone(), "pw").unwrap();
+    let mut mine = Session::open(received.clone(), "pw").unwrap();
     peer_sync::adopt_received_copy(&mut mine).unwrap();
 
     let sync = &mine.doc.sync;
@@ -63,7 +63,7 @@ fn a_received_copy_drops_the_senders_bookkeeping() {
     assert_eq!(sync.tombstones, before.tombstones);
     assert_eq!(sync.peers.len(), before.peers.len());
     drop(mine);
-    let reopened = UnlockedVault::open(received, "pw").unwrap();
+    let reopened = Session::open(received, "pw").unwrap();
     assert!(reopened.doc.sync.batches.is_empty());
 }
 
@@ -121,7 +121,7 @@ fn open_stamps_carry_this_device() {
     let before = vault.doc.sync.stamps.clone();
     drop(vault);
 
-    let opened = UnlockedVault::open_as(path, "pw", Some("cccccccc-this")).unwrap();
+    let opened = Session::open_as(path, "pw", Some("cccccccc-this")).unwrap();
     let tag = crate::sync::stamp::device_tag("cccccccc-this");
     let fresh: Vec<_> = opened
         .doc

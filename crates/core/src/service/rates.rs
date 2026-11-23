@@ -5,9 +5,9 @@
 use crate::model::transaction::Transaction;
 use crate::money::rates::RateBook;
 
-use super::UnlockedVault;
+use super::Session;
 
-impl UnlockedVault {
+impl Session {
     /// Give every unpriced side the USD price of its moment (plan §6.2).
     pub(crate) fn stamp_prices(book: &RateBook, tx: &mut Transaction) -> usize {
         crate::money::rates::stamp_prices(book, tx)

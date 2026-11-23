@@ -11,10 +11,10 @@ use crate::error::Result;
 use crate::model::vault::VaultDoc;
 use crate::storage::VaultFile;
 
-use super::super::UnlockedVault;
+use super::super::Session;
 use super::super::exchange_keys::DeviceKeys;
 
-impl UnlockedVault {
+impl Session {
     /// The backup copy at `path`, opened again with this session's password.
     pub(crate) fn read_back_backup(&self, path: &Path) -> Result<VaultDoc> {
         VaultFile::open(path, &self.password).map(|(doc, _)| doc)

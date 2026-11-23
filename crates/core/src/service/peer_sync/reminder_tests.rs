@@ -12,7 +12,7 @@ use crate::time::secs_or_now;
 
 const NOW: &str = "2026-03-10T08:00:00Z";
 
-fn loan(vault: &mut UnlockedVault, name: &str) -> String {
+fn loan(vault: &mut Session, name: &str) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         name,
@@ -35,7 +35,7 @@ fn loan(vault: &mut UnlockedVault, name: &str) -> String {
     .id
 }
 
-fn place(vault: &mut UnlockedVault) {
+fn place(vault: &mut Session) {
     crate::usecases::planning::auto_reminders::sync_auto_reminders(
         vault,
         secs_or_now(NOW),
@@ -47,7 +47,7 @@ fn place(vault: &mut UnlockedVault) {
 
 /// A reminder as the build before derived ids made it: a random id and a key
 /// of the schedule alone.
-fn old_style(vault: &UnlockedVault, store_id: &str, id: &str) -> Reminder {
+fn old_style(vault: &Session, store_id: &str, id: &str) -> Reminder {
     let mut reminder = vault
         .doc
         .reminders
@@ -69,7 +69,7 @@ fn pause() {
     std::thread::sleep(std::time::Duration::from_millis(5));
 }
 
-fn of_loan<'a>(vault: &'a UnlockedVault, store_id: &str) -> Vec<&'a Reminder> {
+fn of_loan<'a>(vault: &'a Session, store_id: &str) -> Vec<&'a Reminder> {
     vault
         .doc
         .reminders

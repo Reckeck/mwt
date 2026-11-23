@@ -8,7 +8,7 @@ use super::peer_sync;
 use crate::error::Result;
 use crate::ipc_contract::security::SecurityLevel;
 use crate::ipc_contract::{AfterApply, StoreBalanceChange};
-use crate::service::{PeerRef, UnlockedVault};
+use crate::service::{PeerRef, Session};
 use crate::sync::history::{StoreValues, store_changes};
 use crate::sync::manifest::Manifest;
 use crate::sync::manifest_view::{
@@ -18,7 +18,7 @@ use crate::sync::{RecordState, SyncSummary, view};
 
 /// One digest per record and deletion. `union_since_ms` leaves out cached
 /// prices and rates older than that (a first sync sends 90 days).
-pub fn sync_manifest(vault: &mut UnlockedVault, union_since_ms: Option<u64>) -> Result<Manifest> {
+pub fn sync_manifest(vault: &mut Session, union_since_ms: Option<u64>) -> Result<Manifest> {
     Ok(sync_manifest_for(vault, union_since_ms, SecurityLevel::Crypto)?.0)
 }
 
@@ -26,7 +26,7 @@ pub fn sync_manifest(vault: &mut UnlockedVault, union_since_ms: Option<u64>) -> 
 /// module's records are left out, so their keys never reach the network. Also
 /// says how many records were left out.
 pub fn sync_manifest_for(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     union_since_ms: Option<u64>,
     peer: SecurityLevel,
 ) -> Result<(Manifest, usize)> {
@@ -46,7 +46,7 @@ pub fn sync_manifest_for(
 /// `(to_request, to_send)` for two manifests: the plain diff without the cache
 /// points this device would thin away as soon as they arrive.
 pub fn sync_diff(
-    vault: &UnlockedVault,
+    vault: &Session,
     mine: &Manifest,
     theirs: &Manifest,
 ) -> (Vec<String>, Vec<String>) {
@@ -58,10 +58,7 @@ pub fn sync_diff(
 }
 
 /// The full state of each asked record (absent keys come back empty).
-pub fn sync_records(
-    vault: &mut UnlockedVault,
-    keys: &[String],
-) -> Result<BTreeMap<String, RecordState>> {
+pub fn sync_records(vault: &mut Session, keys: &[String]) -> Result<BTreeMap<String, RecordState>> {
     sync_records_for(vault, keys, SecurityLevel::Crypto)
 }
 
@@ -69,7 +66,7 @@ pub fn sync_records(
 /// record is not answered even when asked for (a broken or hostile peer may
 /// ask for any key), so it never leaves this device.
 pub fn sync_records_for(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     keys: &[String],
     peer: SecurityLevel,
 ) -> Result<BTreeMap<String, RecordState>> {
@@ -81,7 +78,7 @@ pub fn sync_records_for(
 
 /// What applying `incoming` would change, without changing anything.
 pub fn sync_preview(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     incoming: &BTreeMap<String, RecordState>,
 ) -> Result<SyncSummary> {
     sync_preview_from(vault, incoming, "")
@@ -90,7 +87,7 @@ pub fn sync_preview(
 /// [`sync_preview`] for a batch from the device `device_id`: what that device
 /// has already seen of this one is not listed as overwritten.
 pub fn sync_preview_from(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     incoming: &BTreeMap<String, RecordState>,
     device_id: &str,
 ) -> Result<SyncSummary> {
@@ -106,7 +103,7 @@ pub fn sync_preview_from(
 /// be once applied: the batch goes into an in-memory copy of the vault
 /// (a sandbox writes nothing), this vault is not touched.
 pub fn sync_preview_after(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     incoming: &BTreeMap<String, RecordState>,
 ) -> Result<Option<AfterApply>> {
     check_incoming(incoming)?;

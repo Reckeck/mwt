@@ -28,10 +28,7 @@ fn draft(item_id: &str, buyer: &str, price: &str) -> SharedPurchaseDraft {
 }
 
 /// An event with one guest and one item, on both devices.
-fn event_with_item(
-    left: &mut UnlockedVault,
-    right: &mut UnlockedVault,
-) -> (String, String, String) {
+fn event_with_item(left: &mut Session, right: &mut Session) -> (String, String, String) {
     let event = crate::usecases::household::shared_events::create_shared_event(
         left,
         SharedEventDraft {
@@ -64,7 +61,7 @@ fn event_with_item(
 }
 
 /// `(id, total)` of the purchases of the first item, in order.
-fn purchases(vault: &UnlockedVault) -> Vec<(String, String)> {
+fn purchases(vault: &Session) -> Vec<(String, String)> {
     vault.doc.shared_events[0]
         .items
         .first()
@@ -77,7 +74,7 @@ fn purchases(vault: &UnlockedVault) -> Vec<(String, String)> {
         .unwrap_or_default()
 }
 
-fn totals(vault: &UnlockedVault) -> Vec<String> {
+fn totals(vault: &Session) -> Vec<String> {
     let mut totals: Vec<String> = purchases(vault)
         .into_iter()
         .map(|(_, total)| total)
@@ -86,7 +83,7 @@ fn totals(vault: &UnlockedVault) -> Vec<String> {
     totals
 }
 
-fn add(vault: &mut UnlockedVault, event: &str, item: &str, buyer: &str, price: &str) -> String {
+fn add(vault: &mut Session, event: &str, item: &str, buyer: &str, price: &str) -> String {
     let view = crate::usecases::household::shared_events::add_shared_purchase(
         vault,
         event,

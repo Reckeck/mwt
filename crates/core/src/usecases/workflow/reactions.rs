@@ -4,10 +4,10 @@
 
 use crate::error::Result;
 use crate::kernel::events::DomainEvent;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// An automation was deleted: its workflow goes with its runs.
-pub fn on_automation_deleted(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<()> {
+pub fn on_automation_deleted(vault: &mut Session, event: &DomainEvent) -> Result<()> {
     match event {
         DomainEvent::AutomationDeleted(deleted) => {
             crate::usecases::workflow::records::delete_workflow(vault, &deleted.id)
@@ -17,7 +17,7 @@ pub fn on_automation_deleted(vault: &mut UnlockedVault, event: &DomainEvent) -> 
 }
 
 /// A refused run of an automation (the event names the run) is run again now.
-pub fn on_automation_retried(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<()> {
+pub fn on_automation_retried(vault: &mut Session, event: &DomainEvent) -> Result<()> {
     let DomainEvent::AutomationRetried(retried) = event else {
         return Ok(());
     };
@@ -32,7 +32,7 @@ pub fn on_automation_retried(vault: &mut UnlockedVault, event: &DomainEvent) -> 
 
 /// A goal was paused: the workflows that only save into it (the event names
 /// them, like `GoalResumed`) stop.
-pub fn on_goal_paused(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<()> {
+pub fn on_goal_paused(vault: &mut Session, event: &DomainEvent) -> Result<()> {
     let DomainEvent::GoalPaused(paused) = event else {
         return Ok(());
     };
@@ -45,7 +45,7 @@ pub fn on_goal_paused(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<
 /// A goal was resumed: the workflows its pause stopped (the event names them,
 /// like `GoalDeleted.workflow_ids`) start again; one switched off by hand
 /// before the pause stays off.
-pub fn on_goal_resumed(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<()> {
+pub fn on_goal_resumed(vault: &mut Session, event: &DomainEvent) -> Result<()> {
     let DomainEvent::GoalResumed(resumed) = event else {
         return Ok(());
     };

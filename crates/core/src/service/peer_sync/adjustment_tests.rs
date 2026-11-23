@@ -38,8 +38,8 @@ fn correction(store_id: &str, lines: &[(AssetRef, &str)], stamp: &str) -> Transa
 /// A wallet with 100 USD (and 1 EUR when `with_second`) and a correction made
 /// after it, on both devices: `(store, correction id)`.
 fn shared_correction(
-    left: &mut UnlockedVault,
-    right: &mut UnlockedVault,
+    left: &mut Session,
+    right: &mut Session,
     lines: &[(AssetRef, &str)],
     with_second: bool,
 ) -> (String, String) {
@@ -66,7 +66,7 @@ fn eur() -> AssetRef {
     AssetRef::fiat("EUR", "Euro")
 }
 
-fn lines_of(vault: &UnlockedVault, id: &str) -> Vec<AdjustmentLine> {
+fn lines_of(vault: &Session, id: &str) -> Vec<AdjustmentLine> {
     vault
         .doc
         .transactions
@@ -78,14 +78,14 @@ fn lines_of(vault: &UnlockedVault, id: &str) -> Vec<AdjustmentLine> {
         .expect("the correction")
 }
 
-fn line_of(vault: &UnlockedVault, id: &str, asset: &AssetRef) -> AdjustmentLine {
+fn line_of(vault: &Session, id: &str, asset: &AssetRef) -> AdjustmentLine {
     lines_of(vault, id)
         .into_iter()
         .find(|line| line.asset.key() == asset.key())
         .expect("the line")
 }
 
-fn set_after(vault: &mut UnlockedVault, id: &str, asset: &AssetRef, after: &str) {
+fn set_after(vault: &mut Session, id: &str, asset: &AssetRef, after: &str) {
     let mut tx = vault
         .doc
         .transactions

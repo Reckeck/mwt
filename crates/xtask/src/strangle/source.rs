@@ -7,7 +7,7 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{ImplItemFn, Item, ItemImpl, Signature, Visibility};
 
-use super::scan::{VAULT_TYPE, names_type};
+use super::scan::names_facade;
 
 /// Replaces `start..end` of a text with `text` (an insertion when the range is empty).
 pub struct Splice {
@@ -62,7 +62,7 @@ pub fn line_range(node: &impl Spanned) -> (usize, usize) {
 }
 
 pub fn is_vault_impl(node: &ItemImpl) -> bool {
-    node.trait_.is_none() && names_type(&node.self_ty, VAULT_TYPE)
+    node.trait_.is_none() && names_facade(&node.self_ty)
 }
 
 /// The methods of one impl block, when it is an inherent `impl UnlockedVault`.

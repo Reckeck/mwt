@@ -1,14 +1,14 @@
 //! Characterization ("golden") tests: each pins an output that a later fix
 //! must NOT change. All instants are fixed; nothing reads the wall clock.
 
-use super::UnlockedVault;
+use super::Session;
 use super::test_support::*;
 use crate::model::store::{Binding, StoreKind, SubType};
 use mwt_reports::overview::{Report, ReportFilter, ReportKind};
 
 /// BTC store (`Cold`): buy 1 @ 40 000 (Jan 1), buy 1 @ 50 000 (Jan 2),
 /// sell 1 @ 60 000 (`sale_day`). Base currency usd.
-fn btc_stream(sale_day: &str) -> (tempfile::TempDir, UnlockedVault, String) {
+fn btc_stream(sale_day: &str) -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = setup();
     vault.set_base_currency("usd");
     let store = vault.doc.stores[1].id.clone();
@@ -24,7 +24,7 @@ fn btc_stream(sale_day: &str) -> (tempfile::TempDir, UnlockedVault, String) {
     (dir, vault, store)
 }
 
-fn avg_cost_of(vault: &UnlockedVault, store: &str) -> Option<crate::Amount> {
+fn avg_cost_of(vault: &Session, store: &str) -> Option<crate::Amount> {
     vault
         .doc
         .holdings
@@ -103,7 +103,7 @@ fn golden_g5_merge_without_corrections() {
     let (_dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     let wallet = store(&mut vault, "Wallet", StoreKind::Crypto, None);
-    let token = |vault: &mut UnlockedVault, name: &str| {
+    let token = |vault: &mut Session, name: &str| {
         crate::usecases::money::stores::create_store_with(
             vault,
             name,

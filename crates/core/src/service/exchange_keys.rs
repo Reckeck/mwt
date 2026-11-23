@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use super::UnlockedVault;
+use super::Session;
 use crate::crypto::SealKey;
 use crate::crypto::header::VaultHeader;
 use crate::error::{Error, Result};
@@ -58,7 +58,7 @@ fn has_secret(keys: &ExchangeKeys) -> bool {
     !keys.api_key.is_empty() && !keys.api_secret.is_empty()
 }
 
-impl UnlockedVault {
+impl Session {
     /// The security level of this session, from the key it was opened with.
     pub fn security_level(&self) -> SecurityLevel {
         match &self.key {
@@ -432,7 +432,7 @@ mod tests {
     use crate::service::StoreExtras;
     use crate::service::test_support::*;
 
-    fn bybit(vault: &mut UnlockedVault, name: &str) -> String {
+    fn bybit(vault: &mut Session, name: &str) -> String {
         crate::usecases::money::stores::create_store_with(
             vault,
             name,
@@ -449,7 +449,7 @@ mod tests {
         .id
     }
 
-    fn level3_with_key() -> (tempfile::TempDir, UnlockedVault, String) {
+    fn level3_with_key() -> (tempfile::TempDir, Session, String) {
         let (dir, mut vault) = empty_vault();
         vault.raise_to_level3_for_tests();
         let store = bybit(&mut vault, "Bybit");
@@ -579,7 +579,7 @@ mod tests {
         drop(vault);
         assert!(!contains(&std::fs::read(&path).unwrap(), "OLDSECRET789"));
 
-        let reopened = UnlockedVault::open(path.clone(), "pw").unwrap();
+        let reopened = Session::open(path.clone(), "pw").unwrap();
         let (doc, _) = crate::storage::VaultFile::open(&path, "pw").unwrap();
         assert!(doc.exchanges.bybit.is_empty());
         let key = reopened.device_key(&store).unwrap().expect("moved");
@@ -619,7 +619,7 @@ mod tests {
             fmt,
         )
         .unwrap();
-        let vault = UnlockedVault::open(path.clone(), "pw").unwrap();
+        let vault = Session::open(path.clone(), "pw").unwrap();
         drop(vault);
         let (on_disk, _) = crate::storage::VaultFile::open(&path, "pw").unwrap();
         assert!(
@@ -629,7 +629,7 @@ mod tests {
         assert!(!contains(&std::fs::read(&path).unwrap(), "OLDSECRET789"));
         let raw = std::fs::read(device_secrets::secrets_path(&path)).unwrap();
         assert!(!contains(&raw, "OLDSECRET789"));
-        let vault = UnlockedVault::open(path, "pw").unwrap();
+        let vault = Session::open(path, "pw").unwrap();
         let moved = vault.device_secrets_for_request().unwrap();
         assert_eq!(moved.bybit.len(), 1);
         assert_eq!(moved.bybit[0].keys.api_secret, "OLDSECRET789");
@@ -646,7 +646,7 @@ mod tests {
         bytes[last] ^= 0x40;
         std::fs::write(&secrets, &bytes).unwrap();
         // The vault still opens; the key does not.
-        let vault = UnlockedVault::open(path, "pw").unwrap();
+        let vault = Session::open(path, "pw").unwrap();
         assert!(matches!(vault.device_key(&store), Err(Error::Secret)));
         assert!(matches!(
             vault.device_secrets_for_request(),
@@ -745,7 +745,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v.wallet");
         std::fs::write(device_secrets::secrets_path(&path), b"stale").unwrap();
-        let _vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        let _vault = Session::create(path.clone(), "pw").unwrap();
         assert!(!device_secrets::secrets_path(&path).exists());
     }
 }

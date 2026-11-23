@@ -11,7 +11,7 @@ use syn::{
     Meta, Type, Visibility,
 };
 
-use super::{Call, FileFacts, Method, ModDecl, TestFn, VAULT_RECEIVERS, VAULT_TYPE};
+use super::{Call, FACADE_TYPES, FileFacts, Method, ModDecl, TestFn, VAULT_RECEIVERS};
 
 pub fn scan_source(source: &str) -> Result<FileFacts> {
     let file = syn::parse_file(source).context("parse")?;
@@ -99,7 +99,7 @@ impl<'ast> Visit<'ast> for Scanner {
     }
 
     fn visit_item_impl(&mut self, node: &'ast ItemImpl) {
-        let vault = node.trait_.is_none() && names_type(&node.self_ty, VAULT_TYPE);
+        let vault = node.trait_.is_none() && names_facade(&node.self_ty);
         let outer = std::mem::replace(&mut self.in_vault_impl, vault);
         self.with_test(test_attr_line(&node.attrs).is_some(), |this| {
             visit::visit_item_impl(this, node);
@@ -300,7 +300,11 @@ fn idents_of(tokens: TokenStream) -> Vec<String> {
     found
 }
 
-pub(in crate::strangle) fn names_type(ty: &Type, name: &str) -> bool {
+pub(in crate::strangle) fn names_facade(ty: &Type) -> bool {
+    FACADE_TYPES.iter().any(|name| names_type(ty, name))
+}
+
+fn names_type(ty: &Type, name: &str) -> bool {
     matches!(ty, Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == name))
 }
 

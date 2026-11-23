@@ -9,7 +9,7 @@ use super::*;
 use crate::household::contacts::ContactDraft;
 use crate::model::contact::ContactKind;
 
-fn contact(vault: &mut UnlockedVault, name: &str) -> String {
+fn contact(vault: &mut Session, name: &str) -> String {
     let created = crate::usecases::household::contacts::create_contact(
         vault,
         ContactDraft {
@@ -33,8 +33,8 @@ fn peer() -> PeerRef {
 
 /// What `right` has and `left` lacks, with the record `bad` broken.
 fn incoming_with(
-    left: &mut UnlockedVault,
-    right: &mut UnlockedVault,
+    left: &mut Session,
+    right: &mut Session,
     bad: &str,
 ) -> BTreeMap<String, RecordState> {
     let mine = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
@@ -78,7 +78,7 @@ fn a_skipped_record_is_journaled_once_not_every_session() {
     let incoming = incoming_with(&mut left, &mut right, &bad);
 
     peer_sync::sync_apply(&mut left, &incoming, &peer()).unwrap();
-    let failed = |vault: &UnlockedVault| {
+    let failed = |vault: &Session| {
         peer_sync::sync_state(vault)
             .journal
             .iter()

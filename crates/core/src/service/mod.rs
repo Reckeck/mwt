@@ -1037,7 +1037,7 @@ mod tests {
         let exchange = store(&mut vault, "Bybit", StoreKind::Exchange, None);
         let sub = store(&mut vault, "Spot", StoreKind::Exchange, Some(&exchange));
         let usd_account = store(&mut vault, "USD", StoreKind::Bank, Some(&bank));
-        let find = |vault: &UnlockedVault, id: &str| {
+        let find = |vault: &Session, id: &str| {
             crate::money::tree::find_store(&vault.doc, id)
                 .unwrap()
                 .in_budget()
@@ -1084,7 +1084,7 @@ mod tests {
 
     // -- wallet tree -----------------------------------------------------------
 
-    fn node(vault: &mut UnlockedVault, name: &str, parent: Option<&str>) -> String {
+    fn node(vault: &mut Session, name: &str, parent: Option<&str>) -> String {
         crate::usecases::money::stores::create_store(
             vault,
             name,
@@ -1112,9 +1112,9 @@ mod tests {
     }
 
     /// Bybit › Spot, Bybit › Futures, plus an empty exchange Ledger and a Bank.
-    fn two_levels() -> (tempfile::TempDir, UnlockedVault, [String; 5]) {
+    fn two_levels() -> (tempfile::TempDir, Session, [String; 5]) {
         let dir = tempdir().unwrap();
-        let mut vault = UnlockedVault::create(dir.path().join("tree.wallet"), "pw").unwrap();
+        let mut vault = Session::create(dir.path().join("tree.wallet"), "pw").unwrap();
         let bybit = node(&mut vault, "Bybit", None);
         let spot = node(&mut vault, "Spot", Some(&bybit));
         let futures = crate::usecases::money::stores::create_store_with(
@@ -1340,7 +1340,7 @@ mod tests {
     #[test]
     fn tree_totals_roll_up() {
         let dir = tempdir().unwrap();
-        let mut vault = UnlockedVault::create(dir.path().join("tree.wallet"), "pw").unwrap();
+        let mut vault = Session::create(dir.path().join("tree.wallet"), "pw").unwrap();
         let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
         let card = store(&mut vault, "Card", StoreKind::Bank, Some(&bank));
         crate::usecases::money::transactions::add_transaction(
@@ -1570,7 +1570,7 @@ mod tests {
             binding,
             ..StoreExtras::default()
         };
-        let create = |vault: &mut UnlockedVault, extras| {
+        let create = |vault: &mut Session, extras| {
             crate::usecases::money::stores::create_store_with(
                 vault,
                 "Sub",
@@ -1848,7 +1848,7 @@ mod tests {
     #[test]
     fn summary_uses_the_latest_base_rate() {
         let dir = tempdir().unwrap();
-        let mut vault = UnlockedVault::create(dir.path().join("fx.wallet"), "pw").unwrap();
+        let mut vault = Session::create(dir.path().join("fx.wallet"), "pw").unwrap();
         vault.set_base_currency("rub");
         assert_eq!(
             crate::usecases::money::capital::portfolio_summary(&vault.books()).base_fx_as_of,
@@ -1890,20 +1890,17 @@ mod tests {
     fn change_password_rekeys_the_file() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("pw.wallet");
-        let mut vault = UnlockedVault::create(path.clone(), "old").unwrap();
+        let mut vault = Session::create(path.clone(), "old").unwrap();
         vault.change_password("old", "new").unwrap();
-        assert!(UnlockedVault::open(path.clone(), "new").is_ok());
-        assert!(matches!(
-            UnlockedVault::open(path, "old"),
-            Err(Error::Secret)
-        ));
+        assert!(Session::open(path.clone(), "new").is_ok());
+        assert!(matches!(Session::open(path, "old"), Err(Error::Secret)));
     }
 
     #[test]
     fn change_password_reseals_the_pre_sync_backups() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("pw.wallet");
-        let mut vault = UnlockedVault::create(path.clone(), "old").unwrap();
+        let mut vault = Session::create(path.clone(), "old").unwrap();
         peer_sync::sync_backup(&mut vault).unwrap();
         peer_sync::sync_backup(&mut vault).unwrap();
         assert!(peer_sync::has_sync_backup(&vault));
@@ -1926,7 +1923,7 @@ mod tests {
     fn change_password_rejects_a_wrong_current_one() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("pw.wallet");
-        let mut vault = UnlockedVault::create(path.clone(), "old").unwrap();
+        let mut vault = Session::create(path.clone(), "old").unwrap();
         let before = std::fs::read(&path).unwrap();
         assert!(matches!(
             vault.change_password("nope", "new"),
@@ -1937,7 +1934,7 @@ mod tests {
             Err(Error::InvalidInput(_))
         ));
         assert_eq!(std::fs::read(&path).unwrap(), before);
-        assert!(UnlockedVault::open(path, "old").is_ok());
+        assert!(Session::open(path, "old").is_ok());
     }
 
     #[derive(Default)]
@@ -1953,7 +1950,7 @@ mod tests {
     fn a_mirror_gets_exactly_the_saved_file() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("mirror.wallet");
-        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        let mut vault = Session::create(path.clone(), "pw").unwrap();
         let mirror = std::sync::Arc::new(RecordingMirror::default());
         vault.set_mirror(Some(mirror.clone()));
         assert!(vault.has_mirror());
@@ -1977,10 +1974,10 @@ mod tests {
     // -- analytics -----------------------------------------------------------
 
     /// Fixture: two bank stores, each holding a known USD balance.
-    fn two_stores_with_quotes() -> (tempfile::TempDir, UnlockedVault) {
+    fn two_stores_with_quotes() -> (tempfile::TempDir, Session) {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.wallet");
-        let mut vault = UnlockedVault::create(path, "pw").unwrap();
+        let mut vault = Session::create(path, "pw").unwrap();
         let bank_a = crate::usecases::money::stores::create_store(
             &mut vault,
             "A",
@@ -2197,7 +2194,7 @@ mod tests {
     fn average_cost_is_consistent_with_pnl() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        let cost_of = |vault: &UnlockedVault| {
+        let cost_of = |vault: &Session| {
             vault
                 .doc
                 .holdings
@@ -2327,7 +2324,7 @@ mod tests {
         for (name, bytes) in V4_FIXTURES {
             let dir = tempdir().unwrap();
             let path = v4_vault_at(dir.path(), bytes);
-            let vault = UnlockedVault::open(path.clone(), V4_PASSWORD).unwrap();
+            let vault = Session::open(path.clone(), V4_PASSWORD).unwrap();
             assert_eq!(std::fs::read(bak_of(&path)).unwrap(), bytes, "{name}");
             assert_eq!(container_of(&path), 2, "{name}");
             let (reread, _) = VaultFile::open(&path, V4_PASSWORD).unwrap();
@@ -2355,7 +2352,7 @@ mod tests {
         for (name, bytes) in V4_FIXTURES {
             let dir = tempdir().unwrap();
             let path = v4_vault_at(dir.path(), bytes);
-            let mut vault = UnlockedVault::open(path, V4_PASSWORD).unwrap();
+            let mut vault = Session::open(path, V4_PASSWORD).unwrap();
             assert!(
                 crate::usecases::sync::repair::repair_invariants(&mut vault, None)
                     .unwrap()
@@ -2371,9 +2368,9 @@ mod tests {
         for (name, bytes) in V4_FIXTURES {
             let dir = tempdir().unwrap();
             let path = v4_vault_at(dir.path(), bytes);
-            drop(UnlockedVault::open(path.clone(), V4_PASSWORD).unwrap());
+            drop(Session::open(path.clone(), V4_PASSWORD).unwrap());
             let vault_bytes = std::fs::read(&path).unwrap();
-            drop(UnlockedVault::open(path.clone(), V4_PASSWORD).unwrap());
+            drop(Session::open(path.clone(), V4_PASSWORD).unwrap());
             assert_eq!(std::fs::read(&path).unwrap(), vault_bytes, "{name}");
             assert_eq!(std::fs::read(bak_of(&path)).unwrap(), bytes, "{name}");
         }
@@ -2409,7 +2406,7 @@ mod tests {
         let converted = decoded.carry.as_ref().unwrap().adoption.converted;
         assert!(converted > 0);
         let stale = decoded.doc.holdings.clone();
-        let vault = UnlockedVault::open(path.clone(), "").unwrap();
+        let vault = Session::open(path.clone(), "").unwrap();
         assert!(vault.doc.crypto_events.len() as u32 >= converted);
         assert_ne!(vault.doc.holdings, stale);
         let (reread, _) = VaultFile::open(&path, "").unwrap();
@@ -2451,7 +2448,7 @@ mod tests {
             let path = v4_vault_at(dir.path(), bytes);
             VaultFile::backup_version(&path, 4).unwrap();
             assert_eq!(std::fs::read(&path).unwrap(), bytes, "{name}");
-            drop(UnlockedVault::open(path.clone(), V4_PASSWORD).unwrap());
+            drop(Session::open(path.clone(), V4_PASSWORD).unwrap());
             assert_eq!(std::fs::read(bak_of(&path)).unwrap(), bytes, "{name}");
             assert_eq!(container_of(&path), 2, "{name}");
         }
@@ -2465,10 +2462,10 @@ mod import_tests {
     use crate::exchange::staging::PendingImportExt;
     use tempfile::tempdir;
 
-    fn setup() -> (tempfile::TempDir, UnlockedVault) {
+    fn setup() -> (tempfile::TempDir, Session) {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.wallet");
-        let mut vault = UnlockedVault::create(path, "pw").unwrap();
+        let mut vault = Session::create(path, "pw").unwrap();
         crate::usecases::money::stores::create_store_with(
             &mut vault,
             "Bybit",
@@ -3124,7 +3121,7 @@ mod persist_tests {
     fn every_settings_field_survives_a_restart() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("settings.wallet");
-        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        let mut vault = Session::create(path.clone(), "pw").unwrap();
 
         let edited = Settings {
             display_decimals: 6,
@@ -3230,7 +3227,7 @@ mod persist_tests {
     fn settings_survive_a_json_editor_replace() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("editor.wallet");
-        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        let mut vault = Session::create(path.clone(), "pw").unwrap();
         vault.doc.settings.display_decimals = 4;
         vault.doc.settings.fx_refresh_interval_sec = 1800;
         vault.persist().unwrap();

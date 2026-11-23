@@ -39,7 +39,7 @@ fn doge_ref() -> AssetRef {
 }
 
 /// A followed address with the wallet that shows it (decision P5).
-fn followed(vault: &mut UnlockedVault, account_id: &str, name: &str, address: &str) -> String {
+fn followed(vault: &mut Session, account_id: &str, name: &str, address: &str) -> String {
     vault.doc.crypto_accounts.push(CryptoAccount::new(
         account_id,
         name,
@@ -58,7 +58,7 @@ fn followed(vault: &mut UnlockedVault, account_id: &str, name: &str, address: &s
     wallet
 }
 
-fn archive(vault: &mut UnlockedVault, store_id: &str) {
+fn archive(vault: &mut Session, store_id: &str) {
     vault
         .doc
         .stores
@@ -106,7 +106,7 @@ fn moved(
 }
 
 /// What the module knows a unit cost on every day of the month (spec E4).
-fn priced(vault: &mut UnlockedVault, asset: &CryptoAsset, usd: &str) {
+fn priced(vault: &mut Session, asset: &CryptoAsset, usd: &str) {
     for day in 1..=31 {
         vault.doc.crypto_prices.push(CryptoPricePoint {
             token_key: asset.key(),
@@ -118,7 +118,7 @@ fn priced(vault: &mut UnlockedVault, asset: &CryptoAsset, usd: &str) {
 }
 
 /// The ordinary price cache: what every holding is valued from.
-fn quote(vault: &mut UnlockedVault, asset: &AssetRef, usd: &str) {
+fn quote(vault: &mut Session, asset: &AssetRef, usd: &str) {
     vault.doc.price_cache.push(PricePoint {
         asset_key: asset.key(),
         value_usd: amount(usd),
@@ -755,7 +755,7 @@ fn dated(mut tx: Transaction, stamp: &str) -> Transaction {
 }
 
 /// A vault whose capital is counted in dollars, like the reports tests.
-fn usd_vault() -> (tempfile::TempDir, UnlockedVault) {
+fn usd_vault() -> (tempfile::TempDir, Session) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
@@ -764,7 +764,7 @@ fn usd_vault() -> (tempfile::TempDir, UnlockedVault) {
 
 /// A reading the module wrote down that day (spec E5 writes one per
 /// account on every read, with the day in the id).
-fn recorded(vault: &mut UnlockedVault, account_id: &str, moment: &str, usd: &str) {
+fn recorded(vault: &mut Session, account_id: &str, moment: &str, usd: &str) {
     vault.doc.crypto_snapshots.push(CryptoSnapshot {
         id: crate::cryptotrack::engine::ids::snapshot(Some(account_id), moment),
         at: moment.to_string(),
@@ -773,7 +773,7 @@ fn recorded(vault: &mut UnlockedVault, account_id: &str, moment: &str, usd: &str
     });
 }
 
-fn points_of(vault: &UnlockedVault, filter: &ReportFilter) -> Vec<NetworthPoint> {
+fn points_of(vault: &Session, filter: &ReportFilter) -> Vec<NetworthPoint> {
     let now = unix_secs(NOW).expect("the clock parses");
     match crate::reports::overview::report(&vault.books(), ReportKind::Networth, filter, now, "UTC")
         .expect("the report runs")
@@ -783,7 +783,7 @@ fn points_of(vault: &UnlockedVault, filter: &ReportFilter) -> Vec<NetworthPoint>
     }
 }
 
-fn history(vault: &UnlockedVault, from: &str, to: &str) -> Vec<NetworthPoint> {
+fn history(vault: &Session, from: &str, to: &str) -> Vec<NetworthPoint> {
     points_of(
         vault,
         &ReportFilter {

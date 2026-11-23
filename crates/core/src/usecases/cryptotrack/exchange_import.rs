@@ -22,12 +22,12 @@ use crate::model::store::{MarketKind, StoreKind, SubType, TerminalState};
 use crate::model::vault::PendingImport;
 use crate::money::books::Books;
 use crate::money::tree;
-use crate::service::{MAX_PENDING_IMPORTS, StoreExtras, UnlockedVault};
+use crate::service::{MAX_PENDING_IMPORTS, Session, StoreExtras};
 use crate::usecases::money::stores::rebase_and_commit;
 use mwt_cryptotrack::exchange_sync::TerminalPatch;
 
 /// Status of the Bybit key stored for exactly this store.
-pub fn exchange_key_status(vault: &UnlockedVault, store_id: &str) -> ExchangeKeyStatus {
+pub fn exchange_key_status(vault: &Session, store_id: &str) -> ExchangeKeyStatus {
     vault
         .doc
         .exchanges
@@ -48,7 +48,7 @@ pub fn exchange_key_status(vault: &UnlockedVault, store_id: &str) -> ExchangeKey
 /// stores it verified). Level 3 only. Sub-account targets of a replaced key
 /// are kept.
 pub fn set_exchange_key(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     api_key: &str,
     api_secret: &str,
@@ -60,7 +60,7 @@ pub fn set_exchange_key(
 /// Point imported spot / futures fills at sub-accounts of the key's
 /// store. Each target must be an exchange store inside that wallet.
 pub fn set_exchange_targets(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     spot_store_id: Option<String>,
     futures_store_id: Option<String>,
@@ -97,7 +97,7 @@ pub fn set_exchange_targets(
 /// Stage fills for user confirmation, once per `exec_id`: re-importing the
 /// same history is idempotent. Nothing here touches `transactions` — the
 /// user has to confirm first. Returns how many fills were newly staged.
-pub fn stage_imports(vault: &mut UnlockedVault, imports: Vec<PendingImport>) -> Result<u32> {
+pub fn stage_imports(vault: &mut Session, imports: Vec<PendingImport>) -> Result<u32> {
     let staged = rules::plan_staging(
         &vault.books(),
         imports,
@@ -122,7 +122,7 @@ pub fn stage_imports(vault: &mut UnlockedVault, imports: Vec<PendingImport>) -> 
 /// validation (its store was archived, say) stays staged. The queue and the
 /// transactions change in one edit and the holdings are re-derived before the
 /// one write.
-pub fn confirm_pending_imports(vault: &mut UnlockedVault, exec_ids: &[String]) -> Result<u32> {
+pub fn confirm_pending_imports(vault: &mut Session, exec_ids: &[String]) -> Result<u32> {
     let plan = rules::plan_confirmation(&vault.books(), exec_ids, |tx| {
         crate::usecases::household::validate::validate_transaction(vault, tx).is_ok()
     });
@@ -144,7 +144,7 @@ pub fn confirm_pending_imports(vault: &mut UnlockedVault, exec_ids: &[String]) -
 
 /// Drop staged fills without creating transactions; their ids are
 /// remembered. An empty `exec_ids` discards everything.
-pub fn discard_pending_imports(vault: &mut UnlockedVault, exec_ids: &[String]) -> Result<u32> {
+pub fn discard_pending_imports(vault: &mut Session, exec_ids: &[String]) -> Result<u32> {
     if rules::pending_named(&vault.doc, exec_ids) == 0 {
         return Ok(0);
     }
@@ -154,7 +154,7 @@ pub fn discard_pending_imports(vault: &mut UnlockedVault, exec_ids: &[String]) -
 /// Give a Bybit wallet its three accounts — Funding, Unified Trading and
 /// Earn — creating the ones missing. Returns the ids `(funding, unified, earn)`.
 pub fn ensure_bybit_accounts(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     names: [&str; 3],
 ) -> Result<[String; 3]> {
@@ -165,7 +165,7 @@ pub fn ensure_bybit_accounts(
 /// [`ensure_bybit_accounts`] for the accounts `wanted` (funding, unified,
 /// earn); the others are left alone.
 pub fn ensure_bybit_accounts_for(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     names: [&str; 3],
     wanted: [bool; 3],
@@ -265,11 +265,7 @@ pub fn bybit_reconcile(
 
 /// Background import interval of one exchange; `0` disables it, otherwise it
 /// is kept between a minute and a day.
-pub fn set_import_interval(
-    vault: &mut UnlockedVault,
-    store_id: &str,
-    interval_sec: u32,
-) -> Result<()> {
+pub fn set_import_interval(vault: &mut Session, store_id: &str, interval_sec: u32) -> Result<()> {
     vault.transact(|tx| {
         exchange_profile_mut(tx.doc_mut(), store_id)?.import_interval_sec =
             rules::clamp_interval(interval_sec);
@@ -280,9 +276,7 @@ pub fn set_import_interval(
 /// Exchanges with a key on this device whose background import is on,
 /// with their interval. Empty below level 3 (a stored key is not used
 /// there) and when the device file does not open. The keys zeroize on drop.
-pub fn import_schedule(
-    vault: &UnlockedVault,
-) -> Vec<(u32, crate::vault_io::device_secrets::DeviceKey)> {
+pub fn import_schedule(vault: &Session) -> Vec<(u32, crate::vault_io::device_secrets::DeviceKey)> {
     if !vault.keys_on_device() || vault.doc.exchanges.bybit.is_empty() {
         return Vec::new();
     }
@@ -325,7 +319,7 @@ fn patched(mut terminal: TerminalState, patch: TerminalPatch) -> TerminalState {
 /// Patch the terminal of one exchange. The terminal re-sends its state on
 /// every symbol or timeframe click, so an unchanged state writes nothing.
 pub fn update_terminal_state(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     patch: TerminalPatch,
 ) -> Result<TerminalState> {
@@ -339,7 +333,7 @@ pub fn update_terminal_state(
 
 /// Replace one symbol's drawings; an empty export removes the entry.
 pub fn save_terminal_drawings(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     symbol: &str,
     json: &str,
@@ -357,11 +351,7 @@ pub fn save_terminal_drawings(
 }
 
 /// Put `terminal` into the wallet's profile: one `transact`.
-fn write_terminal(
-    vault: &mut UnlockedVault,
-    store_id: &str,
-    terminal: TerminalState,
-) -> Result<()> {
+fn write_terminal(vault: &mut Session, store_id: &str, terminal: TerminalState) -> Result<()> {
     vault.transact(|tx| {
         exchange_profile_mut(tx.doc_mut(), store_id)?.terminal = terminal;
         Ok(())

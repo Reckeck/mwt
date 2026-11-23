@@ -9,7 +9,7 @@ use crate::usecases::sync::peer_sync;
 
 const COPY: &str = "Copy";
 
-fn comment_of(vault: &UnlockedVault, id: &str) -> String {
+fn comment_of(vault: &Session, id: &str) -> String {
     vault
         .doc
         .transactions
@@ -21,7 +21,7 @@ fn comment_of(vault: &UnlockedVault, id: &str) -> String {
         .expect("the transaction exists")
 }
 
-fn set_comment(vault: &mut UnlockedVault, id: &str, text: &str) {
+fn set_comment(vault: &mut Session, id: &str, text: &str) {
     for tx in &mut vault.doc.transactions {
         if let Transaction::Topup(topup) = tx
             && topup.meta.id == id
@@ -37,7 +37,7 @@ fn set_comment(vault: &mut UnlockedVault, id: &str, text: &str) {
 fn unstamped_pair(
     left_text: &str,
     right_text: &str,
-) -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
+) -> (tempfile::TempDir, Session, Session, String) {
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
     crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "base"))

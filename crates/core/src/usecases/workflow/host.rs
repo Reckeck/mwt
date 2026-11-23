@@ -1,5 +1,5 @@
 //! The vault as the host of a workflow run: every lookup and every `Effect`
-//! the executor asks for, answered from `UnlockedVault` (spec core-strangler,
+//! the executor asks for, answered from `Session` (spec core-strangler,
 //! F6). The executor itself does not know the vault.
 
 use std::collections::HashSet;
@@ -12,7 +12,7 @@ use crate::model::inflation::InflationReading;
 use crate::model::planning::{RejectReason, Reminder};
 use crate::model::store::{AssetRef, StoreScope};
 use crate::model::transaction::Transaction;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::workflow::host::{
     BudgetReading, Checkpoint, EmergencyReading, GoalReading, RecurringReading, TopupBasket,
     TopupReading, WorkflowHost,
@@ -20,9 +20,9 @@ use crate::workflow::host::{
 use crate::workflow::model::{VarScope, Workflow};
 use crate::workflow::types::WfValue;
 
-impl WorkflowHost for UnlockedVault {
+impl WorkflowHost for Session {
     fn base_currency(&self) -> String {
-        UnlockedVault::base_currency(self).to_string()
+        Session::base_currency(self).to_string()
     }
 
     fn wf_asset(&self, symbol: &str) -> AssetRef {

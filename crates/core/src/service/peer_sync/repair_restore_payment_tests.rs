@@ -25,7 +25,7 @@ fn guest(name: &str) -> SharedParticipantDraft {
     }
 }
 
-fn balance(vault: &UnlockedVault, store_id: &str) -> crate::Amount {
+fn balance(vault: &Session, store_id: &str) -> crate::Amount {
     vault
         .doc
         .holdings
@@ -35,7 +35,7 @@ fn balance(vault: &UnlockedVault, store_id: &str) -> crate::Amount {
         .fold(crate::Amount::ZERO, |sum, quantity| sum + quantity)
 }
 
-fn has_tx(vault: &UnlockedVault, tx_id: &str) -> bool {
+fn has_tx(vault: &Session, tx_id: &str) -> bool {
     vault
         .doc
         .transactions
@@ -44,14 +44,7 @@ fn has_tx(vault: &UnlockedVault, tx_id: &str) -> bool {
 }
 
 /// Two synced devices, a wallet with 100 and a 3 payment, an event with a guest.
-fn setup() -> (
-    tempfile::TempDir,
-    UnlockedVault,
-    UnlockedVault,
-    String,
-    String,
-    String,
-) {
+fn setup() -> (tempfile::TempDir, Session, Session, String, String, String) {
     let (dir, mut left, mut right) = two_devices();
     let store_id = left.doc.stores[0].id.clone();
     crate::usecases::money::transactions::add_transaction(
@@ -79,7 +72,7 @@ fn setup() -> (
     (dir, left, right, store_id, event.id, paid.meta().id.clone())
 }
 
-fn attach(vault: &mut UnlockedVault, event_id: &str, tx_id: &str) {
+fn attach(vault: &mut Session, event_id: &str, tx_id: &str) {
     crate::usecases::household::shared_events::attach_payment_to_shared_event(
         vault,
         AttachPaymentInput {
@@ -92,7 +85,7 @@ fn attach(vault: &mut UnlockedVault, event_id: &str, tx_id: &str) {
     .unwrap();
 }
 
-fn linked(vault: &UnlockedVault, tx_id: &str) -> bool {
+fn linked(vault: &Session, tx_id: &str) -> bool {
     vault.doc.shared_events[0]
         .items
         .iter()
@@ -225,7 +218,7 @@ fn a_settlement_never_names_a_transfer_that_is_gone() {
             }
         }
     }
-    let by_id = |vault: &UnlockedVault| {
+    let by_id = |vault: &Session| {
         let mut all = vault.doc.transactions.clone();
         all.sort_by(|first, second| first.meta().id.cmp(&second.meta().id));
         all

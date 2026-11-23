@@ -14,7 +14,7 @@ fn pause() {
 }
 
 /// An automation's operation for one planned moment; its id.
-fn rent(vault: &mut UnlockedVault, comment: &str) -> String {
+fn rent(vault: &mut Session, comment: &str) -> String {
     let cash = vault.doc.stores[0].id.clone();
     let mut tx = income(&cash, "100", comment);
     if let Transaction::Topup(topup) = &mut tx {
@@ -30,7 +30,7 @@ fn rent(vault: &mut UnlockedVault, comment: &str) -> String {
         .clone()
 }
 
-fn comments(vault: &UnlockedVault) -> Vec<String> {
+fn comments(vault: &Session) -> Vec<String> {
     let mut out: Vec<String> = vault
         .doc
         .transactions
@@ -42,7 +42,7 @@ fn comments(vault: &UnlockedVault) -> Vec<String> {
 }
 
 /// Another batch arrives on both devices, so the dedupe runs on each.
-fn touch_and_settle(left: &mut UnlockedVault, right: &mut UnlockedVault, name: &str) {
+fn touch_and_settle(left: &mut Session, right: &mut Session, name: &str) {
     left.doc.stores[0].name = name.into();
     left.persist().unwrap();
     right.doc.stores[0].color = "#123456".into();
@@ -52,7 +52,7 @@ fn touch_and_settle(left: &mut UnlockedVault, right: &mut UnlockedVault, name: &
 
 /// Two copies of one moment on `left`; a batch that merged one away; undone.
 /// Returns the id of the copy the undo brought back.
-fn undone_merge(left: &mut UnlockedVault, right: &mut UnlockedVault) -> String {
+fn undone_merge(left: &mut Session, right: &mut Session) -> String {
     rent(left, "first");
     pause();
     let late = rent(left, "second");
@@ -67,7 +67,7 @@ fn undone_merge(left: &mut UnlockedVault, right: &mut UnlockedVault) -> String {
     late
 }
 
-fn kept(vault: &UnlockedVault, id: &str) -> bool {
+fn kept(vault: &Session, id: &str) -> bool {
     vault
         .doc
         .transactions

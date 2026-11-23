@@ -18,7 +18,7 @@ fn pause() {
     std::thread::sleep(std::time::Duration::from_millis(3));
 }
 
-fn event_with_guest(vault: &mut UnlockedVault, title: &str, currency: &str) -> (String, String) {
+fn event_with_guest(vault: &mut Session, title: &str, currency: &str) -> (String, String) {
     let event = crate::usecases::household::shared_events::create_shared_event(
         vault,
         SharedEventDraft {
@@ -36,7 +36,7 @@ fn event_with_guest(vault: &mut UnlockedVault, title: &str, currency: &str) -> (
     (event.id, event.participants[0].id.clone())
 }
 
-fn contacts_named(vault: &UnlockedVault, name: &str) -> Vec<Contact> {
+fn contacts_named(vault: &Session, name: &str) -> Vec<Contact> {
     vault
         .doc
         .contacts
@@ -46,7 +46,7 @@ fn contacts_named(vault: &UnlockedVault, name: &str) -> Vec<Contact> {
         .collect()
 }
 
-fn paid(vault: &mut UnlockedVault) -> String {
+fn paid(vault: &mut Session) -> String {
     let wallet = store(vault, "bank", StoreKind::Bank, None);
     let tx = payment(&wallet, "10", "taxi");
     let id = tx.meta().id.clone();
@@ -54,7 +54,7 @@ fn paid(vault: &mut UnlockedVault) -> String {
     id
 }
 
-fn attach(vault: &mut UnlockedVault, event_id: &str, tx_id: &str, title: &str) {
+fn attach(vault: &mut Session, event_id: &str, tx_id: &str, title: &str) {
     crate::usecases::household::shared_events::attach_payment_to_shared_event(
         vault,
         AttachPaymentInput {
@@ -68,7 +68,7 @@ fn attach(vault: &mut UnlockedVault, event_id: &str, tx_id: &str, title: &str) {
 }
 
 /// `(event id, purchase id)` of every link purchase of the operation.
-fn links_of(vault: &UnlockedVault, tx_id: &str) -> Vec<(String, String)> {
+fn links_of(vault: &Session, tx_id: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for event in &vault.doc.shared_events {
         for purchase in event.items.iter().flat_map(|item| &item.purchases) {
@@ -463,7 +463,7 @@ fn a_purchase_beside_a_currency_change_is_flagged_for_a_rate_on_every_device() {
         },
     )
     .unwrap();
-    let buy = |vault: &mut UnlockedVault, currency: &str| {
+    let buy = |vault: &mut Session, currency: &str| {
         crate::usecases::household::shared_events::add_shared_purchase(
             vault,
             &event_id,

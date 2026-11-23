@@ -5,9 +5,9 @@ use crate::calendar::Calendar;
 use crate::model::planning::Automation;
 use crate::model::transaction::Transaction;
 
-use super::UnlockedVault;
+use super::Session;
 
-impl UnlockedVault {
+impl Session {
     /// The template the next run books: with an amount that differs, at the
     /// current estimate. Only the automation tests read it; the budget calls
     /// the rule directly.

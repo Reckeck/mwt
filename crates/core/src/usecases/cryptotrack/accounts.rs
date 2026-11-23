@@ -32,7 +32,7 @@ use crate::model::cryptotrack::{
 use crate::model::store::{Store, StoreKind};
 use crate::model::vault::VaultDoc;
 use crate::money::books::Books;
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 use crate::time::{secs_or_now, unix_secs};
 
 /// A secret in any of these texts is refused: they are stored in the vault and
@@ -167,7 +167,7 @@ fn crypto_quarantine_by_account(books: &Books<'_>) -> BTreeMap<String, Vec<Quara
 /// Follow a public address: a wallet of kind `Crypto` and its account,
 /// made together. Nothing is stored when anything is refused.
 pub fn crypto_connect_address(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: &ConnectAddressInput,
 ) -> Result<ConnectAddressResult> {
     // First of all, before anything is looked at for anything else.
@@ -208,7 +208,7 @@ pub fn crypto_connect_address(
 
 /// Rename an account, change its note, or stop counting it (archive) and
 /// start again.
-pub fn crypto_update_account(vault: &mut UnlockedVault, input: &UpdateAccountInput) -> Result<()> {
+pub fn crypto_update_account(vault: &mut Session, input: &UpdateAccountInput) -> Result<()> {
     let account = vault
         .doc
         .crypto_accounts
@@ -248,7 +248,7 @@ pub fn crypto_update_account(vault: &mut UnlockedVault, input: &UpdateAccountInp
 /// cursors go, the operations already read stay until the module is wiped
 /// (spec E12). The wallet that showed it is archived, because nothing drives
 /// it any more and it must not turn into a hand-kept wallet.
-pub fn crypto_forget_account(vault: &mut UnlockedVault, account_id: &str) -> Result<()> {
+pub fn crypto_forget_account(vault: &mut Session, account_id: &str) -> Result<()> {
     if !vault
         .doc
         .crypto_accounts
@@ -838,7 +838,7 @@ mod tests {
         .unwrap();
         let path = vault.path.clone();
         drop(vault);
-        let reopened = UnlockedVault::open(path, "pw").unwrap();
+        let reopened = Session::open(path, "pw").unwrap();
         let account = reopened
             .doc
             .crypto_accounts

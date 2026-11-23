@@ -5,8 +5,8 @@ use crate::exchange::{Execution, InterTransfer};
 use crate::model::store::ExchangeProvider;
 use crate::model::store::StoreKind;
 use crate::model::vault::PendingImport;
+use crate::service::Session;
 use crate::service::StoreExtras;
-use crate::service::UnlockedVault;
 
 const ACCOUNT_NAMES: [&str; 3] = ["Funding", "Unified", "Earn"];
 /// The fills happen on 2023-11-14 UTC.
@@ -14,9 +14,9 @@ const DAY_MS: u64 = 1_700_000_000_000;
 const AT: &str = "2023-11-15T00:00:00Z";
 
 /// A Bybit wallet as an older build left it: `(dir, vault, wallet)`.
-fn bybit_wallet() -> (tempfile::TempDir, UnlockedVault, String) {
+fn bybit_wallet() -> (tempfile::TempDir, Session, String) {
     let dir = tempfile::tempdir().unwrap();
-    let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+    let mut vault = Session::create(dir.path().join("test.wallet"), "pw").unwrap();
     let wallet = crate::usecases::money::stores::create_store_with(
         &mut vault,
         "Bybit",
@@ -81,7 +81,7 @@ fn moved(store: &str, transfer_id: &str, at: u64) -> PendingImport {
 
 /// Everything the conversion writes, as the sync would compare it between
 /// two devices.
-fn written(vault: &UnlockedVault) -> String {
+fn written(vault: &Session) -> String {
     serde_json::to_string_pretty(&serde_json::json!({
         "accounts": vault.doc.crypto_accounts,
         "events": vault.doc.crypto_events,

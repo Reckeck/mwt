@@ -8,12 +8,12 @@ use crate::service::test_support::income;
 use crate::sync::plan::ChangeKind;
 use crate::sync::registry::COLLECTIONS;
 
-fn cash_id(vault: &UnlockedVault) -> String {
+fn cash_id(vault: &Session) -> String {
     vault.doc.stores[0].id.clone()
 }
 
 /// What `from` holds that `into` lacks or has older, as the session sends it.
-fn batch_for(into: &mut UnlockedVault, from: &mut UnlockedVault) -> BTreeMap<String, RecordState> {
+fn batch_for(into: &mut Session, from: &mut Session) -> BTreeMap<String, RecordState> {
     let mine = crate::usecases::sync::read::sync_manifest(into, None).unwrap();
     let theirs = crate::usecases::sync::read::sync_manifest(from, None).unwrap();
     let (wanted, _) = crate::usecases::sync::read::sync_diff(into, &mine, &theirs);

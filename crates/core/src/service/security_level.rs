@@ -2,7 +2,7 @@
 //! level the vault may go to, the raise to the crypto level, and the level
 //! check on what a sync brings in.
 //!
-//! The raise to level 3 ([`UnlockedVault::raise_to_crypto`]) leaves, if the
+//! The raise to level 3 ([`Session::raise_to_crypto`]) leaves, if the
 //! process dies after any step, a vault that opens at exactly one level with
 //! its data whole:
 //!
@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 use zeroize::Zeroizing;
 
-use super::UnlockedVault;
+use super::Session;
 use super::password::{CopyPolicy, PlainCopies, RotationFailure, RotationReport, warn_failures};
 use crate::crypto::SealKey;
 use crate::crypto::header::{VaultHeader, level_of_container};
@@ -172,7 +172,7 @@ pub(crate) enum RaiseStep {
     CopyDone,
 }
 
-impl UnlockedVault {
+impl Session {
     /// The lowest level this vault may be protected at: level 3 once it holds
     /// crypto-module data (stage 1: exchange keys on this device, or their
     /// file next to the vault), else level 1.
@@ -321,7 +321,7 @@ impl UnlockedVault {
         // The mark goes into the very document the level-3 file is made of,
         // so it exists on disk from the first moment the vault is level 3 and
         // an interruption after that is recognisable at the next open
-        // (`UnlockedVault::open_as`). Nothing else saves between here and the
+        // (`Session::open_as`). Nothing else saves between here and the
         // re-encryption; if that fails the vault stays at its old level and
         // the mark is taken back, so no later save writes it there.
         self.doc.settings.crypto_raise_pending = true;
@@ -442,7 +442,7 @@ impl UnlockedVault {
     /// A failure to write here is not a failed raise — the level-3 file is
     /// already on the disk, verified, and the archiving changes no record,
     /// only the `archived` flag. The mark stays on disk in that case, and the
-    /// same idempotent step in the open chain (`UnlockedVault::open_as`)
+    /// same idempotent step in the open chain (`Session::open_as`)
     /// finishes the job: that is what the spec means by a crash between the
     /// re-encryption and the archiving repairing itself.
     pub(crate) fn after_raise(&mut self) {
@@ -475,7 +475,7 @@ impl UnlockedVault {
 }
 
 #[cfg(test)]
-impl UnlockedVault {
+impl Session {
     /// The vault raised to level 3 in place through the real path, keeping
     /// its password, at the cheapest hardened cost; the wizard's backup is
     /// removed so the tests see the vault's own copies only.

@@ -8,7 +8,7 @@ use crate::error::Result;
 use crate::model::store::StoreKind;
 use crate::model::vault::{PendingImport, VaultDoc};
 use crate::money::tree::{find_store, root_of};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Store exchange records as operations of the module. The one way in:
 /// both a fresh sweep and the conversion of the old queue come through
@@ -16,7 +16,7 @@ use crate::service::UnlockedVault;
 ///
 /// Does not save; the caller does, once.
 pub(crate) fn bybit_store(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &str,
     records: &[PendingImport],
 ) -> Result<BybitStored> {

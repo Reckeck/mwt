@@ -24,7 +24,7 @@ fn peer(name: &str) -> PeerRef {
 
 /// A contact both devices hold with stamps from long ago, then deleted on
 /// `left`, the deletion aged `age_days`. Returns the record key.
-fn deleted_long_ago(left: &mut UnlockedVault, right: &mut UnlockedVault, age_days: u64) -> String {
+fn deleted_long_ago(left: &mut Session, right: &mut Session, age_days: u64) -> String {
     let contact = crate::usecases::household::contacts::create_contact(
         left,
         ContactDraft {
@@ -52,7 +52,7 @@ fn deleted_long_ago(left: &mut UnlockedVault, right: &mut UnlockedVault, age_day
     key
 }
 
-fn age_tombstone(vault: &mut UnlockedVault, key: &str, age_days: u64) {
+fn age_tombstone(vault: &mut Session, key: &str, age_days: u64) {
     let old = days_ago(age_days);
     vault
         .doc
@@ -62,7 +62,7 @@ fn age_tombstone(vault: &mut UnlockedVault, key: &str, age_days: u64) {
     vault.doc.sync.tombstones_seen.insert(key.to_string(), old);
 }
 
-fn age_revocation(vault: &mut UnlockedVault, device_id: &str, age_days: u64) {
+fn age_revocation(vault: &mut Session, device_id: &str, age_days: u64) {
     let stamp = Stamp::new(days_ago(age_days), 0, "aaaaaaaa");
     let entry = vault
         .doc

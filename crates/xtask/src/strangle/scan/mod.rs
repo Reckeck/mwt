@@ -11,10 +11,14 @@ mod tests;
 
 pub(in crate::strangle) use corpus::{Corpus, Scanned};
 pub use visitor::scan_source;
-pub(in crate::strangle) use visitor::{is_test_attr, macro_arguments, names_type};
+pub(in crate::strangle) use visitor::{is_test_attr, macro_arguments, names_facade};
 
-/// The type whose impl blocks the areas are made of.
+/// The type whose impl blocks the areas are made of; the word the `vault` counter counts.
 pub(in crate::strangle) const VAULT_TYPE: &str = "UnlockedVault";
+
+/// The names the facade type goes by while the rename to `Session` is under way: an impl block
+/// of either one holds facade methods.
+pub(in crate::strangle) const FACADE_TYPES: [&str; 2] = [VAULT_TYPE, "Session"];
 
 /// The receiver of a method on the vault itself.
 pub(in crate::strangle) const SELF_RECEIVER: &str = "self";

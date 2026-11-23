@@ -34,7 +34,7 @@ fn wire(from: &str, from_port: &str, to: &str, to_port: &str) -> Value {
     })
 }
 
-fn save(vault: &mut UnlockedVault, name: &str, nodes: Vec<Value>, edges: Vec<Value>) -> String {
+fn save(vault: &mut Session, name: &str, nodes: Vec<Value>, edges: Vec<Value>) -> String {
     let draft = WorkflowDraft {
         name: name.into(),
         description: String::new(),
@@ -59,7 +59,7 @@ fn state_key(workflow_id: &str) -> String {
 }
 
 /// A workflow on both devices with an (empty) state record on both.
-fn shared_workflow() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
+fn shared_workflow() -> (tempfile::TempDir, Session, Session, String) {
     let (dir, mut left, mut right) = two_devices();
     let id = save(
         &mut left,
@@ -78,7 +78,7 @@ fn shared_workflow() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String
     (dir, left, right, id)
 }
 
-fn mark_of(vault: &UnlockedVault, id: &str, key: &str) -> Option<String> {
+fn mark_of(vault: &Session, id: &str, key: &str) -> Option<String> {
     crate::workflow::service::marks::mark(&vault.doc, id, key)
 }
 
@@ -150,13 +150,7 @@ fn marks_from_an_old_peer_do_not_erase_another_trigger() {
 }
 
 /// «A top-up comes → move 5 from cash to savings», armed on both devices.
-fn moving_pair() -> (
-    tempfile::TempDir,
-    UnlockedVault,
-    UnlockedVault,
-    String,
-    String,
-) {
+fn moving_pair() -> (tempfile::TempDir, Session, Session, String, String) {
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
     let savings = store(&mut left, "Savings", StoreKind::Bank, None);
@@ -182,7 +176,7 @@ fn moving_pair() -> (
     (dir, left, right, id, cash)
 }
 
-fn cursor_of(vault: &UnlockedVault, id: &str) -> (Option<String>, usize) {
+fn cursor_of(vault: &Session, id: &str) -> (Option<String>, usize) {
     let state = vault
         .doc
         .workflow_state
@@ -237,7 +231,7 @@ fn a_different_cursor_does_not_post_twice() {
     // The right device never looked at the salary: its cursor is older.
     crate::usecases::workflow::runs::run_due_workflows(&mut right, now, "UTC").unwrap();
     settle(&mut left, &mut right);
-    let moved = |vault: &UnlockedVault| {
+    let moved = |vault: &Session| {
         vault
             .doc
             .transactions
@@ -254,13 +248,7 @@ fn a_different_cursor_does_not_post_twice() {
 
 /// «Every day at 09:00 → top up cash by 10», two moments booked on the left
 /// and carried to the right in separate exchanges.
-fn two_moments() -> (
-    tempfile::TempDir,
-    UnlockedVault,
-    UnlockedVault,
-    String,
-    String,
-) {
+fn two_moments() -> (tempfile::TempDir, Session, Session, String, String) {
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
     let id = save(

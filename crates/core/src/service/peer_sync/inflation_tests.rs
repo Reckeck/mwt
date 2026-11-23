@@ -18,7 +18,7 @@ fn table(pairs: &[(&str, &str)]) -> BTreeMap<String, Amount> {
         .collect()
 }
 
-fn set_rates(vault: &mut UnlockedVault, pairs: &[(&str, &str)]) {
+fn set_rates(vault: &mut Session, pairs: &[(&str, &str)]) {
     vault
         .update_settings(UpdateSettingsInput {
             inflation_manual: Some(table(pairs)),

@@ -47,7 +47,7 @@ fn peer(name: &str) -> PeerRef {
 
 /// A level-3 vault that follows one address, with a wallet of that address in
 /// the tree, one operation of the module and one cached quote.
-fn followed() -> (tempfile::TempDir, UnlockedVault, String) {
+fn followed() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     vault.raise_to_level3_for_tests();
     let wallet = crate::usecases::money::stores::create_store(
@@ -184,7 +184,7 @@ fn a_wipe_unlinks_and_archives_the_wallets_and_lifts_the_ban() {
 
     // And it is on the disk, not only in memory.
     drop(vault);
-    let reopened = UnlockedVault::open(path, "pw").expect("the vault opens");
+    let reopened = Session::open(path, "pw").expect("the vault opens");
     assert!(!doc_carries_crypto_data(&reopened.doc));
     assert!(
         crate::money::tree::find_store(&reopened.doc, &wallet)
@@ -250,7 +250,7 @@ fn an_offline_device_does_not_bring_the_module_back() {
     left.flush_pending().expect("written");
     let copy = dir.path().join("copy.wallet");
     std::fs::copy(&left.path, &copy).expect("the second device gets the vault");
-    let mut right = UnlockedVault::open(copy, "pw").expect("the copy opens");
+    let mut right = Session::open(copy, "pw").expect("the copy opens");
     peer_sync::set_device(&mut right, "bbbbbbbb-right");
     assert_eq!(right.security_level(), SecurityLevel::Crypto);
     assert_eq!(right.doc.crypto_accounts.len(), 1, "both hold the module");
@@ -318,7 +318,7 @@ fn an_offline_device_does_not_bring_the_module_back() {
 
 /// One direction of a sync: everything `to` is missing from `from`, as a
 /// session would hand it over. Returns what was sent.
-fn exchange(from: &mut UnlockedVault, to: &mut UnlockedVault) -> BTreeMap<String, RecordState> {
+fn exchange(from: &mut Session, to: &mut Session) -> BTreeMap<String, RecordState> {
     let mine = crate::usecases::sync::read::sync_manifest(to, None).expect("a manifest");
     let theirs = crate::usecases::sync::read::sync_manifest(from, None).expect("a manifest");
     let (wants, _) = crate::usecases::sync::read::sync_diff(to, &mine, &theirs);

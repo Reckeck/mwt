@@ -16,7 +16,7 @@ use crate::model::vault::now_iso;
 use crate::money::books::Books;
 use crate::money::tree::find_store;
 use crate::planning::notifications as notices;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::usecases::planning::notifications::notice;
 use crate::workflow::graph::Graph;
 use crate::workflow::model::{
@@ -57,7 +57,7 @@ fn edit_workflow<R>(
 /// Create (`id` = `None`) or update a workflow. A changed graph keeps the one
 /// before it among the versions; one switched on starts watching from now.
 pub fn save_workflow(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: Option<&str>,
     draft: WorkflowDraft,
     now: i64,
@@ -94,7 +94,7 @@ pub fn save_workflow(
 
 /// Keep the editor's unsaved graph aside: the saved one keeps running.
 pub fn save_workflow_draft(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     graph_json: &str,
     now: i64,
@@ -110,7 +110,7 @@ pub fn save_workflow_draft(
 }
 
 /// Throw the kept-aside edits away.
-pub fn discard_workflow_draft(vault: &mut UnlockedVault, id: &str) -> Result<Workflow> {
+pub fn discard_workflow_draft(vault: &mut Session, id: &str) -> Result<Workflow> {
     vault.transact(|tx| {
         edit_workflow(tx, id, |workflow| {
             workflow.draft = None;
@@ -120,7 +120,7 @@ pub fn discard_workflow_draft(vault: &mut UnlockedVault, id: &str) -> Result<Wor
 }
 
 pub fn set_workflow_active(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     active: bool,
     now: i64,
@@ -140,7 +140,7 @@ pub fn set_workflow_active(
 }
 
 /// Remove a workflow with its runs, own variables, queue, state and waits.
-pub fn delete_workflow(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_workflow(vault: &mut Session, id: &str) -> Result<()> {
     vault.transact(|tx| {
         if tx.collection::<Workflow>().get(id).is_none() {
             return Err(missing_workflow(id));
@@ -185,7 +185,7 @@ pub fn delete_workflow(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 
 /// Put an earlier graph back; the current one becomes a version itself.
 pub fn restore_workflow_version(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     saved_at: &str,
     now: i64,
@@ -198,7 +198,7 @@ pub fn restore_workflow_version(
 /// Add an exported workflow, switched off: it is checked before it runs.
 /// `stores` swaps wallet ids of the file for wallets of this vault.
 pub fn import_workflow(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     json: &str,
     stores: &HashMap<String, String>,
     now: i64,
@@ -209,7 +209,7 @@ pub fn import_workflow(
 
 /// Add a test (empty id) or replace the one with the same id.
 pub fn save_workflow_test(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     workflow_id: &str,
     test: WorkflowTest,
 ) -> Result<Workflow> {
@@ -223,7 +223,7 @@ pub fn save_workflow_test(
 }
 
 pub fn delete_workflow_test(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     workflow_id: &str,
     test_id: &str,
 ) -> Result<Workflow> {
@@ -237,7 +237,7 @@ pub fn delete_workflow_test(
 
 /// Set a variable by hand; `value` is a `WfValue` in JSON.
 pub fn set_workflow_var(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     scope: VarScope,
     name: &str,
     value: &str,
@@ -250,7 +250,7 @@ pub fn set_workflow_var(
     })
 }
 
-pub fn delete_workflow_var(vault: &mut UnlockedVault, scope: &VarScope, name: &str) -> Result<()> {
+pub fn delete_workflow_var(vault: &mut Session, scope: &VarScope, name: &str) -> Result<()> {
     vault.transact(|tx| {
         remove_var(tx.doc_mut(), scope, name);
         Ok(())
@@ -258,7 +258,7 @@ pub fn delete_workflow_var(vault: &mut UnlockedVault, scope: &VarScope, name: &s
 }
 
 /// Make the operations a workflow queued, all together or none.
-pub fn confirm_queued(vault: &mut UnlockedVault, id: &str) -> Result<Vec<Transaction>> {
+pub fn confirm_queued(vault: &mut Session, id: &str) -> Result<Vec<Transaction>> {
     let batch = vault
         .doc
         .workflow_queue
@@ -300,10 +300,10 @@ pub(super) enum RunClosing {
 /// unit: when any step fails the document is put back as it was, so nothing
 /// stays booked while the batch and its refusal wait.
 pub(super) fn book_and_close(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     batch: &QueuedActions,
     closing: RunClosing,
-    book: impl FnOnce(&mut UnlockedVault, Vec<Transaction>) -> Result<Vec<Transaction>>,
+    book: impl FnOnce(&mut Session, Vec<Transaction>) -> Result<Vec<Transaction>>,
 ) -> Result<(Vec<Transaction>, Option<WorkflowRun>)> {
     let backup = vault.doc.clone();
     let outcome = book(vault, batch.transactions.clone()).and_then(|saved| {
@@ -332,7 +332,7 @@ pub(super) fn book_and_close(
 /// Take the batch off the queue and close the run it waited for: that
 /// refusal is answered, so a retry cannot book the operations a second time.
 fn close_batch(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     batch: &QueuedActions,
     created: Vec<String>,
 ) -> Result<Option<WorkflowRun>> {
@@ -386,7 +386,7 @@ pub(super) fn mark_skipped(tx: &mut Tx, run_id: &str) -> Result<WorkflowRun> {
     })
 }
 
-pub fn discard_queued(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn discard_queued(vault: &mut Session, id: &str) -> Result<()> {
     vault.transact(|tx| {
         let Some(batch) = tx.collection::<QueuedActions>().get(id).cloned() else {
             return Err(Error::Missing(format!("queued {id}")));
@@ -405,7 +405,7 @@ pub fn discard_queued(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 /// the journal and a notice, so `run_due_workflows` does not skip them in
 /// silence. Returns whether anything changed. Writes nothing itself: the open
 /// that asks goes on to write.
-pub fn disable_incomplete_workflows(vault: &mut UnlockedVault, now: i64) -> bool {
+pub fn disable_incomplete_workflows(vault: &mut Session, now: i64) -> bool {
     vault
         .run(|tx| {
             let mut notices_made = Vec::new();
@@ -477,7 +477,7 @@ pub fn workflow_templates(books: &Books<'_>) -> Vec<WorkflowTemplateInfo> {
 }
 
 /// Whether `value` is a good answer to a template field of this kind.
-fn field_is_valid(vault: &UnlockedVault, kind: &TemplateFieldKind, value: &str) -> bool {
+fn field_is_valid(vault: &Session, kind: &TemplateFieldKind, value: &str) -> bool {
     match kind {
         TemplateFieldKind::Store => find_store(&vault.doc, value).is_some(),
         TemplateFieldKind::Number => Amount::parse(value).is_ok_and(|number| number > Amount::ZERO),
@@ -491,7 +491,7 @@ fn field_is_valid(vault: &UnlockedVault, kind: &TemplateFieldKind, value: &str) 
 
 /// Builds the template's graph from the form and saves it as an active workflow.
 pub fn workflow_from_template(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     params: &BTreeMap<String, String>,
     locale: &str,

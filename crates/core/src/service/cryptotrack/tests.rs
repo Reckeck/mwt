@@ -6,7 +6,7 @@ use crate::ipc_contract::security::SecurityLevel;
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::CryptoAccount;
 use crate::model::vault::VaultDoc;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::security_level::doc_carries_crypto_data;
 
 fn account() -> CryptoAccount {
@@ -21,7 +21,7 @@ fn account() -> CryptoAccount {
 
 #[test]
 fn an_empty_document_carries_no_crypto_data() {
-    let vault = UnlockedVault::in_memory(VaultDoc::default());
+    let vault = Session::in_memory(VaultDoc::default());
     assert!(!doc_carries_crypto_data(&vault.doc));
     // The mark a wipe leaves behind is not the module's data: it is what
     // tells the other devices about the wipe, and a wiped vault must be
@@ -37,7 +37,7 @@ type Fill = fn(&mut VaultDoc, &VaultDoc);
 #[test]
 fn every_crypto_collection_ties_the_vault_to_level_three() {
     let full = crate::model::fixtures::full_doc();
-    let vault = UnlockedVault::in_memory(VaultDoc::default());
+    let vault = Session::in_memory(VaultDoc::default());
     let cases: [(&str, Fill); 8] = [
         ("crypto_accounts", |doc, full| {
             doc.crypto_accounts = full.crypto_accounts.clone()
@@ -81,7 +81,7 @@ fn every_crypto_collection_ties_the_vault_to_level_three() {
 fn crypto_data_refuses_a_downgrade() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("crypto.wallet");
-    let mut vault = UnlockedVault::create_with(path, None).unwrap();
+    let mut vault = Session::create_with(path, None).unwrap();
     assert_eq!(vault.min_allowed_level(), SecurityLevel::Ledger);
 
     vault.doc.crypto_accounts = vec![account()];
@@ -109,7 +109,7 @@ fn the_crypto_section_survives_a_save_and_a_reopen() {
     let path = dir.path().join("crypto.wallet");
     let full = crate::model::fixtures::full_doc();
     {
-        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        let mut vault = Session::create(path.clone(), "pw").unwrap();
         vault.doc.crypto_accounts = full.crypto_accounts.clone();
         vault.doc.crypto_events = full.crypto_events.clone();
         vault.doc.crypto_tokens = full.crypto_tokens.clone();
@@ -117,7 +117,7 @@ fn the_crypto_section_survives_a_save_and_a_reopen() {
         vault.persist().unwrap();
         vault.flush_pending().unwrap();
     }
-    let again = UnlockedVault::open(path, "pw").unwrap();
+    let again = Session::open(path, "pw").unwrap();
     assert_eq!(again.doc.version, crate::VAULT_FORMAT_VERSION);
     assert_eq!(again.doc.crypto_accounts, full.crypto_accounts);
     assert_eq!(again.doc.crypto_events, full.crypto_events);

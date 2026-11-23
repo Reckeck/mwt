@@ -4,10 +4,10 @@
 use crate::Amount;
 use crate::model::transaction::Leg;
 
-use super::UnlockedVault;
+use super::Session;
 use crate::money::rates::RateBook;
 
-impl UnlockedVault {
+impl Session {
     /// Value of one leg in `currency` at `secs`; `None` without a rate.
     pub(crate) fn leg_value_in(
         book: &RateBook,

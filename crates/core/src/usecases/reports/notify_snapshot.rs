@@ -6,12 +6,12 @@ use std::collections::{HashMap, HashSet};
 
 use crate::model::notify::{MAX_NOTICE_LOG, NoticeRecord};
 use crate::reports::notify_snapshot::AlertBase;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// [`apply_locked_deliveries_seen`] with no record of what the alerts looked
 /// like: every firing applies.
 pub fn apply_locked_deliveries(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     records: Vec<NoticeRecord>,
     fired_alerts: &[(String, String)],
 ) -> crate::Result<()> {
@@ -25,7 +25,7 @@ pub fn apply_locked_deliveries(
 /// alone, so the firing does not silence the new threshold. A firing with
 /// no entry in `seen` (a record kept by an older build) applies as before.
 pub fn apply_locked_deliveries_seen(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     records: Vec<NoticeRecord>,
     fired_alerts: &[(String, String)],
     seen: &HashMap<String, AlertBase>,

@@ -16,7 +16,7 @@ fn peer(name: &str) -> PeerRef {
     }
 }
 
-fn set_lead(vault: &mut UnlockedVault, category: NoticeCategory, lead_days: u16) {
+fn set_lead(vault: &mut Session, category: NoticeCategory, lead_days: u16) {
     let mut config = vault.doc.settings.notifications.clone();
     let mut entry = config.category(category);
     entry.lead_days = lead_days;
@@ -26,7 +26,7 @@ fn set_lead(vault: &mut UnlockedVault, category: NoticeCategory, lead_days: u16)
     vault.persist().unwrap();
 }
 
-fn lead(vault: &UnlockedVault, category: NoticeCategory) -> u16 {
+fn lead(vault: &Session, category: NoticeCategory) -> u16 {
     vault
         .doc
         .settings
@@ -183,7 +183,7 @@ fn notifications_saved_by_an_older_build_load_intact() {
     doc["settings"]["notifications"] = stored.clone();
     vault.doc = serde_json::from_value(doc).unwrap();
     vault.persist().unwrap();
-    let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
+    let reopened = Session::open(vault.path.clone(), "pw").unwrap();
     let config = &reopened.doc.settings.notifications;
     assert!(!config.system);
     assert!(config.hide_details_when_locked);

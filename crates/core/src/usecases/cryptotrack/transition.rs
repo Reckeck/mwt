@@ -16,7 +16,7 @@
 //! past but a source of the present: a wallet that already shows a followed
 //! address ([`crate::model::store::Store::crypto_account_id`]), an exchange
 //! the module reads through its key
-//! (`UnlockedVault::exchange_is_engine_driven`, the mark E11 reads) and an
+//! (`Session::exchange_is_engine_driven`, the mark E11 reads) and an
 //! exchange of a provider the module talks to at all — the user's Bybit
 //! wallet in particular, with or without a key today.
 //!
@@ -56,7 +56,7 @@
 //! `crypto_account_id`, the exchange keys — and an archived wallet is no
 //! longer a candidate. So a second run finds nothing, changes nothing and
 //! writes nothing, and the step can be run by the wizard, by the raise
-//! itself ([`UnlockedVault::raise_to_crypto`]) and by an open that finds the
+//! itself ([`Session::raise_to_crypto`]) and by an open that finds the
 //! raise's mark (`Settings::crypto_raise_pending`). That last one is what
 //! makes a failure between the re-encryption and the archiving repair itself:
 //! the raise sets the mark before it re-encrypts, so it is in the first
@@ -81,7 +81,7 @@ use crate::model::store::StoreKind;
 use crate::model::vault::VaultDoc;
 use crate::money::books::Books;
 use crate::money::tree::{find_store, root_of};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::usecases::planning::emergency::prune_emergency_fund;
 
 use super::legacy_bybit::exchange_is_engine_driven;
@@ -110,7 +110,7 @@ pub fn crypto_transition_plan(books: &Books<'_>) -> CryptoTransitionPlan {
 
 /// Archive the crypto wallets kept by hand and save. What the wizard's
 /// last step calls; idempotent, so calling it again writes nothing.
-pub fn crypto_archive_manual_wallets(vault: &mut UnlockedVault) -> Result<CryptoArchiveReport> {
+pub fn crypto_archive_manual_wallets(vault: &mut Session) -> Result<CryptoArchiveReport> {
     let report = retire_manual_crypto_wallets(vault);
     vault.transact(|tx| {
         tx.touch_if(report.changed);
@@ -125,7 +125,7 @@ pub fn crypto_archive_manual_wallets(vault: &mut UnlockedVault) -> Result<Crypto
 ///
 /// Below level 3 it does nothing: the module cannot follow an address
 /// there, so there is nothing to hand the wallets over to.
-pub(crate) fn retire_manual_crypto_wallets(vault: &mut UnlockedVault) -> CryptoArchiveReport {
+pub(crate) fn retire_manual_crypto_wallets(vault: &mut Session) -> CryptoArchiveReport {
     let mut out = CryptoArchiveReport::default();
     if vault.security_level() != SecurityLevel::Crypto {
         return out;
@@ -146,7 +146,7 @@ pub(crate) fn retire_manual_crypto_wallets(vault: &mut UnlockedVault) -> CryptoA
         .collect();
     archive_wallets(&mut vault.doc, &retired);
     // An archived wallet is no part of the emergency fund, exactly as
-    // `UnlockedVault::archive_store` leaves it.
+    // `Session::archive_store` leaves it.
     prune_emergency_fund(vault);
     // The flag is only half of it: the totals are read off `doc.holdings`,
     // and the yielding happens in the module's fold.

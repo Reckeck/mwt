@@ -24,7 +24,7 @@ fn wire(from: &str, from_port: &str, to: &str, to_port: &str) -> Value {
     })
 }
 
-fn save(vault: &mut UnlockedVault, name: &str, nodes: Vec<Value>, edges: Vec<Value>) -> String {
+fn save(vault: &mut Session, name: &str, nodes: Vec<Value>, edges: Vec<Value>) -> String {
     let draft = WorkflowDraft {
         name: name.into(),
         description: String::new(),
@@ -53,7 +53,7 @@ fn topup_node() -> Value {
 }
 
 /// «Every day at 09:00 → top up the cash wallet by 10», on two devices.
-fn daily_topup() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
+fn daily_topup() -> (tempfile::TempDir, Session, Session, String) {
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
     let mut post = topup_node();
@@ -82,7 +82,7 @@ fn daily_topup() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
     (dir, left, right, id)
 }
 
-fn workflow_keys(vault: &UnlockedVault) -> Vec<Option<String>> {
+fn workflow_keys(vault: &Session) -> Vec<Option<String>> {
     let mut keys: Vec<Option<String>> = vault
         .doc
         .transactions
@@ -208,7 +208,7 @@ fn a_wait_resumed_on_two_devices_posts_once() {
 
 /// «A top-up comes → ask → yes: 5 from cash to savings», both devices
 /// holding the same vault with the workflow armed.
-fn asking_pair() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
+fn asking_pair() -> (tempfile::TempDir, Session, Session, String) {
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
     let savings = store(&mut left, "Savings", StoreKind::Bank, None);
@@ -238,7 +238,7 @@ fn asking_pair() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
     (dir, left, right, id)
 }
 
-fn transfers(vault: &UnlockedVault) -> usize {
+fn transfers(vault: &Session) -> usize {
     vault
         .doc
         .transactions
@@ -331,7 +331,7 @@ fn an_answer_whose_result_is_booked_does_nothing() {
     assert!(right.doc.workflow_waits.is_empty());
 }
 
-fn old_peer_tx(vault: &mut UnlockedVault, run: &str, key: Option<&str>) {
+fn old_peer_tx(vault: &mut Session, run: &str, key: Option<&str>) {
     let cash = vault.doc.stores[0].id.clone();
     let mut tx = income(&cash, "100", "salary");
     if let Transaction::Topup(topup) = &mut tx {

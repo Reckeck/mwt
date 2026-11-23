@@ -18,13 +18,13 @@ use crate::error::Result;
 use crate::ipc_contract::cryptotrack::tokens::{TokenView, TokenWarning};
 use crate::model::cryptotrack::{TokenId, TokenVerdict};
 use crate::model::vault::{VaultDoc, now_iso};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Note a token met in an event. A new contract starts in quarantine
 /// (unless it is on the built-in list); a known record gets its text
 /// refreshed, sanitized. Returns the status after the call.
 pub fn crypto_register_token(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     token: &TokenId,
     symbol: &str,
     name: &str,
@@ -42,7 +42,7 @@ pub fn crypto_register_token(
 /// tokens, and each save is a full encryption under the vault's lock).
 /// Returns the status and whether the document changed.
 pub(crate) fn register_token_unsaved(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     token: &TokenId,
     symbol: &str,
     name: &str,
@@ -54,7 +54,7 @@ pub(crate) fn register_token_unsaved(
 /// Register a leg token of a position read by a built-in adapter as trusted
 /// (`rules::trust_adapter_token`). Returns whether the document changed; the
 /// caller saves.
-pub(crate) fn trust_adapter_token(vault: &mut UnlockedVault, leg: &LegToken) -> Result<bool> {
+pub(crate) fn trust_adapter_token(vault: &mut Session, leg: &LegToken) -> Result<bool> {
     rules::trust_adapter_token(&mut vault.doc, leg, &now_iso())
 }
 
@@ -92,7 +92,7 @@ pub fn crypto_tokens(doc: &VaultDoc) -> Vec<TokenView> {
 /// A verdict decides whether the token counts at all, so the holdings the
 /// capital is read from have to be re-derived (spec E8).
 fn decide(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     token: &TokenId,
     verdict: Option<TokenVerdict>,
 ) -> Result<TokenStatus> {
@@ -102,12 +102,12 @@ fn decide(
 }
 
 /// Take a token into the totals.
-pub fn crypto_confirm_token(vault: &mut UnlockedVault, token: &TokenId) -> Result<TokenStatus> {
+pub fn crypto_confirm_token(vault: &mut Session, token: &TokenId) -> Result<TokenStatus> {
     decide(vault, token, Some(TokenVerdict::Confirmed))
 }
 
 /// Hide a token: no list, no total, no price request.
-pub fn crypto_reject_token(vault: &mut UnlockedVault, token: &TokenId) -> Result<TokenStatus> {
+pub fn crypto_reject_token(vault: &mut Session, token: &TokenId) -> Result<TokenStatus> {
     decide(vault, token, Some(TokenVerdict::Rejected))
 }
 
@@ -115,17 +115,14 @@ pub fn crypto_reject_token(vault: &mut UnlockedVault, token: &TokenId) -> Result
 /// list or the quarantine again, so a confirmed token leaves the totals
 /// and a hidden one comes back to the quarantine list. Clearing a token
 /// that has no verdict changes nothing.
-pub fn crypto_clear_token_verdict(
-    vault: &mut UnlockedVault,
-    token: &TokenId,
-) -> Result<TokenStatus> {
+pub fn crypto_clear_token_verdict(vault: &mut Session, token: &TokenId) -> Result<TokenStatus> {
     decide(vault, token, None)
 }
 
 /// Set (or, with `None`, clear) what the old purchases of this token
 /// cost, USD per unit.
 pub fn crypto_set_token_basis(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     token: &TokenId,
     basis_usd: Option<Amount>,
 ) -> Result<()> {
@@ -237,7 +234,7 @@ mod tests {
                 hash: "0xfeed".into(),
             },
         });
-        let held = |vault: &crate::service::UnlockedVault| {
+        let held = |vault: &crate::service::Session| {
             vault
                 .doc
                 .holdings
@@ -458,7 +455,7 @@ mod counts_in_totals_pins {
     }
 
     /// A followed address with its wallet, and a token nobody confirmed.
-    fn vault_with_a_stranger() -> (tempfile::TempDir, UnlockedVault) {
+    fn vault_with_a_stranger() -> (tempfile::TempDir, Session) {
         let (dir, mut vault) = empty_vault();
         vault.doc.crypto_accounts.push(CryptoAccount::new(
             ACCOUNT,
@@ -499,7 +496,7 @@ mod counts_in_totals_pins {
         }
     }
 
-    fn arrival(vault: &mut UnlockedVault, quantity: &str) {
+    fn arrival(vault: &mut Session, quantity: &str) {
         vault.doc.crypto_events.push(CryptoTx {
             id: "ev-1".into(),
             chain: Chain::Ethereum,
@@ -521,7 +518,7 @@ mod counts_in_totals_pins {
         });
     }
 
-    fn in_a_position(vault: &mut UnlockedVault, quantity: &str) {
+    fn in_a_position(vault: &mut Session, quantity: &str) {
         vault.doc.crypto_positions.push(CryptoPosition {
             id: "pos-1".into(),
             account_id: ACCOUNT.into(),
@@ -535,7 +532,7 @@ mod counts_in_totals_pins {
     }
 
     /// Something quoted the token, as a pretender's price would be.
-    fn quoted_at(vault: &mut UnlockedVault, usd: &str) {
+    fn quoted_at(vault: &mut Session, usd: &str) {
         let key =
             crate::cryptotrack::service::totals::crypto_asset_ref(&vault.doc, &the_token()).key();
         vault.doc.price_cache.push(PricePoint {
@@ -547,7 +544,7 @@ mod counts_in_totals_pins {
         });
     }
 
-    fn confirm(vault: &mut UnlockedVault) {
+    fn confirm(vault: &mut Session) {
         crate::usecases::cryptotrack::tokens::crypto_confirm_token(vault, &stranger())
             .expect("decided");
     }
@@ -576,7 +573,7 @@ mod counts_in_totals_pins {
         let (_dir, mut vault) = vault_with_a_stranger();
         in_a_position(&mut vault, "5");
         let ledger = crate::cryptotrack::service::recompute::fold(&vault.books());
-        let held = |vault: &UnlockedVault| {
+        let held = |vault: &Session| {
             crate::cryptotrack::service::positions::crypto_position_inputs(&vault.doc)
                 .with(|taking| held_by_account(&ledger, taking))
                 .iter()
@@ -635,7 +632,7 @@ mod counts_in_totals_pins {
     #[test]
     fn a_node_is_not_asked_for_the_balance_of_a_quarantined_token() {
         let (_dir, mut vault) = vault_with_a_stranger();
-        let asked = |vault: &UnlockedVault| {
+        let asked = |vault: &Session| {
             crate::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)[0].tokens.iter().any(
                 |asset| matches!(asset, RawAsset::Token { contract, .. } if contract == STRANGER),
             )

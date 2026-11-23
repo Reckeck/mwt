@@ -3,7 +3,7 @@
 
 use crate::error::Result;
 use crate::model::vault::now_iso;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::sync::SyncSummary;
 use crate::sync::journal::{SyncJournalEntry, SyncJournalOutcome};
 use crate::sync::sync_journal::{newest_first, push_line, scrub_secrets};
@@ -14,7 +14,7 @@ fn new_line_key() -> (String, String) {
 
 /// Add a line without saving (the caller saves right after).
 pub(crate) fn journal_push(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     peer_name: &str,
     summary: &SyncSummary,
     outcome: SyncJournalOutcome,
@@ -32,7 +32,7 @@ pub(crate) fn journal_push(
 
 /// Note a batch that was not applied (declined, failed) and save.
 pub fn sync_journal_record(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     peer_name: &str,
     summary: &SyncSummary,
     outcome: SyncJournalOutcome,
@@ -52,12 +52,12 @@ pub fn sync_journal_record(
 }
 
 /// One-time cleanup on open: `true` when something changed (the caller saves only then).
-pub(crate) fn scrub_sync_secrets(vault: &mut UnlockedVault) -> bool {
+pub(crate) fn scrub_sync_secrets(vault: &mut Session) -> bool {
     scrub_secrets(&mut vault.doc.sync)
 }
 
 /// The journal, newest first.
-pub fn sync_journal(vault: &UnlockedVault) -> Vec<SyncJournalEntry> {
+pub fn sync_journal(vault: &Session) -> Vec<SyncJournalEntry> {
     newest_first(&vault.doc.sync)
 }
 

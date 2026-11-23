@@ -1,11 +1,11 @@
 //! Backup copies of the open vault file: list, take one now, restore one.
 
-use super::UnlockedVault;
+use super::Session;
 use crate::error::{Error, Result};
 use crate::storage::VaultFile;
 use crate::vault_io::backups::{self, BackupFile};
 
-impl UnlockedVault {
+impl Session {
     /// The vault's backups next to the file, newest first.
     pub fn list_backups(&self) -> Result<Vec<BackupFile>> {
         backups::list(&self.path)
@@ -53,10 +53,10 @@ mod tests {
     use tempfile::tempdir;
 
     use crate::error::Error;
-    use crate::service::UnlockedVault;
+    use crate::service::Session;
 
-    fn vault_with_store(path: std::path::PathBuf, name: &str) -> UnlockedVault {
-        let mut vault = UnlockedVault::create(path, "pw").unwrap();
+    fn vault_with_store(path: std::path::PathBuf, name: &str) -> Session {
+        let mut vault = Session::create(path, "pw").unwrap();
         crate::usecases::money::stores::create_store(
             &mut vault,
             name,
@@ -86,7 +86,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let stores = |vault: &UnlockedVault| vault.doc.stores.len();
+        let stores = |vault: &Session| vault.doc.stores.len();
         let with_both = stores(&vault);
 
         let safety = vault.restore_backup(&backup.name).unwrap();
@@ -96,7 +96,7 @@ mod tests {
         assert_eq!(stores(&vault), with_both);
         // What is on disk is the restored state.
         drop(vault);
-        let reopened = UnlockedVault::open(dir.path().join("v.wallet"), "pw").unwrap();
+        let reopened = Session::open(dir.path().join("v.wallet"), "pw").unwrap();
         assert_eq!(reopened.doc.stores.len(), with_both);
     }
 

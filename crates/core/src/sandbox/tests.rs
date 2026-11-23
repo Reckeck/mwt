@@ -12,14 +12,14 @@ fn today() -> NaiveDate {
 }
 
 /// The document without the sync stamps: those carry the wall clock of the save.
-fn document(vault: &UnlockedVault) -> serde_json::Value {
+fn document(vault: &Session) -> serde_json::Value {
     let mut value = serde_json::to_value(&vault.doc).unwrap();
     value.as_object_mut().unwrap().remove("sync");
     value
 }
 
 /// Income and spending per month (`YYYY-MM`), in whole dollars.
-fn months(vault: &UnlockedVault) -> BTreeMap<String, (Amount, Amount)> {
+fn months(vault: &Session) -> BTreeMap<String, (Amount, Amount)> {
     let mut sums: BTreeMap<String, (Amount, Amount)> = BTreeMap::new();
     for tx in &vault.doc.transactions {
         let meta = tx.meta();
@@ -113,7 +113,7 @@ fn the_vault_has_no_password_and_lives_in_the_folder() {
     assert!(!crate::crypto::file_is_encrypted(&dir.file()));
     assert!(dir.contains(&vault.path).is_ok());
     drop(vault);
-    let reopened = UnlockedVault::open(dir.file(), "").unwrap();
+    let reopened = Session::open(dir.file(), "").unwrap();
     assert!(reopened.doc.transactions.len() > 200);
 }
 

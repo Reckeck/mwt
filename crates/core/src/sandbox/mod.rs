@@ -13,7 +13,7 @@
 //! **Fenced in.** Every path the sandbox deletes or opens is checked against
 //! its folder (`SandboxDir::contains`): canonical, and never a symbolic link.
 //!
-//! Not to be confused with `UnlockedVault::sandbox`, an in-memory dry-run
+//! Not to be confused with `Session::sandbox`, an in-memory dry-run
 //! copy that never writes: that one is for emulating automations.
 
 mod seed;
@@ -24,7 +24,7 @@ use std::path::{Component, Path, PathBuf};
 
 use chrono::NaiveDate;
 
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::{Error, Result};
 
 /// The folder's name inside the app cache directory.
@@ -82,11 +82,11 @@ impl SandboxDir {
 
     /// A fresh sandbox vault with the demo data up to `today`: what was left
     /// of an earlier one is erased first. The vault is open and saved.
-    pub fn create(&self, today: NaiveDate) -> Result<UnlockedVault> {
+    pub fn create(&self, today: NaiveDate) -> Result<Session> {
         self.erase()?;
         std::fs::create_dir_all(&self.root)?;
         let file = self.contains(&self.file())?;
-        let mut vault = UnlockedVault::create_with(file, None)?;
+        let mut vault = Session::create_with(file, None)?;
         seed::fill(&mut vault, today)?;
         Ok(vault)
     }

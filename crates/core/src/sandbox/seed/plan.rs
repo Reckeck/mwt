@@ -10,7 +10,7 @@ use crate::model::planning::{BudgetPeriod, BudgetTarget};
 use crate::model::store::StoreScope;
 use crate::planning::budget::BudgetDraft;
 use crate::planning::goals::GoalDraft;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::{Amount, Result};
 
 use super::ids;
@@ -58,7 +58,7 @@ fn goal(
 }
 
 /// Three limits (taxi is over), two goals and three automations, with fixed ids.
-pub fn add(vault: &mut UnlockedVault, wallets: &Wallets, today: NaiveDate) -> Result<()> {
+pub fn add(vault: &mut Session, wallets: &Wallets, today: NaiveDate) -> Result<()> {
     let mut number = 0u128;
     let mut next = || {
         number += 1;

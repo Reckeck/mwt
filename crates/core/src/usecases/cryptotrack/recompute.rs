@@ -21,13 +21,13 @@ use crate::error::Result;
 use crate::ipc_contract::security::SecurityLevel;
 use crate::model::chain::Chain;
 use crate::model::cryptotrack::{CryptoSnapshot, TokenId};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Store a source's batch, fold everything again, reconcile with the
 /// network and snapshot the value. Saves once, and only if the batch
 /// changed something (a pass that met nothing new writes nothing).
 pub fn crypto_apply_batch(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     request: &CryptoBatch<'_>,
     batch: &SourceBatch,
 ) -> Result<CryptoApplied> {
@@ -41,7 +41,7 @@ pub fn crypto_apply_batch(
 /// [`crypto_apply_batch`] without the save: the caller owns it. Returns what
 /// was applied and whether the document changed.
 pub(crate) fn apply_batch_unsaved(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     request: &CryptoBatch<'_>,
     batch: &SourceBatch,
 ) -> Result<(CryptoApplied, bool)> {
@@ -75,11 +75,7 @@ pub(crate) fn apply_batch_unsaved(
 
 /// Note each token of the batch once; saved with the rest of the batch, not
 /// once per token.
-fn register_met_tokens(
-    vault: &mut UnlockedVault,
-    chain: Chain,
-    batch: &SourceBatch,
-) -> Result<bool> {
+fn register_met_tokens(vault: &mut Session, chain: Chain, batch: &SourceBatch) -> Result<bool> {
     let mut changed = false;
     for met in rules::met_tokens(batch).into_values() {
         let (_, registered) = super::tokens::register_token_unsaved(
@@ -97,13 +93,13 @@ fn register_met_tokens(
 /// Write the value of each account and of the module for the day of `at`,
 /// replacing that day's snapshots. Does not save on its own. Returns how
 /// many it wrote and whether any of them differs from what was kept.
-fn take_snapshot(vault: &mut UnlockedVault, at: &str) -> (usize, bool) {
+fn take_snapshot(vault: &mut Session, at: &str) -> (usize, bool) {
     let records = rules::snapshot_records(&vault.books(), at);
     rules::store_snapshots(&mut vault.doc, records)
 }
 
 /// Write the snapshots of `at` and save, if any of them is new.
-pub fn crypto_snapshot(vault: &mut UnlockedVault, at: &str) -> Result<Vec<CryptoSnapshot>> {
+pub fn crypto_snapshot(vault: &mut Session, at: &str) -> Result<Vec<CryptoSnapshot>> {
     let (_, changed) = take_snapshot(vault, at);
     vault.transact(|tx| {
         tx.touch_if(changed);
@@ -114,7 +110,7 @@ pub fn crypto_snapshot(vault: &mut UnlockedVault, at: &str) -> Result<Vec<Crypto
 
 /// Put the engine's balances into `doc.holdings`, replacing what they
 /// supersede. Called at the end of `recompute_holdings`; saves nothing.
-pub(crate) fn apply_crypto_holdings(vault: &mut UnlockedVault) {
+pub(crate) fn apply_crypto_holdings(vault: &mut Session) {
     // A vault without the module keeps `doc.holdings` exactly as the
     // transactions left it: nothing here speaks for it, so a wallet
     // archived long ago counts as it always did. The module is there once
@@ -136,7 +132,7 @@ pub(crate) fn apply_crypto_holdings(vault: &mut UnlockedVault) {
 /// Fold the engine again into `doc.holdings` and save: what the module's
 /// own writers call after they changed an event, a verdict or an account,
 /// since nothing else re-derives the holdings for them.
-pub fn crypto_sync_holdings(vault: &mut UnlockedVault) -> Result<()> {
+pub fn crypto_sync_holdings(vault: &mut Session) -> Result<()> {
     // Unconditional: callers rely on this save for their own edits, which
     // the refold comparison knows nothing about.
     refold_holdings(vault);
@@ -148,7 +144,7 @@ pub fn crypto_sync_holdings(vault: &mut UnlockedVault) -> Result<()> {
 
 /// Fold the engine again into `doc.holdings` without saving. Reports
 /// whether the positions differ from before.
-pub(crate) fn refold_holdings(vault: &mut UnlockedVault) -> bool {
+pub(crate) fn refold_holdings(vault: &mut Session) -> bool {
     let before = std::mem::take(&mut vault.doc.holdings);
     crate::usecases::money::portfolio::recompute_holdings(vault);
     totals::holdings_differ(&before, &vault.doc.holdings)

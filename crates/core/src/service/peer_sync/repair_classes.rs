@@ -5,7 +5,7 @@ use crate::Amount;
 #[cfg(test)]
 use crate::model::planning::AssetClass;
 #[cfg(test)]
-use crate::service::UnlockedVault;
+use crate::service::Session;
 #[cfg(test)]
 use crate::sync::repair::repair_classes::scaled_shares;
 
@@ -25,7 +25,7 @@ mod tests {
         }
     }
 
-    fn shares(vault: &UnlockedVault) -> Vec<String> {
+    fn shares(vault: &Session) -> Vec<String> {
         vault
             .doc
             .asset_classes

@@ -27,7 +27,7 @@ use crate::ipc_contract::cryptotrack::network::{
 };
 use crate::model::chain::Chain;
 use crate::money::books::Books;
-use crate::service::{RpcChain, UnlockedVault};
+use crate::service::{RpcChain, Session};
 use crate::vault_io::device_secrets::{self, BlockscoutKey, NetworkEndpoints};
 
 pub use crate::cryptotrack::service::network::NetworkRequest;
@@ -126,7 +126,7 @@ pub fn crypto_test_target(
 
 /// Save one network. Everything is checked before anything is written.
 pub fn crypto_set_network_settings(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: &SetNetworkSettingsInput,
 ) -> Result<()> {
     if vault.sandbox {
