@@ -6,7 +6,7 @@ use crate::model::store::{LiabilityKind, LiabilityTerms, StoreKind};
 use crate::model::transaction::AccountRef;
 use crate::planning::debt_load::debt_load;
 use crate::service::test_support::*;
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 
 fn pct(raw: &str) -> Option<Amount> {
     Some(amount(raw))
@@ -42,7 +42,7 @@ fn a_card_with_a_debt_is_costly_whatever_its_rate() {
     );
 }
 
-fn loan(vault: &mut UnlockedVault, name: &str, terms: LiabilityTerms) -> String {
+fn loan(vault: &mut Session, name: &str, terms: LiabilityTerms) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         name,

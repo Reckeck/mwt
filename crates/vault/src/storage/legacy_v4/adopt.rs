@@ -1,6 +1,6 @@
 //! The one-time conversion of the old Bybit queue, frozen.
 //!
-//! A copy of `UnlockedVault::adopt_legacy_bybit` and the helpers it used
+//! A copy of `Session::adopt_legacy_bybit` and the helpers it used
 //! (`service/cryptotrack/legacy_bybit.rs`), reading and writing the v4 document instead of a
 //! vault. It turns every staged record of `pending_imports` into an operation of the crypto
 //! module, exactly as the shim did when an exchange sync met the queue, so the transition does it

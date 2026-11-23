@@ -7,7 +7,7 @@ use crate::model::planning::{RepeatUnit, UtilityKind};
 use crate::model::store::StoreKind;
 use crate::planning::auto_reminders::*;
 use crate::service::test_support::*;
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 use crate::time::secs_or_now;
 use chrono::NaiveDate;
 
@@ -15,7 +15,7 @@ use crate::household::utilities::UtilityDraft;
 use crate::model::store::{LiabilityKind, LiabilityTerms, PropertyInfo};
 use crate::model::transaction::AccountRef;
 
-fn loan(vault: &mut UnlockedVault, due_day: u8) -> String {
+fn loan(vault: &mut Session, due_day: u8) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         "Ипотека",
@@ -38,7 +38,7 @@ fn loan(vault: &mut UnlockedVault, due_day: u8) -> String {
     .id
 }
 
-fn auto(vault: &UnlockedVault, kind: ReminderSourceKind) -> Vec<Reminder> {
+fn auto(vault: &Session, kind: ReminderSourceKind) -> Vec<Reminder> {
     vault
         .doc
         .reminders
@@ -354,7 +354,7 @@ fn a_switched_off_category_makes_no_reminders_and_taxes_need_a_reason() {
     assert_eq!(auto(&vault, ReminderSourceKind::MeterReadings).len(), 1);
 }
 
-fn property(vault: &mut UnlockedVault, name: &str, info: PropertyInfo) -> String {
+fn property(vault: &mut Session, name: &str, info: PropertyInfo) -> String {
     crate::usecases::money::stores::create_store_with(
         vault,
         name,
@@ -500,7 +500,7 @@ fn a_car_is_reminded_of_its_insurance_and_service_whichever_comes_first() {
 
 const MARCH: &str = "2026-03-10T08:00:00Z";
 
-fn loan_text(vault: &UnlockedVault) -> String {
+fn loan_text(vault: &Session) -> String {
     auto(vault, ReminderSourceKind::LoanPayment)[0].text.clone()
 }
 
@@ -671,7 +671,7 @@ fn the_sync_delegate_equals_the_scenario() {
     )
     .unwrap();
     assert!(method && made);
-    let shape = |vault: &UnlockedVault| -> Vec<(String, String, bool)> {
+    let shape = |vault: &Session| -> Vec<(String, String, bool)> {
         vault
             .doc
             .reminders

@@ -7,12 +7,12 @@ use crate::model::planning::EmergencyFund;
 use crate::model::store::{Binding, Purpose, StoreKind, StoreScope, SubType};
 use crate::model::transaction::{AccountRef, Transaction};
 use crate::money::interest::INTEREST_CATEGORY;
+use crate::service::Session;
 use crate::service::StoreExtras;
-use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 
-fn savings(vault: &mut UnlockedVault, name: &str) -> String {
+fn savings(vault: &mut Session, name: &str) -> String {
     let bank = store(vault, &format!("{name} bank"), StoreKind::Bank, None);
     let extras = StoreExtras {
         sub_type: Some(SubType::Savings),
@@ -56,7 +56,7 @@ fn fund_of(ids: &[&String]) -> EmergencyFund {
 #[test]
 fn essential_follows_the_defaults_until_the_user_says_otherwise() {
     let (_dir, mut vault) = empty_vault();
-    let find = |vault: &UnlockedVault, key: &str| {
+    let find = |vault: &Session, key: &str| {
         vault
             .doc
             .categories

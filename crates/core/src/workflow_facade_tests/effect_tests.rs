@@ -17,7 +17,7 @@ use crate::model::inflation::InflationReading;
 use crate::model::planning::{RejectReason, Reminder};
 use crate::model::store::{AssetRef, StoreKind, StoreScope};
 use crate::model::transaction::Transaction;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::workflow::exec::{self, RunContext};
 use crate::workflow::host::{
@@ -40,7 +40,7 @@ fn wire(from: &str, from_port: &str, to: &str, to_port: &str) -> Value {
     })
 }
 
-fn save(vault: &mut UnlockedVault, name: &str, nodes: Vec<Value>, edges: Vec<Value>) -> Workflow {
+fn save(vault: &mut Session, name: &str, nodes: Vec<Value>, edges: Vec<Value>) -> Workflow {
     let draft = WorkflowDraft {
         name: name.into(),
         description: String::new(),
@@ -67,14 +67,14 @@ fn later() -> i64 {
 // -- C2-2 ---------------------------------------------------------------------
 
 /// «Ask first → yes: 300 from the card to savings», with only 100 on the card.
-fn asked_transfer() -> (tempfile::TempDir, UnlockedVault, String, String, Workflow) {
+fn asked_transfer() -> (tempfile::TempDir, Session, String, String, Workflow) {
     asked_transfer_capped(None)
 }
 
 /// The same, with the workflow's cap on what a run may move.
 fn asked_transfer_capped(
     cap: Option<&str>,
-) -> (tempfile::TempDir, UnlockedVault, String, String, Workflow) {
+) -> (tempfile::TempDir, Session, String, String, Workflow) {
     let (dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Cash, None);
     let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
@@ -226,7 +226,7 @@ fn a_refused_retry_is_insufficient_funds_by_variant() {
     );
 }
 
-fn refused_asked_transfer() -> (tempfile::TempDir, UnlockedVault, String, String, String) {
+fn refused_asked_transfer() -> (tempfile::TempDir, Session, String, String, String) {
     let (dir, mut vault, card, savings, workflow) = asked_transfer();
     crate::usecases::workflow::runs::run_workflow_now(
         &mut vault,
@@ -309,7 +309,7 @@ fn a_retried_refusal_keeps_the_started_at_of_the_refused_run() {
     assert_eq!(done.started_at, started_at);
 }
 
-fn refused_started_at(vault: &UnlockedVault, workflow_id: &str, run_id: &str) -> String {
+fn refused_started_at(vault: &Session, workflow_id: &str, run_id: &str) -> String {
     crate::workflow::service::runs::runs(&vault.doc, Some(workflow_id), 10)
         .iter()
         .find(|run| run.id == run_id)
@@ -441,19 +441,19 @@ fn a_plain_refusal_under_a_cap_ends_rejected_even_without_a_price() {
 /// gives it back before returning. A call that comes while it is held panics,
 /// as a second take of a real lock would block forever.
 struct LockedHost {
-    vault: Mutex<UnlockedVault>,
+    vault: Mutex<Session>,
     takes: RefCell<Vec<&'static str>>,
 }
 
 impl LockedHost {
-    fn new(vault: UnlockedVault) -> Self {
+    fn new(vault: Session) -> Self {
         Self {
             vault: Mutex::new(vault),
             takes: RefCell::new(Vec::new()),
         }
     }
 
-    fn take(&self, call: &'static str) -> std::sync::MutexGuard<'_, UnlockedVault> {
+    fn take(&self, call: &'static str) -> std::sync::MutexGuard<'_, Session> {
         self.takes.borrow_mut().push(call);
         self.vault
             .try_lock()

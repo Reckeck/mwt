@@ -1,4 +1,4 @@
-//! Tests of the preview area that need the vault (`UnlockedVault`): moved from
+//! Tests of the preview area that need the vault (`Session`): moved from
 //! `money/preview_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::model::store::{AssetRef, StoreKind};

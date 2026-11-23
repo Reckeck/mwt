@@ -1,5 +1,5 @@
 //! Tests of the worth area: the old inline tests (names kept), which drive
-//! the same rules through the `UnlockedVault` delegates.
+//! the same rules through the `Session` delegates.
 
 use crate::model::store::AssetRef;
 use crate::model::store::{Holding, Store, StoreKind};

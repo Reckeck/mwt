@@ -9,11 +9,11 @@ use crate::exchange::staging::PendingImportExt;
 use crate::model::store::{StoreKind, TerminalState};
 use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::PendingImport;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
-fn vault_with_wallet() -> (tempfile::TempDir, UnlockedVault, String) {
+fn vault_with_wallet() -> (tempfile::TempDir, Session, String) {
     let dir = tempfile::tempdir().unwrap();
-    let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+    let mut vault = Session::create(dir.path().join("test.wallet"), "pw").unwrap();
     let wallet = crate::usecases::money::stores::create_store_with(
         &mut vault,
         "Bybit",

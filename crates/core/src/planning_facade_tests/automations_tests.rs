@@ -15,8 +15,8 @@ use crate::planning::automation_plan::{
     automation_occurrences, automation_of, automation_run_of, automation_runs,
 };
 use crate::planning::automations::*;
+use crate::service::Session;
 use crate::service::StoreExtras;
-use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 use crate::usecases::planning::automation_rules::{
@@ -65,12 +65,7 @@ fn monthly_draft(name: &str, day: u8, template: TransactionDraft) -> AutomationD
     }
 }
 
-fn monthly(
-    vault: &mut UnlockedVault,
-    name: &str,
-    day: u8,
-    template: TransactionDraft,
-) -> Automation {
+fn monthly(vault: &mut Session, name: &str, day: u8, template: TransactionDraft) -> Automation {
     crate::usecases::planning::automations::create_automation(
         vault,
         monthly_draft(name, day, template),
@@ -88,7 +83,7 @@ fn rejected_of(pass: &WorkflowPass) -> Vec<RejectReason> {
         .collect()
 }
 
-fn outcomes(vault: &UnlockedVault, id: &str) -> Vec<&'static str> {
+fn outcomes(vault: &Session, id: &str) -> Vec<&'static str> {
     let mut runs = crate::planning::automation_plan::automation_runs(&vault.books(), Some(id));
     runs.reverse();
     runs.iter()
@@ -613,7 +608,7 @@ fn a_template_that_breaks_the_rules_is_refused() {
     assert_eq!(err.code(), "INVALID_INPUT");
 }
 
-fn advance(vault: &mut UnlockedVault, card: &str) -> Automation {
+fn advance(vault: &mut Session, card: &str) -> Automation {
     crate::usecases::planning::automations::create_automation(
         vault,
         AutomationDraft {
@@ -634,7 +629,7 @@ fn advance(vault: &mut UnlockedVault, card: &str) -> Automation {
     .unwrap()
 }
 
-fn made(vault: &UnlockedVault, pass: &WorkflowPass) -> Transaction {
+fn made(vault: &Session, pass: &WorkflowPass) -> Transaction {
     vault
         .doc
         .transactions
@@ -645,7 +640,7 @@ fn made(vault: &UnlockedVault, pass: &WorkflowPass) -> Transaction {
 }
 
 fn salary_for_month(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     card: &str,
     day: u8,
     offset: i8,
@@ -974,7 +969,7 @@ fn the_form_lists_the_next_three_dates_moved_off_days_off() {
 }
 
 /// Planned moments of every booking an automation workflow made, oldest first.
-fn planned_of_bookings(vault: &UnlockedVault) -> Vec<String> {
+fn planned_of_bookings(vault: &Session) -> Vec<String> {
     vault
         .doc
         .transactions
@@ -990,7 +985,7 @@ fn planned_of_bookings(vault: &UnlockedVault) -> Vec<String> {
 }
 
 /// Monthly rent on the 15th at 09:00 Berlin, started on Jan 1.
-fn berlin_rent(vault: &mut UnlockedVault, from: &str) -> Automation {
+fn berlin_rent(vault: &mut Session, from: &str) -> Automation {
     let account = store(vault, "Cash", StoreKind::Cash, None);
     let income = {
         let mut funding = income(&account, "1000", "float");
@@ -1006,7 +1001,7 @@ fn berlin_rent(vault: &mut UnlockedVault, from: &str) -> Automation {
 fn golden_g6_a_monthly_automation_fires_once_per_planned_date() {
     let (_dir, mut vault) = empty_vault();
     berlin_rent(&mut vault, "300");
-    let tick = |vault: &mut UnlockedVault, iso: &str| {
+    let tick = |vault: &mut Session, iso: &str| {
         crate::usecases::workflow::runs::run_due_workflows(vault, secs(iso), "Europe/Berlin")
             .unwrap()
             .created
@@ -1151,11 +1146,11 @@ fn golden_g8_net_worth_and_the_daily_budget_after_the_rent() {
     assert_eq!(budget.left_today.round(2), amount("-214.29"));
 }
 
-fn bookings(vault: &UnlockedVault) -> usize {
+fn bookings(vault: &Session) -> usize {
     planned_of_bookings(vault).len()
 }
 
-fn pass_at(vault: &mut UnlockedVault, iso: &str, zone: &str) -> usize {
+fn pass_at(vault: &mut Session, iso: &str, zone: &str) -> usize {
     crate::usecases::workflow::runs::run_due_workflows(vault, secs(iso), zone)
         .unwrap()
         .created
@@ -1335,7 +1330,7 @@ fn a_day_moved_later_does_not_book_the_new_day_back() {
     assert_eq!(pass_at(&mut vault, "2026-04-18T12:00:00Z", zone), 1);
 }
 
-fn daily_at_0230(vault: &mut UnlockedVault, starts_at: &str) {
+fn daily_at_0230(vault: &mut Session, starts_at: &str) {
     let card = store(vault, "Card", StoreKind::Bank, None);
     let mut draft = monthly_draft("Daily", 1, salary_draft(&card, "1"));
     draft.schedule = Schedule::EveryNDays { days: 1 };
@@ -1747,7 +1742,7 @@ fn run_now_writes_the_rebased_corrections_with_its_commit() {
     });
     crate::usecases::money::transactions::add_transaction(&mut vault, correction).unwrap();
     crate::usecases::planning::automations::run_automation(&mut vault, &pay.id, now).unwrap();
-    let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
+    let reopened = Session::open(vault.path.clone(), "pw").unwrap();
     let stored = reopened
         .doc
         .transactions
@@ -1777,8 +1772,8 @@ fn run_now_without_funds_is_refused_and_leaves_no_run() {
 }
 
 fn twin_vaults() -> (
-    (tempfile::TempDir, UnlockedVault, String),
-    (tempfile::TempDir, UnlockedVault, String),
+    (tempfile::TempDir, Session, String),
+    (tempfile::TempDir, Session, String),
 ) {
     let build = || {
         let (dir, mut vault) = empty_vault();
@@ -1957,7 +1952,7 @@ fn the_confirm_delegate_equals_the_scenario() {
         .unwrap();
     scenario::create_automation(&mut by_scenario, varying(&card_b)).unwrap();
     let due = secs("2026-02-20T10:00:00Z");
-    let booked = |vault: &mut UnlockedVault| {
+    let booked = |vault: &mut Session| {
         let pass = crate::usecases::workflow::runs::run_due_workflows(vault, due, "UTC").unwrap();
         made(vault, &pass).meta().id.clone()
     };

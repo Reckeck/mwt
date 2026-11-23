@@ -1,4 +1,4 @@
-//! Tests of the adjustments area that need the vault (`UnlockedVault`): moved from
+//! Tests of the adjustments area that need the vault (`Session`): moved from
 //! `money/adjustments_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::Amount;
@@ -10,7 +10,7 @@ use crate::model::transaction::{AdjustmentTx, TxMeta};
 use crate::model::vault::now_iso;
 use crate::money::adjustments::{balances_at, complete_adjustment};
 use crate::money::worth::FlowClass;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::usecases::money::adjustments::adjustment_draft;
 
@@ -118,7 +118,7 @@ fn a_back_dated_correction_sees_the_balance_of_its_moment() {
     assert_eq!(holding_of(&vault, &cash, &usd()), amount("145"));
 }
 
-fn before_of(vault: &UnlockedVault, id: &str) -> Vec<Amount> {
+fn before_of(vault: &Session, id: &str) -> Vec<Amount> {
     let Some(Transaction::Adjustment(inner)) =
         vault.doc.transactions.iter().find(|tx| tx.meta().id == id)
     else {

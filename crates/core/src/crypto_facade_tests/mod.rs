@@ -1,4 +1,4 @@
-//! Tests of `cryptotrack/` items that need the vault (`UnlockedVault` and its fixtures) or a
+//! Tests of `cryptotrack/` items that need the vault (`Session` and its fixtures) or a
 //! higher layer. They moved here from `cryptotrack/` with their assertions unchanged so that
 //! module holds pure tests only (crate-split T20). The files are named `<stem>_tests.rs`.
 

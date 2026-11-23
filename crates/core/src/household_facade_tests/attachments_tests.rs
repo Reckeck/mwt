@@ -8,10 +8,10 @@ use crate::model::entity_ref::{EntityKind, EntityRef};
 use crate::model::planning::Goal;
 use crate::model::store::StoreScope;
 use crate::model::vault::VaultDoc;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 
-fn tx_owner(vault: &mut UnlockedVault) -> EntityRef {
+fn tx_owner(vault: &mut Session) -> EntityRef {
     let card = store(vault, "Card", crate::model::store::StoreKind::Bank, None);
     let tx = crate::usecases::money::transactions::add_transaction(
         vault,
@@ -85,7 +85,7 @@ fn a_new_password_keeps_the_files_readable() {
     let path = vault.path.clone();
     vault.change_password("pw", "another").unwrap();
     drop(vault);
-    let reopened = UnlockedVault::open(path, "another").unwrap();
+    let reopened = Session::open(path, "another").unwrap();
     assert_eq!(
         crate::usecases::household::attachments::read_attachment(&reopened, &item.id)
             .unwrap()
@@ -119,7 +119,7 @@ fn removal_waits_for_undo_until_the_next_open() {
     vault.flush_pending().unwrap();
     let path = vault.path.clone();
     drop(vault);
-    let reopened = UnlockedVault::open(path, "pw").unwrap();
+    let reopened = Session::open(path, "pw").unwrap();
     assert!(reopened.doc.attachments.is_empty());
     assert!(reopened.doc.attachment_keys.is_empty());
     assert!(!file.exists());
@@ -147,7 +147,7 @@ fn a_deleted_operation_takes_its_files_on_the_next_open() {
     vault.flush_pending().unwrap();
     let path = vault.path.clone();
     drop(vault);
-    let reopened = UnlockedVault::open(path, "pw").unwrap();
+    let reopened = Session::open(path, "pw").unwrap();
     assert!(reopened.doc.attachments.is_empty());
     assert!(!file.exists());
 }

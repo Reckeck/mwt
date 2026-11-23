@@ -5,8 +5,7 @@ use serde_json::json;
 
 fn outcome_of(kind: &str, params: serde_json::Value) -> RunOutcome {
     let dir = tempfile::tempdir().unwrap();
-    let vault =
-        crate::service::UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+    let vault = crate::service::Session::create(dir.path().join("test.wallet"), "pw").unwrap();
     let graph = serde_json::json!({
         "version": 1,
         "nodes": [

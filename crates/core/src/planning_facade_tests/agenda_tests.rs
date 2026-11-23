@@ -10,7 +10,7 @@ use crate::model::transaction::Transaction;
 use crate::model::vault::PricePoint;
 use crate::planning::agenda::*;
 use crate::planning::automations::AutomationDraft;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 
@@ -171,7 +171,7 @@ fn a_reminder_keeps_what_pay_fills_in_and_drops_an_empty_button() {
 #[test]
 fn a_repeating_alert_rearms_after_the_price_crosses_back() {
     let (_dir, mut vault) = empty_vault();
-    let price = |vault: &mut UnlockedVault, value: &str, ts: &str| {
+    let price = |vault: &mut Session, value: &str, ts: &str| {
         vault.doc.price_cache.push(PricePoint {
             asset_key: btc().key(),
             value_usd: amount(value),

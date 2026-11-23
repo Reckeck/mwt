@@ -3,7 +3,7 @@
 use crate::cryptotrack::exchange_sync::{intake, known_import_ids, preview_exchange_sync};
 use crate::model::store::ImportSettings;
 use crate::model::vault::{ImportKind, PendingImport};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 fn fill(exec_id: &str) -> PendingImport {
     PendingImport {
@@ -16,7 +16,7 @@ fn fill(exec_id: &str) -> PendingImport {
 #[test]
 fn a_preview_counts_a_repeated_exec_id_once_like_the_import() {
     let dir = tempfile::tempdir().unwrap();
-    let vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
+    let vault = Session::create(dir.path().join("test.wallet"), "pw").unwrap();
     let books = vault.books();
     let batch = vec![fill("twice"), fill("twice"), fill(""), fill("other")];
     let settings = ImportSettings::default();

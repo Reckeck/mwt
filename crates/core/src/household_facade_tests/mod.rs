@@ -1,4 +1,4 @@
-//! Tests of `household/` items that need the vault (`UnlockedVault` and its fixtures). They moved
+//! Tests of `household/` items that need the vault (`Session` and its fixtures). They moved
 //! here from the `household` crate with their assertions unchanged so `household/` holds pure tests only
 //! (crate-split T15). The files are named `<stem>_tests.rs`. The scenario support of the shared events tests
 //! stays in `service/shared_events/testing.rs`, where the strangler map lists it.

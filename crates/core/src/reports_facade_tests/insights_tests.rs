@@ -3,7 +3,7 @@
 use crate::Amount;
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 use mwt_reports::insights::*;
@@ -26,7 +26,7 @@ fn earn(store: &str, sum: &str, ts: &str) -> Transaction {
     dated(income(store, sum, "salary"), ts)
 }
 
-fn vault_with_card() -> (tempfile::TempDir, UnlockedVault, String) {
+fn vault_with_card() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
@@ -34,7 +34,7 @@ fn vault_with_card() -> (tempfile::TempDir, UnlockedVault, String) {
     (dir, vault, card)
 }
 
-fn overview(vault: &UnlockedVault) -> ReportOverview {
+fn overview(vault: &Session) -> ReportOverview {
     crate::reports::insights::report_overview(
         &vault.books(),
         &ReportFilter::default(),

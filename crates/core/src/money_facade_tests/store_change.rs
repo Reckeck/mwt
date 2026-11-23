@@ -1,4 +1,4 @@
-//! Tests of the store_change area that need the vault (`UnlockedVault`): moved from
+//! Tests of the store_change area that need the vault (`Session`): moved from
 //! `money/store_change_tests.rs` with their assertions unchanged (crate-split T13).
 
 #[cfg(test)]
@@ -6,8 +6,8 @@ mod tests {
     use crate::model::chain::Chain;
     use crate::model::store::{AssetRef, Binding, MarketKind, StoreKind, SubType};
     use crate::money::store_change::*;
+    use crate::service::Session;
     use crate::service::StoreExtras;
-    use crate::service::UnlockedVault;
     use crate::service::test_support::*;
 
     fn rub() -> AssetRef {
@@ -15,7 +15,7 @@ mod tests {
     }
 
     fn sub(
-        vault: &mut UnlockedVault,
+        vault: &mut Session,
         parent: &str,
         name: &str,
         sub_type: SubType,
@@ -325,7 +325,7 @@ mod merge_correction_tests {
         AdjustmentLine, AdjustmentTx, PriceStamp, Transaction, TxMeta,
     };
     use crate::money::store_change::*;
-    use crate::service::UnlockedVault;
+    use crate::service::Session;
     use crate::service::test_support::*;
     use crate::time::secs_or_now;
 
@@ -333,7 +333,7 @@ mod merge_correction_tests {
         AssetRef::fiat("RUB", "RUB")
     }
 
-    fn card(vault: &mut UnlockedVault, bank: &str, name: &str) -> String {
+    fn card(vault: &mut Session, bank: &str, name: &str) -> String {
         crate::usecases::money::stores::create_store_with(
             vault,
             name,
@@ -351,7 +351,7 @@ mod merge_correction_tests {
         .id
     }
 
-    fn correct(vault: &mut UnlockedVault, store_id: &str, after: &str, timestamp: &str) -> String {
+    fn correct(vault: &mut Session, store_id: &str, after: &str, timestamp: &str) -> String {
         let mut meta = TxMeta::new("count");
         meta.timestamp = timestamp.into();
         let saved = crate::usecases::money::transactions::add_transaction(
@@ -372,14 +372,14 @@ mod merge_correction_tests {
         saved.meta().id.clone()
     }
 
-    fn topup_at(vault: &mut UnlockedVault, store_id: &str, raw: &str, timestamp: &str) {
+    fn topup_at(vault: &mut Session, store_id: &str, raw: &str, timestamp: &str) {
         let mut tx = income_of(store_id, rub(), raw, "0.01", "in");
         at(&mut tx, timestamp);
         crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
     }
 
     /// `(before, after)` of the correction line.
-    fn line_of(vault: &UnlockedVault, id: &str) -> (Amount, Amount) {
+    fn line_of(vault: &Session, id: &str) -> (Amount, Amount) {
         vault
             .doc
             .transactions
@@ -393,14 +393,7 @@ mod merge_correction_tests {
             .unwrap()
     }
 
-    fn scenario() -> (
-        tempfile::TempDir,
-        UnlockedVault,
-        String,
-        String,
-        String,
-        String,
-    ) {
+    fn scenario() -> (tempfile::TempDir, Session, String, String, String, String) {
         let (dir, mut vault) = empty_vault();
         let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
         let first = card(&mut vault, &bank, "Card 1");
@@ -425,7 +418,7 @@ mod merge_correction_tests {
     #[test]
     fn merge_keeps_every_delta_and_the_sum() {
         let (_dir, mut vault, first, second, source_fix, target_fix) = scenario();
-        let delta = |vault: &UnlockedVault, id: &str| {
+        let delta = |vault: &Session, id: &str| {
             let (before, after) = line_of(vault, id);
             after - before
         };
@@ -467,7 +460,7 @@ mod merge_correction_tests {
         let stamp = "2026-05-01T00:00:00Z";
         let first_fix = correct(&mut vault, &first, "500", stamp);
         let second_fix = correct(&mut vault, &second, "2000", stamp);
-        let delta = |vault: &UnlockedVault, id: &str| {
+        let delta = |vault: &Session, id: &str| {
             let (before, after) = line_of(vault, id);
             after - before
         };

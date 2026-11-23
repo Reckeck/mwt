@@ -1,4 +1,4 @@
-//! Tests of `mwt-sync` items that need something only the facade has (`UnlockedVault`,
+//! Tests of `mwt-sync` items that need something only the facade has (`Session`,
 //! `service::test_support`). They moved here from the crate with their assertions unchanged
 //! (crate-split D6).
 

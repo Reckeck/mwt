@@ -1,11 +1,11 @@
-//! Tests of the month_balance area that need the vault (`UnlockedVault`): moved from
+//! Tests of the month_balance area that need the vault (`Session`): moved from
 //! `money/month_balance_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::Amount;
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::money::month_balance::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 use mwt_reports::overview::ReportFilter;
@@ -41,7 +41,7 @@ fn date(text: &str) -> chrono::NaiveDate {
     chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap()
 }
 
-fn balance(vault: &UnlockedVault, from: &str, to: &str) -> MonthBalance {
+fn balance(vault: &Session, from: &str, to: &str) -> MonthBalance {
     let filter = ReportFilter {
         from: Some(from.into()),
         to: Some(to.into()),
@@ -56,7 +56,7 @@ fn balance(vault: &UnlockedVault, from: &str, to: &str) -> MonthBalance {
     .unwrap()
 }
 
-fn vault_with_months() -> (tempfile::TempDir, UnlockedVault) {
+fn vault_with_months() -> (tempfile::TempDir, Session) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
@@ -203,7 +203,7 @@ fn the_pure_balance_runs_on_a_fake_source_without_a_vault() {
 
 /// The vault of `service/golden_tests.rs` (BTC bought twice, sold in February)
 /// with a salary and a payment next to it.
-fn golden_vault() -> (tempfile::TempDir, UnlockedVault) {
+fn golden_vault() -> (tempfile::TempDir, Session) {
     let (dir, mut vault) = setup();
     vault.set_base_currency("usd");
     quote_usd(&mut vault);

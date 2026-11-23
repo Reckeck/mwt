@@ -4,7 +4,7 @@ use crate::ipc_contract::{SetShareOverrideInput, SettleSharedInput, SharedRemain
 use crate::model::shared_event::ME;
 use crate::model::shared_event::{Purchase, RemovedWithPayment, SettleDirection};
 use crate::model::transaction::Transaction;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 fn settle_petya(scenario: &mut Scenario, raw: &str, at: Option<&str>) -> String {
     let wallet = scenario.wallet.clone();
@@ -148,7 +148,7 @@ fn a_purchase_taken_out_by_hand_leaves_nothing_to_bring_back() {
 fn a_payment_that_found_another_place_is_not_linked_twice() {
     let mut scenario = skewers_scenario();
     let (tx_id, _) = linked_purchase(&scenario);
-    let position = |vault: &UnlockedVault| {
+    let position = |vault: &Session| {
         vault
             .doc
             .shared_events

@@ -7,7 +7,7 @@ use crate::model::ids::StoreId;
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::vault::VaultDoc;
 use crate::planning::envelopes::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::{amount, empty_vault, income, payment, store, usd};
 use crate::usecases::household::envelopes as scenarios;
 
@@ -163,7 +163,7 @@ fn allocated_is_the_sum_of_moves() {
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     crate::usecases::money::transactions::add_transaction(&mut vault, income(&cash, "500", "pay"))
         .unwrap();
-    let check = |vault: &UnlockedVault| {
+    let check = |vault: &Session| {
         for envelope in &vault.doc.envelopes {
             assert_eq!(
                 envelope.allocated,
@@ -262,7 +262,7 @@ fn allocated_is_the_sum_of_moves() {
     check(&vault);
 }
 
-fn funded_cash() -> (tempfile::TempDir, UnlockedVault, String) {
+fn funded_cash() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     crate::usecases::money::transactions::add_transaction(&mut vault, income(&cash, "100", "pay"))
@@ -446,7 +446,7 @@ fn the_delegates_equal_the_scenarios() {
         amount("20"),
     )
     .unwrap();
-    let held = |vault: &UnlockedVault| {
+    let held = |vault: &Session| {
         vault
             .doc
             .envelopes

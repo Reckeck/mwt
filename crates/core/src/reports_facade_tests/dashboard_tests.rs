@@ -3,7 +3,7 @@
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::model::vault::DashPeriod;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 use pretty_assertions::assert_eq;
@@ -15,7 +15,7 @@ fn spend(store: &str, sum: &str, category: &str, ts: &str) -> Transaction {
     tx
 }
 
-fn vault_with_card() -> (tempfile::TempDir, UnlockedVault, String) {
+fn vault_with_card() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     quote_usd(&mut vault);

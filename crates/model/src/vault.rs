@@ -122,11 +122,11 @@ pub struct Settings {
     pub inflation_source: std::collections::BTreeMap<String, String>,
     /// Flat annual inflation, percent, by lowercase currency code, where the
     /// group differs from the shipped table (`default_inflation`); read through
-    /// `UnlockedVault::flat_inflation`. Group data: every device sees one table.
+    /// `Session::flat_inflation`. Group data: every device sees one table.
     #[serde(default)]
     pub inflation_manual: std::collections::BTreeMap<String, Amount>,
     /// The device-local rates of the app config were copied into
-    /// `inflation_manual` once (`UnlockedVault::adopt_flat_inflation`).
+    /// `inflation_manual` once (`Session::adopt_flat_inflation`).
     #[serde(default)]
     pub inflation_adopted: bool,
     /// The user's usual monthly income in the budget currency, used until

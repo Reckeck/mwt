@@ -1,4 +1,4 @@
-//! Tests of the transactions area that need the vault (`UnlockedVault`): moved from
+//! Tests of the transactions area that need the vault (`Session`): moved from
 //! `money/transactions_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::error::Error;
@@ -135,7 +135,7 @@ fn history_comes_newest_first() {
     assert_eq!(history[0].meta().comment, "new");
 }
 
-fn linked_operation(vault: &mut crate::service::UnlockedVault, cash: &str) -> Transaction {
+fn linked_operation(vault: &mut crate::service::Session, cash: &str) -> Transaction {
     let mut tx = income(cash, "100", "water");
     tx.meta_mut().flow_id = Some("flow-1".into());
     tx.meta_mut().utility_item_id = Some("util-1".into());

@@ -1,4 +1,4 @@
-//! Tests of the worth area that need the vault (`UnlockedVault`): moved from
+//! Tests of the worth area that need the vault (`Session`): moved from
 //! `money/worth_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::Amount;
@@ -8,8 +8,8 @@ use crate::model::store::{Holding, Store, StoreKind};
 use crate::model::transaction::{AccountRef, Transaction};
 use crate::model::vault::VaultDoc;
 use crate::money::worth::*;
+use crate::service::Session;
 use crate::service::StoreExtras;
-use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 
 /// A bare document: a bank (in the budget), a property wallet holding `FLAT`.
@@ -40,7 +40,7 @@ fn bare_doc() -> (VaultDoc, AssetRef) {
 
 /// A bank and a credit card: draw 500, pay 200 at a shop, 10 interest,
 /// repay 300 (the repayment is priced at 1, as an app-booked one is).
-fn credit_card_story(vault: &mut UnlockedVault) -> (String, Transaction, Transaction) {
+fn credit_card_story(vault: &mut Session) -> (String, Transaction, Transaction) {
     vault.set_base_currency("usd");
     quote_usd(vault);
     let bank = store(vault, "Bank", StoreKind::Bank, None);

@@ -1,4 +1,4 @@
-//! Tests of the validate area that need the vault (`UnlockedVault`): moved from
+//! Tests of the validate area that need the vault (`Session`): moved from
 //! `money/validate_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::household::contacts::ContactDraft;
@@ -465,7 +465,7 @@ fn category_keys_are_trimmed_lowercased_and_deduplicated() {
     crate::money::validate::normalize_categories(&mut tx);
     assert_eq!(tx.meta().categories, vec!["coffee"]);
     assert_eq!(
-        crate::service::UnlockedVault::store_sides(&tx),
+        crate::service::Session::store_sides(&tx),
         vec![card.as_str()]
     );
 }

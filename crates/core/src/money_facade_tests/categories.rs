@@ -1,17 +1,17 @@
-//! Tests of the categories area that need the vault (`UnlockedVault`): moved from
+//! Tests of the categories area that need the vault (`Session`): moved from
 //! `money/categories_tests.rs` with their assertions unchanged (crate-split T13).
 
 use crate::error::Error;
 use crate::model::VaultDoc;
 use crate::model::category::CategoryGroup;
 use crate::money::categories::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::usecases::household::categories as scenarios;
 
 #[test]
 fn a_new_vault_has_the_default_categories() {
-    let vault = UnlockedVault::in_memory(VaultDoc::default());
+    let vault = Session::in_memory(VaultDoc::default());
     let group = |key: &str| {
         vault
             .doc
@@ -128,7 +128,7 @@ fn system_categories_cannot_be_changed() {
 }
 
 fn defaults() -> VaultDoc {
-    UnlockedVault::in_memory(VaultDoc::default()).doc.clone()
+    Session::in_memory(VaultDoc::default()).doc.clone()
 }
 
 #[test]

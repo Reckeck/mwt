@@ -4,7 +4,7 @@
 use crate::model::store::StoreKind;
 use crate::service::PeerRef;
 use crate::service::test_support::empty_vault;
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 use crate::usecases::sync::peer_sync;
 
 fn peer() -> PeerRef {
@@ -15,13 +15,13 @@ fn peer() -> PeerRef {
 }
 
 /// Two devices of one vault; `left` has a store `right` does not.
-fn left_ahead() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
+fn left_ahead() -> (tempfile::TempDir, Session, Session) {
     let (dir, mut left) = empty_vault();
     peer_sync::set_device(&mut left, "aaaaaaaa-left");
     left.persist().unwrap();
     let copy = dir.path().join("copy.wallet");
     std::fs::copy(dir.path().join("test.wallet"), &copy).unwrap();
-    let mut right = UnlockedVault::open(copy, "pw").unwrap();
+    let mut right = Session::open(copy, "pw").unwrap();
     peer_sync::set_device(&mut right, "bbbbbbbb-right");
     crate::usecases::money::stores::create_store_with(
         &mut left,
@@ -37,8 +37,8 @@ fn left_ahead() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
 }
 
 fn incoming_for(
-    left: &mut UnlockedVault,
-    right: &mut UnlockedVault,
+    left: &mut Session,
+    right: &mut Session,
 ) -> std::collections::BTreeMap<String, crate::sync::RecordState> {
     let mine = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
     let theirs = crate::usecases::sync::read::sync_manifest(right, None).unwrap();
@@ -49,7 +49,7 @@ fn incoming_for(
 }
 
 /// The document and its sync bookkeeping, serialized.
-fn bytes(vault: &mut UnlockedVault) -> String {
+fn bytes(vault: &mut Session) -> String {
     let doc = serde_json::to_string(&peer_sync::doc_value(vault).unwrap()).unwrap();
     doc + &serde_json::to_string(peer_sync::sync_state(vault)).unwrap()
 }

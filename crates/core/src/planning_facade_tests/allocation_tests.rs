@@ -5,21 +5,16 @@ use crate::model::store::StoreKind;
 use crate::model::store::{AssetRef, Purpose, StoreScope};
 use crate::model::vault::PricePoint;
 use crate::planning::allocation::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::{amount, empty_vault, income_of, store};
 use crate::{Amount, Error};
 
-fn vault() -> (tempfile::TempDir, UnlockedVault) {
+fn vault() -> (tempfile::TempDir, Session) {
     empty_vault()
 }
 
 /// A store holding fiat at one USD a unit.
-fn store_with(
-    vault: &mut UnlockedVault,
-    name: &str,
-    kind: StoreKind,
-    assets: &[(&str, &str)],
-) -> String {
+fn store_with(vault: &mut Session, name: &str, kind: StoreKind, assets: &[(&str, &str)]) -> String {
     let id = store(vault, name, kind, None);
     for (symbol, quantity) in assets {
         let asset = AssetRef::fiat(symbol, symbol);

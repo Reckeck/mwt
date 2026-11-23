@@ -14,7 +14,7 @@ use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
 use crate::money::books::Books;
 use crate::money::ledger::TxFilter;
 use crate::service::test_support::*;
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 use crate::time::unix_secs;
 use mwt_reports::where_went::WhereKind;
 
@@ -49,7 +49,7 @@ fn usd_move(from: &str, to: &str, sum: &str, ts: &str) -> Transaction {
     )
 }
 
-fn vault_with_card() -> (tempfile::TempDir, UnlockedVault, String) {
+fn vault_with_card() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
@@ -67,7 +67,7 @@ fn range(from: &str, to: &str) -> ReportFilter {
 
 const NOW: &str = "2026-06-15T12:00:00Z";
 
-fn run(vault: &UnlockedVault, kind: ReportKind, filter: &ReportFilter) -> Report {
+fn run(vault: &Session, kind: ReportKind, filter: &ReportFilter) -> Report {
     crate::reports::overview::report(&vault.books(), kind, filter, secs(NOW), "UTC").unwrap()
 }
 
@@ -824,7 +824,7 @@ fn pnl_without_a_rate_to_the_report_currency_is_marked_not_taken_one_to_one() {
     assert_eq!(base.unpriced, 0);
 }
 
-fn with_flat_inflation(vault: &mut UnlockedVault, percent: &str) {
+fn with_flat_inflation(vault: &mut Session, percent: &str) {
     vault
         .update_settings(crate::ipc_contract::UpdateSettingsInput {
             inflation_manual: Some(BTreeMap::from([("usd".to_string(), amount(percent))])),
@@ -915,8 +915,8 @@ fn real_terms_cash_flow_and_categories_round_after_summing() {
 // -- the pure queries over `&Books`, without a tempdir vault ---------------------------
 
 /// An in-memory vault with one card, a salary and a grocery spend in 2026-02.
-fn memory_vault() -> UnlockedVault {
-    let mut vault = UnlockedVault::in_memory(crate::model::vault::VaultDoc::default());
+fn memory_vault() -> Session {
+    let mut vault = Session::in_memory(crate::model::vault::VaultDoc::default());
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
     let card = store(&mut vault, "Card", StoreKind::Bank, None);

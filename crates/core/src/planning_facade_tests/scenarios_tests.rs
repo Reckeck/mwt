@@ -14,7 +14,7 @@ use crate::model::store::{Binding, StoreKind, SubType};
 use crate::model::transaction::{AccountRef, Transaction};
 use crate::planning::scenarios::*;
 use crate::service::test_support::*;
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 use crate::time::unix_secs;
 
 pub(super) fn input(initial: &str, monthly: &str, months: u32) -> InvestInput {
@@ -48,7 +48,7 @@ fn draft(name: &str) -> CalcScenarioDraft {
     }
 }
 
-fn deposit_store(vault: &mut UnlockedVault, name: &str) -> String {
+fn deposit_store(vault: &mut Session, name: &str) -> String {
     let bank = store(vault, &format!("{name} bank"), StoreKind::Bank, None);
     let extras = StoreExtras {
         sub_type: Some(SubType::Deposit),

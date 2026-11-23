@@ -6,7 +6,7 @@ use crate::ipc_contract::{
 use crate::model::contact::{ContactAccount, DetailKind};
 use crate::model::shared_event::{GuestDetails, ItemSplit, ME, SharedEventStatus};
 use crate::model::vault::VaultDoc;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 use crate::storage::{SnapshotFormat, VaultFile, decode, encode};
 
@@ -383,7 +383,7 @@ fn a_split_names_only_people_of_the_event() {
     .items[0]
         .id
         .clone();
-    let set = |vault: &mut UnlockedVault, split: ItemSplit| {
+    let set = |vault: &mut Session, split: ItemSplit| {
         crate::usecases::household::shared_events::set_shared_item_split(
             vault,
             SetSharedItemSplitInput {
@@ -438,7 +438,7 @@ fn an_old_vault_without_shared_events_opens_keeps_its_data_and_reads_again() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("old.wallet");
         VaultFile::save(&path, "pw", &doc, fmt).unwrap();
-        let mut vault = UnlockedVault::open(path.clone(), "pw").unwrap();
+        let mut vault = Session::open(path.clone(), "pw").unwrap();
         let stores = vault.doc.stores.len();
         let id = crate::usecases::household::shared_events::create_shared_event(
             &mut vault,
@@ -448,7 +448,7 @@ fn an_old_vault_without_shared_events_opens_keeps_its_data_and_reads_again() {
         .event
         .id;
         drop(vault);
-        let reopened = UnlockedVault::open(path, "pw").unwrap();
+        let reopened = Session::open(path, "pw").unwrap();
         assert_eq!(reopened.doc.stores.len(), stores);
         assert_eq!(reopened.doc.shared_events.len(), 1);
         assert_eq!(reopened.doc.shared_events[0].id, id);

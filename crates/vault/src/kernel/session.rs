@@ -1,6 +1,6 @@
 //! The write state of an open vault: what is unsaved, which revision it is,
 //! and how a change is told to the writer. It moved here from `service/saving.rs`;
-//! the secrets and the file lock stay in `UnlockedVault`.
+//! the secrets and the file lock stay in the facade's `Session`.
 
 use std::sync::{Arc, Mutex};
 
@@ -59,7 +59,7 @@ impl Write {
         Self::with_store(Arc::new(SandboxStore))
     }
 
-    /// A session whose snapshots go to `store` (the test kit's in-memory one); called by the facade's `UnlockedVault`.
+    /// A session whose snapshots go to `store` (the test kit's in-memory one); called by the facade's `Session`.
     pub fn with_store(store: Arc<dyn Persistence>) -> Self {
         Self {
             dirty: false,
@@ -80,7 +80,7 @@ impl Write {
 
     /// Publish the events of a finished transaction: only a touched one that
     /// returned `Ok` calls this; an untouched one drops them. Called by the facade's
-    /// `UnlockedVault` commit (`service/saving.rs`).
+    /// `Session` commit (`service/saving.rs`).
     pub fn deliver(&self, touched: bool, events: Vec<DomainEvent>) {
         if !touched {
             return;

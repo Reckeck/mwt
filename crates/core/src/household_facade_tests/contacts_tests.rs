@@ -6,10 +6,10 @@ use crate::household::contacts::*;
 use crate::model::contact::{Contact, ContactAccount, ContactKind, DetailKind};
 use crate::model::store::StoreKind;
 use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::service::test_support::*;
 
-fn ann(vault: &mut UnlockedVault) -> Contact {
+fn ann(vault: &mut Session) -> Contact {
     crate::usecases::household::contacts::create_contact(
         vault,
         ContactDraft {
@@ -144,7 +144,7 @@ fn turnover_counts_sent_and_received_but_not_internal_moves() {
     assert_eq!(one.tx_count, 1);
 }
 
-fn summary_of(vault: &UnlockedVault, contact_id: &str) -> ContactSummary {
+fn summary_of(vault: &Session, contact_id: &str) -> ContactSummary {
     crate::usecases::household::contacts::contact_summaries(vault)
         .unwrap()
         .into_iter()

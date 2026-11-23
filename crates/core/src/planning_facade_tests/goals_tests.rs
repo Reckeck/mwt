@@ -4,7 +4,7 @@ use crate::Amount;
 use crate::model::ids::StoreId;
 use crate::model::store::StoreScope;
 use crate::planning::goals::*;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 #[test]
 fn a_far_deadline_with_a_return_does_not_panic() {
@@ -45,13 +45,13 @@ fn goal(name: &str, target: &str, stores: &[&str], priority: u8) -> GoalDraft {
     }
 }
 
-fn deposit(vault: &mut UnlockedVault, store: &str, sum: &str, ts: &str) {
+fn deposit(vault: &mut Session, store: &str, sum: &str, ts: &str) {
     let mut tx = income(store, sum, "salary");
     at(&mut tx, ts);
     crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
 }
 
-fn setup_savings() -> (tempfile::TempDir, UnlockedVault, String) {
+fn setup_savings() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
@@ -315,7 +315,7 @@ fn deleting_a_goal_frees_its_envelopes_and_stops_its_saver_until_undone() {
     )
     .unwrap()
     .workflow;
-    let active = |vault: &UnlockedVault, id: &str| {
+    let active = |vault: &Session, id: &str| {
         vault
             .doc
             .workflows
@@ -690,7 +690,7 @@ pub(super) fn has_key(keys: impl IntoIterator<Item = impl AsRef<str>>, id: &str)
 }
 
 /// Write what is pending to disk, so the sync registry sees the edit.
-pub(super) fn flush(vault: &mut UnlockedVault) {
+pub(super) fn flush(vault: &mut Session) {
     vault.set_write_behind(Some(std::sync::Arc::new(NoWake)));
     if let Some(job) = vault.prepare_flush().unwrap() {
         let done = job.write().unwrap();
