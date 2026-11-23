@@ -141,6 +141,52 @@ pub fn set_lock_version(text: &str, krate: &str, next: &str) -> Result<String> {
     )
 }
 
+/// `Cargo.lock` gets `next` for every named workspace member.
+pub fn set_lock_versions(text: &str, members: &[String], next: &str) -> Result<String> {
+    members.iter().try_fold(text.to_string(), |lock, member| {
+        set_lock_version(&lock, member, next)
+    })
+}
+
+/// The package names of the manifests that say `version.workspace = true`.
+pub fn inheriting_members(manifests: &[String]) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    for text in manifests {
+        let manifest: toml::Table = text.parse().context("parse a member Cargo.toml")?;
+        let Some(package) = manifest.get("package").and_then(toml::Value::as_table) else {
+            continue;
+        };
+        let inherits = package
+            .get("version")
+            .and_then(toml::Value::as_table)
+            .and_then(|version| version.get("workspace"))
+            .and_then(toml::Value::as_bool)
+            == Some(true);
+        if let (true, Some(name)) = (inherits, package.get("name").and_then(toml::Value::as_str)) {
+            names.push(name.to_string());
+        }
+    }
+    Ok(names)
+}
+
+/// Every `crates/*/Cargo.toml` (the workspace members), read in directory order.
+fn member_manifests(root: &Path) -> Result<Vec<String>> {
+    let mut paths = Vec::new();
+    for entry in std::fs::read_dir(root.join("crates")).context("read crates")? {
+        let manifest = entry?.path().join("Cargo.toml");
+        if manifest.is_file() {
+            paths.push(manifest);
+        }
+    }
+    paths.sort();
+    paths
+        .iter()
+        .map(|path| {
+            std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
+        })
+        .collect()
+}
+
 /// The `<release>` of `next` gets the date, or a new one opens the `<releases>` list.
 pub fn set_metainfo_release(text: &str, next: &str, date: &str) -> Result<String> {
     let entry = format!("<release version=\"{next}\"");
@@ -305,9 +351,7 @@ pub fn write_bump(root: &Path, next: &str) -> Result<()> {
         ),
     ];
     let mut lock = read(root, "Cargo.lock")?;
-    for krate in ["trade-app", "trade-core"] {
-        lock = set_lock_version(&lock, krate, next)?;
-    }
+    lock = set_lock_versions(&lock, &inheriting_members(&member_manifests(root)?)?, next)?;
     edits.push(("Cargo.lock", lock));
     edits.push((
         METAINFO,

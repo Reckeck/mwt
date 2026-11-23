@@ -335,3 +335,25 @@ fn nearest_tag_ties_go_to_the_release_base_whatever_the_dates() {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+#[test]
+fn bump_updates_every_member_that_inherits_the_workspace_version() {
+    let manifests = [
+        "[package]\nname = \"mwt-base\"\nversion.workspace = true\n".to_string(),
+        "[package]\nname = \"trade-app\"\nversion.workspace = true\nedition = \"2024\"\n"
+            .to_string(),
+        "[package]\nname = \"mwt-net\"\nversion.workspace = true\n".to_string(),
+        "[package]\nname = \"vendored\"\nversion = \"9.9.9\"\n".to_string(),
+    ];
+    let names = inheriting_members(&manifests).unwrap();
+    assert_eq!(names, ["mwt-base", "trade-app", "mwt-net"]);
+
+    let lock = "[[package]]\nname = \"mwt-base\"\nversion = \"0.1.0\"\n\n\
+                [[package]]\nname = \"mwt-net\"\nversion = \"0.1.0\"\n\n\
+                [[package]]\nname = \"serde\"\nversion = \"0.1.0\"\n\n\
+                [[package]]\nname = \"trade-app\"\nversion = \"0.1.0\"\n";
+    let out = set_lock_versions(lock, &names, "0.2.0").unwrap();
+    assert_eq!(out.matches("version = \"0.2.0\"").count(), 3);
+    assert!(out.contains("name = \"serde\"\nversion = \"0.1.0\""));
+    assert!(set_lock_versions(lock, &["absent".to_string()], "0.2.0").is_err());
+}
