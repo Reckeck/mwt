@@ -399,6 +399,7 @@ path = "sync/repair/"
 
 [[area]]
 name = "loyalty"
+retired = true
 task = "T26"
 group = "household"
 context = "household"
@@ -406,6 +407,7 @@ files = ["loyalty.rs"]
 
 [[area]]
 name = "leaves"
+retired = true
 task = "A"
 group = "household"
 context = "household"
@@ -420,6 +422,7 @@ homes = {
 
 [[area]]
 name = "reports_overview"
+retired = true
 task = "A"
 group = "reports"
 context = "reports"
@@ -428,6 +431,7 @@ stem = { "reports.rs" = "overview" }
 
 [[area]]
 name = "insights"
+retired = true
 task = "A"
 group = "reports"
 context = "reports"
@@ -435,6 +439,7 @@ files = ["where_went.rs", "insights.rs", "notify_snapshot.rs"]
 
 [[area]]
 name = "dashboard"
+retired = true
 task = "A"
 group = "reports"
 context = "reports"
@@ -442,6 +447,7 @@ files = ["dashboard.rs", "dashboard_today.rs", "dashboard_tiles.rs"]
 
 [[area]]
 name = "rates"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -449,6 +455,7 @@ files = ["rates.rs", "price_info.rs"]
 
 [[area]]
 name = "valuation"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -456,6 +463,7 @@ files = ["valuation.rs", "inflation.rs", "interest.rs"]
 
 [[area]]
 name = "worth"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -463,6 +471,7 @@ files = ["worth.rs"]
 
 [[area]]
 name = "stores"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -470,6 +479,7 @@ files = ["stores.rs", "store_change.rs"]
 
 [[area]]
 name = "transactions"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -477,6 +487,7 @@ files = ["transactions.rs"]
 
 [[area]]
 name = "portfolio"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -484,6 +495,7 @@ files = ["portfolio.rs", "asset_holdings.rs", "investments.rs"]
 
 [[area]]
 name = "adjustments"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -493,6 +505,7 @@ files = [
 
 [[area]]
 name = "contacts_debts"
+retired = true
 task = "C"
 group = "household"
 context = "household"
@@ -500,6 +513,7 @@ files = ["contacts.rs", "debts.rs"]
 
 [[area]]
 name = "utilities"
+retired = true
 task = "C"
 group = "household"
 context = "household"
@@ -507,6 +521,7 @@ files = ["utilities.rs", "property_links.rs"]
 
 [[area]]
 name = "shared_events_split"
+retired = true
 task = "C"
 stubs = false
 group = "household/shared_events"
@@ -522,6 +537,7 @@ stem = {
 
 [[area]]
 name = "shared_events_views"
+retired = true
 task = "C"
 stubs = false
 group = "household/shared_events"
@@ -540,6 +556,7 @@ stem = {
 
 [[area]]
 name = "shared_events_testing"
+retired = true
 task = "C"
 stubs = false
 group = "household/shared_events"
@@ -549,6 +566,7 @@ stem = { "shared_events/testing.rs" = "testing" }
 
 [[area]]
 name = "attachments"
+retired = true
 task = "C"
 group = "household"
 context = "household"
@@ -563,6 +581,7 @@ files = ["peer_sync.rs"]
 
 [[area]]
 name = "sync_repair"
+retired = true
 task = "C"
 stubs = false
 group = "sync/repair"
@@ -598,6 +617,7 @@ stem = {
 
 [[area]]
 name = "sync_ids_journal"
+retired = true
 task = "C"
 group = "sync"
 context = "sync"

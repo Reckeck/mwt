@@ -7,33 +7,12 @@ pub use crate::household::shared_events::view::{
     SharedTxLink,
 };
 
+#[cfg(test)]
+use super::super::UnlockedVault;
+#[cfg(test)]
 use crate::error::Result;
 #[cfg(test)]
 use crate::model::shared_event::SharedEvent;
-
-use super::super::UnlockedVault;
-use super::super::forward::forward;
-
-impl UnlockedVault {
-    // forward:begin
-    forward! {
-        /// The event with everything worked out.
-        pub fn shared_event_view(&self, id: &str) -> Result<SharedEventView>
-            => crate::household::shared_events::view::shared_event_view @doc;
-        /// The events, newest first by their date (`starts_on`, else the day they
-        /// were made); archived ones only when asked for.
-        pub fn list_shared_events(&self, include_archived: bool) -> Vec<SharedEventSummary>
-            => crate::household::shared_events::view::list_shared_events @doc;
-        /// The events that left a debt with (or credit from) a contact.
-        pub fn contact_shared_events(&self, contact_id: &str) -> Vec<ContactEventBalance>
-            => crate::household::shared_events::view::contact_shared_events @doc;
-        /// Every operation tied to an event, found through the events (the
-        /// operations themselves carry no mark, so older vault files still read).
-        pub fn shared_tx_links(&self) -> Vec<SharedTxLink>
-            => crate::household::shared_events::view::shared_tx_links @doc;
-    }
-    // forward:end
-}
 
 /// The accessors the tests of the area use on the vault.
 #[cfg(test)]

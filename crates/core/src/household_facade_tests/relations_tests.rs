@@ -215,23 +215,3 @@ fn a_wallet_card_takes_its_value_from_outside() {
     let gone = card_of(&doc, &EntityRef::new(EntityKind::Store, "gone"), &worth);
     assert!(gone.missing && gone.groups.is_empty());
 }
-
-#[test]
-fn the_delegates_equal_the_scenarios() {
-    let (_dir, mut vault) = setup();
-    let binance = vault.doc.stores[0].id.clone();
-    vault
-        .doc
-        .transactions
-        .push(income(&binance, "100", "зарплата"));
-    vault.doc.goals.push(goal_on(&binance));
-    let target = EntityRef::new(EntityKind::Store, &binance);
-    assert_eq!(
-        crate::usecases::household::relations::entity_card(&vault, &target),
-        crate::usecases::household::relations::entity_card(&vault, &target)
-    );
-    assert_eq!(
-        crate::household::relations::relations(&vault.doc, &target),
-        relations(&vault.doc, &target)
-    );
-}

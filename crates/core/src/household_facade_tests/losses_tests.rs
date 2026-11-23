@@ -390,45 +390,6 @@ fn link_and_unlink_are_one_write_each() {
     assert_eq!(wakes.0.load(std::sync::atomic::Ordering::SeqCst), 2);
 }
 
-#[test]
-fn the_delegates_equal_the_scenarios() {
-    let (_dir, mut vault, card, wallet, _) = setup();
-    let saved = crate::usecases::money::transactions::add_transaction(
-        &mut vault,
-        convert(
-            (&card, rub(), "10000"),
-            (&wallet, usdt(), "95"),
-            Some("105.26"),
-            "2026-02-01T10:00:00Z",
-        ),
-    )
-    .unwrap();
-    let id = saved.meta().id.clone();
-    crate::usecases::household::losses::link_transactions(
-        &mut vault,
-        std::slice::from_ref(&id),
-        Some("chain"),
-    )
-    .unwrap();
-    assert_eq!(
-        crate::usecases::household::losses::tx_loss(&vault, &id).unwrap(),
-        crate::usecases::household::losses::tx_loss(&vault, &id).unwrap()
-    );
-    assert_eq!(
-        crate::usecases::household::losses::tx_losses(&vault),
-        crate::usecases::household::losses::tx_losses(&vault)
-    );
-    assert_eq!(
-        crate::usecases::household::losses::list_flows(&vault, None, None, &[]),
-        crate::usecases::household::losses::list_flows(&vault, None, None, &[])
-    );
-    let favorites = ["THB".to_string()];
-    assert_eq!(
-        crate::usecases::household::losses::fx_table(&vault, &favorites),
-        crate::usecases::household::losses::fx_table(&vault, &favorites)
-    );
-}
-
 /// L5: a side without a price is no evidence of a spread. The missing side
 /// used to count as zero, so 1000 USDT given for an unlisted token read as a
 /// loss of 1000.

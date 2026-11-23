@@ -155,7 +155,7 @@ fn the_pins_are_capped() {
 }
 
 #[test]
-fn the_delegates_equal_the_scenarios() {
+fn pinning_stores_a_list_and_an_empty_list_clears_it() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Tinkoff", StoreKind::Bank, None);
     crate::usecases::money::transactions::add_transaction(
@@ -163,23 +163,11 @@ fn the_delegates_equal_the_scenarios() {
         payment(&card, "230", "Coffee"),
     )
     .unwrap();
-    assert_eq!(
-        crate::money::search::search_index(&vault.doc),
-        search_index(&vault.doc)
-    );
-    assert_eq!(
-        crate::money::search::search_transactions(&vault.doc, "coff", &[], 10),
-        search_transactions(&vault.doc, "coff", &[], 10)
-    );
     let wallet = Pinned::Entity {
         target: EntityRef::new(EntityKind::Store, &card),
     };
     crate::usecases::household::search::set_pinned(&mut vault, vec![wallet.clone()]).unwrap();
     assert_eq!(vault.doc.settings.pinned, vec![wallet.clone()]);
-    assert_eq!(
-        crate::usecases::household::search::pinned(&vault, now_secs(), "UTC"),
-        crate::usecases::household::search::pinned(&vault, now_secs(), "UTC")
-    );
     crate::usecases::household::search::set_pinned(&mut vault, Vec::new()).unwrap();
     assert!(vault.doc.settings.pinned.is_empty());
 }
