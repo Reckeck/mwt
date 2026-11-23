@@ -14,6 +14,7 @@ mod market;
 mod pricing;
 #[cfg(test)]
 mod props;
+mod txinfo;
 mod updates;
 
 pub use chain::{HostLimiter, RpcCall, RpcClient, RpcConfig};
@@ -33,6 +34,10 @@ pub use pricing::history::{
 };
 pub use pricing::llama::llama_coin;
 pub use pricing::{AssetSearchHit, PricingService, Quote};
+pub use txinfo::{
+    BtcPrevout, BtcStatus, BtcTx, BtcVin, BtcVout, SolMeta, SolTokenAmount, SolTokenBalance, SolTx,
+    TxInfoClient,
+};
 pub use updates::{
     AppVersion, Channel, InstallKind, ManualHint, PlatformEntry, UpdateManifest, UpdateOffer,
     fetch_manifest, is_newer, manifest_url, offer_from_manifest,

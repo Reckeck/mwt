@@ -8,7 +8,7 @@
 //! on the tip of the release branch (`start`), which development reaches through the back-merge.
 //! On a hotfix branch (from main) the nearest `vX.Y.Z` is the boundary.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
@@ -139,6 +139,83 @@ pub fn set_lock_version(text: &str, krate: &str, next: &str) -> Result<String> {
         next,
         "Cargo.lock",
     )
+}
+
+/// `Cargo.lock` gets `next` for every named workspace member.
+fn set_lock_versions(text: &str, members: &[String], next: &str) -> Result<String> {
+    members.iter().try_fold(text.to_string(), |lock, member| {
+        set_lock_version(&lock, member, next)
+    })
+}
+
+/// The package names of the manifests that say `version.workspace = true`.
+fn inheriting_members(manifests: &[String]) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    for text in manifests {
+        let manifest: toml::Table = text.parse().context("parse a member Cargo.toml")?;
+        let Some(package) = manifest.get("package").and_then(toml::Value::as_table) else {
+            continue;
+        };
+        let inherits = package
+            .get("version")
+            .and_then(toml::Value::as_table)
+            .and_then(|version| version.get("workspace"))
+            .and_then(toml::Value::as_bool)
+            == Some(true);
+        if let (true, Some(name)) = (inherits, package.get("name").and_then(toml::Value::as_str)) {
+            names.push(name.to_string());
+        }
+    }
+    Ok(names)
+}
+
+/// The member directories of `[workspace] members`: plain paths, or `dir/*` for each child directory.
+fn member_dirs(root: &Path, root_manifest: &str) -> Result<Vec<PathBuf>> {
+    let manifest: toml::Table = root_manifest.parse().context("parse the root Cargo.toml")?;
+    let members = manifest
+        .get("workspace")
+        .and_then(|workspace| workspace.get("members"))
+        .and_then(toml::Value::as_array)
+        .context("Cargo.toml: no [workspace] members")?;
+    let mut dirs = Vec::new();
+    for member in members {
+        let pattern = member
+            .as_str()
+            .context("Cargo.toml: a member is not a string")?;
+        if let Some(parent) = pattern.strip_suffix("/*") {
+            if parent.contains(['*', '?', '[']) {
+                bail!("Cargo.toml: unsupported member pattern `{pattern}`");
+            }
+            let mut children = Vec::new();
+            for entry in
+                std::fs::read_dir(root.join(parent)).with_context(|| format!("read {parent}"))?
+            {
+                let path = entry?.path();
+                if path.is_dir() {
+                    children.push(path);
+                }
+            }
+            children.sort();
+            dirs.extend(children);
+        } else if pattern.contains(['*', '?', '[']) {
+            bail!("Cargo.toml: unsupported member pattern `{pattern}`");
+        } else {
+            dirs.push(root.join(pattern));
+        }
+    }
+    Ok(dirs)
+}
+
+/// The `Cargo.toml` text of every workspace member, in member order.
+fn member_manifests(root: &Path, root_manifest: &str) -> Result<Vec<String>> {
+    member_dirs(root, root_manifest)?
+        .iter()
+        .map(|dir| dir.join("Cargo.toml"))
+        .filter(|path| path.is_file())
+        .map(|path| {
+            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))
+        })
+        .collect()
 }
 
 /// The `<release>` of `next` gets the date, or a new one opens the `<releases>` list.
@@ -293,21 +370,18 @@ pub fn write_bump(root: &Path, next: &str) -> Result<()> {
     let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
     // Everything is computed before the first write: a failing file leaves the tree untouched.
     let listed = changelog::with_commits(&read(root, "CHANGELOG.md")?, &commit_list(root)?)?;
+    let root_manifest = read(root, "Cargo.toml")?;
     let mut edits = vec![
         ("CHANGELOG.md", changelog::promote(&listed, next, &date)?),
         (
             "crates/app/tauri.conf.json",
             set_tauri_version(&read(root, "crates/app/tauri.conf.json")?, next)?,
         ),
-        (
-            "Cargo.toml",
-            set_workspace_version(&read(root, "Cargo.toml")?, next)?,
-        ),
+        ("Cargo.toml", set_workspace_version(&root_manifest, next)?),
     ];
     let mut lock = read(root, "Cargo.lock")?;
-    for krate in ["trade-app", "trade-core"] {
-        lock = set_lock_version(&lock, krate, next)?;
-    }
+    let members = inheriting_members(&member_manifests(root, &root_manifest)?)?;
+    lock = set_lock_versions(&lock, &members, next)?;
     edits.push(("Cargo.lock", lock));
     edits.push((
         METAINFO,

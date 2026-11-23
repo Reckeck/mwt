@@ -216,12 +216,6 @@ pub const TABLE: &[Row] = &[
 
 /// `reqwest` and the parsers live in `mwt-net` only, except these entries; a stale entry fails.
 pub const EXTERNAL_ALLOW: &[ExternalAllow] = &[
-    // `txinfo.rs` cannot move into `mwt-net`, which must not depend on money.
-    ExternalAllow {
-        package: USECASES,
-        dependency: "reqwest",
-        until: "F7",
-    },
     // The shell's updater and pricing adapter.
     ExternalAllow {
         package: APP,
@@ -541,18 +535,11 @@ mod tests {
 
     #[test]
     fn a_tree_that_obeys_every_rule_is_green() {
-        let allow = [
-            ExternalAllow {
-                package: USECASES,
-                dependency: "reqwest",
-                until: "F7",
-            },
-            ExternalAllow {
-                package: APP,
-                dependency: "reqwest",
-                until: "permanent",
-            },
-        ];
+        let allow = [ExternalAllow {
+            package: APP,
+            dependency: "reqwest",
+            until: "permanent",
+        }];
         let packages = [
             package(
                 MONEY,
@@ -564,7 +551,7 @@ mod tests {
                     dependency("ts-rs", Kind::Normal, true),
                 ],
             ),
-            package(USECASES, vec![normal("reqwest"), normal(MONEY)]),
+            package(USECASES, vec![normal(MONEY)]),
             package(APP, vec![normal("reqwest"), normal(FACADE)]),
             package(NET, vec![normal("reqwest"), normal("csv")]),
             package(SYNC, vec![normal("snow")]),
