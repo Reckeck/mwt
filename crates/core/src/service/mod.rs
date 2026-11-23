@@ -43,7 +43,7 @@ mod exchange_sync;
 mod password;
 pub mod security_level;
 pub use mwt_cryptotrack::exchange_sync::TerminalPatch;
-mod peer_sync;
+pub(crate) mod peer_sync;
 mod saving;
 mod shared_events;
 pub use peer_sync::{AppliedBatch, ExternalMerge, PeerRef, SyncTap, UndoReport};
@@ -108,34 +108,40 @@ pub struct UnlockedVault {
     /// preference (see [`crate::appconfig::AppSettings`]), so opening a
     /// different vault must not change it. The app layer pushes the current
     /// value in right after the vault is opened.
-    base_currency: String,
+    pub(crate) base_currency: String,
     /// Whether notices made inside the core (not passed a language) are in
     /// Russian. Runtime only; the app layer sets it before running workflows.
-    notice_ru: bool,
-    password: Zeroizing<String>,
+    pub(crate) notice_ru: bool,
+    pub(crate) password: Zeroizing<String>,
     /// Released when the vault is locked (dropped).
-    _lock: crate::storage::VaultLock,
+    pub(crate) _lock: crate::storage::VaultLock,
     /// A sandbox copy: it runs every rule like the real vault but never
     /// writes the file (see [`Self::sandbox`]).
     pub(crate) sandbox: bool,
     /// What the last save looked like, to stamp changes for sync.
-    tracker: Option<crate::sync::track::Tracker>,
+    pub(crate) tracker: Option<crate::sync::track::Tracker>,
     /// This device's clock for sync stamps.
-    clock: crate::sync::Clock,
+    pub(crate) clock: crate::sync::Clock,
     /// Told every save's changed keys while a sync session is live.
-    sync_tap: Option<std::sync::Arc<dyn SyncTap>>,
+    pub(crate) sync_tap: Option<std::sync::Arc<dyn SyncTap>>,
     /// Keys stamped by any path (save, sync calls) and not yet announced: only
     /// the save-time push drains it, so a sync call cannot swallow an edit.
-    announce: std::collections::BTreeSet<String>,
+    pub(crate) announce: std::collections::BTreeSet<String>,
     /// The key derived at unlock: saves seal with it, Argon2 does not run again.
-    key: Option<std::sync::Arc<SealKey>>,
+    pub(crate) key: Option<std::sync::Arc<SealKey>>,
     /// Unsaved changes and the batched writer (see `saving`).
-    session: crate::kernel::session::Session,
+    pub(crate) session: crate::kernel::session::Session,
     /// What the session knows of the device secrets file (see `exchange_keys`).
-    device_keys: exchange_keys::DeviceKeys,
+    pub(crate) device_keys: exchange_keys::DeviceKeys,
 }
 
 impl UnlockedVault {
+    /// [`Self::announce_to_tap`] for the sync scenarios of `usecases` (that
+    /// method is private to `service`; its rule keeps one home in `saving`).
+    pub(crate) fn announce_keys_to_tap(&mut self, keys: Vec<String>) {
+        self.announce_to_tap(keys);
+    }
+
     /// A fresh read context; the book inside is built once, when first used.
     /// (`Books` is in `money/books.rs`; the vault is its source, see `books.rs`.)
     pub fn books(&self) -> crate::money::books::Books<'_> {

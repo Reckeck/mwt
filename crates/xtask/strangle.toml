@@ -575,7 +575,7 @@ stubs = false
 group = "sync/repair"
 context = "sync"
 files = [
-    "peer_sync/bad_record.rs", "peer_sync/bad_record_tests.rs", "peer_sync/keep.rs",
+    "peer_sync/bad_record.rs", "peer_sync/bad_record_tests.rs",
     "peer_sync/keep_tests.rs", "peer_sync/repair.rs", "peer_sync/repair_cash.rs",
     "peer_sync/repair_classes.rs", "peer_sync/repair_events.rs",
     "peer_sync/repair_events_tests.rs", "peer_sync/repair_imports.rs",
@@ -586,7 +586,6 @@ files = [
 stem = {
     "peer_sync/bad_record.rs" = "bad_record",
     "peer_sync/bad_record_tests.rs" = "bad_record_tests",
-    "peer_sync/keep.rs" = "keep",
     "peer_sync/keep_tests.rs" = "keep_tests",
     "peer_sync/repair.rs" = "repair",
     "peer_sync/repair_cash.rs" = "repair_cash",

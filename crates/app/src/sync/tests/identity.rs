@@ -31,8 +31,8 @@ async fn a_vault_switched_under_a_live_session_sends_nothing() {
     // Another vault takes the phone's place under the running session.
     let mut other = UnlockedVault::create(dir.path().join("other.wallet"), "pw").unwrap();
     other.persist().unwrap();
-    other.set_device(&client.settings().device_id);
-    other.set_sync_tap(Some(Arc::new(Tap(client.clone()))));
+    peer_sync::set_device(&mut other, &client.settings().device_id);
+    peer_sync::set_sync_tap(&mut other, Some(Arc::new(Tap(client.clone()))));
     *client.0.vault.lock().unwrap() = Some(other);
     seed(&client, "stray from another vault");
 

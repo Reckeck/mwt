@@ -18,6 +18,7 @@ use trade_core::error::{Error, Result};
 use trade_core::ipc_contract::SyncRole;
 use trade_core::sync::session::{day_of, discovery_tag};
 use trade_core::sync::stamp::now_ms;
+use trade_core::usecases::sync::peer_sync;
 
 use super::host::Host;
 use super::{Hub, Order, Run};
@@ -75,7 +76,7 @@ pub(crate) fn skipped_instances<H: Host>(
 ) -> std::collections::BTreeSet<String> {
     let devices: Vec<String> = app
         .with_vault(|vault| {
-            let state = vault.sync_state();
+            let state = peer_sync::sync_state(vault);
             let mut ids: Vec<String> = state.cut_by.keys().cloned().collect();
             // A forgotten device is not dialed (it can still call, and pairing
             // again lifts the revocation).

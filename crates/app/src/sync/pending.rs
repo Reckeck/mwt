@@ -8,6 +8,7 @@ use trade_core::appconfig::{AppSettings, PendingTrustPref};
 use trade_core::error::Result;
 use trade_core::model::notify::NoticeRecord;
 use trade_core::service::UnlockedVault;
+use trade_core::usecases::sync::peer_sync;
 use trade_core::usecases::sync::trust as sync_trust;
 
 use super::transfer::Delivered;
@@ -60,8 +61,8 @@ pub(super) fn apply(vault: &mut UnlockedVault, pending: &PendingTrustPref) -> Re
         &pending.device_key,
     )?;
     // A new transfer is a fresh start: an old decline must not keep it out.
-    vault.sync_resume_peer(&pending.device_id)?;
-    vault.sync_clear_cut(&pending.device_id)?;
+    peer_sync::sync_resume_peer(vault, &pending.device_id)?;
+    peer_sync::sync_clear_cut(vault, &pending.device_id)?;
     Ok(())
 }
 
@@ -78,14 +79,15 @@ pub(super) fn record_delivery(
     delivered: &Delivered,
     ru: bool,
 ) -> Result<NoticeRecord> {
-    let notice = vault.sync_record_transfer(
+    let notice = peer_sync::sync_record_transfer(
+        vault,
         &delivered.device_id,
         &delivered.device_name,
         &delivered.device_key,
         ru,
     )?;
-    vault.sync_resume_peer(&delivered.device_id)?;
-    vault.sync_clear_cut(&delivered.device_id)?;
+    peer_sync::sync_resume_peer(vault, &delivered.device_id)?;
+    peer_sync::sync_clear_cut(vault, &delivered.device_id)?;
     Ok(notice)
 }
 
