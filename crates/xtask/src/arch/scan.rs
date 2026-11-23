@@ -48,12 +48,11 @@ impl Names {
 fn reexports(lib_text: &str, modules: &BTreeSet<String>) -> Result<BTreeMap<String, String>> {
     let mut found = BTreeMap::new();
     for statement in strip_comments(lib_text).split(';') {
-        let Some(start) = statement.find("pub use ") else {
+        let Some((visibility, rest)) = use_after_visibility(statement) else {
             continue;
         };
-        let rest = statement[start + "pub use ".len()..].trim();
         let import = read_use(rest)
-            .with_context(|| format!("cannot read the statement `pub use {rest};`"))?;
+            .with_context(|| format!("cannot read the statement `{visibility} use {rest};`"))?;
         let krate = import.krate.strip_prefix("mwt_").unwrap_or(&import.krate);
         for (original, key) in import.items {
             let lowercase = original.to_lowercase();
@@ -72,7 +71,32 @@ fn reexports(lib_text: &str, modules: &BTreeSet<String>) -> Result<BTreeMap<Stri
     Ok(found)
 }
 
-/// What one `pub use` statement (the text after `pub use `) names.
+/// The visibility (`pub`, `pub(crate)`, `pub(in a::b)`) and the text after `use ` of a statement that
+/// is a re-export; `None` for any other statement.
+fn use_after_visibility(statement: &str) -> Option<(&str, &str)> {
+    let mut from = 0;
+    while let Some(found) = statement[from..].find("pub") {
+        let start = from + found;
+        let after = &statement[start + "pub".len()..];
+        let (visibility_len, tail) = match after.strip_prefix('(') {
+            Some(inner) => {
+                let close = inner.find(')')?;
+                ("pub".len() + close + 2, &inner[close + 1..])
+            }
+            None => ("pub".len(), after),
+        };
+        if let Some(rest) = tail
+            .strip_prefix(' ')
+            .and_then(|tail| tail.trim_start().strip_prefix("use "))
+        {
+            return Some((&statement[start..start + visibility_len], rest.trim()));
+        }
+        from = start + "pub".len();
+    }
+    None
+}
+
+/// What one re-export statement (the text after `pub use `) names.
 struct Import {
     krate: String,
     /// `(original name, name it is reached by)` of each item; `*` is left out.
@@ -430,6 +454,22 @@ mod tests {
             .map(String::from)
             .collect();
         Names::new(modules, lib)
+    }
+
+    #[test]
+    fn a_restricted_reexport_is_read_not_skipped() {
+        let names = names_from(
+            "pub(crate) use mwt_base::Amount;\npub(in crate::a) use mwt_money::Cash;\npub(crate) fn f() {}\n",
+        )
+        .unwrap();
+        assert_eq!(names.resolve("Amount"), "base");
+        assert_eq!(names.resolve("Cash"), "money");
+    }
+
+    #[test]
+    fn an_unreadable_restricted_reexport_is_refused_with_its_visibility() {
+        let error = names_from("pub(crate) use mwt_base::{A;\n").unwrap_err();
+        assert!(format!("{error:#}").contains("pub(crate) use"), "{error:#}");
     }
 
     #[test]
