@@ -144,7 +144,7 @@ fn forbidden_in(text: &str, own_service: bool) -> Vec<(usize, String, Option<Str
     let cleaned = scan::production_text(text);
     let mut found = Vec::new();
     for offset in word_offsets(&cleaned, SESSION_TYPE) {
-        if cleaned[..offset].ends_with(SERVICE_SESSION_PREFIX) {
+        if !own_service && cleaned[..offset].ends_with(SERVICE_SESSION_PREFIX) {
             let what = format!("`{SERVICE_SESSION_PREFIX}{SESSION_TYPE}`");
             found.push((line_of(&cleaned, offset), what, None));
         }
@@ -249,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    fn the_vault_type_through_service_fails_with_file_and_line() {
+    fn session_through_service_fails_with_file_and_line() {
         let found = messages(
             &[source(
                 "money/rates.rs",
@@ -307,6 +307,8 @@ mod tests {
     fn the_cryptotrack_own_service_is_not_flagged() {
         let text = "use super::service::x;\nuse crate::cryptotrack::service::y;\n";
         assert!(messages(&[source("cryptotrack/a.rs", text)], NONE).is_empty());
+        let own = "use crate::service::Session;\n";
+        assert!(messages(&[source("cryptotrack/a.rs", own)], NONE).is_empty());
     }
 
     #[test]
