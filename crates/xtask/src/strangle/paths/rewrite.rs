@@ -39,6 +39,8 @@ pub struct Rewriter<'run> {
     shims: &'run ShimMap,
     context: &'run FileContext,
     inline_depth: usize,
+    /// The inline modules around the item being visited.
+    modules: Vec<String>,
     uses: Vec<UseItem>,
     pub report: FileReport,
 }
@@ -51,6 +53,7 @@ impl<'run> Rewriter<'run> {
             shims,
             context,
             inline_depth: 0,
+            modules: Vec::new(),
             uses: Vec::new(),
             report: FileReport::default(),
         }
@@ -170,7 +173,7 @@ impl<'run> Rewriter<'run> {
     }
 
     /// Records one `use` item with a text per leaf; `finish` turns the items into splices.
-    fn rewrite_use(&mut self, node: &ItemUse, top_level: bool) {
+    fn rewrite_use(&mut self, node: &ItemUse, in_module: bool) {
         let mut entries = Vec::new();
         let mut changed = false;
         let line = node.span().start().line;
@@ -207,9 +210,9 @@ impl<'run> Rewriter<'run> {
         }
         let start = node.span().start();
         let first_head = self.text_between(start, node.use_token.span.start());
-        let mergeable = top_level && node.attrs.is_empty();
+        let mergeable = in_module && node.attrs.is_empty();
         let scope = if mergeable {
-            format!("top:{}", first_head.trim())
+            format!("{}:{}", self.modules.join("::"), first_head.trim())
         } else {
             format!("item:{}", self.uses.len())
         };
@@ -223,6 +226,18 @@ impl<'run> Rewriter<'run> {
             dirty: changed,
             entries,
         });
+    }
+
+    /// The range widened to the whole lines it stands on, when only blanks share them.
+    fn whole_lines(&self, start: usize, end: usize) -> (usize, usize) {
+        let before = &self.source[..start];
+        let line_start = before.trim_end_matches([' ', '\t']).len();
+        let at_line_start = line_start == 0 || before[..line_start].ends_with('\n');
+        let after = &self.source[end..];
+        match after.strip_prefix('\n') {
+            Some(_) if at_line_start => (line_start, end + 1),
+            _ => (start, end),
+        }
     }
 
     /// Turns the collected `use` items into splices. A leaf that goes to a module another `use` item
@@ -265,11 +280,13 @@ impl<'run> Rewriter<'run> {
             item.dirty = true;
         }
         for item in uses.iter().filter(|item| item.dirty) {
-            self.report.splices.push(Splice {
-                start: item.start,
-                end: item.end,
-                text: item.text(),
-            });
+            let text = item.text();
+            let (start, end) = if text.is_empty() {
+                self.whole_lines(item.start, item.end)
+            } else {
+                (item.start, item.end)
+            };
+            self.report.splices.push(Splice { start, end, text });
         }
     }
 }
@@ -370,17 +387,24 @@ fn leaf_text(leaf: &Leaf, path: &[String]) -> String {
     text
 }
 
-impl<'ast> Visit<'ast> for Rewriter<'_> {
-    fn visit_file(&mut self, node: &'ast File) {
-        for attribute in &node.attrs {
-            self.visit_attribute(attribute);
-        }
-        for item in &node.items {
+impl Rewriter<'_> {
+    /// The items of a file or an inline module: their `use` items share a scope.
+    fn visit_module_items(&mut self, items: &[Item]) {
+        for item in items {
             match item {
                 Item::Use(node) => self.rewrite_use(node, true),
                 other => self.visit_item(other),
             }
         }
+    }
+}
+
+impl<'ast> Visit<'ast> for Rewriter<'_> {
+    fn visit_file(&mut self, node: &'ast File) {
+        for attribute in &node.attrs {
+            self.visit_attribute(attribute);
+        }
+        self.visit_module_items(&node.items);
         self.finish();
     }
 
@@ -396,7 +420,14 @@ impl<'ast> Visit<'ast> for Rewriter<'_> {
     fn visit_item_mod(&mut self, node: &'ast ItemMod) {
         let inline = usize::from(node.content.is_some());
         self.inline_depth += inline;
-        visit::visit_item_mod(self, node);
+        for attribute in &node.attrs {
+            self.visit_attribute(attribute);
+        }
+        if let Some((_, items)) = &node.content {
+            self.modules.push(node.ident.to_string());
+            self.visit_module_items(items);
+            self.modules.pop();
+        }
         self.inline_depth -= inline;
     }
 
