@@ -34,7 +34,7 @@ use trade_core::model::notify::{NoticeCategory, NoticeRecord, notice, notice_tit
 use trade_core::model::planning::{AlertCondition, RejectReason};
 use trade_core::model::transaction::Transaction;
 use trade_core::reports::notify_snapshot::AlertBase;
-use trade_core::service::UnlockedVault;
+use trade_core::service::Session;
 use trade_core::workflow::RunOutcome;
 
 use crate::commands::AppState;
@@ -360,7 +360,7 @@ fn take_locked(notify: &mut crate::notify_store::NotifyMemory) -> Option<LockedF
 /// on a client the main device owns alerts and the log, and what a stale
 /// locked snapshot saw would only fight what came by sync. The findings are
 /// dropped there, not kept for later. Returns whether they were applied.
-fn merge_findings(vault: &mut UnlockedVault, found: LockedFindings, runs_jobs: bool) -> bool {
+fn merge_findings(vault: &mut Session, found: LockedFindings, runs_jobs: bool) -> bool {
     if !runs_jobs || vault.doc.id != found.vault_id {
         return false;
     }
@@ -1077,14 +1077,14 @@ mod tests {
 
     use trade_core::model::planning::{AlertCondition, PriceAlert};
     use trade_core::model::store::AssetRef;
-    use trade_core::service::UnlockedVault;
+    use trade_core::service::Session;
 
     use super::{merge_findings, take_locked};
     use crate::notify_store::NotifyMemory;
 
-    fn alert_vault() -> (tempfile::TempDir, UnlockedVault) {
+    fn alert_vault() -> (tempfile::TempDir, Session) {
         let dir = tempfile::tempdir().unwrap();
-        let mut vault = UnlockedVault::create(dir.path().join("a.wallet"), "pw").unwrap();
+        let mut vault = Session::create(dir.path().join("a.wallet"), "pw").unwrap();
         vault.doc.price_alerts.push(PriceAlert {
             id: "alert".into(),
             asset: AssetRef::default(),

@@ -13,7 +13,7 @@ use tauri::{AppHandle, Manager};
 use trade_core::crypto::{self, SealKey};
 use trade_core::error::{Error, Result};
 use trade_core::ipc_contract::{ConflictSide, VaultLinkStatus};
-use trade_core::service::{ExternalMerge, UnlockedVault};
+use trade_core::service::{ExternalMerge, Session};
 use trade_core::storage::VaultFile;
 use trade_core::usecases::sync::peer_sync;
 use trade_core::vault_io::mirror::{
@@ -255,7 +255,7 @@ pub enum TakeIn {
 /// was. Afterwards the result goes back to the copy.
 pub fn take_in(
     app: &AppHandle,
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     outcome: OpenSync,
     password: &str,
 ) -> Result<TakeIn> {
@@ -402,8 +402,8 @@ mod tests {
     #[test]
     fn a_copy_at_a_lower_level_is_not_pulled() {
         let dir = tempfile::tempdir().unwrap();
-        let plain = UnlockedVault::create_with(dir.path().join("plain.wallet"), None).unwrap();
-        let pin = UnlockedVault::create(dir.path().join("pin.wallet"), "482913").unwrap();
+        let plain = Session::create_with(dir.path().join("plain.wallet"), None).unwrap();
+        let pin = Session::create(dir.path().join("pin.wallet"), "482913").unwrap();
         let plain_bytes = std::fs::read(&plain.path).unwrap();
         let pin_bytes = std::fs::read(&pin.path).unwrap();
         assert!(matches!(
@@ -415,7 +415,7 @@ mod tests {
     }
 
     fn pin_vault(dir: &Path) -> (PathBuf, SealKey) {
-        let vault = UnlockedVault::create(dir.join("v.wallet"), "482913").unwrap();
+        let vault = Session::create(dir.join("v.wallet"), "482913").unwrap();
         let bytes = std::fs::read(&vault.path).unwrap();
         let (_, _, key) = crypto::open_bytes_keyed(&bytes, b"482913").unwrap();
         (vault.path.clone(), key)

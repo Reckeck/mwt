@@ -36,7 +36,7 @@ use trade_core::planning::{
     agenda as agenda_reads, budget as budget_reads, daily_budget as daily_reads,
     goals as goal_reads, upcoming as upcoming_reads,
 };
-use trade_core::service::UnlockedVault;
+use trade_core::service::Session;
 use trade_core::usecases::household::{loyalty, utilities};
 use trade_core::usecases::money::interest;
 use trade_core::usecases::money::rebase;
@@ -601,7 +601,7 @@ pub async fn get_interest_tax(
 
 #[ipc(write)]
 pub fn set_loyalty_info(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: SetLoyaltyInfoInput,
 ) -> trade_core::Result<Store> {
     loyalty::set_loyalty_info(vault, &StoreId::from(input.store_id), input.info)
@@ -609,7 +609,7 @@ pub fn set_loyalty_info(
 
 #[ipc(write)]
 pub fn create_loyalty_program(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: CreateLoyaltyProgramInput,
 ) -> trade_core::Result<Store> {
     loyalty::create_loyalty_program(
@@ -623,7 +623,7 @@ pub fn create_loyalty_program(
 
 #[ipc(write)]
 pub fn adjust_points(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: AdjustPointsInput,
 ) -> trade_core::Result<Transaction> {
     loyalty::adjust_points(
@@ -639,7 +639,7 @@ pub fn adjust_points(
 /// Cashback and bonus points of this month (`period = "month"`) or this year.
 #[ipc(read)]
 pub fn get_cashback_report(
-    vault: &UnlockedVault,
+    vault: &Session,
     app: &AppHandle,
     period: Option<String>,
 ) -> trade_core::Result<CashbackReport> {

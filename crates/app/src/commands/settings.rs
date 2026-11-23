@@ -106,7 +106,7 @@ pub async fn dev_export_vault(
 /// overwrites the whole encrypted document.
 ///
 /// `base` is the JSON the editor loaded or saved last. With it only what
-/// differs from `base` is written (`UnlockedVault::apply_document_edit`), so a
+/// differs from `base` is written (`Session::apply_document_edit`), so a
 /// record another device sent meanwhile stays; without it the document is
 /// replaced as a whole.
 ///

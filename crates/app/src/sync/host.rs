@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use trade_core::appconfig::AppSettings;
 use trade_core::error::{Error, Result};
 use trade_core::model::notify::NoticeRecord;
-use trade_core::service::UnlockedVault;
+use trade_core::service::Session;
 use trade_core::sync::session::DeviceKey;
 
 use super::{Hub, SyncHub};
@@ -17,7 +17,7 @@ use crate::ipc::events::AppEvent;
 
 pub(crate) trait Host: Clone + Send + Sync + 'static {
     fn hub(&self) -> MutexGuard<'_, Hub>;
-    fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T>;
+    fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T>;
     fn settings(&self) -> AppSettings;
     fn device_key(&self) -> Result<DeviceKey>;
     fn key_storage(&self) -> &'static str;
@@ -66,7 +66,7 @@ impl Host for AppHandle {
         lock_hub(self.state::<SyncHub>().inner())
     }
 
-    fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T> {
+    fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
         let state = self.state::<AppState>();
         let mut guard = require_vault(&state)?;
         let vault = guard.as_mut().ok_or(Error::RequiresUnlock)?;

@@ -4,7 +4,7 @@ use mwt_app_macros::ipc;
 include!("../stub/ipc_stub.rs");
 
 #[ipc(write, sandbox = deny)]
-fn change(_vault: &mut UnlockedVault) -> Result<(), ipc::IpcError> {
+fn change(_vault: &mut Session) -> Result<(), ipc::IpcError> {
     Ok(())
 }
 

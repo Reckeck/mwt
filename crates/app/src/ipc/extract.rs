@@ -11,13 +11,13 @@ use std::sync::MutexGuard;
 use tauri::Manager;
 use tauri::Runtime;
 use tauri::ipc::{CommandArg, CommandItem, InvokeError};
-use trade_core::service::UnlockedVault;
+use trade_core::service::Session;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 
 /// The unlocked vault, locked for the length of the command.
-pub struct Unlocked<'guard>(MutexGuard<'guard, Option<UnlockedVault>>);
+pub struct Unlocked<'guard>(MutexGuard<'guard, Option<Session>>);
 
 impl<'guard> Unlocked<'guard> {
     fn open(state: &'guard AppState) -> Result<Self, IpcError> {
@@ -26,9 +26,9 @@ impl<'guard> Unlocked<'guard> {
 }
 
 impl Deref for Unlocked<'_> {
-    type Target = UnlockedVault;
+    type Target = Session;
 
-    fn deref(&self) -> &UnlockedVault {
+    fn deref(&self) -> &Session {
         self.0.as_ref().expect("checked in open")
     }
 }

@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use trade_core::error::{Error, PeerSyncFailure, Result};
-use trade_core::service::UnlockedVault;
+use trade_core::service::Session;
 use trade_core::sync::session::DeviceKey;
 use trade_core::sync::transfer::{Offer, TRANSFER_PROTOCOL, sha256};
 
@@ -14,7 +14,7 @@ use super::transfer::{Delivered, Incoming, Me, Outgoing, Received, fingerprint_o
 fn vault_file() -> (tempfile::TempDir, Vec<u8>) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("home.wallet");
-    UnlockedVault::create(path.clone(), "pw").unwrap();
+    Session::create(path.clone(), "pw").unwrap();
     let bytes = std::fs::read(path).unwrap();
     (dir, bytes)
 }

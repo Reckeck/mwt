@@ -23,7 +23,7 @@ mod ipc {
             _host: H,
             _meta: &CommandMeta,
             _gate: Gate,
-            _body: impl FnOnce(&crate::UnlockedVault) -> Result<R, crate::ipc::IpcError>,
+            _body: impl FnOnce(&crate::Session) -> Result<R, crate::ipc::IpcError>,
         ) -> Result<R, crate::ipc::IpcError> {
             unimplemented!()
         }
@@ -31,7 +31,7 @@ mod ipc {
             _host: H,
             _meta: &CommandMeta,
             _gate: Gate,
-            _body: impl FnOnce(&mut crate::UnlockedVault) -> Result<R, crate::ipc::IpcError>,
+            _body: impl FnOnce(&mut crate::Session) -> Result<R, crate::ipc::IpcError>,
         ) -> Result<R, crate::ipc::IpcError> {
             unimplemented!()
         }
@@ -45,5 +45,5 @@ mod ipc {
         }
     }
 }
-pub struct UnlockedVault;
+pub struct Session;
 pub struct AppState;

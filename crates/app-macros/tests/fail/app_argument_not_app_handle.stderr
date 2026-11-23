@@ -1,5 +1,5 @@
 error: `app` is reserved by #[ipc] for the &AppHandle
- --> tests/fail/app_argument_not_app_handle.rs:4:32
+ --> tests/fail/app_argument_not_app_handle.rs:4:26
   |
-4 | fn list(vault: &UnlockedVault, app: String) -> Result<(), ()> {
-  |                                ^^^
+4 | fn list(vault: &Session, app: String) -> Result<(), ()> {
+  |                          ^^^
