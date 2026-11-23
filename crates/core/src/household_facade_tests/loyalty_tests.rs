@@ -403,7 +403,7 @@ fn without_ids<T: serde::Serialize>(value: &T, known_ids: &[&str]) -> serde_json
 }
 
 #[test]
-fn the_create_delegate_equals_the_scenario() {
+fn creating_a_programme_twice_gives_the_same_result_up_to_ids() {
     let (_dir_a, mut by_method) = empty_vault();
     let (_dir_b, mut by_scenario) = empty_vault();
     let mut settings = info("миля");
