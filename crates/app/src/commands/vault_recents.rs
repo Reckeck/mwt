@@ -335,7 +335,8 @@ ipc_commands!(vault_recents_commands, VAULT_RECENTS_NAMES, commands::vault_recen
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trade_core::service::{SaveHook, UnlockedVault};
+    use trade_core::kernel::session::SaveHook;
+    use trade_core::service::UnlockedVault;
 
     struct NoWake;
 

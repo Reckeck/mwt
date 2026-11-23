@@ -11,7 +11,6 @@ mod view;
 mod settle;
 pub(crate) mod split;
 pub use view::{
-    ContactEventBalance, EventTotals, ItemShareView, ItemView, MyPosition, PersonView,
-    PlannedPayment, PurchaseView, SettlementView, SharedEventSummary, SharedEventView,
-    SharedTxLink,
+    EventTotals, ItemShareView, ItemView, MyPosition, PersonView, PlannedPayment, PurchaseView,
+    SettlementView,
 };

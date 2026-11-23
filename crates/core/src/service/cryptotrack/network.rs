@@ -2,8 +2,7 @@
 //! `crate::cryptotrack::service::network`, the scenario to
 //! `crate::usecases::cryptotrack::network` (spec core-strangler, D1).
 
-pub use crate::cryptotrack::service::network::NetworkRequest;
-pub use crate::usecases::cryptotrack::network::{NetworkProbe, Probe, test_endpoint};
+pub use crate::usecases::cryptotrack::network::Probe;
 
 #[cfg(test)]
 mod tests;

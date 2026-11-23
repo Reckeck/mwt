@@ -2,6 +2,4 @@
 //! `crate::planning::automation_card`, the scenarios that read workflow graphs to
 //! `crate::usecases::planning::automation_card` (spec core-strangler, D1).
 
-pub use crate::planning::automation_card::{
-    AutomationCard, CardAction, CardMoney, CardTrigger, JournalEntry, JournalStatus,
-};
+pub use crate::planning::automation_card::{CardAction, CardMoney, CardTrigger, JournalStatus};

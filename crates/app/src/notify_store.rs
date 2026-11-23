@@ -14,7 +14,7 @@ use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use tauri::{AppHandle, Manager};
 
 use trade_core::model::notify::NoticeRecord;
-use trade_core::service::{AlertBase, NotificationSnapshot};
+use trade_core::reports::notify_snapshot::{AlertBase, NotificationSnapshot};
 
 /// Where the key lived while the app was TradeApp; moved on first use.
 #[cfg(desktop)]

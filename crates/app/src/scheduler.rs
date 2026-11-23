@@ -30,10 +30,11 @@ use tauri_plugin_notification::NotificationExt;
 use trade_core::appconfig::{Locale, load_settings};
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{AutomationRejectedEvent, SyncRole};
-use trade_core::model::notify::{NoticeCategory, NoticeRecord};
+use trade_core::model::notify::{NoticeCategory, NoticeRecord, notice, notice_title};
 use trade_core::model::planning::{AlertCondition, RejectReason};
 use trade_core::model::transaction::Transaction;
-use trade_core::service::{AlertBase, UnlockedVault, notice, notice_title};
+use trade_core::reports::notify_snapshot::AlertBase;
+use trade_core::service::UnlockedVault;
 use trade_core::workflow::RunOutcome;
 
 use crate::commands::AppState;
@@ -314,10 +315,10 @@ pub fn snapshot_tick(app: &AppHandle, force: bool) {
     if let Ok(mut notify) = state.notify.lock() {
         // The same notices as a minute ago: no keyring call, no encrypted write.
         let unchanged = notify.snapshot.as_ref().is_some_and(|kept| {
-            trade_core::service::NotificationSnapshot {
+            trade_core::reports::notify_snapshot::NotificationSnapshot {
                 created_at: String::new(),
                 ..kept.clone()
-            } == trade_core::service::NotificationSnapshot {
+            } == trade_core::reports::notify_snapshot::NotificationSnapshot {
                 created_at: String::new(),
                 ..snapshot.clone()
             }
@@ -1101,7 +1102,7 @@ mod tests {
 
     fn told(vault_id: &str) -> NotifyMemory {
         let mut notify = NotifyMemory {
-            snapshot: Some(trade_core::service::NotificationSnapshot {
+            snapshot: Some(trade_core::reports::notify_snapshot::NotificationSnapshot {
                 vault_id: vault_id.into(),
                 ..Default::default()
             }),

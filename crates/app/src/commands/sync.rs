@@ -7,7 +7,8 @@ use trade_core::appconfig::{UpdateAppSettingsInput, load_settings};
 use trade_core::ipc_contract::{
     AllowMergingInput, SyncDecisionInput, SyncPeerView, SyncSettingsInput, SyncStatus,
 };
-use trade_core::service::{AppliedBatch, UndoReport};
+use trade_core::service::UndoReport;
+use trade_core::sync::history::AppliedBatch;
 use trade_core::sync::journal::SyncJournalEntry;
 
 use crate::commands::{AppState, require_vault};

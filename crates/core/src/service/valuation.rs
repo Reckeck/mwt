@@ -3,6 +3,6 @@
 //! `usecases::money::valuation`.
 
 pub(crate) use crate::money::valuation::ValuationCurve;
-pub use crate::money::valuation::{
-    PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput,
-};
+#[cfg(test)]
+pub use crate::money::valuation::ValuationInput;
+pub use crate::money::valuation::{PropertyPurchase, ValuationBaseKind};
