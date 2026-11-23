@@ -83,7 +83,11 @@ fn bitcoin_info(tx: BtcTx, tx_hash: &str) -> TxInfo {
         .and_then(|input| input.prevout.as_ref());
     let first_out = tx.vout.as_ref().and_then(|outputs| outputs.first());
 
-    let occurred = tx.block_time.or(tx.time).map(mwt_model::unix_to_iso);
+    let occurred = tx
+        .status
+        .as_ref()
+        .and_then(|status| status.block_time)
+        .map(mwt_model::unix_to_iso);
 
     TxInfo {
         tx_hash: tx.txid.unwrap_or_else(|| tx_hash.to_string()),
@@ -132,7 +136,7 @@ fn solana_info(value: SolTx, tx_hash: &str) -> Option<TxInfo> {
         status: Some("confirmed".to_string()),
         asset_in: token_before.and_then(|balance| balance.mint.clone()),
         amount_in: token_before
-            .and_then(|balance| balance.token_amount.as_ref())
+            .and_then(|balance| balance.ui_token_amount.as_ref())
             .and_then(|token| token.amount.clone())
             .or_else(|| {
                 sol(meta
@@ -141,7 +145,7 @@ fn solana_info(value: SolTx, tx_hash: &str) -> Option<TxInfo> {
             }),
         asset_out: token_after.and_then(|balance| balance.mint.clone()),
         amount_out: token_after
-            .and_then(|balance| balance.token_amount.as_ref())
+            .and_then(|balance| balance.ui_token_amount.as_ref())
             .and_then(|token| token.amount.clone())
             .or_else(|| {
                 sol(meta
@@ -181,5 +185,67 @@ mod tests {
         let info = svc.inspect("garbage", None).await.unwrap();
         assert_eq!(info.network, None);
         assert_eq!(info.tx_hash, "garbage");
+    }
+
+    #[test]
+    fn bitcoin_info_maps_date_amounts_fee_and_status() {
+        use mwt_net::{BtcPrevout, BtcStatus, BtcVin, BtcVout};
+        let tx = BtcTx {
+            txid: Some("ab".into()),
+            fee: Some(141),
+            status: Some(BtcStatus {
+                confirmed: Some(true),
+                block_time: Some(1_700_000_000),
+            }),
+            vin: Some(vec![BtcVin {
+                prevout: Some(BtcPrevout {
+                    scriptpubkey_address: Some("bc1a".into()),
+                    value: Some(1000),
+                }),
+            }]),
+            vout: Some(vec![BtcVout {
+                scriptpubkey_address: Some("bc1b".into()),
+                value: Some(859),
+            }]),
+        };
+        let info = bitcoin_info(tx, BTC_TXID);
+        assert_eq!(
+            info.occurred_at,
+            Some(mwt_model::unix_to_iso(1_700_000_000))
+        );
+        assert_eq!(info.status.as_deref(), Some("confirmed"));
+        assert_eq!(info.amount_in.as_deref(), Some("0.00001"));
+        assert_eq!(info.amount_out.as_deref(), Some("0.00000859"));
+        assert_eq!(info.fee.as_deref(), Some("0.00000141"));
+    }
+
+    #[test]
+    fn solana_info_maps_date_amounts_fee_and_status() {
+        use mwt_net::{SolMeta, SolTokenAmount, SolTokenBalance};
+        let balance = |amount: &str| SolTokenBalance {
+            mint: Some("mint".into()),
+            ui_token_amount: Some(SolTokenAmount {
+                amount: Some(amount.into()),
+            }),
+        };
+        let tx = SolTx {
+            block_time: Some(1_700_000_000),
+            meta: Some(SolMeta {
+                fee: Some(5000),
+                pre_balances: None,
+                post_balances: None,
+                pre_token_balances: Some(vec![balance("7")]),
+                post_token_balances: Some(vec![balance("5")]),
+            }),
+        };
+        let info = solana_info(tx, "sig").expect("meta present");
+        assert_eq!(
+            info.occurred_at,
+            Some(mwt_model::unix_to_iso(1_700_000_000))
+        );
+        assert_eq!(info.status.as_deref(), Some("confirmed"));
+        assert_eq!(info.amount_in.as_deref(), Some("7"));
+        assert_eq!(info.amount_out.as_deref(), Some("5"));
+        assert_eq!(info.fee.as_deref(), Some("0.000005"));
     }
 }
