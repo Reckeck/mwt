@@ -31,7 +31,11 @@ fn salary_automation(store: &str) -> AutomationDraft {
 fn deleting_an_automation_announces_it_and_the_reaction_removes_the_workflow() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    let made = vault.create_automation(salary_automation(&card)).unwrap();
-    vault.delete_automation(&made.id).unwrap();
+    let made = crate::usecases::planning::automations::create_automation(
+        &mut vault,
+        salary_automation(&card),
+    )
+    .unwrap();
+    crate::usecases::planning::automations::delete_automation(&mut vault, &made.id).unwrap();
     assert!(vault.doc.workflows.is_empty());
 }

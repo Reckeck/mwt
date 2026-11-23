@@ -213,14 +213,14 @@ fn a_reset_brings_back_the_original_data() {
     let mut vault = dir.create(today()).unwrap();
     let original = document(&vault);
     let victim = vault.doc.transactions[10].meta().id.clone();
-    vault.delete_transaction(&victim).unwrap();
-    vault
-        .create_category(
-            None,
-            "Мои траты",
-            crate::model::category::CategoryGroup::Daily,
-        )
-        .unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut vault, &victim).unwrap();
+    crate::usecases::household::categories::create_category(
+        &mut vault,
+        None,
+        "Мои траты",
+        crate::model::category::CategoryGroup::Daily,
+    )
+    .unwrap();
     assert_ne!(document(&vault), original);
     drop(vault);
     let fresh = dir.create(today()).unwrap();
@@ -240,13 +240,13 @@ fn the_demo_has_limits_goals_and_automations() {
     assert_eq!(vault.doc.goals.len(), 2);
     assert_eq!(vault.doc.workflows.len(), 3);
     // One limit is over: the demo shows the red card too.
-    let over = vault
-        .budget_status(
-            today().and_hms_opt(12, 0, 0).unwrap().and_utc().timestamp(),
-            "UTC",
-        )
-        .iter()
-        .filter(|status| status.remaining.is_negative())
-        .count();
+    let over = crate::usecases::planning::budget::budget_status(
+        &vault.books(),
+        today().and_hms_opt(12, 0, 0).unwrap().and_utc().timestamp(),
+        "UTC",
+    )
+    .iter()
+    .filter(|status| status.remaining.is_negative())
+    .count();
     assert!(over >= 1, "no limit is over");
 }

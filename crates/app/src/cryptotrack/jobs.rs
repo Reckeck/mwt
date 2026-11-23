@@ -433,9 +433,12 @@ pub async fn run_pass<H: Host, R: Reader>(
     }
     let force = tracker.take_force() || force;
     // The data the pass needs, copied; the vault is free from here on.
-    let Ok((vault_id, targets)) =
-        host.with_vault(|vault| Ok((vault.doc.id.clone(), vault.crypto_sync_targets())))
-    else {
+    let Ok((vault_id, targets)) = host.with_vault(|vault| {
+        Ok((
+            vault.doc.id.clone(),
+            trade_core::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc),
+        ))
+    }) else {
         report.cancelled = true;
         return report;
     };
@@ -581,7 +584,8 @@ async fn read_account<H: Host, R: Reader>(
             if vault.doc.id != vault_id {
                 return Err(Error::RequiresUnlock);
             }
-            vault.crypto_apply_pages(
+            trade_core::usecases::cryptotrack::apply::crypto_apply_pages(
+                vault,
                 &CryptoPages {
                     account_id: &target.account_id,
                     read_at: &read_at,
@@ -646,13 +650,18 @@ async fn read_positions<H: Host, R: Reader>(
         if vault.doc.id != vault_id {
             return Err(Error::RequiresUnlock);
         }
-        let applied = vault.crypto_apply_positions(
+        let applied = trade_core::usecases::cryptotrack::positions::crypto_apply_positions(
+            vault,
             &target.account_id,
             &read.readings,
             &read.events,
             &read.reviewed,
         )?;
-        vault.crypto_remember_protocols(&target.account_id, &read.memory)?;
+        trade_core::usecases::cryptotrack::apply::crypto_remember_protocols(
+            vault,
+            &target.account_id,
+            &read.memory,
+        )?;
         Ok(applied)
     })?;
     if !applied.is_unchanged() {
@@ -710,7 +719,7 @@ async fn fill_prices<H: Host, R: Reader>(
             if vault.doc.id != vault_id {
                 return Err(Error::RequiresUnlock);
             }
-            vault.crypto_apply_prices(&fetched)
+            trade_core::usecases::cryptotrack::apply::crypto_apply_prices(vault, &fetched)
         })?;
         if stored > 0 {
             host.updated(&target.account_id);
@@ -782,7 +791,14 @@ impl EvmReader {
     /// look at the vault anyway.
     fn network(&self, chain: Chain) -> NetworkRequest {
         AppHost(self.app.clone())
-            .with_vault(|vault| Ok(vault.crypto_network_for_request(chain)))
+            .with_vault(|vault| {
+                Ok(
+                    trade_core::cryptotrack::service::network::crypto_network_for_request(
+                        &vault.books(),
+                        chain,
+                    ),
+                )
+            })
             .unwrap_or_default()
     }
 }
@@ -1047,11 +1063,12 @@ fn clear_on_lock(bus: &EventBus, tracker: &'static Tracker) {
 pub fn status(app: &AppHandle) -> Result<CryptoSyncStatus> {
     let host = AppHost(app.clone());
     let ids = host.with_vault(|vault| {
-        Ok(vault
-            .crypto_sync_targets()
-            .into_iter()
-            .map(|target| target.account_id)
-            .collect::<Vec<_>>())
+        Ok(
+            trade_core::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)
+                .into_iter()
+                .map(|target| target.account_id)
+                .collect::<Vec<_>>(),
+        )
     })?;
     Ok(CryptoSyncStatus {
         consent: crate::commands::app_settings::current_settings(app).crypto_tracking_consent,
@@ -1760,7 +1777,7 @@ mod tests {
         let host = TestHost::new(vault_with(dir.path(), "a.wallet", &[("acc-a", ME)]), true);
         host.with_vault(|vault| {
             let kept = quote(&[(eth(), NaiveDate::from_ymd_opt(2026, 1, 5).unwrap())])?;
-            vault.crypto_apply_prices(&kept).map(|_| ())
+            trade_core::usecases::cryptotrack::apply::crypto_apply_prices(vault, &kept).map(|_| ())
         })
         .unwrap();
         let stub = Stub::new(&host.vault, |address, _| one_page(address, 1))

@@ -6,6 +6,7 @@ use crate::calc::invest::{CapFreq, ContributionStage, Freq, InvestInput};
 use crate::calc::invest::{TaxRule, Timing};
 use crate::model::deposit::Capitalization;
 use crate::model::deposit::{DepositTerms, RatePeriod};
+use crate::model::ids::StoreId;
 use crate::model::planning::ScenarioSource;
 use crate::model::store::StoreScope;
 use crate::model::store::{Binding, StoreKind, SubType};
@@ -54,10 +55,17 @@ fn deposit_store(vault: &mut UnlockedVault, name: &str) -> String {
         binding: Some(Binding::Asset(usd())),
         ..StoreExtras::default()
     };
-    vault
-        .create_store_with(name, StoreKind::Bank, "#000", "", Some(bank), extras)
-        .unwrap()
-        .id
+    crate::usecases::money::stores::create_store_with(
+        vault,
+        name,
+        StoreKind::Bank,
+        "#000",
+        "",
+        Some(bank),
+        extras,
+    )
+    .unwrap()
+    .id
 }
 
 fn usd_transfer(from: &str, to: &str, raw: &str) -> Transaction {
@@ -73,82 +81,113 @@ fn dated(mut tx: Transaction, ts: &str) -> Transaction {
 #[test]
 fn scenarios_are_saved_updated_and_checked() {
     let (_dir, mut vault) = empty_vault();
-    assert!(vault.save_calc_scenario(draft("  ")).is_err());
+    assert!(
+        crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, draft("  ")).is_err()
+    );
     let mut broken = draft("Broken");
     broken.input.initial = amount("-1");
-    assert!(vault.save_calc_scenario(broken).is_err());
+    assert!(crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, broken).is_err());
     let mut odd = draft("Odd period");
     odd.source = Some(ScenarioSource {
         scope: StoreScope::default(),
         income_months: 5,
         income_pct: amount("10"),
     });
-    assert!(vault.save_calc_scenario(odd).is_err());
+    assert!(crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, odd).is_err());
 
-    let saved = vault.save_calc_scenario(draft(" Pension ")).unwrap();
+    let saved =
+        crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, draft(" Pension "))
+            .unwrap();
     assert_eq!(saved.name, "Pension");
     let mut edit = draft("Pension 2");
     edit.id = Some(saved.id.clone());
-    let updated = vault.save_calc_scenario(edit).unwrap();
+    let updated =
+        crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, edit).unwrap();
     assert_eq!(updated.id, saved.id);
     assert_eq!(updated.created_at, saved.created_at);
-    assert_eq!(vault.calc_scenarios().len(), 1);
-    assert_eq!(vault.calc_scenarios()[0].name, "Pension 2");
+    assert_eq!(
+        crate::planning::scenarios::calc_scenarios(&vault.doc).len(),
+        1
+    );
+    assert_eq!(
+        crate::planning::scenarios::calc_scenarios(&vault.doc)[0].name,
+        "Pension 2"
+    );
 
     let mut missing = draft("Missing");
     missing.id = Some("nope".into());
-    assert!(vault.save_calc_scenario(missing).is_err());
+    assert!(crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, missing).is_err());
 }
 
 #[test]
 fn deleting_a_scenario_unlinks_its_goals_and_undo_links_them_back() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    let scenario = vault.save_calc_scenario(draft("Flat")).unwrap();
-    let mut goal = vault
-        .goal_from_scenario(
-            &scenario.id,
-            unix_secs("2026-03-10T10:00:00Z").unwrap(),
-            "UTC",
-        )
-        .unwrap();
+    let scenario =
+        crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, draft("Flat"))
+            .unwrap();
+    let mut goal = crate::usecases::planning::scenarios::goal_from_scenario(
+        &vault.doc,
+        &scenario.id,
+        unix_secs("2026-03-10T10:00:00Z").unwrap(),
+        "UTC",
+    )
+    .unwrap();
     goal.scope = StoreScope {
         store_ids: vec![card],
         include_children: false,
     };
-    let goal = vault.create_goal(goal.into()).unwrap();
+    let goal = crate::usecases::planning::goals::create_goal(&mut vault, goal.into()).unwrap();
     assert_eq!(goal.scenario_id.as_deref(), Some(scenario.id.as_str()));
 
-    let deleted = vault.delete_calc_scenario(&scenario.id).unwrap();
+    let deleted =
+        crate::usecases::planning::scenarios::delete_calc_scenario(&mut vault, &scenario.id)
+            .unwrap();
     assert_eq!(deleted.goal_ids, vec![goal.id.clone()]);
-    assert!(vault.calc_scenarios().is_empty());
-    assert_eq!(vault.goals()[0].scenario_id, None);
-    assert!(vault.delete_calc_scenario(&scenario.id).is_err());
-
-    vault.restore_calc_scenario(deleted.clone()).unwrap();
-    assert_eq!(vault.calc_scenarios().len(), 1);
+    assert!(crate::planning::scenarios::calc_scenarios(&vault.doc).is_empty());
     assert_eq!(
-        vault.goals()[0].scenario_id.as_deref(),
+        crate::planning::goals::goals(&vault.doc)[0].scenario_id,
+        None
+    );
+    assert!(
+        crate::usecases::planning::scenarios::delete_calc_scenario(&mut vault, &scenario.id)
+            .is_err()
+    );
+
+    crate::usecases::planning::scenarios::restore_calc_scenario(&mut vault, deleted.clone())
+        .unwrap();
+    assert_eq!(
+        crate::planning::scenarios::calc_scenarios(&vault.doc).len(),
+        1
+    );
+    assert_eq!(
+        crate::planning::goals::goals(&vault.doc)[0]
+            .scenario_id
+            .as_deref(),
         Some(scenario.id.as_str())
     );
-    assert!(vault.restore_calc_scenario(deleted).is_err());
+    assert!(
+        crate::usecases::planning::scenarios::restore_calc_scenario(&mut vault, deleted).is_err()
+    );
 }
 
 #[test]
 fn a_goal_with_an_unknown_scenario_is_refused() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    let scenario = vault.save_calc_scenario(draft("Flat")).unwrap();
-    let mut goal = vault
-        .goal_from_scenario(
-            &scenario.id,
-            unix_secs("2026-03-10T10:00:00Z").unwrap(),
-            "UTC",
-        )
-        .unwrap();
+    let scenario =
+        crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, draft("Flat"))
+            .unwrap();
+    let mut goal = crate::usecases::planning::scenarios::goal_from_scenario(
+        &vault.doc,
+        &scenario.id,
+        unix_secs("2026-03-10T10:00:00Z").unwrap(),
+        "UTC",
+    )
+    .unwrap();
     goal.scope.store_ids = vec![card];
     goal.scenario_id = Some("gone".into());
-    assert!(vault.create_goal(goal.into()).is_err());
+    assert!(crate::usecases::planning::goals::create_goal(&mut vault, goal.into()).is_err());
 }
 
 #[test]
@@ -157,14 +196,16 @@ fn goal_from_scenario_aims_at_the_final_amount_over_the_term() {
     let mut quarterly = draft("Car");
     quarterly.input.stages[0].freq = Freq::Quarterly;
     quarterly.input.stages[0].amount = amount("300");
-    let scenario = vault.save_calc_scenario(quarterly.clone()).unwrap();
-    let goal = vault
-        .goal_from_scenario(
-            &scenario.id,
-            unix_secs("2026-03-10T10:00:00Z").unwrap(),
-            "UTC",
-        )
-        .unwrap();
+    let scenario =
+        crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, quarterly.clone())
+            .unwrap();
+    let goal = crate::usecases::planning::scenarios::goal_from_scenario(
+        &vault.doc,
+        &scenario.id,
+        unix_secs("2026-03-10T10:00:00Z").unwrap(),
+        "UTC",
+    )
+    .unwrap();
     let expected = invest::simulate(&quarterly.input).unwrap().final_nominal;
     assert_eq!(goal.target_amount, expected);
     assert_eq!(goal.name, "Car");
@@ -172,7 +213,10 @@ fn goal_from_scenario_aims_at_the_final_amount_over_the_term() {
     assert_eq!(goal.deadline.as_deref(), Some("2027-03-10T00:00:00Z"));
     assert_eq!(goal.monthly_commitment, Some(amount("100")));
     assert_eq!(goal.scenario_id, Some(scenario.id));
-    assert!(vault.goal_from_scenario("nope", 0, "UTC").is_err());
+    assert!(
+        crate::usecases::planning::scenarios::goal_from_scenario(&vault.doc, "nope", 0, "UTC")
+            .is_err()
+    );
 }
 
 #[test]
@@ -187,41 +231,44 @@ fn prefill_takes_wallet_value_deposit_terms_and_a_share_of_income() {
         (&deposit, "16", Capitalization::Daily),
         (&small, "20", Capitalization::None),
     ] {
-        vault
-            .set_deposit_terms(
-                target,
-                Some(DepositTerms {
-                    rates: vec![RatePeriod {
-                        from: "2026-01-01".into(),
-                        rate: amount(rate),
-                    }],
-                    capitalization: cap,
-                    opened_at: None,
-                    term_months: None,
-                    auto_accrue: false,
-                    pds: None,
-                }),
-            )
-            .unwrap();
+        crate::usecases::money::interest::set_deposit_terms(
+            &mut vault,
+            &StoreId::from(target),
+            Some(DepositTerms {
+                rates: vec![RatePeriod {
+                    from: "2026-01-01".into(),
+                    rate: amount(rate),
+                }],
+                capitalization: cap,
+                opened_at: None,
+                term_months: None,
+                auto_accrue: false,
+                pds: None,
+            }),
+        )
+        .unwrap();
     }
     for (month, sum) in [("01", "1000"), ("02", "2000"), ("03", "3000")] {
         let ts = format!("2026-{month}-05T10:00:00Z");
-        vault
-            .add_transaction(dated(income(&card, sum, "salary"), &ts))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            dated(income(&card, sum, "salary"), &ts),
+        )
+        .unwrap();
     }
-    vault
-        .add_transaction(dated(
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        dated(
             usd_transfer(&card, &deposit, "1500"),
             "2026-03-06T10:00:00Z",
-        ))
-        .unwrap();
-    vault
-        .add_transaction(dated(
-            usd_transfer(&card, &small, "500"),
-            "2026-03-06T10:00:00Z",
-        ))
-        .unwrap();
+        ),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        dated(usd_transfer(&card, &small, "500"), "2026-03-06T10:00:00Z"),
+    )
+    .unwrap();
 
     let now = unix_secs("2026-04-10T10:00:00Z").unwrap();
     let source = ScenarioSource {
@@ -232,7 +279,9 @@ fn prefill_takes_wallet_value_deposit_terms_and_a_share_of_income() {
         income_months: 3,
         income_pct: amount("10"),
     };
-    let prefill = vault.scenario_prefill(&source, "usd", now, "UTC").unwrap();
+    let prefill =
+        crate::planning::scenarios::scenario_prefill(&vault.books(), &source, "usd", now, "UTC")
+            .unwrap();
     assert_eq!(prefill.initial, amount("2000"));
     // The larger deposit gives the rate.
     assert_eq!(prefill.rate_store_id, Some(deposit));
@@ -253,24 +302,30 @@ fn prefill_without_history_or_deposits_gives_only_the_value() {
         income_months: 12,
         income_pct: amount("10"),
     };
-    let prefill = vault
-        .scenario_prefill(
-            &source,
-            "usd",
-            unix_secs("2026-04-10T10:00:00Z").unwrap(),
-            "UTC",
-        )
-        .unwrap();
+    let prefill = crate::planning::scenarios::scenario_prefill(
+        &vault.books(),
+        &source,
+        "usd",
+        unix_secs("2026-04-10T10:00:00Z").unwrap(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(prefill.initial, Amount::ZERO);
     assert_eq!(prefill.rate_pct, None);
     assert_eq!(prefill.monthly_contribution, None);
     assert_eq!(prefill.income_months_used, 0);
     let mut bad = source.clone();
     bad.income_pct = amount("101");
-    assert!(vault.scenario_prefill(&bad, "usd", 0, "UTC").is_err());
+    assert!(
+        crate::planning::scenarios::scenario_prefill(&vault.books(), &bad, "usd", 0, "UTC")
+            .is_err()
+    );
     bad.income_pct = amount("10");
     bad.scope.store_ids = vec!["gone".into()];
-    assert!(vault.scenario_prefill(&bad, "usd", 0, "UTC").is_err());
+    assert!(
+        crate::planning::scenarios::scenario_prefill(&vault.books(), &bad, "usd", 0, "UTC")
+            .is_err()
+    );
     let _ = &mut vault;
 }
 
@@ -279,26 +334,34 @@ fn a_goal_shows_what_its_scenario_planned_by_now() {
     let (_dir, mut vault) = empty_vault();
     quote_usd(&mut vault);
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    let scenario = vault.save_calc_scenario(draft("Flat")).unwrap();
-    let mut goal = vault
-        .goal_from_scenario(
-            &scenario.id,
-            unix_secs("2026-03-10T10:00:00Z").unwrap(),
-            "UTC",
-        )
-        .unwrap();
+    let scenario =
+        crate::usecases::planning::scenarios::save_calc_scenario(&mut vault, draft("Flat"))
+            .unwrap();
+    let mut goal = crate::usecases::planning::scenarios::goal_from_scenario(
+        &vault.doc,
+        &scenario.id,
+        unix_secs("2026-03-10T10:00:00Z").unwrap(),
+        "UTC",
+    )
+    .unwrap();
     goal.scope.store_ids = vec![card];
-    let goal = vault.create_goal(goal.into()).unwrap();
-    let groups = vault.relations(&EntityRef::new(EntityKind::Scenario, &scenario.id));
+    let goal = crate::usecases::planning::goals::create_goal(&mut vault, goal.into()).unwrap();
+    let groups = crate::household::relations::relations(
+        &vault.doc,
+        &EntityRef::new(EntityKind::Scenario, &scenario.id),
+    );
     assert_eq!(groups[0].kind, RelationKind::Goals);
     assert_eq!(groups[0].items[0].target.id, goal.id);
-    let back = vault.relations(&EntityRef::new(EntityKind::Goal, &goal.id));
+    let back = crate::household::relations::relations(
+        &vault.doc,
+        &EntityRef::new(EntityKind::Goal, &goal.id),
+    );
     assert!(
         back.iter()
             .any(|group| group.kind == RelationKind::Scenarios)
     );
     let now = unix_secs("2026-05-20T10:00:00Z").unwrap();
-    let progress = vault.goal_progress(now, "UTC");
+    let progress = crate::usecases::planning::goals::goal_progress(&vault.books(), now, "UTC");
     let expected = planned_balance(&scenario.input, 2).unwrap();
     assert_eq!(progress[0].planned_now, Some(expected.round(2)));
 }
@@ -371,25 +434,30 @@ fn the_scenario_delegates_equal_the_scenarios() {
     use crate::usecases::planning::scenarios as case;
     let (_a, mut by_method) = empty_vault();
     let (_b, mut by_case) = empty_vault();
-    let saved = by_method.save_calc_scenario(draft("Flat")).unwrap();
+    let saved =
+        crate::usecases::planning::scenarios::save_calc_scenario(&mut by_method, draft("Flat"))
+            .unwrap();
     let made = case::save_calc_scenario(&mut by_case, draft("Flat")).unwrap();
     assert_eq!(
         super::automations_tests::without_ids(&saved, &[saved.id.as_str()]),
         super::automations_tests::without_ids(&made, &[made.id.as_str()])
     );
-    let gone = by_method.delete_calc_scenario(&saved.id).unwrap();
+    let gone =
+        crate::usecases::planning::scenarios::delete_calc_scenario(&mut by_method, &saved.id)
+            .unwrap();
     let gone_by_case = case::delete_calc_scenario(&mut by_case, &made.id).unwrap();
     assert_eq!(gone.goal_ids, gone_by_case.goal_ids);
     assert_eq!(
-        by_method.calc_scenarios().len(),
-        by_case.calc_scenarios().len()
+        crate::planning::scenarios::calc_scenarios(&by_method.doc).len(),
+        crate::planning::scenarios::calc_scenarios(&by_case.doc).len()
     );
-    let back = by_method.restore_calc_scenario(gone).unwrap();
+    let back =
+        crate::usecases::planning::scenarios::restore_calc_scenario(&mut by_method, gone).unwrap();
     let back_by_case = case::restore_calc_scenario(&mut by_case, gone_by_case).unwrap();
     assert_eq!(back, saved);
     assert_eq!(back_by_case, made);
     assert_eq!(
-        by_method.calc_scenarios().len(),
-        by_case.calc_scenarios().len()
+        crate::planning::scenarios::calc_scenarios(&by_method.doc).len(),
+        crate::planning::scenarios::calc_scenarios(&by_case.doc).len()
     );
 }

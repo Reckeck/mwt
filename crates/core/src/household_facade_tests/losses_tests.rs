@@ -57,43 +57,51 @@ fn setup() -> (tempfile::TempDir, UnlockedVault, String, String, String) {
     let baht = store(&mut vault, "THB card", StoreKind::Bank, None);
     let mut seed = income_of(&card, rub(), "20000", "0.01", "salary");
     seed.meta_mut().timestamp = "2026-01-01T00:00:00Z".into();
-    vault.add_transaction(seed).unwrap();
-    vault.apply_fx(&[
-        FxPoint {
-            currency: "rub".into(),
-            per_usd: amount("100"),
+    crate::usecases::money::transactions::add_transaction(&mut vault, seed).unwrap();
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[
+            FxPoint {
+                currency: "rub".into(),
+                per_usd: amount("100"),
+                ts: "2026-01-01T00:00:00Z".into(),
+                source: "test".into(),
+            },
+            FxPoint {
+                currency: "thb".into(),
+                per_usd: amount("35"),
+                ts: "2026-01-01T00:00:00Z".into(),
+                source: "test".into(),
+            },
+        ],
+    );
+    crate::usecases::money::rates::apply_prices(
+        &mut vault,
+        &[PricePoint {
+            asset_key: usdt().key(),
+            value_usd: amount("1"),
             ts: "2026-01-01T00:00:00Z".into(),
             source: "test".into(),
-        },
-        FxPoint {
-            currency: "thb".into(),
-            per_usd: amount("35"),
-            ts: "2026-01-01T00:00:00Z".into(),
-            source: "test".into(),
-        },
-    ]);
-    vault.apply_prices(&[PricePoint {
-        asset_key: usdt().key(),
-        value_usd: amount("1"),
-        ts: "2026-01-01T00:00:00Z".into(),
-        source: "test".into(),
-        change_24h_pct: None,
-    }]);
+            change_24h_pct: None,
+        }],
+    );
     (dir, vault, card, wallet, baht)
 }
 
 #[test]
 fn a_convert_at_a_worse_rate_than_the_market_loses_the_spread() {
     let (_dir, mut vault, card, wallet, _) = setup();
-    let saved = vault
-        .add_transaction(convert(
+    let saved = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        convert(
             (&card, rub(), "10000"),
             (&wallet, usdt(), "95"),
             Some("105.26"),
             "2026-02-01T10:00:00Z",
-        ))
-        .unwrap();
-    let loss = vault.tx_loss(&saved.meta().id).unwrap();
+        ),
+    )
+    .unwrap();
+    let loss = crate::usecases::household::losses::tx_loss(&vault, &saved.meta().id).unwrap();
     assert_eq!(loss.slippage, amount("5"));
     assert_eq!(loss.total, amount("5"));
     assert!(loss.complete);
@@ -109,7 +117,7 @@ fn the_preview_of_a_convert_shows_the_overpay_over_the_market() {
         None,
         "2026-02-01T10:00:00Z",
     );
-    let preview = vault.convert_preview(&draft).unwrap();
+    let preview = crate::money::preview::convert_preview(&vault.books(), &draft).unwrap();
     assert_eq!(preview.market_price, amount("100"));
     assert_eq!(preview.overpay, amount("500"));
     assert_eq!(preview.overpay_base, amount("5"));
@@ -119,15 +127,17 @@ fn the_preview_of_a_convert_shows_the_overpay_over_the_market() {
 #[test]
 fn an_internal_convert_still_counts_its_spread() {
     let (_dir, mut vault, card, _, _) = setup();
-    let saved = vault
-        .add_transaction(convert(
+    let saved = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        convert(
             (&card, rub(), "10000"),
             (&card, AssetRef::fiat("USD", "Dollar"), "98"),
             None,
             "2026-02-01T10:00:00Z",
-        ))
-        .unwrap();
-    let loss = vault.tx_loss(&saved.meta().id).unwrap();
+        ),
+    )
+    .unwrap();
+    let loss = crate::usecases::household::losses::tx_loss(&vault, &saved.meta().id).unwrap();
     assert!(loss.internal);
     assert_eq!((loss.fee, loss.slippage), (Amount::ZERO, amount("2")));
 }
@@ -135,26 +145,33 @@ fn an_internal_convert_still_counts_its_spread() {
 #[test]
 fn a_rub_usdt_thb_chain_adds_up_its_links() {
     let (_dir, mut vault, card, wallet, baht) = setup();
-    let first = vault
-        .add_transaction(convert(
+    let first = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        convert(
             (&card, rub(), "10000"),
             (&wallet, usdt(), "98"),
             None,
             "2026-02-01T10:00:00Z",
-        ))
-        .unwrap();
-    let second = vault
-        .add_transaction(convert(
+        ),
+    )
+    .unwrap();
+    let second = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        convert(
             (&wallet, usdt(), "98"),
             (&baht, thb(), "3400"),
             None,
             "2026-02-01T12:00:00Z",
-        ))
-        .unwrap();
-    let flow = vault
-        .link_transactions(&[first.meta().id.clone(), second.meta().id.clone()], None)
-        .unwrap();
-    let flows = vault.list_flows(None, None, &[]);
+        ),
+    )
+    .unwrap();
+    let flow = crate::usecases::household::losses::link_transactions(
+        &mut vault,
+        &[first.meta().id.clone(), second.meta().id.clone()],
+        None,
+    )
+    .unwrap();
+    let flows = crate::usecases::household::losses::list_flows(&vault, None, None, &[]);
     assert_eq!(flows.len(), 1);
     let chain = &flows[0];
     assert_eq!(chain.flow_id, flow);
@@ -166,18 +183,31 @@ fn a_rub_usdt_thb_chain_adds_up_its_links() {
     assert_eq!(chain.loss, amount("2.86"));
     assert_eq!(chain.difference, amount("2.86"));
 
-    vault.unlink_transaction(&second.meta().id).unwrap();
-    assert_eq!(vault.list_flows(None, None, &[])[0].links.len(), 1);
+    crate::usecases::household::losses::unlink_transaction(&mut vault, &second.meta().id).unwrap();
+    assert_eq!(
+        crate::usecases::household::losses::list_flows(&vault, None, None, &[])[0]
+            .links
+            .len(),
+        1
+    );
     // Another wallet's chains stay out; one of the chain's own wallets keeps it.
     assert!(
-        vault
-            .list_flows(None, None, std::slice::from_ref(&baht))
-            .is_empty()
+        crate::usecases::household::losses::list_flows(
+            &vault,
+            None,
+            None,
+            std::slice::from_ref(&baht)
+        )
+        .is_empty()
     );
     assert_eq!(
-        vault
-            .list_flows(None, None, std::slice::from_ref(&card))
-            .len(),
+        crate::usecases::household::losses::list_flows(
+            &vault,
+            None,
+            None,
+            std::slice::from_ref(&card)
+        )
+        .len(),
         1
     );
 }
@@ -186,7 +216,7 @@ fn a_rub_usdt_thb_chain_adds_up_its_links() {
 fn the_rates_table_is_against_the_base() {
     let (_dir, mut vault, ..) = setup();
     vault.set_base_currency("rub");
-    let table = vault.fx_table(&[]);
+    let table = crate::usecases::household::losses::fx_table(&vault, &[]);
     assert_eq!(table.base, "rub");
     let usd = table.rows.iter().find(|row| row.currency == "usd").unwrap();
     assert_eq!(usd.in_base, amount("100"));
@@ -199,15 +229,18 @@ fn the_rates_table_is_against_the_base() {
 fn crypto_favorites_join_the_rates_table() {
     let (_dir, mut vault, ..) = setup();
     vault.set_base_currency("rub");
-    vault.apply_prices(&[PricePoint {
-        asset_key: "coin:bitcoin".into(),
-        value_usd: amount("50000"),
-        ts: "2026-01-02T00:00:00Z".into(),
-        source: "test".into(),
-        change_24h_pct: None,
-    }]);
+    crate::usecases::money::rates::apply_prices(
+        &mut vault,
+        &[PricePoint {
+            asset_key: "coin:bitcoin".into(),
+            value_usd: amount("50000"),
+            ts: "2026-01-02T00:00:00Z".into(),
+            source: "test".into(),
+            change_24h_pct: None,
+        }],
+    );
     let favorites = ["BTC".to_string(), "THB".to_string()];
-    let table = vault.fx_table(&favorites);
+    let table = crate::usecases::household::losses::fx_table(&vault, &favorites);
     let btc = table.rows.iter().find(|row| row.currency == "btc").unwrap();
     assert!(btc.crypto && btc.favorite);
     assert_eq!(btc.in_base, amount("5000000"));
@@ -220,7 +253,7 @@ fn crypto_favorites_join_the_rates_table() {
 #[test]
 fn an_unpriced_favorite_has_no_row() {
     let (_dir, vault, ..) = setup();
-    let table = vault.fx_table(&["DOGE".to_string()]);
+    let table = crate::usecases::household::losses::fx_table(&vault, &["DOGE".to_string()]);
     assert!(table.rows.iter().all(|row| row.currency != "doge"));
 }
 
@@ -325,63 +358,73 @@ impl SaveHook for Wakes {
 #[test]
 fn link_and_unlink_are_one_write_each() {
     let (_dir, mut vault, card, wallet, _) = setup();
-    let first = vault
-        .add_transaction(convert(
+    let first = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        convert(
             (&card, rub(), "10000"),
             (&wallet, usdt(), "98"),
             None,
             "2026-02-01T10:00:00Z",
-        ))
-        .unwrap();
+        ),
+    )
+    .unwrap();
     let wakes = std::sync::Arc::new(Wakes::default());
     vault.set_write_behind(Some(wakes.clone()));
     let id = first.meta().id.clone();
-    let flow = vault
-        .link_transactions(std::slice::from_ref(&id), None)
-        .unwrap();
+    let flow = crate::usecases::household::losses::link_transactions(
+        &mut vault,
+        std::slice::from_ref(&id),
+        None,
+    )
+    .unwrap();
     assert_eq!(wakes.0.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert_eq!(
         vault.doc.transactions.last().unwrap().meta().flow_id,
         Some(flow)
     );
-    vault.unlink_transaction(&id).unwrap();
+    crate::usecases::household::losses::unlink_transaction(&mut vault, &id).unwrap();
     assert_eq!(wakes.0.load(std::sync::atomic::Ordering::SeqCst), 2);
     // A refusal writes nothing.
-    assert!(vault.unlink_transaction("nope").is_err());
-    assert!(vault.link_transactions(&[], None).is_err());
+    assert!(crate::usecases::household::losses::unlink_transaction(&mut vault, "nope").is_err());
+    assert!(crate::usecases::household::losses::link_transactions(&mut vault, &[], None).is_err());
     assert_eq!(wakes.0.load(std::sync::atomic::Ordering::SeqCst), 2);
 }
 
 #[test]
 fn the_delegates_equal_the_scenarios() {
     let (_dir, mut vault, card, wallet, _) = setup();
-    let saved = vault
-        .add_transaction(convert(
+    let saved = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        convert(
             (&card, rub(), "10000"),
             (&wallet, usdt(), "95"),
             Some("105.26"),
             "2026-02-01T10:00:00Z",
-        ))
-        .unwrap();
+        ),
+    )
+    .unwrap();
     let id = saved.meta().id.clone();
-    vault
-        .link_transactions(std::slice::from_ref(&id), Some("chain"))
-        .unwrap();
+    crate::usecases::household::losses::link_transactions(
+        &mut vault,
+        std::slice::from_ref(&id),
+        Some("chain"),
+    )
+    .unwrap();
     assert_eq!(
-        vault.tx_loss(&id).unwrap(),
+        crate::usecases::household::losses::tx_loss(&vault, &id).unwrap(),
         crate::usecases::household::losses::tx_loss(&vault, &id).unwrap()
     );
     assert_eq!(
-        vault.tx_losses(),
+        crate::usecases::household::losses::tx_losses(&vault),
         crate::usecases::household::losses::tx_losses(&vault)
     );
     assert_eq!(
-        vault.list_flows(None, None, &[]),
+        crate::usecases::household::losses::list_flows(&vault, None, None, &[]),
         crate::usecases::household::losses::list_flows(&vault, None, None, &[])
     );
     let favorites = ["THB".to_string()];
     assert_eq!(
-        vault.fx_table(&favorites),
+        crate::usecases::household::losses::fx_table(&vault, &favorites),
         crate::usecases::household::losses::fx_table(&vault, &favorites)
     );
 }
@@ -402,11 +445,11 @@ fn an_unlisted_token_bought_for_usdt_has_no_slippage_but_stays_incomplete() {
     let id = bought.meta().id.clone();
     vault.doc.transactions.push(bought);
 
-    let loss = vault.tx_loss(&id).unwrap();
+    let loss = crate::usecases::household::losses::tx_loss(&vault, &id).unwrap();
     assert_eq!(loss.slippage, Amount::ZERO);
     assert_eq!(loss.total, Amount::ZERO);
     assert!(!loss.complete);
-    assert!(vault.tx_losses().contains_key(&id));
+    assert!(crate::usecases::household::losses::tx_losses(&vault).contains_key(&id));
 
     let filter = ReportFilter {
         from: Some("2026-01".into()),
@@ -414,15 +457,14 @@ fn an_unlisted_token_bought_for_usdt_has_no_slippage_but_stays_incomplete() {
         currency: Some("usd".into()),
         ..ReportFilter::default()
     };
-    let Report::Losses(report) = vault
-        .report(
-            ReportKind::Losses,
-            &filter,
-            secs("2026-03-15T00:00:00Z"),
-            "UTC",
-        )
-        .unwrap()
-    else {
+    let Report::Losses(report) = mwt_reports::overview::report(
+        &vault.books(),
+        ReportKind::Losses,
+        &filter,
+        secs("2026-03-15T00:00:00Z"),
+        "UTC",
+    )
+    .unwrap() else {
         panic!("a losses report");
     };
     assert_eq!(report.losses.total.slippage, Amount::ZERO);

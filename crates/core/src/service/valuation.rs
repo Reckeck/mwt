@@ -23,10 +23,6 @@ impl UnlockedVault {
         /// Curves of every property asset that has a valuation or a rule.
         pub(crate) fn valuation_curves(&self) -> HashMap<String, ValuationCurve>
             => crate::money::valuation::valuation_curves @books;
-        /// The curve of one asset, if it has one.
-        #[cfg(test)]
-        pub(crate) fn valuation_curve(&self, asset_key: &str) -> Option<ValuationCurve>
-            => crate::money::valuation::valuation_curve @books;
         /// The value story of each asset a property holds.
         pub fn property_values(&self, store_id: &str, zone: &str) -> Result<Vec<PropertyValue>>
             => crate::money::valuation::property_values @books with (store_id => &StoreId::from(store_id));

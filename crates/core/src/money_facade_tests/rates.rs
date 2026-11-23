@@ -68,23 +68,38 @@ fn first_price(vault: &mut UnlockedVault) -> Option<Amount> {
 fn with_rub_history(vault: &mut UnlockedVault) {
     vault.set_base_currency("rub");
     vault.doc.settings.budget_currency = "thb".into();
-    vault.apply_fx(&[
-        fx("rub", "80", "2026-01-01T00:00:00Z"),
-        fx("thb", "32", "2026-01-01T00:00:00Z"),
-    ]);
-    vault.apply_fx(&[
-        fx("rub", "100", "2026-06-01T00:00:00Z"),
-        fx("thb", "40", "2026-06-01T00:00:00Z"),
-    ]);
+    crate::usecases::money::rates::apply_fx(
+        vault,
+        &[
+            fx("rub", "80", "2026-01-01T00:00:00Z"),
+            fx("thb", "32", "2026-01-01T00:00:00Z"),
+        ],
+    );
+    crate::usecases::money::rates::apply_fx(
+        vault,
+        &[
+            fx("rub", "100", "2026-06-01T00:00:00Z"),
+            fx("thb", "40", "2026-06-01T00:00:00Z"),
+        ],
+    );
 }
 
 #[test]
 fn convert_of_a_huge_amount_is_none_not_a_panic() {
     let (_dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
-    vault.apply_fx(&[fx("eur", "0.000000000001", "2026-01-01T00:00:00Z")]);
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[fx("eur", "0.000000000001", "2026-01-01T00:00:00Z")],
+    );
     assert_eq!(
-        vault.convert_at(Amount::MAX_INPUT, "eur", "usd", "2026-01-15T00:00:00Z"),
+        crate::money::rates::convert_at(
+            &vault.books(),
+            Amount::MAX_INPUT,
+            "eur",
+            "usd",
+            "2026-01-15T00:00:00Z"
+        ),
         None
     );
 }
@@ -95,14 +110,29 @@ fn convert_crosses_through_usd_at_the_date() {
     with_rub_history(&mut vault);
     // 8000 RUB in January = 100 USD = 3200 THB; in July 8000 RUB = 80 USD.
     assert_eq!(
-        vault.convert_at(amount("8000"), "rub", "thb", "2026-01-15T00:00:00Z"),
+        crate::money::rates::convert_at(
+            &vault.books(),
+            amount("8000"),
+            "rub",
+            "thb",
+            "2026-01-15T00:00:00Z"
+        ),
         Some(amount("3200"))
     );
     assert_eq!(
-        vault.convert_at(amount("8000"), "RUB", "usd", "2026-07-01T00:00:00Z"),
+        crate::money::rates::convert_at(
+            &vault.books(),
+            amount("8000"),
+            "RUB",
+            "usd",
+            "2026-07-01T00:00:00Z"
+        ),
         Some(amount("80"))
     );
-    assert_eq!(vault.convert_at(amount("1"), "rub", "xyz", ""), None);
+    assert_eq!(
+        crate::money::rates::convert_at(&vault.books(), amount("1"), "rub", "xyz", ""),
+        None
+    );
 }
 
 #[test]
@@ -111,16 +141,19 @@ fn saving_stamps_the_rate_of_that_day_and_keeps_a_typed_price() {
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     with_rub_history(&mut vault);
 
-    vault
-        .add_transaction(rub_income(&card, "8000", "2026-02-01T00:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        rub_income(&card, "8000", "2026-02-01T00:00:00Z"),
+    )
+    .unwrap();
     assert_eq!(first_price(&mut vault), Some(amount("0.0125")));
 
     let mut typed = rub_income(&card, "100", "2026-02-02T00:00:00Z");
     if let Transaction::Topup(inner) = &mut typed {
         inner.price.price_usd = Some(amount("0.02"));
     }
-    let mut saved = vault.add_transaction(typed).unwrap();
+    let mut saved =
+        crate::usecases::money::transactions::add_transaction(&mut vault, typed).unwrap();
     assert_eq!(saved.stamps_mut()[0].1.price_usd, Some(amount("0.02")));
 }
 
@@ -128,11 +161,16 @@ fn saving_stamps_the_rate_of_that_day_and_keeps_a_typed_price() {
 fn a_fiat_holding_has_value() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    vault.apply_fx(&[fx("rub", "100", "2026-01-01T00:00:00Z")]);
-    vault
-        .add_transaction(rub_income(&card, "10000", "2026-02-01T00:00:00Z"))
-        .unwrap();
-    let worth = vault.net_worth();
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[fx("rub", "100", "2026-01-01T00:00:00Z")],
+    );
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        rub_income(&card, "10000", "2026-02-01T00:00:00Z"),
+    )
+    .unwrap();
+    let worth = crate::usecases::money::capital::net_worth(&vault.books());
     assert!(worth.financial.is_positive(), "{worth:?}");
 }
 
@@ -140,14 +178,22 @@ fn a_fiat_holding_has_value() {
 fn restamp_fills_only_what_is_missing() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    vault
-        .add_transaction(rub_income(&card, "8000", "2026-02-01T00:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        rub_income(&card, "8000", "2026-02-01T00:00:00Z"),
+    )
+    .unwrap();
     assert_eq!(first_price(&mut vault), None);
 
-    vault.apply_fx(&[fx("rub", "80", "2026-01-01T00:00:00Z")]);
-    assert_eq!(vault.restamp_missing(), 1);
-    assert_eq!(vault.restamp_missing(), 0);
+    crate::usecases::money::rates::apply_fx(&mut vault, &[fx("rub", "80", "2026-01-01T00:00:00Z")]);
+    assert_eq!(
+        crate::usecases::money::rates::restamp_missing(&mut vault),
+        1
+    );
+    assert_eq!(
+        crate::usecases::money::rates::restamp_missing(&mut vault),
+        0
+    );
     assert_eq!(first_price(&mut vault), Some(amount("0.0125")));
 }
 
@@ -155,7 +201,7 @@ fn restamp_fills_only_what_is_missing() {
 fn leg_price_in_base_uses_the_rate_of_the_moment() {
     let (_dir, mut vault) = empty_vault();
     with_rub_history(&mut vault);
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let leg = Leg::in_coming("s", &usd(), amount("1"), &usd_price("1"));
     let feb = secs_or_now("2026-02-01T00:00:00Z");
     let jul = secs_or_now("2026-07-01T00:00:00Z");
@@ -167,8 +213,11 @@ fn leg_price_in_base_uses_the_rate_of_the_moment() {
 fn a_base_price_of_another_currency_is_read_through_usd() {
     let (_dir, mut vault) = empty_vault();
     with_rub_history(&mut vault);
-    vault.apply_fx(&[fx("eur", "0.5", "2026-01-01T00:00:00Z")]);
-    let book = vault.rate_book();
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[fx("eur", "0.5", "2026-01-01T00:00:00Z")],
+    );
+    let book = crate::money::rates::rate_book(&vault.books());
     let feb = secs_or_now("2026-02-01T00:00:00Z");
     // Written on a device whose base is rub: 100 USD = 8000 RUB in February.
     let stamp = labelled_stamp("100", "8000", Some("rub"));
@@ -185,7 +234,7 @@ fn a_base_price_of_another_currency_is_read_through_usd() {
 fn a_base_price_with_the_readers_label_is_kept_as_is() {
     let (_dir, mut vault) = empty_vault();
     with_rub_history(&mut vault);
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let feb = secs_or_now("2026-02-01T00:00:00Z");
     let stamp = labelled_stamp("100", "7777", Some("rub"));
     let leg = Leg::in_coming("s", &usd(), amount("1"), &stamp);
@@ -196,7 +245,7 @@ fn a_base_price_with_the_readers_label_is_kept_as_is() {
 fn a_base_price_without_a_label_reads_as_before() {
     let (_dir, mut vault) = empty_vault();
     with_rub_history(&mut vault);
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let feb = secs_or_now("2026-02-01T00:00:00Z");
     let stamp = labelled_stamp("100", "7777", None);
     let leg = Leg::in_coming("s", &usd(), amount("1"), &stamp);
@@ -207,7 +256,7 @@ fn a_base_price_without_a_label_reads_as_before() {
 fn a_labelled_base_price_with_no_usd_price_or_rate_is_kept() {
     let (_dir, mut vault) = empty_vault();
     with_rub_history(&mut vault);
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let feb = secs_or_now("2026-02-01T00:00:00Z");
     let mut stamp = labelled_stamp("100", "8000", Some("rub"));
     stamp.price_usd = None;
@@ -223,19 +272,22 @@ fn a_labelled_base_price_with_no_usd_price_or_rate_is_kept() {
 fn a_price_typed_in_the_base_currency_is_labelled_with_it() {
     let (_dir, mut vault) = empty_vault();
     vault.set_base_currency("rub");
-    vault.apply_fx(&[
-        fx("rub", "80", "2026-01-01T00:00:00Z"),
-        fx("thb", "32", "2026-01-01T00:00:00Z"),
-    ]);
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[
+            fx("rub", "80", "2026-01-01T00:00:00Z"),
+            fx("thb", "32", "2026-01-01T00:00:00Z"),
+        ],
+    );
     let mut input = priced_payment("8000", "rub", "2026-02-01T00:00:00Z");
-    vault.resolve_input_price(&mut input).unwrap();
+    crate::usecases::money::rates::resolve_input_price(&vault, &mut input).unwrap();
     assert_eq!(
         input.common_mut().price_base_currency.as_deref(),
         Some("rub")
     );
     // Not the base: no base price, so no label.
     let mut other = priced_payment("3200", "thb", "2026-02-01T00:00:00Z");
-    vault.resolve_input_price(&mut other).unwrap();
+    crate::usecases::money::rates::resolve_input_price(&vault, &mut other).unwrap();
     assert_eq!(other.common_mut().price_base, None);
     assert_eq!(other.common_mut().price_base_currency, None);
 }
@@ -243,8 +295,14 @@ fn a_price_typed_in_the_base_currency_is_labelled_with_it() {
 #[test]
 fn untracked_currencies_do_not_grow_history() {
     let (_dir, mut vault) = empty_vault();
-    vault.apply_fx(&[fx("jpy", "150", "2026-01-01T00:00:00Z")]);
-    vault.apply_fx(&[fx("jpy", "151", "2026-02-01T00:00:00Z")]);
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[fx("jpy", "150", "2026-01-01T00:00:00Z")],
+    );
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[fx("jpy", "151", "2026-02-01T00:00:00Z")],
+    );
     let jpy: Vec<_> = vault
         .doc
         .fx_cache
@@ -267,7 +325,7 @@ fn a_hand_set_price_holds_for_the_whole_history() {
             currency: "usd".into(),
             updated_at: "2026-09-01T00:00:00Z".into(),
         });
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let long_ago = secs_or_now("2020-01-01T00:00:00Z");
     assert_eq!(
         book.history_price("asset:FLAT", long_ago),
@@ -279,22 +337,28 @@ fn a_hand_set_price_holds_for_the_whole_history() {
 fn the_quote_carries_the_moment_of_its_rate() {
     let (_dir, mut vault) = empty_vault();
     with_rub_history(&mut vault);
-    let quote = vault.cached_quote(&rub(), "2026-03-01T12:00:00Z");
+    let quote = crate::usecases::money::rates::cached_quote(&vault, &rub(), "2026-03-01T12:00:00Z");
     assert_eq!(quote.price_usd, amount("0.0125"));
     assert_eq!(quote.ts, "2026-01-01T00:00:00Z");
-    assert_eq!(vault.cached_quote(&btc(), ""), CachedPrice::default());
+    assert_eq!(
+        crate::usecases::money::rates::cached_quote(&vault, &btc(), ""),
+        CachedPrice::default()
+    );
 }
 
 #[test]
 fn fx_missing_on_checks_the_calendar_day() {
     let (_dir, mut vault) = crate::service::test_support::empty_vault();
-    vault.apply_fx(&[fx("rub", "90", "2026-10-09T12:00:00Z")]);
+    crate::usecases::money::rates::apply_fx(&mut vault, &[fx("rub", "90", "2026-10-09T12:00:00Z")]);
     let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
     let wanted = ["rub".to_string(), "EUR".to_string(), "usd".to_string()];
-    assert_eq!(vault.fx_missing_on(&wanted, day), vec!["eur".to_string()]);
+    assert_eq!(
+        crate::money::rates::fx_missing_on(&vault.doc, &wanted, day),
+        vec!["eur".to_string()]
+    );
     let next = day.succ_opt().unwrap();
     assert_eq!(
-        vault.fx_missing_on(&wanted, next),
+        crate::money::rates::fx_missing_on(&vault.doc, &wanted, next),
         vec!["eur".to_string(), "rub".to_string()]
     );
 }
@@ -304,21 +368,27 @@ fn fx_missing_on_skips_crypto_codes() {
     let (_dir, vault) = crate::service::test_support::empty_vault();
     let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
     let wanted = ["btc".to_string(), "TON".to_string(), "eur".to_string()];
-    assert_eq!(vault.fx_missing_on(&wanted, day), vec!["eur".to_string()]);
+    assert_eq!(
+        crate::money::rates::fx_missing_on(&vault.doc, &wanted, day),
+        vec!["eur".to_string()]
+    );
 }
 
 #[test]
 fn convert_reaches_a_well_known_coin_not_held() {
     let (_dir, mut vault) = empty_vault();
-    vault.apply_prices(&[PricePoint {
-        asset_key: "coin:ethereum".into(),
-        value_usd: amount("2000"),
-        ts: "2026-01-01T00:00:00Z".into(),
-        source: "test".into(),
-        change_24h_pct: None,
-    }]);
+    crate::usecases::money::rates::apply_prices(
+        &mut vault,
+        &[PricePoint {
+            asset_key: "coin:ethereum".into(),
+            value_usd: amount("2000"),
+            ts: "2026-01-01T00:00:00Z".into(),
+            source: "test".into(),
+            change_24h_pct: None,
+        }],
+    );
     assert_eq!(
-        vault.convert_at(amount("1"), "eth", "usd", ""),
+        crate::money::rates::convert_at(&vault.books(), amount("1"), "eth", "usd", ""),
         Some(amount("2000"))
     );
 }
@@ -327,18 +397,23 @@ fn convert_reaches_a_well_known_coin_not_held() {
 fn favorite_asset_prefers_the_held_identity() {
     let (_dir, mut vault) = empty_vault();
     assert_eq!(
-        vault.favorite_asset("btc").map(|asset| asset.key()),
+        crate::money::rates::favorite_asset(&vault.doc, "btc").map(|asset| asset.key()),
         Some("coin:bitcoin".to_string())
     );
-    assert!(vault.favorite_asset("eur").is_none());
-    assert!(vault.favorite_asset("usd").is_none());
+    assert!(crate::money::rates::favorite_asset(&vault.doc, "eur").is_none());
+    assert!(crate::money::rates::favorite_asset(&vault.doc, "usd").is_none());
 
     let wallet = store(&mut vault, "Cold", StoreKind::Crypto, None);
     let held = AssetRef::crypto("TON", "Toncoin", None, crate::model::chain::Chain::Ton);
-    vault
-        .add_transaction(income_of(&wallet, held.clone(), "5", "3", "gift"))
-        .unwrap();
-    assert_eq!(vault.favorite_asset("ton"), Some(held));
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&wallet, held.clone(), "5", "3", "gift"),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::money::rates::favorite_asset(&vault.doc, "ton"),
+        Some(held)
+    );
 }
 
 /// A price typed in rubles is stored as USD at the rate of the moment,
@@ -347,12 +422,15 @@ fn favorite_asset_prefers_the_held_identity() {
 fn a_price_in_any_currency_becomes_usd_at_the_moment_rate() {
     let (_dir, mut vault) = empty_vault();
     vault.set_base_currency("rub");
-    vault.apply_fx(&[
-        fx("rub", "80", "2026-01-01T00:00:00Z"),
-        fx("rub", "100", "2026-06-01T00:00:00Z"),
-    ]);
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[
+            fx("rub", "80", "2026-01-01T00:00:00Z"),
+            fx("rub", "100", "2026-06-01T00:00:00Z"),
+        ],
+    );
     let mut input = priced_payment("8000", "rub", "2026-02-01T00:00:00Z");
-    vault.resolve_input_price(&mut input).unwrap();
+    crate::usecases::money::rates::resolve_input_price(&vault, &mut input).unwrap();
     let common = input.common_mut();
     assert_eq!(common.price_usd, Some(amount("100")));
     assert_eq!(common.price_base, Some(amount("8000")));
@@ -360,7 +438,7 @@ fn a_price_in_any_currency_becomes_usd_at_the_moment_rate() {
 
     let mut unknown = priced_payment("10", "thb", "2026-02-01T00:00:00Z");
     assert!(
-        matches!(vault.resolve_input_price(&mut unknown), Err(crate::Error::FxMissing(code)) if code == "thb")
+        matches!(crate::usecases::money::rates::resolve_input_price(&vault, &mut unknown), Err(crate::Error::FxMissing(code)) if code == "thb")
     );
 }
 
@@ -368,14 +446,20 @@ fn a_price_in_any_currency_becomes_usd_at_the_moment_rate() {
 fn priced_vault() -> (tempfile::TempDir, UnlockedVault) {
     let (dir, mut vault) = empty_vault();
     with_rub_history(&mut vault);
-    vault.apply_fx(&[fx("eur", "0.5", "2026-01-01T00:00:00Z")]);
-    vault.apply_prices(&[PricePoint {
-        asset_key: "coin:bitcoin".into(),
-        value_usd: amount("50000"),
-        ts: "2026-01-01T00:00:00Z".into(),
-        source: "test".into(),
-        change_24h_pct: None,
-    }]);
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[fx("eur", "0.5", "2026-01-01T00:00:00Z")],
+    );
+    crate::usecases::money::rates::apply_prices(
+        &mut vault,
+        &[PricePoint {
+            asset_key: "coin:bitcoin".into(),
+            value_usd: amount("50000"),
+            ts: "2026-01-01T00:00:00Z".into(),
+            source: "test".into(),
+            change_24h_pct: None,
+        }],
+    );
     vault
         .doc
         .manual_prices
@@ -391,7 +475,7 @@ fn priced_vault() -> (tempfile::TempDir, UnlockedVault) {
 #[test]
 fn lookups_of_a_fixed_vault_are_pinned() {
     let (_dir, vault) = priced_vault();
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let feb = secs_or_now("2026-02-01T00:00:00Z");
     let jul = secs_or_now("2026-07-01T00:00:00Z");
     assert_eq!(book.fx_at("usd", feb), Some(amount("1")));
@@ -419,8 +503,7 @@ fn lookups_of_a_fixed_vault_are_pinned() {
 #[test]
 fn build_equals_the_old_rate_book() {
     let (_dir, vault) = priced_vault();
-    let curves = vault
-        .valuation_curves()
+    let curves = crate::money::valuation::valuation_curves(&vault.books())
         .into_iter()
         .map(|(key, curve)| {
             (
@@ -430,7 +513,7 @@ fn build_equals_the_old_rate_book() {
         })
         .collect();
     let built = RateBook::build(&vault.doc, curves);
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let feb = secs_or_now("2026-02-01T00:00:00Z");
     for code in ["usd", "rub", "thb", "eur", "xyz"] {
         assert_eq!(built.fx_at(code, feb), book.fx_at(code, feb), "{code}");
@@ -463,7 +546,7 @@ fn build_equals_the_old_rate_book() {
 fn a_base_currency_leg_is_priced_at_exactly_one() {
     let (_dir, mut vault) = empty_vault();
     with_rub_history(&mut vault);
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let leg = Leg::in_coming("s", &rub(), amount("1"), &usd_price("0.0125"));
     let jul = secs_or_now("2026-07-01T00:00:00Z");
     assert_eq!(book.leg_price_in_base(&leg, "rub", jul), amount("1"));
@@ -480,10 +563,15 @@ fn base_currency_cash_is_valued_without_a_rate() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     vault.set_base_currency("rub");
-    vault
-        .add_transaction(rub_income(&card, "10000", "2026-02-01T00:00:00Z"))
-        .unwrap();
-    assert_eq!(vault.net_worth().financial, amount("10000"));
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        rub_income(&card, "10000", "2026-02-01T00:00:00Z"),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        amount("10000")
+    );
 }
 
 /// The base figure is the quantity, but the USD side must not claim one
@@ -493,24 +581,32 @@ fn base_currency_cash_without_a_rate_is_not_one_usd_per_unit() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     vault.set_base_currency("rub");
-    vault
-        .add_transaction(rub_income(&card, "10000", "2026-02-01T00:00:00Z"))
-        .unwrap();
-    let (_, fx) = vault.base_and_fx();
-    let positions = vault.store_positions(&card, fx);
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        rub_income(&card, "10000", "2026-02-01T00:00:00Z"),
+    )
+    .unwrap();
+    let (_, fx) = crate::usecases::money::portfolio::base_and_fx(&vault);
+    let positions = crate::money::portfolio::store_positions(&vault.books(), &card, fx);
     assert_eq!(positions.len(), 1);
     assert_eq!(positions[0].value_base, amount("10000"));
     assert_eq!(positions[0].value_usd, Amount::ZERO);
-    assert_eq!(vault.price_usd_for("fiat:rub"), Amount::ZERO);
+    assert_eq!(
+        crate::money::portfolio::price_usd_for(&vault.books(), "fiat:rub"),
+        Amount::ZERO
+    );
 }
 
 #[test]
 fn per_usd_is_the_latest_rate_and_usd_is_one() {
     let (_dir, mut vault) = empty_vault();
-    vault.apply_fx(&[
-        fx("rub", "90", "2026-01-01T00:00:00Z"),
-        fx("rub", "100", "2026-02-01T00:00:00Z"),
-    ]);
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[
+            fx("rub", "90", "2026-01-01T00:00:00Z"),
+            fx("rub", "100", "2026-02-01T00:00:00Z"),
+        ],
+    );
     assert_eq!(per_usd(&vault.doc, "RUB"), Some(amount("100")));
     assert_eq!(per_usd(&vault.doc, "usd"), Some(amount("1")));
     assert_eq!(per_usd(&vault.doc, "jpy"), None);

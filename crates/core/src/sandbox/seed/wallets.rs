@@ -44,7 +44,8 @@ fn create(
     extras: StoreExtras,
     id: String,
 ) -> Result<Store> {
-    let made = vault.create_store_with(
+    let made = crate::usecases::money::stores::create_store_with(
+        vault,
         name,
         kind,
         color,
@@ -57,7 +58,7 @@ fn create(
 }
 
 pub fn create_all(vault: &mut UnlockedVault) -> Result<Wallets> {
-    vault.ensure_cash_wallet("Наличные")?;
+    crate::usecases::money::stores::ensure_cash_wallet(vault, "Наличные")?;
     let cash = vault
         .doc
         .stores

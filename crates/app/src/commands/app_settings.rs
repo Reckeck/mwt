@@ -203,7 +203,9 @@ pub fn sync_base_currency(state: &AppState, app: &AppHandle) {
         // The flat inflation rates used to be kept per device; they are the
         // group's now, so the first open after the update copies this device's
         // own into the vault (once, never over a rate the group already has).
-        if let Err(err) = vault.adopt_flat_inflation(&settings.inflation) {
+        if let Err(err) =
+            trade_core::usecases::money::inflation::adopt_flat_inflation(vault, &settings.inflation)
+        {
             eprintln!("inflation rates were not adopted: {err}");
         }
         drop(guard);

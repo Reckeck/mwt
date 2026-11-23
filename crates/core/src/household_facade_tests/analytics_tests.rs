@@ -17,9 +17,7 @@ use crate::service::test_support::{empty_vault, income_of, store};
 
 fn spent_in_flows(scenario: &Scenario) -> Amount {
     let cal = Calendar::new("UTC");
-    scenario
-        .vault
-        .flows_between(&cal, "rub", i64::MIN, i64::MAX)
+    crate::planning::flows::flows_between(&scenario.vault.books(), &cal, "rub", i64::MIN, i64::MAX)
         .into_iter()
         .filter(|flow| matches!(flow.class, FlowClass::Fixed | FlowClass::Daily))
         .fold(Amount::ZERO, |sum, flow| sum + flow.value)
@@ -51,23 +49,30 @@ fn paid_6000_with_my_share_1500_is_an_expense_of_1500() {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("rub");
     let wallet = store(&mut vault, "Bank", StoreKind::Bank, None);
-    vault
-        .add_transaction(income_of(&wallet, rub(), "50000", "0.0109", "salary"))
-        .unwrap();
-    let event = vault
-        .create_shared_event(SharedEventDraft {
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&wallet, rub(), "50000", "0.0109", "salary"),
+    )
+    .unwrap();
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        &mut vault,
+        SharedEventDraft {
             title: "Ужин".into(),
             currency: "rub".into(),
             participants: vec![guest("A"), guest("B"), guest("C")],
             category_id: Some("groceries".into()),
             ..SharedEventDraft::default()
-        })
-        .unwrap()
-        .event
-        .id;
-    vault
-        .add_shared_purchase(&event, dinner(&wallet, "", "6000"))
-        .unwrap();
+        },
+    )
+    .unwrap()
+    .event
+    .id;
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut vault,
+        &event,
+        dinner(&wallet, "", "6000"),
+    )
+    .unwrap();
     let scenario = Scenario {
         _dir: dir,
         vault,
@@ -78,7 +83,11 @@ fn paid_6000_with_my_share_1500_is_an_expense_of_1500() {
     // 6000 left the wallet, 1500 is my spending
     assert_eq!(scenario.balance(), amount("44000"));
     assert_eq!(spent_in_flows(&scenario), amount("1500"));
-    let view = scenario.vault.shared_event_view(&scenario.event).unwrap();
+    let view = crate::household::shared_events::view::shared_event_view(
+        &scenario.vault.doc,
+        &scenario.event,
+    )
+    .unwrap();
     assert_eq!(view.mine.unwrap().owed_to_me, amount("4500"));
 }
 
@@ -89,17 +98,15 @@ fn the_skewers_count_my_share_of_every_purchase_and_nothing_twice() {
     assert_eq!(spent_in_flows(&scenario), amount("1060"));
     // a return of money is not spending, so it changes nothing
     let wallet = scenario.wallet.clone();
-    scenario
-        .vault
-        .settle_shared(SettleSharedInput {
-            event_id: scenario.event.clone(),
-            participant_id: scenario.person("petya"),
-            direction: SettleDirection::ToOrganizer,
-            amount: amount("1735"),
-            store_id: Some(wallet),
-            at: None,
-        })
-        .unwrap();
+    let hoisted = SettleSharedInput {
+        event_id: scenario.event.clone(),
+        participant_id: scenario.person("petya"),
+        direction: SettleDirection::ToOrganizer,
+        amount: amount("1735"),
+        store_id: Some(wallet),
+        at: None,
+    };
+    crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted).unwrap();
     assert_eq!(spent_in_flows(&scenario), amount("1060"));
 }
 
@@ -107,26 +114,28 @@ fn the_skewers_count_my_share_of_every_purchase_and_nothing_twice() {
 fn a_write_off_is_my_expense_in_the_category_of_the_event() {
     let mut scenario = skewers_scenario();
     let vasya = scenario.person("vasya");
-    scenario
-        .vault
-        .settle_shared(SettleSharedInput {
+    crate::usecases::household::shared_events::settle_shared(
+        &mut scenario.vault,
+        SettleSharedInput {
             event_id: scenario.event.clone(),
             participant_id: vasya.clone(),
             direction: SettleDirection::ToOrganizer,
             amount: amount("1000"),
             store_id: None,
             at: None,
-        })
-        .unwrap();
-    scenario
-        .vault
-        .write_off_shared(SharedRemainderInput {
+        },
+    )
+    .unwrap();
+    crate::usecases::household::shared_events::write_off_shared(
+        &mut scenario.vault,
+        SharedRemainderInput {
             event_id: scenario.event.clone(),
             participant_id: vasya,
             amount: None,
             to: Vec::new(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(spent_in_flows(&scenario), amount("1060") + amount("685"));
 }
 
@@ -134,9 +143,9 @@ fn a_write_off_is_my_expense_in_the_category_of_the_event() {
 fn a_calculator_for_others_adds_no_spending_and_no_debts() {
     let mut scenario = skewers_scenario();
     let before = spent_in_flows(&scenario);
-    let view = scenario
-        .vault
-        .create_shared_event(SharedEventDraft {
+    let view = crate::usecases::household::shared_events::create_shared_event(
+        &mut scenario.vault,
+        SharedEventDraft {
             title: "Для других".into(),
             currency: "rub".into(),
             i_participate: false,
@@ -150,34 +159,42 @@ fn a_calculator_for_others_adds_no_spending_and_no_debts() {
                 guest("Y"),
             ],
             ..SharedEventDraft::default()
-        })
-        .unwrap();
-    scenario
-        .vault
-        .add_shared_purchase(&view.event.id, dinner("", "x", "900"))
-        .unwrap();
+        },
+    )
+    .unwrap();
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut scenario.vault,
+        &view.event.id,
+        dinner("", "x", "900"),
+    )
+    .unwrap();
     assert_eq!(spent_in_flows(&scenario), before);
-    assert_eq!(scenario.vault.contact_balances().len(), 3);
+    assert_eq!(
+        crate::usecases::household::contacts::contact_balances(&scenario.vault).len(),
+        3
+    );
 }
 
 #[test]
 fn budgets_see_my_part_not_the_whole_payment() {
     let mut scenario = skewers_scenario();
     // the payments have no category of their own: «other»
-    let budget = scenario
-        .vault
-        .create_budget(BudgetDraft {
+    let budget = crate::usecases::planning::budget::create_budget(
+        &mut scenario.vault,
+        BudgetDraft {
             active: true,
             target: BudgetTarget::Category("other".into()),
             period: BudgetPeriod::Month,
             limit: amount("100000"),
             currency: "rub".into(),
             warn: false,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     // 15 October 2026: the purchases are dated 3 October
     let now = secs_or_now("2026-10-15T12:00:00Z");
-    let statuses = scenario.vault.budget_status(now, "UTC");
+    let statuses =
+        crate::usecases::planning::budget::budget_status(&scenario.vault.books(), now, "UTC");
     let status = statuses
         .iter()
         .find(|row| row.budget.id == budget.id)

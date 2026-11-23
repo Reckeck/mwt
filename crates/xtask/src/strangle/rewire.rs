@@ -24,7 +24,7 @@ use super::fileset::FileSet;
 use super::forward::delegate_target;
 use super::home::{DOC_MARKER, core_dir, homes};
 use super::map::Map;
-use super::receivers::{Bindings, Held, Shapes};
+use super::receivers::{Bindings, Held, Shapes, impl_type_name};
 use super::scan::{macro_arguments, macro_line};
 use super::source::{LineIndex, Splice, apply, is_vault_impl};
 
@@ -45,32 +45,46 @@ pub fn run(root: &Path, args: &RewireArgs) -> Result<()> {
     let baseline = Baseline::load(root)?;
     let mut files = FileSet::new(root);
     let report = rewire(root, &mut files, &map, &baseline, args)?;
-    if args.dry_run {
-        for line in &report.rewrites {
-            println!("rewire: would rewrite {line}");
-        }
-    }
-    for line in &report.skipped {
-        println!("rewire: skipped {line}");
+    for line in plan_lines(&report, args.dry_run) {
+        println!("{line}");
     }
     if args.dry_run {
-        println!(
-            "rewire: dry run, {} call(s) would be replaced, {} skipped",
-            report.replaced,
-            report.skipped.len()
-        );
         return Ok(());
     }
-    println!("rewire: {} call(s) replaced", report.replaced);
     let changed: Vec<String> = files.changed().iter().map(ToString::to_string).collect();
     files.write()?;
     format(root, &changed)
 }
 
+/// What a run prints: with `--dry-run` each planned rewrite as `file:line: <before> -> <after>`,
+/// then the skipped calls and a summary.
+fn plan_lines(report: &Report, dry_run: bool) -> Vec<String> {
+    let mut lines = Vec::new();
+    if dry_run {
+        lines.extend(report.rewrites.iter().cloned());
+    }
+    lines.extend(
+        report
+            .skipped
+            .iter()
+            .map(|line| format!("rewire: skipped {line}")),
+    );
+    lines.push(if dry_run {
+        format!(
+            "rewire: dry run, {} call(s) would be replaced, {} skipped",
+            report.replaced,
+            report.skipped.len()
+        )
+    } else {
+        format!("rewire: {} call(s) replaced", report.replaced)
+    });
+    lines
+}
+
 #[derive(Default)]
 struct Report {
     replaced: usize,
-    /// `file:line: name()`.
+    /// `file:line: <before> -> <after>`.
     rewrites: Vec<String>,
     skipped: Vec<String>,
 }
@@ -196,10 +210,12 @@ struct Rewriter<'run> {
     prefix: &'run str,
     shapes: &'run Shapes,
     in_vault_impl: bool,
+    /// The self type of the impl being visited.
+    self_type: Option<String>,
     /// The names in scope that are, or are not, provably the vault.
     bindings: Bindings,
     splices: Vec<Splice>,
-    /// `line: name()`.
+    /// `line: <before> -> <after>`.
     rewrites: Vec<String>,
     /// `line: name(): reason`.
     skipped: Vec<String>,
@@ -219,6 +235,7 @@ impl<'run> Rewriter<'run> {
             prefix,
             shapes,
             in_vault_impl: false,
+            self_type: None,
             bindings: Bindings::default(),
             splices: Vec::new(),
             rewrites: Vec::new(),
@@ -278,8 +295,10 @@ impl<'run> Rewriter<'run> {
 impl<'ast> Visit<'ast> for Rewriter<'_> {
     fn visit_item_impl(&mut self, node: &'ast ItemImpl) {
         let outer = std::mem::replace(&mut self.in_vault_impl, is_vault_impl(node));
+        let outer_type = std::mem::replace(&mut self.self_type, impl_type_name(node));
         visit::visit_item_impl(self, node);
         self.in_vault_impl = outer;
+        self.self_type = outer_type;
     }
 
     fn visit_item_fn(&mut self, node: &'ast ItemFn) {
@@ -304,7 +323,8 @@ impl<'ast> Visit<'ast> for Rewriter<'_> {
             }
         }
         let init = node.init.as_ref().map(|init| &*init.expr);
-        self.bindings.bind_let(&node.pat, init, self.shapes);
+        self.bindings
+            .bind_let(&node.pat, init, self.shapes, self.self_type.as_deref());
     }
 
     fn visit_expr_closure(&mut self, node: &'ast ExprClosure) {
@@ -386,12 +406,15 @@ impl<'ast> Visit<'ast> for Rewriter<'_> {
             visit::visit_expr_method_call(self, node);
         } else if let Some(held) = self.vault_receiver(&node.receiver) {
             let span = node.span();
+            let replacement = self.replacement(target, node, held);
             self.splices.push(Splice {
                 start: self.index.offset(span.start()),
                 end: self.index.offset(span.end()),
-                text: self.replacement(target, node, held),
+                text: replacement.clone(),
             });
-            self.rewrites.push(format!("{line}: {name}()"));
+            let before = self.text_of(node).split_whitespace().collect::<Vec<_>>();
+            self.rewrites
+                .push(format!("{line}: {} -> {}", before.join(" "), replacement));
             // The arguments are copied as written; a moved call inside them waits for the next run.
         } else {
             self.skipped.push(format!(
@@ -697,5 +720,57 @@ fn d() {
         run(tree.root(), &args).unwrap();
         let text = std::fs::read_to_string(tree.root().join(USER)).unwrap();
         assert_eq!(text, USER_SOURCE);
+    }
+
+    const SETUP_SOURCE: &str = "fn setup() -> UnlockedVault { todo!() }
+impl UnlockedVault {
+    fn build() -> UnlockedVault { todo!() }
+    fn again() { let own = Self::build(); own.set_info(\"s\", info); }
+}
+fn t() {
+    let mine = setup();
+    mine.set_info(\"a\", info);
+    let theirs = other::setup();
+    theirs.set_info(\"b\", info);
+    let built = UnlockedVault::build();
+    built.set_info(\"c\", info);
+}
+";
+
+    #[test]
+    fn a_multi_segment_call_does_not_prove_a_receiver() {
+        let (report, _) = rewired(SETUP_SOURCE);
+        assert_eq!(report.replaced, 3, "{:?}", report.skipped);
+        assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
+        assert!(report.skipped[0].starts_with(&format!("{USER}:10: set_info()")));
+    }
+
+    #[test]
+    fn the_dry_run_plan_shows_each_rewrite_and_the_skipped_list() {
+        let tree = fixture();
+        std::fs::write(tree.root().join(USER), SETUP_SOURCE).unwrap();
+        let map = Map::load(tree.root()).unwrap();
+        let baseline = Baseline::load(tree.root()).unwrap();
+        let mut files = FileSet::new(tree.root());
+        let args = RewireArgs {
+            area: "loyalty".into(),
+            files: vec![USER.into()],
+            dry_run: true,
+        };
+        let report = rewire(tree.root(), &mut files, &map, &baseline, &args).unwrap();
+        let lines = plan_lines(&report, true);
+        assert_eq!(
+            lines[1],
+            format!(
+                "{USER}:8: mine.set_info(\"a\", info) -> crate::usecases::household::loyalty::set_info(&mut mine, \"a\", info)"
+            ),
+            "{lines:#?}"
+        );
+        assert_eq!(lines.len(), 5, "{lines:#?}");
+        assert!(lines[3].starts_with(&format!("rewire: skipped {USER}:10: set_info()")));
+        assert_eq!(
+            lines[4],
+            "rewire: dry run, 3 call(s) would be replaced, 1 skipped"
+        );
     }
 }

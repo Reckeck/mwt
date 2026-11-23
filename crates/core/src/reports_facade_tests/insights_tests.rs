@@ -35,9 +35,13 @@ fn vault_with_card() -> (tempfile::TempDir, UnlockedVault, String) {
 }
 
 fn overview(vault: &UnlockedVault) -> ReportOverview {
-    vault
-        .report_overview(&ReportFilter::default(), unix_secs(NOW).unwrap(), "UTC")
-        .unwrap()
+    crate::reports::insights::report_overview(
+        &vault.books(),
+        &ReportFilter::default(),
+        unix_secs(NOW).unwrap(),
+        "UTC",
+    )
+    .unwrap()
 }
 
 fn codes(facts: &[Insight]) -> Vec<InsightCode> {
@@ -79,20 +83,24 @@ fn wealth_within_a_percent_reads_as_flat() {
 #[test]
 fn every_report_carries_its_insights_in_the_meta() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(earn(&card, "1000", "2026-05-05T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "1200", "groceries", "2026-05-06T10:00:00Z"))
-        .unwrap();
-    let report = vault
-        .report(
-            ReportKind::Cashflow,
-            &ReportFilter::default(),
-            unix_secs(NOW).unwrap(),
-            "UTC",
-        )
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-05-05T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "1200", "groceries", "2026-05-06T10:00:00Z"),
+    )
+    .unwrap();
+    let report = crate::reports::overview::report(
+        &vault.books(),
+        ReportKind::Cashflow,
+        &ReportFilter::default(),
+        unix_secs(NOW).unwrap(),
+        "UTC",
+    )
+    .unwrap();
     let Report::Cashflow(cash) = report else {
         panic!()
     };
@@ -106,21 +114,31 @@ fn every_report_carries_its_insights_in_the_meta() {
 #[test]
 fn the_overview_compares_the_month_with_the_one_before() {
     let (_dir, mut vault, card) = vault_with_card();
-    vault
-        .add_transaction(earn(&card, "1000", "2026-05-05T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "400", "groceries", "2026-05-06T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(earn(&card, "1000", "2026-06-05T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "500", "groceries", "2026-06-06T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(spend(&card, "100", "taxi", "2026-06-07T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-05-05T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "400", "groceries", "2026-05-06T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        earn(&card, "1000", "2026-06-05T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "500", "groceries", "2026-06-06T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "100", "taxi", "2026-06-07T10:00:00Z"),
+    )
+    .unwrap();
     let view = overview(&vault);
     assert_eq!(view.month, "2026-06");
     assert_eq!(view.previous_month, "2026-05");

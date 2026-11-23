@@ -18,8 +18,9 @@ fn mine_lists_everything_that_fires_the_soonest_first() {
     let Transaction::Topup(salary) = income(&card, "1575", "salary") else {
         unreachable!()
     };
-    vault
-        .create_automation(AutomationDraft {
+    crate::usecases::planning::automations::create_automation(
+        &mut vault,
+        AutomationDraft {
             time: None,
             asks: false,
             for_month_offset: None,
@@ -32,13 +33,19 @@ fn mine_lists_everything_that_fires_the_soonest_first() {
             amount_mode: Default::default(),
             workday_shift: Default::default(),
             property_id: None,
-        })
-        .unwrap();
-    vault
-        .create_reminder("Pay rent", "2026-11-01T09:00:00Z", None)
-        .unwrap();
-    vault
-        .create_price_alert(PriceAlertDraft {
+        },
+    )
+    .unwrap();
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Pay rent",
+        "2026-11-01T09:00:00Z",
+        None,
+    )
+    .unwrap();
+    crate::usecases::planning::agenda::create_price_alert(
+        &mut vault,
+        PriceAlertDraft {
             asset: btc(),
             condition: AlertCondition::Below,
             price: amount("60000"),
@@ -46,8 +53,9 @@ fn mine_lists_everything_that_fires_the_soonest_first() {
             active: true,
             store_id: None,
             repeats: false,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let graph = json!({
         "version": 1,
         "nodes": [
@@ -70,9 +78,9 @@ fn mine_lists_everything_that_fires_the_soonest_first() {
         max_amount_currency: None,
     };
     let now = unix_secs("2026-10-24T12:00:00Z").unwrap();
-    vault.save_workflow(None, draft, now).unwrap();
+    crate::usecases::workflow::records::save_workflow(&mut vault, None, draft, now).unwrap();
 
-    let mine = vault.my_automations(now, "UTC");
+    let mine = crate::usecases::planning::my_automations::my_automations(&vault, now, "UTC");
     let rows: Vec<(MineKind, &str, Option<&str>)> = mine
         .iter()
         .map(|item| (item.kind, item.name.as_str(), item.next_at.as_deref()))
@@ -94,18 +102,33 @@ fn mine_lists_everything_that_fires_the_soonest_first() {
     assert_eq!(mine[3].condition, Some(AlertCondition::Below));
 
     let reminder = mine[2].id.clone();
-    vault
-        .set_my_automation_active(MineKind::Reminder, &reminder, false, now)
-        .unwrap();
+    crate::usecases::planning::my_automations::set_my_automation_active(
+        &mut vault,
+        MineKind::Reminder,
+        &reminder,
+        false,
+        now,
+    )
+    .unwrap();
     let alert = mine[3].id.clone();
-    vault
-        .set_my_automation_active(MineKind::Alert, &alert, false, now)
-        .unwrap();
+    crate::usecases::planning::my_automations::set_my_automation_active(
+        &mut vault,
+        MineKind::Alert,
+        &alert,
+        false,
+        now,
+    )
+    .unwrap();
     let repeat = mine[1].id.clone();
-    vault
-        .set_my_automation_active(MineKind::Repeat, &repeat, false, now)
-        .unwrap();
-    let after = vault.my_automations(now, "UTC");
+    crate::usecases::planning::my_automations::set_my_automation_active(
+        &mut vault,
+        MineKind::Repeat,
+        &repeat,
+        false,
+        now,
+    )
+    .unwrap();
+    let after = crate::usecases::planning::my_automations::my_automations(&vault, now, "UTC");
     let off: Vec<bool> = after.iter().map(|item| item.active).collect();
     assert_eq!(off, vec![true, false, false, false]);
 }
@@ -118,11 +141,16 @@ fn the_switch_delegate_equals_the_scenario() {
     let now = unix_secs("2026-10-24T12:00:00Z").unwrap();
     let mut ids = Vec::new();
     for vault in [&mut by_method, &mut by_scenario] {
-        let reminder = vault
-            .create_reminder("Pay rent", "2026-11-01T09:00:00Z", None)
-            .unwrap();
-        let alert = vault
-            .create_price_alert(PriceAlertDraft {
+        let reminder = crate::usecases::planning::agenda::create_reminder(
+            vault,
+            "Pay rent",
+            "2026-11-01T09:00:00Z",
+            None,
+        )
+        .unwrap();
+        let alert = crate::usecases::planning::agenda::create_price_alert(
+            vault,
+            PriceAlertDraft {
                 asset: btc(),
                 condition: AlertCondition::Below,
                 price: amount("60000"),
@@ -130,16 +158,27 @@ fn the_switch_delegate_equals_the_scenario() {
                 active: true,
                 store_id: None,
                 repeats: false,
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         ids.push((reminder.id, alert.id));
     }
-    by_method
-        .set_my_automation_active(MineKind::Reminder, &ids[0].0, false, now)
-        .unwrap();
-    by_method
-        .set_my_automation_active(MineKind::Alert, &ids[0].1, false, now)
-        .unwrap();
+    crate::usecases::planning::my_automations::set_my_automation_active(
+        &mut by_method,
+        MineKind::Reminder,
+        &ids[0].0,
+        false,
+        now,
+    )
+    .unwrap();
+    crate::usecases::planning::my_automations::set_my_automation_active(
+        &mut by_method,
+        MineKind::Alert,
+        &ids[0].1,
+        false,
+        now,
+    )
+    .unwrap();
     scenario::set_my_automation_active(&mut by_scenario, MineKind::Reminder, &ids[1].0, false, now)
         .unwrap();
     scenario::set_my_automation_active(&mut by_scenario, MineKind::Alert, &ids[1].1, false, now)

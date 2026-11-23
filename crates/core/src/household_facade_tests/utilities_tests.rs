@@ -20,8 +20,9 @@ fn metered(vault: &mut UnlockedVault) -> UtilityItem {
 
 fn metered_in(vault: &mut UnlockedVault, flat: &str) -> UtilityItem {
     let flat = store(vault, flat, StoreKind::Property, None);
-    vault
-        .create_utility_item(UtilityDraft {
+    crate::usecases::household::utilities::create_utility_item(
+        vault,
+        UtilityDraft {
             name: "Electricity".into(),
             active: true,
             kind: UtilityKind::Metered {
@@ -34,23 +35,37 @@ fn metered_in(vault: &mut UnlockedVault, flat: &str) -> UtilityItem {
             property_id: flat,
             store_id: None,
             category: "utilities".into(),
-        })
-        .unwrap()
+        },
+    )
+    .unwrap()
 }
 
 #[test]
 fn a_meter_bills_consumption_times_tariff() {
     let (_dir, mut vault) = empty_vault();
     let item = metered(&mut vault);
-    vault
-        .add_meter_reading(&item.id, amount("1000"), "2026-01", None, None)
-        .unwrap();
-    vault
-        .add_meter_reading(&item.id, amount("1150"), "2026-02", None, None)
-        .unwrap();
-    let draft = vault
-        .utility_payment_draft(&item.id, "2026-02", "UTC")
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("1000"),
+        "2026-01",
+        None,
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("1150"),
+        "2026-02",
+        None,
+        None,
+    )
+    .unwrap();
+    let draft = crate::usecases::household::utilities::utility_payment_draft(
+        &vault, &item.id, "2026-02", "UTC",
+    )
+    .unwrap();
     assert_eq!(draft.consumption, Some(amount("150")));
     let Transaction::Payment(payment) = &draft.transaction else {
         panic!()
@@ -59,11 +74,17 @@ fn a_meter_bills_consumption_times_tariff() {
     assert_eq!(payment.meta.categories, vec!["utilities"]);
     // A meter only counts up.
     assert!(
-        vault
-            .add_meter_reading(&item.id, amount("900"), "2026-03", None, None)
-            .is_err()
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut vault,
+            &item.id,
+            amount("900"),
+            "2026-03",
+            None,
+            None
+        )
+        .is_err()
     );
-    let trend = vault.meter_trend(&item.id, "UTC").unwrap();
+    let trend = crate::household::utilities::meter_trend(&vault.books(), &item.id, "UTC").unwrap();
     assert_eq!(trend.months[1].amount, amount("750"));
 }
 
@@ -72,20 +93,34 @@ fn a_month_without_a_reading_bills_the_last_unpaid_one() {
     let (_dir, mut vault) = empty_vault();
     let (flat, item, _internet, card) = flat_with_bills(&mut vault);
     // Nothing read yet: an empty draft, not an error.
-    let empty = vault
-        .utility_payment_draft(&item.id, "2026-03", "UTC")
-        .unwrap();
+    let empty = crate::usecases::household::utilities::utility_payment_draft(
+        &vault, &item.id, "2026-03", "UTC",
+    )
+    .unwrap();
     assert_eq!(empty.consumption, Some(Amount::ZERO));
-    vault
-        .add_meter_reading(&item.id, amount("1000"), "2026-01", None, None)
-        .unwrap();
-    vault
-        .add_meter_reading(&item.id, amount("1150"), "2026-02", None, None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("1000"),
+        "2026-01",
+        None,
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("1150"),
+        "2026-02",
+        None,
+        None,
+    )
+    .unwrap();
     // Read in February, paid in March.
-    let draft = vault
-        .utility_payment_draft(&item.id, "2026-03", "UTC")
-        .unwrap();
+    let draft = crate::usecases::household::utilities::utility_payment_draft(
+        &vault, &item.id, "2026-03", "UTC",
+    )
+    .unwrap();
     assert_eq!(draft.consumption, Some(amount("150")));
     // The month's bill picks up the same readings.
     let bill = utility_bill(&vault.books(), &flat, "2026-03", "UTC", now_secs()).unwrap();
@@ -102,11 +137,12 @@ fn a_month_without_a_reading_bills_the_last_unpaid_one() {
         payment.store_id = card;
     }
     paid.meta_mut().timestamp = "2026-02-20T12:00:00Z".into();
-    vault.add_transaction(paid).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, paid).unwrap();
     // February is paid: March has nothing left to bill.
-    let after = vault
-        .utility_payment_draft(&item.id, "2026-03", "UTC")
-        .unwrap();
+    let after = crate::usecases::household::utilities::utility_payment_draft(
+        &vault, &item.id, "2026-03", "UTC",
+    )
+    .unwrap();
     assert_eq!(after.consumption, Some(Amount::ZERO));
 }
 
@@ -122,10 +158,11 @@ fn the_first_rent_payment_carries_the_deposit() {
         "salary",
     );
     seed.meta_mut().timestamp = "2026-01-01T00:00:00Z".into();
-    vault.add_transaction(seed).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, seed).unwrap();
     let flat = store(&mut vault, "Flat", StoreKind::Property, None);
-    let item = vault
-        .create_utility_item(UtilityDraft {
+    let item = crate::usecases::household::utilities::create_utility_item(
+        &mut vault,
+        UtilityDraft {
             name: "Rent".into(),
             active: true,
             kind: UtilityKind::Housing {
@@ -138,20 +175,23 @@ fn the_first_rent_payment_carries_the_deposit() {
             property_id: flat,
             store_id: Some(card.clone()),
             category: "rent_mortgage".into(),
-        })
-        .unwrap();
-    let first = vault
-        .utility_payment_draft(&item.id, "2026-02", "UTC")
-        .unwrap();
+        },
+    )
+    .unwrap();
+    let first = crate::usecases::household::utilities::utility_payment_draft(
+        &vault, &item.id, "2026-02", "UTC",
+    )
+    .unwrap();
     assert!(first.includes_deposit);
     let Transaction::Payment(payment) = first.transaction.clone() else {
         panic!()
     };
     assert_eq!(payment.amount, amount("80000"));
-    vault.add_transaction(first.transaction).unwrap();
-    let second = vault
-        .utility_payment_draft(&item.id, "2026-03", "UTC")
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, first.transaction).unwrap();
+    let second = crate::usecases::household::utilities::utility_payment_draft(
+        &vault, &item.id, "2026-03", "UTC",
+    )
+    .unwrap();
     assert!(!second.includes_deposit);
     let Transaction::Payment(payment) = second.transaction else {
         panic!()
@@ -171,20 +211,32 @@ fn the_trend_forecasts_and_flags_a_spike() {
         ("2026-04", "330"),
         ("2026-05", "460"),
     ] {
-        vault
-            .add_meter_reading(&item.id, amount(value), period, None, None)
-            .unwrap();
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut vault,
+            &item.id,
+            amount(value),
+            period,
+            None,
+            None,
+        )
+        .unwrap();
     }
-    let steady = vault.meter_trend(&item.id, "UTC").unwrap();
+    let steady = crate::household::utilities::meter_trend(&vault.books(), &item.id, "UTC").unwrap();
     assert_eq!(steady.forecast, Some(amount("700")));
     assert!(!steady.anomaly);
     assert_eq!(steady.delta_pct, Some(amount("8.3")));
     assert_eq!(steady.average, Some(amount("575")));
 
-    vault
-        .add_meter_reading(&item.id, amount("860"), "2026-06", None, None)
-        .unwrap();
-    let spike = vault.meter_trend(&item.id, "UTC").unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("860"),
+        "2026-06",
+        None,
+        None,
+    )
+    .unwrap();
+    let spike = crate::household::utilities::meter_trend(&vault.books(), &item.id, "UTC").unwrap();
     assert!(spike.anomaly);
 }
 
@@ -203,10 +255,14 @@ fn a_utility_needs_a_property_and_the_summary_adds_it_up() {
         store_id: None,
         category: "utilities".into(),
     };
-    assert!(vault.create_utility_item(draft(&bank)).is_err());
+    assert!(
+        crate::usecases::household::utilities::create_utility_item(&mut vault, draft(&bank))
+            .is_err()
+    );
     let flat = store(&mut vault, "Flat", StoreKind::Property, None);
-    vault.create_utility_item(draft(&flat)).unwrap();
-    let summary = vault.property_summary(&flat, "UTC").unwrap();
+    crate::usecases::household::utilities::create_utility_item(&mut vault, draft(&flat)).unwrap();
+    let summary =
+        crate::usecases::household::utilities::property_summary(&vault, &flat, "UTC").unwrap();
     assert_eq!(summary.utility_count, 1);
     assert_eq!(summary.utilities_month_base, amount("30"));
     assert_eq!(summary.monthly_cost_base, amount("30"));
@@ -223,11 +279,12 @@ fn flat_with_bills(vault: &mut UnlockedVault) -> (String, UtilityItem, UtilityIt
         "salary",
     );
     seed.meta_mut().timestamp = "2026-01-01T00:00:00Z".into();
-    vault.add_transaction(seed).unwrap();
+    crate::usecases::money::transactions::add_transaction(vault, seed).unwrap();
     let meter = metered(vault);
     let flat = meter.property_id.clone();
-    let internet = vault
-        .create_utility_item(UtilityDraft {
+    let internet = crate::usecases::household::utilities::create_utility_item(
+        vault,
+        UtilityDraft {
             name: "Internet".into(),
             active: true,
             kind: UtilityKind::Static {
@@ -237,8 +294,9 @@ fn flat_with_bills(vault: &mut UnlockedVault) -> (String, UtilityItem, UtilityIt
             property_id: flat.clone(),
             store_id: None,
             category: "utilities".into(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     (flat, meter, internet, card)
 }
 
@@ -246,29 +304,35 @@ fn flat_with_bills(vault: &mut UnlockedVault) -> (String, UtilityItem, UtilityIt
 fn the_bill_estimates_an_unread_meter_and_compares_with_its_average() {
     let (_dir, mut vault) = empty_vault();
     let (flat, meter, _internet, card) = flat_with_bills(&mut vault);
-    vault
-        .add_meter_reading(&meter.id, amount("1000"), "2026-01", None, None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &meter.id,
+        amount("1000"),
+        "2026-01",
+        None,
+        None,
+    )
+    .unwrap();
     // February and March read and paid on the bill, 500 each.
     for (reading, period) in [("1100", "2026-02"), ("1200", "2026-03")] {
-        vault
-            .pay_utility_bill(
-                PayUtilityBillInput {
-                    property_id: flat.clone(),
-                    period: period.into(),
-                    store_id: card.clone(),
-                    timestamp: Some(format!("{period}-10T12:00:00Z")),
-                    lines: vec![PayUtilityLine {
-                        item_id: meter.id.clone(),
-                        amount: amount("500"),
-                        reading: Some(amount(reading)),
-                        reading_day: None,
-                        zone_readings: Vec::new(),
-                    }],
-                },
-                "UTC",
-            )
-            .unwrap();
+        crate::usecases::household::utilities::pay_utility_bill(
+            &mut vault,
+            PayUtilityBillInput {
+                property_id: flat.clone(),
+                period: period.into(),
+                store_id: card.clone(),
+                timestamp: Some(format!("{period}-10T12:00:00Z")),
+                lines: vec![PayUtilityLine {
+                    item_id: meter.id.clone(),
+                    amount: amount("500"),
+                    reading: Some(amount(reading)),
+                    reading_day: None,
+                    zone_readings: Vec::new(),
+                }],
+            },
+            "UTC",
+        )
+        .unwrap();
     }
     // April not read yet: the meter is estimated, the internet is fixed.
     let bill = utility_bill(&vault.books(), &flat, "2026-04", "UTC", now_secs()).unwrap();
@@ -291,9 +355,15 @@ fn the_bill_estimates_an_unread_meter_and_compares_with_its_average() {
 fn a_whole_bill_is_paid_at_once_and_linked_to_its_items() {
     let (_dir, mut vault) = empty_vault();
     let (flat, meter, internet, card) = flat_with_bills(&mut vault);
-    vault
-        .add_meter_reading(&meter.id, amount("1000"), "2026-01", None, None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &meter.id,
+        amount("1000"),
+        "2026-01",
+        None,
+        None,
+    )
+    .unwrap();
 
     let bill = utility_bill(&vault.books(), &flat, "2026-02", "UTC", now_secs()).unwrap();
     assert_eq!(bill.lines.len(), 2);
@@ -305,33 +375,33 @@ fn a_whole_bill_is_paid_at_once_and_linked_to_its_items() {
     assert_eq!(meter_line.previous_reading, Some(amount("1000")));
     assert_eq!(meter_line.amount, None, "no reading for February yet");
 
-    let paid = vault
-        .pay_utility_bill(
-            PayUtilityBillInput {
-                property_id: flat.clone(),
-                period: "2026-02".into(),
-                store_id: card,
-                timestamp: Some("2026-02-10T12:00:00Z".into()),
-                lines: vec![
-                    PayUtilityLine {
-                        item_id: meter.id.clone(),
-                        amount: amount("500"),
-                        reading: Some(amount("1100")),
-                        reading_day: None,
-                        zone_readings: Vec::new(),
-                    },
-                    PayUtilityLine {
-                        item_id: internet.id.clone(),
-                        amount: amount("700"),
-                        reading: None,
-                        reading_day: None,
-                        zone_readings: Vec::new(),
-                    },
-                ],
-            },
-            "UTC",
-        )
-        .unwrap();
+    let paid = crate::usecases::household::utilities::pay_utility_bill(
+        &mut vault,
+        PayUtilityBillInput {
+            property_id: flat.clone(),
+            period: "2026-02".into(),
+            store_id: card,
+            timestamp: Some("2026-02-10T12:00:00Z".into()),
+            lines: vec![
+                PayUtilityLine {
+                    item_id: meter.id.clone(),
+                    amount: amount("500"),
+                    reading: Some(amount("1100")),
+                    reading_day: None,
+                    zone_readings: Vec::new(),
+                },
+                PayUtilityLine {
+                    item_id: internet.id.clone(),
+                    amount: amount("700"),
+                    reading: None,
+                    reading_day: None,
+                    zone_readings: Vec::new(),
+                },
+            ],
+        },
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(paid.len(), 2);
     assert!(paid.iter().all(|tx| tx.meta().utility_item_id.is_some()));
     // The comment no longer has to match: the link counts.
@@ -354,11 +424,18 @@ fn a_whole_bill_is_paid_at_once_and_linked_to_its_items() {
 fn a_failing_line_leaves_the_vault_untouched() {
     let (_dir, mut vault) = empty_vault();
     let (flat, meter, internet, card) = flat_with_bills(&mut vault);
-    vault
-        .add_meter_reading(&meter.id, amount("1000"), "2026-01", None, None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &meter.id,
+        amount("1000"),
+        "2026-01",
+        None,
+        None,
+    )
+    .unwrap();
     let before = vault.doc.transactions.len();
-    let result = vault.pay_utility_bill(
+    let result = crate::usecases::household::utilities::pay_utility_bill(
+        &mut vault,
         PayUtilityBillInput {
             property_id: flat,
             period: "2026-02".into(),
@@ -393,24 +470,46 @@ fn a_failing_line_leaves_the_vault_untouched() {
 fn a_reading_can_be_corrected_within_the_meter_rules() {
     let (_dir, mut vault) = empty_vault();
     let item = metered(&mut vault);
-    vault
-        .add_meter_reading(&item.id, amount("1000"), "2026-01", None, None)
-        .unwrap();
-    let feb = vault
-        .add_meter_reading(&item.id, amount("1200"), "2026-02", None, None)
-        .unwrap();
-    let fixed = vault
-        .update_meter_reading(&feb.id, amount("1150"), "2026-02", None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("1000"),
+        "2026-01",
+        None,
+        None,
+    )
+    .unwrap();
+    let feb = crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("1200"),
+        "2026-02",
+        None,
+        None,
+    )
+    .unwrap();
+    let fixed = crate::usecases::household::utilities::update_meter_reading(
+        &mut vault,
+        &feb.id,
+        amount("1150"),
+        "2026-02",
+        None,
+    )
+    .unwrap();
     assert_eq!(fixed.id, feb.id);
     assert_eq!(
         monthly_readings(&vault.doc, &item.id)["2026-02"].end,
         amount("1150")
     );
     assert!(
-        vault
-            .update_meter_reading(&feb.id, amount("900"), "2026-02", None)
-            .is_err()
+        crate::usecases::household::utilities::update_meter_reading(
+            &mut vault,
+            &feb.id,
+            amount("900"),
+            "2026-02",
+            None
+        )
+        .is_err()
     );
     assert_eq!(
         monthly_readings(&vault.doc, &item.id)["2026-02"].end,
@@ -426,15 +525,33 @@ fn a_move_mid_month_bills_each_flat_from_its_own_readings() {
     let (_dir, mut vault) = empty_vault();
     let old_flat = metered_in(&mut vault, "Old flat");
     let new_flat = metered_in(&mut vault, "New flat");
-    vault
-        .add_meter_reading(&old_flat.id, amount("100"), "2026-09", None, None)
-        .unwrap();
-    vault
-        .add_meter_reading(&old_flat.id, amount("130"), "2026-10", Some(15), None)
-        .unwrap();
-    vault
-        .add_meter_reading(&new_flat.id, amount("500"), "2026-10", Some(15), None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &old_flat.id,
+        amount("100"),
+        "2026-09",
+        None,
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &old_flat.id,
+        amount("130"),
+        "2026-10",
+        Some(15),
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &new_flat.id,
+        amount("500"),
+        "2026-10",
+        Some(15),
+        None,
+    )
+    .unwrap();
 
     // Before the month ends the new flat has only its start: nothing used yet.
     let line = |vault: &UnlockedVault, item: &UtilityItem| {
@@ -450,9 +567,15 @@ fn a_move_mid_month_bills_each_flat_from_its_own_readings() {
     assert_eq!(started.previous_reading, Some(amount("500")));
     assert_eq!(started.reading, None);
 
-    vault
-        .add_meter_reading(&new_flat.id, amount("520"), "2026-10", None, None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &new_flat.id,
+        amount("520"),
+        "2026-10",
+        None,
+        None,
+    )
+    .unwrap();
     let old_bill = line(&vault, &old_flat);
     assert_eq!(old_bill.previous_reading, Some(amount("100")));
     assert_eq!(old_bill.consumption, Some(amount("30")));
@@ -461,7 +584,8 @@ fn a_move_mid_month_bills_each_flat_from_its_own_readings() {
     assert_eq!(new_bill.consumption, Some(amount("20")));
     assert_eq!(new_bill.amount, Some(amount("100")));
 
-    let trend = vault.meter_trend(&new_flat.id, "UTC").unwrap();
+    let trend =
+        crate::household::utilities::meter_trend(&vault.books(), &new_flat.id, "UTC").unwrap();
     assert_eq!(trend.months.len(), 1);
     assert_eq!(trend.months[0].readings.len(), 2);
     assert_eq!(trend.months[0].consumption, Some(amount("20")));
@@ -471,30 +595,60 @@ fn a_move_mid_month_bills_each_flat_from_its_own_readings() {
 fn readings_of_one_month_keep_their_order_by_day() {
     let (_dir, mut vault) = empty_vault();
     let item = metered(&mut vault);
-    vault
-        .add_meter_reading(&item.id, amount("100"), "2026-10", Some(10), None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("100"),
+        "2026-10",
+        Some(10),
+        None,
+    )
+    .unwrap();
     assert!(
-        vault
-            .add_meter_reading(&item.id, amount("90"), "2026-10", Some(20), None)
-            .is_err(),
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut vault,
+            &item.id,
+            amount("90"),
+            "2026-10",
+            Some(20),
+            None
+        )
+        .is_err(),
         "the 20th cannot be below the 10th"
     );
     assert!(
-        vault
-            .add_meter_reading(&item.id, amount("110"), "2026-10", Some(5), None)
-            .is_err(),
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut vault,
+            &item.id,
+            amount("110"),
+            "2026-10",
+            Some(5),
+            None
+        )
+        .is_err(),
         "the 5th cannot be above the 10th"
     );
     assert!(
-        vault
-            .add_meter_reading(&item.id, amount("110"), "2026-02", Some(30), None)
-            .is_err(),
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut vault,
+            &item.id,
+            amount("110"),
+            "2026-02",
+            Some(30),
+            None
+        )
+        .is_err(),
         "February has no 30th"
     );
-    vault
-        .add_meter_reading(&item.id, amount("120"), "2026-10", Some(20), None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("120"),
+        "2026-10",
+        Some(20),
+        None,
+    )
+    .unwrap();
     assert_eq!(readings_of(&vault.doc.meter_readings, &item.id).len(), 2);
 }
 
@@ -512,16 +666,34 @@ fn a_reading_without_a_day_does_not_block_a_later_one() {
         day: None,
         zone: None,
     });
-    vault
-        .add_meter_reading(&item.id, amount("2540"), "2026-10", Some(12), None)
-        .unwrap();
-    vault
-        .add_meter_reading(&item.id, amount("2552"), "2026-10", Some(20), None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("2540"),
+        "2026-10",
+        Some(12),
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("2552"),
+        "2026-10",
+        Some(20),
+        None,
+    )
+    .unwrap();
     assert!(
-        vault
-            .add_meter_reading(&item.id, amount("2530"), "2026-10", Some(8), None)
-            .is_err(),
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut vault,
+            &item.id,
+            amount("2530"),
+            "2026-10",
+            Some(8),
+            None
+        )
+        .is_err(),
         "the 8th still cannot be below the 5th"
     );
     let values: Vec<String> = readings_of(&vault.doc.meter_readings, &item.id)
@@ -535,12 +707,24 @@ fn a_reading_without_a_day_does_not_block_a_later_one() {
 fn a_second_reading_the_same_day_corrects_the_first() {
     let (_dir, mut vault) = empty_vault();
     let item = metered(&mut vault);
-    vault
-        .add_meter_reading(&item.id, amount("100"), "2026-10", Some(12), None)
-        .unwrap();
-    vault
-        .add_meter_reading(&item.id, amount("101"), "2026-10", Some(12), None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("100"),
+        "2026-10",
+        Some(12),
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("101"),
+        "2026-10",
+        Some(12),
+        None,
+    )
+    .unwrap();
     let readings = readings_of(&vault.doc.meter_readings, &item.id);
     assert_eq!(readings.len(), 1);
     assert_eq!(readings[0].value, amount("101"));
@@ -549,26 +733,30 @@ fn a_second_reading_the_same_day_corrects_the_first() {
 fn meter_with(vault: &mut UnlockedVault, formula: &str, zones: &[&str]) -> Result<UtilityItem> {
     let name = format!("Dacha {}", vault.doc.stores.len());
     let flat = store(vault, &name, StoreKind::Property, None);
-    vault.create_utility_item(UtilityDraft {
-        name: "Свет".into(),
-        active: true,
-        kind: UtilityKind::Metered {
-            unit: "kWh".into(),
-            tariff: amount("0"),
-            formula: Some(formula.into()),
-            zones: zones.iter().map(|zone| (*zone).to_string()).collect(),
+    crate::usecases::household::utilities::create_utility_item(
+        vault,
+        UtilityDraft {
+            name: "Свет".into(),
+            active: true,
+            kind: UtilityKind::Metered {
+                unit: "kWh".into(),
+                tariff: amount("0"),
+                formula: Some(formula.into()),
+                zones: zones.iter().map(|zone| (*zone).to_string()).collect(),
+            },
+            currency: "rub".into(),
+            property_id: flat,
+            store_id: None,
+            category: "utilities".into(),
         },
-        currency: "rub".into(),
-        property_id: flat,
-        store_id: None,
-        category: "utilities".into(),
-    })
+    )
 }
 
 fn draft_amount(vault: &UnlockedVault, item: &UtilityItem, period: &str) -> Amount {
-    let draft = vault
-        .utility_payment_draft(&item.id, period, "UTC")
-        .unwrap();
+    let draft = crate::usecases::household::utilities::utility_payment_draft(
+        vault, &item.id, period, "UTC",
+    )
+    .unwrap();
     let Transaction::Payment(payment) = &draft.transaction else {
         panic!()
     };
@@ -586,14 +774,26 @@ fn a_meter_bills_by_its_own_formula() {
         formula.as_deref(),
         Some("(показание - предыдущее) * 3.5 * 10")
     );
-    vault
-        .add_meter_reading(&item.id, amount("1200"), "2026-01", None, None)
-        .unwrap();
-    vault
-        .add_meter_reading(&item.id, amount("1345"), "2026-02", None, None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("1200"),
+        "2026-01",
+        None,
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("1345"),
+        "2026-02",
+        None,
+        None,
+    )
+    .unwrap();
     assert_eq!(draft_amount(&vault, &item, "2026-02"), amount("5075"));
-    let trend = vault.meter_trend(&item.id, "UTC").unwrap();
+    let trend = crate::household::utilities::meter_trend(&vault.books(), &item.id, "UTC").unwrap();
     assert_eq!(trend.months[1].amount, amount("5075"));
 }
 
@@ -606,20 +806,23 @@ fn a_wrong_formula_is_not_saved() {
     assert!(meter_with(&mut vault, "расход", &["день", " День "]).is_err());
     // Without a formula a meter still needs a tariff.
     let flat = store(&mut vault, "Flat", StoreKind::Property, None);
-    let no_tariff = vault.create_utility_item(UtilityDraft {
-        name: "Water".into(),
-        active: true,
-        kind: UtilityKind::Metered {
-            unit: "m3".into(),
-            tariff: amount("0"),
-            formula: Some("  ".into()),
-            zones: Vec::new(),
+    let no_tariff = crate::usecases::household::utilities::create_utility_item(
+        &mut vault,
+        UtilityDraft {
+            name: "Water".into(),
+            active: true,
+            kind: UtilityKind::Metered {
+                unit: "m3".into(),
+                tariff: amount("0"),
+                formula: Some("  ".into()),
+                zones: Vec::new(),
+            },
+            currency: "rub".into(),
+            property_id: flat,
+            store_id: None,
+            category: "utilities".into(),
         },
-        currency: "rub".into(),
-        property_id: flat,
-        store_id: None,
-        category: "utilities".into(),
-    });
+    );
     assert!(no_tariff.is_err());
 }
 
@@ -634,14 +837,26 @@ fn a_two_rate_meter_reads_and_bills_per_zone() {
     .unwrap();
     // A zone must be named, and be one of the meter's.
     assert!(
-        vault
-            .add_meter_reading(&item.id, amount("600"), "2026-01", None, None)
-            .is_err()
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut vault,
+            &item.id,
+            amount("600"),
+            "2026-01",
+            None,
+            None
+        )
+        .is_err()
     );
     assert!(
-        vault
-            .add_meter_reading(&item.id, amount("600"), "2026-01", None, Some("вечер"))
-            .is_err()
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut vault,
+            &item.id,
+            amount("600"),
+            "2026-01",
+            None,
+            Some("вечер")
+        )
+        .is_err()
     );
     for (value, period, zone) in [
         ("600", "2026-01", "день"),
@@ -649,13 +864,19 @@ fn a_two_rate_meter_reads_and_bills_per_zone() {
         ("800", "2026-02", "день"),
         ("500", "2026-02", "ночь"),
     ] {
-        vault
-            .add_meter_reading(&item.id, amount(value), period, None, Some(zone))
-            .unwrap();
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut vault,
+            &item.id,
+            amount(value),
+            period,
+            None,
+            Some(zone),
+        )
+        .unwrap();
     }
     // Each zone counts up on its own: night below day is fine.
     assert_eq!(draft_amount(&vault, &item, "2026-02"), amount("1600"));
-    let trend = vault.meter_trend(&item.id, "UTC").unwrap();
+    let trend = crate::household::utilities::meter_trend(&vault.books(), &item.id, "UTC").unwrap();
     let february = &trend.months[1];
     assert_eq!(february.consumption, Some(amount("300")));
     assert_eq!(february.zones.len(), 2);
@@ -686,37 +907,39 @@ fn a_two_rate_meter_reads_and_bills_per_zone() {
         ]
     );
     let card = store(&mut vault, "Card", StoreKind::Cash, None);
-    vault
-        .add_transaction(income(&card, "5000", "opening"))
-        .unwrap();
-    vault
-        .pay_utility_bill(
-            PayUtilityBillInput {
-                property_id: item.property_id.clone(),
-                period: "2026-03".into(),
-                store_id: card,
-                timestamp: Some("2026-03-10T12:00:00Z".into()),
-                lines: vec![PayUtilityLine {
-                    item_id: item.id.clone(),
-                    amount: amount("1000"),
-                    reading: None,
-                    reading_day: None,
-                    zone_readings: vec![
-                        ZoneReadingInput {
-                            zone: "день".into(),
-                            reading: amount("900"),
-                        },
-                        ZoneReadingInput {
-                            zone: "ночь".into(),
-                            reading: amount("550"),
-                        },
-                    ],
-                }],
-            },
-            "UTC",
-        )
-        .unwrap();
-    let trend = vault.meter_trend(&item.id, "UTC").unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "opening"),
+    )
+    .unwrap();
+    crate::usecases::household::utilities::pay_utility_bill(
+        &mut vault,
+        PayUtilityBillInput {
+            property_id: item.property_id.clone(),
+            period: "2026-03".into(),
+            store_id: card,
+            timestamp: Some("2026-03-10T12:00:00Z".into()),
+            lines: vec![PayUtilityLine {
+                item_id: item.id.clone(),
+                amount: amount("1000"),
+                reading: None,
+                reading_day: None,
+                zone_readings: vec![
+                    ZoneReadingInput {
+                        zone: "день".into(),
+                        reading: amount("900"),
+                    },
+                    ZoneReadingInput {
+                        zone: "ночь".into(),
+                        reading: amount("550"),
+                    },
+                ],
+            }],
+        },
+        "UTC",
+    )
+    .unwrap();
+    let trend = crate::household::utilities::meter_trend(&vault.books(), &item.id, "UTC").unwrap();
     // 100 × 6 + 50 × 3 + 100.
     assert_eq!(trend.months[2].amount, amount("850"));
 }
@@ -804,13 +1027,25 @@ fn a_meter_from_an_older_app_still_reads() {
 fn a_reading_below_the_previous_one_is_flagged_not_rewritten() {
     let (_dir, mut vault) = empty_vault();
     let item = metered(&mut vault);
-    vault
-        .add_meter_reading(&item.id, amount("100"), "2026-09", Some(10), None)
-        .unwrap();
-    vault
-        .add_meter_reading(&item.id, amount("120"), "2026-10", Some(10), None)
-        .unwrap();
-    let clean = vault.meter_trend(&item.id, "UTC").unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("100"),
+        "2026-09",
+        Some(10),
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("120"),
+        "2026-10",
+        Some(10),
+        None,
+    )
+    .unwrap();
+    let clean = crate::household::utilities::meter_trend(&vault.books(), &item.id, "UTC").unwrap();
     assert!(
         clean
             .months
@@ -828,7 +1063,7 @@ fn a_reading_below_the_previous_one_is_flagged_not_rewritten() {
         day: Some(20),
         zone: None,
     });
-    let trend = vault.meter_trend(&item.id, "UTC").unwrap();
+    let trend = crate::household::utilities::meter_trend(&vault.books(), &item.id, "UTC").unwrap();
     let october = trend
         .months
         .iter()
@@ -954,9 +1189,11 @@ fn the_delegates_equal_the_scenarios() {
     let (_dir_b, mut through_scenario) = empty_vault();
     let flat_a = store(&mut through_delegate, "Flat", StoreKind::Property, None);
     let flat_b = store(&mut through_scenario, "Flat", StoreKind::Property, None);
-    let item_a = through_delegate
-        .create_utility_item(draft_for(&flat_a, " Internet "))
-        .unwrap();
+    let item_a = crate::usecases::household::utilities::create_utility_item(
+        &mut through_delegate,
+        draft_for(&flat_a, " Internet "),
+    )
+    .unwrap();
     let item_b =
         scenario::create_utility_item(&mut through_scenario, draft_for(&flat_b, " Internet "))
             .unwrap();
@@ -964,31 +1201,56 @@ fn the_delegates_equal_the_scenarios() {
     assert_eq!(item_a.currency, item_b.currency);
     assert_eq!(item_a.name, item_b.name);
     let renamed = draft_for(&flat_a, "Fibre");
-    let updated = through_delegate
-        .update_utility_item(&item_a.id, renamed)
-        .unwrap();
+    let updated = crate::usecases::household::utilities::update_utility_item(
+        &mut through_delegate,
+        &item_a.id,
+        renamed,
+    )
+    .unwrap();
     assert_eq!(updated.id, item_a.id);
     assert_eq!(updated.name, "Fibre");
-    assert_eq!(through_delegate.utility_items(), vec![updated]);
-    through_delegate.delete_utility_item(&item_a.id).unwrap();
+    assert_eq!(
+        crate::household::utilities::utility_items(&through_delegate.doc),
+        vec![updated]
+    );
+    crate::usecases::household::utilities::delete_utility_item(&mut through_delegate, &item_a.id)
+        .unwrap();
     scenario::delete_utility_item(&mut through_scenario, &item_b.id).unwrap();
     assert!(through_delegate.doc.utility_items.is_empty());
     assert!(through_scenario.doc.utility_items.is_empty());
-    assert!(through_delegate.delete_utility_item(&item_a.id).is_err());
+    assert!(
+        crate::usecases::household::utilities::delete_utility_item(
+            &mut through_delegate,
+            &item_a.id
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn deleting_an_item_takes_its_readings_with_it() {
     let (_dir, mut vault) = empty_vault();
     let item = metered(&mut vault);
-    vault
-        .add_meter_reading(&item.id, amount("10"), "2026-01", None, None)
-        .unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("10"),
+        "2026-01",
+        None,
+        None,
+    )
+    .unwrap();
     let kept = metered_in(&mut vault, "Dacha");
-    vault
-        .add_meter_reading(&kept.id, amount("7"), "2026-01", None, None)
-        .unwrap();
-    vault.delete_utility_item(&item.id).unwrap();
+    crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &kept.id,
+        amount("7"),
+        "2026-01",
+        None,
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::utilities::delete_utility_item(&mut vault, &item.id).unwrap();
     assert_eq!(vault.doc.meter_readings.len(), 1);
     assert_eq!(vault.doc.meter_readings[0].item_id, kept.id);
 }
@@ -997,21 +1259,40 @@ fn deleting_an_item_takes_its_readings_with_it() {
 fn a_reading_is_added_corrected_and_deleted_through_the_delegates() {
     let (_dir, mut vault) = empty_vault();
     let item = metered(&mut vault);
-    let first = vault
-        .add_meter_reading(&item.id, amount("10"), "2026-01", Some(5), None)
-        .unwrap();
-    let again = vault
-        .add_meter_reading(&item.id, amount("11"), "2026-01", Some(5), None)
-        .unwrap();
+    let first = crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("10"),
+        "2026-01",
+        Some(5),
+        None,
+    )
+    .unwrap();
+    let again = crate::usecases::household::utilities::add_meter_reading(
+        &mut vault,
+        &item.id,
+        amount("11"),
+        "2026-01",
+        Some(5),
+        None,
+    )
+    .unwrap();
     assert_eq!(first.id, again.id, "the same day is the same record");
     assert_eq!(vault.doc.meter_readings.len(), 1);
-    let moved = vault
-        .update_meter_reading(&first.id, amount("12"), "2026-01", Some(9))
-        .unwrap();
+    let moved = crate::usecases::household::utilities::update_meter_reading(
+        &mut vault,
+        &first.id,
+        amount("12"),
+        "2026-01",
+        Some(9),
+    )
+    .unwrap();
     assert_ne!(moved.id, first.id, "the id follows the day");
     assert_eq!(vault.doc.meter_readings.len(), 1);
-    assert!(vault.delete_meter_reading(&first.id).is_err());
-    vault.delete_meter_reading(&moved.id).unwrap();
+    assert!(
+        crate::usecases::household::utilities::delete_meter_reading(&mut vault, &first.id).is_err()
+    );
+    crate::usecases::household::utilities::delete_meter_reading(&mut vault, &moved.id).unwrap();
     assert!(vault.doc.meter_readings.is_empty());
 }
 
@@ -1031,24 +1312,24 @@ fn paying_a_bill_is_one_commit() {
     let (flat, meter, _internet, card) = flat_with_bills(&mut vault);
     let commits = std::sync::Arc::new(Commits::default());
     vault.set_write_behind(Some(commits.clone()));
-    let paid = vault
-        .pay_utility_bill(
-            PayUtilityBillInput {
-                property_id: flat,
-                period: "2026-03".into(),
-                store_id: card,
-                timestamp: Some("2026-03-10T12:00:00Z".into()),
-                lines: vec![PayUtilityLine {
-                    item_id: meter.id.clone(),
-                    amount: amount("500"),
-                    reading: Some(amount("1200")),
-                    reading_day: None,
-                    zone_readings: Vec::new(),
-                }],
-            },
-            "UTC",
-        )
-        .unwrap();
+    let paid = crate::usecases::household::utilities::pay_utility_bill(
+        &mut vault,
+        PayUtilityBillInput {
+            property_id: flat,
+            period: "2026-03".into(),
+            store_id: card,
+            timestamp: Some("2026-03-10T12:00:00Z".into()),
+            lines: vec![PayUtilityLine {
+                item_id: meter.id.clone(),
+                amount: amount("500"),
+                reading: Some(amount("1200")),
+                reading_day: None,
+                zone_readings: Vec::new(),
+            }],
+        },
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(paid.len(), 1);
     assert_eq!(vault.doc.meter_readings.len(), 1);
     assert_eq!(

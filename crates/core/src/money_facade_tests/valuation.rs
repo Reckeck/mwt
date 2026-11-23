@@ -1,6 +1,7 @@
 //! Tests of the valuation area that need the vault (`UnlockedVault`): moved from
 //! `money/valuation_tests.rs` with their assertions unchanged (crate-split T13).
 
+use crate::model::ids::StoreId;
 use crate::model::store::{AssetRef, PropertyInfo};
 use crate::model::store::{PropertyCategory, RevalueFloor, RevalueRule, StoreKind};
 use crate::model::transaction::Transaction;
@@ -24,23 +25,23 @@ fn thing() -> AssetRef {
 }
 
 fn property(vault: &mut UnlockedVault, category: PropertyCategory) -> String {
-    vault
-        .create_store_with(
-            &format!("{category:?}"),
-            StoreKind::Property,
-            "#555",
-            "",
-            None,
-            StoreExtras {
-                property: Some(PropertyInfo {
-                    category,
-                    ..PropertyInfo::default()
-                }),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id
+    crate::usecases::money::stores::create_store_with(
+        vault,
+        &format!("{category:?}"),
+        StoreKind::Property,
+        "#555",
+        "",
+        None,
+        StoreExtras {
+            property: Some(PropertyInfo {
+                category,
+                ..PropertyInfo::default()
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id
 }
 
 fn buy(vault: &mut UnlockedVault, store_id: &str, price: &str, when: &str) {
@@ -58,7 +59,7 @@ fn buy(vault: &mut UnlockedVault, store_id: &str, price: &str, when: &str) {
         price: PriceStamp::default(),
     });
     at(&mut tx, when);
-    vault.add_transaction(tx).unwrap();
+    crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
 }
 
 /// An object from before this change: no rule, a hand-set price.
@@ -86,8 +87,7 @@ fn old_flat(vault: &mut UnlockedVault) -> String {
 fn new_objects_get_the_rule_of_their_type() {
     let (_dir, mut vault) = empty_vault();
     let car = property(&mut vault, PropertyCategory::Car);
-    let rule = vault
-        .find_store(&car)
+    let rule = crate::money::tree::find_store(&vault.doc, &car)
         .unwrap()
         .property
         .clone()
@@ -96,25 +96,33 @@ fn new_objects_get_the_rule_of_their_type() {
     assert_eq!(rule, RevalueRule::default_for(PropertyCategory::Car));
     assert!(rule.unwrap().floor.is_some());
     let other = property(&mut vault, PropertyCategory::Other);
-    let info = vault.find_store(&other).unwrap().property.clone().unwrap();
+    let info = crate::money::tree::find_store(&vault.doc, &other)
+        .unwrap()
+        .property
+        .clone()
+        .unwrap();
     assert_eq!(info.revalue, None);
     // Saving the form keeps the rule.
-    vault
-        .update_store(
-            &car,
-            "Car",
-            "#555",
-            "",
-            StoreExtras {
-                property: Some(PropertyInfo {
-                    category: PropertyCategory::Car,
-                    ..PropertyInfo::default()
-                }),
-                ..StoreExtras::default()
-            },
-        )
+    crate::usecases::money::stores::update_store(
+        &mut vault,
+        &car,
+        "Car",
+        "#555",
+        "",
+        StoreExtras {
+            property: Some(PropertyInfo {
+                category: PropertyCategory::Car,
+                ..PropertyInfo::default()
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap();
+    let kept = crate::money::tree::find_store(&vault.doc, &car)
+        .unwrap()
+        .property
+        .clone()
         .unwrap();
-    let kept = vault.find_store(&car).unwrap().property.clone().unwrap();
     assert!(kept.revalue.is_some());
 }
 
@@ -124,10 +132,13 @@ fn old_objects_keep_their_value_and_history() {
     old_flat(&mut vault);
     let key = thing().key();
     let early = secs_or_now("2021-01-01T00:00:00Z");
-    let before = vault.rate_book().history_price(&key, early);
+    let before = crate::money::rates::rate_book(&vault.books()).history_price(&key, early);
     assert_eq!(before, Some(amount("150000")));
-    assert_eq!(vault.net_worth().non_financial, amount("150000"));
-    assert!(vault.valuation_curves().is_empty());
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).non_financial,
+        amount("150000")
+    );
+    assert!(crate::money::valuation::valuation_curves(&vault.books()).is_empty());
 }
 
 #[test]
@@ -135,35 +146,50 @@ fn a_valuation_keeps_the_old_price_as_the_start() {
     let (_dir, mut vault) = empty_vault();
     let flat = old_flat(&mut vault);
     let key = thing().key();
-    vault
-        .add_valuation(ValuationInput {
+    crate::usecases::money::valuation::add_valuation(
+        &mut vault,
+        ValuationInput {
             store_id: flat.clone(),
             asset_key: key.clone(),
             date: "2024-01-10".into(),
             unit_price: amount("200000"),
             currency: "usd".into(),
-        })
-        .unwrap();
-    let book = vault.rate_book();
+        },
+    )
+    .unwrap();
+    let book = crate::money::rates::rate_book(&vault.books());
     let purchase = secs_or_now("2020-01-10T00:00:00Z");
     assert_eq!(book.history_price(&key, purchase), Some(amount("150000")));
-    assert_eq!(vault.net_worth().non_financial, amount("200000"));
-    let values = vault.property_values(&flat, "UTC").unwrap();
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).non_financial,
+        amount("200000")
+    );
+    let values = crate::money::valuation::property_values(
+        &vault.books(),
+        &StoreId::from(flat.as_str()),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(values[0].base, Some(ValuationBaseKind::Manual));
     assert_eq!(values[0].change, Some(amount("100000")));
     assert_eq!(values[0].change_pct, Some(amount("100")));
     // The same day replaces, delete returns the point.
-    let again = vault
-        .add_valuation(ValuationInput {
+    let again = crate::usecases::money::valuation::add_valuation(
+        &mut vault,
+        ValuationInput {
             store_id: flat,
             asset_key: key,
             date: "2024-01-10".into(),
             unit_price: amount("210000"),
             currency: "usd".into(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(vault.doc.valuations.len(), 1);
-    assert_eq!(vault.delete_valuation(&again.id).unwrap(), again);
+    assert_eq!(
+        crate::usecases::money::valuation::delete_valuation(&mut vault, &again.id).unwrap(),
+        again
+    );
     assert!(vault.doc.valuations.is_empty());
 }
 
@@ -175,17 +201,31 @@ fn depreciation_needs_a_floor() {
         pct_per_year: Some(amount("-10")),
         floor: None,
     };
-    assert!(vault.set_revalue_rule(&flat, Some(rule), "UTC").is_err());
+    assert!(
+        crate::usecases::money::valuation::set_revalue_rule(
+            &mut vault,
+            &StoreId::from(flat.as_str()),
+            Some(rule),
+            "UTC"
+        )
+        .is_err()
+    );
     let rule = RevalueRule {
         pct_per_year: Some(amount("-10")),
         floor: Some(RevalueFloor::PctOfPurchase { pct: amount("20") }),
     };
-    vault.set_revalue_rule(&flat, Some(rule), "UTC").unwrap();
+    crate::usecases::money::valuation::set_revalue_rule(
+        &mut vault,
+        &StoreId::from(flat.as_str()),
+        Some(rule),
+        "UTC",
+    )
+    .unwrap();
     // Switching on starts from today's value, so capital does not jump.
     assert_eq!(vault.doc.valuations.len(), 1);
     assert_eq!(vault.doc.valuations[0].unit_price, amount("150000"));
     // Only the hours since midnight of depreciation, not years.
-    let now = vault.net_worth().non_financial;
+    let now = crate::usecases::money::capital::net_worth(&vault.books()).non_financial;
     assert!(now <= amount("150000") && now > amount("149000"), "{now}");
 }
 
@@ -193,23 +233,28 @@ fn depreciation_needs_a_floor() {
 fn loyalty_prices_stay_as_they_were() {
     let (_dir, mut vault) = empty_vault();
     let flat = old_flat(&mut vault);
-    vault
-        .add_valuation(ValuationInput {
+    crate::usecases::money::valuation::add_valuation(
+        &mut vault,
+        ValuationInput {
             store_id: flat,
             asset_key: thing().key(),
             date: "2024-01-10".into(),
             unit_price: amount("200000"),
             currency: "usd".into(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     vault.doc.manual_prices.push(ManualPrice {
         asset_key: "asset:POINTS".into(),
         unit_price: amount("0.5"),
         currency: "usd".into(),
         updated_at: String::new(),
     });
-    assert_eq!(vault.manual_price_usd("asset:POINTS"), Some(amount("0.5")));
-    assert!(vault.valuation_curve("asset:POINTS").is_none());
+    assert_eq!(
+        crate::usecases::money::capital::manual_price_usd(&vault.books(), "asset:POINTS"),
+        Some(amount("0.5"))
+    );
+    assert!(crate::money::valuation::valuation_curve(&vault.books(), "asset:POINTS").is_none());
 }
 
 /// A purchase priced by another device is signed with the currency that
@@ -238,8 +283,10 @@ fn a_purchase_is_signed_with_the_currency_of_its_label() {
         },
     });
     at(&mut tx, "2020-01-10T00:00:00Z");
-    vault.add_transaction(tx).unwrap();
-    let store = vault.find_store(&flat).unwrap().clone();
+    crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
+    let store = crate::money::tree::find_store(&vault.doc, &flat)
+        .unwrap()
+        .clone();
     let purchase = purchase_of(&vault.books(), &store, &thing().key()).unwrap();
     assert_eq!(purchase.unit_price, amount("9000000"));
     assert_eq!(purchase.currency, "rub");
@@ -253,7 +300,9 @@ fn a_purchase_without_a_label_is_signed_with_the_readers_base() {
     vault.set_base_currency("eur");
     let flat = property(&mut vault, PropertyCategory::Flat);
     buy(&mut vault, &flat, "100000", "2020-01-10T00:00:00Z");
-    let store = vault.find_store(&flat).unwrap().clone();
+    let store = crate::money::tree::find_store(&vault.doc, &flat)
+        .unwrap()
+        .clone();
     let purchase = purchase_of(&vault.books(), &store, &thing().key()).unwrap();
     assert_eq!(purchase.currency, "eur");
     // Completing the operation labels the base price with the author's base.
@@ -272,15 +321,17 @@ fn a_sold_flat_keeps_its_valuation_curve_in_past_months() {
     vault.set_base_currency("usd");
     let flat = property(&mut vault, PropertyCategory::Flat);
     buy(&mut vault, &flat, "5000000", "2020-01-10T00:00:00Z");
-    vault
-        .add_valuation(ValuationInput {
+    crate::usecases::money::valuation::add_valuation(
+        &mut vault,
+        ValuationInput {
             store_id: flat.clone(),
             asset_key: thing().key(),
             date: "2024-01-10".into(),
             unit_price: amount("8000000"),
             currency: "usd".into(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let mut sale = Transaction::AssetSell(AssetSellTx {
         meta: meta("sold", &["income_other"]),
         store_id: flat,
@@ -293,13 +344,13 @@ fn a_sold_flat_keeps_its_valuation_curve_in_past_months() {
         price: PriceStamp::default(),
     });
     at(&mut sale, "2025-01-10T00:00:00Z");
-    vault.add_transaction(sale).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, sale).unwrap();
     let key = thing().key();
     assert!(
         vault.doc.holdings.iter().all(|row| row.asset.key() != key),
         "the flat is no longer held"
     );
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let bought = secs_or_now("2020-01-10T00:00:00Z");
     assert_eq!(book.history_price(&key, bought), Some(amount("5000000")));
     let between = book

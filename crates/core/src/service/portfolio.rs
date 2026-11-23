@@ -41,10 +41,6 @@ impl UnlockedVault {
         /// Transactions with at least one leg on a store in `ids`.
         pub(crate) fn scoped_txs(&self, ids: &HashSet<String>) -> Vec<Transaction>
             => crate::money::portfolio::scoped_txs @doc;
-        /// A store's positions, sorted by value descending.
-        #[cfg(test)]
-        pub(crate) fn store_positions(&self, store_id: &str, fx: Amount) -> Vec<StorePosition>
-            => crate::money::portfolio::store_positions @books;
         /// Direct children of a store.
         #[cfg(test)]
         pub(crate) fn children_of(&self, parent_id: &str) -> Vec<&Store>

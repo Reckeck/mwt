@@ -23,8 +23,9 @@ fn card_follows_the_salary_and_the_journal_shows_the_asked_share() {
         unreachable!()
     };
     salary.meta.categories = vec!["salary".into()];
-    vault
-        .create_automation(AutomationDraft {
+    crate::usecases::planning::automations::create_automation(
+        &mut vault,
+        AutomationDraft {
             time: None,
             asks: false,
             for_month_offset: None,
@@ -37,8 +38,9 @@ fn card_follows_the_salary_and_the_journal_shows_the_asked_share() {
             amount_mode: Default::default(),
             workday_shift: WorkdayShift::Back,
             property_id: None,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let to_cash = json!({ "store": cash });
     let graph = json!({
         "version": 1,
@@ -67,9 +69,14 @@ fn card_follows_the_salary_and_the_journal_shows_the_asked_share() {
         max_amount_currency: None,
     };
     let now = unix_secs("2026-10-24T12:00:00Z").unwrap();
-    let scheme = vault.save_workflow(None, draft, now).unwrap().workflow.id;
+    let scheme = crate::usecases::workflow::records::save_workflow(&mut vault, None, draft, now)
+        .unwrap()
+        .workflow
+        .id;
 
-    let card = vault.automation_card(&scheme, now, "UTC").unwrap();
+    let card =
+        crate::usecases::planning::automation_card::automation_card(&vault, &scheme, now, "UTC")
+            .unwrap();
     assert_eq!(card.kind, MineKind::Scheme);
     assert_eq!(card.follows.as_deref(), Some("Salary"));
     assert_eq!(card.schedule, Some(Schedule::Monthly { day: 25 }));
@@ -131,7 +138,7 @@ fn card_follows_the_salary_and_the_journal_shows_the_asked_share() {
         graph: String::new(),
     });
 
-    let journal = vault.automation_journal(20);
+    let journal = crate::usecases::planning::automation_card::automation_journal(&vault, 20);
     let asked = journal.iter().find(|entry| entry.id == "run1").unwrap();
     assert_eq!(asked.status, JournalStatus::Asking);
     assert_eq!(asked.wait_id.as_deref(), Some("wait1"));
@@ -139,8 +146,7 @@ fn card_follows_the_salary_and_the_journal_shows_the_asked_share() {
     assert_eq!(asked.money.currency.as_deref(), Some("usd"));
     assert_eq!(asked.money.to_store.as_deref(), Some(cash.as_str()));
     assert_eq!(
-        vault
-            .automation_card(&scheme, now, "UTC")
+        crate::usecases::planning::automation_card::automation_card(&vault, &scheme, now, "UTC")
             .unwrap()
             .runs
             .len(),

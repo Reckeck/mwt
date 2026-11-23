@@ -25,10 +25,10 @@ fn move_carries_the_source_cost_and_the_later_sale_realizes_the_gain() {
     let cold = store(&mut vault, "Cold", StoreKind::Exchange, None);
     let mut buy = income_of(&hot, btc(), "1", "20000", "buy");
     at(&mut buy, "2026-01-01T00:00:00Z");
-    vault.add_transaction(buy).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
     let mut moved = move_priced(&hot, &cold, "1", "60000");
     at(&mut moved, "2026-01-02T00:00:00Z");
-    vault.add_transaction(moved).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, moved).unwrap();
 
     let held = |vault: &crate::service::UnlockedVault| {
         let holding = vault
@@ -41,16 +41,21 @@ fn move_carries_the_source_cost_and_the_later_sale_realizes_the_gain() {
     };
     assert_eq!(held(&vault), (amount("1"), Some(amount("20000"))));
     assert!(
-        vault.realized_pnl().legs.is_empty(),
+        crate::money::portfolio::realized_pnl(&vault.books())
+            .legs
+            .is_empty(),
         "a move realizes nothing"
     );
 
     let mut sell = sell_btc(&cold, "1", "60000", "60000");
     at(&mut sell, "2026-01-03T00:00:00Z");
-    vault.add_transaction(sell).unwrap();
-    let pnl = vault.realized_pnl();
+    crate::usecases::money::transactions::add_transaction(&mut vault, sell).unwrap();
+    let pnl = crate::money::portfolio::realized_pnl(&vault.books());
     assert_eq!(pnl.total_base, amount("40000"));
     assert_eq!(pnl.legs.len(), 1);
     // The per-store view of the selling wallet sees the carried cost too.
-    assert_eq!(vault.store_pnl(&cold, false).total_base, amount("40000"));
+    assert_eq!(
+        crate::money::portfolio::store_pnl(&vault.books(), &cold, false).total_base,
+        amount("40000")
+    );
 }

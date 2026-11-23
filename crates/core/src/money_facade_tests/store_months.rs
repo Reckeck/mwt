@@ -13,16 +13,23 @@ fn store_months_split_inflow_and_outflow_by_month() {
     let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
     let mut salary = income_of(&bank, usd(), "1000", "1", "salary");
     at(&mut salary, "2026-09-10T12:00:00Z");
-    vault.add_transaction(salary).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
     let mut rent = payment(&bank, "300", "rent");
     at(&mut rent, "2026-10-05T12:00:00Z");
-    vault.add_transaction(rent).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, rent).unwrap();
     let mut food = payment(&bank, "50", "food");
     at(&mut food, "2026-10-06T12:00:00Z");
-    vault.add_transaction(food).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, food).unwrap();
 
     let now = crate::time::secs_or_now("2026-10-19T12:00:00Z");
-    let rows = vault.store_months(&bank, true, 2, now, "UTC");
+    let rows = crate::usecases::household::store_months::store_months(
+        &vault,
+        &StoreId::from(bank.as_str()),
+        true,
+        2,
+        now,
+        "UTC",
+    );
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].month, "2026-09");
     assert_eq!(rows[0].inflow, amount("1000"));
@@ -56,7 +63,7 @@ fn two_wallets() -> (tempfile::TempDir, UnlockedVault, String, String) {
     let child = store(&mut vault, "Card", StoreKind::Bank, Some(&parent));
     let mut salary = income_of(&child, usd(), "100", "1", "salary");
     at(&mut salary, "2026-10-02T12:00:00Z");
-    vault.add_transaction(salary).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
     (dir, vault, parent, child)
 }
 
@@ -83,5 +90,15 @@ fn zero_months_gives_the_current_one_and_the_delegate_equals_the_function() {
     let now = crate::time::secs_or_now("2026-10-19T12:00:00Z");
     let direct = rows(&vault, &parent, true, 0, now);
     assert_eq!(direct.len(), 1);
-    assert_eq!(direct, vault.store_months(&parent, true, 0, now, "UTC"));
+    assert_eq!(
+        direct,
+        crate::usecases::household::store_months::store_months(
+            &vault,
+            &StoreId::from(parent.as_str()),
+            true,
+            0,
+            now,
+            "UTC"
+        )
+    );
 }

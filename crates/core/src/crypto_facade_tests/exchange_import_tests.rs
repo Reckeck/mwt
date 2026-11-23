@@ -14,20 +14,20 @@ use crate::service::UnlockedVault;
 fn vault_with_wallet() -> (tempfile::TempDir, UnlockedVault, String) {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
-    let wallet = vault
-        .create_store_with(
-            "Bybit",
-            StoreKind::Exchange,
-            "#f0b90b",
-            "",
-            None,
-            crate::service::StoreExtras {
-                provider: Some(crate::model::store::ExchangeProvider::Bybit),
-                ..Default::default()
-            },
-        )
-        .unwrap()
-        .id;
+    let wallet = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Bybit",
+        StoreKind::Exchange,
+        "#f0b90b",
+        "",
+        None,
+        crate::service::StoreExtras {
+            provider: Some(crate::model::store::ExchangeProvider::Bybit),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .id;
     (dir, vault, wallet)
 }
 

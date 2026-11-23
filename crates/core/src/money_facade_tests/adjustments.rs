@@ -39,11 +39,13 @@ fn a_correction_sets_the_balance_and_remembers_what_was_there() {
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let mut salary = income(&cash, "100", "salary");
     at(&mut salary, "2026-03-01T10:00:00Z");
-    vault.add_transaction(salary).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
 
-    let saved = vault
-        .add_transaction(correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"))
-        .unwrap();
+    let saved = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"),
+    )
+    .unwrap();
     let Transaction::Adjustment(inner) = &saved else {
         panic!("a correction");
     };
@@ -58,18 +60,23 @@ fn a_correction_is_neither_income_nor_spending_nor_a_sale() {
     let wallet = vault.doc.stores[1].id.clone();
     let mut buy = income_of(&wallet, btc(), "1", "30000", "bought");
     at(&mut buy, "2026-01-01T00:00:00Z");
-    vault.add_transaction(buy).unwrap();
-    let before = vault.realized_pnl().total_base;
+    crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
+    let before = crate::money::portfolio::realized_pnl(&vault.books()).total_base;
 
-    let tx = vault
-        .add_transaction(correction(
-            &wallet,
-            &[(btc(), "0.5")],
-            "2026-02-01T00:00:00Z",
-        ))
-        .unwrap();
-    assert_eq!(vault.classify_flow(&tx), FlowClass::Ignored);
-    assert_eq!(vault.realized_pnl().total_base, before, "nothing was sold");
+    let tx = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&wallet, &[(btc(), "0.5")], "2026-02-01T00:00:00Z"),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::money::worth::classify_flow(&vault.doc, &tx),
+        FlowClass::Ignored
+    );
+    assert_eq!(
+        crate::money::portfolio::realized_pnl(&vault.books()).total_base,
+        before,
+        "nothing was sold"
+    );
     assert_eq!(holding_of(&vault, &wallet, &btc()), amount("0.5"));
 }
 
@@ -83,11 +90,13 @@ fn a_back_dated_correction_sees_the_balance_of_its_moment() {
     ] {
         let mut tx = income(&cash, sum, "salary");
         at(&mut tx, ts);
-        vault.add_transaction(tx).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
     }
-    let saved = vault
-        .add_transaction(correction(&cash, &[(usd(), "90")], "2026-03-05T10:00:00Z"))
-        .unwrap();
+    let saved = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&cash, &[(usd(), "90")], "2026-03-05T10:00:00Z"),
+    )
+    .unwrap();
     let Transaction::Adjustment(inner) = &saved else {
         panic!("a correction");
     };
@@ -96,12 +105,12 @@ fn a_back_dated_correction_sees_the_balance_of_its_moment() {
 
     // Edited: it does not see itself as part of the ledger.
     let id = saved.meta().id.clone();
-    let edited = vault
-        .update_transaction(
-            &id,
-            correction(&cash, &[(usd(), "95")], "2026-03-05T10:00:00Z"),
-        )
-        .unwrap();
+    let edited = crate::usecases::money::transactions::update_transaction(
+        &mut vault,
+        &id,
+        correction(&cash, &[(usd(), "95")], "2026-03-05T10:00:00Z"),
+    )
+    .unwrap();
     let Transaction::Adjustment(inner) = &edited else {
         panic!("a correction");
     };
@@ -124,35 +133,40 @@ fn a_correction_follows_changes_to_the_history_before_it() {
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let mut salary = income(&cash, "100", "salary");
     at(&mut salary, "2026-03-01T10:00:00Z");
-    let salary = vault.add_transaction(salary).unwrap();
-    let fixed = vault
-        .add_transaction(correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"))
-        .unwrap();
+    let salary = crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
+    let fixed = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"),
+    )
+    .unwrap();
     let fixed = fixed.meta().id.clone();
     let mut later = income(&cash, "10", "salary");
     at(&mut later, "2026-03-10T10:00:00Z");
-    vault.add_transaction(later).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, later).unwrap();
     assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
 
     // Added before it: the counted 80 still stands.
     let mut forgotten = payment(&cash, "15", "lunch");
     at(&mut forgotten, "2026-03-03T10:00:00Z");
-    let forgotten = vault.add_transaction(forgotten).unwrap();
+    let forgotten =
+        crate::usecases::money::transactions::add_transaction(&mut vault, forgotten).unwrap();
     assert_eq!(before_of(&vault, &fixed), [amount("85")]);
     assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
 
     // Edited before it.
     let mut bigger = income(&cash, "120", "salary");
     at(&mut bigger, "2026-03-01T10:00:00Z");
-    vault.update_transaction(&salary.meta().id, bigger).unwrap();
+    crate::usecases::money::transactions::update_transaction(&mut vault, &salary.meta().id, bigger)
+        .unwrap();
     assert_eq!(before_of(&vault, &fixed), [amount("105")]);
     assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
 
     // Deleted before it; the difference may come to nothing, the line stays.
-    vault.delete_transaction(&forgotten.meta().id).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut vault, &forgotten.meta().id)
+        .unwrap();
     let mut spent = payment(&cash, "40", "rent");
     at(&mut spent, "2026-03-02T10:00:00Z");
-    vault.add_transaction(spent).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, spent).unwrap();
     assert_eq!(before_of(&vault, &fixed), [amount("80")]);
     assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
 }
@@ -163,27 +177,33 @@ fn corrections_in_a_row_are_recalculated_in_order() {
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let mut salary = income(&cash, "100", "salary");
     at(&mut salary, "2026-03-01T10:00:00Z");
-    vault.add_transaction(salary).unwrap();
-    let first = vault
-        .add_transaction(correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
+    let first = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"),
+    )
+    .unwrap();
     let mut between = payment(&cash, "10", "lunch");
     at(&mut between, "2026-03-07T10:00:00Z");
-    let between = vault.add_transaction(between).unwrap();
-    let second = vault
-        .add_transaction(correction(&cash, &[(usd(), "60")], "2026-03-09T10:00:00Z"))
-        .unwrap();
+    let between =
+        crate::usecases::money::transactions::add_transaction(&mut vault, between).unwrap();
+    let second = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&cash, &[(usd(), "60")], "2026-03-09T10:00:00Z"),
+    )
+    .unwrap();
     assert_eq!(before_of(&vault, &second.meta().id), [amount("70")]);
 
     // A change before both moves only the first one's difference.
     let mut bonus = income(&cash, "50", "bonus");
     at(&mut bonus, "2026-03-02T10:00:00Z");
-    vault.add_transaction(bonus).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, bonus).unwrap();
     assert_eq!(before_of(&vault, &first.meta().id), [amount("150")]);
     assert_eq!(before_of(&vault, &second.meta().id), [amount("70")]);
 
     // A change between them moves only the second one's.
-    vault.delete_transaction(&between.meta().id).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut vault, &between.meta().id)
+        .unwrap();
     assert_eq!(before_of(&vault, &first.meta().id), [amount("150")]);
     assert_eq!(before_of(&vault, &second.meta().id), [amount("80")]);
     assert_eq!(holding_of(&vault, &cash, &usd()), amount("60"));
@@ -195,17 +215,21 @@ fn corrections_at_the_same_moment_settle() {
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let mut salary = income(&cash, "100", "salary");
     at(&mut salary, "2026-03-01T10:00:00Z");
-    vault.add_transaction(salary).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
     let moment = "2026-03-05T10:00:00Z";
-    vault
-        .add_transaction(correction(&cash, &[(usd(), "80")], moment))
-        .unwrap();
-    vault
-        .add_transaction(correction(&cash, &[(usd(), "70")], moment))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&cash, &[(usd(), "80")], moment),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&cash, &[(usd(), "70")], moment),
+    )
+    .unwrap();
     let held = holding_of(&vault, &cash, &usd());
-    vault.rebase_adjustments();
-    vault.recompute_holdings();
+    crate::usecases::money::adjustments::rebase_adjustments(&mut vault);
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
     assert_eq!(holding_of(&vault, &cash, &usd()), held, "stable");
     assert_eq!(held, amount("70"));
 }
@@ -214,16 +238,20 @@ fn corrections_at_the_same_moment_settle() {
 fn the_draft_lists_what_the_account_holds() {
     let (_dir, mut vault) = empty_vault();
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
-    vault
-        .add_transaction(income(&cash, "100", "salary"))
-        .unwrap();
-    let draft = vault
-        .adjustment_draft(&AdjustmentDraftInput {
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&cash, "100", "salary"),
+    )
+    .unwrap();
+    let draft = crate::usecases::money::adjustments::adjustment_draft(
+        &vault.doc,
+        &AdjustmentDraftInput {
             store_id: cash.clone(),
             at: None,
             replaces: None,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(draft.lines.len(), 1);
     assert_eq!(draft.lines[0].before, amount("100"));
     assert_eq!(draft.lines[0].after, amount("100"));
@@ -233,32 +261,42 @@ fn the_draft_lists_what_the_account_holds() {
 fn a_correction_keeps_to_the_rules_of_the_account() {
     let (_dir, mut vault) = empty_vault();
     let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&bank, "100", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&bank, "100", "salary"),
+    )
+    .unwrap();
     let now = now_iso();
     assert!(
-        vault
-            .add_transaction(correction(&bank, &[(btc(), "1")], &now))
-            .is_err(),
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            correction(&bank, &[(btc(), "1")], &now)
+        )
+        .is_err(),
         "a bank holds only fiat"
     );
     assert!(
-        vault
-            .add_transaction(correction(&bank, &[(usd(), "-5")], &now))
-            .is_err(),
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            correction(&bank, &[(usd(), "-5")], &now)
+        )
+        .is_err(),
         "money cannot be below zero"
     );
     assert!(
-        vault
-            .add_transaction(correction(&bank, &[(usd(), "100")], &now))
-            .is_err(),
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            correction(&bank, &[(usd(), "100")], &now)
+        )
+        .is_err(),
         "nothing to correct"
     );
     assert!(
-        vault
-            .add_transaction(correction(&bank, &[(usd(), "1"), (usd(), "2")], &now))
-            .is_err(),
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            correction(&bank, &[(usd(), "1"), (usd(), "2")], &now)
+        )
+        .is_err(),
         "an asset twice"
     );
 }
@@ -269,25 +307,27 @@ fn re_saving_a_correction_keeps_its_assets_even_when_they_match() {
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let mut salary = income(&cash, "100", "salary");
     at(&mut salary, "2026-03-01T10:00:00Z");
-    vault.add_transaction(salary).unwrap();
-    let saved = vault
-        .add_transaction(correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
+    let saved = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"),
+    )
+    .unwrap();
     let id = saved.meta().id.clone();
 
     // A later change of history before it: the correction absorbs it.
     let mut refund = income(&cash, "20", "refund");
     at(&mut refund, "2026-03-02T10:00:00Z");
-    vault.add_transaction(refund).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut vault, refund).unwrap();
     assert_eq!(holding_of(&vault, &cash, &usd()), amount("80"));
 
     // Opened and saved as it is: the line stays, so does the balance.
-    let resaved = vault
-        .update_transaction(
-            &id,
-            correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"),
-        )
-        .unwrap();
+    let resaved = crate::usecases::money::transactions::update_transaction(
+        &mut vault,
+        &id,
+        correction(&cash, &[(usd(), "80")], "2026-03-05T10:00:00Z"),
+    )
+    .unwrap();
     let Transaction::Adjustment(inner) = &resaved else {
         panic!("a correction");
     };
@@ -296,9 +336,11 @@ fn re_saving_a_correction_keeps_its_assets_even_when_they_match() {
 
     // A brand-new correction that changes nothing is still refused.
     assert!(
-        vault
-            .add_transaction(correction(&cash, &[(usd(), "80")], "2026-03-06T10:00:00Z"))
-            .is_err()
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            correction(&cash, &[(usd(), "80")], "2026-03-06T10:00:00Z")
+        )
+        .is_err()
     );
 }
 
@@ -308,15 +350,20 @@ fn re_saving_an_operation_unchanged_does_not_move_the_balance() {
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let mut salary = income(&cash, "100", "salary");
     at(&mut salary, "2026-03-01T10:00:30Z");
-    let salary = vault.add_transaction(salary).unwrap();
-    vault
-        .add_transaction(correction(&cash, &[(usd(), "90")], "2026-03-01T10:00:45Z"))
-        .unwrap();
+    let salary = crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        correction(&cash, &[(usd(), "90")], "2026-03-01T10:00:45Z"),
+    )
+    .unwrap();
     assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
     // The same moment, seconds and all: nothing moves past the correction.
-    vault
-        .update_transaction(&salary.meta().id.clone(), salary.clone())
-        .unwrap();
+    crate::usecases::money::transactions::update_transaction(
+        &mut vault,
+        &salary.meta().id.clone(),
+        salary.clone(),
+    )
+    .unwrap();
     assert_eq!(holding_of(&vault, &cash, &usd()), amount("90"));
 }
 
@@ -367,10 +414,12 @@ fn complete_adjustment_leaves_other_kinds_alone() {
 fn rebasing_the_corrections_writes_nothing() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&card, "100", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "100", "salary"),
+    )
+    .unwrap();
     let commits = super::bulk::Commits::watch(&mut vault);
-    vault.rebase_adjustments();
+    crate::usecases::money::adjustments::rebase_adjustments(&mut vault);
     assert_eq!(commits.count(), 0);
 }

@@ -13,9 +13,11 @@ use crate::service::test_support::*;
 
 fn tx_owner(vault: &mut UnlockedVault) -> EntityRef {
     let card = store(vault, "Card", crate::model::store::StoreKind::Bank, None);
-    let tx = vault
-        .add_transaction(income(&card, "100", "salary"))
-        .unwrap();
+    let tx = crate::usecases::money::transactions::add_transaction(
+        vault,
+        income(&card, "100", "salary"),
+    )
+    .unwrap();
     EntityRef::new(EntityKind::Tx, tx.meta().id.clone())
 }
 
@@ -31,28 +33,41 @@ fn receipt<'a>(bytes: &'a [u8]) -> NewFile<'a> {
 fn a_file_is_sealed_next_to_the_vault_and_opens_back() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
-    let item = vault
-        .add_attachment_file(owner.clone(), receipt(b"%PDF-1.7 receipt"))
-        .unwrap();
+    let item = crate::usecases::household::attachments::add_attachment_file(
+        &mut vault,
+        owner.clone(),
+        receipt(b"%PDF-1.7 receipt"),
+    )
+    .unwrap();
 
-    let on_disk = std::fs::read(vault.attachments_dir().join(&item.id)).unwrap();
+    let on_disk = std::fs::read(
+        crate::usecases::household::attachments::attachments_dir(&vault).join(&item.id),
+    )
+    .unwrap();
     assert!(
         !on_disk.windows(7).any(|part| part == b"receipt"),
         "the file is not sealed"
     );
-    let (_, bytes) = vault.read_attachment(&item.id).unwrap();
+    let (_, bytes) =
+        crate::usecases::household::attachments::read_attachment(&vault, &item.id).unwrap();
     assert_eq!(bytes, b"%PDF-1.7 receipt");
     assert_eq!(item.size, 16);
-    assert_eq!(vault.list_attachments(Some(&owner)), vec![item.clone()]);
     assert_eq!(
-        vault.transactions_with_attachments(),
+        crate::household::attachments::list_attachments(&vault.doc, Some(&owner)),
+        vec![item.clone()]
+    );
+    assert_eq!(
+        crate::household::attachments::transactions_with_attachments(&vault.doc),
         vec![owner.id.clone()]
     );
 
     // The same file again is the same attachment.
-    let again = vault
-        .add_attachment_file(owner, receipt(b"%PDF-1.7 receipt"))
-        .unwrap();
+    let again = crate::usecases::household::attachments::add_attachment_file(
+        &mut vault,
+        owner,
+        receipt(b"%PDF-1.7 receipt"),
+    )
+    .unwrap();
     assert_eq!(again.id, item.id);
 }
 
@@ -60,31 +75,47 @@ fn a_file_is_sealed_next_to_the_vault_and_opens_back() {
 fn a_new_password_keeps_the_files_readable() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
-    let item = vault.add_attachment_file(owner, receipt(b"bytes")).unwrap();
+    let item = crate::usecases::household::attachments::add_attachment_file(
+        &mut vault,
+        owner,
+        receipt(b"bytes"),
+    )
+    .unwrap();
     vault.flush_pending().unwrap();
     let path = vault.path.clone();
     vault.change_password("pw", "another").unwrap();
     drop(vault);
     let reopened = UnlockedVault::open(path, "another").unwrap();
-    assert_eq!(reopened.read_attachment(&item.id).unwrap().1, b"bytes");
+    assert_eq!(
+        crate::usecases::household::attachments::read_attachment(&reopened, &item.id)
+            .unwrap()
+            .1,
+        b"bytes"
+    );
 }
 
 #[test]
 fn removal_waits_for_undo_until_the_next_open() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
-    let item = vault
-        .add_attachment_file(owner.clone(), receipt(b"bytes"))
-        .unwrap();
-    let file = vault.attachments_dir().join(&item.id);
+    let item = crate::usecases::household::attachments::add_attachment_file(
+        &mut vault,
+        owner.clone(),
+        receipt(b"bytes"),
+    )
+    .unwrap();
+    let file = crate::usecases::household::attachments::attachments_dir(&vault).join(&item.id);
 
-    vault.remove_attachment(&item.id).unwrap();
-    assert!(vault.list_attachments(Some(&owner)).is_empty());
+    crate::usecases::household::attachments::remove_attachment(&mut vault, &item.id).unwrap();
+    assert!(crate::household::attachments::list_attachments(&vault.doc, Some(&owner)).is_empty());
     assert!(file.exists(), "undo still needs the file");
-    vault.restore_attachment(&item.id).unwrap();
-    assert_eq!(vault.list_attachments(Some(&owner)).len(), 1);
+    crate::usecases::household::attachments::restore_attachment(&mut vault, &item.id).unwrap();
+    assert_eq!(
+        crate::household::attachments::list_attachments(&vault.doc, Some(&owner)).len(),
+        1
+    );
 
-    vault.remove_attachment(&item.id).unwrap();
+    crate::usecases::household::attachments::remove_attachment(&mut vault, &item.id).unwrap();
     vault.flush_pending().unwrap();
     let path = vault.path.clone();
     drop(vault);
@@ -98,14 +129,21 @@ fn removal_waits_for_undo_until_the_next_open() {
 fn a_deleted_operation_takes_its_files_on_the_next_open() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
-    let item = vault
-        .add_attachment_file(owner.clone(), receipt(b"bytes"))
-        .unwrap();
-    vault
-        .add_attachment_link(owner.clone(), "bank.ru/check/1", "")
-        .unwrap();
-    let file = vault.attachments_dir().join(&item.id);
-    vault.delete_transaction(&owner.id).unwrap();
+    let item = crate::usecases::household::attachments::add_attachment_file(
+        &mut vault,
+        owner.clone(),
+        receipt(b"bytes"),
+    )
+    .unwrap();
+    crate::usecases::household::attachments::add_attachment_link(
+        &mut vault,
+        owner.clone(),
+        "bank.ru/check/1",
+        "",
+    )
+    .unwrap();
+    let file = crate::usecases::household::attachments::attachments_dir(&vault).join(&item.id);
+    crate::usecases::money::transactions::delete_transaction(&mut vault, &owner.id).unwrap();
     vault.flush_pending().unwrap();
     let path = vault.path.clone();
     drop(vault);
@@ -118,52 +156,77 @@ fn a_deleted_operation_takes_its_files_on_the_next_open() {
 fn links_are_web_addresses_with_a_caption() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
-    let link = vault
-        .add_attachment_link(owner.clone(), " bank.ru/check/1 ", "")
-        .unwrap();
+    let link = crate::usecases::household::attachments::add_attachment_link(
+        &mut vault,
+        owner.clone(),
+        " bank.ru/check/1 ",
+        "",
+    )
+    .unwrap();
     assert_eq!(link.url.as_deref(), Some("https://bank.ru/check/1"));
     assert_eq!(link.title, "https://bank.ru/check/1");
-    let named = vault
-        .add_attachment_link(owner.clone(), "https://x.io", "Договор")
-        .unwrap();
+    let named = crate::usecases::household::attachments::add_attachment_link(
+        &mut vault,
+        owner.clone(),
+        "https://x.io",
+        "Договор",
+    )
+    .unwrap();
     assert_eq!(named.title, "Договор");
     assert!(
-        vault
-            .add_attachment_link(owner.clone(), "file:///etc/passwd", "")
-            .is_err()
+        crate::usecases::household::attachments::add_attachment_link(
+            &mut vault,
+            owner.clone(),
+            "file:///etc/passwd",
+            ""
+        )
+        .is_err()
     );
     assert!(
-        vault
-            .add_attachment_link(owner, "not an address", "")
-            .is_err()
+        crate::usecases::household::attachments::add_attachment_link(
+            &mut vault,
+            owner,
+            "not an address",
+            ""
+        )
+        .is_err()
     );
-    assert!(vault.read_attachment(&link.id).is_err());
+    assert!(crate::usecases::household::attachments::read_attachment(&vault, &link.id).is_err());
 }
 
 #[test]
 fn a_renamed_file_is_found_by_its_new_name() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
-    let item = vault
-        .add_attachment_file(owner.clone(), receipt(b"bytes"))
-        .unwrap();
-    vault
-        .rename_attachment(&item.id, "  Чек skycapital  ")
-        .unwrap();
-    assert!(vault.rename_attachment(&item.id, " ").is_err());
+    let item = crate::usecases::household::attachments::add_attachment_file(
+        &mut vault,
+        owner.clone(),
+        receipt(b"bytes"),
+    )
+    .unwrap();
+    crate::usecases::household::attachments::rename_attachment(
+        &mut vault,
+        &item.id,
+        "  Чек skycapital  ",
+    )
+    .unwrap();
+    assert!(
+        crate::usecases::household::attachments::rename_attachment(&mut vault, &item.id, " ")
+            .is_err()
+    );
     let filter = crate::service::TxFilter {
         text: Some("skycapital".into()),
         ..Default::default()
     };
-    let found = vault.list_transactions(&filter, "UTC").unwrap();
+    let found =
+        crate::usecases::household::ledger::list_transactions(&vault, &filter, "UTC").unwrap();
     assert_eq!(found.len(), 1);
     let only_attached = crate::service::TxFilter {
         with_attachments: true,
         ..Default::default()
     };
     assert_eq!(
-        vault
-            .list_transactions(&only_attached, "UTC")
+        crate::usecases::household::ledger::list_transactions(&vault, &only_attached, "UTC")
             .unwrap()
             .len(),
         1
@@ -175,20 +238,32 @@ fn only_operations_and_goals_that_exist_take_files() {
     let (_dir, mut vault) = setup();
     let missing = EntityRef::new(EntityKind::Tx, "nope");
     assert!(
-        vault
-            .add_attachment_link(missing, "https://x.io", "")
-            .is_err()
+        crate::usecases::household::attachments::add_attachment_link(
+            &mut vault,
+            missing,
+            "https://x.io",
+            ""
+        )
+        .is_err()
     );
     let store = EntityRef::new(EntityKind::Store, vault.doc.stores[0].id.clone());
     assert!(
-        vault
-            .add_attachment_link(store, "https://x.io", "")
-            .is_err()
+        crate::usecases::household::attachments::add_attachment_link(
+            &mut vault,
+            store,
+            "https://x.io",
+            ""
+        )
+        .is_err()
     );
     let owner = tx_owner(&mut vault);
     let big = vec![0u8; MAX_ATTACHMENT_BYTES + 1];
     assert!(matches!(
-        vault.add_attachment_file(owner, receipt(&big)),
+        crate::usecases::household::attachments::add_attachment_file(
+            &mut vault,
+            owner,
+            receipt(&big)
+        ),
         Err(Error::TooLarge(_))
     ));
 }
@@ -433,9 +508,13 @@ fn the_file_key_round_trips_through_the_document() {
 fn the_link_delegate_matches_the_scenario() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
-    let via_delegate = vault
-        .add_attachment_link(owner.clone(), "example.com", " Docs ")
-        .unwrap();
+    let via_delegate = crate::usecases::household::attachments::add_attachment_link(
+        &mut vault,
+        owner.clone(),
+        "example.com",
+        " Docs ",
+    )
+    .unwrap();
     let via_scenario = crate::usecases::household::attachments::add_attachment_link(
         &mut vault,
         owner.clone(),
@@ -449,7 +528,10 @@ fn the_link_delegate_matches_the_scenario() {
         ..item.clone()
     };
     assert_eq!(strip(&via_delegate), strip(&via_scenario));
-    assert_eq!(vault.list_attachments(Some(&owner)).len(), 2);
+    assert_eq!(
+        crate::household::attachments::list_attachments(&vault.doc, Some(&owner)).len(),
+        2
+    );
 }
 
 #[test]
@@ -457,9 +539,12 @@ fn the_file_delegate_matches_the_scenario() {
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
     // Different bytes, so both calls take the fresh-write path (seal, write, key record).
-    let via_delegate = vault
-        .add_attachment_file(owner.clone(), receipt(b"%PDF-1 receipt one"))
-        .unwrap();
+    let via_delegate = crate::usecases::household::attachments::add_attachment_file(
+        &mut vault,
+        owner.clone(),
+        receipt(b"%PDF-1 receipt one"),
+    )
+    .unwrap();
     let via_scenario = crate::usecases::household::attachments::add_attachment_file(
         &mut vault,
         owner.clone(),
@@ -476,12 +561,17 @@ fn the_file_delegate_matches_the_scenario() {
     assert_eq!(strip(&via_delegate), strip(&via_scenario));
     assert_ne!(via_delegate.sha256, via_scenario.sha256);
 
-    let (read_delegate, bytes_delegate) = vault.read_attachment(&via_delegate.id).unwrap();
-    let (read_scenario, bytes_scenario) = vault.read_attachment(&via_scenario.id).unwrap();
+    let (read_delegate, bytes_delegate) =
+        crate::usecases::household::attachments::read_attachment(&vault, &via_delegate.id).unwrap();
+    let (read_scenario, bytes_scenario) =
+        crate::usecases::household::attachments::read_attachment(&vault, &via_scenario.id).unwrap();
     assert_eq!(strip(&read_delegate), strip(&read_scenario));
     assert_eq!(bytes_delegate, b"%PDF-1 receipt one");
     assert_eq!(bytes_scenario, b"%PDF-1 receipt two");
-    assert_eq!(vault.list_attachments(Some(&owner)).len(), 2);
+    assert_eq!(
+        crate::household::attachments::list_attachments(&vault.doc, Some(&owner)).len(),
+        2
+    );
 }
 
 #[test]
@@ -489,35 +579,47 @@ fn the_remove_rename_restore_delegates_match_their_scenarios() {
     use crate::usecases::household::attachments as scenario;
     let (_dir, mut vault) = setup();
     let owner = tx_owner(&mut vault);
-    let first = vault
-        .add_attachment_link(owner.clone(), "example.com", "One")
-        .unwrap();
-    let second = vault
-        .add_attachment_link(owner.clone(), "example.org", "Two")
-        .unwrap();
+    let first = crate::usecases::household::attachments::add_attachment_link(
+        &mut vault,
+        owner.clone(),
+        "example.com",
+        "One",
+    )
+    .unwrap();
+    let second = crate::usecases::household::attachments::add_attachment_link(
+        &mut vault,
+        owner.clone(),
+        "example.org",
+        "Two",
+    )
+    .unwrap();
 
-    let removed_a = vault.remove_attachment(&first.id).unwrap();
+    let removed_a =
+        crate::usecases::household::attachments::remove_attachment(&mut vault, &first.id).unwrap();
     let removed_b = scenario::remove_attachment(&mut vault, &second.id).unwrap();
     assert!(removed_a.removed_at.is_some() && removed_b.removed_at.is_some());
 
-    let restored_a = vault.restore_attachment(&first.id).unwrap();
+    let restored_a =
+        crate::usecases::household::attachments::restore_attachment(&mut vault, &first.id).unwrap();
     let restored_b = scenario::restore_attachment(&mut vault, &second.id).unwrap();
     assert!(restored_a.removed_at.is_none() && restored_b.removed_at.is_none());
 
-    let renamed_a = vault.rename_attachment(&first.id, " New ").unwrap();
+    let renamed_a =
+        crate::usecases::household::attachments::rename_attachment(&mut vault, &first.id, " New ")
+            .unwrap();
     let renamed_b = scenario::rename_attachment(&mut vault, &second.id, " New ").unwrap();
     assert_eq!(renamed_a.title, renamed_b.title);
 
     assert!(matches!(
-        vault.remove_attachment("missing"),
+        crate::usecases::household::attachments::remove_attachment(&mut vault, "missing"),
         Err(Error::Missing(_))
     ));
     assert!(matches!(
-        vault.rename_attachment("missing", "x"),
+        crate::usecases::household::attachments::rename_attachment(&mut vault, "missing", "x"),
         Err(Error::Missing(_))
     ));
     assert!(matches!(
-        vault.restore_attachment("missing"),
+        crate::usecases::household::attachments::restore_attachment(&mut vault, "missing"),
         Err(Error::Missing(_))
     ));
     assert!(matches!(

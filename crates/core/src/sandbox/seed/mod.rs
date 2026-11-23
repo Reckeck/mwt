@@ -44,7 +44,10 @@ fn book(vault: &mut UnlockedVault, today: NaiveDate) -> Result<()> {
     vault.doc.created_at = format!("{}T00:00:00Z", today - chrono::Duration::days(365));
     let wallets = wallets::create_all(vault)?;
     for (number, planned) in ledger::plan(&wallets, today, SEED).into_iter().enumerate() {
-        vault.add_transaction(planned.into_transaction(number as u128))?;
+        crate::usecases::money::transactions::add_transaction(
+            vault,
+            planned.into_transaction(number as u128),
+        )?;
     }
     fix_holdings(vault);
     plan::add(vault, &wallets, today)?;

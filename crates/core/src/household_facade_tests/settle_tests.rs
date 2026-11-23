@@ -25,13 +25,12 @@ fn settle(
 
 /// The debt transfer an event settlement made.
 fn last_transfer(scenario: &Scenario) -> TransferTx {
-    let linked: Vec<String> = scenario
-        .vault
-        .shared_tx_links()
-        .into_iter()
-        .filter(|link| link.link.settlement_id.is_some())
-        .map(|link| link.tx_id)
-        .collect();
+    let linked: Vec<String> =
+        crate::household::shared_events::view::shared_tx_links(&scenario.vault.doc)
+            .into_iter()
+            .filter(|link| link.link.settlement_id.is_some())
+            .map(|link| link.tx_id)
+            .collect();
     scenario
         .vault
         .doc
@@ -45,9 +44,7 @@ fn last_transfer(scenario: &Scenario) -> TransferTx {
 }
 
 fn debt_with(scenario: &Scenario, contact: &str) -> Amount {
-    scenario
-        .vault
-        .contact_balances()
+    crate::usecases::household::contacts::contact_balances(&scenario.vault)
         .into_iter()
         .filter(|row| row.contact_id == contact)
         .fold(Amount::ZERO, |sum, row| sum + row.receivable - row.payable)
@@ -62,29 +59,33 @@ fn debts_appear_at_once_in_contact_cards_and_go_out_when_returned() {
     assert_eq!(debt_with(&scenario, &vasya), amount("1685"));
     // the guest is nowhere in the contacts
     assert_eq!(
-        scenario.vault.contact_balances().len(),
+        crate::usecases::household::contacts::contact_balances(&scenario.vault).len(),
         3,
         "Petya, Vasya and Anya only"
     );
-    let cards = scenario.vault.contact_shared_events(&petya);
+    let cards =
+        crate::household::shared_events::view::contact_shared_events(&scenario.vault.doc, &petya);
     assert_eq!(cards.len(), 1);
     assert_eq!(cards[0].amount, amount("1735"));
 
     let person = scenario.person("petya");
     let wallet = scenario.wallet.clone();
-    let view = scenario
-        .vault
-        .settle_shared(settle(
-            &scenario,
-            &person,
-            SettleDirection::ToOrganizer,
-            "1735",
-            Some(&wallet),
-        ))
-        .unwrap();
+    let hoisted = settle(
+        &scenario,
+        &person,
+        SettleDirection::ToOrganizer,
+        "1735",
+        Some(&wallet),
+    );
+    let view =
+        crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted)
+            .unwrap();
     assert_eq!(view.status, SharedEventStatus::Settling);
     assert_eq!(debt_with(&scenario, &petya), amount("0"));
-    assert!(scenario.vault.contact_shared_events(&petya).is_empty());
+    assert!(
+        crate::household::shared_events::view::contact_shared_events(&scenario.vault.doc, &petya)
+            .is_empty()
+    );
     // the money is in my wallet, and the operation is a Collect from Petya
     assert_eq!(scenario.balance(), amount("43400") + amount("1735"));
     let transfer = last_transfer(&scenario);
@@ -97,36 +98,38 @@ fn a_partial_return_leaves_the_rest_and_too_much_is_refused() {
     let mut scenario = skewers_scenario();
     let vasya = scenario.person("vasya");
     let wallet = scenario.wallet.clone();
-    scenario
-        .vault
-        .settle_shared(settle(
-            &scenario,
-            &vasya,
-            SettleDirection::ToOrganizer,
-            "1000",
-            Some(&wallet),
-        ))
-        .unwrap();
+    let hoisted = settle(
+        &scenario,
+        &vasya,
+        SettleDirection::ToOrganizer,
+        "1000",
+        Some(&wallet),
+    );
+    crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted).unwrap();
     assert_eq!(
         debt_with(&scenario, &scenario.contact("vasya")),
         amount("685")
     );
-    let too_much = scenario.vault.settle_shared(settle(
+    let hoisted = settle(
         &scenario,
         &vasya,
         SettleDirection::ToOrganizer,
         "686",
         Some(&wallet),
-    ));
+    );
+    let too_much =
+        crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted);
     assert!(too_much.is_err());
     // giving money to someone who owes me makes no sense either
-    let backwards = scenario.vault.settle_shared(settle(
+    let hoisted = settle(
         &scenario,
         &vasya,
         SettleDirection::FromOrganizer,
         "10",
         None,
-    ));
+    );
+    let backwards =
+        crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted);
     assert!(backwards.is_err());
 }
 
@@ -135,16 +138,8 @@ fn a_set_off_changes_the_balance_without_an_operation() {
     let mut scenario = skewers_scenario();
     let anya = scenario.person("anya");
     let before = scenario.vault.doc.transactions.len();
-    scenario
-        .vault
-        .settle_shared(settle(
-            &scenario,
-            &anya,
-            SettleDirection::ToOrganizer,
-            "1060",
-            None,
-        ))
-        .unwrap();
+    let hoisted = settle(&scenario, &anya, SettleDirection::ToOrganizer, "1060", None);
+    crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted).unwrap();
     assert_eq!(scenario.vault.doc.transactions.len(), before);
     assert_eq!(debt_with(&scenario, &scenario.contact("anya")), amount("0"));
 }
@@ -154,24 +149,20 @@ fn a_guest_settles_without_an_operation_only() {
     let mut scenario = skewers_scenario();
     let olya = scenario.person("olya");
     let wallet = scenario.wallet.clone();
-    let refused = scenario.vault.settle_shared(settle(
+    let hoisted = settle(
         &scenario,
         &olya,
         SettleDirection::ToOrganizer,
         "1060",
         Some(&wallet),
-    ));
+    );
+    let refused =
+        crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted);
     assert!(refused.is_err());
-    let view = scenario
-        .vault
-        .settle_shared(settle(
-            &scenario,
-            &olya,
-            SettleDirection::ToOrganizer,
-            "1060",
-            None,
-        ))
-        .unwrap();
+    let hoisted = settle(&scenario, &olya, SettleDirection::ToOrganizer, "1060", None);
+    let view =
+        crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted)
+            .unwrap();
     let guest = view.people.iter().find(|row| row.id == olya).unwrap();
     assert!(guest.saldo.is_zero());
 }
@@ -181,23 +172,25 @@ fn writing_off_the_rest_closes_the_debt_and_is_my_position() {
     let mut scenario = skewers_scenario();
     let vasya = scenario.person("vasya");
     let wallet = scenario.wallet.clone();
-    scenario
-        .vault
-        .settle_shared(settle(
-            &scenario,
-            &vasya,
-            SettleDirection::ToOrganizer,
-            "1000",
-            Some(&wallet),
-        ))
-        .unwrap();
+    let hoisted = settle(
+        &scenario,
+        &vasya,
+        SettleDirection::ToOrganizer,
+        "1000",
+        Some(&wallet),
+    );
+    crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted).unwrap();
     let rest = |amount: Option<Amount>| SharedRemainderInput {
         event_id: scenario.event.clone(),
         participant_id: vasya.clone(),
         amount,
         to: Vec::new(),
     };
-    let view = scenario.vault.write_off_shared(rest(None)).unwrap();
+    let view = crate::usecases::household::shared_events::write_off_shared(
+        &mut scenario.vault,
+        rest(None),
+    )
+    .unwrap();
     assert_eq!(
         debt_with(&scenario, &scenario.contact("vasya")),
         amount("0")
@@ -205,7 +198,13 @@ fn writing_off_the_rest_closes_the_debt_and_is_my_position() {
     let mine = view.mine.unwrap();
     assert_eq!(mine.written_off, amount("685"));
     // nothing to write off any more
-    assert!(scenario.vault.write_off_shared(rest(None)).is_err());
+    assert!(
+        crate::usecases::household::shared_events::write_off_shared(
+            &mut scenario.vault,
+            rest(None)
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -213,25 +212,24 @@ fn putting_the_rest_on_the_others_shifts_their_shares() {
     let mut scenario = skewers_scenario();
     let vasya = scenario.person("vasya");
     let wallet = scenario.wallet.clone();
-    scenario
-        .vault
-        .settle_shared(settle(
-            &scenario,
-            &vasya,
-            SettleDirection::ToOrganizer,
-            "1000",
-            Some(&wallet),
-        ))
-        .unwrap();
-    let view = scenario
-        .vault
-        .reassign_shared(SharedRemainderInput {
+    let hoisted = settle(
+        &scenario,
+        &vasya,
+        SettleDirection::ToOrganizer,
+        "1000",
+        Some(&wallet),
+    );
+    crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted).unwrap();
+    let view = crate::usecases::household::shared_events::reassign_shared(
+        &mut scenario.vault,
+        SharedRemainderInput {
             event_id: scenario.event.clone(),
             participant_id: vasya.clone(),
             amount: None,
             to: Vec::new(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     // 685 over Me, Petya, Anya, Olya: 171.25 each
     let row = |id: &str| view.people.iter().find(|row| row.id == id).unwrap();
     assert_eq!(row(&vasya).share, amount("1500"));
@@ -253,22 +251,24 @@ fn a_settlement_can_be_taken_back_with_its_operation() {
     let mut scenario = skewers_scenario();
     let petya = scenario.person("petya");
     let wallet = scenario.wallet.clone();
-    let view = scenario
-        .vault
-        .settle_shared(settle(
-            &scenario,
-            &petya,
-            SettleDirection::ToOrganizer,
-            "500",
-            Some(&wallet),
-        ))
-        .unwrap();
+    let hoisted = settle(
+        &scenario,
+        &petya,
+        SettleDirection::ToOrganizer,
+        "500",
+        Some(&wallet),
+    );
+    let view =
+        crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted)
+            .unwrap();
     let settlement = view.event.settlements[0].clone();
     let balance = scenario.balance();
-    scenario
-        .vault
-        .delete_shared_settlement(&scenario.event, &settlement.id)
-        .unwrap();
+    crate::usecases::household::shared_events::delete_shared_settlement(
+        &mut scenario.vault,
+        &scenario.event,
+        &settlement.id,
+    )
+    .unwrap();
     assert_eq!(scenario.balance(), balance - amount("500"));
     assert_eq!(
         debt_with(&scenario, &scenario.contact("petya")),
@@ -282,7 +282,11 @@ fn when_someone_else_organizes_one_repay_settles_my_share() {
     let anya = scenario.contact("anya");
     // I owe Anya my 1850: a negative debt of hers
     assert_eq!(debt_with(&scenario, &anya), amount("-1850"));
-    let view = scenario.vault.shared_event_view(&scenario.event).unwrap();
+    let view = crate::household::shared_events::view::shared_event_view(
+        &scenario.vault.doc,
+        &scenario.event,
+    )
+    .unwrap();
     let mine = view.mine.clone().unwrap();
     assert_eq!(mine.i_owe, amount("1850"));
     assert_eq!(
@@ -300,16 +304,16 @@ fn when_someone_else_organizes_one_repay_settles_my_share() {
             .count()
     };
     let before = transfers(&scenario);
-    let view = scenario
-        .vault
-        .settle_shared(settle(
-            &scenario,
-            ME,
-            SettleDirection::ToOrganizer,
-            "1850",
-            Some(&wallet),
-        ))
-        .unwrap();
+    let hoisted = settle(
+        &scenario,
+        ME,
+        SettleDirection::ToOrganizer,
+        "1850",
+        Some(&wallet),
+    );
+    let view =
+        crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted)
+            .unwrap();
     assert_eq!(transfers(&scenario), before + 1);
     let repay = last_transfer(&scenario);
     assert_eq!(repay.debt, Some(DebtEffect::Repay));
@@ -340,7 +344,11 @@ fn a_calculator_for_others_touches_no_wallet_and_no_contact() {
         ],
         ..Default::default()
     };
-    let id = scenario.vault.create_shared_event(draft).unwrap().event.id;
+    let id =
+        crate::usecases::household::shared_events::create_shared_event(&mut scenario.vault, draft)
+            .unwrap()
+            .event
+            .id;
     let cake = |buyer: &str| SharedPurchaseDraft {
         new_item_title: Some("Торт".into()),
         buyer: buyer.into(),
@@ -351,8 +359,20 @@ fn a_calculator_for_others_touches_no_wallet_and_no_contact() {
         ..Default::default()
     };
     // I cannot buy for it, and it creates no debts with my contacts
-    assert!(scenario.vault.add_shared_purchase(&id, cake("")).is_err());
-    let view = scenario.vault.add_shared_purchase(&id, cake("pa")).unwrap();
+    assert!(
+        crate::usecases::household::shared_events::add_shared_purchase(
+            &mut scenario.vault,
+            &id,
+            cake("")
+        )
+        .is_err()
+    );
+    let view = crate::usecases::household::shared_events::add_shared_purchase(
+        &mut scenario.vault,
+        &id,
+        cake("pa"),
+    )
+    .unwrap();
     assert!(view.mine.is_none());
     assert_eq!(
         view.people.iter().find(|row| row.id == "pb").unwrap().saldo,
@@ -368,20 +388,25 @@ fn a_calculator_for_others_touches_no_wallet_and_no_contact() {
         at: None,
     };
     // settling is a set-off only
-    assert!(scenario.vault.settle_shared(money.clone()).is_err());
-    scenario
-        .vault
-        .settle_shared(SettleSharedInput {
+    assert!(
+        crate::usecases::household::shared_events::settle_shared(
+            &mut scenario.vault,
+            money.clone()
+        )
+        .is_err()
+    );
+    crate::usecases::household::shared_events::settle_shared(
+        &mut scenario.vault,
+        SettleSharedInput {
             store_id: None,
             ..money
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(scenario.balance(), balance);
     let petya = scenario.contact("petya");
     assert!(
-        scenario
-            .vault
-            .contact_shared_events(&petya)
+        crate::household::shared_events::view::contact_shared_events(&scenario.vault.doc, &petya)
             .iter()
             .all(|row| row.event_id != id)
     );
@@ -391,31 +416,37 @@ fn a_calculator_for_others_touches_no_wallet_and_no_contact() {
 fn a_term_can_be_set_for_a_contact_debt() {
     let mut scenario = skewers_scenario();
     let petya = scenario.person("petya");
-    let terms = scenario
-        .vault
-        .set_shared_due(SetSharedDueInput {
+    let terms = crate::usecases::household::shared_events::set_shared_due(
+        &mut scenario.vault,
+        SetSharedDueInput {
             event_id: scenario.event.clone(),
             participant_id: petya.clone(),
             due_at: Some("2026-12-01".into()),
-        })
-        .unwrap()
-        .unwrap();
+        },
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(terms.asset, "RUB");
     assert_eq!(terms.due_at.as_deref(), Some("2026-12-01"));
-    let view = scenario.vault.shared_event_view(&scenario.event).unwrap();
+    let view = crate::household::shared_events::view::shared_event_view(
+        &scenario.vault.doc,
+        &scenario.event,
+    )
+    .unwrap();
     let row = view.people.iter().find(|row| row.id == petya).unwrap();
     assert_eq!(row.due_at.as_deref(), Some("2026-12-01"));
     // a guest has no contact to hang a term on
     let olya = scenario.person("olya");
     assert!(
-        scenario
-            .vault
-            .set_shared_due(SetSharedDueInput {
+        crate::usecases::household::shared_events::set_shared_due(
+            &mut scenario.vault,
+            SetSharedDueInput {
                 event_id: scenario.event.clone(),
                 participant_id: olya,
                 due_at: Some("2026-12-01".into()),
-            })
-            .is_err()
+            }
+        )
+        .is_err()
     );
 }
 
@@ -437,7 +468,7 @@ fn five_hundred_events_keep_the_contact_balances_fast() {
         scenario.vault.doc.shared_events.push(copy);
     }
     let started = std::time::Instant::now();
-    let balances = scenario.vault.contact_balances();
+    let balances = crate::usecases::household::contacts::contact_balances(&scenario.vault);
     let elapsed = started.elapsed();
     assert_eq!(balances.len(), 3);
     // 501 events x 1 735 for Petya
@@ -455,12 +486,8 @@ fn five_hundred_events_keep_the_contact_balances_fast() {
 #[test]
 fn the_organizer_cannot_settle_with_themselves() {
     let mut scenario = skewers_scenario();
-    let refused = scenario.vault.settle_shared(settle(
-        &scenario,
-        ME,
-        SettleDirection::ToOrganizer,
-        "10",
-        None,
-    ));
+    let hoisted = settle(&scenario, ME, SettleDirection::ToOrganizer, "10", None);
+    let refused =
+        crate::usecases::household::shared_events::settle_shared(&mut scenario.vault, hoisted);
     assert!(refused.is_err());
 }

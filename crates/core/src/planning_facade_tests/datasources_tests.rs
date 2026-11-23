@@ -36,27 +36,53 @@ fn number(value: &str) -> std::result::Result<Extracted, String> {
 #[test]
 fn three_failures_in_a_row_break_a_source() {
     let (_dir, mut vault) = vault();
-    let id = vault.save_data_source(draft(vec![])).unwrap().source.id;
+    let id = crate::usecases::planning::datasources::save_data_source(&mut vault, draft(vec![]))
+        .unwrap()
+        .source
+        .id;
     for attempt in 1..=2 {
-        let notices = vault
-            .apply_source_fetch(&id, Err("no table".into()), true)
-            .unwrap();
+        let notices = crate::usecases::planning::datasources::apply_source_fetch(
+            &mut vault,
+            &id,
+            Err("no table".into()),
+            true,
+        )
+        .unwrap();
         assert!(notices.is_empty(), "attempt {attempt}");
     }
-    let notices = vault
-        .apply_source_fetch(&id, Err("no table".into()), true)
-        .unwrap();
+    let notices = crate::usecases::planning::datasources::apply_source_fetch(
+        &mut vault,
+        &id,
+        Err("no table".into()),
+        true,
+    )
+    .unwrap();
     assert_eq!(notices.len(), 1);
-    assert_eq!(vault.data_source(&id).unwrap().status, SourceStatus::Broken);
+    assert_eq!(
+        crate::planning::datasources::data_source(&vault.doc, &id)
+            .unwrap()
+            .status,
+        SourceStatus::Broken
+    );
     // A fourth failure does not announce it again; a value repairs it.
     assert!(
-        vault
-            .apply_source_fetch(&id, Err("no table".into()), true)
-            .unwrap()
-            .is_empty()
+        crate::usecases::planning::datasources::apply_source_fetch(
+            &mut vault,
+            &id,
+            Err("no table".into()),
+            true
+        )
+        .unwrap()
+        .is_empty()
     );
-    vault.apply_source_fetch(&id, number("6.35"), true).unwrap();
-    let source = vault.data_source(&id).unwrap();
+    crate::usecases::planning::datasources::apply_source_fetch(
+        &mut vault,
+        &id,
+        number("6.35"),
+        true,
+    )
+    .unwrap();
+    let source = crate::planning::datasources::data_source(&vault.doc, &id).unwrap();
     assert_eq!(source.status, SourceStatus::Ok);
     assert_eq!(source.failures, 0);
     assert_eq!(source.last.as_ref().unwrap().number, Some(amount("6.35")));
@@ -65,11 +91,18 @@ fn three_failures_in_a_row_break_a_source() {
 #[test]
 fn an_out_of_range_fetch_is_recorded_and_not_due() {
     let (_dir, mut vault) = vault();
-    let id = vault.save_data_source(draft(vec![])).unwrap().source.id;
-    vault
-        .apply_source_fetch(&id, Err("number out of range".into()), true)
-        .unwrap();
-    let source = vault.data_source(&id).unwrap();
+    let id = crate::usecases::planning::datasources::save_data_source(&mut vault, draft(vec![]))
+        .unwrap()
+        .source
+        .id;
+    crate::usecases::planning::datasources::apply_source_fetch(
+        &mut vault,
+        &id,
+        Err("number out of range".into()),
+        true,
+    )
+    .unwrap();
+    let source = crate::planning::datasources::data_source(&vault.doc, &id).unwrap();
     assert!(source.checked_at.is_some());
     assert_eq!(source.failures, 1);
     assert!(!is_due(source, chrono::Utc::now()));
@@ -78,31 +111,60 @@ fn an_out_of_range_fetch_is_recorded_and_not_due() {
 #[test]
 fn a_jump_waits_for_confirmation() {
     let (_dir, mut vault) = vault();
-    let id = vault.save_data_source(draft(vec![])).unwrap().source.id;
-    vault.apply_source_fetch(&id, number("6.35"), true).unwrap();
-    let notices = vault.apply_source_fetch(&id, number("635"), true).unwrap();
+    let id = crate::usecases::planning::datasources::save_data_source(&mut vault, draft(vec![]))
+        .unwrap()
+        .source
+        .id;
+    crate::usecases::planning::datasources::apply_source_fetch(
+        &mut vault,
+        &id,
+        number("6.35"),
+        true,
+    )
+    .unwrap();
+    let notices = crate::usecases::planning::datasources::apply_source_fetch(
+        &mut vault,
+        &id,
+        number("635"),
+        true,
+    )
+    .unwrap();
     assert_eq!(notices.len(), 1);
-    let source = vault.data_source(&id).unwrap();
+    let source = crate::planning::datasources::data_source(&vault.doc, &id).unwrap();
     assert_eq!(source.status, SourceStatus::Pending);
     assert_eq!(source.last.as_ref().unwrap().number, Some(amount("6.35")));
-    vault.confirm_source_value(&id, true, true).unwrap();
-    let source = vault.data_source(&id).unwrap();
+    crate::usecases::planning::datasources::confirm_source_value(&mut vault, &id, true, true)
+        .unwrap();
+    let source = crate::planning::datasources::data_source(&vault.doc, &id).unwrap();
     assert_eq!(source.status, SourceStatus::Ok);
     assert_eq!(source.last.as_ref().unwrap().number, Some(amount("635")));
     assert_eq!(source.history.len(), 1);
     // A small move is taken at once.
-    vault.apply_source_fetch(&id, number("640"), true).unwrap();
-    assert_eq!(vault.data_source(&id).unwrap().status, SourceStatus::Ok);
+    crate::usecases::planning::datasources::apply_source_fetch(
+        &mut vault,
+        &id,
+        number("640"),
+        true,
+    )
+    .unwrap();
+    assert_eq!(
+        crate::planning::datasources::data_source(&vault.doc, &id)
+            .unwrap()
+            .status,
+        SourceStatus::Ok
+    );
 }
 
 #[test]
 fn inflation_in_source_mode_reads_the_source() {
     let (_dir, mut vault) = vault();
-    let view = vault
-        .save_data_source(draft(vec![SourceUse::Inflation {
+    let view = crate::usecases::planning::datasources::save_data_source(
+        &mut vault,
+        draft(vec![SourceUse::Inflation {
             currency: "THB".into(),
-        }]))
-        .unwrap();
+        }]),
+    )
+    .unwrap();
     let id = view.source.id;
     assert_eq!(
         view.used_by,
@@ -110,49 +172,63 @@ fn inflation_in_source_mode_reads_the_source() {
             currency: "thb".into()
         }]
     );
-    assert!(vault.inflation_series("thb").is_empty());
-    vault
-        .apply_source_fetch(
-            &id,
-            Ok(Extracted {
-                series: vec![
-                    crate::model::datasource::SeriesPoint {
-                        label: "08.2026".into(),
-                        value: amount("1.10"),
-                    },
-                    crate::model::datasource::SeriesPoint {
-                        label: "09.2026".into(),
-                        value: amount("1.25"),
-                    },
-                ],
-                ..Extracted::default()
-            }),
-            true,
-        )
-        .unwrap();
-    let series = vault.inflation_series("thb");
+    assert!(crate::money::inflation::inflation_series(&vault.doc, "thb").is_empty());
+    crate::usecases::planning::datasources::apply_source_fetch(
+        &mut vault,
+        &id,
+        Ok(Extracted {
+            series: vec![
+                crate::model::datasource::SeriesPoint {
+                    label: "08.2026".into(),
+                    value: amount("1.10"),
+                },
+                crate::model::datasource::SeriesPoint {
+                    label: "09.2026".into(),
+                    value: amount("1.25"),
+                },
+            ],
+            ..Extracted::default()
+        }),
+        true,
+    )
+    .unwrap();
+    let series = crate::money::inflation::inflation_series(&vault.doc, "thb");
     assert_eq!(series.len(), 2);
     assert_eq!(series[1].month, "2026-09");
     assert_eq!(series[1].yoy_pct, amount("1.25"));
-    assert_eq!(vault.inflation_mode("thb"), InflationMode::Source);
+    assert_eq!(
+        crate::money::inflation::inflation_mode(&vault.doc, "thb"),
+        InflationMode::Source
+    );
     // Deleting the source returns the currency to its default mode.
-    vault.delete_data_source(&id).unwrap();
+    crate::usecases::planning::datasources::delete_data_source(&mut vault, &id).unwrap();
     assert!(vault.doc.settings.inflation_source.is_empty());
-    assert_ne!(vault.inflation_mode("thb"), InflationMode::Source);
+    assert_ne!(
+        crate::money::inflation::inflation_mode(&vault.doc, "thb"),
+        InflationMode::Source
+    );
 }
 
 #[test]
 fn a_price_source_writes_custom_points_in_usd() {
     let (_dir, mut vault) = vault();
-    let id = vault
-        .save_data_source(draft(vec![SourceUse::AssetPrice {
+    let id = crate::usecases::planning::datasources::save_data_source(
+        &mut vault,
+        draft(vec![SourceUse::AssetPrice {
             asset_key: "asset:gold".into(),
             currency: "usd".into(),
-        }]))
-        .unwrap()
-        .source
-        .id;
-    vault.apply_source_fetch(&id, number("2400"), true).unwrap();
+        }]),
+    )
+    .unwrap()
+    .source
+    .id;
+    crate::usecases::planning::datasources::apply_source_fetch(
+        &mut vault,
+        &id,
+        number("2400"),
+        true,
+    )
+    .unwrap();
     let point = vault
         .doc
         .price_cache
@@ -168,13 +244,13 @@ fn a_draft_is_checked() {
     let (_dir, mut vault) = vault();
     let mut bad = draft(vec![]);
     bad.url = "ftp://x".into();
-    assert!(vault.save_data_source(bad).is_err());
+    assert!(crate::usecases::planning::datasources::save_data_source(&mut vault, bad).is_err());
     let mut text = draft(vec![SourceUse::AssetPrice {
         asset_key: "asset:gold".into(),
         currency: "usd".into(),
     }]);
     text.output = SourceOutput::Text;
-    assert!(vault.save_data_source(text).is_err());
+    assert!(crate::usecases::planning::datasources::save_data_source(&mut vault, text).is_err());
 }
 
 #[test]
@@ -182,34 +258,43 @@ fn the_list_is_sorted_by_name_and_a_fresh_source_is_due() {
     let (_dir, mut vault) = vault();
     let mut second = draft(vec![]);
     second.name = "Alpha".into();
-    vault.save_data_source(draft(vec![])).unwrap();
-    vault.save_data_source(second).unwrap();
-    let names: Vec<String> = vault
-        .data_sources_list()
+    crate::usecases::planning::datasources::save_data_source(&mut vault, draft(vec![])).unwrap();
+    crate::usecases::planning::datasources::save_data_source(&mut vault, second).unwrap();
+    let names: Vec<String> = crate::usecases::planning::datasources::data_sources_list(&vault.doc)
         .into_iter()
         .map(|view| view.source.name)
         .collect();
     assert_eq!(names, ["Alpha", "ЦБ"]);
     let now = chrono::Utc::now();
-    assert_eq!(vault.due_data_sources(now).len(), 2);
+    assert_eq!(
+        crate::planning::datasources::due_data_sources(&vault.doc, now).len(),
+        2
+    );
     assert_eq!(due_data_sources(&vault.doc, now).len(), 2);
 }
 
 #[test]
 fn a_fetch_records_the_value_and_the_price_it_sets_together() {
     let (_dir, mut vault) = vault();
-    let id = vault
-        .save_data_source(draft(vec![SourceUse::AssetPrice {
+    let id = crate::usecases::planning::datasources::save_data_source(
+        &mut vault,
+        draft(vec![SourceUse::AssetPrice {
             asset_key: "asset:gold".into(),
             currency: "usd".into(),
-        }]))
-        .unwrap()
-        .source
-        .id;
-    vault.apply_source_fetch(&id, number("2400"), true).unwrap();
+        }]),
+    )
+    .unwrap()
+    .source
+    .id;
+    crate::usecases::planning::datasources::apply_source_fetch(
+        &mut vault,
+        &id,
+        number("2400"),
+        true,
+    )
+    .unwrap();
     assert_eq!(
-        vault
-            .data_source(&id)
+        crate::planning::datasources::data_source(&vault.doc, &id)
             .unwrap()
             .last
             .as_ref()
@@ -231,52 +316,70 @@ fn the_source_delegates_equal_the_scenarios() {
     use crate::usecases::planning::datasources as scenario;
     let (_a, mut by_method) = vault();
     let (_b, mut by_scenario) = vault();
-    let method = by_method.save_data_source(draft(vec![])).unwrap().source;
+    let method =
+        crate::usecases::planning::datasources::save_data_source(&mut by_method, draft(vec![]))
+            .unwrap()
+            .source;
     let made = scenario::save_data_source(&mut by_scenario, draft(vec![]))
         .unwrap()
         .source;
     let shape = |source: &DataSource| (source.name.clone(), source.url.clone(), source.status);
     assert_eq!(shape(&method), shape(&made));
-    let method_notices = by_method
-        .apply_source_fetch(&method.id, number("6.35"), true)
-        .unwrap();
+    let method_notices = crate::usecases::planning::datasources::apply_source_fetch(
+        &mut by_method,
+        &method.id,
+        number("6.35"),
+        true,
+    )
+    .unwrap();
     let made_notices =
         scenario::apply_source_fetch(&mut by_scenario, &made.id, number("6.35"), true).unwrap();
     assert_eq!(method_notices, made_notices);
     // A jump waits; confirming it is the same through both doors.
-    by_method
-        .apply_source_fetch(&method.id, number("6350"), true)
-        .unwrap();
+    crate::usecases::planning::datasources::apply_source_fetch(
+        &mut by_method,
+        &method.id,
+        number("6350"),
+        true,
+    )
+    .unwrap();
     scenario::apply_source_fetch(&mut by_scenario, &made.id, number("6350"), true).unwrap();
     assert_eq!(
-        by_method.data_source(&method.id).unwrap().status,
+        crate::planning::datasources::data_source(&by_method.doc, &method.id)
+            .unwrap()
+            .status,
         SourceStatus::Pending
     );
     assert_eq!(
-        by_method
-            .confirm_source_value(&method.id, true, true)
-            .unwrap(),
+        crate::usecases::planning::datasources::confirm_source_value(
+            &mut by_method,
+            &method.id,
+            true,
+            true
+        )
+        .unwrap(),
         scenario::confirm_source_value(&mut by_scenario, &made.id, true, true).unwrap()
     );
     assert_eq!(
-        by_method
-            .data_source(&method.id)
+        crate::planning::datasources::data_source(&by_method.doc, &method.id)
             .unwrap()
             .last
             .as_ref()
             .map(|value| value.number),
-        by_scenario
-            .data_source(&made.id)
+        crate::planning::datasources::data_source(&by_scenario.doc, &made.id)
             .unwrap()
             .last
             .as_ref()
             .map(|value| value.number)
     );
-    by_method.delete_data_source(&method.id).unwrap();
+    crate::usecases::planning::datasources::delete_data_source(&mut by_method, &method.id).unwrap();
     scenario::delete_data_source(&mut by_scenario, &made.id).unwrap();
-    assert!(by_method.data_sources_list().is_empty());
-    assert!(by_scenario.data_sources_list().is_empty());
-    assert!(by_method.delete_data_source(&method.id).is_err());
+    assert!(crate::usecases::planning::datasources::data_sources_list(&by_method.doc).is_empty());
+    assert!(crate::usecases::planning::datasources::data_sources_list(&by_scenario.doc).is_empty());
+    assert!(
+        crate::usecases::planning::datasources::delete_data_source(&mut by_method, &method.id)
+            .is_err()
+    );
     assert!(scenario::delete_data_source(&mut by_scenario, &made.id).is_err());
 }
 

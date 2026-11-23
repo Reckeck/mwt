@@ -49,8 +49,7 @@ fn save(vault: &mut UnlockedVault, name: &str, nodes: Vec<Value>, edges: Vec<Val
         max_amount: None,
         max_amount_currency: None,
     };
-    vault
-        .save_workflow(None, draft, now_secs())
+    crate::usecases::workflow::records::save_workflow(vault, None, draft, now_secs())
         .unwrap()
         .workflow
 }
@@ -78,9 +77,11 @@ fn asked_transfer_capped(
     let (dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Cash, None);
     let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&card, "100", "opening"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "100", "opening"),
+    )
+    .unwrap();
     let workflow = save(
         &mut vault,
         "Ask",
@@ -107,10 +108,14 @@ fn asked_transfer_capped(
                 max_amount: Some(amount(cap)),
                 max_amount_currency: None,
             };
-            vault
-                .save_workflow(Some(&workflow.id), draft, now_secs())
-                .unwrap()
-                .workflow
+            crate::usecases::workflow::records::save_workflow(
+                &mut vault,
+                Some(&workflow.id),
+                draft,
+                now_secs(),
+            )
+            .unwrap()
+            .workflow
         }
     };
     (dir, vault, card, savings, workflow)
@@ -119,13 +124,23 @@ fn asked_transfer_capped(
 #[test]
 fn an_asked_operation_refused_for_lack_of_funds_is_booked_by_a_retry() {
     let (_dir, mut vault, card, savings, workflow) = asked_transfer();
-    vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
-    let wait = vault.workflow_waits().remove(0);
-    let report = vault
-        .answer_workflow_wait(&wait.id, true, later(), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
+    let wait = crate::workflow::service::runs::waits(&vault.doc).remove(0);
+    let report = crate::usecases::workflow::runs::answer_workflow_wait(
+        &mut vault,
+        &wait.id,
+        true,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     let RunOutcome::Rejected { trigger_node, .. } = &report.run.outcome else {
         panic!("expected a refusal, got {:?}", report.run.outcome);
     };
@@ -134,35 +149,44 @@ fn an_asked_operation_refused_for_lack_of_funds_is_booked_by_a_retry() {
         "the refusal names the trigger, not the question"
     );
     // The refused operation waits in the queue, for the run that was refused.
-    let queue = vault.workflow_queue();
+    let queue = crate::workflow::service::runs::queue(&vault.doc);
     assert_eq!(queue.len(), 1);
     assert_eq!(queue[0].run_id, report.run.id);
     assert_eq!(queue[0].transactions.len(), 1);
 
     // Still short: the retry says so and keeps the refusal.
     assert!(
-        vault
-            .retry_workflow_run(&report.run.id, later(), "UTC")
-            .is_err()
+        crate::usecases::workflow::runs::retry_workflow_run(
+            &mut vault,
+            &report.run.id,
+            later(),
+            "UTC"
+        )
+        .is_err()
     );
-    assert_eq!(vault.workflow_queue().len(), 1);
+    assert_eq!(crate::workflow::service::runs::queue(&vault.doc).len(), 1);
 
-    vault
-        .add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
-    let pass = vault
-        .retry_workflow_run(&report.run.id, later(), "UTC")
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
+    let pass = crate::usecases::workflow::runs::retry_workflow_run(
+        &mut vault,
+        &report.run.id,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(pass.created.len(), 1, "{:?}", pass.runs);
     assert_eq!(holding_of(&vault, &savings, &usd()), amount("300"));
-    assert!(vault.workflow_queue().is_empty());
+    assert!(crate::workflow::service::runs::queue(&vault.doc).is_empty());
     assert!(
-        vault.workflow_waits().is_empty(),
+        crate::workflow::service::runs::waits(&vault.doc).is_empty(),
         "the retry did not ask again"
     );
     assert!(
-        vault
-            .workflow_runs(Some(&workflow.id), 10)
+        crate::workflow::service::runs::runs(&vault.doc, Some(&workflow.id), 10)
             .iter()
             .all(|run| run.id != report.run.id),
         "the refusal gives way to the new run"
@@ -172,14 +196,29 @@ fn an_asked_operation_refused_for_lack_of_funds_is_booked_by_a_retry() {
 #[test]
 fn a_refused_retry_is_insufficient_funds_by_variant() {
     let (_dir, mut vault, _card, _savings, workflow) = asked_transfer();
-    vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
-    let wait = vault.workflow_waits().remove(0);
-    let report = vault
-        .answer_workflow_wait(&wait.id, true, later(), "UTC")
-        .unwrap();
-    let refusal = vault.retry_workflow_run(&report.run.id, later(), "UTC");
+    crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
+    let wait = crate::workflow::service::runs::waits(&vault.doc).remove(0);
+    let report = crate::usecases::workflow::runs::answer_workflow_wait(
+        &mut vault,
+        &wait.id,
+        true,
+        later(),
+        "UTC",
+    )
+    .unwrap();
+    let refusal = crate::usecases::workflow::runs::retry_workflow_run(
+        &mut vault,
+        &report.run.id,
+        later(),
+        "UTC",
+    );
     assert!(
         matches!(refusal, Err(crate::Error::InsufficientFunds(_))),
         "{refusal:?}"
@@ -188,34 +227,49 @@ fn a_refused_retry_is_insufficient_funds_by_variant() {
 
 fn refused_asked_transfer() -> (tempfile::TempDir, UnlockedVault, String, String, String) {
     let (dir, mut vault, card, savings, workflow) = asked_transfer();
-    vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
-    let wait = vault.workflow_waits().remove(0);
-    let report = vault
-        .answer_workflow_wait(&wait.id, true, later(), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
+    let wait = crate::workflow::service::runs::waits(&vault.doc).remove(0);
+    let report = crate::usecases::workflow::runs::answer_workflow_wait(
+        &mut vault,
+        &wait.id,
+        true,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(matches!(report.run.outcome, RunOutcome::Rejected { .. }));
-    vault
-        .add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
     (dir, vault, savings, report.run.id, workflow.id)
 }
 
 #[test]
 fn a_confirmed_refusal_closes_its_run_and_a_retry_books_nothing_more() {
     let (_dir, mut vault, savings, run_id, workflow_id) = refused_asked_transfer();
-    let batch = vault.workflow_queue().remove(0);
-    vault.confirm_queued(&batch.id).unwrap();
+    let batch = crate::workflow::service::runs::queue(&vault.doc).remove(0);
+    crate::usecases::workflow::records::confirm_queued(&mut vault, &batch.id).unwrap();
     let booked = vault.doc.transactions.len();
     let holding = holding_of(&vault, &savings, &usd());
-    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    let runs = crate::workflow::service::runs::runs(&vault.doc, Some(&workflow_id), 10);
     assert!(runs.iter().all(|run| run.id != run_id));
     assert!(
         runs.iter()
             .any(|run| matches!(run.outcome, RunOutcome::Done))
     );
-    assert!(vault.retry_workflow_run(&run_id, later(), "UTC").is_err());
+    assert!(
+        crate::usecases::workflow::runs::retry_workflow_run(&mut vault, &run_id, later(), "UTC")
+            .is_err()
+    );
     assert_eq!(vault.doc.transactions.len(), booked);
     assert_eq!(holding_of(&vault, &savings, &usd()), holding);
 }
@@ -224,9 +278,9 @@ fn a_confirmed_refusal_closes_its_run_and_a_retry_books_nothing_more() {
 fn a_confirmed_refusal_keeps_the_started_at_of_the_refused_run() {
     let (_dir, mut vault, _savings, run_id, workflow_id) = refused_asked_transfer();
     let started_at = refused_started_at(&vault, &workflow_id, &run_id);
-    let batch = vault.workflow_queue().remove(0);
-    vault.confirm_queued(&batch.id).unwrap();
-    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    let batch = crate::workflow::service::runs::queue(&vault.doc).remove(0);
+    crate::usecases::workflow::records::confirm_queued(&mut vault, &batch.id).unwrap();
+    let runs = crate::workflow::service::runs::runs(&vault.doc, Some(&workflow_id), 10);
     let done = runs
         .iter()
         .find(|run| matches!(run.outcome, RunOutcome::Done))
@@ -239,10 +293,14 @@ fn a_retried_refusal_keeps_the_started_at_of_the_refused_run() {
     let (_dir, mut vault, _savings, run_id, workflow_id) = refused_asked_transfer();
     let started_at = refused_started_at(&vault, &workflow_id, &run_id);
     // A retry a day later: a fresh stamp would differ from the refusal's.
-    vault
-        .retry_workflow_run(&run_id, later() + 86_400, "UTC")
-        .unwrap();
-    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    crate::usecases::workflow::runs::retry_workflow_run(
+        &mut vault,
+        &run_id,
+        later() + 86_400,
+        "UTC",
+    )
+    .unwrap();
+    let runs = crate::workflow::service::runs::runs(&vault.doc, Some(&workflow_id), 10);
     let done = runs
         .iter()
         .find(|run| matches!(run.outcome, RunOutcome::Done))
@@ -251,8 +309,7 @@ fn a_retried_refusal_keeps_the_started_at_of_the_refused_run() {
 }
 
 fn refused_started_at(vault: &UnlockedVault, workflow_id: &str, run_id: &str) -> String {
-    vault
-        .workflow_runs(Some(workflow_id), 10)
+    crate::workflow::service::runs::runs(&vault.doc, Some(workflow_id), 10)
         .iter()
         .find(|run| run.id == run_id)
         .unwrap()
@@ -263,41 +320,60 @@ fn refused_started_at(vault: &UnlockedVault, workflow_id: &str, run_id: &str) ->
 #[test]
 fn a_discarded_refusal_is_no_longer_retryable() {
     let (_dir, mut vault, savings, run_id, workflow_id) = refused_asked_transfer();
-    let batch = vault.workflow_queue().remove(0);
-    vault.discard_queued(&batch.id).unwrap();
-    let runs = vault.workflow_runs(Some(&workflow_id), 10);
+    let batch = crate::workflow::service::runs::queue(&vault.doc).remove(0);
+    crate::usecases::workflow::records::discard_queued(&mut vault, &batch.id).unwrap();
+    let runs = crate::workflow::service::runs::runs(&vault.doc, Some(&workflow_id), 10);
     let run = runs.iter().find(|run| run.id == run_id).unwrap();
     assert!(matches!(run.outcome, RunOutcome::Dropped { .. }));
-    assert!(vault.retry_workflow_run(&run_id, later(), "UTC").is_err());
+    assert!(
+        crate::usecases::workflow::runs::retry_workflow_run(&mut vault, &run_id, later(), "UTC")
+            .is_err()
+    );
     assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
 }
 
 #[test]
 fn an_asked_transfer_over_the_cap_is_not_queued_and_books_nothing() {
     let (_dir, mut vault, card, savings, workflow) = asked_transfer_capped(Some("100"));
-    vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
-    let wait = vault.workflow_waits().remove(0);
-    let report = vault
-        .answer_workflow_wait(&wait.id, true, later(), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
+    let wait = crate::workflow::service::runs::waits(&vault.doc).remove(0);
+    let report = crate::usecases::workflow::runs::answer_workflow_wait(
+        &mut vault,
+        &wait.id,
+        true,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(&report.run.outcome, RunOutcome::Failed { message } if message.contains("cap")),
         "{:?}",
         report.run.outcome
     );
     assert!(
-        vault.workflow_queue().is_empty(),
+        crate::workflow::service::runs::queue(&vault.doc).is_empty(),
         "over the cap: nothing to retry"
     );
-    vault
-        .add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
     assert!(
-        vault
-            .retry_workflow_run(&report.run.id, later(), "UTC")
-            .is_err()
+        crate::usecases::workflow::runs::retry_workflow_run(
+            &mut vault,
+            &report.run.id,
+            later(),
+            "UTC"
+        )
+        .is_err()
     );
     assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
 }
@@ -307,9 +383,11 @@ fn a_plain_refusal_under_a_cap_ends_rejected_even_without_a_price() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Cash, None);
     let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&card, "100", "opening"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "100", "opening"),
+    )
+    .unwrap();
     let workflow = save(
         &mut vault,
         "Plain",
@@ -332,19 +410,28 @@ fn a_plain_refusal_under_a_cap_ends_rejected_even_without_a_price() {
         max_amount: Some(amount("100")),
         max_amount_currency: None,
     };
-    let workflow = vault
-        .save_workflow(Some(&workflow.id), draft, now_secs())
-        .unwrap()
-        .workflow;
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let workflow = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        Some(&workflow.id),
+        draft,
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(report.run.outcome, RunOutcome::Rejected { .. }),
         "{:?}",
         report.run.outcome
     );
-    assert!(vault.workflow_queue().is_empty());
+    assert!(crate::workflow::service::runs::queue(&vault.doc).is_empty());
 }
 
 // -- C2-5 and the lock --------------------------------------------------------
@@ -454,9 +541,11 @@ fn run_on(host: &mut LockedHost, workflow: &Workflow) -> crate::workflow::RunRep
 fn a_node_that_asks_for_data_gets_it_without_the_lock_held() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Cash, None);
-    vault
-        .add_transaction(income(&card, "100", "opening"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "100", "opening"),
+    )
+    .unwrap();
     let workflow = save(
         &mut vault,
         "Balance",

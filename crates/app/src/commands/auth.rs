@@ -107,7 +107,14 @@ pub async fn create_vault(
             .find(|store| store.kind == trade_core::model::store::StoreKind::Cash)
             .map(|store| store.id.clone())
     {
-        vault.update_store(&cash, name, "#16a34a", "", Default::default())?;
+        trade_core::usecases::money::stores::update_store(
+            &mut vault,
+            &cash,
+            name,
+            "#16a34a",
+            "",
+            Default::default(),
+        )?;
     }
     store_vault(&state, vault)?;
     // The base currency lives in the app config, so push it into the new vault

@@ -17,26 +17,56 @@ fn booked(mut tx: Transaction, category: &str, ts: &str) -> Transaction {
 #[test]
 fn passive_follows_the_defaults_until_the_user_says_otherwise() {
     let (_dir, mut vault) = empty_vault();
-    assert!(vault.is_passive_category("deposit_interest"));
+    assert!(crate::planning::passive::is_passive_category(
+        &vault.doc,
+        "deposit_interest"
+    ));
     assert!(
-        vault.is_passive_category("earn"),
+        crate::planning::passive::is_passive_category(&vault.doc, "earn"),
         "Bybit Earn has no category record"
     );
-    assert!(!vault.is_passive_category("cashback"));
-    assert!(!vault.is_passive_category("salary"));
-    vault
-        .update_category("cashback", None, CategoryGroup::Income, None, Some(true))
-        .unwrap();
-    vault
-        .update_category("dividends", None, CategoryGroup::Income, None, Some(false))
-        .unwrap();
-    assert!(vault.is_passive_category("cashback"));
-    assert!(!vault.is_passive_category("dividends"));
-    vault
-        .update_category("cashback", None, CategoryGroup::Daily, None, None)
-        .unwrap();
+    assert!(!crate::planning::passive::is_passive_category(
+        &vault.doc, "cashback"
+    ));
+    assert!(!crate::planning::passive::is_passive_category(
+        &vault.doc, "salary"
+    ));
+    crate::usecases::household::categories::update_category(
+        &mut vault,
+        "cashback",
+        None,
+        CategoryGroup::Income,
+        None,
+        Some(true),
+    )
+    .unwrap();
+    crate::usecases::household::categories::update_category(
+        &mut vault,
+        "dividends",
+        None,
+        CategoryGroup::Income,
+        None,
+        Some(false),
+    )
+    .unwrap();
+    assert!(crate::planning::passive::is_passive_category(
+        &vault.doc, "cashback"
+    ));
+    assert!(!crate::planning::passive::is_passive_category(
+        &vault.doc,
+        "dividends"
+    ));
+    crate::usecases::household::categories::update_category(
+        &mut vault,
+        "cashback",
+        None,
+        CategoryGroup::Daily,
+        None,
+        None,
+    )
+    .unwrap();
     assert!(
-        !vault.is_passive_category("cashback"),
+        !crate::planning::passive::is_passive_category(&vault.doc, "cashback"),
         "only income can be passive"
     );
 }
@@ -59,7 +89,7 @@ fn old_vaults_get_the_new_categories_once() {
     vault.doc.settings.categories_rev = 0;
     let before = vault.doc.categories.len();
 
-    assert!(vault.ensure_default_categories());
+    assert!(crate::usecases::planning::passive::ensure_default_categories(&mut vault));
     assert_eq!(vault.doc.categories.len(), before + 3);
     let dividends = vault
         .doc
@@ -70,14 +100,14 @@ fn old_vaults_get_the_new_categories_once() {
     assert_eq!(dividends.name.as_deref(), Some("Дивы"));
     assert!(dividends.archived);
     assert!(
-        !vault.ensure_default_categories(),
+        !crate::usecases::planning::passive::ensure_default_categories(&mut vault),
         "a second open adds nothing"
     );
     assert_eq!(vault.doc.categories.len(), before + 3);
 
     // Deleted after its batch arrived: stays deleted.
-    vault.delete_category("coupons").unwrap();
-    assert!(!vault.ensure_default_categories());
+    crate::usecases::household::categories::delete_category(&mut vault, "coupons").unwrap();
+    assert!(!crate::usecases::planning::passive::ensure_default_categories(&mut vault));
     assert!(
         !vault
             .doc
@@ -89,11 +119,11 @@ fn old_vaults_get_the_new_categories_once() {
     // Both as a vault from before the batch has them: missing, with no
     // tombstone, so `taxi` is held back by the batch and not by the
     // tombstone check (that case is in `stale_base_tests`).
-    vault.delete_category("taxi").unwrap();
+    crate::usecases::household::categories::delete_category(&mut vault, "taxi").unwrap();
     vault.doc.sync.tombstones.remove("categories:coupons");
     vault.doc.sync.tombstones.remove("categories:taxi");
     vault.doc.settings.categories_rev = 0;
-    assert!(vault.ensure_default_categories());
+    assert!(crate::usecases::planning::passive::ensure_default_categories(&mut vault));
     assert!(
         vault
             .doc
@@ -124,39 +154,53 @@ fn passive_income_and_the_freedom_index() {
     // Three finished months of mandatory spending: 1000 a month.
     for month in ["2026-07", "2026-08", "2026-09"] {
         let salary = income(&bank, "5000", "salary");
-        vault
-            .add_transaction(booked(salary, "salary", &format!("{month}-01T10:00:00Z")))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            booked(salary, "salary", &format!("{month}-01T10:00:00Z")),
+        )
+        .unwrap();
         let rent = payment(&bank, "1000", "rent");
-        vault
-            .add_transaction(booked(rent, "utilities", &format!("{month}-05T10:00:00Z")))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            booked(rent, "utilities", &format!("{month}-05T10:00:00Z")),
+        )
+        .unwrap();
     }
     let interest = income(&bank, "60", "deposit_interest");
-    vault
-        .add_transaction(booked(interest, "deposit_interest", "2026-08-10T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        booked(interest, "deposit_interest", "2026-08-10T10:00:00Z"),
+    )
+    .unwrap();
     let dividend = income(&broker, "60", "dividends");
-    vault
-        .add_transaction(booked(dividend, "dividends", "2026-09-10T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        booked(dividend, "dividends", "2026-09-10T10:00:00Z"),
+    )
+    .unwrap();
     let early = income(&bank, "999", "deposit_interest");
-    vault
-        .add_transaction(booked(early, "deposit_interest", "2025-09-30T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        booked(early, "deposit_interest", "2025-09-30T10:00:00Z"),
+    )
+    .unwrap();
     let current = income(&bank, "7", "staking");
-    vault
-        .add_transaction(booked(current, "staking", "2026-10-02T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        booked(current, "staking", "2026-10-02T10:00:00Z"),
+    )
+    .unwrap();
     let cashback = income(&bank, "50", "cashback");
-    vault
-        .add_transaction(booked(cashback, "cashback", "2026-09-12T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        booked(cashback, "cashback", "2026-09-12T10:00:00Z"),
+    )
+    .unwrap();
 
     let now = unix_secs("2026-10-15T12:00:00Z").unwrap();
-    let report = vault
-        .passive_income(now, "UTC", Some(amount("12")))
-        .unwrap();
+    let report =
+        crate::planning::passive::passive_income(&vault.books(), now, "UTC", Some(amount("12")))
+            .unwrap();
     assert_eq!(report.months.len(), 12);
     assert_eq!(report.months[0].month, "2025-10");
     assert_eq!(report.months[11].month, "2026-09");
@@ -180,9 +224,9 @@ fn passive_income_and_the_freedom_index() {
         },
         ..EmergencyFund::default()
     };
-    let report = vault
-        .passive_income(now, "UTC", Some(amount("12")))
-        .unwrap();
+    let report =
+        crate::planning::passive::passive_income(&vault.books(), now, "UTC", Some(amount("12")))
+            .unwrap();
     assert_eq!(report.invested, Amount::ZERO);
     assert_eq!(report.total_12m, amount("120"), "its income still counts");
 }

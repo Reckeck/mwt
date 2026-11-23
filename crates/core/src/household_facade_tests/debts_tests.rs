@@ -43,20 +43,20 @@ fn a_card_with_a_debt_is_costly_whatever_its_rate() {
 }
 
 fn loan(vault: &mut UnlockedVault, name: &str, terms: LiabilityTerms) -> String {
-    vault
-        .create_store_with(
-            name,
-            StoreKind::Liability,
-            "",
-            "",
-            None,
-            StoreExtras {
-                liability: Some(terms),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id
+    crate::usecases::money::stores::create_store_with(
+        vault,
+        name,
+        StoreKind::Liability,
+        "",
+        "",
+        None,
+        StoreExtras {
+            liability: Some(terms),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id
 }
 
 fn terms(kind: LiabilityKind, rate: Option<&str>, payment: Option<&str>) -> LiabilityTerms {
@@ -110,27 +110,35 @@ fn dti_takes_terms_or_recent_repayments_against_income() {
             stamp,
         )
     };
-    vault
-        .add_transaction(draw(&mortgage, "10000", "2026-05-02T10:00:00Z"))
-        .unwrap();
-    vault
-        .add_transaction(draw(&card, "900", "2026-05-02T10:00:00Z"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        draw(&mortgage, "10000", "2026-05-02T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        draw(&card, "900", "2026-05-02T10:00:00Z"),
+    )
+    .unwrap();
     for month in ["06", "07", "08"] {
         let mut salary = income(&bank, "2000", "salary");
         salary.meta_mut().categories = vec!["salary".into()];
-        vault
-            .add_transaction(dated(salary, &format!("2026-{month}-05T10:00:00Z")))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            dated(salary, &format!("2026-{month}-05T10:00:00Z")),
+        )
+        .unwrap();
         let repay = transfer_between(
             AccountRef::Store(bank.clone()),
             AccountRef::Store(card.clone()),
             usd(),
             "100",
         );
-        vault
-            .add_transaction(dated(repay, &format!("2026-{month}-20T10:00:00Z")))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            dated(repay, &format!("2026-{month}-20T10:00:00Z")),
+        )
+        .unwrap();
     }
 
     let now = unix("2026-09-10T10:00:00Z");

@@ -19,13 +19,17 @@ fn asset_holdings_join_the_same_ticker_across_wallets() {
     let hot = store(&mut vault, "Hot", StoreKind::Crypto, None);
     let tether = AssetRef::crypto("USDT", "Tether", Some("tether"), Chain::Ethereum);
     let bare = AssetRef::crypto("USDT", "Tether", None, Chain::Ethereum);
-    vault
-        .add_transaction(income_of(&cold, tether.clone(), "100", "1", "in"))
-        .unwrap();
-    vault
-        .add_transaction(income_of(&hot, bare, "50", "1", "in"))
-        .unwrap();
-    let held = vault.asset_holdings(&tether);
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&cold, tether.clone(), "100", "1", "in"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&hot, bare, "50", "1", "in"),
+    )
+    .unwrap();
+    let held = crate::money::asset_holdings::asset_holdings(&vault.books(), &tether);
     assert_eq!(held.rows.len(), 2);
     assert_eq!(held.total_quantity, amount("150"));
     assert_eq!(held.rows[0].store_name, "Cold");
@@ -40,13 +44,17 @@ fn asset_holdings_keep_other_chains_apart() {
         "0xdac17f958d2ee523a2206206994597c13d831ec7",
     );
     let trc = usdt_on(Chain::Tron, "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t");
-    vault
-        .add_transaction(income_of(&cold, erc.clone(), "10", "1", "in"))
-        .unwrap();
-    vault
-        .add_transaction(income_of(&cold, trc, "20", "1", "in"))
-        .unwrap();
-    let held = vault.asset_holdings(&erc);
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&cold, erc.clone(), "10", "1", "in"),
+    )
+    .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&cold, trc, "20", "1", "in"),
+    )
+    .unwrap();
+    let held = crate::money::asset_holdings::asset_holdings(&vault.books(), &erc);
     assert_eq!(held.rows.len(), 1);
     assert_eq!(held.total_quantity, amount("10"));
 }
@@ -67,8 +75,8 @@ fn asset_holdings_flag_peg_valued_stablecoins() {
     if let Transaction::Topup(inner) = &mut topup {
         inner.price = PriceStamp::default();
     }
-    vault.add_transaction(topup).unwrap();
-    let held = vault.asset_holdings(&tether);
+    crate::usecases::money::transactions::add_transaction(&mut vault, topup).unwrap();
+    let held = crate::money::asset_holdings::asset_holdings(&vault.books(), &tether);
     assert!(held.rows[0].peg_valued);
     assert_eq!(held.rows[0].value_base, amount("5"));
 }

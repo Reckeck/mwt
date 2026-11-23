@@ -15,33 +15,32 @@ fn day(raw: &str) -> NaiveDate {
 }
 
 fn car(vault: &mut UnlockedVault, category: PropertyCategory) -> String {
-    vault
-        .create_store_with(
-            "Октавия",
-            StoreKind::Property,
-            "#555",
-            "",
-            None,
-            StoreExtras {
-                property: Some(PropertyInfo {
-                    category,
-                    car: Some(CarInfo {
-                        service_interval_months: Some(12),
-                        service_interval_km: Some(15_000),
-                        ..CarInfo::default()
-                    }),
-                    ..PropertyInfo::default()
+    crate::usecases::money::stores::create_store_with(
+        vault,
+        "Октавия",
+        StoreKind::Property,
+        "#555",
+        "",
+        None,
+        StoreExtras {
+            property: Some(PropertyInfo {
+                category,
+                car: Some(CarInfo {
+                    service_interval_months: Some(12),
+                    service_interval_km: Some(15_000),
+                    ..CarInfo::default()
                 }),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id
+                ..PropertyInfo::default()
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id
 }
 
 fn info(vault: &UnlockedVault, id: &str) -> CarInfo {
-    vault
-        .find_store(id)
+    crate::money::tree::find_store(&vault.doc, id)
         .unwrap()
         .property
         .clone()
@@ -54,9 +53,13 @@ fn info(vault: &UnlockedVault, id: &str) -> CarInfo {
 fn mileage_is_read_with_its_date() {
     let (_dir, mut vault) = empty_vault();
     let id = car(&mut vault, PropertyCategory::Car);
-    vault
-        .vehicle_update_mileage(&id, 42_000, day("2026-03-10"))
-        .unwrap();
+    crate::usecases::household::vehicle::vehicle_update_mileage(
+        &mut vault,
+        &StoreId::from(&id),
+        42_000,
+        day("2026-03-10"),
+    )
+    .unwrap();
     let read = info(&vault, &id);
     assert_eq!(read.mileage_km, Some(42_000));
     assert_eq!(read.mileage_at.as_deref(), Some("2026-03-10"));
@@ -66,9 +69,13 @@ fn mileage_is_read_with_its_date() {
 fn service_done_moves_the_next_one_by_the_intervals() {
     let (_dir, mut vault) = empty_vault();
     let id = car(&mut vault, PropertyCategory::Car);
-    vault
-        .vehicle_service_done(&id, day("2026-01-31"), Some(45_000))
-        .unwrap();
+    crate::usecases::household::vehicle::vehicle_service_done(
+        &mut vault,
+        &StoreId::from(&id),
+        day("2026-01-31"),
+        Some(45_000),
+    )
+    .unwrap();
     let done = info(&vault, &id);
     assert_eq!(done.service_due_at.as_deref(), Some("2027-01-31"));
     assert_eq!(done.service_due_km, Some(60_000));
@@ -81,13 +88,22 @@ fn only_a_car_has_a_mileage() {
     let (_dir, mut vault) = empty_vault();
     let home = car(&mut vault, PropertyCategory::Flat);
     assert!(matches!(
-        vault.vehicle_update_mileage(&home, 1, day("2026-03-10")),
+        crate::usecases::household::vehicle::vehicle_update_mileage(
+            &mut vault,
+            &StoreId::from(&home),
+            1,
+            day("2026-03-10")
+        ),
         Err(Error::InvalidInput(_))
     ));
     assert!(
-        vault
-            .vehicle_update_mileage("nope", 1, day("2026-03-10"))
-            .is_err()
+        crate::usecases::household::vehicle::vehicle_update_mileage(
+            &mut vault,
+            &StoreId::from("nope"),
+            1,
+            day("2026-03-10")
+        )
+        .is_err()
     );
 }
 
@@ -157,16 +173,24 @@ fn the_delegates_equal_the_scenarios() {
     let first = car(&mut delegated, PropertyCategory::Car);
     let second = car(&mut direct, PropertyCategory::Car);
     let today = day("2026-03-10");
-    let by_delegate = delegated
-        .vehicle_update_mileage(&first, 42_000, today)
-        .unwrap();
+    let by_delegate = crate::usecases::household::vehicle::vehicle_update_mileage(
+        &mut delegated,
+        &StoreId::from(&first),
+        42_000,
+        today,
+    )
+    .unwrap();
     let by_scenario =
         scenarios::vehicle_update_mileage(&mut direct, &StoreId::from(&second), 42_000, today)
             .unwrap();
     assert_eq!(by_delegate.property, by_scenario.property);
-    let by_delegate = delegated
-        .vehicle_service_done(&first, today, Some(45_000))
-        .unwrap();
+    let by_delegate = crate::usecases::household::vehicle::vehicle_service_done(
+        &mut delegated,
+        &StoreId::from(&first),
+        today,
+        Some(45_000),
+    )
+    .unwrap();
     let by_scenario =
         scenarios::vehicle_service_done(&mut direct, &StoreId::from(&second), today, Some(45_000))
             .unwrap();

@@ -30,9 +30,11 @@ fn store_with(
             source: "test".into(),
             change_24h_pct: None,
         });
-        vault
-            .add_transaction(income_of(&id, asset, quantity, "1", "seed"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            vault,
+            income_of(&id, asset, quantity, "1", "seed"),
+        )
+        .unwrap();
     }
     id
 }
@@ -49,7 +51,7 @@ fn class(id: &str, pct: u32, cap: bool) -> AssetClass {
 #[test]
 fn preset_until_saved() {
     let (_dir, vault) = vault();
-    let view = vault.asset_classes();
+    let view = crate::planning::allocation::asset_classes(&vault.doc);
     assert!(view.preset);
     let ids: Vec<&str> = view.classes.iter().map(|class| class.id.as_str()).collect();
     assert_eq!(ids, [PRESET_LOCAL, PRESET_GLOBAL, PRESET_RISKY]);
@@ -60,17 +62,23 @@ fn preset_until_saved() {
 #[test]
 fn shares_must_add_up_to_hundred() {
     let (_dir, mut vault) = vault();
-    let err = vault
-        .set_asset_classes(vec![class("one", 60, false), class("two", 30, false)])
-        .unwrap_err();
+    let err = crate::usecases::planning::allocation::set_asset_classes(
+        &mut vault,
+        vec![class("one", 60, false), class("two", 30, false)],
+    )
+    .unwrap_err();
     assert!(matches!(err, Error::InvalidInput(_)), "{err:?}");
-    let err = vault
-        .set_asset_classes(vec![class("one", 50, false), class("one", 50, false)])
-        .unwrap_err();
+    let err = crate::usecases::planning::allocation::set_asset_classes(
+        &mut vault,
+        vec![class("one", 50, false), class("one", 50, false)],
+    )
+    .unwrap_err();
     assert!(matches!(err, Error::AlreadyExists(_)), "{err:?}");
-    let saved = vault
-        .set_asset_classes(vec![class("", 70, false), class("two", 30, true)])
-        .unwrap();
+    let saved = crate::usecases::planning::allocation::set_asset_classes(
+        &mut vault,
+        vec![class("", 70, false), class("two", 30, true)],
+    )
+    .unwrap();
     assert!(!saved.preset);
     assert!(!saved.classes[0].id.is_empty(), "a new basket gets an id");
 }
@@ -79,28 +87,35 @@ fn shares_must_add_up_to_hundred() {
 fn removing_a_basket_drops_its_assignments() {
     let (_dir, mut vault) = vault();
     let store = store_with(&mut vault, "Broker", StoreKind::Exchange, &[("USD", "100")]);
-    vault
-        .assign_asset_class(
-            AssetClassTarget::Store {
-                store_id: store.clone(),
-            },
-            Some(PRESET_GLOBAL.into()),
-        )
-        .unwrap();
+    crate::usecases::planning::allocation::assign_asset_class(
+        &mut vault,
+        AssetClassTarget::Store {
+            store_id: store.clone(),
+        },
+        Some(PRESET_GLOBAL.into()),
+    )
+    .unwrap();
     assert_eq!(vault.doc.asset_classes.len(), 3, "the preset got saved");
-    vault
-        .assign_asset_class(
-            AssetClassTarget::Asset {
-                asset_key: "fiat:usd".into(),
-            },
-            Some(PRESET_RISKY.into()),
-        )
-        .unwrap();
-    vault
-        .set_asset_classes(vec![class(PRESET_LOCAL, 100, false)])
-        .unwrap();
+    crate::usecases::planning::allocation::assign_asset_class(
+        &mut vault,
+        AssetClassTarget::Asset {
+            asset_key: "fiat:usd".into(),
+        },
+        Some(PRESET_RISKY.into()),
+    )
+    .unwrap();
+    crate::usecases::planning::allocation::set_asset_classes(
+        &mut vault,
+        vec![class(PRESET_LOCAL, 100, false)],
+    )
+    .unwrap();
     assert!(vault.doc.asset_class_of.is_empty());
-    assert_eq!(vault.find_store(&store).unwrap().asset_class, None);
+    assert_eq!(
+        crate::money::tree::find_store(&vault.doc, &store)
+            .unwrap()
+            .asset_class,
+        None
+    );
 }
 
 #[test]
@@ -112,22 +127,22 @@ fn asset_basket_beats_store_basket() {
         StoreKind::Exchange,
         &[("USD", "100"), ("EUR", "50")],
     );
-    vault
-        .assign_asset_class(
-            AssetClassTarget::Store { store_id: store },
-            Some(PRESET_GLOBAL.into()),
-        )
-        .unwrap();
-    vault
-        .assign_asset_class(
-            AssetClassTarget::Asset {
-                asset_key: "fiat:usd".into(),
-            },
-            Some(PRESET_LOCAL.into()),
-        )
-        .unwrap();
+    crate::usecases::planning::allocation::assign_asset_class(
+        &mut vault,
+        AssetClassTarget::Store { store_id: store },
+        Some(PRESET_GLOBAL.into()),
+    )
+    .unwrap();
+    crate::usecases::planning::allocation::assign_asset_class(
+        &mut vault,
+        AssetClassTarget::Asset {
+            asset_key: "fiat:usd".into(),
+        },
+        Some(PRESET_LOCAL.into()),
+    )
+    .unwrap();
     assert_eq!(vault.doc.holdings.len(), 2);
-    let resolve = vault.slot_resolver();
+    let resolve = crate::planning::allocation::slot_resolver(&vault.doc);
     for holding in &vault.doc.holdings {
         let expected = if holding.asset.key() == "fiat:usd" {
             PRESET_LOCAL
@@ -142,7 +157,8 @@ fn asset_basket_beats_store_basket() {
 fn unassigned_holdings_have_no_basket() {
     let (_dir, mut vault) = vault();
     store_with(&mut vault, "Bank", StoreKind::Bank, &[("USD", "100")]);
-    let advice = vault.topup_advice(Some(amount("10")), 0, "UTC");
+    let advice =
+        crate::planning::allocation::topup_advice(&vault.books(), Some(amount("10")), 0, "UTC");
     assert_eq!(advice.unclassified, amount("100"));
     assert!(advice.rows.iter().all(|row| row.value.is_zero()));
 }
@@ -159,23 +175,26 @@ fn fund_accounts_stay_outside() {
     {
         store.purpose = Purpose::Savings;
     }
-    vault
-        .set_emergency_fund(crate::model::planning::EmergencyFund {
+    crate::usecases::planning::emergency::set_emergency_fund(
+        &mut vault,
+        crate::model::planning::EmergencyFund {
             scope: StoreScope {
                 store_ids: vec![reserve.clone()],
                 include_children: false,
             },
             ..Default::default()
-        })
-        .unwrap();
-    let err = vault
-        .assign_asset_class(
-            AssetClassTarget::Store { store_id: reserve },
-            Some(PRESET_LOCAL.into()),
-        )
-        .unwrap_err();
+        },
+    )
+    .unwrap();
+    let err = crate::usecases::planning::allocation::assign_asset_class(
+        &mut vault,
+        AssetClassTarget::Store { store_id: reserve },
+        Some(PRESET_LOCAL.into()),
+    )
+    .unwrap_err();
     assert!(matches!(err, Error::InvalidInput(_)), "{err:?}");
-    let advice = vault.topup_advice(Some(amount("10")), 0, "UTC");
+    let advice =
+        crate::planning::allocation::topup_advice(&vault.books(), Some(amount("10")), 0, "UTC");
     assert_eq!(advice.emergency, amount("300"));
     assert!(advice.unclassified.is_zero());
 }
@@ -194,14 +213,15 @@ fn net_worth_splits_financial_by_basket() {
     {
         store.purpose = Purpose::Savings;
     }
-    vault.emergency_fund_toggle(&reserve, true).unwrap();
-    vault
-        .assign_asset_class(
-            AssetClassTarget::Store { store_id: broker },
-            Some(PRESET_GLOBAL.into()),
-        )
+    crate::usecases::planning::emergency::emergency_fund_toggle(&mut vault, &reserve, true)
         .unwrap();
-    let worth = vault.net_worth();
+    crate::usecases::planning::allocation::assign_asset_class(
+        &mut vault,
+        AssetClassTarget::Store { store_id: broker },
+        Some(PRESET_GLOBAL.into()),
+    )
+    .unwrap();
+    let worth = crate::usecases::money::capital::net_worth(&vault.books());
     assert_eq!(worth.financial, amount("150"));
     assert_eq!(worth.financial_fund, amount("50"));
     assert_eq!(
@@ -257,7 +277,7 @@ fn empty_portfolio_follows_the_targets() {
 #[test]
 fn advice_defaults_to_last_month_savings() {
     let (_dir, vault) = vault();
-    let advice = vault.topup_advice(None, 0, "UTC");
+    let advice = crate::planning::allocation::topup_advice(&vault.books(), None, 0, "UTC");
     assert!(advice.from_savings);
     assert_eq!(advice.savings_month.as_deref(), Some("1969-12"));
     assert!(advice.amount.is_zero());
@@ -312,11 +332,14 @@ fn basket(id: &str, pct: u32) -> AssetClass {
 #[test]
 fn dropping_a_basket_leaves_a_tombstone() {
     let (_dir, mut vault) = vault();
-    vault
-        .set_asset_classes(vec![basket("keep", 50), basket("drop", 50)])
-        .unwrap();
+    crate::usecases::planning::allocation::set_asset_classes(
+        &mut vault,
+        vec![basket("keep", 50), basket("drop", 50)],
+    )
+    .unwrap();
     super::goals_tests::flush(&mut vault);
-    vault.set_asset_classes(vec![basket("keep", 100)]).unwrap();
+    crate::usecases::planning::allocation::set_asset_classes(&mut vault, vec![basket("keep", 100)])
+        .unwrap();
     super::goals_tests::flush(&mut vault);
     assert!(super::goals_tests::has_key(
         vault.doc.sync.tombstones.keys(),
@@ -333,21 +356,24 @@ fn dropping_a_basket_leaves_a_tombstone() {
 fn an_empty_list_brings_the_preset_back() {
     let (_dir, mut vault) = vault();
     let store = store_with(&mut vault, "Broker", StoreKind::Exchange, &[("USD", "100")]);
-    vault
-        .assign_asset_class(
-            AssetClassTarget::Store { store_id: store },
-            Some(PRESET_GLOBAL.into()),
-        )
-        .unwrap();
+    crate::usecases::planning::allocation::assign_asset_class(
+        &mut vault,
+        AssetClassTarget::Store { store_id: store },
+        Some(PRESET_GLOBAL.into()),
+    )
+    .unwrap();
     assert_eq!(vault.doc.asset_classes.len(), 3, "the preset got saved");
-    vault
-        .set_asset_classes(vec![
+    crate::usecases::planning::allocation::set_asset_classes(
+        &mut vault,
+        vec![
             class(PRESET_LOCAL, 50, false),
             class(PRESET_GLOBAL, 30, false),
             class(PRESET_RISKY, 20, true),
-        ])
-        .unwrap();
-    let view = vault.set_asset_classes(Vec::new()).unwrap();
+        ],
+    )
+    .unwrap();
+    let view =
+        crate::usecases::planning::allocation::set_asset_classes(&mut vault, Vec::new()).unwrap();
     assert!(vault.doc.asset_classes.is_empty());
     assert!(view.preset);
 }
@@ -357,9 +383,11 @@ fn the_allocation_delegates_equal_the_scenarios() {
     use crate::usecases::planning::allocation as scenario;
     let (_a, mut by_method) = vault();
     let (_b, mut by_scenario) = vault();
-    let first = by_method
-        .set_asset_classes(vec![basket("b", 40), basket("a", 60)])
-        .unwrap();
+    let first = crate::usecases::planning::allocation::set_asset_classes(
+        &mut by_method,
+        vec![basket("b", 40), basket("a", 60)],
+    )
+    .unwrap();
     let second =
         scenario::set_asset_classes(&mut by_scenario, vec![basket("b", 40), basket("a", 60)])
             .unwrap();
@@ -367,9 +395,12 @@ fn the_allocation_delegates_equal_the_scenarios() {
     let target = || AssetClassTarget::Asset {
         asset_key: "fiat:usd".into(),
     };
-    let first = by_method
-        .assign_asset_class(target(), Some("a".into()))
-        .unwrap();
+    let first = crate::usecases::planning::allocation::assign_asset_class(
+        &mut by_method,
+        target(),
+        Some("a".into()),
+    )
+    .unwrap();
     let second =
         scenario::assign_asset_class(&mut by_scenario, target(), Some("a".into())).unwrap();
     assert_eq!(first, second);

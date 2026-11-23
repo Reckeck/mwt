@@ -2,6 +2,7 @@
 
 use crate::model::category::CategoryGroup;
 use crate::model::deposit::{Capitalization, DepositTerms, RatePeriod};
+use crate::model::ids::StoreId;
 use crate::model::planning::EmergencyFund;
 use crate::model::store::{Binding, Purpose, StoreKind, StoreScope, SubType};
 use crate::model::transaction::{AccountRef, Transaction};
@@ -18,10 +19,17 @@ fn savings(vault: &mut UnlockedVault, name: &str) -> String {
         binding: Some(Binding::Asset(usd())),
         ..StoreExtras::default()
     };
-    vault
-        .create_store_with(name, StoreKind::Bank, "#000", "", Some(bank), extras)
-        .unwrap()
-        .id
+    crate::usecases::money::stores::create_store_with(
+        vault,
+        name,
+        StoreKind::Bank,
+        "#000",
+        "",
+        Some(bank),
+        extras,
+    )
+    .unwrap()
+    .id
 }
 
 fn dated(mut tx: Transaction, ts: &str) -> Transaction {
@@ -62,35 +70,47 @@ fn essential_follows_the_defaults_until_the_user_says_otherwise() {
     assert!(find(&vault, "utilities").is_essential());
     assert!(!find(&vault, "salary").is_essential());
 
-    vault
-        .update_category("groceries", None, CategoryGroup::Daily, Some(false), None)
-        .unwrap();
-    vault
-        .update_category(
-            "entertainment",
-            None,
-            CategoryGroup::Daily,
-            Some(true),
-            None,
-        )
-        .unwrap();
+    crate::usecases::household::categories::update_category(
+        &mut vault,
+        "groceries",
+        None,
+        CategoryGroup::Daily,
+        Some(false),
+        None,
+    )
+    .unwrap();
+    crate::usecases::household::categories::update_category(
+        &mut vault,
+        "entertainment",
+        None,
+        CategoryGroup::Daily,
+        Some(true),
+        None,
+    )
+    .unwrap();
     assert!(!find(&vault, "groceries").is_essential());
     assert!(find(&vault, "entertainment").is_essential());
     // a rename without the flag keeps the choice
-    vault
-        .update_category(
-            "entertainment",
-            Some("Fun"),
-            CategoryGroup::Daily,
-            None,
-            None,
-        )
-        .unwrap();
+    crate::usecases::household::categories::update_category(
+        &mut vault,
+        "entertainment",
+        Some("Fun"),
+        CategoryGroup::Daily,
+        None,
+        None,
+    )
+    .unwrap();
     assert!(find(&vault, "entertainment").is_essential());
     // a mandatory category is mandatory whatever the flag says
-    vault
-        .update_category("utilities", None, CategoryGroup::Fixed, Some(false), None)
-        .unwrap();
+    crate::usecases::household::categories::update_category(
+        &mut vault,
+        "utilities",
+        None,
+        CategoryGroup::Fixed,
+        Some(false),
+        None,
+    )
+    .unwrap();
     assert!(find(&vault, "utilities").is_essential());
 }
 
@@ -107,18 +127,21 @@ fn mandatory_spending_is_fixed_plus_essential_everyday() {
             ("300", "groceries"),
             ("200", "entertainment"),
         ] {
-            vault
-                .add_transaction(spend(&card, raw, category, &ts))
-                .unwrap();
+            crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                spend(&card, raw, category, &ts),
+            )
+            .unwrap();
         }
     }
-    let summary = vault.month_summary("2026-01", "UTC").unwrap();
+    let summary =
+        crate::usecases::planning::budget::month_summary(&vault.books(), "2026-01", "UTC").unwrap();
     assert_eq!(summary.fixed, amount("500"));
     assert_eq!(summary.daily, amount("500"));
     assert_eq!(summary.essential_daily, amount("300"));
 
     let now = unix_secs("2026-03-05T10:00:00Z").unwrap();
-    let avg = vault.avg_month(6, now, "UTC").unwrap();
+    let avg = crate::planning::budget::avg_month(&vault.books(), 6, now, "UTC").unwrap();
     assert_eq!(avg.essential, amount("800"));
 }
 
@@ -127,20 +150,28 @@ fn the_fund_takes_only_live_savings_accounts() {
     let (_dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     let reserve = savings(&mut vault, "Reserve");
-    assert!(vault.set_emergency_fund(fund_of(&[&card])).is_err());
+    assert!(
+        crate::usecases::planning::emergency::set_emergency_fund(&mut vault, fund_of(&[&card]))
+            .is_err()
+    );
     let mut long = fund_of(&[&reserve]);
     long.target_months = 25;
-    assert!(vault.set_emergency_fund(long).is_err());
+    assert!(crate::usecases::planning::emergency::set_emergency_fund(&mut vault, long).is_err());
     let mut zero = fund_of(&[&reserve]);
     zero.avg_months = 0;
-    assert!(vault.set_emergency_fund(zero).is_err());
+    assert!(crate::usecases::planning::emergency::set_emergency_fund(&mut vault, zero).is_err());
 
-    let saved = vault
-        .set_emergency_fund(fund_of(&[&reserve, &reserve]))
-        .unwrap();
+    let saved = crate::usecases::planning::emergency::set_emergency_fund(
+        &mut vault,
+        fund_of(&[&reserve, &reserve]),
+    )
+    .unwrap();
     assert_eq!(saved.scope.store_ids, vec![reserve.clone()]);
     assert!(!saved.scope.include_children);
-    assert!(vault.emergency_fund_toggle(&card, true).is_err());
+    assert!(
+        crate::usecases::planning::emergency::emergency_fund_toggle(&mut vault, &card, true)
+            .is_err()
+    );
 }
 
 #[test]
@@ -148,15 +179,19 @@ fn switching_off_the_last_account_leaves_no_fund() {
     let (_dir, mut vault) = empty_vault();
     let first = savings(&mut vault, "First");
     let second = savings(&mut vault, "Second");
-    vault.emergency_fund_toggle(&first, true).unwrap();
-    let both = vault.emergency_fund_toggle(&second, true).unwrap();
+    crate::usecases::planning::emergency::emergency_fund_toggle(&mut vault, &first, true).unwrap();
+    let both =
+        crate::usecases::planning::emergency::emergency_fund_toggle(&mut vault, &second, true)
+            .unwrap();
     assert_eq!(both.scope.store_ids, vec![first.clone(), second.clone()]);
-    vault.emergency_fund_toggle(&first, false).unwrap();
-    let none = vault.emergency_fund_toggle(&second, false).unwrap();
+    crate::usecases::planning::emergency::emergency_fund_toggle(&mut vault, &first, false).unwrap();
+    let none =
+        crate::usecases::planning::emergency::emergency_fund_toggle(&mut vault, &second, false)
+            .unwrap();
     assert!(!none.is_set());
     assert_eq!(none.target_months, 6);
     // an empty fund is not «every store»
-    let status = vault.emergency_fund_status(0, "UTC");
+    let status = crate::planning::emergency::emergency_fund_status(&vault.books(), 0, "UTC");
     assert!(status.stores.is_empty());
     assert_eq!(status.months_covered, None);
 }
@@ -166,24 +201,31 @@ fn a_new_purpose_or_the_archive_takes_the_account_out() {
     let (_dir, mut vault) = empty_vault();
     let first = savings(&mut vault, "First");
     let second = savings(&mut vault, "Second");
-    vault
-        .set_emergency_fund(fund_of(&[&first, &second]))
-        .unwrap();
-    vault
-        .update_store(
-            &first,
-            "First",
-            "#000",
-            "",
-            StoreExtras {
-                purpose: Some(Purpose::Everyday),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap();
-    assert_eq!(vault.emergency_fund().scope.store_ids, vec![second.clone()]);
-    vault.archive_store(&second, true).unwrap();
-    assert!(!vault.emergency_fund().is_set());
+    crate::usecases::planning::emergency::set_emergency_fund(
+        &mut vault,
+        fund_of(&[&first, &second]),
+    )
+    .unwrap();
+    crate::usecases::money::stores::update_store(
+        &mut vault,
+        &first,
+        "First",
+        "#000",
+        "",
+        StoreExtras {
+            purpose: Some(Purpose::Everyday),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        crate::planning::emergency::emergency_fund(&vault.doc)
+            .scope
+            .store_ids,
+        vec![second.clone()]
+    );
+    crate::usecases::money::stores::archive_store(&mut vault, &second, true).unwrap();
+    assert!(!crate::planning::emergency::emergency_fund(&vault.doc).is_set());
 }
 
 #[test]
@@ -194,30 +236,33 @@ fn coverage_surplus_interest_and_goal_overlap() {
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     let reserve = savings(&mut vault, "Reserve");
     let spare = savings(&mut vault, "Spare");
-    vault
-        .set_deposit_terms(
-            &reserve,
-            Some(DepositTerms {
-                rates: vec![RatePeriod {
-                    from: "2025-01-01".into(),
-                    rate: amount("2"),
-                }],
-                capitalization: Capitalization::Monthly,
-                opened_at: None,
-                term_months: None,
-                auto_accrue: false,
-                pds: None,
-            }),
-        )
-        .unwrap();
+    crate::usecases::money::interest::set_deposit_terms(
+        &mut vault,
+        &StoreId::from(&reserve),
+        Some(DepositTerms {
+            rates: vec![RatePeriod {
+                from: "2025-01-01".into(),
+                rate: amount("2"),
+            }],
+            capitalization: Capitalization::Monthly,
+            opened_at: None,
+            term_months: None,
+            auto_accrue: false,
+            pds: None,
+        }),
+    )
+    .unwrap();
     for month in ["01", "02", "03"] {
         let ts = format!("2026-{month}-10T10:00:00Z");
-        vault
-            .add_transaction(spend(&card, "1000", "rent_mortgage", &ts))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            spend(&card, "1000", "rent_mortgage", &ts),
+        )
+        .unwrap();
     }
-    vault
-        .add_transaction(dated(
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        dated(
             transfer_between(
                 AccountRef::Store(card.clone()),
                 AccountRef::Store(reserve.clone()),
@@ -225,16 +270,21 @@ fn coverage_surplus_interest_and_goal_overlap() {
                 "7000",
             ),
             "2026-03-20T10:00:00Z",
-        ))
-        .unwrap();
+        ),
+    )
+    .unwrap();
     let mut interest = income(&reserve, "80", "interest");
     interest.meta_mut().categories = vec![INTEREST_CATEGORY.into()];
-    vault
-        .add_transaction(dated(interest, "2026-03-31T10:00:00Z"))
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        dated(interest, "2026-03-31T10:00:00Z"),
+    )
+    .unwrap();
+    crate::usecases::planning::emergency::emergency_fund_toggle(&mut vault, &reserve, true)
         .unwrap();
-    vault.emergency_fund_toggle(&reserve, true).unwrap();
-    let goal = vault
-        .create_goal(crate::service::GoalDraft {
+    let goal = crate::usecases::planning::goals::create_goal(
+        &mut vault,
+        crate::service::GoalDraft {
             name: "Trip".into(),
             active: true,
             target_amount: amount("10000"),
@@ -246,11 +296,12 @@ fn coverage_surplus_interest_and_goal_overlap() {
             scope: StoreScope::store(&reserve, false),
             scenario_id: None,
             expected_return: None,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
 
     let now = unix_secs("2026-04-05T10:00:00Z").unwrap();
-    let status = vault.emergency_fund_status(now, "UTC");
+    let status = crate::planning::emergency::emergency_fund_status(&vault.books(), now, "UTC");
     assert_eq!(status.total, amount("7080"));
     assert_eq!(status.e_mand, Some(amount("1000")));
     assert_eq!(status.months_covered, Some(amount("7.1")));

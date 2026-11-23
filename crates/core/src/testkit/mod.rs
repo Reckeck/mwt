@@ -55,11 +55,19 @@ mod tests {
         let mut vault = UnlockedVault::with_persistence(VaultDoc::default(), store.clone());
         vault.path = dir.path().join("vault.bin");
         assert_eq!(store.write_count(), 0, "building the vault writes nothing");
-        let wallet = vault
-            .create_store("Bank", StoreKind::Bank, "#000", "", None)
-            .unwrap();
+        let wallet = crate::usecases::money::stores::create_store(
+            &mut vault,
+            "Bank",
+            StoreKind::Bank,
+            "#000",
+            "",
+            None,
+        )
+        .unwrap();
         let writes = store.write_count();
-        let added = vault.add_transaction(topup(&wallet.id)).unwrap();
+        let added =
+            crate::usecases::money::transactions::add_transaction(&mut vault, topup(&wallet.id))
+                .unwrap();
         assert!(store.write_count() > writes, "the save went to the store");
         assert!(
             vault

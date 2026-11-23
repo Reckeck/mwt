@@ -5,10 +5,12 @@ use crate::model::shared_event::SharedEvent;
 #[test]
 fn the_skewers_text_has_purchases_shares_and_who_pays_whom() {
     let scenario = skewers_scenario();
-    let text = scenario
-        .vault
-        .shared_event_share_text(&scenario.event, "ru")
-        .unwrap();
+    let text = crate::usecases::household::shared_events::shared_event_share_text(
+        &scenario.vault,
+        &scenario.event,
+        "ru",
+    )
+    .unwrap();
     assert!(text.starts_with("Шашлыки · 2–4 ноя"), "{text}");
     assert!(text.contains("• Мясо — 4\u{a0}800\u{a0}₽ (Я)"), "{text}");
     assert!(
@@ -41,20 +43,25 @@ fn english_text_and_the_organizers_requisites_from_their_contact() {
         }],
         ..Default::default()
     };
-    scenario.vault.update_contact(&anya, draft).unwrap();
-    let ru = scenario
-        .vault
-        .shared_event_share_text(&scenario.event, "ru")
+    crate::usecases::household::contacts::update_contact(&mut scenario.vault, &anya, draft)
         .unwrap();
+    let ru = crate::usecases::household::shared_events::shared_event_share_text(
+        &scenario.vault,
+        &scenario.event,
+        "ru",
+    )
+    .unwrap();
     assert!(
         ru.contains("Реквизиты Аня: Карта: 5536 9137 •• 4417"),
         "{ru}"
     );
     assert!(ru.contains("• Я → Аня: 1\u{a0}850\u{a0}₽"), "{ru}");
-    let en = scenario
-        .vault
-        .shared_event_share_text(&scenario.event, "en")
-        .unwrap();
+    let en = crate::usecases::household::shared_events::shared_event_share_text(
+        &scenario.vault,
+        &scenario.event,
+        "en",
+    )
+    .unwrap();
     assert!(en.contains("Spent 7\u{a0}400\u{a0}₽ for 4 people"), "{en}");
     assert!(en.contains("• Me → Аня: 1\u{a0}850\u{a0}₽"), "{en}");
     assert!(en.contains("Pay to Аня"), "{en}");
@@ -65,7 +72,12 @@ fn a_guest_organizer_without_details_has_no_requisites_line() {
     let mut scenario = skewers_scenario();
     let id = scenario.event.clone();
     scenario.vault.find_shared_event_mut(&id).unwrap().organizer = "olya".into();
-    let text = scenario.vault.shared_event_share_text(&id, "ru").unwrap();
+    let text = crate::usecases::household::shared_events::shared_event_share_text(
+        &scenario.vault,
+        &id,
+        "ru",
+    )
+    .unwrap();
     assert!(!text.contains("Реквизиты"), "{text}");
 }
 

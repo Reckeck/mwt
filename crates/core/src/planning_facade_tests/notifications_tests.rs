@@ -23,33 +23,63 @@ use crate::time::secs_or_now;
 #[test]
 fn a_due_reminder_is_told_once_and_survives_in_the_log() {
     let (_dir, mut vault) = empty_vault();
-    vault
-        .create_reminder("Позвонить в банк", "2026-03-05T09:00:00Z", None)
-        .unwrap();
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Позвонить в банк",
+        "2026-03-05T09:00:00Z",
+        None,
+    )
+    .unwrap();
     let now = secs_or_now("2026-03-05T09:00:30Z");
-    let first = vault.due_notices(now, "UTC", true).unwrap();
+    let first = crate::usecases::planning::notifications::due_notices(&mut vault, now, "UTC", true)
+        .unwrap();
     assert_eq!(first.len(), 1);
     assert_eq!(first[0].category, NoticeCategory::Reminder);
     assert_eq!(first[0].body, "Позвонить в банк");
-    assert!(vault.due_notices(now + 60, "UTC", true).unwrap().is_empty());
-    assert_eq!(vault.unread_notifications(), 1);
-    vault.mark_notifications_read(None).unwrap();
-    assert_eq!(vault.unread_notifications(), 0);
-    assert_eq!(vault.notifications().len(), 1);
+    assert!(
+        crate::usecases::planning::notifications::due_notices(&mut vault, now + 60, "UTC", true)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        crate::planning::notifications::unread_notifications(&vault.doc),
+        1
+    );
+    crate::usecases::planning::notifications::mark_notifications_read(&mut vault, None).unwrap();
+    assert_eq!(
+        crate::planning::notifications::unread_notifications(&vault.doc),
+        0
+    );
+    assert_eq!(
+        crate::planning::notifications::notifications(&vault.doc).len(),
+        1
+    );
 }
 
 #[test]
 fn a_switched_off_kind_is_silent_and_an_old_reminder_is_not_announced() {
     let (_dir, mut vault) = empty_vault();
-    vault
-        .create_reminder("Old", "2026-01-01T09:00:00Z", None)
-        .unwrap();
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Old",
+        "2026-01-01T09:00:00Z",
+        None,
+    )
+    .unwrap();
     let now = secs_or_now("2026-03-05T09:00:00Z");
-    assert!(vault.due_notices(now, "UTC", false).unwrap().is_empty());
+    assert!(
+        crate::usecases::planning::notifications::due_notices(&mut vault, now, "UTC", false)
+            .unwrap()
+            .is_empty()
+    );
 
-    vault
-        .create_reminder("Fresh", "2026-03-05T08:00:00Z", None)
-        .unwrap();
+    crate::usecases::planning::agenda::create_reminder(
+        &mut vault,
+        "Fresh",
+        "2026-03-05T08:00:00Z",
+        None,
+    )
+    .unwrap();
     vault
         .doc
         .settings
@@ -61,7 +91,11 @@ fn a_switched_off_kind_is_silent_and_an_old_reminder_is_not_announced() {
             lead_days: 0,
             auto_reminders: true,
         });
-    assert!(vault.due_notices(now, "UTC", false).unwrap().is_empty());
+    assert!(
+        crate::usecases::planning::notifications::due_notices(&mut vault, now, "UTC", false)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -77,13 +111,17 @@ fn the_log_keeps_the_newest_and_never_repeats_a_key() {
             now_iso(),
         )
     };
-    assert!(vault.record_notice(record(1)).unwrap());
-    assert!(!vault.record_notice(record(1)).unwrap());
+    assert!(
+        crate::usecases::planning::notifications::record_notice(&mut vault, record(1)).unwrap()
+    );
+    assert!(
+        !crate::usecases::planning::notifications::record_notice(&mut vault, record(1)).unwrap()
+    );
     let many: Vec<NoticeRecord> = (0..MAX_NOTICE_LOG + 10).map(record).collect();
-    vault.log_notices(many).unwrap();
+    crate::usecases::planning::notifications::log_notices(&mut vault, many).unwrap();
     assert_eq!(vault.doc.notification_log.len(), MAX_NOTICE_LOG);
     assert_eq!(
-        vault.notifications()[0].key,
+        crate::planning::notifications::notifications(&vault.doc)[0].key,
         format!("alert:{}", MAX_NOTICE_LOG + 9)
     );
 }
@@ -91,7 +129,10 @@ fn the_log_keeps_the_newest_and_never_repeats_a_key() {
 #[test]
 fn notices_are_wanted_until_their_kind_is_switched_off() {
     let (_dir, mut vault) = empty_vault();
-    assert!(vault.notices_enabled(NoticeCategory::Budget));
+    assert!(crate::planning::notifications::notices_enabled(
+        &vault.doc,
+        NoticeCategory::Budget
+    ));
     vault
         .doc
         .settings
@@ -103,7 +144,10 @@ fn notices_are_wanted_until_their_kind_is_switched_off() {
             lead_days: 0,
             auto_reminders: true,
         });
-    assert!(!vault.notices_enabled(NoticeCategory::Budget));
+    assert!(!crate::planning::notifications::notices_enabled(
+        &vault.doc,
+        NoticeCategory::Budget
+    ));
     assert!(!notices_enabled(&vault.doc, NoticeCategory::Budget));
 }
 
@@ -160,41 +204,59 @@ fn the_notice_delegates_equal_the_scenarios() {
             record("b", NoticeCategory::PriceAlert),
         ]
     };
-    let method = by_method.log_notices(batch()).unwrap();
+    let method =
+        crate::usecases::planning::notifications::log_notices(&mut by_method, batch()).unwrap();
     let made = scenario::log_notices(&mut by_scenario, batch()).unwrap();
     assert_eq!(method, made);
     assert_eq!(method.len(), 2);
-    by_method
-        .mark_notifications_read(Some(&["a".to_string()]))
-        .unwrap();
+    crate::usecases::planning::notifications::mark_notifications_read(
+        &mut by_method,
+        Some(&["a".to_string()]),
+    )
+    .unwrap();
     scenario::mark_notifications_read(&mut by_scenario, Some(&["a".to_string()])).unwrap();
-    assert_eq!(by_method.notifications(), by_scenario.notifications());
-    assert_eq!(by_method.unread_notifications(), 1);
+    assert_eq!(
+        crate::planning::notifications::notifications(&by_method.doc),
+        crate::planning::notifications::notifications(&by_scenario.doc)
+    );
+    assert_eq!(
+        crate::planning::notifications::unread_notifications(&by_method.doc),
+        1
+    );
     assert!(
-        by_method
-            .record_notice(record("c", NoticeCategory::Reminder))
-            .unwrap()
+        crate::usecases::planning::notifications::record_notice(
+            &mut by_method,
+            record("c", NoticeCategory::Reminder)
+        )
+        .unwrap()
     );
     assert!(
         scenario::record_notice(&mut by_scenario, record("c", NoticeCategory::Reminder)).unwrap()
     );
     assert!(
-        !by_method
-            .record_notice(record("c", NoticeCategory::Reminder))
-            .unwrap()
+        !crate::usecases::planning::notifications::record_notice(
+            &mut by_method,
+            record("c", NoticeCategory::Reminder)
+        )
+        .unwrap()
     );
     assert!(
         !scenario::record_notice(&mut by_scenario, record("c", NoticeCategory::Reminder)).unwrap()
     );
     assert!(
-        by_method
-            .record_notice(record(" ", NoticeCategory::Reminder))
-            .is_err()
+        crate::usecases::planning::notifications::record_notice(
+            &mut by_method,
+            record(" ", NoticeCategory::Reminder)
+        )
+        .is_err()
     );
     assert!(
         scenario::record_notice(&mut by_scenario, record(" ", NoticeCategory::Reminder)).is_err()
     );
-    assert_eq!(by_method.notifications(), by_scenario.notifications());
+    assert_eq!(
+        crate::planning::notifications::notifications(&by_method.doc),
+        crate::planning::notifications::notifications(&by_scenario.doc)
+    );
 }
 
 #[test]
@@ -203,9 +265,13 @@ fn the_due_sweep_delegate_equals_the_scenario() {
     let (_a, mut by_method) = empty_vault();
     let (_b, mut by_scenario) = empty_vault();
     for vault in [&mut by_method, &mut by_scenario] {
-        vault
-            .create_reminder("Позвонить в банк", "2026-03-05T09:00:00Z", None)
-            .unwrap();
+        crate::usecases::planning::agenda::create_reminder(
+            vault,
+            "Позвонить в банк",
+            "2026-03-05T09:00:00Z",
+            None,
+        )
+        .unwrap();
     }
     let now = secs_or_now("2026-03-05T09:00:30Z");
     let keys = |notices: Vec<NoticeRecord>| -> Vec<(String, String)> {
@@ -214,7 +280,10 @@ fn the_due_sweep_delegate_equals_the_scenario() {
             .map(|notice| (format!("{:?}", notice.category), notice.body))
             .collect()
     };
-    let method = keys(by_method.due_notices(now, "UTC", true).unwrap());
+    let method = keys(
+        crate::usecases::planning::notifications::due_notices(&mut by_method, now, "UTC", true)
+            .unwrap(),
+    );
     let made = keys(scenario::due_notices(&mut by_scenario, now, "UTC", true).unwrap());
     assert_eq!(method, made);
     assert_eq!(method.len(), 1);

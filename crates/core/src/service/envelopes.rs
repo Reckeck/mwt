@@ -49,10 +49,6 @@ impl UnlockedVault {
 
     // Not part of the baseline (crate-internal): the callers outside the area keep these names.
     forward! {
-        /// Value of the envelopes linked to a goal, in `currency` at `now`.
-        #[cfg(test)]
-        pub(crate) fn envelope_saved_for_goal(&self, goal_id: &str, currency: &str, now: i64) -> Option<Amount>
-            => crate::planning::envelopes::envelope_saved_for_goal @books;
         /// Give every envelope its opening entry and re-derive `allocated` from
         /// the journal (on open, and after a sync brought records in). True when
         /// something changed.

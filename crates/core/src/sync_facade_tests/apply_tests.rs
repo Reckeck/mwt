@@ -22,7 +22,8 @@ fn left_ahead() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
     std::fs::copy(dir.path().join("test.wallet"), &copy).unwrap();
     let mut right = UnlockedVault::open(copy, "pw").unwrap();
     right.set_device("bbbbbbbb-right");
-    left.create_store_with(
+    crate::usecases::money::stores::create_store_with(
+        &mut left,
         "Savings jar",
         StoreKind::Bank,
         "#000",
@@ -38,12 +39,12 @@ fn incoming_for(
     left: &mut UnlockedVault,
     right: &mut UnlockedVault,
 ) -> std::collections::BTreeMap<String, crate::sync::RecordState> {
-    let mine = left.sync_manifest(None).unwrap();
-    let theirs = right.sync_manifest(None).unwrap();
-    let (_, right_wants) = left.sync_diff(&mine, &theirs);
-    let (wants, _) = right.sync_diff(&theirs, &mine);
+    let mine = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
+    let theirs = crate::usecases::sync::read::sync_manifest(right, None).unwrap();
+    let (_, right_wants) = crate::usecases::sync::read::sync_diff(left, &mine, &theirs);
+    let (wants, _) = crate::usecases::sync::read::sync_diff(right, &theirs, &mine);
     let keys = if wants.is_empty() { right_wants } else { wants };
-    left.sync_records(&keys).unwrap()
+    crate::usecases::sync::read::sync_records(left, &keys).unwrap()
 }
 
 /// The document and its sync bookkeeping, serialized.
@@ -73,7 +74,7 @@ fn a_batch_that_fails_at_its_last_step_leaves_the_document_as_it_was() {
 fn a_failed_batch_leaves_no_stamp_or_tombstone_once_the_file_is_back() {
     let (dir, mut left, mut right) = left_ahead();
     let incoming = incoming_for(&mut left, &mut right);
-    let manifest = right.sync_manifest(None).unwrap();
+    let manifest = crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
     let file = dir.path().join("copy.wallet");
     std::fs::remove_file(&file).unwrap();
     std::fs::create_dir(&file).unwrap();
@@ -85,7 +86,10 @@ fn a_failed_batch_leaves_no_stamp_or_tombstone_once_the_file_is_back() {
     std::fs::copy(dir.path().join("test.wallet"), &file).unwrap();
     right.persist().unwrap();
 
-    assert_eq!(right.sync_manifest(None).unwrap(), manifest);
+    assert_eq!(
+        crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap(),
+        manifest
+    );
 }
 
 #[test]
@@ -150,7 +154,7 @@ fn a_failed_batch_announces_nothing_it_stamped_on_its_way() {
                 exec_id: "exec-1".into(),
             };
         }
-        right.add_transaction(tx).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut right, tx).unwrap();
     }
     let incoming = incoming_for(&mut left, &mut right);
     // What was stamped so far goes out first: the queue is empty.
@@ -173,7 +177,8 @@ fn a_failed_batch_announces_nothing_it_stamped_on_its_way() {
 #[test]
 fn a_failed_write_after_an_unparsable_record_leaves_no_journal_entry() {
     let (dir, mut left, mut right) = left_ahead();
-    left.create_store_with(
+    crate::usecases::money::stores::create_store_with(
+        &mut left,
         "Second jar",
         StoreKind::Bank,
         "#000",
@@ -199,6 +204,9 @@ fn a_failed_write_after_an_unparsable_record_leaves_no_journal_entry() {
     let outcome = right.sync_apply(&incoming, &peer());
 
     assert!(outcome.is_err(), "the write was expected to fail");
-    assert!(right.sync_journal().is_empty(), "a journal entry was left");
+    assert!(
+        crate::usecases::sync::sync_journal::sync_journal(&right).is_empty(),
+        "a journal entry was left"
+    );
     assert!(bytes(&mut right) == before, "the document changed");
 }

@@ -68,7 +68,7 @@ pub fn add(vault: &mut UnlockedVault, wallets: &Wallets, today: NaiveDate) -> Re
         limit("food_delivery", 80),
         limit("taxi", 25),
     ] {
-        let made = vault.create_budget(draft)?;
+        let made = crate::usecases::planning::budget::create_budget(vault, draft)?;
         let id = next();
         if let Some(budget) = vault
             .doc
@@ -91,7 +91,7 @@ pub fn add(vault: &mut UnlockedVault, wallets: &Wallets, today: NaiveDate) -> Re
         ),
         goal("Отпуск на море", 3_000, &wallets.savings, today, 8, 200),
     ] {
-        let made = vault.create_goal(draft)?;
+        let made = crate::usecases::planning::goals::create_goal(vault, draft)?;
         let id = next();
         if let Some(goal) = vault.doc.goals.iter_mut().find(|goal| goal.id == made.id) {
             goal.id = id;
@@ -128,7 +128,9 @@ pub fn add(vault: &mut UnlockedVault, wallets: &Wallets, today: NaiveDate) -> Re
         ),
     ];
     for (template, fields) in cards {
-        let saved = vault.workflow_from_template(template, &fields, "ru", now)?;
+        let saved = crate::usecases::workflow::records::workflow_from_template(
+            vault, template, &fields, "ru", now,
+        )?;
         let id = next();
         if let Some(workflow) = vault
             .doc
