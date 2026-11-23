@@ -43,7 +43,7 @@ const size = provideWidgetSize(useTemplateRef<HTMLElement>('body'))
     <button
       v-else
       type="button"
-      class="touch-hit-lg absolute right-1 top-1 z-10 flex size-6 items-center justify-center rounded-md bg-background/80 text-muted-foreground shadow-sm transition-opacity hover:text-foreground pointer-fine:opacity-0 pointer-fine:focus-visible:opacity-100 pointer-fine:group-hover/frame:opacity-100"
+      class="touch-hit-lg absolute right-1 top-1 z-10 flex size-6 items-center justify-center rounded-md bg-background/80 text-muted-foreground transition-opacity hover:text-foreground pointer-fine:opacity-0 pointer-fine:focus-visible:opacity-100 pointer-fine:group-hover/frame:opacity-100"
       :title="t('widgetFrame.unpin')"
       :aria-label="t('widgetFrame.unpin')"
       @click="emit('pin', false)"

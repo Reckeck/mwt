@@ -100,7 +100,7 @@ function focusFirstField(event: Event) {
     <DialogPortal v-if="portalled">
       <DialogOverlay class="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
       <DialogContent
-        class="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(90dvh-var(--safe-top)-var(--safe-bottom))] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-clip rounded-xl border border-border bg-card text-card-foreground shadow-lg focus:outline-none data-[state=open]:animate-panel-in data-[state=closed]:animate-panel-out"
+        class="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(90dvh-var(--safe-top)-var(--safe-bottom))] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-clip rounded-xl border border-border bg-card text-card-foreground focus:outline-none data-[state=open]:animate-panel-in data-[state=closed]:animate-panel-out"
         :class="widths[props.size]"
         :data-overlay="props.overlay"
         v-bind="props.description ? {} : { 'aria-describedby': undefined }"

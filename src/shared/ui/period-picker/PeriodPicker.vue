@@ -56,7 +56,7 @@ function reset() {
   draft.value = { ...props.defaultRange }
 }
 const TRIGGER =
-  'flex h-9 min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs data-[state=open]:ring-2 data-[state=open]:ring-ring/40'
+  'flex h-9 min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm data-[state=open]:ring-2 data-[state=open]:ring-ring/40'
 </script>
 
 <template>

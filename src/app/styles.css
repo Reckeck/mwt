@@ -95,9 +95,10 @@
   --color-node-list: var(--node-list);
   --color-node-date: var(--node-date);
   --color-node-text: var(--node-text);
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   /* Container widths of the project's own. Not --container-sm/md/lg: in Tailwind v4 those
      also size max-w-sm/md/lg, and overriding them made a «md» dialog wider than an «lg» one.
      36rem is Tailwind's own @xl. */
@@ -178,7 +179,6 @@
   --chart-heat-2: #B4AE9F;
   --chart-heat-3: #6F716B;
   --chart-heat-4: #1B1E1C;
-  --radius: 0.625rem;
 
   /* Sidebar (shadcn-vue): a shade off the page so the rail reads as chrome. */
   --sidebar: #FDFCF8;
@@ -759,7 +759,7 @@ body .driver-popover-close-btn {
 .wf-canvas .vue-flow__controls {
   box-shadow: none;
   border: 1px solid var(--border);
-  border-radius: calc(var(--radius) - 2px);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 .wf-canvas .vue-flow__controls-button {

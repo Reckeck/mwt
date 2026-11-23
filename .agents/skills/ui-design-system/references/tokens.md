@@ -94,10 +94,18 @@ The Tailwind scale (1 = 4px). Conventions:
 
 ## Radii
 
-`--radius` = 10px. `rounded-md` — fields and buttons (set by the components),
-`rounded-lg` — nested blocks inside a card, `rounded-xl` — `Card` and
-`Dialog`, `rounded-full` — dots and avatars. A nested block is not rounder
-than its parent.
+An explicit scale (8/12/16/24):
+
+| Class | Size | Where |
+|---|---|---|
+| `rounded-sm` | 8 | popovers and menus |
+| `rounded-md` | 12 | fields and buttons (set by the components) |
+| `rounded-lg` | 16 | `Card` and card-like blocks |
+| `rounded-xl` | 24 | `Sheet`, `Drawer`, `Dialog` |
+| `rounded-full` | - | chips, dots and avatars |
+
+A nested block is not rounder than its parent. Surfaces are flat: shared
+components keep `shadow-*` only on popovers and menus.
 
 ## Theme
 

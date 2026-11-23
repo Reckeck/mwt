@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -55,7 +56,7 @@ const grounds = ['background', 'card']
 
 describe('colour tokens', () => {
   it('defines the same set in :root and .dark, except theme-independent ones', () => {
-    const shared = (name: string) => /^(safe-|radius|port-|node-|wire-|syntax-(key|string|number|literal))/.test(name)
+    const shared = (name: string) => /^(safe-|port-|node-|wire-|syntax-(key|string|number|literal))/.test(name)
     const names = (theme: Map<string, string>) => [...theme.keys()].filter((name) => !shared(name)).sort()
     const light = names(themes.light)
     const dark = names(themes.dark)
@@ -154,5 +155,18 @@ describe('type', () => {
       expect(css).toContain(`@utility ${utility} {`)
     }
     expect(css).toMatch(/--text-2xs:\s*0\.6875rem;/)
+  })
+
+  it('sets the explicit radius scale in @theme and keeps no legacy --radius', () => {
+    for (const [name, size] of [
+      ['sm', '8px'],
+      ['md', '12px'],
+      ['lg', '16px'],
+      ['xl', '24px'],
+    ]) {
+      expect(css).toMatch(new RegExp(`--radius-${name}:\\s*${size};`))
+    }
+    const sources = execSync('grep -rEl "var\\(--radius\\)|calc\\(var\\(--radius" src || true', { encoding: 'utf8' })
+    expect(sources.split('\n').filter((file) => file && !file.endsWith('styles.test.ts'))).toEqual([])
   })
 })
