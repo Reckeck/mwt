@@ -34,6 +34,17 @@ export interface ChartColors {
   success: string
   destructive: string
   warning: string
+  /** Design chart tokens: the series a chart is about, its reference line, grid, band and wash. */
+  actual: string
+  reference: string
+  grid: string
+  band: string
+  wash: string
+  over: string
+  income: string
+  /** `--chart-heat-0..4`: a calendar/heat scale from empty to full. */
+  heat: string[]
+  /** Category series: bank, crypto, property, accent, reference. */
   palette: string[]
 }
 
@@ -56,7 +67,15 @@ export function chartColors(): ChartColors {
     success: tokenColor('--success'),
     destructive: tokenColor('--destructive'),
     warning: tokenColor('--warning'),
-    palette: [1, 2, 3, 4, 5].map((index) => tokenColor(`--chart-${index}`)),
+    actual: tokenColor('--chart-actual'),
+    reference: tokenColor('--chart-reference'),
+    grid: tokenColor('--chart-grid'),
+    band: tokenColor('--chart-band'),
+    wash: tokenColor('--chart-wash'),
+    over: tokenColor('--chart-over'),
+    income: tokenColor('--chart-income'),
+    heat: [0, 1, 2, 3, 4].map((index) => tokenColor(`--chart-heat-${index}`)),
+    palette: ['bank', 'crypto', 'property', 'accent', 'reference'].map((name) => tokenColor(`--chart-${name}`)),
   }
 }
 
