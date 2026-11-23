@@ -9,18 +9,22 @@ description = "Multi Wallet Tracker workflow: the node catalog, graph, validatio
 [lints]
 workspace = true
 
+[features]
+# The derives of this crate name model and base types, so both features forward to them.
+ts = ["dep:ts-rs", "mwt-base/ts", "mwt-model/ts"]
+schema = ["dep:schemars", "mwt-base/schema", "mwt-model/schema"]
+
 [dependencies]
-# The derives of model and base are always on here: this crate derives `TS`/`JsonSchema` over their types.
-mwt-base = { path = "../base", features = ["ts", "schema"] }
-mwt-model = { path = "../model", features = ["ts", "schema"] }
+mwt-base = { path = "../base" }
+mwt-model = { path = "../model" }
 serde.workspace = true
 serde_json.workspace = true
 rust_decimal.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 regex.workspace = true
-ts-rs.workspace = true
-schemars.workspace = true
+ts-rs = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 insta.workspace = true

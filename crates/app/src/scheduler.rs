@@ -30,10 +30,11 @@ use tauri_plugin_notification::NotificationExt;
 use trade_core::appconfig::{Locale, load_settings};
 use trade_core::calendar::now_secs;
 use trade_core::ipc_contract::{AutomationRejectedEvent, SyncRole};
-use trade_core::model::notify::{NoticeCategory, NoticeRecord};
+use trade_core::model::notify::{NoticeCategory, NoticeRecord, notice, notice_title};
 use trade_core::model::planning::{AlertCondition, RejectReason};
 use trade_core::model::transaction::Transaction;
-use trade_core::service::{AlertBase, UnlockedVault, notice, notice_title};
+use trade_core::reports::notify_snapshot::AlertBase;
+use trade_core::service::Session;
 use trade_core::workflow::RunOutcome;
 
 use crate::commands::AppState;
@@ -268,7 +269,8 @@ pub fn record_and_deliver(app: &AppHandle, records: Vec<NoticeRecord>) {
         let Some(vault) = guard.as_mut() else {
             return;
         };
-        vault.log_notices(records).unwrap_or_default()
+        trade_core::usecases::planning::notifications::log_notices(vault, records)
+            .unwrap_or_default()
     };
     deliver(app, fresh, false);
 }
@@ -301,17 +303,22 @@ pub fn snapshot_tick(app: &AppHandle, force: bool) {
         let Some(vault) = guard.as_ref() else {
             return;
         };
-        let mut snapshot = vault.notification_snapshot(now_secs(), &zone, ru);
+        let mut snapshot = trade_core::reports::notify_snapshot::notification_snapshot(
+            &vault.books(),
+            now_secs(),
+            &zone,
+            ru,
+        );
         snapshot.role_client = matches!(crate::sync::current_role(app), Some(SyncRole::Client));
         snapshot
     };
     if let Ok(mut notify) = state.notify.lock() {
         // The same notices as a minute ago: no keyring call, no encrypted write.
         let unchanged = notify.snapshot.as_ref().is_some_and(|kept| {
-            trade_core::service::NotificationSnapshot {
+            trade_core::reports::notify_snapshot::NotificationSnapshot {
                 created_at: String::new(),
                 ..kept.clone()
-            } == trade_core::service::NotificationSnapshot {
+            } == trade_core::reports::notify_snapshot::NotificationSnapshot {
                 created_at: String::new(),
                 ..snapshot.clone()
             }
@@ -353,11 +360,16 @@ fn take_locked(notify: &mut crate::notify_store::NotifyMemory) -> Option<LockedF
 /// on a client the main device owns alerts and the log, and what a stale
 /// locked snapshot saw would only fight what came by sync. The findings are
 /// dropped there, not kept for later. Returns whether they were applied.
-fn merge_findings(vault: &mut UnlockedVault, found: LockedFindings, runs_jobs: bool) -> bool {
+fn merge_findings(vault: &mut Session, found: LockedFindings, runs_jobs: bool) -> bool {
     if !runs_jobs || vault.doc.id != found.vault_id {
         return false;
     }
-    let _ = vault.apply_locked_deliveries_seen(found.shown, &found.fired, &found.bases);
+    let _ = trade_core::usecases::reports::notify_snapshot::apply_locked_deliveries_seen(
+        vault,
+        found.shown,
+        &found.fired,
+        &found.bases,
+    );
     true
 }
 
@@ -549,7 +561,9 @@ fn bybit_tick(app: &AppHandle, memory: &mut Memory) {
             };
             guard
                 .as_ref()
-                .map(|vault| vault.import_schedule())
+                .map(|vault| {
+                    trade_core::usecases::cryptotrack::exchange_import::import_schedule(vault)
+                })
                 .unwrap_or_default()
         },
         |key| key.keys.store_id.as_str(),
@@ -665,17 +679,22 @@ fn workflows_tick(app: &AppHandle) {
             return;
         };
         vault.set_notice_language(ru);
-        let Ok(pass) = vault.run_due_workflows_at(&trade_core::time::SystemClock, &zone) else {
+        let Ok(pass) = trade_core::usecases::workflow::runs::run_due_workflows_at(
+            vault,
+            &trade_core::time::SystemClock,
+            &zone,
+        ) else {
             return;
         };
         // Savings accounts that ask for it get last month's interest booked.
         let today = trade_core::calendar::Calendar::new(&zone).date_of(now_secs());
-        let interest = vault.post_due_interest(today).unwrap_or(0);
-        let names: std::collections::HashMap<String, String> = vault
-            .automations()
-            .into_iter()
-            .map(|automation| (automation.id, automation.name))
-            .collect();
+        let interest =
+            trade_core::usecases::money::interest::post_due_interest(vault, today).unwrap_or(0);
+        let names: std::collections::HashMap<String, String> =
+            trade_core::usecases::planning::automations::automations(vault)
+                .into_iter()
+                .map(|automation| (automation.id, automation.name))
+                .collect();
         let mut news = AutomationNews {
             created: Vec::new(),
             rejected: Vec::new(),
@@ -868,7 +887,7 @@ fn alerts_tick(app: &AppHandle, memory: &mut Memory) {
         let Some(vault) = guard.as_ref() else {
             return;
         };
-        vault.alert_assets()
+        trade_core::planning::agenda::alert_assets(&vault.doc)
     };
     if assets.is_empty() {
         return;
@@ -890,10 +909,10 @@ fn alerts_tick(app: &AppHandle, memory: &mut Memory) {
         let Some(vault) = guard.as_mut() else {
             return;
         };
-        vault.apply_prices(&prices);
-        vault.restamp_missing();
+        trade_core::usecases::money::rates::apply_prices(vault, &prices);
+        trade_core::usecases::money::rates::restamp_missing(vault);
         let _ = vault.persist();
-        vault.check_alerts(now_secs()).unwrap_or_default()
+        trade_core::usecases::planning::agenda::check_alerts(vault, now_secs()).unwrap_or_default()
     };
     let ru = russian(app);
     let records = fired
@@ -947,11 +966,21 @@ fn reminders_tick(app: &AppHandle, _memory: &mut Memory) {
             return;
         };
         // Automatic reminders follow the data: a new loan, a moved payment day.
-        let synced = vault
-            .sync_auto_reminders(now_secs(), &zone, ru)
-            .unwrap_or(false);
+        let synced = trade_core::usecases::planning::auto_reminders::sync_auto_reminders(
+            vault,
+            now_secs(),
+            &zone,
+            ru,
+        )
+        .unwrap_or(false);
         // Reminders whose time came, money that will run short, budgets.
-        let fresh = vault.due_notices(now_secs(), &zone, ru).unwrap_or_default();
+        let fresh = trade_core::usecases::planning::notifications::due_notices(
+            vault,
+            now_secs(),
+            &zone,
+            ru,
+        )
+        .unwrap_or_default();
         (fresh, synced)
     };
     if synced {
@@ -1048,14 +1077,14 @@ mod tests {
 
     use trade_core::model::planning::{AlertCondition, PriceAlert};
     use trade_core::model::store::AssetRef;
-    use trade_core::service::UnlockedVault;
+    use trade_core::service::Session;
 
     use super::{merge_findings, take_locked};
     use crate::notify_store::NotifyMemory;
 
-    fn alert_vault() -> (tempfile::TempDir, UnlockedVault) {
+    fn alert_vault() -> (tempfile::TempDir, Session) {
         let dir = tempfile::tempdir().unwrap();
-        let mut vault = UnlockedVault::create(dir.path().join("a.wallet"), "pw").unwrap();
+        let mut vault = Session::create(dir.path().join("a.wallet"), "pw").unwrap();
         vault.doc.price_alerts.push(PriceAlert {
             id: "alert".into(),
             asset: AssetRef::default(),
@@ -1073,7 +1102,7 @@ mod tests {
 
     fn told(vault_id: &str) -> NotifyMemory {
         let mut notify = NotifyMemory {
-            snapshot: Some(trade_core::service::NotificationSnapshot {
+            snapshot: Some(trade_core::reports::notify_snapshot::NotificationSnapshot {
                 vault_id: vault_id.into(),
                 ..Default::default()
             }),

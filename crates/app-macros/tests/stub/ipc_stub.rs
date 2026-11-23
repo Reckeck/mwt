@@ -4,27 +4,6 @@ mod tauri {
     #[derive(Clone)]
     pub struct AppHandle;
 }
-mod ts_rs {
-    pub struct Config;
-    impl Config {
-        pub fn new() -> Self {
-            Config
-        }
-    }
-    pub trait TS {
-        fn name(config: &Config) -> String;
-    }
-    impl TS for String {
-        fn name(_: &Config) -> String {
-            "string".into()
-        }
-    }
-    impl TS for () {
-        fn name(_: &Config) -> String {
-            "null".into()
-        }
-    }
-}
 mod ipc {
     pub struct IpcError;
     pub mod run {
@@ -35,18 +14,16 @@ mod ipc {
         }
         pub struct ArgMeta {
             pub name: &'static str,
-            pub ts: fn() -> String,
         }
         pub struct CommandMeta {
             pub name: &'static str,
             pub args: &'static [ArgMeta],
-            pub ret: fn() -> String,
         }
         pub async fn read<H: VaultHost, R>(
             _host: H,
             _meta: &CommandMeta,
             _gate: Gate,
-            _body: impl FnOnce(&crate::UnlockedVault) -> Result<R, crate::ipc::IpcError>,
+            _body: impl FnOnce(&crate::Session) -> Result<R, crate::ipc::IpcError>,
         ) -> Result<R, crate::ipc::IpcError> {
             unimplemented!()
         }
@@ -54,7 +31,7 @@ mod ipc {
             _host: H,
             _meta: &CommandMeta,
             _gate: Gate,
-            _body: impl FnOnce(&mut crate::UnlockedVault) -> Result<R, crate::ipc::IpcError>,
+            _body: impl FnOnce(&mut crate::Session) -> Result<R, crate::ipc::IpcError>,
         ) -> Result<R, crate::ipc::IpcError> {
             unimplemented!()
         }
@@ -68,5 +45,5 @@ mod ipc {
         }
     }
 }
-pub struct UnlockedVault;
+pub struct Session;
 pub struct AppState;

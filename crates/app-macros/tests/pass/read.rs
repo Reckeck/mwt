@@ -4,7 +4,7 @@ use mwt_app_macros::ipc;
 include!("../stub/ipc_stub.rs");
 
 #[ipc(read)]
-fn list(_vault: &UnlockedVault, id: String) -> Result<String, ipc::IpcError> {
+fn list(_vault: &Session, id: String) -> Result<String, ipc::IpcError> {
     Ok(id)
 }
 

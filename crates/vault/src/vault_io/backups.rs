@@ -198,6 +198,28 @@ pub fn stamp(now: time::OffsetDateTime) -> String {
     )
 }
 
+/// Rotated pre-sync copies kept before the first batch of each session.
+pub const PRESYNC_BACKUPS: usize = 3;
+
+/// The pre-sync copy of `vault` at rotation `index` (0 is the newest):
+/// `<vault>.presync.bak`, `<vault>.presync.<index>.bak`.
+pub fn presync_path(vault: &Path, index: usize) -> PathBuf {
+    let mut name = vault.file_name().unwrap_or_default().to_os_string();
+    if index == 0 {
+        name.push(".presync.bak");
+    } else {
+        name.push(format!(".presync.{index}.bak"));
+    }
+    vault.with_file_name(name)
+}
+
+/// Delete every pre-sync copy of `vault` (a missing file is fine).
+pub fn remove_presync(vault: &Path) {
+    for index in 0..PRESYNC_BACKUPS {
+        let _ = std::fs::remove_file(presync_path(vault, index));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,5 +390,35 @@ mod tests {
         std::os::unix::fs::symlink(&target, dir.path().join("vault.wallet.v8.bak")).unwrap();
         assert!(resolve(&vault, "vault.wallet.v8.bak").is_err());
         assert!(list(&vault).unwrap().is_empty());
+    }
+
+    #[test]
+    fn presync_copies_sit_next_to_the_vault_and_rotate_by_index() {
+        let vault = Path::new("/tmp/home/v.wallet");
+        assert_eq!(
+            presync_path(vault, 0),
+            Path::new("/tmp/home/v.wallet.presync.bak")
+        );
+        assert_eq!(
+            presync_path(vault, 2),
+            Path::new("/tmp/home/v.wallet.presync.2.bak")
+        );
+    }
+
+    #[test]
+    fn removing_presync_copies_leaves_the_vault_and_other_copies() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = dir.path().join("v.wallet");
+        std::fs::write(&vault, b"v").unwrap();
+        let other = dir.path().join("v.wallet.bak");
+        std::fs::write(&other, b"o").unwrap();
+        for index in 0..PRESYNC_BACKUPS {
+            std::fs::write(presync_path(&vault, index), b"p").unwrap();
+        }
+        remove_presync(&vault);
+        for index in 0..PRESYNC_BACKUPS {
+            assert!(!presync_path(&vault, index).exists());
+        }
+        assert!(vault.exists() && other.exists());
     }
 }

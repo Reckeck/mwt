@@ -26,9 +26,9 @@ Static checks (onboarding, routes, forms, ui, fsd) are the `checks` project, `te
 run them as separate processes (a touch in layout is irreversible for the pointer in the same browser).
 
 ```bash
-cargo test -p trade-core                      # core only
-cargo test -p trade-core service::            # by module path prefix
-cargo test -p trade-core <name> -- --exact --nocapture
+cargo test -p mwt-usecases                      # core only
+cargo test -p mwt-usecases service::            # by module path prefix
+cargo test -p mwt-usecases <name> -- --exact --nocapture
 ```
 
 `CARGO_TARGET_DIR=.rust-target` is set in `mise.toml`; if cargo runs outside

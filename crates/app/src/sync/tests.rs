@@ -16,7 +16,7 @@ use trade_core::ipc_contract::{SyncPhase, SyncRole};
 use trade_core::model::notify::NoticeRecord;
 use trade_core::model::store::AssetRef;
 use trade_core::model::transaction::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta};
-use trade_core::service::{SyncTap, UnlockedVault};
+use trade_core::service::{Session, SyncTap};
 use trade_core::sync::session::DeviceKey;
 
 mod dialing;
@@ -27,12 +27,13 @@ mod liveness;
 use super::host::{Host, lock_hub};
 use super::{Hub, Order, Run, SyncHub};
 use crate::ipc::events::{AppEvent, SyncError, SyncOffer, SyncPairing, SyncPlanReady};
+use trade_core::usecases::sync::peer_sync;
 use trade_core::usecases::sync::read as sync_read;
 use trade_core::usecases::sync::trust as sync_trust;
 
 struct Inner {
     hub: SyncHub,
-    vault: Mutex<Option<UnlockedVault>>,
+    vault: Mutex<Option<Session>>,
     settings: Mutex<AppSettings>,
     key: DeviceKey,
     events: mpsc::UnboundedSender<(String, Value)>,
@@ -55,7 +56,7 @@ impl Host for TestHost {
         lock_hub(&self.0.hub)
     }
 
-    fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T> {
+    fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
         let mut guard = self.0.vault.lock().unwrap();
         let vault = guard.as_mut().ok_or(Error::RequiresUnlock)?;
         work(vault)
@@ -111,7 +112,7 @@ impl SyncTap for Tap {
 type Events = mpsc::UnboundedReceiver<(String, Value)>;
 
 /// A device with `vault` open and sync on; its events go to the receiver.
-fn device(name: &str, mut vault: UnlockedVault, role: SyncRole) -> (TestHost, Events) {
+fn device(name: &str, mut vault: Session, role: SyncRole) -> (TestHost, Events) {
     let (events, received) = mpsc::unbounded_channel();
     let mut settings = AppSettings::default();
     settings.ensure_device_id();
@@ -132,8 +133,8 @@ fn device(name: &str, mut vault: UnlockedVault, role: SyncRole) -> (TestHost, Ev
         took_main: Default::default(),
         demoted: Default::default(),
     }));
-    vault.set_device(&settings.device_id);
-    vault.set_sync_tap(Some(Arc::new(Tap(host.clone()))));
+    peer_sync::set_device(&mut vault, &settings.device_id);
+    peer_sync::set_sync_tap(&mut vault, Some(Arc::new(Tap(host.clone()))));
     *host.0.vault.lock().unwrap() = Some(vault);
     let (stop, _) = tokio::sync::watch::channel(false);
     host.hub().run = Some(Run {
@@ -281,7 +282,7 @@ fn seed(host: &TestHost, comment: &str) {
                 ..PriceStamp::default()
             },
         });
-        vault.add_transaction(tx)?;
+        trade_core::usecases::money::transactions::add_transaction(vault, tx)?;
         Ok(())
     })
     .unwrap();
@@ -405,11 +406,11 @@ fn raw_identity(device_id: &str, name: &str) -> trade_core::sync::protocol::Iden
 }
 
 /// The same vault twice (a copied file).
-fn same_vault(dir: &std::path::Path) -> (UnlockedVault, UnlockedVault) {
-    let mut left = UnlockedVault::create(dir.join("left.wallet"), "pw").unwrap();
+fn same_vault(dir: &std::path::Path) -> (Session, Session) {
+    let mut left = Session::create(dir.join("left.wallet"), "pw").unwrap();
     left.persist().unwrap();
     std::fs::copy(dir.join("left.wallet"), dir.join("right.wallet")).unwrap();
-    let right = UnlockedVault::open(dir.join("right.wallet"), "pw").unwrap();
+    let right = Session::open(dir.join("right.wallet"), "pw").unwrap();
     (left, right)
 }
 
@@ -433,8 +434,7 @@ async fn devices_pair_exchange_and_stay_in_sync() {
     let trusted = |host: &TestHost| {
         let me = host.settings().device_id;
         host.with_vault(|vault| {
-            Ok(vault
-                .sync_state()
+            Ok(peer_sync::sync_state(vault)
                 .peers
                 .iter()
                 .filter(|peer| peer.device_id != me)
@@ -446,7 +446,7 @@ async fn devices_pair_exchange_and_stay_in_sync() {
     assert_eq!(trusted(&client), 1);
     // The first batch was preceded by a backup.
     assert!(
-        main.with_vault(|vault| Ok(vault.has_sync_backup()))
+        main.with_vault(|vault| Ok(peer_sync::has_sync_backup(vault)))
             .unwrap()
     );
 
@@ -472,8 +472,8 @@ async fn devices_pair_exchange_and_stay_in_sync() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn another_vault_is_refused() {
     let dir = tempfile::tempdir().unwrap();
-    let left = UnlockedVault::create(dir.path().join("a.wallet"), "pw").unwrap();
-    let right = UnlockedVault::create(dir.path().join("b.wallet"), "pw").unwrap();
+    let left = Session::create(dir.path().join("a.wallet"), "pw").unwrap();
+    let right = Session::create(dir.path().join("b.wallet"), "pw").unwrap();
     let (main, main_events) = device("A", left, SyncRole::Main);
     let (client, client_events) = device("B", right, SyncRole::Client);
     let main_errors = answer(main.clone(), main_events, true);
@@ -505,7 +505,7 @@ async fn a_declined_pairing_trusts_nobody() {
     assert!(client.hub().failures.is_empty());
     assert!(comments(&main).is_empty());
     let peers = main
-        .with_vault(|vault| Ok(vault.sync_state().peers.len()))
+        .with_vault(|vault| Ok(peer_sync::sync_state(vault).peers.len()))
         .unwrap();
     assert_eq!(peers, 0);
 }
@@ -614,8 +614,8 @@ async fn a_forgotten_device_stays_untrusted_when_the_pairing_is_declined() {
         .with_vault(|vault| {
             let key = trade_core::sync::session::hex(&client.0.key.public);
             Ok((
-                vault.sync_state().trusted(&key).is_some(),
-                vault.sync_state().is_revoked(&key),
+                peer_sync::sync_state(vault).trusted(&key).is_some(),
+                peer_sync::sync_state(vault).is_revoked(&key),
             ))
         })
         .unwrap();
@@ -635,7 +635,7 @@ async fn a_forgotten_device_returns_through_a_confirmed_pairing() {
     assert_eq!(comments(&client), comments(&main));
     let key = trade_core::sync::session::hex(&client.0.key.public);
     let trusted = main
-        .with_vault(|vault| Ok(vault.sync_state().trusted(&key).is_some()))
+        .with_vault(|vault| Ok(peer_sync::sync_state(vault).trusted(&key).is_some()))
         .unwrap();
     assert!(trusted);
     assert!(!has(&main_errors, "SYNC_REVOKED"));
@@ -891,7 +891,7 @@ fn responder(host: TestHost, mut events: Events, plan: Option<bool>) -> Seen {
 }
 
 fn paused(host: &TestHost, device_id: &str) -> bool {
-    host.with_vault(|vault| Ok(vault.sync_is_paused(device_id)))
+    host.with_vault(|vault| Ok(peer_sync::sync_is_paused(vault, device_id)))
         .unwrap()
 }
 
@@ -931,7 +931,7 @@ async fn declining_a_plan_pauses_the_device_until_resumed() {
 
     // "Resume": the plan question comes back.
     client
-        .with_vault(|vault| vault.sync_resume_peer(&main_id))
+        .with_vault(|vault| peer_sync::sync_resume_peer(vault, &main_id))
         .unwrap();
     connect(&main, &client).await;
     until("the plan is asked again", || client_seen.plans() == 2).await;
@@ -1158,11 +1158,11 @@ async fn assert_refused_on_both_sides(odd_versions: (u32, u32)) {
     let client_key = client.0.key.public_hex();
     assert!(
         client
-            .with_vault(|vault| Ok(vault.sync_state().trusted(&main_key).is_some()))
+            .with_vault(|vault| Ok(peer_sync::sync_state(vault).trusted(&main_key).is_some()))
             .unwrap()
     );
     assert!(
-        main.with_vault(|vault| Ok(vault.sync_state().trusted(&client_key).is_some()))
+        main.with_vault(|vault| Ok(peer_sync::sync_state(vault).trusted(&client_key).is_some()))
             .unwrap()
     );
     assert!(main.hub().failures.is_empty());
@@ -1321,7 +1321,7 @@ fn current_versions() -> (u32, u32) {
 }
 
 fn cut_reason(host: &TestHost, device_id: &str) -> Option<SyncCutReason> {
-    host.with_vault(|vault| Ok(vault.sync_cut_reason(device_id)))
+    host.with_vault(|vault| Ok(peer_sync::sync_cut_reason(vault, device_id)))
         .unwrap()
 }
 
@@ -1354,7 +1354,7 @@ async fn a_paused_device_is_told_and_stops_calling() {
         trusting_pair(dir.path(), current_versions());
     let (laptop_id, phone_id) = (laptop.settings().device_id, phone.settings().device_id);
     laptop
-        .with_vault(|vault| vault.sync_pause_peer(&phone_id))
+        .with_vault(|vault| peer_sync::sync_pause_peer(vault, &phone_id))
         .unwrap();
     let laptop_seen = responder(laptop.clone(), laptop_events, Some(true));
     let phone_seen = responder(phone.clone(), phone_events, Some(true));
@@ -1399,7 +1399,7 @@ async fn a_paused_device_is_told_and_stops_calling() {
     }
     assert!(super::discovery::due_callbacks(&laptop, 1).is_empty());
     laptop
-        .with_vault(|vault| vault.sync_resume_peer(&phone_id))
+        .with_vault(|vault| peer_sync::sync_resume_peer(vault, &phone_id))
         .unwrap();
     assert_eq!(super::discovery::due_callbacks(&laptop, 1).len(), 1);
 }
@@ -1411,7 +1411,7 @@ async fn resuming_on_the_other_side_brings_the_exchange_back() {
         trusting_pair(dir.path(), current_versions());
     let (laptop_id, phone_id) = (laptop.settings().device_id, phone.settings().device_id);
     laptop
-        .with_vault(|vault| vault.sync_pause_peer(&phone_id))
+        .with_vault(|vault| peer_sync::sync_pause_peer(vault, &phone_id))
         .unwrap();
     let _laptop_seen = responder(laptop.clone(), laptop_events, Some(true));
     let phone_seen = responder(phone.clone(), phone_events, Some(true));
@@ -1422,7 +1422,7 @@ async fn resuming_on_the_other_side_brings_the_exchange_back() {
 
     // "Resume" there; the laptop calls the phone itself.
     laptop
-        .with_vault(|vault| vault.sync_resume_peer(&phone_id))
+        .with_vault(|vault| peer_sync::sync_resume_peer(vault, &phone_id))
         .unwrap();
     call_back(&laptop, &phone).await;
     until("both live", || live(&laptop) && live(&phone)).await;
@@ -1524,9 +1524,7 @@ async fn a_client_cut_by_its_main_does_not_become_main() {
         .insert("laptop-id".into(), "Laptop".into());
     phone
         .with_vault(|vault| {
-            vault
-                .sync_cut_by("laptop-id", SyncCutReason::Paused)
-                .map(|_| ())
+            peer_sync::sync_cut_by(vault, "laptop-id", SyncCutReason::Paused).map(|_| ())
         })
         .unwrap();
 
@@ -1723,8 +1721,7 @@ async fn a_live_link_receives_an_edit_made_just_before_a_sync_call() {
 
 fn trusted(host: &TestHost, device_id: &str) -> bool {
     host.with_vault(|vault| {
-        Ok(vault
-            .sync_state()
+        Ok(peer_sync::sync_state(vault)
             .peers
             .iter()
             .any(|peer| peer.device_id == device_id && peer.revoked.is_none()))
@@ -1752,8 +1749,7 @@ fn pending_trust_survives_a_restart() {
     assert_eq!(taken.len(), 1);
     super::pending::apply(&mut vault, &taken[0]).unwrap();
     assert!(
-        vault
-            .sync_state()
+        peer_sync::sync_state(&vault)
             .peers
             .iter()
             .any(|peer| peer.device_id == "laptop-id" && peer.revoked.is_none())
@@ -1914,8 +1910,7 @@ async fn a_revocation_during_the_question_is_not_lost() {
             let laptop_key = trade_core::sync::session::hex(&laptop.0.key.public);
             let mut entry = phone
                 .with_vault(|vault| {
-                    Ok(vault
-                        .sync_state()
+                    Ok(peer_sync::sync_state(vault)
                         .peers
                         .iter()
                         .find(|peer| peer.public_key == laptop_key)
@@ -1931,7 +1926,7 @@ async fn a_revocation_during_the_question_is_not_lost() {
             entry.revoked = Some(stamp.clone());
             entry.stamp = stamp;
             laptop
-                .with_vault(|vault| vault.sync_merge_peers(&[entry]))
+                .with_vault(|vault| peer_sync::sync_merge_peers(vault, &[entry]))
                 .unwrap();
             let session = laptop.hub().links.keys().next().cloned().unwrap();
             super::send(laptop, &session, Order::SendPeers);

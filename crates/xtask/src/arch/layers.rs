@@ -1,4 +1,4 @@
-//! The crate table of `crates/core/src` as data: modules form the target crates of the crate split
+//! The crate table of `crates/usecases/src` as data: modules form the target crates of the crate split
 //! (spec crate-split, D8 and "Interfaces"), and an explicit list says which crate may name which.
 //! An import `A -> B` is legal when both sit in the same crate or B's crate is in A's `may_use` list.
 
@@ -43,6 +43,7 @@ pub const GROUPS: &[Group] = &[
         name: "net",
         modules: &[
             "pricing",
+            "chain",
             "exchange",
             "datasource",
             "market",
@@ -60,12 +61,6 @@ pub const GROUPS: &[Group] = &[
         name: "sync",
         modules: &["sync"],
         may_use: &["base", "crypto", "model"],
-    },
-    // Test support: compiled only under `cfg(test)` or the `testkit` feature.
-    Group {
-        name: "testkit",
-        modules: &["testkit"],
-        may_use: &["base", "model"],
     },
     // `txinfo` is a re-export of `money::txinfo` until Ф7 removes the old path (core-strangler T27).
     Group {
@@ -99,10 +94,12 @@ pub const GROUPS: &[Group] = &[
         modules: &["cryptotrack"],
         may_use: &["base", "model", "money"],
     },
-    // The IPC contract sits on top of the domain crates (spec fact 2); nothing below may name it.
+    // The IPC contract crate `mwt-contract` sits on top of the domain crates (spec fact 2); nothing below may
+    // name it. No module of `crates/usecases/src` belongs to it (`ipc_contract.rs` is the shim over it), so
+    // the group only records which crates the contract may depend on (checked by `cargo tree`, T24).
     Group {
         name: "contract",
-        modules: &["ipc_contract"],
+        modules: &[],
         may_use: &[
             "base",
             "model",
@@ -112,12 +109,20 @@ pub const GROUPS: &[Group] = &[
             "planning",
             "reports",
             "cryptotrack",
+            "sync",
+            "crypto",
+            "vault",
+            "net",
         ],
     },
-    // The facade (`trade-core`): scenarios, the service shim, sandbox and config; it uses every crate.
+    // The use-case crate (`mwt-usecases`): scenarios, the service shim, sandbox, config and the test kit
+    // (`testkit` and the files gated by the `testkit` feature); it uses every crate.
+    // Scenarios naming `crate::testkit` are stopped by the compiler gate `cfg(any(test, feature = "testkit"))`, not by this table.
     Group {
-        name: "facade",
+        name: "usecases",
         modules: &[
+            "ipc_contract",
+            "testkit",
             "service",
             "usecases",
             "sandbox",
@@ -129,6 +134,7 @@ pub const GROUPS: &[Group] = &[
             "workflow_facade_tests",
             "planning_facade_tests",
             "reports_facade_tests",
+            "crypto_facade_tests",
         ],
         may_use: &[
             "base",
@@ -162,7 +168,7 @@ pub fn is_legal(from: &str, to: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{AllowEntry, Edge, domain, evaluate};
+    use super::super::{AllowEntry, Edge, crates, domain, evaluate};
     use super::*;
 
     /// The domain crates the contract may sit on top of.
@@ -180,6 +186,26 @@ mod tests {
         for group in GROUPS {
             for used in group.may_use {
                 assert!(GROUPS.iter().any(|other| other.name == *used), "{used}");
+            }
+        }
+    }
+
+    /// The crate of the crate table that a module group stands for.
+    fn crate_of(group: &str) -> String {
+        format!("mwt-{group}")
+    }
+
+    #[test]
+    fn a_group_may_use_only_what_its_crate_row_allows() {
+        for group in GROUPS {
+            let name = crate_of(group.name);
+            let row = crates::TABLE
+                .iter()
+                .find(|row| row.name == name)
+                .unwrap_or_else(|| panic!("no row for {name}"));
+            for used in group.may_use {
+                let used = crate_of(used);
+                assert!(row.uses.contains(&used.as_str()), "{name} -> {used}");
             }
         }
     }
@@ -203,10 +229,36 @@ mod tests {
     #[test]
     fn contract_sits_above_the_domain() {
         for domain_module in DOMAIN {
-            assert!(is_legal("ipc_contract", domain_module), "{domain_module}");
+            // No domain module may use the facade shim of the contract.
             assert!(!is_legal(domain_module, "ipc_contract"), "{domain_module}");
         }
-        assert!(!is_legal("ipc_contract", "service"));
+        let contract = GROUPS
+            .iter()
+            .find(|group| group.name == "contract")
+            .unwrap();
+        assert_eq!(
+            contract.may_use,
+            [
+                "base",
+                "model",
+                "money",
+                "household",
+                "workflow",
+                "planning",
+                "reports",
+                "cryptotrack",
+                "sync",
+                "crypto",
+                "vault",
+                "net"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_contract_shim_is_part_of_the_facade() {
+        assert!(is_legal("ipc_contract", "appconfig"));
+        assert!(is_legal("ipc_contract", "service"));
     }
 
     #[test]
@@ -217,10 +269,12 @@ mod tests {
     }
 
     #[test]
-    fn nothing_below_the_facade_names_it_or_testkit() {
+    fn nothing_below_usecases_names_it_or_testkit() {
         assert!(!is_legal("reports", "usecases"));
-        assert!(!is_legal("usecases", "testkit"));
-        assert!(is_legal("testkit", "model"));
+        assert!(!is_legal("model", "testkit"));
+        assert!(!is_legal("sync", "testkit"));
+        assert!(is_legal("testkit", "workflow"));
+        assert!(is_legal("testkit", "sync"));
     }
 
     #[test]

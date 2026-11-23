@@ -5,16 +5,16 @@
 //! The expansion names `crate::ipc::...`, so this crate is for `crates/app`
 //! only. At most four flags:
 //!
-//! - `read` or `write`: the first parameter is `&UnlockedVault` or
-//!   `&mut UnlockedVault` (exactly one of the two, unless `locked_ok`),
+//! - `read` or `write`: the first parameter is `&Session` or
+//!   `&mut Session` (exactly one of the two, unless `locked_ok`),
 //! - `sandbox = deny`: refuse while the sandbox is open,
 //! - `locked_ok`: no vault check; the first parameter is `&AppState` or absent.
 //!
 //! ```ignore
 //! #[ipc(read)]
-//! fn list_stores(vault: &UnlockedVault) -> Result<Vec<Store>> { .. }
+//! fn list_stores(vault: &Session) -> Result<Vec<Store>> { .. }
 //! #[ipc(write, sandbox = deny)]
-//! fn delete_store(vault: &mut UnlockedVault, id: String) -> Result<()> { .. }
+//! fn delete_store(vault: &mut Session, id: String) -> Result<()> { .. }
 //! #[ipc(locked_ok)]
 //! fn vault_status(state: &AppState) -> Result<VaultStatus> { .. }
 //! ```
@@ -25,7 +25,7 @@
 //! # use mwt_app_macros::ipc;
 //! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(read)]
-//! fn list(_vault: &UnlockedVault, id: String) -> Result<String, ipc::IpcError> { Ok(id) }
+//! fn list(_vault: &Session, id: String) -> Result<String, ipc::IpcError> { Ok(id) }
 //! # fn main() { assert_eq!(__IPC_META_list.name, "list"); }
 //! ```
 //!
@@ -35,7 +35,7 @@
 //! # use mwt_app_macros::ipc;
 //! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(read, write, sandbox = deny, locked_ok, read)]
-//! fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! fn list(vault: &Session) -> Result<(), ipc::IpcError> { Ok(()) }
 //! # fn main() {}
 //! ```
 //!
@@ -45,7 +45,7 @@
 //! # use mwt_app_macros::ipc;
 //! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(read, write)]
-//! fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! fn list(vault: &Session) -> Result<(), ipc::IpcError> { Ok(()) }
 //! # fn main() {}
 //! ```
 //!
@@ -55,7 +55,7 @@
 //! # use mwt_app_macros::ipc;
 //! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(sandbox = deny)]
-//! fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! fn list(vault: &Session) -> Result<(), ipc::IpcError> { Ok(()) }
 //! # fn main() {}
 //! ```
 //!
@@ -65,7 +65,7 @@
 //! # use mwt_app_macros::ipc;
 //! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(write)]
-//! fn change(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! fn change(vault: &Session) -> Result<(), ipc::IpcError> { Ok(()) }
 //! # fn main() {}
 //! ```
 //!
@@ -75,7 +75,7 @@
 //! # use mwt_app_macros::ipc;
 //! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(read, fast)]
-//! fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! fn list(vault: &Session) -> Result<(), ipc::IpcError> { Ok(()) }
 //! # fn main() {}
 //! ```
 //!
@@ -85,7 +85,7 @@
 //! # use mwt_app_macros::ipc;
 //! # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/stub/ipc_stub.rs"));
 //! #[ipc(read)]
-//! async fn list(vault: &UnlockedVault) -> Result<(), ipc::IpcError> { Ok(()) }
+//! async fn list(vault: &Session) -> Result<(), ipc::IpcError> { Ok(()) }
 //! ```
 
 use proc_macro::TokenStream as CompilerTokens;
@@ -254,7 +254,7 @@ struct Argument {
 
 /// The body's parameters split by role.
 struct Signature {
-    /// The `&UnlockedVault` / `&mut UnlockedVault` / `&AppState` parameter.
+    /// The `&Session` / `&mut Session` / `&AppState` parameter.
     first: Option<Type>,
     /// A `&AppHandle` parameter, forwarded from the command's `app`.
     handle: bool,
@@ -285,11 +285,11 @@ fn take_first<'a>(
 /// Whether `ty` is the first parameter `mode` wants; a wrong vault kind is an error.
 fn first_matches(ty: &Type, mode: Mode) -> Result<bool, Error> {
     let (expected, mutable) = match mode {
-        Mode::Read => ("&UnlockedVault", false),
-        Mode::Write => ("&mut UnlockedVault", true),
+        Mode::Read => ("&Session", false),
+        Mode::Write => ("&mut Session", true),
         Mode::LockedOk => return Ok(is_reference_to(ty, "AppState", false)),
     };
-    if is_reference_to(ty, "UnlockedVault", mutable) {
+    if is_reference_to(ty, "Session", mutable) {
         return Ok(true);
     }
     Err(Error::new_spanned(
@@ -510,8 +510,9 @@ fn meta_item(command: &Command) -> TokenStream {
         pub const #meta_name: crate::ipc::run::CommandMeta = crate::ipc::run::CommandMeta {
             name: stringify!(#name),
             args: &[
-                #( crate::ipc::run::ArgMeta { name: stringify!(#names), ts: #printers } ),*
+                #( crate::ipc::run::ArgMeta { name: stringify!(#names), #[cfg(feature = "ts")] ts: #printers } ),*
             ],
+            #[cfg(feature = "ts")]
             ret: #ret_printer,
         };
     }
@@ -557,7 +558,14 @@ mod tests {
     }
 
     const READ_ITEM: &str =
-        "fn list(vault: &UnlockedVault, id: String) -> Result<Vec<Store>> { todo!() }";
+        "fn list(vault: &Session, id: String) -> Result<Vec<Store>> { todo!() }";
+
+    #[test]
+    fn the_ts_printers_are_behind_the_ts_feature() {
+        let out = expanded("read", READ_ITEM);
+        assert!(out.contains("# [cfg (feature = \"ts\")] ts :"));
+        assert!(out.contains("# [cfg (feature = \"ts\")] ret :"));
+    }
 
     #[test]
     fn read_expands_to_a_tauri_command_through_run_read() {
@@ -579,7 +587,7 @@ mod tests {
     fn write_expands_through_run_write() {
         let out = expanded(
             "write",
-            "fn change(vault: &mut UnlockedVault) -> Result<()> { todo!() }",
+            "fn change(vault: &mut Session) -> Result<()> { todo!() }",
         );
         assert!(out.contains("crate :: ipc :: run :: write (__ipc_host"));
         assert!(out.contains("sandbox_deny : false"));
@@ -589,7 +597,7 @@ mod tests {
     fn write_with_sandbox_deny_sets_the_gate() {
         let out = expanded(
             "write, sandbox = deny",
-            "fn change(vault: &mut UnlockedVault) -> Result<()> { todo!() }",
+            "fn change(vault: &mut Session) -> Result<()> { todo!() }",
         );
         assert!(out.contains("crate :: ipc :: run :: write (__ipc_host"));
         assert!(out.contains("sandbox_deny : true"));
@@ -626,10 +634,10 @@ mod tests {
 
     #[test]
     fn a_reference_of_the_wrong_kind_is_refused() {
-        let item = "fn change(vault: &UnlockedVault) -> Result<()> { todo!() }";
-        assert!(error_of("write", item).contains("&mut UnlockedVault"));
-        let item = "fn list(vault: &mut UnlockedVault) -> Result<()> { todo!() }";
-        assert!(error_of("read", item).contains("`&UnlockedVault`"));
+        let item = "fn change(vault: &Session) -> Result<()> { todo!() }";
+        assert!(error_of("write", item).contains("&mut Session"));
+        let item = "fn list(vault: &mut Session) -> Result<()> { todo!() }";
+        assert!(error_of("read", item).contains("`&Session`"));
     }
 
     #[test]
@@ -640,7 +648,7 @@ mod tests {
 
     #[test]
     fn an_async_body_is_refused() {
-        let item = "async fn list(vault: &UnlockedVault) -> Result<()> { todo!() }";
+        let item = "async fn list(vault: &Session) -> Result<()> { todo!() }";
         assert!(error_of("read", item).contains("plain sync fn"));
     }
 
@@ -660,16 +668,15 @@ mod tests {
 
     #[test]
     fn an_app_argument_that_is_not_the_app_handle_is_refused() {
-        let item = "fn list(vault: &UnlockedVault, app: String) -> Result<()> { todo!() }";
+        let item = "fn list(vault: &Session, app: String) -> Result<()> { todo!() }";
         assert!(error_of("read", item).contains("`app` is reserved by #[ipc] for the &AppHandle"));
     }
 
     #[test]
     fn reserved_argument_names_are_refused() {
         for reserved in RESERVED {
-            let item = format!(
-                "fn list(vault: &UnlockedVault, {reserved}: u8) -> Result<()> {{ todo!() }}"
-            );
+            let item =
+                format!("fn list(vault: &Session, {reserved}: u8) -> Result<()> {{ todo!() }}");
             assert!(error_of("read", &item).contains("is reserved by #[ipc]"));
         }
     }

@@ -1,6 +1,6 @@
-//! The domain modules must not reach back into the shim: no `UnlockedVault`, no top-level
-//! `crate::service::` path and no `Books::vault` in their non-test code (core-strangler Z6/D5).
-//! `cryptotrack::service` is the module's own and is not the top-level `service`.
+//! The domain crates must not reach back into the facade: no `Session` from the `service` module, no top-level
+//! `crate::service::` path, no `trade_core::` path and no `Books::vault` in their non-test code
+//! (core-strangler Z6/D5, core-dismantle D14). `cryptotrack::service` is the crate's own module.
 //! A few uses are exempt until the task named in the exemption moves them; entries may only be removed.
 
 use std::collections::BTreeMap;
@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use super::Source;
 use super::scan;
 
-/// The domain modules the rule holds.
-const DOMAIN_MODULES: &[&str] = &[
+/// The domain crates the rule holds; each is scanned under `crates/<name>/src`.
+pub const DOMAIN_CRATES: &[&str] = &[
     "money",
     "household",
     "planning",
@@ -18,10 +18,15 @@ const DOMAIN_MODULES: &[&str] = &[
     "cryptotrack",
 ];
 
-const VAULT_TYPE: &str = "UnlockedVault";
+/// Crates with a `service` module of their own: there `crate::service` is theirs, not the facade's.
+const OWN_SERVICE: &[&str] = &["cryptotrack", "workflow"];
+
+const SESSION_TYPE: &str = "Session";
 const BOOKS_VAULT: &str = "Books::vault";
 const VAULT_CALL: &str = ".vault()";
 const SERVICE: &str = "service";
+const SERVICE_SESSION_PREFIX: &str = "service::";
+const FACADE_PATH: &str = "trade_core::";
 
 /// One use that stays until `until` moves it: the file, and the last segment of the `crate::service` path.
 pub struct Exemption {
@@ -50,6 +55,8 @@ pub struct Findings {
     pub violations: Vec<Finding>,
     /// One description per exemption that covers nothing.
     pub stale: Vec<String>,
+    /// How many files were scanned, so an empty scan shows.
+    pub scanned: usize,
 }
 
 impl Findings {
@@ -57,13 +64,13 @@ impl Findings {
         self.violations.len() + self.stale.len()
     }
 
-    pub fn lines(&self, core_src: &str) -> Vec<String> {
+    pub fn lines(&self) -> Vec<String> {
         let mut lines: Vec<String> = self
             .violations
             .iter()
             .map(|finding| {
                 format!(
-                    "error: {core_src}/{}:{}: {} is forbidden in the domain modules",
+                    "error: crates/{}:{}: {} is forbidden in the domain crates",
                     finding.file, finding.line, finding.what
                 )
             })
@@ -71,6 +78,7 @@ impl Findings {
         lines.extend(self.stale.iter().map(|entry| {
             format!("error: arch exemption {entry}: no such use any more, delete it")
         }));
+        lines.push(format!("arch: {} domain crate files scanned", self.scanned));
         lines
     }
 }
@@ -87,6 +95,19 @@ fn word_offsets(text: &str, needle: &str) -> Vec<usize> {
             let before = text[..offset].chars().next_back();
             let after = text[offset + needle.len()..].chars().next();
             !before.is_some_and(scan::is_ident_char) && !after.is_some_and(scan::is_ident_char)
+        })
+        .collect()
+}
+
+/// The occurrences of `needle` not preceded by an identifier character.
+fn word_start_offsets(text: &str, needle: &str) -> Vec<usize> {
+    text.match_indices(needle)
+        .map(|(offset, _)| offset)
+        .filter(|&offset| {
+            !text[..offset]
+                .chars()
+                .next_back()
+                .is_some_and(scan::is_ident_char)
         })
         .collect()
 }
@@ -119,11 +140,17 @@ fn last_segment(path: &str) -> &str {
 }
 
 /// The forbidden names of one file: (line, description, `service` item if it is a service path).
-fn forbidden_in(text: &str) -> Vec<(usize, String, Option<String>)> {
+fn forbidden_in(text: &str, own_service: bool) -> Vec<(usize, String, Option<String>)> {
     let cleaned = scan::production_text(text);
     let mut found = Vec::new();
-    for offset in word_offsets(&cleaned, VAULT_TYPE) {
-        found.push((line_of(&cleaned, offset), format!("`{VAULT_TYPE}`"), None));
+    for offset in word_offsets(&cleaned, SESSION_TYPE) {
+        if !own_service && cleaned[..offset].ends_with(SERVICE_SESSION_PREFIX) {
+            let what = format!("`{SERVICE_SESSION_PREFIX}{SESSION_TYPE}`");
+            found.push((line_of(&cleaned, offset), what, None));
+        }
+    }
+    for offset in word_start_offsets(&cleaned, FACADE_PATH) {
+        found.push((line_of(&cleaned, offset), format!("`{FACADE_PATH}`"), None));
     }
     for needle in [BOOKS_VAULT, VAULT_CALL] {
         for (offset, _) in cleaned.match_indices(needle) {
@@ -131,7 +158,7 @@ fn forbidden_in(text: &str) -> Vec<(usize, String, Option<String>)> {
         }
     }
     for offset in scan::name_offsets(&cleaned) {
-        if scan::leading_ident(&cleaned[offset..]) == SERVICE {
+        if !own_service && scan::leading_ident(&cleaned[offset..]) == SERVICE {
             let path = path_from(&cleaned, offset);
             let item = last_segment(&path).to_string();
             found.push((
@@ -149,11 +176,10 @@ fn forbidden_in(text: &str) -> Vec<(usize, String, Option<String>)> {
 pub fn check(sources: &[Source], exemptions: &[Exemption]) -> Findings {
     let mut used: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     let mut violations = Vec::new();
-    for source in sources
-        .iter()
-        .filter(|source| DOMAIN_MODULES.contains(&source.module.as_str()))
-    {
-        for (line, what, item) in forbidden_in(&source.text) {
+    for source in sources {
+        for (line, what, item) in
+            forbidden_in(&source.text, OWN_SERVICE.contains(&source.module.as_str()))
+        {
             let exempt = item.as_deref().and_then(|name| {
                 exemptions
                     .iter()
@@ -195,7 +221,11 @@ pub fn check(sources: &[Source], exemptions: &[Exemption]) -> Findings {
             )
         })
         .collect();
-    Findings { violations, stale }
+    Findings {
+        violations,
+        stale,
+        scanned: sources.len(),
+    }
 }
 
 #[cfg(test)]
@@ -213,15 +243,17 @@ mod tests {
     const NONE: &[Exemption] = &[];
 
     fn messages(sources: &[Source], exemptions: &[Exemption]) -> Vec<String> {
-        check(sources, exemptions).lines("core")
+        let mut lines = check(sources, exemptions).lines();
+        lines.retain(|line| line.starts_with("error:"));
+        lines
     }
 
     #[test]
-    fn the_vault_type_through_service_fails_with_file_and_line() {
+    fn session_through_service_fails_with_file_and_line() {
         let found = messages(
             &[source(
                 "money/rates.rs",
-                "use std::fmt;\nuse crate::service::UnlockedVault;\n",
+                "use std::fmt;\nuse crate::service::Session;\n",
             )],
             NONE,
         );
@@ -229,8 +261,31 @@ mod tests {
         assert!(
             found
                 .iter()
-                .all(|line| line.contains("core/money/rates.rs:2"))
+                .all(|line| line.contains("crates/money/rates.rs:2"))
         );
+    }
+
+    #[test]
+    fn session_from_the_service_module_fails_but_another_session_does_not() {
+        let found = messages(
+            &[source("money/a.rs", "use crate::service::Session;\n")],
+            NONE,
+        );
+        assert!(
+            found.iter().any(|line| line.contains("`service::Session`")),
+            "{found:?}"
+        );
+        let other = "use crate::clock::Session;\nlet session = Session::new();\n";
+        assert!(messages(&[source("money/a.rs", other)], NONE).is_empty());
+    }
+
+    #[test]
+    fn the_facade_crate_path_fails_and_a_longer_name_does_not() {
+        let found = messages(&[source("money/a.rs", "use trade_core::Amount;\n")], NONE);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("crates/money/a.rs:1"));
+        let text = "use my_trade_core::X;\n";
+        assert!(messages(&[source("money/a.rs", text)], NONE).is_empty());
     }
 
     #[test]
@@ -252,6 +307,8 @@ mod tests {
     fn the_cryptotrack_own_service_is_not_flagged() {
         let text = "use super::service::x;\nuse crate::cryptotrack::service::y;\n";
         assert!(messages(&[source("cryptotrack/a.rs", text)], NONE).is_empty());
+        let own = "use crate::service::Session;\n";
+        assert!(messages(&[source("cryptotrack/a.rs", own)], NONE).is_empty());
     }
 
     #[test]
@@ -268,11 +325,12 @@ mod tests {
     }
 
     #[test]
-    fn test_code_comments_and_other_modules_pass() {
-        let text = "// UnlockedVault\n#[cfg(test)]\nmod tests {\n    use crate::service::UnlockedVault;\n}\n";
+    fn test_code_comments_and_a_crates_own_service_pass() {
+        let text =
+            "// service::Session\n#[cfg(test)]\nmod tests {\n    use crate::service::Session;\n}\n";
         assert!(messages(&[source("money/a.rs", text)], NONE).is_empty());
-        let outside = source("service/a.rs", "use crate::service::UnlockedVault;\n");
-        assert!(messages(&[outside], NONE).is_empty());
+        let own = source("workflow/a.rs", "use crate::service::graph::G;\n");
+        assert!(messages(&[own], NONE).is_empty());
     }
 
     #[test]

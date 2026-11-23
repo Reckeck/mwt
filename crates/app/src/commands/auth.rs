@@ -9,7 +9,7 @@ use trade_core::ipc_contract::{
 };
 use trade_core::kernel::events::{LockReason, VaultLocked};
 use trade_core::service::security_level::{check_new_secret, level_of_vault_file};
-use trade_core::service::{CopyPolicy, UnlockedVault};
+use trade_core::service::{CopyPolicy, Session};
 
 use crate::commands::{AppState, app_settings, lock_vault, require_vault};
 use crate::ipc::IpcError;
@@ -18,7 +18,7 @@ use crate::state::LockBus;
 
 /// Vault identity for the unlock screen. The base currency is *not* part of the
 /// document any more — it is an app-level preference — so it is left out here.
-pub fn info_of(vault: &UnlockedVault) -> VaultInfo {
+pub fn info_of(vault: &Session) -> VaultInfo {
     VaultInfo {
         path: vault.path.display().to_string(),
         doc_version: vault.doc.version,
@@ -93,7 +93,7 @@ pub async fn create_vault(
     let path = crate::platform_fs::resolve_new_vault(&app, &input.path)?;
     close_open_vault(&app, &state, &path)?;
     // `None` = a vault without a password; an empty one is refused by the core.
-    let mut vault = UnlockedVault::create_with(path.clone(), input.password.as_deref())?;
+    let mut vault = Session::create_with(path.clone(), input.password.as_deref())?;
     crate::vault_writer::install(&mut vault);
     if let Some(name) = input
         .cash_name
@@ -107,7 +107,14 @@ pub async fn create_vault(
             .find(|store| store.kind == trade_core::model::store::StoreKind::Cash)
             .map(|store| store.id.clone())
     {
-        vault.update_store(&cash, name, "#16a34a", "", Default::default())?;
+        trade_core::usecases::money::stores::update_store(
+            &mut vault,
+            &cash,
+            name,
+            "#16a34a",
+            "",
+            Default::default(),
+        )?;
     }
     store_vault(&state, vault)?;
     // The base currency lives in the app config, so push it into the new vault
@@ -162,7 +169,7 @@ pub(crate) async fn unlock_with(
     // A linked vault first takes in what changed in its external copy.
     let open_sync = crate::platform_fs::links::sync_before_open(app, &path)?;
     let device = crate::commands::app_settings::device_id(app);
-    let opened = UnlockedVault::open_as(path.clone(), &input.password, Some(&device));
+    let opened = Session::open_as(path.clone(), &input.password, Some(&device));
     if let Some(key) = &pin_key {
         note_pin_attempt(app, key, &opened);
     }
@@ -173,7 +180,7 @@ pub(crate) async fn unlock_with(
         == crate::platform_fs::links::TakeIn::Reopen
     {
         drop(vault);
-        vault = UnlockedVault::open_as(path.clone(), &input.password, Some(&device))?;
+        vault = Session::open_as(path.clone(), &input.password, Some(&device))?;
     }
     crate::platform_fs::attach_mirror(app, &mut vault);
     crate::vault_writer::install(&mut vault);
@@ -495,7 +502,7 @@ mod lock_order_tests {
 
 /// Put a freshly opened vault in place, writing the previous one's batched
 /// changes first (switching vaults must not lose them).
-fn store_vault(state: &AppState, vault: UnlockedVault) -> Result<(), IpcError> {
+fn store_vault(state: &AppState, vault: Session) -> Result<(), IpcError> {
     let mut guard = state
         .vault
         .lock()

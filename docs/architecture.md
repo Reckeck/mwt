@@ -17,7 +17,7 @@ is a thin shell: `tauri::Builder`, commands and state.
                            │ invoke / events
 ┌──────────────────────────┴──────────────────────────┐
 │                crates/app (Tauri shell)             │
-│  AppState { vault: Mutex<Option<UnlockedVault>>,    │
+│  AppState { vault: Mutex<Option<Session>>,    │
 │             vault_path: Mutex<PathBuf>, pricing }   │
 │  commands/{auth,stores,transactions,categories,     │
 │             pricing,portfolio,settings,exchange,     │
@@ -30,7 +30,7 @@ is a thin shell: `tauri::Builder`, commands and state.
 │  model/      — domain entities (VaultDoc, Store,    │
 │                Transaction, Settings, Chain)        │
 │  appconfig.rs— app settings (outside the vault, JSON)│
-│  service.rs  — UnlockedVault: all mutations + analytics│
+│  service.rs  — Session: all mutations + analytics│
 │  pricing/    — price providers, cache, FX            │
 │  cryptotrack/— the crypto engine: sources (EVM,      │
 │                Bybit), tokens, RPC client, prices    │
@@ -119,7 +119,7 @@ vaults.
 1. The user enters the master password → `auth::unlock_vault` →
    `VaultFile::open(path, password)` → `crypto::open_bytes` (AEAD check of the
    password) → `VaultDoc` deserialization. The result is stored in `AppState.vault`.
-2. All mutations (store/tx/settings) go through `UnlockedVault::transact`, which marks
+2. All mutations (store/tx/settings) go through `Session::transact`, which marks
    the document through `persist()`. The app's write-behind writer then does the
    re-encryption and the atomic write to disk, batching a burst of changes into one write.
    `persist_now` writes at once: it is used for copy, re-key and close. Without a
@@ -153,7 +153,7 @@ A new back edge fails `arch`; to allow one, write an entry with `until` and a re
 Today only `kernel -> service` and `workflow -> service` remain, until phase Ф5.
 
 The kernel (`crates/core/src/kernel/`) is the one place where a change of the open
-vault is committed. It grows by the strangler rule. What exists:
+vault is committed. What exists:
 
 - `Session` — the write state of an open vault: dirty flag, revision, the write gate,
   the store and the event bus.
@@ -166,8 +166,10 @@ vault is committed. It grows by the strangler rule. What exists:
   the write-behind hook and the sync tap are its subscribers.
 - `SaveHook` and `Commit` — how a marked change is told to the writer.
 
-Not built yet: the sandbox gate still lives in the service write path; the
-strangler moves continue in later waves.
+Not built yet: the sandbox gate still lives in the service write path.
+
+The facade's old name and the forwarding macro are banned for good: `xtask arch` refuses
+them in every `crates/*/src/**/*.rs` file, comments and tests included.
 
 ## Principles
 

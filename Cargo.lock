@@ -963,9 +963,9 @@ dependencies = [
 
 [[package]]
 name = "cookie"
-version = "0.18.2"
+version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a373e3602691c3cdea496d2f0ee5935151e6168fe87739483c463db1b2f2f87"
+checksum = "d55f2d6c30eeec7d5c6f98bd4395d4abb1895629eab97ee6522d340623615f8a"
 dependencies = [
  "time",
  "version_check",
@@ -1129,7 +1129,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d045de693cb712d0b22c6a64be5b953f67b3ce00ab5ad3dd5d8b441886ab8e1a"
 dependencies = [
  "quote",
- "syn 3.0.9",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -1725,9 +1725,9 @@ checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.2"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
+checksum = "afa489199eaffb1211795df1c6236ce1ad0d41a6fa45250add73e3b02420f06e"
 dependencies = [
  "percent-encoding",
 ]
@@ -3087,6 +3087,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-contract"
+version = "0.1.0"
+dependencies = [
+ "mwt-base",
+ "mwt-crypto",
+ "mwt-cryptotrack",
+ "mwt-household",
+ "mwt-model",
+ "mwt-money",
+ "mwt-net",
+ "mwt-planning",
+ "mwt-reports",
+ "mwt-sync",
+ "mwt-vault",
+ "mwt-workflow",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
 name = "mwt-crypto"
 version = "0.1.0"
 dependencies = [
@@ -3102,6 +3123,23 @@ dependencies = [
  "tempfile",
  "ts-rs",
  "zeroize",
+]
+
+[[package]]
+name = "mwt-cryptotrack"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "mwt-base",
+ "mwt-model",
+ "mwt-money",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "tokio",
+ "ts-rs",
+ "url",
+ "uuid",
 ]
 
 [[package]]
@@ -3184,6 +3222,7 @@ dependencies = [
  "mwt-base",
  "mwt-model",
  "proptest",
+ "rand 0.10.4",
  "reqwest 0.12.28",
  "rust_decimal",
  "scraper",
@@ -3266,6 +3305,51 @@ dependencies = [
  "rust_decimal",
  "tempfile",
  "time",
+]
+
+[[package]]
+name = "mwt-usecases"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "blake2 0.11.0",
+ "chrono",
+ "chrono-tz",
+ "hmac 0.13.0",
+ "insta",
+ "mwt-base",
+ "mwt-contract",
+ "mwt-crypto",
+ "mwt-cryptotrack",
+ "mwt-household",
+ "mwt-model",
+ "mwt-money",
+ "mwt-net",
+ "mwt-planning",
+ "mwt-reports",
+ "mwt-sync",
+ "mwt-testkit",
+ "mwt-usecases",
+ "mwt-vault",
+ "mwt-workflow",
+ "pretty_assertions",
+ "proptest",
+ "rand 0.10.4",
+ "regex",
+ "rmp-serde",
+ "rust_decimal",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "ts-rs",
+ "url",
+ "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -6519,7 +6603,6 @@ dependencies = [
  "rand 0.10.4",
  "reqwest 0.12.28",
  "rmp-serde",
- "schemars 1.2.3",
  "security-framework 3.7.0",
  "serde",
  "serde_json",
@@ -6542,6 +6625,7 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
+ "trade-app",
  "trade-core",
  "ts-rs",
  "uuid",
@@ -6554,43 +6638,12 @@ dependencies = [
 name = "trade-core"
 version = "0.1.0"
 dependencies = [
- "base64 0.23.1",
- "blake2 0.11.0",
- "chrono",
- "chrono-tz",
- "hmac 0.13.0",
- "insta",
- "mwt-base",
- "mwt-crypto",
- "mwt-household",
- "mwt-model",
+ "mwt-cryptotrack",
  "mwt-money",
- "mwt-net",
- "mwt-planning",
  "mwt-reports",
- "mwt-sync",
- "mwt-testkit",
- "mwt-vault",
- "mwt-workflow",
- "pretty_assertions",
- "proptest",
- "rand 0.10.4",
- "regex",
- "reqwest 0.12.28",
- "rmp-serde",
- "rust_decimal",
- "schemars 1.2.3",
- "serde",
- "serde_bytes",
+ "mwt-usecases",
  "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "time",
- "tokio",
  "ts-rs",
- "uuid",
- "zeroize",
 ]
 
 [[package]]
@@ -6739,9 +6792,9 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "url"
-version = "2.5.8"
+version = "2.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed"
+checksum = "f00cd2407bb42c0ef17be88d4cf020f5cceffd121665bac9b8b9493a369b3b1a"
 dependencies = [
  "form_urlencoded",
  "idna",
@@ -7643,11 +7696,9 @@ dependencies = [
  "chrono",
  "clap",
  "libc",
- "proc-macro2",
  "serde",
  "serde_json",
  "sha2 0.11.1",
- "syn 2.0.119",
  "tokio",
  "tokio-util",
  "toml 1.2.1+spec-1.1.0",

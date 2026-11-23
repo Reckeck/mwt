@@ -4,78 +4,29 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Multi Wallet Tracker core: domain model, encrypted vault, pricing, market data (no Tauri deps)"
+description = "Multi Wallet Tracker core facade: re-exports of mwt-usecases and the type generator (no Tauri deps)"
 
 [lints]
 workspace = true
 
 [features]
-# Test kit (`crate::testkit`): the facade module plus a re-export of the dev-only crate `mwt-testkit`.
-testkit = ["dep:mwt-testkit", "mwt-vault/testing"]
-# Forwarded to every extracted crate that has them (`mwt-base`, `mwt-crypto` and `mwt-model` are always built with them here).
-ts = ["mwt-model/ts", "mwt-sync/ts", "mwt-money/ts", "mwt-household/ts", "mwt-planning/ts", "mwt-reports/ts"]
-schema = ["mwt-model/schema", "mwt-money/schema", "mwt-planning/schema", "mwt-reports/schema"]
-# Marks every `forward!` delegate `#[deprecated]` so the remaining callers can be listed (`cargo clippy --features deprecated-forwards`).
-deprecated-forwards = []
+# Test kit (`trade_core::testkit`): the one of `mwt-usecases`.
+testkit = ["mwt-usecases/testkit"]
+# Forwarded to the use-case crate (which forwards it down); the generator names `ts_rs` itself.
+ts = ["dep:ts-rs", "mwt-usecases/ts", "mwt-money/ts", "mwt-reports/ts", "mwt-cryptotrack/ts"]
+schema = ["mwt-usecases/schema"]
 
 [dependencies]
-# The model: its derives are always on here, like base.
-mwt-model = { path = "../model", features = ["ts", "schema"] }
-# The DTO derives of base are always on here: this crate derives `TS`/`JsonSchema` over `Amount`.
-mwt-base = { path = "../base", features = ["ts", "schema"] }
-# The network layer: pricing, exchanges, data sources, market, updates, external links.
-mwt-net = { path = "../net" }
-# The vault: file codec, kernel (`Session`, `Tx`, `Collection<T>`), vault files and copies, frozen v1-v4 schemas.
-mwt-vault = { path = "../vault" }
-# Device-to-device sync: merge, Noise channel, pairing code.
-mwt-sync = { path = "../sync", features = ["ts"] }
-# Money rules: the books, ledger, valuation, cost basis, validation.
-mwt-money = { path = "../money", features = ["ts", "schema"] }
-# Household rules: attachments, contacts, debts, losses, loyalty, property links, relations, shared events, utilities, vehicles.
-mwt-household = { path = "../household", features = ["ts"] }
-# Planning rules: budgets, envelopes, goals, allocation, agenda, automations, health, notifications, scenarios.
-mwt-planning = { path = "../planning", features = ["ts", "schema"] }
-# Reports: the overview, dashboard, insights, health, comparison, where-went and notification snapshot.
-mwt-reports = { path = "../reports", features = ["ts", "schema"] }
-# Workflow: the node catalog, graph, validation, executor and the pure record, run, mark and variable rules.
-mwt-workflow = { path = "../workflow" }
-# Test support: reached only through the `testkit` feature (and the dev-dependency below); no other crate lists it.
-mwt-testkit = { path = "../testkit", optional = true }
-# `SecurityLevel` / `RaiseStage` are TS types of the IPC contract.
-mwt-crypto = { path = "../crypto", features = ["ts"] }
-serde.workspace = true
+# Everything the facade re-exports: the scenarios, the service shim, sandbox, app config, the IPC contract shim.
+mwt-usecases = { path = "../usecases" }
+# The type generator (`gen-types`) lists the view types of these crates.
+mwt-money = { path = "../money" }
+mwt-reports = { path = "../reports" }
+mwt-cryptotrack = { path = "../cryptotrack" }
 serde_json.workspace = true
-rmp-serde.workspace = true
-thiserror.workspace = true
-rust_decimal.workspace = true
-uuid.workspace = true
-base64 = "0.23"
-time.workspace = true
-chrono.workspace = true
-chrono-tz.workspace = true
-zeroize.workspace = true
-hmac.workspace = true
-sha2.workspace = true
-blake2.workspace = true
-rand.workspace = true
-reqwest.workspace = true
-tokio.workspace = true
-schemars.workspace = true
-ts-rs.workspace = true
-regex.workspace = true
-serde_bytes.workspace = true
-
-[dev-dependencies]
-mwt-money = { path = "../money", features = ["ts", "schema", "testing"] }
-mwt-sync = { path = "../sync", features = ["ts", "testing"] }
-mwt-vault = { path = "../vault", features = ["testing"] }
-mwt-testkit = { path = "../testkit" }
-mwt-crypto = { path = "../crypto", features = ["ts", "testing"] }
-tempfile = "3"
-insta.workspace = true
-proptest.workspace = true
-pretty_assertions.workspace = true
+ts-rs = { workspace = true, optional = true }
 
 [[bin]]
 name = "gen-types"
 path = "src/bin/gen_types.rs"
+required-features = ["ts"]

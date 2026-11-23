@@ -4,7 +4,7 @@ description: >
   Vault editor in JSON format (Settings → View JSON, dev-only): CodeMirror,
   document schema from Rust, JSON-path autocomplete, Ctrl+S, .bak before
   writing, $EDITOR. Use when editing crates/app/src/commands/settings.rs
-  (vault_schema, dev_dump_vault, dev_apply_vault_json, dev_open_vault_json_in_editor,
+  (vault_schema (needs --features schema), dev_dump_vault, dev_apply_vault_json, dev_open_vault_json_in_editor,
   dev_reload_vault_json_from_editor), crates/core/src/model/vault.rs (json_schema),
   src/shared/lib/editor.ts, src/shared/lib/json.ts, src/shared/lib/json-schema-reader.ts,
   src/widgets/vault-json-editor/VaultJsonEditor.vue, and for tasks like
@@ -30,7 +30,7 @@ the schema comes from Rust over IPC. The full description is in
    (`parseJson` before the call) and in the core (`storage::decode` before
    `replace_doc`) — two independent refusals. Do not bypass this "just in case".
 3. **The shape of the document lives only in Rust.** The frontend does not know
-   the vault fields — it asks `vault_schema` and builds hints from the answer.
+   the vault fields — it asks `vault_schema` (dev only, needs `--features schema`) and builds hints from the answer.
    Add a field to `VaultDoc` and the hints update by themselves.
 
 ## Layers

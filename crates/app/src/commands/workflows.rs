@@ -15,10 +15,10 @@ use trade_core::ipc_contract::{
     SetWorkflowVarInput, ValidateWorkflowInput, WorkflowFromTemplateInput,
 };
 use trade_core::model::transaction::Transaction;
-use trade_core::service::{
-    SavedWorkflow, UnlockedVault, WorkflowImportPreview, WorkflowTestResult,
-};
+use trade_core::service::Session;
 use trade_core::usecases::workflow::{records, runs};
+use trade_core::workflow::service::records::{SavedWorkflow, WorkflowImportPreview};
+use trade_core::workflow::service::tests_def::WorkflowTestResult;
 use trade_core::workflow::service::{
     records as record_reads, runs as run_reads, vars as var_reads,
 };
@@ -50,18 +50,18 @@ pub async fn validate_workflow(input: ValidateWorkflowInput) -> Result<Vec<Graph
 }
 
 #[ipc(read)]
-pub fn list_workflows(vault: &UnlockedVault) -> trade_core::Result<Vec<Workflow>> {
+pub fn list_workflows(vault: &Session) -> trade_core::Result<Vec<Workflow>> {
     Ok(record_reads::workflows(&vault.doc))
 }
 
 #[ipc(read)]
-pub fn get_workflow(vault: &UnlockedVault, id: String) -> trade_core::Result<Workflow> {
+pub fn get_workflow(vault: &Session, id: String) -> trade_core::Result<Workflow> {
     record_reads::workflow(&vault.doc, &id)
 }
 
 #[ipc(write)]
 pub fn save_workflow(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: SaveWorkflowInput,
 ) -> trade_core::Result<SavedWorkflow> {
     records::save_workflow(
@@ -75,36 +75,33 @@ pub fn save_workflow(
 /// Keep the editor's unsaved edits aside, to come back to them.
 #[ipc(write)]
 pub fn save_workflow_draft(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: SaveWorkflowDraftInput,
 ) -> trade_core::Result<Workflow> {
     records::save_workflow_draft(vault, &input.id, &input.graph, now_secs())
 }
 
 #[ipc(write)]
-pub fn discard_workflow_draft(
-    vault: &mut UnlockedVault,
-    id: String,
-) -> trade_core::Result<Workflow> {
+pub fn discard_workflow_draft(vault: &mut Session, id: String) -> trade_core::Result<Workflow> {
     records::discard_workflow_draft(vault, &id)
 }
 
 #[ipc(write)]
 pub fn set_workflow_active(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: SetWorkflowActiveInput,
 ) -> trade_core::Result<Workflow> {
     records::set_workflow_active(vault, &input.id, input.active, now_secs())
 }
 
 #[ipc(write)]
-pub fn delete_workflow(vault: &mut UnlockedVault, id: String) -> trade_core::Result<()> {
+pub fn delete_workflow(vault: &mut Session, id: String) -> trade_core::Result<()> {
     records::delete_workflow(vault, &id)
 }
 
 #[ipc(write)]
 pub fn restore_workflow_version(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: RestoreWorkflowVersionInput,
 ) -> trade_core::Result<SavedWorkflow> {
     records::restore_workflow_version(vault, &input.id, &input.saved_at, now_secs())
@@ -113,7 +110,7 @@ pub fn restore_workflow_version(
 /// Emulate on a copy of the vault: nothing is written.
 #[ipc(read)]
 pub fn dry_run_workflow(
-    vault: &UnlockedVault,
+    vault: &Session,
     app: &AppHandle,
     input: DryRunWorkflowInput,
 ) -> trade_core::Result<RunReport> {
@@ -161,7 +158,7 @@ pub async fn run_workflow_now(
 
 #[ipc(read)]
 pub fn list_workflow_runs(
-    vault: &UnlockedVault,
+    vault: &Session,
     input: ListWorkflowRunsInput,
 ) -> trade_core::Result<Vec<WorkflowRun>> {
     let limit = input.limit.unwrap_or(DEFAULT_RUNS) as usize;
@@ -173,7 +170,7 @@ pub fn list_workflow_runs(
 }
 
 #[ipc(read)]
-pub fn list_workflow_queue(vault: &UnlockedVault) -> trade_core::Result<Vec<QueuedActions>> {
+pub fn list_workflow_queue(vault: &Session) -> trade_core::Result<Vec<QueuedActions>> {
     Ok(run_reads::queue(&vault.doc))
 }
 
@@ -195,13 +192,13 @@ pub async fn confirm_workflow_queued(
 }
 
 #[ipc(write)]
-pub fn discard_workflow_queued(vault: &mut UnlockedVault, id: String) -> trade_core::Result<()> {
+pub fn discard_workflow_queued(vault: &mut Session, id: String) -> trade_core::Result<()> {
     records::discard_queued(vault, &id)
 }
 
 /// Runs asleep: timers and questions waiting for an answer.
 #[ipc(read)]
-pub fn list_workflow_waits(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowWait>> {
+pub fn list_workflow_waits(vault: &Session) -> trade_core::Result<Vec<WorkflowWait>> {
     Ok(run_reads::waits(&vault.doc))
 }
 
@@ -232,21 +229,18 @@ pub async fn answer_workflow_wait(
 }
 
 #[ipc(read)]
-pub fn list_workflow_vars(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowVar>> {
+pub fn list_workflow_vars(vault: &Session) -> trade_core::Result<Vec<WorkflowVar>> {
     Ok(var_reads::variables(&vault.doc))
 }
 
 #[ipc(write)]
-pub fn set_workflow_var(
-    vault: &mut UnlockedVault,
-    input: SetWorkflowVarInput,
-) -> trade_core::Result<()> {
+pub fn set_workflow_var(vault: &mut Session, input: SetWorkflowVarInput) -> trade_core::Result<()> {
     records::set_workflow_var(vault, input.scope, &input.name, &input.value)
 }
 
 #[ipc(write)]
 pub fn delete_workflow_var(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: DeleteWorkflowVarInput,
 ) -> trade_core::Result<()> {
     records::delete_workflow_var(vault, &input.scope, &input.name)
@@ -254,14 +248,14 @@ pub fn delete_workflow_var(
 
 /// The workflow as a file's text.
 #[ipc(read)]
-pub fn export_workflow(vault: &UnlockedVault, id: String) -> trade_core::Result<String> {
+pub fn export_workflow(vault: &Session, id: String) -> trade_core::Result<String> {
     record_reads::export_workflow(&vault.doc, &id)
 }
 
 /// Add a workflow from a file's text, switched off.
 #[ipc(write)]
 pub fn import_workflow(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: ImportWorkflowInput,
 ) -> trade_core::Result<SavedWorkflow> {
     records::import_workflow(vault, &input.json, &input.stores, now_secs())
@@ -270,7 +264,7 @@ pub fn import_workflow(
 /// What a workflow file holds and which of its wallets are missing here.
 #[ipc(read)]
 pub fn preview_workflow_import(
-    vault: &UnlockedVault,
+    vault: &Session,
     json: String,
 ) -> trade_core::Result<WorkflowImportPreview> {
     record_reads::preview_import(&vault.doc, &json)
@@ -278,14 +272,14 @@ pub fn preview_workflow_import(
 
 /// The gallery of ready-made workflows with defaults from the vault.
 #[ipc(read)]
-pub fn workflow_templates(vault: &UnlockedVault) -> trade_core::Result<Vec<WorkflowTemplateInfo>> {
+pub fn workflow_templates(vault: &Session) -> trade_core::Result<Vec<WorkflowTemplateInfo>> {
     Ok(records::workflow_templates(&vault.books()))
 }
 
 /// Build a template's workflow from its form and save it switched on.
 #[ipc(write)]
 pub fn workflow_from_template(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     app: &AppHandle,
     input: WorkflowFromTemplateInput,
 ) -> trade_core::Result<SavedWorkflow> {
@@ -299,7 +293,7 @@ pub fn workflow_from_template(
 
 #[ipc(write)]
 pub fn save_workflow_test(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: SaveWorkflowTestInput,
 ) -> trade_core::Result<Workflow> {
     records::save_workflow_test(vault, &input.workflow_id, input.test)
@@ -307,7 +301,7 @@ pub fn save_workflow_test(
 
 #[ipc(write)]
 pub fn delete_workflow_test(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: DeleteWorkflowTestInput,
 ) -> trade_core::Result<Workflow> {
     records::delete_workflow_test(vault, &input.workflow_id, &input.test_id)
@@ -316,7 +310,7 @@ pub fn delete_workflow_test(
 /// Every test of a workflow by emulation; nothing is written.
 #[ipc(read)]
 pub fn run_workflow_tests(
-    vault: &UnlockedVault,
+    vault: &Session,
     app: &AppHandle,
     id: String,
 ) -> trade_core::Result<Vec<WorkflowTestResult>> {

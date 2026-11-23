@@ -111,7 +111,7 @@ A transfer is a **fresh trust on both sides**.
 ### Sender bookkeeping in the copy
 
 The file carries the sender's `doc.sync` as it was written. The core has a
-function for starting clean, `UnlockedVault::adopt_received_copy`: it keeps the
+function for starting clean, `Session::adopt_received_copy`: it keeps the
 record metadata and the trusted devices, and drops undo batches, the journal,
 transfers, pauses, cut-offs and the peers' last-sync times (the same set
 `take_records_from` keeps local for a pulled external copy).

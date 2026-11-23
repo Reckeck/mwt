@@ -16,7 +16,7 @@ autocompletion from Rust.
 | JSON helpers | `src/shared/lib/json.ts` | `parseJson` (whether the draft parses) and `normalizeJson` (canonical form for comparison) |
 | Component | `src/widgets/vault-json-editor/VaultJsonEditor.vue` | glue: CodeMirror + IPC + status |
 
-The `dev_*` commands (including `dev_export_vault`) exist only in development builds (`#[cfg(debug_assertions)]`, also on their `generate_handler!` entries): they do not exist in release builds. Only `vault_schema` is present there.
+The `dev_*` commands (including `dev_export_vault`) exist only in development builds (`#[cfg(debug_assertions)]`, also on their `generate_handler!` entries): they do not exist in release builds. `vault_schema` is dev-only as well: it needs `--features schema` (`mise run dev` passes it), so a release build has no schema command.
 
 The document shape exists nowhere in the frontend: the editor asks the backend for the schema.
 Add a field to `VaultDoc` and it shows up in the suggestions by itself.

@@ -123,7 +123,7 @@ pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpt
             "test-slow",
             Class::Heavy,
             &[],
-            Cmd::new("cargo").args(["test", "-p", "trade-core", "--lib", "--", SLOW_FILTER]),
+            Cmd::new("cargo").args(["test", "-p", "mwt-usecases", "--lib", "--", SLOW_FILTER]),
         ),
         Task::cmd(
             "test",
@@ -156,7 +156,6 @@ pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpt
         vitest("checks", Class::Light, "checks"),
         ci_scripts(),
         arch(),
-        strangle(),
         Task::cmd(
             "fmt",
             Class::Light,
@@ -185,7 +184,7 @@ fn ci_scripts() -> Task {
     })
 }
 
-/// The module graph of `crates/core/src` against the layer table (`crate::arch`), and the
+/// The module graph of `crates/usecases/src` against the layer table (`crate::arch`), and the
 /// `no-f64-in-money` rule (`money_f64`).
 fn arch() -> Task {
     Task::func("arch", Class::Light, &[], |ctx: Ctx| async move {
@@ -206,72 +205,10 @@ fn arch() -> Task {
         match report.failures() + floats.len() {
             0 => Outcome::Ok,
             count => Outcome::Fail(format!(
-                "{count} back edge(s), stale allowlist entries or f64 in money code, see the log"
+                "{count} back edge(s), stale allowlist entries, crate-table violations, banned words or f64 in money code, see the log"
             )),
         }
     })
-}
-
-const DEFAULT_BASE_REF: &str = "origin/development";
-
-/// The revision the CI gate diffs against: `origin/<GITHUB_BASE_REF>` on a PR, else `origin/development`.
-fn diff_base(github_base_ref: Option<&str>) -> String {
-    match github_base_ref.filter(|name| !name.is_empty()) {
-        Some(name) => format!("origin/{name}"),
-        None => DEFAULT_BASE_REF.to_string(),
-    }
-}
-
-/// The one line shown when the diff base is absent locally.
-fn missing_base_notice(base: &str) -> String {
-    format!("base ref {base} not found locally: running --all without --diff")
-}
-
-/// Arguments of `strangle check`: `--all`, plus `--diff <base>` when the base exists.
-fn strangle_args(base: Option<&str>) -> Vec<String> {
-    let mut args: Vec<String> = ["strangle", "check", "--all"].map(String::from).into();
-    if let Some(base) = base {
-        args.extend(["--diff".to_string(), base.to_string()]);
-    }
-    args
-}
-
-/// `strangle check --all --diff <base>`: the moved areas against `baseline.json` and the changed
-/// files against the task scope. Without the base ref locally it runs `--all` alone and says so.
-/// Runs this very binary, so no second cargo build is started.
-fn strangle() -> Task {
-    Task::func("strangle", Class::Light, &[], |ctx: Ctx| async move {
-        match std::env::current_exe() {
-            Ok(path) => strangle_outcome(&ctx, &path.display().to_string()).await,
-            Err(error) => Outcome::Fail(format!("{error:#}")),
-        }
-    })
-}
-
-/// Runs `program strangle check --all [--diff <base>]` and maps its exit to an outcome.
-async fn strangle_outcome(ctx: &Ctx, program: &str) -> Outcome {
-    let base = diff_base(std::env::var("GITHUB_BASE_REF").ok().as_deref());
-    let known = ctx
-        .capture("git", &["rev-parse", "--verify", "--quiet", &base])
-        .await
-        .is_some();
-    let notice = (!known).then(|| missing_base_notice(&base));
-    let cmd = Cmd::new(program).args(strangle_args(known.then_some(base.as_str())));
-    match ctx.exec(&cmd).await {
-        Ok(ExecEnd::Done(0)) => notice.map_or(Outcome::Ok, Outcome::OkNote),
-        Ok(ExecEnd::Done(code)) => Outcome::Fail(strangle_failure(code, notice.as_deref())),
-        Ok(ExecEnd::Cancelled) => Outcome::Cancelled,
-        Err(error) => Outcome::Fail(format!("{error:#}")),
-    }
-}
-
-/// The failure reason of `strangle check`, with the missing-base notice joined with "; " so the reason stays one line.
-fn strangle_failure(code: i32, notice: Option<&str>) -> String {
-    let reason = format!("strangle check exited with {code}");
-    match notice {
-        Some(text) => format!("{reason}; {text}"),
-        None => reason,
-    }
 }
 
 /// Regenerates ipc.gen.d.ts and fails when it differs from the committed file; the file is put back.
@@ -279,7 +216,15 @@ fn gen_types(_root: &Path) -> Task {
     Task::func("gen-types", Class::Heavy, &[], |ctx: Ctx| async move {
         let path = ctx.root.join(GEN_TYPES_FILE);
         let before = std::fs::read(&path).ok();
-        let cmd = Cmd::new("cargo").args(["run", "-p", "trade-core", "--bin", "gen-types"]);
+        let cmd = Cmd::new("cargo").args([
+            "run",
+            "-p",
+            "trade-core",
+            "--features",
+            "ts",
+            "--bin",
+            "gen-types",
+        ]);
         let end = ctx.exec(&cmd).await;
         // A killed generator leaves its scratch directory behind.
         let _ = std::fs::remove_dir_all(ctx.root.join("src/shared/api/.ts-tmp"));
@@ -309,13 +254,7 @@ fn gen_types(_root: &Path) -> Task {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        BrowserOpts, browser_cmd, diff_base, missing_base_notice, parse_shard, strangle_args,
-        strangle_failure, strangle_outcome,
-    };
-    use crate::exec::Ctx;
-    use crate::graph::Outcome;
-    use tokio_util::sync::CancellationToken;
+    use super::{BrowserOpts, browser_cmd, parse_shard};
 
     fn opts(quick: bool, shard: Option<&str>, jobs: Option<usize>) -> BrowserOpts {
         BrowserOpts {
@@ -351,62 +290,5 @@ mod tests {
         for bad in ["0/6", "7/6", "3", "a/b", "1/0", "/"] {
             assert!(parse_shard(bad).is_err(), "{bad}");
         }
-    }
-
-    #[test]
-    fn strangle_diffs_against_origin_development_by_default() {
-        assert_eq!(diff_base(None), "origin/development");
-        assert_eq!(diff_base(Some("")), "origin/development");
-        assert_eq!(
-            strangle_args(Some(&diff_base(None))),
-            ["strangle", "check", "--all", "--diff", "origin/development"]
-        );
-    }
-
-    #[test]
-    fn strangle_base_follows_github_base_ref() {
-        assert_eq!(diff_base(Some("main")), "origin/main");
-    }
-
-    #[test]
-    fn strangle_without_a_base_checks_all_only() {
-        assert_eq!(strangle_args(None), ["strangle", "check", "--all"]);
-    }
-
-    #[test]
-    fn missing_base_notice_is_one_line_naming_the_ref() {
-        let notice = missing_base_notice("origin/development");
-        assert_eq!(
-            notice,
-            "base ref origin/development not found locally: running --all without --diff"
-        );
-        assert!(!notice.contains('\n'));
-    }
-
-    #[test]
-    fn strangle_failure_keeps_the_missing_base_notice() {
-        let notice = missing_base_notice("origin/development");
-        let reason = strangle_failure(1, Some(&notice));
-        assert!(reason.starts_with("strangle check exited with 1"));
-        assert!(reason.contains(&notice));
-        assert!(!reason.contains('\n'), "{reason}");
-        assert_eq!(strangle_failure(1, None), "strangle check exited with 1");
-    }
-
-    #[tokio::test]
-    async fn strangle_without_a_base_passes_with_the_notice() {
-        // Not a git repository: the base ref cannot be found.
-        let root = std::env::temp_dir().join(format!("xtask-strangle-{}", std::process::id()));
-        std::fs::create_dir_all(&root).unwrap();
-        // Calls `strangle_outcome` directly, not the Task wrapper (`run_graph`).
-        let ctx = Ctx {
-            log: root.join("strangle.log"),
-            root,
-            cancel: CancellationToken::new(),
-        };
-        let Outcome::OkNote(note) = strangle_outcome(&ctx, "true").await else {
-            panic!("expected OkNote");
-        };
-        assert!(note.contains("not found locally"), "{note}");
     }
 }

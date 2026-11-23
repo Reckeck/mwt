@@ -1,7 +1,7 @@
 //! Analytics (plan F6): reports over months, the spending calendar and CSV.
 //!
 //! Every report reads the same classified flows as the budget
-//! ([`UnlockedVault::classify_flow`]) or replays legs to value what was held
+//! ([`Session::classify_flow`]) or replays legs to value what was held
 //! at a past date. Amounts are in the report currency (the budget currency
 //! unless the filter names one) at the rate of the day they happened; with
 //! `real_terms` each month is restated in today's money by the user's

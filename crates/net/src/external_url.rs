@@ -64,7 +64,7 @@ pub fn check_external_url(url: &str) -> Result<()> {
 }
 
 /// Refuse a link of an attachment unless it is a web or mail address, the
-/// two kinds `UnlockedVault::add_link_attachment` admits.
+/// two kinds `Session::add_link_attachment` admits.
 ///
 /// It is the same rule with a wider whitelist, not a second one: what the user
 /// typed into an attachment may be `http://`, carry a port or an address
@@ -156,7 +156,7 @@ mod tests {
 
     // -- attachment links ---------------------------------------------------
 
-    /// Every form `UnlockedVault::add_link_attachment` admits (web and mail
+    /// Every form `Session::add_link_attachment` admits (web and mail
     /// addresses, normalized or kept as typed) still opens.
     #[test]
     fn what_an_attachment_link_may_hold_still_opens() {

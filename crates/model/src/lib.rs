@@ -7,6 +7,8 @@
 
 mod attachment;
 mod automation_facts;
+mod bybit;
+mod bybit_staging;
 mod category;
 mod chain;
 mod coins;
@@ -22,6 +24,7 @@ mod ids;
 mod inflation;
 mod iso_date;
 mod json_value;
+mod llama_coin;
 mod notify;
 mod planning;
 mod rate_index;
@@ -41,6 +44,8 @@ pub use automation_facts::{
     ESTIMATE_OF, TRIGGER_NODE, When, fire_time, made_by, main_leg, parse_time, recent_average,
     schedule_key, schedule_params, start_mark, when_params, workflow_mark,
 };
+pub use bybit::{BybitCategory, EarnYield, Execution, InterTransfer, TradePrefill};
+pub use bybit_staging::PendingImportExt;
 pub use category::{
     CATEGORIES_REV, CATEGORY_ADDITIONS, Category, CategoryGroup, DEFAULT_ESSENTIAL,
     DEFAULT_PASSIVE, EXCHANGE_IMPORT_CATEGORY, default_categories, is_passive_key,
@@ -69,6 +74,7 @@ pub use entity_ref::{EntityKind, EntityRef, Pinned};
 pub use ids::StoreId;
 pub use inflation::{InflationMode, InflationReading, InflationSource};
 pub use json_value::{json_field, json_number, json_text};
+pub use llama_coin::llama_coin;
 pub use notify::{
     MAX_NOTICE_LOG, NoticeCategory, NoticeCategoryCfg, NoticeRecord, NotificationSettings, notice,
     notice_at, notice_title,
@@ -122,8 +128,8 @@ pub use vault::{
     ACCOUNT_EARN, ACCOUNT_FUND, ACCOUNT_UNIFIED, DailyBudgetMode, DashPeriod, DashboardWidgetCfg,
     ExchangeKeys, Exchanges, FxPoint, ImportKind, ImportRun, ImportSource, MAX_DISCARDED_IMPORTS,
     MAX_IMPORT_RUNS, ManualPrice, PendingImport, PricePoint, Settings, TxProperty,
-    VAULT_FORMAT_VERSION, Valuation, VaultDoc, default_fx_interval, default_minimize_to_tray,
-    iso_to_millis, now_iso, unix_to_iso,
+    VAULT_FORMAT_VERSION, Valuation, VaultDoc, bybit_key_for, default_fx_interval,
+    default_minimize_to_tray, iso_to_millis, now_iso, unix_to_iso,
 };
 pub use workflow::{
     GraphVersion, MAX_GRAPH_VERSIONS, MAX_WORKFLOW_RUNS, QueuedActions, RunOutcome, StepStatus,

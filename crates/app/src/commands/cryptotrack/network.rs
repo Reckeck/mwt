@@ -13,7 +13,7 @@ use trade_core::error::Error;
 use trade_core::ipc_contract::cryptotrack::network::{
     NetworkSettings, NetworkTestResult, SetNetworkSettingsInput, TestNetworkInput,
 };
-use trade_core::service::{NetworkProbe, test_endpoint};
+use trade_core::usecases::cryptotrack::network::{NetworkProbe, test_endpoint};
 
 use crate::commands::app_settings::current_settings;
 use crate::commands::{AppState, sandbox};

@@ -1,5 +1,5 @@
 //! The dev-only rule: no crate lists `mwt-testkit` under `[dependencies]`. It belongs in
-//! `[dev-dependencies]`; the one exception is the facade, which reaches it through its `testkit`
+//! `[dev-dependencies]`; the one exception is the use-case crate, which reaches it through its `testkit`
 //! feature as an `optional = true` entry.
 
 use std::fs;
@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 
 const DEV_ONLY: &str = "mwt-testkit";
 /// The crate whose `testkit` feature may enable the dev-only crate.
-const FACADE: &str = "trade-core";
+const USECASES: &str = "mwt-usecases";
 
 /// The message for each crate under `crates_dir` that lists the dev-only crate as a normal dependency.
 pub fn check(crates_dir: &Path) -> Result<Vec<String>> {
@@ -46,11 +46,11 @@ fn violations(label: &str, text: &str) -> Result<Option<String>> {
         .get("optional")
         .and_then(toml::Value::as_bool)
         .unwrap_or(false);
-    if name == Some(FACADE) && optional {
+    if name == Some(USECASES) && optional {
         return Ok(None);
     }
     Ok(Some(format!(
-        "error: {label}: `{DEV_ONLY}` is dev-only: list it under [dev-dependencies] (only `{FACADE}` may list it as an optional dependency of its `testkit` feature)"
+        "error: {label}: `{DEV_ONLY}` is dev-only: list it under [dev-dependencies] (only `{USECASES}` may list it as an optional dependency of its `testkit` feature)"
     )))
 }
 
@@ -86,14 +86,21 @@ mod tests {
     #[test]
     fn only_the_facade_may_list_it_optional() {
         let optional = "[dependencies]\nmwt-testkit = { path = \"../testkit\", optional = true }\n";
-        assert_eq!(violations("f", &manifest(FACADE, optional)).unwrap(), None);
+        assert_eq!(
+            violations("f", &manifest(USECASES, optional)).unwrap(),
+            None
+        );
         assert!(
             violations("o", &manifest("mwt-money", optional))
                 .unwrap()
                 .is_some()
         );
         let plain = "[dependencies]\nmwt-testkit = { path = \"../testkit\" }\n";
-        assert!(violations("f", &manifest(FACADE, plain)).unwrap().is_some());
+        assert!(
+            violations("f", &manifest(USECASES, plain))
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[test]

@@ -18,7 +18,8 @@ use mwt_model::{NumberFormat, SeriesPoint, SourceMethod, SourceOutput, TableRow}
 pub use number::parse_number;
 
 /// What the address returned, as the picker shows it.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum PreviewKind {
     Html,
@@ -28,7 +29,8 @@ pub enum PreviewKind {
 }
 
 /// The page for the picker: a safe HTML copy, the JSON text or file rows.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SourcePreview {
     pub kind: PreviewKind,
     /// Sanitized HTML for the sandboxed frame (`kind = html`).

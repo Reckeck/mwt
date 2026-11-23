@@ -1,5 +1,7 @@
-//! `xtask arch`: the module graph of `crates/core/src`, read from the non-test `crate::` paths.
+//! `xtask arch`: the module graph of `crates/usecases/src`, read from the non-test `crate::` paths.
 
+mod banned;
+mod crates;
 mod domain;
 mod layers;
 mod manifests;
@@ -21,7 +23,7 @@ pub struct Edge {
     pub to_module: String,
 }
 
-const CORE_SRC: &str = "crates/core/src";
+const USECASES_SRC: &str = "crates/usecases/src";
 const ALLOW_FILE: &str = "crates/xtask/arch-allow.toml";
 /// Group of the modules gated by the `testkit` feature (see `layers::GROUPS`).
 const TESTKIT: &str = "testkit";
@@ -29,7 +31,7 @@ const TESTKIT: &str = "testkit";
 /// A back edge: the same data as an edge, the ones the crate table does not allow.
 pub type Violation = Edge;
 
-/// One line of `arch-allow.toml`: back edges from `from` (under `crates/core/src`) to module `to`.
+/// One line of `arch-allow.toml`: back edges from `from` (under `crates/usecases/src`) to module `to`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AllowEntry {
     pub from: String,
@@ -65,12 +67,21 @@ pub struct Report {
     pub domain: domain::Findings,
     /// Crates that list a dev-only crate as a normal dependency (`manifests.rs`).
     pub manifests: Vec<String>,
+    /// Workspace crate edges and external crates the crate table forbids (`crates.rs`).
+    pub crates: Vec<String>,
+    /// The facade's old name and the forwarding macro anywhere in `crates/*/src` (`banned.rs`).
+    pub banned: Vec<banned::Banned>,
 }
 
 impl Report {
     /// How many findings fail the check.
     pub fn failures(&self) -> usize {
-        self.violations.len() + self.stale.len() + self.domain.failures() + self.manifests.len()
+        self.violations.len()
+            + self.stale.len()
+            + self.domain.failures()
+            + self.manifests.len()
+            + self.crates.len()
+            + self.banned.len()
     }
 
     /// The log lines: every violation as `file:line`, every stale entry as an error.
@@ -80,7 +91,7 @@ impl Report {
             .iter()
             .map(|edge| {
                 format!(
-                    "error: {CORE_SRC}/{}:{}: `{}` must not use `{}` (edge the crate table forbids)",
+                    "error: {USECASES_SRC}/{}:{}: `{}` must not use `{}` (edge the crate table forbids)",
                     edge.from_file, edge.line, edge.from_module, edge.to_module
                 )
             })
@@ -91,8 +102,10 @@ impl Report {
                 entry.from, entry.to, entry.until
             )
         }));
-        lines.extend(self.domain.lines(CORE_SRC));
+        lines.extend(self.domain.lines());
         lines.extend(self.manifests.iter().cloned());
+        lines.extend(self.crates.iter().cloned());
+        lines.extend(self.banned.iter().map(banned::Banned::line_text));
         lines
     }
 }
@@ -118,18 +131,22 @@ fn evaluate(edges: &[Edge], allow: &[AllowEntry], domain: domain::Findings) -> R
         stale,
         domain,
         manifests: Vec::new(),
+        crates: Vec::new(),
+        banned: Vec::new(),
     }
 }
 
 /// Scans the core crate under the repository `root` and holds it against the crate table and the allowlist.
 pub fn check(root: &Path) -> Result<Report> {
-    let sources = sources(&root.join(CORE_SRC))?;
-    let edges = edges_of(&root.join(CORE_SRC), &sources)?;
-    let domain = domain::check(&sources, domain::EXEMPTIONS);
+    let sources = sources(&root.join(USECASES_SRC))?;
+    let edges = edges_of(&root.join(USECASES_SRC), &sources)?;
+    let domain = domain::check(&domain_sources(root)?, domain::EXEMPTIONS);
     let path = root.join(ALLOW_FILE);
     let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     let mut report = evaluate(&edges, &parse_allowlist(&text)?, domain);
     report.manifests = manifests::check(&root.join("crates"))?;
+    report.crates = crates::check(root)?;
+    report.banned = banned::check(root)?;
     Ok(report)
 }
 
@@ -210,7 +227,7 @@ fn collect_files(dir: &Path, skipped: &mut Files, files: &mut Vec<PathBuf>) -> R
 }
 
 /// Files of modules declared under a cfg gate: `#[cfg(test)]` ones are skipped, ones gated by the
-/// `testkit` feature are test support and are checked as the `testkit` crate.
+/// `testkit` feature are test support, checked as part of the use-case crate (the `usecases` group).
 #[derive(Default)]
 struct Files {
     test: BTreeSet<PathBuf>,
@@ -239,16 +256,16 @@ fn declare_gated_modules(file: &Path, gated: &mut Files) -> Result<()> {
     Ok(())
 }
 
-/// One non-test source file of the core crate.
+/// One non-test source file of the use-case crate.
 pub struct Source {
-    /// Path under `crates/core/src`, with `/`.
+    /// Path under `crates/usecases/src`, with `/`.
     pub file: String,
     /// The top-level module, or `testkit` for the files gated by the testkit feature.
     pub module: String,
     pub text: String,
 }
 
-/// Every source file under `root` (`crates/core/src`) that is not test code, in file order.
+/// Every source file under `root` (`crates/usecases/src`) that is not test code, in file order.
 fn sources(root: &Path) -> Result<Vec<Source>> {
     let mut gated = Files::default();
     let mut files = Vec::new();
@@ -271,15 +288,45 @@ fn sources(root: &Path) -> Result<Vec<Source>> {
     Ok(found)
 }
 
+/// The non-test files of the domain crates (`crates/<name>/src`), each with the crate as its module.
+fn domain_sources(root: &Path) -> Result<Vec<Source>> {
+    let mut found = Vec::new();
+    for name in domain::DOMAIN_CRATES {
+        for source in sources(&root.join("crates").join(name).join("src"))? {
+            found.push(Source {
+                file: format!("{name}/src/{}", source.file),
+                module: (*name).to_string(),
+                text: source.text,
+            });
+        }
+    }
+    Ok(found)
+}
+
+/// The names a `crate::<name>` path may resolve to: the directory modules plus every module of the
+/// table, so names re-exported from extracted crates (`pub use mwt_workflow as workflow;`) stay visible.
+fn table_modules(root: &Path) -> Result<scan::Names> {
+    let mut modules = module_names(root)?;
+    modules.extend(
+        layers::GROUPS
+            .iter()
+            .flat_map(|group| group.modules.iter())
+            .filter(|name| **name != "lib")
+            .map(|name| (*name).to_string()),
+    );
+    let lib = fs::read_to_string(root.join("lib.rs"))?;
+    scan::Names::new(modules, &lib)
+}
+
 fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
-    let modules = module_names(root)?;
+    let modules = table_modules(root)?;
     Ok(sources
         .iter()
         .flat_map(|source| scan::read_edges(&source.file, &source.module, &source.text, &modules))
         .collect())
 }
 
-/// Every non-test `crate::` path under `root` (`crates/core/src`), in file order.
+/// Every non-test `crate::` path under `root` (`crates/usecases/src`), in file order.
 #[cfg(test)]
 fn scan(root: &Path) -> Result<Vec<Edge>> {
     edges_of(root, &sources(root)?)
@@ -313,7 +360,52 @@ mod tests {
 
     #[test]
     fn every_module_of_core_is_in_the_crate_table() {
-        let names = module_names(&repo_root().join(CORE_SRC)).unwrap();
+        let names = module_names(&repo_root().join(USECASES_SRC)).unwrap();
+        let missing: Vec<_> = names
+            .iter()
+            .filter(|name| layers::group_of(name).is_none())
+            .collect();
+        assert!(missing.is_empty(), "not in layers.rs: {missing:?}");
+    }
+
+    /// `name` of every `pub use mwt_<crate> as <name>;` and every lowercase item of `pub use mwt_base::{..}`.
+    fn reexported_modules(lib: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        for statement in lib.split(';') {
+            const MARKER: &str = "pub use mwt_";
+            let Some(start) = statement.find(MARKER) else {
+                continue;
+            };
+            let rest = &statement[start + MARKER.len()..];
+            if let Some((_, alias)) = rest.split_once(" as ") {
+                names.push(alias.trim().to_string());
+            } else if let Some(items) = rest.strip_prefix("base::{") {
+                names.extend(
+                    items
+                        .trim_end_matches('}')
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|item| item.starts_with(|ch: char| ch.is_ascii_lowercase()))
+                        .map(str::to_string),
+                );
+            }
+        }
+        names
+    }
+
+    #[test]
+    fn reexported_modules_skip_nothing_after_other_text_and_ignore_restricted_use() {
+        let lib = "/// plain docs, with a p\n#[cfg(test)]\npub use mwt_a as alpha;\n\
+                   pub(crate) use mwt_x as hidden;\n\
+                   // pending\npub use mwt_base::{beta, Gamma};\n";
+        assert_eq!(reexported_modules(lib), ["alpha", "beta"]);
+    }
+
+    #[test]
+    fn every_reexported_module_of_lib_is_a_module_of_the_table() {
+        let lib = fs::read_to_string(repo_root().join(USECASES_SRC).join("lib.rs")).unwrap();
+        let names = reexported_modules(&lib);
+        assert!(names.len() > 10, "{names:?}");
         let missing: Vec<_> = names
             .iter()
             .filter(|name| layers::group_of(name).is_none())
@@ -322,9 +414,54 @@ mod tests {
     }
 
     #[test]
+    fn a_name_reexported_from_an_extracted_crate_resolves_to_its_own_module() {
+        let modules = table_modules(&repo_root().join(USECASES_SRC)).unwrap();
+        let edges = scan::read_edges(
+            "planning/x.rs",
+            "planning",
+            "use crate::workflow::W;\nuse crate::Amount;\nuse crate::money::M;\n",
+            &modules,
+        );
+        let targets: Vec<&str> = edges.iter().map(|item| item.to_module.as_str()).collect();
+        assert_eq!(targets, ["workflow", "amount", "money"]);
+        let report = evaluate(&edges, &[], domain::Findings::default());
+        assert_eq!(report.violations.len(), 1);
+        assert_eq!(report.violations[0].to_module, "workflow");
+        let money_edge = scan::read_edges(
+            "workflow/x.rs",
+            "workflow",
+            "use crate::money::M;\n",
+            &modules,
+        );
+        assert_eq!(money_edge[0].to_module, "money");
+        assert_eq!(
+            evaluate(&money_edge, &[], domain::Findings::default())
+                .violations
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn the_reexport_table_is_derived_from_lib_rs() {
+        let names = table_modules(&repo_root().join(USECASES_SRC)).unwrap();
+        let resolved = |text: &str| {
+            let edges = scan::read_edges("x.rs", "facade", text, &names);
+            edges[0].to_module.clone()
+        };
+        assert_eq!(resolved("use crate::cryptotrack::X;"), "cryptotrack");
+        assert_eq!(resolved("use crate::SnapshotFormat;"), "crypto");
+        assert_eq!(resolved("use crate::VAULT_FORMAT_VERSION;"), "model");
+        assert_eq!(resolved("use crate::VaultFile;"), "storage");
+        assert_eq!(resolved("use crate::Error;"), "error");
+        assert_eq!(resolved("use crate::VaultDoc;"), "model");
+    }
+
+    #[test]
     fn the_baseline_matches_the_tree() {
         let report = check(&repo_root()).unwrap();
         assert_eq!(report.failures(), 0, "{:#?}", report.lines());
+        assert!(report.domain.scanned > 150, "{}", report.domain.scanned);
     }
 
     #[test]
@@ -341,7 +478,7 @@ mod tests {
 
     #[test]
     fn modules_gated_by_the_testkit_feature_are_checked_as_the_testkit_crate() {
-        let edges = scan(&repo_root().join(CORE_SRC)).unwrap();
+        let edges = scan(&repo_root().join(USECASES_SRC)).unwrap();
         let fixtures: Vec<&Edge> = edges
             .iter()
             .filter(|edge| edge.from_file == "model/fixtures.rs")
@@ -391,9 +528,9 @@ mod tests {
     }
 
     #[test]
-    fn testkit_is_a_low_crate_and_nothing_below_the_facade_may_use_it() {
+    fn testkit_is_a_low_crate_and_nothing_below_usecases_may_use_it() {
         assert!(layers::is_legal("testkit", "model"));
-        assert!(!layers::is_legal("service", "testkit"));
+        assert!(!layers::is_legal("planning", "testkit"));
     }
 
     #[test]
@@ -416,7 +553,7 @@ mod tests {
         let edges = [edge("error.rs", 131, "error", "service")];
         let report = evaluate(&edges, &[], domain::Findings::default());
         assert_eq!(report.violations, edges);
-        assert!(report.lines()[0].contains("crates/core/src/error.rs:131"));
+        assert!(report.lines()[0].contains("crates/usecases/src/error.rs:131"));
         assert_eq!(report.failures(), 1);
     }
 

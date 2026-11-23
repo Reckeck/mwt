@@ -5,6 +5,9 @@
 use tauri::State;
 
 use trade_core::household::shared_events::view::{self as event_views};
+use trade_core::household::shared_events::view::{
+    ContactEventBalance, SharedEventSummary, SharedEventView, SharedTxLink,
+};
 use trade_core::ipc_contract::{
     AddSharedPurchaseInput, ArchiveSharedEventInput, AttachPaymentInput, SetShareOverrideInput,
     SetSharedDueInput, SetSharedItemSplitInput, SettleSharedInput, SharedEventDraft,
@@ -14,7 +17,6 @@ use trade_core::ipc_contract::{
     UpdateSharedParticipantInput, UpdateSharedPurchaseInput,
 };
 use trade_core::model::contact::{Contact, DebtTerms};
-use trade_core::service::{ContactEventBalance, SharedEventSummary, SharedEventView, SharedTxLink};
 use trade_core::usecases::household::shared_events;
 
 use crate::commands::AppState;

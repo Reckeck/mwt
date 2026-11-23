@@ -8,12 +8,15 @@ use trade_core::model::planning::AssetClass;
 use trade_core::model::store::AssetRef;
 use trade_core::model::vault::ManualPrice;
 use trade_core::model::vault::Valuation;
+use trade_core::money::asset_holdings::AssetHoldings;
+use trade_core::money::investments::Investments;
+use trade_core::money::portfolio::{HistoryPoint, PortfolioSummary, RealizedPnl};
+use trade_core::money::store_months::StoreMonthRow;
+use trade_core::money::valuation::{PropertyValue, ValuationInput};
+use trade_core::money::worth::NetWorth;
 use trade_core::money::{asset_holdings, investments, portfolio, valuation as valuation_reads};
 use trade_core::planning::allocation as allocation_reads;
-use trade_core::service::{
-    AssetClassTarget, AssetClassesView, AssetHoldings, HistoryPoint, Investments, NetWorth,
-    PortfolioSummary, PropertyValue, RealizedPnl, StoreMonthRow, TopupAdvice, ValuationInput,
-};
+use trade_core::planning::allocation::{AssetClassTarget, AssetClassesView, TopupAdvice};
 use trade_core::usecases::household::store_months;
 use trade_core::usecases::money::{capital, valuation};
 use trade_core::usecases::planning::allocation;

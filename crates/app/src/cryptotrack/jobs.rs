@@ -45,11 +45,12 @@ use trade_core::ipc_contract::events::CryptoUpdatedPayload;
 
 use chrono::NaiveDate;
 use tauri::{AppHandle, Manager};
+use trade_core::chain::{RpcClient, RpcConfig};
 use trade_core::cryptotrack::prices;
 use trade_core::cryptotrack::protocols::{
     PositionReading, ProtocolRequest, ProtocolReview, Registry,
 };
-use trade_core::cryptotrack::rpc::{RpcClient, RpcConfig};
+use trade_core::cryptotrack::service::network::NetworkRequest;
 use trade_core::cryptotrack::sources::evm::{
     BalanceRequest, Cursor, EvmSource, HistoryRequest, RawAsset, SourceBatch, Stream,
 };
@@ -63,8 +64,7 @@ use trade_core::model::chain::Chain;
 use trade_core::model::cryptotrack::{CryptoAsset, CryptoPricePoint, CryptoTx};
 use trade_core::model::vault::now_iso;
 use trade_core::pricing::PricingService;
-use trade_core::service::NetworkRequest;
-use trade_core::service::UnlockedVault;
+use trade_core::service::{RpcChain, Session};
 use trade_core::sync::stamp::now_ms;
 use trade_core::vault_io::device_secrets::BlockscoutKey;
 
@@ -96,7 +96,7 @@ pub trait Host: Send + Sync {
 
     /// Run `work` on the open vault and let go of it. `RequiresUnlock` when
     /// the vault is locked. The guard never leaves this call.
-    fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T>;
+    fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T>;
 
     /// Something new was stored for the account (`crypto-updated`).
     fn updated(&self, account_id: &str);
@@ -179,7 +179,7 @@ pub struct Tracker {
     /// balances a node reports, so they live here beside the pass instead of
     /// in the vault — the schema does not change for DeFi. A device that has
     /// only synced holds none, and
-    /// [`UnlockedVault::crypto_list_positions`] then leaves those figures
+    /// [`Session::crypto_list_positions`] then leaves those figures
     /// absent rather than zero.
     positions: Mutex<BTreeMap<String, Vec<PositionReading>>>,
     /// `(asset key, day)` the provider had no price for, and when it said so.
@@ -434,9 +434,12 @@ pub async fn run_pass<H: Host, R: Reader>(
     }
     let force = tracker.take_force() || force;
     // The data the pass needs, copied; the vault is free from here on.
-    let Ok((vault_id, targets)) =
-        host.with_vault(|vault| Ok((vault.doc.id.clone(), vault.crypto_sync_targets())))
-    else {
+    let Ok((vault_id, targets)) = host.with_vault(|vault| {
+        Ok((
+            vault.doc.id.clone(),
+            trade_core::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc),
+        ))
+    }) else {
         report.cancelled = true;
         return report;
     };
@@ -582,7 +585,8 @@ async fn read_account<H: Host, R: Reader>(
             if vault.doc.id != vault_id {
                 return Err(Error::RequiresUnlock);
             }
-            vault.crypto_apply_pages(
+            trade_core::usecases::cryptotrack::apply::crypto_apply_pages(
+                vault,
                 &CryptoPages {
                     account_id: &target.account_id,
                     read_at: &read_at,
@@ -647,13 +651,18 @@ async fn read_positions<H: Host, R: Reader>(
         if vault.doc.id != vault_id {
             return Err(Error::RequiresUnlock);
         }
-        let applied = vault.crypto_apply_positions(
+        let applied = trade_core::usecases::cryptotrack::positions::crypto_apply_positions(
+            vault,
             &target.account_id,
             &read.readings,
             &read.events,
             &read.reviewed,
         )?;
-        vault.crypto_remember_protocols(&target.account_id, &read.memory)?;
+        trade_core::usecases::cryptotrack::apply::crypto_remember_protocols(
+            vault,
+            &target.account_id,
+            &read.memory,
+        )?;
         Ok(applied)
     })?;
     if !applied.is_unchanged() {
@@ -711,7 +720,7 @@ async fn fill_prices<H: Host, R: Reader>(
             if vault.doc.id != vault_id {
                 return Err(Error::RequiresUnlock);
             }
-            vault.crypto_apply_prices(&fetched)
+            trade_core::usecases::cryptotrack::apply::crypto_apply_prices(vault, &fetched)
         })?;
         if stored > 0 {
             host.updated(&target.account_id);
@@ -729,7 +738,7 @@ impl Host for AppHost {
         crate::commands::app_settings::current_settings(&self.0).crypto_tracking_allowed()
     }
 
-    fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T> {
+    fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
         let state = self.0.state::<AppState>();
         let mut guard = lock_vault(&state)?;
         match guard.as_mut() {
@@ -755,10 +764,10 @@ struct EvmReader {
     /// Talks to the explorer: the history and the token list. The per-network
     /// key is added to a copy of it for one request, so a network without a key
     /// never sends another network's.
-    explorer: RpcClient,
+    explorer: RpcChain,
     /// Talks to the node: balances. It never carries the Blockscout key, and it
     /// accepts a loopback address, because the user's own node is often one.
-    node: RpcClient,
+    node: RpcChain,
     /// Historic prices: DeFiLlama, no key.
     pricing: PricingService,
 }
@@ -767,11 +776,11 @@ impl EvmReader {
     fn new(app: AppHandle) -> Result<Self> {
         Ok(Self {
             app,
-            explorer: RpcClient::new(RpcConfig::default())?,
-            node: RpcClient::new(RpcConfig {
+            explorer: RpcChain::new(RpcClient::new(RpcConfig::default())?),
+            node: RpcChain::new(RpcClient::new(RpcConfig {
                 allow_loopback_http: true,
                 ..RpcConfig::default()
-            })?,
+            })?),
             pricing: PricingService::default().with_known_tokens(known::is_known),
         })
     }
@@ -783,7 +792,14 @@ impl EvmReader {
     /// look at the vault anyway.
     fn network(&self, chain: Chain) -> NetworkRequest {
         AppHost(self.app.clone())
-            .with_vault(|vault| Ok(vault.crypto_network_for_request(chain)))
+            .with_vault(|vault| {
+                Ok(
+                    trade_core::cryptotrack::service::network::crypto_network_for_request(
+                        &vault.books(),
+                        chain,
+                    ),
+                )
+            })
             .unwrap_or_default()
     }
 }
@@ -1048,11 +1064,12 @@ fn clear_on_lock(bus: &EventBus, tracker: &'static Tracker) {
 pub fn status(app: &AppHandle) -> Result<CryptoSyncStatus> {
     let host = AppHost(app.clone());
     let ids = host.with_vault(|vault| {
-        Ok(vault
-            .crypto_sync_targets()
-            .into_iter()
-            .map(|target| target.account_id)
-            .collect::<Vec<_>>())
+        Ok(
+            trade_core::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)
+                .into_iter()
+                .map(|target| target.account_id)
+                .collect::<Vec<_>>(),
+        )
     })?;
     Ok(CryptoSyncStatus {
         consent: crate::commands::app_settings::current_settings(app).crypto_tracking_consent,
@@ -1423,7 +1440,7 @@ mod tests {
     type Protocols = Box<dyn Fn(&str) -> Result<Reading> + Send + Sync>;
     type PriceScript =
         Box<dyn Fn(&[(CryptoAsset, NaiveDate)]) -> Result<Vec<CryptoPricePoint>> + Send + Sync>;
-    type SharedVault = Arc<Mutex<Option<UnlockedVault>>>;
+    type SharedVault = Arc<Mutex<Option<Session>>>;
 
     struct TestHost {
         vault: SharedVault,
@@ -1432,7 +1449,7 @@ mod tests {
     }
 
     impl TestHost {
-        fn new(vault: UnlockedVault, consent: bool) -> Self {
+        fn new(vault: Session, consent: bool) -> Self {
             Self {
                 vault: Arc::new(Mutex::new(Some(vault))),
                 consent: AtomicBool::new(consent),
@@ -1450,7 +1467,7 @@ mod tests {
             self.consent.load(Ordering::SeqCst)
         }
 
-        fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T> {
+        fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
             let mut guard = self.vault.lock().unwrap();
             match guard.as_mut() {
                 Some(vault) => work(vault),
@@ -1597,8 +1614,8 @@ mod tests {
         }
     }
 
-    fn vault_with(dir: &std::path::Path, name: &str, accounts: &[(&str, &str)]) -> UnlockedVault {
-        let mut vault = UnlockedVault::create(dir.join(name), "pw").unwrap();
+    fn vault_with(dir: &std::path::Path, name: &str, accounts: &[(&str, &str)]) -> Session {
+        let mut vault = Session::create(dir.join(name), "pw").unwrap();
         for (id, address) in accounts {
             vault.doc.crypto_accounts.push(CryptoAccount::new(
                 id,
@@ -1761,7 +1778,7 @@ mod tests {
         let host = TestHost::new(vault_with(dir.path(), "a.wallet", &[("acc-a", ME)]), true);
         host.with_vault(|vault| {
             let kept = quote(&[(eth(), NaiveDate::from_ymd_opt(2026, 1, 5).unwrap())])?;
-            vault.crypto_apply_prices(&kept).map(|_| ())
+            trade_core::usecases::cryptotrack::apply::crypto_apply_prices(vault, &kept).map(|_| ())
         })
         .unwrap();
         let stub = Stub::new(&host.vault, |address, _| one_page(address, 1))

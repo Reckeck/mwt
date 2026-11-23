@@ -267,6 +267,10 @@ pub(crate) mod tests {
     }
 
     /// The number of distinct command names the flat list held on the day of the switch: 400.
+    /// It is the count of a debug build with the `schema` feature on (the test run, through
+    /// the dev self-dependency); a release build registers 394, since `vault_schema` and the
+    /// five `dev_*` commands are debug-only.
+    ///
     /// The spec's 402 counted `#[tauri::command]` attributes: `get_autostart` and
     /// `set_autostart` each carry one per platform (desktop and mobile twins), so two names
     /// are counted twice.

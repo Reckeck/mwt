@@ -11,7 +11,7 @@ use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
-/// Move the open vault to level 3 (`UnlockedVault::raise_to_crypto`): backup,
+/// Move the open vault to level 3 (`Session::raise_to_crypto`): backup,
 /// re-encryption at the hardened cost of this device (of a phone if the vault
 /// has an external copy), check, copies. The backup goes next to the vault;
 /// another place is not supported yet (`backup_path` must be empty).

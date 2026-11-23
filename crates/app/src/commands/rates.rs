@@ -6,8 +6,8 @@ use chrono::{Datelike, Months, NaiveDate};
 use tauri::{AppHandle, Manager, State};
 use trade_core::model::inflation::{InflationMode, InflationSource};
 use trade_core::money::inflation as inflation_reads;
+use trade_core::money::inflation::{FetchedRates, InflationCurrency};
 use trade_core::pricing::PricingService;
-use trade_core::service::{FetchedRates, InflationCurrency};
 use trade_core::usecases::money::inflation;
 use trade_core::usecases::planning::notifications;
 

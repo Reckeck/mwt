@@ -34,6 +34,7 @@ use trade_core::sync::session::{
     Channel, ClockWatch, Handshake, Skew, check_commit, commit_to, new_nonce, skew_of,
 };
 use trade_core::sync::stamp::{device_tag, now_ms};
+use trade_core::usecases::sync::peer_sync;
 
 use super::host::Host;
 use super::{Link, Order, set_phase, set_progress, update_link};
@@ -315,7 +316,7 @@ pub(super) struct Peer {
 fn with_peer_vault<H: Host, T>(
     app: &H,
     peer: &Peer,
-    work: impl FnOnce(&mut trade_core::service::UnlockedVault) -> Result<T>,
+    work: impl FnOnce(&mut trade_core::service::Session) -> Result<T>,
 ) -> Flow<T> {
     let outcome = app.with_vault(|vault| {
         if vault.doc.id != peer.vault_id {
@@ -338,10 +339,10 @@ fn take_peers<H: Host>(
         if vault.doc.id != peer.vault_id {
             return Ok(None);
         }
-        let changed = vault.sync_merge_peers(peers)?;
+        let changed = peer_sync::sync_merge_peers(vault, peers)?;
         Ok(Some((
             changed,
-            vault.sync_state().is_revoked(&peer.remote_key),
+            peer_sync::sync_state(vault).is_revoked(&peer.remote_key),
         )))
     })?;
     let Some((changed, revoked)) = taken else {
@@ -417,7 +418,7 @@ async fn session<H: Host>(
     let (vault_id, trusted) = app.with_vault(|vault| {
         Ok((
             vault.doc.id.clone(),
-            vault.sync_state().trusted(&remote_key).is_some(),
+            peer_sync::sync_state(vault).trusted(&remote_key).is_some(),
         ))
     })?;
     let settings = app.settings();
@@ -463,8 +464,7 @@ async fn session<H: Host>(
         // A hello before the vault proof names no device, so a trusted key
         // gives the name it was paired under.
         let known = app.with_vault(|vault| {
-            Ok(vault
-                .sync_state()
+            Ok(peer_sync::sync_state(vault)
                 .trusted(&remote_key)
                 .map(|peer| (peer.device_id.clone(), peer.name.clone())))
         })?;
@@ -529,7 +529,7 @@ async fn session<H: Host>(
         .as_ref()
         .is_some_and(|run| run.declined.contains(&theirs.device_id));
     // Paused by the user (a declined list of changes): close without a word.
-    let paused = app.with_vault(|vault| Ok(vault.sync_is_paused(&theirs.device_id)))?;
+    let paused = app.with_vault(|vault| Ok(peer_sync::sync_is_paused(vault, &theirs.device_id)))?;
     if theirs.device_id == settings.device_id || declined {
         return Err(Stop::Quiet);
     }
@@ -550,7 +550,7 @@ async fn session<H: Host>(
     // A forgotten key only returns through a pairing somebody asked for: a
     // pairing request right after the hellos. Anything else is told so.
     let mut asked_to_pair = false;
-    if app.with_vault(|vault| Ok(vault.sync_state().is_revoked(&remote_key)))? {
+    if app.with_vault(|vault| Ok(peer_sync::sync_state(vault).is_revoked(&remote_key)))? {
         match tokio::time::timeout(FORGOTTEN_GRACE, wire.next()).await {
             Ok(Ok(Some(Message::PairRequest))) => asked_to_pair = true,
             Ok(Ok(Some(Message::Bye { .. }) | None)) => return Err(Stop::Quiet),
@@ -849,8 +849,10 @@ fn heard_bye<H: Host>(app: &H, peer: &Peer, reason: &str) -> Stop {
     let Some(cut) = SyncCutReason::from_wire(reason) else {
         return Stop::Quiet;
     };
-    let news = with_peer_vault(app, peer, |vault| vault.sync_cut_by(&peer.device_id, cut))
-        .unwrap_or(false);
+    let news = with_peer_vault(app, peer, |vault| {
+        peer_sync::sync_cut_by(vault, &peer.device_id, cut)
+    })
+    .unwrap_or(false);
     if news {
         let failure = match cut {
             SyncCutReason::Paused => PeerSyncFailure::PausedByPeer,
@@ -984,11 +986,11 @@ async fn exchange<H: Host>(
     pending: &mut BTreeSet<String>,
 ) -> Flow<()> {
     set_phase(app, &peer.session_id, SyncPhase::Exchanging);
-    let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
+    let peers = with_peer_vault(app, peer, peer_sync::sync_peers_to_send)?;
     wire.send(&Message::Peers { peers }).await?;
     let since = now_ms().saturating_sub(UNION_DAYS * 24 * 3600 * 1000);
     let (mine, mark, withheld) = with_peer_vault(app, peer, |vault| {
-        vault.sync_manifest_marked_for(Some(since), peer.security_level)
+        peer_sync::sync_manifest_marked_for(vault, Some(since), peer.security_level)
     })?;
     if withheld > 0 {
         // The crypto records stay here: this side tells the user why, once.
@@ -1084,12 +1086,12 @@ async fn exchange<H: Host>(
     set_progress(app, &peer.session_id, None);
     apply(app, wire, orders, peer, watch, incoming, reason, pending).await?;
     with_peer_vault(app, peer, |vault| {
-        vault.sync_mark_synced(&peer.device_id, Some(&mark))?;
+        peer_sync::sync_mark_synced(vault, &peer.device_id, Some(&mark))?;
         // Only an applied exchange vouches for our deletions: its manifest
         // says which of them the peer holds.
-        vault.sync_ack_tombstones(&peer.device_id, &theirs)?;
+        peer_sync::sync_ack_tombstones(vault, &peer.device_id, &theirs)?;
         // It talks to us again: whatever it told us before is over.
-        vault.sync_clear_cut(&peer.device_id).map(|_| ())
+        peer_sync::sync_clear_cut(vault, &peer.device_id).map(|_| ())
     })?;
     super::peer_recovered(app, &peer.device_id);
     Ok(())
@@ -1239,7 +1241,7 @@ async fn apply_shown<H: Host>(
                         Some(Order::Presence(focused)) => wire.send(&Message::Presence { focused }).await?,
                         Some(Order::TakeMain) => peer.take_main_ordered.store(true, Ordering::SeqCst),
                         Some(Order::SendPeers) => {
-                            let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
+                            let peers = with_peer_vault(app, peer, peer_sync::sync_peers_to_send)?;
                             wire.send(&Message::Peers { peers }).await?;
                         }
                         Some(Order::Close) | None => return Err(Stop::Quiet),
@@ -1282,7 +1284,7 @@ async fn apply_shown<H: Host>(
                             &summary,
                             SyncJournalOutcome::Declined,
                         )?;
-                        vault.sync_pause_peer(&peer.device_id)
+                        peer_sync::sync_pause_peer(vault, &peer.device_id)
                     });
                 }
                 let _ = wire
@@ -1313,7 +1315,10 @@ async fn apply_shown<H: Host>(
         }
         // The question can be open for minutes: a device forgotten meanwhile
         // (here, or through another link) gets nothing.
-        if vault.sync_state().trusted(&peer.remote_key).is_none() {
+        if peer_sync::sync_state(vault)
+            .trusted(&peer.remote_key)
+            .is_none()
+        {
             let summary =
                 sync_read::sync_preview_from(vault, &incoming, &peer.device_id).unwrap_or_default();
             journal_cases::sync_journal_record(
@@ -1326,10 +1331,10 @@ async fn apply_shown<H: Host>(
             return Ok(Some(None));
         }
         if backup {
-            vault.sync_backup()?;
+            peer_sync::sync_backup(vault)?;
             backed_up = true;
         }
-        let Some(batch) = vault.sync_apply(&incoming, &peer_ref)? else {
+        let Some(batch) = peer_sync::sync_apply(vault, &incoming, &peer_ref)? else {
             return Ok(Some(None));
         };
         let keys = history_reads::batch_keys(&vault.doc, &batch.id);
@@ -1414,7 +1419,7 @@ async fn live<H: Host>(
     // SendPeers orders are dropped while exchanging: say where we stand now.
     // The client sends this right after taking the main role, so it is also
     // the (wire-compatible) confirmation the main device waits for.
-    let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
+    let peers = with_peer_vault(app, peer, peer_sync::sync_peers_to_send)?;
     wire.send(&Message::Peers { peers }).await?;
 
     let mut flush_at = (!pending.is_empty()).then(|| Instant::now() + DEBOUNCE);
@@ -1450,7 +1455,7 @@ async fn live<H: Host>(
                 Some(Order::Presence(focused)) => wire.send(&Message::Presence { focused }).await?,
                 Some(Order::TakeMain) => wire.send(&Message::TakeMain).await?,
                 Some(Order::SendPeers) => {
-                    let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
+                    let peers = with_peer_vault(app, peer, peer_sync::sync_peers_to_send)?;
                     wire.send(&Message::Peers { peers }).await?;
                 }
                 Some(Order::Close) | None => {
@@ -1501,7 +1506,7 @@ async fn live<H: Host>(
                     Some(Message::TakeMain) => {
                         app.become_main();
                         // The answer the main device waits for before it steps down.
-                        let peers = with_peer_vault(app, peer, |vault| vault.sync_peers_to_send())?;
+                        let peers = with_peer_vault(app, peer, peer_sync::sync_peers_to_send)?;
                         wire.send(&Message::Peers { peers }).await?;
                     }
                     Some(Message::Bye { reason }) => return Err(heard_bye(app, peer, &reason)),

@@ -252,11 +252,11 @@ pub struct SettingsV4 {
     pub inflation_source: std::collections::BTreeMap<String, String>,
     /// Flat annual inflation, percent, by lowercase currency code, where the
     /// group differs from the shipped table (`default_inflation`); read through
-    /// `UnlockedVault::flat_inflation`. Group data: every device sees one table.
+    /// `Session::flat_inflation`. Group data: every device sees one table.
     #[serde(default)]
     pub inflation_manual: std::collections::BTreeMap<String, Amount>,
     /// The device-local rates of the app config were copied into
-    /// `inflation_manual` once (`UnlockedVault::adopt_flat_inflation`).
+    /// `inflation_manual` once (`Session::adopt_flat_inflation`).
     #[serde(default)]
     pub inflation_adopted: bool,
     /// The user's usual monthly income in the budget currency, used until
@@ -289,7 +289,7 @@ pub struct SettingsV4 {
     #[serde(default)]
     pub onboarding_checklist_hidden: bool,
     /// Whether the vault holds crypto. Derived since spec E14 (the crypto module has data, or a
-    /// hand-made crypto wallet remains): [`crate::UnlockedVault::open`] refreshes this copy, nobody
+    /// hand-made crypto wallet remains): [`crate::Session::open`] refreshes this copy, nobody
     /// sets it. The field stays in the file for compatibility with old and new builds.
     #[serde(default)]
     pub crypto: Option<bool>,

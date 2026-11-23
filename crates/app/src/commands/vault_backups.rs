@@ -1,6 +1,6 @@
 //! Backup copies of the vault file: list, take one now, restore one, show
 //! the folder. Logic lives in `trade_core::vault_io::backups` and
-//! `UnlockedVault`; these are the IPC wrappers.
+//! `Session`; these are the IPC wrappers.
 
 use tauri::State;
 use trade_core::ipc_contract::{RestoreVaultBackupInput, VaultBackup};
