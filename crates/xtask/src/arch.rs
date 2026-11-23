@@ -1,5 +1,6 @@
 //! `xtask arch`: the module graph of `crates/core/src`, read from the non-test `crate::` paths.
 
+mod banned;
 mod crates;
 mod domain;
 mod layers;
@@ -68,6 +69,8 @@ pub struct Report {
     pub manifests: Vec<String>,
     /// Workspace crate edges and external crates the crate table forbids (`crates.rs`).
     pub crates: Vec<String>,
+    /// The facade's old name and the forwarding macro anywhere in `crates/*/src` (`banned.rs`).
+    pub banned: Vec<banned::Banned>,
 }
 
 impl Report {
@@ -78,6 +81,7 @@ impl Report {
             + self.domain.failures()
             + self.manifests.len()
             + self.crates.len()
+            + self.banned.len()
     }
 
     /// The log lines: every violation as `file:line`, every stale entry as an error.
@@ -101,6 +105,7 @@ impl Report {
         lines.extend(self.domain.lines());
         lines.extend(self.manifests.iter().cloned());
         lines.extend(self.crates.iter().cloned());
+        lines.extend(self.banned.iter().map(banned::Banned::line_text));
         lines
     }
 }
@@ -127,6 +132,7 @@ fn evaluate(edges: &[Edge], allow: &[AllowEntry], domain: domain::Findings) -> R
         domain,
         manifests: Vec::new(),
         crates: Vec::new(),
+        banned: Vec::new(),
     }
 }
 
@@ -140,6 +146,7 @@ pub fn check(root: &Path) -> Result<Report> {
     let mut report = evaluate(&edges, &parse_allowlist(&text)?, domain);
     report.manifests = manifests::check(&root.join("crates"))?;
     report.crates = crates::check(root)?;
+    report.banned = banned::check(root)?;
     Ok(report)
 }
 

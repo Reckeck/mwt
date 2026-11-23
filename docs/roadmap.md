@@ -7,7 +7,7 @@ Status legend: `[x]` done · `[~]` in progress · `[ ]` planned.
 - `[x]` Domain model (VaultDoc, Store/Holding, Transaction, Settings, Chain, Sim)
 - `[x]` Crypto: Argon2id + XChaCha20-Poly1305, header=AAD, atomic write
 - `[x]` Storage: JSON (dev) / MessagePack (release; bincode was replaced by the 2026-11-19 reset), VaultFile::create/open/save
-- `[x]` UnlockedVault: mutations, holdings (derived), summary, history, realized PnL
+- `[x]` Session: mutations, holdings (derived), summary, history, realized PnL
 - `[x]` Prices+FX: CoinGecko→CoinCap→Binance, open.er-api.com, TTL cache
 - `[x]` IPC contract + the `src/shared/api/ipc.gen.d.ts` generator (ts-rs)
 - `[x]` Tauri shell: builder, AppState, commands (auth/stores/…/sim)

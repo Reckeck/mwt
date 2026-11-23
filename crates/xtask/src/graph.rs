@@ -27,8 +27,6 @@ pub enum Class {
 
 pub enum Outcome {
     Ok,
-    /// Passed, with a note the result line shows (a degraded run, not an error).
-    OkNote(String),
     /// Not an error: this machine cannot run the task. The reason goes to the summary.
     Skip(String),
     Fail(String),
@@ -292,7 +290,6 @@ async fn run_one(
     let log_hint = format!("{} ({})", task.name, rel(&ctx.root, &ctx.log));
     let (status, note) = match outcome {
         Outcome::Ok => (Status::Ok, String::new()),
-        Outcome::OkNote(text) => (Status::Ok, text),
         Outcome::Skip(reason) => (Status::Skip, reason),
         Outcome::Fail(reason) => {
             ctx.note(&format!("xtask: {reason}"));

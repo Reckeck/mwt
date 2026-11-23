@@ -70,11 +70,11 @@ UI ─ pick_vault_file ─► platform_fs::pick_vault
                          └ mobile:  URI → read_location → import_into(vaults_dir) → copy path
    ─ unlock_vault(path) ─► resolve_vault_to_open   (a URI from old recents is imported too)
                          ─► links::sync_before_open (reconcile with the copy: push / pull / merge)
-                         ─► UnlockedVault::open     (core: read, lock, migration, .vN.bak)
+                         ─► Session::open     (core: read, lock, migration, .vN.bak)
                          ─► links::take_in          (pull/merge of the copy into the open vault, the password comes from the request, is not stored)
                          ─► attach_mirror           (if linked: the copy thread)
    ─ create_vault(path) ─► resolve_new_vault        (bare name → vaults_dir, URI forbidden)
-mutation → UnlockedVault::persist → dirty + wakes vault_writer (batch)
+mutation → Session::persist → dirty + wakes vault_writer (batch)
 vault_writer: 500 ms of quiet (at most 3 s) → prepare_flush (under the lock: sync marks, encode)
             → FlushJob::write (without the lock: seal with the session key → atomic_write)
             └► VaultMirror::push(bytes) → thread → write_location(URI, "wt")
@@ -129,7 +129,7 @@ a process crash or power loss — at most ~3 s of the latest edits.
 | only the copy (an edit on another device) | `PullRemote` — the local one goes to `.bak`, the copy's data becomes the vault's data, `stamps` and `tombstones` are taken from the copy (they are record metadata), `peers` are merged by the `merge_peers` rules, and the undo batches, the journal, `transfers`, `tombstones_seen`, `paused`, `cut_by` **stay local** (`take_records_from` is the single source of what is taken from a copy) |
 | both (including a copy written blindly by an old app) | `Conflict` → a **merge** into the open vault, with no questions |
 
-  The merge (`links::take_in`, `UnlockedVault::merge_external_copy`): the copy
+  The merge (`links::take_in`, `Session::merge_external_copy`): the copy
   is opened with the same password (it exists only during `unlock_vault`); if
   `doc.id` matches, its records are applied through the peer sync path
   (`sync_manifest`/`sync_records` on the copy, `sync_apply` on the local vault,
@@ -152,7 +152,7 @@ a process crash or power loss — at most ~3 s of the latest edits.
 - `storage` and `crypto` re-export `vault_io::local` (`atomic_write`,
   `read_all`, `VaultLock`, `backup_path`, `ensure_wallet_ext`, `VAULT_EXT`):
   the old import paths work.
-- `service::UnlockedVault` only knows about `VaultMirror` (a trait) and
+- `service::Session` only knows about `VaultMirror` (a trait) and
   `set_mirror`; the sandbox gets no mirror.
 - `commands/auth.rs` and `commands/vault_recents.rs` call `platform_fs`
   instead of `PathBuf::from` and dialogs. `commands/vault_link.rs` is a thin

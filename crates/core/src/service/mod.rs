@@ -135,9 +135,6 @@ pub struct Session {
     pub(crate) device_keys: exchange_keys::DeviceKeys,
 }
 
-/// The old name of [`Session`]; callers move to `Session` in later steps.
-pub type UnlockedVault = Session;
-
 impl Session {
     /// [`Self::announce_to_tap`] for the sync scenarios of `usecases` (that
     /// method is private to `service`; its rule keeps one home in `saving`).
