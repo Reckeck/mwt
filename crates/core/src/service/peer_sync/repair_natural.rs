@@ -1,7 +1,7 @@
 //! Shim of the `peer_sync/repair_natural` area: moved to `crate::sync::repair::repair_natural` (spec core-strangler, D1).
 
 #[cfg(test)]
-use super::UnlockedVault;
+use crate::service::UnlockedVault;
 #[cfg(test)]
 use crate::sync::sync_ids;
 
@@ -17,6 +17,7 @@ mod tests {
     use crate::money::valuation::ValuationInput;
     use crate::planning::goals::GoalDraft;
     use crate::service::test_support::{amount, income, store};
+    use crate::usecases::sync::peer_sync;
 
     fn pair() -> (tempfile::TempDir, Vec<UnlockedVault>, Ledger) {
         let (dir, left, right) = two_devices();
@@ -133,7 +134,7 @@ mod tests {
         let batch = applied.expect("right applied a batch").id;
         let right = &mut right[0];
         assert_eq!(right.doc.debt_terms.len(), 1);
-        assert!(right.sync_undo(&batch).unwrap().restored > 0);
+        assert!(peer_sync::sync_undo(right, &batch).unwrap().restored > 0);
         // Back to the state before the batch: the device's own record only.
         assert_eq!(right.doc.debt_terms.len(), 1);
         assert_eq!(right.doc.debt_terms[0].id, "00000000-old");

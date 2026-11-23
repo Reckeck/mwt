@@ -25,6 +25,7 @@ use crate::planning::schedule::{fresh_moments, processed_dates};
 use crate::service::UnlockedVault;
 use crate::time::{Clock, FixedClock, secs_or_now, unix_secs};
 use crate::usecases::planning::notifications::notice;
+use crate::usecases::sync::peer_sync;
 use crate::workflow::catalog::node_def;
 use crate::workflow::exec::{self, EmittedEvent, Resume, RunContext, RunMode, RunReport};
 use crate::workflow::graph::{Graph, Node};
@@ -254,7 +255,7 @@ pub(crate) fn keep_run(
     report: &RunReport,
     pass: &mut WorkflowPass,
 ) -> Result<()> {
-    let ru = vault.notice_in_russian();
+    let ru = peer_sync::notice_in_russian(vault);
     vault.transact(|tx| write_run(tx, report, pass, ru))
 }
 

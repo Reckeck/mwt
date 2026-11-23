@@ -20,6 +20,7 @@ use zeroize::Zeroizing;
 
 use crate::error::{Error, Result};
 use crate::storage::encode;
+use crate::usecases::sync::peer_sync;
 
 use crate::kernel::events::DomainEvent;
 pub use crate::kernel::persistence::Flushed;
@@ -103,7 +104,7 @@ impl UnlockedVault {
         let events = tx.take_events();
         let forgotten = tx.take_forgotten_logs();
         for key in forgotten {
-            self.sync_forget_log_record(&key)?;
+            peer_sync::sync_forget_log_record(self, &key)?;
         }
         Ok((out, touched, events))
     }
@@ -169,7 +170,7 @@ impl UnlockedVault {
             .key
             .clone()
             .ok_or_else(|| Error::Crypto("the vault has no key to save with".into()))?;
-        self.track_changes()?;
+        peer_sync::track_changes(self)?;
         // Everything stamped since the last push, by this save or by a sync
         // call in between.
         let changed: Vec<String> = std::mem::take(&mut self.announce).into_iter().collect();

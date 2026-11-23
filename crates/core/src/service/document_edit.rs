@@ -12,6 +12,7 @@ use super::UnlockedVault;
 use crate::error::{Error, Result};
 use crate::model::vault::VaultDoc;
 use crate::sync::view;
+use crate::usecases::sync::peer_sync;
 
 impl UnlockedVault {
     /// Three-way apply of an editor save: a record `edited` changes, adds or
@@ -45,8 +46,8 @@ impl UnlockedVault {
     }
 
     pub(crate) fn merge_edit(&mut self, base: &Value, edited: &Value) -> Result<()> {
-        self.track_changes()?;
-        let mut value = self.doc_value()?;
+        peer_sync::track_changes(self)?;
+        let mut value = peer_sync::doc_value(self)?;
         let base_records = view::records(base);
         let edited_records = view::records(edited);
         let current = view::records(&value);

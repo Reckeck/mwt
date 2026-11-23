@@ -21,6 +21,7 @@ use crate::model::transaction::Transaction;
 use crate::planning::envelopes::EnvelopeDraft;
 use crate::service::StoreExtras;
 use crate::service::test_support::{amount, income, store, usd};
+use crate::usecases::sync::peer_sync;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Edit kinds the harness may pick. Later stages (B3 slices) add kinds here:
@@ -193,7 +194,7 @@ fn three_devices(start: Start) -> (Vec<tempfile::TempDir>, Vec<UnlockedVault>) {
             let copy = dir.path().join("third.wallet");
             std::fs::copy(&left.path, &copy).unwrap();
             let mut third = UnlockedVault::open(copy, "pw").unwrap();
-            third.set_device("cccccccc-third");
+            peer_sync::set_device(&mut third, "cccccccc-third");
             (vec![dir], vec![left, right, third])
         }
         Start::Separate => {
@@ -201,7 +202,7 @@ fn three_devices(start: Start) -> (Vec<tempfile::TempDir>, Vec<UnlockedVault>) {
             let mut devices = Vec::new();
             for name in ["aaaaaaaa-left", "bbbbbbbb-right", "cccccccc-third"] {
                 let (dir, mut vault) = crate::service::test_support::empty_vault();
-                vault.set_device(name);
+                peer_sync::set_device(&mut vault, name);
                 vault.persist().unwrap();
                 dirs.push(dir);
                 devices.push(vault);
@@ -219,8 +220,7 @@ pub(super) fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) -> boo
     let (wants, _) =
         crate::usecases::sync::read::sync_diff(&devices[to], &to_manifest, &from_manifest);
     let records = crate::usecases::sync::read::sync_records(&mut devices[from], &wants).unwrap();
-    devices[to]
-        .sync_apply(&records, &peer_of(from))
+    peer_sync::sync_apply(&mut devices[to], &records, &peer_of(from))
         .unwrap()
         .is_some()
 }
@@ -978,7 +978,7 @@ fn created_categories(vault: &UnlockedVault) -> Vec<String> {
 }
 
 fn view_of(vault: &mut UnlockedVault) -> BTreeMap<String, Value> {
-    let value = vault.doc_value().unwrap();
+    let value = peer_sync::doc_value(vault).unwrap();
     view::records(&value)
 }
 

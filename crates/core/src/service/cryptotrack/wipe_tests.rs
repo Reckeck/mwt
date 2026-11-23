@@ -1,5 +1,6 @@
 //! What a wipe of the module must and must not do (spec E12).
 
+use crate::usecases::sync::peer_sync;
 use std::collections::BTreeMap;
 
 use crate::cryptotrack::service::wipe::WIPE_CONFIRM;
@@ -244,13 +245,13 @@ fn the_device_secrets_file_goes_with_the_module() {
 fn an_offline_device_does_not_bring_the_module_back() {
     let dir = tempfile::tempdir().expect("a folder");
     let (_left_dir, mut left, _wallet) = followed();
-    left.set_device("aaaaaaaa-left");
+    peer_sync::set_device(&mut left, "aaaaaaaa-left");
     left.persist().expect("saved");
     left.flush_pending().expect("written");
     let copy = dir.path().join("copy.wallet");
     std::fs::copy(&left.path, &copy).expect("the second device gets the vault");
     let mut right = UnlockedVault::open(copy, "pw").expect("the copy opens");
-    right.set_device("bbbbbbbb-right");
+    peer_sync::set_device(&mut right, "bbbbbbbb-right");
     assert_eq!(right.security_level(), SecurityLevel::Crypto);
     assert_eq!(right.doc.crypto_accounts.len(), 1, "both hold the module");
 
@@ -322,7 +323,6 @@ fn exchange(from: &mut UnlockedVault, to: &mut UnlockedVault) -> BTreeMap<String
     let theirs = crate::usecases::sync::read::sync_manifest(from, None).expect("a manifest");
     let (wants, _) = crate::usecases::sync::read::sync_diff(to, &mine, &theirs);
     let sent = crate::usecases::sync::read::sync_records(from, &wants).expect("the records");
-    to.sync_apply(&sent, &peer("other"))
-        .expect("the batch applies");
+    peer_sync::sync_apply(to, &sent, &peer("other")).expect("the batch applies");
     sent
 }

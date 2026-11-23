@@ -55,7 +55,7 @@ fn undo_of_an_added_log_record_does_not_come_back() {
     let batch = exchange_batch(&mut left, &mut right);
     assert_eq!(keys(&left), vec!["reminder:a"]);
 
-    let report = left.sync_undo(&batch).unwrap();
+    let report = peer_sync::sync_undo(&mut left, &batch).unwrap();
     assert_eq!(report.restored, 1);
     assert!(keys(&left).is_empty());
     assert!(
@@ -78,7 +78,7 @@ fn undo_lists_a_union_entry_as_skipped() {
     let batch = exchange_batch(&mut left, &mut right);
     assert_eq!(left.doc.discarded_imports, vec!["exec-1".to_string()]);
 
-    let report = left.sync_undo(&batch).unwrap();
+    let report = peer_sync::sync_undo(&mut left, &batch).unwrap();
     assert_eq!(report.restored, 0, "a union entry cannot be deleted");
     assert_eq!(report.skipped.len(), 1, "{:?}", report.skipped);
     assert_eq!(left.doc.discarded_imports, vec!["exec-1".to_string()]);
@@ -158,7 +158,7 @@ fn a_record_cut_by_the_cap_is_not_counted_or_requested_again() {
     let (wants, _) = crate::usecases::sync::read::sync_diff(&left, &left_manifest, &right_manifest);
     let incoming = crate::usecases::sync::read::sync_records(&mut right, &wants).unwrap();
     let before = left.doc.sync.batches.len();
-    let applied = left.apply_batch(&incoming, &peer("right"), false).unwrap();
+    let applied = peer_sync::apply_batch(&mut left, &incoming, &peer("right"), false).unwrap();
     assert!(
         applied.is_none(),
         "the cut record made a batch: {applied:?}"

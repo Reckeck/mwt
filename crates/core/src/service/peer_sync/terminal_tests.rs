@@ -109,7 +109,7 @@ fn terminal_state_is_not_synced() {
 fn terminal_change_stamps_nothing() {
     let (_dir, mut vault, _right) = two_devices();
     let id = exchange_store(&mut vault);
-    let mut tracker = Tracker::capture(&vault.doc_value().unwrap());
+    let mut tracker = Tracker::capture(&peer_sync::doc_value(&mut vault).unwrap());
     let mut state = SyncState::default();
     let mut clock = Clock::new("dev");
 
@@ -122,13 +122,21 @@ fn terminal_change_stamps_nothing() {
         r#"[{"id":"1"}]"#,
     )
     .unwrap();
-    let changed = tracker.stamp(&vault.doc_value().unwrap(), &mut state, &mut clock);
+    let changed = tracker.stamp(
+        &peer_sync::doc_value(&mut vault).unwrap(),
+        &mut state,
+        &mut clock,
+    );
     assert!(changed.is_empty(), "{changed:?}");
     assert!(state.stamps.is_empty(), "{:?}", state.stamps);
 
     // An import setting does count.
     set_coins(&mut vault, &id, &["ETH"]);
-    let changed = tracker.stamp(&vault.doc_value().unwrap(), &mut state, &mut clock);
+    let changed = tracker.stamp(
+        &peer_sync::doc_value(&mut vault).unwrap(),
+        &mut state,
+        &mut clock,
+    );
     assert_eq!(changed, vec![format!("stores:{id}")]);
     let stamps = &state.stamps[&format!("stores:{id}")];
     assert!(stamps.fields.contains_key("exchange.import"));
@@ -164,7 +172,7 @@ fn undo_of_a_batch_keeps_the_local_terminal() {
     assert_eq!(coins_of(&right, &id), vec!["BTC".to_string()]);
     set_watchlist(&mut right, &id, "DOGEUSDT");
 
-    let report = right.sync_undo(&batch.id).unwrap();
+    let report = peer_sync::sync_undo(&mut right, &batch.id).unwrap();
     assert_eq!(report.restored, 1, "{report:?}");
     assert!(coins_of(&right, &id).is_empty());
     let kept = terminal(&right, &id);
@@ -182,7 +190,7 @@ fn a_new_store_from_a_peer_gets_a_default_terminal() {
     assert_eq!(terminal(&right, &id), TerminalState::default());
     assert_eq!(terminal(&left, &id).timeframe, "1w");
     // A record from an older device, which still sends its terminal inside.
-    let mut value = left.doc_value().unwrap();
+    let mut value = peer_sync::doc_value(&mut left).unwrap();
     let stores = value["stores"].as_array_mut().unwrap();
     let sent = stores.iter_mut().find(|store| store["id"] == id).unwrap();
     assert_eq!(sent["exchange"]["terminal"]["timeframe"], "1w");

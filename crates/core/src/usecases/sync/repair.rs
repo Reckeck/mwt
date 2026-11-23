@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 
+use super::peer_sync;
 use crate::error::Result;
 use crate::ipc_contract::MergeTarget;
 use crate::model::notify::{NoticeCategory, notice};
@@ -161,7 +162,7 @@ fn repair_restored(vault: &mut UnlockedVault, report: &mut RepairReport) {
 
 /// The notice of a repair, added to the (synced) log under a key the repair itself decides.
 fn announce_repair(vault: &mut UnlockedVault, report: &RepairReport) {
-    let ru = vault.notice_in_russian();
+    let ru = peer_sync::notice_in_russian(vault);
     let Some(body) = report.notice_body(ru) else {
         return;
     };
@@ -184,9 +185,9 @@ fn tracked_edit<R>(
     batch_id: Option<&str>,
     edit: impl FnOnce(&mut UnlockedVault) -> R,
 ) -> Result<(R, Vec<String>)> {
-    let before = vault.doc_value()?;
+    let before = peer_sync::doc_value(vault)?;
     let out = edit(vault);
-    let after = vault.doc_value()?;
+    let after = peer_sync::doc_value(vault)?;
     if after == before {
         return Ok((out, Vec::new()));
     }
@@ -202,9 +203,9 @@ fn tracked_edit<R>(
                 (key, state)
             })
             .collect();
-    let changed = vault.track_changes()?;
+    let changed = peer_sync::track_changes(vault)?;
     if let Some(id) = batch_id {
-        let settled = view::records(&vault.doc_value()?);
+        let settled = view::records(&peer_sync::doc_value(vault)?);
         let entries: Vec<BatchEntry> = changed
             .iter()
             .filter_map(|key| {

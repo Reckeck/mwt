@@ -10,6 +10,7 @@ use trade_core::ipc_contract::{
 use trade_core::service::UndoReport;
 use trade_core::sync::history::AppliedBatch;
 use trade_core::sync::journal::SyncJournalEntry;
+use trade_core::usecases::sync::peer_sync;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
@@ -166,8 +167,7 @@ pub async fn sync_peers(
         .collect();
     let guard = require_vault(&state)?;
     let vault = guard.as_ref().ok_or(trade_core::Error::RequiresUnlock)?;
-    Ok(vault
-        .sync_state()
+    Ok(peer_sync::sync_state(vault)
         .peers
         .iter()
         // The list also carries this device as the others trust it.
@@ -178,8 +178,8 @@ pub async fn sync_peers(
             paired_at: peer.paired_at.clone(),
             last_synced_at: peer.last_synced_at.clone(),
             online: online.contains(&peer.device_id),
-            paused: vault.sync_is_paused(&peer.device_id),
-            cut_by: vault.sync_cut_reason(&peer.device_id),
+            paused: peer_sync::sync_is_paused(vault, &peer.device_id),
+            cut_by: peer_sync::sync_cut_reason(vault, &peer.device_id),
             forgotten: peer.revoked.is_some(),
         })
         .collect())
@@ -213,7 +213,7 @@ pub async fn sync_resume_peer(
     {
         let mut guard = require_vault(&state)?;
         let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
-        vault.sync_resume_peer(&device_id)?;
+        peer_sync::sync_resume_peer(vault, &device_id)?;
     }
     sync::reconnect(&app);
     sync::emit_status(&app);
@@ -243,7 +243,7 @@ pub async fn sync_undo(
 ) -> Result<UndoReport, IpcError> {
     let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
-    vault.sync_undo(&batch_id).map_err(IpcError::from)
+    peer_sync::sync_undo(vault, &batch_id).map_err(IpcError::from)
 }
 
 /// «Allow merging»: clear the «keep» mark of a transaction or a reminder.
@@ -262,7 +262,7 @@ pub async fn allow_merging(
 pub async fn sync_restore_backup(state: State<'_, AppState>) -> Result<(), IpcError> {
     let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
-    vault.sync_restore_backup().map_err(IpcError::from)
+    peer_sync::sync_restore_backup(vault).map_err(IpcError::from)
 }
 
 ipc_commands!(sync_commands, SYNC_NAMES, commands::sync: [sync_status, sync_set_settings, sync_open_firewall, sync_open_notification_settings, sync_pair, sync_dismiss_offer, sync_confirm_pairing, sync_decide_plan, sync_peers, sync_forget_peer, sync_resume_peer, sync_history, sync_journal, sync_undo, allow_merging, sync_restore_backup]);

@@ -27,7 +27,7 @@ fn pull_one_way(from: &mut UnlockedVault, to: &mut UnlockedVault) {
     let to_manifest = crate::usecases::sync::read::sync_manifest(to, None).unwrap();
     let (to_wants, _) = crate::usecases::sync::read::sync_diff(to, &to_manifest, &from_manifest);
     let records = crate::usecases::sync::read::sync_records(from, &to_wants).unwrap();
-    to.sync_apply(&records, &peer("from")).unwrap();
+    peer_sync::sync_apply(to, &records, &peer("from")).unwrap();
 }
 
 fn contact(vault: &mut UnlockedVault, name: &str) -> String {
@@ -289,7 +289,7 @@ fn third_device(dir: &tempfile::TempDir, left: &UnlockedVault) -> UnlockedVault 
     let copy = dir.path().join("third.wallet");
     std::fs::copy(&left.path, &copy).unwrap();
     let mut third = UnlockedVault::open(copy, "pw").unwrap();
-    third.set_device("cccccccc-third");
+    peer_sync::set_device(&mut third, "cccccccc-third");
     third
 }
 
@@ -377,7 +377,7 @@ fn undoing_the_batch_removes_the_restore_again() {
         Some("Hobby 2")
     );
     let batch = left.doc.sync.batches.last().unwrap().id.clone();
-    assert!(left.sync_undo(&batch).unwrap().restored > 0);
+    assert!(peer_sync::sync_undo(&mut left, &batch).unwrap().restored > 0);
     assert!(
         categories_of(&left, &key).is_empty(),
         "the restore is undone"

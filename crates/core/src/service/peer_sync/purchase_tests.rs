@@ -231,6 +231,6 @@ fn undoing_a_sync_that_added_a_purchase_removes_only_that_purchase() {
     let (applied, _) = super::tests::exchange(&mut left, &mut right);
     let batch = applied.expect("the left device took the purchase in");
     assert_eq!(totals(&left), vec!["10", "20"]);
-    left.sync_undo(&batch.id).unwrap();
+    peer_sync::sync_undo(&mut left, &batch.id).unwrap();
     assert_eq!(totals(&left), vec!["10"]);
 }

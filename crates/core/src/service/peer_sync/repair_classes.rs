@@ -1,11 +1,11 @@
 //! Shim of the `peer_sync/repair_classes` area: moved to `crate::sync::repair::repair_classes` (spec core-strangler, D1).
 
 #[cfg(test)]
-use super::UnlockedVault;
-#[cfg(test)]
 use crate::Amount;
 #[cfg(test)]
 use crate::model::planning::AssetClass;
+#[cfg(test)]
+use crate::service::UnlockedVault;
 #[cfg(test)]
 use crate::sync::repair::repair_classes::scaled_shares;
 

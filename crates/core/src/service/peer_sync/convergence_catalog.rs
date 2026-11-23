@@ -25,6 +25,7 @@ use crate::planning::goals::GoalDraft;
 use crate::service::StoreExtras;
 use crate::service::test_support::{amount, income_of, payment, usd};
 use crate::time::unix_secs;
+use crate::usecases::sync::peer_sync;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// One item of the stage M catalog (`trade-app-sync-bugs.md`).
@@ -922,9 +923,7 @@ fn undo_last_batch(vault: &mut UnlockedVault, ledger: &mut Ledger) {
         .map(|(event, item, purchase)| purchase_present(&vault.doc, event, item, purchase))
         .collect();
     let leads_before = notice_leads(vault);
-    let undone = vault
-        .sync_undo(&batch.id)
-        .is_ok_and(|report| report.restored > 0);
+    let undone = peer_sync::sync_undo(vault, &batch.id).is_ok_and(|report| report.restored > 0);
     // The same for a notice lead: the value the undo put back counts as written.
     for (index, lead) in notice_leads(vault).into_iter().enumerate() {
         if leads_before.get(index) != Some(&lead) {

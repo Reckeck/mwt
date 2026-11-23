@@ -15,6 +15,7 @@ use trade_core::error::{Error, Result};
 use trade_core::ipc_contract::{ConflictSide, VaultLinkStatus};
 use trade_core::service::{ExternalMerge, UnlockedVault};
 use trade_core::storage::VaultFile;
+use trade_core::usecases::sync::peer_sync;
 use trade_core::vault_io::mirror::{
     PushOutcome, SyncAction, compare_and_push, content_hash, reconcile,
 };
@@ -266,18 +267,17 @@ pub fn take_in(
     };
     VaultFile::backup(&path)?;
     let taken = if merging {
-        vault.merge_external_copy(&remote, password, MERGE_PEER_NAME)?
+        peer_sync::merge_external_copy(vault, &remote, password, MERGE_PEER_NAME)?
     } else {
-        vault.take_external_copy(&remote, password)?
+        peer_sync::take_external_copy(vault, &remote, password)?
     };
     if taken == ExternalMerge::Unmergeable {
         if merging {
             let target = get(app, &path).map_or_else(String::new, |link| shown(&link.location()));
             return Err(Error::SyncConflict(target));
         }
-        let pulled = vault
-            .probe_external(&remote)
-            .and_then(|_| pull(app, &path, &remote, None));
+        let pulled =
+            peer_sync::probe_external(vault, &remote).and_then(|_| pull(app, &path, &remote, None));
         match pulled {
             Ok(()) => return Ok(TakeIn::Reopen),
             // A copy that is cheaper, does not open under this vault's key or

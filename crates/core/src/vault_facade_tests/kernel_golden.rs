@@ -5,6 +5,7 @@
 //! The mirror counts the writes: it is pushed once per write that reached
 //! the file, and never for a job the gate dropped.
 
+use crate::usecases::sync::peer_sync;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -75,7 +76,7 @@ impl Announcements {
 fn open_vault() -> (tempfile::TempDir, UnlockedVault) {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
-    vault.set_device("aaaaaaaa-golden");
+    peer_sync::set_device(&mut vault, "aaaaaaaa-golden");
     (dir, vault)
 }
 
@@ -203,7 +204,7 @@ fn a_sandbox_has_no_mirror_and_pushes_nothing() {
 fn sync_stamps_are_made_at_flush_and_announced_once() {
     let (_dir, mut vault) = open_vault();
     let tap = Arc::new(Announcements::default());
-    vault.set_sync_tap(Some(tap.clone()));
+    peer_sync::set_sync_tap(&mut vault, Some(tap.clone()));
     vault.set_write_behind(Some(Arc::new(Wakes::default())));
 
     let stamped_before = vault.doc.sync.stamps.clone();

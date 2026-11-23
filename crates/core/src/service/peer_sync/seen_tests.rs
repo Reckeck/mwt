@@ -1,6 +1,7 @@
 //! "Overwritten" lists only what this device edited and the other device had
 //! not seen yet (`SyncState.seen_by`), and a lost change of a record's kind.
 
+use crate::usecases::sync::peer_sync;
 use std::time::Duration;
 
 use super::tests::{settle, two_devices};
@@ -22,20 +23,18 @@ fn exchange_marked(
     left: &mut UnlockedVault,
     right: &mut UnlockedVault,
 ) -> (Vec<OverwrittenField>, Vec<OverwrittenField>) {
-    let (left_manifest, left_mark) = left.sync_manifest_marked(None).unwrap();
-    let (right_manifest, right_mark) = right.sync_manifest_marked(None).unwrap();
+    let (left_manifest, left_mark) = peer_sync::sync_manifest_marked(left, None).unwrap();
+    let (right_manifest, right_mark) = peer_sync::sync_manifest_marked(right, None).unwrap();
     let (left_wants, _) =
         crate::usecases::sync::read::sync_diff(left, &left_manifest, &right_manifest);
     let (right_wants, _) =
         crate::usecases::sync::read::sync_diff(right, &right_manifest, &left_manifest);
     let to_left = crate::usecases::sync::read::sync_records(right, &left_wants).unwrap();
     let to_right = crate::usecases::sync::read::sync_records(left, &right_wants).unwrap();
-    let applied_left = left.sync_apply(&to_left, &peer_of("right")).unwrap();
-    let applied_right = right.sync_apply(&to_right, &peer_of("left")).unwrap();
-    left.sync_mark_synced("right-id", Some(&left_mark)).unwrap();
-    right
-        .sync_mark_synced("left-id", Some(&right_mark))
-        .unwrap();
+    let applied_left = peer_sync::sync_apply(left, &to_left, &peer_of("right")).unwrap();
+    let applied_right = peer_sync::sync_apply(right, &to_right, &peer_of("left")).unwrap();
+    peer_sync::sync_mark_synced(left, "right-id", Some(&left_mark)).unwrap();
+    peer_sync::sync_mark_synced(right, "left-id", Some(&right_mark)).unwrap();
     let overwritten = |applied: Option<AppliedBatch>| {
         applied
             .map(|batch| batch.summary.overwritten)
@@ -107,7 +106,9 @@ fn without_a_record_of_the_peer_every_edit_still_counts() {
     let batch =
         crate::usecases::sync::read::sync_records(&mut right, &[format!("transactions:{id}")])
             .unwrap();
-    let applied = left.sync_apply(&batch, &peer_of("right")).unwrap().unwrap();
+    let applied = peer_sync::sync_apply(&mut left, &batch, &peer_of("right"))
+        .unwrap()
+        .unwrap();
     assert_eq!(applied.summary.overwritten.len(), 1);
 }
 
@@ -116,14 +117,14 @@ fn seen_by_only_grows_and_is_not_taken_from_a_received_copy() {
     let (_dir, mut left, mut right, id) = seeded();
     comment_edit(&mut left, &id, "first");
     exchange_marked(&mut left, &mut right);
-    let seen = left.sync_state().seen_by["right-id"].clone();
-    left.sync_mark_synced("right-id", Some(&Stamp::new(1, 0, &seen.device)))
+    let seen = peer_sync::sync_state(&left).seen_by["right-id"].clone();
+    peer_sync::sync_mark_synced(&mut left, "right-id", Some(&Stamp::new(1, 0, &seen.device)))
         .unwrap();
-    assert_eq!(left.sync_state().seen_by["right-id"], seen);
-    left.sync_mark_synced("right-id", None).unwrap();
-    assert_eq!(left.sync_state().seen_by["right-id"], seen);
+    assert_eq!(peer_sync::sync_state(&left).seen_by["right-id"], seen);
+    peer_sync::sync_mark_synced(&mut left, "right-id", None).unwrap();
+    assert_eq!(peer_sync::sync_state(&left).seen_by["right-id"], seen);
 
-    let mut sent = left.sync_state().clone();
+    let mut sent = peer_sync::sync_state(&left).clone();
     assert!(!sent.seen_by.is_empty());
     let mut keeper = crate::sync::SyncState::default();
     keeper.seen_by.insert("x-id".into(), seen);

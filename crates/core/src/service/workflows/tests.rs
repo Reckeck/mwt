@@ -1,3 +1,4 @@
+use crate::usecases::sync::peer_sync;
 use std::collections::{BTreeMap, HashMap};
 
 use serde_json::{Value, json};
@@ -2962,8 +2963,7 @@ fn a_rejected_retry_leaves_a_tombstone() {
     assert_eq!(pass.created.len(), 1);
     // Without it the refusal comes back from a device that still has it.
     assert!(
-        vault
-            .sync_state()
+        peer_sync::sync_state(&vault)
             .tombstones
             .contains_key(&format!("workflow_runs:{}", refused.id))
     );
@@ -3009,8 +3009,7 @@ fn a_stale_rejected_is_cleared_not_retried() {
             .all(|run| run.id != refused.id)
     );
     assert!(
-        vault
-            .sync_state()
+        peer_sync::sync_state(&vault)
             .tombstones
             .contains_key(&format!("workflow_runs:{}", refused.id))
     );
@@ -3299,12 +3298,12 @@ fn a_swap_for_an_unknown_wallet_is_refused() {
 fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
     use crate::sync::manifest::diff;
     let (dir, mut left, card, _workflow, refused) = refused_rent();
-    left.set_device("aaaaaaaa-left");
+    peer_sync::set_device(&mut left, "aaaaaaaa-left");
     left.persist().unwrap();
     let copy = dir.path().join("copy.wallet");
     std::fs::copy(&left.path, &copy).unwrap();
     let mut right = UnlockedVault::open(copy, "pw").unwrap();
-    right.set_device("bbbbbbbb-right");
+    peer_sync::set_device(&mut right, "bbbbbbbb-right");
     let run_key = format!("workflow_runs:{}", refused.id);
     let has_run = |vault: &UnlockedVault| {
         vault
@@ -3341,12 +3340,16 @@ fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
         let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
         let to_left = crate::usecases::sync::read::sync_records(&mut right, &left_wants).unwrap();
         let to_right = crate::usecases::sync::read::sync_records(&mut left, &right_wants).unwrap();
-        left.sync_apply(&to_left, &peer("right")).unwrap();
-        right.sync_apply(&to_right, &peer("left")).unwrap();
+        peer_sync::sync_apply(&mut left, &to_left, &peer("right")).unwrap();
+        peer_sync::sync_apply(&mut right, &to_right, &peer("left")).unwrap();
     }
     assert!(!has_run(&left), "the refusal came back to the laptop");
     assert!(!has_run(&right), "the refusal stayed on the other device");
-    assert!(right.sync_state().tombstones.contains_key(&run_key));
+    assert!(
+        peer_sync::sync_state(&right)
+            .tombstones
+            .contains_key(&run_key)
+    );
 
     // The other device cannot book the moment again, and nothing booked it
     // twice.

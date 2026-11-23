@@ -176,7 +176,7 @@ async fn a_protocol_four_dialer_is_refused_with_its_name() {
     assert_eq!(field(&on_main, "peer_version"), "0.1.0-30");
     // Trust stays: the pair joins once the phone is updated.
     assert!(
-        main.with_vault(|vault| Ok(vault.sync_state().trusted(&public_key).is_some()))
+        main.with_vault(|vault| Ok(peer_sync::sync_state(vault).trusted(&public_key).is_some()))
             .unwrap()
     );
 }

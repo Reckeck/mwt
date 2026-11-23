@@ -1,3 +1,4 @@
+use crate::usecases::sync::peer_sync;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -107,7 +108,7 @@ fn the_raise_reaches_level_three_and_leaves_no_cheaper_copy() {
     // before a sync, and one under a password this raise does not know.
     std::fs::copy(&vault.path, dir.path().join("test.wallet.bak")).unwrap();
     std::fs::copy(&vault.path, dir.path().join("test.wallet.v1.bak")).unwrap();
-    vault.sync_backup().unwrap();
+    peer_sync::sync_backup(&mut vault).unwrap();
     let stranger = tempfile::tempdir().unwrap();
     let other = UnlockedVault::create(stranger.path().join("o.wallet"), "9999").unwrap();
     std::fs::copy(&other.path, dir.path().join("test.wallet.v9.bak")).unwrap();
@@ -274,7 +275,7 @@ fn plain_vault_with_copies() -> (tempfile::TempDir, UnlockedVault) {
     vault.flush_pending().unwrap();
     std::fs::copy(&vault.path, dir.path().join("test.wallet.bak")).unwrap();
     std::fs::copy(&vault.path, dir.path().join("test.wallet.v1.bak")).unwrap();
-    vault.sync_backup().unwrap();
+    peer_sync::sync_backup(&mut vault).unwrap();
     assert_eq!(vault.security_level(), SecurityLevel::Ledger);
     (dir, vault)
 }

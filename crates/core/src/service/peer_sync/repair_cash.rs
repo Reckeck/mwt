@@ -1,9 +1,9 @@
 //! Shim of the `peer_sync/repair_cash` area: moved to `crate::sync::repair::repair_cash` (spec core-strangler, D1).
 
 #[cfg(test)]
-use super::UnlockedVault;
-#[cfg(test)]
 use crate::service::CASH_WALLET_ID;
+#[cfg(test)]
+use crate::service::UnlockedVault;
 
 #[cfg(test)]
 mod tests {
@@ -14,6 +14,7 @@ mod tests {
     use crate::service::StoreExtras;
     use crate::service::test_support::{empty_vault, income, usd};
     use crate::sync::track::Tracker;
+    use crate::usecases::sync::peer_sync;
 
     /// A vault as an older build made it: the Cash wallet has a random id.
     fn old_build(vault: &mut UnlockedVault) -> String {
@@ -36,14 +37,14 @@ mod tests {
                 .stamps
                 .insert(format!("stores:{old}"), stamps);
         }
-        vault.tracker = Some(Tracker::capture(&vault.doc_value().unwrap()));
+        vault.tracker = Some(Tracker::capture(&peer_sync::doc_value(vault).unwrap()));
         vault.persist().unwrap();
         old
     }
 
     fn device(name: &str) -> (tempfile::TempDir, UnlockedVault) {
         let (dir, mut vault) = empty_vault();
-        vault.set_device(name);
+        peer_sync::set_device(&mut vault, name);
         vault.persist().unwrap();
         (dir, vault)
     }
@@ -188,7 +189,7 @@ mod tests {
         let (_, applied) = exchange(&mut left, &mut right);
         let batch = applied.expect("right applied a batch").id;
         assert_eq!(roots(&right).len(), 1);
-        assert!(right.sync_undo(&batch).unwrap().restored > 0);
+        assert!(peer_sync::sync_undo(&mut right, &batch).unwrap().restored > 0);
         assert_eq!(roots(&right), vec![right_cash.clone()]);
         assert!(
             right

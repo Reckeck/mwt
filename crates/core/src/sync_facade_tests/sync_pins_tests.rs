@@ -9,16 +9,17 @@ use crate::service::UnlockedVault;
 use crate::service::test_support::{empty_vault, income};
 use crate::sync::plan::ChangeKind;
 use crate::sync::{RecordState, SyncSummary};
+use crate::usecases::sync::peer_sync;
 
 /// The same vault on two devices: a copy of one file, opened twice.
 fn two_devices() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
     let (dir, mut left) = empty_vault();
-    left.set_device("aaaaaaaa-left");
+    peer_sync::set_device(&mut left, "aaaaaaaa-left");
     left.persist().unwrap();
     let copy = dir.path().join("copy.wallet");
     std::fs::copy(&left.path, &copy).unwrap();
     let mut right = UnlockedVault::open(copy, "pw").unwrap();
-    right.set_device("bbbbbbbb-right");
+    peer_sync::set_device(&mut right, "bbbbbbbb-right");
     (dir, left, right)
 }
 
@@ -102,8 +103,8 @@ fn sync_manifest_for_a_lower_peer_counts_only_crypto_records() {
 #[test]
 fn sync_manifest_marked_carries_the_clock_of_the_moment() {
     let (_dir, mut left, _right) = two_devices();
-    let (manifest, mark) = left.sync_manifest_marked(None).unwrap();
-    let (again, same_mark) = left.sync_manifest_marked(None).unwrap();
+    let (manifest, mark) = peer_sync::sync_manifest_marked(&mut left, None).unwrap();
+    let (again, same_mark) = peer_sync::sync_manifest_marked(&mut left, None).unwrap();
     assert_eq!(
         manifest,
         crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap()
@@ -114,14 +115,16 @@ fn sync_manifest_marked_carries_the_clock_of_the_moment() {
 #[test]
 fn sync_manifest_marked_for_adds_the_withheld_count() {
     let (_dir, mut left, _right) = two_devices();
-    let (manifest, mark, withheld) = left
-        .sync_manifest_marked_for(None, SecurityLevel::Crypto)
-        .unwrap();
+    let (manifest, mark, withheld) =
+        peer_sync::sync_manifest_marked_for(&mut left, None, SecurityLevel::Crypto).unwrap();
     assert_eq!(
         manifest,
         crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap()
     );
-    assert_eq!(mark, left.sync_manifest_marked(None).unwrap().1);
+    assert_eq!(
+        mark,
+        peer_sync::sync_manifest_marked(&mut left, None).unwrap().1
+    );
     assert_eq!(withheld, 0);
 }
 
@@ -282,14 +285,14 @@ fn sync_history_lists_an_applied_batch_and_a_transfer_newest_first() {
     crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))
         .unwrap();
     let incoming = batch_for(&mut right, &mut left);
-    let applied = right.sync_apply(&incoming, &peer()).unwrap().unwrap();
+    let applied = peer_sync::sync_apply(&mut right, &incoming, &peer())
+        .unwrap()
+        .unwrap();
     assert_eq!(
         crate::sync::history::history(&right.doc),
         vec![applied.clone()]
     );
-    right
-        .sync_record_transfer("dev-c", "Tablet", "cc", false)
-        .unwrap();
+    peer_sync::sync_record_transfer(&mut right, "dev-c", "Tablet", "cc", false).unwrap();
     let history = crate::sync::history::history(&right.doc);
     assert_eq!(history.len(), 2);
     let transfer = history
@@ -311,7 +314,9 @@ fn sync_batch_keys_and_collections_name_what_a_batch_changed() {
     )
     .unwrap();
     let incoming = batch_for(&mut right, &mut left);
-    let applied = right.sync_apply(&incoming, &peer()).unwrap().unwrap();
+    let applied = peer_sync::sync_apply(&mut right, &incoming, &peer())
+        .unwrap()
+        .unwrap();
     let keys = crate::sync::history::batch_keys(&right.doc, &applied.id);
     assert!(keys.contains(&format!("transactions:{}", tx.meta().id)));
     let collections = crate::sync::history::batch_collections(&right.doc, &applied.id);
@@ -337,7 +342,9 @@ fn sync_batch_notices_hands_back_the_notices_a_batch_added() {
     crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))
         .unwrap();
     let incoming = batch_for(&mut right, &mut left);
-    let applied = right.sync_apply(&incoming, &peer()).unwrap().unwrap();
+    let applied = peer_sync::sync_apply(&mut right, &incoming, &peer())
+        .unwrap()
+        .unwrap();
     let added: Vec<String> = crate::sync::history::batch_notices(&right.doc, &applied.id)
         .iter()
         .map(|record| record.key.clone())
@@ -354,7 +361,7 @@ fn sync_batch_notices_hands_back_the_notices_a_batch_added() {
 fn sync_trust_peer_adds_a_device_and_pairs_a_known_one_afresh() {
     let (_dir, mut left, _right) = two_devices();
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-    let state = left.sync_state();
+    let state = peer_sync::sync_state(&left);
     assert_eq!(state.peers.len(), 1);
     let peer = &state.peers[0];
     assert_eq!(peer.device_id, "dev-c");
@@ -363,24 +370,24 @@ fn sync_trust_peer_adds_a_device_and_pairs_a_known_one_afresh() {
     assert!(peer.revoked.is_none());
     assert!(peer.last_synced_at.is_none());
     let first_stamp = peer.stamp.clone();
-    left.sync_pause_peer("dev-c").unwrap();
+    peer_sync::sync_pause_peer(&mut left, "dev-c").unwrap();
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet 2", "cc").unwrap();
-    let state = left.sync_state();
+    let state = peer_sync::sync_state(&left);
     assert_eq!(state.peers.len(), 1);
     assert_eq!(state.peers[0].name, "Tablet 2");
     assert!(state.peers[0].stamp > first_stamp);
-    assert!(!left.sync_is_paused("dev-c"));
+    assert!(!peer_sync::sync_is_paused(&left, "dev-c"));
 }
 
 #[test]
 fn sync_forget_peer_revokes_a_device_and_refuses_an_unknown_one() {
     let (_dir, mut left, _right) = two_devices();
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-    left.sync_pause_peer("dev-c").unwrap();
+    peer_sync::sync_pause_peer(&mut left, "dev-c").unwrap();
     crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
-    let peer = &left.sync_state().peers[0];
+    let peer = &peer_sync::sync_state(&left).peers[0];
     assert_eq!(peer.revoked.as_ref(), Some(&peer.stamp));
-    assert!(!left.sync_is_paused("dev-c"));
+    assert!(!peer_sync::sync_is_paused(&left, "dev-c"));
     let error = crate::usecases::sync::trust::sync_forget_peer(&mut left, "ghost").unwrap_err();
     assert!(matches!(error, crate::error::Error::NotFound(_)));
 }
@@ -403,8 +410,7 @@ fn sync_forget_peer_observes_the_stamps_of_every_entry_with_the_device_id() {
     let (_dir, mut left, _right) = two_devices();
     left.doc.sync.peers = vec![peer("dev-c", 10), peer("other", 99), peer("dev-c", 50)];
     crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
-    let revoked = left
-        .sync_state()
+    let revoked = peer_sync::sync_state(&left)
         .peers
         .iter()
         .filter(|entry| entry.device_id == "dev-c")

@@ -1,6 +1,7 @@
 //! A record that does not fit the schema is skipped on its own: the good
 //! records of the batch apply, the session goes on, and the skip is told once.
 
+use crate::usecases::sync::peer_sync;
 use std::collections::BTreeMap;
 
 use super::tests::two_devices;
@@ -55,8 +56,7 @@ fn a_record_that_does_not_parse_is_skipped_and_the_rest_applies() {
     let bad = contact(&mut right, "Bad");
     let incoming = incoming_with(&mut left, &mut right, &bad);
 
-    let applied = left
-        .sync_apply(&incoming, &peer())
+    let applied = peer_sync::sync_apply(&mut left, &incoming, &peer())
         .unwrap()
         .expect("the good record applied");
     assert_eq!(applied.skipped, vec![bad.clone()]);
@@ -77,10 +77,9 @@ fn a_skipped_record_is_journaled_once_not_every_session() {
     let bad = contact(&mut right, "Bad");
     let incoming = incoming_with(&mut left, &mut right, &bad);
 
-    left.sync_apply(&incoming, &peer()).unwrap();
+    peer_sync::sync_apply(&mut left, &incoming, &peer()).unwrap();
     let failed = |vault: &UnlockedVault| {
-        vault
-            .sync_state()
+        peer_sync::sync_state(vault)
             .journal
             .iter()
             .filter(|entry| entry.outcome == SyncJournalOutcome::Failed)
@@ -88,7 +87,7 @@ fn a_skipped_record_is_journaled_once_not_every_session() {
     };
     assert_eq!(failed(&left), 1);
     // The next session offers the same records again.
-    let again = left.sync_apply(&incoming, &peer()).unwrap();
+    let again = peer_sync::sync_apply(&mut left, &incoming, &peer()).unwrap();
     assert!(again.is_none());
     assert_eq!(failed(&left), 1);
 }
@@ -98,6 +97,10 @@ fn a_batch_of_only_bad_records_ends_without_an_error() {
     let (_dir, mut left, mut right) = two_devices();
     let bad = contact(&mut right, "Bad");
     let incoming = incoming_with(&mut left, &mut right, &bad);
-    assert!(left.sync_apply(&incoming, &peer()).unwrap().is_none());
+    assert!(
+        peer_sync::sync_apply(&mut left, &incoming, &peer())
+            .unwrap()
+            .is_none()
+    );
     assert!(left.doc.contacts.is_empty());
 }

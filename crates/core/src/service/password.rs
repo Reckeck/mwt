@@ -34,6 +34,7 @@ use crate::crypto::{self, SealKey};
 use crate::error::{Error, Result};
 use crate::ipc_contract::security::SecurityLevel;
 use crate::storage::{SnapshotFormat, VaultFile, decode_file};
+use crate::usecases::sync::peer_sync;
 use crate::vault_io::backups;
 use crate::vault_io::copies::{self, CopyKind, CopySeal, VaultCopy};
 use crate::vault_io::device_secrets;
@@ -281,7 +282,7 @@ impl UnlockedVault {
         self.rekey(Arc::new(SealKey::plain()), "")?;
         // The pre-sync copies are sealed under the password just removed: the
         // restore button would offer a copy nothing can open.
-        self.remove_sync_backups();
+        peer_sync::remove_sync_backups(self);
         Ok(())
     }
 
@@ -578,13 +579,13 @@ mod tests {
             ),
         )
         .unwrap();
-        vault.sync_backup().unwrap();
-        vault.sync_backup().unwrap();
-        assert!(vault.has_sync_backup());
+        peer_sync::sync_backup(&mut vault).unwrap();
+        peer_sync::sync_backup(&mut vault).unwrap();
+        assert!(peer_sync::has_sync_backup(&vault));
         vault.remove_password("pw").unwrap();
         // The button hides, the copies are gone and a restore says so instead
         // of failing on the empty password.
-        assert!(!vault.has_sync_backup());
+        assert!(!peer_sync::has_sync_backup(&vault));
         let left: Vec<String> = std::fs::read_dir(dir.path())
             .unwrap()
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
@@ -592,7 +593,7 @@ mod tests {
             .collect();
         assert!(left.is_empty(), "left behind: {left:?}");
         assert!(matches!(
-            vault.sync_restore_backup(),
+            peer_sync::sync_restore_backup(&mut vault),
             Err(Error::NotFound(_))
         ));
     }
@@ -608,9 +609,9 @@ mod tests {
         let copy = vault.path.with_file_name("v.wallet.presync.bak");
         std::fs::write(&copy, sealed).unwrap();
         assert!(copy.exists());
-        assert!(!vault.has_sync_backup());
+        assert!(!peer_sync::has_sync_backup(&vault));
         assert!(matches!(
-            vault.sync_restore_backup(),
+            peer_sync::sync_restore_backup(&mut vault),
             Err(Error::NotFound(_))
         ));
     }
@@ -618,10 +619,10 @@ mod tests {
     #[test]
     fn setting_a_password_keeps_the_copy_from_before_a_sync_readable() {
         let (_dir, mut vault) = plain_vault();
-        vault.sync_backup().unwrap();
+        peer_sync::sync_backup(&mut vault).unwrap();
         vault.set_password("pw", false).unwrap();
-        assert!(vault.has_sync_backup());
-        vault.sync_restore_backup().unwrap();
+        assert!(peer_sync::has_sync_backup(&vault));
+        peer_sync::sync_restore_backup(&mut vault).unwrap();
         assert!(vault.is_encrypted());
     }
 
@@ -776,7 +777,7 @@ mod tests {
     fn the_copies_are_listed_with_their_seal() {
         let (_dir, mut vault) = empty_vault();
         let backup = vault.create_backup().unwrap();
-        vault.sync_backup().unwrap();
+        peer_sync::sync_backup(&mut vault).unwrap();
         let listed = vault.list_vault_copies().unwrap();
         assert_eq!(listed.len(), 2);
         assert!(listed.iter().all(|copy| copy.seal == CopySeal::CurrentKey));
@@ -1142,7 +1143,7 @@ mod tests {
     /// one of the two passwords, the keys included.
     fn crash_at(step: RotateStep) {
         let (dir, mut vault, store) = level3_with_key();
-        vault.sync_backup().unwrap();
+        peer_sync::sync_backup(&mut vault).unwrap();
         vault.create_backup().unwrap();
         let path = vault.path.clone();
         let result = vault.change_password_inner(

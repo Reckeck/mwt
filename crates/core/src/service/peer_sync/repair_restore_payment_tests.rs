@@ -157,7 +157,7 @@ fn a_device_without_the_value_leaves_the_purchase_alone_and_reports_it() {
     let to = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
     let (wants, _) = crate::usecases::sync::read::sync_diff(&left, &to, &from);
     let records = crate::usecases::sync::read::sync_records(&mut right, &wants).unwrap();
-    left.sync_apply(&records, &peer("right")).unwrap();
+    peer_sync::sync_apply(&mut left, &records, &peer("right")).unwrap();
     let report = crate::usecases::sync::repair::repair_invariants(&mut left, None).unwrap();
     assert!(report.unrestored.contains(&tx_id), "{report:?}");
     assert!(linked(&left, &tx_id), "the purchase is untouched");

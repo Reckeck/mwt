@@ -5,6 +5,7 @@ use super::tests::{exchange, settle, two_devices};
 use super::*;
 use crate::service::test_support::income;
 use crate::sync::state::{CutBy, TransferRecord};
+use crate::usecases::sync::peer_sync;
 
 fn cash_id(vault: &UnlockedVault) -> String {
     vault.doc.stores[0].id.clone()
@@ -21,7 +22,7 @@ fn a_received_copy_drops_the_senders_bookkeeping() {
     let id = left.doc.transactions[0].meta().id.clone();
     crate::usecases::money::transactions::delete_transaction(&mut left, &id).unwrap();
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-    left.sync_pause_peer("dev-c").unwrap();
+    peer_sync::sync_pause_peer(&mut left, "dev-c").unwrap();
     left.doc.sync.peers.last_mut().unwrap().last_synced_at = Some("2026-11-01T10:00:00Z".into());
     left.doc.sync.cut_by.insert(
         "dev-d".into(),
@@ -43,7 +44,7 @@ fn a_received_copy_drops_the_senders_bookkeeping() {
     let received = dir.path().join("received.wallet");
     std::fs::copy(&left.path, &received).unwrap();
     let mut mine = UnlockedVault::open(received.clone(), "pw").unwrap();
-    mine.adopt_received_copy().unwrap();
+    peer_sync::adopt_received_copy(&mut mine).unwrap();
 
     let sync = &mine.doc.sync;
     assert!(sync.paused.is_empty());
@@ -70,10 +71,10 @@ fn a_received_copy_drops_the_senders_bookkeeping() {
 fn trusting_again_lifts_a_pause() {
     let (_dir, mut left, _right) = two_devices();
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-    left.sync_pause_peer("dev-c").unwrap();
-    assert!(left.sync_is_paused("dev-c"));
+    peer_sync::sync_pause_peer(&mut left, "dev-c").unwrap();
+    assert!(peer_sync::sync_is_paused(&left, "dev-c"));
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-    assert!(!left.sync_is_paused("dev-c"));
+    assert!(!peer_sync::sync_is_paused(&left, "dev-c"));
 }
 
 #[test]
@@ -81,24 +82,17 @@ fn a_newer_trust_beats_an_older_revoke() {
     let (_dir, mut left, mut right) = two_devices();
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     settle(&mut left, &mut right);
-    right
-        .sync_merge_peers(&left.sync_state().peers.clone())
-        .unwrap();
+    peer_sync::sync_merge_peers(&mut right, &peer_sync::sync_state(&left).peers.clone()).unwrap();
     crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
-    right
-        .sync_merge_peers(&left.sync_state().peers.clone())
-        .unwrap();
-    assert!(right.sync_state().is_revoked("cc"));
+    peer_sync::sync_merge_peers(&mut right, &peer_sync::sync_state(&left).peers.clone()).unwrap();
+    assert!(peer_sync::sync_state(&right).is_revoked("cc"));
     // The user pairs it again on the right device: a newer stamp.
     crate::usecases::sync::trust::sync_trust_peer(&mut right, "dev-c", "Tablet", "cc").unwrap();
-    left.sync_merge_peers(&right.sync_state().peers.clone())
-        .unwrap();
-    right
-        .sync_merge_peers(&left.sync_state().peers.clone())
-        .unwrap();
-    assert!(!left.sync_state().is_revoked("cc"));
-    assert!(!right.sync_state().is_revoked("cc"));
-    assert!(left.sync_state().trusted("cc").is_some());
+    peer_sync::sync_merge_peers(&mut left, &peer_sync::sync_state(&right).peers.clone()).unwrap();
+    peer_sync::sync_merge_peers(&mut right, &peer_sync::sync_state(&left).peers.clone()).unwrap();
+    assert!(!peer_sync::sync_state(&left).is_revoked("cc"));
+    assert!(!peer_sync::sync_state(&right).is_revoked("cc"));
+    assert!(peer_sync::sync_state(&left).trusted("cc").is_some());
     let _ = exchange;
 }
 
@@ -106,17 +100,14 @@ fn a_newer_trust_beats_an_older_revoke() {
 fn an_older_trust_does_not_lift_a_newer_revoke() {
     let (_dir, mut left, mut right) = two_devices();
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-    let trusted = left.sync_state().peers.clone();
-    right.sync_merge_peers(&trusted).unwrap();
+    let trusted = peer_sync::sync_state(&left).peers.clone();
+    peer_sync::sync_merge_peers(&mut right, &trusted).unwrap();
     crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
     // The right device still offers the older, live entry.
-    left.sync_merge_peers(&right.sync_state().peers.clone())
-        .unwrap();
-    assert!(left.sync_state().is_revoked("cc"));
-    right
-        .sync_merge_peers(&left.sync_state().peers.clone())
-        .unwrap();
-    assert!(right.sync_state().is_revoked("cc"));
+    peer_sync::sync_merge_peers(&mut left, &peer_sync::sync_state(&right).peers.clone()).unwrap();
+    assert!(peer_sync::sync_state(&left).is_revoked("cc"));
+    peer_sync::sync_merge_peers(&mut right, &peer_sync::sync_state(&left).peers.clone()).unwrap();
+    assert!(peer_sync::sync_state(&right).is_revoked("cc"));
 }
 
 #[test]

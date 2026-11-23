@@ -38,6 +38,7 @@ use trade_core::ipc_contract::{
     SyncNetworkView, SyncPhase, SyncProgress, SyncRole, SyncSessionView, SyncStatus,
 };
 use trade_core::service::SyncTap;
+use trade_core::usecases::sync::peer_sync;
 
 use crate::commands::AppState;
 use crate::ipc::events::{SyncError, SyncStatusChanged};
@@ -174,7 +175,7 @@ pub fn on_unlock(app: &AppHandle) {
         if let Ok(mut guard) = state.vault.lock()
             && let Some(vault) = guard.as_mut()
         {
-            vault.set_device(&device);
+            peer_sync::set_device(vault, &device);
         }
     }
     handover::trust_sender(app);
@@ -230,7 +231,7 @@ pub fn restart(app: &AppHandle) {
         if let Ok(mut guard) = state.vault.lock()
             && let Some(vault) = guard.as_mut()
         {
-            vault.set_sync_tap(Some(Arc::new(Tap(app.clone()))));
+            peer_sync::set_sync_tap(vault, Some(Arc::new(Tap(app.clone()))));
         }
     }
     let generation = {
@@ -291,7 +292,7 @@ pub(crate) fn teardown<H: Host>(app: &H) -> Option<Run> {
         let _ = link.orders.send(Order::Close);
     }
     let _ = app.with_vault(|vault| {
-        vault.set_sync_tap(None);
+        peer_sync::set_sync_tap(vault, None);
         Ok(())
     });
     emit_status(app);
@@ -415,7 +416,7 @@ pub(crate) fn peers_changed<H: Host>(app: &H, origin_session: &str) {
         .with_vault(|vault| {
             Ok(links
                 .iter()
-                .map(|(_, key)| vault.sync_state().is_revoked(key))
+                .map(|(_, key)| peer_sync::sync_state(vault).is_revoked(key))
                 .collect())
         })
         .unwrap_or_default();
@@ -465,7 +466,7 @@ pub(crate) fn pair_again<H: Host>(app: &H, device_id: &str) -> trade_core::Resul
         run.pair_intent.insert(device_id.to_string());
         (run.generation, addrs)
     };
-    app.with_vault(|vault| vault.sync_clear_cut(device_id).map(|_| ()))?;
+    app.with_vault(|vault| peer_sync::sync_clear_cut(vault, device_id).map(|_| ()))?;
     // Its refusal, if it comes again, is news again.
     peer_recovered(app, device_id);
     let app = app.clone();
@@ -528,7 +529,7 @@ pub(crate) fn blocked<H: Host>(app: &H, addr: IpAddr) -> bool {
 pub(crate) fn status<H: Host>(app: &H) -> SyncStatus {
     let settings = app.settings();
     let has_backup = app
-        .with_vault(|vault| Ok(vault.has_sync_backup()))
+        .with_vault(|vault| Ok(peer_sync::has_sync_backup(vault)))
         .unwrap_or(false);
     let key_storage = if settings.sync.enabled {
         app.key_storage()

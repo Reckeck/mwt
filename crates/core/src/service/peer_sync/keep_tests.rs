@@ -61,7 +61,7 @@ fn undone_merge(left: &mut UnlockedVault, right: &mut UnlockedVault) -> String {
     let (applied_left, _) = exchange(left, right);
     let batch = applied_left.expect("left applied the store change");
     assert_eq!(comments(left), vec!["first"], "the later copy was merged");
-    let report = left.sync_undo(&batch.id).unwrap();
+    let report = peer_sync::sync_undo(left, &batch.id).unwrap();
     assert!(report.skipped.is_empty(), "{:?}", report.skipped);
     assert_eq!(comments(left), vec!["first", "second"]);
     late
@@ -165,7 +165,7 @@ fn a_kept_reminder_survives_too() {
     let (applied_left, _) = exchange(&mut left, &mut right);
     let batch = applied_left.expect("left applied the store change");
     assert_eq!(left.doc.reminders.len(), 1, "the copy was merged");
-    left.sync_undo(&batch.id).unwrap();
+    peer_sync::sync_undo(&mut left, &batch.id).unwrap();
     assert_eq!(left.doc.reminders.len(), 2);
     assert!(left.doc.reminders.iter().any(|reminder| reminder.keep));
     touch_and_settle(&mut left, &mut right, "Renamed");

@@ -12,6 +12,7 @@
 //! cargo test -p trade-core crypto_events_volume -- --ignored --nocapture
 //! ```
 
+use crate::usecases::sync::peer_sync;
 use std::time::Instant;
 
 use crate::Amount;
@@ -86,10 +87,10 @@ fn crypto_events_volume() {
         // The first pass only remembers the document (what `open` does), the
         // second is the diff every save pays.
         let started = Instant::now();
-        vault.track_changes().unwrap();
+        peer_sync::track_changes(&mut vault).unwrap();
         let capture = started.elapsed();
         let started = Instant::now();
-        vault.track_changes().unwrap();
+        peer_sync::track_changes(&mut vault).unwrap();
         let stamp = started.elapsed();
 
         let started = Instant::now();

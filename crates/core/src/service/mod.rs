@@ -43,7 +43,7 @@ mod exchange_sync;
 mod password;
 pub mod security_level;
 pub use mwt_cryptotrack::exchange_sync::TerminalPatch;
-mod peer_sync;
+pub(crate) mod peer_sync;
 mod saving;
 mod shared_events;
 pub use peer_sync::{AppliedBatch, ExternalMerge, PeerRef, SyncTap, UndoReport};
@@ -108,34 +108,40 @@ pub struct UnlockedVault {
     /// preference (see [`crate::appconfig::AppSettings`]), so opening a
     /// different vault must not change it. The app layer pushes the current
     /// value in right after the vault is opened.
-    base_currency: String,
+    pub(crate) base_currency: String,
     /// Whether notices made inside the core (not passed a language) are in
     /// Russian. Runtime only; the app layer sets it before running workflows.
-    notice_ru: bool,
-    password: Zeroizing<String>,
+    pub(crate) notice_ru: bool,
+    pub(crate) password: Zeroizing<String>,
     /// Released when the vault is locked (dropped).
-    _lock: crate::storage::VaultLock,
+    pub(crate) _lock: crate::storage::VaultLock,
     /// A sandbox copy: it runs every rule like the real vault but never
     /// writes the file (see [`Self::sandbox`]).
     pub(crate) sandbox: bool,
     /// What the last save looked like, to stamp changes for sync.
-    tracker: Option<crate::sync::track::Tracker>,
+    pub(crate) tracker: Option<crate::sync::track::Tracker>,
     /// This device's clock for sync stamps.
-    clock: crate::sync::Clock,
+    pub(crate) clock: crate::sync::Clock,
     /// Told every save's changed keys while a sync session is live.
-    sync_tap: Option<std::sync::Arc<dyn SyncTap>>,
+    pub(crate) sync_tap: Option<std::sync::Arc<dyn SyncTap>>,
     /// Keys stamped by any path (save, sync calls) and not yet announced: only
     /// the save-time push drains it, so a sync call cannot swallow an edit.
-    announce: std::collections::BTreeSet<String>,
+    pub(crate) announce: std::collections::BTreeSet<String>,
     /// The key derived at unlock: saves seal with it, Argon2 does not run again.
-    key: Option<std::sync::Arc<SealKey>>,
+    pub(crate) key: Option<std::sync::Arc<SealKey>>,
     /// Unsaved changes and the batched writer (see `saving`).
-    session: crate::kernel::session::Session,
+    pub(crate) session: crate::kernel::session::Session,
     /// What the session knows of the device secrets file (see `exchange_keys`).
-    device_keys: exchange_keys::DeviceKeys,
+    pub(crate) device_keys: exchange_keys::DeviceKeys,
 }
 
 impl UnlockedVault {
+    /// [`Self::announce_to_tap`] for the sync scenarios of `usecases` (that
+    /// method is private to `service`; its rule keeps one home in `saving`).
+    pub(crate) fn announce_keys_to_tap(&mut self, keys: Vec<String>) {
+        self.announce_to_tap(keys);
+    }
+
     /// A fresh read context; the book inside is built once, when first used.
     /// (`Books` is in `money/books.rs`; the vault is its source, see `books.rs`.)
     pub fn books(&self) -> crate::money::books::Books<'_> {
@@ -201,7 +207,7 @@ impl UnlockedVault {
             session: crate::kernel::session::Session::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
         };
-        vault.start_tracking()?;
+        crate::usecases::sync::peer_sync::start_tracking(&mut vault)?;
         crate::usecases::money::stores::ensure_cash_wallet(&mut vault, "Cash")?;
         Ok(vault)
     }
@@ -301,12 +307,12 @@ impl UnlockedVault {
             device_keys: exchange_keys::DeviceKeys::default(),
         };
         if let Some(device_id) = device_id {
-            vault.set_device(device_id);
+            crate::usecases::sync::peer_sync::set_device(&mut vault, device_id);
         }
         // Before tracking starts, so the opening entries of envelopes (the
         // same on every device) are never stamped as an edit.
         let envelopes_settled = crate::usecases::household::envelopes::settle_envelopes(&mut vault);
-        vault.start_tracking()?;
+        crate::usecases::sync::peer_sync::start_tracking(&mut vault)?;
         // A merge left the tree or a reference broken in a copy that was
         // saved before the invariant pass existed: fixed once, stamped as an
         // edit of this device.
@@ -653,6 +659,7 @@ mod tests {
     use super::*;
     use crate::model::transaction::{AccountRef, KindDetails, TopupTx};
     use crate::storage::SnapshotFormat;
+    use crate::usecases::sync::peer_sync;
     use tempfile::tempdir;
 
     #[test]
@@ -1894,11 +1901,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("pw.wallet");
         let mut vault = UnlockedVault::create(path.clone(), "old").unwrap();
-        vault.sync_backup().unwrap();
-        vault.sync_backup().unwrap();
-        assert!(vault.has_sync_backup());
+        peer_sync::sync_backup(&mut vault).unwrap();
+        peer_sync::sync_backup(&mut vault).unwrap();
+        assert!(peer_sync::has_sync_backup(&vault));
         vault.change_password("old", "new").unwrap();
-        assert!(vault.has_sync_backup());
+        assert!(peer_sync::has_sync_backup(&vault));
         let copies: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
             .filter_map(|entry| entry.ok())
@@ -2410,7 +2417,7 @@ mod tests {
     fn open_copy_and_probe_read_a_container_1_copy_by_its_own_container() {
         let (_dir, vault) = setup();
         for (name, bytes) in V4_FIXTURES {
-            let copy = vault.open_copy(bytes, V4_PASSWORD).unwrap();
+            let copy = peer_sync::open_copy(&vault, bytes, V4_PASSWORD).unwrap();
             assert_eq!(copy.doc.version, crate::VAULT_FORMAT_VERSION, "{name}");
             let (_, _, key) =
                 crate::crypto::open_bytes_keyed(bytes, V4_PASSWORD.as_bytes()).unwrap();
@@ -2424,7 +2431,7 @@ mod tests {
         let old_file =
             crate::crypto::seal_plain_in_container(1, fmt, &serde_json::to_vec(&old).unwrap());
         assert!(matches!(
-            vault.open_copy(&old_file, ""),
+            peer_sync::open_copy(&vault, &old_file, ""),
             Err(crate::Error::LegacyVault(_))
         ));
         assert!(matches!(
