@@ -16,6 +16,7 @@ use crate::household::shared_events::settle::{
     plan_due, plan_reassign, plan_settle, plan_take_back, plan_write_off,
 };
 use crate::household::shared_events::text::share_text;
+use crate::household::shared_events::view::SharedEventView;
 use crate::household::shared_events::{
     check_archivable, find_event, plan_add_item, plan_add_participant, plan_create_event,
     plan_delete_item, plan_guest_contact, plan_item_split, plan_remove_participant,
@@ -31,7 +32,7 @@ use crate::model::contact::{Contact, DebtTerms};
 use crate::model::shared_event::{Settlement, SharedEvent};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
-use crate::service::{SharedEventView, UnlockedVault};
+use crate::service::UnlockedVault;
 
 /// Put the event in place of its older self. An archived event that was
 /// edited is open again.
@@ -147,7 +148,7 @@ pub fn make_shared_participant_contact(
     event_id: &str,
     participant_id: &str,
 ) -> Result<Contact> {
-    let contact_id = crate::service::sync_ids::guest_contact_id(event_id, participant_id);
+    let contact_id = crate::sync::sync_ids::guest_contact_id(event_id, participant_id);
     let plan = plan_guest_contact(
         &vault.doc,
         event_id,
@@ -386,7 +387,7 @@ pub fn attach_payment_to_shared_event(
     vault: &mut UnlockedVault,
     input: AttachPaymentInput,
 ) -> Result<SharedEventView> {
-    let purchase_id = crate::service::sync_ids::payment_link_id(&input.tx_id);
+    let purchase_id = crate::sync::sync_ids::payment_link_id(&input.tx_id);
     let books = vault.books();
     let event = plan_attach_payment(books.rate_book(), books.doc(), &input, purchase_id)?;
     commit_event(vault, event)

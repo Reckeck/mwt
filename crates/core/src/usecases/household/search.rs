@@ -8,8 +8,11 @@ use crate::error::Result;
 use crate::household::relations::entity_card_head;
 use crate::model::entity_ref::{EntityKind, Pinned};
 use crate::money::search::{PinnedView, plan_pins};
+use crate::money::worth::FlowClass;
+use crate::planning::budget::BudgetStatus;
 use crate::planning::flows::flows_between;
-use crate::service::{BudgetStatus, FlowClass, GoalProgress, UnlockedVault};
+use crate::planning::goals::GoalProgress;
+use crate::service::UnlockedVault;
 
 use super::relations::store_worth;
 

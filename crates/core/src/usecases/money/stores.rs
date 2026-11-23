@@ -10,6 +10,7 @@ use crate::kernel::tx::Tx;
 use crate::model::store::{Binding, ExchangeProfile, PropertyInfo, Store, StoreKind, SubType};
 use crate::model::transaction::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta};
 use crate::model::vault::VaultDoc;
+use crate::money::portfolio::StoreTreeNode;
 use crate::money::stores::{
     ExtraClaims, StoreMove, check_deletable, check_root_creatable, check_store_extras,
     check_sub_account, default_sub_account, edited_binding, ensure_unique_name, plan_archive,
@@ -18,8 +19,9 @@ use crate::money::stores::{
 use crate::money::tree::find_store;
 use crate::money::valuation::initial_rule;
 use crate::planning::emergency::prune_emergency_fund;
-use crate::service::UnlockedVault;
-use crate::service::{CASH_WALLET_ID, FirstCard, OpeningBalance, StoreExtras, StoreTreeNode};
+use crate::service::{CASH_WALLET_ID, StoreExtras, UnlockedVault};
+use mwt_money::stores::FirstCard;
+use mwt_money::stores::OpeningBalance;
 
 /// Allowed destinations for moving a sub-account.
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -124,7 +124,7 @@ pub fn fund_goal(
         None => {
             // Named by goal, wallet and asset: two devices that start
             // funding the same goal make one envelope.
-            let id = crate::service::sync_ids::goal_envelope_id(
+            let id = crate::sync::sync_ids::goal_envelope_id(
                 goal_id,
                 store_id.as_str(),
                 &funding.asset.key(),

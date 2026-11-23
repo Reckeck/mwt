@@ -3,7 +3,5 @@
 
 #[cfg(test)]
 pub(crate) use crate::sync::sync_ids::sync_safe_id;
-pub(crate) use crate::sync::sync_ids::{
-    asset_class_id, debt_terms_id, goal_envelope_id, guest_contact_id, payment_link_id, reading_id,
-    valuation_id,
-};
+#[cfg(test)]
+pub(crate) use crate::sync::sync_ids::{debt_terms_id, payment_link_id, reading_id};

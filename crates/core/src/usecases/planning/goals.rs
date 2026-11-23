@@ -22,6 +22,7 @@ use crate::model::transaction::LegRole;
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::money::books::Books;
 use crate::money::portfolio::history_series_filtered_in;
+use crate::planning::budget::MIN_HISTORY_MONTHS;
 use crate::planning::budget::{budget_currency, manual_month, month_summary};
 use crate::planning::envelopes::envelope_saved_for_goal;
 use crate::planning::goals::{
@@ -31,7 +32,6 @@ use crate::planning::goals::{
     plan_create_goal, plan_delete_goal, plan_restore_goal, plan_update_goal, planned_now,
     resolve_scope, slope,
 };
-use crate::service::MIN_HISTORY_MONTHS;
 use crate::service::UnlockedVault;
 use crate::time::secs_or_now;
 use crate::usecases::react::react;

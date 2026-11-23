@@ -17,7 +17,7 @@ use crate::model::planning::{MeterReading, UtilityItem};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
 use crate::service::UnlockedVault;
-use crate::service::sync_ids::reading_id;
+use crate::sync::sync_ids::reading_id;
 
 /// The property summary: value, debt, equity and monthly costs.
 pub fn property_summary(
