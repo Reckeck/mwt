@@ -1,5 +1,13 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/cyrillic-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/cyrillic-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-sans/cyrillic-600.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/cyrillic-400.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -93,8 +101,11 @@
   /* Container widths of the project's own. Not --container-sm/md/lg: in Tailwind v4 those
      also size max-w-sm/md/lg, and overriding them made a «md» dialog wider than an «lg» one.
      36rem is Tailwind's own @xl. */
-  /* Below text-xs: badges, calendar cells, axis-like captions (was text-[10px] / text-[11px]). */
-  --text-2xs: 0.625rem;
+  /* Self-hosted (@fontsource, font-display: swap): the system stack shows while a file loads. */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  /* Label 11/14: badges, calendar cells, axis-like captions. */
+  --text-2xs: 0.6875rem;
   --text-2xs--line-height: 0.875rem;
   /* 13px: the canvas's `.sm` — subtitles under a sum, phone buttons. */
   --text-caption: 0.8125rem;
@@ -322,18 +333,18 @@
   }
 }
 
-/* Type scale: one class per level, so a page title looks the same on every screen.
-   Page = the shell's h1; section = a block inside a page or a settings section;
-   card = a card's own title; figure = the big number of a stat card. */
+/* Type scale (Foundations): one class per level, so a page title looks the same on every screen.
+   Page and section = Title 20/28 SemiBold; card = a card's own title (Body 14 SemiBold);
+   figure = Figure 28/34 Medium, the big number of a stat card. Display and hero are for
+   onboarding/lock and the spend-today amount; keypad for the amount keypad. */
 @utility heading-page {
-  font-size: var(--text-lg);
-  line-height: var(--text-lg--line-height);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
   font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--tracking-tight);
 }
 @utility heading-section {
-  font-size: var(--text-base);
-  line-height: var(--text-base--line-height);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
   font-weight: var(--font-weight-semibold);
 }
 @utility heading-card {
@@ -342,11 +353,27 @@
   font-weight: var(--font-weight-semibold);
 }
 @utility figure {
-  font-size: var(--text-xl);
-  line-height: var(--text-xl--line-height);
-  font-weight: var(--font-weight-semibold);
+  font-size: 1.75rem;
+  line-height: 2.125rem;
+  font-weight: var(--font-weight-medium);
   font-variant-numeric: tabular-nums;
-  letter-spacing: var(--tracking-tight);
+}
+@utility text-display {
+  font-size: 4rem;
+  line-height: 4.25rem;
+  font-weight: var(--font-weight-medium);
+}
+@utility text-hero {
+  font-size: 3rem;
+  line-height: 3.25rem;
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+@utility text-keypad {
+  font-size: 1.5rem;
+  line-height: 1.75rem;
+  font-weight: var(--font-weight-normal);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Room for the system bars (see --safe-* on :root). */

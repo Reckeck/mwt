@@ -129,3 +129,30 @@ describe('colour tokens', () => {
     }
   })
 })
+
+describe('type', () => {
+  it('self-hosts IBM Plex Latin and Cyrillic, only the allowed weights', () => {
+    const imports = [...css.matchAll(/@import '(@fontsource\/[^']+)'/g)].map((match) => match[1]).sort()
+    const sans = ['400', '500', '600']
+    const expected = [
+      ...sans.flatMap((weight) =>
+        ['cyrillic', 'latin'].map((subset) => `@fontsource/ibm-plex-sans/${subset}-${weight}.css`),
+      ),
+      '@fontsource/ibm-plex-mono/cyrillic-400.css',
+      '@fontsource/ibm-plex-mono/latin-400.css',
+    ].sort()
+    expect(imports).toEqual(expected)
+  })
+
+  it('sets the families in @theme with a system fallback', () => {
+    expect(css).toMatch(/--font-sans:\s*'IBM Plex Sans',[^;]*sans-serif;/)
+    expect(css).toMatch(/--font-mono:\s*'IBM Plex Mono',[^;]*monospace;/)
+  })
+
+  it('defines the scale utilities', () => {
+    for (const utility of ['text-display', 'text-hero', 'text-keypad']) {
+      expect(css).toContain(`@utility ${utility} {`)
+    }
+    expect(css).toMatch(/--text-2xs:\s*0\.6875rem;/)
+  })
+})
