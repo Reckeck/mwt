@@ -5,7 +5,7 @@
 use tauri::{AppHandle, Manager};
 use tracing::{Instrument, field, info_span};
 use trade_core::Error;
-use trade_core::service::UnlockedVault;
+use trade_core::service::Session;
 
 use crate::commands::sandbox::refuse;
 use crate::commands::{AppState, lock_vault};
@@ -56,7 +56,7 @@ pub async fn read<H, R>(
     host: H,
     meta: &CommandMeta,
     gate: Gate,
-    body: impl FnOnce(&UnlockedVault) -> Result<R, IpcError> + Send + 'static,
+    body: impl FnOnce(&Session) -> Result<R, IpcError> + Send + 'static,
 ) -> Result<R, IpcError>
 where
     H: VaultHost,
@@ -74,7 +74,7 @@ pub async fn write<H, R>(
     host: H,
     meta: &CommandMeta,
     gate: Gate,
-    body: impl FnOnce(&mut UnlockedVault) -> Result<R, IpcError> + Send + 'static,
+    body: impl FnOnce(&mut Session) -> Result<R, IpcError> + Send + 'static,
 ) -> Result<R, IpcError>
 where
     H: VaultHost,
@@ -175,7 +175,7 @@ mod tests {
 
     fn unlocked_host() -> (TestHost, tempfile::TempDir) {
         let dir = tempfile::tempdir().expect("temp dir");
-        let vault = UnlockedVault::create(dir.path().join("a.wallet"), "pw").expect("vault");
+        let vault = Session::create(dir.path().join("a.wallet"), "pw").expect("vault");
         let host = locked_host();
         *host.0.vault.lock().expect("lock") = Some(vault);
         (host, dir)

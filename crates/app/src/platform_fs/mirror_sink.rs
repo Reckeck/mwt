@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 
 use tauri::AppHandle;
-use trade_core::service::UnlockedVault;
+use trade_core::service::Session;
 use trade_core::vault_io::VaultMirror;
 
 use super::links;
@@ -26,7 +26,7 @@ impl VaultMirror for MirrorSink {
 }
 
 /// Give `vault` its mirror if it is linked, or take it away if not.
-pub fn attach_mirror(app: &AppHandle, vault: &mut UnlockedVault) {
+pub fn attach_mirror(app: &AppHandle, vault: &mut Session) {
     let mirror = links::get(app, &vault.path)
         .map(|_| Arc::new(spawn(app.clone(), vault.path.clone())) as Arc<dyn VaultMirror>);
     vault.set_mirror(mirror);

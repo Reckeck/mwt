@@ -1,7 +1,7 @@
 use mwt_app_macros::ipc;
 
 #[ipc(read)]
-fn list(vault: &UnlockedVault, app: String) -> Result<(), ()> {
+fn list(vault: &Session, app: String) -> Result<(), ()> {
     Ok(())
 }
 

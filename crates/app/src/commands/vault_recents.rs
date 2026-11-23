@@ -285,7 +285,7 @@ pub async fn delete_vault_file(
 
 /// Write the open vault's batched changes when `source` is that vault.
 fn flush_if_open(
-    open: Option<&mut trade_core::service::UnlockedVault>,
+    open: Option<&mut trade_core::service::Session>,
     source: &Path,
 ) -> trade_core::error::Result<()> {
     match open {
@@ -336,7 +336,7 @@ ipc_commands!(vault_recents_commands, VAULT_RECENTS_NAMES, commands::vault_recen
 mod tests {
     use super::*;
     use trade_core::kernel::session::SaveHook;
-    use trade_core::service::UnlockedVault;
+    use trade_core::service::Session;
 
     struct NoWake;
 
@@ -356,7 +356,7 @@ mod tests {
     fn a_copy_of_the_open_vault_holds_its_batched_edits() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("home.wallet");
-        let mut vault = UnlockedVault::create(path.clone(), "pw").unwrap();
+        let mut vault = Session::create(path.clone(), "pw").unwrap();
         vault.set_write_behind(Some(std::sync::Arc::new(NoWake)));
         let before = decimals_on_disk(&path);
         let changed = before + 1;

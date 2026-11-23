@@ -16,7 +16,7 @@ use trade_core::ipc_contract::{SyncPhase, SyncRole};
 use trade_core::model::notify::NoticeRecord;
 use trade_core::model::store::AssetRef;
 use trade_core::model::transaction::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta};
-use trade_core::service::{SyncTap, UnlockedVault};
+use trade_core::service::{Session, SyncTap};
 use trade_core::sync::session::DeviceKey;
 
 mod dialing;
@@ -33,7 +33,7 @@ use trade_core::usecases::sync::trust as sync_trust;
 
 struct Inner {
     hub: SyncHub,
-    vault: Mutex<Option<UnlockedVault>>,
+    vault: Mutex<Option<Session>>,
     settings: Mutex<AppSettings>,
     key: DeviceKey,
     events: mpsc::UnboundedSender<(String, Value)>,
@@ -56,7 +56,7 @@ impl Host for TestHost {
         lock_hub(&self.0.hub)
     }
 
-    fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T> {
+    fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
         let mut guard = self.0.vault.lock().unwrap();
         let vault = guard.as_mut().ok_or(Error::RequiresUnlock)?;
         work(vault)
@@ -112,7 +112,7 @@ impl SyncTap for Tap {
 type Events = mpsc::UnboundedReceiver<(String, Value)>;
 
 /// A device with `vault` open and sync on; its events go to the receiver.
-fn device(name: &str, mut vault: UnlockedVault, role: SyncRole) -> (TestHost, Events) {
+fn device(name: &str, mut vault: Session, role: SyncRole) -> (TestHost, Events) {
     let (events, received) = mpsc::unbounded_channel();
     let mut settings = AppSettings::default();
     settings.ensure_device_id();
@@ -406,11 +406,11 @@ fn raw_identity(device_id: &str, name: &str) -> trade_core::sync::protocol::Iden
 }
 
 /// The same vault twice (a copied file).
-fn same_vault(dir: &std::path::Path) -> (UnlockedVault, UnlockedVault) {
-    let mut left = UnlockedVault::create(dir.join("left.wallet"), "pw").unwrap();
+fn same_vault(dir: &std::path::Path) -> (Session, Session) {
+    let mut left = Session::create(dir.join("left.wallet"), "pw").unwrap();
     left.persist().unwrap();
     std::fs::copy(dir.join("left.wallet"), dir.join("right.wallet")).unwrap();
-    let right = UnlockedVault::open(dir.join("right.wallet"), "pw").unwrap();
+    let right = Session::open(dir.join("right.wallet"), "pw").unwrap();
     (left, right)
 }
 
@@ -472,8 +472,8 @@ async fn devices_pair_exchange_and_stay_in_sync() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn another_vault_is_refused() {
     let dir = tempfile::tempdir().unwrap();
-    let left = UnlockedVault::create(dir.path().join("a.wallet"), "pw").unwrap();
-    let right = UnlockedVault::create(dir.path().join("b.wallet"), "pw").unwrap();
+    let left = Session::create(dir.path().join("a.wallet"), "pw").unwrap();
+    let right = Session::create(dir.path().join("b.wallet"), "pw").unwrap();
     let (main, main_events) = device("A", left, SyncRole::Main);
     let (client, client_events) = device("B", right, SyncRole::Client);
     let main_errors = answer(main.clone(), main_events, true);

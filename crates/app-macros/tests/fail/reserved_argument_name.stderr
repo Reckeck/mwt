@@ -1,5 +1,5 @@
 error: `__ipc_host` is reserved by #[ipc]; rename this argument
- --> tests/fail/reserved_argument_name.rs:4:32
+ --> tests/fail/reserved_argument_name.rs:4:26
   |
-4 | fn list(vault: &UnlockedVault, __ipc_host: String) -> Result<(), ()> {
-  |                                ^^^^^^^^^^
+4 | fn list(vault: &Session, __ipc_host: String) -> Result<(), ()> {
+  |                          ^^^^^^^^^^

@@ -7,7 +7,7 @@ use std::path::Path;
 use trade_core::appconfig::{AppSettings, PendingTrustPref};
 use trade_core::error::Result;
 use trade_core::model::notify::NoticeRecord;
-use trade_core::service::UnlockedVault;
+use trade_core::service::Session;
 use trade_core::usecases::sync::peer_sync;
 use trade_core::usecases::sync::trust as sync_trust;
 
@@ -53,7 +53,7 @@ pub(super) fn take(settings: &mut AppSettings, path: &Path, now_ms: u64) -> Vec<
 }
 
 /// Trust the sender in the freshly opened received copy.
-pub(super) fn apply(vault: &mut UnlockedVault, pending: &PendingTrustPref) -> Result<()> {
+pub(super) fn apply(vault: &mut Session, pending: &PendingTrustPref) -> Result<()> {
     sync_trust::sync_trust_peer(
         vault,
         &pending.device_id,
@@ -75,7 +75,7 @@ pub(super) fn is_sent_vault(open: &Path, sent: &Path) -> bool {
 /// The vault went to `delivered`: record it, trust the device and lift
 /// whatever kept it out (a pause, a cut) so the new copy links at once.
 pub(super) fn record_delivery(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     delivered: &Delivered,
     ru: bool,
 ) -> Result<NoticeRecord> {

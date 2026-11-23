@@ -64,7 +64,7 @@ use trade_core::model::chain::Chain;
 use trade_core::model::cryptotrack::{CryptoAsset, CryptoPricePoint, CryptoTx};
 use trade_core::model::vault::now_iso;
 use trade_core::pricing::PricingService;
-use trade_core::service::{RpcChain, UnlockedVault};
+use trade_core::service::{RpcChain, Session};
 use trade_core::sync::stamp::now_ms;
 use trade_core::vault_io::device_secrets::BlockscoutKey;
 
@@ -96,7 +96,7 @@ pub trait Host: Send + Sync {
 
     /// Run `work` on the open vault and let go of it. `RequiresUnlock` when
     /// the vault is locked. The guard never leaves this call.
-    fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T>;
+    fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T>;
 
     /// Something new was stored for the account (`crypto-updated`).
     fn updated(&self, account_id: &str);
@@ -179,7 +179,7 @@ pub struct Tracker {
     /// balances a node reports, so they live here beside the pass instead of
     /// in the vault — the schema does not change for DeFi. A device that has
     /// only synced holds none, and
-    /// [`UnlockedVault::crypto_list_positions`] then leaves those figures
+    /// [`Session::crypto_list_positions`] then leaves those figures
     /// absent rather than zero.
     positions: Mutex<BTreeMap<String, Vec<PositionReading>>>,
     /// `(asset key, day)` the provider had no price for, and when it said so.
@@ -738,7 +738,7 @@ impl Host for AppHost {
         crate::commands::app_settings::current_settings(&self.0).crypto_tracking_allowed()
     }
 
-    fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T> {
+    fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
         let state = self.0.state::<AppState>();
         let mut guard = lock_vault(&state)?;
         match guard.as_mut() {
@@ -1440,7 +1440,7 @@ mod tests {
     type Protocols = Box<dyn Fn(&str) -> Result<Reading> + Send + Sync>;
     type PriceScript =
         Box<dyn Fn(&[(CryptoAsset, NaiveDate)]) -> Result<Vec<CryptoPricePoint>> + Send + Sync>;
-    type SharedVault = Arc<Mutex<Option<UnlockedVault>>>;
+    type SharedVault = Arc<Mutex<Option<Session>>>;
 
     struct TestHost {
         vault: SharedVault,
@@ -1449,7 +1449,7 @@ mod tests {
     }
 
     impl TestHost {
-        fn new(vault: UnlockedVault, consent: bool) -> Self {
+        fn new(vault: Session, consent: bool) -> Self {
             Self {
                 vault: Arc::new(Mutex::new(Some(vault))),
                 consent: AtomicBool::new(consent),
@@ -1467,7 +1467,7 @@ mod tests {
             self.consent.load(Ordering::SeqCst)
         }
 
-        fn with_vault<T>(&self, work: impl FnOnce(&mut UnlockedVault) -> Result<T>) -> Result<T> {
+        fn with_vault<T>(&self, work: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
             let mut guard = self.vault.lock().unwrap();
             match guard.as_mut() {
                 Some(vault) => work(vault),
@@ -1614,8 +1614,8 @@ mod tests {
         }
     }
 
-    fn vault_with(dir: &std::path::Path, name: &str, accounts: &[(&str, &str)]) -> UnlockedVault {
-        let mut vault = UnlockedVault::create(dir.join(name), "pw").unwrap();
+    fn vault_with(dir: &std::path::Path, name: &str, accounts: &[(&str, &str)]) -> Session {
+        let mut vault = Session::create(dir.join(name), "pw").unwrap();
         for (id, address) in accounts {
             vault.doc.crypto_accounts.push(CryptoAccount::new(
                 id,

@@ -316,7 +316,7 @@ pub(super) struct Peer {
 fn with_peer_vault<H: Host, T>(
     app: &H,
     peer: &Peer,
-    work: impl FnOnce(&mut trade_core::service::UnlockedVault) -> Result<T>,
+    work: impl FnOnce(&mut trade_core::service::Session) -> Result<T>,
 ) -> Flow<T> {
     let outcome = app.with_vault(|vault| {
         if vault.doc.id != peer.vault_id {

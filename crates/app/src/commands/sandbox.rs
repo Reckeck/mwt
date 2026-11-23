@@ -180,11 +180,11 @@ ipc_commands!(sandbox_commands, SANDBOX_NAMES, commands::sandbox: [open_sandbox,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trade_core::service::UnlockedVault;
+    use trade_core::service::Session;
 
     fn state_with_vault(dir: &std::path::Path, sandbox: bool) -> AppState {
         let state = AppState::new();
-        let vault = UnlockedVault::create_with(dir.join("some.wallet"), None).unwrap();
+        let vault = Session::create_with(dir.join("some.wallet"), None).unwrap();
         *state.vault.lock().unwrap() = Some(vault);
         state.sandbox.store(sandbox, Ordering::SeqCst);
         state

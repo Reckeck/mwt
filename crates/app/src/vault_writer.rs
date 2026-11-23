@@ -1,6 +1,6 @@
 //! The open vault's writer: changes are batched and written in one go.
 //!
-//! A mutation only marks the vault dirty (`UnlockedVault::persist` with a
+//! A mutation only marks the vault dirty (`Session::persist` with a
 //! hook installed, see `trade_core::service::saving`). This thread waits for
 //! a quiet moment — [`IDLE`] after the last change, at most [`CAP`] after the
 //! first — then snapshots the document under the vault lock and seals and
@@ -18,7 +18,7 @@ use trade_core::ipc_contract::events::VaultSaveFailedPayload;
 
 use tauri::{AppHandle, Manager};
 use trade_core::kernel::session::SaveHook;
-use trade_core::service::UnlockedVault;
+use trade_core::service::Session;
 use trade_core::{Error, Result};
 
 use crate::commands::AppState;
@@ -62,7 +62,7 @@ pub fn spawn(app: AppHandle) {
 }
 
 /// Batch the saves of a vault that is about to be stored in the app state.
-pub fn install(vault: &mut UnlockedVault) {
+pub fn install(vault: &mut Session) {
     if let Some(hook) = HOOK.get() {
         vault.set_write_behind(Some(hook.clone() as Arc<dyn SaveHook>));
     }
