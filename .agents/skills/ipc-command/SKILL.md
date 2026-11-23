@@ -14,18 +14,19 @@ description: >
 
 # Adding/changing a Tauri command
 
-The architectural boundary is hard: **`crates/core` knows nothing about
-Tauri**, and `crates/app/src/commands/*` is a thin IPC wrapper that only
-translates DTOs into calls of the core service. Never put domain logic into
+The architectural boundary is hard: **the Rust crates under `crates/` (domain
+crates and `mwt-usecases`) know nothing about Tauri**, and
+`crates/app/src/commands/*` is a thin IPC wrapper that only translates DTOs
+into calls of one scenario in `crates/usecases/src/usecases/<area>/`. Never put domain logic into
 `commands/`.
 
 ## Layers and who is responsible for what
 
 | Layer | File | What is there |
 |---|---|---|
-| DTO | `crates/core/src/ipc_contract.rs` | command inputs/outputs, `#[derive(Serialize, Deserialize, ts_rs::TS)]` |
-| Domain | `crates/core/src/service.rs` (`UnlockedVault`) | all the logic + unit tests |
-| Container | `crates/core/src/storage/mod.rs` | `SnapshotFormat`, encode/decode, version migration |
+| DTO | `crates/contract/src/lib.rs` (re-exported as `ipc_contract`) | command inputs/outputs, `#[derive(Serialize, Deserialize, ts_rs::TS)]` |
+| Domain | `crates/usecases/src/usecases/<area>/` (a scenario over `Session` / `Books`) and the pure rules in the domain crates | all the logic + unit tests |
+| Container | `crates/vault/src/storage/mod.rs` | `SnapshotFormat`, encode/decode, version migration |
 | IPC | `crates/app/src/commands/<module>.rs` | the `#[tauri::command]` handler |
 | Registration | `crates/app/src/lib.rs` | `tauri::generate_handler![…]` |
 | TS types | `src/shared/api/ipc.gen.d.ts` | **generated**, do not edit by hand |
@@ -34,7 +35,7 @@ translates DTOs into calls of the core service. Never put domain logic into
 
 ## Step-by-step checklist
 
-### 1. DTO in `crates/core/src/ipc_contract.rs`
+### 1. DTO in `crates/contract/src/lib.rs`
 
 Sections are separated by divider comments (`// -- auth ---…`). Put the new
 type in its own section, not at the end of the file.
@@ -59,15 +60,15 @@ Rules:
   frontend needs a domain type, make a DTO with the needed fields.
 - `Amount` in TS is a `string` (custom impl in `amount.rs`), not a `number`.
 
-### 2. Logic + test in `crates/core/src/service.rs`
+### 2. Scenario + test in `crates/usecases/src/usecases/<area>/`
 
-A method on `UnlockedVault` returning `Result<_, crate::error::Error>`:
+A function over `Session` (or `Books` for a read) returning `Result<_, crate::error::Error>`. A mutation decides first, then makes one `transact`:
 
 ```rust
-pub fn archive_store(&mut self, id: &str, archived: bool) -> Result<()> { … }
+pub fn archive_store(vault: &mut Session, id: &str, archived: bool) -> Result<()> { … }
 ```
 
-The unit test goes in the same file (`#[cfg(test)] mod tests`). Core is tested
+The unit test goes next to it (`#[cfg(test)] mod tests`). The scenarios are tested
 without Tauri: the vault is created in a temporary directory, any password.
 
 ### 3. Handler in `crates/app/src/commands/<module>.rs`
@@ -167,12 +168,12 @@ Keep the section "Adding a new command (checklist)" up to date.
 mise run check
 ```
 
-Required: `mise run test` (core), `mise run typecheck` (frontend),
+Required: `mise run test` (Rust), `mise run typecheck` (frontend),
 `mise run lint`, and the diff of `ipc.gen.d.ts`.
 
 ## Iron rule: a `MutexGuard` must not be held across `.await`
 
-`AppState.vault` is `Mutex<Option<UnlockedVault>>`. The guard is **not
+`AppState.vault` is `Mutex<Option<Session>>`. The guard is **not
 `Send`**, so an `async fn` that holds the guard during `.await` will not
 compile.
 
@@ -199,7 +200,7 @@ you get a confusing borrowing error rather than a clear one about the mutex.
 
 ## Error codes
 
-`Error::code()` in `crates/core/src/error.rs` returns a string that becomes the
+`Error::code()` in `crates/base/src/error.rs` returns a string that becomes the
 prefix of the message. The frontend parses it in `parseError`
 (`src/shared/api/ipc.ts`) and looks for the key `errors.<CODE>` in the locales.
 

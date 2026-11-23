@@ -2,44 +2,81 @@
 
 ## Overview
 
-Multi Wallet Tracker (MWT) is a Tauri 2 desktop application with a monolithic Rust core and a Vue
-frontend, connected through IPC (invoke + events). All business logic lives in `crates/core`
-(pure Rust, zero dependencies on Tauri) and is covered by unit tests; `crates/app`
-is a thin shell: `tauri::Builder`, commands and state.
+Multi Wallet Tracker (MWT) is a Tauri 2 desktop application with a Rust backend split into crates and a
+Vue frontend, connected through IPC (invoke + events). All business logic lives in the Rust crates under
+`crates/` (pure Rust, zero dependencies on Tauri) and is covered by unit tests; `crates/app` is a thin
+shell: `tauri::Builder`, commands and state. There is no god object: the open vault is one `Session`, the
+rules are functions of the domain crates, and every command is one scenario in `crates/usecases`.
+
+## Crates
+
+The workspace is `crates/*`: 24 members, 23 without the facade `trade-core`, whose fate is still open. The edges are a table in `crates/xtask/src/arch/crates.rs`;
+`cargo xtask check arch` fails on an edge that is not in it.
+
+| Crate | What it holds | May depend on |
+|---|---|---|
+| `mwt-macros` | the `#[dto]` attribute (serde + feature-gated ts-rs / schemars derives) | nothing |
+| `mwt-base` | `Amount`, errors, limits, time and calendar, calculators, secrets, route names | macros |
+| `mwt-crypto` | the container codec, key derivation, AEAD seal and open, KDF profiles, `SnapshotFormat` | base |
+| `mwt-model` | `VaultDoc` and the types it holds, ids, record kinds, coin tables, the data of the device secrets (`DeviceSecrets`) | base, macros, crypto |
+| `mwt-net` | price and FX sources, exchange clients, data sources, market candles, updates, the chain RPC client | base, model |
+| `mwt-vault` | the file codec, frozen v1-v4 schemas, vault files, copies, backups, mirrors, JSON stores, the kernel of the open vault | base, crypto, model |
+| `mwt-sync` | device-to-device merge, the Noise channel, the pairing code, transfer | base, crypto, model |
+| `mwt-money` | pure money rules: the books (`Books`), ledger, valuation, cost basis, validation | base, model |
+| `mwt-household` | attachments, contacts, debts, losses, loyalty, property links, relations, shared events, utilities, vehicles | base, model, money |
+| `mwt-workflow` | the node catalog, graph, validation, executor, record, run, mark and variable rules | base, model |
+| `mwt-planning` | budgets, envelopes, goals, allocation, agenda, automations, health, notifications, scenarios | base, model, money, household |
+| `mwt-reports` | overview, dashboard, insights, health, comparison, where-went, notification snapshot | planning, household, money, model, base |
+| `mwt-cryptotrack` | the crypto module: chains, protocols, engine, sources, tokens, the pure service rules | base, model, money |
+| `mwt-contract` | the command input/output types shared with the frontend (`#[dto]`) | the domain crates, sync, crypto, vault, net |
+| `mwt-usecases` | `Session`, the scenarios (`usecases/`), the service shim, ports, sandbox, app config | everything above |
+| `mwt-testkit` | property strategies, an in-memory persistence, model-only builders (dev-only) | base, model, vault |
+| `trade-core` | the facade: re-exports `mwt-usecases` and holds the type generator `gen_types` (its fate is open) | usecases, money, reports, cryptotrack |
+| `mwt-app-macros` | the `#[ipc]` attribute for `crates/app` commands | nothing |
+| `trade-app` | the Tauri shell | trade-core, app-macros, the plugins |
+| `tauri-plugin-saf`, `-net`, `-biometric`, `-insets` | Android plugins (below) | Tauri only |
+| `xtask` | the build and check engine (`cargo xtask`) | nothing |
+
+### Session, scenarios, ports
+
+- **`Session`** (`crates/usecases/src/service/mod.rs`) is the open vault: the document, the password-derived
+  key, the file lock, the device-secrets state and the write state `kernel::session::Write`. It is the only
+  owner of the open vault; `AppState.vault` holds it in a mutex.
+- **A scenario** is a function in `crates/usecases/src/usecases/<area>/` (`money`, `household`, `planning`,
+  `reports`, `cryptotrack`, `sync`, `workflow`) that takes `Books` (a read context) or a `Session`, calls
+  the pure rules of the domain crates and returns a result. A command in `crates/app` calls one scenario.
+- **The rule: a mutation is a scenario: decide, then one `transact`.** The scenario reads, decides and
+  builds the change, then applies it in a single `Session::transact` (or `transact_now`). The domain
+  crates never write the vault.
+- **Ports** are traits owned by the crate that needs them and implemented where both sides are visible:
+  `Persistence` and `ChangeSink` (kernel, `mwt-vault`), `Clock` (`mwt-base::time`), `ChainSource` and
+  `PriceSource` (`mwt-cryptotrack`; the adapters are in `crates/usecases/src/service/ports.rs`),
+  `BooksSource` (`mwt-money`; the `Session` implements it in `service/books.rs`, so the money rules stay
+  below the vault).
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Vue 3 frontend                    │
+│                   Vue 3 frontend                    │
 │  Pinia (state) · TanStack Query (network + cache)   │
 │  shadcn-vue (UI) · vue-echarts (charts)             │
-│  vue-i18n (ru/en) · types from src/shared/api/ipc.gen.d.ts      │
+│  vue-i18n (ru/en) · types: shared/api/ipc.gen.d.ts  │
 └──────────────────────────┬──────────────────────────┘
                            │ invoke / events
 ┌──────────────────────────┴──────────────────────────┐
-│                crates/app (Tauri shell)             │
-│  AppState { vault: Mutex<Option<Session>>,    │
+│             crates/app (Tauri shell)                │
+│  AppState { vault: Mutex<Option<Session>>,          │
 │             vault_path: Mutex<PathBuf>, pricing }   │
-│  commands/{auth,stores,transactions,categories,     │
-│             pricing,portfolio,settings,exchange,     │
-│             cryptotrack,security,sync,app_settings, │
-│             vault_recents, …}                       │
+│  commands/*: thin handlers, one scenario each;      │
+│  scheduler, write-behind writer, platform_fs        │
 └──────────────────────────┬──────────────────────────┘
-                           │ (shared dependency via the workspace)
+                           │ scenarios over Session
 ┌──────────────────────────┴──────────────────────────┐
-│                crates/core (business)               │
-│  model/      — domain entities (VaultDoc, Store,    │
-│                Transaction, Settings, Chain)        │
-│  appconfig.rs— app settings (outside the vault, JSON)│
-│  service.rs  — Session: all mutations + analytics│
-│  pricing/    — price providers, cache, FX            │
-│  cryptotrack/— the crypto engine: sources (EVM,      │
-│                Bybit), tokens, RPC client, prices    │
-│  crypto/     — XChaCha20-Poly1305 + Argon2id,        │
-│                fixed 55-byte header (AAD)            │
-│  storage/    — SnapshotFormat (JSON/MessagePack),    │
-│                atomic write                          │
-│  market/     — Binance OHLCV candles for charts      │
-│  ipc_contract.rs — command DTOs (ts-rs → ipc.gen.d.ts)│
+│         crates/usecases + the domain crates         │
+│  mwt-usecases — Session, scenarios, ports, sandbox  │
+│  mwt-contract — command DTOs (ts-rs -> ipc.gen.d.ts)│
+│  mwt-vault    — file codec, kernel of the open vault│
+│  mwt-model    — VaultDoc and the types it holds     │
+│  domain crates, crypto, net, sync: see "Crates"     │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -65,12 +102,12 @@ nothing to the webview, Rust calls them (`run_mobile_plugin`):
 A user follows public addresses and exchanges; the module reads them and nothing is typed in by hand. The stored data
 is nine sibling `crypto_*` fields of the vault (no nested object; `docs/data-model.md` -> "The crypto module").
 
-- **Core** (`crates/core/src/cryptotrack/`) is pure and Tauri-free: `source.rs` (the traits), `sources/evm` (Blockscout
+- **The domain crate** (`crates/cryptotrack/src/`, `mwt-cryptotrack`) is pure and Tauri-free: `source.rs` (the traits), `sources/evm` (Blockscout
   history + node balances) and `sources/bybit.rs`, `rpc/` (a JSON-RPC client with a per-host limiter and a rule that
   one address's calls are never merged with another's), `tokens/` (identity by network + contract, quarantine),
-  `prices.rs` (historic quotes, fetched by `pricing/llama.rs`) and `engine/` (operations, the user's overrides, cost
+  `prices.rs` (historic quotes, fetched by `crates/net/src/pricing/llama.rs`) and `engine/` (operations, the user's overrides, cost
   basis, reconciliation with the node, snapshots). Nothing derived is stored.
-- **The vault side** is `service/cryptotrack/`: `apply.rs` stores a batch, `recompute.rs` folds everything again and is
+- **The vault side** is `crates/usecases/src/service/cryptotrack/` (and the pure rules in `crates/cryptotrack/src/service/`): `apply.rs` stores a batch, `recompute.rs` folds everything again and is
   the only place that knows "now", plus accounts, tokens, links, relations, `transition.rs` and `wipe.rs`.
 - **The shell** (`crates/app`): `commands/cryptotrack/*` are thin IPC handlers; `cryptotrack/jobs.rs` and the scheduler
   run the background reads. A network call follows the usual pattern: copy the inputs under the mutex, release it,
@@ -119,7 +156,7 @@ vaults.
 1. The user enters the master password → `auth::unlock_vault` →
    `VaultFile::open(path, password)` → `crypto::open_bytes` (AEAD check of the
    password) → `VaultDoc` deserialization. The result is stored in `AppState.vault`.
-2. All mutations (store/tx/settings) go through `Session::transact`, which marks
+2. Every mutation is a scenario: decide, then one `Session::transact`, which marks
    the document through `persist()`. The app's write-behind writer then does the
    re-encryption and the atomic write to disk, batching a burst of changes into one write.
    `persist_now` writes at once: it is used for copy, re-key and close. Without a
@@ -135,29 +172,28 @@ vaults.
 
 ## Layers and ports
 
-Modules of `crates/core/src` form groups, groups form layers; a module may use only
-a lower layer or its own group. The table lives in `crates/xtask/src/arch/layers.rs`.
+The crates of the table above form layers: a crate may use only the crates in its row. `crates/xtask/src/arch/crates.rs`
+holds the crate table; `crates/xtask/src/arch/layers.rs` holds the module table of the part of `crates/usecases/src`
+that has not moved yet. A new back edge fails `cargo xtask check arch`; to allow one, write an entry with `until` and a
+reason in the PR (`crates/xtask/arch-allow.toml`, empty today). An entry that no longer matches an edge fails too.
 
-| Layer | Groups (modules) |
+| Layer | Crates |
 |---|---|
-| 0 | base (`amount`, `error`, `time`, `calendar`, `calc`, `limits`, `app_dirs`, `routes`, `external_url`) |
-| 1 | `crypto` |
-| 2 | `model` |
-| 3 | vault (`storage`, `vault_io`, `jsonstore`, `kernel`), `sync`, net (`pricing`, `exchange`, `datasource`, `market`, `updates`) |
-| 4 | `money`, `planning`, `cryptotrack`, `workflow`, `txinfo`, `utilities_formula` |
-| 5 | use cases (`service`, `sandbox`, `appconfig`, `ipc_contract`) |
-| 6 | `testkit` (tests and the `testkit` feature only) |
+| 0 | `mwt-macros`, `mwt-base` |
+| 1 | `mwt-crypto` |
+| 2 | `mwt-model` |
+| 3 | `mwt-vault`, `mwt-sync`, `mwt-net` |
+| 4 | `mwt-money`, `mwt-household`, `mwt-planning`, `mwt-reports`, `mwt-cryptotrack`, `mwt-workflow` |
+| 5 | `mwt-contract`, `mwt-usecases` (and the facade `trade-core`) |
+| 6 | `mwt-testkit` (dev-only) |
 
-A new back edge fails `arch`; to allow one, write an entry with `until` and a reason in the PR
-(`crates/xtask/arch-allow.toml`). An entry that no longer matches an edge fails too.
-Today only `kernel -> service` and `workflow -> service` remain, until phase Ф5.
-
-The kernel (`crates/core/src/kernel/`) is the one place where a change of the open
+The kernel (`crates/vault/src/kernel/`, re-exported as `kernel::` by `mwt-usecases`) is the one place where a change of the open
 vault is committed. What exists:
 
-- `Session` — the write state of an open vault: dirty flag, revision, the write gate,
-  the store and the event bus.
-- `Tx`, `Books`, `Collection`, `Record` — a transaction over the document and typed access to its records.
+- `kernel::session::Write` — the write state of an open vault: dirty flag, revision, the write gate,
+  the store and the event bus. The `Session` of `mwt-usecases` holds one; the secrets and the file lock stay
+  in the `Session`.
+- `Tx`, `Collection` — a transaction over the document and typed access to its records (the `Record` trait is in `mwt-model`; `Books`, the read context, is in `mwt-money`).
 - `Persistence` (port) — where a sealed snapshot goes: `FileStore`, `SandboxStore`
   (no I/O), `Mirrored` (copy to an external document).
 - `ChangeSink` (port) — told the keys of every local save, so a live sync session can send them on.
@@ -166,14 +202,14 @@ vault is committed. What exists:
   the write-behind hook and the sync tap are its subscribers.
 - `SaveHook` and `Commit` — how a marked change is told to the writer.
 
-Not built yet: the sandbox gate still lives in the service write path.
+The sandbox gate still lives in the service write path (`Session::transact` skips the write for a sandbox).
 
 The facade's old name and the forwarding macro are banned for good: `xtask arch` refuses
 them in every `crates/*/src/**/*.rs` file, comments and tests included.
 
 ## Principles
 
-- **A core without a GUI.** Everything testable is in core, tests run without Tauri.
+- **A backend without a GUI.** Everything testable is in the Rust crates, tests run without Tauri.
 - **Secure by default.** One password, no stored verifiers;
   integrity is provided by AEAD (header = AAD, any change fails the check).
 - **Offline-friendly.** Prices/FX accumulate history in the vault (`price_cache`,
@@ -194,6 +230,6 @@ them in every `crates/*/src/**/*.rs` file, comments and tests included.
 
 ## Scaling
 
-For now it is a monolith. If the core grows, potential slots are: moving heavy
+The backend is already split into crates (above). If it grows, potential slots are: moving heavy
 numeric tasks into a separate background process, data-provider plugins through
-feature flags in `trade-core`. The IPC contract remains the source of truth for the frontend.
+feature flags in `mwt-net`. The IPC contract remains the source of truth for the frontend.

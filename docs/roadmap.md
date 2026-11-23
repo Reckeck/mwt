@@ -3,7 +3,7 @@
 Status legend: `[x]` done · `[~]` in progress · `[ ]` planned.
 
 ## Phase 1 — Foundation `[~]`
-- `[x]` Cargo workspace (`crates/core` + `crates/app`), mise environment, tasks
+- `[x]` Cargo workspace (`crates/*`: the domain crates, `mwt-usecases`, `crates/app`), mise environment, tasks
 - `[x]` Domain model (VaultDoc, Store/Holding, Transaction, Settings, Chain, Sim)
 - `[x]` Crypto: Argon2id + XChaCha20-Poly1305, header=AAD, atomic write
 - `[x]` Storage: JSON (dev) / MessagePack (release; bincode was replaced by the 2026-11-19 reset), VaultFile::create/open/save

@@ -176,7 +176,7 @@ what you need is missing — `pnpm dlx shadcn-vue@latest search`, then `add`.
    key (`grep -rn "delete_contact" src`): the action may already live in
    another feature.
 2. **Check the backend contract** before laying out a form: the DTO in
-   `ipc.gen.d.ts` and the checks in `crates/core/src/service/*` — required
+   `ipc.gen.d.ts` and the checks in `crates/usecases/src/service/*` — required
    fields and refusals that the form must catch itself (rule 13).
 3. **Build from the catalog.** The catalog wins over existing code: old
    screens are still being moved to the shared components

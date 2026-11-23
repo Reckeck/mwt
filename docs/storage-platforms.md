@@ -5,7 +5,7 @@ Windows, macOS, Android and iOS. The module has two halves:
 
 | Half | Where | What it does |
 |---|---|---|
-| core | `crates/core/src/vault_io/` | no Tauri, unit-tested: local file (atomic write, lock, `.bak`), path or URI, importing a copy, mirror logic |
+| vault crate | `crates/vault/src/vault_io/` | no Tauri, unit-tested: local file (atomic write, lock, `.bak`), path or URI, importing a copy, mirror logic |
 | app | `crates/app/src/platform_fs/` | the only place in app with file dialogs, `content://` and the vault directory; picks the implementation by OS |
 | Android | `crates/plugin-saf/` | Kotlin plugin: picking a document with a persistent access permission |
 
@@ -70,7 +70,7 @@ UI ─ pick_vault_file ─► platform_fs::pick_vault
                          └ mobile:  URI → read_location → import_into(vaults_dir) → copy path
    ─ unlock_vault(path) ─► resolve_vault_to_open   (a URI from old recents is imported too)
                          ─► links::sync_before_open (reconcile with the copy: push / pull / merge)
-                         ─► Session::open     (core: read, lock, migration, .vN.bak)
+                         ─► Session::open     (`mwt-usecases`: read, lock, migration, .vN.bak)
                          ─► links::take_in          (pull/merge of the copy into the open vault, the password comes from the request, is not stored)
                          ─► attach_mirror           (if linked: the copy thread)
    ─ create_vault(path) ─► resolve_new_vault        (bare name → vaults_dir, URI forbidden)
@@ -83,7 +83,7 @@ vault_writer: 500 ms of quiet (at most 3 s) → prepare_flush (under the lock: s
 ### Batched writes
 
 Changes accumulate in memory and are written with a single save per batch
-(`crates/core/src/service/saving.rs`, `crates/app/src/vault_writer.rs`).
+(`crates/usecases/src/service/saving.rs`, `crates/app/src/vault_writer.rs`).
 Reads come from memory, so the interface sees a change immediately.
 
 Forced (`persist_now` / `flush_pending`, the file is on disk before returning):
@@ -129,7 +129,7 @@ a process crash or power loss — at most ~3 s of the latest edits.
 | only the copy (an edit on another device) | `PullRemote` — the local one goes to `.bak`, the copy's data becomes the vault's data, `stamps` and `tombstones` are taken from the copy (they are record metadata), `peers` are merged by the `merge_peers` rules, and the undo batches, the journal, `transfers`, `tombstones_seen`, `paused`, `cut_by` **stay local** (`take_records_from` is the single source of what is taken from a copy) |
 | both (including a copy written blindly by an old app) | `Conflict` → a **merge** into the open vault, with no questions |
 
-  The merge (`links::take_in`, `Session::merge_external_copy`): the copy
+  The merge (`links::take_in`, free scenario `merge_external_copy(&mut Session, ...)` in `crates/usecases/src/usecases/sync/peer_sync.rs`): the copy
   is opened with the same password (it exists only during `unlock_vault`); if
   `doc.id` matches, its records are applied through the peer sync path
   (`sync_manifest`/`sync_records` on the copy, `sync_apply` on the local vault,
@@ -166,11 +166,11 @@ a process crash or power loss — at most ~3 s of the latest edits.
 
 ## Verification
 
-- `cargo test -p trade-core vault_io::`: paths of all OSes, `file://`,
+- `cargo test -p mwt-vault vault_io::`: paths of all OSes, `file://`,
   `content://`, file name, import without overwriting, all `reconcile` branches.
-- `cargo test -p trade-core a_mirror_gets_exactly_the_saved_file`.
-- `cargo test -p trade-core cas_` (compare-and-swap), `cargo test -p trade-core merge_` and
-  `a_pull_from` (merge and pull keeping the local `doc.sync`).
+- `cargo test -p mwt-usecases a_mirror_gets_exactly_the_saved_file`.
+- `cargo test -p mwt-vault cas_` (compare-and-swap), `cargo test -p mwt-usecases merge_` and
+  `cargo test -p mwt-usecases a_pull_from` (merge and pull keeping the local `doc.sync`).
 - `cargo test -p trade-app platform_fs`.
 - `cargo clippy -p trade-app --lib --target aarch64-linux-android -- -D warnings`
   (needs the NDK) or `ANDROID_TARGETS=aarch64 mise run build:all -- android`.

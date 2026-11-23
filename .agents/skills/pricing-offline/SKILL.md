@@ -5,7 +5,7 @@ description: >
   the fallback chain CoinGecko → CoinCap → Binance, open.er-api for currencies,
   the rate history inside the vault, the price stamp on a transaction and the
   rule "network is separate from the cache". Use when changing
-  crates/core/src/pricing/**, commands/pricing.rs, model/vault.rs (price_cache,
+  crates/net/src/pricing/**, crates/usecases/src/usecases/money/rates.rs, commands/pricing.rs, model/vault.rs (price_cache,
   fx_cache), and for tasks like "price does not update" («цена не
   обновляется»), "offline" («офлайн»), "stale price", "currency rate" («курс
   валюты»), "new provider" («новый провайдер»), "cache" («кэш»), "refresh_all",
@@ -19,7 +19,7 @@ description: >
 
 # Prices, FX and offline degradation
 
-`crates/core/src/pricing/mod.rs` is the only module that goes to the network
+`crates/net/src/pricing/mod.rs` is the only module that goes to the network
 for prices. All endpoints are free and **keyless**.
 
 ## Providers
@@ -45,15 +45,15 @@ moves on to the next; an error goes out only if none of them worked.
   point per hour (the fresh one wins), the last week (`HOURLY_KEEP`) hourly,
   older ones one point per day, no more than `HISTORY_CAP = 2000` points.
 - `fetch_fx()` brings the **whole table** from er-api. History is kept only for
-  the currencies from `UnlockedVault::fx_currencies_in_use()` (USD, the base
+  the currencies from `fx_currencies_in_use(&books)` (`crates/money/src/rates.rs`) (USD, the base
   currency, the budget currency, fiat in transactions and holdings, currencies
   of manual prices); the rest get only the single latest point, otherwise ~170
   currencies hourly would bloat the vault, which is re-encrypted on every
   write. Consequence: a currency you started using today has no past.
 - Time is compared by unix seconds (`history::unix_secs`), not as a string:
   `…:00Z` and `…:00.5Z` sort the wrong way as strings.
-- "At a moment" queries go through `RateBook` (`UnlockedVault::rate_book()`,
-  `service/rates.rs`): the cache is parsed once, then a binary search.
+- "At a moment" queries go through `RateBook` (`crates/money/src/rates.rs`; `Books::rate_book()`
+  in `crates/money/src/books.rs`): the cache is parsed once, then a binary search.
   `fx_at` / `price_at` take the nearest point <= ts, otherwise the first one
   after; `history_price` for a chart looks at the past first (cache, transaction
   stamps) and only then at the future; `convert` is a cross rate via USD;
@@ -83,12 +83,13 @@ async fn fetch_prices(&self, assets: &[AssetRef]) -> Result<Vec<PricePoint>>
 async fn fetch_fx(&self)                            -> Result<Vec<FxPoint>>
 
 // MUTATION: apply what was already fetched (do not persist: refresh writes once)
-fn UnlockedVault::apply_prices(&mut self, fresh: &[PricePoint])
-fn UnlockedVault::apply_fx(&mut self, fresh: &[FxPoint])   // knows whose history to keep
-fn UnlockedVault::restamp_missing(&mut self) -> usize
+fn apply_prices(vault: &mut Session, fresh: &[PricePoint])
+fn apply_fx(vault: &mut Session, fresh: &[FxPoint])   // knows whose history to keep
+fn restamp_missing(vault: &mut Session) -> usize
+// all three: crates/usecases/src/usecases/money/rates.rs
 ```
 
-**Why:** `doc` lives inside `Mutex<Option<UnlockedVault>>`, and the guard must
+**Why:** `doc` lives inside `Mutex<Option<Session>>`, and the guard must
 not be held across `.await`. A pure `fetch_*` lets you take the needed data
 from the vault, release the guard, await the network in peace, take the guard
 again and apply. The reference is `refresh_all` in
