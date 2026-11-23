@@ -8,7 +8,7 @@ use crate::planning::allocation::{
     check_assign_asset_class, plan_set_asset_classes, preset_classes,
 };
 use crate::service::UnlockedVault;
-use crate::service::sync_ids::asset_class_id;
+use crate::sync::sync_ids::asset_class_id;
 
 /// Replace the baskets. Shares must add up to 100; a basket that is gone
 /// takes its assignments with it. An empty list brings the preset back.

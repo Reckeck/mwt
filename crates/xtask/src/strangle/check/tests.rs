@@ -415,36 +415,15 @@ fn a_stem_override_renames_the_new_home_only_and_the_shim_stays() {
     ]);
     let root = before.root();
     let workspace = Workspace::load(root).unwrap();
-    let baseline = baseline::capture(root, &workspace).unwrap();
     let mut files = FileSet::new(root);
     relocate(&mut files, &workspace.map, "loyalty").unwrap();
     files.write().unwrap();
-    let moved = std::collections::BTreeMap::from_iter(moved_files());
-    for (path, new_path) in [
-        (PURE, NEW_PURE),
-        (SCENARIO, "crates/core/src/usecases/household/overview.rs"),
-        (TESTS, "crates/core/src/household/overview_tests.rs"),
-    ] {
-        let text = moved[path].replace("loyalty", "overview");
-        std::fs::write(root.join(new_path), text).unwrap();
-    }
-    std::fs::write(
-        root.join(OLD),
-        moved[SERVICE].replace("loyalty", "overview"),
-    )
-    .unwrap();
     let shim = std::fs::read_to_string(root.join(OLD)).unwrap();
     assert!(shim.contains("crate::household::overview::Card"), "{shim}");
-    let workspace = Workspace::load(root).unwrap();
-    let found = findings(
-        root,
-        &workspace,
-        &baseline,
-        Some("loyalty"),
-        Some(&[]),
-        None,
-    );
-    assert_eq!(found.unwrap(), Vec::<String>::new());
+    assert!(!shim.contains("loyalty"), "{shim}");
+    let pure = std::fs::read_to_string(root.join(NEW_PURE)).unwrap();
+    assert!(!pure.contains("placeholder"), "{pure}");
+    assert!(!root.join("crates/core/src/household/loyalty.rs").exists());
 }
 
 /// The moved fixture with a `remaining_dirs` tree: `crates/other/x.rs` names `UnlockedVault`

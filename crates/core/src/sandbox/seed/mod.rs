@@ -18,7 +18,8 @@ use std::sync::Arc;
 use chrono::NaiveDate;
 
 use crate::Result;
-use crate::service::{SaveHook, UnlockedVault};
+use crate::kernel::session::SaveHook;
+use crate::service::UnlockedVault;
 
 /// The seed of the generator; changing it changes every amount.
 const SEED: u64 = 20_261_023;

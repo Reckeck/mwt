@@ -133,6 +133,21 @@ fn pub_crate_and_attributes_stay_on_every_new_line() {
 }
 
 #[test]
+fn a_doc_comment_stays_on_the_first_new_line_only() {
+    let (_, text) = planned(
+        USER,
+        "/// Docs.\n#[allow(unused)]\npub(crate) use crate::service::{DataSourceDraft, MIN_HISTORY_MONTHS};\n",
+    );
+    assert_eq!(text.matches("/// Docs.").count(), 1, "{text}");
+    assert_eq!(
+        text.matches("#[allow(unused)]\npub(crate) use ").count(),
+        2,
+        "{text}"
+    );
+    assert!(text.starts_with("/// Docs.\n#[allow(unused)]"), "{text}");
+}
+
+#[test]
 fn a_path_in_an_expression_and_a_type_is_rewritten() {
     let (report, text) = planned(
         USER,

@@ -22,8 +22,9 @@ use crate::model::store::{MarketKind, StoreKind, SubType, TerminalState};
 use crate::model::vault::PendingImport;
 use crate::money::books::Books;
 use crate::money::tree;
-use crate::service::{MAX_PENDING_IMPORTS, StoreExtras, TerminalPatch, UnlockedVault};
+use crate::service::{MAX_PENDING_IMPORTS, StoreExtras, UnlockedVault};
 use crate::usecases::money::stores::rebase_and_commit;
+use mwt_cryptotrack::exchange_sync::TerminalPatch;
 
 /// Status of the Bybit key stored for exactly this store.
 pub fn exchange_key_status(vault: &UnlockedVault, store_id: &str) -> ExchangeKeyStatus {

@@ -10,7 +10,9 @@ use crate::money::month_balance::{
     CashMonth, DayFlow, FlowKind, MonthBalance, ReportFlows, ReportSource,
     month_balance as balance, parse_carry_since,
 };
-use crate::service::{FlowClass, ReportFilter, UnlockedVault};
+use crate::money::worth::FlowClass;
+use crate::service::UnlockedVault;
+use mwt_reports::overview::ReportFilter;
 
 /// The vault as the month balance's source for the reports area: it holds the
 /// filter, the moment and the zone the balance was asked for.

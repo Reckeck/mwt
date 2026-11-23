@@ -8,7 +8,7 @@ use crate::model::store::RevalueRule;
 use crate::model::vault::Valuation;
 use crate::money::valuation::{ValuationInput, plan_revalue_rule, plan_valuation};
 use crate::service::UnlockedVault;
-use crate::service::sync_ids::valuation_id;
+use crate::sync::sync_ids::valuation_id;
 
 /// The record of a planned valuation, under its deterministic sync id.
 fn valuation_record(input: ValuationInput) -> Valuation {

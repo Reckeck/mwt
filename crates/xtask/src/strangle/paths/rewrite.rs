@@ -144,6 +144,27 @@ impl<'run> Rewriter<'run> {
         }
     }
 
+    /// What precedes `use` on every new line after the first: the attributes except doc comments, and
+    /// the visibility.
+    fn repeated_head(&self, node: &ItemUse) -> String {
+        let mut head = String::new();
+        for attribute in node
+            .attrs
+            .iter()
+            .filter(|attr| !attr.path().is_ident("doc"))
+        {
+            head.push_str(self.text_between(attribute.span().start(), attribute.span().end()));
+            head.push('\n');
+        }
+        let after_attributes = node
+            .attrs
+            .last()
+            .map_or(node.span().start(), |attribute| attribute.span().end());
+        let visibility = self.text_between(after_attributes, node.use_token.span.start());
+        head.push_str(visibility.trim_start());
+        head
+    }
+
     /// One new `use` line (or the old text) per leaf of an item that names a shim path.
     fn rewrite_use(&mut self, node: &ItemUse) {
         let all = leaves(&node.tree);
@@ -186,9 +207,14 @@ impl<'run> Rewriter<'run> {
         }
         let start = node.span().start();
         let head = self.text_between(start, node.use_token.span.start());
+        let repeated = self.repeated_head(node);
         let body: Vec<String> = lines
             .iter()
-            .map(|text| format!("{head}use {text};"))
+            .enumerate()
+            .map(|(number, text)| {
+                let head = if number == 0 { head } else { repeated.as_str() };
+                format!("{head}use {text};")
+            })
             .collect();
         self.report.splices.push(Splice {
             start: self.index.offset(start),

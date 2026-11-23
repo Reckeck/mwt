@@ -13,7 +13,7 @@ use crate::kernel::tx::Tx;
 use crate::model::contact::{Contact, DebtTerms};
 use crate::model::vault::now_iso;
 use crate::service::UnlockedVault;
-use crate::service::sync_ids::debt_terms_id;
+use crate::sync::sync_ids::debt_terms_id;
 
 pub fn create_contact(vault: &mut UnlockedVault, draft: ContactDraft) -> Result<Contact> {
     let contact = plan_create_contact(draft, &now_iso())?;

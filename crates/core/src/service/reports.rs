@@ -1,7 +1,6 @@
 //! Shim of the `reports` area: moved to `mwt_reports::overview` (spec core-strangler, D1).
 //! The reports take `&Books`.
 
-pub(crate) use mwt_reports::overview::csv_text;
 pub use mwt_reports::overview::{
     CalendarDay, CalendarMonth, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock,
     CategoryRow, DayStatus, InflationPoint, InflationReport, NetworthPoint, NetworthReport,
