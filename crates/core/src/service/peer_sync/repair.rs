@@ -1,15 +1,9 @@
 //! Shim of the `peer_sync/repair` area: moved to `crate::sync::repair::repair` (spec core-strangler, D1).
 
+#[cfg(test)]
 use super::UnlockedVault;
 #[cfg(test)]
 use crate::model::store::Binding;
-use crate::service::forward::forward;
-
-impl UnlockedVault {
-    // forward:begin
-    forward! {}
-    // forward:end
-}
 
 #[cfg(test)]
 mod tests {

@@ -74,17 +74,13 @@ fn old_or_other_payee_does_not_count() {
 }
 
 #[test]
-fn a_bare_document_gives_the_same_answer_as_the_vault() {
+fn a_bare_document_without_history_has_nothing_to_compare() {
     let (_dir, mut vault) = empty_vault();
     vault
         .doc
         .transactions
         .push(subscription("5", "2026-04-10T10:00:00Z"));
     let next = subscription("6", "2026-05-10T10:00:00Z");
-    assert_eq!(
-        recurring_check(&vault.doc, &next),
-        crate::planning::recurring::recurring_check(&vault.doc, &next)
-    );
     assert_eq!(
         recurring_check(&crate::model::VaultDoc::default(), &next),
         RecurringCheck {

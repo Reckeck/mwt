@@ -9,9 +9,9 @@ mod visitor;
 #[cfg(test)]
 mod tests;
 
-pub(in crate::strangle) use corpus::{Corpus, Scanned, UnscannedMacro};
+pub(in crate::strangle) use corpus::{Corpus, Scanned};
 pub use visitor::scan_source;
-pub(in crate::strangle) use visitor::{is_test_attr, macro_arguments, macro_line, names_type};
+pub(in crate::strangle) use visitor::{is_test_attr, macro_arguments, names_type};
 
 /// The type whose impl blocks the areas are made of.
 pub(in crate::strangle) const VAULT_TYPE: &str = "UnlockedVault";

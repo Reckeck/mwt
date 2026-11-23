@@ -8,51 +8,13 @@
 use std::path::Path;
 
 use crate::error::Result;
-use crate::ipc_contract::cryptotrack::wipe::{CryptoWipePreview, CryptoWipeReport};
 use crate::model::vault::VaultDoc;
 use crate::storage::VaultFile;
 
-// What the wipe tests reach through `super::*`.
-#[cfg(test)]
-use crate::cryptotrack::service::wipe::WIPE_CONFIRM;
-#[cfg(test)]
-use crate::error::Error;
-#[cfg(test)]
-use crate::ipc_contract::security::SecurityLevel;
-#[cfg(test)]
-use crate::vault_io::backups;
-
 use super::super::UnlockedVault;
 use super::super::exchange_keys::DeviceKeys;
-use super::super::forward::forward;
 
 impl UnlockedVault {
-    // forward:begin
-    forward! {
-        /// What a wipe would remove: the records per collection, the wallets that
-        /// would be unlinked and archived, what the capital would lose and which
-        /// backup the user has already.
-        pub fn crypto_wipe_preview(&self) -> CryptoWipePreview
-            => crate::usecases::cryptotrack::wipe::crypto_wipe_preview;
-        /// Wipe the module. See the module docs for the order; `confirm` must be
-        /// [`WIPE_CONFIRM`].
-        ///
-        /// Nothing is removed while the backup cannot be taken and read back, and
-        /// a vault that holds nothing of the module takes no backup at all: there
-        /// is nothing to risk and nothing to mark.
-        pub fn crypto_wipe_module(&mut self, confirm: &str) -> Result<CryptoWipeReport>
-            => crate::usecases::cryptotrack::wipe::crypto_wipe_module;
-    }
-    // forward:end
-
-    // Called by the wipe tests, which hand the backup step in; not in the baseline
-    // (crate-private), so outside the regenerated block.
-    forward! {}
-
-    // Vault-side: they read what is private to `service`, so the scenarios,
-    // which live outside it, ask for them here. Each is one line, with no rule
-    // in it.
-
     /// The backup copy at `path`, opened again with this session's password.
     pub(crate) fn read_back_backup(&self, path: &Path) -> Result<VaultDoc> {
         VaultFile::open(path, &self.password).map(|(doc, _)| doc)

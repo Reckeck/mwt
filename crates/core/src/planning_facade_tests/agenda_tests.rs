@@ -414,7 +414,7 @@ fn a_repeating_reminder_moves_on_when_done_by_the_pure_rule() {
 }
 
 #[test]
-fn the_reminder_scenarios_equal_their_delegates() {
+fn a_snoozed_reminder_keeps_its_snooze_moment() {
     let (_dir, mut vault) = empty_vault();
     let made = crate::usecases::planning::agenda::create_reminder(
         &mut vault,
@@ -423,10 +423,6 @@ fn the_reminder_scenarios_equal_their_delegates() {
         None,
     )
     .unwrap();
-    assert_eq!(
-        crate::planning::agenda::reminders(&vault.doc),
-        reminders(&vault.doc)
-    );
     let snoozed = crate::usecases::planning::agenda::snooze_reminder(
         &mut vault,
         &made.id,
@@ -436,10 +432,6 @@ fn the_reminder_scenarios_equal_their_delegates() {
     assert_eq!(
         snoozed.snoozed_until.as_deref(),
         Some("2026-03-07T09:00:00Z")
-    );
-    assert_eq!(
-        crate::planning::agenda::due_reminders(&vault.doc, secs("2026-03-08T00:00:00Z")),
-        due_reminders(&vault.doc, secs("2026-03-08T00:00:00Z"))
     );
 }
 

@@ -373,36 +373,6 @@ fn the_cashback_is_reported_on_a_bare_document() {
     assert!(empty.by_source.is_empty());
 }
 
-#[test]
-fn the_delegates_equal_the_scenarios() {
-    let (_dir, mut vault) = empty_vault();
-    let programme = store(&mut vault, "A", StoreKind::Loyalty, None);
-    let saved = crate::usecases::household::loyalty::set_loyalty_info(
-        &mut vault,
-        &StoreId::from(&programme),
-        info("PTS"),
-    )
-    .unwrap();
-    assert_eq!(
-        saved,
-        crate::usecases::household::loyalty::set_loyalty_info(
-            &mut vault,
-            &StoreId::from(&programme),
-            info("PTS")
-        )
-        .unwrap()
-    );
-    assert_eq!(
-        crate::household::loyalty::loyalty_symbol_clash(&vault.doc, &StoreId::from(&programme)),
-        loyalty_symbol_clash(&vault.doc, &StoreId::from(&programme))
-    );
-    let (from, to) = ("2026-01-01T00:00:00Z", "2026-12-31T00:00:00Z");
-    assert_eq!(
-        crate::household::loyalty::cashback_report(&vault.books(), from, to),
-        cashback_report(&vault.books(), from, to)
-    );
-}
-
 /// A result as JSON with every id and timestamp blanked, so twin vaults compare.
 fn without_ids<T: serde::Serialize>(value: &T, known_ids: &[&str]) -> serde_json::Value {
     fn blank(node: &mut serde_json::Value, known_ids: &[&str]) {

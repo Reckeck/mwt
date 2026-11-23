@@ -34,10 +34,6 @@ pub struct Map {
     /// `<dir>/<stem>_tests.rs`), keyed by the top segment like `group_dirs`.
     #[serde(default)]
     pub facade_test_dirs: BTreeMap<String, String>,
-    /// Shared test helper files (`service/test_support.rs`), by path from the workspace root: the
-    /// functions they declare are known to `rewire` when it proves what a `let` pattern binds.
-    #[serde(default)]
-    pub helper_files: Vec<String>,
     /// Directories whose `.rs` files `strangle remaining` counts, relative to the workspace root.
     #[serde(default)]
     pub remaining_dirs: Vec<String>,

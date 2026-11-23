@@ -283,7 +283,7 @@ pub(in crate::strangle) fn macro_arguments(node: &Macro) -> Option<Punctuated<Ex
 }
 
 /// The line of the macro's name.
-pub(in crate::strangle) fn macro_line(node: &Macro) -> usize {
+fn macro_line(node: &Macro) -> usize {
     node.path.span().start().line
 }
 

@@ -5,7 +5,6 @@ use crate::strangle::area_fixture::{
 };
 use crate::strangle::fileset::FileSet;
 use crate::strangle::fixture::TempTree;
-use crate::strangle::forward::forward;
 use crate::strangle::map::MAP_FILE;
 use crate::strangle::relocate::relocate;
 
@@ -429,9 +428,11 @@ fn a_stem_override_renames_the_new_home_only_and_the_shim_stays() {
         let text = moved[path].replace("loyalty", "overview");
         std::fs::write(root.join(new_path), text).unwrap();
     }
-    let mut files = FileSet::new(root);
-    forward(&mut files, &workspace.map, &baseline, "loyalty").unwrap();
-    files.write().unwrap();
+    std::fs::write(
+        root.join(OLD),
+        moved[SERVICE].replace("loyalty", "overview"),
+    )
+    .unwrap();
     let shim = std::fs::read_to_string(root.join(OLD)).unwrap();
     assert!(shim.contains("crate::household::overview::Card"), "{shim}");
     let workspace = Workspace::load(root).unwrap();

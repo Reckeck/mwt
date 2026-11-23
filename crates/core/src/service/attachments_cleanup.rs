@@ -4,13 +4,3 @@
 //! public. The block below it is hand-written for the two crate-internal
 //! callers (vault open and external merge) that still use these delegates
 //! until their files move.
-
-use super::UnlockedVault;
-use super::forward::forward;
-
-impl UnlockedVault {
-    // forward:begin
-    // forward:end
-
-    forward! {}
-}

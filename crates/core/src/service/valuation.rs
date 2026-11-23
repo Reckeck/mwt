@@ -6,32 +6,3 @@ pub(crate) use crate::money::valuation::ValuationCurve;
 pub use crate::money::valuation::{
     PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput,
 };
-
-use crate::error::Result;
-use crate::model::ids::StoreId;
-use crate::model::store::RevalueRule;
-use crate::model::vault::Valuation;
-
-use super::UnlockedVault;
-use super::forward::forward;
-
-impl UnlockedVault {
-    // forward:begin
-    forward! {
-        /// The value story of each asset a property holds.
-        pub fn property_values(&self, store_id: &str, zone: &str) -> Result<Vec<PropertyValue>>
-            => crate::money::valuation::property_values @books with (store_id => &StoreId::from(store_id));
-        /// Add a dated valuation; one on the same day replaces it.
-        pub fn add_valuation(&mut self, input: ValuationInput) -> Result<Valuation>
-            => crate::usecases::money::valuation::add_valuation;
-        /// Remove a valuation; returns it so the UI can put it back.
-        pub fn delete_valuation(&mut self, id: &str) -> Result<Valuation>
-            => crate::usecases::money::valuation::delete_valuation;
-        /// Set or switch off a property's rule. Switching it on where nothing was
-        /// valued yet first values every asset at today's price, so the value
-        /// continues from where it is instead of jumping (plan §11.4).
-        pub fn set_revalue_rule(&mut self, store_id: &str, rule: Option<RevalueRule>, zone: &str) -> Result<()>
-            => crate::usecases::money::valuation::set_revalue_rule with (store_id => &StoreId::from(store_id));
-    }
-    // forward:end
-}

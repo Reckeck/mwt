@@ -14,9 +14,6 @@ service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
 scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src", "crates/planning/src", "crates/reports/src", "crates/cryptotrack/src", "crates/contract/src"]
 
-# Shared test helper files: `rewire` reads the return types of their functions (`empty_vault()` and the like).
-helper_files = ["crates/core/src/service/test_support.rs", "crates/core/src/testkit/mod.rs"]
-
 # `strangle remaining` counts the `.rs` files under `remaining_dirs`, less `remaining_exclude` (the tool and
 # its fixtures name the words it counts; they go with the tool).
 remaining_dirs = ["crates"]
@@ -399,6 +396,7 @@ path = "sync/repair/"
 
 [[area]]
 name = "loyalty"
+retired = true
 task = "T26"
 group = "household"
 context = "household"
@@ -406,6 +404,7 @@ files = ["loyalty.rs"]
 
 [[area]]
 name = "leaves"
+retired = true
 task = "A"
 group = "household"
 context = "household"
@@ -420,6 +419,7 @@ homes = {
 
 [[area]]
 name = "reports_overview"
+retired = true
 task = "A"
 group = "reports"
 context = "reports"
@@ -428,6 +428,7 @@ stem = { "reports.rs" = "overview" }
 
 [[area]]
 name = "insights"
+retired = true
 task = "A"
 group = "reports"
 context = "reports"
@@ -435,6 +436,7 @@ files = ["where_went.rs", "insights.rs", "notify_snapshot.rs"]
 
 [[area]]
 name = "dashboard"
+retired = true
 task = "A"
 group = "reports"
 context = "reports"
@@ -442,6 +444,7 @@ files = ["dashboard.rs", "dashboard_today.rs", "dashboard_tiles.rs"]
 
 [[area]]
 name = "rates"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -449,6 +452,7 @@ files = ["rates.rs", "price_info.rs"]
 
 [[area]]
 name = "valuation"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -456,6 +460,7 @@ files = ["valuation.rs", "inflation.rs", "interest.rs"]
 
 [[area]]
 name = "worth"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -463,6 +468,7 @@ files = ["worth.rs"]
 
 [[area]]
 name = "stores"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -470,6 +476,7 @@ files = ["stores.rs", "store_change.rs"]
 
 [[area]]
 name = "transactions"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -477,6 +484,7 @@ files = ["transactions.rs"]
 
 [[area]]
 name = "portfolio"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -484,6 +492,7 @@ files = ["portfolio.rs", "asset_holdings.rs", "investments.rs"]
 
 [[area]]
 name = "adjustments"
+retired = true
 task = "B"
 group = "money"
 context = "money"
@@ -493,6 +502,7 @@ files = [
 
 [[area]]
 name = "contacts_debts"
+retired = true
 task = "C"
 group = "household"
 context = "household"
@@ -500,6 +510,7 @@ files = ["contacts.rs", "debts.rs"]
 
 [[area]]
 name = "utilities"
+retired = true
 task = "C"
 group = "household"
 context = "household"
@@ -507,6 +518,7 @@ files = ["utilities.rs", "property_links.rs"]
 
 [[area]]
 name = "shared_events_split"
+retired = true
 task = "C"
 stubs = false
 group = "household/shared_events"
@@ -522,6 +534,7 @@ stem = {
 
 [[area]]
 name = "shared_events_views"
+retired = true
 task = "C"
 stubs = false
 group = "household/shared_events"
@@ -540,6 +553,7 @@ stem = {
 
 [[area]]
 name = "shared_events_testing"
+retired = true
 task = "C"
 stubs = false
 group = "household/shared_events"
@@ -549,6 +563,7 @@ stem = { "shared_events/testing.rs" = "testing" }
 
 [[area]]
 name = "attachments"
+retired = true
 task = "C"
 group = "household"
 context = "household"
@@ -563,6 +578,7 @@ files = ["peer_sync.rs"]
 
 [[area]]
 name = "sync_repair"
+retired = true
 task = "C"
 stubs = false
 group = "sync/repair"
@@ -598,6 +614,7 @@ stem = {
 
 [[area]]
 name = "sync_ids_journal"
+retired = true
 task = "C"
 group = "sync"
 context = "sync"
@@ -651,6 +668,7 @@ stem = {
 
 [[area]]
 name = "automations_recurring"
+retired = true
 task = "D"
 group = "planning"
 context = "planning"
@@ -658,6 +676,7 @@ files = ["automations.rs", "recurring.rs"]
 
 [[area]]
 name = "budget"
+retired = true
 task = "D"
 group = "planning"
 context = "planning"
@@ -665,6 +684,7 @@ files = ["budget.rs", "emergency.rs"]
 
 [[area]]
 name = "goals"
+retired = true
 task = "D"
 group = "planning"
 context = "planning"
@@ -674,6 +694,7 @@ files = [
 
 [[area]]
 name = "notifications"
+retired = true
 task = "D"
 group = "planning"
 context = "planning"
@@ -684,6 +705,7 @@ files = [
 
 [[area]]
 name = "crypto_accounts"
+retired = true
 task = "E"
 stubs = false
 group = "cryptotrack/service"
@@ -701,6 +723,7 @@ stem = {
 
 [[area]]
 name = "crypto_recompute"
+retired = true
 task = "E"
 stubs = false
 group = "cryptotrack/service"
@@ -718,6 +741,7 @@ stem = {
 
 [[area]]
 name = "crypto_positions"
+retired = true
 task = "E"
 stubs = false
 group = "cryptotrack/service"
@@ -740,6 +764,7 @@ stem = {
 
 [[area]]
 name = "cryptotrack"
+retired = true
 task = "E"
 stubs = false
 group = "cryptotrack"
@@ -752,6 +777,7 @@ stem = {
 
 [[area]]
 name = "exchange"
+retired = true
 task = "E"
 group = "cryptotrack"
 context = "cryptotrack"
@@ -759,6 +785,7 @@ files = ["exchange_sync.rs", "exchange_import.rs"]
 
 [[area]]
 name = "workflow"
+retired = true
 task = "E"
 group = "workflow"
 context = "workflow"
@@ -777,6 +804,7 @@ files = [
 
 [[area]]
 name = "misc"
+retired = true
 task = "phase-6"
 stubs = false
 group = "vault"

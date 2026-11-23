@@ -2,69 +2,16 @@
 //! flow queries to `crate::planning::flows` (spec core-strangler, D1).
 
 pub use crate::planning::budget::{
-    BudgetDraft, BudgetStatus, DailyBudget, MIN_HISTORY_MONTHS, MonthAvg, MonthSummary,
+    BudgetDraft, BudgetStatus, DailyBudget, MIN_HISTORY_MONTHS, MonthSummary,
 };
 
 use crate::Amount;
-use crate::error::Result;
-use crate::model::planning::Budget;
-use crate::model::store::StoreScope;
 use crate::model::transaction::Leg;
 
 use super::UnlockedVault;
-use super::forward::forward;
 use super::rates::RateBook;
 
 impl UnlockedVault {
-    // forward:begin
-    forward! {
-        /// The budget currency, never empty (D20).
-        pub fn budget_currency(&self) -> String
-            => crate::planning::budget::budget_currency @books;
-        pub fn budgets(&self) -> Vec<Budget>
-            => crate::planning::budget::budgets @doc;
-        /// Whether a scope belongs to the budget: the form's over-limit hint.
-        pub fn scope_in_budget(&self, scope: &StoreScope) -> bool
-            => crate::planning::budget::scope_in_budget @books;
-        /// The user's own month from the settings (plan B): income and spending,
-        /// `months = 0`. `None` without a hand-entered income.
-        pub fn manual_month(&self) -> Option<MonthAvg>
-            => crate::planning::budget::manual_month @books;
-        pub fn create_budget(&mut self, draft: BudgetDraft) -> Result<Budget>
-            => crate::usecases::planning::budget::create_budget;
-        pub fn update_budget(&mut self, id: &str, draft: BudgetDraft) -> Result<Budget>
-            => crate::usecases::planning::budget::update_budget;
-        /// Delete a limit; its notices go with it, each with a tombstone, or another
-        /// device would send them back.
-        pub fn delete_budget(&mut self, id: &str) -> Result<()>
-            => crate::usecases::planning::budget::delete_budget;
-        /// Every active limit with what its current period used (plan §7.3):
-        /// mandatory and everyday spending of the budget stores, by category, by
-        /// wallet or in total, in the limit's own currency at each day's rate.
-        pub fn budget_status(&self, now: i64, zone: &str) -> Vec<BudgetStatus>
-            => crate::usecases::planning::budget::budget_status @books;
-        /// Income, mandatory spending, everyday spending and savings of a calendar
-        /// month (`YYYY-MM`) in the budget currency (plan §7.3).
-        pub fn month_summary(&self, month: &str, zone: &str) -> Result<MonthSummary>
-            => crate::usecases::planning::budget::month_summary @books;
-        /// Averages of the last `months` finished calendar months that had any
-        /// flow, before the month of `now`; `None` without such months.
-        pub fn avg_month(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg>
-            => crate::planning::budget::avg_month @books;
-        /// [`avg_month`], or the hand-entered month while fewer than
-        /// `MIN_HISTORY_MONTHS` finished months have flows.
-        pub fn income_basis(&self, months: usize, now: i64, zone: &str) -> Option<MonthAvg>
-            => crate::planning::budget::income_basis @books;
-        /// How much can be spent today (plan §7.3), in the budget currency.
-        pub fn daily_budget(&self, now: i64, zone: &str) -> DailyBudget
-            => crate::planning::daily_budget::daily_budget @books;
-    }
-    // forward:end
-
-    // Read by other areas until they move; not in the baseline (crate-private), so outside the
-    // regenerated block.
-    forward! {}
-
     /// Value of one leg in `currency` at `secs`; `None` without a rate.
     pub(crate) fn leg_value_in(
         book: &RateBook,

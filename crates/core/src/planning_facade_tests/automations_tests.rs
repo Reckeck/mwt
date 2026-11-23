@@ -1415,7 +1415,7 @@ fn a_draft_is_checked_without_a_vault() {
 }
 
 #[test]
-fn the_funds_check_reads_a_bare_document_and_the_delegates_agree() {
+fn the_funds_check_reads_a_bare_document() {
     let (_dir, mut vault) = empty_vault();
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     let over = draft_to_transaction(&rent_draft(&cash, "50"), "a", "", "2026-01-01T09:00:00Z");
@@ -1425,15 +1425,6 @@ fn the_funds_check_reads_a_bare_document_and_the_delegates_agree() {
         reason,
         Some(RejectReason::InsufficientFunds { .. })
     ));
-    assert_eq!(
-        reason,
-        crate::planning::automations::funds_shortfall(&vault.doc, &over, secs)
-    );
-    let key = crate::model::store::AssetRef::fiat("USD", "USD").key();
-    assert_eq!(
-        balance_at(&vault.doc, &cash, &key, secs),
-        crate::planning::automations::balance_at(&vault.doc, &cash, &key, secs)
-    );
     let text = describe_shortfall(&vault.doc, &reason.unwrap());
     assert!(text.starts_with("Cash:"), "{text}");
 }

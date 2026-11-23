@@ -2,33 +2,12 @@
 //! gallery and the workflow made from a template live in
 //! `crate::usecases::workflow::records`.
 
-use std::collections::BTreeMap;
-
-use super::SavedWorkflow;
-use super::UnlockedVault;
-use super::forward::forward;
-#[cfg(test)]
-use crate::error::Error;
-use crate::error::Result;
-use crate::workflow::templates::WorkflowTemplateInfo;
-
-impl UnlockedVault {
-    // forward:begin
-    forward! {
-        /// The gallery: the savings share and the budget currency come from the vault.
-        pub fn workflow_templates(&self) -> Vec<WorkflowTemplateInfo>
-            => crate::usecases::workflow::records::workflow_templates @books;
-        /// Builds the template's graph from the form and saves it as an active workflow.
-        pub fn workflow_from_template(&mut self, id: &str, params: &BTreeMap<String, String>, locale: &str, now: i64) -> Result<SavedWorkflow>
-            => crate::usecases::workflow::records::workflow_from_template;
-    }
-    // forward:end
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::BTreeMap;
+
     use crate::calendar::now_secs;
+    use crate::error::Error;
     use crate::model::store::StoreKind;
     use crate::service::test_support::*;
 

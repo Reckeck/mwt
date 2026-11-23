@@ -1,4 +1,3 @@
-use super::*;
 use crate::Amount;
 use crate::cryptotrack::service::totals::CryptoLeftOut;
 use crate::model::chain::Chain;
@@ -13,6 +12,7 @@ use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::Transaction;
 use crate::model::vault::PricePoint;
 use crate::service::test_support::*;
+use crate::service::*;
 use crate::service::{NetworthPoint, Report, ReportFilter, ReportKind};
 use crate::time::unix_secs;
 
