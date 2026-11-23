@@ -130,7 +130,7 @@ fn marks_from_an_old_peer_do_not_erase_another_trigger() {
     stamps.fields.clear();
     stamps.fields.insert("marks".into(), later.clone());
     stamps.fields.insert("tx_cursor".into(), later);
-    right.sync_apply(&incoming, &peer("old")).unwrap();
+    peer_sync::sync_apply(&mut right, &incoming, &peer("old")).unwrap();
     assert_eq!(
         mark_of(&right, &id, "schedule:base").as_deref(),
         Some("2026-03-05T00:00:00Z"),
@@ -221,7 +221,7 @@ fn the_transaction_cursor_is_not_synced() {
         .unwrap()
         .fields
         .insert("marks".into(), Stamp::new(now_ms() + 1_000, 0, "oldpeer"));
-    right.sync_apply(&incoming, &peer("old")).unwrap();
+    peer_sync::sync_apply(&mut right, &incoming, &peer("old")).unwrap();
     assert_eq!(cursor_of(&right, &id), right_before);
 }
 
@@ -320,7 +320,7 @@ fn undo_does_not_move_a_schedule_mark_back() {
         }
     }
     right.persist().unwrap();
-    let report = right.sync_undo(&batch.id).unwrap();
+    let report = peer_sync::sync_undo(&mut right, &batch.id).unwrap();
     assert_eq!(report.skipped.len(), 1, "{report:?}");
     assert_eq!(
         mark_of(&right, &id, "schedule:s"),
@@ -366,7 +366,7 @@ fn a_batch_with_nothing_restored_stays_undoable() {
         }
     }
     right.persist().unwrap();
-    let report = right.sync_undo(&batch.id).unwrap();
+    let report = peer_sync::sync_undo(&mut right, &batch.id).unwrap();
     assert_eq!(report.restored, 0);
     // The batch no longer carries a settings record (the derived crypto copy is gone).
     assert_eq!(report.skipped.len(), 1, "{report:?}");
@@ -376,5 +376,5 @@ fn a_batch_with_nothing_restored_stays_undoable() {
         .collect();
     assert_eq!(listed[&batch.id], None, "the batch was marked undone");
     // It can still be tried again.
-    assert!(right.sync_undo(&batch.id).is_ok());
+    assert!(peer_sync::sync_undo(&mut right, &batch.id).is_ok());
 }

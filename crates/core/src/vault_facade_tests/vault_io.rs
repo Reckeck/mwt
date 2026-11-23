@@ -4,6 +4,7 @@
 use crate::model::VaultDoc;
 use crate::service::UnlockedVault;
 use crate::storage::{SnapshotFormat, encode};
+use crate::usecases::sync::peer_sync;
 
 fn sealed(password: &str) -> Vec<u8> {
     let plaintext = encode(&VaultDoc::default(), SnapshotFormat::Json).unwrap();
@@ -17,7 +18,7 @@ fn probe_external_uses_the_open_vaults_key() {
     let path = dir.path().join("v.wallet");
     let vault = UnlockedVault::create(path.clone(), "a").unwrap();
     let bytes = std::fs::read(&path).unwrap();
-    assert!(vault.probe_external(&bytes).is_ok());
-    assert!(vault.probe_external(&bytes[..bytes.len() - 8]).is_err());
-    assert!(vault.probe_external(&sealed("b")).is_err());
+    assert!(peer_sync::probe_external(&vault, &bytes).is_ok());
+    assert!(peer_sync::probe_external(&vault, &bytes[..bytes.len() - 8]).is_err());
+    assert!(peer_sync::probe_external(&vault, &sealed("b")).is_err());
 }

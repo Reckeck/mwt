@@ -9,6 +9,7 @@ use crate::model::store::StoreKind;
 use crate::planning::envelopes::EnvelopeDraft;
 use crate::service::test_support::{amount, income, store, usd};
 use crate::sync::stamp::Stamp;
+use crate::usecases::sync::peer_sync;
 
 fn draft(store_id: &str) -> EnvelopeDraft {
     EnvelopeDraft {
@@ -90,7 +91,7 @@ fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) {
         device_id: format!("device-{from}-id"),
         name: format!("device-{from}"),
     };
-    devices[to].sync_apply(&records, &peer).unwrap();
+    peer_sync::sync_apply(&mut devices[to], &records, &peer).unwrap();
 }
 
 fn three_devices() -> (tempfile::TempDir, Vec<UnlockedVault>) {
@@ -98,7 +99,7 @@ fn three_devices() -> (tempfile::TempDir, Vec<UnlockedVault>) {
     let copy = dir.path().join("third.wallet");
     std::fs::copy(&left.path, &copy).unwrap();
     let mut third = UnlockedVault::open(copy, "pw").unwrap();
-    third.set_device("cccccccc-third");
+    peer_sync::set_device(&mut third, "cccccccc-third");
     (dir, vec![left, right, third])
 }
 
@@ -259,7 +260,7 @@ fn old_peer_allocated_edit_becomes_one_correction() {
     };
     // The old device topped it up to 25 (it saw 10).
     let batch = from_old(&mut right, "25", stamp.clone());
-    right.sync_apply(&batch, &peer("old")).unwrap();
+    peer_sync::sync_apply(&mut right, &batch, &peer("old")).unwrap();
     assert_eq!(allocated(&right, &id), amount("25"));
     let fixes = corrections(&right, &id);
     assert_eq!(fixes.len(), 1);
@@ -267,8 +268,8 @@ fn old_peer_allocated_edit_becomes_one_correction() {
     assert_eq!(envelope_of(&right, &id).moves.len(), 2);
     assert_derived(&right, &id);
     // Delivered again, and to the other new device: still one entry.
-    right.sync_apply(&batch, &peer("old")).unwrap();
-    left.sync_apply(&batch, &peer("old")).unwrap();
+    peer_sync::sync_apply(&mut right, &batch, &peer("old")).unwrap();
+    peer_sync::sync_apply(&mut left, &batch, &peer("old")).unwrap();
     settle(&mut left, &mut right);
     for vault in [&left, &right] {
         assert_eq!(corrections(vault, &id).len(), 1, "one correction");
@@ -282,7 +283,7 @@ fn old_peer_allocated_edit_becomes_one_correction() {
         next
     };
     let batch = from_old(&mut right, "30", second);
-    left.sync_apply(&batch, &peer("old")).unwrap();
+    peer_sync::sync_apply(&mut left, &batch, &peer("old")).unwrap();
     settle(&mut left, &mut right);
     for vault in [&left, &right] {
         assert_eq!(corrections(vault, &id).len(), 2);
@@ -319,8 +320,12 @@ fn old_peer_value_without_moves_keeps_the_journal() {
         .fields
         .insert("name".into(), stamp);
     let before = envelope_of(&left, &id).moves;
-    left.sync_apply(&BTreeMap::from([(key.clone(), state)]), &peer("old"))
-        .unwrap();
+    peer_sync::sync_apply(
+        &mut left,
+        &BTreeMap::from([(key.clone(), state)]),
+        &peer("old"),
+    )
+    .unwrap();
     let after = envelope_of(&left, &id);
     assert_eq!(after.name, "Renamed");
     assert_eq!(after.moves, before);
@@ -349,9 +354,12 @@ fn a_relayed_value_of_a_new_device_is_no_correction() {
         .unwrap()
         .fields
         .insert("moves".into(), head);
-    right
-        .sync_apply(&BTreeMap::from([(key.clone(), relayed)]), &peer("old"))
-        .unwrap();
+    peer_sync::sync_apply(
+        &mut right,
+        &BTreeMap::from([(key.clone(), relayed)]),
+        &peer("old"),
+    )
+    .unwrap();
     assert!(corrections(&right, &id).is_empty());
     assert!(
         envelope_of(&right, &id).moves.is_empty(),
@@ -426,17 +434,20 @@ fn a_correction_from_a_stripped_relay_is_withdrawn_when_the_real_move_arrives() 
         .unwrap();
     let relay = stripped_relay(&mut devices[0], &key, "10");
     // C hears it from the old device first: a (false) correction.
-    devices[2]
-        .sync_apply(
-            &BTreeMap::from([(key.clone(), relay.clone())]),
-            &peer("old"),
-        )
-        .unwrap();
+    peer_sync::sync_apply(
+        &mut devices[2],
+        &BTreeMap::from([(key.clone(), relay.clone())]),
+        &peer("old"),
+    )
+    .unwrap();
     assert_eq!(allocated(&devices[2], &id), amount("10"));
     // B holds the correction too (the same relay).
-    devices[1]
-        .sync_apply(&BTreeMap::from([(key.clone(), relay)]), &peer("old"))
-        .unwrap();
+    peer_sync::sync_apply(
+        &mut devices[1],
+        &BTreeMap::from([(key.clone(), relay)]),
+        &peer("old"),
+    )
+    .unwrap();
     assert_eq!(corrections(&devices[1], &id).len(), 1);
     // The real move arrives.
     pull(&mut devices, 0, 2);
@@ -475,7 +486,7 @@ fn a_real_old_edit_stays_after_later_moves() {
         key.clone(),
         as_old_peer(records.remove(&key).unwrap(), "25", Some(stamp)),
     )]);
-    right.sync_apply(&batch, &peer("old")).unwrap();
+    peer_sync::sync_apply(&mut right, &batch, &peer("old")).unwrap();
     crate::usecases::household::envelopes::fund_envelope(&mut left, &id, amount("3")).unwrap();
     crate::usecases::household::envelopes::fund_envelope(&mut right, &id, amount("4")).unwrap();
     settle(&mut left, &mut right);

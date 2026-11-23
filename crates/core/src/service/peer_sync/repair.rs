@@ -1,9 +1,9 @@
 //! Shim of the `peer_sync/repair` area: moved to `crate::sync::repair::repair` (spec core-strangler, D1).
 
 #[cfg(test)]
-use super::UnlockedVault;
-#[cfg(test)]
 use crate::model::store::Binding;
+#[cfg(test)]
+use crate::service::UnlockedVault;
 
 #[cfg(test)]
 mod tests {
@@ -14,6 +14,7 @@ mod tests {
     use crate::planning::goals::GoalDraft;
     use crate::service::StoreExtras;
     use crate::service::test_support::{amount, holding_of, income, store, usd};
+    use crate::usecases::sync::peer_sync;
 
     fn sub_account(vault: &mut UnlockedVault, name: &str, parent: &str) -> String {
         crate::usecases::money::stores::create_store_with(
@@ -172,7 +173,7 @@ mod tests {
     #[test]
     fn a_second_pass_changes_and_stamps_nothing() {
         let (_dir, mut vault) = crate::service::test_support::empty_vault();
-        vault.set_device("aaaaaaaa-one");
+        peer_sync::set_device(&mut vault, "aaaaaaaa-one");
         let bank = store(&mut vault, "bank", StoreKind::Bank, None);
         let one = sub_account(&mut vault, "one", &bank);
         let two = sub_account(&mut vault, "two", &bank);
@@ -222,7 +223,7 @@ mod tests {
             .map(|batch| batch.id.clone())
             .expect("a batch names the account");
         assert_eq!(parent_of(&right, &savings), None, "repaired");
-        let report = right.sync_undo(&batch).unwrap();
+        let report = peer_sync::sync_undo(&mut right, &batch).unwrap();
         assert!(report.restored > 0);
         assert_ne!(
             parent_of(&right, &savings),

@@ -2,28 +2,31 @@
 //! save, describing the records to another device, applying and undoing what
 //! comes back (docs/sync.md). The pure parts live in [`crate::sync`].
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use super::UnlockedVault;
-use crate::error::Result;
-use crate::ipc_contract::SyncCutReason;
-use crate::ipc_contract::security::SecurityLevel;
 #[cfg(test)]
 use crate::model::transaction::TxOrigin;
 pub use crate::sync::history::AppliedBatch;
-use crate::sync::manifest::Manifest;
 #[cfg(test)]
 use crate::sync::manifest_view::is_crypto_key;
-use crate::sync::{RecordState, Stamp, TrustedPeer};
+#[cfg(test)]
+use crate::usecases::sync::peer_sync;
 // What the test modules below reach through `use super::*`.
 #[cfg(test)]
 use {
-    crate::error::Error, crate::model::vault::VaultDoc, crate::sync::journal::SyncJournalOutcome,
-    crate::sync::view, serde_json::Value,
+    super::UnlockedVault,
+    crate::error::Error,
+    crate::ipc_contract::SyncCutReason,
+    crate::ipc_contract::security::SecurityLevel,
+    crate::model::vault::VaultDoc,
+    crate::sync::journal::SyncJournalOutcome,
+    crate::sync::manifest::Manifest,
+    crate::sync::view,
+    crate::sync::{RecordState, Stamp, TrustedPeer},
+    serde_json::Value,
+    std::collections::BTreeMap,
 };
 
 /// Told the keys of every local save, so a live session can send them on.
@@ -64,172 +67,6 @@ pub enum ExternalMerge {
     /// The copy does not open with this password or is another vault: the
     /// caller falls back to asking the user which side to keep.
     Unmergeable,
-}
-
-impl UnlockedVault {
-    // Delegates to `usecases::sync::peer_sync`; removed in T24.
-    #[cfg(test)]
-    pub(crate) fn compact_tombstones(&mut self) {
-        crate::usecases::sync::peer_sync::compact_tombstones(self)
-    } // removed in T24
-    #[cfg(test)]
-    pub(crate) fn open_copy(&self, remote: &[u8], password: &str) -> Result<UnlockedVault> {
-        crate::usecases::sync::peer_sync::open_copy(self, remote, password)
-    } // removed in T24
-    #[cfg(test)]
-    pub(crate) fn swap_doc(
-        &mut self,
-        doc: crate::model::vault::VaultDoc,
-    ) -> crate::model::vault::VaultDoc {
-        crate::usecases::sync::peer_sync::swap_doc(self, doc)
-    } // removed in T24
-    #[cfg(test)]
-    pub(crate) fn dedupe_generated(&mut self, batch_id: &str, carry: bool) -> Result<()> {
-        crate::usecases::sync::peer_sync::dedupe_generated(self, batch_id, carry)
-    } // removed in T24
-    pub(crate) fn stamp_past_known_peer(
-        &mut self,
-        device_id: &str,
-        public_key: Option<&str>,
-    ) -> Stamp {
-        crate::usecases::sync::peer_sync::stamp_past_known_peer(self, device_id, public_key)
-    } // removed in T24
-    pub(crate) fn notice_in_russian(&self) -> bool {
-        crate::usecases::sync::peer_sync::notice_in_russian(self)
-    } // removed in T24
-    pub(crate) fn doc_value(&mut self) -> Result<serde_json::Value> {
-        crate::usecases::sync::peer_sync::doc_value(self)
-    } // removed in T24
-    pub(crate) fn start_tracking(&mut self) -> Result<()> {
-        crate::usecases::sync::peer_sync::start_tracking(self)
-    } // removed in T24
-    pub(crate) fn track_changes(&mut self) -> Result<Vec<String>> {
-        crate::usecases::sync::peer_sync::track_changes(self)
-    } // removed in T24
-    pub(crate) fn sync_forget_log_record(&mut self, key: &str) -> Result<()> {
-        crate::usecases::sync::peer_sync::sync_forget_log_record(self, key)
-    } // removed in T24
-    pub(crate) fn apply_batch(
-        &mut self,
-        incoming: &BTreeMap<String, RecordState>,
-        peer: &PeerRef,
-        carry: bool,
-    ) -> Result<Option<AppliedBatch>> {
-        crate::usecases::sync::peer_sync::apply_batch(self, incoming, peer, carry)
-    } // removed in T24
-    pub(crate) fn remove_sync_backups(&self) {
-        crate::usecases::sync::peer_sync::remove_sync_backups(self)
-    } // removed in T24
-    pub fn sync_peers_to_send(&mut self) -> Result<Vec<TrustedPeer>> {
-        crate::usecases::sync::peer_sync::sync_peers_to_send(self)
-    } // removed in T24
-    pub fn set_device(&mut self, device_id: &str) {
-        crate::usecases::sync::peer_sync::set_device(self, device_id)
-    } // removed in T24
-    pub fn set_sync_tap(&mut self, tap: Option<Arc<dyn SyncTap>>) {
-        crate::usecases::sync::peer_sync::set_sync_tap(self, tap)
-    } // removed in T24
-    pub fn sync_state(&self) -> &crate::sync::SyncState {
-        crate::usecases::sync::peer_sync::sync_state(self)
-    } // removed in T24
-    pub fn sync_manifest_marked(
-        &mut self,
-        union_since_ms: Option<u64>,
-    ) -> Result<(Manifest, Stamp)> {
-        crate::usecases::sync::peer_sync::sync_manifest_marked(self, union_since_ms)
-    } // removed in T24
-    pub fn sync_manifest_marked_for(
-        &mut self,
-        union_since_ms: Option<u64>,
-        peer: SecurityLevel,
-    ) -> Result<(Manifest, Stamp, usize)> {
-        crate::usecases::sync::peer_sync::sync_manifest_marked_for(self, union_since_ms, peer)
-    } // removed in T24
-    pub fn sync_apply(
-        &mut self,
-        incoming: &BTreeMap<String, RecordState>,
-        peer: &PeerRef,
-    ) -> Result<Option<AppliedBatch>> {
-        crate::usecases::sync::peer_sync::sync_apply(self, incoming, peer)
-    } // removed in T24
-    pub fn probe_external(&self, remote: &[u8]) -> Result<crate::storage::SnapshotFormat> {
-        crate::usecases::sync::peer_sync::probe_external(self, remote)
-    } // removed in T24
-    pub fn merge_from(
-        &mut self,
-        other: &mut UnlockedVault,
-        name: &str,
-    ) -> Result<Option<AppliedBatch>> {
-        crate::usecases::sync::peer_sync::merge_from(self, other, name)
-    } // removed in T24
-    pub fn merge_external_copy(
-        &mut self,
-        remote: &[u8],
-        password: &str,
-        name: &str,
-    ) -> Result<ExternalMerge> {
-        crate::usecases::sync::peer_sync::merge_external_copy(self, remote, password, name)
-    } // removed in T24
-    pub fn take_external_copy(&mut self, remote: &[u8], password: &str) -> Result<ExternalMerge> {
-        crate::usecases::sync::peer_sync::take_external_copy(self, remote, password)
-    } // removed in T24
-    pub fn sync_record_transfer(
-        &mut self,
-        device_id: &str,
-        device_name: &str,
-        public_key: &str,
-        ru: bool,
-    ) -> Result<crate::model::notify::NoticeRecord> {
-        crate::usecases::sync::peer_sync::sync_record_transfer(
-            self,
-            device_id,
-            device_name,
-            public_key,
-            ru,
-        )
-    } // removed in T24
-    pub fn sync_undo(&mut self, batch_id: &str) -> Result<UndoReport> {
-        crate::usecases::sync::peer_sync::sync_undo(self, batch_id)
-    } // removed in T24
-    pub fn adopt_received_copy(&mut self) -> Result<()> {
-        crate::usecases::sync::peer_sync::adopt_received_copy(self)
-    } // removed in T24
-    pub fn sync_merge_peers(&mut self, remote: &[TrustedPeer]) -> Result<bool> {
-        crate::usecases::sync::peer_sync::sync_merge_peers(self, remote)
-    } // removed in T24
-    pub fn sync_pause_peer(&mut self, device_id: &str) -> Result<()> {
-        crate::usecases::sync::peer_sync::sync_pause_peer(self, device_id)
-    } // removed in T24
-    pub fn sync_resume_peer(&mut self, device_id: &str) -> Result<()> {
-        crate::usecases::sync::peer_sync::sync_resume_peer(self, device_id)
-    } // removed in T24
-    pub fn sync_is_paused(&self, device_id: &str) -> bool {
-        crate::usecases::sync::peer_sync::sync_is_paused(self, device_id)
-    } // removed in T24
-    pub fn sync_cut_by(&mut self, device_id: &str, reason: SyncCutReason) -> Result<bool> {
-        crate::usecases::sync::peer_sync::sync_cut_by(self, device_id, reason)
-    } // removed in T24
-    pub fn sync_clear_cut(&mut self, device_id: &str) -> Result<bool> {
-        crate::usecases::sync::peer_sync::sync_clear_cut(self, device_id)
-    } // removed in T24
-    pub fn sync_cut_reason(&self, device_id: &str) -> Option<SyncCutReason> {
-        crate::usecases::sync::peer_sync::sync_cut_reason(self, device_id)
-    } // removed in T24
-    pub fn sync_ack_tombstones(&mut self, device_id: &str, theirs: &Manifest) -> Result<()> {
-        crate::usecases::sync::peer_sync::sync_ack_tombstones(self, device_id, theirs)
-    } // removed in T24
-    pub fn sync_mark_synced(&mut self, device_id: &str, mark: Option<&Stamp>) -> Result<()> {
-        crate::usecases::sync::peer_sync::sync_mark_synced(self, device_id, mark)
-    } // removed in T24
-    pub fn sync_backup(&mut self) -> Result<PathBuf> {
-        crate::usecases::sync::peer_sync::sync_backup(self)
-    } // removed in T24
-    pub fn has_sync_backup(&self) -> bool {
-        crate::usecases::sync::peer_sync::has_sync_backup(self)
-    } // removed in T24
-    pub fn sync_restore_backup(&mut self) -> Result<()> {
-        crate::usecases::sync::peer_sync::sync_restore_backup(self)
-    } // removed in T24
 }
 
 #[cfg(test)]
@@ -315,12 +152,12 @@ mod tests {
     /// The same vault on two devices: a copy of one file, opened twice.
     pub(super) fn two_devices() -> (tempfile::TempDir, UnlockedVault, UnlockedVault) {
         let (dir, mut left) = empty_vault();
-        left.set_device("aaaaaaaa-left");
+        peer_sync::set_device(&mut left, "aaaaaaaa-left");
         left.persist().unwrap();
         let copy = dir.path().join("copy.wallet");
         std::fs::copy(&left.path, &copy).unwrap();
         let mut right = UnlockedVault::open(copy, "pw").unwrap();
-        right.set_device("bbbbbbbb-right");
+        peer_sync::set_device(&mut right, "bbbbbbbb-right");
         (dir, left, right)
     }
 
@@ -344,8 +181,8 @@ mod tests {
             crate::usecases::sync::read::sync_diff(right, &right_manifest, &left_manifest);
         let to_left = crate::usecases::sync::read::sync_records(right, &left_wants).unwrap();
         let to_right = crate::usecases::sync::read::sync_records(left, &right_wants).unwrap();
-        let applied_left = left.sync_apply(&to_left, &peer("right")).unwrap();
-        let applied_right = right.sync_apply(&to_right, &peer("left")).unwrap();
+        let applied_left = peer_sync::sync_apply(left, &to_left, &peer("right")).unwrap();
+        let applied_right = peer_sync::sync_apply(right, &to_right, &peer("left")).unwrap();
         (applied_left, applied_right)
     }
 
@@ -382,9 +219,9 @@ mod tests {
     fn an_edit_just_before_a_sync_call_is_pushed_in_the_same_session() {
         let (_dir, mut left, right) = two_devices();
         let tap = Arc::new(Announced::default());
-        left.set_sync_tap(Some(tap.clone()));
+        peer_sync::set_sync_tap(&mut left, Some(tap.clone()));
         left.set_write_behind(Some(Arc::new(NoWake)));
-        left.start_tracking().unwrap();
+        peer_sync::start_tracking(&mut left).unwrap();
         let cash = cash_id(&left);
         left.doc.stores[0].name = "Renamed in a hurry".into();
         left.persist().unwrap();
@@ -404,9 +241,9 @@ mod tests {
     fn set_sync_tap_still_receives_the_changed_keys() {
         let (_dir, mut left, right) = two_devices();
         let tap = Arc::new(Announced::default());
-        left.set_sync_tap(Some(tap.clone()));
+        peer_sync::set_sync_tap(&mut left, Some(tap.clone()));
         left.set_write_behind(Some(Arc::new(NoWake)));
-        left.start_tracking().unwrap();
+        peer_sync::start_tracking(&mut left).unwrap();
         let cash = cash_id(&left);
         let stamped_before = left.doc.sync.stamps.clone();
         left.doc.stores[0].name = "Renamed for the tap".into();
@@ -436,7 +273,7 @@ mod tests {
     fn a_write_now_batch_announces_its_dedupe_keys_right_after_persist() {
         let (_dir, mut left, mut right) = two_devices();
         let tap = Arc::new(Announced::default());
-        left.set_sync_tap(Some(tap.clone()));
+        peer_sync::set_sync_tap(&mut left, Some(tap.clone()));
         rent(&mut left, "first");
         pause();
         rent(&mut left, "second");
@@ -715,9 +552,8 @@ mod tests {
         crate::usecases::money::transactions::add_transaction(&mut right, income(&cash, "20", "Y"))
             .unwrap();
 
-        let outcome = left
-            .merge_external_copy(&file_bytes(&right), "pw", COPY)
-            .unwrap();
+        let outcome =
+            peer_sync::merge_external_copy(&mut left, &file_bytes(&right), "pw", COPY).unwrap();
         let ExternalMerge::Done(Some(batch)) = outcome else {
             panic!("expected an applied batch, got {outcome:?}");
         };
@@ -734,10 +570,9 @@ mod tests {
         let (_other_dir, other) = empty_vault();
         assert_ne!(left.doc.id, other.doc.id);
         let mut other = other;
-        assert!(left.merge_from(&mut other, COPY).is_err());
+        assert!(peer_sync::merge_from(&mut left, &mut other, COPY).is_err());
         assert_eq!(
-            left.merge_external_copy(&file_bytes(&other), "pw", COPY)
-                .unwrap(),
+            peer_sync::merge_external_copy(&mut left, &file_bytes(&other), "pw", COPY).unwrap(),
             ExternalMerge::Unmergeable
         );
     }
@@ -775,8 +610,7 @@ mod tests {
             .map(|batch| batch.id.clone())
             .collect();
         let journal_before = left.doc.sync.journal.len();
-        left.merge_external_copy(&file_bytes(&right), "pw", COPY)
-            .unwrap();
+        peer_sync::merge_external_copy(&mut left, &file_bytes(&right), "pw", COPY).unwrap();
 
         let batches_after: Vec<String> = left
             .doc
@@ -819,8 +653,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            left.merge_external_copy(&file_bytes(&right), "not-the-password", COPY)
-                .unwrap(),
+            peer_sync::merge_external_copy(
+                &mut left,
+                &file_bytes(&right),
+                "not-the-password",
+                COPY
+            )
+            .unwrap(),
             ExternalMerge::Unmergeable
         );
         assert!(comments(&left).is_empty());
@@ -842,7 +681,7 @@ mod tests {
         left.persist().unwrap();
         let local_sync = left.doc.sync.clone();
 
-        let outcome = left.take_external_copy(&file_bytes(&right), "pw").unwrap();
+        let outcome = peer_sync::take_external_copy(&mut left, &file_bytes(&right), "pw").unwrap();
         assert_eq!(outcome, ExternalMerge::Done(None));
         assert_eq!(comments(&left), ["theirs"]);
         assert_eq!(left.doc.sync.paused, local_sync.paused);
@@ -908,11 +747,14 @@ mod tests {
         set_comment(&mut right, "copy edit");
         let remote_stamps = right.doc.sync.stamps[&key].clone();
 
-        left.take_external_copy(&file_bytes(&right), "pw").unwrap();
+        peer_sync::take_external_copy(&mut left, &file_bytes(&right), "pw").unwrap();
         assert_eq!(comments(&left), ["copy edit"]);
         assert_eq!(left.doc.sync.stamps[&key], remote_stamps);
         // The older edit must not win over the pulled value.
-        assert_eq!(left.sync_apply(&older, &peer("third")).unwrap(), None);
+        assert_eq!(
+            peer_sync::sync_apply(&mut left, &older, &peer("third")).unwrap(),
+            None
+        );
         assert_eq!(comments(&left), ["copy edit"]);
     }
 
@@ -925,11 +767,14 @@ mod tests {
         let id = right.doc.transactions[0].meta().id.clone();
         crate::usecases::money::transactions::delete_transaction(&mut right, &id).unwrap();
 
-        left.take_external_copy(&file_bytes(&right), "pw").unwrap();
+        peer_sync::take_external_copy(&mut left, &file_bytes(&right), "pw").unwrap();
         assert!(left.doc.transactions.is_empty());
         assert!(left.doc.sync.tombstones.contains_key(&key));
         // A peer that still offers the old record does not bring it back.
-        assert_eq!(left.sync_apply(&alive, &peer("third")).unwrap(), None);
+        assert_eq!(
+            peer_sync::sync_apply(&mut left, &alive, &peer("third")).unwrap(),
+            None
+        );
         assert!(left.doc.transactions.is_empty());
     }
 
@@ -938,7 +783,7 @@ mod tests {
         let (_dir, mut left, _right) = two_devices();
         let (_other_dir, other) = empty_vault();
         assert_eq!(
-            left.take_external_copy(&file_bytes(&other), "pw").unwrap(),
+            peer_sync::take_external_copy(&mut left, &file_bytes(&other), "pw").unwrap(),
             ExternalMerge::Unmergeable
         );
     }
@@ -996,7 +841,7 @@ mod tests {
         let (applied, _) = exchange(&mut left, &mut right);
         let batch = applied.expect("left received prices");
         assert!(left.doc.price_cache.len() < 800);
-        let report = left.sync_undo(&batch.id).unwrap();
+        let report = peer_sync::sync_undo(&mut left, &batch.id).unwrap();
         // Cached points are a union: it has no deletion, so undo lists them
         // as skipped instead of removing what a peer would send back.
         assert_eq!(report.restored, 0);
@@ -1103,7 +948,7 @@ mod tests {
         assert_eq!(line.batch_id.as_deref(), Some(batch.id.as_str()));
         assert_eq!(line.outcome, SyncJournalOutcome::Applied);
 
-        let report = left.sync_undo(&batch.id).unwrap();
+        let report = peer_sync::sync_undo(&mut left, &batch.id).unwrap();
         assert_eq!(report.restored, 2);
         assert!(left.doc.transactions.is_empty());
         assert_eq!(left.doc.stores[0].name, "Cash");
@@ -1112,7 +957,7 @@ mod tests {
                 .undone_at
                 .is_some()
         );
-        assert!(left.sync_undo(&batch.id).is_err());
+        assert!(peer_sync::sync_undo(&mut left, &batch.id).is_err());
 
         settle(&mut left, &mut right);
         assert!(right.doc.transactions.is_empty());
@@ -1145,7 +990,7 @@ mod tests {
             topup.meta.comment = "kept and edited".into();
         }
         left.persist().unwrap();
-        let report = left.sync_undo(&batch.id).unwrap();
+        let report = peer_sync::sync_undo(&mut left, &batch.id).unwrap();
         assert_eq!(report.restored, 1);
         // The readable label of the record: its comment, date and amount.
         assert_eq!(report.skipped.len(), 1);
@@ -1216,8 +1061,8 @@ mod tests {
         let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
         let to_left = crate::usecases::sync::read::sync_records(right, &left_wants).unwrap();
         let to_right = crate::usecases::sync::read::sync_records(left, &right_wants).unwrap();
-        let applied_left = left.sync_apply(&to_left, &peer("right")).unwrap();
-        let applied_right = right.apply_batch(&to_right, &peer("left"), false).unwrap();
+        let applied_left = peer_sync::sync_apply(left, &to_left, &peer("right")).unwrap();
+        let applied_right = peer_sync::apply_batch(right, &to_right, &peer("left"), false).unwrap();
         applied_left.is_some() || applied_right.is_some()
     }
 
@@ -1294,7 +1139,7 @@ mod tests {
             }
         }
         left.doc.sync.stamps.clear();
-        left.dedupe_generated("no-batch", true).unwrap();
+        peer_sync::dedupe_generated(&mut left, "no-batch", true).unwrap();
         assert_eq!(
             left.doc.transactions.len(),
             4,
@@ -1316,7 +1161,7 @@ mod tests {
         let (applied_left, _) = exchange(&mut left, &mut right);
         let batch = applied_left.expect("left applied the store change");
         assert_eq!(comments(&left), vec!["second, edited"]);
-        let report = left.sync_undo(&batch.id).unwrap();
+        let report = peer_sync::sync_undo(&mut left, &batch.id).unwrap();
         assert!(report.skipped.is_empty(), "{:?}", report.skipped);
         assert_eq!(comments(&left), vec!["first", "second, edited"]);
         // Dedupe runs again with the next batch, but the undone copy carries
@@ -1336,7 +1181,7 @@ mod tests {
         let (applied_left, _) = exchange(&mut left, &mut right);
         let batch = applied_left.expect("left took the earlier copy");
         assert_eq!(left.doc.transactions.len(), 1);
-        left.sync_undo(&batch.id).unwrap();
+        peer_sync::sync_undo(&mut left, &batch.id).unwrap();
         assert_eq!(left.doc.transactions.len(), 1, "undo left neither copy");
     }
 
@@ -1467,7 +1312,7 @@ mod tests {
             },
         )]
         .into();
-        left.sync_apply(&incoming, &peer("right"))
+        peer_sync::sync_apply(&mut left, &incoming, &peer("right"))
             .unwrap()
             .expect("taken");
         assert!(left.doc.sync.tombstones.contains_key(&key));
@@ -1491,7 +1336,7 @@ mod tests {
             .tombstones
             .insert(key.clone(), Stamp::new(old, 0, "bbbbbbbb"));
         left.doc.sync.tombstones_seen.insert(key.clone(), old);
-        left.compact_tombstones();
+        peer_sync::compact_tombstones(&mut left);
         assert!(!left.doc.sync.tombstones.contains_key(&key));
         assert!(!left.doc.sync.tombstones_seen.contains_key(&key));
     }
@@ -1581,7 +1426,7 @@ mod tests {
         for field in ["dashboard_period", "pinned", "savings_rate"] {
             stamps.fields.insert(field.into(), later.clone());
         }
-        right.sync_apply(&records, &peer("left")).unwrap();
+        peer_sync::sync_apply(&mut right, &records, &peer("left")).unwrap();
         assert_eq!(
             right.doc.settings.savings_rate,
             crate::Amount::parse("0.33").unwrap()
@@ -1600,7 +1445,7 @@ mod tests {
         forged.clear();
         forged.insert("stores:someone-else".into(), state);
         assert!(matches!(
-            left.sync_apply(&forged, &peer("right")),
+            peer_sync::sync_apply(&mut left, &forged, &peer("right")),
             Err(Error::InvalidInput(_))
         ));
         forged.clear();
@@ -1623,7 +1468,11 @@ mod tests {
         .into();
         // The record is skipped (told in the journal), not an error that ends
         // the session; the data stays as it was.
-        assert!(left.sync_apply(&broken, &peer("right")).unwrap().is_none());
+        assert!(
+            peer_sync::sync_apply(&mut left, &broken, &peer("right"))
+                .unwrap()
+                .is_none()
+        );
         let mut after = left.doc.clone();
         after.sync = before.sync.clone();
         assert_eq!(after, before);
@@ -1637,7 +1486,7 @@ mod tests {
         edited.stores[0].name = "Edited".into();
         edited.sync = Default::default();
         left.replace_doc(edited).unwrap();
-        assert_eq!(left.sync_state().peers.len(), 1);
+        assert_eq!(peer_sync::sync_state(&left).peers.len(), 1);
         settle(&mut left, &mut right);
         assert_eq!(right.doc.stores[0].name, "Edited");
     }
@@ -1646,16 +1495,14 @@ mod tests {
     fn forgetting_a_device_reaches_the_others() {
         let (_dir, mut left, mut right) = two_devices();
         crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-        right
-            .sync_merge_peers(&left.sync_state().peers.clone())
+        peer_sync::sync_merge_peers(&mut right, &peer_sync::sync_state(&left).peers.clone())
             .unwrap();
-        assert!(right.sync_state().trusted("cc").is_some());
+        assert!(peer_sync::sync_state(&right).trusted("cc").is_some());
         crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
-        right
-            .sync_merge_peers(&left.sync_state().peers.clone())
+        peer_sync::sync_merge_peers(&mut right, &peer_sync::sync_state(&left).peers.clone())
             .unwrap();
-        assert!(right.sync_state().trusted("cc").is_none());
-        assert!(right.sync_state().is_revoked("cc"));
+        assert!(peer_sync::sync_state(&right).trusted("cc").is_none());
+        assert!(peer_sync::sync_state(&right).is_revoked("cc"));
     }
 
     #[test]
@@ -1663,10 +1510,10 @@ mod tests {
         let (_dir, mut left, _right) = two_devices();
         crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
         crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
-        assert!(left.sync_state().is_revoked("cc"));
+        assert!(peer_sync::sync_state(&left).is_revoked("cc"));
         crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-        assert!(!left.sync_state().is_revoked("cc"));
-        assert!(left.sync_state().trusted("cc").is_some());
+        assert!(!peer_sync::sync_state(&left).is_revoked("cc"));
+        assert!(peer_sync::sync_state(&left).trusted("cc").is_some());
     }
 
     #[test]
@@ -1677,9 +1524,12 @@ mod tests {
         crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-old").unwrap();
         crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-new", "Tablet", "cc")
             .unwrap();
-        assert!(!left.sync_state().is_revoked("cc"));
+        assert!(!peer_sync::sync_state(&left).is_revoked("cc"));
         assert_eq!(
-            left.sync_state().trusted("cc").unwrap().device_id,
+            peer_sync::sync_state(&left)
+                .trusted("cc")
+                .unwrap()
+                .device_id,
             "dev-new"
         );
     }
@@ -1689,13 +1539,13 @@ mod tests {
         let (_dir, mut left, mut right) = two_devices();
         crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
         crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
-        let revoked = left.sync_state().peers.clone();
-        right.sync_merge_peers(&revoked).unwrap();
+        let revoked = peer_sync::sync_state(&left).peers.clone();
+        peer_sync::sync_merge_peers(&mut right, &revoked).unwrap();
         crate::usecases::sync::trust::sync_trust_peer(&mut right, "dev-c2", "Tablet", "cc")
             .unwrap();
-        right.sync_merge_peers(&revoked).unwrap();
-        assert!(right.sync_state().trusted("cc").is_some());
-        assert!(!right.sync_state().is_revoked("cc"));
+        peer_sync::sync_merge_peers(&mut right, &revoked).unwrap();
+        assert!(peer_sync::sync_state(&right).trusted("cc").is_some());
+        assert!(!peer_sync::sync_state(&right).is_revoked("cc"));
     }
 
     #[test]
@@ -1709,10 +1559,10 @@ mod tests {
             stamp: Stamp::new(ahead, 0, "remote"),
             ..TrustedPeer::default()
         };
-        assert!(left.sync_merge_peers(&[revoked]).unwrap());
-        assert!(left.sync_state().is_revoked("cc"));
+        assert!(peer_sync::sync_merge_peers(&mut left, &[revoked]).unwrap());
+        assert!(peer_sync::sync_state(&left).is_revoked("cc"));
         crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-        assert!(left.sync_state().trusted("cc").is_some());
+        assert!(peer_sync::sync_state(&left).trusted("cc").is_some());
     }
 
     #[test]
@@ -1724,8 +1574,8 @@ mod tests {
         crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-new", "Tablet", "cc")
             .unwrap();
         crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-new").unwrap();
-        assert!(left.sync_state().is_revoked("cc"));
-        assert!(left.sync_state().trusted("cc").is_none());
+        assert!(peer_sync::sync_state(&left).is_revoked("cc"));
+        assert!(peer_sync::sync_state(&left).trusted("cc").is_none());
     }
 
     #[test]
@@ -1737,10 +1587,10 @@ mod tests {
             income(&cash, "20", "theirs"),
         )
         .unwrap();
-        left.sync_backup().unwrap();
+        peer_sync::sync_backup(&mut left).unwrap();
         exchange(&mut left, &mut right);
         assert_eq!(comments(&left), vec!["theirs"]);
-        left.sync_restore_backup().unwrap();
+        peer_sync::sync_restore_backup(&mut left).unwrap();
         assert!(left.doc.transactions.is_empty());
         settle(&mut left, &mut right);
         assert!(right.doc.transactions.is_empty());
@@ -1754,10 +1604,10 @@ mod tests {
         let path = vault.path.clone();
         drop(vault);
         let mut reopened = UnlockedVault::open(path, "pw").unwrap();
-        assert!(reopened.sync_state().stamps.is_empty());
+        assert!(peer_sync::sync_state(&reopened).stamps.is_empty());
         reopened.doc.stores[0].name = "X".into();
         reopened.persist().unwrap();
-        assert_eq!(reopened.sync_state().stamps.len(), 1);
+        assert_eq!(peer_sync::sync_state(&reopened).stamps.len(), 1);
         drop(dir);
     }
 
@@ -1768,9 +1618,9 @@ mod tests {
         assert!(matches!(vault.check_password("pw "), Err(Error::Secret)));
         assert!(matches!(vault.check_password(""), Err(Error::Secret)));
 
-        let notice = vault
-            .sync_record_transfer("phone", "Сочный Апельсин", "ab", true)
-            .unwrap();
+        let notice =
+            peer_sync::sync_record_transfer(&mut vault, "phone", "Сочный Апельсин", "ab", true)
+                .unwrap();
         assert_eq!(
             notice.category,
             crate::model::notify::NoticeCategory::Security
@@ -1785,7 +1635,7 @@ mod tests {
                 .any(|record| record.key == notice.key)
         );
         // ...the new device may sync...
-        assert!(vault.sync_state().trusted("ab").is_some());
+        assert!(peer_sync::sync_state(&vault).trusted("ab").is_some());
         // ...and the history says where the vault went.
         let history = crate::sync::history::history(&vault.doc);
         assert_eq!(
@@ -1796,21 +1646,21 @@ mod tests {
     #[test]
     fn a_pause_survives_a_reopen_and_is_never_a_peer_field() {
         let (dir, mut vault) = empty_vault();
-        assert!(!vault.sync_is_paused("dev-a"));
-        vault.sync_pause_peer("dev-a").unwrap();
+        assert!(!peer_sync::sync_is_paused(&vault, "dev-a"));
+        peer_sync::sync_pause_peer(&mut vault, "dev-a").unwrap();
         // Pausing twice changes nothing.
-        vault.sync_pause_peer("dev-a").unwrap();
-        assert!(vault.sync_is_paused("dev-a"));
-        assert!(!vault.sync_is_paused("dev-b"));
+        peer_sync::sync_pause_peer(&mut vault, "dev-a").unwrap();
+        assert!(peer_sync::sync_is_paused(&vault, "dev-a"));
+        assert!(!peer_sync::sync_is_paused(&vault, "dev-b"));
         let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
-        assert!(reopened.sync_is_paused("dev-a"));
+        assert!(peer_sync::sync_is_paused(&reopened, "dev-a"));
         // The list that goes to other devices does not carry it.
-        assert!(reopened.sync_state().peers.is_empty());
+        assert!(peer_sync::sync_state(&reopened).peers.is_empty());
         let mut reopened = reopened;
-        reopened.sync_resume_peer("dev-a").unwrap();
-        assert!(!reopened.sync_is_paused("dev-a"));
+        peer_sync::sync_resume_peer(&mut reopened, "dev-a").unwrap();
+        assert!(!peer_sync::sync_is_paused(&reopened, "dev-a"));
         let again = UnlockedVault::open(reopened.path.clone(), "pw").unwrap();
-        assert!(!again.sync_is_paused("dev-a"));
+        assert!(!peer_sync::sync_is_paused(&again, "dev-a"));
         drop(dir);
     }
 
@@ -1818,63 +1668,57 @@ mod tests {
     fn forgetting_a_device_lifts_its_pause() {
         let (_dir, mut vault) = empty_vault();
         crate::usecases::sync::trust::sync_trust_peer(&mut vault, "dev-a", "A", "key-a").unwrap();
-        vault.sync_pause_peer("dev-a").unwrap();
+        peer_sync::sync_pause_peer(&mut vault, "dev-a").unwrap();
         crate::usecases::sync::trust::sync_forget_peer(&mut vault, "dev-a").unwrap();
-        assert!(!vault.sync_is_paused("dev-a"));
+        assert!(!peer_sync::sync_is_paused(&vault, "dev-a"));
     }
 
     #[test]
     fn merging_a_peer_list_leaves_the_pause_alone() {
         let (_dir, mut vault) = empty_vault();
         crate::usecases::sync::trust::sync_trust_peer(&mut vault, "dev-a", "A", "key-a").unwrap();
-        vault.sync_pause_peer("dev-a").unwrap();
-        let remote = vault.sync_state().peers.clone();
-        vault.sync_merge_peers(&remote).unwrap();
-        assert!(vault.sync_is_paused("dev-a"));
+        peer_sync::sync_pause_peer(&mut vault, "dev-a").unwrap();
+        let remote = peer_sync::sync_state(&vault).peers.clone();
+        peer_sync::sync_merge_peers(&mut vault, &remote).unwrap();
+        assert!(peer_sync::sync_is_paused(&vault, "dev-a"));
     }
 
     #[test]
     fn cut_by_is_saved_once_survives_a_reopen_and_is_never_a_peer_field() {
         let (dir, mut vault) = empty_vault();
-        assert_eq!(vault.sync_cut_reason("dev-a"), None);
-        assert!(vault.sync_cut_by("dev-a", SyncCutReason::Paused).unwrap());
+        assert_eq!(peer_sync::sync_cut_reason(&vault, "dev-a"), None);
+        assert!(peer_sync::sync_cut_by(&mut vault, "dev-a", SyncCutReason::Paused).unwrap());
         // The same news again changes nothing; another reason does.
-        assert!(!vault.sync_cut_by("dev-a", SyncCutReason::Paused).unwrap());
+        assert!(!peer_sync::sync_cut_by(&mut vault, "dev-a", SyncCutReason::Paused).unwrap());
         let reopened = UnlockedVault::open(vault.path.clone(), "pw").unwrap();
         assert_eq!(
-            reopened.sync_cut_reason("dev-a"),
+            peer_sync::sync_cut_reason(&reopened, "dev-a"),
             Some(SyncCutReason::Paused)
         );
-        assert!(reopened.sync_state().peers.is_empty());
+        assert!(peer_sync::sync_state(&reopened).peers.is_empty());
         let mut reopened = reopened;
-        assert!(
-            reopened
-                .sync_cut_by("dev-a", SyncCutReason::Forgotten)
-                .unwrap()
-        );
+        assert!(peer_sync::sync_cut_by(&mut reopened, "dev-a", SyncCutReason::Forgotten).unwrap());
         // A merged list leaves it alone.
-        let remote = reopened.sync_state().peers.clone();
-        reopened.sync_merge_peers(&remote).unwrap();
+        let remote = peer_sync::sync_state(&reopened).peers.clone();
+        peer_sync::sync_merge_peers(&mut reopened, &remote).unwrap();
         assert_eq!(
-            reopened.sync_cut_reason("dev-a"),
+            peer_sync::sync_cut_reason(&reopened, "dev-a"),
             Some(SyncCutReason::Forgotten)
         );
-        assert!(reopened.sync_clear_cut("dev-a").unwrap());
-        assert!(!reopened.sync_clear_cut("dev-a").unwrap());
+        assert!(peer_sync::sync_clear_cut(&mut reopened, "dev-a").unwrap());
+        assert!(!peer_sync::sync_clear_cut(&mut reopened, "dev-a").unwrap());
         drop(dir);
     }
 
     #[test]
     fn pairing_or_forgetting_a_device_clears_what_it_told_us() {
         let (_dir, mut vault) = empty_vault();
-        vault
-            .sync_cut_by("dev-a", SyncCutReason::Forgotten)
-            .unwrap();
+        peer_sync::sync_cut_by(&mut vault, "dev-a", SyncCutReason::Forgotten).unwrap();
         crate::usecases::sync::trust::sync_trust_peer(&mut vault, "dev-a", "A", "key-a").unwrap();
-        assert_eq!(vault.sync_cut_reason("dev-a"), None);
-        vault.sync_cut_by("dev-a", SyncCutReason::Paused).unwrap();
+        assert_eq!(peer_sync::sync_cut_reason(&vault, "dev-a"), None);
+        peer_sync::sync_cut_by(&mut vault, "dev-a", SyncCutReason::Paused).unwrap();
         crate::usecases::sync::trust::sync_forget_peer(&mut vault, "dev-a").unwrap();
-        assert_eq!(vault.sync_cut_reason("dev-a"), None);
+        assert_eq!(peer_sync::sync_cut_reason(&vault, "dev-a"), None);
     }
 }
 
@@ -2005,8 +1849,8 @@ mod level_pair_tests {
 
         let (kept, dropped) = right.sync_admit(to_right);
         assert_eq!(dropped, 0, "nothing should arrive that has to be dropped");
-        right.sync_apply(&kept, &peer("left")).unwrap();
-        left.sync_apply(&to_left, &peer("right")).unwrap();
+        peer_sync::sync_apply(&mut right, &kept, &peer("left")).unwrap();
+        peer_sync::sync_apply(&mut left, &to_left, &peer("right")).unwrap();
 
         assert!(has_store(&right, "FromLeft"));
         assert!(has_store(&left, "FromRight"));
@@ -2033,7 +1877,7 @@ mod level_pair_tests {
                 .unwrap();
         let (kept, dropped) = right.sync_admit(records);
         assert_eq!(dropped, 0);
-        right.sync_apply(&kept, &peer("left")).unwrap();
+        peer_sync::sync_apply(&mut right, &kept, &peer("left")).unwrap();
         assert_eq!(right.doc.crypto_accounts.len(), 1);
     }
 
@@ -2052,13 +1896,13 @@ mod level_pair_tests {
         assert!(!crypto_keys(sent.keys()).is_empty());
 
         assert!(matches!(
-            right.sync_apply(&sent, &peer("left")),
+            peer_sync::sync_apply(&mut right, &sent, &peer("left")),
             Err(Error::SecurityLevelRequired)
         ));
         let (kept, dropped) = right.sync_admit(sent);
         assert!(dropped > 0);
         assert!(crypto_keys(kept.keys()).is_empty());
-        right.sync_apply(&kept, &peer("left")).unwrap();
+        peer_sync::sync_apply(&mut right, &kept, &peer("left")).unwrap();
         assert!(has_store(&right, "FromLeft"));
         assert!(right.doc.crypto_accounts.is_empty());
     }

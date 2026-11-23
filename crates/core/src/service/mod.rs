@@ -207,7 +207,7 @@ impl UnlockedVault {
             session: crate::kernel::session::Session::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
         };
-        vault.start_tracking()?;
+        crate::usecases::sync::peer_sync::start_tracking(&mut vault)?;
         crate::usecases::money::stores::ensure_cash_wallet(&mut vault, "Cash")?;
         Ok(vault)
     }
@@ -307,12 +307,12 @@ impl UnlockedVault {
             device_keys: exchange_keys::DeviceKeys::default(),
         };
         if let Some(device_id) = device_id {
-            vault.set_device(device_id);
+            crate::usecases::sync::peer_sync::set_device(&mut vault, device_id);
         }
         // Before tracking starts, so the opening entries of envelopes (the
         // same on every device) are never stamped as an edit.
         let envelopes_settled = crate::usecases::household::envelopes::settle_envelopes(&mut vault);
-        vault.start_tracking()?;
+        crate::usecases::sync::peer_sync::start_tracking(&mut vault)?;
         // A merge left the tree or a reference broken in a copy that was
         // saved before the invariant pass existed: fixed once, stamped as an
         // edit of this device.
@@ -659,6 +659,7 @@ mod tests {
     use super::*;
     use crate::model::transaction::{AccountRef, KindDetails, TopupTx};
     use crate::storage::SnapshotFormat;
+    use crate::usecases::sync::peer_sync;
     use tempfile::tempdir;
 
     #[test]
@@ -1900,11 +1901,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("pw.wallet");
         let mut vault = UnlockedVault::create(path.clone(), "old").unwrap();
-        vault.sync_backup().unwrap();
-        vault.sync_backup().unwrap();
-        assert!(vault.has_sync_backup());
+        peer_sync::sync_backup(&mut vault).unwrap();
+        peer_sync::sync_backup(&mut vault).unwrap();
+        assert!(peer_sync::has_sync_backup(&vault));
         vault.change_password("old", "new").unwrap();
-        assert!(vault.has_sync_backup());
+        assert!(peer_sync::has_sync_backup(&vault));
         let copies: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
             .filter_map(|entry| entry.ok())
@@ -2416,7 +2417,7 @@ mod tests {
     fn open_copy_and_probe_read_a_container_1_copy_by_its_own_container() {
         let (_dir, vault) = setup();
         for (name, bytes) in V4_FIXTURES {
-            let copy = vault.open_copy(bytes, V4_PASSWORD).unwrap();
+            let copy = peer_sync::open_copy(&vault, bytes, V4_PASSWORD).unwrap();
             assert_eq!(copy.doc.version, crate::VAULT_FORMAT_VERSION, "{name}");
             let (_, _, key) =
                 crate::crypto::open_bytes_keyed(bytes, V4_PASSWORD.as_bytes()).unwrap();
@@ -2430,7 +2431,7 @@ mod tests {
         let old_file =
             crate::crypto::seal_plain_in_container(1, fmt, &serde_json::to_vec(&old).unwrap());
         assert!(matches!(
-            vault.open_copy(&old_file, ""),
+            peer_sync::open_copy(&vault, &old_file, ""),
             Err(crate::Error::LegacyVault(_))
         ));
         assert!(matches!(

@@ -376,7 +376,7 @@ fn undoing_the_batch_brings_the_removed_link_back() {
     let (_, applied) = exchange(&mut left, &mut right);
     let batch = applied.expect("right took something").id;
     assert_eq!(links_of(&right, &tx_id).len(), 1, "repaired");
-    assert!(right.sync_undo(&batch).unwrap().restored > 0);
+    assert!(peer_sync::sync_undo(&mut right, &batch).unwrap().restored > 0);
     let links = links_of(&right, &tx_id);
     assert_eq!(links.len(), 1);
     assert_eq!(links[0].0, second, "the repair went with the batch");

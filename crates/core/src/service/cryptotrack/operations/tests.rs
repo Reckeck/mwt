@@ -1,3 +1,4 @@
+use crate::usecases::sync::peer_sync;
 use chrono::NaiveDate;
 
 use crate::cryptotrack::engine::ids;
@@ -885,7 +886,7 @@ fn clearing_a_contract_rule_leaves_a_tombstone() {
         CryptoDirection::In,
         "1",
     )]);
-    vault.set_device("aaaaaaaa-rule");
+    peer_sync::set_device(&mut vault, "aaaaaaaa-rule");
     vault.set_write_behind(Some(std::sync::Arc::new(NoWake)));
     crate::usecases::cryptotrack::operations::crypto_set_override(
         &mut vault,

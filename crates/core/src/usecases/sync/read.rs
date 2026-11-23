@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use super::peer_sync;
 use crate::error::Result;
 use crate::ipc_contract::security::SecurityLevel;
 use crate::ipc_contract::{AfterApply, StoreBalanceChange};
@@ -29,8 +30,8 @@ pub fn sync_manifest_for(
     union_since_ms: Option<u64>,
     peer: SecurityLevel,
 ) -> Result<(Manifest, usize)> {
-    vault.track_changes()?;
-    let value = vault.doc_value()?;
+    peer_sync::track_changes(vault)?;
+    let value = peer_sync::doc_value(vault)?;
     let records = view::records(&value);
     let keeps_fx = crate::money::rates::fx_history_filter(&vault.books());
     Ok(manifest_for(
@@ -72,8 +73,8 @@ pub fn sync_records_for(
     keys: &[String],
     peer: SecurityLevel,
 ) -> Result<BTreeMap<String, RecordState>> {
-    vault.track_changes()?;
-    let value = vault.doc_value()?;
+    peer_sync::track_changes(vault)?;
+    let value = peer_sync::doc_value(vault)?;
     let records = view::records(&value);
     Ok(records_for(&vault.doc, &records, keys, peer))
 }
@@ -95,8 +96,8 @@ pub fn sync_preview_from(
 ) -> Result<SyncSummary> {
     check_incoming(incoming)?;
     vault.sync_check_level(incoming)?;
-    vault.track_changes()?;
-    let value = vault.doc_value()?;
+    peer_sync::track_changes(vault)?;
+    let value = peer_sync::doc_value(vault)?;
     let records = view::records(&value);
     Ok(preview_summary(&vault.doc, &records, incoming, device_id))
 }
@@ -110,7 +111,7 @@ pub fn sync_preview_after(
 ) -> Result<Option<AfterApply>> {
     check_incoming(incoming)?;
     vault.sync_check_level(incoming)?;
-    vault.track_changes()?;
+    peer_sync::track_changes(vault)?;
     let mut copy = vault.sandbox();
     let peer = PeerRef {
         device_id: String::new(),
@@ -118,7 +119,7 @@ pub fn sync_preview_after(
     };
     // A sandbox never persists, mirrors or announces: the copy takes the
     // batch exactly as the real apply would and is dropped.
-    if copy.apply_batch(incoming, &peer, true)?.is_none() {
+    if peer_sync::apply_batch(&mut copy, incoming, &peer, true)?.is_none() {
         return Ok(None);
     }
     let (currency, fx) = crate::usecases::money::portfolio::base_and_fx(vault);

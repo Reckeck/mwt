@@ -6,6 +6,7 @@ use super::*;
 use crate::household::contacts::ContactDraft;
 use crate::model::contact::ContactKind;
 use crate::sync::stamp::{MAX_FUTURE_MS, now_ms};
+use crate::usecases::sync::peer_sync;
 
 const DAY_MS: u64 = 24 * 3600 * 1000;
 
@@ -48,7 +49,7 @@ fn a_future_stamp_does_not_poison_the_clock() {
     assert!(right.doc.sync.stamps[&key].created.wall <= limit());
     // ... but the clock did not follow it.
     crate::usecases::sync::trust::sync_trust_peer(&mut right, "dev-c", "Tablet", "cc").unwrap();
-    let stamp = &right.sync_state().trusted("cc").unwrap().stamp;
+    let stamp = &peer_sync::sync_state(&right).trusted("cc").unwrap().stamp;
     assert!(stamp.wall <= limit(), "clock followed a future stamp");
 }
 
@@ -56,15 +57,13 @@ fn a_future_stamp_does_not_poison_the_clock() {
 fn a_revocation_after_a_future_record_reaches_the_other_device() {
     let (_dir, mut left, mut right) = two_devices();
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-    right
-        .sync_merge_peers(&left.sync_state().peers.clone())
-        .unwrap();
+    peer_sync::sync_merge_peers(&mut right, &peer_sync::sync_state(&left).peers.clone()).unwrap();
     poisoned_contact(&mut right);
     exchange(&mut left, &mut right);
     crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
-    let sent = left.sync_peers_to_send().unwrap();
-    right.sync_merge_peers(&sent).unwrap();
-    assert!(right.sync_state().is_revoked("cc"));
+    let sent = peer_sync::sync_peers_to_send(&mut left).unwrap();
+    peer_sync::sync_merge_peers(&mut right, &sent).unwrap();
+    assert!(peer_sync::sync_state(&right).is_revoked("cc"));
 }
 
 #[test]
@@ -74,9 +73,12 @@ fn a_poisoned_vault_reopens_with_a_bounded_clock() {
     let path = left.path.clone();
     drop(left);
     let mut reopened = UnlockedVault::open(path, "pw").unwrap();
-    reopened.set_device("aaaaaaaa-left");
+    peer_sync::set_device(&mut reopened, "aaaaaaaa-left");
     crate::usecases::sync::trust::sync_trust_peer(&mut reopened, "dev-c", "Tablet", "cc").unwrap();
-    let stamp = &reopened.sync_state().trusted("cc").unwrap().stamp;
+    let stamp = &peer_sync::sync_state(&reopened)
+        .trusted("cc")
+        .unwrap()
+        .stamp;
     assert!(stamp.wall <= limit(), "reopened clock is poisoned");
 }
 
@@ -84,32 +86,30 @@ fn a_poisoned_vault_reopens_with_a_bounded_clock() {
 fn a_poisoned_own_revocation_is_restamped_before_sending() {
     let (_dir, mut left, mut right) = two_devices();
     crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
-    right
-        .sync_merge_peers(&left.sync_state().peers.clone())
-        .unwrap();
+    peer_sync::sync_merge_peers(&mut right, &peer_sync::sync_state(&left).peers.clone()).unwrap();
     crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
     let far = Stamp::new(now_ms() + 30 * DAY_MS, 0, "aaaaaaaa");
     let entry = &mut left.doc.sync.peers[0];
     entry.stamp = far.clone();
     entry.revoked = Some(far);
-    let sent = left.sync_peers_to_send().unwrap();
+    let sent = peer_sync::sync_peers_to_send(&mut left).unwrap();
     assert!(sent[0].stamp.wall <= limit());
     assert!(sent[0].revoked.is_some());
-    right.sync_merge_peers(&sent).unwrap();
-    assert!(right.sync_state().is_revoked("cc"));
+    peer_sync::sync_merge_peers(&mut right, &sent).unwrap();
+    assert!(peer_sync::sync_state(&right).is_revoked("cc"));
 }
 
 #[test]
 fn a_newer_revocation_beats_an_older_trust_from_a_third_device() {
     let (_dir, mut third, mut right) = two_devices();
     crate::usecases::sync::trust::sync_trust_peer(&mut right, "dev-c", "Tablet", "cc").unwrap();
-    let older_trust = right.sync_state().peers.clone();
+    let older_trust = peer_sync::sync_state(&right).peers.clone();
     crate::usecases::sync::trust::sync_forget_peer(&mut right, "dev-c").unwrap();
-    let newer_revocation = right.sync_state().peers.clone();
-    third.sync_merge_peers(&newer_revocation).unwrap();
-    third.sync_merge_peers(&older_trust).unwrap();
-    assert!(third.sync_state().is_revoked("cc"));
-    assert!(third.sync_state().trusted("cc").is_none());
+    let newer_revocation = peer_sync::sync_state(&right).peers.clone();
+    peer_sync::sync_merge_peers(&mut third, &newer_revocation).unwrap();
+    peer_sync::sync_merge_peers(&mut third, &older_trust).unwrap();
+    assert!(peer_sync::sync_state(&third).is_revoked("cc"));
+    assert!(peer_sync::sync_state(&third).trusted("cc").is_none());
 }
 
 #[test]

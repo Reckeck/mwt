@@ -1,3 +1,4 @@
+use crate::usecases::sync::peer_sync;
 use std::time::Instant;
 
 use crate::Amount;
@@ -911,9 +912,9 @@ fn crypto_engine_volume() {
         assert_eq!(scanned.counted, count);
         vault.doc.crypto_prices.truncate(62);
 
-        vault.track_changes().expect("the first pass remembers");
+        peer_sync::track_changes(&mut vault).expect("the first pass remembers");
         let started = Instant::now();
-        vault.track_changes().expect("the diff every save pays");
+        peer_sync::track_changes(&mut vault).expect("the diff every save pays");
         let stamp = started.elapsed();
 
         let started = Instant::now();

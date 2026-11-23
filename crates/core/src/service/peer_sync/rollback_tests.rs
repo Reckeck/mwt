@@ -30,18 +30,18 @@ fn a_failed_batch_leaves_document_and_tracker_as_they_were() {
     let (wants, _) = crate::usecases::sync::read::sync_diff(&left, &left_manifest, &right_manifest);
     let records = crate::usecases::sync::read::sync_records(&mut right, &wants).unwrap();
 
-    left.track_changes().unwrap();
+    peer_sync::track_changes(&mut left).unwrap();
     let doc_before = serde_json::to_vec(&left.doc).unwrap();
     // The save at the end of the batch cannot seal without a key.
     left.key = None;
 
-    let err = left.sync_apply(&records, &peer("right")).unwrap_err();
+    let err = peer_sync::sync_apply(&mut left, &records, &peer("right")).unwrap_err();
 
     assert!(matches!(err, Error::Crypto(_)), "the batch error: {err:?}");
     assert_eq!(serde_json::to_vec(&left.doc).unwrap(), doc_before);
     // A tracker still equal to the document sees no change to stamp; one left
     // at the merged state would report the rolled-back records.
-    assert!(left.track_changes().unwrap().is_empty());
+    assert!(peer_sync::track_changes(&mut left).unwrap().is_empty());
     assert_eq!(serde_json::to_vec(&left.doc).unwrap(), doc_before);
 }
 
@@ -50,7 +50,7 @@ fn swapping_the_document_cannot_fail() {
     let (_dir, mut left, _right) = two_devices();
     let mut replacement = left.doc.clone();
     replacement.sync.tombstones_seen.insert("marker".into(), 1);
-    let old: VaultDoc = left.swap_doc(replacement);
+    let old: VaultDoc = peer_sync::swap_doc(&mut left, replacement);
     assert!(!old.sync.tombstones_seen.contains_key("marker"));
     assert!(left.doc.sync.tombstones_seen.contains_key("marker"));
 }

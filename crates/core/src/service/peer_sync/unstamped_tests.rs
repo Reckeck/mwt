@@ -5,6 +5,7 @@ use super::tests::{exchange, two_devices};
 use super::*;
 use crate::model::transaction::Transaction;
 use crate::service::test_support::income;
+use crate::usecases::sync::peer_sync;
 
 const COPY: &str = "Copy";
 
@@ -53,8 +54,7 @@ fn unstamped_pair(
 #[test]
 fn different_unstamped_values_are_counted_and_the_loser_is_listed() {
     let (_dir, mut left, mut right, id) = unstamped_pair("aaa", "zzz");
-    let applied = left
-        .merge_from(&mut right, COPY)
+    let applied = peer_sync::merge_from(&mut left, &mut right, COPY)
         .unwrap()
         .expect("the copy changes this vault");
     // The pick is the one the value comparison always made: the larger one.
@@ -69,7 +69,7 @@ fn different_unstamped_values_are_counted_and_the_loser_is_listed() {
 #[test]
 fn when_the_local_value_wins_nothing_is_overwritten_or_counted() {
     let (_dir, mut left, mut right, id) = unstamped_pair("zzz", "aaa");
-    let applied = left.merge_from(&mut right, COPY).unwrap();
+    let applied = peer_sync::merge_from(&mut left, &mut right, COPY).unwrap();
     assert_eq!(comment_of(&left, &id), "zzz");
     assert!(
         applied.is_none_or(|batch| batch.summary.overwritten.is_empty()),
@@ -80,7 +80,7 @@ fn when_the_local_value_wins_nothing_is_overwritten_or_counted() {
 #[test]
 fn equal_unstamped_copies_have_no_conflict() {
     let (_dir, mut left, mut right, id) = unstamped_pair("same", "same");
-    let applied = left.merge_from(&mut right, COPY).unwrap();
+    let applied = peer_sync::merge_from(&mut left, &mut right, COPY).unwrap();
     assert_eq!(comment_of(&left, &id), "same");
     assert!(applied.is_none_or(
         |batch| batch.summary.unstamped_conflicts == 0 && batch.summary.overwritten.is_empty()
@@ -99,8 +99,7 @@ fn a_peer_over_the_network_neither_counts_nor_lists_unstamped_values() {
         device_id: "right-id".into(),
         name: "right".into(),
     };
-    let applied = left
-        .sync_apply(&incoming, &peer)
+    let applied = peer_sync::sync_apply(&mut left, &incoming, &peer)
         .unwrap()
         .expect("the value changes");
     assert_eq!(comment_of(&left, &id), "zzz");

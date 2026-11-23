@@ -91,15 +91,23 @@ fn a_device_switch_change_stamps_nothing() {
     use crate::sync::state::SyncState;
     use crate::sync::track::Tracker;
     let (_dir, mut vault, _right) = two_devices();
-    let mut tracker = Tracker::capture(&vault.doc_value().unwrap());
+    let mut tracker = Tracker::capture(&peer_sync::doc_value(&mut vault).unwrap());
     let mut state = SyncState::default();
     let mut clock = Clock::new("dev");
     vault.doc.settings.notifications.system = false;
     vault.doc.settings.notifications.hide_details_when_locked = true;
-    let changed = tracker.stamp(&vault.doc_value().unwrap(), &mut state, &mut clock);
+    let changed = tracker.stamp(
+        &peer_sync::doc_value(&mut vault).unwrap(),
+        &mut state,
+        &mut clock,
+    );
     assert!(changed.is_empty(), "{changed:?}");
     set_lead(&mut vault, NoticeCategory::Loan, 3);
-    let changed = tracker.stamp(&vault.doc_value().unwrap(), &mut state, &mut clock);
+    let changed = tracker.stamp(
+        &peer_sync::doc_value(&mut vault).unwrap(),
+        &mut state,
+        &mut clock,
+    );
     assert_eq!(changed, vec!["settings:".to_string()]);
     let stamps = &state.stamps["settings:"];
     assert!(
@@ -142,7 +150,7 @@ fn a_whole_notification_object_from_an_older_build_merges() {
         "notifications".into(),
         Stamp::new(now_ms() + 1_000, 0, "aaaaaaaa"),
     );
-    right.sync_apply(&records, &peer("old")).unwrap();
+    peer_sync::sync_apply(&mut right, &records, &peer("old")).unwrap();
     let config = &right.doc.settings.notifications;
     assert_eq!(config.default_time, "07:15");
     let loan = config.category(NoticeCategory::Loan);
@@ -171,7 +179,7 @@ fn notifications_saved_by_an_older_build_load_intact() {
             "category": "rent", "enabled": true, "lead_days": 3, "auto_reminders": false
         }],
     });
-    let mut doc = vault.doc_value().unwrap();
+    let mut doc = peer_sync::doc_value(&mut vault).unwrap();
     doc["settings"]["notifications"] = stored.clone();
     vault.doc = serde_json::from_value(doc).unwrap();
     vault.persist().unwrap();

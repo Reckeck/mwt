@@ -28,7 +28,7 @@ fn pull_one_way(from: &mut UnlockedVault, to: &mut UnlockedVault) {
     let to_manifest = crate::usecases::sync::read::sync_manifest(to, None).unwrap();
     let (to_wants, _) = crate::usecases::sync::read::sync_diff(to, &to_manifest, &from_manifest);
     let records = crate::usecases::sync::read::sync_records(from, &to_wants).unwrap();
-    to.sync_apply(&records, &peer("from")).unwrap();
+    peer_sync::sync_apply(to, &records, &peer("from")).unwrap();
 }
 
 /// Close the vault and open it again as the same device, as the app does.
@@ -318,13 +318,13 @@ fn the_queue_rule_is_idempotent_and_undone_with_its_batch() {
     assert!(pending_ids(&right).is_empty());
     assert_eq!(booked(&right, "e1"), 1);
     // A second pass finds nothing to do.
-    let doc = right.doc_value().unwrap();
+    let doc = peer_sync::doc_value(&mut right).unwrap();
     let report = crate::usecases::sync::repair::repair_invariants(&mut right, None).unwrap();
     assert!(report.dropped_imports.is_empty());
-    assert_eq!(right.doc_value().unwrap(), doc);
+    assert_eq!(peer_sync::doc_value(&mut right).unwrap(), doc);
     // Undoing the batch returns the entry (and removes the booking again).
     let batch = right.doc.sync.batches.last().unwrap().id.clone();
-    right.sync_undo(&batch).unwrap();
+    peer_sync::sync_undo(&mut right, &batch).unwrap();
     assert_eq!(pending_ids(&right), vec!["e1".to_string()]);
     assert_eq!(booked(&right, "e1"), 0);
 }

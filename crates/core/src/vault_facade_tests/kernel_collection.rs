@@ -1,6 +1,7 @@
 //! Tests of `Collection<T>` that commit through `UnlockedVault`: it lives in the facade, so
 //! these moved here from `mwt-vault` with their assertions unchanged.
 
+use crate::usecases::sync::peer_sync;
 use std::sync::Arc;
 
 use mwt_vault::kernel::session::SaveHook;
@@ -33,7 +34,7 @@ fn run(id: &str) -> ImportRun {
 fn batched_vault() -> (tempfile::TempDir, UnlockedVault) {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
-    vault.set_device("aaaaaaaa-collection");
+    peer_sync::set_device(&mut vault, "aaaaaaaa-collection");
     vault.set_write_behind(Some(Arc::new(NoWake)));
     (dir, vault)
 }
