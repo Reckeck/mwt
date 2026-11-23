@@ -23,7 +23,7 @@ pub struct Edge {
     pub to_module: String,
 }
 
-const CORE_SRC: &str = "crates/usecases/src";
+const USECASES_SRC: &str = "crates/usecases/src";
 const ALLOW_FILE: &str = "crates/xtask/arch-allow.toml";
 /// Group of the modules gated by the `testkit` feature (see `layers::GROUPS`).
 const TESTKIT: &str = "testkit";
@@ -91,7 +91,7 @@ impl Report {
             .iter()
             .map(|edge| {
                 format!(
-                    "error: {CORE_SRC}/{}:{}: `{}` must not use `{}` (edge the crate table forbids)",
+                    "error: {USECASES_SRC}/{}:{}: `{}` must not use `{}` (edge the crate table forbids)",
                     edge.from_file, edge.line, edge.from_module, edge.to_module
                 )
             })
@@ -138,8 +138,8 @@ fn evaluate(edges: &[Edge], allow: &[AllowEntry], domain: domain::Findings) -> R
 
 /// Scans the core crate under the repository `root` and holds it against the crate table and the allowlist.
 pub fn check(root: &Path) -> Result<Report> {
-    let sources = sources(&root.join(CORE_SRC))?;
-    let edges = edges_of(&root.join(CORE_SRC), &sources)?;
+    let sources = sources(&root.join(USECASES_SRC))?;
+    let edges = edges_of(&root.join(USECASES_SRC), &sources)?;
     let domain = domain::check(&domain_sources(root)?, domain::EXEMPTIONS);
     let path = root.join(ALLOW_FILE);
     let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
@@ -227,7 +227,7 @@ fn collect_files(dir: &Path, skipped: &mut Files, files: &mut Vec<PathBuf>) -> R
 }
 
 /// Files of modules declared under a cfg gate: `#[cfg(test)]` ones are skipped, ones gated by the
-/// `testkit` feature are test support and are checked as the `testkit` crate.
+/// `testkit` feature are test support, checked as part of the use-case crate (the `usecases` group).
 #[derive(Default)]
 struct Files {
     test: BTreeSet<PathBuf>,
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn every_module_of_core_is_in_the_crate_table() {
-        let names = module_names(&repo_root().join(CORE_SRC)).unwrap();
+        let names = module_names(&repo_root().join(USECASES_SRC)).unwrap();
         let missing: Vec<_> = names
             .iter()
             .filter(|name| layers::group_of(name).is_none())
@@ -403,7 +403,7 @@ mod tests {
 
     #[test]
     fn every_reexported_module_of_lib_is_a_module_of_the_table() {
-        let lib = fs::read_to_string(repo_root().join(CORE_SRC).join("lib.rs")).unwrap();
+        let lib = fs::read_to_string(repo_root().join(USECASES_SRC).join("lib.rs")).unwrap();
         let names = reexported_modules(&lib);
         assert!(names.len() > 10, "{names:?}");
         let missing: Vec<_> = names
@@ -415,7 +415,7 @@ mod tests {
 
     #[test]
     fn a_name_reexported_from_an_extracted_crate_resolves_to_its_own_module() {
-        let modules = table_modules(&repo_root().join(CORE_SRC)).unwrap();
+        let modules = table_modules(&repo_root().join(USECASES_SRC)).unwrap();
         let edges = scan::read_edges(
             "planning/x.rs",
             "planning",
@@ -444,7 +444,7 @@ mod tests {
 
     #[test]
     fn the_reexport_table_is_derived_from_lib_rs() {
-        let names = table_modules(&repo_root().join(CORE_SRC)).unwrap();
+        let names = table_modules(&repo_root().join(USECASES_SRC)).unwrap();
         let resolved = |text: &str| {
             let edges = scan::read_edges("x.rs", "facade", text, &names);
             edges[0].to_module.clone()
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn modules_gated_by_the_testkit_feature_are_checked_as_the_testkit_crate() {
-        let edges = scan(&repo_root().join(CORE_SRC)).unwrap();
+        let edges = scan(&repo_root().join(USECASES_SRC)).unwrap();
         let fixtures: Vec<&Edge> = edges
             .iter()
             .filter(|edge| edge.from_file == "model/fixtures.rs")
@@ -528,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn testkit_is_a_low_crate_and_nothing_below_the_facade_may_use_it() {
+    fn testkit_is_a_low_crate_and_nothing_below_usecases_may_use_it() {
         assert!(layers::is_legal("testkit", "model"));
         assert!(!layers::is_legal("planning", "testkit"));
     }

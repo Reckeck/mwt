@@ -117,6 +117,7 @@ pub const GROUPS: &[Group] = &[
     },
     // The use-case crate (`mwt-usecases`): scenarios, the service shim, sandbox, config and the test kit
     // (`testkit` and the files gated by the `testkit` feature); it uses every crate.
+    // Scenarios naming `crate::testkit` are stopped by the compiler gate `cfg(any(test, feature = "testkit"))`, not by this table.
     Group {
         name: "usecases",
         modules: &[
@@ -268,7 +269,7 @@ mod tests {
     }
 
     #[test]
-    fn nothing_below_the_facade_names_it_or_testkit() {
+    fn nothing_below_usecases_names_it_or_testkit() {
         assert!(!is_legal("reports", "usecases"));
         assert!(!is_legal("model", "testkit"));
         assert!(!is_legal("sync", "testkit"));
