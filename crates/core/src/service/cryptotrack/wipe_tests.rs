@@ -44,10 +44,16 @@ fn peer(name: &str) -> PeerRef {
 fn followed() -> (tempfile::TempDir, UnlockedVault, String) {
     let (dir, mut vault) = empty_vault();
     vault.raise_to_level3_for_tests();
-    let wallet = vault
-        .create_store("Cold EVM", StoreKind::Crypto, "#111", "", None)
-        .expect("the wallet is made")
-        .id;
+    let wallet = crate::usecases::money::stores::create_store(
+        &mut vault,
+        "Cold EVM",
+        StoreKind::Crypto,
+        "#111",
+        "",
+        None,
+    )
+    .expect("the wallet is made")
+    .id;
     vault
         .doc
         .stores
@@ -68,11 +74,11 @@ fn a_wipe_needs_the_word_and_changes_nothing_without_it() {
     let before = vault.doc.crypto_accounts.clone();
 
     assert!(matches!(
-        vault.crypto_wipe_module(""),
+        crate::usecases::cryptotrack::wipe::crypto_wipe_module(&mut vault, ""),
         Err(Error::InvalidInput(_))
     ));
     assert!(matches!(
-        vault.crypto_wipe_module("wipe"),
+        crate::usecases::cryptotrack::wipe::crypto_wipe_module(&mut vault, "wipe"),
         Err(Error::InvalidInput(_)),
     ));
 
@@ -95,16 +101,17 @@ fn without_a_backup_that_opens_nothing_is_wiped() {
     let (_dir, mut vault, wallet) = followed();
     let before = vault.doc.clone();
 
-    let refused = vault.wipe_inner(WIPE_CONFIRM, |_| Err(Error::Io("the disk is full".into())));
+    let refused = crate::usecases::cryptotrack::wipe::wipe_inner(&mut vault, WIPE_CONFIRM, |_| {
+        Err(Error::Io("the disk is full".into()))
+    });
 
     assert!(matches!(refused, Err(Error::Io(_))));
     assert_eq!(vault.doc.crypto_accounts, before.crypto_accounts);
     assert_eq!(vault.doc.crypto_events, before.crypto_events);
     assert_eq!(vault.doc.crypto_prices, before.crypto_prices);
     assert!(vault.doc.crypto_wiped_at.is_empty());
-    let store = vault
-        .find_store(&wallet)
-        .expect("the wallet is still there");
+    let store =
+        crate::money::tree::find_store(&vault.doc, &wallet).expect("the wallet is still there");
     assert_eq!(store.crypto_account_id.as_deref(), Some("cacc-1"));
     assert!(!store.archived);
     assert!(doc_carries_crypto_data(&vault.doc));
@@ -117,8 +124,7 @@ fn without_a_backup_that_opens_nothing_is_wiped() {
 fn the_wipe_leaves_a_backup_that_still_holds_the_module() {
     let (_dir, mut vault, _wallet) = followed();
 
-    let report = vault
-        .crypto_wipe_module(WIPE_CONFIRM)
+    let report = crate::usecases::cryptotrack::wipe::crypto_wipe_module(&mut vault, WIPE_CONFIRM)
         .expect("the wipe runs");
 
     let name = report
@@ -143,8 +149,7 @@ fn a_wipe_unlinks_and_archives_the_wallets_and_lifts_the_ban() {
     let (dir, mut vault, wallet) = followed();
     let path = dir.path().join("test.wallet");
 
-    let report = vault
-        .crypto_wipe_module(WIPE_CONFIRM)
+    let report = crate::usecases::cryptotrack::wipe::crypto_wipe_module(&mut vault, WIPE_CONFIRM)
         .expect("the wipe runs");
 
     assert_eq!(report.counts.accounts, 1);
@@ -156,9 +161,8 @@ fn a_wipe_unlinks_and_archives_the_wallets_and_lifts_the_ban() {
     assert!(report.can_lower_level);
 
     // The wallet is still a wallet: nothing of its history was deleted.
-    let store = vault
-        .find_store(&wallet)
-        .expect("the wallet is not deleted");
+    let store =
+        crate::money::tree::find_store(&vault.doc, &wallet).expect("the wallet is not deleted");
     assert!(
         store.crypto_account_id.is_none(),
         "it is no longer led by the module"
@@ -177,8 +181,7 @@ fn a_wipe_unlinks_and_archives_the_wallets_and_lifts_the_ban() {
     let reopened = UnlockedVault::open(path, "pw").expect("the vault opens");
     assert!(!doc_carries_crypto_data(&reopened.doc));
     assert!(
-        reopened
-            .find_store(&wallet)
+        crate::money::tree::find_store(&reopened.doc, &wallet)
             .expect("the wallet survived the reopen")
             .archived
     );
@@ -188,8 +191,7 @@ fn a_wipe_unlinks_and_archives_the_wallets_and_lifts_the_ban() {
 fn a_vault_without_the_module_is_wiped_without_risking_anything() {
     let (_dir, mut vault) = empty_vault();
 
-    let report = vault
-        .crypto_wipe_module(WIPE_CONFIRM)
+    let report = crate::usecases::cryptotrack::wipe::crypto_wipe_module(&mut vault, WIPE_CONFIRM)
         .expect("the call is allowed");
 
     assert!(
@@ -217,10 +219,9 @@ fn the_device_secrets_file_goes_with_the_module() {
     // The file itself is what the wipe removes; what is sealed inside it is
     // the key module's business and never this one's.
     std::fs::write(&secrets_file, b"sealed bytes").expect("the device keeps a file");
-    assert!(vault.crypto_wipe_preview().device_secrets);
+    assert!(crate::usecases::cryptotrack::wipe::crypto_wipe_preview(&vault).device_secrets);
 
-    let report = vault
-        .crypto_wipe_module(WIPE_CONFIRM)
+    let report = crate::usecases::cryptotrack::wipe::crypto_wipe_module(&mut vault, WIPE_CONFIRM)
         .expect("the wipe runs");
 
     assert!(report.device_secrets_removed);
@@ -254,8 +255,7 @@ fn an_offline_device_does_not_bring_the_module_back() {
     right.doc.crypto_prices.push(price("2026-02-02T00:00:00Z"));
     right.persist().expect("saved");
 
-    let report = left
-        .crypto_wipe_module(WIPE_CONFIRM)
+    let report = crate::usecases::cryptotrack::wipe::crypto_wipe_module(&mut left, WIPE_CONFIRM)
         .expect("the wipe runs");
     assert!(report.wiped_at.is_some());
 
@@ -313,10 +313,10 @@ fn an_offline_device_does_not_bring_the_module_back() {
 /// One direction of a sync: everything `to` is missing from `from`, as a
 /// session would hand it over. Returns what was sent.
 fn exchange(from: &mut UnlockedVault, to: &mut UnlockedVault) -> BTreeMap<String, RecordState> {
-    let mine = to.sync_manifest(None).expect("a manifest");
-    let theirs = from.sync_manifest(None).expect("a manifest");
-    let (wants, _) = to.sync_diff(&mine, &theirs);
-    let sent = from.sync_records(&wants).expect("the records");
+    let mine = crate::usecases::sync::read::sync_manifest(to, None).expect("a manifest");
+    let theirs = crate::usecases::sync::read::sync_manifest(from, None).expect("a manifest");
+    let (wants, _) = crate::usecases::sync::read::sync_diff(to, &mine, &theirs);
+    let sent = crate::usecases::sync::read::sync_records(from, &wants).expect("the records");
     to.sync_apply(&sent, &peer("other"))
         .expect("the batch applies");
     sent

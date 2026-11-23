@@ -29,17 +29,7 @@ impl UnlockedVault {
 
     // Called by the raise to level 3 and the open chain; not in the baseline
     // (crate-private), so outside the regenerated block.
-    forward! {
-        /// The archiving as one step of a chain: it sets `Store::archived` on the
-        /// hand-kept crypto wallets, deletes no record, saves nothing and reports
-        /// whether it changed anything. The caller decides when to write — the
-        /// open chain persists once for all its steps.
-        ///
-        /// Below level 3 it does nothing: the module cannot follow an address
-        /// there, so there is nothing to hand the wallets over to.
-        pub(crate) fn retire_manual_crypto_wallets(&mut self) -> CryptoArchiveReport
-            => crate::usecases::cryptotrack::transition::retire_manual_crypto_wallets;
-    }
+    forward! {}
 }
 
 #[cfg(test)]

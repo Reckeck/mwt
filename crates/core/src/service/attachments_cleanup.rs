@@ -18,8 +18,5 @@ impl UnlockedVault {
         /// the last session can be waiting any more. Returns whether anything went.
         pub(crate) fn prune_attachments(&mut self) -> bool
             => crate::usecases::household::attachments_cleanup::prune_attachments;
-        /// Delete the files of the attachments directory that no record names.
-        pub(crate) fn sweep_orphan_attachment_files(&self)
-            => crate::usecases::household::attachments_cleanup::sweep_orphan_attachment_files;
     }
 }

@@ -360,7 +360,7 @@ impl UnlockedVault {
             device_keys: exchange_keys::DeviceKeys::default(),
         };
         vault.start_tracking()?;
-        vault.ensure_cash_wallet("Cash")?;
+        crate::usecases::money::stores::ensure_cash_wallet(&mut vault, "Cash")?;
         Ok(vault)
     }
 
@@ -463,24 +463,29 @@ impl UnlockedVault {
         }
         // Before tracking starts, so the opening entries of envelopes (the
         // same on every device) are never stamped as an edit.
-        let envelopes_settled = vault.settle_envelopes();
+        let envelopes_settled = crate::usecases::household::envelopes::settle_envelopes(&mut vault);
         vault.start_tracking()?;
         // A merge left the tree or a reference broken in a copy that was
         // saved before the invariant pass existed: fixed once, stamped as an
         // edit of this device.
         let repaired = vault.repair_until_settled()?;
         // A vault from before the single cash wallet gets one on first open.
-        vault.ensure_cash_wallet("Cash")?;
+        crate::usecases::money::stores::ensure_cash_wallet(&mut vault, "Cash")?;
         // Built-in categories added in later versions reach old vaults too.
-        let categories_added = vault.ensure_default_categories();
+        let categories_added =
+            crate::usecases::planning::passive::ensure_default_categories(&mut vault);
         // A field became required after the workflow was switched on: off, and said so.
-        let incomplete = vault.disable_incomplete_workflows(crate::calendar::now_secs());
+        let incomplete = crate::usecases::workflow::records::disable_incomplete_workflows(
+            &mut vault,
+            crate::calendar::now_secs(),
+        );
         // Files removed last session (their "Undo" is long gone) go now.
-        let attachments_pruned = vault.prune_attachments();
+        let attachments_pruned =
+            crate::usecases::household::attachments_cleanup::prune_attachments(&mut vault);
         // Files no record names (local disk cleanup only).
-        vault.sweep_orphan_attachment_files();
+        crate::usecases::household::attachments_cleanup::sweep_orphan_attachment_files(&vault);
         // Sync history written before secrets were hidden.
-        let secrets_scrubbed = vault.scrub_sync_secrets();
+        let secrets_scrubbed = crate::usecases::sync::sync_journal::scrub_sync_secrets(&mut vault);
         // Level 3: exchange keys of an old document move to the device file.
         let keys_moved = vault.adopt_device_secrets()?;
         // The raise to level 3 was cut short between the re-encryption and
@@ -490,7 +495,7 @@ impl UnlockedVault {
         // module existed keeps the wallets its user keeps by hand.
         let retired = vault.finish_cut_short_raise();
         if queue_converted {
-            vault.crypto_sync_holdings()?;
+            crate::usecases::cryptotrack::recompute::crypto_sync_holdings(&mut vault)?;
         }
         if migrated
             || keys_moved
@@ -518,7 +523,7 @@ impl UnlockedVault {
         const MAX_PASSES: usize = 3;
         let mut repaired = false;
         for _ in 0..MAX_PASSES {
-            if self.repair_invariants(None)?.is_empty() {
+            if crate::usecases::sync::repair::repair_invariants(self, None)?.is_empty() {
                 break;
             }
             repaired = true;
@@ -543,7 +548,7 @@ impl UnlockedVault {
             return;
         }
         self.base_currency = base;
-        self.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(self);
     }
 
     /// Current base currency, never empty.
@@ -606,7 +611,7 @@ impl UnlockedVault {
         // brings keys in nor drops the ones this device holds.
         doc.exchanges = std::mem::take(&mut self.doc.exchanges);
         self.doc = doc;
-        self.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(self);
         self.persist()
     }
 
@@ -814,10 +819,10 @@ mod tests {
         let store = vault.doc.stores[1].id.clone();
         let mut top_up = income(&store, "100", "top up");
         at(&mut top_up, "2026-01-01T00:00:00Z");
-        vault.add_transaction(top_up).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, top_up).unwrap();
         let mut groceries = payment(&store, "30", "groceries");
         at(&mut groceries, "2026-01-02T00:00:00Z");
-        vault.add_transaction(groceries).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, groceries).unwrap();
         assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "70");
     }
 
@@ -827,7 +832,10 @@ mod tests {
         let store = vault.doc.stores[1].id.clone();
         for raw in ["0", "-10"] {
             assert!(matches!(
-                vault.add_transaction(payment(&store, raw, "nothing")),
+                crate::usecases::money::transactions::add_transaction(
+                    &mut vault,
+                    payment(&store, raw, "nothing")
+                ),
                 Err(Error::InvalidInput(_))
             ));
         }
@@ -838,12 +846,20 @@ mod tests {
     fn fees_reduce_the_holdings() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        vault.add_transaction(income(&store, "100", "in")).unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&store, "100", "in"),
+        )
+        .unwrap();
         let Transaction::Payment(mut rent) = payment(&store, "30", "rent") else {
             unreachable!()
         };
         rent.fee = fee_usd("1.5");
-        vault.add_transaction(Transaction::Payment(rent)).unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            Transaction::Payment(rent),
+        )
+        .unwrap();
         assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "68.5");
     }
 
@@ -853,26 +869,34 @@ mod tests {
         let store = vault.doc.stores[1].id.clone();
         let mut tx = payment(&store, "30", "groceries");
         tx.meta_mut().categories = vec!["  Groceries ".into(), "groceries".into(), "TAXI".into()];
-        let stored = vault.add_transaction(tx).unwrap();
+        let stored = crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
         assert_eq!(stored.meta().categories, vec!["groceries", "taxi"]);
 
         let mut unknown = payment(&store, "1", "x");
         unknown.meta_mut().categories = vec!["no_such".into()];
-        assert!(vault.add_transaction(unknown).is_err());
+        assert!(
+            crate::usecases::money::transactions::add_transaction(&mut vault, unknown).is_err()
+        );
     }
 
     #[test]
     fn a_trade_moves_both_sides_of_one_record() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        vault.add_transaction(income(&store, "1000", "in")).unwrap();
-        vault
-            .add_transaction(trade(&store, "600", "0.01", "buy"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&store, "1000", "in"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            trade(&store, "600", "0.01", "buy"),
+        )
+        .unwrap();
         assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "400");
         assert_eq!(holding_of(&vault, &store, &btc()).to_string(), "0.01");
         let id = vault.doc.transactions[1].meta().id.clone();
-        vault.delete_transaction(&id).unwrap();
+        crate::usecases::money::transactions::delete_transaction(&mut vault, &id).unwrap();
         assert_eq!(holding_of(&vault, &store, &btc()), Amount::ZERO);
         assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "1000");
     }
@@ -885,7 +909,13 @@ mod tests {
             unreachable!()
         };
         swap.bought.asset = usd();
-        assert!(vault.add_transaction(Transaction::TradeSpot(swap)).is_err());
+        assert!(
+            crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                Transaction::TradeSpot(swap)
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -893,9 +923,11 @@ mod tests {
         let (_dir, mut vault) = setup();
         let binance = vault.doc.stores[1].id.clone();
         let cold = vault.doc.stores[2].id.clone();
-        vault
-            .add_transaction(income_of(&binance, btc(), "1", "50000", "buy"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of(&binance, btc(), "1", "50000", "buy"),
+        )
+        .unwrap();
         let Transaction::Transfer(mut out) = transfer(&binance, &cold, "0.4") else {
             unreachable!()
         };
@@ -904,18 +936,28 @@ mod tests {
             amount: amount("0.0001"),
             price: PriceStamp::default(),
         });
-        vault.add_transaction(Transaction::Transfer(out)).unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            Transaction::Transfer(out),
+        )
+        .unwrap();
         // the receiver gets exactly the amount; the sender pays the fee on top
         assert_eq!(holding_of(&vault, &binance, &btc()).to_string(), "0.5999");
         assert_eq!(holding_of(&vault, &cold, &btc()).to_string(), "0.4");
         assert_eq!(
-            vault.transactions(&StoreScope::store(&cold, false)).len(),
+            crate::usecases::money::transactions::transactions(
+                &vault,
+                &StoreScope::store(&cold, false)
+            )
+            .len(),
             1
         );
         assert_eq!(
-            vault
-                .transactions(&StoreScope::store(&binance, false))
-                .len(),
+            crate::usecases::money::transactions::transactions(
+                &vault,
+                &StoreScope::store(&binance, false)
+            )
+            .len(),
             2
         );
     }
@@ -925,9 +967,11 @@ mod tests {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
         assert!(
-            vault
-                .add_transaction(transfer(&store, &store, "1"))
-                .is_err()
+            crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                transfer(&store, &store, "1")
+            )
+            .is_err()
         );
     }
 
@@ -935,13 +979,19 @@ mod tests {
     fn unknown_and_archived_stores_are_rejected() {
         let (_dir, mut vault) = setup();
         assert!(matches!(
-            vault.add_transaction(income("nope", "1", "x")),
+            crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                income("nope", "1", "x")
+            ),
             Err(Error::Missing(_))
         ));
         let store = vault.doc.stores[1].id.clone();
-        vault.archive_store(&store, true).unwrap();
+        crate::usecases::money::stores::archive_store(&mut vault, &store, true).unwrap();
         assert!(matches!(
-            vault.add_transaction(income(&store, "1", "x")),
+            crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                income(&store, "1", "x")
+            ),
             Err(Error::Archived(_))
         ));
     }
@@ -953,13 +1003,13 @@ mod tests {
         for (day, comment) in [("01", "first"), ("03", "third"), ("02", "second")] {
             let mut tx = income(&store, "1", comment);
             at(&mut tx, &format!("2026-01-{day}T00:00:00Z"));
-            vault.add_transaction(tx).unwrap();
+            crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
         }
-        let comments: Vec<String> = vault
-            .transactions(&StoreScope::default())
-            .iter()
-            .map(|tx| tx.meta().comment.clone())
-            .collect();
+        let comments: Vec<String> =
+            crate::usecases::money::transactions::transactions(&vault, &StoreScope::default())
+                .iter()
+                .map(|tx| tx.meta().comment.clone())
+                .collect();
         assert_eq!(comments, vec!["third", "second", "first"]);
     }
 
@@ -989,26 +1039,37 @@ mod tests {
         let (_dir, mut vault) = setup();
         let cold = vault.doc.stores[2].id.clone();
         assert!(matches!(
-            vault.add_transaction(on_chain(&cold, Some(Chain::Bitcoin), "not-a-hash")),
+            crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                on_chain(&cold, Some(Chain::Bitcoin), "not-a-hash")
+            ),
             Err(Error::TxHashMalformed(_))
         ));
         let bitcoin = "a".repeat(64);
-        vault
-            .add_transaction(on_chain(&cold, Some(Chain::Bitcoin), &bitcoin))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            on_chain(&cold, Some(Chain::Bitcoin), &bitcoin),
+        )
+        .unwrap();
         let evm = format!("0x{}", "b".repeat(64));
-        vault
-            .add_transaction(on_chain(&cold, Some(Chain::Ethereum), &evm))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            on_chain(&cold, Some(Chain::Ethereum), &evm),
+        )
+        .unwrap();
         // a hash on a network the moved asset does not live on
         assert!(matches!(
-            vault
-                .add_transaction(on_chain(
+            crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                on_chain(
                     &cold,
                     Some(Chain::Ethereum),
                     &format!("0x{}", "c".repeat(64))
-                ))
-                .and_then(|_| vault.add_transaction({
+                )
+            )
+            .and_then(|_| crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                {
                     let mut tx = on_chain(
                         &cold,
                         Some(Chain::Ethereum),
@@ -1018,7 +1079,8 @@ mod tests {
                         inner.asset = btc();
                     }
                     tx
-                })),
+                }
+            )),
             Err(Error::TxHashNetworkMismatch(_))
         ));
     }
@@ -1031,10 +1093,16 @@ mod tests {
         original.meta_mut().origin = TxOrigin::Import {
             exec_id: "e1".into(),
         };
-        let stored = vault.add_transaction(original).unwrap();
+        let stored =
+            crate::usecases::money::transactions::add_transaction(&mut vault, original).unwrap();
         let mut edited = income(&store, "250", "salary, corrected");
         edited.meta_mut().origin = TxOrigin::Manual;
-        let saved = vault.update_transaction(&stored.meta().id, edited).unwrap();
+        let saved = crate::usecases::money::transactions::update_transaction(
+            &mut vault,
+            &stored.meta().id,
+            edited,
+        )
+        .unwrap();
         assert_eq!(saved.meta().id, stored.meta().id);
         assert_eq!(
             saved.meta().origin,
@@ -1045,9 +1113,12 @@ mod tests {
         assert_eq!(vault.doc.transactions.len(), 1);
         assert_eq!(holding_of(&vault, &store, &usd()).to_string(), "250");
         assert!(
-            vault
-                .update_transaction("missing", income(&store, "1", "x"))
-                .is_err()
+            crate::usecases::money::transactions::update_transaction(
+                &mut vault,
+                "missing",
+                income(&store, "1", "x")
+            )
+            .is_err()
         );
     }
 
@@ -1080,15 +1151,31 @@ mod tests {
                 price: PriceStamp::default(),
             })
         };
-        assert!(vault.add_transaction(buy(None)).is_err());
-        vault.add_transaction(buy(Some("100000"))).unwrap();
-        assert_eq!(vault.net_worth().non_financial, amount("100000"));
-        vault
-            .set_manual_price(&thing.key(), amount("120000"), "usd")
+        assert!(
+            crate::usecases::money::transactions::add_transaction(&mut vault, buy(None)).is_err()
+        );
+        crate::usecases::money::transactions::add_transaction(&mut vault, buy(Some("100000")))
             .unwrap();
-        assert_eq!(vault.net_worth().non_financial, amount("120000"));
-        vault.clear_manual_price(&thing.key()).unwrap();
-        assert_eq!(vault.net_worth().non_financial, amount("100000"));
+        assert_eq!(
+            crate::usecases::money::capital::net_worth(&vault.books()).non_financial,
+            amount("100000")
+        );
+        crate::usecases::money::capital::set_manual_price(
+            &mut vault,
+            &thing.key(),
+            amount("120000"),
+            "usd",
+        )
+        .unwrap();
+        assert_eq!(
+            crate::usecases::money::capital::net_worth(&vault.books()).non_financial,
+            amount("120000")
+        );
+        crate::usecases::money::capital::clear_manual_price(&mut vault, &thing.key()).unwrap();
+        assert_eq!(
+            crate::usecases::money::capital::net_worth(&vault.books()).non_financial,
+            amount("100000")
+        );
     }
 
     #[test]
@@ -1098,7 +1185,11 @@ mod tests {
         let exchange = store(&mut vault, "Bybit", StoreKind::Exchange, None);
         let sub = store(&mut vault, "Spot", StoreKind::Exchange, Some(&exchange));
         let usd_account = store(&mut vault, "USD", StoreKind::Bank, Some(&bank));
-        let find = |vault: &UnlockedVault, id: &str| vault.find_store(id).unwrap().in_budget();
+        let find = |vault: &UnlockedVault, id: &str| {
+            crate::money::tree::find_store(&vault.doc, id)
+                .unwrap()
+                .in_budget()
+        };
         assert!(find(&vault, &bank));
         assert!(!find(&vault, &exchange));
         assert!(!find(&vault, &sub));
@@ -1116,28 +1207,42 @@ mod tests {
             ..StoreExtras::default()
         };
         assert!(
-            vault
-                .create_store_with("X", StoreKind::Bank, "", "", None, extras.clone())
-                .is_err()
+            crate::usecases::money::stores::create_store_with(
+                &mut vault,
+                "X",
+                StoreKind::Bank,
+                "",
+                "",
+                None,
+                extras.clone()
+            )
+            .is_err()
         );
-        vault
-            .create_store_with("Loan", StoreKind::Liability, "", "", None, extras)
-            .unwrap();
+        crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Loan",
+            StoreKind::Liability,
+            "",
+            "",
+            None,
+            extras,
+        )
+        .unwrap();
     }
 
     // -- wallet tree -----------------------------------------------------------
 
     fn node(vault: &mut UnlockedVault, name: &str, parent: Option<&str>) -> String {
-        vault
-            .create_store(
-                name,
-                StoreKind::Exchange,
-                "#000",
-                "",
-                parent.map(str::to_string),
-            )
-            .unwrap()
-            .id
+        crate::usecases::money::stores::create_store(
+            vault,
+            name,
+            StoreKind::Exchange,
+            "#000",
+            "",
+            parent.map(str::to_string),
+        )
+        .unwrap()
+        .id
     }
 
     fn violation(result: Result<impl std::fmt::Debug>) -> StoreTreeViolation {
@@ -1160,25 +1265,31 @@ mod tests {
         let mut vault = UnlockedVault::create(dir.path().join("tree.wallet"), "pw").unwrap();
         let bybit = node(&mut vault, "Bybit", None);
         let spot = node(&mut vault, "Spot", Some(&bybit));
-        let futures = vault
-            .create_store_with(
-                "Futures",
-                StoreKind::Exchange,
-                "",
-                "",
-                Some(bybit.clone()),
-                StoreExtras {
-                    sub_type: Some(SubType::Futures),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id;
+        let futures = crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Futures",
+            StoreKind::Exchange,
+            "",
+            "",
+            Some(bybit.clone()),
+            StoreExtras {
+                sub_type: Some(SubType::Futures),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id;
         let ledger = node(&mut vault, "Ledger", None);
-        let bank = vault
-            .create_store("Bank", StoreKind::Bank, "", "", None)
-            .unwrap()
-            .id;
+        let bank = crate::usecases::money::stores::create_store(
+            &mut vault,
+            "Bank",
+            StoreKind::Bank,
+            "",
+            "",
+            None,
+        )
+        .unwrap()
+        .id;
         (dir, vault, [bybit, spot, futures, ledger, bank])
     }
 
@@ -1187,20 +1298,20 @@ mod tests {
         let (_dir, mut vault, [bybit, ..]) = two_levels();
         let usdt = AssetRef::fiat("USDT", "Tether");
         let mut create = |name: &str, sub_type| {
-            vault
-                .create_store_with(
-                    name,
-                    StoreKind::Exchange,
-                    "",
-                    "",
-                    Some(bybit.clone()),
-                    StoreExtras {
-                        sub_type: Some(sub_type),
-                        margin: Some(usdt.clone()),
-                        ..StoreExtras::default()
-                    },
-                )
-                .unwrap()
+            crate::usecases::money::stores::create_store_with(
+                &mut vault,
+                name,
+                StoreKind::Exchange,
+                "",
+                "",
+                Some(bybit.clone()),
+                StoreExtras {
+                    sub_type: Some(sub_type),
+                    margin: Some(usdt.clone()),
+                    ..StoreExtras::default()
+                },
+            )
+            .unwrap()
         };
         let futures = create("Perps", SubType::Futures);
         assert_eq!(
@@ -1218,7 +1329,11 @@ mod tests {
     fn a_store_cannot_become_its_own_parent() {
         let (_dir, mut vault, [_bybit, spot, ..]) = two_levels();
         assert_eq!(
-            violation(vault.move_store(&spot, Some(&spot))),
+            violation(crate::usecases::money::stores::move_store(
+                &mut vault,
+                &spot,
+                Some(&spot)
+            )),
             StoreTreeViolation::Cycle
         );
     }
@@ -1226,7 +1341,14 @@ mod tests {
     #[test]
     fn a_third_level_is_rejected() {
         let (_dir, mut vault, [_bybit, spot, ..]) = two_levels();
-        let created = vault.create_store("Deep", StoreKind::Exchange, "", "", Some(spot));
+        let created = crate::usecases::money::stores::create_store(
+            &mut vault,
+            "Deep",
+            StoreKind::Exchange,
+            "",
+            "",
+            Some(spot),
+        );
         assert_eq!(violation(created), StoreTreeViolation::TooDeep);
     }
 
@@ -1236,9 +1358,23 @@ mod tests {
         // a second "Spot" elsewhere is fine
         node(&mut vault, "Spot", Some(&ledger));
         // a case-different twin under the same parent is not
-        let twin = vault.create_store(" spot ", StoreKind::Exchange, "", "", Some(bybit.clone()));
+        let twin = crate::usecases::money::stores::create_store(
+            &mut vault,
+            " spot ",
+            StoreKind::Exchange,
+            "",
+            "",
+            Some(bybit.clone()),
+        );
         assert_eq!(violation(twin), StoreTreeViolation::NameTaken);
-        let root = vault.create_store("bybit", StoreKind::Exchange, "", "", None);
+        let root = crate::usecases::money::stores::create_store(
+            &mut vault,
+            "bybit",
+            StoreKind::Exchange,
+            "",
+            "",
+            None,
+        );
         assert_eq!(violation(root), StoreTreeViolation::NameTaken);
     }
 
@@ -1246,24 +1382,41 @@ mod tests {
     fn renaming_into_a_sibling_name_is_rejected() {
         let (_dir, mut vault, [_bybit, spot, futures, ..]) = two_levels();
         assert_eq!(
-            violation(vault.update_store(&futures, "SPOT", "", "", StoreExtras::default())),
+            violation(crate::usecases::money::stores::update_store(
+                &mut vault,
+                &futures,
+                "SPOT",
+                "",
+                "",
+                StoreExtras::default()
+            )),
             StoreTreeViolation::NameTaken
         );
         // keeping its own name (or changing only the case) is fine
-        vault
-            .update_store(&spot, "SPOT", "#fff", "note", StoreExtras::default())
-            .unwrap();
+        crate::usecases::money::stores::update_store(
+            &mut vault,
+            &spot,
+            "SPOT",
+            "#fff",
+            "note",
+            StoreExtras::default(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn a_top_level_wallet_never_becomes_a_sub_account() {
         let (_dir, mut vault, [bybit, _spot, _futures, ledger, _bank]) = two_levels();
         assert_eq!(
-            violation(vault.move_store(&ledger, Some(&bybit))),
+            violation(crate::usecases::money::stores::move_store(
+                &mut vault,
+                &ledger,
+                Some(&bybit)
+            )),
             StoreTreeViolation::RootMove
         );
         assert_eq!(
-            vault.store_move_targets(&ledger).unwrap(),
+            crate::usecases::money::stores::store_move_targets(&vault, &ledger).unwrap(),
             StoreMoveTargets::default()
         );
     }
@@ -1272,14 +1425,20 @@ mod tests {
     fn sub_accounts_move_only_between_wallets_of_their_kind() {
         let (_dir, mut vault, [_bybit, spot, _futures, ledger, bank]) = two_levels();
         assert_eq!(
-            rule(vault.move_store(&spot, None)),
+            rule(crate::usecases::money::stores::move_store(
+                &mut vault, &spot, None
+            )),
             WalletRule::NotApplicable
         );
         assert_eq!(
-            rule(vault.move_store(&spot, Some(&bank))),
+            rule(crate::usecases::money::stores::move_store(
+                &mut vault,
+                &spot,
+                Some(&bank)
+            )),
             WalletRule::SubTypeNotAllowed
         );
-        let targets = vault.store_move_targets(&spot).unwrap();
+        let targets = crate::usecases::money::stores::store_move_targets(&vault, &spot).unwrap();
         let ids: Vec<&str> = targets
             .parents
             .iter()
@@ -1287,25 +1446,43 @@ mod tests {
             .collect();
         assert_eq!(ids, vec![ledger.as_str()]);
         assert!(!targets.can_detach);
-        vault.move_store(&spot, Some(&ledger)).unwrap();
-        assert_eq!(vault.root_of(&spot), ledger);
+        crate::usecases::money::stores::move_store(&mut vault, &spot, Some(&ledger)).unwrap();
+        assert_eq!(crate::money::tree::root_of(&vault.doc, &spot), ledger);
     }
 
     #[test]
     fn archiving_cascades_and_restoring_needs_the_parent() {
         let (_dir, mut vault, [bybit, spot, ..]) = two_levels();
-        vault.archive_store(&bybit, true).unwrap();
-        assert!(vault.find_store(&spot).unwrap().archived);
+        crate::usecases::money::stores::archive_store(&mut vault, &bybit, true).unwrap();
+        assert!(
+            crate::money::tree::find_store(&vault.doc, &spot)
+                .unwrap()
+                .archived
+        );
 
-        let created = vault.create_store("New", StoreKind::Exchange, "", "", Some(bybit.clone()));
+        let created = crate::usecases::money::stores::create_store(
+            &mut vault,
+            "New",
+            StoreKind::Exchange,
+            "",
+            "",
+            Some(bybit.clone()),
+        );
         assert_eq!(violation(created), StoreTreeViolation::ParentArchived);
         assert_eq!(
-            violation(vault.archive_store(&spot, false).map(|()| "ok")),
+            violation(
+                crate::usecases::money::stores::archive_store(&mut vault, &spot, false)
+                    .map(|()| "ok")
+            ),
             StoreTreeViolation::RestoreParentFirst
         );
 
-        vault.archive_store(&bybit, false).unwrap();
-        assert!(!vault.find_store(&spot).unwrap().archived);
+        crate::usecases::money::stores::archive_store(&mut vault, &bybit, false).unwrap();
+        assert!(
+            !crate::money::tree::find_store(&vault.doc, &spot)
+                .unwrap()
+                .archived
+        );
     }
 
     #[test]
@@ -1314,8 +1491,16 @@ mod tests {
         let mut vault = UnlockedVault::create(dir.path().join("tree.wallet"), "pw").unwrap();
         let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
         let card = store(&mut vault, "Card", StoreKind::Bank, Some(&bank));
-        vault.add_transaction(income(&bank, "1", "own")).unwrap();
-        vault.add_transaction(income(&card, "10", "card")).unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&bank, "1", "own"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&card, "10", "card"),
+        )
+        .unwrap();
         vault.doc.price_cache.push(crate::model::vault::PricePoint {
             asset_key: usd().key(),
             value_usd: amount("1"),
@@ -1324,7 +1509,7 @@ mod tests {
             change_24h_pct: None,
         });
 
-        let tree = vault.store_tree();
+        let tree = crate::money::portfolio::store_tree(&vault.books());
         let root = tree.iter().find(|node| node.store.id == bank).unwrap();
         assert_eq!(root.own_usd, amount("1"));
         assert_eq!(root.subtree_usd, amount("11"));
@@ -1332,13 +1517,19 @@ mod tests {
         assert!(root.can_add_child);
         assert!(!root.children[0].can_add_child);
 
-        let overview = vault.store_overview(&bank, true).unwrap();
+        let overview =
+            crate::money::portfolio::store_overview(&vault.books(), &bank, true).unwrap();
         assert_eq!(overview.subtree_usd, amount("11"));
         assert_eq!(overview.children[0].value_usd, amount("10"));
         assert_eq!(overview.tx_count, 2);
-        assert_eq!(vault.store_overview(&bank, false).unwrap().tx_count, 1);
+        assert_eq!(
+            crate::money::portfolio::store_overview(&vault.books(), &bank, false)
+                .unwrap()
+                .tx_count,
+            1
+        );
 
-        let leaf = vault.store_overview(&card, true).unwrap();
+        let leaf = crate::money::portfolio::store_overview(&vault.books(), &card, true).unwrap();
         let crumbs: Vec<&str> = leaf
             .ancestors
             .iter()
@@ -1352,30 +1543,45 @@ mod tests {
         let (_dir, mut vault, [bybit, spot, ..]) = two_levels();
         let mut buy = income_of(&spot, btc(), "1", "50000", "buy");
         at(&mut buy, "2026-01-01T00:00:00Z");
-        vault.add_transaction(buy).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
         let mut sell = sell_btc(&spot, "0.5", "30000", "60000");
         at(&mut sell, "2026-01-02T00:00:00Z");
-        vault.add_transaction(sell).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, sell).unwrap();
 
-        assert!(vault.store_pnl(&bybit, false).legs.is_empty());
-        assert_eq!(vault.store_pnl(&bybit, true).legs.len(), 1);
+        assert!(
+            crate::money::portfolio::store_pnl(&vault.books(), &bybit, false)
+                .legs
+                .is_empty()
+        );
         assert_eq!(
-            vault.store_pnl(&bybit, true).total_base,
-            vault.store_pnl(&spot, false).total_base
+            crate::money::portfolio::store_pnl(&vault.books(), &bybit, true)
+                .legs
+                .len(),
+            1
+        );
+        assert_eq!(
+            crate::money::portfolio::store_pnl(&vault.books(), &bybit, true).total_base,
+            crate::money::portfolio::store_pnl(&vault.books(), &spot, false).total_base
         );
 
-        let own = vault.store_history(&bybit, false, "usd");
+        let own = crate::money::portfolio::store_history(&vault.books(), &bybit, false, "usd");
         assert!(own.iter().all(|point| point.value_usd.is_zero()));
-        let rolled = vault.store_history(&bybit, true, "usd");
+        let rolled = crate::money::portfolio::store_history(&vault.books(), &bybit, true, "usd");
         assert!(rolled.iter().any(|point| !point.value_usd.is_zero()));
         assert_eq!(
-            vault.transactions(&StoreScope::store(&bybit, true)).len(),
+            crate::usecases::money::transactions::transactions(
+                &vault,
+                &StoreScope::store(&bybit, true)
+            )
+            .len(),
             2
         );
         assert!(
-            vault
-                .transactions(&StoreScope::store(&bybit, false))
-                .is_empty()
+            crate::usecases::money::transactions::transactions(
+                &vault,
+                &StoreScope::store(&bybit, false)
+            )
+            .is_empty()
         );
     }
 
@@ -1392,9 +1598,16 @@ mod tests {
             }),
             ..StoreExtras::default()
         };
-        vault
-            .create_store_with("Bank", StoreKind::Bank, "", "", None, extras)
-            .unwrap();
+        crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Bank",
+            StoreKind::Bank,
+            "",
+            "",
+            None,
+            extras,
+        )
+        .unwrap();
         let tx = vault.doc.transactions.last().unwrap();
         assert_eq!(tx.meta().timestamp, "2026-10-01T00:00:00Z");
     }
@@ -1410,25 +1623,43 @@ mod tests {
             }),
             ..StoreExtras::default()
         };
-        let bank = vault
-            .create_store_with("Bank", StoreKind::Bank, "", "", None, opening("250", usd()))
-            .unwrap();
+        let bank = crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Bank",
+            StoreKind::Bank,
+            "",
+            "",
+            None,
+            opening("250", usd()),
+        )
+        .unwrap();
         assert_eq!(holding_of(&vault, &bank.id, &usd()), amount("250"));
         let tx = vault.doc.transactions.last().unwrap();
         assert_eq!(tx.meta().categories, vec!["opening_balance"]);
         // not income: the opening balance stays out of the budget
-        assert_eq!(vault.classify_flow(tx), FlowClass::Ignored);
+        assert_eq!(
+            crate::money::worth::classify_flow(&vault.doc, tx),
+            FlowClass::Ignored
+        );
 
         // a bank holds only fiat: the whole create is refused, nothing remains
         let stores = vault.doc.stores.len();
         assert!(
-            vault
-                .create_store_with("Bad", StoreKind::Bank, "", "", None, opening("1", btc()))
-                .is_err()
+            crate::usecases::money::stores::create_store_with(
+                &mut vault,
+                "Bad",
+                StoreKind::Bank,
+                "",
+                "",
+                None,
+                opening("1", btc())
+            )
+            .is_err()
         );
         assert_eq!(vault.doc.stores.len(), stores);
         assert_eq!(
-            rule(vault.create_store_with(
+            rule(crate::usecases::money::stores::create_store_with(
+                &mut vault,
                 "Flat",
                 StoreKind::Property,
                 "",
@@ -1452,18 +1683,30 @@ mod tests {
         assert_eq!(cash.len(), 1);
         let cash = cash[0].id.clone();
         assert_eq!(
-            rule(vault.create_store("More cash", StoreKind::Cash, "", "", None)),
+            rule(crate::usecases::money::stores::create_store(
+                &mut vault,
+                "More cash",
+                StoreKind::Cash,
+                "",
+                "",
+                None
+            )),
             WalletRule::NotCreatable
         );
         assert_eq!(
-            rule(vault.archive_store(&cash, true).map(|()| "ok")),
+            rule(
+                crate::usecases::money::stores::archive_store(&mut vault, &cash, true)
+                    .map(|()| "ok")
+            ),
             WalletRule::CashLocked
         );
         assert_eq!(
-            rule(vault.delete_store(&cash).map(|()| "ok")),
+            rule(crate::usecases::money::stores::delete_store(&mut vault, &cash).map(|()| "ok")),
             WalletRule::CashLocked
         );
-        assert!(!vault.ensure_cash_wallet("Наличные").unwrap());
+        assert!(
+            !crate::usecases::money::stores::ensure_cash_wallet(&mut vault, "Наличные").unwrap()
+        );
     }
 
     #[test]
@@ -1476,7 +1719,15 @@ mod tests {
             ..StoreExtras::default()
         };
         let create = |vault: &mut UnlockedVault, extras| {
-            vault.create_store_with("Sub", StoreKind::Bank, "", "", Some(bank.clone()), extras)
+            crate::usecases::money::stores::create_store_with(
+                vault,
+                "Sub",
+                StoreKind::Bank,
+                "",
+                "",
+                Some(bank.clone()),
+                extras,
+            )
         };
         assert_eq!(
             rule(create(&mut vault, with(None, None))),
@@ -1516,11 +1767,19 @@ mod tests {
         let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
         let card = store(&mut vault, "Card", StoreKind::Bank, Some(&bank));
         let eur = AssetRef::fiat("EUR", "Euro");
-        let refused = vault.add_transaction(income_of(&card, eur.clone(), "5", "1", "eur"));
+        let refused = crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of(&card, eur.clone(), "5", "1", "eur"),
+        );
         assert_eq!(rule(refused), WalletRule::BindingMismatch);
-        vault.add_transaction(income(&card, "5", "usd")).unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&card, "5", "usd"),
+        )
+        .unwrap();
         // re-binding to EUR would orphan the USD already booked
-        let rebind = vault.update_store(
+        let rebind = crate::usecases::money::stores::update_store(
+            &mut vault,
             &card,
             "Card",
             "",
@@ -1537,34 +1796,45 @@ mod tests {
     fn a_pair_converts_both_ways() {
         let (_dir, mut vault) = empty_vault();
         let bybit = store(&mut vault, "Bybit", StoreKind::Exchange, None);
-        let pair = vault
-            .create_store_with(
-                "BTCUSD",
-                StoreKind::Exchange,
-                "",
-                "",
-                Some(bybit),
-                StoreExtras {
-                    sub_type: Some(SubType::Pair),
-                    binding: Some(Binding::Pair {
-                        base: btc(),
-                        quote: usd(),
-                    }),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id;
-        vault.add_transaction(income(&pair, "100", "fund")).unwrap();
-        vault
-            .add_transaction(trade(&pair, "50", "0.001", "buy"))
-            .unwrap();
-        vault
-            .add_transaction(sell_btc(&pair, "0.0005", "30", "60000"))
-            .unwrap();
+        let pair = crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "BTCUSD",
+            StoreKind::Exchange,
+            "",
+            "",
+            Some(bybit),
+            StoreExtras {
+                sub_type: Some(SubType::Pair),
+                binding: Some(Binding::Pair {
+                    base: btc(),
+                    quote: usd(),
+                }),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id;
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&pair, "100", "fund"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            trade(&pair, "50", "0.001", "buy"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            sell_btc(&pair, "0.0005", "30", "60000"),
+        )
+        .unwrap();
         let eth = AssetRef::crypto("ETH", "Ethereum", Some("ethereum"), Chain::Ethereum);
         assert_eq!(
-            rule(vault.add_transaction(income_of(&pair, eth, "1", "1", "eth"))),
+            rule(crate::usecases::money::transactions::add_transaction(
+                &mut vault,
+                income_of(&pair, eth, "1", "1", "eth")
+            )),
             WalletRule::BindingMismatch
         );
     }
@@ -1572,7 +1842,8 @@ mod tests {
     #[test]
     fn extras_only_where_they_apply() {
         let (_dir, mut vault) = empty_vault();
-        let bad = vault.create_store_with(
+        let bad = crate::usecases::money::stores::create_store_with(
+            &mut vault,
             "Bank",
             StoreKind::Bank,
             "",
@@ -1584,38 +1855,43 @@ mod tests {
             },
         );
         assert_eq!(rule(bad), WalletRule::NotApplicable);
-        let bybit = vault
-            .create_store_with(
-                "Bybit",
-                StoreKind::Exchange,
-                "",
-                "",
-                None,
-                StoreExtras {
-                    provider: Some(ExchangeProvider::Bybit),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap();
+        let bybit = crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Bybit",
+            StoreKind::Exchange,
+            "",
+            "",
+            None,
+            StoreExtras {
+                provider: Some(ExchangeProvider::Bybit),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap();
         assert_eq!(
             bybit.exchange.as_ref().map(|profile| profile.provider),
             Some(ExchangeProvider::Bybit)
         );
         let flat = store(&mut vault, "Flat", StoreKind::Property, None);
-        assert!(vault.find_store(&flat).unwrap().property.is_some());
-        let mortgage = vault
-            .create_store_with(
-                "Mortgage",
-                StoreKind::Liability,
-                "",
-                "",
-                None,
-                StoreExtras {
-                    secured_by: Some(flat.clone()),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap();
+        assert!(
+            crate::money::tree::find_store(&vault.doc, &flat)
+                .unwrap()
+                .property
+                .is_some()
+        );
+        let mortgage = crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Mortgage",
+            StoreKind::Liability,
+            "",
+            "",
+            None,
+            StoreExtras {
+                secured_by: Some(flat.clone()),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap();
         assert_eq!(mortgage.secured_by, Some(flat));
     }
 
@@ -1623,65 +1899,81 @@ mod tests {
     fn each_exchange_keeps_its_own_terminal() {
         let (_dir, mut vault) = setup();
         let binance = vault.doc.stores[1].id.clone();
-        let other = vault
-            .create_store_with(
-                "Bybit 2",
-                StoreKind::Exchange,
-                "",
-                "",
-                None,
-                StoreExtras {
-                    provider: Some(ExchangeProvider::Bybit),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id;
-        vault
-            .update_terminal_state(
-                &binance,
-                TerminalPatch {
-                    watchlist: Some(vec!["solusdt".into(), "SOLUSDT".into(), " ".into()]),
-                    ..TerminalPatch::default()
-                },
-            )
-            .unwrap();
-        vault
-            .save_terminal_drawings(&binance, "solusdt", r#"[{"id":"1"}]"#)
-            .unwrap();
+        let other = crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Bybit 2",
+            StoreKind::Exchange,
+            "",
+            "",
+            None,
+            StoreExtras {
+                provider: Some(ExchangeProvider::Bybit),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id;
+        crate::usecases::cryptotrack::exchange_import::update_terminal_state(
+            &mut vault,
+            &binance,
+            TerminalPatch {
+                watchlist: Some(vec!["solusdt".into(), "SOLUSDT".into(), " ".into()]),
+                ..TerminalPatch::default()
+            },
+        )
+        .unwrap();
+        crate::usecases::cryptotrack::exchange_import::save_terminal_drawings(
+            &mut vault,
+            &binance,
+            "solusdt",
+            r#"[{"id":"1"}]"#,
+        )
+        .unwrap();
         // a timeframe change keeps the watchlist and the drawings
-        let after = vault
-            .update_terminal_state(
-                &binance,
-                TerminalPatch {
-                    timeframe: Some("4h".into()),
-                    ..TerminalPatch::default()
-                },
-            )
-            .unwrap();
+        let after = crate::usecases::cryptotrack::exchange_import::update_terminal_state(
+            &mut vault,
+            &binance,
+            TerminalPatch {
+                timeframe: Some("4h".into()),
+                ..TerminalPatch::default()
+            },
+        )
+        .unwrap();
         assert_eq!(after.watchlist, vec!["SOLUSDT".to_string()]);
         assert_eq!(after.timeframe, "4h");
         assert!(after.drawings.contains_key("SOLUSDT"));
         assert_eq!(
-            vault.terminal_state(&other).unwrap(),
+            crate::cryptotrack::exchange_import::terminal_state(&vault.doc, &other).unwrap(),
             TerminalState::default()
         );
 
-        vault
-            .save_terminal_drawings(&binance, "SOLUSDT", "[]")
-            .unwrap();
-        assert!(vault.terminal_state(&binance).unwrap().drawings.is_empty());
+        crate::usecases::cryptotrack::exchange_import::save_terminal_drawings(
+            &mut vault, &binance, "SOLUSDT", "[]",
+        )
+        .unwrap();
+        assert!(
+            crate::cryptotrack::exchange_import::terminal_state(&vault.doc, &binance)
+                .unwrap()
+                .drawings
+                .is_empty()
+        );
 
         // a wallet without a chosen exchange has no terminal and takes no key
         let cold = vault.doc.stores[2].id.clone();
         assert_eq!(
-            rule(vault.terminal_state(&cold)),
+            rule(crate::cryptotrack::exchange_import::terminal_state(
+                &vault.doc, &cold
+            )),
             WalletRule::ProviderRequired
         );
         let bare = store(&mut vault, "Bare", StoreKind::Exchange, None);
         vault.raise_to_level3_for_tests();
         assert_eq!(
-            rule(vault.set_exchange_key(&bare, "key", "secret")),
+            rule(
+                crate::usecases::cryptotrack::exchange_import::set_exchange_key(
+                    &mut vault, &bare, "key", "secret"
+                )
+            ),
             WalletRule::ProviderRequired
         );
     }
@@ -1691,7 +1983,9 @@ mod tests {
     #[test]
     fn history_counts_an_asset_held_twice_once() {
         let (_dir, vault) = two_stores_with_quotes();
-        let last = vault.history_series("usd").pop().unwrap();
+        let last = crate::money::portfolio::history_series(&vault.books(), "usd")
+            .pop()
+            .unwrap();
         assert_eq!(last.value_usd, amount("150"));
     }
 
@@ -1704,16 +1998,19 @@ mod tests {
         let dir = tempdir().unwrap();
         let mut vault = UnlockedVault::create(dir.path().join("fx.wallet"), "pw").unwrap();
         vault.set_base_currency("rub");
-        assert_eq!(vault.portfolio_summary().base_fx_as_of, None);
+        assert_eq!(
+            crate::usecases::money::capital::portfolio_summary(&vault.books()).base_fx_as_of,
+            None
+        );
         let point = |rate: &str, ts: &str| crate::model::vault::FxPoint {
             currency: "rub".into(),
             per_usd: amount(rate),
             ts: ts.into(),
             source: "test".into(),
         };
-        vault.apply_fx(&[point("80", "2026-01-01T00:00:00Z")]);
-        vault.apply_fx(&[point("95", "2026-03-01T00:00:00Z")]);
-        let summary = vault.portfolio_summary();
+        crate::usecases::money::rates::apply_fx(&mut vault, &[point("80", "2026-01-01T00:00:00Z")]);
+        crate::usecases::money::rates::apply_fx(&mut vault, &[point("95", "2026-03-01T00:00:00Z")]);
+        let summary = crate::usecases::money::capital::portfolio_summary(&vault.books());
         assert_eq!(summary.fx_per_usd, amount("95"));
         assert_eq!(
             summary.base_fx_as_of.as_deref(),
@@ -1832,18 +2129,30 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.wallet");
         let mut vault = UnlockedVault::create(path, "pw").unwrap();
-        let bank_a = vault
-            .create_store("A", StoreKind::Bank, "#111", "", None)
-            .unwrap();
-        let bank_b = vault
-            .create_store("B", StoreKind::Bank, "#222", "", None)
-            .unwrap();
+        let bank_a = crate::usecases::money::stores::create_store(
+            &mut vault,
+            "A",
+            StoreKind::Bank,
+            "#111",
+            "",
+            None,
+        )
+        .unwrap();
+        let bank_b = crate::usecases::money::stores::create_store(
+            &mut vault,
+            "B",
+            StoreKind::Bank,
+            "#222",
+            "",
+            None,
+        )
+        .unwrap();
         let mut left = income(&bank_a.id, "100", "in");
         at(&mut left, "2026-01-01T00:00:00Z");
-        vault.add_transaction(left).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, left).unwrap();
         let mut right = income(&bank_b.id, "50", "in");
         at(&mut right, "2026-01-01T00:00:00Z");
-        vault.add_transaction(right).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, right).unwrap();
 
         // Valuing a store means looking its assets up in the price cache, not
         // reading the price off the transaction, so seed it.
@@ -1860,7 +2169,7 @@ mod tests {
     #[test]
     fn portfolio_summary_splits_by_store() {
         let (_dir, vault) = two_stores_with_quotes();
-        let summary = vault.portfolio_summary();
+        let summary = crate::usecases::money::capital::portfolio_summary(&vault.books());
         assert_eq!(summary.total_usd.to_string(), "150");
         assert_eq!(summary.by_store.len(), 2);
     }
@@ -1868,7 +2177,7 @@ mod tests {
     #[test]
     fn prices_as_of_is_the_freshest_point() {
         let (_dir, mut vault) = crate::service::test_support::empty_vault();
-        assert_eq!(vault.prices_as_of(), None);
+        assert_eq!(crate::money::portfolio::prices_as_of(&vault.doc), None);
         vault.doc.price_cache.push(crate::model::vault::PricePoint {
             asset_key: "coin:bitcoin".into(),
             value_usd: crate::service::test_support::amount("1"),
@@ -1883,7 +2192,7 @@ mod tests {
             source: "test".into(),
         });
         assert_eq!(
-            vault.prices_as_of().as_deref(),
+            crate::money::portfolio::prices_as_of(&vault.doc).as_deref(),
             Some("2026-01-01T12:30:00.5Z")
         );
     }
@@ -1892,7 +2201,8 @@ mod tests {
     fn store_overview_matches_global_slice() {
         let (_dir, vault) = two_stores_with_quotes();
         let first = vault.doc.stores[1].id.clone();
-        let overview = vault.store_overview(&first, true).unwrap();
+        let overview =
+            crate::money::portfolio::store_overview(&vault.books(), &first, true).unwrap();
         assert_eq!(overview.own_usd.to_string(), "100");
         assert_eq!(overview.tx_count, 1);
     }
@@ -1903,11 +2213,11 @@ mod tests {
         let cold = vault.doc.stores[1].id.clone();
         let mut buy = income_of(&cold, btc(), "1", "50000", "buy");
         at(&mut buy, "2026-03-01T00:00:00Z");
-        vault.add_transaction(buy).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
         let mut cash = income_of(&cold, usd(), "100", "1", "cash");
         at(&mut cash, "2026-05-01T00:00:00Z");
-        vault.add_transaction(cash).unwrap();
-        let tree = vault.store_tree();
+        crate::usecases::money::transactions::add_transaction(&mut vault, cash).unwrap();
+        let tree = crate::money::portfolio::store_tree(&vault.books());
         let node = tree
             .iter()
             .find(|node| node.store.id == cold)
@@ -1930,16 +2240,22 @@ mod tests {
         child.name = "Sub".into();
         child.parent_id = Some(cold.clone());
         vault.doc.stores.push(child);
-        vault
-            .add_transaction(income_of(&cold, btc(), "0.5", "50000", "buy"))
-            .unwrap();
-        vault
-            .add_transaction(income_of(&cold, usd(), "100", "1", "cash"))
-            .unwrap();
-        vault
-            .add_transaction(income_of("child", btc(), "0.25", "50000", "buy"))
-            .unwrap();
-        let tree = vault.store_tree();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of(&cold, btc(), "0.5", "50000", "buy"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of(&cold, usd(), "100", "1", "cash"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income_of("child", btc(), "0.25", "50000", "buy"),
+        )
+        .unwrap();
+        let tree = crate::money::portfolio::store_tree(&vault.books());
         let node = tree
             .iter()
             .find(|node| node.store.id == cold)
@@ -1959,15 +2275,19 @@ mod tests {
         let store = vault.doc.stores[1].id.clone();
         let mut buy = income_of(&store, btc(), "1", "50000", "buy");
         at(&mut buy, "2026-01-01T00:00:00Z");
-        vault.add_transaction(buy).unwrap();
-        vault.apply_prices(&[crate::model::vault::PricePoint {
-            asset_key: btc().key(),
-            value_usd: amount("60000"),
-            ts: "2026-10-19T09:00:00Z".into(),
-            source: "coingecko".into(),
-            change_24h_pct: Some(amount("1.5")),
-        }]);
-        let overview = vault.store_overview(&store, true).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
+        crate::usecases::money::rates::apply_prices(
+            &mut vault,
+            &[crate::model::vault::PricePoint {
+                asset_key: btc().key(),
+                value_usd: amount("60000"),
+                ts: "2026-10-19T09:00:00Z".into(),
+                source: "coingecko".into(),
+                change_24h_pct: Some(amount("1.5")),
+            }],
+        );
+        let overview =
+            crate::money::portfolio::store_overview(&vault.books(), &store, true).unwrap();
         assert_eq!(overview.unrealized_base, amount("10000"));
         assert_eq!(overview.subtree_unrealized_base, amount("10000"));
         assert_eq!(
@@ -1985,8 +2305,8 @@ mod tests {
     fn store_history_isolates_store() {
         let (_dir, vault) = two_stores_with_quotes();
         let first = vault.doc.stores[1].id.clone();
-        let mine = vault.store_history(&first, true, "usd");
-        let everyone = vault.history_series("usd");
+        let mine = crate::money::portfolio::store_history(&vault.books(), &first, true, "usd");
+        let everyone = crate::money::portfolio::history_series(&vault.books(), "usd");
         assert!(mine.len() <= everyone.len());
         for point in &mine {
             assert!(point.value_usd <= everyone.last().unwrap().value_usd);
@@ -2002,14 +2322,14 @@ mod tests {
 
         let mut buy = income_of(&store, btc(), "1", "50000", "buy");
         at(&mut buy, "2026-01-01T00:00:00Z");
-        vault.add_transaction(buy).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
 
         let mut sell = sell_btc(&store, "0.5", "30000", "60000");
         at(&mut sell, "2026-01-02T00:00:00Z");
-        vault.add_transaction(sell).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, sell).unwrap();
 
         // bought at 50k, sold at 60k, half the position
-        let pnl = vault.store_pnl(&store, true);
+        let pnl = crate::money::portfolio::store_pnl(&vault.books(), &store, true);
         assert_eq!(pnl.total_base, amount("5000"));
         assert_eq!(pnl.legs.len(), 1);
         assert_eq!(pnl.legs[0].side, "sell");
@@ -2033,18 +2353,18 @@ mod tests {
         };
         let mut buy = income_of(&store, btc(), "1", "50000", "buy");
         at(&mut buy, "2026-01-01T00:00:00Z");
-        vault.add_transaction(buy).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, buy).unwrap();
         let mut unpriced = income_of(&store, btc(), "1", "0", "airdrop");
         at(&mut unpriced, "2026-01-02T00:00:00Z");
-        vault.add_transaction(unpriced).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, unpriced).unwrap();
         let (quantity, cost) = cost_of(&vault);
         assert_eq!(quantity, amount("2"));
         assert_eq!(cost, Some(amount("50000")));
 
         let mut sell = sell_btc(&store, "1", "60000", "60000");
         at(&mut sell, "2026-01-03T00:00:00Z");
-        vault.add_transaction(sell).unwrap();
-        let pnl = vault.realized_pnl();
+        crate::usecases::money::transactions::add_transaction(&mut vault, sell).unwrap();
+        let pnl = crate::money::portfolio::realized_pnl(&vault.books());
         assert_eq!(pnl.legs.len(), 1);
         assert_eq!(
             pnl.legs[0].pnl_base,
@@ -2064,9 +2384,9 @@ mod tests {
         let store = vault.doc.stores[1].id.clone();
         let mut sale = sell_btc(&store, "0.5", "30000", "60000");
         at(&mut sale, "2026-01-01T00:00:00Z");
-        vault.add_transaction(sale).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, sale).unwrap();
 
-        let pnl = vault.realized_pnl();
+        let pnl = crate::money::portfolio::realized_pnl(&vault.books());
         assert_eq!(pnl.total_base, Amount::ZERO);
         assert!(pnl.legs.is_empty());
         let holding = vault
@@ -2083,9 +2403,11 @@ mod tests {
     fn replace_doc_rederives_holdings_and_pins_identity() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        vault
-            .add_transaction(income(&store, "100", "top up"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&store, "100", "top up"),
+        )
+        .unwrap();
 
         let mut edited = vault.doc.clone();
         // A hand-edited holdings array must not be able to disagree with the
@@ -2179,7 +2501,12 @@ mod tests {
             let dir = tempdir().unwrap();
             let path = v4_vault_at(dir.path(), bytes);
             let mut vault = UnlockedVault::open(path, V4_PASSWORD).unwrap();
-            assert!(vault.repair_invariants(None).unwrap().is_empty(), "{name}");
+            assert!(
+                crate::usecases::sync::repair::repair_invariants(&mut vault, None)
+                    .unwrap()
+                    .is_empty(),
+                "{name}"
+            );
         }
     }
 
@@ -2287,19 +2614,19 @@ mod import_tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.wallet");
         let mut vault = UnlockedVault::create(path, "pw").unwrap();
-        vault
-            .create_store_with(
-                "Bybit",
-                StoreKind::Exchange,
-                "#f0b90b",
-                "",
-                None,
-                StoreExtras {
-                    provider: Some(crate::model::store::ExchangeProvider::Bybit),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap();
+        crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Bybit",
+            StoreKind::Exchange,
+            "#f0b90b",
+            "",
+            None,
+            StoreExtras {
+                provider: Some(crate::model::store::ExchangeProvider::Bybit),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap();
         (dir, vault)
     }
 
@@ -2332,12 +2659,17 @@ mod import_tests {
     fn staging_creates_no_transactions() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        let count = vault
-            .stage_imports(vec![staged(&store, "e1", "buy")])
-            .unwrap();
+        let count = crate::usecases::cryptotrack::exchange_import::stage_imports(
+            &mut vault,
+            vec![staged(&store, "e1", "buy")],
+        )
+        .unwrap();
         assert_eq!(count, 1);
         assert_eq!(vault.doc.transactions.len(), 0);
-        assert_eq!(vault.pending_imports().len(), 1);
+        assert_eq!(
+            crate::cryptotrack::exchange_import::pending_imports(&vault.doc).len(),
+            1
+        );
     }
 
     /// Re-running an import must not duplicate fills: execId is the key.
@@ -2346,28 +2678,34 @@ mod import_tests {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
         assert_eq!(
-            vault
-                .stage_imports(vec![staged(&store, "e1", "buy")])
-                .unwrap(),
+            crate::usecases::cryptotrack::exchange_import::stage_imports(
+                &mut vault,
+                vec![staged(&store, "e1", "buy")]
+            )
+            .unwrap(),
             1
         );
         assert_eq!(
-            vault
-                .stage_imports(vec![staged(&store, "e1", "buy")])
-                .unwrap(),
+            crate::usecases::cryptotrack::exchange_import::stage_imports(
+                &mut vault,
+                vec![staged(&store, "e1", "buy")]
+            )
+            .unwrap(),
             0
         );
         // A batch that repeats asset known id alongside asset new one adds only the new one.
         assert_eq!(
-            vault
-                .stage_imports(vec![
-                    staged(&store, "e1", "buy"),
-                    staged(&store, "e2", "sell"),
-                ])
-                .unwrap(),
+            crate::usecases::cryptotrack::exchange_import::stage_imports(
+                &mut vault,
+                vec![staged(&store, "e1", "buy"), staged(&store, "e2", "sell"),]
+            )
+            .unwrap(),
             1
         );
-        assert_eq!(vault.pending_imports().len(), 2);
+        assert_eq!(
+            crate::cryptotrack::exchange_import::pending_imports(&vault.doc).len(),
+            2
+        );
     }
 
     const ACCOUNT_NAMES: [&str; 3] = ["Funding", "Unified", "Earn"];
@@ -2376,10 +2714,20 @@ mod import_tests {
     fn bybit_accounts_are_created_once() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        let first = vault.ensure_bybit_accounts(&store, ACCOUNT_NAMES).unwrap();
-        let again = vault.ensure_bybit_accounts(&store, ACCOUNT_NAMES).unwrap();
+        let first = crate::usecases::cryptotrack::exchange_import::ensure_bybit_accounts(
+            &mut vault,
+            &store,
+            ACCOUNT_NAMES,
+        )
+        .unwrap();
+        let again = crate::usecases::cryptotrack::exchange_import::ensure_bybit_accounts(
+            &mut vault,
+            &store,
+            ACCOUNT_NAMES,
+        )
+        .unwrap();
         assert_eq!(first, again);
-        assert_eq!(vault.children_of(&store).len(), 3);
+        assert_eq!(crate::money::tree::children_of(&vault.doc, &store).len(), 3);
     }
 
     /// Keys of a wallet that only trades: the unified account is created, the
@@ -2403,14 +2751,27 @@ mod import_tests {
 
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        let ids = vault
-            .ensure_bybit_accounts_for(&store, ACCOUNT_NAMES, wanted)
-            .unwrap();
+        let ids = crate::usecases::cryptotrack::exchange_import::ensure_bybit_accounts_for(
+            &mut vault,
+            &store,
+            ACCOUNT_NAMES,
+            wanted,
+        )
+        .unwrap();
         assert!(ids[0].is_none() && ids[2].is_none());
-        assert_eq!(vault.children_of(&store).len(), 1);
-        assert_eq!(vault.unified_account_of(&store), ids[1]);
+        assert_eq!(crate::money::tree::children_of(&vault.doc, &store).len(), 1);
+        assert_eq!(
+            crate::cryptotrack::exchange_import::unified_account_of(&vault.books(), &store),
+            ids[1]
+        );
         // Trades on the wallet or any of its accounts go to the unified one.
-        assert_eq!(vault.unified_account_of(ids[1].as_deref().unwrap()), ids[1]);
+        assert_eq!(
+            crate::cryptotrack::exchange_import::unified_account_of(
+                &vault.books(),
+                ids[1].as_deref().unwrap()
+            ),
+            ids[1]
+        );
     }
 
     #[test]
@@ -2418,12 +2779,12 @@ mod import_tests {
         use crate::service::test_support::{amount, empty_vault, holding_of, income, usd};
         let (_dir, mut vault) = empty_vault();
         let cash = vault.doc.stores[0].id.clone();
-        let saved = vault
-            .add_linked_transactions(
-                vec![income(&cash, "10", "a"), income(&cash, "5", "b")],
-                None,
-            )
-            .unwrap();
+        let saved = crate::usecases::money::transactions::add_linked_transactions(
+            &mut vault,
+            vec![income(&cash, "10", "a"), income(&cash, "5", "b")],
+            None,
+        )
+        .unwrap();
         assert_eq!(saved.len(), 2);
         let flow = saved[0].meta().flow_id.clone();
         assert!(flow.is_some());
@@ -2434,9 +2795,12 @@ mod import_tests {
         broken.meta_mut().categories = vec!["no-such-category".into()];
         let before = vault.doc.transactions.len();
         assert!(
-            vault
-                .add_linked_transactions(vec![income(&cash, "3", "d"), broken], None)
-                .is_err()
+            crate::usecases::money::transactions::add_linked_transactions(
+                &mut vault,
+                vec![income(&cash, "3", "d"), broken],
+                None
+            )
+            .is_err()
         );
         assert_eq!(
             vault.doc.transactions.len(),
@@ -2450,26 +2814,26 @@ mod import_tests {
     fn a_bank_comes_with_its_card_and_the_opening_balance_on_it() {
         use crate::service::test_support::{amount, empty_vault, holding_of};
         let (_dir, mut vault) = empty_vault();
-        let bank = vault
-            .create_bank_with_card(
-                "Sber",
-                "#0a0",
-                "",
-                StoreExtras {
-                    opening: Some(OpeningBalance {
-                        asset: AssetRef::fiat("RUB", "RUB"),
-                        amount: amount("1500"),
-                        at: None,
-                    }),
-                    ..StoreExtras::default()
-                },
-                FirstCard {
-                    name: String::new(),
-                    currency: "rub".into(),
-                },
-            )
-            .unwrap();
-        let cards = vault.children_of(&bank.id);
+        let bank = crate::usecases::money::stores::create_bank_with_card(
+            &mut vault,
+            "Sber",
+            "#0a0",
+            "",
+            StoreExtras {
+                opening: Some(OpeningBalance {
+                    asset: AssetRef::fiat("RUB", "RUB"),
+                    amount: amount("1500"),
+                    at: None,
+                }),
+                ..StoreExtras::default()
+            },
+            FirstCard {
+                name: String::new(),
+                currency: "rub".into(),
+            },
+        )
+        .unwrap();
+        let cards = crate::money::tree::children_of(&vault.doc, &bank.id);
         assert_eq!(cards.len(), 1);
         let card = cards[0].clone();
         assert_eq!(card.sub_type, Some(SubType::Card));
@@ -2482,25 +2846,25 @@ mod import_tests {
         // A card that cannot hold the opening currency leaves nothing behind.
         let stores = vault.doc.stores.len();
         assert!(
-            vault
-                .create_bank_with_card(
-                    "Tinkoff",
-                    "#ff0",
-                    "",
-                    StoreExtras {
-                        opening: Some(OpeningBalance {
-                            asset: AssetRef::fiat("USD", "USD"),
-                            amount: amount("10"),
-                            at: None,
-                        }),
-                        ..StoreExtras::default()
-                    },
-                    FirstCard {
-                        name: "Card".into(),
-                        currency: "rub".into(),
-                    },
-                )
-                .is_err()
+            crate::usecases::money::stores::create_bank_with_card(
+                &mut vault,
+                "Tinkoff",
+                "#ff0",
+                "",
+                StoreExtras {
+                    opening: Some(OpeningBalance {
+                        asset: AssetRef::fiat("USD", "USD"),
+                        amount: amount("10"),
+                        at: None,
+                    }),
+                    ..StoreExtras::default()
+                },
+                FirstCard {
+                    name: "Card".into(),
+                    currency: "rub".into(),
+                }
+            )
+            .is_err()
         );
         assert_eq!(vault.doc.stores.len(), stores);
     }
@@ -2520,12 +2884,18 @@ mod import_tests {
     fn bybit_imports_are_routed_by_account() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        let [funding, unified, earn] = vault.ensure_bybit_accounts(&store, ACCOUNT_NAMES).unwrap();
+        let [funding, unified, earn] =
+            crate::usecases::cryptotrack::exchange_import::ensure_bybit_accounts(
+                &mut vault,
+                &store,
+                ACCOUNT_NAMES,
+            )
+            .unwrap();
         let usdt = AssetRef::fiat("USDT", "USDT");
         let mut seed =
             crate::service::test_support::income_of(&funding, usdt, "100", "1", "salary");
         seed.meta_mut().timestamp = "2023-01-01T00:00:00Z".into();
-        vault.add_transaction(seed).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut vault, seed).unwrap();
 
         let transfer = PendingImport::from_transfer(
             &store,
@@ -2552,12 +2922,18 @@ mod import_tests {
         )
         .unwrap();
         assert_eq!(
-            vault
-                .stage_imports(vec![transfer, payout, staged(&store, "e1", "buy")])
+            crate::usecases::cryptotrack::exchange_import::stage_imports(
+                &mut vault,
+                vec![transfer, payout, staged(&store, "e1", "buy")]
+            )
+            .unwrap(),
+            3
+        );
+        assert_eq!(
+            crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(&mut vault, &[])
                 .unwrap(),
             3
         );
-        assert_eq!(vault.confirm_pending_imports(&[]).unwrap(), 3);
 
         let moved = vault
             .doc
@@ -2596,7 +2972,8 @@ mod import_tests {
         assert_eq!(trade.store_id, unified);
 
         // The API says Funding holds 70; the ledger has 60 left after the move.
-        let report = vault.bybit_reconcile(
+        let report = crate::usecases::cryptotrack::exchange_import::bybit_reconcile(
+            &vault.books(),
             &store,
             &[(
                 "FUND".into(),
@@ -2615,11 +2992,13 @@ mod import_tests {
     #[test]
     fn staging_skips_fills_for_unknown_stores() {
         let (_dir, mut vault) = setup();
-        let count = vault
-            .stage_imports(vec![staged("ghost-store", "e1", "buy")])
-            .unwrap();
+        let count = crate::usecases::cryptotrack::exchange_import::stage_imports(
+            &mut vault,
+            vec![staged("ghost-store", "e1", "buy")],
+        )
+        .unwrap();
         assert_eq!(count, 0);
-        assert!(vault.pending_imports().is_empty());
+        assert!(crate::cryptotrack::exchange_import::pending_imports(&vault.doc).is_empty());
     }
 
     /// A buy becomes a two-leg trade: quote out (negative), base in (positive).
@@ -2627,11 +3006,17 @@ mod import_tests {
     fn confirming_a_buy_creates_a_balanced_trade() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        vault
-            .stage_imports(vec![staged(&store, "e1", "buy")])
-            .unwrap();
+        crate::usecases::cryptotrack::exchange_import::stage_imports(
+            &mut vault,
+            vec![staged(&store, "e1", "buy")],
+        )
+        .unwrap();
 
-        assert_eq!(vault.confirm_pending_imports(&[]).unwrap(), 1);
+        assert_eq!(
+            crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(&mut vault, &[])
+                .unwrap(),
+            1
+        );
         // One fill is one trade: a single record holding both sides, not two
         // transactions that had to be paired back up by a shared group id.
         assert_eq!(vault.doc.transactions.len(), 1);
@@ -2654,7 +3039,7 @@ mod import_tests {
         };
         assert_eq!(spot.liquidity, Some(Liquidity::Taker));
         // Staging area is drained so the same fill cannot be confirmed twice.
-        assert!(vault.pending_imports().is_empty());
+        assert!(crate::cryptotrack::exchange_import::pending_imports(&vault.doc).is_empty());
         // Holdings reflect the bought asset.
         assert!(
             vault
@@ -2669,18 +3054,20 @@ mod import_tests {
     fn confirming_selectively_leaves_the_rest_staged() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        vault
-            .stage_imports(vec![
-                staged(&store, "e1", "buy"),
-                staged(&store, "e2", "sell"),
-            ])
-            .unwrap();
+        crate::usecases::cryptotrack::exchange_import::stage_imports(
+            &mut vault,
+            vec![staged(&store, "e1", "buy"), staged(&store, "e2", "sell")],
+        )
+        .unwrap();
 
-        let confirmed = vault.confirm_pending_imports(&["e1".to_string()]).unwrap();
+        let confirmed = crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(
+            &mut vault,
+            &["e1".to_string()],
+        )
+        .unwrap();
         assert_eq!(confirmed, 1);
         assert_eq!(vault.doc.transactions.len(), 1);
-        let left: Vec<String> = vault
-            .pending_imports()
+        let left: Vec<String> = crate::cryptotrack::exchange_import::pending_imports(&vault.doc)
             .into_iter()
             .map(|pending| pending.exec_id)
             .collect();
@@ -2691,11 +3078,17 @@ mod import_tests {
     fn discarding_creates_nothing_and_drops_the_fill() {
         let (_dir, mut vault) = setup();
         let store = vault.doc.stores[1].id.clone();
-        vault
-            .stage_imports(vec![staged(&store, "e1", "buy")])
-            .unwrap();
-        assert_eq!(vault.discard_pending_imports(&[]).unwrap(), 1);
-        assert!(vault.pending_imports().is_empty());
+        crate::usecases::cryptotrack::exchange_import::stage_imports(
+            &mut vault,
+            vec![staged(&store, "e1", "buy")],
+        )
+        .unwrap();
+        assert_eq!(
+            crate::usecases::cryptotrack::exchange_import::discard_pending_imports(&mut vault, &[])
+                .unwrap(),
+            1
+        );
+        assert!(crate::cryptotrack::exchange_import::pending_imports(&vault.doc).is_empty());
         assert_eq!(vault.doc.transactions.len(), 0);
     }
 
@@ -2703,9 +3096,11 @@ mod import_tests {
     fn confirmed_fills_reject_a_missing_exec_id() {
         let (_dir, mut vault) = setup();
         assert_eq!(
-            vault
-                .confirm_pending_imports(&["nope".to_string()])
-                .unwrap(),
+            crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(
+                &mut vault,
+                &["nope".to_string()]
+            )
+            .unwrap(),
             0
         );
         assert_eq!(vault.doc.transactions.len(), 0);
@@ -2750,29 +3145,40 @@ mod import_tests {
     fn futures_fills_open_and_close_positions_on_the_sub_account() {
         let (_dir, mut vault) = setup();
         let bybit = vault.doc.stores[1].id.clone();
-        let futures = vault
-            .create_store_with(
-                "Futures",
-                StoreKind::Exchange,
-                "",
-                "",
-                Some(bybit.clone()),
-                StoreExtras {
-                    sub_type: Some(SubType::Futures),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id;
+        let futures = crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Futures",
+            StoreKind::Exchange,
+            "",
+            "",
+            Some(bybit.clone()),
+            StoreExtras {
+                sub_type: Some(SubType::Futures),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id;
         vault.raise_to_level3_for_tests();
-        vault.set_exchange_key(&bybit, "key", "secret").unwrap();
-        vault
-            .set_exchange_targets(&bybit, None, Some(futures.clone()))
-            .unwrap();
+        crate::usecases::cryptotrack::exchange_import::set_exchange_key(
+            &mut vault, &bybit, "key", "secret",
+        )
+        .unwrap();
+        crate::usecases::cryptotrack::exchange_import::set_exchange_targets(
+            &mut vault,
+            &bybit,
+            None,
+            Some(futures.clone()),
+        )
+        .unwrap();
         assert!(
-            vault
-                .set_exchange_targets(&bybit, Some("elsewhere".into()), None)
-                .is_err()
+            crate::usecases::cryptotrack::exchange_import::set_exchange_targets(
+                &mut vault,
+                &bybit,
+                Some("elsewhere".into()),
+                None
+            )
+            .is_err()
         );
 
         let mut open = fill("o1", "Buy", "0.5", "65000");
@@ -2781,13 +3187,19 @@ mod import_tests {
         close.closed_size = Some("0.5".into());
         let mut closing = PendingImport::from_execution(&bybit, "linear", &close).unwrap();
         closing.closed_pnl = Some(Amount::parse("500").unwrap());
-        vault
-            .stage_imports(vec![
+        crate::usecases::cryptotrack::exchange_import::stage_imports(
+            &mut vault,
+            vec![
                 PendingImport::from_execution(&bybit, "linear", &open).unwrap(),
                 closing,
-            ])
-            .unwrap();
-        assert_eq!(vault.confirm_pending_imports(&[]).unwrap(), 2);
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(&mut vault, &[])
+                .unwrap(),
+            2
+        );
 
         let kinds: Vec<(FuturesDirection, FuturesAction)> = vault
             .doc
@@ -2824,7 +3236,7 @@ mod import_tests {
             .unwrap();
         assert_eq!(usdt.quantity.to_string(), "499.0");
         assert_eq!(
-            vault.realized_pnl().total_base,
+            crate::money::portfolio::realized_pnl(&vault.books()).total_base,
             Amount::parse("500").unwrap()
         );
     }
@@ -2986,39 +3398,46 @@ mod persist_tests {
         let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
         let mut payment = income(&cash, "100", "water");
         payment.meta_mut().utility_item_id = Some("util-1".into());
-        let saved = vault.add_transaction(payment).unwrap();
+        let saved =
+            crate::usecases::money::transactions::add_transaction(&mut vault, payment).unwrap();
         let id = saved.meta().id.clone();
 
         // The form sends no link: the stored one stays.
         let edited = income(&cash, "120", "water");
-        let updated = vault.update_transaction(&id, edited).unwrap();
+        let updated =
+            crate::usecases::money::transactions::update_transaction(&mut vault, &id, edited)
+                .unwrap();
         assert_eq!(updated.meta().utility_item_id.as_deref(), Some("util-1"));
     }
 
     #[test]
     fn import_schedule_skips_an_archived_store() {
         let (_dir, mut vault) = super::test_support::empty_vault();
-        let bybit = vault
-            .create_store_with(
-                "Bybit",
-                StoreKind::Exchange,
-                "",
-                "",
-                None,
-                StoreExtras {
-                    provider: Some(crate::model::store::ExchangeProvider::Bybit),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id;
+        let bybit = crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Bybit",
+            StoreKind::Exchange,
+            "",
+            "",
+            None,
+            StoreExtras {
+                provider: Some(crate::model::store::ExchangeProvider::Bybit),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id;
         vault.raise_to_level3_for_tests();
         vault
             .store_device_key(&bybit, "KEYKEYKEY123", "SECRETSECRET456", true)
             .unwrap();
-        vault.set_import_interval(&bybit, 900).unwrap();
-        assert_eq!(vault.import_schedule().len(), 1);
-        vault.archive_store(&bybit, true).unwrap();
-        assert!(vault.import_schedule().is_empty());
+        crate::usecases::cryptotrack::exchange_import::set_import_interval(&mut vault, &bybit, 900)
+            .unwrap();
+        assert_eq!(
+            crate::usecases::cryptotrack::exchange_import::import_schedule(&vault).len(),
+            1
+        );
+        crate::usecases::money::stores::archive_store(&mut vault, &bybit, true).unwrap();
+        assert!(crate::usecases::cryptotrack::exchange_import::import_schedule(&vault).is_empty());
     }
 }

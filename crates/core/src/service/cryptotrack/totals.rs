@@ -7,11 +7,6 @@
 pub use crate::cryptotrack::service::totals::CryptoLeftOut;
 use crate::cryptotrack::service::totals::CryptoOutsideTotals;
 
-#[cfg(test)]
-use crate::model::cryptotrack::CryptoAsset;
-#[cfg(test)]
-use crate::model::store::AssetRef;
-
 use super::super::UnlockedVault;
 use super::super::forward::forward;
 
@@ -26,17 +21,7 @@ impl UnlockedVault {
 
     // Called by the holdings fold and the positions until those areas move;
     // not in the baseline (crate-private), so outside the regenerated block.
-    forward! {
-        #[cfg(test)]
-        /// Put the engine's balances into `doc.holdings`, replacing what they
-        /// supersede. Called at the end of `recompute_holdings`; saves nothing.
-        pub(crate) fn apply_crypto_holdings(&mut self)
-            => crate::usecases::cryptotrack::recompute::apply_crypto_holdings;
-        /// The identity a module holding is shown and priced under.
-        #[cfg(test)]
-        pub(crate) fn crypto_asset_ref(&self, asset: &CryptoAsset) -> AssetRef
-            => crate::cryptotrack::service::totals::crypto_asset_ref @doc;
-    }
+    forward! {}
 }
 
 #[cfg(test)]

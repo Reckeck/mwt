@@ -15,11 +15,6 @@ impl UnlockedVault {
         /// Transaction history, newest first, limited to a scope.
         pub fn transactions(&self, scope: &StoreScope) -> Vec<Transaction>
             => crate::usecases::money::transactions::transactions;
-        /// Everything a write does before storing: categories normalized and
-        /// auto-filled, property prices completed, unpriced sides stamped, every
-        /// rule checked.
-        pub(crate) fn prepare_transaction(&self, tx: &mut Transaction) -> Result<()>
-            => crate::usecases::money::transactions::prepare_transaction;
         /// Validate and append a transaction of any variant (plan §4.5, §8.1):
         /// categories are normalized and auto-filled, then every rule is checked.
         pub fn add_transaction(&mut self, tx: Transaction) -> Result<Transaction>

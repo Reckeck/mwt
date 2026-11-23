@@ -74,18 +74,27 @@ fn a_fired_alert_remembers_its_threshold_and_an_edit_clears_both() {
         store_id: None,
         repeats: false,
     };
-    let created = vault.create_price_alert(draft("95000")).unwrap();
+    let created =
+        crate::usecases::planning::agenda::create_price_alert(&mut vault, draft("95000")).unwrap();
     let now = unix_secs("2026-03-01T01:00:00Z").unwrap();
-    assert_eq!(vault.check_alerts(now).unwrap().len(), 1);
+    assert_eq!(
+        crate::usecases::planning::agenda::check_alerts(&mut vault, now)
+            .unwrap()
+            .len(),
+        1
+    );
     let stored = &vault.doc.price_alerts[0];
     assert_eq!(
         stored.triggered_for.as_deref(),
         Some(stored.fingerprint().as_str())
     );
     assert!(stored.is_triggered());
-    let edited = vault
-        .update_price_alert(&created.id, draft("99000"))
-        .unwrap();
+    let edited = crate::usecases::planning::agenda::update_price_alert(
+        &mut vault,
+        &created.id,
+        draft("99000"),
+    )
+    .unwrap();
     assert!(edited.triggered_at.is_none() && edited.triggered_for.is_none());
 }
 
@@ -100,7 +109,7 @@ fn the_list_hides_a_stale_firing_but_the_record_keeps_it() {
     fired.triggered_at = Some("2026-03-01T00:00:00Z".into());
     fired.triggered_for = Some(fired.fingerprint());
     vault.doc.price_alerts = vec![stale, fired];
-    let listed = vault.price_alerts();
+    let listed = crate::planning::agenda::price_alerts(&vault.doc);
     assert!(
         listed[0].triggered_at.is_none(),
         "a stale firing shows as armed"

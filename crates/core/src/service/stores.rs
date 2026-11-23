@@ -13,6 +13,7 @@ use super::{FirstCard, StoreExtras, UnlockedVault};
 impl UnlockedVault {
     // forward:begin
     forward! {
+        #[cfg(test)]
         pub(crate) fn find_store(&self, id: &str) -> Option<&Store>
             => crate::money::tree::find_store @doc;
         /// 0 for a top-level wallet.

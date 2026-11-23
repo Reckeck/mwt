@@ -9,7 +9,6 @@ pub use crate::money::portfolio::{
 
 use std::collections::HashSet;
 
-use crate::Amount;
 use crate::error::Result;
 #[cfg(test)]
 use crate::model::store::Store;
@@ -25,15 +24,6 @@ impl UnlockedVault {
         /// module's balances over them. Saves nothing: the caller persists.
         pub(crate) fn recompute_holdings(&mut self)
             => crate::usecases::money::portfolio::recompute_holdings;
-        /// Base currency code (never empty) and its **latest** cached FX rate.
-        pub(crate) fn base_and_fx(&self) -> (String, Amount)
-            => crate::usecases::money::portfolio::base_and_fx;
-        /// Current USD price of one unit; see [`crate::money::price_info::price_quote_for`].
-        pub(crate) fn price_usd_for(&self, asset_key: &str) -> Amount
-            => crate::money::portfolio::price_usd_for @books;
-        /// Base-currency price of one unit (the base's own fiat is exactly 1).
-        pub(crate) fn price_base_for(&self, asset_key: &str, fx: Amount) -> Amount
-            => crate::money::portfolio::price_base_for @books;
         /// Every store id a scope covers. An empty id list means the whole vault.
         pub fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String>
             => crate::money::tree::resolve_scope @doc;

@@ -262,9 +262,15 @@ fn a_wrong_pin_or_a_weak_password_changes_nothing() {
 fn plain_vault_with_copies() -> (tempfile::TempDir, UnlockedVault) {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = UnlockedVault::create_with(wallet(&dir), None).unwrap();
-    vault
-        .create_store("Cold", StoreKind::Crypto, "#555", "", None)
-        .unwrap();
+    crate::usecases::money::stores::create_store(
+        &mut vault,
+        "Cold",
+        StoreKind::Crypto,
+        "#555",
+        "",
+        None,
+    )
+    .unwrap();
     vault.flush_pending().unwrap();
     std::fs::copy(&vault.path, dir.path().join("test.wallet.bak")).unwrap();
     std::fs::copy(&vault.path, dir.path().join("test.wallet.v1.bak")).unwrap();
@@ -396,20 +402,20 @@ fn a_linked_vault_raises_with_the_phone_profile() {
 fn level3_with_key() -> (tempfile::TempDir, UnlockedVault) {
     let (dir, mut vault) = empty_vault();
     vault.raise_to_level3_for_tests();
-    let store = vault
-        .create_store_with(
-            "Bybit",
-            StoreKind::Exchange,
-            "#f0b90b",
-            "",
-            None,
-            StoreExtras {
-                provider: Some(ExchangeProvider::Bybit),
-                ..Default::default()
-            },
-        )
-        .unwrap()
-        .id;
+    let store = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Bybit",
+        StoreKind::Exchange,
+        "#f0b90b",
+        "",
+        None,
+        StoreExtras {
+            provider: Some(ExchangeProvider::Bybit),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .id;
     vault
         .store_device_key(&store, "KEYKEYKEY123", "SECRETSECRET456", true)
         .unwrap();
@@ -475,18 +481,18 @@ fn crypto_data_is_not_taken_in_below_level_three() {
         .iter()
         .map(|store| format!("stores:{}", store.id))
         .collect();
-    let incoming = vault.sync_records(&keys).unwrap();
+    let incoming = crate::usecases::sync::read::sync_records(&mut vault, &keys).unwrap();
     assert!(!incoming.is_empty());
     assert!(matches!(
-        vault.sync_preview(&incoming),
+        crate::usecases::sync::read::sync_preview(&mut vault, &incoming),
         Err(Error::SecurityLevelRequired)
     ));
     assert!(matches!(
-        vault.sync_preview_after(&incoming),
+        crate::usecases::sync::read::sync_preview_after(&mut vault, &incoming),
         Err(Error::SecurityLevelRequired)
     ));
     vault.raise_to_level3_for_tests();
-    assert!(vault.sync_preview(&incoming).is_ok());
+    assert!(crate::usecases::sync::read::sync_preview(&mut vault, &incoming).is_ok());
 }
 
 #[test]
@@ -498,6 +504,6 @@ fn ordinary_records_sync_at_any_level() {
         .iter()
         .map(|store| format!("stores:{}", store.id))
         .collect();
-    let incoming = vault.sync_records(&keys).unwrap();
+    let incoming = crate::usecases::sync::read::sync_records(&mut vault, &keys).unwrap();
     assert!(vault.sync_check_level(&incoming).is_ok());
 }

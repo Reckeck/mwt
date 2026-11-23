@@ -139,11 +139,14 @@ fn an_error_never_echoes_the_address() {
 #[test]
 fn below_level_3_the_presets_are_shown_and_saving_is_refused() {
     let (_dir, mut vault) = empty_vault();
-    let settings = vault.crypto_network_settings();
+    let settings = crate::usecases::cryptotrack::network::crypto_network_settings(&vault.books());
     assert!(!settings.editable);
     assert_eq!(settings.networks.len(), chains::all().len());
     assert!(matches!(
-        vault.crypto_set_network_settings(&input(Chain::Base)),
+        crate::usecases::cryptotrack::network::crypto_set_network_settings(
+            &mut vault,
+            &input(Chain::Base)
+        ),
         Err(Error::SecurityLevelRequired)
     ));
 }
@@ -154,8 +157,8 @@ fn saved_endpoints_are_used_and_an_empty_one_goes_back_to_the_preset() {
     let mut save = input(Chain::Base);
     save.rpc = "http://localhost:8545".into();
     save.explorer = "https://explorer.example.org/".into();
-    vault.crypto_set_network_settings(&save).unwrap();
-    let settings = vault.crypto_network_settings();
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &save).unwrap();
+    let settings = crate::usecases::cryptotrack::network::crypto_network_settings(&vault.books());
     assert!(settings.editable);
     let base = settings
         .networks
@@ -168,25 +171,41 @@ fn saved_endpoints_are_used_and_an_empty_one_goes_back_to_the_preset() {
     assert_eq!(base.explorer.value, "https://explorer.example.org");
     assert!(!base.blockscout.custom);
     assert_eq!(
-        vault.crypto_network_for_request(Chain::Base).rpc.as_deref(),
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .rpc
+        .as_deref(),
         Some("http://localhost:8545")
     );
     assert!(
-        vault
-            .crypto_network_for_request(Chain::Ethereum)
-            .rpc
-            .is_none()
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Ethereum
+        )
+        .rpc
+        .is_none()
     );
-    let links = vault.crypto_explorer_settings();
+    let links = crate::cryptotrack::service::network::crypto_explorer_settings(&vault.books());
     assert_eq!(
         links.custom.get(&Chain::Base).map(String::as_str),
         Some("https://explorer.example.org")
     );
     // Reset: all empty.
-    vault
-        .crypto_set_network_settings(&input(Chain::Base))
-        .unwrap();
-    assert!(vault.crypto_network_for_request(Chain::Base).rpc.is_none());
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(
+        &mut vault,
+        &input(Chain::Base),
+    )
+    .unwrap();
+    assert!(
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .rpc
+        .is_none()
+    );
 }
 
 #[test]
@@ -194,13 +213,21 @@ fn a_bad_address_changes_nothing() {
     let (_dir, mut vault) = level3();
     let mut good = input(Chain::Base);
     good.rpc = "https://node.example.org".into();
-    vault.crypto_set_network_settings(&good).unwrap();
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &good).unwrap();
     let mut bad = input(Chain::Base);
     bad.rpc = "https://other.example.org".into();
     bad.blockscout = "http://scout.example.org".into();
-    assert!(vault.crypto_set_network_settings(&bad).is_err());
+    assert!(
+        crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &bad)
+            .is_err()
+    );
     assert_eq!(
-        vault.crypto_network_for_request(Chain::Base).rpc.as_deref(),
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .rpc
+        .as_deref(),
         Some("https://node.example.org")
     );
 }
@@ -210,19 +237,29 @@ fn the_key_is_optional_kept_hidden_and_never_leaves_the_device_file() {
     let (dir, mut vault) = level3();
     let key = key_text();
     // Keyless by default.
-    assert!(vault.crypto_network_for_request(Chain::Base).key.is_none());
+    assert!(
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .key
+        .is_none()
+    );
     let mut save = input(Chain::Base);
     save.blockscout_key = Some(key.clone());
-    vault.crypto_set_network_settings(&save).unwrap();
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &save).unwrap();
     vault.flush_pending().unwrap();
 
     // It reaches the reader, and the screen only learns that it is set.
-    let request = vault.crypto_network_for_request(Chain::Base);
+    let request = crate::cryptotrack::service::network::crypto_network_for_request(
+        &vault.books(),
+        Chain::Base,
+    );
     assert_eq!(
         request.key.as_ref().map(BlockscoutKey::expose),
         Some(key.as_str())
     );
-    let shown = vault.crypto_network_settings();
+    let shown = crate::usecases::cryptotrack::network::crypto_network_settings(&vault.books());
     let base = shown
         .networks
         .iter()
@@ -236,21 +273,38 @@ fn the_key_is_optional_kept_hidden_and_never_leaves_the_device_file() {
     // Saving other fields keeps it; an empty text removes it.
     let mut again = input(Chain::Base);
     again.explorer = "https://explorer.example.org".into();
-    vault.crypto_set_network_settings(&again).unwrap();
-    assert!(vault.crypto_network_for_request(Chain::Base).key.is_some());
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &again).unwrap();
+    assert!(
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .key
+        .is_some()
+    );
     let mut clear = input(Chain::Base);
     clear.blockscout_key = Some(String::new());
-    vault.crypto_set_network_settings(&clear).unwrap();
-    assert!(vault.crypto_network_for_request(Chain::Base).key.is_none());
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &clear).unwrap();
+    assert!(
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .key
+        .is_none()
+    );
 
     // A key a header cannot carry is refused without echo.
     let mut broken = input(Chain::Base);
     broken.blockscout_key = Some("has space".into());
-    assert!(vault.crypto_set_network_settings(&broken).is_err());
+    assert!(
+        crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &broken)
+            .is_err()
+    );
 
     // On disk: not in the vault file, not in the mirror of the document,
     // not in the plain device file.
-    vault.crypto_set_network_settings(&save).unwrap();
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &save).unwrap();
     vault.flush_pending().unwrap();
     for entry in std::fs::read_dir(dir.path()).unwrap() {
         let bytes = std::fs::read(entry.unwrap().path()).unwrap();
@@ -271,17 +325,19 @@ fn the_stored_key_is_only_offered_to_the_instance_that_issued_it() {
     let mut save = input(Chain::Base);
     save.blockscout = mine.into();
     save.blockscout_key = Some(key.clone());
-    vault.crypto_set_network_settings(&save).unwrap();
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &save).unwrap();
 
     let target = |url: Option<&str>, kind| {
-        vault
-            .crypto_test_target(&TestNetworkInput {
+        crate::usecases::cryptotrack::network::crypto_test_target(
+            &vault.books(),
+            &TestNetworkInput {
                 chain: Chain::Base,
                 kind,
                 url: url.map(str::to_owned),
                 blockscout_key: None,
-            })
-            .unwrap()
+            },
+        )
+        .unwrap()
     };
 
     // The instance the key belongs to: typed out in full, or left empty.
@@ -310,14 +366,16 @@ fn the_stored_key_is_only_offered_to_the_instance_that_issued_it() {
     assert!(target(None, EndpointKind::Rpc).1.is_none());
 
     // A key typed into the request is used as typed, on any address.
-    let (_, typed) = vault
-        .crypto_test_target(&TestNetworkInput {
+    let (_, typed) = crate::usecases::cryptotrack::network::crypto_test_target(
+        &vault.books(),
+        &TestNetworkInput {
             chain: Chain::Base,
             kind: EndpointKind::Blockscout,
             url: Some("https://other-scout.example.org".into()),
             blockscout_key: Some(key.clone()),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(
         typed.as_ref().map(BlockscoutKey::expose),
         Some(key.as_str())
@@ -331,43 +389,82 @@ fn a_key_does_not_survive_a_change_of_the_instance_it_was_issued_for() {
     let mut save = input(Chain::Base);
     save.blockscout = "https://scout.example.org".into();
     save.blockscout_key = Some(key.clone());
-    vault.crypto_set_network_settings(&save).unwrap();
-    assert!(vault.crypto_network_for_request(Chain::Base).key.is_some());
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &save).unwrap();
+    assert!(
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .key
+        .is_some()
+    );
 
     // Another field of the same instance: the key stays.
     let mut same = input(Chain::Base);
     same.blockscout = "https://scout.example.org".into();
     same.rpc = "https://node.example.org".into();
-    vault.crypto_set_network_settings(&same).unwrap();
-    assert!(vault.crypto_network_for_request(Chain::Base).key.is_some());
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &same).unwrap();
+    assert!(
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .key
+        .is_some()
+    );
 
     // The instance changes and no new key comes with it: the key is gone,
     // so no background pass can send it to the new host.
     let mut moved = input(Chain::Base);
     moved.blockscout = "https://other-scout.example.org".into();
     moved.rpc = "https://node.example.org".into();
-    vault.crypto_set_network_settings(&moved).unwrap();
-    assert!(vault.crypto_network_for_request(Chain::Base).key.is_none());
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &moved).unwrap();
+    assert!(
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .key
+        .is_none()
+    );
 
     // Back to the presets counts as a change as well.
-    vault.crypto_set_network_settings(&save).unwrap();
-    assert!(vault.crypto_network_for_request(Chain::Base).key.is_some());
-    vault
-        .crypto_set_network_settings(&input(Chain::Base))
-        .unwrap();
-    assert!(vault.crypto_network_for_request(Chain::Base).key.is_none());
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &save).unwrap();
+    assert!(
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .key
+        .is_some()
+    );
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(
+        &mut vault,
+        &input(Chain::Base),
+    )
+    .unwrap();
+    assert!(
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .key
+        .is_none()
+    );
 
     // A new instance with its own key keeps that one.
     let mut pair = input(Chain::Base);
     pair.blockscout = "https://third-scout.example.org".into();
     pair.blockscout_key = Some(key.clone());
-    vault.crypto_set_network_settings(&pair).unwrap();
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(&mut vault, &pair).unwrap();
     assert_eq!(
-        vault
-            .crypto_network_for_request(Chain::Base)
-            .key
-            .as_ref()
-            .map(BlockscoutKey::expose),
+        crate::cryptotrack::service::network::crypto_network_for_request(
+            &vault.books(),
+            Chain::Base
+        )
+        .key
+        .as_ref()
+        .map(BlockscoutKey::expose),
         Some(key.as_str())
     );
 }

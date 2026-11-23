@@ -47,14 +47,7 @@ impl UnlockedVault {
 
     // Called by the wipe tests, which hand the backup step in; not in the baseline
     // (crate-private), so outside the regenerated block.
-    forward! {
-        /// [`Self::crypto_wipe_module`] with the backup step handed in, so a test
-        /// can watch what a failed backup leaves behind: the answer must be
-        /// "everything, untouched".
-        #[cfg(test)]
-        pub(crate) fn wipe_inner(&mut self, confirm: &str, backup: impl FnOnce(&mut Self) -> Result<String>) -> Result<CryptoWipeReport>
-            => crate::usecases::cryptotrack::wipe::wipe_inner;
-    }
+    forward! {}
 
     // Vault-side: they read what is private to `service`, so the scenarios,
     // which live outside it, ask for them here. Each is one line, with no rule

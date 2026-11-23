@@ -2,9 +2,6 @@
 //! `crate::cryptotrack::service::positions`, the scenario to
 //! `crate::usecases::cryptotrack::positions` (spec core-strangler, D1).
 
-#[cfg(test)]
-use std::collections::BTreeSet;
-
 pub use crate::cryptotrack::service::positions::CryptoPositionsApplied;
 
 use crate::cryptotrack::protocols::{PositionReading, ProtocolReview};
@@ -64,13 +61,7 @@ impl UnlockedVault {
     // forward:end
 
     // Crate-private and test-only, so not in the baseline: outside the regenerated block.
-    forward! {
-        /// Asset keys the module holds only as the receipt of a position (an
-        /// aToken, stETH, a position NFT), so the capital counts the money once.
-        #[cfg(test)]
-        pub(crate) fn crypto_position_receipts(&self) -> BTreeSet<String>
-            => crate::cryptotrack::service::positions::crypto_position_receipts @doc;
-    }
+    forward! {}
 }
 
 #[cfg(test)]

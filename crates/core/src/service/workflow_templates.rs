@@ -42,7 +42,7 @@ mod tests {
     #[test]
     fn defaults_come_from_the_vault() {
         let (_dir, vault) = empty_vault();
-        let list = vault.workflow_templates();
+        let list = crate::usecases::workflow::records::workflow_templates(&vault.books());
         let pay = list
             .iter()
             .find(|info| info.id == "pay_yourself_first")
@@ -54,14 +54,16 @@ mod tests {
     #[test]
     fn a_missing_or_unknown_account_is_refused() {
         let (_dir, mut vault) = empty_vault();
-        let no_target = vault.workflow_from_template(
+        let no_target = crate::usecases::workflow::records::workflow_from_template(
+            &mut vault,
             "pay_yourself_first",
             &params(&[("category", "salary"), ("pct", "10")]),
             "ru",
             now_secs(),
         );
         assert!(matches!(no_target, Err(Error::InvalidInput(_))));
-        let unknown = vault.workflow_from_template(
+        let unknown = crate::usecases::workflow::records::workflow_from_template(
+            &mut vault,
             "pay_yourself_first",
             &params(&[("category", "salary"), ("pct", "10"), ("target", "nope")]),
             "ru",
@@ -76,30 +78,38 @@ mod tests {
         let card = store(&mut vault, "Card", StoreKind::Bank, None);
         let other = store(&mut vault, "Other", StoreKind::Bank, None);
         let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
-        vault
-            .workflow_from_template(
-                "pay_yourself_first",
-                &params(&[
-                    ("category", "salary"),
-                    ("pct", "10"),
-                    ("target", &cash),
-                    ("source", &card),
-                ]),
-                "en",
-                now_secs(),
-            )
-            .unwrap();
+        crate::usecases::workflow::records::workflow_from_template(
+            &mut vault,
+            "pay_yourself_first",
+            &params(&[
+                ("category", "salary"),
+                ("pct", "10"),
+                ("target", &cash),
+                ("source", &card),
+            ]),
+            "en",
+            now_secs(),
+        )
+        .unwrap();
 
-        vault
-            .add_transaction(income(&other, "1000", "side"))
-            .unwrap();
-        let pass = vault.run_due_workflows(now_secs() + 5, "UTC").unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&other, "1000", "side"),
+        )
+        .unwrap();
+        let pass =
+            crate::usecases::workflow::runs::run_due_workflows(&mut vault, now_secs() + 5, "UTC")
+                .unwrap();
         assert!(pass.runs.is_empty(), "{:?}", pass.runs);
 
-        vault
-            .add_transaction(income(&card, "1000", "salary"))
-            .unwrap();
-        let pass = vault.run_due_workflows(now_secs() + 10, "UTC").unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&card, "1000", "salary"),
+        )
+        .unwrap();
+        let pass =
+            crate::usecases::workflow::runs::run_due_workflows(&mut vault, now_secs() + 10, "UTC")
+                .unwrap();
         assert_eq!(pass.runs.len(), 1, "{:?}", pass.runs);
     }
 
@@ -108,33 +118,38 @@ mod tests {
         let (_dir, mut vault) = empty_vault();
         let card = store(&mut vault, "Card", StoreKind::Cash, None);
         let jar = store(&mut vault, "Jar", StoreKind::Bank, None);
-        vault
-            .add_transaction(income(&card, "1000", "opening"))
-            .unwrap();
-        let saved = vault
-            .workflow_from_template(
-                "round_up",
-                &params(&[
-                    ("from", &card),
-                    ("to", &jar),
-                    ("step", "100"),
-                    ("weekday", "6"),
-                ]),
-                "en",
-                now_secs(),
-            )
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            income(&card, "1000", "opening"),
+        )
+        .unwrap();
+        let saved = crate::usecases::workflow::records::workflow_from_template(
+            &mut vault,
+            "round_up",
+            &params(&[
+                ("from", &card),
+                ("to", &jar),
+                ("step", "100"),
+                ("weekday", "6"),
+            ]),
+            "en",
+            now_secs(),
+        )
+        .unwrap();
         assert!(saved.workflow.active);
         assert_eq!(saved.workflow.name, "Round-up jar");
 
-        vault
-            .add_transaction(payment(&card, "230", "shop"))
-            .unwrap();
-        let pass = vault.run_due_workflows(now_secs() + 5, "UTC").unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            payment(&card, "230", "shop"),
+        )
+        .unwrap();
+        let pass =
+            crate::usecases::workflow::runs::run_due_workflows(&mut vault, now_secs() + 5, "UTC")
+                .unwrap();
         assert_eq!(pass.runs.len(), 1, "{:?}", pass.runs);
         assert!(pass.created.is_empty(), "no money moves on a spend");
-        let jar_value = vault
-            .workflow_vars()
+        let jar_value = crate::workflow::service::vars::variables(&vault.doc)
             .into_iter()
             .find(|var| var.name == "round_up")
             .map(|var| var.value)

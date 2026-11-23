@@ -12,21 +12,26 @@ const ACCOUNT_NAMES: [&str; 3] = ["Funding", "Unified", "Earn"];
 fn bybit() -> (tempfile::TempDir, UnlockedVault, String, String) {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
-    let wallet = vault
-        .create_store_with(
-            "Bybit",
-            StoreKind::Exchange,
-            "#f0b90b",
-            "",
-            None,
-            StoreExtras {
-                provider: Some(crate::model::store::ExchangeProvider::Bybit),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
-    let [_, unified, _] = vault.ensure_bybit_accounts(&wallet, ACCOUNT_NAMES).unwrap();
+    let wallet = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Bybit",
+        StoreKind::Exchange,
+        "#f0b90b",
+        "",
+        None,
+        StoreExtras {
+            provider: Some(crate::model::store::ExchangeProvider::Bybit),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
+    let [_, unified, _] = crate::usecases::cryptotrack::exchange_import::ensure_bybit_accounts(
+        &mut vault,
+        &wallet,
+        ACCOUNT_NAMES,
+    )
+    .unwrap();
     (dir, vault, wallet, unified)
 }
 
@@ -70,13 +75,18 @@ fn empty_polls_keep_one_run_and_write_nothing() {
     let (_dir, mut vault, wallet, _) = bybit();
     let before = std::fs::read(&vault.path).unwrap();
     for _ in 0..3 {
-        let run = vault
-            .sync_exchange(&wallet, Vec::new(), ImportSource::Auto, now())
-            .unwrap();
+        let run = crate::usecases::cryptotrack::exchange_sync::sync_exchange(
+            &mut vault,
+            &wallet,
+            Vec::new(),
+            ImportSource::Auto,
+            now(),
+        )
+        .unwrap();
         assert_eq!(run.staged, 0);
     }
     assert_eq!(
-        vault.import_runs(&wallet).len(),
+        crate::cryptotrack::exchange_sync::import_runs(&vault.books(), &wallet).len(),
         1,
         "one «checked at» row, not one per poll"
     );
@@ -91,51 +101,54 @@ fn empty_polls_keep_one_run_and_write_nothing() {
 #[test]
 fn a_sync_records_at_once_and_never_what_was_settled() {
     let (_dir, mut vault, wallet, _) = bybit();
-    let first = vault
-        .sync_exchange(
-            &wallet,
-            vec![
-                buy(&wallet, "a", "SOLUSDT", "1700000000000"),
-                buy(&wallet, "b", "SOLUSDT", "1700000000000"),
-            ],
-            ImportSource::Manual,
-            now(),
-        )
-        .unwrap();
+    let first = crate::usecases::cryptotrack::exchange_sync::sync_exchange(
+        &mut vault,
+        &wallet,
+        vec![
+            buy(&wallet, "a", "SOLUSDT", "1700000000000"),
+            buy(&wallet, "b", "SOLUSDT", "1700000000000"),
+        ],
+        ImportSource::Manual,
+        now(),
+    )
+    .unwrap();
     // Nothing waits for confirmation any more: both fills are operations
     // of the module, and `staged` is not written (rule 5).
     assert_eq!((first.fetched, first.staged, first.confirmed), (2, 0, 2));
     assert_eq!((first.trades, first.transfers), (2, 0), "both are fills");
-    assert!(vault.pending_imports().is_empty());
+    assert!(crate::cryptotrack::exchange_import::pending_imports(&vault.doc).is_empty());
     assert_eq!(vault.doc.crypto_events.len(), 2);
 
     // The exchange answers with the same two fills on the next poll.
-    let again = vault
-        .sync_exchange(
-            &wallet,
-            vec![
-                buy(&wallet, "a", "SOLUSDT", "1700000000000"),
-                buy(&wallet, "b", "SOLUSDT", "1700000000000"),
-            ],
-            ImportSource::Auto,
-            now(),
-        )
-        .unwrap();
+    let again = crate::usecases::cryptotrack::exchange_sync::sync_exchange(
+        &mut vault,
+        &wallet,
+        vec![
+            buy(&wallet, "a", "SOLUSDT", "1700000000000"),
+            buy(&wallet, "b", "SOLUSDT", "1700000000000"),
+        ],
+        ImportSource::Auto,
+        now(),
+    )
+    .unwrap();
     assert_eq!((again.confirmed, again.known), (0, 2));
     assert_eq!(vault.doc.crypto_events.len(), 2, "two, not four");
-    assert_eq!(vault.import_runs(&wallet).len(), 2);
+    assert_eq!(
+        crate::cryptotrack::exchange_sync::import_runs(&vault.books(), &wallet).len(),
+        2
+    );
 
     // A record the user refused before stays refused and never becomes an
     // operation.
     vault.remember_discarded(["c".to_owned()]);
-    let refused = vault
-        .sync_exchange(
-            &wallet,
-            vec![buy(&wallet, "c", "SOLUSDT", "1700000000000")],
-            ImportSource::Auto,
-            now(),
-        )
-        .unwrap();
+    let refused = crate::usecases::cryptotrack::exchange_sync::sync_exchange(
+        &mut vault,
+        &wallet,
+        vec![buy(&wallet, "c", "SOLUSDT", "1700000000000")],
+        ImportSource::Auto,
+        now(),
+    )
+    .unwrap();
     assert_eq!((refused.confirmed, refused.known), (0, 1));
     assert_eq!(vault.doc.crypto_events.len(), 2);
 }
@@ -145,10 +158,13 @@ fn a_sync_records_at_once_and_never_what_was_settled() {
 #[test]
 fn imported_operations_carry_the_import_mark_and_a_known_coin_id() {
     let (_dir, mut vault, wallet, _) = bybit();
-    vault
-        .stage_imports(vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")])
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")],
+    )
+    .unwrap();
+    crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(&mut vault, &[])
         .unwrap();
-    vault.confirm_pending_imports(&[]).unwrap();
     let tx = vault.doc.transactions.last().unwrap();
     assert!(
         tx.meta()
@@ -166,7 +182,11 @@ fn imported_operations_carry_the_import_mark_and_a_known_coin_id() {
         panic!("a spot trade");
     };
     assert_eq!(trade.bought.asset.coingecko_id.as_deref(), Some("solana"));
-    assert_eq!(vault.imported_transactions(&wallet, 10, 0).total, 1);
+    assert_eq!(
+        crate::cryptotrack::exchange_sync::imported_transactions(&vault.books(), &wallet, 10, 0)
+            .total,
+        1
+    );
 }
 
 #[test]
@@ -177,45 +197,53 @@ fn the_settings_leave_out_kinds_coins_dates_and_accounts() {
         since: Some("2023-11-15T00:00:00Z".into()),
         ..ImportSettings::default()
     };
-    vault.set_import_settings(&wallet, settings).unwrap();
-    let run = vault
-        .sync_exchange(
-            &wallet,
-            vec![
-                buy(&wallet, "sol-new", "SOLUSDT", "1700100000000"),
-                buy(&wallet, "sol-old", "SOLUSDT", "1690000000000"),
-                buy(&wallet, "eth-new", "ETHUSDT", "1700100000000"),
-            ],
-            ImportSource::Manual,
-            now(),
-        )
+    crate::usecases::cryptotrack::exchange_sync::set_import_settings(&mut vault, &wallet, settings)
         .unwrap();
+    let run = crate::usecases::cryptotrack::exchange_sync::sync_exchange(
+        &mut vault,
+        &wallet,
+        vec![
+            buy(&wallet, "sol-new", "SOLUSDT", "1700100000000"),
+            buy(&wallet, "sol-old", "SOLUSDT", "1690000000000"),
+            buy(&wallet, "eth-new", "ETHUSDT", "1700100000000"),
+        ],
+        ImportSource::Manual,
+        now(),
+    )
+    .unwrap();
     assert_eq!((run.confirmed, run.filtered), (1, 2));
 
     // Unified not imported at all: fills are left out.
-    let mut off = vault.import_settings(&wallet).unwrap();
+    let mut off =
+        crate::cryptotrack::exchange_sync::import_settings(&vault.books(), &wallet).unwrap();
     off.coins.clear();
     off.since = None;
     off.accounts = vec![ImportAccountRoute {
         account: "UNIFIED".into(),
         store_id: None,
     }];
-    vault.set_import_settings(&wallet, off).unwrap();
-    let run = vault
-        .sync_exchange(
-            &wallet,
-            vec![buy(&wallet, "x", "SOLUSDT", "1700100000000")],
-            ImportSource::Manual,
-            now(),
-        )
+    crate::usecases::cryptotrack::exchange_sync::set_import_settings(&mut vault, &wallet, off)
         .unwrap();
+    let run = crate::usecases::cryptotrack::exchange_sync::sync_exchange(
+        &mut vault,
+        &wallet,
+        vec![buy(&wallet, "x", "SOLUSDT", "1700100000000")],
+        ImportSource::Manual,
+        now(),
+    )
+    .unwrap();
     assert_eq!((run.confirmed, run.filtered), (0, 1));
 }
 
 #[test]
 fn a_booked_record_can_go_into_a_chosen_sub_account() {
     let (_dir, mut vault, wallet, _) = bybit();
-    let [funding, _, _] = vault.ensure_bybit_accounts(&wallet, ACCOUNT_NAMES).unwrap();
+    let [funding, _, _] = crate::usecases::cryptotrack::exchange_import::ensure_bybit_accounts(
+        &mut vault,
+        &wallet,
+        ACCOUNT_NAMES,
+    )
+    .unwrap();
     let settings = ImportSettings {
         accounts: vec![ImportAccountRoute {
             account: "unified".into(),
@@ -224,31 +252,38 @@ fn a_booked_record_can_go_into_a_chosen_sub_account() {
         auto_confirm: true,
         ..ImportSettings::default()
     };
-    vault.set_import_settings(&wallet, settings).unwrap();
+    crate::usecases::cryptotrack::exchange_sync::set_import_settings(&mut vault, &wallet, settings)
+        .unwrap();
     // The route still decides where a record from an older build's queue
     // is booked.
-    vault
-        .stage_imports(vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")])
-        .unwrap();
-    assert_eq!(vault.confirm_pending_imports(&[]).unwrap(), 1);
-    assert!(vault.pending_imports().is_empty());
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")],
+    )
+    .unwrap();
+    assert_eq!(
+        crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(&mut vault, &[])
+            .unwrap(),
+        1
+    );
+    assert!(crate::cryptotrack::exchange_import::pending_imports(&vault.doc).is_empty());
     let Transaction::TradeSpot(trade) = vault.doc.transactions.last().unwrap() else {
         panic!("a spot trade");
     };
     assert_eq!(trade.store_id, funding);
 
     // A wallet outside this exchange is refused.
-    let other = vault
-        .create_store_with(
-            "Card",
-            StoreKind::Bank,
-            "#000",
-            "",
-            None,
-            StoreExtras::default(),
-        )
-        .unwrap()
-        .id;
+    let other = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Card",
+        StoreKind::Bank,
+        "#000",
+        "",
+        None,
+        StoreExtras::default(),
+    )
+    .unwrap()
+    .id;
     let bad = ImportSettings {
         accounts: vec![ImportAccountRoute {
             account: "FUND".into(),
@@ -256,26 +291,42 @@ fn a_booked_record_can_go_into_a_chosen_sub_account() {
         }],
         ..ImportSettings::default()
     };
-    assert!(vault.set_import_settings(&wallet, bad).is_err());
+    assert!(
+        crate::usecases::cryptotrack::exchange_sync::set_import_settings(&mut vault, &wallet, bad)
+            .is_err()
+    );
 }
 
 #[test]
 fn the_live_balance_is_set_once_everything_is_booked() {
     let (_dir, mut vault, wallet, unified) = bybit();
-    vault
-        .stage_imports(vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")])
-        .unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut vault,
+        vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")],
+    )
+    .unwrap();
     let live = vec![balance("UNIFIED", &[("SOL", "1.5"), ("USDT", "400")])];
     // Something waits for confirmation: it explains the difference.
     assert!(
-        vault
-            .reconcile_exchange(&wallet, &live, now())
-            .unwrap()
-            .is_empty()
+        crate::usecases::cryptotrack::exchange_sync::reconcile_exchange(
+            &mut vault,
+            &wallet,
+            &live,
+            now()
+        )
+        .unwrap()
+        .is_empty()
     );
 
-    vault.confirm_pending_imports(&[]).unwrap();
-    let made = vault.reconcile_exchange(&wallet, &live, now()).unwrap();
+    crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(&mut vault, &[])
+        .unwrap();
+    let made = crate::usecases::cryptotrack::exchange_sync::reconcile_exchange(
+        &mut vault,
+        &wallet,
+        &live,
+        now(),
+    )
+    .unwrap();
     assert_eq!(made.len(), 1);
     let holding = |symbol: &str| {
         vault
@@ -294,22 +345,32 @@ fn the_live_balance_is_set_once_everything_is_booked() {
 
     // In step now: nothing more to set.
     assert!(
-        vault
-            .reconcile_exchange(&wallet, &live, now() + 60)
-            .unwrap()
-            .is_empty()
+        crate::usecases::cryptotrack::exchange_sync::reconcile_exchange(
+            &mut vault,
+            &wallet,
+            &live,
+            now() + 60
+        )
+        .unwrap()
+        .is_empty()
     );
 
     // Turned off in the settings: the ledger is left alone.
-    let mut settings = vault.import_settings(&wallet).unwrap();
+    let mut settings =
+        crate::cryptotrack::exchange_sync::import_settings(&vault.books(), &wallet).unwrap();
     settings.auto_reconcile = false;
-    vault.set_import_settings(&wallet, settings).unwrap();
+    crate::usecases::cryptotrack::exchange_sync::set_import_settings(&mut vault, &wallet, settings)
+        .unwrap();
     let moved = vec![balance("UNIFIED", &[("SOL", "2"), ("USDT", "400")])];
     assert!(
-        vault
-            .reconcile_exchange(&wallet, &moved, now() + 120)
-            .unwrap()
-            .is_empty()
+        crate::usecases::cryptotrack::exchange_sync::reconcile_exchange(
+            &mut vault,
+            &wallet,
+            &moved,
+            now() + 120
+        )
+        .unwrap()
+        .is_empty()
     );
 }
 
@@ -319,22 +380,28 @@ fn the_live_balance_is_set_once_everything_is_booked() {
 #[test]
 fn a_wallet_on_the_engine_is_not_corrected_into_the_ledger() {
     let (_dir, mut vault, wallet, _) = bybit();
-    vault
-        .sync_exchange(
-            &wallet,
-            vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")],
-            ImportSource::Manual,
-            now(),
-        )
-        .unwrap();
-    assert!(vault.exchange_is_engine_driven(&wallet));
+    crate::usecases::cryptotrack::exchange_sync::sync_exchange(
+        &mut vault,
+        &wallet,
+        vec![buy(&wallet, "a", "SOLUSDT", "1700000000000")],
+        ImportSource::Manual,
+        now(),
+    )
+    .unwrap();
+    assert!(
+        crate::usecases::cryptotrack::legacy_bybit::exchange_is_engine_driven(&vault.doc, &wallet)
+    );
     let before = vault.doc.transactions.len();
     let live = vec![balance("UNIFIED", &[("SOL", "1.5"), ("USDT", "400")])];
     assert!(
-        vault
-            .reconcile_exchange(&wallet, &live, now())
-            .unwrap()
-            .is_empty()
+        crate::usecases::cryptotrack::exchange_sync::reconcile_exchange(
+            &mut vault,
+            &wallet,
+            &live,
+            now()
+        )
+        .unwrap()
+        .is_empty()
     );
     assert_eq!(
         vault.doc.transactions.len(),
@@ -355,10 +422,15 @@ fn a_wallet_on_the_engine_is_not_corrected_into_the_ledger() {
 #[test]
 fn a_failed_sync_is_kept_with_its_reason() {
     let (_dir, mut vault, wallet, _) = bybit();
-    vault
-        .record_import_error(&wallet, ImportSource::Auto, "rate_limited", now())
-        .unwrap();
-    let runs = vault.import_runs(&wallet);
+    crate::usecases::cryptotrack::exchange_sync::record_import_error(
+        &mut vault,
+        &wallet,
+        ImportSource::Auto,
+        "rate_limited",
+        now(),
+    )
+    .unwrap();
+    let runs = crate::cryptotrack::exchange_sync::import_runs(&vault.books(), &wallet);
     assert_eq!(runs[0].error.as_deref(), Some("rate_limited"));
 }
 
@@ -373,14 +445,14 @@ fn a_stablecoin_without_a_price_is_worth_a_dollar() {
 #[test]
 fn a_preview_follows_unsaved_settings_and_keeps_nothing() {
     let (_dir, mut vault, wallet, _) = bybit();
-    vault
-        .sync_exchange(
-            &wallet,
-            vec![buy(&wallet, "seen", "SOLUSDT", "1700000000000")],
-            ImportSource::Manual,
-            now(),
-        )
-        .unwrap();
+    crate::usecases::cryptotrack::exchange_sync::sync_exchange(
+        &mut vault,
+        &wallet,
+        vec![buy(&wallet, "seen", "SOLUSDT", "1700000000000")],
+        ImportSource::Manual,
+        now(),
+    )
+    .unwrap();
     let fills = vec![
         buy(&wallet, "seen", "SOLUSDT", "1700000000000"),
         buy(&wallet, "sol", "SOLUSDT", "1700100000000"),
@@ -390,7 +462,11 @@ fn a_preview_follows_unsaved_settings_and_keeps_nothing() {
         coins: vec!["SOL".into()],
         ..ImportSettings::default()
     };
-    let preview = vault.preview_exchange_sync(fills.clone(), &draft);
+    let preview = crate::cryptotrack::exchange_sync::preview_exchange_sync(
+        &vault.books(),
+        fills.clone(),
+        &draft,
+    );
     assert_eq!(
         (
             preview.fetched,
@@ -403,9 +479,14 @@ fn a_preview_follows_unsaved_settings_and_keeps_nothing() {
     );
     assert_eq!(preview.items[0].exec_id, "sol");
     // Not one record kept, the saved settings untouched.
-    assert!(vault.pending_imports().is_empty());
+    assert!(crate::cryptotrack::exchange_import::pending_imports(&vault.doc).is_empty());
     assert_eq!(vault.doc.crypto_events.len(), 1);
-    assert!(vault.import_settings(&wallet).unwrap().coins.is_empty());
+    assert!(
+        crate::cryptotrack::exchange_sync::import_settings(&vault.books(), &wallet)
+            .unwrap()
+            .coins
+            .is_empty()
+    );
     // Skipping the unified account in the draft leaves every fill out.
     let skip = ImportSettings {
         accounts: vec![ImportAccountRoute {
@@ -414,5 +495,8 @@ fn a_preview_follows_unsaved_settings_and_keeps_nothing() {
         }],
         ..ImportSettings::default()
     };
-    assert_eq!(vault.preview_exchange_sync(fills, &skip).new, 0);
+    assert_eq!(
+        crate::cryptotrack::exchange_sync::preview_exchange_sync(&vault.books(), fills, &skip).new,
+        0
+    );
 }

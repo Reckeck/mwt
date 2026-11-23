@@ -141,22 +141,11 @@ impl UnlockedVault {
     // regenerated block.
     forward! {
         #[cfg(test)]
-        /// The average amount of the latest `count` operations a workflow made.
-        pub(crate) fn wf_recent_average(&self, workflow_id: &str, count: usize) -> Option<(Amount, String)>
-            => crate::workflow::service::vars::recent_average @doc;
-        #[cfg(test)]
-        /// What an operation takes out of an account, in `currency`.
-        pub(crate) fn wf_outflow_in(&self, tx: &Transaction, currency: &str) -> Option<Amount>
-            => crate::usecases::workflow::runs::wf_outflow_in @books;
-        #[cfg(test)]
         pub(crate) fn wf_mark(&self, workflow_id: &str, key: &str) -> Option<String>
             => crate::workflow::service::marks::mark @doc;
         #[cfg(test)]
         pub(crate) fn wf_set_mark(&mut self, workflow_id: &str, key: &str, value: &str)
             => crate::usecases::workflow::runs::wf_set_mark;
-        #[cfg(test)]
-        pub(crate) fn wf_var(&self, scope: &VarScope, name: &str) -> Option<WfValue>
-            => crate::workflow::service::vars::var @doc;
         /// A schedule mark never stays below a moment whose run key is booked.
         pub(crate) fn keep_schedule_marks(&mut self)
             => crate::usecases::workflow::runs::keep_schedule_marks;
