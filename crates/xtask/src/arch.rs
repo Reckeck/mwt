@@ -1,4 +1,4 @@
-//! `xtask arch`: the module graph of `crates/core/src`, read from the non-test `crate::` paths.
+//! `xtask arch`: the module graph of `crates/usecases/src`, read from the non-test `crate::` paths.
 
 mod banned;
 mod crates;
@@ -23,7 +23,7 @@ pub struct Edge {
     pub to_module: String,
 }
 
-const CORE_SRC: &str = "crates/core/src";
+const CORE_SRC: &str = "crates/usecases/src";
 const ALLOW_FILE: &str = "crates/xtask/arch-allow.toml";
 /// Group of the modules gated by the `testkit` feature (see `layers::GROUPS`).
 const TESTKIT: &str = "testkit";
@@ -31,7 +31,7 @@ const TESTKIT: &str = "testkit";
 /// A back edge: the same data as an edge, the ones the crate table does not allow.
 pub type Violation = Edge;
 
-/// One line of `arch-allow.toml`: back edges from `from` (under `crates/core/src`) to module `to`.
+/// One line of `arch-allow.toml`: back edges from `from` (under `crates/usecases/src`) to module `to`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AllowEntry {
     pub from: String,
@@ -256,16 +256,16 @@ fn declare_gated_modules(file: &Path, gated: &mut Files) -> Result<()> {
     Ok(())
 }
 
-/// One non-test source file of the core crate.
+/// One non-test source file of the use-case crate.
 pub struct Source {
-    /// Path under `crates/core/src`, with `/`.
+    /// Path under `crates/usecases/src`, with `/`.
     pub file: String,
     /// The top-level module, or `testkit` for the files gated by the testkit feature.
     pub module: String,
     pub text: String,
 }
 
-/// Every source file under `root` (`crates/core/src`) that is not test code, in file order.
+/// Every source file under `root` (`crates/usecases/src`) that is not test code, in file order.
 fn sources(root: &Path) -> Result<Vec<Source>> {
     let mut gated = Files::default();
     let mut files = Vec::new();
@@ -326,7 +326,7 @@ fn edges_of(root: &Path, sources: &[Source]) -> Result<Vec<Edge>> {
         .collect())
 }
 
-/// Every non-test `crate::` path under `root` (`crates/core/src`), in file order.
+/// Every non-test `crate::` path under `root` (`crates/usecases/src`), in file order.
 #[cfg(test)]
 fn scan(root: &Path) -> Result<Vec<Edge>> {
     edges_of(root, &sources(root)?)
@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn testkit_is_a_low_crate_and_nothing_below_the_facade_may_use_it() {
         assert!(layers::is_legal("testkit", "model"));
-        assert!(!layers::is_legal("service", "testkit"));
+        assert!(!layers::is_legal("planning", "testkit"));
     }
 
     #[test]
@@ -553,7 +553,7 @@ mod tests {
         let edges = [edge("error.rs", 131, "error", "service")];
         let report = evaluate(&edges, &[], domain::Findings::default());
         assert_eq!(report.violations, edges);
-        assert!(report.lines()[0].contains("crates/core/src/error.rs:131"));
+        assert!(report.lines()[0].contains("crates/usecases/src/error.rs:131"));
         assert_eq!(report.failures(), 1);
     }
 

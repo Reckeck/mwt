@@ -123,7 +123,7 @@ pub fn check_tasks(root: &Path, overlap_browser: bool, browser_opts: &BrowserOpt
             "test-slow",
             Class::Heavy,
             &[],
-            Cmd::new("cargo").args(["test", "-p", "trade-core", "--lib", "--", SLOW_FILTER]),
+            Cmd::new("cargo").args(["test", "-p", "mwt-usecases", "--lib", "--", SLOW_FILTER]),
         ),
         Task::cmd(
             "test",
@@ -184,7 +184,7 @@ fn ci_scripts() -> Task {
     })
 }
 
-/// The module graph of `crates/core/src` against the layer table (`crate::arch`), and the
+/// The module graph of `crates/usecases/src` against the layer table (`crate::arch`), and the
 /// `no-f64-in-money` rule (`money_f64`).
 fn arch() -> Task {
     Task::func("arch", Class::Light, &[], |ctx: Ctx| async move {

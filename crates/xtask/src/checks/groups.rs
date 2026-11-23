@@ -245,7 +245,7 @@ mod tests {
         let filter = crate::checks::SLOW_FILTER;
         assert_eq!(
             command_of("test-slow"),
-            format!("cargo test -p trade-core --lib -- {filter}")
+            format!("cargo test -p mwt-usecases --lib -- {filter}")
         );
         assert_eq!(
             command_of("test"),
@@ -258,14 +258,14 @@ mod tests {
     fn the_slow_filter_names_a_module_of_the_source_tree() {
         let relative = crate::checks::SLOW_FILTER.replace("::", "/");
         let (dir, prefix) = relative.rsplit_once('/').unwrap();
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../core/src");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../usecases/src");
         let found = std::fs::read_dir(root.join(dir))
             .unwrap()
             .filter_map(Result::ok)
             .any(|entry| entry.file_name().to_string_lossy().starts_with(prefix));
         assert!(
             found,
-            "no module `{}` under crates/core/src",
+            "no module `{}` under crates/usecases/src",
             crate::checks::SLOW_FILTER
         );
     }

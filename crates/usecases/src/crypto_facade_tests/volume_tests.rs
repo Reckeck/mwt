@@ -9,7 +9,7 @@
 //! The measurement is not part of the gate; run it on purpose:
 //!
 //! ```text
-//! cargo test -p trade-core crypto_events_volume -- --ignored --nocapture
+//! cargo test -p mwt-usecases crypto_events_volume -- --ignored --nocapture
 //! ```
 
 use crate::usecases::sync::peer_sync;

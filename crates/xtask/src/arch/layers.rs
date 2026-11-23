@@ -1,4 +1,4 @@
-//! The crate table of `crates/core/src` as data: modules form the target crates of the crate split
+//! The crate table of `crates/usecases/src` as data: modules form the target crates of the crate split
 //! (spec crate-split, D8 and "Interfaces"), and an explicit list says which crate may name which.
 //! An import `A -> B` is legal when both sit in the same crate or B's crate is in A's `may_use` list.
 
@@ -62,12 +62,6 @@ pub const GROUPS: &[Group] = &[
         modules: &["sync"],
         may_use: &["base", "crypto", "model"],
     },
-    // Test support: compiled only under `cfg(test)` or the `testkit` feature.
-    Group {
-        name: "testkit",
-        modules: &["testkit"],
-        may_use: &["base", "model"],
-    },
     // `txinfo` is a re-export of `money::txinfo` until Ф7 removes the old path (core-strangler T27).
     Group {
         name: "money",
@@ -101,7 +95,7 @@ pub const GROUPS: &[Group] = &[
         may_use: &["base", "model", "money"],
     },
     // The IPC contract crate `mwt-contract` sits on top of the domain crates (spec fact 2); nothing below may
-    // name it. No module of `crates/core/src` belongs to it any more (`ipc_contract.rs` is the facade shim), so
+    // name it. No module of `crates/usecases/src` belongs to it (`ipc_contract.rs` is the shim over it), so
     // the group only records which crates the contract may depend on (checked by `cargo tree`, T24).
     Group {
         name: "contract",
@@ -121,11 +115,13 @@ pub const GROUPS: &[Group] = &[
             "net",
         ],
     },
-    // The facade (`trade-core`): scenarios, the service shim, sandbox and config; it uses every crate.
+    // The use-case crate (`mwt-usecases`): scenarios, the service shim, sandbox, config and the test kit
+    // (`testkit` and the files gated by the `testkit` feature); it uses every crate.
     Group {
-        name: "facade",
+        name: "usecases",
         modules: &[
             "ipc_contract",
+            "testkit",
             "service",
             "usecases",
             "sandbox",
@@ -195,10 +191,7 @@ mod tests {
 
     /// The crate of the crate table that a module group stands for.
     fn crate_of(group: &str) -> String {
-        match group {
-            "facade" => "trade-core".to_string(),
-            other => format!("mwt-{other}"),
-        }
+        format!("mwt-{group}")
     }
 
     #[test]
@@ -277,8 +270,10 @@ mod tests {
     #[test]
     fn nothing_below_the_facade_names_it_or_testkit() {
         assert!(!is_legal("reports", "usecases"));
-        assert!(!is_legal("usecases", "testkit"));
-        assert!(is_legal("testkit", "model"));
+        assert!(!is_legal("model", "testkit"));
+        assert!(!is_legal("sync", "testkit"));
+        assert!(is_legal("testkit", "workflow"));
+        assert!(is_legal("testkit", "sync"));
     }
 
     #[test]

@@ -837,7 +837,7 @@ impl Prices for Scanning<'_> {
 /// (a debug build is some ten times slower here):
 ///
 /// ```text
-/// cargo test --release -p trade-core crypto_engine_volume -- --ignored --nocapture
+/// cargo test --release -p mwt-usecases crypto_engine_volume -- --ignored --nocapture
 /// ```
 #[test]
 #[ignore = "a measurement, not a check: run it with --ignored --nocapture"]

@@ -70,6 +70,7 @@ const CRYPTOTRACK: &str = "mwt-cryptotrack";
 const CONTRACT: &str = "mwt-contract";
 const TESTKIT: &str = "mwt-testkit";
 const FACADE: &str = "trade-core";
+const USECASES: &str = "mwt-usecases";
 const APP: &str = "trade-app";
 const PLUGIN_PREFIX: &str = "tauri-plugin-";
 /// Dev-dependencies of every crate may name this crate besides its own row.
@@ -152,7 +153,7 @@ pub const TABLE: &[Row] = &[
         ],
     },
     Row {
-        name: FACADE,
+        name: USECASES,
         uses: &[
             BASE,
             CRYPTO,
@@ -170,6 +171,11 @@ pub const TABLE: &[Row] = &[
             CONTRACT,
             MACROS,
         ],
+    },
+    // The facade: re-exports `mwt-usecases`; the type generator names the view types of three crates.
+    Row {
+        name: FACADE,
+        uses: &[USECASES, MONEY, REPORTS, CRYPTOTRACK],
     },
     Row {
         name: APP,
@@ -212,7 +218,7 @@ pub const TABLE: &[Row] = &[
 pub const EXTERNAL_ALLOW: &[ExternalAllow] = &[
     // `txinfo.rs` cannot move into `mwt-net`, which must not depend on money.
     ExternalAllow {
-        package: FACADE,
+        package: USECASES,
         dependency: "reqwest",
         until: "F7",
     },
@@ -537,7 +543,7 @@ mod tests {
     fn a_tree_that_obeys_every_rule_is_green() {
         let allow = [
             ExternalAllow {
-                package: FACADE,
+                package: USECASES,
                 dependency: "reqwest",
                 until: "F7",
             },
@@ -558,7 +564,7 @@ mod tests {
                     dependency("ts-rs", Kind::Normal, true),
                 ],
             ),
-            package(FACADE, vec![normal("reqwest"), normal(MONEY)]),
+            package(USECASES, vec![normal("reqwest"), normal(MONEY)]),
             package(APP, vec![normal("reqwest"), normal(FACADE)]),
             package(NET, vec![normal("reqwest"), normal("csv")]),
             package(SYNC, vec![normal("snow")]),
