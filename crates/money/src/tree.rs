@@ -8,7 +8,7 @@ use mwt_model::{Store, StoreScope};
 
 /// The store with this id.
 pub fn find_store<'doc>(doc: &'doc VaultDoc, id: &str) -> Option<&'doc Store> {
-    doc.stores.iter().find(|store| store.id == id)
+    doc.store(id)
 }
 
 /// Parent chain from the root down to `id`'s parent. Stops at a missing

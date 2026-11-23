@@ -7,6 +7,9 @@ use std::sync::{Arc, Mutex};
 use super::events::{ChangeSink, Committed, DomainEvent, EventBus, KeysChanged, Subscription};
 use super::persistence::{FileStore, Mirrored, Persistence, SandboxStore};
 
+/// Portfolio base until the user picks another one.
+pub const DEFAULT_BASE_CURRENCY: &str = "usd";
+
 /// Told that the vault has unsaved changes (the app's writer thread).
 pub trait SaveHook: Send + Sync {
     fn dirty(&self);
@@ -24,7 +27,7 @@ pub enum Commit {
 }
 
 /// Batching state of an open vault.
-pub struct Session {
+pub struct Write {
     /// Changes not on disk yet.
     dirty: bool,
     /// Bumped by every change; a job snapshots it.
@@ -44,13 +47,13 @@ pub struct Session {
     bus: EventBus,
 }
 
-impl Default for Session {
+impl Default for Write {
     fn default() -> Self {
         Self::with_store(Arc::new(FileStore))
     }
 }
 
-impl Session {
+impl Write {
     /// A session whose writes go nowhere: a sandbox copy.
     pub fn sandboxed() -> Self {
         Self::with_store(Arc::new(SandboxStore))
@@ -193,7 +196,7 @@ mod tests {
 
     #[test]
     fn has_mirror_follows_the_store() {
-        let mut session = Session::default();
+        let mut session = Write::default();
         assert!(!session.has_mirror());
         session.set_mirror(Some(Arc::new(Nowhere)));
         assert!(session.has_mirror());
@@ -201,7 +204,7 @@ mod tests {
 
     #[test]
     fn set_mirror_none_goes_back_to_the_plain_store() {
-        let mut session = Session::default();
+        let mut session = Write::default();
         session.set_mirror(Some(Arc::new(Nowhere)));
         session.set_mirror(None);
         assert!(!session.has_mirror());
@@ -210,7 +213,7 @@ mod tests {
 
     #[test]
     fn mark_bumps_and_says_write_now_without_a_hook() {
-        let mut session = Session::default();
+        let mut session = Write::default();
         assert_eq!(session.mark(), Commit::WriteNow);
         assert!(session.is_dirty());
         assert_eq!(session.revision(), 1);
@@ -218,7 +221,7 @@ mod tests {
 
     #[test]
     fn finish_of_an_older_revision_stays_dirty() {
-        let mut session = Session::default();
+        let mut session = Write::default();
         session.touch();
         session.touch();
         session.finish(1);

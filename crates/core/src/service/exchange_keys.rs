@@ -225,8 +225,7 @@ impl UnlockedVault {
             return Err(Error::Secret);
         }
         let Some(owner) =
-            crate::cryptotrack::exchange_import::bybit_key_for(&self.books(), store_id)
-                .map(|keys| keys.store_id.clone())
+            mwt_model::bybit_key_for(&self.doc, store_id).map(|keys| keys.store_id.clone())
         else {
             return Ok(None);
         };
@@ -263,8 +262,7 @@ impl UnlockedVault {
             };
         }
         let legacy = match store_id {
-            Some(id) => crate::cryptotrack::exchange_import::bybit_key_for(&self.books(), id)
-                .is_some_and(has_secret),
+            Some(id) => mwt_model::bybit_key_for(&self.doc, id).is_some_and(has_secret),
             None => self.doc.exchanges.bybit.iter().any(has_secret),
         };
         if legacy {
@@ -279,9 +277,7 @@ impl UnlockedVault {
         if self.security_level() != SecurityLevel::Crypto {
             return ExchangeKeyState::LevelRequired;
         }
-        let Some(keys) =
-            crate::cryptotrack::exchange_import::bybit_key_for(&self.books(), store_id)
-        else {
+        let Some(keys) = mwt_model::bybit_key_for(&self.doc, store_id) else {
             return ExchangeKeyState::Missing;
         };
         if self.device_keys.unreadable {
@@ -315,7 +311,9 @@ impl UnlockedVault {
                 "api key and secret are required".into(),
             ));
         }
-        let store = crate::money::tree::find_store(&self.doc, store_id)
+        let store = self
+            .doc
+            .store(store_id)
             .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
         if store.kind != StoreKind::Exchange {
             return Err(Error::InvalidInput("store is not an exchange".into()));

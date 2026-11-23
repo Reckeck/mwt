@@ -13,7 +13,6 @@ use crate::error::{Error, Result};
 use crate::ipc_contract::SyncCutReason;
 use crate::ipc_contract::security::SecurityLevel;
 use crate::model::vault::{VaultDoc, now_iso};
-use crate::service::peer_sync::TapSink;
 use crate::service::{AppliedBatch, ExternalMerge, PeerRef, SyncTap, UndoReport, UnlockedVault};
 use crate::storage::VaultFile;
 use crate::sync::history::applied_of;
@@ -28,12 +27,10 @@ use crate::sync::state::{
 use crate::sync::track::Tracker;
 use crate::sync::view::{self, split_key};
 use crate::sync::{BatchEntry, RecordState, Stamp, SyncBatch, SyncSummary, TrustedPeer};
+use crate::vault_io::backups::{PRESYNC_BACKUPS, presync_path};
 
 /// Device id on batches that came from the external copy.
 const EXTERNAL_COPY_DEVICE: &str = "external-copy";
-
-/// Rotated backups kept before the first batch of each session.
-pub const PRESYNC_BACKUPS: usize = 3;
 
 fn ser_err(err: serde_json::Error) -> Error {
     Error::Serialize(err.to_string())
@@ -181,9 +178,7 @@ pub fn set_device(vault: &mut UnlockedVault, device_id: &str) {
 pub fn set_sync_tap(vault: &mut UnlockedVault, tap: Option<Arc<dyn SyncTap>>) {
     if !vault.sandbox {
         vault.sync_tap = tap.clone();
-        vault
-            .session
-            .set_change_sink(tap.map(|tap| Arc::new(TapSink(tap))));
+        vault.session.set_change_sink(tap);
     }
 }
 
@@ -559,7 +554,7 @@ pub(crate) fn open_copy(
         sync_tap: None,
         announce: std::collections::BTreeSet::new(),
         key: None,
-        session: crate::kernel::session::Session::sandboxed(),
+        session: crate::kernel::session::Write::sandboxed(),
         device_keys: Default::default(),
     })
 }
@@ -1245,47 +1240,30 @@ pub fn sync_mark_synced(
 
 // -- backups --------------------------------------------------------------
 
-pub(crate) fn presync_path(vault: &UnlockedVault, index: usize) -> PathBuf {
-    let mut name = vault.path.file_name().unwrap_or_default().to_os_string();
-    if index == 0 {
-        name.push(".presync.bak");
-    } else {
-        name.push(format!(".presync.{index}.bak"));
-    }
-    vault.path.with_file_name(name)
-}
-
 /// Copy the vault file aside before the first batch of a session,
 /// keeping the last [`PRESYNC_BACKUPS`].
 pub fn sync_backup(vault: &mut UnlockedVault) -> Result<PathBuf> {
     if vault.sandbox {
-        return Ok(presync_path(vault, 0));
+        return Ok(presync_path(&vault.path, 0));
     }
     for index in (1..PRESYNC_BACKUPS).rev() {
-        let from = presync_path(vault, index - 1);
+        let from = presync_path(&vault.path, index - 1);
         if from.exists() {
-            std::fs::rename(&from, presync_path(vault, index))
+            std::fs::rename(&from, presync_path(&vault.path, index))
                 .map_err(|err| Error::Io(err.to_string()))?;
         }
     }
-    let target = presync_path(vault, 0);
+    let target = presync_path(&vault.path, 0);
     // The copy is of the file: batched changes go to it first.
     vault.flush_pending()?;
     std::fs::copy(&vault.path, &target).map_err(|err| Error::Io(err.to_string()))?;
     Ok(target)
 }
 
-/// Delete every pre-sync backup (a missing file is fine).
-pub(crate) fn remove_sync_backups(vault: &UnlockedVault) {
-    for index in 0..PRESYNC_BACKUPS {
-        let _ = std::fs::remove_file(presync_path(vault, index));
-    }
-}
-
 /// Whether a pre-sync backup exists that can be restored: a copy sealed
 /// under a password cannot be opened by a vault that has none now.
 pub fn has_sync_backup(vault: &UnlockedVault) -> bool {
-    let path = presync_path(vault, 0);
+    let path = presync_path(&vault.path, 0);
     path.exists() && (vault.is_encrypted() || !crate::crypto::file_is_encrypted(&path))
 }
 
@@ -1293,7 +1271,7 @@ pub fn has_sync_backup(vault: &UnlockedVault) -> bool {
 /// session's first batch. Saved as new local changes, so it reaches the
 /// other devices like any edit.
 pub fn sync_restore_backup(vault: &mut UnlockedVault) -> Result<()> {
-    let path = presync_path(vault, 0);
+    let path = presync_path(&vault.path, 0);
     if !has_sync_backup(vault) {
         return Err(Error::NotFound("no backup from before a sync".into()));
     }

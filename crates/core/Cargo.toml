@@ -23,7 +23,7 @@ mwt-model = { path = "../model" }
 mwt-base = { path = "../base" }
 # The network layer: pricing, exchanges, data sources, market, updates, external links.
 mwt-net = { path = "../net" }
-# The vault: file codec, kernel (`Session`, `Tx`, `Collection<T>`), vault files and copies, frozen v1-v4 schemas.
+# The vault: file codec, kernel (`Write`, `Tx`, `Collection<T>`), vault files and copies, frozen v1-v4 schemas.
 mwt-vault = { path = "../vault" }
 # Device-to-device sync: merge, Noise channel, pairing code.
 mwt-sync = { path = "../sync" }

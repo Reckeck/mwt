@@ -128,8 +128,8 @@ pub use vault::{
     ACCOUNT_EARN, ACCOUNT_FUND, ACCOUNT_UNIFIED, DailyBudgetMode, DashPeriod, DashboardWidgetCfg,
     ExchangeKeys, Exchanges, FxPoint, ImportKind, ImportRun, ImportSource, MAX_DISCARDED_IMPORTS,
     MAX_IMPORT_RUNS, ManualPrice, PendingImport, PricePoint, Settings, TxProperty,
-    VAULT_FORMAT_VERSION, Valuation, VaultDoc, default_fx_interval, default_minimize_to_tray,
-    iso_to_millis, now_iso, unix_to_iso,
+    VAULT_FORMAT_VERSION, Valuation, VaultDoc, bybit_key_for, default_fx_interval,
+    default_minimize_to_tray, iso_to_millis, now_iso, unix_to_iso,
 };
 pub use workflow::{
     GraphVersion, MAX_GRAPH_VERSIONS, MAX_WORKFLOW_RUNS, QueuedActions, RunOutcome, StepStatus,
