@@ -380,7 +380,7 @@
     "crates/core/src/usecases/cryptotrack/exchange_sync.rs": 1,
     "crates/core/src/usecases/cryptotrack/legacy_bybit.rs": 1,
     "crates/core/src/usecases/cryptotrack/links.rs": 2,
-    "crates/core/src/usecases/cryptotrack/network.rs": 2,
+    "crates/core/src/usecases/cryptotrack/network.rs": 1,
     "crates/core/src/usecases/cryptotrack/operations.rs": 1,
     "crates/core/src/usecases/cryptotrack/positions.rs": 1,
     "crates/core/src/usecases/cryptotrack/recompute.rs": 1,

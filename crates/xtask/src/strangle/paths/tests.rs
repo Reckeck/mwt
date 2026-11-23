@@ -89,14 +89,14 @@ fn a_grouped_use_gets_one_line_per_name_and_keeps_the_refused_ones() {
 }
 
 #[test]
-fn a_nested_group_and_a_foreign_branch_are_split() {
+fn a_nested_group_and_a_foreign_branch_are_split_by_module() {
     let (report, text) = planned(
         USER,
         "use crate::{model::Thing, service::{DataSourceDraft, source_is_due}};\n",
     );
     assert!(text.contains("use crate::model::Thing;"), "{text}");
     assert!(
-        text.contains("use mwt_planning::datasources::DataSourceDraft;"),
+        text.contains("use mwt_planning::datasources::{DataSourceDraft, is_due as source_is_due};"),
         "{text}"
     );
     assert_eq!(report.rewrites.len(), 2);
@@ -109,12 +109,58 @@ fn an_alias_of_the_shim_keeps_the_name_the_file_uses() {
         USER,
         "use crate::service::source_is_due;\nuse crate::service::DataSourceDraft as Source;\n",
     );
-    assert!(
-        text.contains("use mwt_planning::datasources::is_due as source_is_due;"),
+    assert!(text.contains("is_due as source_is_due"), "{text}");
+    assert!(text.contains("DataSourceDraft as Source"), "{text}");
+}
+
+#[test]
+fn leaves_going_to_one_new_module_form_one_grouped_use() {
+    let (_, text) = planned(
+        USER,
+        "use crate::service::DataSourceDraft;\nuse crate::service::{source_is_due, MIN_HISTORY_MONTHS};\n",
+    );
+    assert_eq!(
+        text.matches("use mwt_planning::datasources").count(),
+        1,
         "{text}"
     );
     assert!(
-        text.contains("use mwt_planning::datasources::DataSourceDraft as Source;"),
+        text.contains("use mwt_planning::datasources::{DataSourceDraft, is_due as source_is_due};"),
+        "{text}"
+    );
+    assert!(
+        text.contains("use crate::planning::budget::MIN_HISTORY_MONTHS;"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_leaf_joins_the_use_group_the_file_already_has_for_its_module() {
+    let (_, text) = planned(
+        USER,
+        "use mwt_planning::datasources::{Other, Another};\nuse crate::service::DataSourceDraft;\n",
+    );
+    assert_eq!(
+        text.matches("use mwt_planning::datasources").count(),
+        1,
+        "{text}"
+    );
+    assert!(
+        text.contains("{Other, Another, DataSourceDraft}")
+            || text.contains("{Another, DataSourceDraft, Other}"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_leaf_does_not_join_a_use_of_another_visibility() {
+    let (_, text) = planned(
+        USER,
+        "pub use mwt_planning::datasources::Other;\nuse crate::service::DataSourceDraft;\n",
+    );
+    assert_eq!(
+        text.matches("use mwt_planning::datasources").count(),
+        2,
         "{text}"
     );
 }

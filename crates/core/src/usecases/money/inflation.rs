@@ -9,9 +9,7 @@ use crate::Amount;
 use crate::error::Result;
 use crate::model::deposit::KeyRatePoint;
 use crate::model::inflation::{InflationMode, InflationReading};
-use crate::model::notify::notice;
-use crate::model::notify::notice_title;
-use crate::model::notify::{NoticeCategory, NoticeRecord};
+use crate::model::notify::{NoticeCategory, NoticeRecord, notice, notice_title};
 use crate::money::inflation::{
     FetchedRates, InflationNews, flat_rates_to_adopt, merge_readings, plan_inflation_mode,
     plan_inflation_source,

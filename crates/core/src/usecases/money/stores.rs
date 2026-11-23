@@ -20,8 +20,7 @@ use crate::money::tree::find_store;
 use crate::money::valuation::initial_rule;
 use crate::planning::emergency::prune_emergency_fund;
 use crate::service::{CASH_WALLET_ID, StoreExtras, UnlockedVault};
-use mwt_money::stores::FirstCard;
-use mwt_money::stores::OpeningBalance;
+use mwt_money::stores::{FirstCard, OpeningBalance};
 
 /// Allowed destinations for moving a sub-account.
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

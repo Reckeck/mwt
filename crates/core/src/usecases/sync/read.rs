@@ -13,8 +13,7 @@ use crate::sync::manifest::Manifest;
 use crate::sync::manifest_view::{
     check_incoming, diff_wanted, manifest_for, preview_summary, records_for,
 };
-use crate::sync::view;
-use crate::sync::{RecordState, SyncSummary};
+use crate::sync::{RecordState, SyncSummary, view};
 
 /// One digest per record and deletion. `union_since_ms` leaves out cached
 /// prices and rates older than that (a first sync sends 90 days).

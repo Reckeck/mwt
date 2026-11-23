@@ -20,8 +20,7 @@ use crate::service::UnlockedVault;
 use crate::service::security_level::level_rank;
 use crate::usecases::money::capital::net_worth;
 use crate::usecases::planning::emergency::prune_emergency_fund;
-use crate::vault_io::backups;
-use crate::vault_io::device_secrets;
+use crate::vault_io::{backups, device_secrets};
 
 /// What a wipe would remove: the records per collection, the wallets that
 /// would be unlinked and archived, what the capital would lose and which

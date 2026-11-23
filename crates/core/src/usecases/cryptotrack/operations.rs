@@ -25,8 +25,7 @@ use crate::cryptotrack::service::operations::{
     crypto_release_chain, crypto_remember_address, crypto_signed_value, crypto_symbol, day_of,
     other_side, rule_for, secs, short,
 };
-use crate::cryptotrack::tracking::ExplorerSettings;
-use crate::cryptotrack::tracking::TrackingRefExt;
+use crate::cryptotrack::tracking::{ExplorerSettings, TrackingRefExt};
 use crate::cryptotrack::validate::Validate;
 use crate::error::{Error, Result};
 use crate::ipc_contract::cryptotrack::operations::{

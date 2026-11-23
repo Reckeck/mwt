@@ -3,8 +3,6 @@
 //! the holdings are areas that have not moved yet; they are asked through the
 //! vault.
 
-use crate::Amount;
-use crate::calendar;
 use crate::error::Result;
 use crate::household::utilities::{
     BillPlan, PayUtilityBillInput, PropertySummary, ReadingInput, UtilityBill, UtilityDraft,
@@ -18,6 +16,7 @@ use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
 use crate::service::UnlockedVault;
 use crate::sync::sync_ids::reading_id;
+use crate::{Amount, calendar};
 
 /// The property summary: value, debt, equity and monthly costs.
 pub fn property_summary(

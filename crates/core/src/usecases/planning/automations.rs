@@ -11,8 +11,6 @@ use super::automation_rules::{
     check_draft_moment, detach, manual_run_record, new_automation_workflow, rewrite_automation,
     simulation_report,
 };
-use crate::Amount;
-use crate::calendar;
 use crate::error::{Error, Result};
 use crate::kernel::events::{AutomationDeleted, AutomationRetried, DomainEvent};
 use crate::model::planning::{Automation, AutomationRun, draft_to_transaction};
@@ -25,6 +23,7 @@ use crate::time::secs_or_now;
 use crate::usecases::react::{ReactionFailure, react};
 use crate::workflow::automation as graph_of;
 use crate::workflow::model::Workflow;
+use crate::{Amount, calendar};
 
 pub fn automations(vault: &UnlockedVault) -> Vec<Automation> {
     plan::automations(&vault.books())
