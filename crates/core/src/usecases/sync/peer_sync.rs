@@ -559,7 +559,7 @@ pub(crate) fn open_copy(
         sync_tap: None,
         announce: std::collections::BTreeSet::new(),
         key: None,
-        session: crate::kernel::session::Session::sandboxed(),
+        session: crate::kernel::session::Write::sandboxed(),
         device_keys: Default::default(),
     })
 }

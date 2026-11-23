@@ -98,7 +98,7 @@ pub(crate) const CASH_WALLET_ID: &str = "cash";
 /// An unlocked vault held in memory for the duration of a session.
 /// The master password lives only here (zeroized on drop) — it is never
 /// written to disk and is required again on the next unlock.
-pub struct UnlockedVault {
+pub struct Session {
     pub path: PathBuf,
     pub fmt: SnapshotFormat,
     pub doc: VaultDoc,
@@ -130,12 +130,15 @@ pub struct UnlockedVault {
     /// The key derived at unlock: saves seal with it, Argon2 does not run again.
     pub(crate) key: Option<std::sync::Arc<SealKey>>,
     /// Unsaved changes and the batched writer (see `saving`).
-    pub(crate) session: crate::kernel::session::Session,
+    pub(crate) session: crate::kernel::session::Write,
     /// What the session knows of the device secrets file (see `exchange_keys`).
     pub(crate) device_keys: exchange_keys::DeviceKeys,
 }
 
-impl UnlockedVault {
+/// The old name of [`Session`]; callers move to `Session` in later steps.
+pub type UnlockedVault = Session;
+
+impl Session {
     /// [`Self::announce_to_tap`] for the sync scenarios of `usecases` (that
     /// method is private to `service`; its rule keeps one home in `saving`).
     pub(crate) fn announce_keys_to_tap(&mut self, keys: Vec<String>) {
@@ -204,7 +207,7 @@ impl UnlockedVault {
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: Some(std::sync::Arc::new(key)),
-            session: crate::kernel::session::Session::default(),
+            session: crate::kernel::session::Write::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
         };
         crate::usecases::sync::peer_sync::start_tracking(&mut vault)?;
@@ -234,7 +237,7 @@ impl UnlockedVault {
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: Some(std::sync::Arc::new(SealKey::plain())),
-            session: crate::kernel::session::Session::with_store(store),
+            session: crate::kernel::session::Write::with_store(store),
             device_keys: exchange_keys::DeviceKeys::default(),
         }
     }
@@ -303,7 +306,7 @@ impl UnlockedVault {
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: Some(std::sync::Arc::new(key)),
-            session: crate::kernel::session::Session::default(),
+            session: crate::kernel::session::Write::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
         };
         if let Some(device_id) = device_id {
@@ -407,8 +410,8 @@ impl UnlockedVault {
     /// A copy of the vault in memory for emulation: every operation and rule
     /// works on it as on the real one, but nothing is ever written, so trying
     /// things out cannot break the user's data.
-    pub fn sandbox(&self) -> UnlockedVault {
-        UnlockedVault {
+    pub fn sandbox(&self) -> Session {
+        Session {
             path: self.path.clone(),
             fmt: self.fmt,
             doc: self.doc.clone(),
@@ -422,7 +425,7 @@ impl UnlockedVault {
             sync_tap: None,
             announce: std::collections::BTreeSet::new(),
             key: None,
-            session: crate::kernel::session::Session::sandboxed(),
+            session: crate::kernel::session::Write::sandboxed(),
             device_keys: exchange_keys::DeviceKeys::default(),
         }
     }

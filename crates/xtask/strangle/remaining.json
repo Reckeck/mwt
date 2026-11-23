@@ -107,7 +107,7 @@
     "crates/core/src/service/exchange_sync.rs": 2,
     "crates/core/src/service/exchange_sync_tests.rs": 2,
     "crates/core/src/service/golden_tests.rs": 4,
-    "crates/core/src/service/mod.rs": 31,
+    "crates/core/src/service/mod.rs": 28,
     "crates/core/src/service/password.rs": 21,
     "crates/core/src/service/peer_sync.rs": 36,
     "crates/core/src/service/peer_sync/adjustment_tests.rs": 5,
