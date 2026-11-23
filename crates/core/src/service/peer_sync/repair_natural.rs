@@ -3,7 +3,7 @@
 #[cfg(test)]
 use super::UnlockedVault;
 #[cfg(test)]
-use crate::service::sync_ids;
+use crate::sync::sync_ids;
 
 #[cfg(test)]
 mod tests {
@@ -11,12 +11,12 @@ mod tests {
     use super::super::convergence_tests::Ledger;
     use super::super::tests::{settle, two_devices};
     use super::*;
+    use crate::household::contacts::DebtTermsDraft;
     use crate::model::contact::DebtTerms;
     use crate::model::store::{StoreKind, StoreScope};
+    use crate::money::valuation::ValuationInput;
     use crate::planning::goals::GoalDraft;
-    use crate::service::contacts::DebtTermsDraft;
     use crate::service::test_support::{amount, income, store};
-    use crate::service::valuation::ValuationInput;
 
     fn pair() -> (tempfile::TempDir, Vec<UnlockedVault>, Ledger) {
         let (dir, left, right) = two_devices();

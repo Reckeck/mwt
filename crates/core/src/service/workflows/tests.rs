@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde_json::{Value, json};
 
-use super::*;
 use crate::Amount;
 use crate::calendar::now_secs;
 use crate::model::store::{AssetRef, StoreKind};
@@ -16,7 +15,7 @@ use crate::workflow::graph::Graph;
 use crate::workflow::model::{
     TestExpect, VarScope, WaitKind, Workflow, WorkflowRun, WorkflowTest, WorkflowWait,
 };
-use crate::workflow::service::records::EXPORT_FORMAT;
+use crate::workflow::service::records::{EXPORT_FORMAT, ExportedStore, WorkflowDraft};
 use crate::workflow::types::WfValue;
 use crate::workflow::validate::validate;
 use pretty_assertions::assert_eq;
@@ -550,7 +549,7 @@ fn a_counter_lives_between_runs() {
 fn a_source_trigger_fires_on_a_new_value_and_on_crossing() {
     use crate::datasource::Extracted;
     use crate::model::datasource::{NumberFormat, SourceInterval, SourceMethod, SourceOutput};
-    use crate::service::DataSourceDraft;
+    use crate::planning::datasources::DataSourceDraft;
 
     let (_dir, mut vault) = empty_vault();
     let source = crate::usecases::planning::datasources::save_data_source(

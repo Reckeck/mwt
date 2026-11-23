@@ -7,6 +7,7 @@
 use super::convergence_catalog::{self as catalog, Item, KNOWN_OPEN, Violation};
 use super::tests::two_devices;
 use super::*;
+use crate::household::contacts::ContactDraft;
 use crate::ipc_contract::{
     SettleSharedInput, SharedEventDraft, SharedItemDraft, SharedParticipantDraft,
     SharedPurchaseDraft,
@@ -17,9 +18,8 @@ use crate::model::inflation::InflationMode;
 use crate::model::shared_event::{PriceMode, SettleDirection};
 use crate::model::store::{Binding, StoreKind, SubType};
 use crate::model::transaction::Transaction;
+use crate::planning::envelopes::EnvelopeDraft;
 use crate::service::StoreExtras;
-use crate::service::contacts::ContactDraft;
-use crate::service::envelopes::EnvelopeDraft;
 use crate::service::test_support::{amount, income, store, usd};
 use std::collections::{BTreeMap, BTreeSet};
 

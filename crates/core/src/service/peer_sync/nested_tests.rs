@@ -392,7 +392,7 @@ fn deleted_store_is_pruned_from_emergency_scope() {
 #[test]
 fn a_deleted_data_source_is_pruned_from_the_inflation_maps() {
     let (_dir, mut left, mut right) = two_devices();
-    let draft = crate::service::datasources::DataSourceDraft {
+    let draft = crate::planning::datasources::DataSourceDraft {
         id: None,
         name: "CPI".into(),
         url: "https://example.org/cpi".into(),

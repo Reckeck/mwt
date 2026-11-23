@@ -64,7 +64,7 @@ fn new_vault() -> (
     for (key, name) in [("petya", "Петя"), ("vasya", "Вася"), ("anya", "Аня")] {
         let contact: Contact = crate::usecases::household::contacts::create_contact(
             &mut vault,
-            crate::service::ContactDraft {
+            crate::household::contacts::ContactDraft {
                 name: name.into(),
                 ..Default::default()
             },

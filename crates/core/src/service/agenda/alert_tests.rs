@@ -2,7 +2,7 @@
 
 use crate::model::planning::{AlertCondition, PriceAlert};
 use crate::model::vault::PricePoint;
-use crate::service::PriceAlertDraft;
+use crate::planning::agenda::PriceAlertDraft;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 

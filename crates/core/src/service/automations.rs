@@ -1,10 +1,6 @@
 //! Shim of the `automations` area: the rules moved to `crate::planning::automations`, the
 //! scenarios to `crate::usecases::planning::automations` (spec core-strangler, D1).
 
-pub use crate::planning::automations::{
-    MAX_CATCH_UP, SimulatedBalance, SimulatedRun, describe_reject,
-};
-
 use crate::calendar::Calendar;
 use crate::model::planning::Automation;
 use crate::model::transaction::Transaction;

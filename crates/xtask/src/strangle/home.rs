@@ -232,20 +232,7 @@ mod tests {
             .into_iter()
             .map(|home| (home.stem, home.group))
             .collect();
-        for (stem, group) in [
-            ("categories", "money"),
-            ("ledger", "money"),
-            ("validate", "money"),
-            ("store_months", "money"),
-            ("month_balance", "money"),
-            ("search", "money"),
-            ("envelopes", "planning"),
-            ("vehicle", "household"),
-            ("losses", "household"),
-            ("relations", "household"),
-        ] {
-            assert_eq!(groups[stem], group, "{FIX_MAP}: {stem}");
-        }
+        assert_eq!(groups["validate"], "money", "{FIX_MAP}: validate");
     }
 
     #[test]
@@ -253,7 +240,7 @@ mod tests {
         let mut map = Map::parse(include_str!("../../strangle.toml")).expect(FIX_MAP);
         map.group_dirs
             .insert("sync".to_string(), "crates/sync/src".to_string());
-        let area = &map.areas[map.area_index("sync_ids_journal").expect(FIX_MAP)];
+        let area = &map.areas[map.area_index("peer_sync").expect(FIX_MAP)];
         let home = homes(&map, area).remove(0);
         assert_eq!(
             home.pure_file(),
@@ -275,11 +262,13 @@ mod tests {
         let leaves = &map.areas[map.area_index("leaves").expect(FIX_MAP)];
         let home = homes(&map, leaves)
             .into_iter()
-            .find(|home| home.stem == "ledger")
+            .find(|home| home.stem == "validate")
             .expect(FIX_MAP);
         let tests = home.test_files();
-        assert!(tests.contains(&"crates/core/src/money_facade_tests/ledger.rs".to_string()));
-        assert!(tests.contains(&"crates/core/src/money_facade_tests/ledger_tests.rs".to_string()));
+        assert!(tests.contains(&"crates/core/src/money_facade_tests/validate.rs".to_string()));
+        assert!(
+            tests.contains(&"crates/core/src/money_facade_tests/validate_tests.rs".to_string())
+        );
     }
 
     #[test]

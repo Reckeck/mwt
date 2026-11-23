@@ -13,8 +13,8 @@ use crate::model::transaction::Transaction;
 use crate::model::vault::PricePoint;
 use crate::service::test_support::*;
 use crate::service::*;
-use crate::service::{NetworthPoint, Report, ReportFilter, ReportKind};
 use crate::time::unix_secs;
+use mwt_reports::overview::{NetworthPoint, Report, ReportFilter, ReportKind};
 
 const ME: &str = "0xabcd00000000000000000000000000000000ef01";
 const MATE: &str = "0x1111111111111111111111111111111111111111";

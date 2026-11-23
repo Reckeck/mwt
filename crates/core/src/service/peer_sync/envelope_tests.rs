@@ -6,7 +6,7 @@ use super::tests::{settle, two_devices};
 use super::*;
 use crate::model::planning::{Envelope, EnvelopeMove};
 use crate::model::store::StoreKind;
-use crate::service::envelopes::EnvelopeDraft;
+use crate::planning::envelopes::EnvelopeDraft;
 use crate::service::test_support::{amount, income, store, usd};
 use crate::sync::stamp::Stamp;
 

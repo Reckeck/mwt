@@ -6,11 +6,11 @@ use super::convergence_catalog::add_catalog_stores;
 use super::convergence_tests::Ledger;
 use super::tests::{settle, two_devices};
 use super::*;
+use crate::household::contacts::DebtTermsDraft;
 use crate::model::store::{StoreKind, StoreScope};
+use crate::money::valuation::ValuationInput;
 use crate::planning::goals::GoalDraft;
-use crate::service::contacts::DebtTermsDraft;
 use crate::service::test_support::{amount, income, store};
-use crate::service::valuation::ValuationInput;
 
 fn pair() -> (tempfile::TempDir, Vec<UnlockedVault>, Ledger) {
     let (dir, left, right) = two_devices();

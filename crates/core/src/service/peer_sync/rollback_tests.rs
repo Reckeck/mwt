@@ -16,7 +16,7 @@ fn a_failed_batch_leaves_document_and_tracker_as_they_were() {
     let (_dir, mut left, mut right) = two_devices();
     crate::usecases::household::contacts::create_contact(
         &mut right,
-        crate::service::contacts::ContactDraft {
+        crate::household::contacts::ContactDraft {
             name: "Theirs".into(),
             kind: crate::model::contact::ContactKind::Person,
             note: String::new(),

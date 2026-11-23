@@ -3,8 +3,8 @@
 
 use super::tests::{exchange, two_devices};
 use super::*;
+use crate::household::contacts::ContactDraft;
 use crate::model::contact::ContactKind;
-use crate::service::contacts::ContactDraft;
 use crate::sync::stamp::{MAX_FUTURE_MS, now_ms};
 
 const DAY_MS: u64 = 24 * 3600 * 1000;

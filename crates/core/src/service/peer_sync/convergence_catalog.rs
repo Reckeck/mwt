@@ -10,6 +10,7 @@
 use super::convergence_tests::{Edit, Ledger, Rng, event_ids, guest, pick};
 use super::*;
 use crate::exchange::staging::PendingImportExt;
+use crate::household::contacts::DebtTermsDraft;
 use crate::household::utilities::UtilityDraft;
 use crate::ipc_contract::{
     AttachPaymentInput, SharedEventDraft, SharedItemDraft, SharedPurchaseDraft,
@@ -18,12 +19,11 @@ use crate::model::planning::AssetClass;
 use crate::model::shared_event::{ItemSplit, ME, PriceMode};
 use crate::model::store::{AssetRef, MAX_STORE_DEPTH, StoreKind, StoreScope};
 use crate::model::transaction::Transaction;
+use crate::money::valuation::ValuationInput;
+use crate::planning::allocation::AssetClassTarget;
 use crate::planning::goals::GoalDraft;
 use crate::service::StoreExtras;
-use crate::service::allocation::AssetClassTarget;
-use crate::service::contacts::DebtTermsDraft;
 use crate::service::test_support::{amount, income_of, payment, usd};
-use crate::service::valuation::ValuationInput;
 use crate::time::unix_secs;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -151,7 +151,7 @@ pub(super) fn add_catalog_stores(devices: &mut [UnlockedVault], ledger: &mut Led
     for name in ["anchor A", "anchor B"] {
         let contact = crate::usecases::household::contacts::create_contact(
             &mut devices[0],
-            crate::service::contacts::ContactDraft {
+            crate::household::contacts::ContactDraft {
                 name: name.into(),
                 kind: crate::model::contact::ContactKind::Person,
                 note: String::new(),
@@ -719,8 +719,8 @@ fn remember_purchases(
 
 /// Baskets drawn from three fixed ids, so two devices editing at once edit the
 /// same records; shares add up to 100 on the device that saves them.
-fn alert_draft(price: usize) -> crate::service::PriceAlertDraft {
-    crate::service::PriceAlertDraft {
+fn alert_draft(price: usize) -> crate::planning::agenda::PriceAlertDraft {
+    crate::planning::agenda::PriceAlertDraft {
         asset: crate::service::test_support::btc(),
         condition: crate::model::planning::AlertCondition::Above,
         price: amount(&price.to_string()),
@@ -1048,7 +1048,7 @@ fn check_base_prices(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Viola
             continue;
         };
         // L3: the reader's own fiat is worth exactly one of itself.
-        let own_fiat = crate::service::rates::is_fiat_of(&leg.asset.key(), &base);
+        let own_fiat = crate::money::rates::is_fiat_of(&leg.asset.key(), &base);
         let wanted = if own_fiat {
             amount("1")
         } else {
@@ -1475,7 +1475,7 @@ fn check_shared_events(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Vio
 
 /// What a failure report says about the payment behind a `link-` purchase.
 fn link_state(doc: &crate::model::vault::VaultDoc, purchase_id: &str) -> String {
-    let payment_of = |id: &str| crate::service::sync_ids::payment_link_id(id) == purchase_id;
+    let payment_of = |id: &str| crate::sync::sync_ids::payment_link_id(id) == purchase_id;
     let live = doc.transactions.iter().find(|tx| payment_of(&tx.meta().id));
     let dead = doc
         .sync
@@ -1498,12 +1498,12 @@ fn link_moved_or_gone(doc: &crate::model::vault::VaultDoc, purchase_id: &str) ->
     let payment_exists = doc
         .transactions
         .iter()
-        .any(|tx| crate::service::sync_ids::payment_link_id(&tx.meta().id) == purchase_id);
+        .any(|tx| crate::sync::sync_ids::payment_link_id(&tx.meta().id) == purchase_id);
     // Gone for good only when the payment carries a tombstone: a payment that
     // is merely absent (no tombstone) is a loss the check must still see.
     let payment_deleted = doc.sync.tombstones.keys().any(|key| {
         key.strip_prefix("transactions:")
-            .is_some_and(|id| crate::service::sync_ids::payment_link_id(id) == purchase_id)
+            .is_some_and(|id| crate::sync::sync_ids::payment_link_id(id) == purchase_id)
     });
     let placed_elsewhere = doc
         .shared_events

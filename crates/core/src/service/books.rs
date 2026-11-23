@@ -12,7 +12,7 @@ use crate::money::books::{Books, BooksSource};
 use mwt_model::CryptoHistory;
 
 use super::UnlockedVault;
-use super::valuation::ValuationCurve;
+use crate::money::valuation::ValuationCurve;
 
 impl BooksSource for UnlockedVault {
     fn doc(&self) -> &VaultDoc {

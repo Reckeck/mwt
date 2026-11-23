@@ -12,9 +12,9 @@ use crate::calendar::now_secs;
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::service::test_support::{income, store};
-use crate::service::workflows::WorkflowDraft;
 use crate::sync::stamp::now_ms;
 use crate::time::unix_secs;
+use crate::workflow::service::records::WorkflowDraft;
 
 fn peer(name: &str) -> PeerRef {
     PeerRef {

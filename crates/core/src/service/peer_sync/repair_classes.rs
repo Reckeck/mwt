@@ -13,7 +13,7 @@ use crate::sync::repair::repair_classes::scaled_shares;
 mod tests {
     use super::super::tests::{settle, two_devices};
     use super::*;
-    use crate::service::allocation::AssetClassTarget;
+    use crate::planning::allocation::AssetClassTarget;
     use crate::service::test_support::{amount, usd};
 
     fn class(id: &str, share: &str) -> AssetClass {

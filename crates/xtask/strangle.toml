@@ -228,14 +228,11 @@ files = [
     "crates/reports/src/", "crates/cryptotrack/src/", "crates/workflow/src/",
     "crates/core/src/usecases/", "crates/core/src/kernel/books.rs",
     # Forwards in service/ that lose their last caller are deleted (orchestrator decision 2026-11-20).
-    "crates/core/src/service/allocation.rs", "crates/core/src/service/budget.rs",
-    "crates/core/src/service/cryptotrack/totals.rs", "crates/core/src/service/envelopes.rs",
-    "crates/core/src/service/portfolio.rs", "crates/core/src/service/price_info.rs",
-    "crates/core/src/service/scenarios.rs", "crates/core/src/service/shared_events/analytics.rs",
-    "crates/core/src/service/where_went.rs",
+    "crates/core/src/service/budget.rs",
+    "crates/core/src/service/cryptotrack/totals.rs", "crates/core/src/service/shared_events/analytics.rs",
     # T231: the domain imports of next_occurrence, reminder_secs and draft_to_transaction point at planning, so their
     # service re-exports lose their last user and go.
-    "crates/core/src/service/agenda.rs", "crates/core/src/service/automations.rs", "crates/core/src/service/mod.rs",
+    "crates/core/src/service/automations.rs", "crates/core/src/service/mod.rs",
 ]
 
 [[foundation]]
@@ -346,7 +343,7 @@ files = ["crates/core/src/service/mod.rs"]
 [[foundation]]
 # reports no longer call real_coefficients through the vault; the shim method becomes test-only
 task = "A"
-files = ["crates/core/src/service/inflation.rs"]
+files = []
 
 # Stubs that later tasks name but no area lists; paths are under crates/core/src.
 [[extra_stub]]
@@ -400,7 +397,7 @@ retired = true
 task = "T26"
 group = "household"
 context = "household"
-files = ["loyalty.rs"]
+files = []
 
 [[area]]
 name = "leaves"
@@ -408,10 +405,7 @@ retired = true
 task = "A"
 group = "household"
 context = "household"
-files = [
-    "vehicle.rs", "envelopes.rs", "categories.rs", "ledger.rs", "validate.rs",
-    "store_months.rs", "month_balance.rs", "search.rs", "losses.rs", "relations.rs",
-]
+files = ["validate.rs"]
 homes = {
     envelopes = "planning", categories = "money", ledger = "money", validate = "money",
     store_months = "money", month_balance = "money", search = "money",
@@ -423,8 +417,7 @@ retired = true
 task = "A"
 group = "reports"
 context = "reports"
-files = ["reports.rs"]
-stem = { "reports.rs" = "overview" }
+files = []
 
 [[area]]
 name = "insights"
@@ -432,7 +425,7 @@ retired = true
 task = "A"
 group = "reports"
 context = "reports"
-files = ["where_went.rs", "insights.rs", "notify_snapshot.rs"]
+files = []
 
 [[area]]
 name = "dashboard"
@@ -440,7 +433,7 @@ retired = true
 task = "A"
 group = "reports"
 context = "reports"
-files = ["dashboard.rs", "dashboard_today.rs", "dashboard_tiles.rs"]
+files = []
 
 [[area]]
 name = "rates"
@@ -448,7 +441,7 @@ retired = true
 task = "B"
 group = "money"
 context = "money"
-files = ["rates.rs", "price_info.rs"]
+files = ["rates.rs"]
 
 [[area]]
 name = "valuation"
@@ -456,7 +449,7 @@ retired = true
 task = "B"
 group = "money"
 context = "money"
-files = ["valuation.rs", "inflation.rs", "interest.rs"]
+files = []
 
 [[area]]
 name = "worth"
@@ -464,7 +457,7 @@ retired = true
 task = "B"
 group = "money"
 context = "money"
-files = ["worth.rs"]
+files = []
 
 [[area]]
 name = "stores"
@@ -472,7 +465,7 @@ retired = true
 task = "B"
 group = "money"
 context = "money"
-files = ["stores.rs", "store_change.rs"]
+files = []
 
 [[area]]
 name = "transactions"
@@ -480,7 +473,7 @@ retired = true
 task = "B"
 group = "money"
 context = "money"
-files = ["transactions.rs"]
+files = []
 
 [[area]]
 name = "portfolio"
@@ -488,7 +481,7 @@ retired = true
 task = "B"
 group = "money"
 context = "money"
-files = ["portfolio.rs", "asset_holdings.rs", "investments.rs"]
+files = []
 
 [[area]]
 name = "adjustments"
@@ -496,9 +489,7 @@ retired = true
 task = "B"
 group = "money"
 context = "money"
-files = [
-    "preview.rs", "bulk.rs", "adjustments.rs", "rebase.rs", "enrichment.rs",
-]
+files = []
 
 [[area]]
 name = "contacts_debts"
@@ -506,7 +497,7 @@ retired = true
 task = "C"
 group = "household"
 context = "household"
-files = ["contacts.rs", "debts.rs"]
+files = []
 
 [[area]]
 name = "utilities"
@@ -514,7 +505,7 @@ retired = true
 task = "C"
 group = "household"
 context = "household"
-files = ["utilities.rs", "property_links.rs"]
+files = []
 
 [[area]]
 name = "shared_events_split"
@@ -567,7 +558,7 @@ retired = true
 task = "C"
 group = "household"
 context = "household"
-files = ["attachments.rs", "attachments_cleanup.rs"]
+files = []
 
 [[area]]
 name = "peer_sync"
@@ -618,7 +609,7 @@ retired = true
 task = "C"
 group = "sync"
 context = "sync"
-files = ["sync_ids.rs", "sync_journal.rs"]
+files = []
 
 [[area]]
 name = "peer_sync_tests"
@@ -672,7 +663,7 @@ retired = true
 task = "D"
 group = "planning"
 context = "planning"
-files = ["automations.rs", "recurring.rs"]
+files = ["automations.rs"]
 
 [[area]]
 name = "budget"
@@ -680,7 +671,7 @@ retired = true
 task = "D"
 group = "planning"
 context = "planning"
-files = ["budget.rs", "emergency.rs"]
+files = ["budget.rs"]
 
 [[area]]
 name = "goals"
@@ -688,9 +679,7 @@ retired = true
 task = "D"
 group = "planning"
 context = "planning"
-files = [
-    "goals.rs", "allocation.rs", "scenarios.rs", "passive.rs", "health.rs",
-]
+files = []
 
 [[area]]
 name = "notifications"
@@ -699,8 +688,7 @@ task = "D"
 group = "planning"
 context = "planning"
 files = [
-    "notifications.rs", "auto_reminders.rs", "agenda.rs", "agenda/", "my_automations.rs",
-    "automation_card.rs", "datasources.rs",
+    "agenda/",
 ]
 
 [[area]]
@@ -781,7 +769,7 @@ retired = true
 task = "E"
 group = "cryptotrack"
 context = "cryptotrack"
-files = ["exchange_sync.rs", "exchange_import.rs"]
+files = ["exchange_sync.rs"]
 
 [[area]]
 name = "workflow"
@@ -838,7 +826,6 @@ files = [
     "crates/workflow/src/nodes/actions.rs",
     "crates/core/src/service/mod.rs",
     "crates/core/src/service/automations.rs",
-    "crates/core/src/service/notifications.rs",
     "crates/xtask/src/arch/",
 ]
 
@@ -853,10 +840,6 @@ files = [
   "crates/workflow/src/service/vars.rs",
   "crates/reports/src/overview.rs",
   "crates/core/src/kernel/books.rs",
-  "crates/core/src/service/worth.rs",
-  "crates/core/src/service/portfolio.rs",
-  "crates/core/src/service/interest.rs",
-  "crates/core/src/service/inflation.rs",
   "crates/core/src/usecases/money/",
   "crates/xtask/arch-allow.toml",
 ]
@@ -874,13 +857,11 @@ files = [
 task = "T111"
 files = [
   "crates/core/src/usecases/household/utilities.rs",
-  "crates/core/src/service/utilities.rs",
   "crates/core/src/model/vault.rs",
   "crates/core/src/secret.rs",
   "crates/core/src/service/password.rs",
   "crates/app/src/commands/exchange.rs",
   "crates/core/src/service/exchange_keys.rs",
-  "crates/core/src/service/exchange_import.rs",
   "crates/core/src/service/cryptotrack/transition/tests.rs",
   "crates/core/src/service/cryptotrack/operations.rs",
   "crates/cryptotrack/src/",
@@ -912,13 +893,8 @@ files = [
   "crates/core/src/usecases/workflow/runs.rs",
   "crates/core/src/usecases/money/capital.rs",
   "crates/core/src/service/budget.rs",
-  "crates/core/src/service/losses.rs",
-  "crates/core/src/service/contacts.rs",
-  "crates/core/src/service/loyalty.rs",
   "crates/core/src/service/mod.rs",
-  "crates/core/src/service/worth.rs",
   "crates/core/src/service/shared_events/view.rs",
-  "crates/core/src/service/reports.rs",
   "crates/xtask/src/arch/",
 ]
 
@@ -941,20 +917,12 @@ files = [
   "crates/core/src/usecases/planning/emergency.rs",
   "crates/core/src/usecases/planning/mod.rs",
   "crates/core/src/usecases/household/mod.rs",
-  "crates/core/src/service/emergency.rs",
-  "crates/core/src/service/interest.rs",
   "crates/core/src/service/cryptotrack/totals.rs",
   "crates/core/src/usecases/household/contacts.rs",
   "crates/core/src/service/automations.rs",
-  "crates/core/src/service/contacts.rs",
   "crates/core/src/usecases/household/utilities.rs",
   "crates/core/src/usecases/household/debts.rs",
-  "crates/core/src/service/agenda.rs",
   "crates/core/src/service/budget.rs",
-  "crates/core/src/service/utilities.rs",
-  "crates/core/src/service/health.rs",
-  "crates/core/src/service/reports.rs",
-  "crates/core/src/service/debts.rs",
   "crates/core/src/service/mod.rs",
   "crates/app/src/commands/planning.rs",
   "crates/app/src/commands/analytics.rs",
