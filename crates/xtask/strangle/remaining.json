@@ -294,7 +294,7 @@
     "crates/app/src/sync/transfer_tests.rs": 1,
     "crates/app/src/vault_writer.rs": 2,
     "crates/contract/src/cryptotrack/wipe.rs": 1,
-    "crates/core/src/bin/gen_types.rs": 192,
+    "crates/core/src/bin/gen_types.rs": 1,
     "crates/core/src/crypto_facade_tests/exchange_import_tests.rs": 2,
     "crates/core/src/crypto_facade_tests/exchange_sync_intake_tests.rs": 1,
     "crates/core/src/crypto_facade_tests/ports_tests.rs": 1,
