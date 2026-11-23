@@ -14,16 +14,12 @@ use crate::kernel::tx::Tx;
 use crate::model::planning::{MeterReading, UtilityItem};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::sync::sync_ids::reading_id;
 use crate::{Amount, calendar};
 
 /// The property summary: value, debt, equity and monthly costs.
-pub fn property_summary(
-    vault: &UnlockedVault,
-    store_id: &str,
-    zone: &str,
-) -> Result<PropertySummary> {
+pub fn property_summary(vault: &Session, store_id: &str, zone: &str) -> Result<PropertySummary> {
     crate::household::utilities::property_summary(
         &vault.books(),
         store_id,
@@ -34,7 +30,7 @@ pub fn property_summary(
 
 /// The "Pay" for one month of an item, dated by today.
 pub fn utility_payment_draft(
-    vault: &UnlockedVault,
+    vault: &Session,
     item_id: &str,
     period: &str,
     zone: &str,
@@ -44,7 +40,7 @@ pub fn utility_payment_draft(
 
 /// The month's bill of a property, due today when the month is this one.
 pub fn utility_bill(
-    vault: &UnlockedVault,
+    vault: &Session,
     property_id: &str,
     period: &str,
     zone: &str,
@@ -58,11 +54,11 @@ pub fn utility_bill(
     )
 }
 
-fn automation_known(vault: &UnlockedVault) -> impl Fn(&str) -> bool + '_ {
+fn automation_known(vault: &Session) -> impl Fn(&str) -> bool + '_ {
     |id| crate::usecases::planning::automations::automation(vault, id).is_ok()
 }
 
-pub fn create_utility_item(vault: &mut UnlockedVault, draft: UtilityDraft) -> Result<UtilityItem> {
+pub fn create_utility_item(vault: &mut Session, draft: UtilityDraft) -> Result<UtilityItem> {
     let item = plan_create_utility(&vault.doc, draft, &automation_known(vault))?;
     vault.transact(|tx| {
         tx.collection::<UtilityItem>().insert(item.clone())?;
@@ -71,7 +67,7 @@ pub fn create_utility_item(vault: &mut UnlockedVault, draft: UtilityDraft) -> Re
 }
 
 pub fn update_utility_item(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     draft: UtilityDraft,
 ) -> Result<UtilityItem> {
@@ -85,7 +81,7 @@ pub fn update_utility_item(
 }
 
 /// Remove an item with its meter readings; payments already made stay.
-pub fn delete_utility_item(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_utility_item(vault: &mut Session, id: &str) -> Result<()> {
     let readings = plan_delete_utility(&vault.doc, id)?;
     vault.transact(|tx| {
         for reading_id in &readings {
@@ -100,7 +96,7 @@ pub fn delete_utility_item(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 /// may hold several readings (a move-out on the 15th). A meter only counts
 /// up: a reading below an earlier one or above a later one is refused.
 pub fn add_meter_reading(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     item_id: &str,
     value: Amount,
     period: &str,
@@ -124,7 +120,7 @@ pub fn add_meter_reading(
 /// Correct a reading: its value and, if moved, its month and day. The
 /// same rules as a new one apply against every other reading of the meter.
 pub fn update_meter_reading(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     value: Amount,
     period: &str,
@@ -140,7 +136,7 @@ pub fn update_meter_reading(
     })
 }
 
-pub fn delete_meter_reading(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_meter_reading(vault: &mut Session, id: &str) -> Result<()> {
     require_reading(&vault.doc, id)?;
     vault.transact(|tx| tx.collection::<MeterReading>().remove(id).map(|_| ()))
 }
@@ -149,7 +145,7 @@ pub fn delete_meter_reading(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 /// payment per line, linked to its item. All or nothing — a line that
 /// fails leaves the vault as it was.
 pub fn pay_utility_bill(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: PayUtilityBillInput,
     zone: &str,
 ) -> Result<Vec<Transaction>> {

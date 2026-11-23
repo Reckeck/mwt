@@ -10,7 +10,7 @@ use crate::money::categories::{
     check_rule, new_rule, plan_archive_category, plan_create_category, plan_delete_category,
     plan_rule_order, plan_update_category,
 };
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Put `category` in place of the one with its key.
 fn replace_category(tx: &mut Tx<'_>, category: Category) -> Result<()> {
@@ -27,7 +27,7 @@ fn replace_category(tx: &mut Tx<'_>, category: Category) -> Result<()> {
 /// Add a category. The key is taken from `key` or derived from the name,
 /// made unique, and never changes afterwards.
 pub fn create_category(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     key: Option<&str>,
     name: &str,
     group: CategoryGroup,
@@ -43,7 +43,7 @@ pub fn create_category(
 /// An empty name restores the built-in label; `essential: None` and
 /// `passive: None` keep the flags as they are.
 pub fn update_category(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     key: &str,
     name: Option<&str>,
     group: CategoryGroup,
@@ -57,14 +57,14 @@ pub fn update_category(
     })
 }
 
-pub fn archive_category(vault: &mut UnlockedVault, key: &str, archived: bool) -> Result<()> {
+pub fn archive_category(vault: &mut Session, key: &str, archived: bool) -> Result<()> {
     let category = plan_archive_category(&vault.doc, key, archived)?;
     vault.transact(|tx| replace_category(tx, category))
 }
 
 /// Only an unused category can be deleted; otherwise archive it. The
 /// automations are the planning area's: read through the vault (OD6).
-pub fn delete_category(vault: &mut UnlockedVault, key: &str) -> Result<()> {
+pub fn delete_category(vault: &mut Session, key: &str) -> Result<()> {
     let automations = crate::usecases::planning::automations::automations(vault);
     plan_delete_category(&vault.doc, key, &automations)?;
     vault.transact(|tx| {
@@ -77,7 +77,7 @@ pub fn delete_category(vault: &mut UnlockedVault, key: &str) -> Result<()> {
 
 /// Add a rule at the end of the list.
 pub fn create_categorization_rule(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     pattern: &str,
     category: &str,
 ) -> Result<CategorizationRule> {
@@ -95,7 +95,7 @@ pub fn create_categorization_rule(
 }
 
 pub fn update_categorization_rule(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     pattern: &str,
     category: &str,
@@ -114,7 +114,7 @@ pub fn update_categorization_rule(
     })
 }
 
-pub fn delete_categorization_rule(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_categorization_rule(vault: &mut Session, id: &str) -> Result<()> {
     vault.transact(|tx| {
         tx.collection::<CategorizationRule>()
             .remove(id)
@@ -125,7 +125,7 @@ pub fn delete_categorization_rule(vault: &mut UnlockedVault, id: &str) -> Result
 
 /// Put the rules in the given order; ids not listed keep their relative
 /// order after the listed ones.
-pub fn reorder_categorization_rules(vault: &mut UnlockedVault, ids: &[String]) -> Result<()> {
+pub fn reorder_categorization_rules(vault: &mut Session, ids: &[String]) -> Result<()> {
     let order = plan_rule_order(&vault.doc, ids);
     vault.transact(|tx| {
         let mut rules = tx.collection::<CategorizationRule>();

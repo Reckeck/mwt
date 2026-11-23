@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 use crate::model::planning::{PriceAlert, Reminder, ReminderPay, ReminderRepeat};
 use crate::model::vault::now_iso;
 use crate::planning::agenda::{self as rules, PriceAlertDraft};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 fn missing_reminder(id: &str) -> Error {
     Error::Missing(format!("reminder {id}"))
@@ -19,7 +19,7 @@ fn missing_alert(id: &str) -> Error {
 
 /// Change the reminder with this id and hand back the changed copy.
 fn change_reminder(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     change: impl FnOnce(&mut Reminder) -> Result<()>,
 ) -> Result<Reminder> {
@@ -34,7 +34,7 @@ fn change_reminder(
 }
 
 pub fn create_reminder(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     text: &str,
     due_at: &str,
     repeat: Option<ReminderRepeat>,
@@ -44,7 +44,7 @@ pub fn create_reminder(
 
 /// A reminder with "Pay" in it.
 pub fn create_reminder_paying(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     text: &str,
     due_at: &str,
     repeat: Option<ReminderRepeat>,
@@ -60,7 +60,7 @@ pub fn create_reminder_paying(
 /// Edit what and when. An automatic reminder edited by hand keeps its
 /// time from then on: the sync no longer moves it.
 pub fn update_reminder(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     text: &str,
     due_at: &str,
@@ -75,7 +75,7 @@ pub fn update_reminder(
 
 /// Edit what, when and what "Pay" fills in.
 pub fn update_reminder_paying(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     text: &str,
     due_at: &str,
@@ -96,13 +96,13 @@ pub fn update_reminder_paying(
 
 /// Done. A repeating reminder is not closed but moves on to its next date
 /// after now — «paid this month» leaves next month's in place.
-pub fn set_reminder_done(vault: &mut UnlockedVault, id: &str, done: bool) -> Result<Reminder> {
+pub fn set_reminder_done(vault: &mut Session, id: &str, done: bool) -> Result<Reminder> {
     let now = calendar::now_secs();
     change_reminder(vault, id, |reminder| rules::mark_done(reminder, done, now))
 }
 
 /// Stop a repeating reminder: it is done for good.
-pub fn finish_reminder_series(vault: &mut UnlockedVault, id: &str) -> Result<Reminder> {
+pub fn finish_reminder_series(vault: &mut Session, id: &str) -> Result<Reminder> {
     change_reminder(vault, id, |reminder| {
         rules::finish_series(reminder);
         Ok(())
@@ -110,7 +110,7 @@ pub fn finish_reminder_series(vault: &mut UnlockedVault, id: &str) -> Result<Rem
 }
 
 /// Put a reminder off: it is not due before `until`.
-pub fn snooze_reminder(vault: &mut UnlockedVault, id: &str, until: &str) -> Result<Reminder> {
+pub fn snooze_reminder(vault: &mut Session, id: &str, until: &str) -> Result<Reminder> {
     rules::check_snooze(until)?;
     change_reminder(vault, id, |reminder| {
         reminder.snoozed_until = Some(until.to_string());
@@ -121,7 +121,7 @@ pub fn snooze_reminder(vault: &mut UnlockedVault, id: &str, until: &str) -> Resu
 /// Delete a reminder. An automatic one is muted rather than removed: its
 /// source would make it again with the next sync, and a muted one stays
 /// gone (and hidden) until the source itself is gone.
-pub fn delete_reminder(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_reminder(vault: &mut Session, id: &str) -> Result<()> {
     let reminder = vault
         .doc
         .reminders
@@ -139,7 +139,7 @@ pub fn delete_reminder(vault: &mut UnlockedVault, id: &str) -> Result<()> {
     })
 }
 
-pub fn create_price_alert(vault: &mut UnlockedVault, draft: PriceAlertDraft) -> Result<PriceAlert> {
+pub fn create_price_alert(vault: &mut Session, draft: PriceAlertDraft) -> Result<PriceAlert> {
     rules::check_alert(&vault.doc, &draft)?;
     let alert = rules::new_alert(draft, uuid::Uuid::new_v4().to_string());
     vault.transact(|tx| {
@@ -150,7 +150,7 @@ pub fn create_price_alert(vault: &mut UnlockedVault, draft: PriceAlertDraft) -> 
 
 /// Edit an alert; an edited alert is armed again.
 pub fn update_price_alert(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     draft: PriceAlertDraft,
 ) -> Result<PriceAlert> {
@@ -165,7 +165,7 @@ pub fn update_price_alert(
     })
 }
 
-pub fn delete_price_alert(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_price_alert(vault: &mut Session, id: &str) -> Result<()> {
     vault.transact(|tx| {
         tx.collection::<PriceAlert>()
             .remove(id)
@@ -177,7 +177,7 @@ pub fn delete_price_alert(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 /// Fire every armed alert whose condition holds at the cached price.
 /// A one-off alert stays triggered until edited; a repeating one is
 /// armed again once the price is back on the other side.
-pub fn check_alerts(vault: &mut UnlockedVault, now: i64) -> Result<Vec<PriceAlert>> {
+pub fn check_alerts(vault: &mut Session, now: i64) -> Result<Vec<PriceAlert>> {
     let book = crate::money::rates::rate_book(&vault.books());
     let price_of = |alert: &PriceAlert| {
         let usd = book.price_at(&alert.asset.key(), now)?;

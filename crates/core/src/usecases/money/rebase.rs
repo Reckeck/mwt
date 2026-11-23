@@ -13,7 +13,7 @@ use crate::ipc_contract::{
 use crate::model::vault::VaultDoc;
 use crate::money::rebase::{pick, rebased, three_way};
 use crate::money::tree::find_store;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 use crate::usecases::planning::automations::automation;
 
@@ -98,7 +98,7 @@ pub fn rebase_category_input(
 }
 
 pub fn rebase_automation_input(
-    vault: &UnlockedVault,
+    vault: &Session,
     input: UpdateAutomationInput,
 ) -> Result<UpdateAutomationInput> {
     let current = automation(vault, &input.id).ok();

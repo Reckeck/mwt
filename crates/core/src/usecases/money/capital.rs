@@ -10,7 +10,7 @@ use crate::money::books::Books;
 use crate::money::portfolio::PortfolioSummary;
 use crate::money::worth::{NetWorth, plan_manual_price};
 use crate::reports::net_worth_now::net_worth_with_crypto;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// USD value of one unit of a hand-priced asset, read at the present moment.
 #[cfg(test)]
@@ -20,7 +20,7 @@ pub(crate) fn manual_price_usd(books: &Books<'_>, asset_key: &str) -> Option<Amo
 
 /// Set the value of one unit of a property asset.
 pub fn set_manual_price(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     asset_key: &str,
     unit_price: Amount,
     currency: &str,
@@ -34,7 +34,7 @@ pub fn set_manual_price(
     })
 }
 
-pub fn clear_manual_price(vault: &mut UnlockedVault, asset_key: &str) -> Result<()> {
+pub fn clear_manual_price(vault: &mut Session, asset_key: &str) -> Result<()> {
     vault.transact(|tx| {
         tx.doc_mut()
             .manual_prices

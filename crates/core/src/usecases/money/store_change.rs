@@ -10,7 +10,7 @@ use crate::model::vault::VaultDoc;
 use crate::money::store_change::{
     ChangeOutcome, CreatedAt, StoreChangeInput, StoreChangePlan, refusal, work_out,
 };
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::storage::VaultFile;
 use crate::sync::view::full_key;
 use crate::usecases::money::stores::rebase_and_commit;
@@ -32,14 +32,14 @@ fn created_at(doc: &VaultDoc) -> HashMap<String, CreatedAt> {
 }
 
 /// What a change would do; nothing is written.
-pub fn plan_store_change(vault: &UnlockedVault, input: &StoreChangeInput) -> StoreChangePlan {
+pub fn plan_store_change(vault: &Session, input: &StoreChangeInput) -> StoreChangePlan {
     work_out(&vault.doc, input, &created_at(&vault.doc)).plan
 }
 
 /// Make the change: refused while it has an error or a conflict. The vault
 /// file is copied to `.bak` first.
 pub fn apply_store_change(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: &StoreChangeInput,
 ) -> Result<StoreChangePlan> {
     let ChangeOutcome { plan, after } = work_out(&vault.doc, input, &created_at(&vault.doc));

@@ -18,18 +18,18 @@ use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
 use crate::planning::automation_plan as plan;
 use crate::planning::automations::{self as rules, AutomationDraft, AutomationSimulation};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::time::secs_or_now;
 use crate::usecases::react::{ReactionFailure, react};
 use crate::workflow::automation as graph_of;
 use crate::workflow::model::Workflow;
 use crate::{Amount, calendar};
 
-pub fn automations(vault: &UnlockedVault) -> Vec<Automation> {
+pub fn automations(vault: &Session) -> Vec<Automation> {
     plan::automations(&vault.books())
 }
 
-pub fn automation(vault: &UnlockedVault, id: &str) -> Result<Automation> {
+pub fn automation(vault: &Session, id: &str) -> Result<Automation> {
     vault
         .doc
         .workflows
@@ -41,7 +41,7 @@ pub fn automation(vault: &UnlockedVault, id: &str) -> Result<Automation> {
 
 /// Reject a draft that could never run: a bad schedule, or a template
 /// that fails the transaction rules on its own.
-fn check_automation(vault: &UnlockedVault, draft: &AutomationDraft) -> Result<()> {
+fn check_automation(vault: &Session, draft: &AutomationDraft) -> Result<()> {
     rules::check_draft_form(draft)?;
     crate::usecases::household::property_links::check_property_link(
         vault,
@@ -59,7 +59,7 @@ fn check_automation(vault: &UnlockedVault, draft: &AutomationDraft) -> Result<()
     )
 }
 
-pub fn create_automation(vault: &mut UnlockedVault, draft: AutomationDraft) -> Result<Automation> {
+pub fn create_automation(vault: &mut Session, draft: AutomationDraft) -> Result<Automation> {
     check_automation(vault, &draft)?;
     let id = uuid::Uuid::new_v4().to_string();
     let workflow = new_automation_workflow(&draft, &id, &now_iso())?;
@@ -79,7 +79,7 @@ pub fn create_automation(vault: &mut UnlockedVault, draft: AutomationDraft) -> R
 /// Change what an automation does: its graph is built again, the old one
 /// kept as a version. Dates already processed stay processed.
 pub fn update_automation(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     draft: AutomationDraft,
 ) -> Result<Automation> {
@@ -88,7 +88,7 @@ pub fn update_automation(
 
 /// [`update_automation`] with the edit moment given by the caller.
 pub fn update_automation_at(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     draft: AutomationDraft,
     edited_at: i64,
@@ -124,14 +124,14 @@ pub fn update_automation_at(
 }
 
 /// Remove an automation and its run history. Transactions it created stay.
-pub fn delete_automation(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_automation(vault: &mut Session, id: &str) -> Result<()> {
     automation(vault, id)?;
     announce(vault, AutomationDeleted { id: id.to_string() }.into())
 }
 
 /// Commit `event` (it touches the document, so it is delivered), then run its
 /// reactions; the first one that failed is the error of the scenario.
-pub(super) fn announce(vault: &mut UnlockedVault, event: DomainEvent) -> Result<()> {
+pub(super) fn announce(vault: &mut Session, event: DomainEvent) -> Result<()> {
     vault.transact(|tx| {
         tx.emit(event.clone());
         tx.touch();
@@ -149,7 +149,7 @@ fn first_failure(failures: Vec<ReactionFailure>) -> Result<()> {
 
 /// Make an automation an ordinary workflow: the graph stays and is edited
 /// in the editor from now on; the form no longer shows it.
-pub fn detach_automation(vault: &mut UnlockedVault, id: &str) -> Result<Workflow> {
+pub fn detach_automation(vault: &mut Session, id: &str) -> Result<Workflow> {
     let now = now_iso();
     vault.transact(|tx| {
         let workflow = tx
@@ -167,7 +167,7 @@ pub fn detach_automation(vault: &mut UnlockedVault, id: &str) -> Result<Workflow
 /// day by day on a sandbox copy, so each run sees the balance the earlier
 /// ones left, exactly as the scheduler would. The vault is not touched.
 pub fn simulate_automations(
-    vault: &UnlockedVault,
+    vault: &Session,
     automation_id: Option<&str>,
     days: u32,
     now: i64,
@@ -200,11 +200,7 @@ pub fn simulate_automations(
 
 /// Funds check, then the transaction. A shortfall is an `INSUFFICIENT_FUNDS`
 /// error. Returns the prepared transaction; the caller writes it.
-fn checked_transaction(
-    vault: &UnlockedVault,
-    mut tx: Transaction,
-    now: i64,
-) -> Result<Transaction> {
+fn checked_transaction(vault: &Session, mut tx: Transaction, now: i64) -> Result<Transaction> {
     if let Some(reason) = rules::funds_shortfall(&vault.doc, &tx, now) {
         return Err(rules::funds_error(&vault.doc, reason));
     }
@@ -214,7 +210,7 @@ fn checked_transaction(
 
 /// Create the transaction of an automation now ("Create now"), with
 /// the same funds check as the schedule.
-pub fn run_automation(vault: &mut UnlockedVault, id: &str, now: i64) -> Result<Transaction> {
+pub fn run_automation(vault: &mut Session, id: &str, now: i64) -> Result<Transaction> {
     let automation = automation(vault, id)?;
     let planned_at = calendar::iso(now);
     let run_id = uuid::Uuid::new_v4().to_string();
@@ -242,7 +238,7 @@ pub fn run_automation(vault: &mut UnlockedVault, id: &str, now: i64) -> Result<T
 /// Retry a refused run: funds are checked at the current moment and the
 /// transaction is dated now.
 pub fn retry_automation_run(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     run_id: &str,
     now: i64,
     zone: &str,
@@ -272,7 +268,7 @@ pub fn retry_automation_run(
 }
 
 /// Dismiss a refused run.
-pub fn skip_automation_run(vault: &mut UnlockedVault, run_id: &str) -> Result<AutomationRun> {
+pub fn skip_automation_run(vault: &mut Session, run_id: &str) -> Result<AutomationRun> {
     let run = crate::usecases::workflow::runs::skip_workflow_run(vault, run_id)?;
     plan::automation_run_of(&vault.doc, &run)
         .ok_or_else(|| Error::Missing(format!("automation run {run_id}")))
@@ -281,7 +277,7 @@ pub fn skip_automation_run(vault: &mut UnlockedVault, run_id: &str) -> Result<Au
 /// Put in the real amount of an operation booked approximately: it is
 /// corrected with the usual checks and counts toward the next estimate.
 pub fn confirm_estimated_amount(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     tx_id: &str,
     amount: Amount,
 ) -> Result<Transaction> {
@@ -291,7 +287,7 @@ pub fn confirm_estimated_amount(
 }
 
 /// Drop the «approximate» mark of an operation; saved when it changed.
-fn clear_estimated(vault: &mut UnlockedVault, tx_id: &str) -> Result<Transaction> {
+fn clear_estimated(vault: &mut Session, tx_id: &str) -> Result<Transaction> {
     vault.transact(|tx| {
         let index = tx
             .doc()

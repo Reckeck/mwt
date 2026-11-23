@@ -9,10 +9,10 @@ use crate::model::transaction::{AdjustmentLine, PriceStamp};
 use crate::model::vault::{VaultDoc, now_iso};
 use crate::money::adjustments::{AdjustmentDraft, balances_at, rebase_adjustment_lines};
 use crate::money::validate::live_store;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Work out again what the ledger held before every correction.
-pub(crate) fn rebase_adjustments(vault: &mut UnlockedVault) {
+pub(crate) fn rebase_adjustments(vault: &mut Session) {
     rebase_adjustment_lines(&mut vault.doc);
 }
 

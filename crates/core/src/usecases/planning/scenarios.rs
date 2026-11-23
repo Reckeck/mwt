@@ -16,13 +16,10 @@ use crate::planning::scenarios::{
     CalcScenarioDeleted, CalcScenarioDraft, SCENARIO_GOAL_PRIORITY, find_calc_scenario, per_month,
     plan_delete_calc_scenario, plan_restore_calc_scenario, plan_save_calc_scenario,
 };
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Save a scenario: a new one when `draft.id` is `None`, else the edited one.
-pub fn save_calc_scenario(
-    vault: &mut UnlockedVault,
-    draft: CalcScenarioDraft,
-) -> Result<CalcScenario> {
+pub fn save_calc_scenario(vault: &mut Session, draft: CalcScenarioDraft) -> Result<CalcScenario> {
     let is_new = draft.id.is_none();
     let saved = plan_save_calc_scenario(
         &vault.doc,
@@ -42,7 +39,7 @@ pub fn save_calc_scenario(
 }
 
 /// Delete a scenario; goals made from it stay and stop following it.
-pub fn delete_calc_scenario(vault: &mut UnlockedVault, id: &str) -> Result<CalcScenarioDeleted> {
+pub fn delete_calc_scenario(vault: &mut Session, id: &str) -> Result<CalcScenarioDeleted> {
     let deleted = plan_delete_calc_scenario(&vault.doc, id)?;
     vault.transact(|tx| {
         tx.collection::<CalcScenario>().remove(id)?;
@@ -57,7 +54,7 @@ pub fn delete_calc_scenario(vault: &mut UnlockedVault, id: &str) -> Result<CalcS
 
 /// Undo [`delete_calc_scenario`]: the scenario and its goal links.
 pub fn restore_calc_scenario(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     deleted: CalcScenarioDeleted,
 ) -> Result<CalcScenario> {
     let relink = plan_restore_calc_scenario(&vault.doc, &deleted)?;

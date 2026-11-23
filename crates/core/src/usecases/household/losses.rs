@@ -14,12 +14,12 @@ use crate::household::losses::{
 };
 use crate::money::books::Books;
 use crate::reports::overview::BookValues;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::time::secs_or_now;
 
 /// The vault's rates as the table's source.
 struct VaultRates<'vault> {
-    vault: &'vault UnlockedVault,
+    vault: &'vault Session,
     books: &'vault Books<'vault>,
     now: i64,
 }
@@ -45,7 +45,7 @@ impl FxSources for VaultRates<'_> {
 }
 
 /// The loss of one transaction in the base currency.
-pub fn tx_loss(vault: &UnlockedVault, id: &str) -> Result<TxLoss> {
+pub fn tx_loss(vault: &Session, id: &str) -> Result<TxLoss> {
     let books = vault.books();
     loss_by_id(
         &vault.doc,
@@ -57,7 +57,7 @@ pub fn tx_loss(vault: &UnlockedVault, id: &str) -> Result<TxLoss> {
 
 /// Losses of every transaction that has one, in the base currency, by id
 /// — for the loss column of the list.
-pub fn tx_losses(vault: &UnlockedVault) -> BTreeMap<String, TxLoss> {
+pub fn tx_losses(vault: &Session) -> BTreeMap<String, TxLoss> {
     let books = vault.books();
     losses_by_id(
         &vault.doc,
@@ -69,7 +69,7 @@ pub fn tx_losses(vault: &UnlockedVault) -> BTreeMap<String, TxLoss> {
 /// Put transactions into one chain: the given one, else the chain one of
 /// them is already in, else a new one. Returns the chain id.
 pub fn link_transactions(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     ids: &[String],
     flow_id: Option<&str>,
 ) -> Result<String> {
@@ -89,7 +89,7 @@ pub fn link_transactions(
 }
 
 /// Take a transaction out of its chain.
-pub fn unlink_transaction(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn unlink_transaction(vault: &mut Session, id: &str) -> Result<()> {
     vault.transact(|tx| {
         let unlinked = tx
             .doc_mut()
@@ -105,7 +105,7 @@ pub fn unlink_transaction(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 /// Every chain with a link in `[from, to)` (RFC3339 bounds; empty = open),
 /// newest first, valued in the base currency.
 pub fn list_flows(
-    vault: &UnlockedVault,
+    vault: &Session,
     from: Option<&str>,
     to: Option<&str>,
     store_ids: &[String],
@@ -123,7 +123,7 @@ pub fn list_flows(
 
 /// Every cached currency against the base, latest rates (plan F3b, "Rates"),
 /// plus a row per crypto favourite that has a cached price.
-pub fn fx_table(vault: &UnlockedVault, favorites: &[String]) -> FxTable {
+pub fn fx_table(vault: &Session, favorites: &[String]) -> FxTable {
     let books = vault.books();
     let rates = VaultRates {
         vault,

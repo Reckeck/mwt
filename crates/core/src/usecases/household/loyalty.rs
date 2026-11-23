@@ -11,12 +11,12 @@ use crate::model::ids::StoreId;
 use crate::model::store::{LoyaltyInfo, Store, StoreKind};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
-use crate::service::{StoreExtras, UnlockedVault};
+use crate::service::{Session, StoreExtras};
 
 /// Set a programme's points and price of a point. The price becomes the
 /// points' hand-set price, so the wallet counts in net worth.
 pub fn set_loyalty_info(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &StoreId,
     info: LoyaltyInfo,
 ) -> Result<Store> {
@@ -49,7 +49,7 @@ fn apply_loyalty_update(tx: &mut Tx<'_>, update: LoyaltyUpdate) -> Result<Store>
 /// Create a bonus programme and set its points in one action, so a
 /// programme never exists without them.
 pub fn create_loyalty_program(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     name: &str,
     color: &str,
     contact_id: Option<String>,
@@ -76,7 +76,7 @@ pub fn create_loyalty_program(
 /// Credit (`delta` > 0) or spend points of a programme, optionally tied
 /// to the card whose purchase earned them.
 pub fn adjust_points(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     store_id: &StoreId,
     delta: Amount,
     comment: &str,

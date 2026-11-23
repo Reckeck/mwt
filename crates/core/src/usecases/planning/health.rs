@@ -9,10 +9,10 @@ use crate::model::notify::{NoticeCategory, NoticeRecord, notice, notice_title};
 use crate::model::planning::{HealthColor, HealthSnapshot};
 use crate::planning::health::{check_freedom_rate, color_text, reason_text};
 use crate::reports::health::capital_health;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Set the yearly return the freedom potential assumes; `None` = the key rate.
-pub fn set_freedom_rate(vault: &mut UnlockedVault, rate: Option<Amount>) -> Result<()> {
+pub fn set_freedom_rate(vault: &mut Session, rate: Option<Amount>) -> Result<()> {
     check_freedom_rate(rate)?;
     vault.transact(|tx| {
         tx.doc_mut().settings.freedom_rate = rate;
@@ -24,7 +24,7 @@ pub fn set_freedom_rate(vault: &mut UnlockedVault, rate: Option<Amount>) -> Resu
 /// colour or the reasons changed since the last check. The check itself
 /// is remembered either way.
 pub(crate) fn health_notice(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     now: i64,
     zone: &str,
     ru: bool,

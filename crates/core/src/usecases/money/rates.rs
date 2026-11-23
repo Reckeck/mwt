@@ -9,13 +9,13 @@ use crate::model::store::AssetRef;
 use crate::model::vault::{FxPoint, PricePoint};
 use crate::money::rates::{fx_history_filter, iso_of, stamp_prices};
 use crate::pricing::history;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::time::secs_or_now;
 
 /// The cached USD quote of an asset nearest `ts` (RFC3339; empty = now),
 /// with the moment that rate was taken. Lives here with its contract type
 /// (`money` may not use `ipc_contract`).
-pub fn cached_quote(vault: &UnlockedVault, asset: &AssetRef, ts: &str) -> CachedPrice {
+pub fn cached_quote(vault: &Session, asset: &AssetRef, ts: &str) -> CachedPrice {
     let secs = secs_or_now(ts);
     match vault.books().rate_book().quote_at(&asset.key(), secs) {
         Some((price_usd, taken)) => CachedPrice {
@@ -32,7 +32,7 @@ pub fn cached_quote(vault: &UnlockedVault, asset: &AssetRef, ts: &str) -> Cached
 ///
 /// Fails with `FX_MISSING` when the currency has no rate at all: guessing 1
 /// would silently store rubles as dollars.
-pub fn resolve_input_price(vault: &UnlockedVault, input: &mut TransactionInput) -> Result<()> {
+pub fn resolve_input_price(vault: &Session, input: &mut TransactionInput) -> Result<()> {
     let common = input.common_mut();
     let Some(price) = common.price.take() else {
         return Ok(());
@@ -60,27 +60,27 @@ pub fn resolve_input_price(vault: &UnlockedVault, input: &mut TransactionInput) 
 }
 
 /// Add a fetched FX table to the cache. Does not persist.
-pub fn apply_fx(vault: &mut UnlockedVault, fresh: &[FxPoint]) {
+pub fn apply_fx(vault: &mut Session, fresh: &[FxPoint]) {
     let keep_history = fx_history_filter(&vault.books());
     history::merge_fx(&mut vault.doc.fx_cache, fresh, keep_history);
 }
 
 /// Thin both rate caches by the refresh rules, adding nothing.
-pub fn thin_rate_caches(vault: &mut UnlockedVault) {
+pub fn thin_rate_caches(vault: &mut Session) {
     let keep_history = fx_history_filter(&vault.books());
     history::thin_fx(&mut vault.doc.fx_cache, keep_history);
     history::thin_prices(&mut vault.doc.price_cache);
 }
 
 /// Add fetched quotes to the cache. Does not persist.
-pub fn apply_prices(vault: &mut UnlockedVault, fresh: &[PricePoint]) {
+pub fn apply_prices(vault: &mut Session, fresh: &[PricePoint]) {
     history::merge_prices(&mut vault.doc.price_cache, fresh);
 }
 
 /// Stamp what was saved without a price — imported, automated, or
 /// entered before the rate was cached. Run after a refresh; does not
 /// persist. Returns how many sides got a price.
-pub fn restamp_missing(vault: &mut UnlockedVault) -> usize {
+pub fn restamp_missing(vault: &mut Session) -> usize {
     let book = crate::money::rates::rate_book(&vault.books());
     let mut stamped = 0;
     for tx in &mut vault.doc.transactions {

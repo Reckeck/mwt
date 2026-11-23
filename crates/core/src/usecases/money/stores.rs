@@ -19,7 +19,7 @@ use crate::money::stores::{
 use crate::money::tree::find_store;
 use crate::money::valuation::initial_rule;
 use crate::planning::emergency::prune_emergency_fund;
-use crate::service::{CASH_WALLET_ID, StoreExtras, UnlockedVault};
+use crate::service::{CASH_WALLET_ID, Session, StoreExtras};
 use mwt_money::stores::{FirstCard, OpeningBalance};
 
 /// Allowed destinations for moving a sub-account.
@@ -34,7 +34,7 @@ pub struct StoreMoveTargets {
 
 /// Rebuild the holdings from the operations and write once: the commit of
 /// every change that books or removes something the holdings derive from.
-pub(crate) fn rebase_and_commit(vault: &mut UnlockedVault) -> Result<()> {
+pub(crate) fn rebase_and_commit(vault: &mut Session) -> Result<()> {
     crate::usecases::money::portfolio::recompute_holdings(vault);
     vault.transact(|tx| {
         tx.touch();
@@ -83,7 +83,7 @@ pub(crate) fn opening_topup(store_id: &str, opening: OpeningBalance) -> Transact
 }
 
 pub fn create_store(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     name: &str,
     kind: StoreKind,
     color: &str,
@@ -220,7 +220,7 @@ fn plan_store(
 }
 
 pub fn create_store_with(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     name: &str,
     kind: StoreKind,
     color: &str,
@@ -254,7 +254,7 @@ pub fn create_store_with(
 /// bank is never left without one. The opening balance goes on the card. All
 /// or nothing.
 pub fn create_bank_with_card(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     name: &str,
     color: &str,
     note: &str,
@@ -300,7 +300,7 @@ pub fn create_bank_with_card(
 
 /// The vault always has exactly one cash wallet; called on create and open.
 /// Returns whether one had to be added.
-pub fn ensure_cash_wallet(vault: &mut UnlockedVault, name: &str) -> Result<bool> {
+pub fn ensure_cash_wallet(vault: &mut Session, name: &str) -> Result<bool> {
     let has_cash = vault
         .doc
         .stores
@@ -419,7 +419,7 @@ fn plan_edit(
 /// Edit a store's own fields. Its place in the tree changes only through
 /// [`move_store`].
 pub fn update_store(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     name: &str,
     color: &str,
@@ -439,7 +439,7 @@ pub fn update_store(
 
 /// Re-hang a sub-account under another node, or make it a top-level wallet
 /// with `parent_id = None`. A top-level wallet never moves (R6).
-pub fn move_store(vault: &mut UnlockedVault, id: &str, parent_id: Option<&str>) -> Result<Store> {
+pub fn move_store(vault: &mut Session, id: &str, parent_id: Option<&str>) -> Result<Store> {
     match plan_move(&vault.doc, id, parent_id)? {
         StoreMove::Stay(store) => Ok(*store),
         StoreMove::Reparent => vault.transact(|tx| {
@@ -464,7 +464,7 @@ fn flatten_tree(nodes: Vec<StoreTreeNode>) -> Vec<StoreTreeNode> {
 
 /// Where `id` may be moved: every allowed parent (flat, without the current
 /// one) and whether it may become a top-level wallet.
-pub fn store_move_targets(vault: &UnlockedVault, id: &str) -> Result<StoreMoveTargets> {
+pub fn store_move_targets(vault: &Session, id: &str) -> Result<StoreMoveTargets> {
     let store = find_store(&vault.doc, id).ok_or_else(|| Error::Missing("store".into()))?;
     if store.parent_id.is_none() {
         return Ok(StoreMoveTargets::default());
@@ -483,7 +483,7 @@ pub fn store_move_targets(vault: &UnlockedVault, id: &str) -> Result<StoreMoveTa
 }
 
 /// Archive (or restore) a store together with its whole subtree.
-pub fn archive_store(vault: &mut UnlockedVault, id: &str, archived: bool) -> Result<()> {
+pub fn archive_store(vault: &mut Session, id: &str, archived: bool) -> Result<()> {
     let affected = plan_archive(&vault.doc, id, archived)?;
     vault.transact(|tx| {
         for store_id in &affected {
@@ -495,7 +495,7 @@ pub fn archive_store(vault: &mut UnlockedVault, id: &str, archived: bool) -> Res
     })
 }
 
-pub fn delete_store(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_store(vault: &mut Session, id: &str) -> Result<()> {
     check_deletable(&vault.doc, id)?;
     vault.run(|tx: &mut Tx<'_>| {
         tx.collection::<Store>().remove(id)?;
@@ -511,7 +511,7 @@ pub fn delete_store(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 /// corrections keep their deltas, and the account goes. The same change as
 /// `apply_store_change` with `MergeInto`.
 pub fn merge(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     source_id: &str,
     target_id: &str,
 ) -> Result<crate::money::store_change::StoreChangePlan> {

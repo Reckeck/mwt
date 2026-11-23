@@ -7,7 +7,7 @@ use crate::calendar::{self, Calendar};
 use crate::error::Result;
 use crate::model::vault::VaultDoc;
 use crate::planning::my_automations::{self as rules, MineItem, MineKind};
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::workflow::graph::Graph;
 use crate::workflow::nodes::triggers::schedule_moments_limited;
 
@@ -56,7 +56,7 @@ fn scheme_items(doc: &VaultDoc, cal: &Calendar, now: i64, until: i64) -> Vec<Min
 
 /// Everything that fires on its own, the soonest first; alerts and
 /// schemes without a date after them, by name.
-pub fn my_automations(vault: &UnlockedVault, now: i64, zone: &str) -> Vec<MineItem> {
+pub fn my_automations(vault: &Session, now: i64, zone: &str) -> Vec<MineItem> {
     let cal = Calendar::new(zone);
     let until = rules::lookahead_until(now);
     let mut out: Vec<MineItem> = crate::usecases::planning::automations::automations(vault)
@@ -80,7 +80,7 @@ pub fn my_automations(vault: &UnlockedVault, now: i64, zone: &str) -> Vec<MineIt
 /// workflow (one with errors stays off), a reminder is muted, an alert
 /// switched back on waits for the price again.
 pub fn set_my_automation_active(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     kind: MineKind,
     id: &str,
     active: bool,

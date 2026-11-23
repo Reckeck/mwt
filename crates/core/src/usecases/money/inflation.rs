@@ -15,7 +15,7 @@ use crate::money::inflation::{
     plan_inflation_source,
 };
 use crate::money::interest::merge_key_rates;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 const MONTHS_RU: [&str; 12] = [
     "январе",
@@ -144,10 +144,7 @@ fn key_rate_notices(known: &KeyRatePoint, table: &[KeyRatePoint], ru: bool) -> V
 /// table, and never over a rate the group already has. Returns whether
 /// anything was written. Two devices that adopt different values of one
 /// currency settle on the later write when they sync.
-pub fn adopt_flat_inflation(
-    vault: &mut UnlockedVault,
-    local: &BTreeMap<String, Amount>,
-) -> Result<bool> {
+pub fn adopt_flat_inflation(vault: &mut Session, local: &BTreeMap<String, Amount>) -> Result<bool> {
     if vault.doc.settings.inflation_adopted {
         return Ok(false);
     }
@@ -163,10 +160,7 @@ pub fn adopt_flat_inflation(
 /// Merge fetched readings: a revised month replaces the old value. Returns
 /// the months newer than what each currency had (for the notice). Does
 /// not persist.
-pub fn apply_inflation(
-    vault: &mut UnlockedVault,
-    fresh: &[InflationReading],
-) -> Vec<InflationNews> {
+pub fn apply_inflation(vault: &mut Session, fresh: &[InflationReading]) -> Vec<InflationNews> {
     let known = std::mem::take(&mut vault.doc.inflation_points);
     let (merged, news) = merge_readings(known, fresh);
     vault.doc.inflation_points = merged;
@@ -177,7 +171,7 @@ pub fn apply_inflation(
 /// for (not yet logged): new inflation months and key-rate decisions
 /// that were not known before. The first fetch fills history silently.
 pub fn apply_rates(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     fetched: &FetchedRates,
     ru: bool,
 ) -> Result<Vec<NoticeRecord>> {
@@ -204,7 +198,7 @@ pub fn apply_rates(
 /// Choose where a currency's inflation comes from; `None` returns it to
 /// the inferred default.
 pub fn set_inflation_mode(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     currency: &str,
     mode: Option<InflationMode>,
 ) -> Result<()> {
@@ -220,11 +214,7 @@ pub fn set_inflation_mode(
 }
 
 /// Read a currency's inflation from one of the user's data sources.
-pub fn set_inflation_source(
-    vault: &mut UnlockedVault,
-    currency: &str,
-    source_id: &str,
-) -> Result<()> {
+pub fn set_inflation_source(vault: &mut Session, currency: &str, source_id: &str) -> Result<()> {
     let currency = plan_inflation_source(&vault.books(), currency, source_id)?;
     vault.transact(|tx| {
         let settings = &mut tx.doc_mut().settings;

@@ -32,7 +32,7 @@ use crate::model::contact::{Contact, DebtTerms};
 use crate::model::shared_event::{Settlement, SharedEvent};
 use crate::model::transaction::Transaction;
 use crate::model::vault::now_iso;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 /// Put the event in place of its older self. An archived event that was
 /// edited is open again.
@@ -49,14 +49,14 @@ fn store_event(tx: &mut Tx<'_>, mut event: SharedEvent) -> Result<()> {
 }
 
 /// Write the changed event and read it back as the view.
-fn commit_event(vault: &mut UnlockedVault, event: SharedEvent) -> Result<SharedEventView> {
+fn commit_event(vault: &mut Session, event: SharedEvent) -> Result<SharedEventView> {
     let id = event.id.clone();
     vault.transact(|tx| store_event(tx, event))?;
     crate::household::shared_events::view::shared_event_view(&vault.doc, &id)
 }
 
 pub fn create_shared_event(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     draft: SharedEventDraft,
 ) -> Result<SharedEventView> {
     let base = crate::usecases::money::portfolio::base_and_fx(vault).0;
@@ -73,7 +73,7 @@ pub fn create_shared_event(
 /// already depend on stay put: the currency, who organizes, whether I take
 /// part (while it would strand my payments).
 pub fn update_shared_event(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     id: &str,
     draft: SharedEventDraft,
 ) -> Result<SharedEventView> {
@@ -86,7 +86,7 @@ pub fn update_shared_event(
 /// vault as an ordinary one: my payments are plain payments, and the
 /// `Collect`/`Repay` transfers are plain debt transfers (they count in the
 /// contact balances again, as the event's own balance goes away).
-pub fn delete_shared_event(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_shared_event(vault: &mut Session, id: &str) -> Result<()> {
     find_event(&vault.doc, id)?;
     vault.transact(|tx| {
         tx.doc_mut().shared_events.retain(|known| known.id != id);
@@ -95,7 +95,7 @@ pub fn delete_shared_event(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 }
 
 /// Put a settled event away (or take it back).
-pub fn archive_shared_event(vault: &mut UnlockedVault, id: &str, archived: bool) -> Result<()> {
+pub fn archive_shared_event(vault: &mut Session, id: &str, archived: bool) -> Result<()> {
     check_archivable(&vault.doc, id, archived)?;
     vault.transact(|tx| {
         let event = tx
@@ -110,7 +110,7 @@ pub fn archive_shared_event(vault: &mut UnlockedVault, id: &str, archived: bool)
 }
 
 pub fn add_shared_participant(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     draft: SharedParticipantDraft,
 ) -> Result<SharedEventView> {
@@ -121,7 +121,7 @@ pub fn add_shared_participant(
 /// Rename a guest, change their details, or link them to a contact
 /// (their debts then show in the contact's card).
 pub fn update_shared_participant(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     participant_id: &str,
     draft: SharedParticipantDraft,
@@ -133,7 +133,7 @@ pub fn update_shared_participant(
 /// Take someone out of the event; refused once money or a hand-set total
 /// mentions them.
 pub fn remove_shared_participant(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     participant_id: &str,
 ) -> Result<SharedEventView> {
@@ -144,7 +144,7 @@ pub fn remove_shared_participant(
 /// "Make a contact": a guest becomes a contact of the directory with
 /// the details they had, and is linked to it.
 pub fn make_shared_participant_contact(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     participant_id: &str,
 ) -> Result<Contact> {
@@ -169,7 +169,7 @@ pub fn make_shared_participant_contact(
 /// Fix a person's total by hand (the rest is spread over the others), or
 /// take the fixed total back with `None`.
 pub fn set_shared_share_override(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: SetShareOverrideInput,
 ) -> Result<SharedEventView> {
     let event = plan_share_override(&vault.doc, input)?;
@@ -177,7 +177,7 @@ pub fn set_shared_share_override(
 }
 
 pub fn add_shared_item(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     draft: SharedItemDraft,
 ) -> Result<SharedEventView> {
@@ -186,7 +186,7 @@ pub fn add_shared_item(
 }
 
 pub fn update_shared_item(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     item_id: &str,
     draft: SharedItemDraft,
@@ -197,7 +197,7 @@ pub fn update_shared_item(
 
 /// Delete an item nothing was bought for.
 pub fn delete_shared_item(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     item_id: &str,
 ) -> Result<SharedEventView> {
@@ -207,7 +207,7 @@ pub fn delete_shared_item(
 
 /// Who shares an item and how.
 pub fn set_shared_item_split(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: SetSharedItemSplitInput,
 ) -> Result<SharedEventView> {
     let event = plan_item_split(&vault.doc, input)?;
@@ -216,7 +216,7 @@ pub fn set_shared_item_split(
 
 /// Add a settlement to its event.
 fn record_settlement(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     settlement: Settlement,
 ) -> Result<SharedEventView> {
@@ -227,7 +227,7 @@ fn record_settlement(
 
 /// Validate the settlement's operation and put it in the document, without
 /// saving: the one `transact` that records the settlement writes it too.
-fn append_transfer(vault: &mut UnlockedVault, mut transfer: Transaction) -> Result<String> {
+fn append_transfer(vault: &mut Session, mut transfer: Transaction) -> Result<String> {
     crate::usecases::money::transactions::prepare_transaction(vault, &mut transfer)?;
     let id = transfer.meta().id.clone();
     if id.trim().is_empty()
@@ -246,10 +246,7 @@ fn append_transfer(vault: &mut UnlockedVault, mut transfer: Transaction) -> Resu
 }
 
 /// Money between a participant and the organizer (or a set-off).
-pub fn settle_shared(
-    vault: &mut UnlockedVault,
-    input: SettleSharedInput,
-) -> Result<SharedEventView> {
+pub fn settle_shared(vault: &mut Session, input: SettleSharedInput) -> Result<SharedEventView> {
     let plan = plan_settle(&vault.doc, &input, &now_iso())?;
     let mut settlement = plan.settlement;
     if let Some(transfer) = plan.transfer {
@@ -263,7 +260,7 @@ pub fn settle_shared(
 /// "Write off the rest": I give up what a participant owes me; it becomes my
 /// expense in the category of the event.
 pub fn write_off_shared(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: SharedRemainderInput,
 ) -> Result<SharedEventView> {
     let settlement = plan_write_off(&vault.doc, &input, &now_iso())?;
@@ -273,7 +270,7 @@ pub fn write_off_shared(
 /// "Move onto the others": what a participant has not returned is split
 /// between the others.
 pub fn reassign_shared(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: SharedRemainderInput,
 ) -> Result<SharedEventView> {
     let settlement = plan_reassign(&vault.doc, &input, &now_iso())?;
@@ -282,7 +279,7 @@ pub fn reassign_shared(
 
 /// Take a settlement back, with the operation it made.
 pub fn delete_shared_settlement(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     settlement_id: &str,
 ) -> Result<SharedEventView> {
@@ -300,23 +297,20 @@ pub fn delete_shared_settlement(
 
 /// The due date of a contact participant's debt (the existing debt terms,
 /// keyed by contact and currency); an empty date clears it.
-pub fn set_shared_due(
-    vault: &mut UnlockedVault,
-    input: SetSharedDueInput,
-) -> Result<Option<DebtTerms>> {
+pub fn set_shared_due(vault: &mut Session, input: SetSharedDueInput) -> Result<Option<DebtTerms>> {
     let draft = plan_due(&vault.doc, input)?;
     crate::usecases::household::contacts::set_debt_terms(vault, draft)
 }
 
 /// Remove a transaction without saving; the caller saves.
-fn drop_shared_tx(vault: &mut UnlockedVault, tx_id: &str) {
+fn drop_shared_tx(vault: &mut Session, tx_id: &str) {
     vault.doc.transactions.retain(|tx| tx.meta().id != tx_id);
     crate::usecases::household::property_links::set_property_link(vault, tx_id, None);
 }
 
 /// Do what a changed purchase asks of the vault's payments, then write the
 /// event. Nothing of the event is saved if the vault refuses the payment.
-fn commit_purchase(vault: &mut UnlockedVault, edit: PurchaseEdit) -> Result<SharedEventView> {
+fn commit_purchase(vault: &mut Session, edit: PurchaseEdit) -> Result<SharedEventView> {
     let PurchaseEdit { mut event, payment } = edit;
     match payment {
         PaymentStep::Keep => {}
@@ -341,7 +335,7 @@ fn commit_purchase(vault: &mut UnlockedVault, edit: PurchaseEdit) -> Result<Shar
 }
 
 pub fn add_shared_purchase(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     draft: SharedPurchaseDraft,
 ) -> Result<SharedEventView> {
@@ -354,7 +348,7 @@ pub fn add_shared_purchase(
 /// change; an adopted payment keeps its own amount and only the number of
 /// units can change.
 pub fn update_shared_purchase(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     purchase_id: &str,
     draft: SharedPurchaseDraft,
@@ -374,7 +368,7 @@ pub fn update_shared_purchase(
 /// Delete a purchase with the payment the event made for it; an adopted
 /// payment stays in the vault, unlinked.
 pub fn delete_shared_purchase(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     event_id: &str,
     purchase_id: &str,
 ) -> Result<SharedEventView> {
@@ -384,7 +378,7 @@ pub fn delete_shared_purchase(
 
 /// Take a payment that is already in the vault as my purchase of the event.
 pub fn attach_payment_to_shared_event(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     input: AttachPaymentInput,
 ) -> Result<SharedEventView> {
     let purchase_id = crate::sync::sync_ids::payment_link_id(&input.tx_id);
@@ -395,21 +389,17 @@ pub fn attach_payment_to_shared_event(
 
 /// Drop the purchases and settlements of every event that point at an
 /// operation about to be deleted. Reopens an archived event. The caller saves.
-pub(crate) fn cascade_shared_delete(vault: &mut UnlockedVault, tx_id: &str) {
+pub(crate) fn cascade_shared_delete(vault: &mut Session, tx_id: &str) {
     cascade_delete(&mut vault.doc.shared_events, tx_id);
 }
 
 /// Put the event a ledger edit planned in place of its older self. The caller
 /// saves.
-pub(crate) fn apply_shared_edit(vault: &mut UnlockedVault, next: Option<SharedEvent>) {
+pub(crate) fn apply_shared_edit(vault: &mut Session, next: Option<SharedEvent>) {
     apply_edit(&mut vault.doc.shared_events, next);
 }
 
 /// The settlement as text for a chat, in `ru` or `en`.
-pub fn shared_event_share_text(
-    vault: &UnlockedVault,
-    event_id: &str,
-    locale: &str,
-) -> Result<String> {
+pub fn shared_event_share_text(vault: &Session, event_id: &str, locale: &str) -> Result<String> {
     share_text(&vault.doc, event_id, locale, chrono::Utc::now().year())
 }

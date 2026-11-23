@@ -9,7 +9,7 @@ use crate::money::enrichment::{
     pending_record, plan_apply_enrichment, plan_enrichment_result, record_of,
 };
 use crate::money::txinfo::TxInfo;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 
 use super::transactions::update_transaction;
 
@@ -17,7 +17,7 @@ use super::transactions::update_transaction;
 /// pending one). `None` when there is nothing worth showing. Does not
 /// persist: the caller writes once.
 pub fn apply_enrichment_result(
-    vault: &mut UnlockedVault,
+    vault: &mut Session,
     tx_id: &str,
     info: &TxInfo,
 ) -> Option<EnrichmentRecord> {
@@ -38,7 +38,7 @@ pub fn apply_enrichment_result(
 
 /// Merge a finding into its transaction — the network fee, when the
 /// operation has none yet — through the usual checks.
-pub fn apply_enrichment(vault: &mut UnlockedVault, id: &str) -> Result<EnrichmentRecord> {
+pub fn apply_enrichment(vault: &mut Session, id: &str) -> Result<EnrichmentRecord> {
     let (record, tx) = plan_apply_enrichment(&vault.doc, id)?;
     // `update_transaction` validates, re-derives holdings and persists, so the
     // status goes in first and comes back if it refuses.
@@ -51,7 +51,7 @@ pub fn apply_enrichment(vault: &mut UnlockedVault, id: &str) -> Result<Enrichmen
 }
 
 /// Dismiss a finding; the transaction stays as it is.
-pub fn reject_enrichment(vault: &mut UnlockedVault, id: &str) -> Result<EnrichmentRecord> {
+pub fn reject_enrichment(vault: &mut Session, id: &str) -> Result<EnrichmentRecord> {
     pending_record(&vault.doc, id)?;
     vault.transact(|tx| {
         tx.collection::<EnrichmentRecord>()
@@ -60,7 +60,7 @@ pub fn reject_enrichment(vault: &mut UnlockedVault, id: &str) -> Result<Enrichme
     Ok(stored(vault, id))
 }
 
-fn set_status(vault: &mut UnlockedVault, id: &str, status: EnrichmentStatus) {
+fn set_status(vault: &mut Session, id: &str, status: EnrichmentStatus) {
     if let Some(record) = vault
         .doc
         .enrichments
@@ -71,6 +71,6 @@ fn set_status(vault: &mut UnlockedVault, id: &str, status: EnrichmentStatus) {
     }
 }
 
-fn stored(vault: &UnlockedVault, id: &str) -> EnrichmentRecord {
+fn stored(vault: &Session, id: &str) -> EnrichmentRecord {
     record_of(&vault.doc, id).cloned().expect("record exists")
 }

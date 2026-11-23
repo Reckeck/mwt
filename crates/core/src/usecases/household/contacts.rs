@@ -12,10 +12,10 @@ use crate::household::contacts::{
 use crate::kernel::tx::Tx;
 use crate::model::contact::{Contact, DebtTerms};
 use crate::model::vault::now_iso;
-use crate::service::UnlockedVault;
+use crate::service::Session;
 use crate::sync::sync_ids::debt_terms_id;
 
-pub fn create_contact(vault: &mut UnlockedVault, draft: ContactDraft) -> Result<Contact> {
+pub fn create_contact(vault: &mut Session, draft: ContactDraft) -> Result<Contact> {
     let contact = plan_create_contact(draft, &now_iso())?;
     vault.transact(|tx| {
         tx.collection::<Contact>().insert(contact.clone())?;
@@ -25,7 +25,7 @@ pub fn create_contact(vault: &mut UnlockedVault, draft: ContactDraft) -> Result<
 
 /// Replace a contact's fields and accounts. An account that disappeared
 /// from the draft but is used by a transaction is kept, deactivated.
-pub fn update_contact(vault: &mut UnlockedVault, id: &str, draft: ContactDraft) -> Result<Contact> {
+pub fn update_contact(vault: &mut Session, id: &str, draft: ContactDraft) -> Result<Contact> {
     let edit = plan_update_contact(&vault.doc, id, draft)?;
     vault.transact(|tx| {
         tx.collection::<Contact>().update(id, |contact| {
@@ -39,7 +39,7 @@ pub fn update_contact(vault: &mut UnlockedVault, id: &str, draft: ContactDraft) 
     })
 }
 
-pub fn archive_contact(vault: &mut UnlockedVault, id: &str, archived: bool) -> Result<()> {
+pub fn archive_contact(vault: &mut Session, id: &str, archived: bool) -> Result<()> {
     require_contact(&vault.doc, id)?;
     vault.transact(|tx| {
         tx.collection::<Contact>()
@@ -49,7 +49,7 @@ pub fn archive_contact(vault: &mut UnlockedVault, id: &str, archived: bool) -> R
 
 /// Only a contact nothing refers to can be deleted; otherwise archive it. Its
 /// debt terms go with it, in the same transaction.
-pub fn delete_contact(vault: &mut UnlockedVault, id: &str) -> Result<()> {
+pub fn delete_contact(vault: &mut Session, id: &str) -> Result<()> {
     plan_delete_contact(&vault.doc, id)?;
     let terms = debt_terms_of(&vault.doc, id);
     vault.transact(|tx| {
@@ -63,7 +63,7 @@ pub fn delete_contact(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 /// What was sent to and received from a contact, per asset. Internal
 /// moves never count: they did not leave the user's hands.
 pub fn contact_turnover(
-    vault: &UnlockedVault,
+    vault: &Session,
     contact_id: &str,
     account_id: Option<&str>,
 ) -> Result<ContactTurnover> {
@@ -72,7 +72,7 @@ pub fn contact_turnover(
 
 /// One summary per contact: operation count, the latest operation and the
 /// debts converted to the base currency with the cached rates (no network).
-pub fn contact_summaries(vault: &UnlockedVault) -> Result<Vec<ContactSummary>> {
+pub fn contact_summaries(vault: &Session) -> Result<Vec<ContactSummary>> {
     Ok(summaries(
         &vault.books(),
         &event_debts(&vault.doc, i64::MAX),
@@ -80,16 +80,13 @@ pub fn contact_summaries(vault: &UnlockedVault) -> Result<Vec<ContactSummary>> {
 }
 
 /// Personal debts per contact and asset, from transfers marked as debts only.
-pub fn contact_balances(vault: &UnlockedVault) -> Vec<ContactBalance> {
+pub fn contact_balances(vault: &Session) -> Vec<ContactBalance> {
     contact_balances_until(&vault.books(), i64::MAX)
 }
 
 /// Set (or replace) the terms of one contact's debt in one asset; an
 /// empty date and note removes them.
-pub fn set_debt_terms(
-    vault: &mut UnlockedVault,
-    draft: DebtTermsDraft,
-) -> Result<Option<DebtTerms>> {
+pub fn set_debt_terms(vault: &mut Session, draft: DebtTermsDraft) -> Result<Option<DebtTerms>> {
     let plan = plan_debt_terms(&vault.doc, draft)?;
     let replaced = debt_terms_replaced(&vault.doc, &plan.contact_id, &plan.asset);
     let terms = (!plan.clears()).then(|| DebtTerms {
