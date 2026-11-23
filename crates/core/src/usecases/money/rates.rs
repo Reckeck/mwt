@@ -81,13 +81,13 @@ pub fn apply_prices(vault: &mut UnlockedVault, fresh: &[PricePoint]) {
 /// entered before the rate was cached. Run after a refresh; does not
 /// persist. Returns how many sides got a price.
 pub fn restamp_missing(vault: &mut UnlockedVault) -> usize {
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let mut stamped = 0;
     for tx in &mut vault.doc.transactions {
         stamped += stamp_prices(&book, tx);
     }
     if stamped > 0 {
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(vault);
     }
     stamped
 }

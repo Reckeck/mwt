@@ -193,11 +193,13 @@ mod tests {
     }
 
     fn relations(vault: &UnlockedVault) -> CryptoRelations {
-        vault
-            .crypto_relations(&CryptoRelationsInput {
+        crate::usecases::cryptotrack::relations::crypto_relations(
+            &vault.books(),
+            &CryptoRelationsInput {
                 account_id: "acc-1".into(),
-            })
-            .unwrap()
+            },
+        )
+        .unwrap()
     }
 
     /// A wallet with years of history must not be answered with a list that
@@ -259,10 +261,13 @@ mod tests {
             .chain(&found.exchanges.items)
             .chain(&found.protocols.items)
         {
-            let page = vault.crypto_list_operations(&CryptoListOperationsInput {
-                filter: row.filter.clone(),
-                ..Default::default()
-            });
+            let page = crate::usecases::cryptotrack::operations::crypto_list_operations(
+                &vault.books(),
+                &CryptoListOperationsInput {
+                    filter: row.filter.clone(),
+                    ..Default::default()
+                },
+            );
             assert_eq!(page.total, row.count, "row {}", row.key);
         }
     }
@@ -285,11 +290,13 @@ mod tests {
         });
         let found = relations(&vault);
         assert_eq!(found.protocols.items[0].count, 1);
-        let other = vault
-            .crypto_relations(&CryptoRelationsInput {
+        let other = crate::usecases::cryptotrack::relations::crypto_relations(
+            &vault.books(),
+            &CryptoRelationsInput {
                 account_id: "acc-2".into(),
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         assert!(other.own_addresses.items.is_empty() && other.protocols.items.is_empty());
     }
 
@@ -299,13 +306,19 @@ mod tests {
         let bank = store(&mut vault, "Bank", StoreKind::Cash, None);
         let mut spend = payment(&bank, "500", "to the exchanger");
         at(&mut spend, "2026-11-11T09:00:00Z");
-        let id = vault.add_transaction(spend).unwrap().meta().id.clone();
-        vault
-            .crypto_link_fiat(&CryptoLinkInput {
+        let id = crate::usecases::money::transactions::add_transaction(&mut vault, spend)
+            .unwrap()
+            .meta()
+            .id
+            .clone();
+        crate::usecases::cryptotrack::links::crypto_link_fiat(
+            &mut vault,
+            &CryptoLinkInput {
                 event_id: "ccc".into(),
                 fiat_tx_id: id.clone(),
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         let before = serde_json::to_string(&vault.doc.crypto_overrides).unwrap();
         let found = relations(&vault);
         assert_eq!(found.fiat.items.len(), 1);
@@ -320,7 +333,7 @@ mod tests {
             before
         );
         // A deleted fiat record leaves no row, and no error.
-        vault.delete_transaction(&id).unwrap();
+        crate::usecases::money::transactions::delete_transaction(&mut vault, &id).unwrap();
         assert!(relations(&vault).fiat.items.is_empty());
     }
 
@@ -328,11 +341,13 @@ mod tests {
     fn an_unknown_account_is_not_found() {
         let (_dir, vault) = setup();
         assert!(
-            vault
-                .crypto_relations(&CryptoRelationsInput {
+            crate::usecases::cryptotrack::relations::crypto_relations(
+                &vault.books(),
+                &CryptoRelationsInput {
                     account_id: "nope".into()
-                })
-                .is_err()
+                }
+            )
+            .is_err()
         );
     }
 }

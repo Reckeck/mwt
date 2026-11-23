@@ -14,8 +14,7 @@ struct VaultSources<'vault>(&'vault UnlockedVault);
 
 impl FilterSources for VaultSources<'_> {
     fn realized_tx_ids(&self, scope: Option<&HashSet<String>>) -> HashSet<String> {
-        self.0
-            .realized_pnl_filtered(scope)
+        crate::money::portfolio::realized_pnl_filtered(&self.0.books(), scope)
             .legs
             .into_iter()
             .filter(|leg| !leg.pnl_base.is_zero())
@@ -24,11 +23,11 @@ impl FilterSources for VaultSources<'_> {
     }
 
     fn tx_ids_with_attachments(&self) -> Vec<String> {
-        self.0.transactions_with_attachments()
+        crate::household::attachments::transactions_with_attachments(&self.0.doc)
     }
 
     fn unpriced_tx_ids(&self) -> HashSet<String> {
-        self.0.unpriced_tx_ids()
+        crate::usecases::planning::budget::unpriced_tx_ids(&self.0.books())
     }
 }
 
@@ -93,7 +92,7 @@ pub fn tx_graph(
     ledger::tx_graph(
         &vault.books(),
         &VaultSources(vault),
-        &wallet_rows(&vault.store_tree()),
+        &wallet_rows(&crate::money::portfolio::store_tree(&vault.books())),
         filter,
         collapsed,
         zone,

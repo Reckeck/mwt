@@ -5,8 +5,6 @@
 #[cfg(test)]
 use std::collections::BTreeSet;
 
-#[cfg(test)]
-pub(crate) use crate::cryptotrack::service::positions::CryptoPositionInputs;
 pub use crate::cryptotrack::service::positions::CryptoPositionsApplied;
 
 use crate::cryptotrack::protocols::{PositionReading, ProtocolReview};
@@ -67,23 +65,11 @@ impl UnlockedVault {
 
     // Crate-private and test-only, so not in the baseline: outside the regenerated block.
     forward! {
-        /// What takes part in a position's value, built once for the present
-        /// capital and the snapshots: positions of followed, live accounts, no
-        /// stale twin of an old key, plus the receipts.
-        #[cfg(test)]
-        pub(crate) fn crypto_position_inputs(&self) -> CryptoPositionInputs<'_>
-            => crate::cryptotrack::service::positions::crypto_position_inputs @doc;
         /// Asset keys the module holds only as the receipt of a position (an
         /// aToken, stETH, a position NFT), so the capital counts the money once.
         #[cfg(test)]
         pub(crate) fn crypto_position_receipts(&self) -> BTreeSet<String>
             => crate::cryptotrack::service::positions::crypto_position_receipts @doc;
-        /// USD for one unit now, by the same order of sources every other
-        /// position of the app is valued at; `None`, never zero, when nothing
-        /// knows it.
-        #[cfg(test)]
-        pub(crate) fn price_now_usd(&self, asset: &CryptoAsset) -> Option<Amount>
-            => crate::cryptotrack::service::positions::price_now_usd @books;
     }
 }
 

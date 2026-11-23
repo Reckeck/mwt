@@ -15,9 +15,6 @@ use super::forward::forward;
 impl UnlockedVault {
     // forward:begin
     forward! {
-        /// Units of `currency` per USD from the FX cache; USD itself is 1.
-        pub(crate) fn per_usd(&self, currency: &str) -> Option<Amount>
-            => crate::money::rates::per_usd @doc;
         /// Set the value of one unit of a property asset. Applies to its whole
         /// history (plan D24), so revaluing does not make the chart jump.
         pub fn set_manual_price(&mut self, asset_key: &str, unit_price: Amount, currency: &str) -> Result<ManualPrice>

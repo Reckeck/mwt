@@ -26,19 +26,19 @@ impl WorkflowHost for UnlockedVault {
     }
 
     fn wf_asset(&self, symbol: &str) -> AssetRef {
-        UnlockedVault::wf_asset(self, symbol)
+        crate::workflow::service::vars::asset(&self.doc, symbol)
     }
 
     fn wf_balance(&self, store_id: &str, asset: Option<&AssetRef>) -> Result<WfValue, String> {
-        UnlockedVault::wf_balance(self, store_id, asset)
+        crate::usecases::workflow::vars::balance(&self.books(), store_id, asset)
     }
 
     fn wf_price(&self, asset: &AssetRef, currency: &str, secs: i64) -> Option<Amount> {
-        UnlockedVault::wf_price(self, asset, currency, secs)
+        crate::usecases::workflow::vars::price(&self.books(), asset, currency, secs)
     }
 
     fn wf_convert(&self, amount: Amount, from: &str, to: &str, secs: i64) -> Option<Amount> {
-        UnlockedVault::wf_convert(self, amount, from, to, secs)
+        crate::usecases::workflow::vars::convert(&self.books(), amount, from, to, secs)
     }
 
     fn wf_sum(
@@ -49,35 +49,35 @@ impl WorkflowHost for UnlockedVault {
         now: i64,
         zone: &str,
     ) -> Amount {
-        UnlockedVault::wf_sum(self, period, flow, category, now, zone)
+        crate::usecases::workflow::runs::wf_sum(&self.books(), period, flow, category, now, zone)
     }
 
     fn wf_recent_average(&self, workflow_id: &str, count: usize) -> Option<(Amount, String)> {
-        UnlockedVault::wf_recent_average(self, workflow_id, count)
+        crate::workflow::service::vars::recent_average(&self.doc, workflow_id, count)
     }
 
     fn wf_accounts(&self, parent: Option<&str>) -> Vec<(String, String, Amount)> {
-        UnlockedVault::wf_accounts(self, parent)
+        crate::usecases::workflow::vars::accounts(&self.books(), parent)
     }
 
     fn wf_outflow_base(&self, tx: &Transaction) -> Amount {
-        UnlockedVault::wf_outflow_base(self, tx)
+        crate::usecases::workflow::runs::wf_outflow_base(&self.books(), tx)
     }
 
     fn wf_outflow_in(&self, tx: &Transaction, currency: &str) -> Option<Amount> {
-        UnlockedVault::wf_outflow_in(self, tx, currency)
+        crate::usecases::workflow::runs::wf_outflow_in(&self.books(), tx, currency)
     }
 
     fn wf_mark(&self, workflow_id: &str, key: &str) -> Option<String> {
-        UnlockedVault::wf_mark(self, workflow_id, key)
+        crate::workflow::service::marks::mark(&self.doc, workflow_id, key)
     }
 
     fn wf_var(&self, scope: &VarScope, name: &str) -> Option<WfValue> {
-        UnlockedVault::wf_var(self, scope, name)
+        crate::workflow::service::vars::var(&self.doc, scope, name)
     }
 
     fn store_name(&self, store_id: &str) -> Option<String> {
-        self.find_store(store_id).map(|store| store.name.clone())
+        crate::money::tree::find_store(&self.doc, store_id).map(|store| store.name.clone())
     }
 
     fn contact_name(&self, contact_id: &str) -> Option<String> {
@@ -97,27 +97,27 @@ impl WorkflowHost for UnlockedVault {
     }
 
     fn funds_shortfall(&self, tx: &Transaction, secs: i64) -> Option<RejectReason> {
-        UnlockedVault::funds_shortfall(self, tx, secs)
+        crate::planning::automations::funds_shortfall(&self.doc, tx, secs)
     }
 
     fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String> {
-        UnlockedVault::resolve_scope(self, scope)
+        crate::money::tree::resolve_scope(&self.doc, scope)
     }
 
     fn key_rate_on(&self, day: NaiveDate) -> Option<Amount> {
-        UnlockedVault::key_rate_on(self, day)
+        crate::money::interest::key_rate_on(&self.doc, day)
     }
 
     fn inflation_series(&self, currency: &str) -> Vec<InflationReading> {
-        UnlockedVault::inflation_series(self, currency)
+        crate::money::inflation::inflation_series(&self.doc, currency)
     }
 
     fn inflation_on(&self, currency: &str, month: &str) -> Option<Amount> {
-        UnlockedVault::inflation_on(self, currency, month)
+        crate::money::inflation::inflation_on(&self.doc, currency, month)
     }
 
     fn recurring_check(&self, tx: &Transaction) -> RecurringReading {
-        let check = UnlockedVault::recurring_check(self, tx);
+        let check = crate::planning::recurring::recurring_check(&self.doc, tx);
         RecurringReading {
             new: check.new,
             grew: check.grew,
@@ -127,7 +127,7 @@ impl WorkflowHost for UnlockedVault {
     }
 
     fn topup_advice(&self, amount: Option<Amount>, now: i64, zone: &str) -> TopupReading {
-        let advice = UnlockedVault::topup_advice(self, amount, now, zone);
+        let advice = crate::planning::allocation::topup_advice(&self.books(), amount, now, zone);
         TopupReading {
             currency: advice.currency,
             amount: advice.amount,
@@ -144,7 +144,7 @@ impl WorkflowHost for UnlockedVault {
     }
 
     fn emergency_fund_status(&self, now: i64, zone: &str) -> EmergencyReading {
-        let status = UnlockedVault::emergency_fund_status(self, now, zone);
+        let status = crate::planning::emergency::emergency_fund_status(&self.books(), now, zone);
         EmergencyReading {
             currency: status.currency,
             target_amount: status.target_amount,
@@ -154,7 +154,7 @@ impl WorkflowHost for UnlockedVault {
     }
 
     fn budget_status(&self, now: i64, zone: &str) -> Vec<BudgetReading> {
-        UnlockedVault::budget_status(self, now, zone)
+        crate::usecases::planning::budget::budget_status(&self.books(), now, zone)
             .into_iter()
             .map(|status| BudgetReading {
                 id: status.budget.id,
@@ -168,11 +168,11 @@ impl WorkflowHost for UnlockedVault {
     }
 
     fn data_source(&self, id: &str) -> Option<DataSource> {
-        UnlockedVault::data_source(self, id).cloned()
+        crate::planning::datasources::data_source(&self.doc, id).cloned()
     }
 
     fn goal_progress(&self, now: i64, zone: &str) -> Vec<GoalReading> {
-        UnlockedVault::goal_progress(self, now, zone)
+        crate::usecases::planning::goals::goal_progress(&self.books(), now, zone)
             .into_iter()
             .map(|progress| GoalReading {
                 id: progress.goal.id,
@@ -190,15 +190,15 @@ impl WorkflowHost for UnlockedVault {
         txs: Vec<Transaction>,
         now: i64,
     ) -> Result<Vec<Transaction>, String> {
-        self.wf_insert(txs, now)
+        crate::usecases::workflow::runs::wf_insert(self, txs, now)
     }
 
     fn set_mark(&mut self, workflow_id: &str, key: &str, value: &str) {
-        self.wf_set_mark(workflow_id, key, value);
+        crate::usecases::workflow::runs::wf_set_mark(self, workflow_id, key, value);
     }
 
     fn set_var(&mut self, scope: VarScope, name: &str, value: &WfValue) {
-        self.wf_set_var(scope, name, value);
+        crate::usecases::workflow::runs::wf_set_var(self, scope, name, value);
     }
 
     fn add_reminder(&mut self, reminder: Reminder) {

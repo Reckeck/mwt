@@ -107,20 +107,23 @@ fn insert_checked(
             tx.meta_mut().flow_id = Some(flow.clone());
         }
         let secs = secs_or_now(&tx.meta().timestamp);
-        let result = match vault.funds_shortfall(&tx, secs) {
+        let result = match crate::planning::automations::funds_shortfall(&vault.doc, &tx, secs) {
             Some(reason) => Err(InsertRefusal::Short(Box::new(reason))),
             // The run's clock, not the wall one: an emulated run days
             // ahead dates its operations days ahead too.
-            None => vault
-                .prepare_transaction_at(&mut tx, now.max(secs) * 1000)
-                .map_err(|err| InsertRefusal::Invalid(err.to_string())),
+            None => crate::usecases::money::transactions::prepare_transaction_at(
+                vault,
+                &mut tx,
+                now.max(secs) * 1000,
+            )
+            .map_err(|err| InsertRefusal::Invalid(err.to_string())),
         };
         if let Err(refusal) = result {
             vault.doc = backup;
             return Err(refusal);
         }
         vault.doc.transactions.push(tx.clone());
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(vault);
         saved.push(tx);
     }
     Ok(saved)
@@ -283,7 +286,10 @@ fn keep_dropped(
 /// Log the notices a pass made; the ones that are new come back.
 fn log_pass_notices(vault: &mut UnlockedVault, pass: &mut WorkflowPass) -> Result<()> {
     if !pass.notices.is_empty() {
-        pass.notices = vault.log_notices(std::mem::take(&mut pass.notices))?;
+        pass.notices = crate::usecases::planning::notifications::log_notices(
+            vault,
+            std::mem::take(&mut pass.notices),
+        )?;
     }
     Ok(())
 }
@@ -465,14 +471,16 @@ pub fn retry_workflow_run(
     if let RunOutcome::Rejected { reason, .. } = &report.run.outcome {
         return Err(match reason {
             RejectReason::Invalid { message } => Error::InvalidInput(message.clone()),
-            other => Error::InsufficientFunds(vault.describe_shortfall(other)),
+            other => Error::InsufficientFunds(crate::planning::automations::describe_shortfall(
+                &vault.doc, other,
+            )),
         });
     }
     forget_run(vault, run_id)?;
     let mut pass = WorkflowPass::default();
     keep_run(vault, &report, &mut pass)?;
     run_events(vault, report.events.clone(), now, zone, &mut pass)?;
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     commit_applied(vault)?;
     log_pass_notices(vault, &mut pass)?;
     Ok(pass)
@@ -490,9 +498,9 @@ fn retry_queued_refusal(
             tx.meta_mut().timestamp = crate::calendar::iso(now);
         }
         insert_checked(vault, txs, now).map_err(|refusal| match refusal {
-            InsertRefusal::Short(reason) => {
-                Error::InsufficientFunds(vault.describe_shortfall(&reason))
-            }
+            InsertRefusal::Short(reason) => Error::InsufficientFunds(
+                crate::planning::automations::describe_shortfall(&vault.doc, &reason),
+            ),
             InsertRefusal::Invalid(message) => Error::InvalidInput(message),
         })
     })?;
@@ -573,10 +581,10 @@ pub fn run_workflow_now(
     let report = exec::run(vault, &graph, &ctx);
     keep_run(vault, &report, &mut pass)?;
     run_events(vault, report.events.clone(), now, zone, &mut pass)?;
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     commit_applied(vault)?;
     if !pass.notices.is_empty() {
-        vault.log_notices(pass.notices)?;
+        crate::usecases::planning::notifications::log_notices(vault, pass.notices)?;
     }
     Ok(report)
 }
@@ -714,10 +722,10 @@ pub fn answer_workflow_wait(
     let report = exec::run(vault, &graph, &ctx);
     keep_run(vault, &report, &mut pass)?;
     run_events(vault, report.events.clone(), now, zone, &mut pass)?;
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     commit_applied(vault)?;
     if !pass.notices.is_empty() {
-        vault.log_notices(pass.notices)?;
+        crate::usecases::planning::notifications::log_notices(vault, pass.notices)?;
     }
     Ok(report)
 }
@@ -748,7 +756,7 @@ pub fn run_due_workflows_at(
         events.extend(fire_triggers(vault, &workflow, now, zone, &mut pass)?);
     }
     run_events(vault, events, now, zone, &mut pass)?;
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     commit_applied(vault)?;
     log_pass_notices(vault, &mut pass)?;
     Ok(pass)
@@ -904,7 +912,9 @@ fn link_to_property(vault: &mut UnlockedVault, workflow: &Workflow, before: usiz
         .automation
         .as_ref()
         .and_then(|spec| spec.property_id.clone())
-        .filter(|id| vault.check_property_link(Some(id)).is_ok())
+        .filter(|id| {
+            crate::usecases::household::property_links::check_property_link(vault, Some(id)).is_ok()
+        })
     else {
         return;
     };
@@ -913,7 +923,7 @@ fn link_to_property(vault: &mut UnlockedVault, workflow: &Workflow, before: usiz
         .map(|tx| tx.meta().id.clone())
         .collect();
     for id in made {
-        vault.set_property_link(&id, Some(&property));
+        crate::usecases::household::property_links::set_property_link(vault, &id, Some(&property));
     }
 }
 

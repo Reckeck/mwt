@@ -36,7 +36,8 @@ fn saving_vault() -> (tempfile::TempDir, UnlockedVault, String, String) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
-    let goal = vault.create_goal(goal_on(&savings)).unwrap();
+    let goal =
+        crate::usecases::planning::goals::create_goal(&mut vault, goal_on(&savings)).unwrap();
     let params: BTreeMap<String, String> = [
         ("category", "salary"),
         ("pct", "10"),
@@ -45,15 +46,22 @@ fn saving_vault() -> (tempfile::TempDir, UnlockedVault, String, String) {
     .iter()
     .map(|(key, value)| (key.to_string(), value.to_string()))
     .collect();
-    let saver = vault
-        .workflow_from_template("pay_yourself_first", &params, "en", 1_767_312_000)
-        .unwrap()
-        .workflow;
+    let saver = crate::usecases::workflow::records::workflow_from_template(
+        &mut vault,
+        "pay_yourself_first",
+        &params,
+        "en",
+        1_767_312_000,
+    )
+    .unwrap()
+    .workflow;
     (dir, vault, goal.id, saver.id)
 }
 
 fn active(vault: &UnlockedVault, workflow_id: &str) -> bool {
-    vault.workflow(workflow_id).unwrap().active
+    crate::workflow::service::records::workflow(&vault.doc, workflow_id)
+        .unwrap()
+        .active
 }
 
 #[test]
@@ -90,9 +98,13 @@ fn a_paused_goal_stops_its_saver_and_a_resumed_one_starts_it_again() {
 #[test]
 fn a_saver_switched_off_by_hand_stays_off_after_pause_and_resume() {
     let (_dir, mut vault, goal, saver) = saving_vault();
-    vault
-        .set_workflow_active(&saver, false, 1_767_312_000)
-        .unwrap();
+    crate::usecases::workflow::records::set_workflow_active(
+        &mut vault,
+        &saver,
+        false,
+        1_767_312_000,
+    )
+    .unwrap();
     let paused = react(
         &mut vault,
         vec![
@@ -129,7 +141,7 @@ fn a_deleted_automation_removes_its_workflow() {
         vec![AutomationDeleted { id: saver.clone() }.into()],
     );
     assert!(failures.is_empty(), "{failures:?}");
-    assert!(vault.workflow(&saver).is_err());
+    assert!(crate::workflow::service::records::workflow(&vault.doc, &saver).is_err());
 }
 
 #[test]
@@ -155,7 +167,8 @@ fn a_failing_reaction_is_reported_and_keeps_the_first_commit() {
     let (_dir, mut vault, _goal, _saver) = saving_vault();
     let savings = vault.doc.stores[0].id.clone();
     // The first commit: a new goal. Then the reaction to a missing automation fails.
-    let committed = vault.create_goal(goal_on(&savings)).unwrap();
+    let committed =
+        crate::usecases::planning::goals::create_goal(&mut vault, goal_on(&savings)).unwrap();
     let failures = react(
         &mut vault,
         vec![AutomationDeleted { id: "gone".into() }.into()],
@@ -214,8 +227,9 @@ fn a_retry_with_the_event_zone_books_the_refused_run_without_a_vault_zone() {
     let Transaction::Payment(rent) = payment(&card, "800", "rent") else {
         unreachable!()
     };
-    vault
-        .create_automation(AutomationDraft {
+    crate::usecases::planning::automations::create_automation(
+        &mut vault,
+        AutomationDraft {
             time: None,
             asks: false,
             for_month_offset: None,
@@ -228,15 +242,21 @@ fn a_retry_with_the_event_zone_books_the_refused_run_without_a_vault_zone() {
             amount_mode: Default::default(),
             workday_shift: Default::default(),
             property_id: None,
-        })
-        .unwrap();
-    let pass = vault
-        .run_due_workflows(secs("2026-02-20T12:00:00Z"), "UTC")
-        .unwrap();
+        },
+    )
+    .unwrap();
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut vault,
+        secs("2026-02-20T12:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     let refused = pass.runs[0].id.clone();
-    vault
-        .add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
     vault.doc.settings.schedule_timezone = None;
     let failures = react(
         &mut vault,

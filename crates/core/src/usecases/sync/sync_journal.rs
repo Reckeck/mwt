@@ -110,9 +110,15 @@ mod tests {
             } else {
                 SyncJournalOutcome::Declined
             };
-            vault.journal_push("Pixel", &one_change(), outcome, None);
+            crate::usecases::sync::sync_journal::journal_push(
+                &mut vault,
+                "Pixel",
+                &one_change(),
+                outcome,
+                None,
+            );
         }
-        let log = vault.sync_journal();
+        let log = crate::usecases::sync::sync_journal::sync_journal(&vault);
         assert_eq!(log.len(), MAX_JOURNAL);
         assert_eq!(log[0].outcome, SyncJournalOutcome::Failed);
         assert!(!log[0].id.is_empty() && !log[0].at.is_empty());
@@ -121,11 +127,15 @@ mod tests {
     #[test]
     fn a_declined_batch_is_saved_in_the_journal() {
         let (_dir, mut vault) = empty_vault();
-        vault
-            .sync_journal_record("Pixel", &one_change(), SyncJournalOutcome::Declined)
-            .unwrap();
+        crate::usecases::sync::sync_journal::sync_journal_record(
+            &mut vault,
+            "Pixel",
+            &one_change(),
+            SyncJournalOutcome::Declined,
+        )
+        .unwrap();
         assert_eq!(
-            vault.sync_journal()[0].outcome,
+            crate::usecases::sync::sync_journal::sync_journal(&vault)[0].outcome,
             SyncJournalOutcome::Declined
         );
     }
@@ -207,7 +217,9 @@ mod scrub_tests {
             ..Default::default()
         });
 
-        assert!(vault.scrub_sync_secrets());
+        assert!(crate::usecases::sync::sync_journal::scrub_sync_secrets(
+            &mut vault
+        ));
         let text =
             serde_json::to_string(&(&vault.doc.sync.batches, &vault.doc.sync.journal)).unwrap();
         assert!(
@@ -217,6 +229,8 @@ mod scrub_tests {
         // Ordinary collections keep theirs.
         assert!(text.contains("Cash"));
         // The second run finds nothing to do.
-        assert!(!vault.scrub_sync_secrets());
+        assert!(!crate::usecases::sync::sync_journal::scrub_sync_secrets(
+            &mut vault
+        ));
     }
 }

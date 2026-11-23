@@ -23,23 +23,26 @@ struct VaultReports<'ask> {
 
 impl ReportSource for VaultReports<'_> {
     fn shown_months(&self) -> Result<Vec<NaiveDate>> {
-        Ok(self
-            .vault
-            .report_ctx(self.filter, self.now, self.zone)?
-            .months)
+        Ok(mwt_reports::overview::report_ctx(
+            &self.vault.books(),
+            self.filter,
+            self.now,
+            self.zone,
+        )?
+        .months)
     }
 
     fn report(&self, from: &str, to: &str) -> Result<ReportFlows> {
         let mut wide = self.filter.clone();
         wide.from = Some(from.to_string());
         wide.to = Some(to.to_string());
-        let ctx = self.vault.report_ctx(&wide, self.now, self.zone)?;
-        let cash = self.vault.cashflow_report(&ctx);
+        let ctx =
+            mwt_reports::overview::report_ctx(&self.vault.books(), &wide, self.now, self.zone)?;
+        let cash = mwt_reports::overview::cashflow_report(&self.vault.books(), &ctx);
         let last_month = match ctx.months.last() {
             Some(last) => {
                 let (start, end) = ctx.cal.month_bounds(*last);
-                self.vault
-                    .report_flows(&ctx, start, end)
+                mwt_reports::overview::report_flows(&self.vault.books(), &ctx, start, end)
                     .into_iter()
                     .filter_map(|flow| {
                         let kind = match flow.class {
@@ -77,7 +80,8 @@ impl ReportSource for VaultReports<'_> {
     }
 
     fn allowance(&self, month: &str, currency: &str) -> Result<Option<Amount>> {
-        let calendar_month = self.vault.calendar_month(month, self.now, self.zone)?;
+        let calendar_month =
+            mwt_reports::overview::calendar_month(&self.vault.books(), month, self.now, self.zone)?;
         Ok(calendar_month
             .allowance
             .filter(|_| calendar_month.currency == currency))

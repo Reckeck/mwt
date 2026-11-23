@@ -12,7 +12,7 @@ use crate::service::UnlockedVault;
 /// What is still open on a debt's contact and asset: what they owe minus
 /// what is owed to them. The balances are read once, then looked up per debt.
 pub(crate) fn open_debt(vault: &UnlockedVault) -> impl Fn(&DebtTerms) -> Amount {
-    let balances = vault.contact_balances();
+    let balances = crate::usecases::household::contacts::contact_balances(vault);
     move |terms| {
         balances
             .iter()
@@ -32,7 +32,7 @@ pub(crate) fn open_debt(vault: &UnlockedVault) -> impl Fn(&DebtTerms) -> Amount 
 pub fn reminders_in(vault: &UnlockedVault, now: i64, zone: &str, ru: bool) -> Vec<Reminder> {
     let today = Calendar::new(zone).date_of(now);
     let renderings = rules::auto_renderings(&vault.doc, open_debt(vault), today, ru);
-    rules::localized(vault.reminders(), &renderings)
+    rules::localized(crate::planning::agenda::reminders(&vault.doc), &renderings)
 }
 
 /// Create, move and remove the automatic reminders so they match the data.

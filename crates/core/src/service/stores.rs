@@ -21,10 +21,6 @@ impl UnlockedVault {
         /// Top-level wallet that `id` belongs to (itself for a root).
         pub fn root_of(&self, id: &str) -> String
             => crate::money::tree::root_of @doc;
-        /// Whether `node` (an existing store, or `None` for a new one) may sit
-        /// under `parent` with `name`. Rules R1–R6.
-        pub(crate) fn validate_placement(&self, node: Option<&str>, parent: Option<&str>, name: &str) -> Result<()>
-            => crate::money::stores::validate_placement @doc;
         pub fn create_store(&mut self, name: &str, kind: StoreKind, color: &str, note: &str, parent_id: Option<String>) -> Result<Store>
             => crate::usecases::money::stores::create_store;
         /// The vault always has exactly one cash wallet; called on create and

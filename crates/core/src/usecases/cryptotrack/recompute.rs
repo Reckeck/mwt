@@ -82,7 +82,8 @@ fn register_met_tokens(
 ) -> Result<bool> {
     let mut changed = false;
     for met in rules::met_tokens(batch).into_values() {
-        let (_, registered) = vault.register_token_unsaved(
+        let (_, registered) = super::tokens::register_token_unsaved(
+            vault,
             &TokenId::new(chain, met.contract),
             met.symbol,
             met.name,
@@ -149,6 +150,6 @@ pub fn crypto_sync_holdings(vault: &mut UnlockedVault) -> Result<()> {
 /// whether the positions differ from before.
 pub(crate) fn refold_holdings(vault: &mut UnlockedVault) -> bool {
     let before = std::mem::take(&mut vault.doc.holdings);
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     totals::holdings_differ(&before, &vault.doc.holdings)
 }

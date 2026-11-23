@@ -45,8 +45,12 @@ pub fn due_notices(
     ru: bool,
 ) -> Result<Vec<NoticeRecord>> {
     let delivered_at = now_iso();
-    let mut out =
-        rules::reminder_notices(vault.reminders_in(now, zone, ru), now, ru, &delivered_at);
+    let mut out = rules::reminder_notices(
+        crate::usecases::planning::auto_reminders::reminders_in(vault, now, zone, ru),
+        now,
+        ru,
+        &delivered_at,
+    );
     let lead = rules::shortfall_lead_days(&vault.doc);
     out.extend(rules::shortfall_notices(
         upcoming(&vault.books(), lead, now, zone),
@@ -54,12 +58,14 @@ pub fn due_notices(
         &delivered_at,
     ));
     out.extend(rules::budget_notices(
-        vault.budget_status(now, zone),
+        crate::usecases::planning::budget::budget_status(&vault.books(), now, zone),
         now,
         ru,
         &delivered_at,
     ));
-    out.extend(vault.health_notice(now, zone, ru)?);
+    out.extend(crate::usecases::planning::health::health_notice(
+        vault, now, zone, ru,
+    )?);
     log_notices(vault, out)
 }
 

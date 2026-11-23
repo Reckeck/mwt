@@ -48,7 +48,7 @@ pub fn crypto_apply_positions(
         .filter(|reading| reading.account_id == account_id)
         .flat_map(|reading| &reading.tokens)
     {
-        tokens_changed |= vault.trust_adapter_token(token)?;
+        tokens_changed |= super::tokens::trust_adapter_token(vault, token)?;
     }
     out.events = rules::apply_events(&mut vault.doc, account_id, events);
     if out.is_unchanged() && !tokens_changed {
@@ -57,7 +57,7 @@ pub fn crypto_apply_positions(
     rules::sort_records(&mut vault.doc);
     // The capital is read off `doc.holdings` (spec E8) and a save does not
     // re-derive it, so a pass that changed what a protocol holds has to say so.
-    vault.crypto_sync_holdings()?;
+    crate::usecases::cryptotrack::recompute::crypto_sync_holdings(vault)?;
     Ok(out)
 }
 

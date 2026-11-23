@@ -6,9 +6,6 @@ use crate::service::forward::forward;
 impl UnlockedVault {
     // forward:begin
     forward! {
-        /// A payment is back after its deletion: what left the event with it returns.
-        pub(crate) fn restore_removed_with_payment(&mut self)
-            => crate::usecases::sync::repair::restore_removed_with_payment;
         /// Whether a live record of the event still names the participant.
         #[cfg(test)]
         pub(crate) fn event_names_participant(&self, event_id: &str, participant_id: &str) -> bool

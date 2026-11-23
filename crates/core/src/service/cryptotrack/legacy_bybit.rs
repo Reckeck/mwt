@@ -2,8 +2,11 @@
 //! `crate::cryptotrack::service::legacy_bybit`, the scenario to
 //! `crate::usecases::cryptotrack::legacy_bybit` (spec core-strangler, D1).
 
+#[cfg(test)]
 use crate::cryptotrack::service::legacy_bybit::BybitStored;
+#[cfg(test)]
 use crate::error::Result;
+#[cfg(test)]
 use crate::model::vault::PendingImport;
 
 use super::super::UnlockedVault;
@@ -27,6 +30,7 @@ impl UnlockedVault {
     // Called by the exchange sync; not in the baseline
     // (crate-private), so outside the regenerated block.
     forward! {
+        #[cfg(test)]
         /// Store exchange records as operations of the module. The one way in:
         /// both a fresh sweep and the conversion of the old queue come through
         /// here, so neither can write an operation the other would not.

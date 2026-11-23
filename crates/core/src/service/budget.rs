@@ -4,9 +4,6 @@
 pub use crate::planning::budget::{
     BudgetDraft, BudgetStatus, DailyBudget, MIN_HISTORY_MONTHS, MonthAvg, MonthSummary,
 };
-pub(crate) use crate::planning::flows::Flow;
-
-use std::collections::HashSet;
 
 use crate::Amount;
 use crate::error::Result;
@@ -66,12 +63,7 @@ impl UnlockedVault {
 
     // Read by other areas until they move; not in the baseline (crate-private), so outside the
     // regenerated block.
-    forward! {
-        /// Operations the budget could not value in its currency: a side had no
-        /// rate (Currency-1 · 7, "Show").
-        pub(crate) fn unpriced_tx_ids(&self) -> HashSet<String>
-            => crate::usecases::planning::budget::unpriced_tx_ids @books;
-    }
+    forward! {}
 
     /// Value of one leg in `currency` at `secs`; `None` without a rate.
     pub(crate) fn leg_value_in(

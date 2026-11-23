@@ -27,6 +27,7 @@ impl UnlockedVault {
     // Called by the holdings fold and the positions until those areas move;
     // not in the baseline (crate-private), so outside the regenerated block.
     forward! {
+        #[cfg(test)]
         /// Put the engine's balances into `doc.holdings`, replacing what they
         /// supersede. Called at the end of `recompute_holdings`; saves nothing.
         pub(crate) fn apply_crypto_holdings(&mut self)

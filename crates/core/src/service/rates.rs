@@ -60,13 +60,6 @@ impl UnlockedVault {
         /// the currency has no rate at all.
         pub fn resolve_input_price(&self, input: &mut crate::ipc_contract::TransactionInput) -> crate::Result<()>
             => crate::usecases::money::rates::resolve_input_price;
-        /// The held spot coin with this ticker.
-        pub(crate) fn held_coin(&self, code: &str) -> Option<&AssetRef>
-            => crate::money::rates::held_coin @doc;
-        /// Which currencies keep their rate history: the ones in use. Owns its
-        /// data, so it can be used while the cache is borrowed mutably.
-        pub(crate) fn fx_history_filter(&self) -> impl Fn(&str) -> bool + use<>
-            => crate::money::rates::fx_history_filter @books;
         /// Add a fetched FX table to the cache. Does not persist: the refresh
         /// that fetched it writes once at the end.
         pub fn apply_fx(&mut self, fresh: &[FxPoint])

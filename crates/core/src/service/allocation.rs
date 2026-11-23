@@ -34,6 +34,7 @@ impl UnlockedVault {
 
     // Read by the net-worth area and the peer repair until they move.
     forward! {
+        #[cfg(test)]
         pub(crate) fn effective_classes(&self) -> Vec<AssetClass>
             => crate::planning::allocation::effective_classes @doc;
     }

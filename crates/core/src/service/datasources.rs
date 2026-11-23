@@ -46,11 +46,5 @@ impl UnlockedVault {
 
     // Called by the peer-sync repair until that area moves; not in the baseline (crate-private),
     // so outside the regenerated block.
-    forward! {
-        /// Drop the inflation choices that point at a source that no longer
-        /// exists (deleted on another device while this one chose it). Callers
-        /// persist.
-        pub(crate) fn prune_inflation_sources(&mut self)
-            => crate::usecases::planning::datasources::prune_inflation_sources;
-    }
+    forward! {}
 }

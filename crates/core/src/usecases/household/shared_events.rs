@@ -51,21 +51,21 @@ fn store_event(tx: &mut Tx<'_>, mut event: SharedEvent) -> Result<()> {
 fn commit_event(vault: &mut UnlockedVault, event: SharedEvent) -> Result<SharedEventView> {
     let id = event.id.clone();
     vault.transact(|tx| store_event(tx, event))?;
-    vault.shared_event_view(&id)
+    crate::household::shared_events::view::shared_event_view(&vault.doc, &id)
 }
 
 pub fn create_shared_event(
     vault: &mut UnlockedVault,
     draft: SharedEventDraft,
 ) -> Result<SharedEventView> {
-    let base = vault.base_and_fx().0;
+    let base = crate::usecases::money::portfolio::base_and_fx(vault).0;
     let event = plan_create_event(&vault.doc, &base, draft, &now_iso())?;
     let id = event.id.clone();
     vault.transact(|tx| {
         tx.doc_mut().shared_events.push(event);
         Ok(())
     })?;
-    vault.shared_event_view(&id)
+    crate::household::shared_events::view::shared_event_view(&vault.doc, &id)
 }
 
 /// Change the event's own fields. Things the purchases and settlements
@@ -76,7 +76,7 @@ pub fn update_shared_event(
     id: &str,
     draft: SharedEventDraft,
 ) -> Result<SharedEventView> {
-    let base = vault.base_and_fx().0;
+    let base = crate::usecases::money::portfolio::base_and_fx(vault).0;
     let event = plan_update_event(&vault.doc, &base, id, draft)?;
     commit_event(vault, event)
 }
@@ -227,7 +227,7 @@ fn record_settlement(
 /// Validate the settlement's operation and put it in the document, without
 /// saving: the one `transact` that records the settlement writes it too.
 fn append_transfer(vault: &mut UnlockedVault, mut transfer: Transaction) -> Result<String> {
-    vault.prepare_transaction(&mut transfer)?;
+    crate::usecases::money::transactions::prepare_transaction(vault, &mut transfer)?;
     let id = transfer.meta().id.clone();
     if id.trim().is_empty()
         || vault
@@ -240,7 +240,7 @@ fn append_transfer(vault: &mut UnlockedVault, mut transfer: Transaction) -> Resu
     }
     let id = transfer.meta().id.clone();
     vault.doc.transactions.push(transfer);
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     Ok(id)
 }
 
@@ -288,7 +288,7 @@ pub fn delete_shared_settlement(
     let tx_id = plan_take_back(&vault.doc, event_id, settlement_id)?;
     if let Some(tx_id) = tx_id {
         drop_shared_tx(vault, &tx_id);
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(vault);
     }
     let mut event = find_event(&vault.doc, event_id)?.clone();
     event
@@ -304,13 +304,13 @@ pub fn set_shared_due(
     input: SetSharedDueInput,
 ) -> Result<Option<DebtTerms>> {
     let draft = plan_due(&vault.doc, input)?;
-    vault.set_debt_terms(draft)
+    crate::usecases::household::contacts::set_debt_terms(vault, draft)
 }
 
 /// Remove a transaction without saving; the caller saves.
 fn drop_shared_tx(vault: &mut UnlockedVault, tx_id: &str) {
     vault.doc.transactions.retain(|tx| tx.meta().id != tx_id);
-    vault.set_property_link(tx_id, None);
+    crate::usecases::household::property_links::set_property_link(vault, tx_id, None);
 }
 
 /// Do what a changed purchase asks of the vault's payments, then write the
@@ -323,15 +323,17 @@ fn commit_purchase(vault: &mut UnlockedVault, edit: PurchaseEdit) -> Result<Shar
             payment,
             purchase_id,
         } => {
-            let saved = vault.add_transaction(payment)?;
+            let saved = crate::usecases::money::transactions::add_transaction(vault, payment)?;
             link_purchase(&mut event, &purchase_id, &saved.meta().id);
         }
         PaymentStep::Update { tx_id, payment } => {
-            vault.update_transaction_unsynced(&tx_id, payment)?;
+            crate::usecases::money::transactions::update_transaction_unsynced(
+                vault, &tx_id, payment,
+            )?;
         }
         PaymentStep::Drop { tx_id } => {
             drop_shared_tx(vault, &tx_id);
-            vault.recompute_holdings();
+            crate::usecases::money::portfolio::recompute_holdings(vault);
         }
     }
     commit_event(vault, event)

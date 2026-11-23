@@ -104,7 +104,13 @@ pub(crate) fn journal_skipped(
     if journal_has(&vault.doc.sync.journal, &line) {
         return false;
     }
-    vault.journal_push(peer_name, summary, SyncJournalOutcome::Failed, None);
+    crate::usecases::sync::sync_journal::journal_push(
+        vault,
+        peer_name,
+        summary,
+        SyncJournalOutcome::Failed,
+        None,
+    );
     true
 }
 
@@ -113,7 +119,8 @@ pub(crate) fn journal_skipped(
 fn run_rules(vault: &mut UnlockedVault) -> RepairReport {
     let mut report = RepairReport::default();
     repair_restored(vault, &mut report);
-    let decided: HashSet<String> = vault.decided_import_ids();
+    let decided: HashSet<String> =
+        crate::cryptotrack::exchange_sync::decided_import_ids(&vault.doc);
     repair_pending_imports(&mut vault.doc, &decided, &mut report);
     // Before the natural keys: a folded guest contact may leave two debt
     // terms of one contact and asset behind.
@@ -122,8 +129,7 @@ fn run_rules(vault: &mut UnlockedVault) -> RepairReport {
     repair_cash_wallets(&mut vault.doc, CASH_WALLET_ID, &mut report);
     repair_account_tree(&mut vault.doc, &mut report);
     repair_goal_envelopes(&mut vault.doc, &mut report);
-    let known: HashSet<String> = vault
-        .effective_classes()
+    let known: HashSet<String> = crate::planning::allocation::effective_classes(&vault.doc)
         .into_iter()
         .map(|class| class.id)
         .collect();
@@ -135,8 +141,8 @@ fn run_rules(vault: &mut UnlockedVault) -> RepairReport {
     // that arrived (an emergency account, an inflation source). Shared
     // events keep their references: a settlement or item that names a
     // removed participant is user data (the next rules of stage M).
-    vault.prune_emergency_fund();
-    vault.prune_inflation_sources();
+    crate::usecases::planning::emergency::prune_emergency_fund(vault);
+    crate::usecases::planning::datasources::prune_inflation_sources(vault);
     announce_repair(vault, &report);
     report
 }
@@ -150,7 +156,7 @@ fn repair_restored(vault: &mut UnlockedVault, report: &mut RepairReport) {
     // its own wallets and categories, and they must be looked at too.
     if restore_referenced_transactions(&mut vault.doc, report) {
         // Balances follow the operations.
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(vault);
     }
     restore_referenced_records(&mut vault.doc, report);
 }
@@ -193,7 +199,8 @@ fn tracked_edit<R>(
         changed_keys(&pre_records, &post_records)
             .into_iter()
             .map(|key| {
-                let state = vault.state_of(&pre_records, &key);
+                let state =
+                    crate::sync::manifest_view::record_state(&vault.doc, &pre_records, &key);
                 (key, state)
             })
             .collect();
@@ -205,7 +212,8 @@ fn tracked_edit<R>(
             .filter_map(|key| {
                 let prior = before_states.remove(key)?;
                 Some(BatchEntry {
-                    after: vault.state_of(&settled, key).marks(),
+                    after: crate::sync::manifest_view::record_state(&vault.doc, &settled, key)
+                        .marks(),
                     before: prior,
                     key: key.clone(),
                 })

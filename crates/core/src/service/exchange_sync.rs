@@ -60,6 +60,7 @@ impl UnlockedVault {
 
     // Not in the baseline (crate-private), so outside the regenerated block.
     forward! {
+        #[cfg(test)]
         /// Ids an import has already settled: an operation of the crypto module,
         /// a ledger transaction the old import booked, or a record the user refused.
         pub(crate) fn decided_import_ids(&self) -> std::collections::HashSet<String>

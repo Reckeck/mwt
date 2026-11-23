@@ -34,7 +34,7 @@ pub struct StoreMoveTargets {
 /// Rebuild the holdings from the operations and write once: the commit of
 /// every change that books or removes something the holdings derive from.
 pub(crate) fn rebase_and_commit(vault: &mut UnlockedVault) -> Result<()> {
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     vault.transact(|tx| {
         tx.touch();
         Ok(())
@@ -234,7 +234,9 @@ pub fn create_store_with(
     vault.run(|tx| tx.collection::<Store>().insert(store.clone()))?;
     if let Some(opening) = opening {
         let mut topup = opening_topup(&store.id, opening);
-        if let Err(err) = vault.prepare_transaction(&mut topup) {
+        if let Err(err) =
+            crate::usecases::money::transactions::prepare_transaction(vault, &mut topup)
+        {
             vault.run(|tx| tx.collection::<Store>().remove(&store.id).map(drop))?;
             return Err(err);
         }
@@ -466,7 +468,7 @@ pub fn store_move_targets(vault: &UnlockedVault, id: &str) -> Result<StoreMoveTa
     if store.parent_id.is_none() {
         return Ok(StoreMoveTargets::default());
     }
-    let parents = flatten_tree(vault.store_tree())
+    let parents = flatten_tree(crate::money::portfolio::store_tree(&vault.books()))
         .into_iter()
         .filter(|node| store.parent_id.as_deref() != Some(node.store.id.as_str()))
         .filter(|node| {

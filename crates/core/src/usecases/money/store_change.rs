@@ -52,7 +52,7 @@ pub fn apply_store_change(
     let before = std::mem::replace(&mut vault.doc, after);
     if let Err(err) = rebase_and_commit(vault) {
         vault.doc = before;
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(vault);
         return Err(err);
     }
     Ok(plan)

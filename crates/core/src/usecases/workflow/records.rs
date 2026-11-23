@@ -273,9 +273,16 @@ pub fn confirm_queued(vault: &mut UnlockedVault, id: &str) -> Result<Vec<Transac
         |vault, transactions| {
             if transactions.len() == 1 {
                 let mut txs = transactions;
-                Ok(vec![vault.add_transaction(txs.remove(0))?])
+                Ok(vec![crate::usecases::money::transactions::add_transaction(
+                    vault,
+                    txs.remove(0),
+                )?])
             } else {
-                vault.add_linked_transactions(transactions, None)
+                crate::usecases::money::transactions::add_linked_transactions(
+                    vault,
+                    transactions,
+                    None,
+                )
             }
         },
     )?;
@@ -301,7 +308,7 @@ pub(super) fn book_and_close(
     let backup = vault.doc.clone();
     let outcome = book(vault, batch.transactions.clone()).and_then(|saved| {
         let created: Vec<String> = saved.iter().map(|tx| tx.meta().id.clone()).collect();
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(vault);
         let done = close_batch(vault, batch, created)?;
         if done.is_none() && matches!(closing, RunClosing::Required) {
             return Err(Error::Missing(format!("workflow run {}", batch.run_id)));
@@ -310,7 +317,7 @@ pub(super) fn book_and_close(
     });
     if outcome.is_err() && vault.doc != backup {
         vault.doc = backup;
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(vault);
         // The caller gets the original refusal; a failed write here must not hide it,
         // so it is logged, and the next persist writes the restored document anyway.
         if let Err(error) = vault.persist() {
@@ -547,28 +554,49 @@ mod tests {
     #[test]
     fn a_variable_set_by_hand_is_kept_and_then_deleted() {
         let (_dir, mut vault) = empty_vault();
-        vault
-            .set_workflow_var(VarScope::Global, " note ", &text_json("hello"))
-            .unwrap();
-        assert_eq!(vault.workflow_vars().len(), 1);
-        assert_eq!(vault.workflow_vars()[0].name, "note");
+        crate::usecases::workflow::records::set_workflow_var(
+            &mut vault,
+            VarScope::Global,
+            " note ",
+            &text_json("hello"),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::workflow::service::vars::variables(&vault.doc).len(),
+            1
+        );
+        assert_eq!(
+            crate::workflow::service::vars::variables(&vault.doc)[0].name,
+            "note"
+        );
         assert!(matches!(
-            vault.set_workflow_var(VarScope::Global, " ", &text_json("x")),
+            crate::usecases::workflow::records::set_workflow_var(
+                &mut vault,
+                VarScope::Global,
+                " ",
+                &text_json("x")
+            ),
             Err(Error::InvalidInput(_))
         ));
-        vault
-            .delete_workflow_var(&VarScope::Global, "note")
-            .unwrap();
-        assert!(vault.workflow_vars().is_empty());
+        crate::usecases::workflow::records::delete_workflow_var(
+            &mut vault,
+            &VarScope::Global,
+            "note",
+        )
+        .unwrap();
+        assert!(crate::workflow::service::vars::variables(&vault.doc).is_empty());
     }
 
     #[test]
     fn a_discarded_batch_goes_and_an_unknown_one_is_missing() {
         let (_dir, mut vault) = empty_vault();
         vault.doc.workflow_queue.push(queued("q1", Vec::new()));
-        vault.discard_queued("q1").unwrap();
-        assert!(vault.workflow_queue().is_empty());
-        assert!(matches!(vault.discard_queued("q1"), Err(Error::Missing(_))));
+        crate::usecases::workflow::records::discard_queued(&mut vault, "q1").unwrap();
+        assert!(crate::workflow::service::runs::queue(&vault.doc).is_empty());
+        assert!(matches!(
+            crate::usecases::workflow::records::discard_queued(&mut vault, "q1"),
+            Err(Error::Missing(_))
+        ));
     }
 
     #[test]
@@ -579,11 +607,14 @@ mod tests {
             .doc
             .workflow_queue
             .push(queued("q1", vec![income(&card, "25", "queued")]));
-        let saved = vault.confirm_queued("q1").unwrap();
+        let saved = crate::usecases::workflow::records::confirm_queued(&mut vault, "q1").unwrap();
         assert_eq!(saved.len(), 1);
-        assert!(vault.workflow_queue().is_empty());
+        assert!(crate::workflow::service::runs::queue(&vault.doc).is_empty());
         assert_eq!(vault.doc.transactions.len(), 1);
-        assert!(matches!(vault.confirm_queued("q1"), Err(Error::Missing(_))));
+        assert!(matches!(
+            crate::usecases::workflow::records::confirm_queued(&mut vault, "q1"),
+            Err(Error::Missing(_))
+        ));
     }
 
     #[test]
@@ -594,11 +625,11 @@ mod tests {
         vault.doc.workflow_queue.push(batch.clone());
         // The run the batch waited for is gone, and the close insists on it.
         let result = book_and_close(&mut vault, &batch, RunClosing::Required, |vault, txs| {
-            vault.add_linked_transactions(txs, None)
+            crate::usecases::money::transactions::add_linked_transactions(vault, txs, None)
         });
         assert!(matches!(result, Err(Error::Missing(_))));
         assert!(vault.doc.transactions.is_empty());
-        assert_eq!(vault.workflow_queue().len(), 1);
+        assert_eq!(crate::workflow::service::runs::queue(&vault.doc).len(), 1);
     }
 
     #[test]
@@ -613,7 +644,7 @@ mod tests {
         });
         assert!(matches!(result, Err(Error::InsufficientFunds(_))));
         assert_eq!(std::fs::read(&vault.path).unwrap(), before);
-        assert_eq!(vault.workflow_queue().len(), 1);
+        assert_eq!(crate::workflow::service::runs::queue(&vault.doc).len(), 1);
     }
 
     #[test]
@@ -629,7 +660,9 @@ mod tests {
             max_amount: None,
             max_amount_currency: None,
         };
-        let through_delegate = vault.save_workflow(None, draft(), 1_000).unwrap();
+        let through_delegate =
+            crate::usecases::workflow::records::save_workflow(&mut vault, None, draft(), 1_000)
+                .unwrap();
         let through_scenario = save_workflow(&mut vault, None, draft(), 1_000).unwrap();
         assert_eq!(
             through_delegate.workflow.name,
@@ -640,36 +673,40 @@ mod tests {
             through_scenario.workflow.graph
         );
         assert_ne!(through_delegate.workflow.id, through_scenario.workflow.id);
-        assert_eq!(vault.workflows().len(), 2);
+        assert_eq!(
+            crate::workflow::service::records::workflows(&vault.doc).len(),
+            2
+        );
     }
 
     #[test]
     fn deleting_a_workflow_takes_its_queue_and_runs_with_it() {
         let (_dir, mut vault) = empty_vault();
         let graph = r#"{"version":1,"nodes":[],"edges":[]}"#.to_string();
-        let saved = vault
-            .save_workflow(
-                None,
-                WorkflowDraft {
-                    name: "w".into(),
-                    description: String::new(),
-                    active: false,
-                    graph,
-                    react_to_workflows: false,
-                    max_amount: None,
-                    max_amount_currency: None,
-                },
-                1_000,
-            )
-            .unwrap();
+        let saved = crate::usecases::workflow::records::save_workflow(
+            &mut vault,
+            None,
+            WorkflowDraft {
+                name: "w".into(),
+                description: String::new(),
+                active: false,
+                graph,
+                react_to_workflows: false,
+                max_amount: None,
+                max_amount_currency: None,
+            },
+            1_000,
+        )
+        .unwrap();
         let mut batch = queued("q1", Vec::new());
         batch.workflow_id = saved.workflow.id.clone();
         vault.doc.workflow_queue.push(batch);
-        vault.delete_workflow(&saved.workflow.id).unwrap();
-        assert!(vault.workflows().is_empty());
-        assert!(vault.workflow_queue().is_empty());
+        crate::usecases::workflow::records::delete_workflow(&mut vault, &saved.workflow.id)
+            .unwrap();
+        assert!(crate::workflow::service::records::workflows(&vault.doc).is_empty());
+        assert!(crate::workflow::service::runs::queue(&vault.doc).is_empty());
         assert!(matches!(
-            vault.delete_workflow(&saved.workflow.id),
+            crate::usecases::workflow::records::delete_workflow(&mut vault, &saved.workflow.id),
             Err(Error::Missing(_))
         ));
     }

@@ -22,7 +22,7 @@ fn missing_envelope() -> Error {
 /// `live_store`, called by method: OD6) and against the goals.
 fn check_draft(vault: &UnlockedVault, draft: &EnvelopeDraft) -> Result<()> {
     check_draft_name(draft)?;
-    let store = vault.live_store(&draft.store_id)?;
+    let store = crate::money::validate::live_store(&vault.doc, &draft.store_id)?;
     check_draft_against(&vault.doc, store, draft)
 }
 

@@ -9,8 +9,7 @@ use crate::service::UnlockedVault;
 /// A wallet's base value with its sub-accounts and the currency, for a card.
 pub fn store_worth(vault: &UnlockedVault) -> impl Fn(&str) -> Option<(Amount, String)> {
     |id| {
-        vault
-            .store_overview(id, true)
+        crate::money::portfolio::store_overview(&vault.books(), id, true)
             .ok()
             .map(|overview| (overview.subtree_base, overview.base_currency))
     }

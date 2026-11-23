@@ -14,7 +14,6 @@ use crate::error::Result;
 #[cfg(test)]
 use crate::model::store::Store;
 use crate::model::store::StoreScope;
-use crate::model::transaction::Transaction;
 
 use super::UnlockedVault;
 use super::forward::forward;
@@ -38,9 +37,6 @@ impl UnlockedVault {
         /// Every store id a scope covers. An empty id list means the whole vault.
         pub fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String>
             => crate::money::tree::resolve_scope @doc;
-        /// Transactions with at least one leg on a store in `ids`.
-        pub(crate) fn scoped_txs(&self, ids: &HashSet<String>) -> Vec<Transaction>
-            => crate::money::portfolio::scoped_txs @doc;
         /// Direct children of a store.
         #[cfg(test)]
         pub(crate) fn children_of(&self, parent_id: &str) -> Vec<&Store>
@@ -72,10 +68,6 @@ impl UnlockedVault {
             => crate::money::portfolio::history_series @books;
         pub fn realized_pnl(&self) -> RealizedPnl
             => crate::money::portfolio::realized_pnl @books;
-        /// Shared PnL replay. `scope` restricts it to the legs booked on those
-        /// stores (`None` replays the whole vault).
-        pub(crate) fn realized_pnl_filtered(&self, scope: Option<&HashSet<String>>) -> RealizedPnl
-            => crate::money::portfolio::realized_pnl_filtered @books;
     }
     // forward:end
 }
