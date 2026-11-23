@@ -8,8 +8,10 @@ use serde_json::json;
 
 use crate::model::planning::{Schedule, TransactionDraft};
 use crate::model::store::StoreKind;
+use crate::planning::agenda::PriceAlertDraft;
+use crate::planning::automations::AutomationDraft;
 use crate::service::test_support::*;
-use crate::service::{AutomationDraft, PriceAlertDraft, WorkflowDraft};
+use crate::workflow::service::records::WorkflowDraft;
 
 #[test]
 fn mine_lists_everything_that_fires_the_soonest_first() {

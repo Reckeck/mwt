@@ -17,14 +17,15 @@ use crate::model::inflation::InflationReading;
 use crate::model::planning::{RejectReason, Reminder};
 use crate::model::store::{AssetRef, StoreKind, StoreScope};
 use crate::model::transaction::Transaction;
+use crate::service::UnlockedVault;
 use crate::service::test_support::*;
-use crate::service::{UnlockedVault, WorkflowDraft};
 use crate::workflow::exec::{self, RunContext};
 use crate::workflow::host::{
     BudgetReading, Checkpoint, EmergencyReading, GoalReading, RecurringReading, TopupReading,
     WorkflowHost,
 };
 use crate::workflow::model::{VarScope, Workflow};
+use crate::workflow::service::records::WorkflowDraft;
 use crate::workflow::types::WfValue;
 use crate::workflow::{Graph, RunOutcome};
 

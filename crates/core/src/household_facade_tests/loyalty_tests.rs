@@ -349,7 +349,7 @@ fn the_cashback_is_reported_on_a_bare_document() {
     topup.meta_mut().categories = vec![CASHBACK_CATEGORY.into()];
     topup.meta_mut().timestamp = "2026-03-02T10:00:00Z".into();
     doc.transactions.push(topup);
-    let book = crate::service::RateBook::build(&doc, Default::default());
+    let book = crate::money::rates::RateBook::build(&doc, Default::default());
     let rates = CashbackRates {
         base: "rub",
         fx: amount("1"),

@@ -9,7 +9,7 @@ use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::model::vault::PricePoint;
 use crate::planning::agenda::*;
-use crate::service::AutomationDraft;
+use crate::planning::automations::AutomationDraft;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
 use crate::time::unix_secs;

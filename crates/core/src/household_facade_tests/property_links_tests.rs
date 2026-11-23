@@ -7,7 +7,7 @@ use crate::model::store::{AssetRef, PropertyCategory, PropertyInfo};
 use crate::model::transaction::Transaction;
 use crate::model::transaction::{KindDetails, PriceStamp, TopupTx};
 use crate::model::vault::now_iso;
-use crate::service::AutomationDraft;
+use crate::planning::automations::AutomationDraft;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;

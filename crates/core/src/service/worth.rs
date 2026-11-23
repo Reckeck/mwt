@@ -2,4 +2,4 @@
 //! The assembly of `NetWorth` and the scenarios that write hand-set prices live
 //! in `usecases::money::capital`.
 
-pub use crate::money::worth::{ClassShare, FlowClass, LiabilityShare, NetWorth};
+pub use crate::money::worth::{FlowClass, LiabilityShare, NetWorth};

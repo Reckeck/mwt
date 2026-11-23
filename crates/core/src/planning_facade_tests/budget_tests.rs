@@ -10,9 +10,9 @@ use crate::model::transaction::Transaction;
 use crate::model::transaction::{AccountRef, PriceStamp};
 use crate::model::vault::DailyBudgetMode;
 use crate::model::vault::FxPoint;
+use crate::planning::automations::AutomationDraft;
 use crate::planning::budget::*;
 use crate::planning::daily_budget::daily_budget;
-use crate::service::AutomationDraft;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
 use crate::service::test_support::*;
@@ -79,7 +79,7 @@ fn month_summary_counts_income_fixed_and_daily_but_not_internal_or_debts() {
     crate::usecases::money::transactions::add_transaction(&mut vault, inner).unwrap();
     let friend = crate::usecases::household::contacts::create_contact(
         &mut vault,
-        crate::service::ContactDraft {
+        crate::household::contacts::ContactDraft {
             group: String::new(),
             name: "Friend".into(),
             kind: crate::model::contact::ContactKind::Person,

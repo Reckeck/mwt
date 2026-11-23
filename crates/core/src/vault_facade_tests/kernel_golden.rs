@@ -8,7 +8,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::service::{ContactDraft, FlushJob, Flushed, SyncTap, UnlockedVault};
+use crate::household::contacts::ContactDraft;
+use crate::kernel::persistence::Flushed;
+use crate::service::{FlushJob, SyncTap, UnlockedVault};
 use mwt_model::{MAX_NOTICE_LOG, NoticeCategory, NoticeRecord};
 use mwt_vault::kernel::session::SaveHook;
 use mwt_vault::vault_io::VaultMirror;

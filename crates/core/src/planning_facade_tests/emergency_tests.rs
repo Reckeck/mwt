@@ -284,7 +284,7 @@ fn coverage_surplus_interest_and_goal_overlap() {
         .unwrap();
     let goal = crate::usecases::planning::goals::create_goal(
         &mut vault,
-        crate::service::GoalDraft {
+        crate::planning::goals::GoalDraft {
             name: "Trip".into(),
             active: true,
             target_amount: amount("10000"),

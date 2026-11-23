@@ -5,13 +5,15 @@ use crate::Amount;
 use crate::calendar::month_index;
 use crate::error::Error;
 use crate::household::losses::*;
+use crate::kernel::session::SaveHook;
 use crate::model::chain::Chain;
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::AccountRef;
 use crate::model::transaction::{ConvertSide, ConvertTx, Leg, PriceStamp, Transaction, TxMeta};
 use crate::model::vault::{FxPoint, PricePoint, VaultDoc};
+use crate::service::UnlockedVault;
 use crate::service::test_support::*;
-use crate::service::{Report, ReportFilter, ReportKind, SaveHook, UnlockedVault};
+use mwt_reports::overview::{Report, ReportFilter, ReportKind};
 
 fn rub() -> AssetRef {
     AssetRef::fiat("RUB", "Ruble")

@@ -4,6 +4,7 @@ use crate::Amount;
 use crate::calc::invest;
 use crate::calc::invest::{CapFreq, ContributionStage, Freq, InvestInput};
 use crate::calc::invest::{TaxRule, Timing};
+use crate::household::relations::{EntityKind, EntityRef, RelationKind};
 use crate::model::deposit::Capitalization;
 use crate::model::deposit::{DepositTerms, RatePeriod};
 use crate::model::ids::StoreId;
@@ -12,9 +13,8 @@ use crate::model::store::StoreScope;
 use crate::model::store::{Binding, StoreKind, SubType};
 use crate::model::transaction::{AccountRef, Transaction};
 use crate::planning::scenarios::*;
-use crate::service::UnlockedVault;
 use crate::service::test_support::*;
-use crate::service::{EntityKind, EntityRef, RelationKind, StoreExtras};
+use crate::service::{StoreExtras, UnlockedVault};
 use crate::time::unix_secs;
 
 pub(super) fn input(initial: &str, monthly: &str, months: u32) -> InvestInput {

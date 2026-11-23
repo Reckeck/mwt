@@ -1,16 +1,17 @@
 //! Tests of the capital checkup: the old inline tests (names and bodies unchanged).
 
 use crate::Amount;
+use crate::household::debts::LoanClass;
 use crate::model::planning::EmergencyFund;
 use crate::model::planning::{HealthColor, HealthReasonCode};
 use crate::model::store::{StoreKind, StoreScope, SubType};
 use crate::model::transaction::Transaction;
 use crate::planning::health::{SAVINGS_MONTHS, SavingsMonth, savings_figures};
-use crate::service::StoreExtras;
 use crate::service::test_support::*;
-use crate::service::{Insight, InsightCode, LoanClass, UnlockedVault};
+use crate::service::{StoreExtras, UnlockedVault};
 use crate::time::secs_or_now;
 use mwt_reports::health::*;
+use mwt_reports::insights::{Insight, InsightCode};
 use pretty_assertions::assert_eq;
 
 fn pct(raw: &str) -> Amount {

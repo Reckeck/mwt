@@ -2,7 +2,7 @@
 //! (spec core-strangler, D1).
 
 pub use crate::household::shared_events::view::{
-    ContactEventBalance, EventTotals, ItemShareView, ItemView, MyPosition, PersonKind, PersonView,
+    ContactEventBalance, EventTotals, ItemShareView, ItemView, MyPosition, PersonView,
     PlannedPayment, PurchaseView, SettlementView, SharedEventSummary, SharedEventView,
     SharedTxLink,
 };
