@@ -1,25 +1,13 @@
 //! Shim of the `peer_sync/repair` area: moved to `crate::sync::repair::repair` (spec core-strangler, D1).
 
 use super::UnlockedVault;
-use super::repair_report::RepairReport;
-use crate::error::Result;
 #[cfg(test)]
 use crate::model::store::Binding;
 use crate::service::forward::forward;
 
 impl UnlockedVault {
     // forward:begin
-    forward! {
-        /// Check the rules and fix what breaks them. `batch_id` is the sync batch
-        /// whose merge is being settled (the repair is recorded in it for undo);
-        /// `None` when a vault opens (the change is only stamped).
-        pub(crate) fn repair_invariants(&mut self, batch_id: Option<&str>) -> Result<RepairReport>
-            => crate::usecases::sync::repair::repair_invariants;
-        /// The members of one cycle of parent links (smallest start id first), if any.
-        #[cfg(test)]
-        pub(crate) fn account_cycle(&self) -> Option<Vec<String>>
-            => crate::sync::repair::repair::account_cycle @doc;
-    }
+    forward! {}
     // forward:end
 }
 
@@ -34,21 +22,21 @@ mod tests {
     use crate::service::test_support::{amount, holding_of, income, store, usd};
 
     fn sub_account(vault: &mut UnlockedVault, name: &str, parent: &str) -> String {
-        vault
-            .create_store_with(
-                name,
-                StoreKind::Bank,
-                "#000",
-                "",
-                Some(parent.to_string()),
-                StoreExtras {
-                    sub_type: Some(SubType::Savings),
-                    binding: Some(Binding::Asset(usd())),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id
+        crate::usecases::money::stores::create_store_with(
+            vault,
+            name,
+            StoreKind::Bank,
+            "#000",
+            "",
+            Some(parent.to_string()),
+            StoreExtras {
+                sub_type: Some(SubType::Savings),
+                binding: Some(Binding::Asset(usd())),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id
     }
 
     fn set_parent(vault: &mut UnlockedVault, id: &str, parent: &str) {
@@ -63,12 +51,13 @@ mod tests {
     }
 
     fn parent_of(vault: &UnlockedVault, id: &str) -> Option<String> {
-        vault.find_store(id).and_then(|node| node.parent_id.clone())
+        crate::money::tree::find_store(&vault.doc, id).and_then(|node| node.parent_id.clone())
     }
 
     fn goal(vault: &mut UnlockedVault, wallet: &str) -> String {
-        vault
-            .create_goal(GoalDraft {
+        crate::usecases::planning::goals::create_goal(
+            vault,
+            GoalDraft {
                 name: "trip".into(),
                 active: true,
                 target_amount: amount("1000"),
@@ -83,9 +72,10 @@ mod tests {
                 },
                 scenario_id: None,
                 expected_return: None,
-            })
-            .unwrap()
-            .id
+            },
+        )
+        .unwrap()
+        .id
     }
 
     #[test]
@@ -104,9 +94,13 @@ mod tests {
         settle(&mut left, &mut right);
         for device in [&left, &right] {
             assert_eq!(parent_of(device, &one), None, "the older link is cut");
-            assert!(device.find_store(&one).unwrap().archived);
+            assert!(
+                crate::money::tree::find_store(&device.doc, &one)
+                    .unwrap()
+                    .archived
+            );
             assert_eq!(parent_of(device, &two).as_deref(), Some(one.as_str()));
-            assert!(device.account_cycle().is_none());
+            assert!(crate::sync::repair::repair::account_cycle(&device.doc).is_none());
         }
         let _ = second;
     }
@@ -118,11 +112,12 @@ mod tests {
         let second = store(&mut left, "bank 2", StoreKind::Bank, None);
         let savings = sub_account(&mut left, "sv1", &first);
         settle(&mut left, &mut right);
-        left.move_store(&savings, Some(&second)).unwrap();
-        right.delete_store(&second).unwrap();
+        crate::usecases::money::stores::move_store(&mut left, &savings, Some(&second)).unwrap();
+        crate::usecases::money::stores::delete_store(&mut right, &second).unwrap();
         settle(&mut left, &mut right);
         for device in [&left, &right] {
-            let node = device.find_store(&savings).expect("the account stays");
+            let node =
+                crate::money::tree::find_store(&device.doc, &savings).expect("the account stays");
             assert_eq!(node.parent_id, None);
             assert!(node.archived);
         }
@@ -135,7 +130,7 @@ mod tests {
         let one = sub_account(&mut vault, "one", &bank);
         let two = sub_account(&mut vault, "two", &bank);
         set_parent(&mut vault, &two, &one);
-        let report = vault.repair_invariants(None).unwrap();
+        let report = crate::usecases::sync::repair::repair_invariants(&mut vault, None).unwrap();
         assert_eq!(report.detached_accounts.len(), 1);
         assert_eq!(parent_of(&vault, &two), None);
         assert_eq!(parent_of(&vault, &one).as_deref(), Some(bank.as_str()));
@@ -145,16 +140,30 @@ mod tests {
     fn an_envelope_topped_up_after_its_goal_was_deleted_is_deleted_again() {
         let (_dir, mut left, mut right) = two_devices();
         let wallet = store(&mut left, "Cash", StoreKind::Cash, None);
-        left.add_transaction(income(&wallet, "1000", "pay"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut left,
+            income(&wallet, "1000", "pay"),
+        )
+        .unwrap();
         let goal_id = goal(&mut left, &wallet);
-        left.fund_goal(&goal_id, &wallet, amount("100")).unwrap();
+        crate::usecases::household::envelopes::fund_goal(
+            &mut left,
+            &goal_id,
+            &mwt_model::StoreId::from(&wallet),
+            amount("100"),
+        )
+        .unwrap();
         settle(&mut left, &mut right);
         let envelope = left.doc.envelopes[0].id.clone();
-        left.delete_goal(&goal_id, chrono::Utc::now().timestamp())
-            .unwrap();
+        crate::usecases::planning::goals::delete_goal(
+            &mut left,
+            &goal_id,
+            chrono::Utc::now().timestamp(),
+        )
+        .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(3));
-        right.fund_envelope(&envelope, amount("50")).unwrap();
+        crate::usecases::household::envelopes::fund_envelope(&mut right, &envelope, amount("50"))
+            .unwrap();
         settle(&mut left, &mut right);
         for device in [&left, &right] {
             assert!(device.doc.goals.is_empty());
@@ -174,11 +183,19 @@ mod tests {
         let one = sub_account(&mut vault, "one", &bank);
         let two = sub_account(&mut vault, "two", &bank);
         set_parent(&mut vault, &two, &one);
-        assert!(!vault.repair_invariants(None).unwrap().is_empty());
+        assert!(
+            !crate::usecases::sync::repair::repair_invariants(&mut vault, None)
+                .unwrap()
+                .is_empty()
+        );
         let stamps = vault.doc.sync.stamps.clone();
         let tombstones = vault.doc.sync.tombstones.clone();
         let log = vault.doc.notification_log.len();
-        assert!(vault.repair_invariants(None).unwrap().is_empty());
+        assert!(
+            crate::usecases::sync::repair::repair_invariants(&mut vault, None)
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(vault.doc.sync.stamps, stamps);
         assert_eq!(vault.doc.sync.tombstones, tombstones);
         assert_eq!(vault.doc.notification_log.len(), log);
@@ -191,8 +208,8 @@ mod tests {
         let second = store(&mut left, "bank 2", StoreKind::Bank, None);
         let savings = sub_account(&mut left, "sv1", &first);
         settle(&mut left, &mut right);
-        left.move_store(&savings, Some(&second)).unwrap();
-        right.delete_store(&second).unwrap();
+        crate::usecases::money::stores::move_store(&mut left, &savings, Some(&second)).unwrap();
+        crate::usecases::money::stores::delete_store(&mut right, &second).unwrap();
         // The right device takes the left's move and repairs it.
         let (_, applied) = super::super::tests::exchange(&mut left, &mut right);
         assert!(applied.is_some(), "right took something");
@@ -230,15 +247,14 @@ mod tests {
         // Both devices repair their own copy of a broken tree before they meet.
         for device in [&mut left, &mut right] {
             set_parent(device, &two, &one);
-            device.repair_invariants(None).unwrap();
+            crate::usecases::sync::repair::repair_invariants(device, None).unwrap();
         }
         settle(&mut left, &mut right);
         for device in [&left, &right] {
-            assert!(device.account_cycle().is_none());
+            assert!(crate::sync::repair::repair::account_cycle(&device.doc).is_none());
             assert!(device.doc.stores.iter().all(|node| {
                 node.parent_id.as_deref().is_none_or(|parent| {
-                    device
-                        .find_store(parent)
+                    crate::money::tree::find_store(&device.doc, parent)
                         .is_some_and(|up| up.parent_id.is_none())
                 })
             }));

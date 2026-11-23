@@ -184,7 +184,8 @@ pub fn crypto_connect_address(
     // The wallet first: its name can be refused (taken, empty), and then
     // there must be no account left behind. Another area's writer, so it is a
     // step of its own, outside the transaction.
-    let store = vault.create_store_with(
+    let store = crate::usecases::money::stores::create_store_with(
+        vault,
         &account.name,
         StoreKind::Crypto,
         rules::ADDRESS_COLOR,
@@ -198,7 +199,7 @@ pub fn crypto_connect_address(
             own.crypto_account_id = Some(account_id.clone());
         })
     })?;
-    vault.crypto_sync_holdings()?;
+    crate::usecases::cryptotrack::recompute::crypto_sync_holdings(vault)?;
     Ok(ConnectAddressResult {
         account_id,
         store_id: store.id,
@@ -228,7 +229,7 @@ pub fn crypto_update_account(vault: &mut UnlockedVault, input: &UpdateAccountInp
         rules::wallet_of(&vault.doc, &input.account_id).map(|store| (store.id.clone(), name))
     });
     if let Some((store_id, name)) = &renamed_wallet {
-        vault.validate_placement(Some(store_id), None, name)?;
+        crate::money::stores::validate_placement(&vault.doc, Some(store_id), None, name)?;
     }
     vault.transact(|tx| {
         if let Some((store_id, name)) = &renamed_wallet {
@@ -240,7 +241,7 @@ pub fn crypto_update_account(vault: &mut UnlockedVault, input: &UpdateAccountInp
                 rules::edit_account(account, name, input.note.as_deref(), input.archived);
             })
     })?;
-    vault.crypto_sync_holdings()
+    crate::usecases::cryptotrack::recompute::crypto_sync_holdings(vault)
 }
 
 /// Stop following an address: the account, its read positions and its
@@ -288,7 +289,7 @@ pub fn crypto_forget_account(vault: &mut UnlockedVault, account_id: &str) -> Res
         }
         Ok(())
     })?;
-    vault.crypto_sync_holdings()
+    crate::usecases::cryptotrack::recompute::crypto_sync_holdings(vault)
 }
 
 #[cfg(test)]
@@ -386,18 +387,22 @@ mod tests {
         // get in through the back door.
         let (_dir, mut vault) = empty_vault();
         let stores = vault.doc.stores.len();
-        let error = vault
-            .crypto_connect_address(&connect(ADDRESS, &seed_text()))
-            .expect_err("a secret in the name must be refused");
+        let error = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(ADDRESS, &seed_text()),
+        )
+        .expect_err("a secret in the name must be refused");
         assert!(format!("{error}").contains("seed phrase or a private key"));
         assert_eq!(vault.doc.stores.len(), stores, "nothing is stored");
         assert!(vault.doc.crypto_accounts.is_empty());
 
         // The address alone goes through, and then the name and the note are
         // checked on every change of it.
-        let made = vault
-            .crypto_connect_address(&connect(ADDRESS, "Main"))
-            .expect("a public address with an ordinary name");
+        let made = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(ADDRESS, "Main"),
+        )
+        .expect("a public address with an ordinary name");
         for secret in [seed_text(), key_text()] {
             for field in 0..2 {
                 let input = UpdateAccountInput {
@@ -406,9 +411,10 @@ mod tests {
                     note: (field == 1).then(|| secret.clone()),
                     archived: None,
                 };
-                let refused = vault
-                    .crypto_update_account(&input)
-                    .expect_err("a secret must be refused");
+                let refused = crate::usecases::cryptotrack::accounts::crypto_update_account(
+                    &mut vault, &input,
+                )
+                .expect_err("a secret must be refused");
                 assert!(format!("{refused}").contains("seed phrase or a private key"));
             }
         }
@@ -423,9 +429,11 @@ mod tests {
             let secret = secret.as_str();
             let (_dir, mut vault) = empty_vault();
             let stores = vault.doc.stores.len();
-            let error = vault
-                .crypto_connect_address(&connect(secret, "Main"))
-                .expect_err("a secret must be refused");
+            let error = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+                &mut vault,
+                &connect(secret, "Main"),
+            )
+            .expect_err("a secret must be refused");
             let shown = format!("{error} / {error:?}");
             assert!(shown.contains("seed phrase or a private key"), "{shown}");
             // Neither the error nor the input's Debug repeats the string.
@@ -449,15 +457,18 @@ mod tests {
     #[test]
     fn connecting_makes_the_wallet_and_its_account_together() {
         let (_dir, mut vault) = empty_vault();
-        let done = vault
-            .crypto_connect_address(&connect(ADDRESS, "Main"))
-            .unwrap();
-        let account = vault.crypto_list_accounts().remove(0);
+        let done = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(ADDRESS, "Main"),
+        )
+        .unwrap();
+        let account =
+            crate::usecases::cryptotrack::accounts::crypto_list_accounts(&vault.books()).remove(0);
         assert_eq!(account.id, done.account_id);
         assert_eq!(account.store_id.as_deref(), Some(done.store_id.as_str()));
         assert_eq!(account.address, ADDRESS.to_lowercase());
         assert_eq!(account.created_at, "2026-01-01T00:00:00Z");
-        let store = vault.find_store(&done.store_id).unwrap();
+        let store = crate::money::tree::find_store(&vault.doc, &done.store_id).unwrap();
         assert_eq!(store.kind, StoreKind::Crypto);
         assert_eq!(
             store.crypto_account_id.as_deref(),
@@ -469,35 +480,44 @@ mod tests {
     fn a_bad_address_a_second_connect_and_a_taken_name_leave_nothing_behind() {
         let (_dir, mut vault) = empty_vault();
         assert!(
-            vault
-                .crypto_connect_address(&connect("0x12", "Main"))
-                .is_err()
+            crate::usecases::cryptotrack::accounts::crypto_connect_address(
+                &mut vault,
+                &connect("0x12", "Main")
+            )
+            .is_err()
         );
         assert!(
-            vault
-                .crypto_connect_address(&connect(ADDRESS, "Main"))
-                .is_ok()
+            crate::usecases::cryptotrack::accounts::crypto_connect_address(
+                &mut vault,
+                &connect(ADDRESS, "Main")
+            )
+            .is_ok()
         );
         // The same address in another case is the same address.
-        let again = vault.crypto_connect_address(&connect(
-            &ADDRESS.to_uppercase().replace("0X", "0x"),
-            "Other",
-        ));
+        let again = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(&ADDRESS.to_uppercase().replace("0X", "0x"), "Other"),
+        );
         assert!(matches!(again, Err(Error::AlreadyExists(_))), "{again:?}");
         // A taken wallet name is refused without an account being left over.
         let accounts = vault.doc.crypto_accounts.len();
         assert!(
-            vault
-                .crypto_connect_address(&connect(SCAM, "Main"))
-                .is_err()
+            crate::usecases::cryptotrack::accounts::crypto_connect_address(
+                &mut vault,
+                &connect(SCAM, "Main")
+            )
+            .is_err()
         );
         assert_eq!(vault.doc.crypto_accounts.len(), accounts);
         let mut bad_date = connect(SCAM, "Second");
         bad_date.start_date = Some("yesterday".into());
-        assert!(vault.crypto_connect_address(&bad_date).is_err());
+        assert!(
+            crate::usecases::cryptotrack::accounts::crypto_connect_address(&mut vault, &bad_date)
+                .is_err()
+        );
         let mut whole = connect(SCAM, "Second");
         whole.start_date = None;
-        vault.crypto_connect_address(&whole).unwrap();
+        crate::usecases::cryptotrack::accounts::crypto_connect_address(&mut vault, &whole).unwrap();
         assert!(vault.doc.crypto_accounts[1].created_at.starts_with("1970"));
     }
 
@@ -537,13 +557,16 @@ mod tests {
     #[test]
     fn the_quarantine_lists_what_arrived_and_when_and_leaves_the_decided_out() {
         let (_dir, mut vault) = empty_vault();
-        let done = vault
-            .crypto_connect_address(&connect(ADDRESS, "Main"))
-            .unwrap();
+        let done = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(ADDRESS, "Main"),
+        )
+        .unwrap();
         let token = TokenId::new(Chain::Ethereum, SCAM);
-        vault
-            .crypto_register_token(&token, "PEPE2", "Pepe 2", 18)
-            .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault, &token, "PEPE2", "Pepe 2", 18,
+        )
+        .unwrap();
         vault.doc.crypto_events.push(event(
             &done.account_id,
             &token,
@@ -551,17 +574,26 @@ mod tests {
             CryptoDirection::In,
             "2026-10-14T10:00:00Z",
         ));
-        let listed = vault.crypto_list_accounts().remove(0);
+        let listed =
+            crate::usecases::cryptotrack::accounts::crypto_list_accounts(&vault.books()).remove(0);
         assert_eq!(listed.quarantine.len(), 1);
         assert_eq!(
             listed.quarantine[0].quantity,
             Amount::parse("1200000").unwrap()
         );
         assert_eq!(listed.quarantine[0].first_seen, "2026-10-14T10:00:00Z");
-        vault.crypto_confirm_token(&token).unwrap();
-        assert!(vault.crypto_list_accounts()[0].quarantine.is_empty());
-        vault.crypto_reject_token(&token).unwrap();
-        assert!(vault.crypto_list_accounts()[0].quarantine.is_empty());
+        crate::usecases::cryptotrack::tokens::crypto_confirm_token(&mut vault, &token).unwrap();
+        assert!(
+            crate::usecases::cryptotrack::accounts::crypto_list_accounts(&vault.books())[0]
+                .quarantine
+                .is_empty()
+        );
+        crate::usecases::cryptotrack::tokens::crypto_reject_token(&mut vault, &token).unwrap();
+        assert!(
+            crate::usecases::cryptotrack::accounts::crypto_list_accounts(&vault.books())[0]
+                .quarantine
+                .is_empty()
+        );
     }
 
     #[test]
@@ -571,13 +603,16 @@ mod tests {
         // saturate, not panic (the events are already stored, so a panic here
         // would repeat on every opening of the list).
         let (_dir, mut vault) = empty_vault();
-        let done = vault
-            .crypto_connect_address(&connect(ADDRESS, "Main"))
-            .unwrap();
+        let done = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(ADDRESS, "Main"),
+        )
+        .unwrap();
         let token = TokenId::new(Chain::Ethereum, SCAM);
-        vault
-            .crypto_register_token(&token, "JUNK", "Junk", 0)
-            .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault, &token, "JUNK", "Junk", 0,
+        )
+        .unwrap();
         let huge = "50000000000000000000000000000";
         for time in ["2026-10-14T10:00:00Z", "2026-10-15T10:00:00Z"] {
             vault.doc.crypto_events.push(event(
@@ -588,7 +623,8 @@ mod tests {
                 time,
             ));
         }
-        let listed = vault.crypto_list_accounts().remove(0);
+        let listed =
+            crate::usecases::cryptotrack::accounts::crypto_list_accounts(&vault.books()).remove(0);
         assert_eq!(listed.quarantine.len(), 1);
         assert!(listed.quarantine[0].quantity >= unbounded(huge));
     }
@@ -622,12 +658,16 @@ mod tests {
     fn forgetting_an_account_takes_its_positions_and_their_receipts_with_it() {
         use crate::model::cryptotrack::CryptoPosition;
         let (_dir, mut vault) = empty_vault();
-        let gone = vault
-            .crypto_connect_address(&connect(ADDRESS, "Main"))
-            .unwrap();
-        let kept = vault
-            .crypto_connect_address(&connect(SCAM, "Other"))
-            .unwrap();
+        let gone = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(ADDRESS, "Main"),
+        )
+        .unwrap();
+        let kept = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(SCAM, "Other"),
+        )
+        .unwrap();
         let receipt = CryptoAsset::Token(TokenId::new(Chain::Ethereum, SCAM));
         let position = |account: &str| CryptoPosition {
             id: format!("pos-{account}"),
@@ -641,15 +681,19 @@ mod tests {
         };
         vault.doc.crypto_positions = vec![position(&gone.account_id), position(&kept.account_id)];
 
-        vault.crypto_forget_account(&gone.account_id).unwrap();
+        crate::usecases::cryptotrack::accounts::crypto_forget_account(&mut vault, &gone.account_id)
+            .unwrap();
 
         assert_eq!(vault.doc.crypto_positions.len(), 1);
         assert_eq!(vault.doc.crypto_positions[0].account_id, kept.account_id);
         assert!(
-            vault
-                .crypto_list_positions(&[], "2026-11-02T00:00:00Z")
-                .iter()
-                .all(|view| view.account_id != gone.account_id),
+            crate::usecases::cryptotrack::positions::crypto_list_positions(
+                &vault.books(),
+                &[],
+                "2026-11-02T00:00:00Z"
+            )
+            .iter()
+            .all(|view| view.account_id != gone.account_id),
             "a forgotten account's position is no longer listed"
         );
     }
@@ -699,9 +743,11 @@ mod tests {
     fn a_new_account_with_events_shows_its_capital_at_once() {
         // `persist()` alone would leave the wallet at zero until the next poll.
         let (_dir, mut vault) = empty_vault();
-        let done = vault
-            .crypto_connect_address(&connect(ADDRESS, "Main"))
-            .unwrap();
+        let done = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(ADDRESS, "Main"),
+        )
+        .unwrap();
         let native = CryptoAsset::Native {
             chain: Chain::Ethereum,
         };
@@ -715,14 +761,16 @@ mod tests {
         incoming.legs[0].asset = native;
         vault.doc.crypto_events.push(incoming);
         // Forgetting and archiving re-derive the holdings too.
-        vault
-            .crypto_update_account(&UpdateAccountInput {
+        crate::usecases::cryptotrack::accounts::crypto_update_account(
+            &mut vault,
+            &UpdateAccountInput {
                 account_id: done.account_id.clone(),
                 name: None,
                 note: Some("hot".into()),
                 archived: Some(false),
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         let held = vault
             .doc
             .holdings
@@ -730,14 +778,16 @@ mod tests {
             .find(|holding| holding.store_id == done.store_id)
             .expect("the capital is there without a poll");
         assert_eq!(held.quantity, Amount::parse("2").unwrap());
-        vault
-            .crypto_update_account(&UpdateAccountInput {
+        crate::usecases::cryptotrack::accounts::crypto_update_account(
+            &mut vault,
+            &UpdateAccountInput {
                 account_id: done.account_id.clone(),
                 name: Some("Renamed".into()),
                 note: None,
                 archived: Some(true),
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         assert!(
             vault
                 .doc
@@ -745,13 +795,22 @@ mod tests {
                 .iter()
                 .all(|holding| holding.store_id != done.store_id)
         );
-        assert_eq!(vault.find_store(&done.store_id).unwrap().name, "Renamed");
-        vault.crypto_forget_account(&done.account_id).unwrap();
+        assert_eq!(
+            crate::money::tree::find_store(&vault.doc, &done.store_id)
+                .unwrap()
+                .name,
+            "Renamed"
+        );
+        crate::usecases::cryptotrack::accounts::crypto_forget_account(&mut vault, &done.account_id)
+            .unwrap();
         assert!(vault.doc.crypto_accounts.is_empty());
-        assert!(vault.find_store(&done.store_id).unwrap().archived);
         assert!(
-            vault
-                .find_store(&done.store_id)
+            crate::money::tree::find_store(&vault.doc, &done.store_id)
+                .unwrap()
+                .archived
+        );
+        assert!(
+            crate::money::tree::find_store(&vault.doc, &done.store_id)
                 .unwrap()
                 .crypto_account_id
                 .is_none()
@@ -762,17 +821,21 @@ mod tests {
     #[test]
     fn an_account_note_survives_a_reopen_when_holdings_do_not_change() {
         let (_dir, mut vault) = empty_vault();
-        let made = vault
-            .crypto_connect_address(&connect(ADDRESS, "Main"))
-            .unwrap();
-        vault
-            .crypto_update_account(&UpdateAccountInput {
+        let made = crate::usecases::cryptotrack::accounts::crypto_connect_address(
+            &mut vault,
+            &connect(ADDRESS, "Main"),
+        )
+        .unwrap();
+        crate::usecases::cryptotrack::accounts::crypto_update_account(
+            &mut vault,
+            &UpdateAccountInput {
                 account_id: made.account_id.clone(),
                 name: None,
                 note: Some("kept".into()),
                 archived: None,
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         let path = vault.path.clone();
         drop(vault);
         let reopened = UnlockedVault::open(path, "pw").unwrap();

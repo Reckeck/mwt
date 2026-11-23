@@ -38,8 +38,7 @@ fn draft(name: &str, graph: String) -> WorkflowDraft {
 }
 
 fn save(vault: &mut UnlockedVault, name: &str, graph: String) -> Workflow {
-    vault
-        .save_workflow(None, draft(name, graph), now_secs())
+    crate::usecases::workflow::records::save_workflow(vault, None, draft(name, graph), now_secs())
         .unwrap()
         .workflow
 }
@@ -53,9 +52,11 @@ fn wallets() -> (tempfile::TempDir, UnlockedVault, String, String) {
     let (dir, mut vault) = empty_vault();
     let card = store(&mut vault, "Card", StoreKind::Cash, None);
     let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&card, "1000", "opening"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "1000", "opening"),
+    )
+    .unwrap();
     (dir, vault, card, savings)
 }
 
@@ -101,17 +102,19 @@ fn a_salary_sends_ten_percent_to_savings_once() {
     let workflow = save(&mut vault, "Tithe", tithe_graph(&card, &savings));
     // Operations from before the workflow was switched on do not fire it.
     assert!(
-        vault
-            .run_due_workflows(later(), "UTC")
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
             .unwrap()
             .runs
             .is_empty()
     );
 
-    vault
-        .add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
-    let pass = vault.run_due_workflows(later(), "UTC").unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC").unwrap();
     assert_eq!(pass.runs.len(), 1, "{:?}", pass.runs);
     assert_eq!(
         pass.runs[0].outcome,
@@ -132,9 +135,13 @@ fn a_salary_sends_ten_percent_to_savings_once() {
     );
 
     // Its own transfer and the same salary do not fire it again.
-    let again = vault.run_due_workflows(later(), "UTC").unwrap();
+    let again =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC").unwrap();
     assert!(again.runs.is_empty(), "{:?}", again.runs);
-    assert_eq!(vault.workflow_runs(Some(&workflow.id), 10).len(), 1);
+    assert_eq!(
+        crate::workflow::service::runs::runs(&vault.doc, Some(&workflow.id), 10).len(),
+        1
+    );
 }
 
 /// «Ask first → yes: 300 to savings; no: a notice».
@@ -162,9 +169,14 @@ fn ask_graph(card: &str, savings: &str, timeout_hours: &str) -> String {
 fn a_question_pauses_the_run_until_the_answer() {
     let (_dir, mut vault, card, savings) = wallets();
     let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, "0"));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(&report.run.outcome, RunOutcome::Asking { question, until: None, .. } if question == "Отложить 300?"),
         "{:?}",
@@ -173,22 +185,30 @@ fn a_question_pauses_the_run_until_the_answer() {
     assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
     // Nothing goes on by itself, however long it waits.
     assert!(
-        vault
-            .run_due_workflows(later() + 400 * 24 * 3600, "UTC")
-            .unwrap()
-            .runs
-            .is_empty()
+        crate::usecases::workflow::runs::run_due_workflows(
+            &mut vault,
+            later() + 400 * 24 * 3600,
+            "UTC"
+        )
+        .unwrap()
+        .runs
+        .is_empty()
     );
-    let waits = vault.workflow_waits();
+    let waits = crate::workflow::service::runs::waits(&vault.doc);
     assert_eq!(waits.len(), 1);
     assert_eq!(waits[0].kind, WaitKind::Confirm);
 
-    let answered = vault
-        .answer_workflow_wait(&waits[0].id, true, later(), "UTC")
-        .unwrap();
+    let answered = crate::usecases::workflow::runs::answer_workflow_wait(
+        &mut vault,
+        &waits[0].id,
+        true,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(answered.run.outcome, RunOutcome::Done);
     assert_eq!(holding_of(&vault, &savings, &usd()), amount("300"));
-    assert!(vault.workflow_waits().is_empty());
+    assert!(crate::workflow::service::runs::waits(&vault.doc).is_empty());
 }
 
 #[test]
@@ -200,9 +220,14 @@ fn the_question_notice_follows_the_notice_language() {
         let (_dir, mut vault, card, savings) = wallets();
         vault.set_notice_language(ru);
         let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, "0"));
-        vault
-            .run_workflow_now(&workflow.id, None, later(), "UTC")
-            .unwrap();
+        crate::usecases::workflow::runs::run_workflow_now(
+            &mut vault,
+            &workflow.id,
+            None,
+            later(),
+            "UTC",
+        )
+        .unwrap();
         assert!(
             vault
                 .doc
@@ -219,19 +244,36 @@ fn the_question_notice_follows_the_notice_language() {
 fn answering_no_goes_the_no_way() {
     let (_dir, mut vault, card, savings) = wallets();
     let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, "0"));
-    vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
-    let id = vault.workflow_waits()[0].id.clone();
-    let report = vault
-        .answer_workflow_wait(&id, false, later(), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
+    let id = crate::workflow::service::runs::waits(&vault.doc)[0]
+        .id
+        .clone();
+    let report = crate::usecases::workflow::runs::answer_workflow_wait(
+        &mut vault,
+        &id,
+        false,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(report.notices.len(), 1);
     assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
     assert!(
-        vault
-            .answer_workflow_wait(&id, true, later(), "UTC")
-            .is_err()
+        crate::usecases::workflow::runs::answer_workflow_wait(
+            &mut vault,
+            &id,
+            true,
+            later(),
+            "UTC"
+        )
+        .is_err()
     );
 }
 
@@ -240,17 +282,17 @@ fn an_unanswered_question_with_a_deadline_counts_as_no() {
     let (_dir, mut vault, card, savings) = wallets();
     let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, "2"));
     let now = later();
-    vault
-        .run_workflow_now(&workflow.id, None, now, "UTC")
+    crate::usecases::workflow::runs::run_workflow_now(&mut vault, &workflow.id, None, now, "UTC")
         .unwrap();
     assert!(
-        vault
-            .run_due_workflows(now + 3600, "UTC")
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, now + 3600, "UTC")
             .unwrap()
             .runs
             .is_empty()
     );
-    let pass = vault.run_due_workflows(now + 2 * 3600, "UTC").unwrap();
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, now + 2 * 3600, "UTC")
+            .unwrap();
     assert_eq!(pass.runs.len(), 1);
     assert!(
         pass.notices
@@ -264,9 +306,16 @@ fn an_unanswered_question_with_a_deadline_counts_as_no() {
 fn an_emulation_asks_and_then_follows_the_answer() {
     let (_dir, vault, card, savings) = wallets();
     let graph_json = ask_graph(&card, &savings, "0");
-    let asked = vault
-        .dry_run_workflow(&graph_json, None, None, BTreeMap::new(), later(), "UTC")
-        .unwrap();
+    let asked = crate::usecases::workflow::runs::dry_run_workflow(
+        &vault,
+        &graph_json,
+        None,
+        None,
+        BTreeMap::new(),
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(&asked.run.outcome, RunOutcome::Asking { node_id, .. } if node_id == "c"),
         "{:?}",
@@ -275,20 +324,34 @@ fn an_emulation_asks_and_then_follows_the_answer() {
     assert!(asked.transactions.is_empty());
 
     let yes = BTreeMap::from([("c".to_string(), true)]);
-    let report = vault
-        .dry_run_workflow(&graph_json, None, None, yes, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::dry_run_workflow(
+        &vault,
+        &graph_json,
+        None,
+        None,
+        yes,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(report.run.outcome, RunOutcome::Done);
     assert_eq!(report.transactions.len(), 1);
 
     let no = BTreeMap::from([("c".to_string(), false)]);
-    let report = vault
-        .dry_run_workflow(&graph_json, None, None, no, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::dry_run_workflow(
+        &vault,
+        &graph_json,
+        None,
+        None,
+        no,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(report.transactions.is_empty());
     assert_eq!(report.notices.len(), 1);
     // Emulation keeps nothing asleep.
-    assert!(vault.workflow_waits().is_empty());
+    assert!(crate::workflow::service::runs::waits(&vault.doc).is_empty());
 }
 
 #[test]
@@ -305,16 +368,24 @@ fn a_failed_action_rolls_the_run_back_unless_it_has_an_error_way() {
         wire("first", "out", "tx", "in"),
     ];
     let workflow = save(&mut vault, "Too much", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(report.run.outcome, RunOutcome::Failed { .. }),
         "{:?}",
         report.run.outcome
     );
     assert_eq!(holding_of(&vault, &savings, &usd()), Amount::ZERO);
-    assert_eq!(vault.workflow_runs(Some(&workflow.id), 5).len(), 1);
+    assert_eq!(
+        crate::workflow::service::runs::runs(&vault.doc, Some(&workflow.id), 5).len(),
+        1
+    );
 
     // With an «Error» way the run goes on and tells why.
     let nodes = vec![
@@ -330,9 +401,14 @@ fn a_failed_action_rolls_the_run_back_unless_it_has_an_error_way() {
         wire("why", "text", "n", "text"),
     ];
     let workflow = save(&mut vault, "Handled", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         report.run.outcome,
         RunOutcome::Done,
@@ -346,8 +422,7 @@ fn a_failed_action_rolls_the_run_back_unless_it_has_an_error_way() {
         report.notices[0].body
     );
     assert!(
-        vault
-            .notifications()
+        crate::planning::notifications::notifications(&vault.doc)
             .iter()
             .any(|notice| notice.body.starts_with("Не вышло"))
     );
@@ -356,20 +431,22 @@ fn a_failed_action_rolls_the_run_back_unless_it_has_an_error_way() {
 #[test]
 fn an_emulation_shows_the_operations_and_keeps_nothing() {
     let (_dir, mut vault, card, savings) = wallets();
-    vault
-        .add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
     let before = vault.doc.transactions.len();
-    let report = vault
-        .dry_run_workflow(
-            &tithe_graph(&card, &savings),
-            None,
-            None,
-            BTreeMap::new(),
-            later(),
-            "UTC",
-        )
-        .unwrap();
+    let report = crate::usecases::workflow::runs::dry_run_workflow(
+        &vault,
+        &tithe_graph(&card, &savings),
+        None,
+        None,
+        BTreeMap::new(),
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         report.run.outcome,
         RunOutcome::Done,
@@ -407,13 +484,19 @@ fn a_schedule_fires_once_per_planned_moment() {
         graph(nodes, vec![wire("s", "out", "n", "in")]),
     );
     let start = unix_secs("2026-03-01T10:00:00Z").unwrap();
-    vault.wf_set_mark(&workflow.id, "schedule:s", "2026-03-01T10:00:00Z");
-    let pass = vault.run_due_workflows(start + 3 * 86_400, "UTC").unwrap();
+    crate::usecases::workflow::runs::wf_set_mark(
+        &mut vault,
+        &workflow.id,
+        "schedule:s",
+        "2026-03-01T10:00:00Z",
+    );
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, start + 3 * 86_400, "UTC")
+            .unwrap();
     assert_eq!(pass.runs.len(), 3);
     assert_eq!(pass.notices.len(), 3);
     assert!(
-        vault
-            .run_due_workflows(start + 3 * 86_400, "UTC")
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, start + 3 * 86_400, "UTC")
             .unwrap()
             .runs
             .is_empty()
@@ -433,19 +516,23 @@ fn a_counter_lives_between_runs() {
         graph(nodes, vec![wire("t", "out", "add", "in")]),
     );
     for _ in 0..3 {
-        vault
-            .run_workflow_now(&workflow.id, None, later(), "UTC")
-            .unwrap();
+        crate::usecases::workflow::runs::run_workflow_now(
+            &mut vault,
+            &workflow.id,
+            None,
+            later(),
+            "UTC",
+        )
+        .unwrap();
     }
     let scope = VarScope::Workflow(workflow.id.clone());
     assert_eq!(
-        vault
-            .wf_var(&scope, "count")
+        crate::workflow::service::vars::var(&vault.doc, &scope, "count")
             .and_then(|value| value.as_number()),
         Some(amount("3"))
     );
-    vault.delete_workflow(&workflow.id).unwrap();
-    assert!(vault.workflow_vars().is_empty());
+    crate::usecases::workflow::records::delete_workflow(&mut vault, &workflow.id).unwrap();
+    assert!(crate::workflow::service::vars::variables(&vault.doc).is_empty());
 }
 
 #[test]
@@ -455,8 +542,9 @@ fn a_source_trigger_fires_on_a_new_value_and_on_crossing() {
     use crate::service::DataSourceDraft;
 
     let (_dir, mut vault) = empty_vault();
-    let source = vault
-        .save_data_source(DataSourceDraft {
+    let source = crate::usecases::planning::datasources::save_data_source(
+        &mut vault,
+        DataSourceDraft {
             id: None,
             name: "Rate".into(),
             url: "https://example.com".into(),
@@ -467,21 +555,22 @@ fn a_source_trigger_fires_on_a_new_value_and_on_crossing() {
             number: NumberFormat::default(),
             interval: SourceInterval::Day,
             uses: vec![],
-        })
-        .unwrap()
-        .source
-        .id;
+        },
+    )
+    .unwrap()
+    .source
+    .id;
     let fetch = |vault: &mut UnlockedVault, value: &str| {
-        vault
-            .apply_source_fetch(
-                &source,
-                Ok(Extracted {
-                    number: Some(amount(value)),
-                    ..Extracted::default()
-                }),
-                true,
-            )
-            .unwrap();
+        crate::usecases::planning::datasources::apply_source_fetch(
+            vault,
+            &source,
+            Ok(Extracted {
+                number: Some(amount(value)),
+                ..Extracted::default()
+            }),
+            true,
+        )
+        .unwrap();
     };
     fetch(&mut vault, "14");
     let notify = |id: &str| node(id, "action.notify", json!({ "text": "rate" }));
@@ -510,23 +599,27 @@ fn a_source_trigger_fires_on_a_new_value_and_on_crossing() {
             ],
         ),
     );
-    assert_eq!(vault.source_uses(&source).len(), 1);
+    assert_eq!(
+        crate::usecases::planning::datasources::source_uses(&vault.doc, &source).len(),
+        1
+    );
     // The value that was there before the workflow is not news.
     assert!(
-        vault
-            .run_due_workflows(later(), "UTC")
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
             .unwrap()
             .runs
             .is_empty()
     );
     fetch(&mut vault, "13.5");
     assert_eq!(
-        vault.run_due_workflows(later(), "UTC").unwrap().runs.len(),
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
+            .unwrap()
+            .runs
+            .len(),
         1
     );
     assert!(
-        vault
-            .run_due_workflows(later(), "UTC")
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
             .unwrap()
             .runs
             .is_empty()
@@ -534,10 +627,13 @@ fn a_source_trigger_fires_on_a_new_value_and_on_crossing() {
     // Below 13: both the change and the crossing fire.
     fetch(&mut vault, "12");
     assert_eq!(
-        vault.run_due_workflows(later(), "UTC").unwrap().runs.len(),
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
+            .unwrap()
+            .runs
+            .len(),
         2
     );
-    vault.delete_workflow(&workflow.id).unwrap();
+    crate::usecases::workflow::records::delete_workflow(&mut vault, &workflow.id).unwrap();
 }
 
 #[test]
@@ -557,44 +653,55 @@ fn a_balance_threshold_fires_on_crossing_only() {
         graph(nodes, vec![wire("low", "out", "n", "in")]),
     );
     assert!(
-        vault
-            .run_due_workflows(later(), "UTC")
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
             .unwrap()
             .runs
             .is_empty()
     );
-    vault
-        .add_transaction(payment(&card, "600", "rent"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        payment(&card, "600", "rent"),
+    )
+    .unwrap();
     assert_eq!(
-        vault.run_due_workflows(later(), "UTC").unwrap().runs.len(),
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
+            .unwrap()
+            .runs
+            .len(),
         1
     );
-    vault
-        .add_transaction(payment(&card, "100", "food"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        payment(&card, "100", "food"),
+    )
+    .unwrap();
     assert!(
-        vault
-            .run_due_workflows(later(), "UTC")
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
             .unwrap()
             .runs
             .is_empty()
     );
-    vault
-        .add_transaction(income(&card, "1000", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "1000", "salary"),
+    )
+    .unwrap();
     assert!(
-        vault
-            .run_due_workflows(later(), "UTC")
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
             .unwrap()
             .runs
             .is_empty()
     );
-    vault
-        .add_transaction(payment(&card, "1000", "rent"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        payment(&card, "1000", "rent"),
+    )
+    .unwrap();
     assert_eq!(
-        vault.run_due_workflows(later(), "UTC").unwrap().runs.len(),
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC")
+            .unwrap()
+            .runs
+            .len(),
         1
     );
 }
@@ -607,20 +714,25 @@ fn the_cap_stops_a_run_that_moves_too_much() {
         node("t", "trigger.manual", json!({})),
         transfer_node("tx", &card, &savings, "300"),
     ];
-    let workflow = vault
-        .save_workflow(
-            None,
-            WorkflowDraft {
-                max_amount: Some(amount("100")),
-                ..draft("Capped", graph(nodes, vec![wire("t", "out", "tx", "in")]))
-            },
-            now_secs(),
-        )
-        .unwrap()
-        .workflow;
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let workflow = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        None,
+        WorkflowDraft {
+            max_amount: Some(amount("100")),
+            ..draft("Capped", graph(nodes, vec![wire("t", "out", "tx", "in")]))
+        },
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(&report.run.outcome, RunOutcome::Failed { message } if message.contains("cap")),
         "{:?}",
@@ -649,20 +761,19 @@ fn run_capped(
         node("t", "trigger.manual", json!({})),
         transfer_node("tx", card, savings, sum),
     ];
-    let workflow = vault
-        .save_workflow(
-            None,
-            WorkflowDraft {
-                max_amount: Some(amount(cap.0)),
-                max_amount_currency: cap.1.map(str::to_string),
-                ..draft("Capped", graph(nodes, vec![wire("t", "out", "tx", "in")]))
-            },
-            now_secs(),
-        )
-        .unwrap()
-        .workflow;
-    vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
+    let workflow = crate::usecases::workflow::records::save_workflow(
+        vault,
+        None,
+        WorkflowDraft {
+            max_amount: Some(amount(cap.0)),
+            max_amount_currency: cap.1.map(str::to_string),
+            ..draft("Capped", graph(nodes, vec![wire("t", "out", "tx", "in")]))
+        },
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
+    crate::usecases::workflow::runs::run_workflow_now(vault, &workflow.id, None, later(), "UTC")
         .unwrap()
         .run
         .outcome
@@ -672,7 +783,7 @@ fn run_capped(
 fn the_cap_counts_in_its_own_currency() {
     let (_dir, mut vault, card, savings) = wallets();
     quote_usd(&mut vault);
-    vault.apply_fx(&[rub_point("100")]);
+    crate::usecases::money::rates::apply_fx(&mut vault, &[rub_point("100")]);
     // The cap is 5000 RUB (50 USD) while the base of this device is USD.
     let over = run_capped(&mut vault, (&card, &savings), "60", ("5000", Some("rub")));
     assert!(
@@ -690,7 +801,7 @@ fn a_cap_without_a_label_is_read_in_the_base_of_the_runner() {
     let (_dir, mut vault, card, savings) = wallets();
     quote_usd(&mut vault);
     vault.set_base_currency("rub");
-    vault.apply_fx(&[rub_point("100")]);
+    crate::usecases::money::rates::apply_fx(&mut vault, &[rub_point("100")]);
     // 60 USD = 6000 RUB over a cap of 5000 in the base (rub).
     let over = run_capped(&mut vault, (&card, &savings), "60", ("5000", None));
     assert!(
@@ -734,10 +845,19 @@ fn an_outflow_in_the_currency_of_the_cap_needs_no_rate() {
     };
     inner.asset = AssetRef::fiat("RUB", "Ruble");
     inner.amount = amount("500");
-    assert_eq!(vault.wf_outflow_in(&tx, "rub"), Some(amount("500")));
-    assert_eq!(vault.wf_outflow_in(&tx, " RUB "), Some(amount("500")));
+    assert_eq!(
+        crate::usecases::workflow::runs::wf_outflow_in(&vault.books(), &tx, "rub"),
+        Some(amount("500"))
+    );
+    assert_eq!(
+        crate::usecases::workflow::runs::wf_outflow_in(&vault.books(), &tx, " RUB "),
+        Some(amount("500"))
+    );
     // Another currency still needs the rate this vault does not have.
-    assert_eq!(vault.wf_outflow_in(&tx, "thb"), None);
+    assert_eq!(
+        crate::usecases::workflow::runs::wf_outflow_in(&vault.books(), &tx, "thb"),
+        None
+    );
 }
 
 #[test]
@@ -752,9 +872,14 @@ fn no_cap_means_no_price_check() {
         "Free",
         graph(nodes, vec![wire("t", "out", "tx", "in")]),
     );
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(report.run.outcome, RunOutcome::Done);
 }
 
@@ -770,30 +895,42 @@ fn the_cap_currency_is_the_authors_base_unless_chosen() {
             graph(vec![node("t", "trigger.manual", json!({}))], vec![]),
         )
     };
-    let first = vault
-        .save_workflow(None, capped(None, Some("100")), now_secs())
-        .unwrap()
-        .workflow;
+    let first = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        None,
+        capped(None, Some("100")),
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     assert_eq!(first.max_amount_currency.as_deref(), Some("rub"));
-    let chosen = vault
-        .save_workflow(
-            Some(&first.id),
-            capped(Some(" EUR "), Some("100")),
-            now_secs(),
-        )
-        .unwrap()
-        .workflow;
+    let chosen = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        Some(&first.id),
+        capped(Some(" EUR "), Some("100")),
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     assert_eq!(chosen.max_amount_currency.as_deref(), Some("eur"));
-    let empty = vault
-        .save_workflow(Some(&first.id), capped(Some(""), Some("100")), now_secs())
-        .unwrap()
-        .workflow;
+    let empty = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        Some(&first.id),
+        capped(Some(""), Some("100")),
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     assert_eq!(empty.max_amount_currency.as_deref(), Some("rub"));
     // No cap, no label.
-    let free = vault
-        .save_workflow(Some(&first.id), capped(Some("eur"), None), now_secs())
-        .unwrap()
-        .workflow;
+    let free = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        Some(&first.id),
+        capped(Some("eur"), None),
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     assert_eq!(free.max_amount_currency, None);
 }
 
@@ -827,9 +964,14 @@ fn a_wait_sleeps_in_the_vault_and_goes_on_later() {
     ];
     let workflow = save(&mut vault, "Later", graph(nodes, edges));
     let now = later();
-    let report = vault
-        .run_workflow_now(&workflow.id, None, now, "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        now,
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(report.run.outcome, RunOutcome::Waiting { .. }),
         "{:?}",
@@ -837,13 +979,14 @@ fn a_wait_sleeps_in_the_vault_and_goes_on_later() {
     );
     assert_eq!(vault.doc.workflow_waits.len(), 1);
     assert!(
-        vault
-            .run_due_workflows(now + 3600, "UTC")
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, now + 3600, "UTC")
             .unwrap()
             .runs
             .is_empty()
     );
-    let pass = vault.run_due_workflows(now + 2 * 3600, "UTC").unwrap();
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, now + 2 * 3600, "UTC")
+            .unwrap();
     assert_eq!(pass.runs.len(), 1);
     assert_eq!(pass.notices.len(), 1);
     // The trigger's moment, known before the wait, is still there after it.
@@ -886,12 +1029,10 @@ fn an_event_runs_another_workflow() {
             ],
         ),
     );
-    vault
-        .run_workflow_now(&sender.id, None, later(), "UTC")
+    crate::usecases::workflow::runs::run_workflow_now(&mut vault, &sender.id, None, later(), "UTC")
         .unwrap();
     assert!(
-        vault
-            .notifications()
+        crate::planning::notifications::notifications(&vault.doc)
             .iter()
             .any(|notice| notice.body == "ипотека")
     );
@@ -905,17 +1046,25 @@ fn a_graph_with_errors_is_not_switched_on_and_versions_are_kept() {
         vec![],
     );
     let base = draft("Broken", broken);
-    assert!(vault.save_workflow(None, base.clone(), now_secs()).is_err());
-    let saved = vault
-        .save_workflow(
+    assert!(
+        crate::usecases::workflow::records::save_workflow(
+            &mut vault,
             None,
-            WorkflowDraft {
-                active: false,
-                ..base.clone()
-            },
-            now_secs(),
+            base.clone(),
+            now_secs()
         )
-        .unwrap();
+        .is_err()
+    );
+    let saved = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        None,
+        WorkflowDraft {
+            active: false,
+            ..base.clone()
+        },
+        now_secs(),
+    )
+    .unwrap();
     assert!(saved.issues.iter().any(|issue| issue.code == "no_trigger"));
 
     let fixed = graph(
@@ -926,21 +1075,25 @@ fn a_graph_with_errors_is_not_switched_on_and_versions_are_kept() {
         vec![wire("t", "out", "n", "in")],
     );
     let id = saved.workflow.id.clone();
-    let updated = vault
-        .save_workflow(
-            Some(&id),
-            WorkflowDraft {
-                graph: fixed,
-                ..base
-            },
-            now_secs(),
-        )
-        .unwrap();
+    let updated = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        Some(&id),
+        WorkflowDraft {
+            graph: fixed,
+            ..base
+        },
+        now_secs(),
+    )
+    .unwrap();
     assert!(updated.workflow.active);
     assert_eq!(updated.workflow.versions.len(), 1);
-    let restored = vault
-        .restore_workflow_version(&id, &updated.workflow.versions[0].saved_at, now_secs())
-        .unwrap();
+    let restored = crate::usecases::workflow::records::restore_workflow_version(
+        &mut vault,
+        &id,
+        &updated.workflow.versions[0].saved_at,
+        now_secs(),
+    )
+    .unwrap();
     assert!(
         !restored.workflow.active,
         "a broken version comes back switched off"
@@ -960,11 +1113,16 @@ fn a_workflow_travels_as_a_file() {
         "Shared",
         graph(nodes, vec![wire("t", "out", "n", "in")]),
     );
-    let file = vault.export_workflow(&workflow.id).unwrap();
-    let imported = vault
-        .import_workflow(&file, &HashMap::new(), now_secs())
-        .unwrap()
-        .workflow;
+    let file =
+        crate::workflow::service::records::export_workflow(&vault.doc, &workflow.id).unwrap();
+    let imported = crate::usecases::workflow::records::import_workflow(
+        &mut vault,
+        &file,
+        &HashMap::new(),
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     assert_ne!(imported.id, workflow.id);
     assert!(!imported.active);
     assert_eq!(imported.name, "Shared");
@@ -973,9 +1131,13 @@ fn a_workflow_travels_as_a_file() {
         Graph::parse(&workflow.graph).unwrap()
     );
     assert!(
-        vault
-            .import_workflow("{}", &HashMap::new(), now_secs())
-            .is_err()
+        crate::usecases::workflow::records::import_workflow(
+            &mut vault,
+            "{}",
+            &HashMap::new(),
+            now_secs()
+        )
+        .is_err()
     );
 }
 
@@ -999,9 +1161,14 @@ fn for_each_goes_through_the_accounts() {
         wire("name", "value", "last", "value"),
     ];
     let workflow = save(&mut vault, "Loop", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         report.run.outcome,
         RunOutcome::Done,
@@ -1016,13 +1183,12 @@ fn for_each_goes_through_the_accounts() {
         .filter(|store| store.parent_id.is_none() && !store.archived)
         .count();
     assert_eq!(
-        vault
-            .wf_var(&scope, "seen")
+        crate::workflow::service::vars::var(&vault.doc, &scope, "seen")
             .and_then(|value| value.as_number()),
         Some(Amount::new(rust_decimal::Decimal::from(wallets as u64)))
     );
     assert!(matches!(
-        vault.wf_var(&scope, "last"),
+        crate::workflow::service::vars::var(&vault.doc, &scope, "last"),
         Some(WfValue::Text(_))
     ));
 }
@@ -1068,9 +1234,14 @@ fn a_workday_check_sends_the_salary_on_holidays_another_way() {
         wire("rest", "value", "no", "value"),
     ];
     let workflow = save(&mut vault, "Workday", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         report.run.outcome,
         RunOutcome::Done,
@@ -1078,7 +1249,7 @@ fn a_workday_check_sends_the_salary_on_holidays_another_way() {
         report.run.trace
     );
     assert_eq!(
-        vault.wf_var(&VarScope::Global, "said"),
+        crate::workflow::service::vars::var(&vault.doc, &VarScope::Global, "said"),
         Some(WfValue::Text("rest".into()))
     );
     assert_eq!(
@@ -1108,28 +1279,28 @@ fn a_called_workflow_answers_and_shares_the_run() {
         ),
         node("back", "action.return", json!({})),
     ];
-    let helper = vault
-        .save_workflow(
-            None,
-            WorkflowDraft {
-                active: false,
-                ..draft(
-                    "Helper",
-                    graph(
-                        helper,
-                        vec![
-                            wire("called", "out", "move", "in"),
-                            wire("called", "payload", "move", "amount"),
-                            wire("move", "out", "back", "in"),
-                            wire("answer", "value", "back", "value"),
-                        ],
-                    ),
-                )
-            },
-            now_secs(),
-        )
-        .unwrap()
-        .workflow;
+    let helper = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        None,
+        WorkflowDraft {
+            active: false,
+            ..draft(
+                "Helper",
+                graph(
+                    helper,
+                    vec![
+                        wire("called", "out", "move", "in"),
+                        wire("called", "payload", "move", "amount"),
+                        wire("move", "out", "back", "in"),
+                        wire("answer", "value", "back", "value"),
+                    ],
+                ),
+            )
+        },
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     let caller = vec![
         node("t", "trigger.manual", json!({})),
         node(
@@ -1155,9 +1326,14 @@ fn a_called_workflow_answers_and_shares_the_run() {
             ],
         ),
     );
-    let report = vault
-        .run_workflow_now(&caller.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &caller.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         report.run.outcome,
         RunOutcome::Done,
@@ -1171,7 +1347,7 @@ fn a_called_workflow_answers_and_shares_the_run() {
     );
     assert_eq!(holding_of(&vault, &savings, &usd()), amount("200"));
     assert_eq!(
-        vault.wf_var(&VarScope::Global, "answer"),
+        crate::workflow::service::vars::var(&vault.doc, &VarScope::Global, "answer"),
         Some(WfValue::Text("moved".into()))
     );
     assert!(
@@ -1190,20 +1366,20 @@ fn a_failing_helper_rolls_back_the_whole_run() {
         node("called", "trigger.called", json!({})),
         transfer_node("move", &card, &savings, "5000"),
     ];
-    let helper = vault
-        .save_workflow(
-            None,
-            WorkflowDraft {
-                active: false,
-                ..draft(
-                    "Too much",
-                    graph(helper, vec![wire("called", "out", "move", "in")]),
-                )
-            },
-            now_secs(),
-        )
-        .unwrap()
-        .workflow;
+    let helper = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        None,
+        WorkflowDraft {
+            active: false,
+            ..draft(
+                "Too much",
+                graph(helper, vec![wire("called", "out", "move", "in")]),
+            )
+        },
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     let caller = vec![
         node("t", "trigger.manual", json!({})),
         transfer_node("first", &card, &savings, "100"),
@@ -1220,9 +1396,14 @@ fn a_failing_helper_rolls_back_the_whole_run() {
             ],
         ),
     );
-    let report = vault
-        .run_workflow_now(&caller.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &caller.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(report.run.outcome, RunOutcome::Failed { .. }),
         "{:?}",
@@ -1239,33 +1420,33 @@ fn a_workflow_calling_itself_stops_at_the_depth_limit() {
         node("called", "trigger.called", json!({})),
         node("again", "action.call", json!({ "workflow": id })),
     ];
-    let saved = vault
-        .save_workflow(
-            None,
-            WorkflowDraft {
-                active: false,
-                ..draft(
-                    "Loop",
-                    graph(nodes, vec![wire("called", "out", "again", "in")]),
-                )
-            },
-            now_secs(),
-        )
-        .unwrap()
-        .workflow;
+    let saved = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        None,
+        WorkflowDraft {
+            active: false,
+            ..draft(
+                "Loop",
+                graph(nodes, vec![wire("called", "out", "again", "in")]),
+            )
+        },
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     // Point the call at the workflow itself.
     let graph_json = saved.graph.replace(id, &saved.id);
     vault.doc.workflows[0].graph = graph_json.clone();
-    let report = vault
-        .dry_run_workflow(
-            &graph_json,
-            Some(&saved.id),
-            None,
-            BTreeMap::new(),
-            later(),
-            "UTC",
-        )
-        .unwrap();
+    let report = crate::usecases::workflow::runs::dry_run_workflow(
+        &vault,
+        &graph_json,
+        Some(&saved.id),
+        None,
+        BTreeMap::new(),
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(&report.run.outcome, RunOutcome::Failed { message } if message.contains("deeper")),
         "{:?}",
@@ -1298,17 +1479,23 @@ fn tests_compare_an_emulation_with_what_is_expected() {
             notices: None,
         },
     };
-    vault
-        .save_workflow_test(&workflow.id, test("one transfer", 1))
-        .unwrap();
-    let saved = vault
-        .save_workflow_test(&workflow.id, test("two transfers", 2))
-        .unwrap();
+    crate::usecases::workflow::records::save_workflow_test(
+        &mut vault,
+        &workflow.id,
+        test("one transfer", 1),
+    )
+    .unwrap();
+    let saved = crate::usecases::workflow::records::save_workflow_test(
+        &mut vault,
+        &workflow.id,
+        test("two transfers", 2),
+    )
+    .unwrap();
     assert_eq!(saved.tests.len(), 2);
     let before = vault.doc.transactions.len();
-    let results = vault
-        .run_workflow_tests(&workflow.id, later(), "UTC")
-        .unwrap();
+    let results =
+        crate::usecases::workflow::runs::run_workflow_tests(&vault, &workflow.id, later(), "UTC")
+            .unwrap();
     assert_eq!(vault.doc.transactions.len(), before, "tests write nothing");
     assert!(results[0].passed, "{:?}", results[0].problems_en);
     assert!(!results[1].passed);
@@ -1317,37 +1504,39 @@ fn tests_compare_an_emulation_with_what_is_expected() {
         vec!["operations: 1 instead of 2".to_string()]
     );
     // Saving the graph keeps the tests.
-    let kept = vault
-        .save_workflow(
-            Some(&workflow.id),
-            draft("Tested", workflow.graph.clone()),
-            now_secs(),
-        )
-        .unwrap();
+    let kept = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        Some(&workflow.id),
+        draft("Tested", workflow.graph.clone()),
+        now_secs(),
+    )
+    .unwrap();
     assert_eq!(kept.workflow.tests.len(), 2);
-    let removed = vault
-        .delete_workflow_test(&workflow.id, &saved.tests[1].id)
-        .unwrap();
+    let removed = crate::usecases::workflow::records::delete_workflow_test(
+        &mut vault,
+        &workflow.id,
+        &saved.tests[1].id,
+    )
+    .unwrap();
     assert_eq!(removed.tests.len(), 1);
     assert!(
-        vault
-            .save_workflow_test(
-                &workflow.id,
-                WorkflowTest {
-                    expect: TestExpect {
-                        outcome: "maybe".into(),
-                        ..saved.tests[0].expect.clone()
-                    },
-                    ..saved.tests[0].clone()
-                }
-            )
-            .is_err()
+        crate::usecases::workflow::records::save_workflow_test(
+            &mut vault,
+            &workflow.id,
+            WorkflowTest {
+                expect: TestExpect {
+                    outcome: "maybe".into(),
+                    ..saved.tests[0].expect.clone()
+                },
+                ..saved.tests[0].clone()
+            }
+        )
+        .is_err()
     );
 }
 
 fn count_of(vault: &UnlockedVault, workflow: &Workflow, name: &str) -> Option<Amount> {
-    vault
-        .wf_var(&VarScope::Workflow(workflow.id.clone()), name)
+    crate::workflow::service::vars::var(&vault.doc, &VarScope::Workflow(workflow.id.clone()), name)
         .and_then(|value| value.as_number())
 }
 
@@ -1395,9 +1584,14 @@ fn a_payday_on_a_day_off_moves_back_to_the_working_day_before() {
     ] {
         let (_dir, mut vault) = empty_vault();
         let workflow = save(&mut vault, "Payday", payday_graph(month, day));
-        let report = vault
-            .run_workflow_now(&workflow.id, None, later(), "UTC")
-            .unwrap();
+        let report = crate::usecases::workflow::runs::run_workflow_now(
+            &mut vault,
+            &workflow.id,
+            None,
+            later(),
+            "UTC",
+        )
+        .unwrap();
         assert_eq!(
             report.run.outcome,
             RunOutcome::Done,
@@ -1419,16 +1613,16 @@ fn a_payday_on_a_day_off_moves_back_to_the_working_day_before() {
 #[test]
 fn the_payday_template_runs_as_emulation() {
     let (_dir, vault) = empty_vault();
-    let report = vault
-        .dry_run_workflow(
-            &payday_graph(4, 25),
-            None,
-            None,
-            BTreeMap::new(),
-            later(),
-            "UTC",
-        )
-        .unwrap();
+    let report = crate::usecases::workflow::runs::dry_run_workflow(
+        &vault,
+        &payday_graph(4, 25),
+        None,
+        None,
+        BTreeMap::new(),
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(report.reminders.len(), 1);
     // Emulation keeps nothing.
     assert!(vault.doc.reminders.is_empty());
@@ -1463,9 +1657,14 @@ fn loops_repeat_count_and_break() {
         wire("branch", "true", "stop", "in"),
     ];
     let workflow = save(&mut vault, "Loops", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         report.run.outcome,
         RunOutcome::Done,
@@ -1497,9 +1696,14 @@ fn a_while_loop_sees_the_variable_it_changes() {
         wire("while", "each", "add", "in"),
     ];
     let workflow = save(&mut vault, "While", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         report.run.outcome,
         RunOutcome::Done,
@@ -1529,9 +1733,14 @@ fn a_variable_read_after_a_write_is_fresh() {
         wire("get", "value", "say2", "text"),
     ];
     let workflow = save(&mut vault, "Fresh", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     let bodies: Vec<&str> = report
         .notices
         .iter()
@@ -1563,9 +1772,14 @@ fn a_write_apart_from_the_flow_runs_at_the_end() {
             .any(|issue| issue.code == "unreachable"),
         "a write apart from the flow is not a mistake"
     );
-    vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(count_of(&vault, &workflow, "apart"), Some(amount("7")));
 }
 
@@ -1610,9 +1824,14 @@ fn text_and_conversion_nodes_read_what_people_write() {
         wire("digits", "out", "month", "in"),
     ];
     let workflow = save(&mut vault, "Sms", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         report.run.outcome,
         RunOutcome::Done,
@@ -1625,7 +1844,8 @@ fn text_and_conversion_nodes_read_what_people_write() {
         Some(amount("1234.56"))
     );
     assert_eq!(
-        vault.wf_var(&scope, "card").map(|value| value.as_text()),
+        crate::workflow::service::vars::var(&vault.doc, &scope, "card")
+            .map(|value| value.as_text()),
         Some("4321".to_string())
     );
     assert_eq!(count_of(&vault, &workflow, "month"), Some(amount("11")));
@@ -1643,9 +1863,13 @@ fn a_draft_waits_aside_and_saving_takes_it_in() {
         ],
         vec![wire("t", "out", "n", "in")],
     );
-    let drafted = vault
-        .save_workflow_draft(&workflow.id, &edited, later())
-        .unwrap();
+    let drafted = crate::usecases::workflow::records::save_workflow_draft(
+        &mut vault,
+        &workflow.id,
+        &edited,
+        later(),
+    )
+    .unwrap();
     // The saved graph is untouched; the draft sits next to it.
     assert_eq!(drafted.graph, workflow.graph);
     assert!(
@@ -1656,18 +1880,36 @@ fn a_draft_waits_aside_and_saving_takes_it_in() {
     );
     assert!(drafted.versions.is_empty());
 
-    let dropped = vault.discard_workflow_draft(&workflow.id).unwrap();
+    let dropped =
+        crate::usecases::workflow::records::discard_workflow_draft(&mut vault, &workflow.id)
+            .unwrap();
     assert!(dropped.draft.is_none());
 
-    vault
-        .save_workflow_draft(&workflow.id, &edited, later())
-        .unwrap();
-    let saved = vault
-        .save_workflow(Some(&workflow.id), draft("Draft", edited), later())
-        .unwrap()
-        .workflow;
+    crate::usecases::workflow::records::save_workflow_draft(
+        &mut vault,
+        &workflow.id,
+        &edited,
+        later(),
+    )
+    .unwrap();
+    let saved = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        Some(&workflow.id),
+        draft("Draft", edited),
+        later(),
+    )
+    .unwrap()
+    .workflow;
     assert!(saved.draft.is_none());
-    assert!(vault.save_workflow_draft("nope", &first, later()).is_err());
+    assert!(
+        crate::usecases::workflow::records::save_workflow_draft(
+            &mut vault,
+            "nope",
+            &first,
+            later()
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -1699,9 +1941,16 @@ fn an_emulation_shows_the_workflows_its_events_start() {
         ],
         vec![wire("t", "out", "e", "in")],
     );
-    let report = vault
-        .dry_run_workflow(&sender, None, None, BTreeMap::new(), later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::dry_run_workflow(
+        &vault,
+        &sender,
+        None,
+        None,
+        BTreeMap::new(),
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(report.event_runs.len(), 1);
     let run = &report.event_runs[0];
     assert_eq!(run.workflow_id, listener.id);
@@ -1709,7 +1958,7 @@ fn an_emulation_shows_the_workflows_its_events_start() {
     assert_eq!(run.outcome, RunOutcome::Done);
     // Nothing of it is kept: not the run, not the notice.
     assert!(vault.doc.workflow_runs.is_empty());
-    assert!(vault.notifications().is_empty());
+    assert!(crate::planning::notifications::notifications(&vault.doc).is_empty());
 }
 
 #[test]
@@ -1735,9 +1984,16 @@ fn an_emulated_wait_moves_the_clock_for_what_follows() {
         ],
     );
     let start = later();
-    let report = vault
-        .dry_run_workflow(&graph_json, None, None, BTreeMap::new(), start, "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::dry_run_workflow(
+        &vault,
+        &graph_json,
+        None,
+        None,
+        BTreeMap::new(),
+        start,
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         report.run.outcome,
         RunOutcome::Done,
@@ -1769,9 +2025,14 @@ fn a_question_without_text_is_left_for_the_app_to_word() {
             vec![wire("t", "out", "c", "in")],
         ),
     );
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(&report.run.outcome, RunOutcome::Asking { question, .. } if question.is_empty()),
         "{:?}",
@@ -1780,7 +2041,11 @@ fn a_question_without_text_is_left_for_the_app_to_word() {
     let step = report.run.trace.last().unwrap();
     assert!(step.text_ru.contains("Продолжить?"), "{}", step.text_ru);
     assert!(step.text_en.contains("Go on?"), "{}", step.text_en);
-    assert!(vault.workflow_waits()[0].question.is_empty());
+    assert!(
+        crate::workflow::service::runs::waits(&vault.doc)[0]
+            .question
+            .is_empty()
+    );
 }
 
 /* --- data order, branches, waits (graph v1) ----------------------------------- */
@@ -1812,9 +2077,14 @@ fn an_action_runs_after_the_action_it_takes_data_from_without_a_flow_wire() {
         wire("pay", "transaction", "n", "text"),
     ];
     let workflow = save(&mut vault, "Order", graph_v1(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(report.run.outcome, RunOutcome::Done);
     assert_eq!(report.notices.len(), 1);
     let order = ran_order(&report);
@@ -1842,9 +2112,14 @@ fn an_action_waiting_on_a_branch_that_did_not_run_does_not_run() {
         wire("pay", "transaction", "n", "text"),
     ];
     let workflow = save(&mut vault, "Gated", graph_v1(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(report.transactions.is_empty());
     assert!(
         report.notices.is_empty(),
@@ -1867,9 +2142,14 @@ fn data_order_reaches_through_pure_data_nodes() {
         wire("text", "text", "n", "text"),
     ];
     let workflow = save(&mut vault, "Through", graph_v1(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(report.notices.len(), 1);
     assert!(
         report.notices[0].body.starts_with("Ушло:"),
@@ -1892,9 +2172,14 @@ fn a_failing_branch_is_undone_and_its_sibling_goes_on() {
         wire("t", "out", "good", "in"),
     ];
     let workflow = save(&mut vault, "Branches", graph_v1(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(&report.run.outcome, RunOutcome::Partial { failed } if failed.len() == 1),
         "{:?}",
@@ -1917,9 +2202,14 @@ fn a_failure_on_the_main_line_still_undoes_the_whole_run() {
     ];
     let workflow = save(&mut vault, "Line", graph_v1(nodes, edges));
     let before = vault.doc.transactions.len();
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(report.run.outcome, RunOutcome::Failed { .. }),
         "{:?}",
@@ -1945,9 +2235,14 @@ fn a_nested_fork_catches_its_own_failure() {
         wire("a", "out", "b", "in"),
     ];
     let workflow = save(&mut vault, "Nested", graph_v1(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         matches!(report.run.outcome, RunOutcome::Partial { .. }),
         "{:?}",
@@ -2024,15 +2319,14 @@ fn free_nodes_run_after_the_last_wait() {
     let (_dir, mut vault) = empty_vault();
     let workflow = save(&mut vault, "Free", waiting_graph());
     let now = later();
-    vault
-        .run_workflow_now(&workflow.id, None, now, "UTC")
+    crate::usecases::workflow::runs::run_workflow_now(&mut vault, &workflow.id, None, now, "UTC")
         .unwrap();
     assert_eq!(
         count_of(&vault, &workflow, "finished"),
         None,
         "not before the wait is over"
     );
-    vault.run_due_workflows(now + 2 * 3600, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut vault, now + 2 * 3600, "UTC").unwrap();
     assert_eq!(
         count_of(&vault, &workflow, "finished"),
         Some(Amount::new(rust_decimal::Decimal::ONE))
@@ -2044,8 +2338,7 @@ fn a_sleeping_run_goes_on_along_the_graph_it_fell_asleep_on() {
     let (_dir, mut vault) = empty_vault();
     let workflow = save(&mut vault, "Edited", waiting_graph());
     let now = later();
-    vault
-        .run_workflow_now(&workflow.id, None, now, "UTC")
+    crate::usecases::workflow::runs::run_workflow_now(&mut vault, &workflow.id, None, now, "UTC")
         .unwrap();
     // Edited while asleep: the notice is gone from the current graph.
     let edited = graph_v1(
@@ -2055,10 +2348,16 @@ fn a_sleeping_run_goes_on_along_the_graph_it_fell_asleep_on() {
         ],
         vec![wire("t", "out", "w", "in")],
     );
-    vault
-        .save_workflow(Some(&workflow.id), draft("Edited", edited), now)
-        .unwrap();
-    let pass = vault.run_due_workflows(now + 2 * 3600, "UTC").unwrap();
+    crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        Some(&workflow.id),
+        draft("Edited", edited),
+        now,
+    )
+    .unwrap();
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, now + 2 * 3600, "UTC")
+            .unwrap();
     assert_eq!(
         pass.notices.len(),
         1,
@@ -2071,11 +2370,13 @@ fn a_wait_of_a_switched_off_workflow_is_journalled_as_dropped() {
     let (_dir, mut vault) = empty_vault();
     let workflow = save(&mut vault, "Off", waiting_graph());
     let now = later();
-    vault
-        .run_workflow_now(&workflow.id, None, now, "UTC")
+    crate::usecases::workflow::runs::run_workflow_now(&mut vault, &workflow.id, None, now, "UTC")
         .unwrap();
-    vault.set_workflow_active(&workflow.id, false, now).unwrap();
-    let pass = vault.run_due_workflows(now + 2 * 3600, "UTC").unwrap();
+    crate::usecases::workflow::records::set_workflow_active(&mut vault, &workflow.id, false, now)
+        .unwrap();
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, now + 2 * 3600, "UTC")
+            .unwrap();
     assert!(pass.notices.is_empty());
     assert!(
         pass.runs.iter().any(|run| run.outcome
@@ -2093,12 +2394,15 @@ fn a_question_of_a_switched_off_workflow_cannot_be_answered() {
     let (_dir, mut vault, card, savings) = wallets();
     let workflow = save(&mut vault, "Ask", ask_graph(&card, &savings, ""));
     let now = later();
-    vault
-        .run_workflow_now(&workflow.id, None, now, "UTC")
+    crate::usecases::workflow::runs::run_workflow_now(&mut vault, &workflow.id, None, now, "UTC")
         .unwrap();
     let wait = vault.doc.workflow_waits[0].id.clone();
-    vault.set_workflow_active(&workflow.id, false, now).unwrap();
-    assert!(vault.answer_workflow_wait(&wait, true, now, "UTC").is_err());
+    crate::usecases::workflow::records::set_workflow_active(&mut vault, &workflow.id, false, now)
+        .unwrap();
+    assert!(
+        crate::usecases::workflow::runs::answer_workflow_wait(&mut vault, &wait, true, now, "UTC")
+            .is_err()
+    );
     assert_eq!(
         vault.doc.workflow_waits.len(),
         1,
@@ -2140,9 +2444,14 @@ fn run_now_from_a_schedule_takes_its_latest_moment_and_says_by_hand() {
     ];
     let workflow = save(&mut vault, "Pick", graph_v1(nodes, edges));
     let now = unix_secs("2026-03-05T15:30:00Z").unwrap();
-    let report = vault
-        .run_workflow_now(&workflow.id, Some("s"), now, "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        Some("s"),
+        now,
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(report.run.trigger, "schedule by hand");
     assert!(
         report.notices[0].body.contains("2026-03-05T09:00:00"),
@@ -2150,9 +2459,14 @@ fn run_now_from_a_schedule_takes_its_latest_moment_and_says_by_hand() {
         report.notices[0].body
     );
     // With no trigger named, the button starts "Run manually".
-    let manual = vault
-        .run_workflow_now(&workflow.id, None, now, "UTC")
-        .unwrap();
+    let manual = crate::usecases::workflow::runs::run_workflow_now(
+        &mut vault,
+        &workflow.id,
+        None,
+        now,
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(manual.run.trigger, "manual");
 }
 
@@ -2160,9 +2474,11 @@ fn run_now_from_a_schedule_takes_its_latest_moment_and_says_by_hand() {
 /// Savings hold 500; the card gets the salaries.
 fn queue_vault(mode: Option<&str>) -> (tempfile::TempDir, UnlockedVault, String, Workflow) {
     let (dir, mut vault, card, savings) = wallets();
-    vault
-        .add_transaction(income(&savings, "500", "opening"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&savings, "500", "opening"),
+    )
+    .unwrap();
     let pay = transfer_node("pay", &savings, &card, "0");
     let trigger = node(
         "t",
@@ -2196,8 +2512,7 @@ fn queue_vault(mode: Option<&str>) -> (tempfile::TempDir, UnlockedVault, String,
 
 fn salaries(vault: &mut UnlockedVault, card: &str, amounts: &[&str]) {
     for value in amounts {
-        vault
-            .add_transaction(income(card, value, "salary"))
+        crate::usecases::money::transactions::add_transaction(vault, income(card, value, "salary"))
             .unwrap();
     }
 }
@@ -2217,7 +2532,8 @@ fn a_queue_takes_the_firings_of_a_pass_in_one_run() {
     let (_dir, mut vault, savings, workflow) = queue_vault(Some("sequence"));
     let card = card_of(&vault, &savings);
     salaries(&mut vault, &card, &["100", "50", "200"]);
-    let pass = vault.run_due_workflows(later(), "UTC").unwrap();
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC").unwrap();
     assert_eq!(pass.runs.len(), 1, "{:?}", pass.runs);
     assert_eq!(
         pass.runs[0].outcome,
@@ -2232,7 +2548,10 @@ fn a_queue_takes_the_firings_of_a_pass_in_one_run() {
     );
     assert_eq!(pass.created.len(), 3);
     assert_eq!(holding_of(&vault, &savings, &usd()), amount("150"));
-    assert_eq!(vault.workflow_runs(Some(&workflow.id), 10).len(), 1);
+    assert_eq!(
+        crate::workflow::service::runs::runs(&vault.doc, Some(&workflow.id), 10).len(),
+        1
+    );
 }
 
 #[test]
@@ -2240,7 +2559,8 @@ fn a_queue_in_turn_undoes_everything_on_a_failure() {
     let (_dir, mut vault, savings, _workflow) = queue_vault(Some("sequence"));
     let card = card_of(&vault, &savings);
     salaries(&mut vault, &card, &["100", "1000", "200"]);
-    let pass = vault.run_due_workflows(later(), "UTC").unwrap();
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC").unwrap();
     assert_eq!(pass.runs.len(), 1);
     assert!(
         matches!(pass.runs[0].outcome, RunOutcome::Failed { .. }),
@@ -2255,7 +2575,8 @@ fn an_independent_queue_keeps_the_firings_that_went_through() {
     let (_dir, mut vault, savings, _workflow) = queue_vault(Some("independent"));
     let card = card_of(&vault, &savings);
     salaries(&mut vault, &card, &["100", "1000", "200"]);
-    let pass = vault.run_due_workflows(later(), "UTC").unwrap();
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC").unwrap();
     assert_eq!(pass.runs.len(), 1);
     assert!(
         matches!(&pass.runs[0].outcome, RunOutcome::Partial { failed } if failed.len() == 1),
@@ -2271,7 +2592,8 @@ fn without_a_queue_every_firing_is_its_own_run() {
     let (_dir, mut vault, savings, _workflow) = queue_vault(None);
     let card = card_of(&vault, &savings);
     salaries(&mut vault, &card, &["100", "50", "200"]);
-    let pass = vault.run_due_workflows(later(), "UTC").unwrap();
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut vault, later(), "UTC").unwrap();
     assert_eq!(pass.runs.len(), 3, "{:?}", pass.runs);
     assert_eq!(holding_of(&vault, &savings, &usd()), amount("150"));
 }
@@ -2333,16 +2655,16 @@ fn price_watch(asset: Value) -> String {
 #[test]
 fn a_draft_with_an_empty_required_field_saves_inactive() {
     let (_dir, mut vault) = empty_vault();
-    let saved = vault
-        .save_workflow(
-            None,
-            WorkflowDraft {
-                active: false,
-                ..draft("Watch", price_watch(Value::Null))
-            },
-            now_secs(),
-        )
-        .unwrap();
+    let saved = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        None,
+        WorkflowDraft {
+            active: false,
+            ..draft("Watch", price_watch(Value::Null))
+        },
+        now_secs(),
+    )
+    .unwrap();
     assert!(!saved.workflow.active);
     assert!(
         saved
@@ -2356,25 +2678,33 @@ fn a_draft_with_an_empty_required_field_saves_inactive() {
 fn activating_with_an_empty_required_field_is_refused() {
     let (_dir, mut vault) = empty_vault();
     assert!(
-        vault
-            .save_workflow(None, draft("Watch", price_watch(Value::Null)), now_secs())
-            .is_err()
-    );
-    let off = vault
-        .save_workflow(
+        crate::usecases::workflow::records::save_workflow(
+            &mut vault,
             None,
-            WorkflowDraft {
-                active: false,
-                ..draft("Watch", price_watch(Value::Null))
-            },
-            now_secs(),
+            draft("Watch", price_watch(Value::Null)),
+            now_secs()
         )
-        .unwrap()
-        .workflow;
+        .is_err()
+    );
+    let off = crate::usecases::workflow::records::save_workflow(
+        &mut vault,
+        None,
+        WorkflowDraft {
+            active: false,
+            ..draft("Watch", price_watch(Value::Null))
+        },
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     assert!(
-        vault
-            .set_workflow_active(&off.id, true, now_secs())
-            .is_err()
+        crate::usecases::workflow::records::set_workflow_active(
+            &mut vault,
+            &off.id,
+            true,
+            now_secs()
+        )
+        .is_err()
     );
 }
 
@@ -2388,7 +2718,7 @@ fn opening_a_vault_turns_off_workflows_missing_a_required_field() {
     drop(vault);
 
     let reopened = UnlockedVault::open(dir.path().join("test.wallet"), "pw").unwrap();
-    let workflow = reopened.workflow(&on.id).unwrap();
+    let workflow = crate::workflow::service::records::workflow(&reopened.doc, &on.id).unwrap();
     assert!(!workflow.active);
     assert!(reopened.doc.workflow_runs.iter().any(|run| {
         run.workflow_id == on.id
@@ -2440,12 +2770,20 @@ fn salary_graph(card: &str) -> String {
 fn a_salary_lands_on_the_friday_before_with_the_average_amount() {
     let (_dir, mut vault, card, _) = wallets();
     let workflow = save(&mut vault, "Advance", salary_graph(&card));
-    vault.wf_set_mark(&workflow.id, "schedule:t", "2026-11-21T00:00:00Z");
+    crate::usecases::workflow::runs::wf_set_mark(
+        &mut vault,
+        &workflow.id,
+        "schedule:t",
+        "2026-11-21T00:00:00Z",
+    );
 
     // 2026-12-20 is a Sunday: the advance comes on Friday the 18th.
-    let pass = vault
-        .run_due_workflows(secs_at("2026-12-18T10:00:00Z"), "UTC")
-        .unwrap();
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut vault,
+        secs_at("2026-12-18T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(pass.created.len(), 1, "{:?}", pass.runs);
     let made = vault
         .doc
@@ -2463,16 +2801,22 @@ fn a_salary_lands_on_the_friday_before_with_the_average_amount() {
     // Nothing yet to average: the fallback.
     assert_eq!(tx_amount(&made), amount("1000"));
     // Not again on the planned Sunday.
-    let pass = vault
-        .run_due_workflows(secs_at("2026-12-20T10:00:00Z"), "UTC")
-        .unwrap();
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut vault,
+        secs_at("2026-12-20T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert!(pass.created.is_empty());
 
     // The user puts in the real amount.
     correct(&mut vault, &made.meta().id, "1200");
-    let pass = vault
-        .run_due_workflows(secs_at("2027-01-20T10:00:00Z"), "UTC")
-        .unwrap();
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut vault,
+        secs_at("2027-01-20T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(pass.created.len(), 1);
     let next = vault
         .doc
@@ -2483,9 +2827,12 @@ fn a_salary_lands_on_the_friday_before_with_the_average_amount() {
         .clone();
     assert_eq!(tx_amount(&next), amount("1200"));
     // Approximate ones stay out of the average.
-    let pass = vault
-        .run_due_workflows(secs_at("2027-02-20T10:00:00Z"), "UTC")
-        .unwrap();
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut vault,
+        secs_at("2027-02-20T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     let third = vault
         .doc
         .transactions
@@ -2497,7 +2844,7 @@ fn a_salary_lands_on_the_friday_before_with_the_average_amount() {
     correct(&mut vault, &next.meta().id, "1400");
     correct(&mut vault, &third.meta().id, "1600");
     assert_eq!(
-        vault.wf_recent_average(&workflow.id, 3),
+        crate::workflow::service::vars::recent_average(&vault.doc, &workflow.id, 3),
         Some((amount("1400"), "USD".to_string()))
     );
 }
@@ -2554,10 +2901,18 @@ fn refused_rent() -> (
 ) {
     let (dir, mut vault, card, savings) = wallets();
     let workflow = save(&mut vault, "Rent", rent_graph(&card, &savings));
-    vault.wf_set_mark(&workflow.id, "schedule:t", "2026-11-20T00:00:00Z");
-    let pass = vault
-        .run_due_workflows(secs_at("2026-12-01T10:00:00Z"), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::wf_set_mark(
+        &mut vault,
+        &workflow.id,
+        "schedule:t",
+        "2026-11-20T00:00:00Z",
+    );
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut vault,
+        secs_at("2026-12-01T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     let refused = pass.runs[0].clone();
     assert!(matches!(refused.outcome, RunOutcome::Rejected { .. }));
     (dir, vault, card, workflow, refused)
@@ -2576,18 +2931,24 @@ fn post_elsewhere(vault: &mut UnlockedVault, card: &str, workflow: &Workflow) {
             run_key: None,
         };
     }
-    vault.add_transaction(tx).unwrap();
+    crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
 }
 
 #[test]
 fn a_rejected_retry_leaves_a_tombstone() {
     let (_dir, mut vault, card, _workflow, refused) = refused_rent();
-    vault
-        .add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
-    let pass = vault
-        .retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC")
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
+    let pass = crate::usecases::workflow::runs::retry_workflow_run(
+        &mut vault,
+        &refused.id,
+        secs_at("2026-12-03T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(pass.created.len(), 1);
     // Without it the refusal comes back from a device that still has it.
     assert!(
@@ -2601,12 +2962,19 @@ fn a_rejected_retry_leaves_a_tombstone() {
 #[test]
 fn a_rejected_retry_does_not_post_twice() {
     let (_dir, mut vault, card, workflow, refused) = refused_rent();
-    vault
-        .add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
     post_elsewhere(&mut vault, &card, &workflow);
     let before = vault.doc.transactions.len();
-    let result = vault.retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC");
+    let result = crate::usecases::workflow::runs::retry_workflow_run(
+        &mut vault,
+        &refused.id,
+        secs_at("2026-12-03T10:00:00Z"),
+        "UTC",
+    );
     let pass = result.unwrap();
     assert!(pass.created.is_empty(), "the moment was booked twice");
     assert_eq!(vault.doc.transactions.len(), before);
@@ -2616,9 +2984,13 @@ fn a_rejected_retry_does_not_post_twice() {
 fn a_stale_rejected_is_cleared_not_retried() {
     let (_dir, mut vault, card, workflow, refused) = refused_rent();
     post_elsewhere(&mut vault, &card, &workflow);
-    vault
-        .retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::retry_workflow_run(
+        &mut vault,
+        &refused.id,
+        secs_at("2026-12-03T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert!(
         vault
             .doc
@@ -2640,9 +3012,13 @@ fn a_refused_retry_on_a_still_short_run_leaves_the_vault_file_untouched() {
     let file_before = std::fs::read(&vault.path).unwrap();
     let doc_before = vault.doc.clone();
 
-    let err = vault
-        .retry_workflow_run(&refused.id, secs_at("2026-12-02T10:00:00Z"), "UTC")
-        .unwrap_err();
+    let err = crate::usecases::workflow::runs::retry_workflow_run(
+        &mut vault,
+        &refused.id,
+        secs_at("2026-12-02T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap_err();
 
     assert_eq!(err.code(), "INSUFFICIENT_FUNDS");
     // The refusal is decided before anything is written: not a byte of the
@@ -2655,11 +3031,19 @@ fn a_refused_retry_on_a_still_short_run_leaves_the_vault_file_untouched() {
 fn a_refused_run_waits_for_retry_or_skip() {
     let (_dir, mut vault, card, savings) = wallets();
     let workflow = save(&mut vault, "Rent", rent_graph(&card, &savings));
-    vault.wf_set_mark(&workflow.id, "schedule:t", "2026-11-20T00:00:00Z");
+    crate::usecases::workflow::runs::wf_set_mark(
+        &mut vault,
+        &workflow.id,
+        "schedule:t",
+        "2026-11-20T00:00:00Z",
+    );
 
-    let pass = vault
-        .run_due_workflows(secs_at("2026-12-01T10:00:00Z"), "UTC")
-        .unwrap();
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut vault,
+        secs_at("2026-12-01T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(pass.runs.len(), 1);
     let refused = pass.runs[0].clone();
     // The refusal, pinned: what was planned, and why it was turned down.
@@ -2667,9 +3051,13 @@ fn a_refused_run_waits_for_retry_or_skip() {
     assert!(pass.created.is_empty());
 
     // Still short: the error says so and the refusal stays.
-    let err = vault
-        .retry_workflow_run(&refused.id, secs_at("2026-12-02T10:00:00Z"), "UTC")
-        .unwrap_err();
+    let err = crate::usecases::workflow::runs::retry_workflow_run(
+        &mut vault,
+        &refused.id,
+        secs_at("2026-12-02T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap_err();
     assert_eq!(err.code(), "INSUFFICIENT_FUNDS");
     assert!(
         vault
@@ -2679,12 +3067,18 @@ fn a_refused_run_waits_for_retry_or_skip() {
             .any(|run| run.id == refused.id)
     );
 
-    vault
-        .add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
-    let pass = vault
-        .retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC")
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
+    let pass = crate::usecases::workflow::runs::retry_workflow_run(
+        &mut vault,
+        &refused.id,
+        secs_at("2026-12-03T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(pass.created.len(), 1);
     assert!(
         vault
@@ -2708,17 +3102,26 @@ fn a_refused_run_waits_for_retry_or_skip() {
 
     // January is covered by the rest of the top-up; February is refused
     // and skipped.
-    let pass = vault
-        .run_due_workflows(secs_at("2027-01-01T10:00:00Z"), "UTC")
-        .unwrap();
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut vault,
+        secs_at("2027-01-01T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(pass.created.len(), 1);
-    let pass = vault
-        .run_due_workflows(secs_at("2027-02-01T10:00:00Z"), "UTC")
-        .unwrap();
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut vault,
+        secs_at("2027-02-01T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert!(matches!(pass.runs[0].outcome, RunOutcome::Rejected { .. }));
-    let skipped = vault.skip_workflow_run(&pass.runs[0].id).unwrap();
+    let skipped =
+        crate::usecases::workflow::runs::skip_workflow_run(&mut vault, &pass.runs[0].id).unwrap();
     insta::assert_json_snapshot!(skipped, { ".id" => "[id]", ".workflow_id" => "[id]" });
-    assert!(vault.skip_workflow_run(&pass.runs[0].id).is_err());
+    assert!(
+        crate::usecases::workflow::runs::skip_workflow_run(&mut vault, &pass.runs[0].id).is_err()
+    );
 }
 
 /// A workflow that pays from `from` and notifies, saved in the vault.
@@ -2744,7 +3147,10 @@ fn an_export_names_the_wallets_the_graph_mentions() {
     let bank = store(&mut vault, "Sber", StoreKind::Bank, None);
     let _unused = store(&mut vault, "Other", StoreKind::Crypto, None);
     let workflow = paying_workflow(&mut vault, &bank);
-    let file: Value = serde_json::from_str(&vault.export_workflow(&workflow.id).unwrap()).unwrap();
+    let file: Value = serde_json::from_str(
+        &crate::workflow::service::records::export_workflow(&vault.doc, &workflow.id).unwrap(),
+    )
+    .unwrap();
     assert_eq!(file["stores"], json!([{ "id": bank, "name": "Sber" }]));
 }
 
@@ -2753,13 +3159,14 @@ fn a_preview_finds_the_missing_wallet_and_counts_steps() {
     let (_dir, mut vault) = empty_vault();
     let bank = store(&mut vault, "Sber", StoreKind::Bank, None);
     let workflow = paying_workflow(&mut vault, &bank);
-    let file = vault.export_workflow(&workflow.id).unwrap();
-    let here = vault.preview_workflow_import(&file).unwrap();
+    let file =
+        crate::workflow::service::records::export_workflow(&vault.doc, &workflow.id).unwrap();
+    let here = crate::workflow::service::records::preview_import(&vault.doc, &file).unwrap();
     assert_eq!(here.name, "Pay");
     assert_eq!(here.steps, 1);
     assert!(here.missing.is_empty());
-    vault.delete_store(&bank).unwrap();
-    let preview = vault.preview_workflow_import(&file).unwrap();
+    crate::usecases::money::stores::delete_store(&mut vault, &bank).unwrap();
+    let preview = crate::workflow::service::records::preview_import(&vault.doc, &file).unwrap();
     assert_eq!(
         preview.missing,
         vec![ExportedStore {
@@ -2767,7 +3174,7 @@ fn a_preview_finds_the_missing_wallet_and_counts_steps() {
             name: "Sber".into()
         }]
     );
-    assert!(vault.preview_workflow_import("{}").is_err());
+    assert!(crate::workflow::service::records::preview_import(&vault.doc, "{}").is_err());
 }
 
 #[test]
@@ -2776,12 +3183,13 @@ fn an_import_swaps_a_missing_wallet_for_one_the_user_picks() {
     let old = store(&mut vault, "Sber", StoreKind::Bank, None);
     let mine = store(&mut vault, "Mine", StoreKind::Crypto, None);
     let workflow = paying_workflow(&mut vault, &old);
-    let file = vault.export_workflow(&workflow.id).unwrap();
+    let file =
+        crate::workflow::service::records::export_workflow(&vault.doc, &workflow.id).unwrap();
     let map = HashMap::from([(old.clone(), mine.clone())]);
-    let imported = vault
-        .import_workflow(&file, &map, now_secs())
-        .unwrap()
-        .workflow;
+    let imported =
+        crate::usecases::workflow::records::import_workflow(&mut vault, &file, &map, now_secs())
+            .unwrap()
+            .workflow;
     assert!(imported.graph.contains(&mine));
     assert!(!imported.graph.contains(&old));
     assert!(!imported.active);
@@ -2795,12 +3203,16 @@ fn an_old_file_without_wallets_still_imports() {
         "graph": { "version": 1, "nodes": [node("t", "trigger.manual", json!({}))], "edges": [] },
     })
     .to_string();
-    let preview = vault.preview_workflow_import(&file).unwrap();
+    let preview = crate::workflow::service::records::preview_import(&vault.doc, &file).unwrap();
     assert!(preview.missing.is_empty());
     assert_eq!(preview.steps, 0);
-    let imported = vault
-        .import_workflow(&file, &HashMap::new(), now_secs())
-        .unwrap();
+    let imported = crate::usecases::workflow::records::import_workflow(
+        &mut vault,
+        &file,
+        &HashMap::new(),
+        now_secs(),
+    )
+    .unwrap();
     assert_eq!(imported.workflow.name, "Old");
 }
 
@@ -2820,10 +3232,14 @@ fn a_version_1_file_goes_through_the_legacy_steps() {
         },
     })
     .to_string();
-    let imported = vault
-        .import_workflow(&file, &HashMap::new(), now_secs())
-        .unwrap()
-        .workflow;
+    let imported = crate::usecases::workflow::records::import_workflow(
+        &mut vault,
+        &file,
+        &HashMap::new(),
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     let graph = Graph::parse(&imported.graph).unwrap();
     let confirm_wire = graph.edges.iter().find(|edge| edge.from == "ask").unwrap();
     assert_eq!(confirm_wire.from_port, "true");
@@ -2841,10 +3257,14 @@ fn a_version_3_graph_in_an_old_file_imports() {
         },
     })
     .to_string();
-    let imported = vault
-        .import_workflow(&file, &HashMap::new(), now_secs())
-        .unwrap()
-        .workflow;
+    let imported = crate::usecases::workflow::records::import_workflow(
+        &mut vault,
+        &file,
+        &HashMap::new(),
+        now_secs(),
+    )
+    .unwrap()
+    .workflow;
     assert_eq!(imported.name, "Old3");
     assert_eq!(Graph::parse(&imported.graph).unwrap().edges.len(), 1);
 }
@@ -2854,10 +3274,14 @@ fn a_swap_for_an_unknown_wallet_is_refused() {
     let (_dir, mut vault) = empty_vault();
     let old = store(&mut vault, "Sber", StoreKind::Bank, None);
     let workflow = paying_workflow(&mut vault, &old);
-    let file = vault.export_workflow(&workflow.id).unwrap();
+    let file =
+        crate::workflow::service::records::export_workflow(&vault.doc, &workflow.id).unwrap();
     let map = HashMap::from([(old, "nope".to_string())]);
     let before = vault.doc.workflows.len();
-    assert!(vault.import_workflow(&file, &map, now_secs()).is_err());
+    assert!(
+        crate::usecases::workflow::records::import_workflow(&mut vault, &file, &map, now_secs())
+            .is_err()
+    );
     assert_eq!(vault.doc.workflows.len(), before);
 }
 
@@ -2882,11 +3306,18 @@ fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
     assert!(has_run(&left) && has_run(&right));
 
     // The laptop gets the money and retries.
-    left.add_transaction(income(&card, "5000", "salary"))
-        .unwrap();
-    let pass = left
-        .retry_workflow_run(&refused.id, secs_at("2026-12-03T10:00:00Z"), "UTC")
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&card, "5000", "salary"),
+    )
+    .unwrap();
+    let pass = crate::usecases::workflow::runs::retry_workflow_run(
+        &mut left,
+        &refused.id,
+        secs_at("2026-12-03T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(pass.created.len(), 1);
 
     // Sessions follow, in both directions, more than once.
@@ -2895,11 +3326,11 @@ fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
         name: name.into(),
     };
     for _ in 0..3 {
-        let left_manifest = left.sync_manifest(None).unwrap();
-        let right_manifest = right.sync_manifest(None).unwrap();
+        let left_manifest = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
+        let right_manifest = crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
         let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
-        let to_left = right.sync_records(&left_wants).unwrap();
-        let to_right = left.sync_records(&right_wants).unwrap();
+        let to_left = crate::usecases::sync::read::sync_records(&mut right, &left_wants).unwrap();
+        let to_right = crate::usecases::sync::read::sync_records(&mut left, &right_wants).unwrap();
         left.sync_apply(&to_left, &peer("right")).unwrap();
         right.sync_apply(&to_right, &peer("left")).unwrap();
     }
@@ -2910,9 +3341,13 @@ fn a_cleared_rejected_run_does_not_come_back_from_the_other_device() {
     // The other device cannot book the moment again, and nothing booked it
     // twice.
     assert!(
-        right
-            .retry_workflow_run(&refused.id, secs_at("2026-12-04T10:00:00Z"), "UTC")
-            .is_err()
+        crate::usecases::workflow::runs::retry_workflow_run(
+            &mut right,
+            &refused.id,
+            secs_at("2026-12-04T10:00:00Z"),
+            "UTC"
+        )
+        .is_err()
     );
     let booked = |vault: &UnlockedVault| {
         vault
@@ -2939,9 +3374,14 @@ fn inflation_notice(vault: &mut UnlockedVault, currency: &str) -> String {
         wire("text", "text", "n", "text"),
     ];
     let workflow = save(vault, "Inflation", graph(nodes, edges));
-    let report = vault
-        .run_workflow_now(&workflow.id, None, later(), "UTC")
-        .unwrap();
+    let report = crate::usecases::workflow::runs::run_workflow_now(
+        vault,
+        &workflow.id,
+        None,
+        later(),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(report.notices.len(), 1, "{:?}", report.run.outcome);
     report.notices[0].body.clone()
 }

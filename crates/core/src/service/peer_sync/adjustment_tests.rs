@@ -46,15 +46,17 @@ fn shared_correction(
     let cash = store(left, "Cash", StoreKind::Cash, None);
     let mut salary = income(&cash, "100", "salary");
     at(&mut salary, "2026-03-01T10:00:00Z");
-    left.add_transaction(salary).unwrap();
+    crate::usecases::money::transactions::add_transaction(left, salary).unwrap();
     if with_second {
         let mut coin = income_of(&cash, eur(), "1", "1.1", "coin");
         at(&mut coin, "2026-03-01T11:00:00Z");
-        left.add_transaction(coin).unwrap();
+        crate::usecases::money::transactions::add_transaction(left, coin).unwrap();
     }
-    let saved = left
-        .add_transaction(correction(&cash, lines, "2026-03-05T10:00:00Z"))
-        .unwrap();
+    let saved = crate::usecases::money::transactions::add_transaction(
+        left,
+        correction(&cash, lines, "2026-03-05T10:00:00Z"),
+    )
+    .unwrap();
     let id = saved.meta().id.clone();
     settle(left, right);
     (cash, id)
@@ -98,7 +100,7 @@ fn set_after(vault: &mut UnlockedVault, id: &str, asset: &AssetRef, after: &str)
             }
         }
     }
-    vault.update_transaction(id, tx).unwrap();
+    crate::usecases::money::transactions::update_transaction(vault, id, tx).unwrap();
 }
 
 #[test]
@@ -111,7 +113,7 @@ fn backdated_operation_does_not_overwrite_after() {
     set_after(&mut left, &id, &usd(), "70");
     let mut older = income(&cash, "50", "forgotten");
     at(&mut older, "2026-03-02T10:00:00Z");
-    right.add_transaction(older).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut right, older).unwrap();
     assert_eq!(line_of(&right, &id, &usd()).before, amount("150"));
 
     settle(&mut left, &mut right);
@@ -225,7 +227,8 @@ fn an_old_device_can_read_a_correction() {
     set_after(&mut left, &id, &usd(), "60");
     let key = format!("transactions:{id}");
     for vault in [&mut left, &mut right] {
-        let sent = vault.sync_records(std::slice::from_ref(&key)).unwrap();
+        let sent =
+            crate::usecases::sync::read::sync_records(vault, std::slice::from_ref(&key)).unwrap();
         let value = sent[&key].value.clone().expect("the record");
         let sent_lines = value["adjustment"]["lines"].as_array().expect("lines");
         assert_eq!(sent_lines.len(), 2);
@@ -267,12 +270,16 @@ fn simultaneous_corrections_end_with_the_same_before_everywhere() {
     let (_dir, mut left, mut right) = two_devices();
     let (cash, _id) = shared_correction(&mut left, &mut right, &[(usd(), "80")], false);
     let moment = "2026-03-06T10:00:00Z";
-    let first = left
-        .add_transaction(correction(&cash, &[(usd(), "60")], moment))
-        .unwrap();
-    let second = right
-        .add_transaction(correction(&cash, &[(usd(), "50")], moment))
-        .unwrap();
+    let first = crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        correction(&cash, &[(usd(), "60")], moment),
+    )
+    .unwrap();
+    let second = crate::usecases::money::transactions::add_transaction(
+        &mut right,
+        correction(&cash, &[(usd(), "50")], moment),
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     for id in [&first.meta().id, &second.meta().id] {
         assert_eq!(

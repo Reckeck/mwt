@@ -119,7 +119,8 @@ fn a_whole_notification_object_from_an_older_build_merges() {
     set_lead(&mut right, NoticeCategory::Tax, 12);
     right.doc.settings.notifications.system = true;
     right.persist().unwrap();
-    let mut records = left.sync_records(&["settings:".to_string()]).unwrap();
+    let mut records =
+        crate::usecases::sync::read::sync_records(&mut left, &["settings:".to_string()]).unwrap();
     let state = records.get_mut("settings:").unwrap();
     let value = state.value.as_mut().unwrap().as_object_mut().unwrap();
     value.insert(
@@ -149,7 +150,8 @@ fn a_whole_notification_object_from_an_older_build_merges() {
     assert_eq!(loan.lead_days, 2);
     assert!(config.system, "the old device's switch is not taken");
     assert!(!config.hide_details_when_locked);
-    let sent = right.sync_records(&["settings:".to_string()]).unwrap();
+    let sent =
+        crate::usecases::sync::read::sync_records(&mut right, &["settings:".to_string()]).unwrap();
     let sent = &sent["settings:"];
     let object = &sent.value.as_ref().unwrap()["notifications"];
     assert!(object["categories"].is_array(), "{object}");

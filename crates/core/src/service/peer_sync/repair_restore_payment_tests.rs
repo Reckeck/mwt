@@ -54,33 +54,42 @@ fn setup() -> (
 ) {
     let (dir, mut left, mut right) = two_devices();
     let store_id = left.doc.stores[0].id.clone();
-    left.add_transaction(income(&store_id, "100", "start"))
-        .unwrap();
-    let paid = left
-        .add_transaction(payment(&store_id, "3", "taxi"))
-        .unwrap();
-    let event = left
-        .create_shared_event(SharedEventDraft {
+    crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&store_id, "100", "start"),
+    )
+    .unwrap();
+    let paid = crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        payment(&store_id, "3", "taxi"),
+    )
+    .unwrap();
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        &mut left,
+        SharedEventDraft {
             title: "trip".into(),
             currency: "usd".into(),
             participants: vec![guest("ann")],
             ..Default::default()
-        })
-        .unwrap()
-        .event;
+        },
+    )
+    .unwrap()
+    .event;
     settle(&mut left, &mut right);
     (dir, left, right, store_id, event.id, paid.meta().id.clone())
 }
 
 fn attach(vault: &mut UnlockedVault, event_id: &str, tx_id: &str) {
-    vault
-        .attach_payment_to_shared_event(AttachPaymentInput {
+    crate::usecases::household::shared_events::attach_payment_to_shared_event(
+        vault,
+        AttachPaymentInput {
             event_id: event_id.into(),
             tx_id: tx_id.into(),
             new_item_title: Some("attached".into()),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
 }
 
 fn linked(vault: &UnlockedVault, tx_id: &str) -> bool {
@@ -94,7 +103,7 @@ fn linked(vault: &UnlockedVault, tx_id: &str) -> bool {
 #[test]
 fn a_payment_deleted_beside_its_attachment_comes_back_with_its_balance() {
     let (_dir, mut left, mut right, store_id, event_id, tx_id) = setup();
-    left.delete_transaction(&tx_id).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx_id).unwrap();
     attach(&mut right, &event_id, &tx_id);
     settle(&mut left, &mut right);
     for device in [&left, &right] {
@@ -116,7 +125,7 @@ fn a_payment_deleted_beside_its_attachment_comes_back_with_its_balance() {
     // A second pass changes nothing.
     for device in [&mut left, &mut right] {
         let doc = device.doc.clone();
-        let report = device.repair_invariants(None).unwrap();
+        let report = crate::usecases::sync::repair::repair_invariants(device, None).unwrap();
         assert!(report.restored.is_empty() && report.unrestored.is_empty());
         assert_eq!(device.doc.transactions, doc.transactions);
         assert_eq!(device.doc.shared_events, doc.shared_events);
@@ -129,7 +138,7 @@ fn an_ordinary_delete_of_a_linked_payment_is_not_undone() {
     attach(&mut left, &event_id, &tx_id);
     settle(&mut left, &mut right);
     assert!(linked(&right, &tx_id));
-    left.delete_transaction(&tx_id).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx_id).unwrap();
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         assert!(!has_tx(device, &tx_id));
@@ -141,15 +150,15 @@ fn an_ordinary_delete_of_a_linked_payment_is_not_undone() {
 #[test]
 fn a_device_without_the_value_leaves_the_purchase_alone_and_reports_it() {
     let (_dir, mut left, mut right, _store, event_id, tx_id) = setup();
-    left.delete_transaction(&tx_id).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx_id).unwrap();
     attach(&mut right, &event_id, &tx_id);
     // Only the attachment travels to the device that deleted the payment.
-    let from = right.sync_manifest(None).unwrap();
-    let to = left.sync_manifest(None).unwrap();
-    let (wants, _) = left.sync_diff(&to, &from);
-    let records = right.sync_records(&wants).unwrap();
+    let from = crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
+    let to = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
+    let (wants, _) = crate::usecases::sync::read::sync_diff(&left, &to, &from);
+    let records = crate::usecases::sync::read::sync_records(&mut right, &wants).unwrap();
     left.sync_apply(&records, &peer("right")).unwrap();
-    let report = left.repair_invariants(None).unwrap();
+    let report = crate::usecases::sync::repair::repair_invariants(&mut left, None).unwrap();
     assert!(report.unrestored.contains(&tx_id), "{report:?}");
     assert!(linked(&left, &tx_id), "the purchase is untouched");
     assert!(!has_tx(&left, &tx_id), "no stub payment is invented");
@@ -161,9 +170,12 @@ fn a_device_without_the_value_leaves_the_purchase_alone_and_reports_it() {
 fn a_settlement_never_names_a_transfer_that_is_gone() {
     let (_dir, mut left, mut right, store_id, event_id, _paid) = setup();
     let person = left.doc.shared_events[0].participants[0].id.clone();
-    left.make_shared_participant_contact(&event_id, &person)
-        .unwrap();
-    left.add_shared_purchase(
+    crate::usecases::household::shared_events::make_shared_participant_contact(
+        &mut left, &event_id, &person,
+    )
+    .unwrap();
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut left,
         &event_id,
         SharedPurchaseDraft {
             new_item_title: Some("dinner".into()),
@@ -176,21 +188,24 @@ fn a_settlement_never_names_a_transfer_that_is_gone() {
         },
     )
     .unwrap();
-    left.settle_shared(SettleSharedInput {
-        event_id: event_id.clone(),
-        participant_id: person,
-        direction: SettleDirection::ToOrganizer,
-        amount: amount("2"),
-        store_id: Some(store_id.clone()),
-        at: None,
-    })
+    crate::usecases::household::shared_events::settle_shared(
+        &mut left,
+        SettleSharedInput {
+            event_id: event_id.clone(),
+            participant_id: person,
+            direction: SettleDirection::ToOrganizer,
+            amount: amount("2"),
+            store_id: Some(store_id.clone()),
+            at: None,
+        },
+    )
     .unwrap();
     settle(&mut left, &mut right);
     let tx_id = left.doc.shared_events[0].settlements[0]
         .tx_id
         .clone()
         .expect("the settlement moved money");
-    left.delete_transaction(&tx_id).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx_id).unwrap();
     let mut edited = right
         .doc
         .transactions
@@ -201,7 +216,7 @@ fn a_settlement_never_names_a_transfer_that_is_gone() {
     if let Transaction::Transfer(transfer) = &mut edited {
         transfer.amount = amount("1");
     }
-    let _ = right.update_transaction(&tx_id, edited);
+    let _ = crate::usecases::money::transactions::update_transaction(&mut right, &tx_id, edited);
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         for settlement in &device.doc.shared_events[0].settlements {
@@ -224,14 +239,14 @@ fn a_settlement_never_names_a_transfer_that_is_gone() {
 #[test]
 fn the_oracle_knows_a_restored_payment_is_named_by_money() {
     let (_dir, mut left, mut right, _store, event_id, tx_id) = setup();
-    left.delete_transaction(&tx_id).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx_id).unwrap();
     attach(&mut right, &event_id, &tx_id);
     settle(&mut left, &mut right);
     let key = format!("transactions:{tx_id}");
     for device in [&left, &right] {
         assert!(has_tx(device, &tx_id) && linked(device, &tx_id));
         assert!(
-            device.money_names_record(&key),
+            crate::sync::repair::repair_restore::money_names_record(&device.doc, &key),
             "the purchase names {key}, the oracle says nothing does"
         );
     }

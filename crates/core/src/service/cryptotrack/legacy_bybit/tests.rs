@@ -17,21 +17,26 @@ const AT: &str = "2023-11-15T00:00:00Z";
 fn bybit_wallet() -> (tempfile::TempDir, UnlockedVault, String) {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = UnlockedVault::create(dir.path().join("test.wallet"), "pw").unwrap();
-    let wallet = vault
-        .create_store_with(
-            "Bybit",
-            StoreKind::Exchange,
-            "#f0b90b",
-            "",
-            None,
-            StoreExtras {
-                provider: Some(ExchangeProvider::Bybit),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
-    vault.ensure_bybit_accounts(&wallet, ACCOUNT_NAMES).unwrap();
+    let wallet = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Bybit",
+        StoreKind::Exchange,
+        "#f0b90b",
+        "",
+        None,
+        StoreExtras {
+            provider: Some(ExchangeProvider::Bybit),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
+    crate::usecases::cryptotrack::exchange_import::ensure_bybit_accounts(
+        &mut vault,
+        &wallet,
+        ACCOUNT_NAMES,
+    )
+    .unwrap();
     (dir, vault, wallet)
 }
 
@@ -94,11 +99,15 @@ fn storing_the_same_records_again_rewrites_them() {
         bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
         moved(&wallet, "t-1", DAY_MS + 120_000),
     ];
-    let first = vault.bybit_store(&wallet, &records).unwrap();
+    let first =
+        crate::usecases::cryptotrack::legacy_bybit::bybit_store(&mut vault, &wallet, &records)
+            .unwrap();
     assert_eq!(first.recorded(), 3);
     let after_first = written(&vault);
 
-    let again = vault.bybit_store(&wallet, &records).unwrap();
+    let again =
+        crate::usecases::cryptotrack::legacy_bybit::bybit_store(&mut vault, &wallet, &records)
+            .unwrap();
     assert_eq!(again.recorded(), 0, "all three were settled already");
     assert_eq!(again.known, 3);
     assert_eq!(written(&vault), after_first);
@@ -110,17 +119,17 @@ fn the_cost_pool_costs_what_the_fills_cost() {
     // Two buys of one bitcoin on one day, at different prices. The engine
     // can only price a day, so the day's point is their weighted mean —
     // and the pool must still cost 60000 + 70000.
-    vault
-        .bybit_store(
-            &wallet,
-            &[
-                bought(&wallet, "exec-1", "60000", DAY_MS),
-                bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
-            ],
-        )
-        .unwrap();
+    crate::usecases::cryptotrack::legacy_bybit::bybit_store(
+        &mut vault,
+        &wallet,
+        &[
+            bought(&wallet, "exec-1", "60000", DAY_MS),
+            bought(&wallet, "exec-2", "70000", DAY_MS + 60_000),
+        ],
+    )
+    .unwrap();
 
-    let totals = vault.crypto_totals(AT);
+    let totals = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), AT);
     let bitcoin = totals
         .assets
         .iter()
@@ -142,11 +151,18 @@ fn the_cost_pool_costs_what_the_fills_cost() {
 fn a_wallet_the_engine_drives_is_not_archivable() {
     let (_dir, mut vault, wallet) = bybit_wallet();
     // Before anything is followed, nothing claims the wallet.
-    assert!(!vault.exchange_is_engine_driven(&wallet));
-    vault
-        .bybit_store(&wallet, &[bought(&wallet, "exec-1", "60000", DAY_MS)])
-        .unwrap();
-    assert!(vault.exchange_is_engine_driven(&wallet));
+    assert!(
+        !crate::usecases::cryptotrack::legacy_bybit::exchange_is_engine_driven(&vault.doc, &wallet)
+    );
+    crate::usecases::cryptotrack::legacy_bybit::bybit_store(
+        &mut vault,
+        &wallet,
+        &[bought(&wallet, "exec-1", "60000", DAY_MS)],
+    )
+    .unwrap();
+    assert!(
+        crate::usecases::cryptotrack::legacy_bybit::exchange_is_engine_driven(&vault.doc, &wallet)
+    );
     // A sub-account of it answers the same, because archiving reaches the
     // whole wallet.
     let unified = vault
@@ -157,7 +173,9 @@ fn a_wallet_the_engine_drives_is_not_archivable() {
         .expect("the wallet has its exchange accounts")
         .id
         .clone();
-    assert!(vault.exchange_is_engine_driven(&unified));
+    assert!(
+        crate::usecases::cryptotrack::legacy_bybit::exchange_is_engine_driven(&vault.doc, &unified)
+    );
     // A wallet that is not an exchange never does.
     let plain = vault
         .doc
@@ -167,5 +185,7 @@ fn a_wallet_the_engine_drives_is_not_archivable() {
         .expect("the new vault has an ordinary wallet")
         .id
         .clone();
-    assert!(!vault.exchange_is_engine_driven(&plain));
+    assert!(
+        !crate::usecases::cryptotrack::legacy_bybit::exchange_is_engine_driven(&vault.doc, &plain)
+    );
 }

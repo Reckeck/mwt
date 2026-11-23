@@ -20,7 +20,7 @@ pub(crate) fn bybit_store(
     store_id: &str,
     records: &[PendingImport],
 ) -> Result<BybitStored> {
-    let decided = vault.decided_import_ids();
+    let decided = crate::cryptotrack::exchange_sync::decided_import_ids(&vault.doc);
     let root = root_of(&vault.doc, store_id);
     rules::store_records(&mut vault.doc, &decided, &root, records)
 }

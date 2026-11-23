@@ -59,21 +59,21 @@ mod tests {
     }
 
     fn pocket(vault: &mut UnlockedVault, parent: &str, name: &str) -> String {
-        vault
-            .create_store_with(
-                name,
-                StoreKind::Cash,
-                "#000",
-                "",
-                Some(parent.to_string()),
-                StoreExtras {
-                    sub_type: Some(SubType::Pocket),
-                    binding: Some(crate::model::store::Binding::Asset(usd())),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id
+        crate::usecases::money::stores::create_store_with(
+            vault,
+            name,
+            StoreKind::Cash,
+            "#000",
+            "",
+            Some(parent.to_string()),
+            StoreExtras {
+                sub_type: Some(SubType::Pocket),
+                binding: Some(crate::model::store::Binding::Asset(usd())),
+                ..StoreExtras::default()
+            },
+        )
+        .unwrap()
+        .id
     }
 
     #[test]
@@ -88,11 +88,16 @@ mod tests {
         let (_two, mut right) = device("bbbbbbbb-right");
         let left_cash = old_build(&mut left);
         let right_cash = old_build(&mut right);
-        left.add_transaction(income(&left_cash, "10", "left"))
-            .unwrap();
-        right
-            .add_transaction(income(&right_cash, "20", "right"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut left,
+            income(&left_cash, "10", "left"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&right_cash, "20", "right"),
+        )
+        .unwrap();
         settle(&mut left, &mut right);
         for device in [&left, &right] {
             let cash = roots(device);
@@ -103,9 +108,12 @@ mod tests {
             }
         }
         assert_eq!(roots(&left), roots(&right));
-        let before = left.sync_manifest(None).unwrap();
+        let before = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
         assert_eq!(exchange(&mut left, &mut right), (None, None));
-        assert_eq!(left.sync_manifest(None).unwrap(), before);
+        assert_eq!(
+            crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap(),
+            before
+        );
     }
 
     #[test]
@@ -113,10 +121,13 @@ mod tests {
         let (_one, mut left) = device("aaaaaaaa-left");
         let (_two, mut right) = device("bbbbbbbb-right");
         let old = old_build(&mut left);
-        right
-            .add_transaction(income(CASH_WALLET_ID, "5", "right"))
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(CASH_WALLET_ID, "5", "right"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut left, income(&old, "7", "left"))
             .unwrap();
-        left.add_transaction(income(&old, "7", "left")).unwrap();
         settle(&mut left, &mut right);
         assert_eq!(roots(&left), vec![CASH_WALLET_ID.to_string()]);
         assert_eq!(roots(&right), vec![CASH_WALLET_ID.to_string()]);
@@ -144,8 +155,18 @@ mod tests {
             names.sort();
             assert_eq!(names, vec!["Jar", "Wallet", "Wallet (2)"]);
         }
-        assert_eq!(left.find_store(&other).unwrap().name, "Wallet");
-        assert_eq!(left.find_store(&mine).unwrap().name, "Wallet (2)");
+        assert_eq!(
+            crate::money::tree::find_store(&left.doc, &other)
+                .unwrap()
+                .name,
+            "Wallet"
+        );
+        assert_eq!(
+            crate::money::tree::find_store(&left.doc, &mine)
+                .unwrap()
+                .name,
+            "Wallet (2)"
+        );
     }
 
     #[test]
@@ -154,11 +175,16 @@ mod tests {
         let (_two, mut right) = device("bbbbbbbb-right");
         let left_cash = old_build(&mut left);
         let right_cash = old_build(&mut right);
-        left.add_transaction(income(&left_cash, "10", "left"))
-            .unwrap();
-        right
-            .add_transaction(income(&right_cash, "20", "right"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut left,
+            income(&left_cash, "10", "left"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&right_cash, "20", "right"),
+        )
+        .unwrap();
         let (_, applied) = exchange(&mut left, &mut right);
         let batch = applied.expect("right applied a batch").id;
         assert_eq!(roots(&right).len(), 1);
@@ -177,10 +203,13 @@ mod tests {
     fn the_cash_wallet_still_cannot_be_merged_away_by_the_user() {
         let (_dir, mut vault) = empty_vault();
         let bank = crate::service::test_support::store(&mut vault, "bank", StoreKind::Bank, None);
-        let refused = vault.apply_store_change(&StoreChangeInput {
-            store_id: CASH_WALLET_ID.into(),
-            change: StoreChange::MergeInto { target_id: bank },
-        });
+        let refused = crate::usecases::money::store_change::apply_store_change(
+            &mut vault,
+            &StoreChangeInput {
+                store_id: CASH_WALLET_ID.into(),
+                change: StoreChange::MergeInto { target_id: bank },
+            },
+        );
         assert!(refused.is_err());
         assert_eq!(roots(&vault).len(), 1);
     }

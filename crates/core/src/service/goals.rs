@@ -5,8 +5,6 @@ pub use crate::planning::goals::{
     GoalCalendar, GoalCalendarMonth, GoalDeleted, GoalDraft, GoalProgress, RealismIssue,
 };
 
-use std::collections::HashMap;
-
 use crate::Amount;
 use crate::error::Result;
 use crate::model::planning::Goal;
@@ -45,8 +43,5 @@ impl UnlockedVault {
     // forward:end
 
     // Read by the emergency and debt areas until they move.
-    forward! {
-        pub(crate) fn store_values_usd(&self) -> HashMap<String, Amount>
-            => crate::planning::goals::store_values_usd @books;
-    }
+    forward! {}
 }

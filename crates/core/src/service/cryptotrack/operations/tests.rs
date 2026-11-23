@@ -70,10 +70,13 @@ fn vault_with(events: Vec<CryptoTx>) -> (tempfile::TempDir, UnlockedVault) {
 }
 
 fn page(vault: &UnlockedVault, filter: CryptoOpFilter) -> CryptoOpsPage {
-    vault.crypto_list_operations(&CryptoListOperationsInput {
-        filter,
-        ..Default::default()
-    })
+    crate::usecases::cryptotrack::operations::crypto_list_operations(
+        &vault.books(),
+        &CryptoListOperationsInput {
+            filter,
+            ..Default::default()
+        },
+    )
 }
 
 fn pin_usdt_price(vault: &mut UnlockedVault, day: NaiveDate) {
@@ -102,11 +105,14 @@ fn the_list_is_newest_first_and_a_page_is_capped() {
     assert_eq!(first.total, 250);
     assert_eq!(first.items.len(), OPERATIONS_PAGE);
     assert_eq!(first.items[0].id, "e249");
-    let second = vault.crypto_list_operations(&CryptoListOperationsInput {
-        offset: 100,
-        limit: Some(10_000),
-        ..Default::default()
-    });
+    let second = crate::usecases::cryptotrack::operations::crypto_list_operations(
+        &vault.books(),
+        &CryptoListOperationsInput {
+            offset: 100,
+            limit: Some(10_000),
+            ..Default::default()
+        },
+    );
     assert_eq!(second.items.len(), OPERATIONS_PAGE, "the limit is capped");
     assert_eq!(second.items[0].id, "e149");
 }
@@ -219,12 +225,14 @@ fn a_coin_on_an_exchange_shows_the_exchange_and_never_the_word_fiat() {
     assert_eq!(row.exchange.as_deref(), Some("bybit"));
     assert_eq!(row.legs[0].symbol, "BTC");
     assert_eq!(row.reference, "ex-1");
-    let detail = vault
-        .crypto_operation_detail(&CryptoOperationDetailInput {
+    let detail = crate::usecases::cryptotrack::operations::crypto_operation_detail(
+        &vault.books(),
+        &CryptoOperationDetailInput {
             id: "fill".into(),
             with_candidates: false,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     // The site, and the id to look for: no deep link to a fill exists.
     assert_eq!(detail.url.as_deref(), Some("https://www.bybit.com/"));
     assert_eq!(detail.url_note.as_deref(), Some("ex-1"));
@@ -242,26 +250,30 @@ fn an_explorer_of_the_users_own_choosing_builds_the_link() {
     )]);
     vault.raise_to_level3_for_tests();
     fn ask(vault: &UnlockedVault) -> Option<String> {
-        vault
-            .crypto_operation_detail(&CryptoOperationDetailInput {
+        crate::usecases::cryptotrack::operations::crypto_operation_detail(
+            &vault.books(),
+            &CryptoOperationDetailInput {
                 id: "cev:1".into(),
                 with_candidates: false,
-            })
-            .unwrap()
-            .url
+            },
+        )
+        .unwrap()
+        .url
     }
     let preset = ask(&vault).expect("a chain operation has a page");
     assert!(preset.starts_with("https://etherscan.io/"), "{preset}");
 
-    vault
-        .crypto_set_network_settings(&SetNetworkSettingsInput {
+    crate::usecases::cryptotrack::network::crypto_set_network_settings(
+        &mut vault,
+        &SetNetworkSettingsInput {
             chain: Chain::Ethereum,
             rpc: String::new(),
             blockscout: String::new(),
             explorer: "https://eth.example.org".into(),
             blockscout_key: None,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let own = ask(&vault).expect("the link survives a change of explorer");
     assert!(own.starts_with("https://eth.example.org/"), "{own}");
     // The hash is what the page is about, so it must still be in the link.
@@ -283,12 +295,14 @@ fn a_row_carries_no_address_and_the_detail_only_an_https_one() {
         !text.contains("http"),
         "the list must not name an explorer page: {text}"
     );
-    let detail = vault
-        .crypto_operation_detail(&CryptoOperationDetailInput {
+    let detail = crate::usecases::cryptotrack::operations::crypto_operation_detail(
+        &vault.books(),
+        &CryptoOperationDetailInput {
             id: "a".into(),
             with_candidates: false,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert!(detail.url.as_deref().unwrap().starts_with("https://"));
 }
 
@@ -301,14 +315,16 @@ fn a_correction_changes_the_attributes_and_nothing_else() {
     let events_before = vault.doc.crypto_events.clone();
     let txs_before = vault.doc.transactions.len();
     let stores_before = vault.doc.stores.len();
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             kind: Some(CryptoTxKind::Claim),
             comment: Some("  pay  ".into()),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(
         vault.doc.crypto_events, events_before,
         "an event is never rewritten"
@@ -332,13 +348,15 @@ fn a_correction_changes_the_attributes_and_nothing_else() {
         CryptoTxKind::Claim
     );
     // And it goes back to what the source said.
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             clear: vec![OverrideField::Kind, OverrideField::Comment],
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(
         page(&vault, CryptoOpFilter::default()).items[0].kind,
         CryptoTxKind::Transfer
@@ -353,13 +371,15 @@ fn a_hidden_operation_leaves_the_list_until_asked_for() {
         CryptoDirection::In,
         "1",
     )]);
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             hidden: Some(true),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert!(page(&vault, CryptoOpFilter::default()).items.is_empty());
     let shown = page(
         &vault,
@@ -380,7 +400,7 @@ fn an_unknown_category_contact_or_operation_is_refused() {
         "1",
     )]);
     let ask = |input: CryptoSetOverrideInput, vault: &mut UnlockedVault| {
-        vault.crypto_set_override(&input)
+        crate::usecases::cryptotrack::operations::crypto_set_override(vault, &input)
     };
     assert!(
         ask(
@@ -497,23 +517,27 @@ fn the_modules_own_entries_are_listed_marked_and_cannot_be_corrected() {
         rows.iter().all(|row| !row.linkable),
         "no explorer link for them"
     );
-    let detail = vault
-        .crypto_operation_detail(&CryptoOperationDetailInput {
+    let detail = crate::usecases::cryptotrack::operations::crypto_operation_detail(
+        &vault.books(),
+        &CryptoOperationDetailInput {
             id: opening.id.clone(),
             with_candidates: false,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(detail.url, None);
     assert_eq!(detail.url_note, None);
     assert_eq!(detail.row.own_entry, Some(OwnEntry::Opening));
     assert!(
-        vault
-            .crypto_set_override(&CryptoSetOverrideInput {
+        crate::usecases::cryptotrack::operations::crypto_set_override(
+            &mut vault,
+            &CryptoSetOverrideInput {
                 event_id: opening.id,
                 kind: Some(CryptoTxKind::Claim),
                 ..Default::default()
-            })
-            .is_err(),
+            }
+        )
+        .is_err(),
         "the kind of an own entry is not corrected"
     );
     assert!(vault.doc.crypto_overrides.is_empty());
@@ -532,7 +556,7 @@ fn declaring_an_exchange_ties_both_sides_by_one_chain_and_can_be_undone() {
     let bank = store(&mut vault, "Bank", StoreKind::Cash, None);
     let mut spend = payment(&bank, "500", "to the exchanger");
     at(&mut spend, "2026-11-11T09:00:00Z");
-    let spend = vault.add_transaction(spend).unwrap();
+    let spend = crate::usecases::money::transactions::add_transaction(&mut vault, spend).unwrap();
     let spend_id = spend.meta().id.clone();
     pin_usdt_price(&mut vault, NaiveDate::from_ymd_opt(2026, 11, 11).unwrap());
 
@@ -565,34 +589,40 @@ fn declaring_an_exchange_ties_both_sides_by_one_chain_and_can_be_undone() {
     );
     // «Not an exchange» is the user's answer about their own data: it is
     // kept in the correction (so it syncs) and the banner stops asking.
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             not_exchange: Some(true),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert!(vault.doc.crypto_overrides[0].not_exchange);
     assert!(
         page(&vault, CryptoOpFilter::default()).suggestion.is_none(),
         "«not an exchange» is respected"
     );
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             not_exchange: Some(false),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert!(page(&vault, CryptoOpFilter::default()).suggestion.is_some());
 
-    let result = vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    let result = crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             link_transaction_id: Some(spend_id.clone()),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let flow = result.flow_id.expect("a chain was made");
     let fiat_flow = vault
         .doc
@@ -604,12 +634,14 @@ fn declaring_an_exchange_ties_both_sides_by_one_chain_and_can_be_undone() {
         .flow_id
         .clone();
     assert_eq!(fiat_flow.as_deref(), Some(flow.as_str()));
-    let detail = vault
-        .crypto_operation_detail(&CryptoOperationDetailInput {
+    let detail = crate::usecases::cryptotrack::operations::crypto_operation_detail(
+        &vault.books(),
+        &CryptoOperationDetailInput {
             id: "a".into(),
             with_candidates: true,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(detail.chain.len(), 2);
     assert!(detail.basis_from_chain);
     assert!(
@@ -620,13 +652,15 @@ fn declaring_an_exchange_ties_both_sides_by_one_chain_and_can_be_undone() {
     );
     assert!(page(&vault, CryptoOpFilter::default()).suggestion.is_none());
 
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             clear: vec![OverrideField::Flow],
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert!(
         vault
             .doc
@@ -648,24 +682,28 @@ fn a_contract_rule_classifies_what_arrives_tomorrow_and_can_be_removed() {
         other,
     ]);
     let detail = |vault: &UnlockedVault| {
-        vault
-            .crypto_operation_detail(&CryptoOperationDetailInput {
+        crate::usecases::cryptotrack::operations::crypto_operation_detail(
+            &vault.books(),
+            &CryptoOperationDetailInput {
                 id: "a".into(),
                 with_candidates: false,
-            })
-            .unwrap()
+            },
+        )
+        .unwrap()
     };
     assert_eq!(detail(&vault).same_contract_count, 2);
     assert!(detail(&vault).contract_rule.is_none());
-    let result = vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    let result = crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             kind: Some(CryptoTxKind::Claim),
             comment: Some("only here".into()),
             same_contract: true,
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(result.applied, 2);
     let rows = page(&vault, CryptoOpFilter::default()).items;
     let find = |id: &str| rows.iter().find(|row| row.id == id).unwrap().clone();
@@ -701,26 +739,30 @@ fn a_contract_rule_classifies_what_arrives_tomorrow_and_can_be_removed() {
     );
     assert_eq!(claims.total, 3);
     // An operation's own correction stands above the rule.
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "tomorrow".into(),
             kind: Some(CryptoTxKind::Stake),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let rows = page(&vault, CryptoOpFilter::default()).items;
     assert_eq!(
         rows.iter().find(|row| row.id == "tomorrow").unwrap().kind,
         CryptoTxKind::Stake
     );
     // Removing the rule takes the decision off everything it reached.
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "b".into(),
             remove_contract_rule: true,
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert!(detail(&vault).contract_rule.is_none());
     let rows = page(&vault, CryptoOpFilter::default()).items;
     let find = |id: &str| rows.iter().find(|row| row.id == id).unwrap().clone();
@@ -751,13 +793,15 @@ fn a_counterparty_is_named_by_address_and_remembered_when_chosen() {
         page(&vault, CryptoOpFilter::default()).items[0].contact_name,
         None
     );
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             contact_id: Some("c1".into()),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let saved = &vault.doc.contacts[0].accounts;
     assert_eq!(saved.len(), 1);
     assert_eq!(saved[0].value, SENDER);
@@ -843,14 +887,16 @@ fn clearing_a_contract_rule_leaves_a_tombstone() {
     )]);
     vault.set_device("aaaaaaaa-rule");
     vault.set_write_behind(Some(std::sync::Arc::new(NoWake)));
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             kind: Some(CryptoTxKind::Claim),
             same_contract: true,
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     flush(&mut vault);
     let rule = vault
         .doc
@@ -860,13 +906,15 @@ fn clearing_a_contract_rule_leaves_a_tombstone() {
         .expect("the rule is stored")
         .id
         .clone();
-    vault
-        .crypto_set_override(&CryptoSetOverrideInput {
+    crate::usecases::cryptotrack::operations::crypto_set_override(
+        &mut vault,
+        &CryptoSetOverrideInput {
             event_id: "a".into(),
             remove_contract_rule: true,
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     flush(&mut vault);
     assert!(
         vault

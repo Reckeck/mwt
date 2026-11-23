@@ -41,22 +41,28 @@ pub fn empty_vault() -> (tempfile::TempDir, UnlockedVault) {
 #[cfg(test)]
 pub fn setup() -> (tempfile::TempDir, UnlockedVault) {
     let (dir, mut vault) = empty_vault();
-    vault
-        .create_store_with(
-            "Binance",
-            StoreKind::Exchange,
-            "#f0b90b",
-            "",
-            None,
-            crate::service::StoreExtras {
-                provider: Some(crate::model::store::ExchangeProvider::Bybit),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    vault
-        .create_store("Cold", StoreKind::Crypto, "#555", "", None)
-        .unwrap();
+    crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Binance",
+        StoreKind::Exchange,
+        "#f0b90b",
+        "",
+        None,
+        crate::service::StoreExtras {
+            provider: Some(crate::model::store::ExchangeProvider::Bybit),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    crate::usecases::money::stores::create_store(
+        &mut vault,
+        "Cold",
+        StoreKind::Crypto,
+        "#555",
+        "",
+        None,
+    )
+    .unwrap();
     (dir, vault)
 }
 
@@ -77,10 +83,16 @@ pub fn store(
         cash.name = name.to_string();
         return cash.id.clone();
     }
-    vault
-        .create_store(name, kind, "#000", "", parent.map(str::to_string))
-        .unwrap()
-        .id
+    crate::usecases::money::stores::create_store(
+        vault,
+        name,
+        kind,
+        "#000",
+        "",
+        parent.map(str::to_string),
+    )
+    .unwrap()
+    .id
 }
 
 pub fn meta(comment: &str, categories: &[&str]) -> TxMeta {

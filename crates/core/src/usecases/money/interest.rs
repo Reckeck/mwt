@@ -43,11 +43,11 @@ pub fn post_due_interest(vault: &mut UnlockedVault, today: NaiveDate) -> Result<
     let drafts = plan_due_interest(&vault.books(), today);
     let count = drafts.len() as u32;
     for mut draft in drafts {
-        vault.prepare_transaction(&mut draft)?;
+        crate::usecases::money::transactions::prepare_transaction(vault, &mut draft)?;
         vault.doc.transactions.push(draft);
     }
     if count > 0 {
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(vault);
         vault.transact(|tx| {
             tx.touch();
             Ok(())

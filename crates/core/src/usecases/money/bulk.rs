@@ -29,7 +29,7 @@ fn all_or_nothing<T>(
         }
         Err(err) => {
             vault.doc = backup;
-            vault.recompute_holdings();
+            crate::usecases::money::portfolio::recompute_holdings(vault);
             Err(err)
         }
     }
@@ -56,8 +56,9 @@ pub fn delete_transactions(
         let mut out = Vec::with_capacity(ids.len());
         for id in ids {
             let index = tx_index(&vault.doc, id)?;
-            let property_id = vault.property_of_tx(id).map(str::to_string);
-            vault.cascade_shared_delete(id);
+            let property_id = crate::household::property_links::property_of_tx(&vault.doc, id)
+                .map(str::to_string);
+            crate::usecases::household::shared_events::cascade_shared_delete(vault, id);
             let (transaction, _, _) =
                 vault.run(|run| Ok(run.doc_mut().transactions.remove(index)))?;
             set_property_link(vault, id, None);
@@ -90,7 +91,7 @@ pub fn restore_transactions(
             })?;
             set_property_link(vault, &id, item.property_id.as_deref());
         }
-        vault.restore_removed_with_payment();
+        crate::usecases::sync::repair::restore_removed_with_payment(vault);
         Ok(())
     })
 }

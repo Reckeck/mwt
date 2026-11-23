@@ -23,7 +23,7 @@ fn category_month_spent(
 ) -> (Amount, String) {
     let cal = Calendar::new(zone);
     let (from, to) = cal.month_bounds(cal.date_of(now));
-    let currency = vault.budget_currency();
+    let currency = crate::planning::budget::budget_currency(&vault.books());
     let spent = flows_between(&vault.books(), &cal, &currency, from, to)
         .into_iter()
         .filter(|flow| {
@@ -91,8 +91,8 @@ fn pinned_view(
 
 /// The pins with their short values.
 pub fn pinned(vault: &UnlockedVault, now: i64, zone: &str) -> Vec<PinnedView> {
-    let goals = vault.goal_progress(now, zone);
-    let budgets = vault.budget_status(now, zone);
+    let goals = crate::usecases::planning::goals::goal_progress(&vault.books(), now, zone);
+    let budgets = crate::usecases::planning::budget::budget_status(&vault.books(), now, zone);
     vault
         .doc
         .settings

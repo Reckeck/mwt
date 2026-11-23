@@ -177,7 +177,9 @@ pub fn automation_journal(vault: &UnlockedVault, limit: usize) -> Vec<JournalEnt
             Some(journal_entry(vault, workflow, run))
         })
         .collect();
-    out.extend(rules::notice_entries(vault.notifications()));
+    out.extend(rules::notice_entries(
+        crate::planning::notifications::notifications(&vault.doc),
+    ));
     rules::newest(out, limit)
 }
 
@@ -222,8 +224,7 @@ pub fn automation_card(
         next_at: None,
         runs,
     };
-    if let Some(automation) = vault
-        .automations()
+    if let Some(automation) = crate::usecases::planning::automations::automations(vault)
         .into_iter()
         .find(|automation| automation.id == id)
     {
@@ -278,8 +279,7 @@ fn follow_income(
     now: i64,
     until: i64,
 ) {
-    let soonest = vault
-        .automations()
+    let soonest = crate::usecases::planning::automations::automations(vault)
         .into_iter()
         .filter(|automation| automation.active)
         .filter_map(|automation| {

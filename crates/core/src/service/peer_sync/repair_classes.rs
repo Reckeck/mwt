@@ -68,7 +68,11 @@ mod tests {
         );
         for device in [&mut left, &mut right] {
             let stamps = device.doc.sync.stamps.clone();
-            assert!(device.repair_invariants(None).unwrap().is_empty());
+            assert!(
+                crate::usecases::sync::repair::repair_invariants(device, None)
+                    .unwrap()
+                    .is_empty()
+            );
             assert_eq!(device.doc.sync.stamps, stamps);
         }
     }
@@ -79,7 +83,11 @@ mod tests {
         for device in [&mut left, &mut right] {
             device.doc.asset_classes = vec![class("a", "10"), class("b", "20"), class("c", "30")];
             device.persist().unwrap();
-            assert!(device.repair_invariants(None).unwrap().normalized_shares);
+            assert!(
+                crate::usecases::sync::repair::repair_invariants(device, None)
+                    .unwrap()
+                    .normalized_shares
+            );
         }
         // `settle` asserts that both sides agree and that a round moves nothing.
         settle(&mut left, &mut right);
@@ -92,21 +100,37 @@ mod tests {
         );
         assert_eq!(shares(&left), shares(&right));
         for device in [&mut left, &mut right] {
-            assert!(device.repair_invariants(None).unwrap().is_empty());
+            assert!(
+                crate::usecases::sync::repair::repair_invariants(device, None)
+                    .unwrap()
+                    .is_empty()
+            );
         }
     }
 
     #[test]
     fn a_link_to_a_class_another_device_removed_is_dropped() {
         let (_dir, mut left, mut right) = two_devices();
-        left.set_asset_classes(vec![class("x", "50"), class("y", "50")])
-            .unwrap();
+        crate::usecases::planning::allocation::set_asset_classes(
+            &mut left,
+            vec![class("x", "50"), class("y", "50")],
+        )
+        .unwrap();
         settle(&mut left, &mut right);
         let target = AssetClassTarget::Asset {
             asset_key: usd().key(),
         };
-        left.set_asset_classes(vec![class("x", "100")]).unwrap();
-        right.assign_asset_class(target, Some("y".into())).unwrap();
+        crate::usecases::planning::allocation::set_asset_classes(
+            &mut left,
+            vec![class("x", "100")],
+        )
+        .unwrap();
+        crate::usecases::planning::allocation::assign_asset_class(
+            &mut right,
+            target,
+            Some("y".into()),
+        )
+        .unwrap();
         settle(&mut left, &mut right);
         for device in [&left, &right] {
             assert!(

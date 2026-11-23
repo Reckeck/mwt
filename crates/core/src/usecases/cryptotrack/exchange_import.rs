@@ -123,7 +123,7 @@ pub fn stage_imports(vault: &mut UnlockedVault, imports: Vec<PendingImport>) -> 
 /// one write.
 pub fn confirm_pending_imports(vault: &mut UnlockedVault, exec_ids: &[String]) -> Result<u32> {
     let plan = rules::plan_confirmation(&vault.books(), exec_ids, |tx| {
-        vault.validate_transaction(tx).is_ok()
+        crate::usecases::household::validate::validate_transaction(vault, tx).is_ok()
     });
     let confirmed = plan.booked();
     vault.run(|run| {
@@ -186,20 +186,20 @@ pub fn ensure_bybit_accounts_for(
         ids[index] = match existing {
             Some(id) => Some(id),
             None if wanted[index] => Some(
-                vault
-                    .create_store_with(
-                        names[index],
-                        StoreKind::Exchange,
-                        &root.color,
-                        "",
-                        Some(store_id.to_string()),
-                        StoreExtras {
-                            sub_type: Some(sub_type),
-                            binding: Some(crate::model::store::Binding::Market(market)),
-                            ..StoreExtras::default()
-                        },
-                    )?
-                    .id,
+                crate::usecases::money::stores::create_store_with(
+                    vault,
+                    names[index],
+                    StoreKind::Exchange,
+                    &root.color,
+                    "",
+                    Some(store_id.to_string()),
+                    StoreExtras {
+                        sub_type: Some(sub_type),
+                        binding: Some(crate::model::store::Binding::Market(market)),
+                        ..StoreExtras::default()
+                    },
+                )?
+                .id,
             ),
             None => None,
         };

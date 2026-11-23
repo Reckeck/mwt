@@ -18,58 +18,61 @@ use crate::sync::state::SyncState;
 use crate::sync::track::Tracker;
 
 fn exchange_store(vault: &mut UnlockedVault) -> String {
-    vault
-        .create_store_with(
-            "Bybit",
-            StoreKind::Exchange,
-            "",
-            "",
-            None,
-            StoreExtras {
-                provider: Some(ExchangeProvider::Bybit),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id
+    crate::usecases::money::stores::create_store_with(
+        vault,
+        "Bybit",
+        StoreKind::Exchange,
+        "",
+        "",
+        None,
+        StoreExtras {
+            provider: Some(ExchangeProvider::Bybit),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id
 }
 
 fn terminal(vault: &UnlockedVault, id: &str) -> TerminalState {
-    vault.terminal_state(id).unwrap()
+    crate::cryptotrack::exchange_import::terminal_state(&vault.doc, id).unwrap()
 }
 
 fn set_timeframe(vault: &mut UnlockedVault, id: &str, timeframe: &str) {
-    vault
-        .update_terminal_state(
-            id,
-            TerminalPatch {
-                timeframe: Some(timeframe.into()),
-                ..TerminalPatch::default()
-            },
-        )
-        .unwrap();
+    crate::usecases::cryptotrack::exchange_import::update_terminal_state(
+        vault,
+        id,
+        TerminalPatch {
+            timeframe: Some(timeframe.into()),
+            ..TerminalPatch::default()
+        },
+    )
+    .unwrap();
 }
 
 fn set_watchlist(vault: &mut UnlockedVault, id: &str, symbol: &str) {
-    vault
-        .update_terminal_state(
-            id,
-            TerminalPatch {
-                watchlist: Some(vec![symbol.into()]),
-                ..TerminalPatch::default()
-            },
-        )
-        .unwrap();
+    crate::usecases::cryptotrack::exchange_import::update_terminal_state(
+        vault,
+        id,
+        TerminalPatch {
+            watchlist: Some(vec![symbol.into()]),
+            ..TerminalPatch::default()
+        },
+    )
+    .unwrap();
 }
 
 fn coins_of(vault: &UnlockedVault, id: &str) -> Vec<String> {
-    vault.import_settings(id).unwrap().coins
+    crate::cryptotrack::exchange_sync::import_settings(&vault.books(), id)
+        .unwrap()
+        .coins
 }
 
 fn set_coins(vault: &mut UnlockedVault, id: &str, coins: &[&str]) {
-    let mut settings = vault.import_settings(id).unwrap();
+    let mut settings =
+        crate::cryptotrack::exchange_sync::import_settings(&vault.books(), id).unwrap();
     settings.coins = coins.iter().map(|coin| (*coin).to_string()).collect();
-    vault.set_import_settings(id, settings).unwrap();
+    crate::usecases::cryptotrack::exchange_sync::set_import_settings(vault, id, settings).unwrap();
 }
 
 #[test]
@@ -79,8 +82,13 @@ fn terminal_state_is_not_synced() {
     settle(&mut left, &mut right);
 
     set_watchlist(&mut left, &id, "SOLUSDT");
-    left.save_terminal_drawings(&id, "SOLUSDT", r#"[{"id":"1"}]"#)
-        .unwrap();
+    crate::usecases::cryptotrack::exchange_import::save_terminal_drawings(
+        &mut left,
+        &id,
+        "SOLUSDT",
+        r#"[{"id":"1"}]"#,
+    )
+    .unwrap();
     set_timeframe(&mut right, &id, "4h");
     set_coins(&mut left, &id, &["BTC"]);
     settle(&mut left, &mut right);
@@ -107,9 +115,13 @@ fn terminal_change_stamps_nothing() {
 
     set_watchlist(&mut vault, &id, "SOLUSDT");
     set_timeframe(&mut vault, &id, "15m");
-    vault
-        .save_terminal_drawings(&id, "SOLUSDT", r#"[{"id":"1"}]"#)
-        .unwrap();
+    crate::usecases::cryptotrack::exchange_import::save_terminal_drawings(
+        &mut vault,
+        &id,
+        "SOLUSDT",
+        r#"[{"id":"1"}]"#,
+    )
+    .unwrap();
     let changed = tracker.stamp(&vault.doc_value().unwrap(), &mut state, &mut clock);
     assert!(changed.is_empty(), "{changed:?}");
     assert!(state.stamps.is_empty(), "{:?}", state.stamps);
@@ -132,8 +144,8 @@ fn digests_agree_with_different_terminals() {
     set_timeframe(&mut right, &id, "1d");
     assert_ne!(terminal(&left, &id), terminal(&right, &id));
     assert_eq!(
-        left.sync_manifest(None).unwrap(),
-        right.sync_manifest(None).unwrap()
+        crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap(),
+        crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap()
     );
     // Nothing is left to send either way.
     assert_eq!(exchange(&mut left, &mut right), (None, None));
@@ -189,29 +201,28 @@ fn a_new_store_from_a_peer_gets_a_default_terminal() {
 }
 
 fn car_store(vault: &mut UnlockedVault) -> String {
-    vault
-        .create_store_with(
-            "Octavia",
-            StoreKind::Property,
-            "#555",
-            "",
-            None,
-            StoreExtras {
-                property: Some(PropertyInfo {
-                    category: PropertyCategory::Car,
-                    car: Some(CarInfo::default()),
-                    ..PropertyInfo::default()
-                }),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id
+    crate::usecases::money::stores::create_store_with(
+        vault,
+        "Octavia",
+        StoreKind::Property,
+        "#555",
+        "",
+        None,
+        StoreExtras {
+            property: Some(PropertyInfo {
+                category: PropertyCategory::Car,
+                car: Some(CarInfo::default()),
+                ..PropertyInfo::default()
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id
 }
 
 fn car_of(vault: &UnlockedVault, id: &str) -> CarInfo {
-    vault
-        .find_store(id)
+    crate::money::tree::find_store(&vault.doc, id)
         .unwrap()
         .property
         .clone()
@@ -227,7 +238,13 @@ fn mileage_and_insurance_edited_on_two_devices_both_kept() {
     settle(&mut left, &mut right);
 
     let day = NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
-    left.vehicle_update_mileage(&id, 42_000, day).unwrap();
+    crate::usecases::household::vehicle::vehicle_update_mileage(
+        &mut left,
+        &mwt_model::StoreId::from(&id),
+        42_000,
+        day,
+    )
+    .unwrap();
     for store in &mut right.doc.stores {
         if store.id == id {
             let car = store.property.as_mut().unwrap().car.as_mut().unwrap();
@@ -251,21 +268,31 @@ fn revalue_and_car_edited_on_two_devices_both_kept() {
     settle(&mut left, &mut right);
 
     let day = NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
-    left.vehicle_update_mileage(&id, 7_000, day).unwrap();
-    right
-        .set_revalue_rule(
-            &id,
-            Some(RevalueRule {
-                pct_per_year: Some(amount("5")),
-                floor: None,
-            }),
-            "UTC",
-        )
-        .unwrap();
+    crate::usecases::household::vehicle::vehicle_update_mileage(
+        &mut left,
+        &mwt_model::StoreId::from(&id),
+        7_000,
+        day,
+    )
+    .unwrap();
+    crate::usecases::money::valuation::set_revalue_rule(
+        &mut right,
+        &mwt_model::StoreId::from(&id),
+        Some(RevalueRule {
+            pct_per_year: Some(amount("5")),
+            floor: None,
+        }),
+        "UTC",
+    )
+    .unwrap();
     settle(&mut left, &mut right);
 
     for vault in [&left, &right] {
-        let info = vault.find_store(&id).unwrap().property.clone().unwrap();
+        let info = crate::money::tree::find_store(&vault.doc, &id)
+            .unwrap()
+            .property
+            .clone()
+            .unwrap();
         assert_eq!(info.car.unwrap().mileage_km, Some(7_000));
         assert_eq!(info.revalue.unwrap().pct_per_year, Some(amount("5")));
     }

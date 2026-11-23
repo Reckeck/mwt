@@ -9,7 +9,9 @@ use crate::service::UnlockedVault;
 /// An automation was deleted: its workflow goes with its runs.
 pub fn on_automation_deleted(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<()> {
     match event {
-        DomainEvent::AutomationDeleted(deleted) => vault.delete_workflow(&deleted.id),
+        DomainEvent::AutomationDeleted(deleted) => {
+            crate::usecases::workflow::records::delete_workflow(vault, &deleted.id)
+        }
         _ => Ok(()),
     }
 }
@@ -19,9 +21,13 @@ pub fn on_automation_retried(vault: &mut UnlockedVault, event: &DomainEvent) -> 
     let DomainEvent::AutomationRetried(retried) = event else {
         return Ok(());
     };
-    vault
-        .retry_workflow_run(&retried.id, retried.at, &retried.zone)
-        .map(drop)
+    crate::usecases::workflow::runs::retry_workflow_run(
+        vault,
+        &retried.id,
+        retried.at,
+        &retried.zone,
+    )
+    .map(drop)
 }
 
 /// A goal was paused: the workflows that only save into it (the event names
@@ -31,7 +37,7 @@ pub fn on_goal_paused(vault: &mut UnlockedVault, event: &DomainEvent) -> Result<
         return Ok(());
     };
     for workflow in &paused.workflow_ids {
-        vault.set_workflow_active(workflow, false, paused.at)?;
+        crate::usecases::workflow::records::set_workflow_active(vault, workflow, false, paused.at)?;
     }
     Ok(())
 }
@@ -45,8 +51,10 @@ pub fn on_goal_resumed(vault: &mut UnlockedVault, event: &DomainEvent) -> Result
     };
     for workflow in &resumed.workflow_ids {
         // A workflow deleted since then has nothing to switch back on.
-        if vault.workflow(workflow).is_ok() {
-            vault.set_workflow_active(workflow, true, resumed.at)?;
+        if crate::workflow::service::records::workflow(&vault.doc, workflow).is_ok() {
+            crate::usecases::workflow::records::set_workflow_active(
+                vault, workflow, true, resumed.at,
+            )?;
         }
     }
     Ok(())

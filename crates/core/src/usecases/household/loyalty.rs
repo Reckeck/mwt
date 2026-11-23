@@ -61,7 +61,15 @@ pub fn create_loyalty_program(
         contact_id: programme.contact_id,
         ..StoreExtras::default()
     };
-    let store = vault.create_store_with(name, StoreKind::Loyalty, color, "", None, extras)?;
+    let store = crate::usecases::money::stores::create_store_with(
+        vault,
+        name,
+        StoreKind::Loyalty,
+        color,
+        "",
+        None,
+        extras,
+    )?;
     set_loyalty_info(vault, &StoreId::from(store.id), programme.info)
 }
 
@@ -83,7 +91,7 @@ pub fn adjust_points(
         source_store_id,
         timestamp,
     )?;
-    vault.add_transaction(tx)
+    crate::usecases::money::transactions::add_transaction(vault, tx)
 }
 
 #[cfg(test)]

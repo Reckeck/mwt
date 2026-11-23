@@ -178,7 +178,7 @@ pub fn delete_price_alert(vault: &mut UnlockedVault, id: &str) -> Result<()> {
 /// A one-off alert stays triggered until edited; a repeating one is
 /// armed again once the price is back on the other side.
 pub fn check_alerts(vault: &mut UnlockedVault, now: i64) -> Result<Vec<PriceAlert>> {
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let price_of = |alert: &PriceAlert| {
         let usd = book.price_at(&alert.asset.key(), now)?;
         book.convert(usd, "usd", &alert.currency, now)

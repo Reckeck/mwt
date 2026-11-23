@@ -15,15 +15,6 @@ impl UnlockedVault {
         /// Transaction history, newest first, limited to a scope.
         pub fn transactions(&self, scope: &StoreScope) -> Vec<Transaction>
             => crate::usecases::money::transactions::transactions;
-        /// Everything a write does before storing: categories normalized and
-        /// auto-filled, property prices completed, unpriced sides stamped, every
-        /// rule checked.
-        pub(crate) fn prepare_transaction(&self, tx: &mut Transaction) -> Result<()>
-            => crate::usecases::money::transactions::prepare_transaction;
-        /// [`Self::prepare_transaction`] with the future-date rule (V11) measured
-        /// from `now_ms` — the scheduler's clock for automation runs.
-        pub(crate) fn prepare_transaction_at(&self, tx: &mut Transaction, now_ms: i64) -> Result<()>
-            => crate::usecases::money::transactions::prepare_transaction_at;
         /// Validate and append a transaction of any variant (plan §4.5, §8.1):
         /// categories are normalized and auto-filled, then every rule is checked.
         pub fn add_transaction(&mut self, tx: Transaction) -> Result<Transaction>
@@ -41,10 +32,6 @@ impl UnlockedVault {
         /// link the form has no field for.
         pub fn update_transaction(&mut self, id: &str, tx: Transaction) -> Result<Transaction>
             => crate::usecases::money::transactions::update_transaction;
-        /// [`Self::update_transaction`] for the shared event that owns the
-        /// operation: the event has changed its own side already.
-        pub(crate) fn update_transaction_unsynced(&mut self, id: &str, tx: Transaction) -> Result<Transaction>
-            => crate::usecases::money::transactions::update_transaction_unsynced;
         /// [`Self::update_transaction`] that also sets the operation's property;
         /// `None` unlinks it.
         pub fn update_transaction_for(&mut self, id: &str, tx: Transaction, property_id: Option<&str>) -> Result<Transaction>

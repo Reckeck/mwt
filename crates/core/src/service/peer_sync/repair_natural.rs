@@ -48,13 +48,17 @@ mod tests {
     fn two_concurrent_debt_terms_of_one_contact_make_one_record() {
         let (_dir, mut devices, ledger) = pair();
         let contact = ledger.anchors[0].clone();
-        devices[0]
-            .set_debt_terms(terms(&contact, "2026-05-01", "left"))
-            .unwrap();
+        crate::usecases::household::contacts::set_debt_terms(
+            &mut devices[0],
+            terms(&contact, "2026-05-01", "left"),
+        )
+        .unwrap();
         pause();
-        devices[1]
-            .set_debt_terms(terms(&contact, "2026-06-01", "right"))
-            .unwrap();
+        crate::usecases::household::contacts::set_debt_terms(
+            &mut devices[1],
+            terms(&contact, "2026-06-01", "right"),
+        )
+        .unwrap();
         meet(&mut devices);
         for device in &devices {
             assert_eq!(device.doc.debt_terms.len(), 1);
@@ -73,9 +77,11 @@ mod tests {
     fn an_old_random_debt_record_and_a_new_one_merge_into_the_deterministic_one() {
         let (_dir, mut devices, ledger) = pair();
         let contact = ledger.anchors[0].clone();
-        devices[0]
-            .set_debt_terms(terms(&contact, "2026-05-01", "new build"))
-            .unwrap();
+        crate::usecases::household::contacts::set_debt_terms(
+            &mut devices[0],
+            terms(&contact, "2026-05-01", "new build"),
+        )
+        .unwrap();
         pause();
         // The older build: a random id, edited later than the new record.
         devices[1].doc.debt_terms.push(DebtTerms {
@@ -108,9 +114,11 @@ mod tests {
     fn folding_duplicates_is_recorded_in_the_batch_and_undone_with_it() {
         let (_dir, mut devices, ledger) = pair();
         let contact = ledger.anchors[0].clone();
-        devices[0]
-            .set_debt_terms(terms(&contact, "2026-05-01", "a"))
-            .unwrap();
+        crate::usecases::household::contacts::set_debt_terms(
+            &mut devices[0],
+            terms(&contact, "2026-05-01", "a"),
+        )
+        .unwrap();
         devices[1].doc.debt_terms.push(DebtTerms {
             id: "00000000-old".into(),
             contact_id: contact,
@@ -135,16 +143,27 @@ mod tests {
     fn a_reading_moved_to_another_day_takes_the_id_of_that_day() {
         let (_dir, mut devices, ledger) = pair();
         let vault = &mut devices[0];
-        let first = vault
-            .add_meter_reading(&ledger.utility_id, amount("100"), "2026-03", Some(3), None)
-            .unwrap();
+        let first = crate::usecases::household::utilities::add_meter_reading(
+            vault,
+            &ledger.utility_id,
+            amount("100"),
+            "2026-03",
+            Some(3),
+            None,
+        )
+        .unwrap();
         assert_eq!(
             first.id,
             sync_ids::reading_id(&ledger.utility_id, None, &("2026-03".into(), 3))
         );
-        let moved = vault
-            .update_meter_reading(&first.id, amount("100"), "2026-03", Some(5))
-            .unwrap();
+        let moved = crate::usecases::household::utilities::update_meter_reading(
+            vault,
+            &first.id,
+            amount("100"),
+            "2026-03",
+            Some(5),
+        )
+        .unwrap();
         assert_ne!(moved.id, first.id);
         assert_eq!(
             moved.id,
@@ -157,13 +176,25 @@ mod tests {
     #[test]
     fn two_readings_of_one_meter_and_day_make_one_record() {
         let (_dir, mut devices, ledger) = pair();
-        devices[0]
-            .add_meter_reading(&ledger.utility_id, amount("100"), "2026-03", Some(2), None)
-            .unwrap();
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut devices[0],
+            &ledger.utility_id,
+            amount("100"),
+            "2026-03",
+            Some(2),
+            None,
+        )
+        .unwrap();
         pause();
-        devices[1]
-            .add_meter_reading(&ledger.utility_id, amount("120"), "2026-03", Some(2), None)
-            .unwrap();
+        crate::usecases::household::utilities::add_meter_reading(
+            &mut devices[1],
+            &ledger.utility_id,
+            amount("120"),
+            "2026-03",
+            Some(2),
+            None,
+        )
+        .unwrap();
         meet(&mut devices);
         for device in &devices {
             assert_eq!(device.doc.meter_readings.len(), 1);
@@ -181,9 +212,9 @@ mod tests {
             unit_price: amount(price),
             currency: "usd".into(),
         };
-        devices[0].add_valuation(input("1000")).unwrap();
+        crate::usecases::money::valuation::add_valuation(&mut devices[0], input("1000")).unwrap();
         pause();
-        devices[1].add_valuation(input("1100")).unwrap();
+        crate::usecases::money::valuation::add_valuation(&mut devices[1], input("1100")).unwrap();
         meet(&mut devices);
         for device in &devices {
             assert_eq!(device.doc.valuations.len(), 1);
@@ -195,10 +226,14 @@ mod tests {
     fn two_concurrent_goal_top_ups_make_one_envelope_with_both() {
         let (_dir, mut left, mut right) = two_devices();
         let wallet = store(&mut left, "Cash", StoreKind::Cash, None);
-        left.add_transaction(income(&wallet, "1000", "pay"))
-            .unwrap();
-        let goal = left
-            .create_goal(GoalDraft {
+        crate::usecases::money::transactions::add_transaction(
+            &mut left,
+            income(&wallet, "1000", "pay"),
+        )
+        .unwrap();
+        let goal = crate::usecases::planning::goals::create_goal(
+            &mut left,
+            GoalDraft {
                 name: "trip".into(),
                 active: true,
                 target_amount: amount("1000"),
@@ -213,12 +248,25 @@ mod tests {
                 },
                 scenario_id: None,
                 expected_return: None,
-            })
-            .unwrap()
-            .id;
+            },
+        )
+        .unwrap()
+        .id;
         settle(&mut left, &mut right);
-        left.fund_goal(&goal, &wallet, amount("100")).unwrap();
-        right.fund_goal(&goal, &wallet, amount("50")).unwrap();
+        crate::usecases::household::envelopes::fund_goal(
+            &mut left,
+            &goal,
+            &mwt_model::StoreId::from(&wallet),
+            amount("100"),
+        )
+        .unwrap();
+        crate::usecases::household::envelopes::fund_goal(
+            &mut right,
+            &goal,
+            &mwt_model::StoreId::from(&wallet),
+            amount("50"),
+        )
+        .unwrap();
         settle(&mut left, &mut right);
         for device in [&left, &right] {
             assert_eq!(

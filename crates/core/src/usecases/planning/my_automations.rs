@@ -59,8 +59,7 @@ fn scheme_items(doc: &VaultDoc, cal: &Calendar, now: i64, until: i64) -> Vec<Min
 pub fn my_automations(vault: &UnlockedVault, now: i64, zone: &str) -> Vec<MineItem> {
     let cal = Calendar::new(zone);
     let until = rules::lookahead_until(now);
-    let mut out: Vec<MineItem> = vault
-        .automations()
+    let mut out: Vec<MineItem> = crate::usecases::planning::automations::automations(vault)
         .iter()
         .map(|automation| {
             let next = vault
@@ -89,7 +88,7 @@ pub fn set_my_automation_active(
 ) -> Result<()> {
     match kind {
         MineKind::Scheme | MineKind::Repeat => {
-            vault.set_workflow_active(id, active, now)?;
+            crate::usecases::workflow::records::set_workflow_active(vault, id, active, now)?;
             Ok(())
         }
         MineKind::Reminder => {

@@ -224,9 +224,9 @@ impl UnlockedVault {
         if self.device_keys.unreadable {
             return Err(Error::Secret);
         }
-        let Some(owner) = self
-            .bybit_key_for(store_id)
-            .map(|keys| keys.store_id.clone())
+        let Some(owner) =
+            crate::cryptotrack::exchange_import::bybit_key_for(&self.books(), store_id)
+                .map(|keys| keys.store_id.clone())
         else {
             return Ok(None);
         };
@@ -263,7 +263,8 @@ impl UnlockedVault {
             };
         }
         let legacy = match store_id {
-            Some(id) => self.bybit_key_for(id).is_some_and(has_secret),
+            Some(id) => crate::cryptotrack::exchange_import::bybit_key_for(&self.books(), id)
+                .is_some_and(has_secret),
             None => self.doc.exchanges.bybit.iter().any(has_secret),
         };
         if legacy {
@@ -278,7 +279,9 @@ impl UnlockedVault {
         if self.security_level() != SecurityLevel::Crypto {
             return ExchangeKeyState::LevelRequired;
         }
-        let Some(keys) = self.bybit_key_for(store_id) else {
+        let Some(keys) =
+            crate::cryptotrack::exchange_import::bybit_key_for(&self.books(), store_id)
+        else {
             return ExchangeKeyState::Missing;
         };
         if self.device_keys.unreadable {
@@ -312,8 +315,7 @@ impl UnlockedVault {
                 "api key and secret are required".into(),
             ));
         }
-        let store = self
-            .find_store(store_id)
+        let store = crate::money::tree::find_store(&self.doc, store_id)
             .ok_or_else(|| Error::Missing(format!("store {store_id}")))?;
         if store.kind != StoreKind::Exchange {
             return Err(Error::InvalidInput("store is not an exchange".into()));
@@ -433,20 +435,20 @@ mod tests {
     use crate::service::test_support::*;
 
     fn bybit(vault: &mut UnlockedVault, name: &str) -> String {
-        vault
-            .create_store_with(
-                name,
-                StoreKind::Exchange,
-                "#f0b90b",
-                "",
-                None,
-                StoreExtras {
-                    provider: Some(ExchangeProvider::Bybit),
-                    ..Default::default()
-                },
-            )
-            .unwrap()
-            .id
+        crate::usecases::money::stores::create_store_with(
+            vault,
+            name,
+            StoreKind::Exchange,
+            "#f0b90b",
+            "",
+            None,
+            StoreExtras {
+                provider: Some(ExchangeProvider::Bybit),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .id
     }
 
     fn level3_with_key() -> (tempfile::TempDir, UnlockedVault, String) {
@@ -471,7 +473,9 @@ mod tests {
         let (_dir, mut vault) = empty_vault();
         let store = bybit(&mut vault, "Bybit");
         assert!(matches!(
-            vault.set_exchange_key(&store, "key", "secret"),
+            crate::usecases::cryptotrack::exchange_import::set_exchange_key(
+                &mut vault, &store, "key", "secret"
+            ),
             Err(Error::SecurityLevelRequired)
         ));
         assert_eq!(
@@ -509,7 +513,9 @@ mod tests {
         assert!(key.verified);
         assert_eq!(vault.exchange_key_state(&store), ExchangeKeyState::ReadOnly);
         assert_eq!(
-            vault.exchange_key_status(&store).hint.as_deref(),
+            crate::usecases::cryptotrack::exchange_import::exchange_key_status(&vault, &store)
+                .hint
+                .as_deref(),
             Some("KEYK…Y123")
         );
         assert!(vault.has_device_keys());
@@ -538,9 +544,10 @@ mod tests {
     #[test]
     fn the_sync_records_have_no_key() {
         let (_dir, mut vault, _store) = level3_with_key();
-        let manifest = vault.sync_manifest(None).unwrap();
-        let (wants, _) = vault.sync_diff(&Default::default(), &manifest);
-        let records = vault.sync_records(&wants).unwrap();
+        let manifest = crate::usecases::sync::read::sync_manifest(&mut vault, None).unwrap();
+        let (wants, _) =
+            crate::usecases::sync::read::sync_diff(&vault, &Default::default(), &manifest);
+        let records = crate::usecases::sync::read::sync_records(&mut vault, &wants).unwrap();
         let text = serde_json::to_string(&records).unwrap();
         assert!(!text.contains("SECRETSECRET456"));
         assert!(!text.contains("KEYKEYKEY123"));
@@ -565,7 +572,10 @@ mod tests {
             vault.exchange_key_state(&store),
             ExchangeKeyState::LevelRequired
         );
-        assert!(vault.exchange_key_status(&store).configured);
+        assert!(
+            crate::usecases::cryptotrack::exchange_import::exchange_key_status(&vault, &store)
+                .configured
+        );
         vault.raise_to_level3_for_tests();
         let path = vault.path.clone();
         drop(vault);
@@ -644,29 +654,33 @@ mod tests {
             vault.device_secrets_for_request(),
             Err(Error::Secret)
         ));
-        assert!(vault.import_schedule().is_empty());
+        assert!(crate::usecases::cryptotrack::exchange_import::import_schedule(&vault).is_empty());
     }
 
     #[test]
     fn retargets_and_removals_reach_the_device_file() {
         let (_dir, mut vault, store) = level3_with_key();
-        let sub = vault
-            .create_store_with(
-                "Futures",
-                StoreKind::Exchange,
-                "",
-                "",
-                Some(store.clone()),
-                StoreExtras {
-                    sub_type: Some(crate::model::store::SubType::Futures),
-                    ..Default::default()
-                },
-            )
-            .unwrap()
-            .id;
-        vault
-            .set_exchange_targets(&store, None, Some(sub.clone()))
-            .unwrap();
+        let sub = crate::usecases::money::stores::create_store_with(
+            &mut vault,
+            "Futures",
+            StoreKind::Exchange,
+            "",
+            "",
+            Some(store.clone()),
+            StoreExtras {
+                sub_type: Some(crate::model::store::SubType::Futures),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .id;
+        crate::usecases::cryptotrack::exchange_import::set_exchange_targets(
+            &mut vault,
+            &store,
+            None,
+            Some(sub.clone()),
+        )
+        .unwrap();
         vault.flush_pending().unwrap();
         let on_file = vault.device_secrets_for_request().unwrap();
         assert_eq!(
@@ -686,9 +700,13 @@ mod tests {
         let (_dir, mut vault) = empty_vault();
         vault.raise_to_level3_for_tests();
         let store = bybit(&mut vault, "Bybit");
-        vault
-            .set_exchange_key(&store, "KEYKEYKEY123", "SECRET")
-            .unwrap();
+        crate::usecases::cryptotrack::exchange_import::set_exchange_key(
+            &mut vault,
+            &store,
+            "KEYKEYKEY123",
+            "SECRET",
+        )
+        .unwrap();
         assert_eq!(
             vault.exchange_key_state(&store),
             ExchangeKeyState::NotVerified

@@ -97,7 +97,7 @@ fn decide(
     verdict: Option<TokenVerdict>,
 ) -> Result<TokenStatus> {
     rules::set_verdict(&mut vault.doc, token, verdict, &now_iso())?;
-    vault.crypto_sync_holdings()?;
+    crate::usecases::cryptotrack::recompute::crypto_sync_holdings(vault)?;
     Ok(tokens::status(&vault.doc, token))
 }
 
@@ -131,7 +131,7 @@ pub fn crypto_set_token_basis(
 ) -> Result<()> {
     rules::set_basis(&mut vault.doc, token, basis_usd)?;
     // The declared cost basis is what a holding's `avg_cost` carries.
-    vault.crypto_sync_holdings()
+    crate::usecases::cryptotrack::recompute::crypto_sync_holdings(vault)
 }
 
 #[cfg(test)]
@@ -151,17 +151,27 @@ mod tests {
     #[test]
     fn a_scam_usdc_with_a_foreign_contract_stays_out_of_the_totals() {
         let (_dir, mut vault) = empty_vault();
-        let real = vault
-            .crypto_register_token(&eth(REAL_USDC), "USDC", "USD Coin", 6)
-            .unwrap();
-        let scam = vault
-            .crypto_register_token(&eth(SCAM), "USDC", "USD Coin", 6)
-            .unwrap();
+        let real = crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault,
+            &eth(REAL_USDC),
+            "USDC",
+            "USD Coin",
+            6,
+        )
+        .unwrap();
+        let scam = crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault,
+            &eth(SCAM),
+            "USDC",
+            "USD Coin",
+            6,
+        )
+        .unwrap();
         assert_eq!(real, TokenStatus::Known);
         assert_eq!(scam, TokenStatus::Quarantined);
         assert!(tokens::counts_in_totals(&vault.doc, &eth(REAL_USDC)));
         assert!(!tokens::counts_in_totals(&vault.doc, &eth(SCAM)));
-        let view = vault.crypto_tokens();
+        let view = crate::usecases::cryptotrack::tokens::crypto_tokens(&vault.doc);
         let scam_view = view.iter().find(|row| row.contract == SCAM).unwrap();
         assert!(scam_view.warnings.contains(&TokenWarning::ImitatesKnown));
     }
@@ -173,9 +183,15 @@ mod tests {
         };
         use crate::model::store::StoreKind;
         let (_dir, mut vault) = empty_vault();
-        let wallet = vault
-            .create_store("Cold EVM", StoreKind::Crypto, "#000", "", None)
-            .unwrap();
+        let wallet = crate::usecases::money::stores::create_store(
+            &mut vault,
+            "Cold EVM",
+            StoreKind::Crypto,
+            "#000",
+            "",
+            None,
+        )
+        .unwrap();
         let mut account = crate::model::cryptotrack::CryptoAccount::new(
             "cacc-1",
             "Cold EVM",
@@ -193,9 +209,10 @@ mod tests {
             .unwrap()
             .crypto_account_id = Some("cacc-1".into());
         let token = eth(SCAM);
-        vault
-            .crypto_register_token(&token, "PEPE2", "Pepe 2", 18)
-            .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault, &token, "PEPE2", "Pepe 2", 18,
+        )
+        .unwrap();
         vault.doc.crypto_events.push(CryptoTx {
             id: "ev-1".into(),
             chain: Chain::Ethereum,
@@ -229,12 +246,13 @@ mod tests {
         };
         assert!(!held(&vault), "quarantined: not in the capital");
         assert_eq!(
-            vault.crypto_confirm_token(&token).unwrap(),
+            crate::usecases::cryptotrack::tokens::crypto_confirm_token(&mut vault, &token).unwrap(),
             TokenStatus::Confirmed
         );
         assert!(held(&vault), "recognised: in the capital at once");
         assert_eq!(
-            vault.crypto_clear_token_verdict(&token).unwrap(),
+            crate::usecases::cryptotrack::tokens::crypto_clear_token_verdict(&mut vault, &token)
+                .unwrap(),
             TokenStatus::Quarantined
         );
         assert!(!held(&vault), "taken back: out of the capital again");
@@ -243,9 +261,10 @@ mod tests {
             "the date goes with the verdict"
         );
         // A hidden token comes back to the quarantine list the same way.
-        vault.crypto_reject_token(&token).unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_reject_token(&mut vault, &token).unwrap();
         assert_eq!(
-            vault.crypto_clear_token_verdict(&token).unwrap(),
+            crate::usecases::cryptotrack::tokens::crypto_clear_token_verdict(&mut vault, &token)
+                .unwrap(),
             TokenStatus::Quarantined
         );
     }
@@ -253,27 +272,42 @@ mod tests {
     #[test]
     fn an_evm_address_in_another_case_is_one_token_and_solana_keeps_case() {
         let (_dir, mut vault) = empty_vault();
-        vault
-            .crypto_register_token(
-                &eth(&SCAM.to_uppercase().replace("0X", "0x")),
-                "AAA",
-                "",
-                18,
-            )
-            .unwrap();
-        vault
-            .crypto_register_token(&eth(SCAM), "AAA", "", 18)
-            .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault,
+            &eth(&SCAM.to_uppercase().replace("0X", "0x")),
+            "AAA",
+            "",
+            18,
+        )
+        .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault,
+            &eth(SCAM),
+            "AAA",
+            "",
+            18,
+        )
+        .unwrap();
         assert_eq!(vault.doc.crypto_tokens.len(), 1);
 
         let mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
         let sol = |contract: &str| TokenId::new(Chain::Solana, contract);
-        vault
-            .crypto_register_token(&sol(mint), "USDC", "", 6)
-            .unwrap();
-        vault
-            .crypto_register_token(&sol(&mint.to_lowercase()), "USDC", "", 6)
-            .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault,
+            &sol(mint),
+            "USDC",
+            "",
+            6,
+        )
+        .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault,
+            &sol(&mint.to_lowercase()),
+            "USDC",
+            "",
+            6,
+        )
+        .unwrap();
         let solana = vault
             .doc
             .crypto_tokens
@@ -292,26 +326,34 @@ mod tests {
     fn the_users_decision_survives_receiving_the_events_again() {
         let (_dir, mut vault) = empty_vault();
         let airdrop = eth(SCAM);
-        vault
-            .crypto_register_token(&airdrop, "AIR", "Airdrop", 18)
-            .unwrap();
-        vault.crypto_confirm_token(&airdrop).unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault, &airdrop, "AIR", "Airdrop", 18,
+        )
+        .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_confirm_token(&mut vault, &airdrop).unwrap();
         let basis = Amount::parse("0.5").unwrap();
-        vault.crypto_set_token_basis(&airdrop, Some(basis)).unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_set_token_basis(
+            &mut vault,
+            &airdrop,
+            Some(basis),
+        )
+        .unwrap();
         // The same token arrives again, with new text: a refetch.
-        vault
-            .crypto_register_token(&airdrop, "AIR2", "Renamed", 9)
-            .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault, &airdrop, "AIR2", "Renamed", 9,
+        )
+        .unwrap();
         assert_eq!(vault.doc.crypto_tokens.len(), 1);
         assert_eq!(vault.doc.crypto_tokens[0].symbol, "AIR2");
         assert_eq!(tokens::status(&vault.doc, &airdrop), TokenStatus::Confirmed);
         assert_eq!(tokens::basis(&vault.doc, &airdrop), Some(basis));
         assert!(tokens::counts_in_totals(&vault.doc, &airdrop));
 
-        vault.crypto_reject_token(&airdrop).unwrap();
-        vault
-            .crypto_register_token(&airdrop, "AIR", "Airdrop", 18)
-            .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_reject_token(&mut vault, &airdrop).unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault, &airdrop, "AIR", "Airdrop", 18,
+        )
+        .unwrap();
         assert_eq!(tokens::status(&vault.doc, &airdrop), TokenStatus::Rejected);
         assert!(!tokens::counts_in_totals(&vault.doc, &airdrop));
     }
@@ -320,8 +362,11 @@ mod tests {
     fn rejecting_a_known_token_wins_over_the_list() {
         let (_dir, mut vault) = empty_vault();
         let usdc = eth(REAL_USDC);
-        vault.crypto_register_token(&usdc, "USDC", "", 6).unwrap();
-        vault.crypto_reject_token(&usdc).unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault, &usdc, "USDC", "", 6,
+        )
+        .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_reject_token(&mut vault, &usdc).unwrap();
         assert_eq!(tokens::status(&vault.doc, &usdc), TokenStatus::Rejected);
     }
 
@@ -329,16 +374,28 @@ mod tests {
     fn the_basis_is_an_attribute_that_can_be_set_and_cleared() {
         let (_dir, mut vault) = empty_vault();
         let token = eth(SCAM);
-        vault.crypto_register_token(&token, "AIR", "", 18).unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault, &token, "AIR", "", 18,
+        )
+        .unwrap();
         let price = Amount::parse("1.25").unwrap();
-        vault.crypto_set_token_basis(&token, Some(price)).unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_set_token_basis(
+            &mut vault,
+            &token,
+            Some(price),
+        )
+        .unwrap();
         assert_eq!(tokens::basis(&vault.doc, &token), Some(price));
         assert!(
-            vault
-                .crypto_set_token_basis(&token, Some(Amount::parse("-1").unwrap()))
-                .is_err()
+            crate::usecases::cryptotrack::tokens::crypto_set_token_basis(
+                &mut vault,
+                &token,
+                Some(Amount::parse("-1").unwrap())
+            )
+            .is_err()
         );
-        vault.crypto_set_token_basis(&token, None).unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_set_token_basis(&mut vault, &token, None)
+            .unwrap();
         assert_eq!(tokens::basis(&vault.doc, &token), None);
         // A basis is not a verdict: the token is still quarantined.
         assert_eq!(tokens::status(&vault.doc, &token), TokenStatus::Quarantined);
@@ -348,7 +405,7 @@ mod tests {
     fn deciding_on_an_unmet_token_is_refused() {
         let (_dir, mut vault) = empty_vault();
         assert!(matches!(
-            vault.crypto_confirm_token(&eth(SCAM)),
+            crate::usecases::cryptotrack::tokens::crypto_confirm_token(&mut vault, &eth(SCAM)),
             Err(Error::NotFound(_))
         ));
     }
@@ -357,9 +414,14 @@ mod tests {
     fn a_hostile_name_is_cleaned_before_it_is_stored() {
         let (_dir, mut vault) = empty_vault();
         let hostile = format!("Free\u{202E} https://evil.example {}", "x".repeat(300));
-        vault
-            .crypto_register_token(&eth(SCAM), "US\u{200B}DC", &hostile, 18)
-            .unwrap();
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault,
+            &eth(SCAM),
+            "US\u{200B}DC",
+            &hostile,
+            18,
+        )
+        .unwrap();
         let record = &vault.doc.crypto_tokens[0];
         assert_eq!(record.symbol, "USDC");
         assert!(!record.name.contains("evil") && !record.name.contains('\u{202E}'));
@@ -413,9 +475,14 @@ mod counts_in_totals_pins {
             .find(|have| have.id == wallet)
             .expect("the wallet was created")
             .crypto_account_id = Some(ACCOUNT.to_string());
-        vault
-            .crypto_register_token(&stranger(), "USDC", "USD Coin", 6)
-            .expect("noted");
+        crate::usecases::cryptotrack::tokens::crypto_register_token(
+            &mut vault,
+            &stranger(),
+            "USDC",
+            "USD Coin",
+            6,
+        )
+        .expect("noted");
         (dir, vault)
     }
 
@@ -469,7 +536,8 @@ mod counts_in_totals_pins {
 
     /// Something quoted the token, as a pretender's price would be.
     fn quoted_at(vault: &mut UnlockedVault, usd: &str) {
-        let key = vault.crypto_asset_ref(&the_token()).key();
+        let key =
+            crate::cryptotrack::service::totals::crypto_asset_ref(&vault.doc, &the_token()).key();
         vault.doc.price_cache.push(PricePoint {
             asset_key: key,
             value_usd: amount(usd),
@@ -480,7 +548,8 @@ mod counts_in_totals_pins {
     }
 
     fn confirm(vault: &mut UnlockedVault) {
-        vault.crypto_confirm_token(&stranger()).expect("decided");
+        crate::usecases::cryptotrack::tokens::crypto_confirm_token(vault, &stranger())
+            .expect("decided");
     }
 
     #[test]
@@ -488,19 +557,27 @@ mod counts_in_totals_pins {
         let (_dir, mut vault) = vault_with_a_stranger();
         arrival(&mut vault, "5");
         let key = (ACCOUNT.to_string(), the_token().key());
-        assert!(!vault.crypto_fold().balances.contains_key(&key));
+        assert!(
+            !crate::cryptotrack::service::recompute::fold(&vault.books())
+                .balances
+                .contains_key(&key)
+        );
         confirm(&mut vault);
-        assert_eq!(vault.crypto_fold().balances.get(&key), Some(&amount("5")));
+        assert_eq!(
+            crate::cryptotrack::service::recompute::fold(&vault.books())
+                .balances
+                .get(&key),
+            Some(&amount("5"))
+        );
     }
 
     #[test]
     fn the_positions_skip_a_quarantined_token_leg() {
         let (_dir, mut vault) = vault_with_a_stranger();
         in_a_position(&mut vault, "5");
-        let ledger = vault.crypto_fold();
+        let ledger = crate::cryptotrack::service::recompute::fold(&vault.books());
         let held = |vault: &UnlockedVault| {
-            vault
-                .crypto_position_inputs()
+            crate::cryptotrack::service::positions::crypto_position_inputs(&vault.doc)
                 .with(|taking| held_by_account(&ledger, taking))
                 .iter()
                 .any(|row| row.asset == the_token())
@@ -515,34 +592,51 @@ mod counts_in_totals_pins {
         let (_dir, mut vault) = vault_with_a_stranger();
         arrival(&mut vault, "5");
         quoted_at(&mut vault, "1");
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(&mut vault);
         let at = "2026-03-10T00:00:00Z";
-        assert!(vault.crypto_totals(at).assets.is_empty());
+        assert!(
+            crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), at)
+                .assets
+                .is_empty()
+        );
         assert!(vault.doc.holdings.is_empty());
-        let left = vault.crypto_outside_totals();
+        let left = crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books());
         assert_eq!(left.len(), 1, "{left:?}");
         assert_eq!(left[0].asset_key, the_token().key());
 
         confirm(&mut vault);
-        assert_eq!(vault.crypto_totals(at).assets.len(), 1);
+        assert_eq!(
+            crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), at)
+                .assets
+                .len(),
+            1
+        );
         assert_eq!(vault.doc.holdings.len(), 1);
-        assert!(vault.crypto_outside_totals().is_empty());
+        assert!(
+            crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books()).is_empty()
+        );
     }
 
     #[test]
     fn a_quarantined_token_has_no_price_even_when_something_quoted_it() {
         let (_dir, mut vault) = vault_with_a_stranger();
         quoted_at(&mut vault, "1");
-        assert_eq!(vault.price_now_usd(&the_token()), None);
+        assert_eq!(
+            crate::cryptotrack::service::positions::price_now_usd(&vault.books(), &the_token()),
+            None
+        );
         confirm(&mut vault);
-        assert_eq!(vault.price_now_usd(&the_token()), Some(amount("1")));
+        assert_eq!(
+            crate::cryptotrack::service::positions::price_now_usd(&vault.books(), &the_token()),
+            Some(amount("1"))
+        );
     }
 
     #[test]
     fn a_node_is_not_asked_for_the_balance_of_a_quarantined_token() {
         let (_dir, mut vault) = vault_with_a_stranger();
         let asked = |vault: &UnlockedVault| {
-            vault.crypto_sync_targets()[0].tokens.iter().any(
+            crate::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)[0].tokens.iter().any(
                 |asset| matches!(asset, RawAsset::Token { contract, .. } if contract == STRANGER),
             )
         };

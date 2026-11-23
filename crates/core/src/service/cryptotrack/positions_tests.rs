@@ -94,7 +94,7 @@ fn priced_then(vault: &mut UnlockedVault, asset: &CryptoAsset, usd: &str) {
 /// The ordinary price cache: what every holding, and so every position leg,
 /// is valued at now.
 fn priced_now(vault: &mut UnlockedVault, asset: &CryptoAsset, usd: &str) {
-    let key = vault.crypto_asset_ref(asset).key();
+    let key = crate::cryptotrack::service::totals::crypto_asset_ref(&vault.doc, asset).key();
     vault.doc.price_cache.push(PricePoint {
         asset_key: key,
         value_usd: amount(usd),
@@ -187,7 +187,8 @@ fn reading(
 }
 
 fn only(vault: &UnlockedVault, live: &[PositionReading]) -> PositionView {
-    let rows = vault.crypto_list_positions(live, LATER);
+    let rows =
+        crate::usecases::cryptotrack::positions::crypto_list_positions(&vault.books(), live, LATER);
     assert_eq!(rows.len(), 1, "exactly one position was stored");
     rows.into_iter().next().expect("the one row")
 }
@@ -234,9 +235,14 @@ fn a_supply_reports_what_it_cost_what_it_accrued_and_its_rate() {
         vec![leg(CryptoDirection::In, token(USDC), "1050")],
         FeeReading::none_earned(),
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[deposit], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[deposit],
+        &[],
+    )
+    .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
     assert_eq!(row.id, "cacc-1|aave-v3|ethereum|usdc-reserve");
@@ -290,9 +296,14 @@ fn a_debt_position_is_the_collateral_minus_the_loan_and_has_no_loss() {
         ],
         FeeReading::none_earned(),
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[deposit], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[deposit],
+        &[],
+    )
+    .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
     assert_eq!(row.value_usd, Some(amount("6000")));
@@ -359,9 +370,14 @@ fn pool_vault() -> (
             }]),
         },
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[mint, collect], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[mint, collect],
+        &[],
+    )
+    .expect("the reading is stored");
     (dir, vault, key, live)
 }
 
@@ -475,9 +491,14 @@ fn a_position_whose_token_has_no_price_shows_a_dash_and_not_a_zero() {
         vec![leg(CryptoDirection::In, token(USDC), "1000")],
         FeeReading::none_earned(),
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[deposit], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[deposit],
+        &[],
+    )
+    .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
     assert_eq!(row.value_usd, None);
@@ -510,9 +531,14 @@ fn a_position_without_a_single_stored_operation_shows_a_dash_and_not_a_zero() {
         vec![leg(CryptoDirection::In, token(USDC), "1000")],
         FeeReading::none_earned(),
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
     // What is on chain is known exactly.
@@ -557,9 +583,14 @@ fn a_pool_without_a_stored_history_shows_a_dash_for_the_loss_against_holding() {
         ],
         FeeReading::none_earned(),
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
 
     let row = only(&vault, &[live]);
     assert_eq!(
@@ -611,9 +642,14 @@ fn a_closed_position_is_frozen_and_adds_nothing_to_the_value() {
         Vec::new(),
         FeeReading::none_earned(),
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[deposit, exit], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[live],
+        &[deposit, exit],
+        &[],
+    )
+    .expect("the reading is stored");
 
     // Read without a live reading: a closed position's numbers must stand on
     // the stored record alone.
@@ -633,7 +669,11 @@ fn a_closed_position_is_frozen_and_adds_nothing_to_the_value() {
     assert_eq!(row.net_usd, Some(amount("20")));
     assert_eq!(row.closed_at.as_deref(), Some("2026-03-31T10:00:00Z"));
     // Its period ended with it: a year later the rate is the same number.
-    let frozen = vault.crypto_list_positions(&[], "2027-05-13T10:00:00Z");
+    let frozen = crate::usecases::cryptotrack::positions::crypto_list_positions(
+        &vault.books(),
+        &[],
+        "2027-05-13T10:00:00Z",
+    );
     assert_eq!(
         frozen[0].apr, row.apr,
         "a closed position's rate must not move with the calendar"
@@ -694,13 +734,18 @@ fn a_position_is_not_counted_twice_against_the_receipt_token_on_the_wallet() {
     );
     from_the_node.tracking = ids::address_ref(Chain::Ethereum, ME);
     from_the_node.legs[0].counterparty = None;
-    vault
-        .crypto_apply_positions(ACCOUNT, &[], &[came_in, deposit, from_the_node], &[])
-        .expect("the operations are stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[came_in, deposit, from_the_node],
+        &[],
+    )
+    .expect("the operations are stored");
 
     // The receipt is recognized from the stored operations alone, so a device
     // that only synced agrees.
-    let receipts = vault.crypto_position_receipts();
+    let receipts = crate::cryptotrack::service::positions::crypto_position_receipts(&vault.doc);
     assert!(receipts.contains(&token(AUSDC).key()));
     assert!(!receipts.contains(&token(USDC).key()));
 
@@ -716,7 +761,7 @@ fn a_position_is_not_counted_twice_against_the_receipt_token_on_the_wallet() {
         vec![("USDC".to_string(), amount("1000"))],
         "the supply is counted once, inside the protocol; the receipt is not a second holding"
     );
-    let left_out = vault.crypto_outside_totals();
+    let left_out = crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books());
     let receipt_row = left_out
         .iter()
         .find(|row| row.reason == CryptoLeftOut::InPosition)
@@ -748,9 +793,14 @@ fn a_position_read_without_a_single_operation_still_counts_in_the_capital() {
             FeeReading::none_earned(),
         )
     };
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
 
     let held: Vec<(String, Amount)> = vault
         .doc
@@ -775,9 +825,14 @@ fn a_position_read_without_a_single_operation_still_counts_in_the_capital() {
 
     // A second reading of the same position replaces it instead of adding to
     // it: the capital follows the chain, it does not accumulate passes.
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the reading is stored again");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the reading is stored again");
     assert_eq!(
         vault
             .doc
@@ -802,9 +857,14 @@ fn a_position_read_without_a_single_operation_still_counts_in_the_capital() {
             FeeReading::none_earned(),
         )
     };
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&borrowed), &[], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&borrowed),
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
     let held: Vec<(String, Amount)> = vault
         .doc
         .holdings
@@ -836,11 +896,16 @@ fn a_position_without_a_history_learns_its_receipt_from_the_adapter_and_the_tabl
             FeeReading::none_earned(),
         )
     };
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
 
-    let receipts = vault.crypto_position_receipts();
+    let receipts = crate::cryptotrack::service::positions::crypto_position_receipts(&vault.doc);
     assert!(
         receipts.contains(&token(AUSDC).key()),
         "the receipt the adapter itself saw is kept with the position"
@@ -886,9 +951,14 @@ fn applying_a_reading_stores_the_legs_and_nothing_derived() {
             }]),
         },
     );
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the reading is stored");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
     assert_eq!(applied.added, 1);
     assert_eq!(applied.rewritten, 0);
     assert_eq!(vault.doc.crypto_positions.len(), 1);
@@ -899,18 +969,28 @@ fn applying_a_reading_stores_the_legs_and_nothing_derived() {
     let mut later = live.clone();
     later.read_at = "2026-05-13T09:15:00Z".into();
     let before = vault.doc.crypto_positions.clone();
-    let again = vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&later), &[], &[])
-        .expect("the reading is stored again");
+    let again = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&later),
+        &[],
+        &[],
+    )
+    .expect("the reading is stored again");
     assert!(again.is_unchanged(), "{again:?}");
     assert_eq!(vault.doc.crypto_positions, before);
 
     // A reading that says something new rewrites the one record.
     let mut moved = later.clone();
     moved.legs = vec![leg(CryptoDirection::In, token(USDC), "2500")];
-    let changed = vault
-        .crypto_apply_positions(ACCOUNT, &[moved], &[], &[])
-        .expect("the changed reading is stored");
+    let changed = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[moved],
+        &[],
+        &[],
+    )
+    .expect("the changed reading is stored");
     assert_eq!(changed.added, 0);
     assert_eq!(changed.rewritten, 1);
     assert_eq!(vault.doc.crypto_positions.len(), 1);
@@ -933,9 +1013,14 @@ fn a_reading_of_another_account_is_not_stored() {
             FeeReading::none_earned(),
         )
     };
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, &[stranger], &[], &[])
-        .expect("the pass stores nothing");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[stranger],
+        &[],
+        &[],
+    )
+    .expect("the pass stores nothing");
     assert_eq!(applied, CryptoPositionsApplied::default());
     assert!(vault.doc.crypto_positions.is_empty());
 }
@@ -950,9 +1035,14 @@ fn a_position_survives_a_save_and_a_reopen() {
         vec![leg(CryptoDirection::In, token(USDC), "1000")],
         FeeReading::none_earned(),
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
     vault.flush_pending().expect("the write lands");
     let path = vault.path.clone();
     drop(vault);
@@ -986,15 +1076,25 @@ fn review(protocol: &str, chain: Chain, kept: &[&PositionReading], at: &str) -> 
 fn a_position_the_protocol_no_longer_reports_is_closed_and_keeps_its_row() {
     let (_dir, mut vault, _wallet) = followed();
     let live = supply_reading();
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the supply is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the supply is stored");
 
     // The next pass: the protocol was asked, and lists nothing.
     let gone = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[gone])
-        .expect("the withdrawal is stored");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[gone],
+    )
+    .expect("the withdrawal is stored");
 
     assert_eq!(applied.closed, 1);
     assert_eq!(vault.doc.crypto_positions.len(), 1, "history is kept");
@@ -1014,13 +1114,23 @@ fn a_protocol_that_was_not_reviewed_leaves_its_positions_alone() {
     // supply says nothing about either.
     let (_dir, mut vault, _wallet) = followed();
     let live = supply_reading();
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the supply is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the supply is stored");
     let other = review("uniswap-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[other])
-        .expect("nothing to change");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[other],
+    )
+    .expect("nothing to change");
     assert_eq!(applied, CryptoPositionsApplied::default());
     assert_eq!(vault.doc.crypto_positions, vec![live.stored()]);
 }
@@ -1029,13 +1139,23 @@ fn a_protocol_that_was_not_reviewed_leaves_its_positions_alone() {
 fn a_position_the_review_found_but_could_not_read_is_not_closed() {
     let (_dir, mut vault, _wallet) = followed();
     let live = supply_reading();
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the supply is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the supply is stored");
     let found = review("aave-v3", Chain::Ethereum, &[&live], "2026-05-14T09:00:00Z");
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[found])
-        .expect("nothing to change");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[found],
+    )
+    .expect("nothing to change");
     assert_eq!(applied, CryptoPositionsApplied::default());
     assert_eq!(vault.doc.crypto_positions, vec![live.stored()]);
 }
@@ -1055,22 +1175,37 @@ fn a_review_closes_only_its_own_account_and_network() {
     .stored();
     elsewhere.account_id = "cacc-elsewhere".into();
     vault.doc.crypto_positions.push(elsewhere.clone());
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the supply is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the supply is stored");
 
     // Same protocol, another network: no say over an Ethereum position.
     let base = review("aave-v3", Chain::Base, &[], "2026-05-14T09:00:00Z");
-    let none = vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[base])
-        .expect("nothing to change");
+    let none = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[base],
+    )
+    .expect("nothing to change");
     assert_eq!(none, CryptoPositionsApplied::default());
 
     // The right network closes this account's position and not the other's.
     let right = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[right])
-        .expect("the withdrawal is stored");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[right],
+    )
+    .expect("the withdrawal is stored");
     assert_eq!(applied.closed, 1);
     let untouched = vault
         .doc
@@ -1085,17 +1220,32 @@ fn a_review_closes_only_its_own_account_and_network() {
 fn a_closed_position_is_not_rewritten_by_the_next_pass() {
     let (_dir, mut vault, _wallet) = followed();
     let live = supply_reading();
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the supply is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the supply is stored");
     let first = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
-    vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[first])
-        .expect("closed");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[first],
+    )
+    .expect("closed");
     let again = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:15:00Z");
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[again])
-        .expect("nothing to change");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[again],
+    )
+    .expect("nothing to change");
     assert_eq!(applied, CryptoPositionsApplied::default());
     assert_eq!(
         vault.doc.crypto_positions[0].updated_at, "2026-05-14T09:00:00Z",
@@ -1107,13 +1257,23 @@ fn a_closed_position_is_not_rewritten_by_the_next_pass() {
 fn a_closed_position_opens_again_when_the_protocol_reports_it() {
     let (_dir, mut vault, _wallet) = followed();
     let live = supply_reading();
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the supply is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the supply is stored");
     let gone = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
-    vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[gone])
-        .expect("closed");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[gone],
+    )
+    .expect("closed");
 
     let back = reading(
         &live.key,
@@ -1122,9 +1282,14 @@ fn a_closed_position_opens_again_when_the_protocol_reports_it() {
         FeeReading::none_earned(),
     );
     let kept = review("aave-v3", Chain::Ethereum, &[&back], "2026-05-15T09:00:00Z");
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&back), &[], &[kept])
-        .expect("reopened");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&back),
+        &[],
+        &[kept],
+    )
+    .expect("reopened");
     assert_eq!(applied.rewritten, 1);
     assert_eq!(applied.closed, 0);
     assert_eq!(vault.doc.crypto_positions, vec![back.stored()]);
@@ -1163,12 +1328,22 @@ fn two_accounts_in_one_reserve_are_two_records_with_their_own_legs() {
     follow_second(&mut vault);
     let first = usdc_supply_of(ACCOUNT, "1000");
     let second = usdc_supply_of(SECOND, "250");
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&first), &[], &[])
-        .expect("the first account is stored");
-    vault
-        .crypto_apply_positions(SECOND, std::slice::from_ref(&second), &[], &[])
-        .expect("the second account is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&first),
+        &[],
+        &[],
+    )
+    .expect("the first account is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        SECOND,
+        std::slice::from_ref(&second),
+        &[],
+        &[],
+    )
+    .expect("the second account is stored");
 
     assert_eq!(vault.doc.crypto_positions.len(), 2);
     let stored = |account: &str| {
@@ -1191,15 +1366,25 @@ fn closing_one_accounts_position_leaves_the_others_open() {
     let first = usdc_supply_of(ACCOUNT, "1000");
     let second = usdc_supply_of(SECOND, "250");
     for (account, live) in [(ACCOUNT, &first), (SECOND, &second)] {
-        vault
-            .crypto_apply_positions(account, std::slice::from_ref(live), &[], &[])
-            .expect("stored");
+        crate::usecases::cryptotrack::positions::crypto_apply_positions(
+            &mut vault,
+            account,
+            std::slice::from_ref(live),
+            &[],
+            &[],
+        )
+        .expect("stored");
     }
     // The first account withdrew: its protocol review no longer keeps it.
     let gone = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[gone])
-        .expect("the withdrawal is stored");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[gone],
+    )
+    .expect("the withdrawal is stored");
     assert_eq!(applied.closed, 1);
     let open = vault
         .doc
@@ -1225,9 +1410,14 @@ fn a_record_of_the_old_key_is_renamed_once_its_account_is_applied() {
     let live = usdc_supply_of(ACCOUNT, "1000");
     vault.doc.crypto_positions.push(legacy_record(&live));
 
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the pass stores the reading");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the pass stores the reading");
     assert_eq!(applied.migrated, 1);
     assert_eq!(applied.added, 0, "the old record became the new one");
     assert_eq!(vault.doc.crypto_positions.len(), 1);
@@ -1245,9 +1435,14 @@ fn a_closed_record_of_the_old_key_stays_closed_under_the_new_one() {
     // The protocol lists nothing: the row is neither duplicated nor revived,
     // and ADR-02 closing keeps working on it.
     let gone = review("aave-v3", Chain::Ethereum, &[], "2026-05-14T09:00:00Z");
-    vault
-        .crypto_apply_positions(ACCOUNT, &[], &[], &[gone])
-        .expect("the pass is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[],
+        &[gone],
+    )
+    .expect("the pass is stored");
     assert_eq!(vault.doc.crypto_positions.len(), 1);
     assert_eq!(vault.doc.crypto_positions[0].id, live.record_id());
     assert!(is_closed(&vault.doc.crypto_positions[0].legs));
@@ -1263,13 +1458,19 @@ fn an_old_key_record_written_back_by_an_older_build_is_not_counted_twice() {
     vault.doc.crypto_positions.push(legacy_record(&live));
 
     assert_eq!(
-        vault.crypto_list_positions(&[], LATER).len(),
+        crate::usecases::cryptotrack::positions::crypto_list_positions(&vault.books(), &[], LATER)
+            .len(),
         1,
         "the stale twin is not listed"
     );
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the pass is stored");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the pass is stored");
     assert_eq!(applied.migrated, 1);
     assert_eq!(vault.doc.crypto_positions, vec![live.stored()]);
 }
@@ -1282,7 +1483,8 @@ fn a_position_of_one_account_does_not_take_the_others_history() {
     let second = usdc_supply_of(SECOND, "250");
     vault.doc.crypto_positions.push(first.stored());
     vault.doc.crypto_positions.push(second.stored());
-    let rows = vault.crypto_list_positions(&[], LATER);
+    let rows =
+        crate::usecases::cryptotrack::positions::crypto_list_positions(&vault.books(), &[], LATER);
     assert_eq!(rows.len(), 2);
     assert_ne!(rows[0].id, rows[1].id);
     assert!(rows.iter().all(|row| row.id.starts_with(&row.account_id)));
@@ -1331,11 +1533,16 @@ fn record_of<'a>(vault: &'a UnlockedVault, id: &TokenId) -> &'a CryptoToken {
 #[test]
 fn position_tokens_are_registered_and_count() {
     let (_dir, mut vault, _wallet) = followed();
-    vault
-        .crypto_apply_positions(ACCOUNT, &[foo_reading("1000")], &[], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[foo_reading("1000")],
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
 
-    let listed = vault.crypto_tokens();
+    let listed = crate::usecases::cryptotrack::tokens::crypto_tokens(&vault.doc);
     let view = listed
         .iter()
         .find(|view| view.contract == FOO)
@@ -1343,11 +1550,18 @@ fn position_tokens_are_registered_and_count() {
     assert_eq!(view.status, TokenStatus::Confirmed);
     assert_eq!(view.symbol, "FOO");
     assert_eq!(view.decimals, 6);
-    assert_eq!(vault.crypto_asset_ref(&token(FOO)).symbol, "FOO");
+    assert_eq!(
+        crate::cryptotrack::service::totals::crypto_asset_ref(&vault.doc, &token(FOO)).symbol,
+        "FOO"
+    );
 
     priced_now(&mut vault, &token(FOO), "1");
-    vault.crypto_sync_holdings().expect("holdings are derived");
-    assert_eq!(vault.net_worth().financial, amount("1000"));
+    crate::usecases::cryptotrack::recompute::crypto_sync_holdings(&mut vault)
+        .expect("holdings are derived");
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        amount("1000")
+    );
 }
 
 #[test]
@@ -1359,9 +1573,14 @@ fn a_rejected_token_stays_rejected_after_a_position_pass() {
         ..CryptoToken::new(foo_token(), "SCAM", 9)
     });
     let before = vault.doc.crypto_tokens.clone();
-    vault
-        .crypto_apply_positions(ACCOUNT, &[foo_reading("1000")], &[], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[foo_reading("1000")],
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
     assert_eq!(vault.doc.crypto_tokens, before);
     let status = crate::cryptotrack::tokens::status(&vault.doc, &foo_token());
     assert_eq!(status, TokenStatus::Rejected);
@@ -1371,20 +1590,29 @@ fn a_rejected_token_stays_rejected_after_a_position_pass() {
 fn a_second_pass_changes_nothing() {
     let (_dir, mut vault, _wallet) = followed();
     let live = foo_reading("1000");
-    vault
-        .crypto_apply_positions(ACCOUNT, std::slice::from_ref(&live), &[], &[])
-        .expect("the first pass");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        std::slice::from_ref(&live),
+        &[],
+        &[],
+    )
+    .expect("the first pass");
     let tokens = vault.doc.crypto_tokens.clone();
     let document = vault.doc.clone();
     assert!(
-        !vault
-            .trust_adapter_token(&foo_leg_token())
+        !crate::usecases::cryptotrack::tokens::trust_adapter_token(&mut vault, &foo_leg_token())
             .expect("the second registration"),
         "nothing to persist"
     );
-    let again = vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
-        .expect("the second pass");
+    let again = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[live],
+        &[],
+        &[],
+    )
+    .expect("the second pass");
     assert!(again.is_unchanged());
     assert_eq!(vault.doc.crypto_tokens, tokens);
     assert_eq!(vault.doc, document, "the second pass wrote nothing");
@@ -1397,9 +1625,14 @@ fn registration_runs_when_the_position_itself_is_unchanged() {
     // An older build stored the position and no token.
     vault.doc.crypto_positions.push(live.stored());
     assert!(vault.doc.crypto_tokens.is_empty());
-    let applied = vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
-        .expect("the pass");
+    let applied = crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[live],
+        &[],
+        &[],
+    )
+    .expect("the pass");
     assert!(applied.is_unchanged());
     assert_eq!(
         record_of(&vault, &foo_token()).verdict,
@@ -1410,18 +1643,28 @@ fn registration_runs_when_the_position_itself_is_unchanged() {
 #[test]
 fn an_event_registered_token_text_is_not_overwritten_by_an_unknown_symbol() {
     let (_dir, mut vault, _wallet) = followed();
-    vault
-        .crypto_register_token(&foo_token(), "FOO", "Foo Coin", 6)
-        .expect("the event registers it");
+    crate::usecases::cryptotrack::tokens::crypto_register_token(
+        &mut vault,
+        &foo_token(),
+        "FOO",
+        "Foo Coin",
+        6,
+    )
+    .expect("the event registers it");
     let mut live = foo_reading("1000");
     live.tokens = vec![LegToken {
         symbol: None,
         decimals: None,
         ..foo_leg_token()
     }];
-    vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
-        .expect("the pass");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[live],
+        &[],
+        &[],
+    )
+    .expect("the pass");
     let record = record_of(&vault, &foo_token());
     assert_eq!(record.symbol, "FOO");
     assert_eq!(record.name, "Foo Coin");
@@ -1439,9 +1682,14 @@ fn a_known_list_token_stays_known() {
         name: None,
         decimals: Some(6),
     }];
-    vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
-        .expect("the pass");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[live],
+        &[],
+        &[],
+    )
+    .expect("the pass");
     let usdc = TokenId::new(Chain::Ethereum, USDC);
     assert_eq!(record_of(&vault, &usdc).verdict, None);
     assert_eq!(
@@ -1460,9 +1708,14 @@ fn a_known_token_the_adapter_gave_no_symbol_for_keeps_the_list_symbol() {
         name: None,
         decimals: Some(6),
     }];
-    vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
-        .expect("the pass");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[live],
+        &[],
+        &[],
+    )
+    .expect("the pass");
     let usdc = TokenId::new(Chain::Ethereum, USDC);
     assert_eq!(record_of(&vault, &usdc).symbol, "USDC");
     assert!(
@@ -1513,19 +1766,29 @@ fn the_capital_equals_the_snapshot_with_a_lido_stake_and_an_aave_debt() {
         ],
         FeeReading::none_earned(),
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, &[lido, aave], &[], &[])
-        .expect("the readings are stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[lido, aave],
+        &[],
+        &[],
+    )
+    .expect("the readings are stored");
 
-    let snapshots = vault
-        .crypto_snapshot("2026-03-10T10:00:00Z")
-        .expect("the snapshot is written");
+    let snapshots = crate::usecases::cryptotrack::recompute::crypto_snapshot(
+        &mut vault,
+        "2026-03-10T10:00:00Z",
+    )
+    .expect("the snapshot is written");
     let module = snapshots
         .iter()
         .find(|record| record.account_id.is_none())
         .expect("the record of the whole module");
     assert_eq!(module.value_usd, amount("5000"));
-    assert_eq!(vault.net_worth().financial, module.value_usd);
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        module.value_usd
+    );
 }
 
 #[test]
@@ -1537,9 +1800,14 @@ fn a_quantity_only_an_adapter_reported_has_no_invented_cost() {
     priced_then(&mut vault, &ether(), "2000");
     priced_now(&mut vault, &ether(), "2000");
     let came_in = arrival("ev-in", 2, ether(), "1");
-    vault
-        .crypto_apply_positions(ACCOUNT, &[], &[came_in], &[])
-        .expect("the arrival is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[],
+        &[came_in],
+        &[],
+    )
+    .expect("the arrival is stored");
     let before = vault
         .doc
         .holdings
@@ -1554,9 +1822,14 @@ fn a_quantity_only_an_adapter_reported_has_no_invented_cost() {
         vec![leg(CryptoDirection::In, ether(), "5")],
         FeeReading::none_earned(),
     );
-    vault
-        .crypto_apply_positions(ACCOUNT, &[live], &[], &[])
-        .expect("the reading is stored");
+    crate::usecases::cryptotrack::positions::crypto_apply_positions(
+        &mut vault,
+        ACCOUNT,
+        &[live],
+        &[],
+        &[],
+    )
+    .expect("the reading is stored");
     let after = vault
         .doc
         .holdings

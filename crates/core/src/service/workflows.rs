@@ -7,8 +7,10 @@ use std::collections::{BTreeMap, HashMap};
 
 use super::UnlockedVault;
 use super::forward::forward;
+#[cfg(test)]
 use crate::Amount;
 use crate::error::Result;
+#[cfg(test)]
 use crate::model::store::AssetRef;
 use crate::model::transaction::Transaction;
 use crate::time::Clock;
@@ -16,6 +18,7 @@ use crate::workflow::exec::RunReport;
 use crate::workflow::model::{
     QueuedActions, VarScope, Workflow, WorkflowRun, WorkflowTest, WorkflowVar, WorkflowWait,
 };
+#[cfg(test)]
 use crate::workflow::types::WfValue;
 
 // The tests of this area name these through `super::*`.
@@ -136,54 +139,7 @@ impl UnlockedVault {
     // What the executor reads and applies through the host, and what the open
     // and the sync read; not in the baseline (crate-private), so outside the
     // regenerated block.
-    forward! {
-        /// An asset by its symbol: one the vault holds, else a currency.
-        pub(crate) fn wf_asset(&self, symbol: &str) -> AssetRef
-            => crate::workflow::service::vars::asset @doc;
-        /// The balance of an account with its sub-accounts: of one asset, or the
-        /// whole value in the base currency.
-        pub(crate) fn wf_balance(&self, store_id: &str, asset: Option<&AssetRef>) -> std::result::Result<WfValue, String>
-            => crate::usecases::workflow::vars::balance @books;
-        /// Price of one unit of an asset in a currency.
-        pub(crate) fn wf_price(&self, asset: &AssetRef, currency: &str, secs: i64) -> Option<Amount>
-            => crate::usecases::workflow::vars::price @books;
-        pub(crate) fn wf_convert(&self, amount: Amount, from: &str, to: &str, secs: i64) -> Option<Amount>
-            => crate::usecases::workflow::vars::convert @books;
-        /// Income or spending of the current period, in the base currency.
-        pub(crate) fn wf_sum(&self, period: &str, flow: &str, category: Option<&str>, now: i64, zone: &str) -> Amount
-            => crate::usecases::workflow::runs::wf_sum @books;
-        /// The average amount of the latest `count` operations a workflow made.
-        pub(crate) fn wf_recent_average(&self, workflow_id: &str, count: usize) -> Option<(Amount, String)>
-            => crate::workflow::service::vars::recent_average @doc;
-        /// Live accounts under a wallet, or every live wallet: id, name and value
-        /// in the base currency.
-        pub(crate) fn wf_accounts(&self, parent: Option<&str>) -> Vec<(String, String, Amount)>
-            => crate::usecases::workflow::vars::accounts @books;
-        /// What an operation takes out of an account, in the base currency.
-        pub(crate) fn wf_outflow_base(&self, tx: &Transaction) -> Amount
-            => crate::usecases::workflow::runs::wf_outflow_base @books;
-        /// What an operation takes out of an account, in `currency`.
-        pub(crate) fn wf_outflow_in(&self, tx: &Transaction, currency: &str) -> Option<Amount>
-            => crate::usecases::workflow::runs::wf_outflow_in @books;
-        /// Check money and rules, then add the operations; all of them or none.
-        /// Not persisted: the run's caller writes once.
-        pub(crate) fn wf_insert(&mut self, txs: Vec<Transaction>, now: i64) -> std::result::Result<Vec<Transaction>, String>
-            => crate::usecases::workflow::runs::wf_insert;
-        pub(crate) fn wf_mark(&self, workflow_id: &str, key: &str) -> Option<String>
-            => crate::workflow::service::marks::mark @doc;
-        pub(crate) fn wf_set_mark(&mut self, workflow_id: &str, key: &str, value: &str)
-            => crate::usecases::workflow::runs::wf_set_mark;
-        pub(crate) fn wf_var(&self, scope: &VarScope, name: &str) -> Option<WfValue>
-            => crate::workflow::service::vars::var @doc;
-        pub(crate) fn wf_set_var(&mut self, scope: VarScope, name: &str, value: &WfValue)
-            => crate::usecases::workflow::runs::wf_set_var;
-        /// A schedule mark never stays below a moment whose run key is booked.
-        pub(crate) fn keep_schedule_marks(&mut self)
-            => crate::usecases::workflow::runs::keep_schedule_marks;
-        /// Active workflows a required field now stops: switched off on open.
-        pub(crate) fn disable_incomplete_workflows(&mut self, now: i64) -> bool
-            => crate::usecases::workflow::records::disable_incomplete_workflows;
-    }
+    forward! {}
 }
 
 #[cfg(test)]

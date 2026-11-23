@@ -12,10 +12,10 @@ use crate::service::UnlockedVault;
 /// (decision P5) are laid over the result last. Saves nothing: the caller that
 /// changed the transactions persists.
 pub fn recompute_holdings(vault: &mut UnlockedVault) {
-    vault.rebase_adjustments();
+    crate::usecases::money::adjustments::rebase_adjustments(vault);
     let holdings = compute_holdings(&vault.books());
     vault.doc.holdings = holdings;
-    vault.apply_crypto_holdings();
+    crate::usecases::cryptotrack::recompute::apply_crypto_holdings(vault);
 }
 
 /// Base currency code (never empty, lower case) and its latest cached FX

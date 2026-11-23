@@ -30,10 +30,5 @@ impl UnlockedVault {
 
     // Read by the store, sync and crypto-track code until they move; not in the baseline
     // (crate-private), so outside the regenerated block.
-    forward! {
-        /// Drop accounts that stopped being live savings (decision 36). Callers
-        /// persist.
-        pub(crate) fn prune_emergency_fund(&mut self)
-            => crate::usecases::planning::emergency::prune_emergency_fund;
-    }
+    forward! {}
 }

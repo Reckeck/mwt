@@ -59,12 +59,7 @@ impl UnlockedVault {
     // forward:end
 
     // Not in the baseline (crate-private), so outside the regenerated block.
-    forward! {
-        /// Ids an import has already settled: an operation of the crypto module,
-        /// a ledger transaction the old import booked, or a record the user refused.
-        pub(crate) fn decided_import_ids(&self) -> std::collections::HashSet<String>
-            => crate::cryptotrack::exchange_sync::decided_import_ids @doc;
-    }
+    forward! {}
 
     /// Discarded ids are remembered, so the next sync does not stage them again.
     #[cfg(test)]

@@ -9,7 +9,6 @@ pub use mwt_reports::health::HealthReport;
 
 use crate::Amount;
 use crate::error::Result;
-use crate::model::notify::NoticeRecord;
 
 use super::UnlockedVault;
 use super::forward::forward;
@@ -37,8 +36,5 @@ impl UnlockedVault {
     // forward:end
 
     // Called by the notification sweep until it moves.
-    forward! {
-        pub(crate) fn health_notice(&mut self, now: i64, zone: &str, ru: bool) -> Result<Option<NoticeRecord>>
-            => crate::usecases::planning::health::health_notice;
-    }
+    forward! {}
 }

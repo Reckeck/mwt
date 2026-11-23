@@ -2,7 +2,6 @@
 //! the scenarios to `crate::usecases::cryptotrack::tokens` (spec core-strangler, D1).
 
 use crate::Amount;
-use crate::cryptotrack::protocols::LegToken;
 use crate::cryptotrack::tokens::TokenStatus;
 use crate::error::Result;
 use crate::ipc_contract::cryptotrack::tokens::TokenView;
@@ -44,15 +43,5 @@ impl UnlockedVault {
 
     // Called by the recompute and the position reads until those areas move; not in the
     // baseline (crate-private), so outside the regenerated block.
-    forward! {
-        /// [`Self::crypto_register_token`] without the save: the caller owns it
-        /// and saves once for however many tokens it noted. Returns the status
-        /// and whether the document changed.
-        pub(crate) fn register_token_unsaved(&mut self, token: &TokenId, symbol: &str, name: &str, decimals: u8) -> Result<(TokenStatus, bool)>
-            => crate::usecases::cryptotrack::tokens::register_token_unsaved;
-        /// Register a leg token of a position read by a built-in adapter as
-        /// trusted. Returns whether the document changed; the caller saves.
-        pub(crate) fn trust_adapter_token(&mut self, leg: &LegToken) -> Result<bool>
-            => crate::usecases::cryptotrack::tokens::trust_adapter_token;
-    }
+    forward! {}
 }

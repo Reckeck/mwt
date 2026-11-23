@@ -32,8 +32,9 @@ fn event_with_item(
     left: &mut UnlockedVault,
     right: &mut UnlockedVault,
 ) -> (String, String, String) {
-    let event = left
-        .create_shared_event(SharedEventDraft {
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        left,
+        SharedEventDraft {
             title: "trip".into(),
             currency: "usd".into(),
             participants: vec![SharedParticipantDraft {
@@ -41,18 +42,19 @@ fn event_with_item(
                 ..Default::default()
             }],
             ..Default::default()
-        })
-        .unwrap()
-        .event;
-    let view = left
-        .add_shared_item(
-            &event.id,
-            SharedItemDraft {
-                title: "taxi".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        },
+    )
+    .unwrap()
+    .event;
+    let view = crate::usecases::household::shared_events::add_shared_item(
+        left,
+        &event.id,
+        SharedItemDraft {
+            title: "taxi".into(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
     settle(left, right);
     (
         event.id,
@@ -85,9 +87,12 @@ fn totals(vault: &UnlockedVault) -> Vec<String> {
 }
 
 fn add(vault: &mut UnlockedVault, event: &str, item: &str, buyer: &str, price: &str) -> String {
-    let view = vault
-        .add_shared_purchase(event, draft(item, buyer, price))
-        .unwrap();
+    let view = crate::usecases::household::shared_events::add_shared_purchase(
+        vault,
+        event,
+        draft(item, buyer, price),
+    )
+    .unwrap();
     view.event
         .items
         .iter()
@@ -106,8 +111,13 @@ fn an_edit_of_one_purchase_and_a_new_one_elsewhere_both_stay() {
     let (event, item, buyer) = event_with_item(&mut left, &mut right);
     let first = add(&mut left, &event, &item, &buyer, "10");
     settle(&mut left, &mut right);
-    left.update_shared_purchase(&event, &first, draft(&item, &buyer, "15"))
-        .unwrap();
+    crate::usecases::household::shared_events::update_shared_purchase(
+        &mut left,
+        &event,
+        &first,
+        draft(&item, &buyer, "15"),
+    )
+    .unwrap();
     pause();
     add(&mut right, &event, &item, &buyer, "20");
     settle(&mut left, &mut right);
@@ -122,11 +132,16 @@ fn a_removed_purchase_and_an_edit_of_another_both_stay() {
     let first = add(&mut left, &event, &item, &buyer, "10");
     let second = add(&mut left, &event, &item, &buyer, "20");
     settle(&mut left, &mut right);
-    left.delete_shared_purchase(&event, &first).unwrap();
-    pause();
-    right
-        .update_shared_purchase(&event, &second, draft(&item, &buyer, "25"))
+    crate::usecases::household::shared_events::delete_shared_purchase(&mut left, &event, &first)
         .unwrap();
+    pause();
+    crate::usecases::household::shared_events::update_shared_purchase(
+        &mut right,
+        &event,
+        &second,
+        draft(&item, &buyer, "25"),
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     assert_eq!(totals(&left), vec!["25"]);
     assert_eq!(purchases(&left), purchases(&right));
@@ -140,7 +155,8 @@ fn a_removed_purchase_and_an_edit_of_another_both_stay() {
 fn a_purchase_made_after_the_item_was_removed_brings_the_item_back() {
     let (_dir, mut left, mut right) = two_devices();
     let (event, item, buyer) = event_with_item(&mut left, &mut right);
-    left.delete_shared_item(&event, &item).unwrap();
+    crate::usecases::household::shared_events::delete_shared_item(&mut left, &event, &item)
+        .unwrap();
     pause();
     let late = add(&mut right, &event, &item, &buyer, "20");
     settle(&mut left, &mut right);
@@ -158,7 +174,8 @@ fn an_item_removed_after_a_purchase_took_it_along() {
     let (event, item, buyer) = event_with_item(&mut left, &mut right);
     add(&mut right, &event, &item, &buyer, "20");
     pause();
-    left.delete_shared_item(&event, &item).unwrap();
+    crate::usecases::household::shared_events::delete_shared_item(&mut left, &event, &item)
+        .unwrap();
     settle(&mut left, &mut right);
     assert!(left.doc.shared_events[0].items.is_empty());
     assert!(right.doc.shared_events[0].items.is_empty());
@@ -170,7 +187,7 @@ fn stamps_of_an_older_vault_without_purchase_entries_still_converge() {
     let (_dir, mut left, mut right) = two_devices();
     let (event, item, buyer) = event_with_item(&mut left, &mut right);
     let first = add(&mut left, &event, &item, &buyer, "10");
-    left.sync_manifest(None).unwrap();
+    crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
     // Rewrite the stamps the way an older build left them.
     let key = format!("shared_events:{event}");
     let stamps = left.doc.sync.stamps.get_mut(&key).unwrap();
@@ -190,8 +207,13 @@ fn stamps_of_an_older_vault_without_purchase_entries_still_converge() {
     // A device that never met the event gets it, then both edit.
     settle(&mut left, &mut right);
     assert_eq!(totals(&right), vec!["10"]);
-    left.update_shared_purchase(&event, &first, draft(&item, &buyer, "11"))
-        .unwrap();
+    crate::usecases::household::shared_events::update_shared_purchase(
+        &mut left,
+        &event,
+        &first,
+        draft(&item, &buyer, "11"),
+    )
+    .unwrap();
     pause();
     add(&mut right, &event, &item, &buyer, "30");
     settle(&mut left, &mut right);

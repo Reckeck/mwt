@@ -566,15 +566,18 @@ mod tests {
     #[test]
     fn removing_the_password_deletes_the_copies_sealed_under_it() {
         let (dir, mut vault) = empty_vault();
-        vault
-            .add_transaction(crate::service::test_support::income_of(
-                &vault.doc.stores[0].id.clone(),
+        let store_id = vault.doc.stores[0].id.clone();
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            crate::service::test_support::income_of(
+                &store_id,
                 crate::service::test_support::usd(),
                 "5",
                 "1",
                 "before the sync",
-            ))
-            .unwrap();
+            ),
+        )
+        .unwrap();
         vault.sync_backup().unwrap();
         vault.sync_backup().unwrap();
         assert!(vault.has_sync_backup());
@@ -724,20 +727,20 @@ mod tests {
     use crate::service::StoreExtras;
 
     fn bybit(vault: &mut UnlockedVault) -> String {
-        vault
-            .create_store_with(
-                "Bybit",
-                StoreKind::Exchange,
-                "#f0b90b",
-                "",
-                None,
-                StoreExtras {
-                    provider: Some(ExchangeProvider::Bybit),
-                    ..Default::default()
-                },
-            )
-            .unwrap()
-            .id
+        crate::usecases::money::stores::create_store_with(
+            vault,
+            "Bybit",
+            StoreKind::Exchange,
+            "#f0b90b",
+            "",
+            None,
+            StoreExtras {
+                provider: Some(ExchangeProvider::Bybit),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .id
     }
 
     /// A level-3 password the strength rule takes.

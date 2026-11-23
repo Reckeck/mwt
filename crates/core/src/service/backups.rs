@@ -57,15 +57,15 @@ mod tests {
 
     fn vault_with_store(path: std::path::PathBuf, name: &str) -> UnlockedVault {
         let mut vault = UnlockedVault::create(path, "pw").unwrap();
-        vault
-            .create_store(
-                name,
-                crate::model::store::StoreKind::Bank,
-                "#000000",
-                "",
-                None,
-            )
-            .unwrap();
+        crate::usecases::money::stores::create_store(
+            &mut vault,
+            name,
+            crate::model::store::StoreKind::Bank,
+            "#000000",
+            "",
+            None,
+        )
+        .unwrap();
         vault
     }
 
@@ -77,15 +77,15 @@ mod tests {
         assert!(backup.name.starts_with("v.wallet.") && backup.name.ends_with(".bak"));
         assert_eq!(vault.list_backups().unwrap()[0].name, backup.name);
 
-        vault
-            .create_store(
-                "After",
-                crate::model::store::StoreKind::Bank,
-                "#000000",
-                "",
-                None,
-            )
-            .unwrap();
+        crate::usecases::money::stores::create_store(
+            &mut vault,
+            "After",
+            crate::model::store::StoreKind::Bank,
+            "#000000",
+            "",
+            None,
+        )
+        .unwrap();
         let stores = |vault: &UnlockedVault| vault.doc.stores.len();
         let with_both = stores(&vault);
 

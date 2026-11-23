@@ -2,8 +2,6 @@
 //! `crate::cryptotrack::service::recompute`, the scenarios to
 //! `crate::usecases::cryptotrack::recompute` (spec core-strangler, D1).
 
-#[cfg(test)]
-use crate::cryptotrack::engine::Ledger;
 use crate::cryptotrack::service::recompute::{CryptoApplied, CryptoBatch, CryptoTotals};
 use crate::cryptotrack::sources::evm::SourceBatch;
 use crate::error::Result;
@@ -33,15 +31,6 @@ impl UnlockedVault {
             => crate::usecases::cryptotrack::recompute::crypto_sync_holdings;
     }
     // forward:end
-
-    // Called by the token tests until they leave the vault; not in the baseline
-    // (crate-private), so outside the regenerated block.
-    forward! {
-        /// Fold every operation of the module, with the corrections on top.
-        #[cfg(test)]
-        pub(crate) fn crypto_fold(&self) -> Ledger
-            => crate::cryptotrack::service::recompute::fold @books;
-    }
 }
 
 #[cfg(test)]

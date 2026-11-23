@@ -13,8 +13,7 @@ fn reopen(vault: &UnlockedVault) -> UnlockedVault {
 
 fn tx_of(vault: &mut UnlockedVault) -> String {
     let card = store(vault, "Card", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&card, "100", "salary"))
+    crate::usecases::money::transactions::add_transaction(vault, income(&card, "100", "salary"))
         .unwrap()
         .meta()
         .id
@@ -22,17 +21,17 @@ fn tx_of(vault: &mut UnlockedVault) -> String {
 }
 
 fn attach(vault: &mut UnlockedVault, tx_id: &str) -> String {
-    vault
-        .add_attachment_file(
-            EntityRef::new(EntityKind::Tx, tx_id),
-            NewFile {
-                name: "a.pdf",
-                mime: None,
-                bytes: b"bytes",
-            },
-        )
-        .unwrap()
-        .id
+    crate::usecases::household::attachments::add_attachment_file(
+        vault,
+        EntityRef::new(EntityKind::Tx, tx_id),
+        NewFile {
+            name: "a.pdf",
+            mime: None,
+            bytes: b"bytes",
+        },
+    )
+    .unwrap()
+    .id
 }
 
 #[test]
@@ -40,8 +39,8 @@ fn a_removed_attachment_is_pruned_with_its_file() {
     let (_dir, mut vault) = setup();
     let tx = tx_of(&mut vault);
     let id = attach(&mut vault, &tx);
-    vault.remove_attachment(&id).unwrap();
-    let file = vault.attachments_dir().join(&id);
+    crate::usecases::household::attachments::remove_attachment(&mut vault, &id).unwrap();
+    let file = crate::usecases::household::attachments::attachments_dir(&vault).join(&id);
     assert!(file.exists(), "kept until the next open");
     let vault = reopen(&vault);
     assert!(vault.doc.attachments.is_empty());
@@ -54,8 +53,8 @@ fn an_attachment_of_a_gone_owner_is_pruned() {
     let (_dir, mut vault) = setup();
     let tx = tx_of(&mut vault);
     let id = attach(&mut vault, &tx);
-    vault.delete_transaction(&tx).unwrap();
-    let file = vault.attachments_dir().join(&id);
+    crate::usecases::money::transactions::delete_transaction(&mut vault, &tx).unwrap();
+    let file = crate::usecases::household::attachments::attachments_dir(&vault).join(&id);
     let vault = reopen(&vault);
     assert!(
         vault.doc.attachments.is_empty(),
@@ -70,11 +69,11 @@ fn an_attachment_of_an_owner_that_may_return_is_kept() {
     let tx = tx_of(&mut left);
     exchange(&mut left, &mut right);
     let id = attach(&mut right, &tx);
-    left.delete_transaction(&tx).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx).unwrap();
     exchange(&mut left, &mut right);
     assert!(right.doc.transactions.is_empty(), "the deletion arrived");
 
-    let file = right.attachments_dir().join(&id);
+    let file = crate::usecases::household::attachments::attachments_dir(&right).join(&id);
     let right = reopen(&right);
     assert!(right.doc.attachments.iter().any(|item| item.id == id));
     assert!(file.exists());
@@ -85,7 +84,7 @@ fn an_orphan_file_is_deleted_and_other_files_are_not() {
     let (_dir, mut vault) = setup();
     let tx = tx_of(&mut vault);
     let kept = attach(&mut vault, &tx);
-    let dir = vault.attachments_dir();
+    let dir = crate::usecases::household::attachments::attachments_dir(&vault);
     let orphan = dir.join(uuid::Uuid::new_v4().to_string());
     let upper = dir.join(uuid::Uuid::new_v4().to_string().to_uppercase());
     let stranger = dir.join("notes.txt");
@@ -129,10 +128,9 @@ fn a_second_open_changes_nothing() {
     let (_dir, mut vault) = setup();
     let tx = tx_of(&mut vault);
     let removed = attach(&mut vault, &tx);
-    vault.remove_attachment(&removed).unwrap();
+    crate::usecases::household::attachments::remove_attachment(&mut vault, &removed).unwrap();
     std::fs::write(
-        vault
-            .attachments_dir()
+        crate::usecases::household::attachments::attachments_dir(&vault)
             .join(uuid::Uuid::new_v4().to_string()),
         b"x",
     )

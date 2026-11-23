@@ -216,27 +216,36 @@ mod tests {
         let bank = store(&mut vault, "Bank", StoreKind::Cash, None);
         let mut spend = payment(&bank, "500", "to the exchanger");
         at(&mut spend, "2026-11-11T09:00:00Z");
-        let id = vault.add_transaction(spend).unwrap().meta().id.clone();
+        let id = crate::usecases::money::transactions::add_transaction(&mut vault, spend)
+            .unwrap()
+            .meta()
+            .id
+            .clone();
         (dir, vault, id)
     }
 
     fn link(vault: &mut UnlockedVault, event_id: &str, fiat_tx_id: &str) {
-        vault
-            .crypto_link_fiat(&CryptoLinkInput {
+        crate::usecases::cryptotrack::links::crypto_link_fiat(
+            vault,
+            &CryptoLinkInput {
                 event_id: event_id.into(),
                 fiat_tx_id: fiat_tx_id.into(),
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
     }
 
     #[test]
     fn candidates_are_the_operations_close_in_time_and_write_nothing() {
         let (_dir, vault, _id) = setup();
         let before = vault.doc.crypto_overrides.clone();
-        let options = vault.crypto_link_candidates(&CryptoLinkCandidatesInput {
-            time: "2026-11-11T09:00:00Z".into(),
-            ..Default::default()
-        });
+        let options = crate::usecases::cryptotrack::links::crypto_link_candidates(
+            &vault.books(),
+            &CryptoLinkCandidatesInput {
+                time: "2026-11-11T09:00:00Z".into(),
+                ..Default::default()
+            },
+        );
         assert_eq!(options.len(), 1);
         assert_eq!(options[0].row.id, "near");
         assert_eq!(options[0].days, 0);
@@ -260,45 +269,63 @@ mod tests {
                 ..Default::default()
             },
         ] {
-            let pairs = vault.crypto_pairs(&input);
+            let pairs = crate::usecases::cryptotrack::links::crypto_pairs(&vault.books(), &input);
             assert_eq!(pairs.len(), 1);
             assert_eq!(pairs[0].event.as_ref().unwrap().id, "near");
             assert_eq!(pairs[0].fiat.as_ref().unwrap().id, id);
         }
-        vault
-            .crypto_unlink_fiat(&CryptoUnlinkInput {
+        crate::usecases::cryptotrack::links::crypto_unlink_fiat(
+            &mut vault,
+            &CryptoUnlinkInput {
                 event_id: "near".into(),
-            })
-            .unwrap();
-        assert!(vault.crypto_pairs(&CryptoPairsInput::default()).is_empty());
+            },
+        )
+        .unwrap();
+        assert!(
+            crate::usecases::cryptotrack::links::crypto_pairs(
+                &vault.books(),
+                &CryptoPairsInput::default()
+            )
+            .is_empty()
+        );
         // Removing what is not there is not an error.
-        vault
-            .crypto_unlink_fiat(&CryptoUnlinkInput {
+        crate::usecases::cryptotrack::links::crypto_unlink_fiat(
+            &mut vault,
+            &CryptoUnlinkInput {
                 event_id: "near".into(),
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
     }
 
     #[test]
     fn a_missing_target_is_a_calm_empty_end_not_an_error() {
         let (_dir, mut vault, id) = setup();
         link(&mut vault, "near", &id);
-        vault.delete_transaction(&id).unwrap();
-        let pairs = vault.crypto_pairs(&CryptoPairsInput::default());
+        crate::usecases::money::transactions::delete_transaction(&mut vault, &id).unwrap();
+        let pairs = crate::usecases::cryptotrack::links::crypto_pairs(
+            &vault.books(),
+            &CryptoPairsInput::default(),
+        );
         assert_eq!(pairs.len(), 1);
         assert!(pairs[0].fiat.is_none());
         assert!(pairs[0].event.is_some());
         vault.doc.crypto_events.clear();
-        let pairs = vault.crypto_pairs(&CryptoPairsInput::default());
+        let pairs = crate::usecases::cryptotrack::links::crypto_pairs(
+            &vault.books(),
+            &CryptoPairsInput::default(),
+        );
         assert!(pairs[0].event.is_none() && pairs[0].fiat.is_none());
         // A pointer cannot be made to something that is not there.
         assert!(
-            vault
-                .crypto_link_fiat(&CryptoLinkInput {
+            crate::usecases::cryptotrack::links::crypto_link_fiat(
+                &mut vault,
+                &CryptoLinkInput {
                     event_id: "near".into(),
                     fiat_tx_id: id,
-                })
-                .is_err()
+                }
+            )
+            .is_err()
         );
     }
 
@@ -308,8 +335,14 @@ mod tests {
         let at_time = "2026-11-12T00:00:00Z";
         let snapshot = |vault: &UnlockedVault| {
             (
-                format!("{:?}", vault.crypto_totals(at_time)),
-                serde_json::to_string(&vault.portfolio_summary()).unwrap(),
+                format!(
+                    "{:?}",
+                    crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), at_time)
+                ),
+                serde_json::to_string(&crate::usecases::money::capital::portfolio_summary(
+                    &vault.books(),
+                ))
+                .unwrap(),
                 // Holding ids are fresh on every recompute; what they hold is not.
                 vault
                     .doc
@@ -333,7 +366,7 @@ mod tests {
         assert_eq!(fix.flow_id, None, "a pointer joins no chain");
         assert!(vault.doc.transactions[0].meta().flow_id.is_none());
         // The same after a recompute from scratch.
-        vault.crypto_sync_holdings().unwrap();
+        crate::usecases::cryptotrack::recompute::crypto_sync_holdings(&mut vault).unwrap();
         assert_eq!(snapshot(&vault), without);
     }
 

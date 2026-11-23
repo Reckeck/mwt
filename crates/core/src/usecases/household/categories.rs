@@ -65,7 +65,7 @@ pub fn archive_category(vault: &mut UnlockedVault, key: &str, archived: bool) ->
 /// Only an unused category can be deleted; otherwise archive it. The
 /// automations are the planning area's: read through the vault (OD6).
 pub fn delete_category(vault: &mut UnlockedVault, key: &str) -> Result<()> {
-    let automations = vault.automations();
+    let automations = crate::usecases::planning::automations::automations(vault);
     plan_delete_category(&vault.doc, key, &automations)?;
     vault.transact(|tx| {
         tx.doc_mut()

@@ -10,7 +10,7 @@ pub use crate::planning::automations::{
 use crate::Amount;
 use crate::calendar::Calendar;
 use crate::error::Result;
-use crate::model::planning::{Automation, AutomationRun, RejectReason};
+use crate::model::planning::{Automation, AutomationRun};
 use crate::model::transaction::Transaction;
 use crate::workflow::model::Workflow;
 
@@ -90,12 +90,5 @@ impl UnlockedVault {
     }
 
     // Not in the baseline (crate-private), so outside the regenerated block.
-    forward! {
-        /// Whether the source of a transaction can pay for it at `secs`; `None` when it can.
-        pub(crate) fn funds_shortfall(&self, tx: &Transaction, secs: i64) -> Option<RejectReason>
-            => crate::planning::automations::funds_shortfall @doc;
-        /// «Card: 500 USD of 800 USD» — with the store's name, for the error text.
-        pub(crate) fn describe_shortfall(&self, reason: &RejectReason) -> String
-            => crate::planning::automations::describe_shortfall @doc;
-    }
+    forward! {}
 }

@@ -134,14 +134,17 @@ fn quote(vault: &mut UnlockedVault, asset: &AssetRef, usd: &str) {
 fn a_vault_without_the_module_keeps_its_capital_byte_for_byte() {
     let (_dir, mut vault) = empty_vault();
     let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&bank, "1000", "salary"))
-        .expect("the top-up is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&bank, "1000", "salary"),
+    )
+    .expect("the top-up is booked");
     quote_usd(&mut vault);
     let holdings = serde_json::to_vec(&vault.doc.holdings).expect("holdings serialize");
-    let worth = serde_json::to_vec(&vault.net_worth()).expect("net worth serializes");
+    let worth = serde_json::to_vec(&crate::usecases::money::capital::net_worth(&vault.books()))
+        .expect("net worth serializes");
 
-    vault.apply_crypto_holdings();
+    crate::usecases::cryptotrack::recompute::apply_crypto_holdings(&mut vault);
 
     assert_eq!(
         serde_json::to_vec(&vault.doc.holdings).expect("holdings serialize"),
@@ -149,22 +152,25 @@ fn a_vault_without_the_module_keeps_its_capital_byte_for_byte() {
         "the module must not touch a holding it did not make"
     );
     assert_eq!(
-        serde_json::to_vec(&vault.net_worth()).expect("net worth serializes"),
+        serde_json::to_vec(&crate::usecases::money::capital::net_worth(&vault.books()))
+            .expect("net worth serializes"),
         worth
     );
-    assert!(vault.crypto_outside_totals().is_empty());
+    assert!(crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books()).is_empty());
 }
 
 #[test]
 fn the_module_adds_its_wallet_and_moves_no_other_total() {
     let (_dir, mut vault) = empty_vault();
     let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&bank, "1000", "salary"))
-        .expect("the top-up is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&bank, "1000", "salary"),
+    )
+    .expect("the top-up is booked");
     quote_usd(&mut vault);
     quote(&mut vault, &eth_ref(), "2000");
-    let before = vault.net_worth();
+    let before = crate::usecases::money::capital::net_worth(&vault.books());
 
     let wallet = followed(&mut vault, "cacc-1", "Cold", ME);
     priced(&mut vault, &eth(), "2000");
@@ -177,9 +183,9 @@ fn the_module_adds_its_wallet_and_moves_no_other_total() {
         CryptoDirection::In,
         OUTSIDE,
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
-    let after = vault.net_worth();
+    let after = crate::usecases::money::capital::net_worth(&vault.books());
     assert_eq!(after.financial, before.financial + amount("4000"));
     assert_eq!(after.non_financial, before.non_financial);
     assert_eq!(after.receivables, before.receivables);
@@ -197,7 +203,7 @@ fn the_module_adds_its_wallet_and_moves_no_other_total() {
         Some(amount("2000")),
         "the engine's average cost reaches the wallet"
     );
-    assert!(vault.crypto_outside_totals().is_empty());
+    assert!(crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books()).is_empty());
 }
 
 #[test]
@@ -216,8 +222,8 @@ fn a_transfer_between_the_users_own_addresses_leaves_the_capital_alone() {
         CryptoDirection::In,
         OUTSIDE,
     ));
-    vault.recompute_holdings();
-    let before = vault.net_worth();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
+    let before = crate::usecases::money::capital::net_worth(&vault.books());
     assert_eq!(before.financial, amount("6000"));
 
     // The same coins move to the user's other address: two sides, one move.
@@ -239,9 +245,9 @@ fn a_transfer_between_the_users_own_addresses_leaves_the_capital_alone() {
         CryptoDirection::In,
         ME,
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
-    let after = vault.net_worth();
+    let after = crate::usecases::money::capital::net_worth(&vault.books());
     assert_eq!(
         after.financial, before.financial,
         "moving one's own coins is not income"
@@ -259,10 +265,15 @@ fn an_archived_hand_kept_wallet_is_not_counted_twice() {
     priced(&mut vault, &eth(), "2000");
     // How it was kept before the address was connected.
     let old = store(&mut vault, "Old cold", StoreKind::Crypto, None);
-    vault
-        .add_transaction(income_of(&old, eth_ref(), "2", "2000", "bought"))
-        .expect("the purchase is booked");
-    assert_eq!(vault.net_worth().financial, amount("4000"));
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&old, eth_ref(), "2", "2000", "bought"),
+    )
+    .expect("the purchase is booked");
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        amount("4000")
+    );
 
     // The move to level 3 archives it and connects the address (spec E11).
     archive(&mut vault, &old);
@@ -276,10 +287,10 @@ fn an_archived_hand_kept_wallet_is_not_counted_twice() {
         CryptoDirection::In,
         OUTSIDE,
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
     assert_eq!(
-        vault.net_worth().financial,
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
         amount("4000"),
         "the same 2 ETH, counted once"
     );
@@ -303,13 +314,20 @@ fn a_retired_wallet_yields_the_coins_the_engine_never_met() {
     quote(&mut vault, &doge_ref(), "1");
     priced(&mut vault, &eth(), "2000");
     let old = store(&mut vault, "Old cold", StoreKind::Crypto, None);
-    vault
-        .add_transaction(income_of(&old, eth_ref(), "2", "2000", "bought"))
-        .expect("the purchase is booked");
-    vault
-        .add_transaction(income_of(&old, doge_ref(), "1000", "1", "bought"))
-        .expect("the second purchase is booked");
-    assert_eq!(vault.net_worth().financial, amount("5000"));
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&old, eth_ref(), "2", "2000", "bought"),
+    )
+    .expect("the purchase is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&old, doge_ref(), "1000", "1", "bought"),
+    )
+    .expect("the second purchase is booked");
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        amount("5000")
+    );
 
     // The move to level 3: the record is archived, the address connected.
     archive(&mut vault, &old);
@@ -323,10 +341,10 @@ fn a_retired_wallet_yields_the_coins_the_engine_never_met() {
         CryptoDirection::In,
         OUTSIDE,
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
     assert_eq!(
-        vault.net_worth().financial,
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
         amount("4000"),
         "only what a followed address really holds is left"
     );
@@ -346,15 +364,17 @@ fn without_the_module_an_archived_crypto_wallet_still_counts() {
     let (_dir, mut vault) = empty_vault();
     quote(&mut vault, &eth_ref(), "2000");
     let old = store(&mut vault, "Old cold", StoreKind::Crypto, None);
-    vault
-        .add_transaction(income_of(&old, eth_ref(), "2", "2000", "bought"))
-        .expect("the purchase is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&old, eth_ref(), "2", "2000", "bought"),
+    )
+    .expect("the purchase is booked");
     archive(&mut vault, &old);
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
     assert!(vault.doc.crypto_accounts.is_empty());
     assert_eq!(
-        vault.net_worth().financial,
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
         amount("4000"),
         "archiving alone is not the module's rule"
     );
@@ -368,9 +388,11 @@ fn a_wallet_still_in_use_keeps_its_own_coins() {
     quote(&mut vault, &eth_ref(), "2000");
     priced(&mut vault, &eth(), "2000");
     let other = store(&mut vault, "By hand", StoreKind::Crypto, None);
-    vault
-        .add_transaction(income_of(&other, eth_ref(), "2", "2000", "bought"))
-        .expect("the purchase is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&other, eth_ref(), "2", "2000", "bought"),
+    )
+    .expect("the purchase is booked");
     followed(&mut vault, "cacc-1", "Cold", ME);
     vault.doc.crypto_events.push(moved(
         "ev-1",
@@ -381,9 +403,12 @@ fn a_wallet_still_in_use_keeps_its_own_coins() {
         CryptoDirection::In,
         OUTSIDE,
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
-    assert_eq!(vault.net_worth().financial, amount("8000"));
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        amount("8000")
+    );
     assert_eq!(holding_of(&vault, &other, &eth_ref()), amount("2"));
 }
 
@@ -415,11 +440,14 @@ fn a_quarantined_token_stays_out_even_when_something_quoted_it() {
         CryptoDirection::In,
         OUTSIDE,
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
-    assert_eq!(vault.net_worth().financial, Amount::ZERO);
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        Amount::ZERO
+    );
     assert_eq!(holding_of(&vault, &wallet, &pretender), Amount::ZERO);
-    let left = vault.crypto_outside_totals();
+    let left = crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books());
     assert_eq!(left.len(), 1, "{left:?}");
     assert_eq!(left[0].reason, CryptoLeftOut::Quarantined);
     assert_eq!(left[0].asset_key, token.key());
@@ -455,12 +483,15 @@ fn a_priced_leg_of_an_unfolded_position_is_not_left_out_for_want_of_a_price() {
         .doc
         .crypto_positions
         .push(position_of("cacc-1", eth(), "2"));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
     assert_eq!(holding_of(&vault, &wallet, &eth_ref()), amount("2"));
-    let left = vault.crypto_outside_totals();
+    let left = crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books());
     assert!(left.is_empty(), "a priced leg is not unpriced: {left:?}");
-    assert_eq!(vault.net_worth().financial, amount("4000"));
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        amount("4000")
+    );
 }
 
 const USDC: &str = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
@@ -482,14 +513,17 @@ fn aave_with_debt() -> CryptoPosition {
 fn an_aave_debt_lowers_the_capital() {
     let (_dir, mut vault) = empty_vault();
     quote(&mut vault, &eth_ref(), "3000");
-    let usdc = vault.crypto_asset_ref(&CryptoAsset::Token(TokenId::new(Chain::Ethereum, USDC)));
+    let usdc = crate::cryptotrack::service::totals::crypto_asset_ref(
+        &vault.doc,
+        &CryptoAsset::Token(TokenId::new(Chain::Ethereum, USDC)),
+    );
     quote(&mut vault, &usdc, "1");
     followed(&mut vault, "cacc-1", "Cold", ME);
     vault.doc.crypto_positions.push(aave_with_debt());
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
     assert_eq!(
-        vault.net_worth().financial,
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
         amount("2000"),
         "3 000 of collateral less 1 000 of debt (was 3 000)"
     );
@@ -501,10 +535,10 @@ fn an_unpriced_debt_is_listed_as_left_out() {
     quote(&mut vault, &eth_ref(), "3000");
     let wallet = followed(&mut vault, "cacc-1", "Cold", ME);
     vault.doc.crypto_positions.push(aave_with_debt());
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
     let usdc_key = CryptoAsset::Token(TokenId::new(Chain::Ethereum, USDC)).key();
-    let left = vault.crypto_outside_totals();
+    let left = crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books());
     let row = left
         .iter()
         .find(|row| row.asset_key == usdc_key)
@@ -525,7 +559,7 @@ fn a_stale_old_key_twin_of_a_position_is_not_counted_twice() {
     twin.id = "uniswap-v3|ethereum|7".into();
     vault.doc.crypto_positions.push(current);
     vault.doc.crypto_positions.push(twin);
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
     assert_eq!(holding_of(&vault, &wallet, &eth_ref()), amount("2"));
 }
@@ -554,20 +588,31 @@ fn an_unregistered_stranger_token_is_still_dropped() {
         CryptoAsset::Token(token.clone()),
         "1000000000",
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
-    assert_eq!(vault.net_worth().financial, Amount::ZERO);
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        Amount::ZERO
+    );
     assert_eq!(holding_of(&vault, &wallet, &pretender), Amount::ZERO);
-    let shown = vault.crypto_list_positions(&[], "2026-03-06T00:00:00Z");
+    let shown = crate::usecases::cryptotrack::positions::crypto_list_positions(
+        &vault.books(),
+        &[],
+        "2026-03-06T00:00:00Z",
+    );
     assert_eq!(shown.len(), 1);
     assert_eq!(shown[0].value_usd, None, "unknown, not zero and not 1e9");
     assert_eq!(shown[0].assets[0].value_usd, None);
 
     // Once the user takes the token in, the leg counts like any other.
-    vault.crypto_confirm_token(&token).expect("confirmed");
+    crate::usecases::cryptotrack::tokens::crypto_confirm_token(&mut vault, &token)
+        .expect("confirmed");
     quote(&mut vault, &pretender, "1");
-    vault.recompute_holdings();
-    assert_eq!(vault.net_worth().financial, amount("1000000000"));
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        amount("1000000000")
+    );
 }
 
 #[test]
@@ -587,7 +632,7 @@ fn a_token_nothing_can_price_keeps_its_coins_and_says_it_is_not_valued() {
         CryptoDirection::In,
         OUTSIDE,
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
     let held = vault
         .doc
@@ -598,11 +643,11 @@ fn a_token_nothing_can_price_keeps_its_coins_and_says_it_is_not_valued() {
     assert_eq!(held.quantity, amount("100"));
     assert_eq!(held.avg_cost, None, "no price known is not a zero cost");
     assert_eq!(
-        vault.net_worth().financial,
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
         Amount::ZERO,
         "nothing values it, so it adds nothing to the capital"
     );
-    let left = vault.crypto_outside_totals();
+    let left = crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books());
     assert_eq!(left.len(), 1, "{left:?}");
     assert_eq!(left[0].reason, CryptoLeftOut::NoPrice);
     assert_eq!(left[0].quantity, Some(amount("100")));
@@ -631,10 +676,13 @@ fn an_account_no_wallet_shows_is_nobodys_capital_and_says_so() {
         CryptoDirection::In,
         OUTSIDE,
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
 
-    assert_eq!(vault.net_worth().financial, Amount::ZERO);
-    let left = vault.crypto_outside_totals();
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        Amount::ZERO
+    );
+    let left = crate::cryptotrack::service::totals::crypto_outside_totals(&vault.books());
     assert_eq!(left.len(), 1, "{left:?}");
     assert_eq!(left[0].reason, CryptoLeftOut::NoWallet);
     assert_eq!(left[0].quantity, Some(amount("2")));
@@ -656,13 +704,16 @@ fn an_archived_account_is_watched_and_not_counted() {
         CryptoDirection::In,
         OUTSIDE,
     ));
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
     assert_eq!(holding_of(&vault, &wallet, &eth_ref()), amount("2"));
 
     vault.doc.crypto_accounts[0].archived = true;
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
     assert_eq!(holding_of(&vault, &wallet, &eth_ref()), Amount::ZERO);
-    assert_eq!(vault.net_worth().financial, Amount::ZERO);
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        Amount::ZERO
+    );
 }
 
 /// The module's own writers have to re-derive the holdings themselves:
@@ -683,12 +734,14 @@ fn the_modules_own_sync_puts_the_balances_into_the_holdings() {
         OUTSIDE,
     ));
 
-    vault
-        .crypto_sync_holdings()
+    crate::usecases::cryptotrack::recompute::crypto_sync_holdings(&mut vault)
         .expect("the holdings are saved");
 
     assert_eq!(holding_of(&vault, &wallet, &eth_ref()), amount("2"));
-    assert_eq!(vault.net_worth().financial, amount("4000"));
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
+        amount("4000")
+    );
 }
 
 // -- the capital history: the months a replay cannot reach ---------------
@@ -722,8 +775,7 @@ fn recorded(vault: &mut UnlockedVault, account_id: &str, moment: &str, usd: &str
 
 fn points_of(vault: &UnlockedVault, filter: &ReportFilter) -> Vec<NetworthPoint> {
     let now = unix_secs(NOW).expect("the clock parses");
-    match vault
-        .report(ReportKind::Networth, filter, now, "UTC")
+    match crate::reports::overview::report(&vault.books(), ReportKind::Networth, filter, now, "UTC")
         .expect("the report runs")
     {
         Report::Networth(report) => report.points,
@@ -750,9 +802,11 @@ fn a_history_without_the_module_is_the_series_it_always_was() {
         ("1000", "2026-03-02T10:00:00Z"),
         ("500", "2026-05-02T10:00:00Z"),
     ] {
-        vault
-            .add_transaction(dated(income(&bank, sum, "salary"), stamp))
-            .expect("the top-up is booked");
+        crate::usecases::money::transactions::add_transaction(
+            &mut vault,
+            dated(income(&bank, sum, "salary"), stamp),
+        )
+        .expect("the top-up is booked");
     }
     let points = history(&vault, "2026-03", "2026-05");
     assert_eq!(points.len(), 3);
@@ -821,12 +875,14 @@ fn a_past_point_does_not_count_an_archived_hand_kept_wallet_twice() {
     let (_dir, mut vault) = usd_vault();
     // Kept by hand until the address was connected.
     let old = store(&mut vault, "Old cold", StoreKind::Crypto, None);
-    vault
-        .add_transaction(dated(
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        dated(
             income_of(&old, eth_ref(), "2", "2000", "bought"),
             "2026-03-02T10:00:00Z",
-        ))
-        .expect("the purchase is booked");
+        ),
+    )
+    .expect("the purchase is booked");
     assert_eq!(
         history(&vault, "2026-03", "2026-03")[0].crypto,
         amount("4000")
@@ -884,12 +940,11 @@ fn an_archived_account_is_out_of_the_history_as_it_is_out_of_the_present() {
 fn a_report_scoped_to_another_wallet_leaves_the_module_out() {
     let (_dir, mut vault) = usd_vault();
     let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
-    vault
-        .add_transaction(dated(
-            income(&bank, "1000", "salary"),
-            "2026-03-02T10:00:00Z",
-        ))
-        .expect("the top-up is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        dated(income(&bank, "1000", "salary"), "2026-03-02T10:00:00Z"),
+    )
+    .expect("the top-up is booked");
     followed(&mut vault, "cacc-1", "Cold", ME);
     recorded(&mut vault, "cacc-1", "2026-03-20T00:00:00Z", "100");
 

@@ -75,7 +75,7 @@ pub fn sync_exchange(
     };
     (run.known, run.filtered) = counts;
     rules::count_kinds(&mut run, &fresh);
-    let stored = vault.bybit_store(&root, &fresh)?;
+    let stored = super::legacy_bybit::bybit_store(vault, &root, &fresh)?;
     run.known += stored.known;
     run.confirmed = stored.recorded();
     // A poll that brought nothing new refreshes the last empty run in memory
@@ -145,7 +145,7 @@ pub fn reconcile_exchange(
     };
     let mut made = Vec::new();
     for correction in corrections {
-        let saved = vault.add_transaction(correction)?;
+        let saved = crate::usecases::money::transactions::add_transaction(vault, correction)?;
         made.push(saved.meta().id.clone());
     }
     if let Some(first) = made.first().cloned() {

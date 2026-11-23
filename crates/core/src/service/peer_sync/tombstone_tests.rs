@@ -24,15 +24,17 @@ fn peer(name: &str) -> PeerRef {
 /// A contact both devices hold with stamps from long ago, then deleted on
 /// `left`, the deletion aged `age_days`. Returns the record key.
 fn deleted_long_ago(left: &mut UnlockedVault, right: &mut UnlockedVault, age_days: u64) -> String {
-    let contact = left
-        .create_contact(ContactDraft {
+    let contact = crate::usecases::household::contacts::create_contact(
+        left,
+        ContactDraft {
             name: "Gone".into(),
             kind: ContactKind::Person,
             note: String::new(),
             accounts: Vec::new(),
             group: String::new(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     settle(left, right);
     let key = format!("contacts:{}", contact.id);
     let created = Stamp::new(days_ago(age_days + 100), 0, "aaaaaaaa");
@@ -44,7 +46,7 @@ fn deleted_long_ago(left: &mut UnlockedVault, right: &mut UnlockedVault, age_day
             .insert(key.clone(), RecordStamps::created(created.clone()));
         vault.persist().unwrap();
     }
-    left.delete_contact(&contact.id).unwrap();
+    crate::usecases::household::contacts::delete_contact(left, &contact.id).unwrap();
     age_tombstone(left, &key, age_days);
     key
 }
@@ -76,18 +78,19 @@ fn age_revocation(vault: &mut UnlockedVault, device_id: &str, age_days: u64) {
 fn a_declined_session_does_not_ack_tombstones() {
     let (_dir, mut left, mut right) = two_devices();
     let key = deleted_long_ago(&mut left, &mut right, 200);
-    left.sync_trust_peer("right-id", "Right", "rr").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "right-id", "Right", "rr").unwrap();
     // The peer has the deletion; the session only compared manifests and
     // was declined: nothing is recorded, the deletion stays.
     right
         .sync_apply(
-            &left.sync_records(std::slice::from_ref(&key)).unwrap(),
+            &crate::usecases::sync::read::sync_records(&mut left, std::slice::from_ref(&key))
+                .unwrap(),
             &peer("left"),
         )
         .unwrap();
-    let theirs = right.sync_manifest(None).unwrap();
-    let mine = left.sync_manifest(None).unwrap();
-    let _ = left.sync_diff(&mine, &theirs);
+    let theirs = crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
+    let mine = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
+    let _ = crate::usecases::sync::read::sync_diff(&left, &mine, &theirs);
     left.sync_mark_synced("right-id", None).unwrap();
     left.compact_tombstones();
     assert!(left.doc.sync.tombstones.contains_key(&key));
@@ -103,9 +106,9 @@ fn a_declined_session_does_not_ack_tombstones() {
 fn a_tombstone_is_compacted_only_after_every_peer_has_it() {
     let (_dir, mut left, mut right) = two_devices();
     let key = deleted_long_ago(&mut left, &mut right, 200);
-    left.sync_trust_peer("dev-b", "Phone", "bb").unwrap();
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
-    let has_it = left.sync_manifest(None).unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-b", "Phone", "bb").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
+    let has_it = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
     let lacks_it = Manifest::new();
     // Both exchanged with us (the old rule would drop the deletion now).
     left.sync_mark_synced("dev-b", None).unwrap();
@@ -123,8 +126,8 @@ fn a_tombstone_is_compacted_only_after_every_peer_has_it() {
 fn a_young_tombstone_stays_even_when_everyone_has_it() {
     let (_dir, mut left, mut right) = two_devices();
     let key = deleted_long_ago(&mut left, &mut right, 10);
-    left.sync_trust_peer("dev-b", "Phone", "bb").unwrap();
-    let has_it = left.sync_manifest(None).unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-b", "Phone", "bb").unwrap();
+    let has_it = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
     left.sync_ack_tombstones("dev-b", &has_it).unwrap();
     left.compact_tombstones();
     assert!(left.doc.sync.tombstones.contains_key(&key));
@@ -134,8 +137,8 @@ fn a_young_tombstone_stays_even_when_everyone_has_it() {
 fn an_ack_never_goes_down() {
     let (_dir, mut left, mut right) = two_devices();
     deleted_long_ago(&mut left, &mut right, 200);
-    left.sync_trust_peer("dev-b", "Phone", "bb").unwrap();
-    let has_it = left.sync_manifest(None).unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-b", "Phone", "bb").unwrap();
+    let has_it = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
     left.sync_ack_tombstones("dev-b", &has_it).unwrap();
     let acked = left.sync_state().tombstone_acks["dev-b"];
     left.sync_ack_tombstones("dev-b", &Manifest::new()).unwrap();
@@ -147,13 +150,13 @@ fn a_forgotten_device_repaired_within_a_year_does_not_bring_deletions_back() {
     let (_dir, mut left, mut right) = two_devices();
     let key = deleted_long_ago(&mut left, &mut right, 200);
     // A third device has the deletion and told us so.
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
-    let has_it = left.sync_manifest(None).unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
+    let has_it = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
     left.sync_mark_synced("dev-c", None).unwrap();
     left.sync_ack_tombstones("dev-c", &has_it).unwrap();
     // The right device is forgotten 100 days ago and never saw the deletion.
-    left.sync_trust_peer("right-id", "Right", "rr").unwrap();
-    left.sync_forget_peer("right-id").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "right-id", "Right", "rr").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut left, "right-id").unwrap();
     age_revocation(&mut left, "right-id", 100);
     left.compact_tombstones();
     assert!(
@@ -161,7 +164,7 @@ fn a_forgotten_device_repaired_within_a_year_does_not_bring_deletions_back() {
         "it still gates"
     );
     // Paired again, it still holds the contact: the deletion wins.
-    left.sync_trust_peer("right-id", "Right", "rr").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "right-id", "Right", "rr").unwrap();
     exchange(&mut left, &mut right);
     assert!(left.doc.contacts.is_empty());
     assert!(right.doc.contacts.is_empty());
@@ -171,8 +174,8 @@ fn a_forgotten_device_repaired_within_a_year_does_not_bring_deletions_back() {
 fn a_device_forgotten_over_a_year_ago_no_longer_holds_compaction() {
     let (_dir, mut left, mut right) = two_devices();
     let key = deleted_long_ago(&mut left, &mut right, 500);
-    left.sync_trust_peer("right-id", "Right", "rr").unwrap();
-    left.sync_forget_peer("right-id").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "right-id", "Right", "rr").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut left, "right-id").unwrap();
     age_revocation(&mut left, "right-id", 400);
     left.compact_tombstones();
     assert!(!left.doc.sync.tombstones.contains_key(&key));
@@ -229,10 +232,10 @@ fn a_recent_tombstone_from_a_peer_is_still_taken() {
 fn an_old_peer_without_acks_does_not_resurrect_a_deletion() {
     let (_dir, mut left, mut right) = two_devices();
     let key = deleted_long_ago(&mut left, &mut right, 200);
-    left.sync_trust_peer("right-id", "Right", "rr").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "right-id", "Right", "rr").unwrap();
     // The old peer still holds the live contact and sends the same manifest
     // as ever; it never vouches for the deletion.
-    let theirs = right.sync_manifest(None).unwrap();
+    let theirs = crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
     left.sync_ack_tombstones("right-id", &theirs).unwrap();
     left.sync_mark_synced("right-id", None).unwrap();
     left.compact_tombstones();
@@ -245,10 +248,9 @@ fn an_old_peer_without_acks_does_not_resurrect_a_deletion() {
 #[test]
 fn a_revocation_of_this_device_stays_in_the_list_it_passes_on() {
     let (_dir, mut left, mut right) = two_devices();
-    right
-        .sync_trust_peer("aaaaaaaa-left", "Left", "aa")
+    crate::usecases::sync::trust::sync_trust_peer(&mut right, "aaaaaaaa-left", "Left", "aa")
         .unwrap();
-    right.sync_forget_peer("aaaaaaaa-left").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut right, "aaaaaaaa-left").unwrap();
     left.sync_merge_peers(&right.sync_state().peers.clone())
         .unwrap();
     assert!(left.sync_state().is_revoked("aa"));
@@ -258,11 +260,12 @@ fn a_revocation_of_this_device_stays_in_the_list_it_passes_on() {
 fn an_own_entry_already_in_the_peer_list_does_not_hold_compaction() {
     let (_dir, mut left, mut right) = two_devices();
     let key = deleted_long_ago(&mut left, &mut right, 200);
-    left.sync_trust_peer("bbbbbbbb-right", "Right", "bb")
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "bbbbbbbb-right", "Right", "bb")
         .unwrap();
     // A vault written before the fix: this device sits in its own list.
-    left.sync_trust_peer("aaaaaaaa-left", "Left", "aa").unwrap();
-    let has_it = left.sync_manifest(None).unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "aaaaaaaa-left", "Left", "aa")
+        .unwrap();
+    let has_it = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
     left.sync_mark_synced("bbbbbbbb-right", None).unwrap();
     left.sync_ack_tombstones("bbbbbbbb-right", &has_it).unwrap();
     left.compact_tombstones();

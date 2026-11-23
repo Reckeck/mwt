@@ -50,9 +50,11 @@ fn keyed(vault: &mut UnlockedVault, store_id: &str) {
 /// module existed.
 fn hand_kept(vault: &mut UnlockedVault, name: &str, kind: StoreKind) -> String {
     let wallet = store(vault, name, kind, None);
-    vault
-        .add_transaction(income_of(&wallet, eth_ref(), "2", "2000", "bought"))
-        .expect("the purchase is booked");
+    crate::usecases::money::transactions::add_transaction(
+        vault,
+        income_of(&wallet, eth_ref(), "2", "2000", "bought"),
+    )
+    .expect("the purchase is booked");
     wallet
 }
 
@@ -69,8 +71,7 @@ fn store_mut<'vault>(
 }
 
 fn archived(vault: &UnlockedVault, store_id: &str) -> bool {
-    vault
-        .find_store(store_id)
+    crate::money::tree::find_store(&vault.doc, store_id)
         .expect("the wallet exists")
         .archived
 }
@@ -80,9 +81,11 @@ fn the_plan_counts_only_the_crypto_kept_by_hand() {
     let (_dir, mut vault) = empty_vault();
     quote(&mut vault, &eth_ref(), "2000");
     let bank = store(&mut vault, "Bank", StoreKind::Bank, None);
-    vault
-        .add_transaction(income(&bank, "1000", "salary"))
-        .expect("the top-up is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&bank, "1000", "salary"),
+    )
+    .expect("the top-up is booked");
     let old = hand_kept(&mut vault, "Old cold", StoreKind::Crypto);
     let binance = hand_kept(&mut vault, "Old exchange", StoreKind::Exchange);
     provider(&mut vault, &binance, ExchangeProvider::Binance);
@@ -91,7 +94,7 @@ fn the_plan_counts_only_the_crypto_kept_by_hand() {
     keyed(&mut vault, &bybit);
     let fresh = store(&mut vault, "New cold", StoreKind::Crypto, None);
 
-    let plan = vault.crypto_transition_plan();
+    let plan = crate::usecases::cryptotrack::transition::crypto_transition_plan(&vault.books());
 
     let named: Vec<&str> = plan
         .wallets
@@ -144,13 +147,14 @@ fn the_move_archives_what_it_named_and_leaves_the_engines_wallet() {
     );
 
     // Idempotent: the wizard, the raise and the next open all run it.
-    let again = vault
-        .crypto_archive_manual_wallets()
+    let again = crate::usecases::cryptotrack::transition::crypto_archive_manual_wallets(&mut vault)
         .expect("a second run saves nothing");
     assert!(!again.changed);
     assert!(again.wallets.is_empty());
     assert!(
-        vault.crypto_transition_plan().wallets.is_empty(),
+        crate::usecases::cryptotrack::transition::crypto_transition_plan(&vault.books())
+            .wallets
+            .is_empty(),
         "and the plan has nothing left to warn about"
     );
 }
@@ -161,19 +165,20 @@ fn below_level_three_nothing_is_retired() {
     quote(&mut vault, &eth_ref(), "2000");
     let old = hand_kept(&mut vault, "Old cold", StoreKind::Crypto);
 
-    let report = vault
-        .crypto_archive_manual_wallets()
-        .expect("the call is allowed, it just has nothing to do");
+    let report =
+        crate::usecases::cryptotrack::transition::crypto_archive_manual_wallets(&mut vault)
+            .expect("the call is allowed, it just has nothing to do");
 
     assert!(!report.changed);
     assert!(!archived(&vault, &old));
     assert_eq!(
-        vault.net_worth().financial,
+        crate::usecases::money::capital::net_worth(&vault.books()).financial,
         amount("4000"),
         "the capital of a level-1 vault is untouched"
     );
     assert_eq!(
-        vault.crypto_transition_plan().leaving_base,
+        crate::usecases::cryptotrack::transition::crypto_transition_plan(&vault.books())
+            .leaving_base,
         amount("4000"),
         "the plan answers at any level: that is what the warning is for"
     );
@@ -189,15 +194,19 @@ fn the_sub_accounts_follow_their_exchange() {
     provider(&mut vault, &binance, ExchangeProvider::Binance);
     // Only the sub-account has the records: the family goes with it.
     let binance_spot = store(&mut vault, "Spot", StoreKind::Exchange, Some(&binance));
-    vault
-        .add_transaction(income_of(&binance_spot, eth_ref(), "2", "2000", "bought"))
-        .expect("the purchase is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&binance_spot, eth_ref(), "2", "2000", "bought"),
+    )
+    .expect("the purchase is booked");
     let bybit = store(&mut vault, "Bybit", StoreKind::Exchange, None);
     provider(&mut vault, &bybit, ExchangeProvider::Bybit);
     let bybit_spot = store(&mut vault, "Spot", StoreKind::Exchange, Some(&bybit));
-    vault
-        .add_transaction(income_of(&bybit_spot, eth_ref(), "2", "2000", "bought"))
-        .expect("the purchase is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&bybit_spot, eth_ref(), "2", "2000", "bought"),
+    )
+    .expect("the purchase is booked");
     vault.raise_to_level3_for_tests();
 
     assert!(
@@ -232,7 +241,9 @@ fn the_exchange_being_connected_is_not_retired() {
     assert!(archived(&vault, &cold));
     // What the key would change: nothing here — it is already a source.
     keyed(&mut vault, &bybit);
-    assert!(!vault.retire_manual_crypto_wallets().changed);
+    assert!(
+        !crate::usecases::cryptotrack::transition::retire_manual_crypto_wallets(&mut vault).changed
+    );
 }
 
 /// A raise cut short right after the level-3 file was written: the vault
@@ -281,7 +292,7 @@ fn an_open_finishes_an_archiving_the_raise_did_not_reach() {
         "the open chain finishes the move the raise began"
     );
     assert_eq!(
-        reopened.net_worth().financial,
+        crate::usecases::money::capital::net_worth(&reopened.books()).financial,
         Amount::ZERO,
         "and the retired coins are out of the totals"
     );
@@ -299,7 +310,7 @@ fn a_finished_archiving_is_not_repeated_by_the_next_open() {
     let mut reopened = UnlockedVault::open(path.clone(), "pw").expect("opens");
     assert!(archived(&reopened, &old));
     store_mut(&mut reopened, &old).archived = false;
-    reopened.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(&mut reopened);
     reopened.persist().expect("the restored wallet is saved");
     drop(reopened);
 
@@ -307,7 +318,10 @@ fn a_finished_archiving_is_not_repeated_by_the_next_open() {
 
     assert!(!again.doc.settings.crypto_raise_pending);
     assert!(!archived(&again, &old), "nothing archives it a second time");
-    assert_eq!(again.net_worth().financial, amount("4000"));
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&again.books()).financial,
+        amount("4000")
+    );
 }
 
 /// A vault that was at level 3 before the module (stage 1 raised it for
@@ -323,11 +337,13 @@ fn a_level_3_vault_without_the_mark_keeps_its_hand_kept_wallets() {
     let old = hand_kept(&mut vault, "Old cold", StoreKind::Crypto);
     let binance = store(&mut vault, "Old exchange", StoreKind::Exchange, None);
     provider(&mut vault, &binance, ExchangeProvider::Binance);
-    vault
-        .add_transaction(income_of(&binance, eth_ref(), "1", "2000", "bought"))
-        .expect("the purchase is booked");
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income_of(&binance, eth_ref(), "1", "2000", "bought"),
+    )
+    .expect("the purchase is booked");
     vault.persist().expect("saved");
-    let capital = vault.net_worth().financial;
+    let capital = crate::usecases::money::capital::net_worth(&vault.books()).financial;
     assert_eq!(capital, amount("6000"));
     drop(vault);
 
@@ -336,7 +352,7 @@ fn a_level_3_vault_without_the_mark_keeps_its_hand_kept_wallets() {
     assert!(!archived(&reopened, &old));
     assert!(!archived(&reopened, &binance));
     assert_eq!(
-        reopened.net_worth().financial,
+        crate::usecases::money::capital::net_worth(&reopened.books()).financial,
         capital,
         "the capital is the same, and not counted twice"
     );
@@ -344,7 +360,10 @@ fn a_level_3_vault_without_the_mark_keeps_its_hand_kept_wallets() {
     drop(reopened);
     let again = UnlockedVault::open(path, "pw").expect("opens");
     assert!(!archived(&again, &old));
-    assert_eq!(again.net_worth().financial, capital);
+    assert_eq!(
+        crate::usecases::money::capital::net_worth(&again.books()).financial,
+        capital
+    );
 }
 
 /// A raise that runs to the end leaves no mark, in memory or on disk.

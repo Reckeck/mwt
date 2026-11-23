@@ -19,8 +19,9 @@ fn pause() {
 }
 
 fn event_with_guest(vault: &mut UnlockedVault, title: &str, currency: &str) -> (String, String) {
-    let event = vault
-        .create_shared_event(SharedEventDraft {
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        vault,
+        SharedEventDraft {
             title: title.into(),
             currency: currency.into(),
             participants: vec![SharedParticipantDraft {
@@ -28,9 +29,10 @@ fn event_with_guest(vault: &mut UnlockedVault, title: &str, currency: &str) -> (
                 ..Default::default()
             }],
             ..Default::default()
-        })
-        .unwrap()
-        .event;
+        },
+    )
+    .unwrap()
+    .event;
     (event.id, event.participants[0].id.clone())
 }
 
@@ -48,19 +50,21 @@ fn paid(vault: &mut UnlockedVault) -> String {
     let wallet = store(vault, "bank", StoreKind::Bank, None);
     let tx = payment(&wallet, "10", "taxi");
     let id = tx.meta().id.clone();
-    vault.add_transaction(tx).unwrap();
+    crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
     id
 }
 
 fn attach(vault: &mut UnlockedVault, event_id: &str, tx_id: &str, title: &str) {
-    vault
-        .attach_payment_to_shared_event(AttachPaymentInput {
+    crate::usecases::household::shared_events::attach_payment_to_shared_event(
+        vault,
+        AttachPaymentInput {
             event_id: event_id.into(),
             tx_id: tx_id.into(),
             new_item_title: Some(title.into()),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
 }
 
 /// `(event id, purchase id)` of every link purchase of the operation.
@@ -81,12 +85,15 @@ fn a_guest_made_a_contact_on_two_devices_is_one_contact_on_both() {
     let (_dir, mut left, mut right) = two_devices();
     let (event_id, guest) = event_with_guest(&mut left, "trip", "usd");
     settle(&mut left, &mut right);
-    left.make_shared_participant_contact(&event_id, &guest)
-        .unwrap();
+    crate::usecases::household::shared_events::make_shared_participant_contact(
+        &mut left, &event_id, &guest,
+    )
+    .unwrap();
     pause();
-    right
-        .make_shared_participant_contact(&event_id, &guest)
-        .unwrap();
+    crate::usecases::household::shared_events::make_shared_participant_contact(
+        &mut right, &event_id, &guest,
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     let wanted = format!("guest-{}", sync_ids::sync_safe_id(&[&event_id, &guest]));
     for device in [&left, &right] {
@@ -107,10 +114,11 @@ fn an_old_random_guest_contact_folds_into_the_deterministic_one() {
     let (_dir, mut left, mut right) = two_devices();
     let (event_id, guest) = event_with_guest(&mut left, "trip", "usd");
     settle(&mut left, &mut right);
-    let wanted = left
-        .make_shared_participant_contact(&event_id, &guest)
-        .unwrap()
-        .id;
+    let wanted = crate::usecases::household::shared_events::make_shared_participant_contact(
+        &mut left, &event_id, &guest,
+    )
+    .unwrap()
+    .id;
     let wallet = store(&mut right, "bank", StoreKind::Bank, None);
     pause();
     // The older build: a random id, linked later than the new contact.
@@ -124,7 +132,7 @@ fn an_old_random_guest_contact_folds_into_the_deterministic_one() {
     let mut tx = payment(&wallet, "5", "to ann");
     tx.meta_mut().contact_id = Some("00000000-old".into());
     let tx_id = tx.meta().id.clone();
-    right.add_transaction(tx).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut right, tx).unwrap();
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         let found = contacts_named(device, "ann");
@@ -199,7 +207,8 @@ fn a_currency_changed_after_a_purchase_goes_back_on_both_devices() {
     let (event_id, guest) = event_with_guest(&mut left, "trip", "usd");
     settle(&mut left, &mut right);
     let event = left.doc.shared_events[0].clone();
-    left.update_shared_event(
+    crate::usecases::household::shared_events::update_shared_event(
+        &mut left,
         &event_id,
         SharedEventDraft {
             title: event.title.clone(),
@@ -212,20 +221,20 @@ fn a_currency_changed_after_a_purchase_goes_back_on_both_devices() {
     )
     .unwrap();
     pause();
-    right
-        .add_shared_purchase(
-            &event_id,
-            SharedPurchaseDraft {
-                new_item_title: Some("taxi".into()),
-                buyer: guest,
-                qty: amount("1"),
-                amount: amount("10"),
-                currency: "usd".into(),
-                price_mode: PriceMode::Total,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut right,
+        &event_id,
+        SharedPurchaseDraft {
+            new_item_title: Some("taxi".into()),
+            buyer: guest,
+            qty: amount("1"),
+            amount: amount("10"),
+            currency: "usd".into(),
+            price_mode: PriceMode::Total,
+            ..Default::default()
+        },
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         assert_eq!(device.doc.shared_events[0].currency, "usd");
@@ -263,7 +272,7 @@ fn ambiguous_currencies_change_nothing_and_name_the_purchases() {
         ..Default::default()
     });
     vault.persist().unwrap();
-    let report = vault.repair_invariants(None).unwrap();
+    let report = crate::usecases::sync::repair::repair_invariants(&mut vault, None).unwrap();
     assert_eq!(vault.doc.shared_events[0].currency, "usd");
     let mut named = report.needs_rate.clone();
     named.sort();
@@ -277,7 +286,8 @@ fn an_organizer_changed_after_a_settlement_goes_back_on_both_devices() {
     let wallet = store(&mut left, "bank", StoreKind::Bank, None);
     settle(&mut left, &mut right);
     let event = left.doc.shared_events[0].clone();
-    left.update_shared_event(
+    crate::usecases::household::shared_events::update_shared_event(
+        &mut left,
         &event_id,
         SharedEventDraft {
             title: event.title.clone(),
@@ -290,30 +300,32 @@ fn an_organizer_changed_after_a_settlement_goes_back_on_both_devices() {
     )
     .unwrap();
     pause();
-    right
-        .add_shared_purchase(
-            &event_id,
-            SharedPurchaseDraft {
-                new_item_title: Some("taxi".into()),
-                buyer: "me".into(),
-                qty: amount("1"),
-                amount: amount("10"),
-                price_mode: PriceMode::Total,
-                store_id: Some(wallet),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    right
-        .settle_shared(SettleSharedInput {
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut right,
+        &event_id,
+        SharedPurchaseDraft {
+            new_item_title: Some("taxi".into()),
+            buyer: "me".into(),
+            qty: amount("1"),
+            amount: amount("10"),
+            price_mode: PriceMode::Total,
+            store_id: Some(wallet),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    crate::usecases::household::shared_events::settle_shared(
+        &mut right,
+        SettleSharedInput {
             event_id: event_id.clone(),
             participant_id: guest.clone(),
             direction: crate::model::shared_event::SettleDirection::ToOrganizer,
             amount: amount("2"),
             store_id: None,
             at: None,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     assert_eq!(
         right.doc.shared_events[0].settlements[0]
             .organizer
@@ -346,7 +358,7 @@ fn a_settlement_without_the_organizer_field_is_only_flagged() {
     });
     vault.persist().unwrap();
     let before = vault.doc.shared_events[0].clone();
-    let report = vault.repair_invariants(None).unwrap();
+    let report = crate::usecases::sync::repair::repair_invariants(&mut vault, None).unwrap();
     assert_eq!(vault.doc.shared_events[0], before, "nothing changed");
     assert_eq!(report.organizer_flags, vec![event_id]);
 }
@@ -382,7 +394,11 @@ fn a_second_pass_changes_and_stamps_nothing() {
     settle(&mut left, &mut right);
     let stamps = left.doc.sync.stamps.clone();
     let log = left.doc.notification_log.len();
-    assert!(left.repair_invariants(None).unwrap().is_empty());
+    assert!(
+        crate::usecases::sync::repair::repair_invariants(&mut left, None)
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(left.doc.sync.stamps, stamps);
     assert_eq!(left.doc.notification_log.len(), log);
 }
@@ -410,7 +426,8 @@ fn needs_rate_is_computed_for_the_purchase_view_by_the_repair_rule() {
         ],
         ..Default::default()
     });
-    let view = vault.shared_event_view(&event_id).unwrap();
+    let view =
+        crate::household::shared_events::view::shared_event_view(&vault.doc, &event_id).unwrap();
     let flag = |id: &str| {
         view.purchases
             .iter()
@@ -433,7 +450,8 @@ fn a_purchase_beside_a_currency_change_is_flagged_for_a_rate_on_every_device() {
     let (event_id, ann) = event_with_guest(&mut left, "trip", "usd");
     settle(&mut left, &mut right);
     let event = left.doc.shared_events[0].clone();
-    left.update_shared_event(
+    crate::usecases::household::shared_events::update_shared_event(
+        &mut left,
         &event_id,
         SharedEventDraft {
             title: event.title.clone(),
@@ -446,20 +464,20 @@ fn a_purchase_beside_a_currency_change_is_flagged_for_a_rate_on_every_device() {
     )
     .unwrap();
     let buy = |vault: &mut UnlockedVault, currency: &str| {
-        vault
-            .add_shared_purchase(
-                &event_id,
-                SharedPurchaseDraft {
-                    new_item_title: Some(format!("bought in {currency}")),
-                    buyer: ann.clone(),
-                    qty: amount("1"),
-                    amount: amount("10"),
-                    currency: currency.into(),
-                    price_mode: PriceMode::Total,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
+        crate::usecases::household::shared_events::add_shared_purchase(
+            vault,
+            &event_id,
+            SharedPurchaseDraft {
+                new_item_title: Some(format!("bought in {currency}")),
+                buyer: ann.clone(),
+                qty: amount("1"),
+                amount: amount("10"),
+                currency: currency.into(),
+                price_mode: PriceMode::Total,
+                ..Default::default()
+            },
+        )
+        .unwrap();
     };
     buy(&mut left, "eur");
     buy(&mut right, "usd");
@@ -473,7 +491,7 @@ fn a_purchase_beside_a_currency_change_is_flagged_for_a_rate_on_every_device() {
             .filter(|purchase| purchase.needs_rate(&event.currency))
             .cloned()
             .collect();
-        let report = device.repair_invariants(None).unwrap();
+        let report = crate::usecases::sync::repair::repair_invariants(device, None).unwrap();
         assert!(
             !wrong.is_empty() && report.needs_rate.contains(&wrong[0].id),
             "repair names the purchase for a rate: {:?}",

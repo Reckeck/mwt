@@ -34,8 +34,7 @@ fn save(vault: &mut UnlockedVault, name: &str, nodes: Vec<Value>, edges: Vec<Val
         max_amount: None,
         max_amount_currency: None,
     };
-    vault
-        .save_workflow(None, draft, now_secs())
+    crate::usecases::workflow::records::save_workflow(vault, None, draft, now_secs())
         .unwrap()
         .workflow
         .id
@@ -72,7 +71,12 @@ fn daily_topup() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
         ],
         vec![wire("s", "out", "post", "in")],
     );
-    left.wf_set_mark(&id, "schedule:s", "2026-03-01T10:00:00Z");
+    crate::usecases::workflow::runs::wf_set_mark(
+        &mut left,
+        &id,
+        "schedule:s",
+        "2026-03-01T10:00:00Z",
+    );
     left.persist().unwrap();
     settle(&mut left, &mut right);
     (dir, left, right, id)
@@ -96,8 +100,8 @@ fn workflow_keys(vault: &UnlockedVault) -> Vec<Option<String>> {
 fn a_schedule_moment_runs_once_across_two_devices() {
     let (_dir, mut left, mut right, _id) = daily_topup();
     let moment = at("2026-03-02T10:00:00Z");
-    left.run_due_workflows(moment, "UTC").unwrap();
-    right.run_due_workflows(moment, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut left, moment, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut right, moment, "UTC").unwrap();
     assert_eq!(workflow_keys(&left).len(), 1);
     assert_eq!(workflow_keys(&right).len(), 1);
     settle(&mut left, &mut right);
@@ -110,11 +114,17 @@ fn a_schedule_moment_runs_once_across_two_devices() {
 fn a_booked_run_key_does_not_run_again() {
     let (_dir, mut left, _right, id) = daily_topup();
     let moment = at("2026-03-02T10:00:00Z");
-    left.run_due_workflows(moment, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut left, moment, "UTC").unwrap();
     assert_eq!(workflow_keys(&left).len(), 1);
     // The mark went back (a sync of an older state): the key is still booked.
-    left.wf_set_mark(&id, "schedule:s", "2026-03-01T10:00:00Z");
-    let pass = left.run_due_workflows(moment, "UTC").unwrap();
+    crate::usecases::workflow::runs::wf_set_mark(
+        &mut left,
+        &id,
+        "schedule:s",
+        "2026-03-01T10:00:00Z",
+    );
+    let pass =
+        crate::usecases::workflow::runs::run_due_workflows(&mut left, moment, "UTC").unwrap();
     assert!(pass.created.is_empty(), "{:?}", pass.created);
     assert_eq!(workflow_keys(&left).len(), 1);
 }
@@ -126,8 +136,8 @@ fn devices_in_different_zones_compute_the_same_run_key() {
     left.persist().unwrap();
     settle(&mut left, &mut right);
     let moment = at("2026-03-03T00:00:00Z");
-    left.run_due_workflows(moment, "UTC").unwrap();
-    right.run_due_workflows(moment, "Asia/Bangkok").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut left, moment, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut right, moment, "Asia/Bangkok").unwrap();
     settle(&mut left, &mut right);
     let keys = workflow_keys(&left);
     assert_eq!(keys.len(), 1, "{keys:?}");
@@ -140,17 +150,24 @@ fn devices_in_different_zones_compute_the_same_run_key() {
 fn the_first_device_that_runs_a_schedule_writes_its_zone() {
     let (_dir, mut left, mut right, _id) = daily_topup();
     assert_eq!(left.doc.settings.schedule_timezone, None);
-    left.run_due_workflows(at("2026-03-02T10:00:00Z"), "Asia/Bangkok")
-        .unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(
+        &mut left,
+        at("2026-03-02T10:00:00Z"),
+        "Asia/Bangkok",
+    )
+    .unwrap();
     assert_eq!(
         left.doc.settings.schedule_timezone.as_deref(),
         Some("Asia/Bangkok")
     );
     // The zone is kept by the next device: it does not overwrite it.
     settle(&mut left, &mut right);
-    right
-        .run_due_workflows(at("2026-03-03T10:00:00Z"), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(
+        &mut right,
+        at("2026-03-03T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert_eq!(
         right.doc.settings.schedule_timezone.as_deref(),
         Some("Asia/Bangkok")
@@ -175,11 +192,12 @@ fn a_wait_resumed_on_two_devices_posts_once() {
         vec![wire("t", "out", "w", "in"), wire("w", "out", "post", "in")],
     );
     let start = now_secs();
-    left.run_workflow_now(&id, None, start, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_workflow_now(&mut left, &id, None, start, "UTC").unwrap();
     settle(&mut left, &mut right);
     assert_eq!(right.doc.workflow_waits.len(), 1);
-    left.run_due_workflows(start + 2 * 3600, "UTC").unwrap();
-    right.run_due_workflows(start + 2 * 3600, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut left, start + 2 * 3600, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut right, start + 2 * 3600, "UTC")
+        .unwrap();
     assert_eq!(workflow_keys(&left).len(), 1);
     assert_eq!(workflow_keys(&right).len(), 1);
     settle(&mut left, &mut right);
@@ -194,8 +212,11 @@ fn asking_pair() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
     let savings = store(&mut left, "Savings", StoreKind::Bank, None);
-    left.add_transaction(income(&cash, "1000", "opening"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&cash, "1000", "opening"),
+    )
+    .unwrap();
     let id = save(
         &mut left,
         "Ask",
@@ -211,7 +232,8 @@ fn asking_pair() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
         vec![wire("t", "out", "c", "in"), wire("c", "true", "move", "in")],
     );
     settle(&mut left, &mut right);
-    left.add_transaction(income(&cash, "50", "salary")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "50", "salary"))
+        .unwrap();
     settle(&mut left, &mut right);
     (dir, left, right, id)
 }
@@ -232,8 +254,8 @@ fn transfers(vault: &UnlockedVault) -> usize {
 fn a_transaction_trigger_on_two_devices_asks_once() {
     let (_dir, mut left, mut right, _id) = asking_pair();
     let now = now_secs() + 5;
-    left.run_due_workflows(now, "UTC").unwrap();
-    right.run_due_workflows(now, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut left, now, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut right, now, "UTC").unwrap();
     assert_eq!(left.doc.workflow_waits.len(), 1);
     assert_eq!(right.doc.workflow_waits.len(), 1);
     settle(&mut left, &mut right);
@@ -245,16 +267,27 @@ fn a_transaction_trigger_on_two_devices_asks_once() {
 fn one_answer_gives_one_set_of_transfers() {
     let (_dir, mut left, mut right, _id) = asking_pair();
     let now = now_secs() + 5;
-    left.run_due_workflows(now, "UTC").unwrap();
-    right.run_due_workflows(now, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut left, now, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut right, now, "UTC").unwrap();
     // Each device answers the question it has.
     let left_ask = left.doc.workflow_waits[0].id.clone();
     let right_ask = right.doc.workflow_waits[0].id.clone();
-    left.answer_workflow_wait(&left_ask, true, now + 1, "UTC")
-        .unwrap();
-    right
-        .answer_workflow_wait(&right_ask, true, now + 1, "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::answer_workflow_wait(
+        &mut left,
+        &left_ask,
+        true,
+        now + 1,
+        "UTC",
+    )
+    .unwrap();
+    crate::usecases::workflow::runs::answer_workflow_wait(
+        &mut right,
+        &right_ask,
+        true,
+        now + 1,
+        "UTC",
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     assert_eq!(transfers(&left), 1, "the answer moved the money twice");
     assert_eq!(transfers(&right), 1);
@@ -265,11 +298,11 @@ fn one_answer_gives_one_set_of_transfers() {
 fn an_answer_whose_result_is_booked_does_nothing() {
     let (_dir, mut left, mut right, _id) = asking_pair();
     let now = now_secs() + 5;
-    left.run_due_workflows(now, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut left, now, "UTC").unwrap();
     settle(&mut left, &mut right);
     let ask = right.doc.workflow_waits[0].id.clone();
     // The other device answered; its transfer arrived before the removal did.
-    left.answer_workflow_wait(&ask, true, now + 1, "UTC")
+    crate::usecases::workflow::runs::answer_workflow_wait(&mut left, &ask, true, now + 1, "UTC")
         .unwrap();
     let booked: Vec<Transaction> = left
         .doc
@@ -285,9 +318,14 @@ fn an_answer_whose_result_is_booked_does_nothing() {
     right.persist().unwrap();
     let before = transfers(&right);
     assert!(
-        right
-            .answer_workflow_wait(&ask, true, now + 2, "UTC")
-            .is_err()
+        crate::usecases::workflow::runs::answer_workflow_wait(
+            &mut right,
+            &ask,
+            true,
+            now + 2,
+            "UTC"
+        )
+        .is_err()
     );
     assert_eq!(transfers(&right), before);
     assert!(right.doc.workflow_waits.is_empty());
@@ -306,7 +344,7 @@ fn old_peer_tx(vault: &mut UnlockedVault, run: &str, key: Option<&str>) {
             run_key: key.map(str::to_string),
         };
     }
-    vault.add_transaction(tx).unwrap();
+    crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
 }
 
 #[test]

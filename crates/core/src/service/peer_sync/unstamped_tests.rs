@@ -39,7 +39,8 @@ fn unstamped_pair(
 ) -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
-    left.add_transaction(income(&cash, "10", "base")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "base"))
+        .unwrap();
     exchange(&mut left, &mut right);
     let id = left.doc.transactions[0].meta().id.clone();
     set_comment(&mut left, &id, left_text);
@@ -93,7 +94,7 @@ fn a_peer_over_the_network_neither_counts_nor_lists_unstamped_values() {
     // same, and the summary stays as it was.
     let (_dir, mut left, mut right, id) = unstamped_pair("aaa", "zzz");
     let wanted = vec![format!("transactions:{id}")];
-    let incoming = right.sync_records(&wanted).unwrap();
+    let incoming = crate::usecases::sync::read::sync_records(&mut right, &wanted).unwrap();
     let peer = PeerRef {
         device_id: "right-id".into(),
         name: "right".into(),

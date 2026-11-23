@@ -7,8 +7,6 @@ pub use crate::money::valuation::{
     PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput,
 };
 
-use std::collections::HashMap;
-
 use crate::error::Result;
 use crate::model::ids::StoreId;
 use crate::model::store::RevalueRule;
@@ -20,9 +18,6 @@ use super::forward::forward;
 impl UnlockedVault {
     // forward:begin
     forward! {
-        /// Curves of every property asset that has a valuation or a rule.
-        pub(crate) fn valuation_curves(&self) -> HashMap<String, ValuationCurve>
-            => crate::money::valuation::valuation_curves @books;
         /// The value story of each asset a property holds.
         pub fn property_values(&self, store_id: &str, zone: &str) -> Result<Vec<PropertyValue>>
             => crate::money::valuation::property_values @books with (store_id => &StoreId::from(store_id));

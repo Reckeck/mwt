@@ -9,12 +9,8 @@ pub use crate::money::portfolio::{
 
 use std::collections::HashSet;
 
-use crate::Amount;
 use crate::error::Result;
-#[cfg(test)]
-use crate::model::store::Store;
 use crate::model::store::StoreScope;
-use crate::model::transaction::Transaction;
 
 use super::UnlockedVault;
 use super::forward::forward;
@@ -22,29 +18,9 @@ use super::forward::forward;
 impl UnlockedVault {
     // forward:begin
     forward! {
-        /// Re-derive `doc.holdings` from the transactions and lay the crypto
-        /// module's balances over them. Saves nothing: the caller persists.
-        pub(crate) fn recompute_holdings(&mut self)
-            => crate::usecases::money::portfolio::recompute_holdings;
-        /// Base currency code (never empty) and its **latest** cached FX rate.
-        pub(crate) fn base_and_fx(&self) -> (String, Amount)
-            => crate::usecases::money::portfolio::base_and_fx;
-        /// Current USD price of one unit; see [`crate::money::price_info::price_quote_for`].
-        pub(crate) fn price_usd_for(&self, asset_key: &str) -> Amount
-            => crate::money::portfolio::price_usd_for @books;
-        /// Base-currency price of one unit (the base's own fiat is exactly 1).
-        pub(crate) fn price_base_for(&self, asset_key: &str, fx: Amount) -> Amount
-            => crate::money::portfolio::price_base_for @books;
         /// Every store id a scope covers. An empty id list means the whole vault.
         pub fn resolve_scope(&self, scope: &StoreScope) -> HashSet<String>
             => crate::money::tree::resolve_scope @doc;
-        /// Transactions with at least one leg on a store in `ids`.
-        pub(crate) fn scoped_txs(&self, ids: &HashSet<String>) -> Vec<Transaction>
-            => crate::money::portfolio::scoped_txs @doc;
-        /// Direct children of a store.
-        #[cfg(test)]
-        pub(crate) fn children_of(&self, parent_id: &str) -> Vec<&Store>
-            => crate::money::tree::children_of @doc;
         /// The whole wallet tree with own and rolled-up values. Roots (and
         /// orphans whose parent is gone) come first; live before archived,
         /// alphabetical inside each group.
@@ -72,10 +48,6 @@ impl UnlockedVault {
             => crate::money::portfolio::history_series @books;
         pub fn realized_pnl(&self) -> RealizedPnl
             => crate::money::portfolio::realized_pnl @books;
-        /// Shared PnL replay. `scope` restricts it to the legs booked on those
-        /// stores (`None` replays the whole vault).
-        pub(crate) fn realized_pnl_filtered(&self, scope: Option<&HashSet<String>>) -> RealizedPnl
-            => crate::money::portfolio::realized_pnl_filtered @books;
     }
     // forward:end
 }

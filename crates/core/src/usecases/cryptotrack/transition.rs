@@ -150,7 +150,7 @@ pub(crate) fn retire_manual_crypto_wallets(vault: &mut UnlockedVault) -> CryptoA
     prune_emergency_fund(vault);
     // The flag is only half of it: the totals are read off `doc.holdings`,
     // and the yielding happens in the module's fold.
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     out.changed = true;
     out
 }

@@ -149,7 +149,7 @@ pub(crate) fn wipe_crypto_document(vault: &mut UnlockedVault) -> CryptoWipeCount
     // An archived wallet is no part of the emergency fund, and the capital is
     // read off `doc.holdings`, not off the flags.
     prune_emergency_fund(vault);
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     counts
 }
 

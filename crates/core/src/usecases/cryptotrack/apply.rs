@@ -239,7 +239,7 @@ mod tests {
             exchange,
             account("bitcoin", Chain::Bitcoin),
         ];
-        let targets = vault.crypto_sync_targets();
+        let targets = crate::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc);
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].account_id, "acc-1");
         assert_eq!(targets[0].address, ME);
@@ -253,14 +253,17 @@ mod tests {
         vault.doc.crypto_accounts = vec![account("acc-1", Chain::Ethereum)];
         let next = Cursor::at(Stream::TokenTransfers, None).encode();
 
-        let stored = vault
-            .crypto_apply_pages(&pages(false, false), &page(2, Some(next.clone())))
-            .unwrap();
+        let stored = crate::usecases::cryptotrack::apply::crypto_apply_pages(
+            &mut vault,
+            &pages(false, false),
+            &page(2, Some(next.clone())),
+        )
+        .unwrap();
         assert_eq!(
             (stored.added, stored.next_cursor.as_deref()),
             (2, Some(next.as_str()))
         );
-        let target = &vault.crypto_sync_targets()[0];
+        let target = &crate::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)[0];
         assert_eq!(
             target.cursor.as_deref(),
             Some(next.as_str()),
@@ -268,10 +271,13 @@ mod tests {
         );
         assert!(!target.refresh);
 
-        vault
-            .crypto_apply_pages(&pages(true, false), &page(0, None))
-            .unwrap();
-        let target = &vault.crypto_sync_targets()[0];
+        crate::usecases::cryptotrack::apply::crypto_apply_pages(
+            &mut vault,
+            &pages(true, false),
+            &page(0, None),
+        )
+        .unwrap();
+        let target = &crate::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)[0];
         assert_eq!(target.cursor, None);
         assert!(target.refresh);
         assert!(target.finished_at_ms.is_some());
@@ -290,14 +296,20 @@ mod tests {
             ),
         )
         .encode();
-        vault
-            .crypto_apply_pages(&pages(false, false), &page(3, Some(more.clone())))
-            .unwrap();
+        crate::usecases::cryptotrack::apply::crypto_apply_pages(
+            &mut vault,
+            &pages(false, false),
+            &page(3, Some(more.clone())),
+        )
+        .unwrap();
 
         // The same page again, as a refresh of a quiet address sees it.
-        let again = vault
-            .crypto_apply_pages(&pages(false, true), &page(3, Some(more)))
-            .unwrap();
+        let again = crate::usecases::cryptotrack::apply::crypto_apply_pages(
+            &mut vault,
+            &pages(false, true),
+            &page(3, Some(more)),
+        )
+        .unwrap();
         assert_eq!(again.added, 0);
         assert_eq!(
             again.next_cursor,
@@ -314,12 +326,18 @@ mod tests {
         let (_dir, mut fresh) = empty_vault();
         fresh.doc.crypto_accounts = vec![account("acc-1", Chain::Ethereum)];
         let more = Cursor::at(Stream::Transactions, None).encode();
-        fresh
-            .crypto_apply_pages(&pages(false, false), &page(3, Some(more.clone())))
-            .unwrap();
-        let again = fresh
-            .crypto_apply_pages(&pages(false, false), &page(3, Some(more.clone())))
-            .unwrap();
+        crate::usecases::cryptotrack::apply::crypto_apply_pages(
+            &mut fresh,
+            &pages(false, false),
+            &page(3, Some(more.clone())),
+        )
+        .unwrap();
+        let again = crate::usecases::cryptotrack::apply::crypto_apply_pages(
+            &mut fresh,
+            &pages(false, false),
+            &page(3, Some(more.clone())),
+        )
+        .unwrap();
         assert_eq!(again.next_cursor, Some(more));
     }
 
@@ -330,21 +348,24 @@ mod tests {
             account("acc-1", Chain::Ethereum),
             account("acc-2", Chain::Ethereum),
         ];
-        vault
-            .crypto_apply_pages(&pages(true, false), &page(1, None))
-            .unwrap();
+        crate::usecases::cryptotrack::apply::crypto_apply_pages(
+            &mut vault,
+            &pages(true, false),
+            &page(1, None),
+        )
+        .unwrap();
         let remember = |vault: &mut UnlockedVault, account: &str, text: Option<&str>| {
-            vault
-                .crypto_remember_protocols(
-                    account,
-                    &[("uniswap-v4".to_string(), text.map(str::to_string))],
-                )
-                .unwrap();
+            crate::usecases::cryptotrack::apply::crypto_remember_protocols(
+                vault,
+                account,
+                &[("uniswap-v4".to_string(), text.map(str::to_string))],
+            )
+            .unwrap();
         };
 
         remember(&mut vault, "acc-1", Some("scan-1"));
         remember(&mut vault, "acc-2", Some("scan-2"));
-        let targets = vault.crypto_sync_targets();
+        let targets = crate::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc);
         assert_eq!(targets[0].protocol_memory["uniswap-v4"], "scan-1");
         assert_eq!(targets[1].protocol_memory["uniswap-v4"], "scan-2");
         assert!(
@@ -356,15 +377,22 @@ mod tests {
         remember(&mut vault, "acc-1", Some("scan-1b"));
         let records = vault.doc.crypto_cursors.len();
         assert_eq!(
-            vault.crypto_sync_targets()[0].protocol_memory["uniswap-v4"],
+            crate::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)[0].protocol_memory
+                ["uniswap-v4"],
             "scan-1b",
             "an update replaces, it does not add a record"
         );
         remember(&mut vault, "acc-1", None);
-        assert!(vault.crypto_sync_targets()[0].protocol_memory.is_empty());
+        assert!(
+            crate::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)[0]
+                .protocol_memory
+                .is_empty()
+        );
         assert_eq!(vault.doc.crypto_cursors.len(), records - 1);
         assert_eq!(
-            vault.crypto_sync_targets()[1].protocol_memory.len(),
+            crate::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)[1]
+                .protocol_memory
+                .len(),
             1,
             "another account's memory is not touched"
         );
@@ -373,9 +401,12 @@ mod tests {
     #[test]
     fn an_unknown_account_is_refused_without_touching_the_cursors() {
         let (_dir, mut vault) = empty_vault();
-        let err = vault
-            .crypto_apply_pages(&pages(false, false), &page(1, None))
-            .unwrap_err();
+        let err = crate::usecases::cryptotrack::apply::crypto_apply_pages(
+            &mut vault,
+            &pages(false, false),
+            &page(1, None),
+        )
+        .unwrap_err();
         assert!(matches!(err, Error::NotFound(_)));
         assert!(vault.doc.crypto_cursors.is_empty());
     }
@@ -401,12 +432,17 @@ mod price_tests {
             source: "defillama".into(),
         };
         assert_eq!(
-            vault
-                .crypto_apply_prices(std::slice::from_ref(&point))
-                .unwrap(),
+            crate::usecases::cryptotrack::apply::crypto_apply_prices(
+                &mut vault,
+                std::slice::from_ref(&point)
+            )
+            .unwrap(),
             1
         );
-        assert_eq!(vault.crypto_apply_prices(&[point]).unwrap(), 0);
+        assert_eq!(
+            crate::usecases::cryptotrack::apply::crypto_apply_prices(&mut vault, &[point]).unwrap(),
+            0
+        );
         assert_eq!(vault.doc.crypto_prices.len(), 1);
     }
 }

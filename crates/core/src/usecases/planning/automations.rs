@@ -44,20 +44,28 @@ pub fn automation(vault: &UnlockedVault, id: &str) -> Result<Automation> {
 /// that fails the transaction rules on its own.
 fn check_automation(vault: &UnlockedVault, draft: &AutomationDraft) -> Result<()> {
     rules::check_draft_form(draft)?;
-    vault.check_property_link(draft.property_id.as_deref())?;
+    crate::usecases::household::property_links::check_property_link(
+        vault,
+        draft.property_id.as_deref(),
+    )?;
     let starts = check_draft_moment(draft)?;
     // The probe is dated at the start, which may be months ahead: it is
     // checked against the rules, not against today.
     let mut probe = draft_to_transaction(&draft.template, "", "", &draft.starts_at);
     let reference = starts.max(secs_or_now(&now_iso()));
-    vault.prepare_transaction_at(&mut probe, reference * 1000)
+    crate::usecases::money::transactions::prepare_transaction_at(
+        vault,
+        &mut probe,
+        reference * 1000,
+    )
 }
 
 pub fn create_automation(vault: &mut UnlockedVault, draft: AutomationDraft) -> Result<Automation> {
     check_automation(vault, &draft)?;
     let id = uuid::Uuid::new_v4().to_string();
     let workflow = new_automation_workflow(&draft, &id, &now_iso())?;
-    vault.wf_set_mark(
+    crate::usecases::workflow::runs::wf_set_mark(
+        vault,
         &id,
         &graph_of::schedule_key(),
         &graph_of::start_mark(&draft.spec()),
@@ -91,19 +99,17 @@ pub fn update_automation_at(
     // A start moved later holds the schedule back until then.
     let key = graph_of::schedule_key();
     let start = graph_of::start_mark(&draft.spec());
-    if vault
-        .wf_mark(id, &key)
+    if crate::workflow::service::marks::mark(&vault.doc, id, &key)
         .is_none_or(|mark| secs_or_now(&mark) < secs_or_now(&start))
     {
-        vault.wf_set_mark(id, &key, &start);
+        crate::usecases::workflow::runs::wf_set_mark(vault, id, &key, &start);
     }
     // A changed schedule plans from the edit on: nothing is back-filled.
     if schedule_changed
-        && vault
-            .wf_mark(id, &key)
+        && crate::workflow::service::marks::mark(&vault.doc, id, &key)
             .is_none_or(|mark| secs_or_now(&mark) < edited_at)
     {
-        vault.wf_set_mark(id, &key, &calendar::iso(edited_at));
+        crate::usecases::workflow::runs::wf_set_mark(vault, id, &key, &calendar::iso(edited_at));
     }
     let now = now_iso();
     vault.transact(|tx| {
@@ -181,7 +187,7 @@ pub fn simulate_automations(
         .collect();
     let before = sandbox.doc.holdings.clone();
     for day in 0..=i64::from(days) {
-        sandbox.run_due_workflows(now + day * 86_400, zone)?;
+        crate::usecases::workflow::runs::run_due_workflows(&mut sandbox, now + day * 86_400, zone)?;
     }
     Ok(simulation_report(
         &sandbox.doc,
@@ -203,7 +209,7 @@ fn checked_transaction(
     if let Some(reason) = rules::funds_shortfall(&vault.doc, &tx, now) {
         return Err(rules::funds_error(&vault.doc, reason));
     }
-    vault.prepare_transaction_at(&mut tx, now * 1000)?;
+    crate::usecases::money::transactions::prepare_transaction_at(vault, &mut tx, now * 1000)?;
     Ok(tx)
 }
 
@@ -226,7 +232,7 @@ pub fn run_automation(vault: &mut UnlockedVault, id: &str, now: i64) -> Result<T
         doc.workflow_runs.push(record);
         Ok(())
     })?;
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     vault.transact(|tx| {
         tx.touch();
         Ok(())
@@ -268,7 +274,7 @@ pub fn retry_automation_run(
 
 /// Dismiss a refused run.
 pub fn skip_automation_run(vault: &mut UnlockedVault, run_id: &str) -> Result<AutomationRun> {
-    let run = vault.skip_workflow_run(run_id)?;
+    let run = crate::usecases::workflow::runs::skip_workflow_run(vault, run_id)?;
     plan::automation_run_of(&vault.doc, &run)
         .ok_or_else(|| Error::Missing(format!("automation run {run_id}")))
 }
@@ -281,7 +287,7 @@ pub fn confirm_estimated_amount(
     amount: Amount,
 ) -> Result<Transaction> {
     let corrected = rules::confirmed_transaction(&vault.doc, tx_id, amount)?;
-    vault.update_transaction(tx_id, corrected)?;
+    crate::usecases::money::transactions::update_transaction(vault, tx_id, corrected)?;
     clear_estimated(vault, tx_id)
 }
 

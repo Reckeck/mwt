@@ -44,8 +44,7 @@ fn save(vault: &mut UnlockedVault, name: &str, nodes: Vec<Value>, edges: Vec<Val
         max_amount: None,
         max_amount_currency: None,
     };
-    vault
-        .save_workflow(None, draft, now_secs())
+    crate::usecases::workflow::records::save_workflow(vault, None, draft, now_secs())
         .unwrap()
         .workflow
         .id
@@ -68,22 +67,32 @@ fn shared_workflow() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String
         vec![node("t", "trigger.manual", json!({}))],
         vec![],
     );
-    left.wf_set_mark(&id, "schedule:base", "2026-03-01T00:00:00Z");
+    crate::usecases::workflow::runs::wf_set_mark(
+        &mut left,
+        &id,
+        "schedule:base",
+        "2026-03-01T00:00:00Z",
+    );
     left.persist().unwrap();
     settle(&mut left, &mut right);
     (dir, left, right, id)
 }
 
 fn mark_of(vault: &UnlockedVault, id: &str, key: &str) -> Option<String> {
-    vault.wf_mark(id, key)
+    crate::workflow::service::marks::mark(&vault.doc, id, key)
 }
 
 #[test]
 fn marks_of_two_triggers_both_survive_a_merge() {
     let (_dir, mut left, mut right, id) = shared_workflow();
-    left.wf_set_mark(&id, "schedule:a", "2026-03-02T09:00:00Z");
+    crate::usecases::workflow::runs::wf_set_mark(
+        &mut left,
+        &id,
+        "schedule:a",
+        "2026-03-02T09:00:00Z",
+    );
     left.persist().unwrap();
-    right.wf_set_mark(&id, "threshold:b", "above");
+    crate::usecases::workflow::runs::wf_set_mark(&mut right, &id, "threshold:b", "above");
     right.persist().unwrap();
     settle(&mut left, &mut right);
     for vault in [&left, &right] {
@@ -102,12 +111,13 @@ fn marks_of_two_triggers_both_survive_a_merge() {
 #[test]
 fn marks_from_an_old_peer_do_not_erase_another_trigger() {
     let (_dir, mut left, mut right, id) = shared_workflow();
-    right.wf_set_mark(&id, "threshold:b", "above");
+    crate::usecases::workflow::runs::wf_set_mark(&mut right, &id, "threshold:b", "above");
     right.persist().unwrap();
     // What an old device sends: the whole map as one field, one stamp, and
     // only the entries it knows.
     let key = state_key(&id);
-    let mut incoming = left.sync_records(std::slice::from_ref(&key)).unwrap();
+    let mut incoming =
+        crate::usecases::sync::read::sync_records(&mut left, std::slice::from_ref(&key)).unwrap();
     let state = incoming.get_mut(&key).unwrap();
     let later = Stamp::new(now_ms() + 1_000, 0, "oldpeer");
     state.value = Some(json!({
@@ -132,7 +142,8 @@ fn marks_from_an_old_peer_do_not_erase_another_trigger() {
         "an entry the old map lacks was dropped"
     );
     // The new side still sends the full map.
-    let sent = right.sync_records(std::slice::from_ref(&key)).unwrap();
+    let sent =
+        crate::usecases::sync::read::sync_records(&mut right, std::slice::from_ref(&key)).unwrap();
     let sent = &sent[&key];
     let marks = sent.value.as_ref().unwrap()["marks"].as_object().unwrap();
     assert_eq!(marks.len(), 2, "{marks:?}");
@@ -149,8 +160,11 @@ fn moving_pair() -> (
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
     let savings = store(&mut left, "Savings", StoreKind::Bank, None);
-    left.add_transaction(income(&cash, "1000", "opening"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&cash, "1000", "opening"),
+    )
+    .unwrap();
     let id = save(
         &mut left,
         "Move",
@@ -182,8 +196,9 @@ fn cursor_of(vault: &UnlockedVault, id: &str) -> (Option<String>, usize) {
 fn the_transaction_cursor_is_not_synced() {
     let (_dir, mut left, mut right, id, cash) = moving_pair();
     let right_before = cursor_of(&right, &id);
-    left.add_transaction(income(&cash, "50", "salary")).unwrap();
-    left.run_due_workflows(now_secs() + 5, "UTC").unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "50", "salary"))
+        .unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut left, now_secs() + 5, "UTC").unwrap();
     let left_after = cursor_of(&left, &id);
     assert_ne!(left_after, right_before);
     settle(&mut left, &mut right);
@@ -192,7 +207,8 @@ fn the_transaction_cursor_is_not_synced() {
 
     // An old peer still sends its cursor: it is ignored.
     let key = state_key(&id);
-    let mut incoming = left.sync_records(std::slice::from_ref(&key)).unwrap();
+    let mut incoming =
+        crate::usecases::sync::read::sync_records(&mut left, std::slice::from_ref(&key)).unwrap();
     let state = incoming.get_mut(&key).unwrap();
     let mut value = state.value.clone().unwrap();
     value["tx_cursor"] = json!("from-the-old-peer");
@@ -212,13 +228,14 @@ fn the_transaction_cursor_is_not_synced() {
 #[test]
 fn a_different_cursor_does_not_post_twice() {
     let (_dir, mut left, mut right, id, cash) = moving_pair();
-    left.add_transaction(income(&cash, "50", "salary")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "50", "salary"))
+        .unwrap();
     settle(&mut left, &mut right);
     let now = now_secs() + 5;
-    left.run_due_workflows(now, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut left, now, "UTC").unwrap();
     settle(&mut left, &mut right);
     // The right device never looked at the salary: its cursor is older.
-    right.run_due_workflows(now, "UTC").unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(&mut right, now, "UTC").unwrap();
     settle(&mut left, &mut right);
     let moved = |vault: &UnlockedVault| {
         vault
@@ -263,14 +280,27 @@ fn two_moments() -> (
         ],
         vec![wire("s", "out", "post", "in")],
     );
-    left.wf_set_mark(&id, "schedule:s", "2026-03-01T10:00:00Z");
+    crate::usecases::workflow::runs::wf_set_mark(
+        &mut left,
+        &id,
+        "schedule:s",
+        "2026-03-01T10:00:00Z",
+    );
     left.persist().unwrap();
     settle(&mut left, &mut right);
-    left.run_due_workflows(at("2026-03-02T10:00:00Z"), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(
+        &mut left,
+        at("2026-03-02T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     settle(&mut left, &mut right);
-    left.run_due_workflows(at("2026-03-03T10:00:00Z"), "UTC")
-        .unwrap();
+    crate::usecases::workflow::runs::run_due_workflows(
+        &mut left,
+        at("2026-03-03T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     let newest = mark_of(&left, &id, "schedule:s").unwrap();
     (dir, left, right, id, newest)
 }
@@ -309,12 +339,15 @@ fn undoing_an_operation_here_does_not_move_a_schedule_mark_back() {
         .map(|tx| tx.meta().id.clone())
         .collect();
     for tx_id in booked {
-        left.delete_transaction(&tx_id).unwrap();
+        crate::usecases::money::transactions::delete_transaction(&mut left, &tx_id).unwrap();
     }
     assert_eq!(mark_of(&left, &id, "schedule:s"), Some(newest));
-    let pass = left
-        .run_due_workflows(at("2026-03-03T10:00:00Z"), "UTC")
-        .unwrap();
+    let pass = crate::usecases::workflow::runs::run_due_workflows(
+        &mut left,
+        at("2026-03-03T10:00:00Z"),
+        "UTC",
+    )
+    .unwrap();
     assert!(pass.created.is_empty(), "{:?}", pass.created);
 }
 
@@ -322,7 +355,8 @@ fn undoing_an_operation_here_does_not_move_a_schedule_mark_back() {
 fn a_batch_with_nothing_restored_stays_undoable() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
-    left.add_transaction(income(&cash, "20", "theirs")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "20", "theirs"))
+        .unwrap();
     let (_, applied) = exchange(&mut left, &mut right);
     let batch = applied.expect("the right device changed");
     // Everything the batch brought is changed here since.
@@ -336,8 +370,7 @@ fn a_batch_with_nothing_restored_stays_undoable() {
     assert_eq!(report.restored, 0);
     // The batch no longer carries a settings record (the derived crypto copy is gone).
     assert_eq!(report.skipped.len(), 1, "{report:?}");
-    let listed: BTreeMap<_, _> = right
-        .sync_history()
+    let listed: BTreeMap<_, _> = crate::sync::history::history(&right.doc)
         .into_iter()
         .map(|entry| (entry.id.clone(), entry.undone_at))
         .collect();

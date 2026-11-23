@@ -26,20 +26,20 @@ struct VaultRates<'vault> {
 
 impl FxSources for VaultRates<'_> {
     fn per_usd(&self, currency: &str) -> Option<Amount> {
-        self.vault.per_usd(currency)
+        crate::money::rates::per_usd(&self.vault.doc, currency)
     }
 
     fn tracked(&self) -> HashSet<String> {
-        self.vault.fx_currencies_in_use()
+        crate::money::rates::fx_currencies_in_use(&self.vault.books())
     }
 
     fn crypto_quote(&self, code: &str) -> Option<CryptoQuote> {
-        let asset = self.vault.favorite_asset(code)?;
+        let asset = crate::money::rates::favorite_asset(&self.vault.doc, code)?;
         let (usd, taken_at) = self.books.rate_book().quote_at(&asset.key(), self.now)?;
         Some(CryptoQuote {
             usd,
             taken_at,
-            held: self.vault.held_coin(code).is_some(),
+            held: crate::money::rates::held_coin(&self.vault.doc, code).is_some(),
         })
     }
 }

@@ -19,9 +19,10 @@ use super::stores::rebase_and_commit;
 
 /// Transaction history, newest first, limited to a scope.
 pub fn transactions(vault: &UnlockedVault, scope: &StoreScope) -> Vec<Transaction> {
-    let ids = (!scope.store_ids.is_empty()).then(|| vault.resolve_scope(scope));
+    let ids =
+        (!scope.store_ids.is_empty()).then(|| crate::money::tree::resolve_scope(&vault.doc, scope));
     let mut out: Vec<Transaction> = match ids {
-        Some(ids) => vault.scoped_txs(&ids),
+        Some(ids) => crate::money::portfolio::scoped_txs(&vault.doc, &ids),
         None => vault.doc.transactions.clone(),
     };
     out.sort_by(|left, right| right.meta().timestamp.cmp(&left.meta().timestamp));
@@ -43,11 +44,11 @@ pub fn prepare_transaction_at(
     now_ms: i64,
 ) -> Result<()> {
     UnlockedVault::normalize_categories(tx);
-    vault.apply_categorization_rules(tx);
+    crate::money::validate::apply_categorization_rules(&vault.doc, tx);
     complete_transaction(&vault.books(), tx);
-    vault.complete_adjustment(tx)?;
-    UnlockedVault::stamp_prices(&vault.rate_book(), tx);
-    vault.validate_transaction_at(tx, now_ms)
+    crate::money::adjustments::complete_adjustment(&vault.doc, tx)?;
+    UnlockedVault::stamp_prices(&crate::money::rates::rate_book(&vault.books()), tx);
+    crate::usecases::household::validate::validate_transaction_at(vault, tx, now_ms)
 }
 
 /// Validate and append a transaction of any variant (plan §4.5, §8.1):
@@ -98,7 +99,7 @@ pub fn add_linked_transactions(
         }
         Err(err) => {
             vault.doc = backup;
-            vault.recompute_holdings();
+            crate::usecases::money::portfolio::recompute_holdings(vault);
             Err(err)
         }
     }
@@ -119,7 +120,7 @@ fn book_linked(
             Ok(())
         })?;
         // The next one sees this one's balances, as if saved in turn.
-        vault.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(vault);
         saved.push(tx);
     }
     Ok(saved)
@@ -133,7 +134,8 @@ pub fn update_transaction(
     id: &str,
     tx: Transaction,
 ) -> Result<Transaction> {
-    let property = vault.property_of_tx(id).map(str::to_string);
+    let property =
+        crate::household::property_links::property_of_tx(&vault.doc, id).map(str::to_string);
     edit(vault, id, replacing(tx), property.as_deref(), true)
 }
 
@@ -145,7 +147,8 @@ pub fn patch_transaction(
     id: &str,
     patch: TransactionPatch,
 ) -> Result<Transaction> {
-    let property = vault.property_of_tx(id).map(str::to_string);
+    let property =
+        crate::household::property_links::property_of_tx(&vault.doc, id).map(str::to_string);
     edit(vault, id, patch, property.as_deref(), true)
 }
 
@@ -156,7 +159,8 @@ pub(crate) fn update_transaction_unsynced(
     id: &str,
     tx: Transaction,
 ) -> Result<Transaction> {
-    let property = vault.property_of_tx(id).map(str::to_string);
+    let property =
+        crate::household::property_links::property_of_tx(&vault.doc, id).map(str::to_string);
     edit(vault, id, replacing(tx), property.as_deref(), false)
 }
 
@@ -185,7 +189,7 @@ fn edit(
     let mut tx = patched(&vault.doc.transactions[index], id, patch);
     prepare_transaction(vault, &mut tx)?;
     let event_edit = if follow_events {
-        vault.plan_shared_tx_edit(id, &tx)?
+        crate::household::shared_events::ledger::plan_tx_edit(&vault.doc, id, &tx)?
     } else {
         None
     };
@@ -193,7 +197,7 @@ fn edit(
         run.doc_mut().transactions[index] = tx.clone();
         Ok(())
     })?;
-    vault.apply_shared_edit(event_edit);
+    crate::usecases::household::shared_events::apply_shared_edit(vault, event_edit);
     set_property_link(vault, id, property_id);
     rebase_and_commit(vault)?;
     Ok(tx)

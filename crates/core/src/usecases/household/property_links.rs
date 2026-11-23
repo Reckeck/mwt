@@ -11,7 +11,7 @@ pub fn check_property_link(vault: &UnlockedVault, property_id: Option<&str>) -> 
     let Some(id) = property_id else {
         return Ok(());
     };
-    require_property(vault.live_store(id)?)
+    require_property(crate::money::validate::live_store(&vault.doc, id)?)
 }
 
 /// Link the operation to a property, or unlink it with `None`. Not persisted:

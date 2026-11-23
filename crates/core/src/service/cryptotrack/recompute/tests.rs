@@ -166,8 +166,7 @@ fn a_batch_leaves_the_capital_already_counted() {
         vec![transfer(1, 5, native(), units("2000000000000000000"), true)],
         vec![balance(native(), units("2000000000000000000"))],
     );
-    vault
-        .crypto_apply_batch(&request(), &seen)
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &request(), &seen)
         .expect("applied");
 
     let held = vault
@@ -187,9 +186,9 @@ fn the_starting_amount_and_the_operations_give_the_network_balance() {
         vec![transfer(1, 5, native(), units("1000000000000000000"), true)],
         vec![balance(native(), units("3000000000000000000"))],
     );
-    let applied = vault
-        .crypto_apply_batch(&request(), &seen)
-        .expect("applied");
+    let applied =
+        crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &request(), &seen)
+            .expect("applied");
     assert_eq!(applied.added, 1);
     assert!(applied.corrected.contains(&eth().key()));
 
@@ -203,7 +202,7 @@ fn the_starting_amount_and_the_operations_give_the_network_balance() {
     assert_eq!(opening.legs[0].direction, CryptoDirection::In);
     assert_eq!(opening.time, "2026-03-01T00:00:00Z");
 
-    let totals = vault.crypto_totals(READ_AT);
+    let totals = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT);
     let coin = eth_total(&totals);
     assert_eq!(
         coin.quantity,
@@ -225,8 +224,7 @@ fn a_correction_survives_a_resync_and_the_balance_still_matches() {
         vec![transfer(1, 5, native(), units("1000000000000000000"), true)],
         vec![balance(native(), units("3000000000000000000"))],
     );
-    vault
-        .crypto_apply_batch(&request(), &seen)
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &request(), &seen)
         .expect("applied");
     let event_id =
         "cev:cacc-1:ethereum:0x0000000000000000000000000000000000000000000000000000000000000001";
@@ -252,14 +250,14 @@ fn a_correction_survives_a_resync_and_the_balance_still_matches() {
         fiat_tx_id: None,
         updated_at: "2026-03-10T00:00:00Z".into(),
     });
-    let before = vault.crypto_totals(READ_AT);
+    let before = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT);
     assert_eq!(eth_total(&before).income_usd, amount("2000"));
 
     // The same pages arrive again: the events are rewritten, the
     // correction is not.
-    let applied = vault
-        .crypto_apply_batch(&request(), &seen)
-        .expect("resynced");
+    let applied =
+        crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &request(), &seen)
+            .expect("resynced");
     assert_eq!(applied.added, 0, "nothing new");
     assert_eq!(applied.rewritten, 1);
     assert_eq!(vault.doc.crypto_overrides.len(), 1);
@@ -267,7 +265,7 @@ fn a_correction_survives_a_resync_and_the_balance_still_matches() {
         vault.doc.crypto_overrides[0].comment.as_deref(),
         Some("staking reward")
     );
-    let after = vault.crypto_totals(READ_AT);
+    let after = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT);
     assert_eq!(eth_total(&after).income_usd, amount("2000"));
     assert_eq!(eth_total(&after).quantity, amount("3"));
     assert_eq!(before.value_usd, after.value_usd);
@@ -301,10 +299,13 @@ fn a_second_run_changes_no_total_whatever_order_the_batches_came_in() {
 
     let straight = {
         let (_dir, mut vault) = followed();
-        vault
-            .crypto_apply_batch(&request(), &batch(facts.clone(), balances.clone()))
-            .expect("applied");
-        vault.crypto_totals(READ_AT)
+        crate::usecases::cryptotrack::recompute::crypto_apply_batch(
+            &mut vault,
+            &request(),
+            &batch(facts.clone(), balances.clone()),
+        )
+        .expect("applied");
+        crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT)
     };
     // No adjustment was needed: the operations already add up.
     assert!(!straight.imprecise, "{:?}", straight.assets);
@@ -322,19 +323,36 @@ fn a_second_run_changes_no_total_whatever_order_the_batches_came_in() {
         let (first, second) = shuffled.split_at(shuffled.len() / 2);
         let mut page = request();
         page.history_done = false;
-        vault
-            .crypto_apply_batch(&page, &batch(first.to_vec(), Vec::new()))
-            .expect("first page");
-        vault
-            .crypto_apply_batch(&request(), &batch(second.to_vec(), balances.clone()))
-            .expect("second page");
-        assert_eq!(vault.crypto_totals(READ_AT), straight, "order {shuffled:?}");
+        crate::usecases::cryptotrack::recompute::crypto_apply_batch(
+            &mut vault,
+            &page,
+            &batch(first.to_vec(), Vec::new()),
+        )
+        .expect("first page");
+        crate::usecases::cryptotrack::recompute::crypto_apply_batch(
+            &mut vault,
+            &request(),
+            &batch(second.to_vec(), balances.clone()),
+        )
+        .expect("second page");
+        assert_eq!(
+            crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT),
+            straight,
+            "order {shuffled:?}"
+        );
 
         // A second run over the same facts changes nothing.
-        vault
-            .crypto_apply_batch(&request(), &batch(shuffled.clone(), balances.clone()))
-            .expect("again");
-        assert_eq!(vault.crypto_totals(READ_AT), straight, "second run");
+        crate::usecases::cryptotrack::recompute::crypto_apply_batch(
+            &mut vault,
+            &request(),
+            &batch(shuffled.clone(), balances.clone()),
+        )
+        .expect("again");
+        assert_eq!(
+            crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT),
+            straight,
+            "second run"
+        );
     }
 }
 
@@ -360,9 +378,12 @@ fn two_devices_hold_the_same_bytes_for_the_same_facts() {
             } else {
                 Vec::new()
             };
-            vault
-                .crypto_apply_batch(&step, &batch(page, with_balances))
-                .expect("applied");
+            crate::usecases::cryptotrack::recompute::crypto_apply_batch(
+                &mut vault,
+                &step,
+                &batch(page, with_balances),
+            )
+            .expect("applied");
         }
         serde_json::to_vec(&vault.doc.crypto_events).expect("events serialize")
     };
@@ -418,9 +439,12 @@ fn counted_vault() -> (
 /// Saves one batch of `tokens` junk airdrops costs.
 fn saves_for_a_batch_of(tokens: u64) -> usize {
     let (_dir, mut vault, saves) = counted_vault();
-    vault
-        .crypto_apply_batch(&request(), &junk_batch(tokens))
-        .expect("applied");
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(
+        &mut vault,
+        &request(),
+        &junk_batch(tokens),
+    )
+    .expect("applied");
     assert_eq!(vault.doc.crypto_tokens.len() as u64, tokens);
     saves.0.load(std::sync::atomic::Ordering::SeqCst)
 }
@@ -434,10 +458,12 @@ fn a_pass_over_many_new_tokens_saves_once() {
 fn an_unchanged_pass_does_not_save() {
     let (_dir, mut vault, saves) = counted_vault();
     let pass = junk_batch(50);
-    vault.crypto_apply_batch(&request(), &pass).expect("first");
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &request(), &pass)
+        .expect("first");
     let after_first = saves.0.load(std::sync::atomic::Ordering::SeqCst);
     let revision = vault.session.revision();
-    vault.crypto_apply_batch(&request(), &pass).expect("second");
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &request(), &pass)
+        .expect("second");
     assert_eq!(after_first, 1);
     assert_eq!(
         saves.0.load(std::sync::atomic::Ordering::SeqCst),
@@ -483,8 +509,9 @@ fn a_quarantined_token_is_outside_the_totals_until_it_is_confirmed() {
     );
     let mut page = request();
     page.history_done = false;
-    vault.crypto_apply_batch(&page, &seen).expect("applied");
-    let totals = vault.crypto_totals(READ_AT);
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &page, &seen)
+        .expect("applied");
+    let totals = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT);
     assert_eq!(
         totals.value_usd,
         Amount::ZERO,
@@ -500,7 +527,7 @@ fn a_quarantined_token_is_outside_the_totals_until_it_is_confirmed() {
         .find(|record| record.id() == scam_id)
         .expect("the token was registered")
         .verdict = Some(TokenVerdict::Confirmed);
-    let totals = vault.crypto_totals(READ_AT);
+    let totals = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT);
     assert_eq!(totals.assets.len(), 1);
     assert_eq!(totals.value_usd, amount("1000000000"));
 }
@@ -514,13 +541,18 @@ fn a_linked_fiat_operation_sets_the_cost_basis_above_the_market() {
     );
     let mut page = request();
     page.history_done = false;
-    vault.crypto_apply_batch(&page, &seen).expect("applied");
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &page, &seen)
+        .expect("applied");
     let event_id =
         "cev:cacc-1:ethereum:0x0000000000000000000000000000000000000000000000000000000000000001";
 
     // Without a chain, the market price of the day is the basis.
     assert_eq!(
-        eth_total(&vault.crypto_totals(READ_AT)).average_usd,
+        eth_total(&crate::cryptotrack::service::recompute::crypto_totals(
+            &vault.books(),
+            READ_AT
+        ))
+        .average_usd,
         Some(amount("2000"))
     );
 
@@ -556,7 +588,10 @@ fn a_linked_fiat_operation_sets_the_cost_basis_above_the_market() {
         fiat_tx_id: None,
         updated_at: "2026-03-10T00:00:00Z".into(),
     });
-    let coin = eth_total(&vault.crypto_totals(READ_AT));
+    let coin = eth_total(&crate::cryptotrack::service::recompute::crypto_totals(
+        &vault.books(),
+        READ_AT,
+    ));
     assert_eq!(
         coin.average_usd,
         Some(amount("2400")),
@@ -575,18 +610,22 @@ fn a_chain_paid_in_another_currency_is_converted_at_the_rate_of_the_day() {
     );
     let mut page = request();
     page.history_done = false;
-    vault.crypto_apply_batch(&page, &seen).expect("applied");
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &page, &seen)
+        .expect("applied");
     let event_id =
         "cev:cacc-1:ethereum:0x0000000000000000000000000000000000000000000000000000000000000001";
 
     // 200 000 roubles at 100 to the dollar: the chain says this coin cost
     // 2 000 dollars, and no price of the day is consulted.
-    vault.apply_fx(&[crate::model::vault::FxPoint {
-        currency: "rub".into(),
-        per_usd: amount("100"),
-        ts: "2026-03-05T00:00:00Z".into(),
-        source: "test".into(),
-    }]);
+    crate::usecases::money::rates::apply_fx(
+        &mut vault,
+        &[crate::model::vault::FxPoint {
+            currency: "rub".into(),
+            per_usd: amount("100"),
+            ts: "2026-03-05T00:00:00Z".into(),
+            source: "test".into(),
+        }],
+    );
     let mut meta = TxMeta::new("bought ETH with roubles");
     meta.id = "tx-1".into();
     meta.timestamp = "2026-03-05T09:00:00Z".into();
@@ -614,7 +653,10 @@ fn a_chain_paid_in_another_currency_is_converted_at_the_rate_of_the_day() {
         fiat_tx_id: None,
         updated_at: "2026-03-10T00:00:00Z".into(),
     });
-    let coin = eth_total(&vault.crypto_totals(READ_AT));
+    let coin = eth_total(&crate::cryptotrack::service::recompute::crypto_totals(
+        &vault.books(),
+        READ_AT,
+    ));
     assert_eq!(coin.average_usd, Some(amount("2000")));
     assert!(coin.linked_basis);
 }
@@ -626,11 +668,10 @@ fn a_declared_basis_is_used_for_what_was_held_before_the_start_date() {
         vec![transfer(1, 5, token(), units("100000000"), true)],
         vec![balance(token(), units("1100000000"))],
     );
-    vault
-        .crypto_apply_batch(&request(), &seen)
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &request(), &seen)
         .expect("applied");
     let token_id = TokenId::new(Chain::Ethereum, USDC);
-    let before = vault.crypto_totals(READ_AT);
+    let before = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT);
     let held = before
         .assets
         .iter()
@@ -640,10 +681,13 @@ fn a_declared_basis_is_used_for_what_was_held_before_the_start_date() {
     assert!(held.doubts.contains(&Doubt::OpeningAtMarket));
 
     // The user says the old thousand cost 0.95 each.
-    vault
-        .crypto_set_token_basis(&token_id, Some(amount("0.95")))
-        .expect("a basis");
-    let after = vault.crypto_totals(READ_AT);
+    crate::usecases::cryptotrack::tokens::crypto_set_token_basis(
+        &mut vault,
+        &token_id,
+        Some(amount("0.95")),
+    )
+    .expect("a basis");
+    let after = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT);
     let held = after
         .assets
         .iter()
@@ -664,7 +708,8 @@ fn the_snapshots_of_a_day_are_written_once_and_rewritten_in_place() {
     );
     let mut page = request();
     page.history_done = false;
-    vault.crypto_apply_batch(&page, &seen).expect("applied");
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &page, &seen)
+        .expect("applied");
     // One for the account, one for the module.
     assert_eq!(vault.doc.crypto_snapshots.len(), 2);
     let module = vault
@@ -675,14 +720,18 @@ fn the_snapshots_of_a_day_are_written_once_and_rewritten_in_place() {
         .expect("the module's own");
     assert_eq!(module.value_usd, amount("2000.00"));
 
-    let same_day = vault
-        .crypto_snapshot("2026-03-09T23:00:00Z")
-        .expect("again");
+    let same_day = crate::usecases::cryptotrack::recompute::crypto_snapshot(
+        &mut vault,
+        "2026-03-09T23:00:00Z",
+    )
+    .expect("again");
     assert_eq!(same_day.len(), 2);
     assert_eq!(vault.doc.crypto_snapshots.len(), 2, "one record per day");
-    let next_day = vault
-        .crypto_snapshot("2026-03-10T10:00:00Z")
-        .expect("later");
+    let next_day = crate::usecases::cryptotrack::recompute::crypto_snapshot(
+        &mut vault,
+        "2026-03-10T10:00:00Z",
+    )
+    .expect("later");
     assert_eq!(next_day.len(), 2);
     assert_eq!(vault.doc.crypto_snapshots.len(), 4);
 }
@@ -694,15 +743,12 @@ fn a_second_reading_on_the_same_day_saves_nothing() {
         vec![transfer(1, 5, native(), units("1000000000000000000"), true)],
         Vec::new(),
     );
-    vault
-        .crypto_apply_batch(&request(), &seen)
+    crate::usecases::cryptotrack::recompute::crypto_apply_batch(&mut vault, &request(), &seen)
         .expect("applied");
-    vault
-        .crypto_snapshot("2026-03-09T08:00:00Z")
+    crate::usecases::cryptotrack::recompute::crypto_snapshot(&mut vault, "2026-03-09T08:00:00Z")
         .expect("first reading");
     let revision = vault.session.revision();
-    vault
-        .crypto_snapshot("2026-03-09T21:00:00Z")
+    crate::usecases::cryptotrack::recompute::crypto_snapshot(&mut vault, "2026-03-09T21:00:00Z")
         .expect("later reading");
     assert_eq!(vault.session.revision(), revision, "only `at` differs");
 }
@@ -756,7 +802,11 @@ fn an_unknown_account_is_refused() {
     let mut missing = request();
     missing.account_id = "nope";
     assert!(matches!(
-        vault.crypto_apply_batch(&missing, &batch(Vec::new(), Vec::new())),
+        crate::usecases::cryptotrack::recompute::crypto_apply_batch(
+            &mut vault,
+            &missing,
+            &batch(Vec::new(), Vec::new())
+        ),
         Err(Error::NotFound(_))
     ));
 }
@@ -818,7 +868,7 @@ fn crypto_engine_volume() {
         assert_eq!(vault.doc.crypto_events.len(), count);
 
         let started = Instant::now();
-        let totals = vault.crypto_totals(READ_AT);
+        let totals = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT);
         let fold = started.elapsed();
         assert_eq!(totals.counted, count);
 
@@ -839,7 +889,7 @@ fn crypto_engine_volume() {
             });
         }
         let started = Instant::now();
-        let fat = vault.crypto_totals(READ_AT);
+        let fat = crate::cryptotrack::service::recompute::crypto_totals(&vault.books(), READ_AT);
         let indexed = started.elapsed();
         assert_eq!(fat.counted, count);
         let own: BTreeSet<String> = [ME.to_owned()].into_iter().collect();
@@ -957,9 +1007,12 @@ fn apply_pages(vault: &mut UnlockedVault, pages: &[Vec<RawEvent>]) {
     for page in pages {
         let mut step = request();
         step.history_done = false;
-        vault
-            .crypto_apply_batch(&step, &batch(page.clone(), Vec::new()))
-            .expect("a page applied");
+        crate::usecases::cryptotrack::recompute::crypto_apply_batch(
+            vault,
+            &step,
+            &batch(page.clone(), Vec::new()),
+        )
+        .expect("a page applied");
     }
 }
 

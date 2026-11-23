@@ -33,7 +33,7 @@ pub fn sync_manifest_for(
     vault.track_changes()?;
     let value = vault.doc_value()?;
     let records = view::records(&value);
-    let keeps_fx = vault.fx_history_filter();
+    let keeps_fx = crate::money::rates::fx_history_filter(&vault.books());
     Ok(manifest_for(
         &vault.doc,
         &records,
@@ -50,7 +50,11 @@ pub fn sync_diff(
     mine: &Manifest,
     theirs: &Manifest,
 ) -> (Vec<String>, Vec<String>) {
-    diff_wanted(mine, theirs, &vault.fx_history_filter())
+    diff_wanted(
+        mine,
+        theirs,
+        &crate::money::rates::fx_history_filter(&vault.books()),
+    )
 }
 
 /// The full state of each asked record (absent keys come back empty).
@@ -118,10 +122,10 @@ pub fn sync_preview_after(
     if copy.apply_batch(incoming, &peer, true)?.is_none() {
         return Ok(None);
     }
-    let (currency, fx) = vault.base_and_fx();
-    let (_, copy_fx) = copy.base_and_fx();
-    let before = vault.store_values_usd();
-    let after = copy.store_values_usd();
+    let (currency, fx) = crate::usecases::money::portfolio::base_and_fx(vault);
+    let (_, copy_fx) = crate::usecases::money::portfolio::base_and_fx(&copy);
+    let before = crate::planning::goals::store_values_usd(&vault.books());
+    let after = crate::planning::goals::store_values_usd(&copy.books());
     let names: HashMap<&str, &str> = vault
         .doc
         .stores
@@ -148,8 +152,8 @@ pub fn sync_preview_after(
     .collect();
     Ok(Some(AfterApply {
         currency,
-        net_worth_before: vault.net_worth().net,
-        net_worth_after: copy.net_worth().net,
+        net_worth_before: crate::usecases::money::capital::net_worth(&vault.books()).net,
+        net_worth_after: crate::usecases::money::capital::net_worth(&copy.books()).net,
         stores,
     }))
 }

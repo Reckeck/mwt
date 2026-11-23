@@ -20,27 +20,31 @@ impl BooksSource for UnlockedVault {
     }
 
     fn base_and_fx(&self) -> (String, Amount) {
-        UnlockedVault::base_and_fx(self)
+        crate::usecases::money::portfolio::base_and_fx(self)
     }
 
     fn price_usd_for(&self, asset_key: &str) -> Amount {
-        UnlockedVault::price_usd_for(self, asset_key)
+        crate::money::portfolio::price_usd_for(&self.books(), asset_key)
     }
 
     fn price_base_for(&self, asset_key: &str, fx: Amount) -> Amount {
-        UnlockedVault::price_base_for(self, asset_key, fx)
+        crate::money::portfolio::price_base_for(&self.books(), asset_key, fx)
     }
 
     fn valuation_curves(&self) -> HashMap<String, ValuationCurve> {
-        UnlockedVault::valuation_curves(self)
+        crate::money::valuation::valuation_curves(&self.books())
     }
 
     fn prepare_transaction(&self, tx: &mut Transaction) -> Result<()> {
-        UnlockedVault::prepare_transaction(self, tx)
+        crate::usecases::money::transactions::prepare_transaction(self, tx)
     }
 
     fn earmarked(&self, store_id: &str, asset_key: &str) -> Amount {
-        UnlockedVault::earmarked(self, store_id, asset_key)
+        crate::planning::envelopes::earmarked(
+            &self.doc,
+            &crate::model::ids::StoreId::from(store_id),
+            asset_key,
+        )
     }
 
     fn keys_on_device(&self) -> bool {
@@ -93,7 +97,7 @@ mod tests {
     fn books_equals_per_call_values() {
         let (_dir, vault) = open_vault();
         let books = vault.books();
-        let fresh = vault.rate_book();
+        let fresh = crate::money::rates::rate_book(&vault.books());
         assert_eq!(books.base(), fresh.base());
         assert_eq!(books.curves().count(), fresh.curves().len());
         assert_eq!(
@@ -110,13 +114,16 @@ mod tests {
     fn books_base_and_fx_equals_vault() {
         let (_dir, vault) = open_vault();
         let books = vault.books();
-        let (vault_base, vault_fx) = vault.base_and_fx();
+        let (vault_base, vault_fx) = crate::usecases::money::portfolio::base_and_fx(&vault);
         assert_eq!(books.base_and_fx(), (vault_base.as_str(), vault_fx));
-        assert_eq!(books.price_usd("fiat:usd"), vault.price_usd_for("fiat:usd"));
-        let fx = vault.base_and_fx().1;
+        assert_eq!(
+            books.price_usd("fiat:usd"),
+            crate::money::portfolio::price_usd_for(&vault.books(), "fiat:usd")
+        );
+        let fx = crate::usecases::money::portfolio::base_and_fx(&vault).1;
         assert_eq!(
             books.price_base("coin:bitcoin"),
-            vault.price_base_for("coin:bitcoin", fx)
+            crate::money::portfolio::price_base_for(&vault.books(), "coin:bitcoin", fx)
         );
         assert!(std::ptr::eq(books.doc(), &vault.doc));
     }

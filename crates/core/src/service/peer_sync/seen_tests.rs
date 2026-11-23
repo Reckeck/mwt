@@ -24,10 +24,12 @@ fn exchange_marked(
 ) -> (Vec<OverwrittenField>, Vec<OverwrittenField>) {
     let (left_manifest, left_mark) = left.sync_manifest_marked(None).unwrap();
     let (right_manifest, right_mark) = right.sync_manifest_marked(None).unwrap();
-    let (left_wants, _) = left.sync_diff(&left_manifest, &right_manifest);
-    let (right_wants, _) = right.sync_diff(&right_manifest, &left_manifest);
-    let to_left = right.sync_records(&left_wants).unwrap();
-    let to_right = left.sync_records(&right_wants).unwrap();
+    let (left_wants, _) =
+        crate::usecases::sync::read::sync_diff(left, &left_manifest, &right_manifest);
+    let (right_wants, _) =
+        crate::usecases::sync::read::sync_diff(right, &right_manifest, &left_manifest);
+    let to_left = crate::usecases::sync::read::sync_records(right, &left_wants).unwrap();
+    let to_right = crate::usecases::sync::read::sync_records(left, &right_wants).unwrap();
     let applied_left = left.sync_apply(&to_left, &peer_of("right")).unwrap();
     let applied_right = right.sync_apply(&to_right, &peer_of("left")).unwrap();
     left.sync_mark_synced("right-id", Some(&left_mark)).unwrap();
@@ -57,13 +59,14 @@ fn comment_edit(vault: &mut UnlockedVault, id: &str, comment: &str) {
         .expect("transaction")
         .clone();
     edited.meta_mut().comment = comment.into();
-    vault.update_transaction(id, edited).unwrap();
+    crate::usecases::money::transactions::update_transaction(vault, id, edited).unwrap();
 }
 
 fn seeded() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
     let (dir, mut left, mut right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
-    left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))
+        .unwrap();
     settle(&mut left, &mut right);
     let id = left.doc.transactions[0].meta().id.clone();
     (dir, left, right, id)
@@ -101,7 +104,9 @@ fn without_a_record_of_the_peer_every_edit_still_counts() {
     comment_edit(&mut left, &id, "mine");
     later();
     comment_edit(&mut right, &id, "theirs");
-    let batch = right.sync_records(&[format!("transactions:{id}")]).unwrap();
+    let batch =
+        crate::usecases::sync::read::sync_records(&mut right, &[format!("transactions:{id}")])
+            .unwrap();
     let applied = left.sync_apply(&batch, &peer_of("right")).unwrap().unwrap();
     assert_eq!(applied.summary.overwritten.len(), 1);
 }
@@ -133,7 +138,7 @@ fn a_lost_change_of_kind_is_listed_as_overwritten() {
     let cash = left.doc.stores[0].id.clone();
     let mut as_payment = payment(&cash, "10", "salary");
     as_payment.meta_mut().id = id.clone();
-    left.update_transaction(&id, as_payment).unwrap();
+    crate::usecases::money::transactions::update_transaction(&mut left, &id, as_payment).unwrap();
     assert!(matches!(left.doc.transactions[0], Transaction::Payment(_)));
     later();
     comment_edit(&mut right, &id, "edited as a top-up");

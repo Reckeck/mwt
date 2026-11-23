@@ -25,8 +25,5 @@ impl UnlockedVault {
     // forward:end
 
     // Called when a vault opens and when a peer's changes are merged.
-    forward! {
-        pub(crate) fn ensure_default_categories(&mut self) -> bool
-            => crate::usecases::planning::passive::ensure_default_categories;
-    }
+    forward! {}
 }

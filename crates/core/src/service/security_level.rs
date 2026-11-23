@@ -446,7 +446,7 @@ impl UnlockedVault {
     /// finishes the job: that is what the spec means by a crash between the
     /// re-encryption and the archiving repairing itself.
     pub(crate) fn after_raise(&mut self) {
-        self.retire_manual_crypto_wallets();
+        crate::usecases::cryptotrack::transition::retire_manual_crypto_wallets(self);
         self.doc.settings.crypto_raise_pending = false;
         let _ = self.persist_now();
     }
@@ -468,7 +468,7 @@ impl UnlockedVault {
         if self.security_level() != SecurityLevel::Crypto {
             return false;
         }
-        self.retire_manual_crypto_wallets();
+        crate::usecases::cryptotrack::transition::retire_manual_crypto_wallets(self);
         self.doc.settings.crypto_raise_pending = false;
         true
     }

@@ -51,17 +51,21 @@ fn notes(vault: &UnlockedVault) -> Vec<String> {
 fn debt_terms_created_again_after_they_were_cleared_reach_the_other_device() {
     let (_dir, mut devices, ledger) = pair();
     let contact = ledger.anchors[0].clone();
-    devices[0].set_debt_terms(terms(&contact, "first")).unwrap();
+    crate::usecases::household::contacts::set_debt_terms(&mut devices[0], terms(&contact, "first"))
+        .unwrap();
     meet(&mut devices);
     pause();
-    devices[0].set_debt_terms(terms(&contact, "")).unwrap();
+    crate::usecases::household::contacts::set_debt_terms(&mut devices[0], terms(&contact, ""))
+        .unwrap();
     assert!(devices[0].doc.debt_terms.is_empty());
     meet(&mut devices);
     assert!(devices[1].doc.debt_terms.is_empty());
     pause();
-    devices[0]
-        .set_debt_terms(terms(&contact, "second"))
-        .unwrap();
+    crate::usecases::household::contacts::set_debt_terms(
+        &mut devices[0],
+        terms(&contact, "second"),
+    )
+    .unwrap();
     meet(&mut devices);
     assert_eq!(notes(&devices[1]), vec!["second"]);
     assert_eq!(notes(&devices[0]), vec!["second"]);
@@ -71,14 +75,18 @@ fn debt_terms_created_again_after_they_were_cleared_reach_the_other_device() {
 fn debt_terms_cleared_on_one_device_and_edited_on_the_other_end_equal() {
     let (_dir, mut devices, ledger) = pair();
     let contact = ledger.anchors[0].clone();
-    devices[0].set_debt_terms(terms(&contact, "first")).unwrap();
+    crate::usecases::household::contacts::set_debt_terms(&mut devices[0], terms(&contact, "first"))
+        .unwrap();
     meet(&mut devices);
     pause();
-    devices[0].set_debt_terms(terms(&contact, "")).unwrap();
-    pause();
-    devices[1]
-        .set_debt_terms(terms(&contact, "edited"))
+    crate::usecases::household::contacts::set_debt_terms(&mut devices[0], terms(&contact, ""))
         .unwrap();
+    pause();
+    crate::usecases::household::contacts::set_debt_terms(
+        &mut devices[1],
+        terms(&contact, "edited"),
+    )
+    .unwrap();
     meet(&mut devices);
     assert_eq!(notes(&devices[0]), notes(&devices[1]));
 }
@@ -87,19 +95,31 @@ fn debt_terms_cleared_on_one_device_and_edited_on_the_other_end_equal() {
 fn a_reading_made_again_after_it_was_deleted_reaches_the_other_device() {
     let (_dir, mut devices, ledger) = pair();
     let item = ledger.utility_id.clone();
-    let id = devices[0]
-        .add_meter_reading(&item, amount("100"), "2026-03", Some(2), None)
-        .unwrap()
-        .id;
+    let id = crate::usecases::household::utilities::add_meter_reading(
+        &mut devices[0],
+        &item,
+        amount("100"),
+        "2026-03",
+        Some(2),
+        None,
+    )
+    .unwrap()
+    .id;
     meet(&mut devices);
     pause();
-    devices[0].delete_meter_reading(&id).unwrap();
+    crate::usecases::household::utilities::delete_meter_reading(&mut devices[0], &id).unwrap();
     meet(&mut devices);
     assert!(devices[1].doc.meter_readings.is_empty());
     pause();
-    let again = devices[0]
-        .add_meter_reading(&item, amount("130"), "2026-03", Some(2), None)
-        .unwrap();
+    let again = crate::usecases::household::utilities::add_meter_reading(
+        &mut devices[0],
+        &item,
+        amount("130"),
+        "2026-03",
+        Some(2),
+        None,
+    )
+    .unwrap();
     assert_eq!(again.id, id, "the same day names the same record");
     meet(&mut devices);
     for device in &devices {
@@ -112,17 +132,28 @@ fn a_reading_made_again_after_it_was_deleted_reaches_the_other_device() {
 fn a_reading_deleted_on_one_device_and_corrected_on_the_other_end_equal() {
     let (_dir, mut devices, ledger) = pair();
     let item = ledger.utility_id.clone();
-    let id = devices[0]
-        .add_meter_reading(&item, amount("100"), "2026-03", Some(2), None)
-        .unwrap()
-        .id;
+    let id = crate::usecases::household::utilities::add_meter_reading(
+        &mut devices[0],
+        &item,
+        amount("100"),
+        "2026-03",
+        Some(2),
+        None,
+    )
+    .unwrap()
+    .id;
     meet(&mut devices);
     pause();
-    devices[0].delete_meter_reading(&id).unwrap();
+    crate::usecases::household::utilities::delete_meter_reading(&mut devices[0], &id).unwrap();
     pause();
-    devices[1]
-        .update_meter_reading(&id, amount("110"), "2026-03", Some(2))
-        .unwrap();
+    crate::usecases::household::utilities::update_meter_reading(
+        &mut devices[1],
+        &id,
+        amount("110"),
+        "2026-03",
+        Some(2),
+    )
+    .unwrap();
     meet(&mut devices);
     assert_eq!(devices[0].doc.meter_readings, devices[1].doc.meter_readings);
 }
@@ -140,18 +171,19 @@ fn valuation(ledger: &Ledger, price: &str) -> ValuationInput {
 #[test]
 fn a_valuation_made_again_after_it_was_deleted_reaches_the_other_device() {
     let (_dir, mut devices, ledger) = pair();
-    let id = devices[0]
-        .add_valuation(valuation(&ledger, "1000"))
-        .unwrap()
-        .id;
+    let id = crate::usecases::money::valuation::add_valuation(
+        &mut devices[0],
+        valuation(&ledger, "1000"),
+    )
+    .unwrap()
+    .id;
     meet(&mut devices);
     pause();
-    devices[0].delete_valuation(&id).unwrap();
+    crate::usecases::money::valuation::delete_valuation(&mut devices[0], &id).unwrap();
     meet(&mut devices);
     assert!(devices[1].doc.valuations.is_empty());
     pause();
-    devices[0]
-        .add_valuation(valuation(&ledger, "1200"))
+    crate::usecases::money::valuation::add_valuation(&mut devices[0], valuation(&ledger, "1200"))
         .unwrap();
     meet(&mut devices);
     for device in &devices {
@@ -163,16 +195,17 @@ fn a_valuation_made_again_after_it_was_deleted_reaches_the_other_device() {
 #[test]
 fn a_valuation_deleted_on_one_device_and_replaced_on_the_other_end_equal() {
     let (_dir, mut devices, ledger) = pair();
-    let id = devices[0]
-        .add_valuation(valuation(&ledger, "1000"))
-        .unwrap()
-        .id;
+    let id = crate::usecases::money::valuation::add_valuation(
+        &mut devices[0],
+        valuation(&ledger, "1000"),
+    )
+    .unwrap()
+    .id;
     meet(&mut devices);
     pause();
-    devices[0].delete_valuation(&id).unwrap();
+    crate::usecases::money::valuation::delete_valuation(&mut devices[0], &id).unwrap();
     pause();
-    devices[1]
-        .add_valuation(valuation(&ledger, "1300"))
+    crate::usecases::money::valuation::add_valuation(&mut devices[1], valuation(&ledger, "1300"))
         .unwrap();
     meet(&mut devices);
     assert_eq!(devices[0].doc.valuations, devices[1].doc.valuations);
@@ -187,10 +220,14 @@ fn goal_setup() -> (
 ) {
     let (dir, mut left, mut right) = two_devices();
     let wallet = store(&mut left, "Cash", StoreKind::Cash, None);
-    left.add_transaction(income(&wallet, "1000", "pay"))
-        .unwrap();
-    let goal = left
-        .create_goal(GoalDraft {
+    crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&wallet, "1000", "pay"),
+    )
+    .unwrap();
+    let goal = crate::usecases::planning::goals::create_goal(
+        &mut left,
+        GoalDraft {
             name: "trip".into(),
             active: true,
             target_amount: amount("1000"),
@@ -205,9 +242,10 @@ fn goal_setup() -> (
             },
             scenario_id: None,
             expected_return: None,
-        })
-        .unwrap()
-        .id;
+        },
+    )
+    .unwrap()
+    .id;
     settle(&mut left, &mut right);
     (dir, left, right, wallet, goal)
 }
@@ -215,15 +253,27 @@ fn goal_setup() -> (
 #[test]
 fn a_goal_envelope_made_again_after_it_was_deleted_reaches_the_other_device() {
     let (_dir, mut left, mut right, wallet, goal) = goal_setup();
-    left.fund_goal(&goal, &wallet, amount("100")).unwrap();
+    crate::usecases::household::envelopes::fund_goal(
+        &mut left,
+        &goal,
+        &mwt_model::StoreId::from(wallet.as_str()),
+        amount("100"),
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     let id = left.doc.envelopes[0].id.clone();
     pause();
-    left.delete_envelope(&id).unwrap();
+    crate::usecases::household::envelopes::delete_envelope(&mut left, &id).unwrap();
     settle(&mut left, &mut right);
     assert!(right.doc.envelopes.is_empty());
     pause();
-    left.fund_goal(&goal, &wallet, amount("40")).unwrap();
+    crate::usecases::household::envelopes::fund_goal(
+        &mut left,
+        &goal,
+        &mwt_model::StoreId::from(wallet.as_str()),
+        amount("40"),
+    )
+    .unwrap();
     assert_eq!(
         left.doc.envelopes[0].id, id,
         "the same goal names the same record"
@@ -238,13 +288,19 @@ fn a_goal_envelope_made_again_after_it_was_deleted_reaches_the_other_device() {
 #[test]
 fn a_goal_envelope_deleted_on_one_device_and_topped_up_on_the_other_end_equal() {
     let (_dir, mut left, mut right, wallet, goal) = goal_setup();
-    left.fund_goal(&goal, &wallet, amount("100")).unwrap();
+    crate::usecases::household::envelopes::fund_goal(
+        &mut left,
+        &goal,
+        &mwt_model::StoreId::from(wallet.as_str()),
+        amount("100"),
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     let id = left.doc.envelopes[0].id.clone();
     pause();
-    left.delete_envelope(&id).unwrap();
+    crate::usecases::household::envelopes::delete_envelope(&mut left, &id).unwrap();
     pause();
-    right.fund_envelope(&id, amount("30")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut right, &id, amount("30")).unwrap();
     settle(&mut left, &mut right);
     assert_eq!(left.doc.envelopes, right.doc.envelopes);
 }

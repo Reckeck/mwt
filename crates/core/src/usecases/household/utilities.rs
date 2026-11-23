@@ -60,7 +60,7 @@ pub fn utility_bill(
 }
 
 fn automation_known(vault: &UnlockedVault) -> impl Fn(&str) -> bool + '_ {
-    |id| vault.automation(id).is_ok()
+    |id| crate::usecases::planning::automations::automation(vault, id).is_ok()
 }
 
 pub fn create_utility_item(vault: &mut UnlockedVault, draft: UtilityDraft) -> Result<UtilityItem> {
@@ -165,7 +165,7 @@ pub fn pay_utility_bill(
         &vault.doc,
         &input,
         &bill,
-        &|tx| vault.prepare_transaction(tx),
+        &|tx| crate::usecases::money::transactions::prepare_transaction(vault, tx),
         &reading_id,
         &now_iso(),
     )?;
@@ -174,7 +174,7 @@ pub fn pay_utility_bill(
     // vault, so the plan is applied and the holdings recomputed before the one
     // commit. `write_bill` emits no events, so none is dropped by `run`.
     vault.run(|tx| write_bill(tx, plan))?;
-    vault.recompute_holdings();
+    crate::usecases::money::portfolio::recompute_holdings(vault);
     vault.transact(|tx| {
         tx.touch();
         Ok(())

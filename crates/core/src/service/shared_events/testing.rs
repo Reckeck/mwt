@@ -55,23 +55,21 @@ fn new_vault() -> (
     let (dir, mut vault) = test_support::empty_vault();
     vault.set_base_currency("rub");
     let wallet = test_support::store(&mut vault, "Тинькофф", StoreKind::Bank, None);
-    vault
-        .add_transaction(test_support::income_of(
-            &wallet,
-            rub(),
-            "50000",
-            "0.0109",
-            "salary",
-        ))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        test_support::income_of(&wallet, rub(), "50000", "0.0109", "salary"),
+    )
+    .unwrap();
     let mut contacts = HashMap::new();
     for (key, name) in [("petya", "Петя"), ("vasya", "Вася"), ("anya", "Аня")] {
-        let contact: Contact = vault
-            .create_contact(crate::service::ContactDraft {
+        let contact: Contact = crate::usecases::household::contacts::create_contact(
+            &mut vault,
+            crate::service::ContactDraft {
                 name: name.into(),
                 ..Default::default()
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         contacts.insert(key.to_string(), contact.id);
     }
     (dir, vault, wallet, contacts)
@@ -124,8 +122,9 @@ fn planned(title: &str, unit: &str, qty: &str, total: &str) -> SharedItemDraft {
 /// I bought the meat (4 800) and the beer (8 for 1 800), Vasya the coal (500).
 pub fn skewers_scenario() -> Scenario {
     let (dir, mut vault, wallet, contacts) = new_vault();
-    let view = vault
-        .create_shared_event(SharedEventDraft {
+    let view = crate::usecases::household::shared_events::create_shared_event(
+        &mut vault,
+        SharedEventDraft {
             title: "Шашлыки".into(),
             currency: "rub".into(),
             starts_on: Some("2026-11-02".into()),
@@ -141,8 +140,9 @@ pub fn skewers_scenario() -> Scenario {
                 },
             ],
             ..SharedEventDraft::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let event = view.event.id;
     let mut items = HashMap::new();
     for draft in [
@@ -154,20 +154,32 @@ pub fn skewers_scenario() -> Scenario {
         planned("Сок", "л", "6", "1800"),
     ] {
         let title = draft.title.clone();
-        let view = vault.add_shared_item(&event, draft).unwrap();
+        let view =
+            crate::usecases::household::shared_events::add_shared_item(&mut vault, &event, draft)
+                .unwrap();
         items.insert(title, view.event.items.last().unwrap().id.clone());
     }
-    vault
-        .add_shared_purchase(&event, buy(&wallet, &items["Мясо"], ME, "4", "4800", None))
-        .unwrap();
-    vault
-        .add_shared_purchase(&event, buy(&wallet, &items["Пиво"], ME, "8", "1800", None))
-        .unwrap();
-    vault
-        .add_shared_purchase(&event, buy(&wallet, "", "vasya", "1", "500", Some("Уголь")))
-        .unwrap();
-    vault
-        .set_shared_item_split(SetSharedItemSplitInput {
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut vault,
+        &event,
+        buy(&wallet, &items["Мясо"], ME, "4", "4800", None),
+    )
+    .unwrap();
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut vault,
+        &event,
+        buy(&wallet, &items["Пиво"], ME, "8", "1800", None),
+    )
+    .unwrap();
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut vault,
+        &event,
+        buy(&wallet, "", "vasya", "1", "500", Some("Уголь")),
+    )
+    .unwrap();
+    crate::usecases::household::shared_events::set_shared_item_split(
+        &mut vault,
+        SetSharedItemSplitInput {
             event_id: event.clone(),
             item_id: items["Пиво"].clone(),
             split: ItemSplit::ByUnits {
@@ -176,8 +188,9 @@ pub fn skewers_scenario() -> Scenario {
                     ("vasya".to_string(), amount("5")),
                 ]),
             },
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     Scenario {
         _dir: dir,
         vault,
@@ -191,8 +204,9 @@ pub fn skewers_scenario() -> Scenario {
 /// us share it, my part is 1 850.
 pub fn gift_scenario() -> Scenario {
     let (dir, mut vault, wallet, contacts) = new_vault();
-    let view = vault
-        .create_shared_event(SharedEventDraft {
+    let view = crate::usecases::household::shared_events::create_shared_event(
+        &mut vault,
+        SharedEventDraft {
             title: "Подарок Маше".into(),
             currency: "rub".into(),
             starts_on: Some("2026-11-05".into()),
@@ -203,15 +217,16 @@ pub fn gift_scenario() -> Scenario {
                 contact_person(&contacts, "vasya"),
             ],
             ..SharedEventDraft::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let event = view.event.id;
-    vault
-        .add_shared_purchase(
-            &event,
-            buy(&wallet, "", "anya", "1", "7400", Some("Подарок")),
-        )
-        .unwrap();
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut vault,
+        &event,
+        buy(&wallet, "", "anya", "1", "7400", Some("Подарок")),
+    )
+    .unwrap();
     Scenario {
         _dir: dir,
         vault,

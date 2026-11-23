@@ -73,7 +73,7 @@ impl UnlockedVault {
         doc.version = crate::VAULT_FORMAT_VERSION;
         doc.sync = std::mem::take(&mut self.doc.sync);
         self.doc = doc;
-        self.recompute_holdings();
+        crate::usecases::money::portfolio::recompute_holdings(self);
         self.persist()
     }
 }
