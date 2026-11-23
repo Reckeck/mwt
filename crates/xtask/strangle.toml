@@ -14,9 +14,6 @@ service_dir = "crates/core/src/service"
 command_dir = "crates/app/src"
 scan_dirs = ["crates/core/src", "crates/core/tests", "crates/app/src", "crates/vault/src", "crates/sync/src", "crates/money/src", "crates/household/src", "crates/workflow/src", "crates/planning/src", "crates/reports/src", "crates/cryptotrack/src", "crates/contract/src"]
 
-# Shared test helper files: `rewire` reads the return types of their functions (`empty_vault()` and the like).
-helper_files = ["crates/core/src/service/test_support.rs", "crates/core/src/testkit/mod.rs"]
-
 # `strangle remaining` counts the `.rs` files under `remaining_dirs`, less `remaining_exclude` (the tool and
 # its fixtures name the words it counts; they go with the tool).
 remaining_dirs = ["crates"]
@@ -671,6 +668,7 @@ stem = {
 
 [[area]]
 name = "automations_recurring"
+retired = true
 task = "D"
 group = "planning"
 context = "planning"
@@ -678,6 +676,7 @@ files = ["automations.rs", "recurring.rs"]
 
 [[area]]
 name = "budget"
+retired = true
 task = "D"
 group = "planning"
 context = "planning"
@@ -685,6 +684,7 @@ files = ["budget.rs", "emergency.rs"]
 
 [[area]]
 name = "goals"
+retired = true
 task = "D"
 group = "planning"
 context = "planning"
@@ -694,6 +694,7 @@ files = [
 
 [[area]]
 name = "notifications"
+retired = true
 task = "D"
 group = "planning"
 context = "planning"
@@ -704,6 +705,7 @@ files = [
 
 [[area]]
 name = "crypto_accounts"
+retired = true
 task = "E"
 stubs = false
 group = "cryptotrack/service"
@@ -721,6 +723,7 @@ stem = {
 
 [[area]]
 name = "crypto_recompute"
+retired = true
 task = "E"
 stubs = false
 group = "cryptotrack/service"
@@ -738,6 +741,7 @@ stem = {
 
 [[area]]
 name = "crypto_positions"
+retired = true
 task = "E"
 stubs = false
 group = "cryptotrack/service"
@@ -760,6 +764,7 @@ stem = {
 
 [[area]]
 name = "cryptotrack"
+retired = true
 task = "E"
 stubs = false
 group = "cryptotrack"
@@ -772,6 +777,7 @@ stem = {
 
 [[area]]
 name = "exchange"
+retired = true
 task = "E"
 group = "cryptotrack"
 context = "cryptotrack"
@@ -779,6 +785,7 @@ files = ["exchange_sync.rs", "exchange_import.rs"]
 
 [[area]]
 name = "workflow"
+retired = true
 task = "E"
 group = "workflow"
 context = "workflow"
@@ -797,6 +804,7 @@ files = [
 
 [[area]]
 name = "misc"
+retired = true
 task = "phase-6"
 stubs = false
 group = "vault"

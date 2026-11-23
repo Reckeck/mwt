@@ -7,16 +7,12 @@
 //! - `widen`: makes non-`pub` `impl UnlockedVault` methods in `service/` `pub(crate)` (methods only, never fields).
 //! - `carve`: moves items named in a TOML file out of a service file into a new one.
 //! - `relocate`: moves an area's files into their stubs and leaves the shim with `pub use`.
-//! - `forward`: regenerates the `forward!` block of an area's shims.
 //! - `check`: holds an area against `baseline.json` (parity, logic, `persist()`, tests, files).
-//! - `callers`: lists the remaining calls of an area's delegates and of `Books::vault()`.
-//! - `rewire`: best effort replacement of delegate calls by the new function.
 //! - `paths`: rewrites the `service::` paths of the shims to their owners' paths.
 //! - `remaining`: the per-file counts of `UnlockedVault`, `forward!` entries and `service::` paths, held by `check --all`.
 //! - `retire`: marks an area whose delegates are deleted.
 
 mod baseline;
-mod callers;
 mod carve;
 mod check;
 mod fields;
@@ -25,11 +21,9 @@ mod forward;
 mod home;
 mod map;
 mod paths;
-mod receivers;
 mod relocate;
 mod remaining;
 mod retire;
-mod rewire;
 mod scaffold;
 mod scan;
 mod scope;
@@ -64,14 +58,8 @@ pub enum StrangleCommand {
     Carve(carve::CarveArgs),
     /// Moves an area's files into their stubs and leaves the shim with `pub use`.
     Relocate(relocate::RelocateArgs),
-    /// Regenerates the `forward!` block of an area's shims from its new functions.
-    Forward(forward::ForwardArgs),
     /// Holds an area against `baseline.json`: parity, logic, `persist()`, tests, allowed files.
     Check(check::CheckArgs),
-    /// Lists every remaining call of an area's delegates and of `Books::vault()`.
-    Callers(callers::CallersArgs),
-    /// Best effort: replaces delegate calls on a proven `UnlockedVault` receiver by the new function.
-    Rewire(rewire::RewireArgs),
     /// Rewrites `service::` paths to the owners' paths by the `pub use` map of the shims.
     Paths(paths::PathsArgs),
     /// The per-file counts of `UnlockedVault`, `forward!` entries and `service::` paths.
@@ -87,10 +75,7 @@ pub fn run(root: &Path, args: &StrangleArgs) -> Result<()> {
         StrangleCommand::Widen => widen::run(root, &Workspace::load(root)?),
         StrangleCommand::Carve(carve_args) => carve::run(root, carve_args),
         StrangleCommand::Relocate(relocate_args) => relocate::run(root, relocate_args),
-        StrangleCommand::Forward(forward_args) => forward::run(root, forward_args),
         StrangleCommand::Check(check_args) => check::run(root, check_args),
-        StrangleCommand::Callers(callers_args) => callers::run(root, callers_args),
-        StrangleCommand::Rewire(rewire_args) => rewire::run(root, rewire_args),
         StrangleCommand::Paths(paths_args) => paths::run(root, paths_args),
         StrangleCommand::Remaining(remaining_args) => remaining::run(root, remaining_args),
         StrangleCommand::Retire(retire_args) => retire::run(root, retire_args),
@@ -261,7 +246,7 @@ fn two(vault: V) { vault.beta_pub(); }
 #[cfg(test)]
 pub mod area_fixture {
     //! One area `loyalty` before the move (`ORIGINAL`) and after it (`moved_files`), written to a
-    //! temp dir, for `relocate`, `forward`, `baseline` and `check`.
+    //! temp dir, for `relocate`, `baseline` and `check`.
 
     use super::fixture::TempTree;
     use super::map::MAP_FILE;

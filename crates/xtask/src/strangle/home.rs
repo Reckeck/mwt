@@ -12,9 +12,6 @@ use super::scaffold::stems;
 /// The scenario module group under the core crate (`usecases/<context>/<stem>.rs`).
 pub const USECASES: &str = "usecases";
 
-/// The delegate-target marker for a `VaultDoc` receiver: the `@doc` argument.
-pub const DOC_MARKER: &str = "@doc";
-
 /// One file stem of an area, with every path it owns.
 pub struct Home {
     /// The name of the new home (`overview`); it names the pure and scenario modules.
@@ -117,11 +114,6 @@ impl Home {
     /// `<group>::<stem>`: `pure_path` without its `crate::`.
     pub fn pure_path_tail(&self) -> String {
         format!("{}::{}", self.group, self.stem)
-    }
-
-    /// `crate::usecases::<context>::<stem>`.
-    pub fn scenario_path(&self) -> String {
-        format!("crate::{USECASES}::{}::{}", self.context, self.stem)
     }
 }
 

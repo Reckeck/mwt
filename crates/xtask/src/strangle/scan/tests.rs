@@ -1,3 +1,4 @@
+use super::corpus::UnscannedMacro;
 use super::*;
 
 const FIXTURE: &str = r##"

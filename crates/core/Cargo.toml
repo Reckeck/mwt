@@ -15,8 +15,6 @@ testkit = ["dep:mwt-testkit", "mwt-vault/testing"]
 # Forwarded to every crate that has them; the derives of this crate name `ts_rs` itself (no `schemars` derive here).
 ts = ["dep:ts-rs", "mwt-base/ts", "mwt-model/ts", "mwt-sync/ts", "mwt-money/ts", "mwt-household/ts", "mwt-planning/ts", "mwt-reports/ts", "mwt-cryptotrack/ts", "mwt-crypto/ts", "mwt-contract/ts", "mwt-workflow/ts", "mwt-net/ts"]
 schema = ["mwt-base/schema", "mwt-model/schema", "mwt-money/schema", "mwt-planning/schema", "mwt-reports/schema", "mwt-cryptotrack/schema", "mwt-contract/schema", "mwt-workflow/schema"]
-# Marks every `forward!` delegate `#[deprecated]` so the remaining callers can be listed (`cargo clippy --features deprecated-forwards`).
-deprecated-forwards = []
 
 [dependencies]
 # The model.

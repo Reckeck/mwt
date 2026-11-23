@@ -11,10 +11,9 @@ use serde_json::Value;
 use zeroize::Zeroizing;
 
 use super::UnlockedVault;
-use super::forward::forward;
 use crate::error::{Error, Result};
+use crate::ipc_contract::SyncCutReason;
 use crate::ipc_contract::security::SecurityLevel;
-use crate::ipc_contract::{AfterApply, SyncCutReason};
 #[cfg(test)]
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::{VaultDoc, now_iso};
@@ -87,63 +86,6 @@ fn ser_err(err: serde_json::Error) -> Error {
 }
 
 impl UnlockedVault {
-    // The read side and trust moved in T35; the rest of the area moves in T36-T38. The task that
-    // moves the last method adds the forward markers, so `strangle check` holds the whole area at once.
-    forward! {
-        /// One digest per record and deletion. `union_since_ms` leaves out cached
-        /// prices and rates older than that (a first sync sends 90 days).
-        pub fn sync_manifest(&mut self, union_since_ms: Option<u64>) -> Result<Manifest>
-            => crate::usecases::sync::read::sync_manifest;
-        /// [`Self::sync_manifest`] for a peer protected at `peer`: below level 3
-        /// the crypto module's records are left out, so their keys never reach
-        /// the network. Also says how many records were left out.
-        pub fn sync_manifest_for(&mut self, union_since_ms: Option<u64>, peer: SecurityLevel) -> Result<(Manifest, usize)>
-            => crate::usecases::sync::read::sync_manifest_for;
-        /// `(to_request, to_send)` for two manifests: the plain diff without the
-        /// cache points this device would thin away as soon as they arrive.
-        pub fn sync_diff(&self, mine: &Manifest, theirs: &Manifest) -> (Vec<String>, Vec<String>)
-            => crate::usecases::sync::read::sync_diff;
-        /// The full state of each asked record (absent keys come back empty).
-        pub fn sync_records(&mut self, keys: &[String]) -> Result<BTreeMap<String, RecordState>>
-            => crate::usecases::sync::read::sync_records;
-        /// [`Self::sync_records`] for a peer protected at `peer`: below level 3 a
-        /// crypto record is not answered even when asked for, so it never leaves
-        /// this device.
-        pub fn sync_records_for(&mut self, keys: &[String], peer: SecurityLevel) -> Result<BTreeMap<String, RecordState>>
-            => crate::usecases::sync::read::sync_records_for;
-        /// What applying `incoming` would change, without changing anything.
-        pub fn sync_preview(&mut self, incoming: &BTreeMap<String, RecordState>) -> Result<SyncSummary>
-            => crate::usecases::sync::read::sync_preview;
-        /// [`Self::sync_preview`] for a batch from the device `device_id`: what
-        /// that device has already seen of this one is not listed as overwritten.
-        pub fn sync_preview_from(&mut self, incoming: &BTreeMap<String, RecordState>, device_id: &str) -> Result<SyncSummary>
-            => crate::usecases::sync::read::sync_preview_from;
-        /// Capital and the balances of the stores the batch moves, as they would
-        /// be once applied (the batch goes into a sandbox copy).
-        pub fn sync_preview_after(&mut self, incoming: &BTreeMap<String, RecordState>) -> Result<Option<AfterApply>>
-            => crate::usecases::sync::read::sync_preview_after;
-        /// Keys a kept batch changed (to pass on to the other devices).
-        pub fn sync_batch_keys(&self, batch_id: &str) -> Vec<String>
-            => crate::sync::history::batch_keys @doc;
-        /// Sorted distinct collections a kept batch touched, the dedupe and the
-        /// repair deletions included.
-        pub fn sync_batch_collections(&self, batch_id: &str) -> Vec<String>
-            => crate::sync::history::batch_collections @doc;
-        /// Notices a kept batch added (to show them on this device).
-        pub fn sync_batch_notices(&self, batch_id: &str) -> Vec<crate::model::notify::NoticeRecord>
-            => crate::sync::history::batch_notices @doc;
-        /// The batches still kept and the transfers to new devices, newest first.
-        pub fn sync_history(&self) -> Vec<AppliedBatch>
-            => crate::sync::history::history @doc;
-        /// Trust a device after both sides confirmed the pairing code.
-        pub fn sync_trust_peer(&mut self, device_id: &str, name: &str, public_key: &str) -> Result<()>
-            => crate::usecases::sync::trust::sync_trust_peer;
-        /// "Forget device": its key is refused here and, once this reaches
-        /// them, on every other device.
-        pub fn sync_forget_peer(&mut self, device_id: &str) -> Result<()>
-            => crate::usecases::sync::trust::sync_forget_peer;
-    }
-
     /// A stamp that sorts after every entry held for this device (and key): the
     /// clock lives here, so the trust scenarios ask the vault for it.
     pub(crate) fn stamp_past_known_peer(

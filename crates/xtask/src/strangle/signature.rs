@@ -3,7 +3,7 @@
 //! method signature from it.
 
 use syn::spanned::Spanned;
-use syn::{Attribute, Expr, ExprLit, Lit, Meta, ReturnType, Signature};
+use syn::{ReturnType, Signature};
 
 use super::source::LineIndex;
 
@@ -83,23 +83,6 @@ fn span_text(node: &impl Spanned, source: &str, index: &LineIndex) -> String {
     raw.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// The `///` lines of an item, as the text after the three slashes (`" docs"`).
-pub fn doc_lines(attrs: &[Attribute]) -> Vec<String> {
-    attrs
-        .iter()
-        .filter_map(|attr| match &attr.meta {
-            Meta::NameValue(pair) if pair.path.is_ident("doc") => match &pair.value {
-                Expr::Lit(ExprLit {
-                    lit: Lit::Str(text),
-                    ..
-                }) => Some(text.value()),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,14 +105,5 @@ mod tests {
             parts.render("pub ", &parts.params),
             "pub async fn load<T: Clone>(vault: &mut V, id: &str) -> Result<T> where T: Send,"
         );
-    }
-
-    #[test]
-    fn doc_comments_come_out_as_text() {
-        let file = syn::parse_file("/// One.\n///Two.\nfn x() {}").unwrap();
-        let syn::Item::Fn(node) = &file.items[0] else {
-            panic!("a fn")
-        };
-        assert_eq!(doc_lines(&node.attrs), [" One.", "Two."]);
     }
 }
