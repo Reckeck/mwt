@@ -213,7 +213,7 @@ pub use utilities::{
     preview_utility_formula,
 };
 pub use valuation::{PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput};
-pub use where_went::{WHERE_ITEMS, WhereItem, WhereKind, WhereReport, WhereRow};
+pub use where_went::{WHERE_ITEMS, WhereItem, WhereReport, WhereRow};
 pub use workflows::{
     ExportedStore, SavedWorkflow, WorkflowDraft, WorkflowImportPreview, WorkflowPass,
     WorkflowTestResult,

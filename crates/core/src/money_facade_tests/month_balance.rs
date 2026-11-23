@@ -5,9 +5,10 @@ use crate::Amount;
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::money::month_balance::*;
+use crate::service::UnlockedVault;
 use crate::service::test_support::*;
-use crate::service::{ReportFilter, UnlockedVault};
 use crate::time::unix_secs;
+use mwt_reports::overview::ReportFilter;
 
 const NOW: &str = "2026-06-15T12:00:00Z";
 

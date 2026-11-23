@@ -126,8 +126,8 @@ fn a_loan_is_a_negative_balance_and_a_liability() {
 /// result, however the repayment is priced.
 #[test]
 fn a_liability_store_books_no_profit() {
-    use crate::service::TxFilter;
-    use crate::service::reports::{Report, ReportFilter, ReportKind};
+    use crate::money::ledger::TxFilter;
+    use mwt_reports::overview::{Report, ReportFilter, ReportKind};
     let (_dir, mut vault) = empty_vault();
     let (card, _interest, _repay) = credit_card_story(&mut vault);
 
