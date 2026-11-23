@@ -357,3 +357,32 @@ fn bump_updates_every_member_that_inherits_the_workspace_version() {
     assert!(out.contains("name = \"serde\"\nversion = \"0.1.0\""));
     assert!(set_lock_versions(lock, &["absent".to_string()], "0.2.0").is_err());
 }
+
+#[test]
+fn members_come_from_the_root_manifest_globs_and_plain_paths() {
+    let root = std::env::temp_dir().join(format!("xtask-members-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for name in ["a", "b", "c"] {
+        let dir = root.join("crates").join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("Cargo.toml"),
+            format!("[package]\nname = \"m-{name}\"\nversion.workspace = true\n"),
+        )
+        .unwrap();
+    }
+    std::fs::create_dir_all(root.join("tools/x")).unwrap();
+    std::fs::write(
+        root.join("tools/x/Cargo.toml"),
+        "[package]\nname = \"m-x\"\nversion = \"1.0.0\"\n",
+    )
+    .unwrap();
+    let manifest = "[workspace]\nmembers = [\"crates/*\", \"tools/x\"]\n";
+    let found = member_manifests(&root, manifest).unwrap();
+    assert_eq!(found.len(), 4);
+    assert_eq!(inheriting_members(&found).unwrap(), ["m-a", "m-b", "m-c"]);
+    assert!(member_manifests(&root, "[workspace]\nmembers = [\"crates/**\"]\n").is_err());
+    assert!(member_manifests(&root, "[workspace]\nmembers = [\"c*/x\"]\n").is_err());
+    assert!(member_manifests(&root, "[package]\n").is_err());
+    std::fs::remove_dir_all(&root).unwrap();
+}
