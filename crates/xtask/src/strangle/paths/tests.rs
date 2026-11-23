@@ -330,3 +330,27 @@ fn dry_run_writes_nothing_and_a_real_run_formats() {
         "use crate::planning::budget::MIN_HISTORY_MONTHS;\nuse mwt_planning::datasources::DataSourceDraft;\n"
     );
 }
+
+#[test]
+fn use_lines_of_one_inline_module_are_merged() {
+    let (_, text) = planned(
+        USER,
+        "mod tests {\n    use mwt_planning::datasources::Other;\n    use crate::service::DataSourceDraft;\n}\n",
+    );
+    assert_eq!(
+        text.matches("use mwt_planning::datasources").count(),
+        1,
+        "{text}"
+    );
+    assert!(text.contains("{Other, DataSourceDraft}"), "{text}");
+}
+
+#[test]
+fn an_emptied_use_leaves_no_blank_line() {
+    let (_, text) = planned(
+        USER,
+        "use mwt_planning::datasources::X;\nuse crate::service::DataSourceDraft;\nuse b::Z;\n",
+    );
+    assert!(!text.contains("\n\n"), "{text:?}");
+    assert!(text.contains("use b::Z;"), "{text}");
+}

@@ -1,5 +1,5 @@
 //! Shim of the `contacts` area: moved to `crate::household::contacts` (spec core-strangler, D1).
 
-pub use crate::household::contacts::{
-    ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft, TurnoverRow,
-};
+#[cfg(test)]
+pub use crate::household::contacts::DebtTermsDraft;
+pub use crate::household::contacts::{ContactDraft, TurnoverRow};

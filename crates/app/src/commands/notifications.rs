@@ -6,9 +6,8 @@ use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
-use trade_core::model::notify::{NoticeCategory, NoticeRecord};
+use trade_core::model::notify::{NoticeCategory, NoticeRecord, notice, notice_title};
 use trade_core::planning::notifications as notification_reads;
-use trade_core::service::{notice, notice_title};
 use trade_core::usecases::planning::notifications;
 
 use crate::commands::AppState;

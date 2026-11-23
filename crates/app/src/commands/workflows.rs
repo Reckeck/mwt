@@ -15,10 +15,10 @@ use trade_core::ipc_contract::{
     SetWorkflowVarInput, ValidateWorkflowInput, WorkflowFromTemplateInput,
 };
 use trade_core::model::transaction::Transaction;
-use trade_core::service::{
-    SavedWorkflow, UnlockedVault, WorkflowImportPreview, WorkflowTestResult,
-};
+use trade_core::service::UnlockedVault;
 use trade_core::usecases::workflow::{records, runs};
+use trade_core::workflow::service::records::{SavedWorkflow, WorkflowImportPreview};
+use trade_core::workflow::service::tests_def::WorkflowTestResult;
 use trade_core::workflow::service::{
     records as record_reads, runs as run_reads, vars as var_reads,
 };

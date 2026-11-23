@@ -47,7 +47,7 @@ mod bulk;
 mod categories;
 mod contacts;
 mod cryptotrack;
-pub use cryptotrack::network::{NetworkProbe, NetworkRequest, Probe, test_endpoint};
+pub use cryptotrack::network::Probe;
 mod dashboard;
 mod dashboard_tiles;
 mod dashboard_today;
@@ -64,7 +64,7 @@ mod passive;
 mod password;
 mod property_links;
 pub mod security_level;
-pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
+pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview};
 pub use mwt_cryptotrack::exchange_sync::TerminalPatch;
 mod goals;
 mod health;
@@ -115,104 +115,69 @@ mod workflows;
 mod worth;
 pub use mwt_money::stores::{FirstCard, OpeningBalance};
 pub use portfolio::{
-    AssetBalance, AssetStat, HistoryPoint, NamedValue, PnlLeg, PortfolioSummary, RealizedPnl,
-    StoreChildRow, StoreCrumb, StoreOverview, StorePosition, StoreTreeNode, StoreValue,
+    AssetBalance, AssetStat, NamedValue, PnlLeg, StoreChildRow, StoreCrumb, StorePosition,
+    StoreValue,
 };
 pub use stores::StoreMoveTargets;
 
-pub use adjustments::AdjustmentDraft;
-pub use agenda::{PriceAlertDraft, UpcomingItem, UpcomingKind};
-pub use allocation::{
-    AssetClassTarget, AssetClassesView, PRESET_GLOBAL, PRESET_LOCAL, PRESET_RISKY, TopupAdvice,
-    TopupRow, preset_classes,
-};
-pub use asset_holdings::{AssetHolding, AssetHoldings};
+pub use agenda::{PriceAlertDraft, UpcomingKind};
+pub use allocation::{PRESET_GLOBAL, PRESET_LOCAL, PRESET_RISKY, TopupRow, preset_classes};
+pub use asset_holdings::AssetHolding;
 pub use attachments::NewFile;
 pub use auto_reminders::category_of;
-pub use automation_card::{
-    AutomationCard, CardAction, CardMoney, CardTrigger, JournalEntry, JournalStatus,
-};
-pub use automations::{
-    AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun, describe_reject,
-};
-pub use budget::{BudgetStatus, DailyBudget, MonthSummary};
-pub use bulk::{DeletedTransaction, TxCategories, TxStore};
-pub use contacts::{
-    ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft, TurnoverRow,
-};
-pub use dashboard::{SpendingDay, SpendingOverview};
-pub use dashboard_tiles::{CategoryGrowth, MonthPace, NetWorthTrend};
-pub use dashboard_today::{DashboardToday, ScenarioStatus, TODAY_TODOS, TodayTodo, TodayTodoKind};
-pub use datasources::{DataSourceDraft, DataSourceView, SourceUse, is_due as source_is_due};
+pub use automation_card::{CardAction, CardMoney, CardTrigger, JournalStatus};
+pub use automations::{MAX_CATCH_UP, SimulatedBalance, SimulatedRun, describe_reject};
+pub use contacts::{ContactDraft, TurnoverRow};
+pub use dashboard::SpendingDay;
+pub use dashboard_tiles::CategoryGrowth;
+pub use dashboard_today::{TODAY_TODOS, TodayTodo, TodayTodoKind};
+pub use datasources::{DataSourceDraft, SourceUse, is_due as source_is_due};
 pub use debts::{DebtLoad, LoanStatus, classify_loan};
-pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
-pub use envelopes::{EnvelopeDraft, EnvelopeView};
-pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDeleted, GoalProgress, RealismIssue};
+pub use emergency::{EmergencyStore, MAX_FUND_MONTHS};
+pub use goals::{GoalCalendarMonth, RealismIssue};
 pub use health::{
-    DTI_ELEVATED_PCT, DTI_HIGH_PCT, FUND_MIN_MONTHS, FUND_SAFE_MONTHS, HealthReason, HealthReport,
+    DTI_ELEVATED_PCT, DTI_HIGH_PCT, FUND_MIN_MONTHS, FUND_SAFE_MONTHS, HealthReason,
     SAVINGS_BENCHMARK_PCT, SavingsMonth,
 };
-pub use inflation::{
-    FetchedRates, INFLATION_CHART_MONTHS, InflationCurrency, InflationNews, inflation_notice,
-    key_rate_notice,
-};
+pub use inflation::{INFLATION_CHART_MONTHS, InflationNews, inflation_notice, key_rate_notice};
 pub use insights::{
-    OverviewFlow, OverviewInvestments, OverviewWealth, OverviewYear, ReportOverview,
-    report_insights,
+    OverviewFlow, OverviewInvestments, OverviewWealth, OverviewYear, report_insights,
 };
-pub use interest::{DepositReport, InterestTaxReport, PdsReport};
-pub use investments::{InvestmentRow, Investments};
-pub use ledger::{
-    GRAPH_NODE_CAP, GraphEdge, GraphEdgeKind, GraphLane, GraphNode, TxFilter, TxGraph, TxPage,
-};
-pub use losses::{
-    FlowAmount, FlowLink, FlowSummary, FxRow, FxTable, LossBucket, LossReport, LossRow, TxLoss,
-};
-pub use loyalty::{CashbackReport, CashbackSource, LoyaltyBalance};
-pub use month_balance::{MonthBalance, MonthBalanceDay, MonthBalanceMark, MonthBalanceRow};
-pub use my_automations::{MineItem, MineKind};
-pub use notifications::{notice, notice_title};
-pub use notify_snapshot::{
-    AlertBase, NotificationSnapshot, SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert,
-};
+pub use interest::PdsReport;
+pub use investments::InvestmentRow;
+pub use ledger::{GRAPH_NODE_CAP, GraphEdge, GraphEdgeKind, GraphLane, GraphNode};
+pub use losses::{FlowAmount, FlowLink, FxRow, LossBucket, LossReport, LossRow};
+pub use loyalty::{CashbackSource, LoyaltyBalance};
+pub use month_balance::{MonthBalanceDay, MonthBalanceMark, MonthBalanceRow};
+pub use my_automations::MineKind;
+pub use notify_snapshot::{SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert};
 pub use passive::{PassiveIncome, PassiveMonth, PassiveShare};
-pub use preview::{PositionChange, PreviewWarning, TxPreview};
+pub use preview::{PositionChange, PreviewWarning};
 pub use price_info::{PriceInfo, PriceOrigin};
 
 pub use recurring::RecurringCheck;
-pub use relations::{
-    EntityCard, EntityKind, EntityRef, RELATION_ITEMS_CAP, RelationGroup, RelationItem,
-};
+pub use relations::{EntityKind, EntityRef, RELATION_ITEMS_CAP, RelationGroup, RelationItem};
 pub use reports::{
-    CalendarDay, CalendarMonth, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock,
-    CategoryRow, DayStatus, InflationPoint, InflationReport, NetworthPoint, NetworthReport,
-    PnlReport, PnlRow, PortfolioPoint, PortfolioReport, Report, ReportFilter, ReportKind,
-    ReportMeta, StoreReportRow, StoresReport, UnpricedSpending, YearReport, YearRow, report_csv,
+    CalendarDay, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock, CategoryRow,
+    DayStatus, InflationPoint, InflationReport, NetworthPoint, NetworthReport, PnlReport, PnlRow,
+    PortfolioPoint, PortfolioReport, Report, ReportFilter, ReportKind, ReportMeta, StoreReportRow,
+    StoresReport, UnpricedSpending, YearReport, YearRow,
 };
-pub use scenarios::{
-    CalcScenarioDeleted, CalcScenarioDraft, INCOME_MONTHS, ScenarioPrefill, planned_balance,
-};
-pub use search::{PINNED_CAP, PinnedView, SEARCH_TX_CAP, SearchEntry};
+pub use scenarios::{INCOME_MONTHS, planned_balance};
+pub use search::{PINNED_CAP, SEARCH_TX_CAP};
 pub use shared_events::{
-    ContactEventBalance, EventTotals, ItemShareView, ItemView, MyPosition, PersonView,
-    PlannedPayment, PurchaseView, SettlementView, SharedEventSummary, SharedEventView,
-    SharedTxLink,
+    EventTotals, ItemShareView, ItemView, MyPosition, PersonView, PlannedPayment, PurchaseView,
+    SettlementView,
 };
-pub use store_change::{
-    StoreChange, StoreChangeConflict, StoreChangeInput, StoreChangeItem, StoreChangePlan,
-};
-pub use store_months::StoreMonthRow;
+pub use store_change::{StoreChange, StoreChangeConflict, StoreChangeItem};
 pub use utilities::{
-    FormulaZoneReading, PayUtilityBillInput, PayUtilityLine, PropertySummary, UtilityBill,
-    UtilityBillLine, UtilityFormulaInput, UtilityFormulaPreview, UtilityMonth, UtilityPaymentDraft,
-    UtilityTrend, ZoneBillLine, ZoneMonth, ZoneReadingInput, preview_utility_formula,
+    FormulaZoneReading, PayUtilityLine, UtilityBillLine, UtilityMonth, ZoneBillLine, ZoneMonth,
+    ZoneReadingInput,
 };
-pub use valuation::{PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput};
+pub use valuation::{PropertyPurchase, ValuationBaseKind};
 pub use where_went::{WHERE_ITEMS, WhereItem, WhereReport, WhereRow};
-pub use workflows::{
-    ExportedStore, SavedWorkflow, WorkflowDraft, WorkflowImportPreview, WorkflowTestResult,
-};
-pub use worth::{FlowClass, LiabilityShare, NetWorth};
+pub use workflows::{ExportedStore, WorkflowDraft};
+pub use worth::{FlowClass, LiabilityShare};
 
 /// Store fields beyond name, colour and note. On update, `None` in an
 /// `Option<Option>`-like field keeps the current value where noted.

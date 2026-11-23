@@ -8,7 +8,7 @@ use trade_core::datasource::{self, Extracted, SourcePreview};
 use trade_core::model::datasource::DataSource;
 use trade_core::model::notify::NoticeRecord;
 use trade_core::planning::datasources as source_reads;
-use trade_core::service::{DataSourceDraft, DataSourceView};
+use trade_core::planning::datasources::{DataSourceDraft, DataSourceView};
 use trade_core::usecases::money::inflation;
 use trade_core::usecases::planning::datasources;
 

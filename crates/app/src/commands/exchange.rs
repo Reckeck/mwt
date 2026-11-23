@@ -8,6 +8,7 @@
 use tauri::State;
 
 use trade_core::calendar::now_secs;
+use trade_core::cryptotrack::exchange_sync::ImportedTransactions;
 use trade_core::cryptotrack::{exchange_import as import_reads, exchange_sync as sync_reads};
 use trade_core::error::Error;
 use trade_core::exchange::bybit::KeyCheck;
@@ -25,7 +26,6 @@ use trade_core::ipc_contract::{
 };
 use trade_core::model::store::{ImportSettings, TerminalState};
 use trade_core::model::vault::{ImportRun, ImportSource, PendingImport};
-use trade_core::service::ImportedTransactions;
 use trade_core::txinfo::{TxInfo, TxInfoService};
 use trade_core::usecases::cryptotrack::{exchange_import, exchange_sync};
 use trade_core::vault_io::device_secrets::DeviceKey;

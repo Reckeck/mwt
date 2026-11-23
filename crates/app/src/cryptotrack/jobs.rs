@@ -50,6 +50,7 @@ use trade_core::cryptotrack::prices;
 use trade_core::cryptotrack::protocols::{
     PositionReading, ProtocolRequest, ProtocolReview, Registry,
 };
+use trade_core::cryptotrack::service::network::NetworkRequest;
 use trade_core::cryptotrack::sources::evm::{
     BalanceRequest, Cursor, EvmSource, HistoryRequest, RawAsset, SourceBatch, Stream,
 };
@@ -63,7 +64,7 @@ use trade_core::model::chain::Chain;
 use trade_core::model::cryptotrack::{CryptoAsset, CryptoPricePoint, CryptoTx};
 use trade_core::model::vault::now_iso;
 use trade_core::pricing::PricingService;
-use trade_core::service::{NetworkRequest, RpcChain, UnlockedVault};
+use trade_core::service::{RpcChain, UnlockedVault};
 use trade_core::sync::stamp::now_ms;
 use trade_core::vault_io::device_secrets::BlockscoutKey;
 

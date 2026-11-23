@@ -3,6 +3,6 @@
 //! document; the scenarios that plan and apply it live in
 //! `usecases::money::store_change`.
 
-pub use crate::money::store_change::{
-    StoreChange, StoreChangeConflict, StoreChangeInput, StoreChangeItem, StoreChangePlan,
-};
+#[cfg(test)]
+pub use crate::money::store_change::StoreChangeInput;
+pub use crate::money::store_change::{StoreChange, StoreChangeConflict, StoreChangeItem};

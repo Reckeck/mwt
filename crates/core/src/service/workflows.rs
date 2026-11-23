@@ -3,10 +3,7 @@
 //! functions) and `crate::usecases::workflow::{records, runs}` (scenarios). The
 //! public types keep their old paths.
 
-pub use crate::workflow::service::records::{
-    ExportedStore, SavedWorkflow, WorkflowDraft, WorkflowImportPreview,
-};
-pub use crate::workflow::service::tests_def::WorkflowTestResult;
+pub use crate::workflow::service::records::{ExportedStore, WorkflowDraft};
 
 #[cfg(test)]
 mod tests;

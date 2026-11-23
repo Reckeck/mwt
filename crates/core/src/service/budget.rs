@@ -1,8 +1,6 @@
 //! Shim of the `budget` area: the rules moved to `crate::planning::budget`, the scenarios and the
 //! flow queries to `crate::planning::flows` (spec core-strangler, D1).
 
-pub use crate::planning::budget::{BudgetStatus, DailyBudget, MonthSummary};
-
 use crate::Amount;
 use crate::model::transaction::Leg;
 

@@ -6,14 +6,18 @@ use tauri::{AppHandle, State};
 
 use trade_core::Amount;
 use trade_core::calendar::{Calendar, month_key, now_secs};
+use trade_core::household::relations::{EntityCard, EntityRef};
 use trade_core::model::entity_ref::Pinned;
 use trade_core::model::transaction::Transaction;
 use trade_core::model::vault::DashPeriod;
-use trade_core::service::{
-    CalendarMonth, DashboardToday, EntityCard, EntityRef, HealthReport, MonthBalance, MonthPace,
-    NetWorthTrend, PinnedView, Report, ReportFilter, ReportKind, ReportOverview, ScenarioStatus,
-    SearchEntry, SpendingOverview, report_csv,
-};
+use trade_core::money::month_balance::MonthBalance;
+use trade_core::money::search::{PinnedView, SearchEntry};
+use trade_core::reports::dashboard::SpendingOverview;
+use trade_core::reports::dashboard_tiles::{MonthPace, NetWorthTrend};
+use trade_core::reports::dashboard_today::{DashboardToday, ScenarioStatus};
+use trade_core::reports::health::HealthReport;
+use trade_core::reports::insights::ReportOverview;
+use trade_core::reports::overview::{CalendarMonth, Report, ReportFilter, ReportKind, report_csv};
 
 use trade_core::money::search;
 use trade_core::reports::{dashboard, dashboard_tiles, dashboard_today, insights, overview};

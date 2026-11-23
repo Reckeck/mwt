@@ -6,8 +6,11 @@ use tauri::{AppHandle, State};
 
 use trade_core::Amount;
 use trade_core::calendar::now_secs;
-use trade_core::household::loyalty::cashback_report;
+use trade_core::household::loyalty::{CashbackReport, cashback_report};
 use trade_core::household::utilities as utility_reads;
+use trade_core::household::utilities::{
+    PayUtilityBillInput, PropertySummary, UtilityBill, UtilityPaymentDraft, UtilityTrend,
+};
 use trade_core::ipc_contract::{
     AdjustPointsInput, AutomationInput, BudgetInput, ConfirmEstimatedInput,
     CreateLoyaltyProgramInput, GoalInput, MeterReadingInput, PriceAlertInput, ReminderInput,
@@ -23,16 +26,17 @@ use trade_core::model::planning::{
 use trade_core::model::store::Store;
 use trade_core::model::transaction::Transaction;
 use trade_core::money::interest as interest_reads;
+use trade_core::money::interest::{DepositReport, InterestTaxReport};
+use trade_core::planning::agenda::UpcomingItem;
+use trade_core::planning::automations::AutomationSimulation;
+use trade_core::planning::budget::{BudgetStatus, DailyBudget, MonthSummary};
+use trade_core::planning::emergency::EmergencyStatus;
+use trade_core::planning::goals::{GoalCalendar, GoalDeleted, GoalProgress};
 use trade_core::planning::{
     agenda as agenda_reads, budget as budget_reads, daily_budget as daily_reads,
     goals as goal_reads, upcoming as upcoming_reads,
 };
-use trade_core::service::{
-    AutomationSimulation, BudgetStatus, CashbackReport, DailyBudget, DepositReport,
-    EmergencyStatus, GoalCalendar, GoalDeleted, GoalProgress, InterestTaxReport, MonthSummary,
-    PayUtilityBillInput, PropertySummary, UnlockedVault, UpcomingItem, UtilityBill,
-    UtilityPaymentDraft, UtilityTrend,
-};
+use trade_core::service::UnlockedVault;
 use trade_core::usecases::household::{loyalty, utilities};
 use trade_core::usecases::money::interest;
 use trade_core::usecases::money::rebase;
@@ -491,7 +495,7 @@ pub async fn get_upcoming(
 pub async fn list_my_automations(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<trade_core::service::MineItem>, IpcError> {
+) -> Result<Vec<trade_core::planning::my_automations::MineItem>, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
         Ok(my_automations::my_automations(vault, now_secs(), &zone))
@@ -521,7 +525,7 @@ pub async fn get_automation_card(
     id: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<trade_core::service::AutomationCard, IpcError> {
+) -> Result<trade_core::planning::automation_card::AutomationCard, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
         automation_card::automation_card(vault, &id, now_secs(), &zone)
@@ -542,7 +546,7 @@ pub async fn preview_automation_dates(
 pub async fn list_automation_journal(
     limit: Option<usize>,
     state: State<'_, AppState>,
-) -> Result<Vec<trade_core::service::JournalEntry>, IpcError> {
+) -> Result<Vec<trade_core::planning::automation_card::JournalEntry>, IpcError> {
     with_vault(&state, |vault| {
         Ok(automation_card::automation_journal(
             vault,
@@ -784,9 +788,11 @@ pub async fn get_property_summary(
 /// What a meter's bill would be by its formula (or tariff); needs no vault.
 #[tauri::command]
 pub async fn preview_utility_formula(
-    input: trade_core::service::UtilityFormulaInput,
-) -> Result<trade_core::service::UtilityFormulaPreview, IpcError> {
-    Ok(trade_core::service::preview_utility_formula(&input))
+    input: trade_core::household::utilities::UtilityFormulaInput,
+) -> Result<trade_core::household::utilities::UtilityFormulaPreview, IpcError> {
+    Ok(trade_core::household::utilities::preview_utility_formula(
+        &input,
+    ))
 }
 
 /// The "Pay" for one month (`YYYY-MM`, default: this month).

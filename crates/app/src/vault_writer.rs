@@ -17,7 +17,8 @@ use std::time::{Duration, Instant};
 use trade_core::ipc_contract::events::VaultSaveFailedPayload;
 
 use tauri::{AppHandle, Manager};
-use trade_core::service::{SaveHook, UnlockedVault};
+use trade_core::kernel::session::SaveHook;
+use trade_core::service::UnlockedVault;
 use trade_core::{Error, Result};
 
 use crate::commands::AppState;

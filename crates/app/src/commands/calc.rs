@@ -8,7 +8,7 @@ use trade_core::calc::{self, CalcInput, CalcResult};
 use trade_core::calendar::now_secs;
 use trade_core::model::planning::{CalcScenario, ScenarioSource};
 use trade_core::planning::scenarios as scenario_reads;
-use trade_core::service::{CalcScenarioDeleted, CalcScenarioDraft, ScenarioPrefill};
+use trade_core::planning::scenarios::{CalcScenarioDeleted, CalcScenarioDraft, ScenarioPrefill};
 use trade_core::usecases::planning::scenarios;
 
 use crate::commands::AppState;

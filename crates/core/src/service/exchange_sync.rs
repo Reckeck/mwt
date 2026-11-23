@@ -2,7 +2,7 @@
 //! `crate::cryptotrack::exchange_sync`, the scenarios to
 //! `crate::usecases::cryptotrack::exchange_sync` (spec core-strangler, D1).
 
-pub use crate::cryptotrack::exchange_sync::{IMPORT_ACCOUNTS, ImportPreview, ImportedTransactions};
+pub use crate::cryptotrack::exchange_sync::{IMPORT_ACCOUNTS, ImportPreview};
 
 use super::UnlockedVault;
 

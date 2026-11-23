@@ -1,11 +1,10 @@
 use tauri::State;
 
-use trade_core::household::contacts::debt_terms;
+use trade_core::household::contacts::{
+    ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft, debt_terms,
+};
 use trade_core::ipc_contract::{ContactTurnoverInput, UpdateContactInput};
 use trade_core::model::contact::{Contact, DebtTerms};
-use trade_core::service::{
-    ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft,
-};
 use trade_core::usecases::household::contacts;
 use trade_core::usecases::money::rebase::rebase_contact_input;
 

@@ -3,13 +3,13 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use tauri::{AppHandle, Manager, State};
 
 use trade_core::household::attachments as attachment_reads;
+use trade_core::household::attachments::NewFile;
 use trade_core::ipc_contract::{
     AddAttachmentFileInput, AddAttachmentLinkInput, AttachmentIdInput, ListAttachmentsInput,
     RenameAttachmentInput,
 };
 use trade_core::kernel::events::EventBus;
 use trade_core::model::attachment::{Attachment, AttachmentKind};
-use trade_core::service::NewFile;
 use trade_core::usecases::household::attachments;
 
 use crate::commands::{AppState, require_vault};
