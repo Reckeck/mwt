@@ -16,15 +16,17 @@ fn limit() -> u64 {
 /// A contact whose every stamp lies thirty days ahead (a device with a wrong
 /// date made it). Returns the record key.
 fn poisoned_contact(vault: &mut UnlockedVault) -> String {
-    let contact = vault
-        .create_contact(ContactDraft {
+    let contact = crate::usecases::household::contacts::create_contact(
+        vault,
+        ContactDraft {
             name: "From the future".into(),
             kind: ContactKind::Person,
             note: String::new(),
             accounts: Vec::new(),
             group: String::new(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let key = format!("contacts:{}", contact.id);
     let far = now_ms() + 30 * DAY_MS;
     let stamps = vault.doc.sync.stamps.get_mut(&key).unwrap();
@@ -45,7 +47,7 @@ fn a_future_stamp_does_not_poison_the_clock() {
     assert!(right.doc.sync.stamps.contains_key(&key));
     assert!(right.doc.sync.stamps[&key].created.wall <= limit());
     // ... but the clock did not follow it.
-    right.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut right, "dev-c", "Tablet", "cc").unwrap();
     let stamp = &right.sync_state().trusted("cc").unwrap().stamp;
     assert!(stamp.wall <= limit(), "clock followed a future stamp");
 }
@@ -53,13 +55,13 @@ fn a_future_stamp_does_not_poison_the_clock() {
 #[test]
 fn a_revocation_after_a_future_record_reaches_the_other_device() {
     let (_dir, mut left, mut right) = two_devices();
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     right
         .sync_merge_peers(&left.sync_state().peers.clone())
         .unwrap();
     poisoned_contact(&mut right);
     exchange(&mut left, &mut right);
-    left.sync_forget_peer("dev-c").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
     let sent = left.sync_peers_to_send().unwrap();
     right.sync_merge_peers(&sent).unwrap();
     assert!(right.sync_state().is_revoked("cc"));
@@ -73,7 +75,7 @@ fn a_poisoned_vault_reopens_with_a_bounded_clock() {
     drop(left);
     let mut reopened = UnlockedVault::open(path, "pw").unwrap();
     reopened.set_device("aaaaaaaa-left");
-    reopened.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut reopened, "dev-c", "Tablet", "cc").unwrap();
     let stamp = &reopened.sync_state().trusted("cc").unwrap().stamp;
     assert!(stamp.wall <= limit(), "reopened clock is poisoned");
 }
@@ -81,11 +83,11 @@ fn a_poisoned_vault_reopens_with_a_bounded_clock() {
 #[test]
 fn a_poisoned_own_revocation_is_restamped_before_sending() {
     let (_dir, mut left, mut right) = two_devices();
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     right
         .sync_merge_peers(&left.sync_state().peers.clone())
         .unwrap();
-    left.sync_forget_peer("dev-c").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
     let far = Stamp::new(now_ms() + 30 * DAY_MS, 0, "aaaaaaaa");
     let entry = &mut left.doc.sync.peers[0];
     entry.stamp = far.clone();
@@ -100,9 +102,9 @@ fn a_poisoned_own_revocation_is_restamped_before_sending() {
 #[test]
 fn a_newer_revocation_beats_an_older_trust_from_a_third_device() {
     let (_dir, mut third, mut right) = two_devices();
-    right.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut right, "dev-c", "Tablet", "cc").unwrap();
     let older_trust = right.sync_state().peers.clone();
-    right.sync_forget_peer("dev-c").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut right, "dev-c").unwrap();
     let newer_revocation = right.sync_state().peers.clone();
     third.sync_merge_peers(&newer_revocation).unwrap();
     third.sync_merge_peers(&older_trust).unwrap();
@@ -121,7 +123,7 @@ fn an_edit_of_a_record_poisoned_beyond_the_limit_is_stamped_now() {
         kind: ContactKind::Person,
         ..ContactDraft::default()
     };
-    right.update_contact(&id, draft).unwrap();
+    crate::usecases::household::contacts::update_contact(&mut right, &id, draft).unwrap();
     // The poisoned stamp is thirty days ahead: the edit is stamped now (the
     // old rule gave one past it, which peers skip when they follow a clock).
     let stamp = right.doc.sync.stamps[&key].field("name").clone();
@@ -148,15 +150,17 @@ fn has_contact(vault: &UnlockedVault, id: &str) -> bool {
 }
 
 fn plain_contact(vault: &mut UnlockedVault) -> crate::model::contact::Contact {
-    vault
-        .create_contact(ContactDraft {
+    crate::usecases::household::contacts::create_contact(
+        vault,
+        ContactDraft {
             name: "Plain".into(),
             kind: ContactKind::Person,
             note: String::new(),
             accounts: Vec::new(),
             group: String::new(),
-        })
-        .unwrap()
+        },
+    )
+    .unwrap()
 }
 
 #[test]
@@ -165,7 +169,7 @@ fn deleting_a_poisoned_record_sticks() {
     let key = poisoned_contact(&mut left);
     let id = key.trim_start_matches("contacts:").to_string();
     exchange(&mut left, &mut right);
-    right.delete_contact(&id).unwrap();
+    crate::usecases::household::contacts::delete_contact(&mut right, &id).unwrap();
     exchange(&mut left, &mut right);
     exchange(&mut left, &mut right);
     assert!(!has_contact(&left, &id), "the deleted record came back");
@@ -178,7 +182,7 @@ fn recreating_over_a_poisoned_tombstone_survives() {
     let contact = plain_contact(&mut left);
     let key = format!("contacts:{}", contact.id);
     exchange(&mut left, &mut right);
-    left.delete_contact(&contact.id).unwrap();
+    crate::usecases::household::contacts::delete_contact(&mut left, &contact.id).unwrap();
     left.doc
         .sync
         .tombstones
@@ -214,7 +218,7 @@ fn rename(vault: &mut UnlockedVault, id: &str, name: &str) {
         kind: ContactKind::Person,
         ..ContactDraft::default()
     };
-    vault.update_contact(id, draft).unwrap();
+    crate::usecases::household::contacts::update_contact(vault, id, draft).unwrap();
 }
 
 #[test]

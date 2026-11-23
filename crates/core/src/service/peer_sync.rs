@@ -90,9 +90,6 @@ impl UnlockedVault {
     // The read side and trust moved in T35; the rest of the area moves in T36-T38. The task that
     // moves the last method adds the forward markers, so `strangle check` holds the whole area at once.
     forward! {
-        /// A record as the digest sees it: its value and stamps, or its tombstone.
-        pub(crate) fn state_of(&self, records: &BTreeMap<String, Value>, key: &str) -> RecordState
-            => crate::sync::manifest_view::record_state @doc;
         /// One digest per record and deletion. `union_since_ms` leaves out cached
         /// prices and rates older than that (a first sync sends 90 days).
         pub fn sync_manifest(&mut self, union_since_ms: Option<u64>) -> Result<Manifest>
@@ -292,7 +289,7 @@ impl UnlockedVault {
         &mut self,
         union_since_ms: Option<u64>,
     ) -> Result<(Manifest, Stamp)> {
-        let manifest = self.sync_manifest(union_since_ms)?;
+        let manifest = crate::usecases::sync::read::sync_manifest(self, union_since_ms)?;
         Ok((manifest, self.clock.last()))
     }
 
@@ -303,7 +300,8 @@ impl UnlockedVault {
         union_since_ms: Option<u64>,
         peer: SecurityLevel,
     ) -> Result<(Manifest, Stamp, usize)> {
-        let (manifest, withheld) = self.sync_manifest_for(union_since_ms, peer)?;
+        let (manifest, withheld) =
+            crate::usecases::sync::read::sync_manifest_for(self, union_since_ms, peer)?;
         Ok((manifest, self.clock.last(), withheld))
     }
 
@@ -356,11 +354,13 @@ impl UnlockedVault {
         let seen = self.doc.sync.seen_by.get(&peer.device_id).cloned();
         let plan_of = |batch: &BTreeMap<String, RecordState>| {
             if external {
-                crate::sync::plan::plan_external(batch, |key| self.state_of(&records, key))
+                crate::sync::plan::plan_external(batch, |key| {
+                    crate::sync::manifest_view::record_state(&self.doc, &records, key)
+                })
             } else {
                 crate::sync::plan::plan_seen(
                     batch,
-                    |key| self.state_of(&records, key),
+                    |key| crate::sync::manifest_view::record_state(&self.doc, &records, key),
                     seen.as_ref(),
                 )
             }
@@ -417,7 +417,8 @@ impl UnlockedVault {
                 // The skip is told only if the rest applies: on failure the
                 // journal goes back with the rolled-back document.
                 let journal = self.doc.sync.journal.clone();
-                let journaled = self.journal_skipped(&peer.name, &summary);
+                let journaled =
+                    crate::usecases::sync::repair::journal_skipped(self, &peer.name, &summary);
                 let mut outcome = match self.apply_batch_from(&rest, peer, carry, external) {
                     Ok(outcome) => outcome,
                     Err(err) => {
@@ -481,7 +482,7 @@ impl UnlockedVault {
             .keys()
             .any(|key| key.starts_with("price_cache:") || key.starts_with("fx_cache:"))
         {
-            self.thin_rate_caches();
+            crate::usecases::money::rates::thin_rate_caches(self);
         }
         // The typed document may serialize a little differently from the
         // merged JSON (defaults, number forms): the tracker starts from what
@@ -489,7 +490,7 @@ impl UnlockedVault {
         // Envelopes that arrived whole (made by a device with no journal) get
         // their opening entry; a merged journal's total is re-derived. Both
         // are the same on every device, so they are not stamped as edits.
-        self.settle_envelopes();
+        crate::usecases::household::envelopes::settle_envelopes(self);
         let settled = self.doc_value()?;
         if let Some(tracker) = self.tracker.as_mut() {
             tracker.rebase(&settled);
@@ -513,7 +514,8 @@ impl UnlockedVault {
             undone_at: None,
         };
         let applied = applied_of(&batch);
-        self.journal_push(
+        crate::usecases::sync::sync_journal::journal_push(
+            self,
             &applied.peer_name,
             &applied.summary,
             SyncJournalOutcome::Applied,
@@ -528,8 +530,8 @@ impl UnlockedVault {
         self.dedupe_generated(&applied.id, carry)?;
         // The rules a merge cannot keep (account tree, envelopes of deleted
         // goals, dangling settings): `repair.rs`.
-        self.repair_invariants(Some(&applied.id))?;
-        self.recompute_holdings();
+        crate::usecases::sync::repair::repair_invariants(self, Some(&applied.id))?;
+        crate::usecases::money::portfolio::recompute_holdings(self);
         self.persist_then_announce(&queued)?;
         Ok(applied)
     }
@@ -656,10 +658,10 @@ impl UnlockedVault {
                 "merge: the copy is another vault".into(),
             ));
         }
-        let mine = self.sync_manifest(None)?;
-        let theirs = other.sync_manifest(None)?;
-        let (wanted, _) = self.sync_diff(&mine, &theirs);
-        let incoming = other.sync_records(&wanted)?;
+        let mine = crate::usecases::sync::read::sync_manifest(self, None)?;
+        let theirs = crate::usecases::sync::read::sync_manifest(other, None)?;
+        let (wanted, _) = crate::usecases::sync::read::sync_diff(self, &mine, &theirs);
+        let incoming = crate::usecases::sync::read::sync_records(other, &wanted)?;
         let peer = PeerRef {
             device_id: EXTERNAL_COPY_DEVICE.into(),
             name: name.into(),
@@ -706,12 +708,15 @@ impl UnlockedVault {
         self.doc = std::mem::take(&mut copy.doc);
         self.doc.sync = sync;
         self.start_tracking()?;
-        self.ensure_cash_wallet("Cash")?;
-        self.ensure_default_categories();
-        self.disable_incomplete_workflows(crate::calendar::now_secs());
-        self.prune_attachments();
-        self.scrub_sync_secrets();
-        self.recompute_holdings();
+        crate::usecases::money::stores::ensure_cash_wallet(self, "Cash")?;
+        crate::usecases::planning::passive::ensure_default_categories(self);
+        crate::usecases::workflow::records::disable_incomplete_workflows(
+            self,
+            crate::calendar::now_secs(),
+        );
+        crate::usecases::household::attachments_cleanup::prune_attachments(self);
+        crate::usecases::sync::sync_journal::scrub_sync_secrets(self);
+        crate::usecases::money::portfolio::recompute_holdings(self);
         self.persist_now()?;
         Ok(ExternalMerge::Done(None))
     }
@@ -737,7 +742,8 @@ impl UnlockedVault {
                 device_name: device_name.to_string(),
                 at: at.clone(),
             });
-        self.journal_push(
+        crate::usecases::sync::sync_journal::journal_push(
+            self,
             device_name,
             &SyncSummary::default(),
             SyncJournalOutcome::Sent,
@@ -773,8 +779,8 @@ impl UnlockedVault {
             Some("/?settings=sync".into()),
             at,
         );
-        self.log_notices(vec![notice.clone()])?;
-        self.sync_trust_peer(device_id, device_name, public_key)?;
+        crate::usecases::planning::notifications::log_notices(self, vec![notice.clone()])?;
+        crate::usecases::sync::trust::sync_trust_peer(self, device_id, device_name, public_key)?;
         Ok(notice)
     }
 
@@ -805,7 +811,7 @@ impl UnlockedVault {
         // back: they get the «keep» mark.
         let mut brought_back = Vec::new();
         for entry in &entries {
-            let current = self.state_of(&records, &entry.key);
+            let current = crate::sync::manifest_view::record_state(&self.doc, &records, &entry.key);
             let union = split_key(&entry.key)
                 .is_some_and(|(coll, _)| matches!(coll.rule, Rule::Union { .. }));
             if !union && current.same_marks(&entry.after) {
@@ -843,8 +849,8 @@ impl UnlockedVault {
             self.sync_forget_log_record(key)?;
         }
         // An undone mark must not make a booked moment fire again.
-        self.keep_schedule_marks();
-        self.recompute_holdings();
+        crate::usecases::workflow::runs::keep_schedule_marks(self);
+        crate::usecases::money::portfolio::recompute_holdings(self);
         self.persist()?;
         Ok(report)
     }
@@ -1064,18 +1070,18 @@ impl UnlockedVault {
             {
                 repoints.push((old.to_string(), new.to_string()));
             }
-            touched
-                .entry(loser.clone())
-                .or_insert_with(|| self.state_of(&records, &loser));
+            touched.entry(loser.clone()).or_insert_with(|| {
+                crate::sync::manifest_view::record_state(&self.doc, &records, &loser)
+            });
             if carry
                 && let Some(winner) = &into
                 && let Some((coll, _)) = split_key(winner)
                 && let (Some(from), Some(to)) =
                     (view::read(&value, &loser), view::read(&value, winner))
             {
-                touched
-                    .entry(winner.clone())
-                    .or_insert_with(|| self.state_of(&records, winner));
+                touched.entry(winner.clone()).or_insert_with(|| {
+                    crate::sync::manifest_view::record_state(&self.doc, &records, winner)
+                });
                 let loser_fields = view::split(coll, &from);
                 let mut kept_fields = view::split(coll, &to);
                 if loser_fields.tag == kept_fields.tag {
@@ -1149,7 +1155,7 @@ impl UnlockedVault {
         }
         // After the rebase: the moved references are an edit of this device,
         // stamped and sent on, not part of the merge.
-        self.repoint_removed_copies(&repoints, batch_id)
+        crate::usecases::sync::repair::repoint_removed_copies(self, &repoints, batch_id)
     }
 
     // -- trusted devices ------------------------------------------------------
@@ -1244,7 +1250,7 @@ impl UnlockedVault {
     /// our deletions are all in it. Call it only for an exchange that was
     /// applied: a declined or failed one proves nothing. Never goes down.
     pub fn sync_ack_tombstones(&mut self, device_id: &str, theirs: &Manifest) -> Result<()> {
-        let ours = self.sync_manifest(None)?;
+        let ours = crate::usecases::sync::read::sync_manifest(self, None)?;
         let sync = &self.doc.sync;
         let deletions: Vec<(u64, &str, u64)> = sync
             .tombstones
@@ -1465,12 +1471,14 @@ mod tests {
         left: &mut UnlockedVault,
         right: &mut UnlockedVault,
     ) -> (Option<AppliedBatch>, Option<AppliedBatch>) {
-        let left_manifest = left.sync_manifest(None).unwrap();
-        let right_manifest = right.sync_manifest(None).unwrap();
-        let (left_wants, _) = left.sync_diff(&left_manifest, &right_manifest);
-        let (right_wants, _) = right.sync_diff(&right_manifest, &left_manifest);
-        let to_left = right.sync_records(&left_wants).unwrap();
-        let to_right = left.sync_records(&right_wants).unwrap();
+        let left_manifest = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
+        let right_manifest = crate::usecases::sync::read::sync_manifest(right, None).unwrap();
+        let (left_wants, _) =
+            crate::usecases::sync::read::sync_diff(left, &left_manifest, &right_manifest);
+        let (right_wants, _) =
+            crate::usecases::sync::read::sync_diff(right, &right_manifest, &left_manifest);
+        let to_left = crate::usecases::sync::read::sync_records(right, &left_wants).unwrap();
+        let to_right = crate::usecases::sync::read::sync_records(left, &right_wants).unwrap();
         let applied_left = left.sync_apply(&to_left, &peer("right")).unwrap();
         let applied_right = right.sync_apply(&to_right, &peer("left")).unwrap();
         (applied_left, applied_right)
@@ -1484,8 +1492,8 @@ mod tests {
             }
         }
         assert_eq!(
-            left.sync_manifest(None).unwrap(),
-            right.sync_manifest(None).unwrap(),
+            crate::usecases::sync::read::sync_manifest(left, None).unwrap(),
+            crate::usecases::sync::read::sync_manifest(right, None).unwrap(),
             "devices did not converge"
         );
     }
@@ -1516,7 +1524,7 @@ mod tests {
         left.doc.stores[0].name = "Renamed in a hurry".into();
         left.persist().unwrap();
         // A sync call stamps the pending edit before the save-time push.
-        left.sync_manifest(None).unwrap();
+        crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
         let job = left.prepare_flush().unwrap().expect("dirty");
         drop(job);
         let sent = tap.0.lock().unwrap().clone();
@@ -1600,10 +1608,12 @@ mod tests {
 
     /// How many cache records the next exchange would move, both ways.
     fn cache_records_moving(left: &mut UnlockedVault, right: &mut UnlockedVault) -> usize {
-        let left_manifest = left.sync_manifest(None).unwrap();
-        let right_manifest = right.sync_manifest(None).unwrap();
-        let (left_wants, _) = left.sync_diff(&left_manifest, &right_manifest);
-        let (right_wants, _) = right.sync_diff(&right_manifest, &left_manifest);
+        let left_manifest = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
+        let right_manifest = crate::usecases::sync::read::sync_manifest(right, None).unwrap();
+        let (left_wants, _) =
+            crate::usecases::sync::read::sync_diff(left, &left_manifest, &right_manifest);
+        let (right_wants, _) =
+            crate::usecases::sync::read::sync_diff(right, &right_manifest, &left_manifest);
         left_wants
             .iter()
             .chain(&right_wants)
@@ -1615,8 +1625,14 @@ mod tests {
     fn an_fx_refresh_on_each_copy_asks_nothing() {
         let (_dir, mut left, mut right) = two_devices();
         let currencies = ["chf", "jpy", "pln"];
-        left.apply_fx(&currencies.map(|code| fx_point(code, "2026-11-03T10:00:00Z")));
-        right.apply_fx(&currencies.map(|code| fx_point(code, "2026-11-03T12:00:00Z")));
+        crate::usecases::money::rates::apply_fx(
+            &mut left,
+            &currencies.map(|code| fx_point(code, "2026-11-03T10:00:00Z")),
+        );
+        crate::usecases::money::rates::apply_fx(
+            &mut right,
+            &currencies.map(|code| fx_point(code, "2026-11-03T12:00:00Z")),
+        );
         // Whatever an older peer would still offer, point by point.
         let keys: Vec<String> = left
             .doc
@@ -1625,8 +1641,8 @@ mod tests {
             .map(|point| format!("fx_cache:{}|{}", point.currency, point.ts))
             .collect();
         assert!(!keys.is_empty());
-        let incoming = left.sync_records(&keys).unwrap();
-        let summary = right.sync_preview(&incoming).unwrap();
+        let incoming = crate::usecases::sync::read::sync_records(&mut left, &keys).unwrap();
+        let summary = crate::usecases::sync::read::sync_preview(&mut right, &incoming).unwrap();
         assert_eq!(
             summary.total, 0,
             "cache points reached the question: {summary:?}"
@@ -1641,7 +1657,10 @@ mod tests {
         // euro history; the right one thins whatever arrives to one point.
         left.base_currency = "eur".into();
         for hour in ["08", "10", "12"] {
-            left.apply_fx(&[fx_point("eur", &format!("2026-11-03T{hour}:00:00Z"))]);
+            crate::usecases::money::rates::apply_fx(
+                &mut left,
+                &[fx_point("eur", &format!("2026-11-03T{hour}:00:00Z"))],
+            );
         }
         exchange(&mut left, &mut right);
         exchange(&mut left, &mut right);
@@ -1655,8 +1674,14 @@ mod tests {
             vault.doc.settings.budget_currency = "eur".into();
             vault.persist().unwrap();
         }
-        left.apply_fx(&[fx_point("eur", "2026-11-03T10:00:00Z")]);
-        right.apply_fx(&[fx_point("eur", "2026-11-03T12:00:00Z")]);
+        crate::usecases::money::rates::apply_fx(
+            &mut left,
+            &[fx_point("eur", "2026-11-03T10:00:00Z")],
+        );
+        crate::usecases::money::rates::apply_fx(
+            &mut right,
+            &[fx_point("eur", "2026-11-03T12:00:00Z")],
+        );
         settle(&mut left, &mut right);
         for vault in [&left, &right] {
             let stamps: Vec<&str> = vault
@@ -1820,8 +1845,10 @@ mod tests {
         // A edits X and locks; C saves without X; A opens: X must survive.
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        left.add_transaction(income(&cash, "10", "X")).unwrap();
-        right.add_transaction(income(&cash, "20", "Y")).unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "X"))
+            .unwrap();
+        crate::usecases::money::transactions::add_transaction(&mut right, income(&cash, "20", "Y"))
+            .unwrap();
 
         let outcome = left
             .merge_external_copy(&file_bytes(&right), "pw", COPY)
@@ -1854,10 +1881,16 @@ mod tests {
     fn merge_keeps_the_local_bookkeeping_and_leaves_the_remote_one() {
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        left.add_transaction(income(&cash, "10", "mine")).unwrap();
-        right
-            .add_transaction(income(&cash, "20", "theirs"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut left,
+            income(&cash, "10", "mine"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&cash, "20", "theirs"),
+        )
+        .unwrap();
         // The remote carries bookkeeping of its own.
         right.doc.sync.paused.insert("foreign-device".into());
         right
@@ -1915,9 +1948,11 @@ mod tests {
     fn merge_with_a_wrong_password_is_unmergeable() {
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        right
-            .add_transaction(income(&cash, "20", "theirs"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&cash, "20", "theirs"),
+        )
+        .unwrap();
         assert_eq!(
             left.merge_external_copy(&file_bytes(&right), "not-the-password", COPY)
                 .unwrap(),
@@ -1930,12 +1965,13 @@ mod tests {
     fn a_pull_from_a_copy_with_a_foreign_sync_state_keeps_the_local_one() {
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        right
-            .add_transaction(income(&cash, "20", "theirs"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&cash, "20", "theirs"),
+        )
+        .unwrap();
         right.doc.sync.paused.insert("foreign-device".into());
-        right
-            .sync_trust_peer("foreign-id", "Foreign", "key")
+        crate::usecases::sync::trust::sync_trust_peer(&mut right, "foreign-id", "Foreign", "key")
             .unwrap();
         left.doc.sync.paused.insert("local-device".into());
         left.persist().unwrap();
@@ -1967,8 +2003,7 @@ mod tests {
     }
 
     fn tx_key(vault: &mut UnlockedVault) -> String {
-        vault
-            .sync_manifest(None)
+        crate::usecases::sync::read::sync_manifest(vault, None)
             .unwrap()
             .keys()
             .find(|key| key.starts_with("transactions:"))
@@ -1980,14 +2015,18 @@ mod tests {
         let mut tx = vault.doc.transactions[0].clone();
         let id = tx.meta().id.clone();
         tx.meta_mut().comment = comment.into();
-        vault.update_transaction(&id, tx).unwrap();
+        crate::usecases::money::transactions::update_transaction(vault, &id, tx).unwrap();
     }
 
     /// One shared transaction on both sides.
     fn shared_transaction() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
         let (dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        left.add_transaction(income(&cash, "10", "shared")).unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut left,
+            income(&cash, "10", "shared"),
+        )
+        .unwrap();
         settle(&mut left, &mut right);
         let key = tx_key(&mut left);
         (dir, left, right, key)
@@ -1998,7 +2037,9 @@ mod tests {
         let (_dir, mut left, mut right, key) = shared_transaction();
         // A peer's edit, older than the one the copy holds.
         set_comment(&mut right, "peer edit");
-        let older = right.sync_records(std::slice::from_ref(&key)).unwrap();
+        let older =
+            crate::usecases::sync::read::sync_records(&mut right, std::slice::from_ref(&key))
+                .unwrap();
         set_comment(&mut right, "copy edit");
         let remote_stamps = right.doc.sync.stamps[&key].clone();
 
@@ -2013,9 +2054,11 @@ mod tests {
     #[test]
     fn a_deletion_in_the_pulled_copy_stays_deleted() {
         let (_dir, mut left, mut right, key) = shared_transaction();
-        let alive = left.sync_records(std::slice::from_ref(&key)).unwrap();
+        let alive =
+            crate::usecases::sync::read::sync_records(&mut left, std::slice::from_ref(&key))
+                .unwrap();
         let id = right.doc.transactions[0].meta().id.clone();
-        right.delete_transaction(&id).unwrap();
+        crate::usecases::money::transactions::delete_transaction(&mut right, &id).unwrap();
 
         left.take_external_copy(&file_bytes(&right), "pw").unwrap();
         assert!(left.doc.transactions.is_empty());
@@ -2055,8 +2098,8 @@ mod tests {
         assert_eq!(price_keys(&left), price_keys(&right));
 
         // A second diff of the price collections is empty.
-        let left_manifest = left.sync_manifest(None).unwrap();
-        let right_manifest = right.sync_manifest(None).unwrap();
+        let left_manifest = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
+        let right_manifest = crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
         let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
         assert!(left_wants.is_empty() && right_wants.is_empty());
         settle(&mut left, &mut right);
@@ -2104,11 +2147,16 @@ mod tests {
     fn edits_on_both_devices_end_up_on_both() {
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        left.add_transaction(income(&cash, "10", "from left"))
-            .unwrap();
-        right
-            .add_transaction(income(&cash, "20", "from right"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut left,
+            income(&cash, "10", "from left"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&cash, "20", "from right"),
+        )
+        .unwrap();
 
         let (applied, _) = exchange(&mut left, &mut right);
         let summary = applied.expect("left took something").summary;
@@ -2156,10 +2204,15 @@ mod tests {
     fn a_deletion_reaches_the_other_device() {
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        let tx = left.add_transaction(income(&cash, "10", "doomed")).unwrap();
+        let tx = crate::usecases::money::transactions::add_transaction(
+            &mut left,
+            income(&cash, "10", "doomed"),
+        )
+        .unwrap();
         settle(&mut left, &mut right);
         assert_eq!(comments(&right), vec!["doomed"]);
-        right.delete_transaction(&tx.meta().id).unwrap();
+        crate::usecases::money::transactions::delete_transaction(&mut right, &tx.meta().id)
+            .unwrap();
         let (applied, _) = exchange(&mut left, &mut right);
         let summary = applied.expect("left changed").summary;
         assert_eq!(summary.collections[0].deleted, 1);
@@ -2171,15 +2224,17 @@ mod tests {
     fn undo_puts_records_back_and_the_undo_travels() {
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        right
-            .add_transaction(income(&cash, "20", "theirs"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&cash, "20", "theirs"),
+        )
+        .unwrap();
         right.doc.stores[0].name = "Renamed".into();
         right.persist().unwrap();
         let (applied, _) = exchange(&mut left, &mut right);
         let batch = applied.expect("left changed");
-        assert_eq!(left.sync_history()[0].id, batch.id);
-        let line = &left.sync_journal()[0];
+        assert_eq!(crate::sync::history::history(&left.doc)[0].id, batch.id);
+        let line = &crate::usecases::sync::sync_journal::sync_journal(&left)[0];
         assert_eq!(line.batch_id.as_deref(), Some(batch.id.as_str()));
         assert_eq!(line.outcome, SyncJournalOutcome::Applied);
 
@@ -2187,7 +2242,11 @@ mod tests {
         assert_eq!(report.restored, 2);
         assert!(left.doc.transactions.is_empty());
         assert_eq!(left.doc.stores[0].name, "Cash");
-        assert!(left.sync_history()[0].undone_at.is_some());
+        assert!(
+            crate::sync::history::history(&left.doc)[0]
+                .undone_at
+                .is_some()
+        );
         assert!(left.sync_undo(&batch.id).is_err());
 
         settle(&mut left, &mut right);
@@ -2199,10 +2258,16 @@ mod tests {
     fn undo_leaves_records_changed_since() {
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        right
-            .add_transaction(income(&cash, "20", "theirs"))
-            .unwrap();
-        right.add_transaction(income(&cash, "30", "kept")).unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&cash, "20", "theirs"),
+        )
+        .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&cash, "30", "kept"),
+        )
+        .unwrap();
         let (applied, _) = exchange(&mut left, &mut right);
         let batch = applied.expect("left changed");
         let kept = left
@@ -2240,7 +2305,7 @@ mod tests {
             if let Transaction::Topup(topup) = &mut tx {
                 topup.meta.origin = origin.clone();
             }
-            vault.add_transaction(tx).unwrap();
+            crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
         }
         settle(&mut left, &mut right);
         assert_eq!(left.doc.transactions.len(), 1);
@@ -2257,7 +2322,11 @@ mod tests {
                 planned_at: "2026-11-01".into(),
             };
         }
-        vault.add_transaction(tx).unwrap().meta().id.clone()
+        crate::usecases::money::transactions::add_transaction(vault, tx)
+            .unwrap()
+            .meta()
+            .id
+            .clone()
     }
 
     fn edit_comment(vault: &mut UnlockedVault, id: &str, text: &str) {
@@ -2277,11 +2346,11 @@ mod tests {
 
     /// [`exchange`] with the right side still running the earlier dedupe.
     fn exchange_with_old_right(left: &mut UnlockedVault, right: &mut UnlockedVault) -> bool {
-        let left_manifest = left.sync_manifest(None).unwrap();
-        let right_manifest = right.sync_manifest(None).unwrap();
+        let left_manifest = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
+        let right_manifest = crate::usecases::sync::read::sync_manifest(right, None).unwrap();
         let (left_wants, right_wants) = diff(&left_manifest, &right_manifest);
-        let to_left = right.sync_records(&left_wants).unwrap();
-        let to_right = left.sync_records(&right_wants).unwrap();
+        let to_left = crate::usecases::sync::read::sync_records(right, &left_wants).unwrap();
+        let to_right = crate::usecases::sync::read::sync_records(left, &right_wants).unwrap();
         let applied_left = left.sync_apply(&to_left, &peer("right")).unwrap();
         let applied_right = right.apply_batch(&to_right, &peer("left"), false).unwrap();
         applied_left.is_some() || applied_right.is_some()
@@ -2330,8 +2399,8 @@ mod tests {
         assert_eq!(comments(&left), vec!["rent, corrected"]);
         assert_eq!(comments(&right), comments(&left));
         assert_eq!(
-            left.sync_manifest(None).unwrap(),
-            right.sync_manifest(None).unwrap()
+            crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap(),
+            crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap()
         );
     }
 
@@ -2426,7 +2495,7 @@ mod tests {
             "the summary is taken before the dedupe"
         );
         assert_eq!(batch.summary.total, 1, "only the store change is counted");
-        let collections = left.sync_batch_collections(&batch.id);
+        let collections = crate::sync::history::batch_collections(&left.doc, &batch.id);
         assert!(
             collections.contains(&"transactions".to_string()),
             "{collections:?}"
@@ -2455,7 +2524,7 @@ mod tests {
                 run_key: None,
             };
         }
-        vault.add_transaction(tx).unwrap();
+        crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
     }
 
     /// Makes both devices apply something, so the dedupe runs on each.
@@ -2507,15 +2576,17 @@ mod tests {
         // The record is still here (stamped before the deletion), so the
         // deletion is news; one for an unknown key is dropped (see
         // `tombstone_tests`).
-        let contact = left
-            .create_contact(crate::service::contacts::ContactDraft {
+        let contact = crate::usecases::household::contacts::create_contact(
+            &mut left,
+            crate::service::contacts::ContactDraft {
                 name: "Gone".into(),
                 kind: crate::model::contact::ContactKind::Person,
                 note: String::new(),
                 accounts: Vec::new(),
                 group: String::new(),
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         let key = format!("contacts:{}", contact.id);
         left.doc.sync.stamps.insert(
             key.clone(),
@@ -2537,7 +2608,11 @@ mod tests {
         assert!(left.doc.sync.tombstones.contains_key(&key));
         assert!(left.doc.sync.tombstones_seen.contains_key(&key));
         // The bookkeeping is not part of what is described to others.
-        assert!(left.sync_manifest(None).unwrap().contains_key(&key));
+        assert!(
+            crate::usecases::sync::read::sync_manifest(&mut left, None)
+                .unwrap()
+                .contains_key(&key)
+        );
     }
 
     #[test]
@@ -2623,7 +2698,9 @@ mod tests {
         let (_dir, mut left, mut right) = two_devices();
         right.doc.settings.pinned = vec![pin("mine")];
         right.persist().unwrap();
-        let mut records = left.sync_records(&["settings:".to_string()]).unwrap();
+        let mut records =
+            crate::usecases::sync::read::sync_records(&mut left, &["settings:".to_string()])
+                .unwrap();
         let state = records.get_mut("settings:").unwrap();
         let value = state.value.as_mut().unwrap().as_object_mut().unwrap();
         value.insert("dashboard_period".into(), serde_json::json!("year"));
@@ -2651,9 +2728,9 @@ mod tests {
     #[test]
     fn a_record_under_a_foreign_key_is_refused() {
         let (_dir, mut left, mut right) = two_devices();
-        let mut forged = right
-            .sync_records(&[format!("stores:{}", cash_id(&right))])
-            .unwrap();
+        let forged_key = format!("stores:{}", cash_id(&right));
+        let mut forged =
+            crate::usecases::sync::read::sync_records(&mut right, &[forged_key]).unwrap();
         let state = forged.values().next().unwrap().clone();
         forged.clear();
         forged.insert("stores:someone-else".into(), state);
@@ -2663,7 +2740,7 @@ mod tests {
         ));
         forged.clear();
         forged.insert("holdings:x".into(), RecordState::default());
-        assert!(left.sync_preview(&forged).is_err());
+        assert!(crate::usecases::sync::read::sync_preview(&mut left, &forged).is_err());
     }
 
     #[test]
@@ -2690,7 +2767,7 @@ mod tests {
     #[test]
     fn json_editor_edits_are_stamped_and_keep_the_bookkeeping() {
         let (_dir, mut left, mut right) = two_devices();
-        left.sync_trust_peer("dev-b", "Phone", "aa").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-b", "Phone", "aa").unwrap();
         let mut edited = left.doc.clone();
         edited.stores[0].name = "Edited".into();
         edited.sync = Default::default();
@@ -2703,12 +2780,12 @@ mod tests {
     #[test]
     fn forgetting_a_device_reaches_the_others() {
         let (_dir, mut left, mut right) = two_devices();
-        left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
         right
             .sync_merge_peers(&left.sync_state().peers.clone())
             .unwrap();
         assert!(right.sync_state().trusted("cc").is_some());
-        left.sync_forget_peer("dev-c").unwrap();
+        crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
         right
             .sync_merge_peers(&left.sync_state().peers.clone())
             .unwrap();
@@ -2719,10 +2796,10 @@ mod tests {
     #[test]
     fn trusting_a_forgotten_device_again_clears_the_revocation() {
         let (_dir, mut left, _right) = two_devices();
-        left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
-        left.sync_forget_peer("dev-c").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
+        crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
         assert!(left.sync_state().is_revoked("cc"));
-        left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
         assert!(!left.sync_state().is_revoked("cc"));
         assert!(left.sync_state().trusted("cc").is_some());
     }
@@ -2730,9 +2807,11 @@ mod tests {
     #[test]
     fn an_older_revoked_entry_under_another_device_id_does_not_revoke_a_new_trust() {
         let (_dir, mut left, _right) = two_devices();
-        left.sync_trust_peer("dev-old", "Tablet", "cc").unwrap();
-        left.sync_forget_peer("dev-old").unwrap();
-        left.sync_trust_peer("dev-new", "Tablet", "cc").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-old", "Tablet", "cc")
+            .unwrap();
+        crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-old").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-new", "Tablet", "cc")
+            .unwrap();
         assert!(!left.sync_state().is_revoked("cc"));
         assert_eq!(
             left.sync_state().trusted("cc").unwrap().device_id,
@@ -2743,11 +2822,12 @@ mod tests {
     #[test]
     fn a_merged_older_revocation_does_not_beat_a_newer_trust() {
         let (_dir, mut left, mut right) = two_devices();
-        left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
-        left.sync_forget_peer("dev-c").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
+        crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
         let revoked = left.sync_state().peers.clone();
         right.sync_merge_peers(&revoked).unwrap();
-        right.sync_trust_peer("dev-c2", "Tablet", "cc").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut right, "dev-c2", "Tablet", "cc")
+            .unwrap();
         right.sync_merge_peers(&revoked).unwrap();
         assert!(right.sync_state().trusted("cc").is_some());
         assert!(!right.sync_state().is_revoked("cc"));
@@ -2766,17 +2846,19 @@ mod tests {
         };
         assert!(left.sync_merge_peers(&[revoked]).unwrap());
         assert!(left.sync_state().is_revoked("cc"));
-        left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
         assert!(left.sync_state().trusted("cc").is_some());
     }
 
     #[test]
     fn forgetting_the_newest_entry_still_revokes_the_key() {
         let (_dir, mut left, _right) = two_devices();
-        left.sync_trust_peer("dev-old", "Tablet", "cc").unwrap();
-        left.sync_forget_peer("dev-old").unwrap();
-        left.sync_trust_peer("dev-new", "Tablet", "cc").unwrap();
-        left.sync_forget_peer("dev-new").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-old", "Tablet", "cc")
+            .unwrap();
+        crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-old").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-new", "Tablet", "cc")
+            .unwrap();
+        crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-new").unwrap();
         assert!(left.sync_state().is_revoked("cc"));
         assert!(left.sync_state().trusted("cc").is_none());
     }
@@ -2785,9 +2867,11 @@ mod tests {
     fn the_backup_restores_the_vault_as_before_the_sync() {
         let (_dir, mut left, mut right) = two_devices();
         let cash = cash_id(&left);
-        right
-            .add_transaction(income(&cash, "20", "theirs"))
-            .unwrap();
+        crate::usecases::money::transactions::add_transaction(
+            &mut right,
+            income(&cash, "20", "theirs"),
+        )
+        .unwrap();
         left.sync_backup().unwrap();
         exchange(&mut left, &mut right);
         assert_eq!(comments(&left), vec!["theirs"]);
@@ -2838,7 +2922,7 @@ mod tests {
         // ...the new device may sync...
         assert!(vault.sync_state().trusted("ab").is_some());
         // ...and the history says where the vault went.
-        let history = vault.sync_history();
+        let history = crate::sync::history::history(&vault.doc);
         assert_eq!(
             history[0].transferred_to.as_deref(),
             Some("Сочный Апельсин")
@@ -2868,16 +2952,16 @@ mod tests {
     #[test]
     fn forgetting_a_device_lifts_its_pause() {
         let (_dir, mut vault) = empty_vault();
-        vault.sync_trust_peer("dev-a", "A", "key-a").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut vault, "dev-a", "A", "key-a").unwrap();
         vault.sync_pause_peer("dev-a").unwrap();
-        vault.sync_forget_peer("dev-a").unwrap();
+        crate::usecases::sync::trust::sync_forget_peer(&mut vault, "dev-a").unwrap();
         assert!(!vault.sync_is_paused("dev-a"));
     }
 
     #[test]
     fn merging_a_peer_list_leaves_the_pause_alone() {
         let (_dir, mut vault) = empty_vault();
-        vault.sync_trust_peer("dev-a", "A", "key-a").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut vault, "dev-a", "A", "key-a").unwrap();
         vault.sync_pause_peer("dev-a").unwrap();
         let remote = vault.sync_state().peers.clone();
         vault.sync_merge_peers(&remote).unwrap();
@@ -2921,10 +3005,10 @@ mod tests {
         vault
             .sync_cut_by("dev-a", SyncCutReason::Forgotten)
             .unwrap();
-        vault.sync_trust_peer("dev-a", "A", "key-a").unwrap();
+        crate::usecases::sync::trust::sync_trust_peer(&mut vault, "dev-a", "A", "key-a").unwrap();
         assert_eq!(vault.sync_cut_reason("dev-a"), None);
         vault.sync_cut_by("dev-a", SyncCutReason::Paused).unwrap();
-        vault.sync_forget_peer("dev-a").unwrap();
+        crate::usecases::sync::trust::sync_forget_peer(&mut vault, "dev-a").unwrap();
         assert_eq!(vault.sync_cut_reason("dev-a"), None);
     }
 }
@@ -2964,11 +3048,24 @@ mod level_pair_tests {
         left.raise_to_level3_for_tests();
         assert_eq!(left.security_level(), SecurityLevel::Crypto);
         assert_ne!(right.security_level(), SecurityLevel::Crypto);
-        left.create_store("FromLeft", StoreKind::Crypto, "#111", "", None)
-            .unwrap();
-        right
-            .create_store("FromRight", StoreKind::Crypto, "#222", "", None)
-            .unwrap();
+        crate::usecases::money::stores::create_store(
+            &mut left,
+            "FromLeft",
+            StoreKind::Crypto,
+            "#111",
+            "",
+            None,
+        )
+        .unwrap();
+        crate::usecases::money::stores::create_store(
+            &mut right,
+            "FromRight",
+            StoreKind::Crypto,
+            "#222",
+            "",
+            None,
+        )
+        .unwrap();
         // Ordinary operations on the shared cash wallet, one from each side.
         for (vault, comment) in [(&mut left, "from left"), (&mut right, "from right")] {
             let cash = vault
@@ -2978,9 +3075,11 @@ mod level_pair_tests {
                 .find(|store| store.kind == StoreKind::Cash && store.parent_id.is_none())
                 .map(|store| store.id.clone())
                 .unwrap();
-            vault
-                .add_transaction(super::super::test_support::income(&cash, "100", comment))
-                .unwrap();
+            crate::usecases::money::transactions::add_transaction(
+                vault,
+                super::super::test_support::income(&cash, "100", comment),
+            )
+            .unwrap();
         }
         left.doc.crypto_accounts.push(CryptoAccount::new(
             "acc-1",
@@ -3003,21 +3102,39 @@ mod level_pair_tests {
         let left_level = left.security_level();
 
         // What each side puts on the wire, as the session builds it.
-        let (to_right_manifest, withheld) = left.sync_manifest_for(None, right_level).unwrap();
-        let (to_left_manifest, none) = right.sync_manifest_for(None, left_level).unwrap();
+        let (to_right_manifest, withheld) =
+            crate::usecases::sync::read::sync_manifest_for(&mut left, None, right_level).unwrap();
+        let (to_left_manifest, none) =
+            crate::usecases::sync::read::sync_manifest_for(&mut right, None, left_level).unwrap();
         assert!(withheld > 0, "the sender must know it held something back");
         assert_eq!(none, 0);
         // The full manifest does carry the module, so the filter is what hides it.
-        assert!(!crypto_keys(left.sync_manifest(None).unwrap().keys()).is_empty());
+        assert!(
+            !crypto_keys(
+                crate::usecases::sync::read::sync_manifest(&mut left, None)
+                    .unwrap()
+                    .keys()
+            )
+            .is_empty()
+        );
         assert!(crypto_keys(to_right_manifest.keys()).is_empty());
 
-        let (right_wants, _) = right.sync_diff(&to_left_manifest, &to_right_manifest);
-        let (left_wants, _) = left.sync_diff(&to_right_manifest, &to_left_manifest);
+        let (right_wants, _) =
+            crate::usecases::sync::read::sync_diff(&right, &to_left_manifest, &to_right_manifest);
+        let (left_wants, _) =
+            crate::usecases::sync::read::sync_diff(&left, &to_right_manifest, &to_left_manifest);
         // A peer that asks for the module's keys anyway gets nothing for them.
         let mut greedy = right_wants.clone();
-        greedy.extend(crypto_keys(left.sync_manifest(None).unwrap().keys()));
-        let to_right = left.sync_records_for(&greedy, right_level).unwrap();
-        let to_left = right.sync_records_for(&left_wants, left_level).unwrap();
+        greedy.extend(crypto_keys(
+            crate::usecases::sync::read::sync_manifest(&mut left, None)
+                .unwrap()
+                .keys(),
+        ));
+        let to_right =
+            crate::usecases::sync::read::sync_records_for(&mut left, &greedy, right_level).unwrap();
+        let to_left =
+            crate::usecases::sync::read::sync_records_for(&mut right, &left_wants, left_level)
+                .unwrap();
         assert!(crypto_keys(to_right.keys()).is_empty());
         assert!(to_right.keys().any(|key| key.starts_with("stores:")));
 
@@ -3039,13 +3156,16 @@ mod level_pair_tests {
     fn a_level_three_pair_still_exchanges_the_module() {
         let (_dir, mut left, mut right) = pair();
         right.raise_to_level3_for_tests();
-        let (manifest, withheld) = left.sync_manifest_for(None, SecurityLevel::Crypto).unwrap();
+        let (manifest, withheld) =
+            crate::usecases::sync::read::sync_manifest_for(&mut left, None, SecurityLevel::Crypto)
+                .unwrap();
         assert_eq!(withheld, 0);
         assert!(!crypto_keys(manifest.keys()).is_empty());
-        let (wants, _) = right.sync_diff(&Manifest::new(), &manifest);
-        let records = left
-            .sync_records_for(&wants, SecurityLevel::Crypto)
-            .unwrap();
+        let (wants, _) =
+            crate::usecases::sync::read::sync_diff(&right, &Manifest::new(), &manifest);
+        let records =
+            crate::usecases::sync::read::sync_records_for(&mut left, &wants, SecurityLevel::Crypto)
+                .unwrap();
         let (kept, dropped) = right.sync_admit(records);
         assert_eq!(dropped, 0);
         right.sync_apply(&kept, &peer("left")).unwrap();
@@ -3058,8 +3178,12 @@ mod level_pair_tests {
     #[test]
     fn a_hostile_sender_loses_only_the_crypto_records() {
         let (_dir, mut left, mut right) = pair();
-        let all: Vec<String> = left.sync_manifest(None).unwrap().keys().cloned().collect();
-        let sent = left.sync_records(&all).unwrap();
+        let all: Vec<String> = crate::usecases::sync::read::sync_manifest(&mut left, None)
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        let sent = crate::usecases::sync::read::sync_records(&mut left, &all).unwrap();
         assert!(!crypto_keys(sent.keys()).is_empty());
 
         assert!(matches!(
@@ -3078,8 +3202,12 @@ mod level_pair_tests {
     fn a_level_three_receiver_drops_nothing() {
         let (_dir, mut left, mut right) = pair();
         right.raise_to_level3_for_tests();
-        let all: Vec<String> = left.sync_manifest(None).unwrap().keys().cloned().collect();
-        let sent = left.sync_records(&all).unwrap();
+        let all: Vec<String> = crate::usecases::sync::read::sync_manifest(&mut left, None)
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        let sent = crate::usecases::sync::read::sync_records(&mut left, &all).unwrap();
         let count = sent.len();
         let (kept, dropped) = right.sync_admit(sent);
         assert_eq!((kept.len(), dropped), (count, 0));

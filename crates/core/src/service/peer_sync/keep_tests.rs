@@ -23,7 +23,11 @@ fn rent(vault: &mut UnlockedVault, comment: &str) -> String {
             planned_at: "2026-11-01".into(),
         };
     }
-    vault.add_transaction(tx).unwrap().meta().id.clone()
+    crate::usecases::money::transactions::add_transaction(vault, tx)
+        .unwrap()
+        .meta()
+        .id
+        .clone()
 }
 
 fn comments(vault: &UnlockedVault) -> Vec<String> {
@@ -112,7 +116,7 @@ fn a_plain_edit_does_not_clear_the_mark() {
         .clone();
     edited.meta_mut().comment = "second, edited".into();
     edited.meta_mut().keep = false; // a form does not know the mark
-    left.update_transaction(&late, edited).unwrap();
+    crate::usecases::money::transactions::update_transaction(&mut left, &late, edited).unwrap();
     assert!(kept(&left, &late), "the edit cleared the mark");
     touch_and_settle(&mut left, &mut right, "Renamed");
     assert_eq!(comments(&left), vec!["first", "second, edited"]);
@@ -122,13 +126,18 @@ fn a_plain_edit_does_not_clear_the_mark() {
 fn allow_merging_clears_the_mark_and_the_next_dedupe_folds() {
     let (_dir, mut left, mut right) = two_devices();
     let late = undone_merge(&mut left, &mut right);
-    left.allow_merging(MergeTarget::Transaction, &late).unwrap();
+    crate::usecases::sync::repair::allow_merging(&mut left, MergeTarget::Transaction, &late)
+        .unwrap();
     assert!(!kept(&left, &late));
     touch_and_settle(&mut left, &mut right, "Renamed");
     assert_eq!(comments(&left), vec!["first"]);
     assert_eq!(comments(&right), comments(&left));
     assert!(matches!(
-        left.allow_merging(MergeTarget::Transaction, "no-such-id"),
+        crate::usecases::sync::repair::allow_merging(
+            &mut left,
+            MergeTarget::Transaction,
+            "no-such-id"
+        ),
         Err(Error::NotFound(_))
     ));
 }
@@ -170,7 +179,8 @@ fn a_kept_reminder_survives_too() {
         .unwrap()
         .id
         .clone();
-    left.allow_merging(MergeTarget::Reminder, &marked).unwrap();
+    crate::usecases::sync::repair::allow_merging(&mut left, MergeTarget::Reminder, &marked)
+        .unwrap();
     touch_and_settle(&mut left, &mut right, "Renamed again");
     assert_eq!(left.doc.reminders.len(), 1);
     assert_eq!(right.doc.reminders.len(), 1);

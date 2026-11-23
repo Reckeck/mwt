@@ -12,11 +12,5 @@ impl UnlockedVault {
     // forward:begin
     // forward:end
 
-    forward! {
-        /// Drop the attachments the user removed and those whose owner is gone
-        /// for good, files included. Runs when the vault is opened: no "Undo" of
-        /// the last session can be waiting any more. Returns whether anything went.
-        pub(crate) fn prune_attachments(&mut self) -> bool
-            => crate::usecases::household::attachments_cleanup::prune_attachments;
-    }
+    forward! {}
 }

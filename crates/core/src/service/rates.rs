@@ -64,9 +64,6 @@ impl UnlockedVault {
         /// that fetched it writes once at the end.
         pub fn apply_fx(&mut self, fresh: &[FxPoint])
             => crate::usecases::money::rates::apply_fx;
-        /// Thin both rate caches by the refresh rules, adding nothing.
-        pub(crate) fn thin_rate_caches(&mut self)
-            => crate::usecases::money::rates::thin_rate_caches;
         /// Add fetched quotes to the cache. Does not persist.
         pub fn apply_prices(&mut self, fresh: &[PricePoint])
             => crate::usecases::money::rates::apply_prices;

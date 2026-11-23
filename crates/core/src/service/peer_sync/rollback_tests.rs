@@ -14,19 +14,21 @@ fn peer(name: &str) -> PeerRef {
 #[test]
 fn a_failed_batch_leaves_document_and_tracker_as_they_were() {
     let (_dir, mut left, mut right) = two_devices();
-    right
-        .create_contact(crate::service::contacts::ContactDraft {
+    crate::usecases::household::contacts::create_contact(
+        &mut right,
+        crate::service::contacts::ContactDraft {
             name: "Theirs".into(),
             kind: crate::model::contact::ContactKind::Person,
             note: String::new(),
             accounts: Vec::new(),
             group: String::new(),
-        })
-        .unwrap();
-    let right_manifest = right.sync_manifest(None).unwrap();
-    let left_manifest = left.sync_manifest(None).unwrap();
-    let (wants, _) = left.sync_diff(&left_manifest, &right_manifest);
-    let records = right.sync_records(&wants).unwrap();
+        },
+    )
+    .unwrap();
+    let right_manifest = crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
+    let left_manifest = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
+    let (wants, _) = crate::usecases::sync::read::sync_diff(&left, &left_manifest, &right_manifest);
+    let records = crate::usecases::sync::read::sync_records(&mut right, &wants).unwrap();
 
     left.track_changes().unwrap();
     let doc_before = serde_json::to_vec(&left.doc).unwrap();

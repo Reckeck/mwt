@@ -213,10 +213,12 @@ fn three_devices(start: Start) -> (Vec<tempfile::TempDir>, Vec<UnlockedVault>) {
 
 /// `from` sends what `to` lacks; only `to` changes. Whether `to` applied.
 pub(super) fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) -> bool {
-    let from_manifest = devices[from].sync_manifest(None).unwrap();
-    let to_manifest = devices[to].sync_manifest(None).unwrap();
-    let (wants, _) = devices[to].sync_diff(&to_manifest, &from_manifest);
-    let records = devices[from].sync_records(&wants).unwrap();
+    let from_manifest =
+        crate::usecases::sync::read::sync_manifest(&mut devices[from], None).unwrap();
+    let to_manifest = crate::usecases::sync::read::sync_manifest(&mut devices[to], None).unwrap();
+    let (wants, _) =
+        crate::usecases::sync::read::sync_diff(&devices[to], &to_manifest, &from_manifest);
+    let records = crate::usecases::sync::read::sync_records(&mut devices[from], &wants).unwrap();
     devices[to]
         .sync_apply(&records, &peer_of(from))
         .unwrap()
@@ -281,9 +283,11 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
         Edit::CreateTx => {
             let store = vault.doc.stores[0].id.clone();
             let amount = format!("{}", 1 + rng.below(1000));
-            vault
-                .add_transaction(income(&store, &amount, "conv"))
-                .unwrap();
+            crate::usecases::money::transactions::add_transaction(
+                vault,
+                income(&store, &amount, "conv"),
+            )
+            .unwrap();
         }
         Edit::ChangeTxAmount | Edit::ChangeTxNote => {
             let ids: Vec<String> = vault
@@ -308,7 +312,7 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
             } else {
                 tx.meta_mut().comment = format!("note {number}");
             }
-            vault.update_transaction(&id, tx).unwrap();
+            crate::usecases::money::transactions::update_transaction(vault, &id, tx).unwrap();
             ledger.touched_after.insert(format!("transactions:{id}"));
         }
         Edit::DeleteTx => {
@@ -321,14 +325,18 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
             let Some(id) = pick(rng, &ids).cloned() else {
                 return;
             };
-            vault.delete_transaction(&id).unwrap();
+            crate::usecases::money::transactions::delete_transaction(vault, &id).unwrap();
             ledger.deleted.insert(format!("transactions:{id}"));
         }
         Edit::CreateCategory => {
             let number = ledger.fresh();
-            vault
-                .create_category(None, &format!("cat{number}"), CategoryGroup::Daily)
-                .unwrap();
+            crate::usecases::household::categories::create_category(
+                vault,
+                None,
+                &format!("cat{number}"),
+                CategoryGroup::Daily,
+            )
+            .unwrap();
         }
         Edit::RenameCategory => {
             let keys = created_categories(vault);
@@ -336,15 +344,15 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
                 return;
             };
             let number = ledger.fresh();
-            vault
-                .update_category(
-                    &key,
-                    Some(&format!("renamed{number}")),
-                    CategoryGroup::Daily,
-                    None,
-                    None,
-                )
-                .unwrap();
+            crate::usecases::household::categories::update_category(
+                vault,
+                &key,
+                Some(&format!("renamed{number}")),
+                CategoryGroup::Daily,
+                None,
+                None,
+            )
+            .unwrap();
             ledger.touched_after.insert(format!("categories:{key}"));
         }
         Edit::DeleteCategory => {
@@ -352,14 +360,16 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
             let Some(key) = pick(rng, &keys).cloned() else {
                 return;
             };
-            vault.delete_category(&key).unwrap();
+            crate::usecases::household::categories::delete_category(vault, &key).unwrap();
             ledger.deleted.insert(format!("categories:{key}"));
         }
         Edit::CreateContact => {
             let number = ledger.fresh();
-            vault
-                .create_contact(contact_draft(format!("contact {number}")))
-                .unwrap();
+            crate::usecases::household::contacts::create_contact(
+                vault,
+                contact_draft(format!("contact {number}")),
+            )
+            .unwrap();
         }
         Edit::RenameContact => {
             let ids: Vec<String> = vault
@@ -372,9 +382,12 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
                 return;
             };
             let number = ledger.fresh();
-            vault
-                .update_contact(&id, contact_draft(format!("renamed contact {number}")))
-                .unwrap();
+            crate::usecases::household::contacts::update_contact(
+                vault,
+                &id,
+                contact_draft(format!("renamed contact {number}")),
+            )
+            .unwrap();
             ledger.touched_after.insert(format!("contacts:{id}"));
         }
         Edit::SharedCreateEvent
@@ -436,7 +449,7 @@ fn apply_edit(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
                 return;
             };
             // A guest linked to an event refuses the deletion: nothing happened.
-            if vault.delete_contact(&id).is_err() {
+            if crate::usecases::household::contacts::delete_contact(vault, &id).is_err() {
                 return;
             }
             ledger.deleted.insert(format!("contacts:{id}"));
@@ -466,14 +479,16 @@ fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &m
     let number = ledger.fresh();
     let Some(event) = pick(rng, &event_ids(vault)).cloned() else {
         if matches!(kind, Edit::SharedCreateEvent | Edit::SharedAddParticipant) {
-            vault
-                .create_shared_event(SharedEventDraft {
+            crate::usecases::household::shared_events::create_shared_event(
+                vault,
+                SharedEventDraft {
                     title: format!("event {number}"),
                     currency: "usd".into(),
                     participants: vec![guest(format!("guest {number}"))],
                     ..Default::default()
-                })
-                .unwrap();
+                },
+            )
+            .unwrap();
         }
         return;
     };
@@ -486,40 +501,49 @@ fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &m
         .clone();
     match kind {
         Edit::SharedCreateEvent => {
-            vault
-                .create_shared_event(SharedEventDraft {
+            crate::usecases::household::shared_events::create_shared_event(
+                vault,
+                SharedEventDraft {
                     title: format!("event {number}"),
                     currency: "usd".into(),
                     participants: vec![guest(format!("guest {number}"))],
                     ..Default::default()
-                })
-                .unwrap();
+                },
+            )
+            .unwrap();
         }
         Edit::SharedAddParticipant => {
-            vault
-                .add_shared_participant(&event, guest(format!("guest {number}")))
-                .unwrap();
+            crate::usecases::household::shared_events::add_shared_participant(
+                vault,
+                &event,
+                guest(format!("guest {number}")),
+            )
+            .unwrap();
         }
         Edit::SharedRemoveParticipant => {
             let Some(person) = pick(rng, &current.participants).cloned() else {
                 return;
             };
-            if vault.remove_shared_participant(&event, &person.id).is_ok() {
+            if crate::usecases::household::shared_events::remove_shared_participant(
+                vault, &event, &person.id,
+            )
+            .is_ok()
+            {
                 ledger
                     .deleted
                     .insert(format!("{event}/participant/{}", person.id));
             }
         }
         Edit::SharedAddItem => {
-            vault
-                .add_shared_item(
-                    &event,
-                    SharedItemDraft {
-                        title: format!("item {number}"),
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
+            crate::usecases::household::shared_events::add_shared_item(
+                vault,
+                &event,
+                SharedItemDraft {
+                    title: format!("item {number}"),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         }
         Edit::SharedEditItem => {
             let Some(item) = pick(rng, &current.items).cloned() else {
@@ -532,7 +556,11 @@ fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &m
                 plan: item.plan.clone(),
                 cancelled: item.cancelled,
             };
-            if vault.update_shared_item(&event, &item.id, draft).is_ok() {
+            if crate::usecases::household::shared_events::update_shared_item(
+                vault, &event, &item.id, draft,
+            )
+            .is_ok()
+            {
                 ledger
                     .touched_after
                     .insert(format!("{event}/item/{}", item.id));
@@ -542,7 +570,11 @@ fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &m
             let Some(item) = pick(rng, &current.items).cloned() else {
                 return;
             };
-            if vault.delete_shared_item(&event, &item.id).is_ok() {
+            if crate::usecases::household::shared_events::delete_shared_item(
+                vault, &event, &item.id,
+            )
+            .is_ok()
+            {
                 ledger.deleted.insert(format!("{event}/item/{}", item.id));
             }
         }
@@ -550,7 +582,8 @@ fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &m
             let Some(person) = pick(rng, &current.participants).cloned() else {
                 return;
             };
-            let _ = vault.add_shared_purchase(
+            let _ = crate::usecases::household::shared_events::add_shared_purchase(
+                vault,
                 &event,
                 SharedPurchaseDraft {
                     new_item_title: Some(format!("bought {number}")),
@@ -568,14 +601,17 @@ fn apply_shared(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &m
                 return;
             };
             for direction in [SettleDirection::ToOrganizer, SettleDirection::FromOrganizer] {
-                let settled = vault.settle_shared(SettleSharedInput {
-                    event_id: event.clone(),
-                    participant_id: person.id.clone(),
-                    direction,
-                    amount: amount("1"),
-                    store_id: None,
-                    at: None,
-                });
+                let settled = crate::usecases::household::shared_events::settle_shared(
+                    vault,
+                    SettleSharedInput {
+                        event_id: event.clone(),
+                        participant_id: person.id.clone(),
+                        direction,
+                        amount: amount("1"),
+                        store_id: None,
+                        at: None,
+                    },
+                );
                 if settled.is_ok() {
                     break;
                 }
@@ -602,13 +638,16 @@ fn apply_envelope(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: 
     match kind {
         Edit::CreateEnvelope => {
             let store_id = vault.doc.stores[0].id.clone();
-            let _ = vault.create_envelope(EnvelopeDraft {
-                store_id,
-                name: format!("envelope {number}"),
-                asset: usd(),
-                target: None,
-                goal_id: None,
-            });
+            let _ = crate::usecases::household::envelopes::create_envelope(
+                vault,
+                EnvelopeDraft {
+                    store_id,
+                    name: format!("envelope {number}"),
+                    asset: usd(),
+                    target: None,
+                    goal_id: None,
+                },
+            );
         }
         Edit::FundEnvelope => {
             let Some(id) = pick(rng, &ids).cloned() else {
@@ -617,7 +656,7 @@ fn apply_envelope(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: 
             // Mostly top-ups, sometimes a release.
             let sign = if rng.below(4) == 0 { "-" } else { "" };
             let by = amount(&format!("{sign}{}", 1 + rng.below(20)));
-            if vault.fund_envelope(&id, by).is_ok() {
+            if crate::usecases::household::envelopes::fund_envelope(vault, &id, by).is_ok() {
                 ledger.touched_after.insert(format!("envelopes:{id}"));
             }
         }
@@ -627,7 +666,12 @@ fn apply_envelope(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: 
                 return;
             };
             let by = amount(&format!("{}", 1 + rng.below(10)));
-            if from != to && vault.move_between_envelopes(&from, &to, by).is_ok() {
+            if from != to
+                && crate::usecases::household::envelopes::move_between_envelopes(
+                    vault, &from, &to, by,
+                )
+                .is_ok()
+            {
                 ledger.touched_after.insert(format!("envelopes:{from}"));
                 ledger.touched_after.insert(format!("envelopes:{to}"));
             }
@@ -636,7 +680,7 @@ fn apply_envelope(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: 
             let Some(id) = pick(rng, &ids).cloned() else {
                 return;
             };
-            if vault.delete_envelope(&id).is_ok() {
+            if crate::usecases::household::envelopes::delete_envelope(vault, &id).is_ok() {
                 ledger.deleted.insert(format!("envelopes:{id}"));
             }
         }
@@ -665,22 +709,22 @@ fn apply_fund(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
                 binding: Some(Binding::Asset(usd())),
                 ..StoreExtras::default()
             };
-            vault
-                .create_store_with(
-                    &format!("sv{number}"),
-                    StoreKind::Bank,
-                    "#000",
-                    "",
-                    Some(bank),
-                    extras,
-                )
-                .unwrap();
+            crate::usecases::money::stores::create_store_with(
+                vault,
+                &format!("sv{number}"),
+                StoreKind::Bank,
+                "#000",
+                "",
+                Some(bank),
+                extras,
+            )
+            .unwrap();
         }
         Edit::DeleteSavings => {
             let Some(id) = pick(rng, &savings_ids(vault)).cloned() else {
                 return;
             };
-            if vault.delete_store(&id).is_ok() {
+            if crate::usecases::money::stores::delete_store(vault, &id).is_ok() {
                 ledger.deleted.insert(format!("stores:{id}"));
             }
         }
@@ -689,12 +733,12 @@ fn apply_fund(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger: &mut
                 return;
             };
             let on = rng.below(3) != 0;
-            vault.emergency_fund_toggle(&id, on).unwrap();
+            crate::usecases::planning::emergency::emergency_fund_toggle(vault, &id, on).unwrap();
         }
         Edit::SetInflation => {
             let currency = ["usd", "eur", "thb"][rng.below(3)];
             let mode = (rng.below(4) != 0).then_some(InflationMode::Manual);
-            vault.set_inflation_mode(currency, mode).unwrap();
+            crate::usecases::money::inflation::set_inflation_mode(vault, currency, mode).unwrap();
         }
         _ => {}
     }
@@ -739,7 +783,7 @@ fn apply_adjustment(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger
                 fee: None,
             });
             // Nothing to correct when the balance already matches: not an error here.
-            let _ = vault.add_transaction(tx);
+            let _ = crate::usecases::money::transactions::add_transaction(vault, tx);
         }
         Edit::RecountBalance => {
             let ids = adjustment_ids(vault);
@@ -756,13 +800,13 @@ fn apply_adjustment(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger
             if let Transaction::Adjustment(inner) = &mut tx {
                 inner.lines[0].after = amount(&format!("{}", 1 + rng.below(1000)));
             }
-            let _ = vault.update_transaction(&id, tx);
+            let _ = crate::usecases::money::transactions::update_transaction(vault, &id, tx);
             ledger.touched_after.insert(format!("transactions:{id}"));
         }
         _ => {
             let mut tx = income(&store_id, &format!("{}", 1 + rng.below(1000)), "late");
             tx.meta_mut().timestamp = MOMENTS[rng.below(MOMENTS.len())].into();
-            vault.add_transaction(tx).unwrap();
+            crate::usecases::money::transactions::add_transaction(vault, tx).unwrap();
         }
     }
 }
@@ -771,9 +815,25 @@ fn apply_adjustment(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledger
 /// car (mileage and insurance are separate fields), made on device 0 and
 /// pulled by the others before the random edits start.
 fn add_shared_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
-    ledger.exchange_id = devices[0]
-        .create_store_with(
-            "conv exchange",
+    ledger.exchange_id = crate::usecases::money::stores::create_store_with(
+        &mut devices[0],
+        "conv exchange",
+        StoreKind::Exchange,
+        "",
+        "",
+        None,
+        StoreExtras {
+            provider: Some(crate::model::store::ExchangeProvider::Bybit),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
+    ledger.key_stores.push(ledger.exchange_id.clone());
+    for number in 0..2 {
+        let id = crate::usecases::money::stores::create_store_with(
+            &mut devices[0],
+            &format!("conv key exchange {number}"),
             StoreKind::Exchange,
             "",
             "",
@@ -785,42 +845,26 @@ fn add_shared_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
         )
         .unwrap()
         .id;
-    ledger.key_stores.push(ledger.exchange_id.clone());
-    for number in 0..2 {
-        let id = devices[0]
-            .create_store_with(
-                &format!("conv key exchange {number}"),
-                StoreKind::Exchange,
-                "",
-                "",
-                None,
-                StoreExtras {
-                    provider: Some(crate::model::store::ExchangeProvider::Bybit),
-                    ..StoreExtras::default()
-                },
-            )
-            .unwrap()
-            .id;
         ledger.key_stores.push(id);
     }
-    ledger.car_id = devices[0]
-        .create_store_with(
-            "conv car",
-            StoreKind::Property,
-            "#555",
-            "",
-            None,
-            StoreExtras {
-                property: Some(crate::model::store::PropertyInfo {
-                    category: crate::model::store::PropertyCategory::Car,
-                    car: Some(crate::model::store::CarInfo::default()),
-                    ..Default::default()
-                }),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
+    ledger.car_id = crate::usecases::money::stores::create_store_with(
+        &mut devices[0],
+        "conv car",
+        StoreKind::Property,
+        "#555",
+        "",
+        None,
+        StoreExtras {
+            property: Some(crate::model::store::PropertyInfo {
+                category: crate::model::store::PropertyCategory::Car,
+                car: Some(crate::model::store::CarInfo::default()),
+                ..Default::default()
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
     for to in 1..DEVICES {
         pull(devices, 0, to);
     }
@@ -839,13 +883,13 @@ fn apply_exchange_key(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledg
     let number = ledger.fresh();
     match kind {
         Edit::AddExchangeKey => {
-            vault
-                .set_exchange_key(
-                    &store,
-                    &format!("dummy-key-{number}"),
-                    &format!("dummy-secret-{number}"),
-                )
-                .unwrap();
+            crate::usecases::cryptotrack::exchange_import::set_exchange_key(
+                vault,
+                &store,
+                &format!("dummy-key-{number}"),
+                &format!("dummy-secret-{number}"),
+            )
+            .unwrap();
         }
         Edit::ChangeExchangeKey => {
             if !vault
@@ -862,15 +906,17 @@ fn apply_exchange_key(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, ledg
                 let spot = (rng.below(2) == 0).then(|| target.clone());
                 let futures = (rng.below(2) == 0).then_some(target);
                 // Targets must sit inside the wallet; a refusal is a legal no-op.
-                let _ = vault.set_exchange_targets(&store, spot, futures);
+                let _ = crate::usecases::cryptotrack::exchange_import::set_exchange_targets(
+                    vault, &store, spot, futures,
+                );
             } else {
-                vault
-                    .set_exchange_key(
-                        &store,
-                        &format!("dummy-key-{number}"),
-                        &format!("dummy-secret-{number}"),
-                    )
-                    .unwrap();
+                crate::usecases::cryptotrack::exchange_import::set_exchange_key(
+                    vault,
+                    &store,
+                    &format!("dummy-key-{number}"),
+                    &format!("dummy-secret-{number}"),
+                )
+                .unwrap();
             }
         }
         _ => {
@@ -890,15 +936,22 @@ fn apply_device_and_car(kind: Edit, vault: &mut UnlockedVault, rng: &mut Rng, le
                 timeframe: Some(TIMEFRAMES[rng.below(TIMEFRAMES.len())].into()),
                 ..Default::default()
             };
-            vault
-                .update_terminal_state(&ledger.exchange_id, patch)
-                .unwrap();
+            crate::usecases::cryptotrack::exchange_import::update_terminal_state(
+                vault,
+                &ledger.exchange_id,
+                patch,
+            )
+            .unwrap();
         }
         Edit::CarMileage => {
             let day = chrono::NaiveDate::from_ymd_opt(2026, 3, 1 + rng.below(28) as u32).unwrap();
-            vault
-                .vehicle_update_mileage(&ledger.car_id, 1000 + rng.below(90_000) as u32, day)
-                .unwrap();
+            crate::usecases::household::vehicle::vehicle_update_mileage(
+                vault,
+                &mwt_model::StoreId::from(ledger.car_id.as_str()),
+                1000 + rng.below(90_000) as u32,
+                day,
+            )
+            .unwrap();
         }
         _ => {
             let until = INSURED_UNTIL[rng.below(INSURED_UNTIL.len())];
@@ -1005,7 +1058,7 @@ fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
     for key in ledger.deleted.difference(&ledger.touched_after) {
         for (index, view) in views.iter().enumerate() {
             // Rule R3: a record that live money names is put back on purpose.
-            if devices[index].money_names_record(key) {
+            if crate::sync::repair::repair_restore::money_names_record(&devices[index].doc, key) {
                 continue;
             }
             assert!(
@@ -1024,10 +1077,13 @@ fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
                 else {
                     continue;
                 };
-                if rest
-                    .split_once('/')
-                    .is_some_and(|(_, id)| device.event_names_participant(event, id))
-                {
+                if rest.split_once('/').is_some_and(|(_, id)| {
+                    crate::sync::repair::repair_restore::event_names_participant(
+                        &device.doc,
+                        event,
+                        id,
+                    )
+                }) {
                     continue;
                 }
                 let present = match rest.split_once('/') {
@@ -1063,7 +1119,7 @@ fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
     for (index, device) in devices.iter().enumerate() {
         for id in &device.doc.emergency_fund.scope.store_ids {
             assert!(
-                device.find_store(id).is_some(),
+                crate::money::tree::find_store(&device.doc, id).is_some(),
                 "{context}: the emergency fund names a missing store {id} on device {index}"
             );
         }
@@ -1096,7 +1152,7 @@ fn run(seed: u64, steps: usize, start: Start) -> Vec<Violation> {
             doc.shared_events.len(),
             doc.contacts.len(),
             doc.asset_classes.len(),
-            devices[0].shared_tx_links().len(),
+            crate::household::shared_events::view::shared_tx_links(&devices[0].doc).len(),
             ledger.purchases.len(),
         );
     }
@@ -1225,24 +1281,24 @@ fn move_beside_delete_keeps_the_account_tree_valid() {
     let (_dir, mut left, mut right) = two_devices();
     let first = store(&mut left, "bank 1", StoreKind::Bank, None);
     let second = store(&mut left, "bank 2", StoreKind::Bank, None);
-    let savings = left
-        .create_store_with(
-            "sv1",
-            StoreKind::Bank,
-            "#000",
-            "",
-            Some(first),
-            StoreExtras {
-                sub_type: Some(SubType::Savings),
-                binding: Some(Binding::Asset(usd())),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
+    let savings = crate::usecases::money::stores::create_store_with(
+        &mut left,
+        "sv1",
+        StoreKind::Bank,
+        "#000",
+        "",
+        Some(first),
+        StoreExtras {
+            sub_type: Some(SubType::Savings),
+            binding: Some(Binding::Asset(usd())),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
     settle(&mut left, &mut right);
-    left.move_store(&savings, Some(&second)).unwrap();
-    right.delete_store(&second).unwrap();
+    crate::usecases::money::stores::move_store(&mut left, &savings, Some(&second)).unwrap();
+    crate::usecases::money::stores::delete_store(&mut right, &second).unwrap();
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         assert_eq!(
@@ -1257,17 +1313,20 @@ fn move_beside_delete_keeps_the_account_tree_valid() {
 fn currency_change_beside_a_purchase_keeps_the_rates_valid() {
     use super::tests::settle;
     let (_dir, mut left, mut right) = two_devices();
-    let event = left
-        .create_shared_event(SharedEventDraft {
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        &mut left,
+        SharedEventDraft {
             title: "trip".into(),
             currency: "usd".into(),
             participants: vec![guest("ann".into())],
             ..Default::default()
-        })
-        .unwrap()
-        .event;
+        },
+    )
+    .unwrap()
+    .event;
     settle(&mut left, &mut right);
-    left.update_shared_event(
+    crate::usecases::household::shared_events::update_shared_event(
+        &mut left,
         &event.id,
         SharedEventDraft {
             title: event.title.clone(),
@@ -1280,20 +1339,20 @@ fn currency_change_beside_a_purchase_keeps_the_rates_valid() {
     )
     .unwrap();
     let buyer = right.doc.shared_events[0].participants[0].id.clone();
-    right
-        .add_shared_purchase(
-            &event.id,
-            SharedPurchaseDraft {
-                new_item_title: Some("taxi".into()),
-                buyer,
-                qty: amount("1"),
-                amount: amount("10"),
-                currency: "usd".into(),
-                price_mode: PriceMode::Total,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut right,
+        &event.id,
+        SharedPurchaseDraft {
+            new_item_title: Some("taxi".into()),
+            buyer,
+            qty: amount("1"),
+            amount: amount("10"),
+            currency: "usd".into(),
+            price_mode: PriceMode::Total,
+            ..Default::default()
+        },
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         assert_eq!(
@@ -1309,21 +1368,24 @@ fn currency_change_beside_a_purchase_keeps_the_rates_valid() {
 fn deleting_a_guest_contact_leaves_no_dangling_participant() {
     use super::tests::settle;
     let (_dir, mut left, mut right) = two_devices();
-    let event = left
-        .create_shared_event(SharedEventDraft {
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        &mut left,
+        SharedEventDraft {
             title: "trip".into(),
             currency: "usd".into(),
             participants: vec![guest("ann".into())],
             ..Default::default()
-        })
-        .unwrap()
-        .event;
+        },
+    )
+    .unwrap()
+    .event;
     let person = event.participants[0].id.clone();
-    let contact = left
-        .make_shared_participant_contact(&event.id, &person)
-        .unwrap();
+    let contact = crate::usecases::household::shared_events::make_shared_participant_contact(
+        &mut left, &event.id, &person,
+    )
+    .unwrap();
     // Either answer is fine for the guard: a refusal, or the link goes too.
-    let _ = left.delete_contact(&contact.id);
+    let _ = crate::usecases::household::contacts::delete_contact(&mut left, &contact.id);
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         assert_eq!(
@@ -1339,23 +1401,30 @@ fn deleting_a_guest_contact_leaves_no_dangling_participant() {
 fn deleted_guest_contact_stays_deleted_once_its_participant_goes() {
     use super::tests::settle;
     let (_dir, mut left, mut right) = two_devices();
-    let event = left
-        .create_shared_event(SharedEventDraft {
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        &mut left,
+        SharedEventDraft {
             title: "trip".into(),
             currency: "usd".into(),
             participants: vec![guest("ann".into()), guest("bob".into())],
             ..Default::default()
-        })
-        .unwrap()
-        .event;
+        },
+    )
+    .unwrap()
+    .event;
     let person = event.participants[0].id.clone();
-    let contact = left
-        .make_shared_participant_contact(&event.id, &person)
-        .unwrap();
+    let contact = crate::usecases::household::shared_events::make_shared_participant_contact(
+        &mut left, &event.id, &person,
+    )
+    .unwrap();
     settle(&mut left, &mut right);
-    let deleted = left.delete_contact(&contact.id).is_ok();
+    let deleted =
+        crate::usecases::household::contacts::delete_contact(&mut left, &contact.id).is_ok();
     settle(&mut left, &mut right);
-    left.remove_shared_participant(&event.id, &person).unwrap();
+    crate::usecases::household::shared_events::remove_shared_participant(
+        &mut left, &event.id, &person,
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         let alive = device.doc.contacts.iter().any(|row| row.id == contact.id);
@@ -1374,33 +1443,40 @@ fn attaching_a_payment_beside_its_deletion_leaves_no_phantom_purchase() {
     use super::tests::settle;
     let (_dir, mut left, mut right) = two_devices();
     let store_id = left.doc.stores[0].id.clone();
-    left.add_transaction(income(&store_id, "100", "start"))
-        .unwrap();
-    let paid = left
-        .add_transaction(crate::service::test_support::payment(
-            &store_id, "3", "taxi",
-        ))
-        .unwrap();
-    let event = left
-        .create_shared_event(SharedEventDraft {
+    crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        income(&store_id, "100", "start"),
+    )
+    .unwrap();
+    let paid = crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        crate::service::test_support::payment(&store_id, "3", "taxi"),
+    )
+    .unwrap();
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        &mut left,
+        SharedEventDraft {
             title: "trip".into(),
             currency: "usd".into(),
             participants: vec![guest("ann".into())],
             ..Default::default()
-        })
-        .unwrap()
-        .event;
+        },
+    )
+    .unwrap()
+    .event;
     settle(&mut left, &mut right);
     let tx_id = paid.meta().id.clone();
-    left.delete_transaction(&tx_id).unwrap();
-    right
-        .attach_payment_to_shared_event(crate::ipc_contract::AttachPaymentInput {
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx_id).unwrap();
+    crate::usecases::household::shared_events::attach_payment_to_shared_event(
+        &mut right,
+        crate::ipc_contract::AttachPaymentInput {
             event_id: event.id.clone(),
             tx_id: tx_id.clone(),
             new_item_title: Some("attached".into()),
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         let payment_alive = device

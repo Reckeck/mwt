@@ -108,27 +108,29 @@ fn flat_topup(property: &str) -> Transaction {
 /// A property with a flat in it and a metered utility, made on device 0 and
 /// pulled by the others, so valuations and readings have something to hang on.
 pub(super) fn add_catalog_stores(devices: &mut [UnlockedVault], ledger: &mut Ledger) {
-    let property = devices[0]
-        .create_store_with(
-            "conv flat",
-            StoreKind::Property,
-            "#555",
-            "",
-            None,
-            StoreExtras {
-                property: Some(crate::model::store::PropertyInfo {
-                    category: crate::model::store::PropertyCategory::Flat,
-                    ..Default::default()
-                }),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
-    devices[0].add_transaction(flat_topup(&property)).unwrap();
+    let property = crate::usecases::money::stores::create_store_with(
+        &mut devices[0],
+        "conv flat",
+        StoreKind::Property,
+        "#555",
+        "",
+        None,
+        StoreExtras {
+            property: Some(crate::model::store::PropertyInfo {
+                category: crate::model::store::PropertyCategory::Flat,
+                ..Default::default()
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
+    crate::usecases::money::transactions::add_transaction(&mut devices[0], flat_topup(&property))
+        .unwrap();
     ledger.thing_key = flat_asset().key();
-    ledger.utility_id = devices[0]
-        .create_utility_item(UtilityDraft {
+    ledger.utility_id = crate::usecases::household::utilities::create_utility_item(
+        &mut devices[0],
+        UtilityDraft {
             name: "Electricity".into(),
             active: true,
             kind: crate::model::planning::UtilityKind::Metered {
@@ -141,20 +143,23 @@ pub(super) fn add_catalog_stores(devices: &mut [UnlockedVault], ledger: &mut Led
             property_id: property.clone(),
             store_id: None,
             category: "utilities".into(),
-        })
-        .unwrap()
-        .id;
+        },
+    )
+    .unwrap()
+    .id;
     ledger.property_id = property;
     for name in ["anchor A", "anchor B"] {
-        let contact = devices[0]
-            .create_contact(crate::service::contacts::ContactDraft {
+        let contact = crate::usecases::household::contacts::create_contact(
+            &mut devices[0],
+            crate::service::contacts::ContactDraft {
                 name: name.into(),
                 kind: crate::model::contact::ContactKind::Person,
                 note: String::new(),
                 accounts: Vec::new(),
                 group: String::new(),
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         ledger.anchors.push(contact.id);
     }
     for to in 1..devices.len() {
@@ -227,22 +232,27 @@ pub(super) fn apply_catalog_edit(
                 return;
             };
             let clear = rng.below(5) == 0;
-            let _ = vault.set_debt_terms(DebtTermsDraft {
-                contact_id,
-                asset: ["USD", "EUR"][rng.below(2)].into(),
-                due_at: (!clear).then(|| format!("2026-0{}-1{}", 4 + rng.below(5), rng.below(9))),
-                note: if clear {
-                    String::new()
-                } else {
-                    format!("terms {number}")
+            let _ = crate::usecases::household::contacts::set_debt_terms(
+                vault,
+                DebtTermsDraft {
+                    contact_id,
+                    asset: ["USD", "EUR"][rng.below(2)].into(),
+                    due_at: (!clear)
+                        .then(|| format!("2026-0{}-1{}", 4 + rng.below(5), rng.below(9))),
+                    note: if clear {
+                        String::new()
+                    } else {
+                        format!("terms {number}")
+                    },
                 },
-            });
+            );
         }
         Edit::AddMeterReading => {
             let day = 1 + rng.below(3);
             // Roughly rising with the day, so most readings pass the monotonic rule.
             let value = amount(&format!("{}", day * 100 + rng.below(50)));
-            let _ = vault.add_meter_reading(
+            let _ = crate::usecases::household::utilities::add_meter_reading(
+                vault,
                 &ledger.utility_id,
                 value,
                 "2026-03",
@@ -255,15 +265,21 @@ pub(super) fn apply_catalog_edit(
                 row.store_id == ledger.property_id && row.asset.key() == ledger.thing_key
             });
             if !held {
-                let _ = vault.add_transaction(flat_topup(&ledger.property_id));
+                let _ = crate::usecases::money::transactions::add_transaction(
+                    vault,
+                    flat_topup(&ledger.property_id),
+                );
             }
-            let _ = vault.add_valuation(ValuationInput {
-                store_id: ledger.property_id.clone(),
-                asset_key: ledger.thing_key.clone(),
-                date: format!("2026-03-0{}", 1 + rng.below(3)),
-                unit_price: amount(&format!("{}", 1000 + rng.below(500))),
-                currency: "usd".into(),
-            });
+            let _ = crate::usecases::money::valuation::add_valuation(
+                vault,
+                ValuationInput {
+                    store_id: ledger.property_id.clone(),
+                    asset_key: ledger.thing_key.clone(),
+                    date: format!("2026-03-0{}", 1 + rng.below(3)),
+                    unit_price: amount(&format!("{}", 1000 + rng.below(500))),
+                    currency: "usd".into(),
+                },
+            );
         }
         Edit::MoveAccount => {
             let banks: Vec<String> = vault
@@ -284,11 +300,11 @@ pub(super) fn apply_catalog_edit(
                 // An empty wallet goes while another device moves an account into it.
                 let empty: Vec<String> = banks
                     .iter()
-                    .filter(|bank| vault.children_of(bank).is_empty())
+                    .filter(|bank| crate::money::tree::children_of(&vault.doc, bank).is_empty())
                     .cloned()
                     .collect();
                 if let Some(bank) = pick_early(rng, empty, 2)
-                    && vault.delete_store(&bank).is_ok()
+                    && crate::usecases::money::stores::delete_store(vault, &bank).is_ok()
                 {
                     ledger.deleted.insert(format!("stores:{bank}"));
                 }
@@ -298,7 +314,7 @@ pub(super) fn apply_catalog_edit(
             else {
                 return;
             };
-            if vault.move_store(&sub, Some(&target)).is_ok() {
+            if crate::usecases::money::stores::move_store(vault, &sub, Some(&target)).is_ok() {
                 ledger.touched_after.insert(format!("stores:{sub}"));
             }
         }
@@ -307,31 +323,37 @@ pub(super) fn apply_catalog_edit(
                 return;
             }
             let store_id = vault.doc.stores[0].id.clone();
-            let _ = vault.create_goal(GoalDraft {
-                name: format!("goal {number}"),
-                active: true,
-                target_amount: amount("1000"),
-                currency: "usd".into(),
-                starts_at: "2026-01-01T00:00:00Z".into(),
-                deadline: Some("2026-12-31T00:00:00Z".into()),
-                priority: 3,
-                monthly_commitment: None,
-                scope: StoreScope {
-                    store_ids: vec![store_id],
-                    include_children: true,
+            let _ = crate::usecases::planning::goals::create_goal(
+                vault,
+                GoalDraft {
+                    name: format!("goal {number}"),
+                    active: true,
+                    target_amount: amount("1000"),
+                    currency: "usd".into(),
+                    starts_at: "2026-01-01T00:00:00Z".into(),
+                    deadline: Some("2026-12-31T00:00:00Z".into()),
+                    priority: 3,
+                    monthly_commitment: None,
+                    scope: StoreScope {
+                        store_ids: vec![store_id],
+                        include_children: true,
+                    },
+                    scenario_id: None,
+                    expected_return: None,
                 },
-                scenario_id: None,
-                expected_return: None,
-            });
+            );
         }
         Edit::DeleteGoal => {
             let ids: Vec<String> = vault.doc.goals.iter().map(|goal| goal.id.clone()).collect();
             let Some(id) = pick(rng, &ids).cloned() else {
                 return;
             };
-            if vault
-                .delete_goal(&id, chrono::Utc::now().timestamp())
-                .is_ok()
+            if crate::usecases::planning::goals::delete_goal(
+                vault,
+                &id,
+                chrono::Utc::now().timestamp(),
+            )
+            .is_ok()
             {
                 ledger.deleted.insert(format!("goals:{id}"));
             }
@@ -342,9 +364,13 @@ pub(super) fn apply_catalog_edit(
                 return;
             };
             let store_id = vault.doc.stores[0].id.clone();
-            if vault
-                .fund_goal(&id, &store_id, amount(&format!("{}", 1 + rng.below(20))))
-                .is_ok()
+            if crate::usecases::household::envelopes::fund_goal(
+                vault,
+                &id,
+                &mwt_model::StoreId::from(store_id.as_str()),
+                amount(&format!("{}", 1 + rng.below(20))),
+            )
+            .is_ok()
             {
                 // Funding a goal whose envelope was deleted elsewhere is a new
                 // funding, not a resurrection: mark the envelopes it filled.
@@ -360,11 +386,10 @@ pub(super) fn apply_catalog_edit(
         }
         Edit::CreatePayment => {
             let store_id = vault.doc.stores[0].id.clone();
-            let _ = vault.add_transaction(payment(
-                &store_id,
-                &format!("{}", 1 + rng.below(5)),
-                "conv pay",
-            ));
+            let _ = crate::usecases::money::transactions::add_transaction(
+                vault,
+                payment(&store_id, &format!("{}", 1 + rng.below(5)), "conv pay"),
+            );
         }
         Edit::MakeGuestContact => {
             let Some(event) = pick_event(vault, rng) else {
@@ -377,9 +402,10 @@ pub(super) fn apply_catalog_edit(
                 .map(|person| person.id.clone())
                 .collect();
             if let Some(person) = pick_early(rng, guests, 2).as_ref()
-                && vault
-                    .make_shared_participant_contact(&event.id, person)
-                    .is_ok()
+                && crate::usecases::household::shared_events::make_shared_participant_contact(
+                    vault, &event.id, person,
+                )
+                .is_ok()
             {
                 // An edit of the person after another device removed them wins.
                 ledger
@@ -402,12 +428,16 @@ pub(super) fn apply_catalog_edit(
                 return;
             };
             let before = purchase_ids(vault, &event.id);
-            let attached = vault.attach_payment_to_shared_event(AttachPaymentInput {
-                event_id: event.id.clone(),
-                tx_id,
-                new_item_title: Some(format!("attached {number}")),
-                ..Default::default()
-            });
+            let attached =
+                crate::usecases::household::shared_events::attach_payment_to_shared_event(
+                    vault,
+                    AttachPaymentInput {
+                        event_id: event.id.clone(),
+                        tx_id,
+                        new_item_title: Some(format!("attached {number}")),
+                        ..Default::default()
+                    },
+                );
             if attached.is_ok() {
                 remember_purchases(vault, &event.id, &before, ledger);
             }
@@ -431,7 +461,8 @@ pub(super) fn apply_catalog_edit(
             }) else {
                 return;
             };
-            let _ = vault.update_shared_event(
+            let _ = crate::usecases::household::shared_events::update_shared_event(
+                vault,
                 &event.id,
                 SharedEventDraft {
                     title: event.title.clone(),
@@ -463,7 +494,8 @@ pub(super) fn apply_catalog_edit(
                 return;
             };
             let before = purchase_ids(vault, &event.id);
-            let added = vault.add_shared_purchase(
+            let added = crate::usecases::household::shared_events::add_shared_purchase(
+                vault,
                 &event.id,
                 SharedPurchaseDraft {
                     item_id: Some(item.id),
@@ -482,7 +514,12 @@ pub(super) fn apply_catalog_edit(
         Edit::SetNoticeCategory => set_notice_category(vault, ledger, number),
         Edit::ToggleSystemNotices => toggle_system_notices(vault, rng, ledger),
         Edit::OpenReminderList => {
-            let _ = vault.sync_auto_reminders(REMINDER_NOW, "UTC", device_is_ru(vault));
+            let _ = crate::usecases::planning::auto_reminders::sync_auto_reminders(
+                vault,
+                REMINDER_NOW,
+                "UTC",
+                device_is_ru(vault),
+            );
         }
         Edit::TxWithBasePrice => tx_with_base_price(vault, ledger, number),
         Edit::SetFlatInflation => set_flat_inflation(vault, rng),
@@ -504,12 +541,15 @@ fn device_is_ru(vault: &UnlockedVault) -> bool {
 
 /// A rate for the second base currency, so a price can be read in either.
 pub(super) fn seed_rub_rate(vault: &mut UnlockedVault) {
-    vault.apply_fx(&[crate::model::vault::FxPoint {
-        currency: "rub".into(),
-        per_usd: amount(&RUB_PER_USD.to_string()),
-        ts: "2020-01-01T00:00:00Z".into(),
-        source: "conv".into(),
-    }]);
+    crate::usecases::money::rates::apply_fx(
+        vault,
+        &[crate::model::vault::FxPoint {
+            currency: "rub".into(),
+            per_usd: amount(&RUB_PER_USD.to_string()),
+            ts: "2020-01-01T00:00:00Z".into(),
+            source: "conv".into(),
+        }],
+    );
     vault.persist().unwrap();
 }
 
@@ -589,9 +629,9 @@ fn set_flat_inflation(vault: &mut UnlockedVault, rng: &mut Rng) {
 /// 100: once the devices have met they compute with one table of flat rates.
 pub(super) fn check_flat_inflation_agrees(devices: &[UnlockedVault]) -> Vec<Violation> {
     let mut out = Vec::new();
-    let first = devices[0].flat_inflation();
+    let first = crate::money::inflation::flat_inflation(&devices[0].doc);
     for (index, device) in devices.iter().enumerate().skip(1) {
-        let table = device.flat_inflation();
+        let table = crate::money::inflation::flat_inflation(&device.doc);
         if table != first {
             found(
                 &mut out,
@@ -619,7 +659,7 @@ fn tx_with_base_price(vault: &mut UnlockedVault, ledger: &mut Ledger, number: us
         topup.price.price_base_currency = Some(vault.base_currency().to_string());
         topup.meta.timestamp = "2026-02-01T00:00:00Z".into();
     }
-    if let Ok(saved) = vault.add_transaction(tx) {
+    if let Ok(saved) = crate::usecases::money::transactions::add_transaction(vault, tx) {
         ledger
             .base_priced
             .push((saved.meta().id.clone(), amount(&usd_price.to_string())));
@@ -635,7 +675,13 @@ pub(super) fn reminder_text_ping_pong(devices: &mut [UnlockedVault]) -> Vec<Viol
         let mut rewrote = false;
         for device in devices.iter_mut() {
             let ru = device_is_ru(device);
-            rewrote |= device.sync_auto_reminders(REMINDER_NOW, "UTC", ru).unwrap();
+            rewrote |= crate::usecases::planning::auto_reminders::sync_auto_reminders(
+                device,
+                REMINDER_NOW,
+                "UTC",
+                ru,
+            )
+            .unwrap();
         }
         let mut sent = false;
         for _ in 0..3 {
@@ -696,14 +742,18 @@ fn fire_alert(vault: &mut UnlockedVault, number: usize) {
     let stamp = chrono::DateTime::from_timestamp(base + hour * 3600, 0)
         .unwrap()
         .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-    vault.apply_prices(&[crate::model::vault::PricePoint {
-        asset_key: crate::service::test_support::btc().key(),
-        value_usd: amount(&(90_000 + hour * 2_000).to_string()),
-        ts: stamp,
-        source: "conv".into(),
-        change_24h_pct: None,
-    }]);
-    vault.check_alerts(base + 3600 * HOURS as i64 + 60).unwrap();
+    crate::usecases::money::rates::apply_prices(
+        vault,
+        &[crate::model::vault::PricePoint {
+            asset_key: crate::service::test_support::btc().key(),
+            value_usd: amount(&(90_000 + hour * 2_000).to_string()),
+            ts: stamp,
+            source: "conv".into(),
+            change_24h_pct: None,
+        }],
+    );
+    crate::usecases::planning::agenda::check_alerts(vault, base + 3600 * HOURS as i64 + 60)
+        .unwrap();
 }
 
 /// Queues a fill from a small pool of exec ids on the exchange wallet and
@@ -730,11 +780,13 @@ fn confirm_import(vault: &mut UnlockedVault, rng: &mut Rng, ledger: &Ledger) {
     else {
         return;
     };
-    let _ = vault.stage_imports(vec![pending]);
+    let _ = crate::usecases::cryptotrack::exchange_import::stage_imports(vault, vec![pending]);
     let ids = [exec_id];
     let _ = match rng.below(6) {
-        0..=2 => vault.confirm_pending_imports(&ids),
-        3 => vault.discard_pending_imports(&ids),
+        0..=2 => {
+            crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(vault, &ids)
+        }
+        3 => crate::usecases::cryptotrack::exchange_import::discard_pending_imports(vault, &ids),
         _ => Ok(0),
     };
 }
@@ -750,10 +802,12 @@ fn edit_alert(vault: &mut UnlockedVault, rng: &mut Rng) {
         .min();
     match id {
         Some(id) => {
-            vault.update_price_alert(&id, alert_draft(price)).unwrap();
+            crate::usecases::planning::agenda::update_price_alert(vault, &id, alert_draft(price))
+                .unwrap();
         }
         None => {
-            vault.create_price_alert(alert_draft(price)).unwrap();
+            crate::usecases::planning::agenda::create_price_alert(vault, alert_draft(price))
+                .unwrap();
         }
     }
 }
@@ -805,7 +859,7 @@ fn set_asset_classes(vault: &mut UnlockedVault, rng: &mut Rng) {
     match rng.below(6) {
         // Back to the preset.
         0 => {
-            let _ = vault.set_asset_classes(Vec::new());
+            let _ = crate::usecases::planning::allocation::set_asset_classes(vault, Vec::new());
         }
         // Put an asset or a wallet in one of the baskets.
         1 => {
@@ -819,10 +873,14 @@ fn set_asset_classes(vault: &mut UnlockedVault, rng: &mut Rng) {
                 }
             };
             let class = ids[rng.below(ids.len())].to_string();
-            let _ = vault.assign_asset_class(target, Some(class));
+            let _ = crate::usecases::planning::allocation::assign_asset_class(
+                vault,
+                target,
+                Some(class),
+            );
         }
         _ => {
-            let _ = vault.set_asset_classes(classes);
+            let _ = crate::usecases::planning::allocation::set_asset_classes(vault, classes);
         }
     }
 }
@@ -978,7 +1036,7 @@ fn check_notice_settings(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<V
 /// 26: the price of a unit in the reader's base currency is the USD price
 /// converted, not the number another device wrote in its own base.
 fn check_base_prices(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Violation>) {
-    let book = vault.rate_book();
+    let book = crate::money::rates::rate_book(&vault.books());
     let base = vault.base_currency().to_string();
     let rate = if base == "rub" { RUB_PER_USD } else { 1 };
     for (id, usd_price) in &ledger.base_priced {
@@ -1009,7 +1067,7 @@ fn check_base_prices(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Viola
 
 /// 29: nothing in the queue names a fill that is already booked or discarded.
 fn check_staged_imports(vault: &UnlockedVault, out: &mut Vec<Violation>) {
-    let decided = vault.decided_import_ids();
+    let decided = crate::cryptotrack::exchange_sync::decided_import_ids(&vault.doc);
     for pending in &vault.doc.pending_imports {
         if decided.contains(&pending.exec_id) {
             found(
@@ -1090,8 +1148,7 @@ fn check_references(vault: &UnlockedVault, out: &mut Vec<Violation>) {
         .map(|contact| contact.id.as_str())
         .collect();
     let goals: BTreeSet<&str> = doc.goals.iter().map(|goal| goal.id.as_str()).collect();
-    let classes: BTreeSet<String> = vault
-        .effective_classes()
+    let classes: BTreeSet<String> = crate::planning::allocation::effective_classes(&vault.doc)
         .into_iter()
         .map(|class| class.id)
         .collect();
@@ -1317,7 +1374,7 @@ fn check_shared_events(vault: &UnlockedVault, ledger: &Ledger, out: &mut Vec<Vio
         );
     }
     let mut links: BTreeMap<String, usize> = BTreeMap::new();
-    for link in vault.shared_tx_links() {
+    for link in crate::household::shared_events::view::shared_tx_links(&vault.doc) {
         *links.entry(link.tx_id).or_default() += 1;
     }
     for (tx_id, count) in links.iter().filter(|(_, count)| **count > 1) {
@@ -1465,16 +1522,19 @@ fn link_moved_or_gone(doc: &crate::model::vault::VaultDoc, purchase_id: &str) ->
 #[cfg(test)]
 pub(super) fn purchase_beside_a_later_item_edit() -> (usize, usize) {
     let (_dir, mut left, mut right) = super::tests::two_devices();
-    let event = left
-        .create_shared_event(SharedEventDraft {
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        &mut left,
+        SharedEventDraft {
             title: "trip".into(),
             currency: "usd".into(),
             participants: vec![guest("guest".into())],
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let event_id = event.event.id.clone();
-    left.add_shared_item(
+    crate::usecases::household::shared_events::add_shared_item(
+        &mut left,
         &event_id,
         SharedItemDraft {
             title: "taxi".into(),
@@ -1487,7 +1547,8 @@ pub(super) fn purchase_beside_a_later_item_edit() -> (usize, usize) {
     let item = current.items[0].clone();
     // A first edit that syncs: a merged record no longer carries the stamp of
     // the whole `items` field, which would otherwise hide the loss below.
-    left.update_shared_item(
+    crate::usecases::household::shared_events::update_shared_item(
+        &mut left,
         &event_id,
         &item.id,
         SharedItemDraft {
@@ -1500,7 +1561,8 @@ pub(super) fn purchase_beside_a_later_item_edit() -> (usize, usize) {
     )
     .unwrap();
     super::tests::settle(&mut left, &mut right);
-    left.add_shared_purchase(
+    crate::usecases::household::shared_events::add_shared_purchase(
+        &mut left,
         &event_id,
         SharedPurchaseDraft {
             item_id: Some(item.id.clone()),
@@ -1515,19 +1577,19 @@ pub(super) fn purchase_beside_a_later_item_edit() -> (usize, usize) {
     .unwrap();
     // Later than the purchase, by a device that has not seen it.
     std::thread::sleep(std::time::Duration::from_millis(5));
-    right
-        .update_shared_item(
-            &event_id,
-            &item.id,
-            SharedItemDraft {
-                title: "taxi home".into(),
-                unit: item.unit.clone(),
-                category_id: item.category_id.clone(),
-                plan: item.plan.clone(),
-                cancelled: item.cancelled,
-            },
-        )
-        .unwrap();
+    crate::usecases::household::shared_events::update_shared_item(
+        &mut right,
+        &event_id,
+        &item.id,
+        SharedItemDraft {
+            title: "taxi home".into(),
+            unit: item.unit.clone(),
+            category_id: item.category_id.clone(),
+            plan: item.plan.clone(),
+            cancelled: item.cancelled,
+        },
+    )
+    .unwrap();
     super::tests::settle(&mut left, &mut right);
     assert_eq!(left.doc.shared_events[0].items[0].title, "taxi home");
     assert_eq!(right.doc.shared_events[0].items[0].title, "taxi home");
@@ -1544,32 +1606,40 @@ pub(super) fn purchase_beside_a_later_item_edit() -> (usize, usize) {
 pub(super) fn payment_revived_after_its_deletion() -> (bool, usize) {
     let (_dir, mut left, mut right) = super::tests::two_devices();
     let store_id = left.doc.stores[0].id.clone();
-    left.add_transaction(crate::service::test_support::income(
-        &store_id, "100", "start",
-    ))
+    crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        crate::service::test_support::income(&store_id, "100", "start"),
+    )
     .unwrap();
-    let paid = left
-        .add_transaction(payment(&store_id, "10", "dinner"))
-        .unwrap();
+    let paid = crate::usecases::money::transactions::add_transaction(
+        &mut left,
+        payment(&store_id, "10", "dinner"),
+    )
+    .unwrap();
     let tx_id = paid.meta().id.clone();
-    let event = left
-        .create_shared_event(SharedEventDraft {
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        &mut left,
+        SharedEventDraft {
             title: "trip".into(),
             currency: "usd".into(),
             participants: vec![guest("guest".into())],
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let event_id = event.event.id.clone();
-    left.attach_payment_to_shared_event(AttachPaymentInput {
-        event_id: event_id.clone(),
-        tx_id: tx_id.clone(),
-        new_item_title: Some("dinner".into()),
-        ..Default::default()
-    })
+    crate::usecases::household::shared_events::attach_payment_to_shared_event(
+        &mut left,
+        AttachPaymentInput {
+            event_id: event_id.clone(),
+            tx_id: tx_id.clone(),
+            new_item_title: Some("dinner".into()),
+            ..Default::default()
+        },
+    )
     .unwrap();
     super::tests::settle(&mut left, &mut right);
-    left.delete_transaction(&tx_id).unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut left, &tx_id).unwrap();
     // Later than the deletion, by a device that has not seen it.
     std::thread::sleep(std::time::Duration::from_millis(5));
     let mut edited = right
@@ -1580,7 +1650,7 @@ pub(super) fn payment_revived_after_its_deletion() -> (bool, usize) {
         .unwrap()
         .clone();
     edited.meta_mut().comment = "dinner with friends".into();
-    right.update_transaction(&tx_id, edited).unwrap();
+    crate::usecases::money::transactions::update_transaction(&mut right, &tx_id, edited).unwrap();
     super::tests::settle(&mut left, &mut right);
     let lives = left.doc.transactions.iter().any(|tx| tx.meta().id == tx_id);
     let purchases = left.doc.shared_events[0]
@@ -1596,16 +1666,19 @@ pub(super) fn payment_revived_after_its_deletion() -> (bool, usize) {
 #[cfg(test)]
 pub(super) fn two_purchases_to_one_item() -> usize {
     let (_dir, mut left, mut right) = super::tests::two_devices();
-    let event = left
-        .create_shared_event(SharedEventDraft {
+    let event = crate::usecases::household::shared_events::create_shared_event(
+        &mut left,
+        SharedEventDraft {
             title: "trip".into(),
             currency: "usd".into(),
             participants: vec![guest("ann".into())],
             ..Default::default()
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let event_id = event.event.id.clone();
-    left.add_shared_item(
+    crate::usecases::household::shared_events::add_shared_item(
+        &mut left,
         &event_id,
         SharedItemDraft {
             title: "taxi".into(),
@@ -1616,20 +1689,20 @@ pub(super) fn two_purchases_to_one_item() -> usize {
     super::tests::settle(&mut left, &mut right);
     for (vault, price) in [(&mut left, "10"), (&mut right, "20")] {
         let current = vault.doc.shared_events[0].clone();
-        vault
-            .add_shared_purchase(
-                &event_id,
-                SharedPurchaseDraft {
-                    item_id: Some(current.items[0].id.clone()),
-                    buyer: current.participants[0].id.clone(),
-                    qty: amount("1"),
-                    amount: amount(price),
-                    currency: "usd".into(),
-                    price_mode: PriceMode::Total,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
+        crate::usecases::household::shared_events::add_shared_purchase(
+            vault,
+            &event_id,
+            SharedPurchaseDraft {
+                item_id: Some(current.items[0].id.clone()),
+                buyer: current.participants[0].id.clone(),
+                qty: amount("1"),
+                amount: amount(price),
+                currency: "usd".into(),
+                price_mode: PriceMode::Total,
+                ..Default::default()
+            },
+        )
+        .unwrap();
     }
     super::tests::settle(&mut left, &mut right);
     assert_eq!(

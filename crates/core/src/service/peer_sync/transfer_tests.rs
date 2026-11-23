@@ -14,12 +14,13 @@ fn cash_id(vault: &UnlockedVault) -> String {
 fn a_received_copy_drops_the_senders_bookkeeping() {
     let (dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    right.add_transaction(income(&cash, "5", "theirs")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut right, income(&cash, "5", "theirs"))
+        .unwrap();
     settle(&mut left, &mut right);
     // Left now holds a batch, a journal entry and a stamped record; add the rest.
     let id = left.doc.transactions[0].meta().id.clone();
-    left.delete_transaction(&id).unwrap();
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::money::transactions::delete_transaction(&mut left, &id).unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     left.sync_pause_peer("dev-c").unwrap();
     left.doc.sync.peers.last_mut().unwrap().last_synced_at = Some("2026-11-01T10:00:00Z".into());
     left.doc.sync.cut_by.insert(
@@ -68,28 +69,28 @@ fn a_received_copy_drops_the_senders_bookkeeping() {
 #[test]
 fn trusting_again_lifts_a_pause() {
     let (_dir, mut left, _right) = two_devices();
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     left.sync_pause_peer("dev-c").unwrap();
     assert!(left.sync_is_paused("dev-c"));
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     assert!(!left.sync_is_paused("dev-c"));
 }
 
 #[test]
 fn a_newer_trust_beats_an_older_revoke() {
     let (_dir, mut left, mut right) = two_devices();
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     settle(&mut left, &mut right);
     right
         .sync_merge_peers(&left.sync_state().peers.clone())
         .unwrap();
-    left.sync_forget_peer("dev-c").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
     right
         .sync_merge_peers(&left.sync_state().peers.clone())
         .unwrap();
     assert!(right.sync_state().is_revoked("cc"));
     // The user pairs it again on the right device: a newer stamp.
-    right.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut right, "dev-c", "Tablet", "cc").unwrap();
     left.sync_merge_peers(&right.sync_state().peers.clone())
         .unwrap();
     right
@@ -104,10 +105,10 @@ fn a_newer_trust_beats_an_older_revoke() {
 #[test]
 fn an_older_trust_does_not_lift_a_newer_revoke() {
     let (_dir, mut left, mut right) = two_devices();
-    left.sync_trust_peer("dev-c", "Tablet", "cc").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(&mut left, "dev-c", "Tablet", "cc").unwrap();
     let trusted = left.sync_state().peers.clone();
     right.sync_merge_peers(&trusted).unwrap();
-    left.sync_forget_peer("dev-c").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-c").unwrap();
     // The right device still offers the older, live entry.
     left.sync_merge_peers(&right.sync_state().peers.clone())
         .unwrap();

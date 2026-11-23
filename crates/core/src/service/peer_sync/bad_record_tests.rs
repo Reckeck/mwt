@@ -9,15 +9,17 @@ use crate::model::contact::ContactKind;
 use crate::service::contacts::ContactDraft;
 
 fn contact(vault: &mut UnlockedVault, name: &str) -> String {
-    let created = vault
-        .create_contact(ContactDraft {
+    let created = crate::usecases::household::contacts::create_contact(
+        vault,
+        ContactDraft {
             name: name.into(),
             kind: ContactKind::Person,
             note: String::new(),
             accounts: Vec::new(),
             group: String::new(),
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     format!("contacts:{}", created.id)
 }
 
@@ -34,10 +36,10 @@ fn incoming_with(
     right: &mut UnlockedVault,
     bad: &str,
 ) -> BTreeMap<String, RecordState> {
-    let mine = left.sync_manifest(None).unwrap();
-    let theirs = right.sync_manifest(None).unwrap();
-    let (wanted, _) = left.sync_diff(&mine, &theirs);
-    let mut incoming = right.sync_records(&wanted).unwrap();
+    let mine = crate::usecases::sync::read::sync_manifest(left, None).unwrap();
+    let theirs = crate::usecases::sync::read::sync_manifest(right, None).unwrap();
+    let (wanted, _) = crate::usecases::sync::read::sync_diff(left, &mine, &theirs);
+    let mut incoming = crate::usecases::sync::read::sync_records(right, &wanted).unwrap();
     let value = incoming
         .get_mut(bad)
         .and_then(|state| state.value.as_mut())

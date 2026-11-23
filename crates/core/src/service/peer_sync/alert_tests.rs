@@ -33,14 +33,21 @@ fn draft(threshold: &str) -> PriceAlertDraft {
 #[test]
 fn a_firing_on_the_old_threshold_does_not_silence_the_raised_one() {
     let (_dir, mut left, mut right) = two_devices();
-    let id = left.create_price_alert(draft("95000")).unwrap().id;
+    let id = crate::usecases::planning::agenda::create_price_alert(&mut left, draft("95000"))
+        .unwrap()
+        .id;
     settle(&mut left, &mut right);
 
     // Right fires on the old threshold while left raises it.
     price(&mut right, "100000", "2026-03-01T00:00:00Z");
     let at = unix_secs("2026-03-01T01:00:00Z").unwrap();
-    assert_eq!(right.check_alerts(at).unwrap().len(), 1);
-    left.update_price_alert(&id, draft("120000")).unwrap();
+    assert_eq!(
+        crate::usecases::planning::agenda::check_alerts(&mut right, at)
+            .unwrap()
+            .len(),
+        1
+    );
+    crate::usecases::planning::agenda::update_price_alert(&mut left, &id, draft("120000")).unwrap();
     settle(&mut left, &mut right);
 
     for device in [&left, &right] {
@@ -53,6 +60,11 @@ fn a_firing_on_the_old_threshold_does_not_silence_the_raised_one() {
     // The new threshold is reached: it fires.
     price(&mut left, "130000", "2026-03-02T00:00:00Z");
     let later = unix_secs("2026-03-02T01:00:00Z").unwrap();
-    assert_eq!(left.check_alerts(later).unwrap().len(), 1);
+    assert_eq!(
+        crate::usecases::planning::agenda::check_alerts(&mut left, later)
+            .unwrap()
+            .len(),
+        1
+    );
     assert!(left.doc.price_alerts[0].is_triggered());
 }

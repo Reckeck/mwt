@@ -14,17 +14,18 @@ fn cash_id(vault: &UnlockedVault) -> String {
 
 /// What `from` holds that `into` lacks or has older, as the session sends it.
 fn batch_for(into: &mut UnlockedVault, from: &mut UnlockedVault) -> BTreeMap<String, RecordState> {
-    let mine = into.sync_manifest(None).unwrap();
-    let theirs = from.sync_manifest(None).unwrap();
-    let (wanted, _) = into.sync_diff(&mine, &theirs);
-    from.sync_records(&wanted).unwrap()
+    let mine = crate::usecases::sync::read::sync_manifest(into, None).unwrap();
+    let theirs = crate::usecases::sync::read::sync_manifest(from, None).unwrap();
+    let (wanted, _) = crate::usecases::sync::read::sync_diff(into, &mine, &theirs);
+    crate::usecases::sync::read::sync_records(from, &wanted).unwrap()
 }
 
 #[test]
 fn preview_lists_changed_fields() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    left.add_transaction(income(&cash, "10", "salary")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "10", "salary"))
+        .unwrap();
     settle(&mut left, &mut right);
     let id = right.doc.transactions[0].meta().id.clone();
     let mut edited = right.doc.transactions[0].clone();
@@ -32,10 +33,10 @@ fn preview_lists_changed_fields() {
         tx.meta.comment = "bonus".into();
         tx.amount = crate::Amount::from(25u32);
     }
-    right.update_transaction(&id, edited).unwrap();
+    crate::usecases::money::transactions::update_transaction(&mut right, &id, edited).unwrap();
 
     let incoming = batch_for(&mut left, &mut right);
-    let summary = left.sync_preview(&incoming).unwrap();
+    let summary = crate::usecases::sync::read::sync_preview(&mut left, &incoming).unwrap();
     let changes = summary
         .collections
         .iter()
@@ -68,13 +69,14 @@ fn preview_lists_changed_fields() {
 fn preview_shows_balances_after() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    left.add_transaction(income(&cash, "100", "base")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "100", "base"))
+        .unwrap();
     settle(&mut left, &mut right);
-    right.add_transaction(income(&cash, "20", "more")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut right, income(&cash, "20", "more"))
+        .unwrap();
 
     let incoming = batch_for(&mut left, &mut right);
-    let after = left
-        .sync_preview_after(&incoming)
+    let after = crate::usecases::sync::read::sync_preview_after(&mut left, &incoming)
         .unwrap()
         .expect("something changes");
     assert_eq!(after.currency, "usd");
@@ -94,15 +96,17 @@ fn preview_shows_balances_after() {
 fn preview_does_not_touch_the_vault() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = cash_id(&left);
-    right
-        .add_transaction(income(&cash, "20", "theirs"))
-        .unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut right,
+        income(&cash, "20", "theirs"),
+    )
+    .unwrap();
     let incoming = batch_for(&mut left, &mut right);
-    left.sync_preview(&incoming).unwrap();
+    crate::usecases::sync::read::sync_preview(&mut left, &incoming).unwrap();
     let doc_before = serde_json::to_value(&left.doc).unwrap();
     let file_before = std::fs::read(&left.path).unwrap();
 
-    let after = left.sync_preview_after(&incoming).unwrap();
+    let after = crate::usecases::sync::read::sync_preview_after(&mut left, &incoming).unwrap();
     assert!(after.is_some());
 
     assert_eq!(serde_json::to_value(&left.doc).unwrap(), doc_before);

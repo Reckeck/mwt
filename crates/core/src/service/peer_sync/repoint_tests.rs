@@ -37,7 +37,11 @@ fn rent(vault: &mut UnlockedVault) -> String {
             planned_at: "2026-11-01".into(),
         };
     }
-    vault.add_transaction(tx).unwrap().meta().id.clone()
+    crate::usecases::money::transactions::add_transaction(vault, tx)
+        .unwrap()
+        .meta()
+        .id
+        .clone()
 }
 
 fn enrichment(tx_id: &str) -> EnrichmentRecord {
@@ -115,7 +119,9 @@ fn repoint_tx_moves_every_known_reference() {
         ..Default::default()
     });
 
-    assert!(vault.repoint_tx("old", "new"));
+    assert!(crate::usecases::sync::repair::repoint_tx(
+        &mut vault, "old", "new"
+    ));
 
     assert_eq!(vault.doc.attachments[0].owner.id, "new");
     assert_eq!(
@@ -131,7 +137,10 @@ fn repoint_tx_moves_every_known_reference() {
         vault.doc.import_runs[0].reconcile_tx_id.as_deref(),
         Some("new")
     );
-    assert!(!vault.repoint_tx("old", "new"), "nothing left to move");
+    assert!(
+        !crate::usecases::sync::repair::repoint_tx(&mut vault, "old", "new"),
+        "nothing left to move"
+    );
 }
 
 fn settlement() -> Settlement {
@@ -150,7 +159,9 @@ fn a_linked_property_of_the_kept_copy_wins() {
             property_id: property_id.into(),
         });
     }
-    assert!(vault.repoint_tx("old", "new"));
+    assert!(crate::usecases::sync::repair::repoint_tx(
+        &mut vault, "old", "new"
+    ));
     assert_eq!(
         vault.doc.tx_properties,
         vec![TxProperty {
@@ -166,16 +177,16 @@ fn dedupe_hands_the_losers_attachment_and_links_to_the_winner() {
     let winner = rent(&mut left);
     pause();
     let loser = rent(&mut right);
-    let item = right
-        .add_attachment_file(
-            EntityRef::new(EntityKind::Tx, loser.clone()),
-            NewFile {
-                name: "rent.pdf",
-                mime: None,
-                bytes: b"%PDF-1.7 rent",
-            },
-        )
-        .unwrap();
+    let item = crate::usecases::household::attachments::add_attachment_file(
+        &mut right,
+        EntityRef::new(EntityKind::Tx, loser.clone()),
+        NewFile {
+            name: "rent.pdf",
+            mime: None,
+            bytes: b"%PDF-1.7 rent",
+        },
+    )
+    .unwrap();
     right.doc.tx_properties.push(TxProperty {
         tx_id: loser.clone(),
         property_id: "flat".into(),
@@ -200,7 +211,7 @@ fn dedupe_hands_the_losers_attachment_and_links_to_the_winner() {
     assert_eq!(right.doc.enrichments[0].tx_id, winner);
 
     // The next open must not delete it nor its bytes.
-    let file = right.attachments_dir().join(&item.id);
+    let file = crate::usecases::household::attachments::attachments_dir(&right).join(&item.id);
     let right = reopen(&right);
     assert!(
         right
@@ -210,6 +221,7 @@ fn dedupe_hands_the_losers_attachment_and_links_to_the_winner() {
             .any(|found| found.id == item.id)
     );
     assert!(file.exists(), "the bytes survived the open");
-    let (_, bytes) = right.read_attachment(&item.id).unwrap();
+    let (_, bytes) =
+        crate::usecases::household::attachments::read_attachment(&right, &item.id).unwrap();
     assert_eq!(bytes, b"%PDF-1.7 rent");
 }

@@ -13,32 +13,36 @@ use crate::time::secs_or_now;
 const NOW: &str = "2026-03-10T08:00:00Z";
 
 fn loan(vault: &mut UnlockedVault, name: &str) -> String {
-    vault
-        .create_store_with(
-            name,
-            StoreKind::Liability,
-            "#c00",
-            "",
-            None,
-            StoreExtras {
-                liability: Some(LiabilityTerms {
-                    kind: LiabilityKind::Mortgage,
-                    rate: None,
-                    limit: None,
-                    due_day: Some(25),
-                    monthly_payment: Some(amount("45000")),
-                }),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id
+    crate::usecases::money::stores::create_store_with(
+        vault,
+        name,
+        StoreKind::Liability,
+        "#c00",
+        "",
+        None,
+        StoreExtras {
+            liability: Some(LiabilityTerms {
+                kind: LiabilityKind::Mortgage,
+                rate: None,
+                limit: None,
+                due_day: Some(25),
+                monthly_payment: Some(amount("45000")),
+            }),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id
 }
 
 fn place(vault: &mut UnlockedVault) {
-    vault
-        .sync_auto_reminders(secs_or_now(NOW), "UTC", false)
-        .unwrap();
+    crate::usecases::planning::auto_reminders::sync_auto_reminders(
+        vault,
+        secs_or_now(NOW),
+        "UTC",
+        false,
+    )
+    .unwrap();
 }
 
 /// A reminder as the build before derived ids made it: a random id and a key
@@ -128,7 +132,7 @@ fn dedupe_keeps_done_and_mute_of_a_reminder() {
     // The other device made its own copy, then the user finished and muted it.
     right.doc.reminders.push(copy);
     right.persist().unwrap();
-    right.sync_manifest(None).unwrap();
+    crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
     pause();
     let last = right.doc.reminders.len() - 1;
     right.doc.reminders[last].done = true;

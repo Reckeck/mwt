@@ -24,10 +24,10 @@ fn peer(name: &str) -> PeerRef {
 
 /// `to` takes what `from` has and `to` lacks; nothing flows back.
 fn pull_one_way(from: &mut UnlockedVault, to: &mut UnlockedVault) {
-    let from_manifest = from.sync_manifest(None).unwrap();
-    let to_manifest = to.sync_manifest(None).unwrap();
-    let (to_wants, _) = to.sync_diff(&to_manifest, &from_manifest);
-    let records = from.sync_records(&to_wants).unwrap();
+    let from_manifest = crate::usecases::sync::read::sync_manifest(from, None).unwrap();
+    let to_manifest = crate::usecases::sync::read::sync_manifest(to, None).unwrap();
+    let (to_wants, _) = crate::usecases::sync::read::sync_diff(to, &to_manifest, &from_manifest);
+    let records = crate::usecases::sync::read::sync_records(from, &to_wants).unwrap();
     to.sync_apply(&records, &peer("from")).unwrap();
 }
 
@@ -63,21 +63,21 @@ fn incomplete_graph() -> String {
 /// Both devices hold the same active workflow that a required field now stops.
 fn devices_with_incomplete_workflow() -> (tempfile::TempDir, UnlockedVault, UnlockedVault, String) {
     let (dir, mut left, mut right) = two_devices();
-    let saved = left
-        .save_workflow(
-            None,
-            WorkflowDraft {
-                name: "Watch".into(),
-                description: String::new(),
-                active: false,
-                graph: incomplete_graph(),
-                react_to_workflows: false,
-                max_amount: None,
-                max_amount_currency: None,
-            },
-            crate::calendar::now_secs(),
-        )
-        .unwrap();
+    let saved = crate::usecases::workflow::records::save_workflow(
+        &mut left,
+        None,
+        WorkflowDraft {
+            name: "Watch".into(),
+            description: String::new(),
+            active: false,
+            graph: incomplete_graph(),
+            react_to_workflows: false,
+            max_amount: None,
+            max_amount_currency: None,
+        },
+        crate::calendar::now_secs(),
+    )
+    .unwrap();
     let id = saved.workflow.id;
     left.doc.workflows[0].active = true;
     left.persist().unwrap();
@@ -143,7 +143,7 @@ fn a_late_updating_device_does_not_bring_back_a_deleted_builtin_category() {
     // The left device deletes the built-in category; the right one takes the
     // deletion (it holds the tombstone) and is then an older build, which has
     // not seen the batch of categories that brought "coupons".
-    left.delete_category("coupons").unwrap();
+    crate::usecases::household::categories::delete_category(&mut left, "coupons").unwrap();
     settle(&mut left, &mut right);
     assert!(!has_category(&right, "coupons"));
     right.doc.settings.categories_rev = 0;
@@ -180,20 +180,20 @@ fn staged(store: &str, exec_id: &str) -> PendingImport {
 
 /// An exchange wallet both devices hold.
 fn exchange_store(left: &mut UnlockedVault, right: &mut UnlockedVault) -> String {
-    let id = left
-        .create_store_with(
-            "Bybit",
-            crate::model::store::StoreKind::Exchange,
-            "#f0b90b",
-            "",
-            None,
-            crate::service::StoreExtras {
-                provider: Some(crate::model::store::ExchangeProvider::Bybit),
-                ..Default::default()
-            },
-        )
-        .unwrap()
-        .id;
+    let id = crate::usecases::money::stores::create_store_with(
+        left,
+        "Bybit",
+        crate::model::store::StoreKind::Exchange,
+        "#f0b90b",
+        "",
+        None,
+        crate::service::StoreExtras {
+            provider: Some(crate::model::store::ExchangeProvider::Bybit),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .id;
     settle(left, right);
     id
 }
@@ -222,11 +222,19 @@ fn booked(vault: &UnlockedVault, exec_id: &str) -> usize {
 fn a_queue_entry_for_a_booked_import_does_not_come_back() {
     let (_dir, mut left, mut right) = two_devices();
     let store = exchange_store(&mut left, &mut right);
-    left.stage_imports(vec![staged(&store, "e1")]).unwrap();
-    left.confirm_pending_imports(&[]).unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut left,
+        vec![staged(&store, "e1")],
+    )
+    .unwrap();
+    crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(&mut left, &[]).unwrap();
     pause();
     // The right device has not seen the booking and queues the same fill.
-    right.stage_imports(vec![staged(&store, "e1")]).unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut right,
+        vec![staged(&store, "e1")],
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         assert!(pending_ids(device).is_empty(), "{:?}", pending_ids(device));
@@ -238,10 +246,18 @@ fn a_queue_entry_for_a_booked_import_does_not_come_back() {
 fn a_queue_entry_for_a_discarded_import_does_not_come_back() {
     let (_dir, mut left, mut right) = two_devices();
     let store = exchange_store(&mut left, &mut right);
-    left.stage_imports(vec![staged(&store, "e1")]).unwrap();
-    left.discard_pending_imports(&[]).unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut left,
+        vec![staged(&store, "e1")],
+    )
+    .unwrap();
+    crate::usecases::cryptotrack::exchange_import::discard_pending_imports(&mut left, &[]).unwrap();
     pause();
-    right.stage_imports(vec![staged(&store, "e1")]).unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut right,
+        vec![staged(&store, "e1")],
+    )
+    .unwrap();
     settle(&mut left, &mut right);
     for device in [&left, &right] {
         assert!(pending_ids(device).is_empty(), "{:?}", pending_ids(device));
@@ -254,14 +270,20 @@ fn a_truly_pending_import_survives_the_rule() {
     let (_dir, mut left, mut right) = two_devices();
     let store = exchange_store(&mut left, &mut right);
     // One fill is booked on the left device before the right one queues it.
-    left.stage_imports(vec![staged(&store, "e1")]).unwrap();
-    left.confirm_pending_imports(&[]).unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut left,
+        vec![staged(&store, "e1")],
+    )
+    .unwrap();
+    crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(&mut left, &[]).unwrap();
     pause();
-    right
-        .stage_imports(vec![staged(&store, "e1"), staged(&store, "e2")])
-        .unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut right,
+        vec![staged(&store, "e1"), staged(&store, "e2")],
+    )
+    .unwrap();
     // Nothing is known on the right yet: the pass leaves the whole queue alone.
-    let report = right.repair_invariants(None).unwrap();
+    let report = crate::usecases::sync::repair::repair_invariants(&mut right, None).unwrap();
     assert!(report.dropped_imports.is_empty());
     assert_eq!(
         pending_ids(&right),
@@ -279,9 +301,17 @@ fn a_truly_pending_import_survives_the_rule() {
 fn the_queue_rule_is_idempotent_and_undone_with_its_batch() {
     let (_dir, mut left, mut right) = two_devices();
     let store = exchange_store(&mut left, &mut right);
-    left.stage_imports(vec![staged(&store, "e1")]).unwrap();
-    left.confirm_pending_imports(&[]).unwrap();
-    right.stage_imports(vec![staged(&store, "e1")]).unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut left,
+        vec![staged(&store, "e1")],
+    )
+    .unwrap();
+    crate::usecases::cryptotrack::exchange_import::confirm_pending_imports(&mut left, &[]).unwrap();
+    crate::usecases::cryptotrack::exchange_import::stage_imports(
+        &mut right,
+        vec![staged(&store, "e1")],
+    )
+    .unwrap();
     let before = right.doc.sync.batches.len();
     pull_one_way(&mut left, &mut right);
     assert_eq!(right.doc.sync.batches.len(), before + 1);
@@ -289,7 +319,7 @@ fn the_queue_rule_is_idempotent_and_undone_with_its_batch() {
     assert_eq!(booked(&right, "e1"), 1);
     // A second pass finds nothing to do.
     let doc = right.doc_value().unwrap();
-    let report = right.repair_invariants(None).unwrap();
+    let report = crate::usecases::sync::repair::repair_invariants(&mut right, None).unwrap();
     assert!(report.dropped_imports.is_empty());
     assert_eq!(right.doc_value().unwrap(), doc);
     // Undoing the batch returns the entry (and removes the booking again).
@@ -302,16 +332,18 @@ fn the_queue_rule_is_idempotent_and_undone_with_its_batch() {
 // -- 99: a whole edited document against the base the user saw ------------------
 
 fn new_contact(vault: &mut UnlockedVault, name: &str) -> String {
-    vault
-        .create_contact(crate::service::contacts::ContactDraft {
+    crate::usecases::household::contacts::create_contact(
+        vault,
+        crate::service::contacts::ContactDraft {
             name: name.into(),
             kind: crate::model::contact::ContactKind::Person,
             note: String::new(),
             accounts: Vec::new(),
             group: String::new(),
-        })
-        .unwrap()
-        .id
+        },
+    )
+    .unwrap()
+    .id
 }
 
 fn contact_names(vault: &UnlockedVault) -> Vec<String> {
@@ -418,7 +450,8 @@ fn a_money_edit_recomputes_holdings_and_pins_identity() {
     use crate::service::test_support::{amount, income, usd};
     let (_dir, mut left, _right) = two_devices();
     let cash = left.doc.stores[0].id.clone();
-    left.add_transaction(income(&cash, "100", "pay")).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "100", "pay"))
+        .unwrap();
     let base = left.doc.clone();
     let mut edited = base.clone();
     let crate::model::transaction::Transaction::Topup(topup) = &mut edited.transactions[0] else {
@@ -469,7 +502,7 @@ fn a_setting_changed_by_the_editor_does_not_undo_a_peers_other_setting() {
 // -- 99: restoring a copy in a group ------------------------------------------
 
 fn live_peer(vault: &mut UnlockedVault) {
-    vault.sync_trust_peer("dev-b", "Phone", "aa").unwrap();
+    crate::usecases::sync::trust::sync_trust_peer(vault, "dev-b", "Phone", "aa").unwrap();
 }
 
 #[test]
@@ -499,7 +532,7 @@ fn restoring_with_peers_brings_back_a_deleted_record_to_the_peer() {
     let id = new_contact(&mut left, "Doomed");
     settle(&mut left, &mut right);
     let backup = left.create_backup().unwrap();
-    left.delete_contact(&id).unwrap();
+    crate::usecases::household::contacts::delete_contact(&mut left, &id).unwrap();
     settle(&mut left, &mut right);
     assert!(right.doc.contacts.is_empty());
     assert!(
@@ -534,7 +567,7 @@ fn restoring_with_peers_brings_back_a_deleted_record_to_the_peer() {
 fn restoring_after_the_only_peer_was_forgotten_replaces_as_before() {
     let (_dir, mut left, mut right) = two_devices();
     live_peer(&mut left);
-    left.sync_forget_peer("dev-b").unwrap();
+    crate::usecases::sync::trust::sync_forget_peer(&mut left, "dev-b").unwrap();
     let backup = left.create_backup().unwrap();
     new_contact(&mut left, "Later");
     settle(&mut left, &mut right);
@@ -551,25 +584,35 @@ fn an_exchange_terminal_edited_in_the_editor_is_applied_and_one_left_alone_is_ke
         timeframe: Some(timeframe.into()),
         ..TerminalPatch::default()
     };
-    let id = left
-        .create_store_with(
-            "Bybit",
-            StoreKind::Exchange,
-            "",
-            "",
-            None,
-            StoreExtras {
-                provider: Some(ExchangeProvider::Bybit),
-                ..StoreExtras::default()
-            },
-        )
-        .unwrap()
-        .id;
-    left.update_terminal_state(&id, patch("1h")).unwrap();
+    let id = crate::usecases::money::stores::create_store_with(
+        &mut left,
+        "Bybit",
+        StoreKind::Exchange,
+        "",
+        "",
+        None,
+        StoreExtras {
+            provider: Some(ExchangeProvider::Bybit),
+            ..StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
+    crate::usecases::cryptotrack::exchange_import::update_terminal_state(
+        &mut left,
+        &id,
+        patch("1h"),
+    )
+    .unwrap();
     let base = left.doc.clone();
     // The terminal moves on after the buffer was loaded; an edit elsewhere
     // must not roll it back.
-    left.update_terminal_state(&id, patch("4h")).unwrap();
+    crate::usecases::cryptotrack::exchange_import::update_terminal_state(
+        &mut left,
+        &id,
+        patch("4h"),
+    )
+    .unwrap();
     let mut edited = base.clone();
     edited
         .stores
@@ -578,7 +621,12 @@ fn an_exchange_terminal_edited_in_the_editor_is_applied_and_one_left_alone_is_ke
         .unwrap()
         .name = "Renamed".into();
     left.apply_document_edit(&base, edited).unwrap();
-    assert_eq!(left.terminal_state(&id).unwrap().timeframe, "4h");
+    assert_eq!(
+        crate::cryptotrack::exchange_import::terminal_state(&left.doc, &id)
+            .unwrap()
+            .timeframe,
+        "4h"
+    );
 
     // An edit of the terminal itself is applied.
     let base = left.doc.clone();
@@ -588,5 +636,10 @@ fn an_exchange_terminal_edited_in_the_editor_is_applied_and_one_left_alone_is_ke
         .replace("\"4h\"", "\"1d\"");
     edited = serde_json::from_str(&json).unwrap();
     left.apply_document_edit(&base, edited).unwrap();
-    assert_eq!(left.terminal_state(&id).unwrap().timeframe, "1d");
+    assert_eq!(
+        crate::cryptotrack::exchange_import::terminal_state(&left.doc, &id)
+            .unwrap()
+            .timeframe,
+        "1d"
+    );
 }

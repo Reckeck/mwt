@@ -48,11 +48,5 @@ impl UnlockedVault {
     // forward:end
 
     // Not part of the baseline (crate-internal): the callers outside the area keep these names.
-    forward! {
-        /// Give every envelope its opening entry and re-derive `allocated` from
-        /// the journal (on open, and after a sync brought records in). True when
-        /// something changed.
-        pub(crate) fn settle_envelopes(&mut self) -> bool
-            => crate::usecases::household::envelopes::settle_envelopes;
-    }
+    forward! {}
 }

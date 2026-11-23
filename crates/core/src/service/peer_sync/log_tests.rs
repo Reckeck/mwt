@@ -87,16 +87,18 @@ fn undo_lists_a_union_entry_as_skipped() {
 #[test]
 fn a_deleted_budget_does_not_bring_its_notices_back() {
     let (_dir, mut left, mut right) = two_devices();
-    let budget = left
-        .create_budget(BudgetDraft {
+    let budget = crate::usecases::planning::budget::create_budget(
+        &mut left,
+        BudgetDraft {
             active: true,
             target: BudgetTarget::Category("groceries".into()),
             period: BudgetPeriod::Month,
             limit: Amount::parse("100").unwrap(),
             currency: "rub".into(),
             warn: true,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let key = format!("budget:{}:2026-11:over", budget.id);
     left.doc
         .notification_log
@@ -104,7 +106,7 @@ fn a_deleted_budget_does_not_bring_its_notices_back() {
     settle(&mut left, &mut right);
     assert_eq!(keys(&right), vec![key.clone()]);
 
-    left.delete_budget(&budget.id).unwrap();
+    crate::usecases::planning::budget::delete_budget(&mut left, &budget.id).unwrap();
     assert!(keys(&left).is_empty());
     settle(&mut left, &mut right);
     assert!(keys(&left).is_empty(), "{:?}", keys(&left));
@@ -151,10 +153,10 @@ fn a_record_cut_by_the_cap_is_not_counted_or_requested_again() {
         .doc
         .notification_log
         .push(notice("old:0000", "2026-10-01T10:00:00Z"));
-    let right_manifest = right.sync_manifest(None).unwrap();
-    let left_manifest = left.sync_manifest(None).unwrap();
-    let (wants, _) = left.sync_diff(&left_manifest, &right_manifest);
-    let incoming = right.sync_records(&wants).unwrap();
+    let right_manifest = crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap();
+    let left_manifest = crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap();
+    let (wants, _) = crate::usecases::sync::read::sync_diff(&left, &left_manifest, &right_manifest);
+    let incoming = crate::usecases::sync::read::sync_records(&mut right, &wants).unwrap();
     let before = left.doc.sync.batches.len();
     let applied = left.apply_batch(&incoming, &peer("right"), false).unwrap();
     assert!(

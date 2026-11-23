@@ -23,8 +23,10 @@ fn draft(store_id: &str) -> EnvelopeDraft {
 /// An envelope in a funded wallet that both devices hold: `(store, envelope)`.
 fn shared_envelope(left: &mut UnlockedVault, right: &mut UnlockedVault) -> (String, String) {
     let cash = store(left, "Cash", StoreKind::Cash, None);
-    left.add_transaction(income(&cash, "1000", "pay")).unwrap();
-    let envelope = left.create_envelope(draft(&cash)).unwrap();
+    crate::usecases::money::transactions::add_transaction(left, income(&cash, "1000", "pay"))
+        .unwrap();
+    let envelope =
+        crate::usecases::household::envelopes::create_envelope(left, draft(&cash)).unwrap();
     settle(left, right);
     (cash, envelope.id)
 }
@@ -78,10 +80,12 @@ fn corrections(vault: &UnlockedVault, id: &str) -> Vec<EnvelopeMove> {
 }
 
 fn pull(devices: &mut [UnlockedVault], from: usize, to: usize) {
-    let from_manifest = devices[from].sync_manifest(None).unwrap();
-    let to_manifest = devices[to].sync_manifest(None).unwrap();
-    let (wants, _) = devices[to].sync_diff(&to_manifest, &from_manifest);
-    let records = devices[from].sync_records(&wants).unwrap();
+    let from_manifest =
+        crate::usecases::sync::read::sync_manifest(&mut devices[from], None).unwrap();
+    let to_manifest = crate::usecases::sync::read::sync_manifest(&mut devices[to], None).unwrap();
+    let (wants, _) =
+        crate::usecases::sync::read::sync_diff(&devices[to], &to_manifest, &from_manifest);
+    let records = crate::usecases::sync::read::sync_records(&mut devices[from], &wants).unwrap();
     let peer = PeerRef {
         device_id: format!("device-{from}-id"),
         name: format!("device-{from}"),
@@ -124,8 +128,8 @@ fn later(vault: &mut UnlockedVault) -> Stamp {
 fn concurrent_top_ups_add_up() {
     let (_dir, mut left, mut right) = two_devices();
     let (cash, id) = shared_envelope(&mut left, &mut right);
-    left.fund_envelope(&id, amount("10")).unwrap();
-    right.fund_envelope(&id, amount("20")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut left, &id, amount("10")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut right, &id, amount("20")).unwrap();
     settle(&mut left, &mut right);
     for vault in [&left, &right] {
         assert_eq!(allocated(vault, &id), amount("30"));
@@ -133,11 +137,17 @@ fn concurrent_top_ups_add_up() {
         assert_derived(vault, &id);
     }
     // A move between envelopes on one side meets a top-up on the other.
-    let other = left.create_envelope(draft(&cash)).unwrap();
+    let other =
+        crate::usecases::household::envelopes::create_envelope(&mut left, draft(&cash)).unwrap();
     settle(&mut left, &mut right);
-    left.move_between_envelopes(&id, &other.id, amount("5"))
-        .unwrap();
-    right.fund_envelope(&id, amount("7")).unwrap();
+    crate::usecases::household::envelopes::move_between_envelopes(
+        &mut left,
+        &id,
+        &other.id,
+        amount("5"),
+    )
+    .unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut right, &id, amount("7")).unwrap();
     settle(&mut left, &mut right);
     for vault in [&left, &right] {
         assert_eq!(allocated(vault, &id), amount("32"));
@@ -161,14 +171,22 @@ fn three_devices_never_produce_a_false_correction() {
             shared_envelope(&mut head[0], &mut rest[0])
         };
         pull(&mut devices, 0, 2);
-        devices[0].fund_envelope(&id, amount("10")).unwrap();
-        devices[1].fund_envelope(&id, amount("20")).unwrap();
-        devices[2].fund_envelope(&id, amount("30")).unwrap();
+        crate::usecases::household::envelopes::fund_envelope(&mut devices[0], &id, amount("10"))
+            .unwrap();
+        crate::usecases::household::envelopes::fund_envelope(&mut devices[1], &id, amount("20"))
+            .unwrap();
+        crate::usecases::household::envelopes::fund_envelope(&mut devices[2], &id, amount("30"))
+            .unwrap();
         for (from, to) in *order {
             pull(&mut devices, *from, *to);
             // A second top-up between sessions, on the device that just merged.
             if (*from, *to) == (1, 0) {
-                devices[0].fund_envelope(&id, amount("1")).unwrap();
+                crate::usecases::household::envelopes::fund_envelope(
+                    &mut devices[0],
+                    &id,
+                    amount("1"),
+                )
+                .unwrap();
             }
         }
         for _ in 0..3 {
@@ -216,8 +234,8 @@ fn opening_entry_is_shared_by_two_devices() {
     assert_eq!(envelope_of(&right, &id).moves, opening);
     let key = format!("envelopes:{id}");
     assert_eq!(
-        left.sync_manifest(None).unwrap()[&key],
-        right.sync_manifest(None).unwrap()[&key],
+        crate::usecases::sync::read::sync_manifest(&mut left, None).unwrap()[&key],
+        crate::usecases::sync::read::sync_manifest(&mut right, None).unwrap()[&key],
         "the record is the same on both devices"
     );
     assert_derived(&left, &id);
@@ -229,12 +247,13 @@ fn opening_entry_is_shared_by_two_devices() {
 fn old_peer_allocated_edit_becomes_one_correction() {
     let (_dir, mut left, mut right) = two_devices();
     let (_, id) = shared_envelope(&mut left, &mut right);
-    left.fund_envelope(&id, amount("10")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut left, &id, amount("10")).unwrap();
     settle(&mut left, &mut right);
     let key = format!("envelopes:{id}");
     let stamp = later(&mut left);
     let from_old = |vault: &mut UnlockedVault, allocated: &str, stamp: Stamp| {
-        let mut records = vault.sync_records(std::slice::from_ref(&key)).unwrap();
+        let mut records =
+            crate::usecases::sync::read::sync_records(vault, std::slice::from_ref(&key)).unwrap();
         let state = records.remove(&key).unwrap();
         BTreeMap::from([(key.clone(), as_old_peer(state, allocated, Some(stamp)))])
     };
@@ -282,13 +301,14 @@ fn peer(name: &str) -> PeerRef {
 fn old_peer_value_without_moves_keeps_the_journal() {
     let (_dir, mut left, mut right) = two_devices();
     let (_, id) = shared_envelope(&mut left, &mut right);
-    left.fund_envelope(&id, amount("10")).unwrap();
-    right.fund_envelope(&id, amount("5")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut left, &id, amount("10")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut right, &id, amount("5")).unwrap();
     settle(&mut left, &mut right);
     let key = format!("envelopes:{id}");
     // The old device only renamed the envelope: its `allocated` is what it
     // last saw, with an old stamp, and it has no entries at all.
-    let mut records = right.sync_records(std::slice::from_ref(&key)).unwrap();
+    let mut records =
+        crate::usecases::sync::read::sync_records(&mut right, std::slice::from_ref(&key)).unwrap();
     let mut state = as_old_peer(records.remove(&key).unwrap(), "10", None);
     state.value.as_mut().unwrap()["name"] = serde_json::json!("Renamed");
     let stamp = later(&mut right);
@@ -316,9 +336,10 @@ fn a_relayed_value_of_a_new_device_is_no_correction() {
     // not in it. The receiver must not invent a correction.
     let (_dir, mut left, mut right) = two_devices();
     let (_, id) = shared_envelope(&mut left, &mut right);
-    left.fund_envelope(&id, amount("10")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut left, &id, amount("10")).unwrap();
     let key = format!("envelopes:{id}");
-    let mut records = left.sync_records(std::slice::from_ref(&key)).unwrap();
+    let mut records =
+        crate::usecases::sync::read::sync_records(&mut left, std::slice::from_ref(&key)).unwrap();
     let state = records.remove(&key).unwrap();
     let head = state.stamps.as_ref().unwrap().fields["allocated"].clone();
     let mut relayed = as_old_peer(state, "10", Some(head.clone()));
@@ -343,16 +364,23 @@ fn a_relayed_value_of_a_new_device_is_no_correction() {
 fn overspent_envelope_after_a_merge_is_reported() {
     let (_dir, mut left, mut right) = two_devices();
     let cash = store(&mut left, "Cash", StoreKind::Cash, None);
-    left.add_transaction(income(&cash, "100", "pay")).unwrap();
-    let envelope = left.create_envelope(draft(&cash)).unwrap();
+    crate::usecases::money::transactions::add_transaction(&mut left, income(&cash, "100", "pay"))
+        .unwrap();
+    let envelope =
+        crate::usecases::household::envelopes::create_envelope(&mut left, draft(&cash)).unwrap();
     settle(&mut left, &mut right);
     // Each device sees 100 free and takes 60: together 120 of 100.
-    left.fund_envelope(&envelope.id, amount("60")).unwrap();
-    right.fund_envelope(&envelope.id, amount("60")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut left, &envelope.id, amount("60"))
+        .unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut right, &envelope.id, amount("60"))
+        .unwrap();
     settle(&mut left, &mut right);
     for vault in [&left, &right] {
         assert_eq!(allocated(vault, &envelope.id), amount("120"));
-        let views = vault.envelopes(Some(&cash));
+        let views = crate::planning::envelopes::envelopes(
+            &vault.doc,
+            Some(mwt_model::StoreId::from(&cash)),
+        );
         assert_eq!(views.len(), 1);
         assert!(views[0].short, "reported as short");
         assert_eq!(views[0].free, amount("-20"));
@@ -363,12 +391,12 @@ fn overspent_envelope_after_a_merge_is_reported() {
 fn a_deleted_envelope_stays_deleted() {
     let (_dir, mut left, mut right) = two_devices();
     let (_, id) = shared_envelope(&mut left, &mut right);
-    left.fund_envelope(&id, amount("10")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut left, &id, amount("10")).unwrap();
     settle(&mut left, &mut right);
     // A top-up on one device, then the deletion on the other: gone for both.
-    right.fund_envelope(&id, amount("20")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut right, &id, amount("20")).unwrap();
     std::thread::sleep(std::time::Duration::from_millis(3));
-    left.delete_envelope(&id).unwrap();
+    crate::usecases::household::envelopes::delete_envelope(&mut left, &id).unwrap();
     settle(&mut left, &mut right);
     assert!(left.doc.envelopes.is_empty());
     assert!(right.doc.envelopes.is_empty());
@@ -377,9 +405,9 @@ fn a_deleted_envelope_stays_deleted() {
 /// What an old device forwards of a new device's envelope: the value without
 /// `moves`, `allocated` with the new device's stamp and no stamp of the array.
 fn stripped_relay(from: &mut UnlockedVault, key: &str, allocated: &str) -> RecordState {
-    let mut records = from
-        .sync_records(std::slice::from_ref(&key.to_string()))
-        .unwrap();
+    let mut records =
+        crate::usecases::sync::read::sync_records(from, std::slice::from_ref(&key.to_string()))
+            .unwrap();
     let state = records.remove(key).unwrap();
     let stamp = state.stamps.as_ref().unwrap().fields["allocated"].clone();
     as_old_peer(state, allocated, Some(stamp))
@@ -394,7 +422,8 @@ fn a_correction_from_a_stripped_relay_is_withdrawn_when_the_real_move_arrives() 
     };
     pull(&mut devices, 0, 2);
     let key = format!("envelopes:{id}");
-    devices[0].fund_envelope(&id, amount("10")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut devices[0], &id, amount("10"))
+        .unwrap();
     let relay = stripped_relay(&mut devices[0], &key, "10");
     // C hears it from the old device first: a (false) correction.
     devices[2]
@@ -424,7 +453,9 @@ fn a_correction_from_a_stripped_relay_is_withdrawn_when_the_real_move_arrives() 
         assert!(corrections(vault, &id).is_empty());
         assert_derived(vault, &id);
     }
-    let digest = |vault: &mut UnlockedVault| vault.sync_manifest(None).unwrap()[&key];
+    let digest = |vault: &mut UnlockedVault| {
+        crate::usecases::sync::read::sync_manifest(vault, None).unwrap()[&key]
+    };
     let first = digest(&mut devices[0]);
     assert_eq!(first, digest(&mut devices[1]));
     assert_eq!(first, digest(&mut devices[2]));
@@ -434,18 +465,19 @@ fn a_correction_from_a_stripped_relay_is_withdrawn_when_the_real_move_arrives() 
 fn a_real_old_edit_stays_after_later_moves() {
     let (_dir, mut left, mut right) = two_devices();
     let (_, id) = shared_envelope(&mut left, &mut right);
-    left.fund_envelope(&id, amount("10")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut left, &id, amount("10")).unwrap();
     settle(&mut left, &mut right);
     let key = format!("envelopes:{id}");
     let stamp = later(&mut left);
-    let mut records = right.sync_records(std::slice::from_ref(&key)).unwrap();
+    let mut records =
+        crate::usecases::sync::read::sync_records(&mut right, std::slice::from_ref(&key)).unwrap();
     let batch = BTreeMap::from([(
         key.clone(),
         as_old_peer(records.remove(&key).unwrap(), "25", Some(stamp)),
     )]);
     right.sync_apply(&batch, &peer("old")).unwrap();
-    left.fund_envelope(&id, amount("3")).unwrap();
-    right.fund_envelope(&id, amount("4")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut left, &id, amount("3")).unwrap();
+    crate::usecases::household::envelopes::fund_envelope(&mut right, &id, amount("4")).unwrap();
     settle(&mut left, &mut right);
     for vault in [&left, &right] {
         assert_eq!(corrections(vault, &id).len(), 1);

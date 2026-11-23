@@ -139,20 +139,7 @@ impl UnlockedVault {
     // What the executor reads and applies through the host, and what the open
     // and the sync read; not in the baseline (crate-private), so outside the
     // regenerated block.
-    forward! {
-        #[cfg(test)]
-        pub(crate) fn wf_mark(&self, workflow_id: &str, key: &str) -> Option<String>
-            => crate::workflow::service::marks::mark @doc;
-        #[cfg(test)]
-        pub(crate) fn wf_set_mark(&mut self, workflow_id: &str, key: &str, value: &str)
-            => crate::usecases::workflow::runs::wf_set_mark;
-        /// A schedule mark never stays below a moment whose run key is booked.
-        pub(crate) fn keep_schedule_marks(&mut self)
-            => crate::usecases::workflow::runs::keep_schedule_marks;
-        /// Active workflows a required field now stops: switched off on open.
-        pub(crate) fn disable_incomplete_workflows(&mut self, now: i64) -> bool
-            => crate::usecases::workflow::records::disable_incomplete_workflows;
-    }
+    forward! {}
 }
 
 #[cfg(test)]
