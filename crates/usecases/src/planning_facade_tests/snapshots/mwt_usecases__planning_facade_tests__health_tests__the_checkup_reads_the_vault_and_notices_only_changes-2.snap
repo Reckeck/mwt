@@ -1,5 +1,5 @@
 ---
-source: crates/core/src/planning_facade_tests/health_tests.rs
+source: crates/usecases/src/planning_facade_tests/health_tests.rs
 expression: sent
 ---
 {

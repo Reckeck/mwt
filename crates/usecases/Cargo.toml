@@ -1,0 +1,81 @@
+[package]
+name = "mwt-usecases"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Multi Wallet Tracker use cases: the scenarios, the service shim, sandbox, app config and the test kit over the domain crates (no Tauri deps)"
+
+[lints]
+workspace = true
+
+[features]
+# Test kit (`crate::testkit`): the use-case crate's own module plus a re-export of the dev-only crate `mwt-testkit`.
+testkit = ["dep:mwt-testkit", "mwt-vault/testing"]
+# Forwarded to every crate that has them; the derives of this crate name `ts_rs` itself (no `schemars` derive here).
+ts = ["dep:ts-rs", "mwt-base/ts", "mwt-model/ts", "mwt-sync/ts", "mwt-money/ts", "mwt-household/ts", "mwt-planning/ts", "mwt-reports/ts", "mwt-cryptotrack/ts", "mwt-crypto/ts", "mwt-contract/ts", "mwt-workflow/ts", "mwt-net/ts"]
+schema = ["mwt-base/schema", "mwt-model/schema", "mwt-money/schema", "mwt-planning/schema", "mwt-reports/schema", "mwt-cryptotrack/schema", "mwt-contract/schema", "mwt-workflow/schema"]
+
+[dependencies]
+# The model.
+mwt-model = { path = "../model" }
+# Base: `Amount` and the DTO derives.
+mwt-base = { path = "../base" }
+# The network layer: pricing, exchanges, data sources, market, updates, external links.
+mwt-net = { path = "../net" }
+# The vault: file codec, kernel (`Write`, `Tx`, `Collection<T>`), vault files and copies, frozen v1-v4 schemas.
+mwt-vault = { path = "../vault" }
+# Device-to-device sync: merge, Noise channel, pairing code.
+mwt-sync = { path = "../sync" }
+# Money rules: the books, ledger, valuation, cost basis, validation.
+mwt-money = { path = "../money" }
+# Household rules: attachments, contacts, debts, losses, loyalty, property links, relations, shared events, utilities, vehicles.
+mwt-household = { path = "../household" }
+# Planning rules: budgets, envelopes, goals, allocation, agenda, automations, health, notifications, scenarios.
+mwt-planning = { path = "../planning" }
+# Reports: the overview, dashboard, insights, health, comparison, where-went and notification snapshot.
+mwt-reports = { path = "../reports" }
+# Crypto module: chains, protocols, engine, sources, tokens and the pure service rules.
+mwt-cryptotrack = { path = "../cryptotrack" }
+# The IPC contract: the command input/output types (everything the frontend sees).
+mwt-contract = { path = "../contract" }
+# Workflow: the node catalog, graph, validation, executor and the pure record, run, mark and variable rules.
+mwt-workflow = { path = "../workflow" }
+# Test support: reached only through the `testkit` feature (and the dev-dependency below); no other crate lists it.
+mwt-testkit = { path = "../testkit", optional = true }
+# `SecurityLevel` / `RaiseStage` (the `ts` feature forwards to it).
+mwt-crypto = { path = "../crypto" }
+serde.workspace = true
+serde_json.workspace = true
+rmp-serde.workspace = true
+thiserror.workspace = true
+rust_decimal.workspace = true
+uuid.workspace = true
+base64 = "0.23"
+time.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+zeroize.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+blake2.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+url.workspace = true
+tokio.workspace = true
+ts-rs = { workspace = true, optional = true }
+regex.workspace = true
+serde_bytes.workspace = true
+
+[dev-dependencies]
+# The feature-gated tests of this crate and of everything below it keep running in workspace test and clippy runs.
+mwt-usecases = { path = ".", features = ["ts", "schema"] }
+mwt-money = { path = "../money", features = ["testing"] }
+mwt-sync = { path = "../sync", features = ["testing"] }
+mwt-vault = { path = "../vault", features = ["testing"] }
+mwt-testkit = { path = "../testkit" }
+mwt-crypto = { path = "../crypto", features = ["testing"] }
+tempfile = "3"
+insta.workspace = true
+proptest.workspace = true
+pretty_assertions.workspace = true

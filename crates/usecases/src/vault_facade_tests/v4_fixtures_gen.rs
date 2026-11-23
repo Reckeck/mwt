@@ -9,7 +9,7 @@
 //! (payload version 4, container version 1) with
 //!
 //! ```text
-//! cargo test -p trade-core --lib vault_facade_tests::v4_fixtures_gen::generate -- --ignored
+//! cargo test -p mwt-usecases --lib vault_facade_tests::v4_fixtures_gen::generate -- --ignored
 //! ```
 //!
 //! Regenerating after the reset would write a different format: the generator

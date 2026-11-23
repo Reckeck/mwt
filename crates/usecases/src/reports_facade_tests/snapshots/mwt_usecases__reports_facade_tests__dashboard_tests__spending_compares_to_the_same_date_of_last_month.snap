@@ -1,5 +1,5 @@
 ---
-source: crates/core/src/reports_facade_tests/dashboard_tests.rs
+source: crates/usecases/src/reports_facade_tests/dashboard_tests.rs
 expression: view
 ---
 {

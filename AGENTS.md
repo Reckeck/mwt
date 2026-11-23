@@ -45,7 +45,7 @@ Always use `mise run …` (the `mise.toml` task file), do not hardcode versions:
 | `mise run dev` | Tauri dev (`pnpm tauri dev --features schema`; the Tauri v2 CLI finds `crates/app/tauri.conf.json` from the workspace root by itself) |
 | `pnpm dev` | Vite frontend without Tauri |
 
-Also useful directly: `cargo build --workspace`, `cargo test -p trade-core`.
+Also useful directly: `cargo build --workspace`, `cargo test -p mwt-usecases`.
 
 ## Structure
 
@@ -411,7 +411,7 @@ Faster, when the edit is clearly local:
 | Changes | Command |
 |---|---|
 | `src/**` (frontend) | `mise run lint && mise run typecheck && mise run test-frontend` |
-| `crates/core/**`, `crates/app/**` | `mise run test && mise run clippy` |
+| `crates/core/**`, `crates/usecases/**`, `crates/app/**` | `mise run test && mise run clippy` |
 | DTOs, models, `ipc_contract.rs` | `mise run test && mise run gen-types` — be sure to diff `src/shared/api/ipc.gen.d.ts`, it must change |
 | final, before committing | `mise run check` |
 

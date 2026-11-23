@@ -1,5 +1,5 @@
 ---
-source: crates/core/src/service/workflows/tests.rs
+source: crates/usecases/src/service/workflows/tests.rs
 expression: refused
 ---
 {

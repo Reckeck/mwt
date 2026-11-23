@@ -3308,6 +3308,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "mwt-usecases"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "blake2 0.11.0",
+ "chrono",
+ "chrono-tz",
+ "hmac 0.13.0",
+ "insta",
+ "mwt-base",
+ "mwt-contract",
+ "mwt-crypto",
+ "mwt-cryptotrack",
+ "mwt-household",
+ "mwt-model",
+ "mwt-money",
+ "mwt-net",
+ "mwt-planning",
+ "mwt-reports",
+ "mwt-sync",
+ "mwt-testkit",
+ "mwt-usecases",
+ "mwt-vault",
+ "mwt-workflow",
+ "pretty_assertions",
+ "proptest",
+ "rand 0.10.4",
+ "regex",
+ "reqwest 0.12.28",
+ "rmp-serde",
+ "rust_decimal",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "ts-rs",
+ "url",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "mwt-vault"
 version = "0.1.0"
 dependencies = [
@@ -6593,46 +6639,12 @@ dependencies = [
 name = "trade-core"
 version = "0.1.0"
 dependencies = [
- "base64 0.23.1",
- "blake2 0.11.0",
- "chrono",
- "chrono-tz",
- "hmac 0.13.0",
- "insta",
- "mwt-base",
- "mwt-contract",
- "mwt-crypto",
  "mwt-cryptotrack",
- "mwt-household",
- "mwt-model",
  "mwt-money",
- "mwt-net",
- "mwt-planning",
  "mwt-reports",
- "mwt-sync",
- "mwt-testkit",
- "mwt-vault",
- "mwt-workflow",
- "pretty_assertions",
- "proptest",
- "rand 0.10.4",
- "regex",
- "reqwest 0.12.28",
- "rmp-serde",
- "rust_decimal",
- "serde",
- "serde_bytes",
+ "mwt-usecases",
  "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "time",
- "tokio",
- "trade-core",
  "ts-rs",
- "url",
- "uuid",
- "zeroize",
 ]
 
 [[package]]
