@@ -2,5 +2,5 @@
 //! progress queries to `crate::usecases::planning::goals` (spec core-strangler, D1).
 
 pub use crate::planning::goals::{
-    GoalCalendar, GoalCalendarMonth, GoalDeleted, GoalDraft, GoalProgress, RealismIssue,
+    GoalCalendar, GoalCalendarMonth, GoalDeleted, GoalProgress, RealismIssue,
 };

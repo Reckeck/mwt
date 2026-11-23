@@ -6,7 +6,7 @@ use super::*;
 use crate::Amount;
 use crate::model::notify::{MAX_NOTICE_LOG, NoticeCategory, NoticeRecord};
 use crate::model::planning::{BudgetPeriod, BudgetTarget};
-use crate::service::budget::BudgetDraft;
+use crate::planning::budget::BudgetDraft;
 
 fn notice(key: &str, delivered_at: &str) -> NoticeRecord {
     NoticeRecord {

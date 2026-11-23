@@ -11,8 +11,8 @@ mod tests {
     use super::*;
     use crate::model::store::StoreScope;
     use crate::model::store::{StoreKind, SubType};
+    use crate::planning::goals::GoalDraft;
     use crate::service::StoreExtras;
-    use crate::service::goals::GoalDraft;
     use crate::service::test_support::{amount, holding_of, income, store, usd};
 
     fn sub_account(vault: &mut UnlockedVault, name: &str, parent: &str) -> String {

@@ -10,6 +10,7 @@
 use super::convergence_tests::{Edit, Ledger, Rng, event_ids, guest, pick};
 use super::*;
 use crate::exchange::staging::PendingImportExt;
+use crate::household::utilities::UtilityDraft;
 use crate::ipc_contract::{
     AttachPaymentInput, SharedEventDraft, SharedItemDraft, SharedPurchaseDraft,
 };
@@ -17,12 +18,11 @@ use crate::model::planning::AssetClass;
 use crate::model::shared_event::{ItemSplit, ME, PriceMode};
 use crate::model::store::{AssetRef, MAX_STORE_DEPTH, StoreKind, StoreScope};
 use crate::model::transaction::Transaction;
+use crate::planning::goals::GoalDraft;
 use crate::service::StoreExtras;
 use crate::service::allocation::AssetClassTarget;
 use crate::service::contacts::DebtTermsDraft;
-use crate::service::goals::GoalDraft;
 use crate::service::test_support::{amount, income_of, payment, usd};
-use crate::service::utilities::UtilityDraft;
 use crate::service::valuation::ValuationInput;
 use crate::time::unix_secs;
 use std::collections::{BTreeMap, BTreeSet};

@@ -7,8 +7,8 @@ use super::convergence_tests::Ledger;
 use super::tests::{settle, two_devices};
 use super::*;
 use crate::model::store::{StoreKind, StoreScope};
+use crate::planning::goals::GoalDraft;
 use crate::service::contacts::DebtTermsDraft;
-use crate::service::goals::GoalDraft;
 use crate::service::test_support::{amount, income, store};
 use crate::service::valuation::ValuationInput;
 

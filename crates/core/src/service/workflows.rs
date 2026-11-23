@@ -6,7 +6,6 @@
 pub use crate::workflow::service::records::{
     ExportedStore, SavedWorkflow, WorkflowDraft, WorkflowImportPreview,
 };
-pub use crate::workflow::service::runs::WorkflowPass;
 pub use crate::workflow::service::tests_def::WorkflowTestResult;
 
 #[cfg(test)]
