@@ -1,4 +1,4 @@
-//! The domain crates must not reach back into the facade: no `UnlockedVault`, no top-level
+//! The domain crates must not reach back into the facade: no `Session` from the `service` module, no top-level
 //! `crate::service::` path, no `trade_core::` path and no `Books::vault` in their non-test code
 //! (core-strangler Z6/D5, core-dismantle D14). `cryptotrack::service` is the crate's own module.
 //! A few uses are exempt until the task named in the exemption moves them; entries may only be removed.
@@ -21,10 +21,11 @@ pub const DOMAIN_CRATES: &[&str] = &[
 /// Crates with a `service` module of their own: there `crate::service` is theirs, not the facade's.
 const OWN_SERVICE: &[&str] = &["cryptotrack", "workflow"];
 
-const VAULT_TYPE: &str = "UnlockedVault";
+const SESSION_TYPE: &str = "Session";
 const BOOKS_VAULT: &str = "Books::vault";
 const VAULT_CALL: &str = ".vault()";
 const SERVICE: &str = "service";
+const SERVICE_SESSION_PREFIX: &str = "service::";
 const FACADE_PATH: &str = "trade_core::";
 
 /// One use that stays until `until` moves it: the file, and the last segment of the `crate::service` path.
@@ -142,8 +143,11 @@ fn last_segment(path: &str) -> &str {
 fn forbidden_in(text: &str, own_service: bool) -> Vec<(usize, String, Option<String>)> {
     let cleaned = scan::production_text(text);
     let mut found = Vec::new();
-    for offset in word_offsets(&cleaned, VAULT_TYPE) {
-        found.push((line_of(&cleaned, offset), format!("`{VAULT_TYPE}`"), None));
+    for offset in word_offsets(&cleaned, SESSION_TYPE) {
+        if cleaned[..offset].ends_with(SERVICE_SESSION_PREFIX) {
+            let what = format!("`{SERVICE_SESSION_PREFIX}{SESSION_TYPE}`");
+            found.push((line_of(&cleaned, offset), what, None));
+        }
     }
     for offset in word_start_offsets(&cleaned, FACADE_PATH) {
         found.push((line_of(&cleaned, offset), format!("`{FACADE_PATH}`"), None));
@@ -249,7 +253,7 @@ mod tests {
         let found = messages(
             &[source(
                 "money/rates.rs",
-                "use std::fmt;\nuse crate::service::UnlockedVault;\n",
+                "use std::fmt;\nuse crate::service::Session;\n",
             )],
             NONE,
         );
@@ -259,6 +263,20 @@ mod tests {
                 .iter()
                 .all(|line| line.contains("crates/money/rates.rs:2"))
         );
+    }
+
+    #[test]
+    fn session_from_the_service_module_fails_but_another_session_does_not() {
+        let found = messages(
+            &[source("money/a.rs", "use crate::service::Session;\n")],
+            NONE,
+        );
+        assert!(
+            found.iter().any(|line| line.contains("`service::Session`")),
+            "{found:?}"
+        );
+        let other = "use crate::clock::Session;\nlet session = Session::new();\n";
+        assert!(messages(&[source("money/a.rs", other)], NONE).is_empty());
     }
 
     #[test]
@@ -306,7 +324,8 @@ mod tests {
 
     #[test]
     fn test_code_comments_and_a_crates_own_service_pass() {
-        let text = "// UnlockedVault\n#[cfg(test)]\nmod tests {\n    use crate::service::UnlockedVault;\n}\n";
+        let text =
+            "// service::Session\n#[cfg(test)]\nmod tests {\n    use crate::service::Session;\n}\n";
         assert!(messages(&[source("money/a.rs", text)], NONE).is_empty());
         let own = source("workflow/a.rs", "use crate::service::graph::G;\n");
         assert!(messages(&[own], NONE).is_empty());
