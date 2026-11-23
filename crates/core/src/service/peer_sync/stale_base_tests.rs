@@ -8,7 +8,7 @@ use crate::exchange::Execution;
 use crate::exchange::staging::PendingImportExt;
 use crate::model::transaction::TxOrigin;
 use crate::model::vault::PendingImport;
-use crate::service::WorkflowDraft;
+use crate::workflow::service::records::WorkflowDraft;
 use serde_json::json;
 
 fn pause() {
@@ -334,7 +334,7 @@ fn the_queue_rule_is_idempotent_and_undone_with_its_batch() {
 fn new_contact(vault: &mut UnlockedVault, name: &str) -> String {
     crate::usecases::household::contacts::create_contact(
         vault,
-        crate::service::contacts::ContactDraft {
+        crate::household::contacts::ContactDraft {
             name: name.into(),
             kind: crate::model::contact::ContactKind::Person,
             note: String::new(),

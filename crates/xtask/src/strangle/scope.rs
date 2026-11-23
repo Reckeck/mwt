@@ -139,8 +139,8 @@ mod tests {
         let found = findings(
             &real_workspace(),
             &changed(&[
-                "crates/sync/src/sync_ids.rs",
-                "crates/core/src/service/loyalty.rs",
+                "crates/sync/src/peer_sync.rs",
+                "crates/core/src/service/rates.rs",
             ]),
             None,
         );

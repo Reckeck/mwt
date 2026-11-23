@@ -713,7 +713,7 @@ impl UnlockedVault {
                 ),
             )
         };
-        let notice = super::notifications::notice(
+        let notice = crate::model::notify::notice(
             crate::model::notify::NoticeCategory::Security,
             format!("transfer:{id}"),
             &title,
@@ -2520,7 +2520,7 @@ mod tests {
         // `tombstone_tests`).
         let contact = crate::usecases::household::contacts::create_contact(
             &mut left,
-            crate::service::contacts::ContactDraft {
+            crate::household::contacts::ContactDraft {
                 name: "Gone".into(),
                 kind: crate::model::contact::ContactKind::Person,
                 note: String::new(),

@@ -4,7 +4,7 @@ use super::tests::{settle, two_devices};
 use super::*;
 use crate::model::planning::AlertCondition;
 use crate::model::vault::PricePoint;
-use crate::service::PriceAlertDraft;
+use crate::planning::agenda::PriceAlertDraft;
 use crate::service::test_support::{amount, btc};
 use crate::time::unix_secs;
 

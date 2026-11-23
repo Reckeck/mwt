@@ -2,11 +2,8 @@
 //! The scenarios that write the rate caches or speak the wire types live in
 //! `usecases::money::rates`.
 
-pub use crate::money::rates::RateBook;
-#[cfg(test)]
-pub(crate) use crate::money::rates::is_fiat_of;
-
 use crate::model::transaction::Transaction;
+use crate::money::rates::RateBook;
 
 use super::UnlockedVault;
 

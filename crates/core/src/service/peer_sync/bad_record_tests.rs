@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use super::tests::two_devices;
 use super::*;
+use crate::household::contacts::ContactDraft;
 use crate::model::contact::ContactKind;
-use crate::service::contacts::ContactDraft;
 
 fn contact(vault: &mut UnlockedVault, name: &str) -> String {
     let created = crate::usecases::household::contacts::create_contact(

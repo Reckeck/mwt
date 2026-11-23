@@ -2,9 +2,9 @@
 
 use super::tests::{exchange, two_devices};
 use super::*;
+use crate::household::attachments::NewFile;
 use crate::model::entity_ref::{EntityKind, EntityRef};
 use crate::model::store::StoreKind;
-use crate::service::NewFile;
 use crate::service::test_support::*;
 
 fn reopen(vault: &UnlockedVault) -> UnlockedVault {

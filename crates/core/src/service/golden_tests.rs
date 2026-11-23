@@ -2,9 +2,9 @@
 //! must NOT change. All instants are fixed; nothing reads the wall clock.
 
 use super::UnlockedVault;
-use super::reports::{Report, ReportFilter, ReportKind};
 use super::test_support::*;
 use crate::model::store::{Binding, StoreKind, SubType};
+use mwt_reports::overview::{Report, ReportFilter, ReportKind};
 
 /// BTC store (`Cold`): buy 1 @ 40 000 (Jan 1), buy 1 @ 50 000 (Jan 2),
 /// sell 1 @ 60 000 (`sale_day`). Base currency usd.
@@ -99,7 +99,7 @@ fn golden_g4_pnl_report_by_month() {
 /// G5: merging two BTC token accounts keeps quantity, average and PnL.
 #[test]
 fn golden_g5_merge_without_corrections() {
-    use super::store_change::{StoreChange, StoreChangeInput};
+    use crate::money::store_change::{StoreChange, StoreChangeInput};
     let (_dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     let wallet = store(&mut vault, "Wallet", StoreKind::Crypto, None);

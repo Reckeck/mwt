@@ -10,8 +10,8 @@ mod tests {
     use super::super::tests::{exchange, settle};
     use super::*;
     use crate::model::store::{StoreKind, SubType};
+    use crate::money::store_change::{StoreChange, StoreChangeInput};
     use crate::service::StoreExtras;
-    use crate::service::store_change::{StoreChange, StoreChangeInput};
     use crate::service::test_support::{empty_vault, income, usd};
     use crate::sync::track::Tracker;
 

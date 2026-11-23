@@ -2,6 +2,7 @@
 
 use super::tests::{settle, two_devices};
 use super::*;
+use crate::household::attachments::NewFile;
 use crate::model::enrichment::{
     EnrichmentData, EnrichmentRecord, EnrichmentSource, EnrichmentStatus,
 };
@@ -9,7 +10,6 @@ use crate::model::entity_ref::{EntityKind, EntityRef};
 use crate::model::shared_event::{EventItem, Purchase, Settlement, SharedEvent};
 use crate::model::transaction::Transaction;
 use crate::model::vault::{ImportRun, TxProperty};
-use crate::service::NewFile;
 use crate::service::test_support::income;
 
 fn pause() {

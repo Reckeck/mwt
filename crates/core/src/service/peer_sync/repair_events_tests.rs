@@ -11,8 +11,8 @@ use crate::ipc_contract::{
 use crate::model::contact::{Contact, ContactKind};
 use crate::model::shared_event::{PriceMode, Purchase, Settlement, SettlementKind};
 use crate::model::store::StoreKind;
-use crate::service::sync_ids;
 use crate::service::test_support::{amount, empty_vault, payment, store};
+use crate::sync::sync_ids;
 
 fn pause() {
     std::thread::sleep(std::time::Duration::from_millis(3));

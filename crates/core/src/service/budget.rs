@@ -5,7 +5,7 @@ use crate::Amount;
 use crate::model::transaction::Leg;
 
 use super::UnlockedVault;
-use super::rates::RateBook;
+use crate::money::rates::RateBook;
 
 impl UnlockedVault {
     /// Value of one leg in `currency` at `secs`; `None` without a rate.

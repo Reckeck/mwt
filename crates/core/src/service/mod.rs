@@ -31,153 +31,38 @@ use crate::storage::{SnapshotFormat, VaultFile};
 pub use password::{CopyPolicy, PlainCopies, RotationReport};
 pub use saving::{FlushJob, SaveHook};
 
-mod adjustments;
-pub(crate) mod agenda;
-mod allocation;
-mod asset_holdings;
-mod attachments;
-mod attachments_cleanup;
-mod auto_reminders;
-mod automation_card;
 mod automations;
 mod backups;
 mod books;
 pub(crate) mod budget;
-mod bulk;
-mod categories;
-mod contacts;
 mod cryptotrack;
 pub use cryptotrack::network::Probe;
-mod dashboard;
-mod dashboard_tiles;
-mod dashboard_today;
-mod datasources;
-mod debts;
 mod document_edit;
-mod emergency;
-mod enrichment;
-mod envelopes;
 mod exchange_keys;
 mod exchange_sync;
-mod investments;
-mod passive;
 mod password;
-mod property_links;
 pub mod security_level;
-pub use exchange_sync::{IMPORT_ACCOUNTS, ImportPreview};
 pub use mwt_cryptotrack::exchange_sync::TerminalPatch;
-mod goals;
-mod health;
-mod inflation;
-pub(crate) mod insights;
-pub(crate) mod interest;
-mod ledger;
-pub(crate) mod losses;
-mod loyalty;
-mod month_balance;
-mod my_automations;
-mod notifications;
-mod notify_snapshot;
 mod peer_sync;
 mod saving;
-mod scenarios;
-mod search;
 mod shared_events;
-pub(crate) mod sync_ids;
-mod sync_journal;
-mod vehicle;
-pub(crate) mod where_went;
 pub use peer_sync::{AppliedBatch, ExternalMerge, PeerRef, SyncTap, UndoReport};
-mod exchange_import;
 #[cfg(test)]
 mod golden_tests;
-mod portfolio;
 mod ports;
 pub use ports::{BybitApi, LlamaPrices, RpcChain};
-mod preview;
-mod price_info;
 mod rates;
-mod rebase;
-mod recurring;
-mod relations;
-pub(crate) mod reports;
-mod store_change;
-mod store_months;
-mod stores;
 #[cfg(any(test, feature = "testkit"))]
 pub(crate) mod test_support;
-mod transactions;
-mod utilities;
 mod validate;
-mod valuation;
 mod workflow_templates;
 mod workflows;
-mod worth;
 pub use mwt_money::stores::{FirstCard, OpeningBalance};
-pub use portfolio::{
-    AssetBalance, AssetStat, NamedValue, PnlLeg, StoreChildRow, StoreCrumb, StorePosition,
-    StoreValue,
-};
-pub use stores::StoreMoveTargets;
 
-pub use agenda::{PriceAlertDraft, UpcomingKind};
-pub use allocation::{PRESET_GLOBAL, PRESET_LOCAL, PRESET_RISKY, TopupRow, preset_classes};
-pub use asset_holdings::AssetHolding;
-pub use attachments::NewFile;
-pub use auto_reminders::category_of;
-pub use automation_card::{CardAction, CardMoney, CardTrigger, JournalStatus};
-pub use automations::{MAX_CATCH_UP, SimulatedBalance, SimulatedRun, describe_reject};
-pub use contacts::{ContactDraft, TurnoverRow};
-pub use dashboard::SpendingDay;
-pub use dashboard_tiles::CategoryGrowth;
-pub use dashboard_today::{TODAY_TODOS, TodayTodo, TodayTodoKind};
-pub use datasources::{DataSourceDraft, SourceUse, is_due as source_is_due};
-pub use debts::{DebtLoad, LoanStatus, classify_loan};
-pub use emergency::{EmergencyStore, MAX_FUND_MONTHS};
-pub use goals::{GoalCalendarMonth, RealismIssue};
-pub use health::{
-    DTI_ELEVATED_PCT, DTI_HIGH_PCT, FUND_MIN_MONTHS, FUND_SAFE_MONTHS, HealthReason,
-    SAVINGS_BENCHMARK_PCT, SavingsMonth,
-};
-pub use inflation::{INFLATION_CHART_MONTHS, InflationNews, inflation_notice, key_rate_notice};
-pub use insights::{
-    OverviewFlow, OverviewInvestments, OverviewWealth, OverviewYear, report_insights,
-};
-pub use interest::PdsReport;
-pub use investments::InvestmentRow;
-pub use ledger::{GRAPH_NODE_CAP, GraphEdge, GraphEdgeKind, GraphLane, GraphNode};
-pub use losses::{FlowAmount, FlowLink, FxRow, LossBucket, LossReport, LossRow};
-pub use loyalty::{CashbackSource, LoyaltyBalance};
-pub use month_balance::{MonthBalanceDay, MonthBalanceMark, MonthBalanceRow};
-pub use my_automations::MineKind;
-pub use notify_snapshot::{SNAPSHOT_DAYS, ScheduledNotice, SnapshotAlert};
-pub use passive::{PassiveIncome, PassiveMonth, PassiveShare};
-pub use preview::{PositionChange, PreviewWarning};
-pub use price_info::{PriceInfo, PriceOrigin};
-
-pub use recurring::RecurringCheck;
-pub use relations::{EntityKind, EntityRef, RELATION_ITEMS_CAP, RelationGroup, RelationItem};
-pub use reports::{
-    CalendarDay, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock, CategoryRow,
-    DayStatus, InflationPoint, InflationReport, NetworthPoint, NetworthReport, PnlReport, PnlRow,
-    PortfolioPoint, PortfolioReport, Report, ReportFilter, ReportKind, ReportMeta, StoreReportRow,
-    StoresReport, UnpricedSpending, YearReport, YearRow,
-};
-pub use scenarios::{INCOME_MONTHS, planned_balance};
-pub use search::{PINNED_CAP, SEARCH_TX_CAP};
 pub use shared_events::{
     EventTotals, ItemShareView, ItemView, MyPosition, PersonView, PlannedPayment, PurchaseView,
     SettlementView,
 };
-pub use store_change::{StoreChange, StoreChangeConflict, StoreChangeItem};
-pub use utilities::{
-    FormulaZoneReading, PayUtilityLine, UtilityBillLine, UtilityMonth, ZoneBillLine, ZoneMonth,
-    ZoneReadingInput,
-};
-pub use valuation::{PropertyPurchase, ValuationBaseKind};
-pub use where_went::{WHERE_ITEMS, WhereItem, WhereReport, WhereRow};
-pub use workflows::{ExportedStore, WorkflowDraft};
-pub use worth::{FlowClass, LiabilityShare};
 
 /// Store fields beyond name, colour and note. On update, `None` in an
 /// `Option<Option>`-like field keeps the current value where noted.
@@ -1374,7 +1259,7 @@ mod tests {
         );
         assert_eq!(
             crate::usecases::money::stores::store_move_targets(&vault, &ledger).unwrap(),
-            StoreMoveTargets::default()
+            crate::usecases::money::stores::StoreMoveTargets::default()
         );
     }
 
@@ -1596,7 +1481,7 @@ mod tests {
         // not income: the opening balance stays out of the budget
         assert_eq!(
             crate::money::worth::classify_flow(&vault.doc, tx),
-            FlowClass::Ignored
+            crate::money::worth::FlowClass::Ignored
         );
 
         // a bank holds only fiat: the whole create is refused, nothing remains
@@ -2253,7 +2138,10 @@ mod tests {
         );
         let position = &overview.positions[0];
         assert_eq!(position.change_24h_pct, Some(amount("1.5")));
-        assert_eq!(position.price_info.origin, PriceOrigin::Market);
+        assert_eq!(
+            position.price_info.origin,
+            crate::money::price_info::PriceOrigin::Market
+        );
     }
 
     /// A per-store series must not be valued against the other store's
@@ -3263,7 +3151,10 @@ mod persist_tests {
             freedom_rate: Some(Amount::parse("12").unwrap()),
             carry_since: None,
             pinned: vec![crate::model::entity_ref::Pinned::Entity {
-                target: EntityRef::new(EntityKind::Goal, "g1"),
+                target: crate::household::relations::EntityRef::new(
+                    crate::household::relations::EntityKind::Goal,
+                    "g1",
+                ),
             }],
             dashboard_period: crate::model::vault::DashPeriod::Year,
             onboarding_checklist_hidden: true,

@@ -2,12 +2,12 @@
 
 use super::tests::{exchange, settle, two_devices};
 use super::*;
+use crate::household::contacts::ContactDraft;
 use crate::ipc_contract::{SharedEventDraft, SharedParticipantDraft, SharedPurchaseDraft};
 use crate::model::category::CategoryGroup;
 use crate::model::contact::ContactKind;
 use crate::model::shared_event::PriceMode;
 use crate::model::store::StoreKind;
-use crate::service::contacts::ContactDraft;
 use crate::service::test_support::{amount, income, store};
 
 fn pause() {

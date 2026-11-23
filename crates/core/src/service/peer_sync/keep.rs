@@ -1,7 +1,7 @@
 //! Shim of the `peer_sync/keep` area: moved to `crate::sync::repair::keep` (spec core-strangler, D1).
 
 use crate::model::planning::Reminder;
-use crate::service::auto_reminders::source_identity;
+use crate::planning::auto_reminders::source_identity;
 
 /// An automatic reminder is one per source (kind + entity id), however its id
 /// or its key was made. Reminders of the old build (random id, schedule-only
