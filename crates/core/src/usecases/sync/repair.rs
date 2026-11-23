@@ -7,12 +7,10 @@ use std::collections::{BTreeMap, HashSet};
 
 use crate::error::Result;
 use crate::ipc_contract::MergeTarget;
-use crate::model::notify::NoticeCategory;
-use crate::model::notify::notice;
+use crate::model::notify::{NoticeCategory, notice};
 use crate::model::vault::now_iso;
 use crate::service::{CASH_WALLET_ID, UnlockedVault};
-use crate::sync::journal::SyncJournalEntryExt;
-use crate::sync::journal::{SyncJournalEntry, SyncJournalOutcome};
+use crate::sync::journal::{SyncJournalEntry, SyncJournalEntryExt, SyncJournalOutcome};
 use crate::sync::repair::bad_record::journal_has;
 use crate::sync::repair::keep::{self, KeepTarget};
 use crate::sync::repair::repair::{
@@ -31,8 +29,7 @@ use crate::sync::repair::repair_restore::{
     restore_removed_with_payment as restore_payment_parts,
 };
 use crate::sync::repair::repoint::repoint_tx as repoint_references;
-use crate::sync::view;
-use crate::sync::{BatchEntry, RecordState, SyncSummary};
+use crate::sync::{BatchEntry, RecordState, SyncSummary, view};
 
 /// Check the rules and fix what breaks them. `batch_id` is the sync batch
 /// whose merge is being settled (the repair is recorded in it for undo);

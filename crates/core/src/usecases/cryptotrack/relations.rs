@@ -112,12 +112,10 @@ mod tests {
     use crate::ipc_contract::cryptotrack::links::CryptoLinkInput;
     use crate::ipc_contract::cryptotrack::operations::CryptoListOperationsInput;
     use crate::model::chain::Chain;
-    use crate::model::contact::{Contact, ContactAccount};
-    use crate::model::contact::{ContactKind, DetailKind};
-    use crate::model::cryptotrack::TrackingRef;
+    use crate::model::contact::{Contact, ContactAccount, ContactKind, DetailKind};
     use crate::model::cryptotrack::{
         CryptoAccount, CryptoAsset, CryptoDirection, CryptoLeg, CryptoOverride, CryptoTx,
-        CryptoTxKind,
+        CryptoTxKind, TrackingRef,
     };
     use crate::model::store::StoreKind;
     use crate::service::UnlockedVault;

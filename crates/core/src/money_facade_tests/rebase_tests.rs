@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::household::contacts::ContactDraft;
 use crate::ipc_contract::{GoalInput, UpdateGoalInput};
 use crate::ipc_contract::{UpdateCategoryInput, UpdateContactInput, UpdateStoreInput};
 use crate::model::contact::ContactKind;
@@ -9,7 +10,6 @@ use crate::model::store::StoreKind;
 use crate::model::store::StoreScope;
 use crate::model::transaction::Transaction;
 use crate::money::rebase::*;
-use crate::service::ContactDraft;
 use crate::service::test_support::*;
 use crate::usecases::money::rebase::*;
 

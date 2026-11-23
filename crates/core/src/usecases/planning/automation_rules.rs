@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use crate::Amount;
-use crate::calendar;
 use crate::error::{Error, Result};
 use crate::model::planning::{AutomationOutcome, AutomationRun, AutomationSpec};
 use crate::model::store::Holding;
@@ -14,6 +12,7 @@ use crate::time::unix_secs;
 use crate::workflow::automation::{self as graph_of, automation_graph};
 use crate::workflow::exec::{StepStatus, TraceStep};
 use crate::workflow::model::{GraphVersion, MAX_GRAPH_VERSIONS, RunOutcome, Workflow, WorkflowRun};
+use crate::{Amount, calendar};
 
 /// Run history over the document, for the command that holds the vault.
 pub fn automation_runs(doc: &VaultDoc, automation_id: Option<&str>) -> Vec<AutomationRun> {

@@ -1,6 +1,6 @@
 use crate::Amount;
 use crate::calendar::Calendar;
-use crate::service::FlowClass;
+use crate::money::worth::FlowClass;
 use crate::time::secs_or_now;
 use std::collections::HashMap;
 
@@ -12,7 +12,7 @@ use crate::ipc_contract::{
 use crate::model::planning::{BudgetPeriod, BudgetTarget};
 use crate::model::shared_event::{PriceMode, SettleDirection};
 use crate::model::store::StoreKind;
-use crate::service::BudgetDraft;
+use crate::planning::budget::BudgetDraft;
 use crate::service::test_support::{empty_vault, income_of, store};
 
 fn spent_in_flows(scenario: &Scenario) -> Amount {

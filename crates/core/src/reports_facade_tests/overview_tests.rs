@@ -4,6 +4,7 @@ use mwt_reports::overview::*;
 use std::collections::BTreeMap;
 
 use crate::Amount;
+use crate::household::contacts::ContactDraft;
 use crate::model::category::CategoryGroup;
 use crate::model::store::AssetRef;
 use crate::model::store::{LiabilityKind, LiabilityTerms};
@@ -11,11 +12,11 @@ use crate::model::store::{StoreKind, StoreScope};
 use crate::model::transaction::PriceStamp;
 use crate::model::transaction::{AccountRef, DebtEffect, Transaction};
 use crate::money::books::Books;
-use crate::service::UnlockedVault;
-use crate::service::WhereKind;
+use crate::money::ledger::TxFilter;
 use crate::service::test_support::*;
-use crate::service::{ContactDraft, StoreExtras, TxFilter};
+use crate::service::{StoreExtras, UnlockedVault};
 use crate::time::unix_secs;
+use mwt_reports::where_went::WhereKind;
 
 fn secs(iso: &str) -> i64 {
     unix_secs(iso).unwrap()

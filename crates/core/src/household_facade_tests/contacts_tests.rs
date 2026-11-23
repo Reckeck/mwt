@@ -81,7 +81,7 @@ fn debts_add_up_per_contact_and_count_in_net_worth() {
     for tx in &vault.doc.transactions[1..] {
         assert_eq!(
             crate::money::worth::classify_flow(&vault.doc, tx),
-            crate::service::FlowClass::Ignored
+            crate::money::worth::FlowClass::Ignored
         );
     }
 }

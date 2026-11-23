@@ -33,7 +33,7 @@ fn the_skewers_text_has_purchases_shares_and_who_pays_whom() {
 fn english_text_and_the_organizers_requisites_from_their_contact() {
     let mut scenario = gift_scenario();
     let anya = scenario.contact("anya");
-    let draft = crate::service::ContactDraft {
+    let draft = crate::household::contacts::ContactDraft {
         name: "Аня".into(),
         accounts: vec![crate::model::contact::ContactAccount {
             label: "Карта".into(),

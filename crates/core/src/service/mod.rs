@@ -29,7 +29,7 @@ use crate::model::vault::PendingImport;
 use crate::storage::{SnapshotFormat, VaultFile};
 
 pub use password::{CopyPolicy, PlainCopies, RotationReport};
-pub use saving::{FlushJob, Flushed, SaveHook};
+pub use saving::{FlushJob, SaveHook};
 
 mod adjustments;
 pub(crate) mod agenda;
@@ -133,10 +133,9 @@ pub use automation_card::{
     AutomationCard, CardAction, CardMoney, CardTrigger, JournalEntry, JournalStatus,
 };
 pub use automations::{
-    AutomationDraft, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun,
-    describe_reject,
+    AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun, describe_reject,
 };
-pub use budget::{BudgetDraft, BudgetStatus, DailyBudget, MonthSummary};
+pub use budget::{BudgetStatus, DailyBudget, MonthSummary};
 pub use bulk::{DeletedTransaction, TxCategories, TxStore};
 pub use contacts::{
     ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft, TurnoverRow,
@@ -145,12 +144,10 @@ pub use dashboard::{SpendingDay, SpendingOverview};
 pub use dashboard_tiles::{CategoryGrowth, MonthPace, NetWorthTrend};
 pub use dashboard_today::{DashboardToday, ScenarioStatus, TODAY_TODOS, TodayTodo, TodayTodoKind};
 pub use datasources::{DataSourceDraft, DataSourceView, SourceUse, is_due as source_is_due};
-pub use debts::{DebtLoad, LoanClass, LoanStatus, classify_loan};
+pub use debts::{DebtLoad, LoanStatus, classify_loan};
 pub use emergency::{EmergencyStatus, EmergencyStore, MAX_FUND_MONTHS};
 pub use envelopes::{EnvelopeDraft, EnvelopeView};
-pub use goals::{
-    GoalCalendar, GoalCalendarMonth, GoalDeleted, GoalDraft, GoalProgress, RealismIssue,
-};
+pub use goals::{GoalCalendar, GoalCalendarMonth, GoalDeleted, GoalProgress, RealismIssue};
 pub use health::{
     DTI_ELEVATED_PCT, DTI_HIGH_PCT, FUND_MIN_MONTHS, FUND_SAFE_MONTHS, HealthReason, HealthReport,
     SAVINGS_BENCHMARK_PCT, SavingsMonth,
@@ -160,8 +157,8 @@ pub use inflation::{
     key_rate_notice,
 };
 pub use insights::{
-    Insight, InsightCode, OverviewFlow, OverviewInvestments, OverviewWealth, OverviewYear,
-    ReportOverview, report_insights,
+    OverviewFlow, OverviewInvestments, OverviewWealth, OverviewYear, ReportOverview,
+    report_insights,
 };
 pub use interest::{DepositReport, InterestTaxReport, PdsReport};
 pub use investments::{InvestmentRow, Investments};
@@ -181,11 +178,10 @@ pub use notify_snapshot::{
 pub use passive::{PassiveIncome, PassiveMonth, PassiveShare};
 pub use preview::{PositionChange, PreviewWarning, TxPreview};
 pub use price_info::{PriceInfo, PriceOrigin};
-pub use rates::RateBook;
+
 pub use recurring::RecurringCheck;
 pub use relations::{
     EntityCard, EntityKind, EntityRef, RELATION_ITEMS_CAP, RelationGroup, RelationItem,
-    RelationKind,
 };
 pub use reports::{
     CalendarDay, CalendarMonth, CashflowReport, CashflowRow, CategoriesReport, CategoryGroupBlock,
@@ -198,7 +194,7 @@ pub use scenarios::{
 };
 pub use search::{PINNED_CAP, PinnedView, SEARCH_TX_CAP, SearchEntry};
 pub use shared_events::{
-    ContactEventBalance, EventTotals, ItemShareView, ItemView, MyPosition, PersonKind, PersonView,
+    ContactEventBalance, EventTotals, ItemShareView, ItemView, MyPosition, PersonView,
     PlannedPayment, PurchaseView, SettlementView, SharedEventSummary, SharedEventView,
     SharedTxLink,
 };
@@ -208,17 +204,15 @@ pub use store_change::{
 pub use store_months::StoreMonthRow;
 pub use utilities::{
     FormulaZoneReading, PayUtilityBillInput, PayUtilityLine, PropertySummary, UtilityBill,
-    UtilityBillLine, UtilityDraft, UtilityFormulaInput, UtilityFormulaPreview, UtilityMonth,
-    UtilityPaymentDraft, UtilityTrend, ZoneBillLine, ZoneMonth, ZoneReadingInput,
-    preview_utility_formula,
+    UtilityBillLine, UtilityFormulaInput, UtilityFormulaPreview, UtilityMonth, UtilityPaymentDraft,
+    UtilityTrend, ZoneBillLine, ZoneMonth, ZoneReadingInput, preview_utility_formula,
 };
 pub use valuation::{PropertyPurchase, PropertyValue, ValuationBaseKind, ValuationInput};
-pub use where_went::{WHERE_ITEMS, WhereItem, WhereKind, WhereReport, WhereRow};
+pub use where_went::{WHERE_ITEMS, WhereItem, WhereReport, WhereRow};
 pub use workflows::{
-    ExportedStore, SavedWorkflow, WorkflowDraft, WorkflowImportPreview, WorkflowPass,
-    WorkflowTestResult,
+    ExportedStore, SavedWorkflow, WorkflowDraft, WorkflowImportPreview, WorkflowTestResult,
 };
-pub use worth::{ClassShare, FlowClass, LiabilityShare, NetWorth};
+pub use worth::{FlowClass, LiabilityShare, NetWorth};
 
 /// Store fields beyond name, colour and note. On update, `None` in an
 /// `Option<Option>`-like field keeps the current value where noted.

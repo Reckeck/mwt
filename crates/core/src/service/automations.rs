@@ -2,8 +2,7 @@
 //! scenarios to `crate::usecases::planning::automations` (spec core-strangler, D1).
 
 pub use crate::planning::automations::{
-    AutomationDraft, AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun,
-    describe_reject,
+    AutomationSimulation, MAX_CATCH_UP, SimulatedBalance, SimulatedRun, describe_reject,
 };
 
 use crate::calendar::Calendar;

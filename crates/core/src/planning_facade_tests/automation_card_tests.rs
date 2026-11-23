@@ -9,10 +9,11 @@ use serde_json::json;
 
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
+use crate::planning::automations::AutomationDraft;
 use crate::service::test_support::*;
-use crate::service::{AutomationDraft, WorkflowDraft};
 use crate::time::unix_secs;
 use crate::workflow::model::{WaitKind, WorkflowWait};
+use crate::workflow::service::records::WorkflowDraft;
 
 #[test]
 fn card_follows_the_salary_and_the_journal_shows_the_asked_share() {

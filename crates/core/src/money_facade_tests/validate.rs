@@ -1,11 +1,11 @@
 //! Tests of the validate area that need the vault (`UnlockedVault`): moved from
 //! `money/validate_tests.rs` with their assertions unchanged (crate-split T13).
 
+use crate::household::contacts::ContactDraft;
 use crate::model::chain::Chain;
 use crate::model::contact::{ContactAccount, ContactKind, DetailKind};
 use crate::model::store::{AssetRef, StoreKind};
 use crate::model::transaction::*;
-use crate::service::ContactDraft;
 use crate::service::test_support::*;
 
 fn rejected(result: crate::Result<Transaction>) -> String {

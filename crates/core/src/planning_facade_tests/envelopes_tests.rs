@@ -89,7 +89,7 @@ fn a_bound_store_only_takes_envelopes_of_its_asset() {
 #[test]
 fn funding_a_goal_takes_only_what_is_free() {
     use crate::model::store::StoreScope;
-    use crate::service::GoalDraft;
+    use crate::planning::goals::GoalDraft;
     let (_dir, mut vault) = empty_vault();
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     crate::usecases::money::transactions::add_transaction(&mut vault, income(&cash, "100", "pay"))
@@ -158,7 +158,7 @@ fn funding_a_goal_takes_only_what_is_free() {
 #[test]
 fn allocated_is_the_sum_of_moves() {
     use crate::model::store::StoreScope;
-    use crate::service::GoalDraft;
+    use crate::planning::goals::GoalDraft;
     let (_dir, mut vault) = empty_vault();
     let cash = store(&mut vault, "Cash", StoreKind::Cash, None);
     crate::usecases::money::transactions::add_transaction(&mut vault, income(&cash, "500", "pay"))
@@ -339,7 +339,7 @@ fn an_envelope_with_money_keeps_its_store_and_asset() {
 #[test]
 fn a_goal_funding_is_decided_before_anything_is_made() {
     use crate::model::store::StoreScope;
-    use crate::service::GoalDraft;
+    use crate::planning::goals::GoalDraft;
     let (_dir, mut vault, cash) = funded_cash();
     let goal = crate::usecases::planning::goals::create_goal(
         &mut vault,

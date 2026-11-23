@@ -2,13 +2,15 @@
 
 use crate::Amount;
 use crate::calc::invest::{CapFreq, ContributionStage, Freq, InvestInput, TaxRule, Timing};
+use crate::household::utilities::UtilityDraft;
 use crate::model::planning::ScenarioSource;
 use crate::model::planning::UtilityKind;
 use crate::model::store::StoreScope;
 use crate::model::store::{LoyaltyInfo, PropertyInfo, StoreKind};
 use crate::model::vault::DashPeriod;
+use crate::planning::scenarios::CalcScenarioDraft;
+use crate::service::StoreExtras;
 use crate::service::test_support::*;
-use crate::service::{CalcScenarioDraft, StoreExtras, UtilityDraft};
 use crate::time::unix_secs;
 use chrono::NaiveDate;
 use mwt_reports::dashboard_today::*;

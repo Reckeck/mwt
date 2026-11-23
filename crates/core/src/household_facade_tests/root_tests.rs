@@ -1,12 +1,13 @@
 use crate::household::contacts::ContactDraft;
+use crate::household::shared_events::view::PersonKind;
 use crate::ipc_contract::{
     SetSharedItemSplitInput, SharedEventDraft, SharedItemDraft, SharedParticipantDraft,
 };
 use crate::model::contact::{ContactAccount, DetailKind};
 use crate::model::shared_event::{GuestDetails, ItemSplit, ME, SharedEventStatus};
 use crate::model::vault::VaultDoc;
+use crate::service::UnlockedVault;
 use crate::service::test_support::*;
-use crate::service::{PersonKind, UnlockedVault};
 use crate::storage::{SnapshotFormat, VaultFile, decode, encode};
 
 fn draft(title: &str) -> SharedEventDraft {

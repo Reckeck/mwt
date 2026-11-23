@@ -227,11 +227,11 @@ fn net_worth_splits_financial_by_basket() {
     assert_eq!(
         worth.financial_by_class,
         vec![
-            crate::service::ClassShare {
+            crate::money::worth::ClassShare {
                 class_id: Some(PRESET_GLOBAL.into()),
                 amount: amount("70"),
             },
-            crate::service::ClassShare {
+            crate::money::worth::ClassShare {
                 class_id: None,
                 amount: amount("30"),
             },

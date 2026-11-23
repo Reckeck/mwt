@@ -3,11 +3,11 @@
 use crate::Amount;
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
-use crate::service::ReportKind;
+use crate::service::UnlockedVault;
 use crate::service::test_support::*;
-use crate::service::{Report, ReportFilter, UnlockedVault};
 use crate::time::unix_secs;
 use mwt_reports::insights::*;
+use mwt_reports::overview::{Report, ReportFilter, ReportKind};
 
 const NOW: &str = "2026-06-15T12:00:00Z";
 

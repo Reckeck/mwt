@@ -17,7 +17,6 @@ use crate::planning::automation_plan::{
 use crate::planning::automations::*;
 use crate::service::StoreExtras;
 use crate::service::UnlockedVault;
-use crate::service::WorkflowPass;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 use crate::usecases::planning::automation_rules::{
@@ -26,6 +25,7 @@ use crate::usecases::planning::automation_rules::{
 };
 use crate::workflow::automation as graph_of;
 use crate::workflow::model::RunOutcome;
+use crate::workflow::service::runs::WorkflowPass;
 use pretty_assertions::assert_eq;
 use std::collections::HashSet;
 
@@ -812,7 +812,7 @@ fn an_automation_is_edited_in_its_form_until_made_an_ordinary_workflow() {
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     let salary = advance(&mut vault, &card);
     let workflow = crate::workflow::service::records::workflow(&vault.doc, &salary.id).unwrap();
-    let draft = crate::service::WorkflowDraft {
+    let draft = crate::workflow::service::records::WorkflowDraft {
         name: workflow.name.clone(),
         description: String::new(),
         active: true,

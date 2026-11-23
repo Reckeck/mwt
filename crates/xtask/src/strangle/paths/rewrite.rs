@@ -1,11 +1,13 @@
 //! Finds the `service::` paths of one file and the text that replaces each, by the shim map: in use
-//! trees (one `use` line per name afterwards) and in every other path (types, expressions, patterns,
+//! trees (one grouped `use` line per module afterwards) and in every other path (types, expressions, patterns,
 //! macro arguments). A path whose name has no safe owner stays and is listed.
+
+use std::collections::{HashMap, HashSet};
 
 use proc_macro2::LineColumn;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
-use syn::{ItemMod, ItemUse, Macro, Path};
+use syn::{File, Item, ItemMod, ItemUse, Macro, Path};
 
 use super::shim::{Leaf, Resolution, ShimMap, leaves};
 use crate::strangle::scan::macro_arguments;
@@ -37,6 +39,7 @@ pub struct Rewriter<'run> {
     shims: &'run ShimMap,
     context: &'run FileContext,
     inline_depth: usize,
+    uses: Vec<UseItem>,
     pub report: FileReport,
 }
 
@@ -48,6 +51,7 @@ impl<'run> Rewriter<'run> {
             shims,
             context,
             inline_depth: 0,
+            uses: Vec::new(),
             report: FileReport::default(),
         }
     }
@@ -165,13 +169,12 @@ impl<'run> Rewriter<'run> {
         head
     }
 
-    /// One new `use` line (or the old text) per leaf of an item that names a shim path.
-    fn rewrite_use(&mut self, node: &ItemUse) {
-        let all = leaves(&node.tree);
-        let mut lines = Vec::new();
+    /// Records one `use` item with a text per leaf; `finish` turns the items into splices.
+    fn rewrite_use(&mut self, node: &ItemUse, top_level: bool) {
+        let mut entries = Vec::new();
         let mut changed = false;
         let line = node.span().start().line;
-        for leaf in &all {
+        for leaf in &leaves(&node.tree) {
             let written = leaf_text(leaf, &leaf.path);
             match self.locate(&leaf.path) {
                 Some((at, Ok(owner))) => {
@@ -192,35 +195,166 @@ impl<'run> Rewriter<'run> {
                     self.report
                         .rewrites
                         .push(format!("{line}: {written} -> {text}"));
-                    lines.push(text);
+                    entries.push(Entry::new(text, leaf.glob));
                     changed = true;
                 }
                 Some((at, Err(skip))) => {
                     self.refuse(line, &leaf.path[..=at].join("::"), &leaf.path[at], &skip);
-                    lines.push(written);
+                    entries.push(Entry::new(written, leaf.glob));
                 }
-                None => lines.push(written),
+                None => entries.push(Entry::new(written, leaf.glob)),
             }
         }
-        if !changed {
-            return;
-        }
         let start = node.span().start();
-        let head = self.text_between(start, node.use_token.span.start());
-        let repeated = self.repeated_head(node);
+        let first_head = self.text_between(start, node.use_token.span.start());
+        let mergeable = top_level && node.attrs.is_empty();
+        let scope = if mergeable {
+            format!("top:{}", first_head.trim())
+        } else {
+            format!("item:{}", self.uses.len())
+        };
+        self.uses.push(UseItem {
+            start: self.index.offset(start),
+            end: self.index.offset(node.span().end()),
+            first_head: first_head.to_string(),
+            repeated_head: self.repeated_head(node),
+            scope,
+            changed,
+            dirty: changed,
+            entries,
+        });
+    }
+
+    /// Turns the collected `use` items into splices. A leaf that goes to a module another `use` item
+    /// of the file (same visibility, no attributes, top level) already names joins the first such
+    /// item; the leaves of one module in one item form one grouped `use` line. Items nothing touched
+    /// stay as written.
+    fn finish(&mut self) {
+        let mut uses = std::mem::take(&mut self.uses);
+        let mut active = HashSet::new();
+        let mut owners: HashMap<(String, String), usize> = HashMap::new();
+        for (number, item) in uses.iter().enumerate() {
+            for key in item.keys() {
+                if item.changed {
+                    active.insert(key.clone());
+                }
+                owners.entry(key).or_insert(number);
+            }
+        }
+        let mut moved: Vec<(usize, Entry)> = Vec::new();
+        for (number, item) in uses.iter_mut().enumerate() {
+            let scope = item.scope.clone();
+            let mut kept = Vec::new();
+            for entry in std::mem::take(&mut item.entries) {
+                let key = entry.module.clone().map(|module| (scope.clone(), module));
+                match key {
+                    Some(key) if active.contains(&key) && owners[&key] != number => {
+                        moved.push((owners[&key], entry));
+                        item.dirty = true;
+                    }
+                    _ => kept.push(entry),
+                }
+            }
+            item.entries = kept;
+        }
+        for (owner, entry) in moved {
+            let item = &mut uses[owner];
+            if !item.entries.iter().any(|have| have.whole == entry.whole) {
+                item.entries.push(entry);
+            }
+            item.dirty = true;
+        }
+        for item in uses.iter().filter(|item| item.dirty) {
+            self.report.splices.push(Splice {
+                start: item.start,
+                end: item.end,
+                text: item.text(),
+            });
+        }
+    }
+}
+
+/// One leaf of a `use` item as text; `module` is what precedes the last segment (none for a glob).
+struct Entry {
+    module: Option<String>,
+    /// The whole leaf: `a::b::Name as Alias`.
+    whole: String,
+    /// What follows the module: `Name as Alias`.
+    name: String,
+}
+
+impl Entry {
+    fn new(whole: String, glob: bool) -> Self {
+        let split = if glob { None } else { whole.rsplit_once("::") };
+        Self {
+            module: split.map(|(module, _)| module.to_string()),
+            name: split.map_or_else(String::new, |(_, name)| name.to_string()),
+            whole,
+        }
+    }
+}
+
+/// A `use` item of the file, with the text of its leaves.
+struct UseItem {
+    start: usize,
+    end: usize,
+    /// What precedes `use` on the first line: docs, attributes, visibility.
+    first_head: String,
+    /// What precedes `use` on every further line.
+    repeated_head: String,
+    /// Leaves may move between items with the same scope: top level, no attributes, same visibility;
+    /// any other item is a scope of its own.
+    scope: String,
+    changed: bool,
+    /// The text of the item differs from the source.
+    dirty: bool,
+    entries: Vec<Entry>,
+}
+
+impl UseItem {
+    fn keys(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        self.entries
+            .iter()
+            .filter_map(|entry| entry.module.clone())
+            .map(|module| (self.scope.clone(), module))
+    }
+
+    /// One `use` line per module, the leaves of a module grouped in braces; empty when no leaf is left.
+    fn text(&self) -> String {
+        let mut done: HashSet<&str> = HashSet::new();
+        let mut lines = Vec::new();
+        for entry in &self.entries {
+            let Some(module) = entry.module.as_deref() else {
+                lines.push(entry.whole.clone());
+                continue;
+            };
+            if !done.insert(module) {
+                continue;
+            }
+            let names: Vec<&str> = self
+                .entries
+                .iter()
+                .filter(|other| other.module.as_deref() == Some(module))
+                .map(|other| other.name.as_str())
+                .collect();
+            lines.push(match names.as_slice() {
+                [single] => format!("{module}::{single}"),
+                many => format!("{module}::{{{}}}", many.join(", ")),
+            });
+        }
         let body: Vec<String> = lines
             .iter()
             .enumerate()
             .map(|(number, text)| {
-                let head = if number == 0 { head } else { repeated.as_str() };
+                let head = if number == 0 {
+                    &self.first_head
+                } else {
+                    &self.repeated_head
+                };
                 format!("{head}use {text};")
             })
             .collect();
-        self.report.splices.push(Splice {
-            start: self.index.offset(start),
-            end: self.index.offset(node.span().end()),
-            text: body.join("\n"),
-        });
+        body.join("\n")
     }
 }
 
@@ -237,8 +371,21 @@ fn leaf_text(leaf: &Leaf, path: &[String]) -> String {
 }
 
 impl<'ast> Visit<'ast> for Rewriter<'_> {
+    fn visit_file(&mut self, node: &'ast File) {
+        for attribute in &node.attrs {
+            self.visit_attribute(attribute);
+        }
+        for item in &node.items {
+            match item {
+                Item::Use(node) => self.rewrite_use(node, true),
+                other => self.visit_item(other),
+            }
+        }
+        self.finish();
+    }
+
     fn visit_item_use(&mut self, node: &'ast ItemUse) {
-        self.rewrite_use(node);
+        self.rewrite_use(node, false);
     }
 
     fn visit_path(&mut self, node: &'ast Path) {

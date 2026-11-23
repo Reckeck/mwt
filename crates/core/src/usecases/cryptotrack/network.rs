@@ -27,8 +27,7 @@ use crate::ipc_contract::cryptotrack::network::{
 };
 use crate::model::chain::Chain;
 use crate::money::books::Books;
-use crate::service::RpcChain;
-use crate::service::UnlockedVault;
+use crate::service::{RpcChain, UnlockedVault};
 use crate::vault_io::device_secrets::{self, BlockscoutKey, NetworkEndpoints};
 
 pub use crate::cryptotrack::service::network::NetworkRequest;

@@ -5,9 +5,7 @@
 use crate::Amount;
 use crate::calendar::{self, Calendar};
 use crate::error::Result;
-use crate::model::notify::notice;
-use crate::model::notify::notice_title;
-use crate::model::notify::{NoticeCategory, NoticeRecord};
+use crate::model::notify::{NoticeCategory, NoticeRecord, notice, notice_title};
 use crate::model::planning::{HealthColor, HealthSnapshot};
 use crate::planning::health::{check_freedom_rate, color_text, reason_text};
 use crate::reports::health::capital_health;

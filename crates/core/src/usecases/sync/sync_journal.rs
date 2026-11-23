@@ -65,8 +65,7 @@ pub fn sync_journal(vault: &UnlockedVault) -> Vec<SyncJournalEntry> {
 mod tests {
     use super::*;
     use crate::service::test_support::empty_vault;
-    use crate::sync::journal::MAX_JOURNAL;
-    use crate::sync::journal::SyncJournalEntryExt;
+    use crate::sync::journal::{MAX_JOURNAL, SyncJournalEntryExt};
     use crate::sync::{ChangeItem, ChangeKind, CollectionChanges};
 
     fn one_change() -> SyncSummary {

@@ -214,14 +214,14 @@ fn a_renamed_file_is_found_by_its_new_name() {
         crate::usecases::household::attachments::rename_attachment(&mut vault, &item.id, " ")
             .is_err()
     );
-    let filter = crate::service::TxFilter {
+    let filter = crate::money::ledger::TxFilter {
         text: Some("skycapital".into()),
         ..Default::default()
     };
     let found =
         crate::usecases::household::ledger::list_transactions(&vault, &filter, "UTC").unwrap();
     assert_eq!(found.len(), 1);
-    let only_attached = crate::service::TxFilter {
+    let only_attached = crate::money::ledger::TxFilter {
         with_attachments: true,
         ..Default::default()
     };

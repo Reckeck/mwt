@@ -4,7 +4,7 @@
 use crate::model::planning::{Schedule, TransactionDraft};
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
-use crate::service::AutomationDraft;
+use crate::planning::automations::AutomationDraft;
 use crate::service::test_support::*;
 
 fn salary_automation(store: &str) -> AutomationDraft {

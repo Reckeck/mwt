@@ -3,7 +3,6 @@
 
 pub use crate::household::utilities::{
     FormulaZoneReading, PayUtilityBillInput, PayUtilityLine, PropertySummary, UtilityBill,
-    UtilityBillLine, UtilityDraft, UtilityFormulaInput, UtilityFormulaPreview, UtilityMonth,
-    UtilityPaymentDraft, UtilityTrend, ZoneBillLine, ZoneMonth, ZoneReadingInput,
-    preview_utility_formula,
+    UtilityBillLine, UtilityFormulaInput, UtilityFormulaPreview, UtilityMonth, UtilityPaymentDraft,
+    UtilityTrend, ZoneBillLine, ZoneMonth, ZoneReadingInput, preview_utility_formula,
 };

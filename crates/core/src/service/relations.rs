@@ -2,5 +2,4 @@
 
 pub use crate::household::relations::{
     EntityCard, EntityKind, EntityRef, RELATION_ITEMS_CAP, RelationGroup, RelationItem,
-    RelationKind,
 };
