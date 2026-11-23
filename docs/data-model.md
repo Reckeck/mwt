@@ -90,7 +90,7 @@ may be incomplete.
 
 ### Base currency — a runtime field, not a document one
 
-`UnlockedVault::base_currency` lives in memory, not in `doc`: the base currency
+`Session::base_currency` lives in memory, not in `doc`: the base currency
 is configured by the app, so the vault cannot know about it. After
 `open`/`create` the IPC layer calls `sync_base_currency`, which pushes the
 value into the vault; changing the base currency recomputes holdings and average

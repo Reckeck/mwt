@@ -14,9 +14,6 @@ const OLD_FACADE_NAME: &str = concat!("Unlocked", "Vault");
 /// The delegation macro of the strangler phase, as a token.
 const FORWARD_MACRO: &str = concat!("for", "ward!");
 
-/// The strangle tool names both words and goes in the next commit; this skip goes with it.
-const TOOL_UNTIL_NEXT_COMMIT: &str = "xtask/src/strangle";
-
 /// A banned word found in a file: `file` is relative to `crates/`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Banned {
@@ -101,9 +98,6 @@ pub fn check(root: &Path) -> Result<Vec<Banned>> {
     for file in files {
         let text = fs::read_to_string(&file).with_context(|| format!("read {}", file.display()))?;
         let relative = file.strip_prefix(&crates).unwrap_or(&file);
-        if relative.starts_with(TOOL_UNTIL_NEXT_COMMIT) {
-            continue;
-        }
         found.extend(banned_in(
             &relative.to_string_lossy().replace('\\', "/"),
             &text,

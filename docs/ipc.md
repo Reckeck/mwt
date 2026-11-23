@@ -10,14 +10,14 @@ pipeline, opener, events) is `crates/app/src/ipc/`; the `#[ipc]` macro is `crate
 A command is a plain function in `crates/app/src/commands/<context>.rs`, registered in its context's list.
 
 1. The input/output type in `crates/core/src/ipc_contract.rs` (`#[derive(Serialize, Deserialize, TS)]`) and the
-   logic as an `UnlockedVault` method in core, with a unit test.
+   logic as a `Session` method in core, with a unit test.
 2. The handler. A synchronous command that reads or writes the vault takes the `#[ipc]` shape:
 
    ```rust
    #[ipc(read)]
-   pub fn list_stores(vault: &UnlockedVault) -> trade_core::Result<Vec<Store>> { .. }
+   pub fn list_stores(vault: &Session) -> trade_core::Result<Vec<Store>> { .. }
    #[ipc(write, sandbox = deny)]
-   pub fn delete_store(vault: &mut UnlockedVault, id: String) -> trade_core::Result<()> { .. }
+   pub fn delete_store(vault: &mut Session, id: String) -> trade_core::Result<()> { .. }
    #[ipc(locked_ok)]
    pub fn vault_status(state: &AppState) -> trade_core::Result<VaultStatus> { .. }
    ```
@@ -505,7 +505,7 @@ otherwise UTC); "now" is taken by the command. Budget amounts are in the budget 
 | `update_automation` | `UpdateAutomationInput { id, automation }` | `Automation`; the graph is rebuilt, the previous one stays in the scheme versions; processed dates stay processed |
 | `delete_automation` | `id` | `()` — together with the run history; created transactions stay |
 | `run_automation` | `id` | `Transaction` "now"; insufficient funds — `INSUFFICIENT_FUNDS` with amounts |
-| `simulate_automations` | `SimulateAutomationsInput { automation_id?, days (1–366) }` | `AutomationSimulation { from, until, runs[{ automation_id, automation_name, planned_at, outcome, transaction? }], balances[{ store_id, asset, before, after }], created, rejected }` — emulation: automations are run day by day on a copy of the vault (`UnlockedVault::sandbox`, writes nothing) with the same money and rule checks as the scheduler; with `automation_id` the response has only its runs |
+| `simulate_automations` | `SimulateAutomationsInput { automation_id?, days (1–366) }` | `AutomationSimulation { from, until, runs[{ automation_id, automation_name, planned_at, outcome, transaction? }], balances[{ store_id, asset, before, after }], created, rejected }` — emulation: automations are run day by day on a copy of the vault (`Session::sandbox`, writes nothing) with the same money and rule checks as the scheduler; with `automation_id` the response has only its runs |
 | `list_automation_runs` | `automation_id?` | `Vec<AutomationRun>`, newest first |
 | `retry_automation_run` | `run_id` | `Transaction`: the balance is checked for the current moment, the transaction date is now |
 | `confirm_estimated_amount` | `ConfirmEstimatedInput { tx_id, amount }` | `Transaction` with the actual amount and the "approximately" mark removed; it goes into the next estimate. An ordinary amount edit of such a transaction (`update_transaction`) also removes the mark. A transaction without the mark — `INVALID_INPUT` |
@@ -615,7 +615,7 @@ The graph is stored in the vault as JSON (`WorkflowGraph { version, nodes, edges
 
 ### settings (vault)
 | `get_settings` | — | `Settings` — vault-scoped fields only |
-| `update_settings` | `UpdateSettingsInput` | `Settings` (`savings_rate` 0..1; `daily_budget_mode`; `budget_currency`, empty — the base; `crypto` is read and ignored: `Settings.crypto` is derived, see `docs/data-model.md`; `get_settings` and this reply carry the derived value). The logic is in core (`UnlockedVault::update_settings`); `inflation_manual?: { currency: % a year }` replaces the group's flat table (unchanged currencies are not stamped); `notifications: NotificationSettings { system, hide_details_when_locked, default_time, categories[{ category, enabled, lead_days (0–90), auto_reminders }] }` |
+| `update_settings` | `UpdateSettingsInput` | `Settings` (`savings_rate` 0..1; `daily_budget_mode`; `budget_currency`, empty — the base; `crypto` is read and ignored: `Settings.crypto` is derived, see `docs/data-model.md`; `get_settings` and this reply carry the derived value). The logic is in core (`Session::update_settings`); `inflation_manual?: { currency: % a year }` replaces the group's flat table (unchanged currencies are not stamped); `notifications: NotificationSettings { system, hide_details_when_locked, default_time, categories[{ category, enabled, lead_days (0–90), auto_reminders }] }` |
 | `list_notifications` | — | `Vec<NoticeRecord>` — the journal of shown notifications, newest on top (at most 500) |
 | `mark_notifications_read` | `keys?: Vec<String>` | `()` — mark the named ones or all as read |
 | `send_test_notification` | — | `()` — show a test notification (a system one — even if they are turned off) |

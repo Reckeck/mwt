@@ -21,7 +21,6 @@ pub const GROUPS: [(&str, &[&str]); 6] = [
             "fmt",
             "ci-scripts",
             "arch",
-            "strangle",
         ],
     ),
     (
@@ -196,7 +195,6 @@ mod tests {
                 "clippy",
                 "ci-scripts",
                 "arch",
-                "strangle",
                 "fmt"
             ]
         );
@@ -206,17 +204,7 @@ mod tests {
             &strings(&["@frontend", "@platforms", "@tests"]),
         )
         .unwrap();
-        assert_eq!(
-            got,
-            [
-                "gen-types",
-                "clippy",
-                "ci-scripts",
-                "arch",
-                "strangle",
-                "fmt"
-            ]
-        );
+        assert_eq!(got, ["gen-types", "clippy", "ci-scripts", "arch", "fmt"]);
     }
 
     fn selected(items: &[&str]) -> Vec<String> {
