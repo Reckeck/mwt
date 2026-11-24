@@ -8,7 +8,9 @@ use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::ids::StoreId;
 use crate::model::vault::now_iso;
-use crate::money::distribution::{validate_distribution_targets, verify_distribution};
+use crate::money::distribution::{
+    BAD_TARGET, NOT_INCOME, WITH_PARTS, validate_distribution_targets, verify_distribution,
+};
 use crate::money::transactions::ensure_fresh_id;
 use crate::planning::distribution::{plan_distribution, resolve_rows};
 use crate::planning::envelopes::{EnvelopeDraft, free_balance, new_envelope, plan_fund_goal};
@@ -69,9 +71,9 @@ pub fn remove_distribution(vault: &mut Session, income_id: &str) -> Result<()> {
 fn income_of<'doc>(doc: &'doc VaultDoc, id: &str) -> Result<&'doc TopupTx> {
     match doc.transactions.iter().find(|tx| tx.meta().id == id) {
         Some(Transaction::Topup(topup)) => Ok(topup),
-        Some(_) => Err(Error::InvalidInput(
-            "only an income can be distributed".into(),
-        )),
+        Some(_) => Err(Error::InvalidInput(format!(
+            "{NOT_INCOME}: only an income can be distributed"
+        ))),
         None => Err(Error::Missing(format!("income {id}"))),
     }
 }
@@ -79,9 +81,9 @@ fn income_of<'doc>(doc: &'doc VaultDoc, id: &str) -> Result<&'doc TopupTx> {
 fn read_income(vault: &Session, income_id: &str) -> Result<Income> {
     let topup = income_of(&vault.doc, income_id)?;
     if !topup.parts.is_empty() {
-        return Err(Error::InvalidInput(
-            "an income cannot arrive in parts and distribute".into(),
-        ));
+        return Err(Error::InvalidInput(format!(
+            "{WITH_PARTS}: an income cannot arrive in parts and distribute"
+        )));
     }
     Ok(Income {
         id: income_id.to_string(),
@@ -255,9 +257,9 @@ fn goal_envelope(
     amount: Amount,
 ) -> Result<String> {
     if store_id != income.store_id {
-        return Err(Error::InvalidInput(
-            "a goal row can only be funded on the card the income arrived on".into(),
-        ));
+        return Err(Error::InvalidInput(format!(
+            "{BAD_TARGET}: a goal row can only be funded on the card the income arrived on"
+        )));
     }
     let funding = plan_fund_goal(&vault.doc, goal_id, &StoreId::from(store_id), amount)?;
     if funding.take < amount {

@@ -4,15 +4,15 @@ use crate::Amount;
 use crate::calendar::Calendar;
 use crate::error::Error;
 use crate::model::store::StoreKind;
-use crate::money::distribution::verify_distribution;
+use crate::money::distribution::{WITH_PARTS, verify_distribution};
 use crate::money::worth::FlowClass;
 use crate::planning::envelopes::EnvelopeDraft;
 use crate::service::Session;
 use crate::service::test_support::{amount, empty_vault, income_of, store};
 use crate::usecases::household::envelopes::{create_envelope, fund_envelope};
-use crate::usecases::money::transactions::add_transaction;
+use crate::usecases::money::transactions::{add_linked_transactions, add_transaction};
 use crate::usecases::planning::distribution::{
-    apply_distribution, remove_distribution, replace_distribution,
+    OVER_ALLOCATED, apply_distribution, remove_distribution, replace_distribution,
 };
 use mwt_model::{
     AssetRef, DistKind, DistTarget, DistributionRow, EffectRef, Envelope, ReceivedPart, Transaction,
@@ -173,7 +173,7 @@ fn a2_over_allocation_is_rejected_and_writes_nothing() {
     let before = serde_json::to_string(&fixture.vault.doc).unwrap();
     let rows = rows(&fixture, "130000");
     let err = apply_distribution(&mut fixture.vault, &fixture.income_id.clone(), &rows);
-    assert!(err.is_err());
+    assert!(err.unwrap_err().to_string().contains(OVER_ALLOCATED));
     assert_eq!(serde_json::to_string(&fixture.vault.doc).unwrap(), before);
 }
 
@@ -300,7 +300,8 @@ fn s14_parts_and_distribution_are_mutually_exclusive() {
     }
     let before = serde_json::to_string(&fixture.vault.doc).unwrap();
     let rows = rows(&fixture, "20000");
-    assert!(apply_distribution(&mut fixture.vault, &id, &rows).is_err());
+    let err = apply_distribution(&mut fixture.vault, &id, &rows).unwrap_err();
+    assert!(err.to_string().contains(WITH_PARTS), "{err}");
     assert_eq!(serde_json::to_string(&fixture.vault.doc).unwrap(), before);
 }
 
@@ -357,4 +358,28 @@ fn s9_add_transaction_refuses_a_supplied_income_ref() {
     salary.meta_mut().income_ref = Some(fixture.income_id.clone());
     let err = add_transaction(&mut fixture.vault, salary).unwrap_err();
     assert!(err.to_string().contains("INCOME_REF_RESERVED"), "{err}");
+}
+
+/// S9: a forged income_ref in a batch is refused as in a single add.
+#[test]
+fn s9_batch_refuses_a_supplied_income_ref() {
+    let mut fixture = fixture();
+    let mut salary = income_of(&fixture.card, rub(), "10", "0.01", "x");
+    salary.meta_mut().income_ref = Some(fixture.income_id.clone());
+    let err = add_linked_transactions(&mut fixture.vault, vec![salary], None).unwrap_err();
+    assert!(err.to_string().contains("INCOME_REF_RESERVED"), "{err}");
+}
+
+/// S11: a topup with a distribution in a batch is distributed and passes V1-V4.
+#[test]
+fn s11_batch_topup_with_distribution_applies_it() {
+    let mut fixture = fixture();
+    let salary = salary_with(&fixture, "20000");
+    let saved = add_linked_transactions(&mut fixture.vault, vec![salary], None).unwrap();
+    let id = saved[0].meta().id.clone();
+    let Transaction::Topup(topup) = &saved[0] else {
+        panic!("a topup")
+    };
+    assert_eq!(topup.distribution.as_ref().map(Vec::len), Some(4));
+    assert!(verify_distribution(&fixture.vault.books(), &id).is_empty());
 }

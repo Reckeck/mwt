@@ -62,11 +62,7 @@ pub fn add_transaction_for(
     mut tx: Transaction,
     property_id: Option<&str>,
 ) -> Result<Transaction> {
-    if tx.meta().income_ref.is_some() {
-        return Err(Error::InvalidInput(format!(
-            "{INCOME_REF_RESERVED}: only a distribution may link an operation to an income"
-        )));
-    }
+    refuse_forged_income_ref(&tx)?;
     check_property_link(vault, property_id)?;
     let rows = take_distribution_rows(&mut tx);
     prepare_transaction(vault, &mut tx)?;
@@ -85,7 +81,7 @@ pub fn add_transaction_for(
                 recompute_holdings(vault);
                 return Err(err);
             }
-            return Ok(stored_income(vault, &tx));
+            return stored_income(vault, &tx);
         }
         None => rebase_and_commit(vault)?,
     }
@@ -114,14 +110,25 @@ fn take_distribution_rows(tx: &mut Transaction) -> Option<Vec<DistributionRow>> 
 }
 
 /// The income as stored once its distribution is applied.
-fn stored_income(vault: &Session, income: &Transaction) -> Transaction {
+fn stored_income(vault: &Session, income: &Transaction) -> Result<Transaction> {
+    let id = &income.meta().id;
     vault
         .doc
         .transactions
         .iter()
-        .find(|tx| tx.meta().id == income.meta().id)
+        .find(|tx| &tx.meta().id == id)
         .cloned()
-        .unwrap_or_else(|| income.clone())
+        .ok_or_else(|| Error::Missing(format!("income {id}")))
+}
+
+/// Only a distribution may link an operation to an income; a caller's link is forged.
+fn refuse_forged_income_ref(tx: &Transaction) -> Result<()> {
+    if tx.meta().income_ref.is_some() {
+        return Err(Error::InvalidInput(format!(
+            "{INCOME_REF_RESERVED}: only a distribution may link an operation to an income"
+        )));
+    }
+    Ok(())
 }
 
 /// Save several operations as one movement of money (an exchange split
@@ -157,6 +164,8 @@ pub fn add_linked_transactions(
 fn book_linked(vault: &mut Session, txs: Vec<Transaction>, flow: &str) -> Result<Vec<Transaction>> {
     let mut saved = Vec::with_capacity(txs.len());
     for mut tx in txs {
+        refuse_forged_income_ref(&tx)?;
+        let rows = take_distribution_rows(&mut tx);
         tx.meta_mut().flow_id = Some(flow.to_string());
         tx.meta_mut().id = uuid::Uuid::new_v4().to_string();
         prepare_transaction(vault, &mut tx)?;
@@ -166,7 +175,13 @@ fn book_linked(vault: &mut Session, txs: Vec<Transaction>, flow: &str) -> Result
         })?;
         // The next one sees this one's balances, as if saved in turn.
         crate::usecases::money::portfolio::recompute_holdings(vault);
-        saved.push(tx);
+        match rows {
+            Some(rows) => {
+                apply_distribution(vault, &tx.meta().id, &rows)?;
+                saved.push(stored_income(vault, &tx)?);
+            }
+            None => saved.push(tx),
+        }
     }
     Ok(saved)
 }
