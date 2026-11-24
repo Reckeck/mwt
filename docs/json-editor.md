@@ -9,7 +9,7 @@ autocompletion from Rust.
 
 | Layer | File | Responsibility |
 |---|---|---|
-| Schema | `crates/core/src/model/vault.rs` → `json_schema()` | the single source of the document shape (`schemars` over `VaultDoc`) |
+| Schema | `crates/model/src/vault.rs` → `json_schema()` | the single source of the document shape (`schemars` over `VaultDoc`) |
 | IPC | `crates/app/src/commands/settings.rs` | `vault_schema`, `dev_dump_vault`, `dev_apply_vault_json`, `dev_open_vault_json_in_editor`, `dev_reload_vault_json_from_editor` |
 | Autocompletion | `src/shared/lib/json-schema-reader.ts` | `$ref` / `anyOf` / `oneOf` / `type: [...]` → flat suggestions |
 | Editor | `src/shared/lib/editor/` (`theme`, `json-path`, `completions`, `extensions`) | CodeMirror extensions: theme, autocomplete by JSON path, lint, history, folding |

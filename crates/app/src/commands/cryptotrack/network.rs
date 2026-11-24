@@ -9,18 +9,18 @@
 
 use tauri::{AppHandle, State};
 
-use trade_core::error::Error;
-use trade_core::ipc_contract::cryptotrack::network::{
+use mwt_base::error::Error;
+use mwt_usecases::ipc_contract::cryptotrack::network::{
     NetworkSettings, NetworkTestResult, SetNetworkSettingsInput, TestNetworkInput,
 };
-use trade_core::usecases::cryptotrack::network::{NetworkProbe, test_endpoint};
+use mwt_usecases::usecases::cryptotrack::network::{NetworkProbe, test_endpoint};
 
 use crate::commands::app_settings::current_settings;
 use crate::commands::{AppState, sandbox};
 use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::usecases::cryptotrack::network;
+use mwt_usecases::usecases::cryptotrack::network;
 
 /// The endpoints of every network, with the presets to fall back to. Below
 /// protection level 3 they are the presets and `editable` is false.

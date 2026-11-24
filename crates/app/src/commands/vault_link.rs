@@ -4,9 +4,9 @@
 
 use std::path::PathBuf;
 
+use mwt_base::error::Error;
+use mwt_usecases::ipc_contract::{LinkVaultInput, ResolveVaultConflictInput, VaultLinkStatus};
 use tauri::{AppHandle, State};
-use trade_core::error::Error;
-use trade_core::ipc_contract::{LinkVaultInput, ResolveVaultConflictInput, VaultLinkStatus};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
@@ -53,7 +53,7 @@ pub async fn link_vault_external(
 ) -> Result<Option<VaultLinkStatus>, IpcError> {
     crate::commands::sandbox::refuse(&state, "an external copy")?;
     let path = unlocked_path(&state)?;
-    let name = trade_core::vault_io::display_name_of(&path.to_string_lossy());
+    let name = mwt_usecases::vault_io::display_name_of(&path.to_string_lossy());
     let Some(target) = platform_fs::pick_link_target(&app, input.existing, &name)? else {
         return Ok(None);
     };

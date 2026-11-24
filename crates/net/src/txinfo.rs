@@ -33,6 +33,7 @@ pub struct BtcVout {
 #[derive(Debug, Deserialize)]
 pub struct BtcStatus {
     pub confirmed: Option<bool>,
+    pub block_time: Option<i64>,
 }
 
 /// A mempool.space transaction; amounts are satoshis.
@@ -40,8 +41,6 @@ pub struct BtcStatus {
 pub struct BtcTx {
     pub txid: Option<String>,
     pub fee: Option<i64>,
-    pub time: Option<i64>,
-    pub block_time: Option<i64>,
     pub status: Option<BtcStatus>,
     pub vin: Option<Vec<BtcVin>>,
     pub vout: Option<Vec<BtcVout>>,
@@ -51,16 +50,19 @@ pub struct BtcTx {
 #[serde(rename_all = "camelCase")]
 pub struct SolTokenAmount {
     pub amount: Option<String>,
+    pub decimals: Option<u8>,
+    pub ui_amount_string: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SolTokenBalance {
     pub mint: Option<String>,
-    pub token_amount: Option<SolTokenAmount>,
+    pub ui_token_amount: Option<SolTokenAmount>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SolMeta {
     pub fee: Option<i64>,
     pub pre_balances: Option<Vec<i64>>,
@@ -71,19 +73,15 @@ pub struct SolMeta {
 
 /// A Solana `getTransaction` result; amounts are lamports.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SolTx {
     pub block_time: Option<i64>,
     pub meta: Option<SolMeta>,
 }
 
 #[derive(Deserialize)]
-struct RpcResult {
-    value: Option<SolTx>,
-}
-
-#[derive(Deserialize)]
 struct RpcResp {
-    result: Option<RpcResult>,
+    result: Option<SolTx>,
 }
 
 #[derive(Debug, Clone)]
@@ -133,7 +131,7 @@ impl TxInfoClient {
         if !resp.status().is_success() {
             return None;
         }
-        resp.json::<RpcResp>().await.ok()?.result?.value
+        resp.json::<RpcResp>().await.ok()?.result
     }
 }
 
@@ -144,29 +142,42 @@ mod tests {
     #[test]
     fn bitcoin_wire_shape_parses_with_missing_fields() {
         let tx: BtcTx = serde_json::from_str(
-            r#"{"txid":"ab","fee":141,"status":{"confirmed":true},
+            r#"{"txid":"ab","fee":141,
+                "status":{"confirmed":true,"block_height":1,"block_time":1700000000},
                 "vin":[{"prevout":{"scriptpubkey_address":"bc1a","value":1000}}],
                 "vout":[{"scriptpubkey_address":"bc1b","value":859}]}"#,
         )
         .unwrap();
         assert_eq!(tx.fee, Some(141));
-        assert_eq!(tx.block_time, None);
+        assert_eq!(tx.status.unwrap().block_time, Some(1_700_000_000));
         assert_eq!(tx.vout.unwrap()[0].value, Some(859));
     }
 
     #[test]
-    fn solana_wire_shape_unwraps_the_rpc_envelope() {
+    fn solana_wire_shape_is_the_real_get_transaction_result() {
         let parsed: RpcResp = serde_json::from_str(
-            r#"{"result":{"value":{"block_time":5,"meta":{"fee":5000,
-                "pre_token_balances":[{"mint":"m","tokenAmount":{"amount":"7"}}]}}}}"#,
+            r#"{"jsonrpc":"2.0","id":1,"result":{"slot":430,"blockTime":1700000000,
+                "meta":{"fee":5000,"preBalances":[100,2],"postBalances":[95,2],
+                "preTokenBalances":[{"accountIndex":1,"mint":"m",
+                "uiTokenAmount":{"amount":"7","decimals":6,"uiAmountString":"0.000007"}}]}}}"#,
         )
         .unwrap();
-        let meta = parsed.result.unwrap().value.unwrap().meta.unwrap();
+        let tx = parsed.result.unwrap();
+        assert_eq!(tx.block_time, Some(1_700_000_000));
+        let meta = tx.meta.unwrap();
         assert_eq!(meta.fee, Some(5000));
+        assert_eq!(meta.pre_balances, Some(vec![100, 2]));
         let balance = &meta.pre_token_balances.unwrap()[0];
-        assert_eq!(
-            balance.token_amount.as_ref().unwrap().amount.as_deref(),
-            Some("7")
-        );
+        let amount = balance.ui_token_amount.as_ref().unwrap();
+        assert_eq!(amount.amount.as_deref(), Some("7"));
+        assert_eq!(amount.decimals, Some(6));
+        assert_eq!(amount.ui_amount_string.as_deref(), Some("0.000007"));
+    }
+
+    #[test]
+    fn solana_null_result_means_no_transaction() {
+        let parsed: RpcResp =
+            serde_json::from_str(r#"{"jsonrpc":"2.0","id":1,"result":null}"#).unwrap();
+        assert!(parsed.result.is_none());
     }
 }

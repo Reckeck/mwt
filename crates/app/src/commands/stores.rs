@@ -1,25 +1,25 @@
 use tauri::State;
 
-use trade_core::Amount;
-use trade_core::calendar::{Calendar, now_secs};
-use trade_core::ipc_contract::{
+use mwt_base::Amount;
+use mwt_base::calendar::{Calendar, now_secs};
+use mwt_money::portfolio;
+use mwt_money::portfolio::{StoreOverview, StoreTreeNode};
+use mwt_money::store_change::{StoreChangeInput, StoreChangePlan};
+use mwt_planning::envelopes as envelope_reads;
+use mwt_planning::envelopes::{EnvelopeDraft, EnvelopeView};
+use mwt_usecases::ipc_contract::{
     CreateStoreInput, FundEnvelopeInput, FundGoalInput, MoveEnvelopeInput, MoveStoreInput,
     UpdateEnvelopeInput, UpdateStoreInput, VehicleMileageInput, VehicleServiceDoneInput,
     WalletCatalog,
 };
-use trade_core::model::ids::StoreId;
-use trade_core::model::planning::Envelope;
-use trade_core::model::store::{Store, StoreKind};
-use trade_core::money::portfolio;
-use trade_core::money::portfolio::{StoreOverview, StoreTreeNode};
-use trade_core::money::store_change::{StoreChangeInput, StoreChangePlan};
-use trade_core::planning::envelopes as envelope_reads;
-use trade_core::planning::envelopes::{EnvelopeDraft, EnvelopeView};
-use trade_core::service::StoreExtras;
-use trade_core::usecases::household::{envelopes, vehicle};
-use trade_core::usecases::money::rebase::{rebase_envelope_input, rebase_store_input};
-use trade_core::usecases::money::stores::StoreMoveTargets;
-use trade_core::usecases::money::{store_change, stores, valuation};
+use mwt_usecases::model::ids::StoreId;
+use mwt_usecases::model::planning::Envelope;
+use mwt_usecases::model::store::{Store, StoreKind};
+use mwt_usecases::service::StoreExtras;
+use mwt_usecases::usecases::household::{envelopes, vehicle};
+use mwt_usecases::usecases::money::rebase::{rebase_envelope_input, rebase_store_input};
+use mwt_usecases::usecases::money::stores::StoreMoveTargets;
+use mwt_usecases::usecases::money::{store_change, stores, valuation};
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
@@ -287,7 +287,7 @@ pub async fn vehicle_service_done(
     state: State<'_, AppState>,
 ) -> Result<Store, IpcError> {
     let date = chrono::NaiveDate::parse_from_str(&input.date, "%Y-%m-%d")
-        .map_err(|_| IpcError::from(trade_core::Error::InvalidInput("date".into())))?;
+        .map_err(|_| IpcError::from(mwt_base::Error::InvalidInput("date".into())))?;
     with_vault_mut(&state, |vault| {
         vehicle::vehicle_service_done(vault, &StoreId::from(input.store_id), date, input.km)
     })
@@ -297,7 +297,7 @@ pub async fn vehicle_service_done(
 #[tauri::command]
 pub async fn property_set_revalue(
     store_id: String,
-    rule: Option<trade_core::model::store::RevalueRule>,
+    rule: Option<mwt_usecases::model::store::RevalueRule>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {

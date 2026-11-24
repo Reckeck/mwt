@@ -9,7 +9,7 @@ in full below and takes priority. This file holds only additions that are not th
 
 ## Running individual tests
 
-Rust tests are inline `#[cfg(test)]` modules inside `crates/core/src/**` (there is no
+Rust tests are inline `#[cfg(test)]` modules inside `crates/usecases/src/**` and the other `crates/*/src/**` (there is no
 separate `tests/` folder). Frontend tests are vitest, project `unit`: `*.test.ts` next to the code, `mise run test-frontend`
 (`pnpm exec vitest run --project unit <part of the file name>` for a single one). `call()`/`onEvent` and
 i18n (the real ru locale) are mocked in `src/test/setup.ts`. End-to-end scenarios are the `e2e` project
@@ -37,9 +37,9 @@ mise, the artifacts end up in `target/` and the build starts from scratch.
 ## The big picture (what takes reading several files)
 
 - **Vault lifecycle.** `auth::unlock_vault` → `VaultFile::open` (the AEAD check
-  of the password = decryption, there is no verifier) → `UnlockedVault` is put into
-  `AppState.vault: Mutex<Option<UnlockedVault>>`. Every mutation in
-  `UnlockedVault` (`service/`) goes through `transact`, which marks the change via
+  of the password = decryption, there is no verifier) → `Session` is put into
+  `AppState.vault: Mutex<Option<Session>>`. Every mutation in
+  `Session` (`crates/usecases/src/service/`) goes through `transact`, which marks the change via
   `persist()`. In the app the write-behind writer then writes it: a full
   re-encryption and an atomic write (tmp + fsync + rename), batched per burst of
   changes. What must be on disk now (new password, backup copy, re-key, closing the vault)
@@ -50,7 +50,7 @@ mise, the artifacts end up in `target/` and the build starts from scratch.
   `platform_fs::resolve_vault_to_open/resolve_new_vault` (Android hands out
   `content://`, which has to be imported). File dialogs, URIs and the vault directory live
   only in `crates/app/src/platform_fs/`, the local write is in
-  `trade_core::vault_io`. A linked vault hands its bytes to `VaultMirror` after `persist()`.
+  `mwt_vault::vault_io`. A linked vault hands its bytes to `VaultMirror` after `persist()`.
   Details: `docs/storage-platforms.md`.
 - **Two settings stores.** Theme/language/base currency/favorites are in
   `appconfig.rs` (plain JSON in the config directory, available before unlock,
@@ -63,7 +63,7 @@ mise, the artifacts end up in `target/` and the build starts from scratch.
   (the old positional binary) is refused; `SnapshotFormat` is `Json | Pack`.
   A container 1 / payload 4 file goes once
   through `storage::decode_file` → `decode_in_container` → the frozen
-  `legacy_v4::transition`; `UnlockedVault::open_as` then puts `<vault>.v4.bak`
+  `legacy_v4::transition`; `Session::open_as` then puts `<vault>.v4.bak`
   (`VaultFile::backup_version`) next to it and rewrites the file. Older formats
   are refused.
 - **Prices.** A command takes the data it needs under the mutex, releases it, runs

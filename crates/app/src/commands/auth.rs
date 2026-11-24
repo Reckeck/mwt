@@ -1,15 +1,15 @@
 use crate::ipc::events::{AppEvent, VaultChanged, VaultSaveFailed};
+use mwt_usecases::ipc_contract::events::VaultSaveFailedPayload;
 use tauri::{AppHandle, Manager, State};
-use trade_core::ipc_contract::events::VaultSaveFailedPayload;
 
-use trade_core::ipc_contract::security::SecurityLevel;
-use trade_core::ipc_contract::{
+use mwt_usecases::ipc_contract::security::SecurityLevel;
+use mwt_usecases::ipc_contract::{
     ChangePasswordInput, CreateVaultInput, RemoveVaultPasswordInput, SetVaultPasswordInput,
     SetVaultPasswordResult, UnlockInput, VaultInfo, VaultStatus,
 };
-use trade_core::kernel::events::{LockReason, VaultLocked};
-use trade_core::service::security_level::{check_new_secret, level_of_vault_file};
-use trade_core::service::{CopyPolicy, Session};
+use mwt_usecases::kernel::events::{LockReason, VaultLocked};
+use mwt_usecases::service::security_level::{check_new_secret, level_of_vault_file};
+use mwt_usecases::service::{CopyPolicy, Session};
 
 use crate::commands::{AppState, app_settings, lock_vault, require_vault};
 use crate::ipc::IpcError;
@@ -51,7 +51,7 @@ pub(crate) fn status_of(state: &AppState) -> Result<VaultStatus, IpcError> {
     let unlocked = guard.is_some();
     let info = guard.as_ref().map(info_of);
     let encrypted = info.as_ref().map_or_else(
-        || trade_core::crypto::file_is_encrypted(&path),
+        || mwt_crypto::file_is_encrypted(&path),
         |info| info.encrypted,
     );
     Ok(VaultStatus {
@@ -104,10 +104,10 @@ pub async fn create_vault(
             .doc
             .stores
             .iter()
-            .find(|store| store.kind == trade_core::model::store::StoreKind::Cash)
+            .find(|store| store.kind == mwt_usecases::model::store::StoreKind::Cash)
             .map(|store| store.id.clone())
     {
-        trade_core::usecases::money::stores::update_store(
+        mwt_usecases::usecases::money::stores::update_store(
             &mut vault,
             &cash,
             name,
@@ -125,13 +125,13 @@ pub async fn create_vault(
         state
             .vault
             .lock()
-            .map_err(|_| IpcError::from(trade_core::Error::Crypto("lock poisoned".into())))?
+            .map_err(|_| IpcError::from(mwt_base::Error::Crypto("lock poisoned".into())))?
             .as_ref()
             .expect("just stored"),
     );
     // Update vault_path and record in recents
     *state.vault_path.lock().map_err(|err| {
-        IpcError::from(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+        IpcError::from(mwt_base::Error::Crypto(format!("lock poisoned: {}", err)))
     })? = path.clone();
     crate::commands::vault_recents::add_recent(&app, &path.to_string_lossy());
     Ok(info)
@@ -162,7 +162,7 @@ pub(crate) async fn unlock_with(
         let wait = app_settings::current_settings(app).pin_retry_after(key, now_secs());
         if wait > 0 {
             let secs = u32::try_from(wait).unwrap_or(u32::MAX);
-            return Err(IpcError::from(trade_core::Error::PinRetryLater { secs }));
+            return Err(IpcError::from(mwt_base::Error::PinRetryLater { secs }));
         }
     }
     close_open_vault(app, state, &path)?;
@@ -194,14 +194,14 @@ pub(crate) async fn unlock_with(
             .vault
             .lock()
             .map_err(|err| {
-                IpcError::from(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+                IpcError::from(mwt_base::Error::Crypto(format!("lock poisoned: {}", err)))
             })?
             .as_ref()
             .expect("just stored"),
     );
     // Update vault_path and record in recents
     *state.vault_path.lock().map_err(|err| {
-        IpcError::from(trade_core::Error::Crypto(format!("lock poisoned: {}", err)))
+        IpcError::from(mwt_base::Error::Crypto(format!("lock poisoned: {}", err)))
     })? = path.clone();
     crate::commands::vault_recents::add_recent(app, &path.to_string_lossy());
     if typed {
@@ -221,11 +221,11 @@ fn pin_guarded(path: &std::path::Path) -> Option<String> {
 
 /// Count a wrong PIN, or forget the count once the vault opened. Any other
 /// failure (a busy file, too little memory) is not a guess and counts nothing.
-fn note_pin_attempt<T>(app: &AppHandle, key: &str, opened: &trade_core::Result<T>) {
+fn note_pin_attempt<T>(app: &AppHandle, key: &str, opened: &mwt_base::Result<T>) {
     let mut settings = app_settings::current_settings(app);
     let changed = match opened {
         Ok(_) => settings.reset_pin_failures(key),
-        Err(trade_core::Error::Secret) => {
+        Err(mwt_base::Error::Secret) => {
             settings.record_pin_failure(key, now_secs());
             true
         }
@@ -251,11 +251,11 @@ pub async fn lock_vault_cmd(app: AppHandle) -> Result<(), IpcError> {
 /// publish `VaultLocked`, which the wipe of decrypted attachments and the reset
 /// of the live positions follow. Locking the sandbox is leaving it: the demo
 /// data goes, nothing is flushed.
-pub fn close_session(app: &AppHandle) -> trade_core::Result<()> {
+pub fn close_session(app: &AppHandle) -> mwt_base::Result<()> {
     close_session_for(app, LockReason::Manual)
 }
 
-fn close_session_for(app: &AppHandle, reason: LockReason) -> trade_core::Result<()> {
+fn close_session_for(app: &AppHandle, reason: LockReason) -> mwt_base::Result<()> {
     if leave_sandbox(app, &app.state::<AppState>()) {
         return Ok(());
     }
@@ -278,7 +278,7 @@ fn announce_sandbox_leave(left: bool, steps: &mut impl LockSteps) -> bool {
 /// The steps of locking, so the order can be tested without Tauri.
 trait LockSteps {
     /// Write the batched changes to disk.
-    fn flush(&mut self) -> trade_core::Result<()>;
+    fn flush(&mut self) -> mwt_base::Result<()>;
     /// The last word before the vault closes: what to remind of while locked.
     fn snapshot(&mut self);
     /// Stop sync.
@@ -293,7 +293,7 @@ trait LockSteps {
 /// Flush first: if the changes cannot be written, nothing is stopped and the
 /// vault stays open with sync and the scheduler running. The lock is published
 /// last either way: files decrypted for other programs must not linger.
-fn close_in_order(steps: &mut impl LockSteps, reason: LockReason) -> trade_core::Result<()> {
+fn close_in_order(steps: &mut impl LockSteps, reason: LockReason) -> mwt_base::Result<()> {
     let flushed = steps.flush();
     let closed = flushed.is_ok();
     if closed {
@@ -329,7 +329,7 @@ fn close_if_open(
     open: Option<&std::path::Path>,
     target: &std::path::Path,
     steps: &mut impl LockSteps,
-) -> trade_core::Result<bool> {
+) -> mwt_base::Result<bool> {
     let Some(open) = open else {
         return Ok(false);
     };
@@ -347,7 +347,7 @@ struct AppLockSteps<'a> {
 }
 
 impl LockSteps for AppLockSteps<'_> {
-    fn flush(&mut self) -> trade_core::Result<()> {
+    fn flush(&mut self) -> mwt_base::Result<()> {
         // The guard is released inside `flush_now`, before the next steps.
         crate::vault_writer::flush_now(self.app).inspect_err(|err| {
             let _ =
@@ -399,10 +399,10 @@ mod lock_order_tests {
     }
 
     impl LockSteps for Recorder {
-        fn flush(&mut self) -> trade_core::Result<()> {
+        fn flush(&mut self) -> mwt_base::Result<()> {
             self.calls.push("flush".into());
             if self.flush_fails {
-                Err(trade_core::Error::Crypto("disk full".into()))
+                Err(mwt_base::Error::Crypto("disk full".into()))
             } else {
                 Ok(())
             }
@@ -506,7 +506,7 @@ fn store_vault(state: &AppState, vault: Session) -> Result<(), IpcError> {
     let mut guard = state
         .vault
         .lock()
-        .map_err(|_| IpcError::from(trade_core::Error::Crypto("lock poisoned".into())))?;
+        .map_err(|_| IpcError::from(mwt_base::Error::Crypto("lock poisoned".into())))?;
     if let Some(previous) = guard.as_mut() {
         previous.flush_pending()?;
     }
@@ -562,11 +562,7 @@ pub async fn change_password(
 /// The bound password is stale as soon as the key changed, whatever the
 /// outcome of the steps after it: quick unlock starts over. A call that
 /// failed before the key changed leaves the binding as it is.
-fn reset_binding_after<T>(
-    outcome: &trade_core::Result<T>,
-    key_changed: bool,
-    reset: impl FnOnce(),
-) {
+fn reset_binding_after<T>(outcome: &mwt_base::Result<T>, key_changed: bool, reset: impl FnOnce()) {
     if outcome.is_ok() || key_changed {
         reset();
     }
@@ -576,7 +572,7 @@ fn reset_binding_after<T>(
 mod key_change_tests {
     use super::*;
 
-    fn reset_called(outcome: trade_core::Result<()>, key_changed: bool) -> bool {
+    fn reset_called(outcome: mwt_base::Result<()>, key_changed: bool) -> bool {
         let mut called = false;
         reset_binding_after(&outcome, key_changed, || called = true);
         called
@@ -584,14 +580,14 @@ mod key_change_tests {
 
     #[test]
     fn the_biometric_binding_is_reset_after_a_key_change_even_when_the_tail_fails() {
-        let tail_failure = Err(trade_core::Error::Io("copy cleanup".into()));
+        let tail_failure = Err(mwt_base::Error::Io("copy cleanup".into()));
         assert!(reset_called(tail_failure, true));
         assert!(reset_called(Ok(()), true));
     }
 
     #[test]
     fn the_biometric_binding_stays_when_the_key_did_not_change() {
-        let early_failure = Err(trade_core::Error::Secret);
+        let early_failure = Err(mwt_base::Error::Secret);
         assert!(!reset_called(early_failure, false));
     }
 }
@@ -627,7 +623,7 @@ pub async fn remove_vault_password(
     if !input.external_copy_too
         && crate::platform_fs::links::is_linked(&app, &vault.path.to_string_lossy())
     {
-        return Err(IpcError::from(trade_core::Error::InvalidInput(
+        return Err(IpcError::from(mwt_base::Error::InvalidInput(
             "the vault has an external copy that would lose its password too: confirm it".into(),
         )));
     }

@@ -1,7 +1,7 @@
 //! Update status and the manual check (logic: `crate::updates`).
 
+use mwt_usecases::ipc_contract::UpdateStatusDto;
 use tauri::AppHandle;
-use trade_core::ipc_contract::UpdateStatusDto;
 
 use crate::ipc::commands::ipc_commands;
 use crate::updates;

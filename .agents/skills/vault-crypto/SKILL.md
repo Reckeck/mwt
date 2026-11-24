@@ -27,7 +27,7 @@ data, not just a build. Every change must come with a test.
 | `VAULT_CONTAINER_VERSION` (currently `2`; `1` is read only for the `legacy_v4` transition) | the envelope: magic, header fields, KDF parameters, cipher | only when the byte layout of the container changes; otherwise old vaults stop opening |
 | `VAULT_FORMAT_VERSION` (currently `1`) | the `VaultDoc` payload schema, the `doc.version` field | only for an incompatible schema change and **only together with a migration** |
 
-Both live in `crates/core/src/lib.rs`. File format:
+`VAULT_CONTAINER_VERSION` lives in `crates/crypto/src/lib.rs` and `VAULT_FORMAT_VERSION` in `crates/model/src/vault.rs`. File format:
 
 ```
 [ VAULT_MAGIC 8B = "TRDWVLT\0" ][ header 55B ][ ciphertext+tag 16B+ ]
@@ -171,12 +171,22 @@ representation breaks compatibility with saved files and locales.
 
 ## Secrets
 
-- The password and the Bybit API key live **only inside the encrypted
-  `VaultDoc`** and never leave core.
+- The password is never stored. The exchange keys (Bybit), the per-network endpoints and the
+  Blockscout key are device secrets: they are **not** in `VaultDoc`. They live in the device file
+  `<vault>.secrets` (`crates/vault/src/vault_io/device_secrets.rs`), sealed with XChaCha20-Poly1305
+  under a key derived by HKDF-SHA256 from the open vault's key (`mwt-crypto`: `SealKey`, `seal_blob`,
+  `open_blob`). The data type `DeviceSecrets` is in `mwt-model`
+  (`crates/model/src/device_secrets.rs`); the file is never part of the vault bytes, so the mirror,
+  sync, transfers and backups never carry it. A new vault key re-seals it in two steps
+  (`stage_rekey`, `finish_rekey`).
+  Keys live on the device only at level 3 and outside the sandbox (`keys_on_device`).
+  `adopt_device_secrets` migrates any keys a document still holds, on open and when the level is
+  raised to 3. `doc.exchanges.bybit` holds only the index and masks. Below level 3 keys are not
+  stored or used (`level_required`). Flow: `crates/usecases/src/service/exchange_keys.rs`.
 - Only a mask like `abcd…wxyz` is exposed (`ExchangeKeyStatus.hint`).
 - Never log the password, key, salt, nonce or decrypted payload.
   `RUST_LOG=info` is enabled through `mise`, but nothing secret must leak into
-  the log: check `tracing`/`println!` in core.
+  the log: check `tracing`/`println!` in the Rust crates.
 - Vault files and backups: `*.wallet`, `*.wallet.bak`, `data/` are in
   `.gitignore`. If you see them in `jj status`, do not commit them and tell the
   user.

@@ -1,6 +1,6 @@
+use mwt_usecases::ipc_contract::security::{SecurityLevel, SecurityState};
+use mwt_usecases::service::security_level::level_of_vault_file;
 use tauri::{AppHandle, State};
-use trade_core::ipc_contract::security::{SecurityLevel, SecurityState};
-use trade_core::service::security_level::level_of_vault_file;
 
 use crate::commands::{AppState, app_settings, lock_vault};
 use crate::ipc::IpcError;

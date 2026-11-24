@@ -50,27 +50,36 @@ Also useful directly: `cargo build --workspace`, `cargo test -p mwt-usecases`.
 ## Structure
 
 ```
-Cargo.toml            # cargo workspace: crates/core + crates/app, edition 2024
-crates/core/          # all business logic, WITHOUT Tauri
-  src/lib.rs          # re-export: Amount, Error/Result, model::*, VaultFile, SnapshotFormat
-  src/error.rs        # Error enum: Crypto/Secret/NotFound/Unsupported/…, method .code()
-  src/amount.rs       # Amount (Decimal newtype), string serialization; custom ts-rs TS impl
-  src/model/          # domain: chain.rs, store.rs, transaction.rs, vault.rs (VaultDoc, Settings…)
-  src/appconfig.rs    # app settings OUTSIDE the vault: theme, locale, base_currency, favorites
-  src/crypto/         # header.rs (55 bytes, AAD) + mod.rs (seal/open/atomic_write)
-  src/storage/        # SnapshotFormat (Json/Pack + for_profile()), VaultFile::create/open/save
-  src/vault_io/       # vault file on any OS: local (atomic_write, lock, .bak), path|URI, import, mirror (docs/storage-platforms.md)
-  src/pricing/        # PricingService: fetch_prices/fetch_fx (pure, no doc mutation)
-  src/service.rs      # UnlockedVault: mutations, holdings, portfolio, history, PnL
-  src/market/         # Binance OHLCV candles for charts (used to live in sim/, the lab was removed)
-  src/ipc_contract.rs # DTOs for commands (IPC inputs/outputs)
-  src/bin/gen_types.rs# generator of src/shared/api/ipc.gen.d.ts (ts-rs export_all_to + merge)
+Cargo.toml            # cargo workspace: crates/* (edition 2024), the edges are a table in crates/xtask/src/arch/crates.rs
+crates/base/          # mwt-base: Amount (Decimal newtype), Error/Result, limits, time/calendar, calc, secrets, route names
+crates/macros/        # mwt-macros: the #[dto] attribute (serde + feature-gated ts-rs / schemars derives)
+crates/crypto/        # mwt-crypto: container header (55 bytes, AAD), seal/open, KDF profiles, SnapshotFormat
+crates/model/         # mwt-model: VaultDoc and its types (store, transaction, chain, …), ids, DeviceSecrets data
+crates/vault/         # mwt-vault: storage/ (VaultFile, frozen v1-v4), vault_io/ (local file, copies, backups, mirror, device secrets), jsonstore, kernel/ (Write, Tx, Persistence)
+crates/net/           # mwt-net: pricing, exchange clients, datasource, market (OHLCV), updates, chain RPC client
+crates/sync/          # mwt-sync: device-to-device merge, Noise channel, pairing code, transfer
+crates/money/         # mwt-money: Books, ledger, valuation, cost basis, validation (pure rules)
+crates/household/     # mwt-household: contacts, debts, losses, loyalty, property, relations, utilities, vehicles
+crates/workflow/      # mwt-workflow: node catalog, graph, validation, executor, run rules
+crates/planning/      # mwt-planning: budgets, envelopes, goals, agenda, automations, health, notifications, scenarios
+crates/reports/       # mwt-reports: overview, dashboard, insights, comparison, where-went
+crates/cryptotrack/   # mwt-cryptotrack: the crypto module (chains, protocols, engine, sources, tokens)
+crates/contract/      # mwt-contract: command DTOs (IPC inputs/outputs) shared with the frontend
+crates/usecases/      # mwt-usecases: Session (service/), scenarios (usecases/<area>/), ports, sandbox, appconfig; NO Tauri
+  src/service/        # Session: the open vault, transact, saving, sync, backups, exchange keys
+  src/usecases/       # the scenarios: money, household, planning, reports, cryptotrack, sync, workflow, react
+crates/core           # trade-core facade: no logic, re-exports mwt-usecases + bin/gen_types.rs (generator of src/shared/api/ipc.gen.d.ts)
+crates/testkit/       # mwt-testkit: property strategies, in-memory persistence, record builders (dev-only)
 crates/plugin-saf/    # Android: document picker with a persistent grant (Kotlin), android target only
+crates/plugin-net/    # Android: LAN sync multicast lock + Keystore-wrapped device key
+crates/plugin-biometric/ # Android: biometric quick unlock (Keystore key behind BiometricPrompt)
+crates/plugin-insets/ # Android: system bars for the webview (inset CSS variables, bar icons)
+crates/app-macros/    # mwt-app-macros: the #[ipc] attribute for crates/app commands
 crates/app/           # Tauri shell: builder, commands/*, tauri.conf.json, capabilities/
   src/commands/       # auth, stores, transactions, categories, contacts, planning, analytics, pricing, portfolio, calc, settings, exchange
   src/platform_fs/    # the ONLY place with file dialogs, content:// and the vault directory: desktop/mobile, copy in an external file
   src/scheduler.rs    # background thread: Bybit import, automations, alerts, reminders
-  src/lib.rs          # tauri::Builder + generate_handler![…] (list of ALL commands), AppState (vault: Mutex<Option<UnlockedVault>>, vault_path)
+  src/lib.rs          # tauri::Builder + generate_handler![…] (list of ALL commands), AppState (vault: Mutex<Option<Session>>, vault_path)
 src/                  # frontend (Vue 3 + Pinia + TanStack Query + vue-i18n + ECharts), FSD v2.1
   main.ts             # bootstrap: createApp + router/pinia/vue-query/i18n
   app/                # top layer: entry point and infrastructure
@@ -106,7 +115,7 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
    quantities and prices. `f64` is allowed only in `market/` — OHLCV candles
    for charts, not money.
 3. **Async Tauri commands.** Never hold a
-   `MutexGuard<Option<UnlockedVault>>` across `.await` (the future is not `Send`).
+   `MutexGuard<Option<Session>>` across `.await` (the future is not `Send`).
    First copy the data you need, release the guard, then await, then take it
    again. Example: `refresh_all` in `commands/pricing.rs`.
 4. **Network is separate from cache.** `PricingService::fetch_prices/fetch_fx` are
@@ -210,7 +219,7 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
     leaks, "Back", touch targets). Details:
     `ui-design-system/references/stable-layout.md`.
 
-18. **Core follows the layer table.** Modules of `crates/core` depend only as
+18. **Crates follow the layer table.** The workspace crates depend only as
     `docs/architecture.md` ("Layers and ports") says; a back edge fails
     `cargo xtask check arch`. An allowance needs an entry in
     `crates/xtask/arch-allow.toml` with `until` and `reason`.
@@ -411,7 +420,7 @@ Faster, when the edit is clearly local:
 | Changes | Command |
 |---|---|
 | `src/**` (frontend) | `mise run lint && mise run typecheck && mise run test-frontend` |
-| `crates/core/**`, `crates/usecases/**`, `crates/app/**` | `mise run test && mise run clippy` |
+| every Rust crate under `crates/` (`crates/usecases/**`, `crates/app/**`, …) | `mise run test && mise run clippy` |
 | DTOs, models, `ipc_contract.rs` | `mise run test && mise run gen-types` — be sure to diff `src/shared/api/ipc.gen.d.ts`, it must change |
 | final, before committing | `mise run check` |
 
@@ -485,7 +494,7 @@ code, not after:
 | `code-review-and-quality` | reviewing a subtask result and your own diff before committing |
 | `doubt-driven-development` | a risky decision (vault, crypto, money): review with a fresh eye |
 | `code-simplification` | the code works but is more complex than needed; a file hit the line limit |
-| `test-driven-development` | logic in `crates/core`: a failing test first (there are no frontend tests) |
+| `test-driven-development` | logic in the Rust crates (`crates/usecases`, the domain crates): a failing test first (there are no frontend tests) |
 | `source-driven-development` | a library API (vue-flow, reka-ui, TanStack, Tauri) — from the docs, not from memory |
 | `security-and-hardening` | untrusted input: file import, attachments, links, sync |
 | `performance-optimization` | noticeable slowdowns, a `check-layout` regression, heavy lists and charts |

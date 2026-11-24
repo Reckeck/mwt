@@ -5,9 +5,9 @@ use std::collections::BTreeMap;
 
 use tauri::{AppHandle, State};
 
-use trade_core::household::losses::{FlowSummary, FxTable, TxLoss};
-use trade_core::ipc_contract::LinkTransactionsInput;
-use trade_core::usecases::household::losses;
+use mwt_household::losses::{FlowSummary, FxTable, TxLoss};
+use mwt_usecases::ipc_contract::LinkTransactionsInput;
+use mwt_usecases::usecases::household::losses;
 
 use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};

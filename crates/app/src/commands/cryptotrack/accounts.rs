@@ -10,7 +10,7 @@
 
 use tauri::State;
 
-use trade_core::ipc_contract::cryptotrack::accounts::{
+use mwt_usecases::ipc_contract::cryptotrack::accounts::{
     ConnectAddressInput, ConnectAddressResult, CryptoAccountRefInput, CryptoAccountView,
     UpdateAccountInput,
 };
@@ -19,7 +19,7 @@ use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::usecases::cryptotrack::accounts;
+use mwt_usecases::usecases::cryptotrack::accounts;
 
 /// The accounts the module follows, with the wallet that shows each and the
 /// tokens of it that wait in quarantine.

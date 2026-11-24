@@ -88,7 +88,7 @@ General copy rules (tone, vocabulary, "…", sentence case) are in
 
 If a feature cannot be understood in 3-5 steps (node-based automation, account
 reconciliation), it needs a lesson: a task in a sandbox
-(`UnlockedVault::sandbox`) with a check of the result. Lessons live in the
+(`Session::sandbox`) with a check of the result. Lessons live in the
 learning center next to the tours.
 
 ## Check

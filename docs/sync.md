@@ -72,15 +72,15 @@ and events).
 
 | Part | Place |
 |---|---|
-| Change tracking, merge, plan, undo data (pure, no network) | `crates/core/src/sync/`: `stamp`, `state`, `registry`, `view`, `fields`, `track`, `merge`, `plan`, `manifest`, `journal`, `alias` |
-| The encrypted channel, the pairing code, the vault proof, the clock check | `crates/core/src/sync/session.rs`, `protocol.rs` |
-| Vault transfer protocol (SPAKE2, file check) | `crates/core/src/sync/transfer.rs` |
-| Vault side: stamping on save, `sync_apply`, `sync_undo`, dedupe, backups, peers | `crates/core/src/service/peer_sync.rs` |
-| Run keys, waits, schedule moments, marks | `crates/workflow/src/run_key.rs`, `crates/core/src/service/workflows.rs` |
-| Reminder ids and sources | `crates/core/src/service/auto_reminders.rs` |
+| Change tracking, merge, plan, undo data (pure, no network) | `crates/sync/src/`: `stamp`, `state`, `registry`, `view`, `fields`, `track`, `merge`, `plan`, `manifest`, `journal`, `alias` |
+| The encrypted channel, the pairing code, the vault proof, the clock check | `crates/sync/src/session.rs`, `protocol.rs` |
+| Vault transfer protocol (SPAKE2, file check) | `crates/sync/src/transfer.rs` |
+| Vault side: stamping on save, `sync_apply`, `sync_undo`, dedupe, backups, peers | `crates/sync/src/peer_sync.rs`, `crates/usecases/src/service/peer_sync.rs` |
+| Run keys, waits, schedule moments, marks | `crates/workflow/src/run_key.rs`, `crates/usecases/src/service/workflows.rs` |
+| Reminder ids and sources | `crates/planning/src/auto_reminders.rs` |
 | Network: mDNS, TCP, roles, sessions | `crates/app/src/sync/`: `discovery`, `link`, `mod` (hub), `keystore`, `host`, `firewall`, `handover`, `transfer`, `pending` |
 | Who runs background jobs | `crates/app/src/scheduler.rs`, `sync::runs_jobs` |
-| The external copy | `crates/app/src/platform_fs/links.rs`, `crates/core/src/vault_io/mirror.rs` |
+| The external copy | `crates/app/src/platform_fs/links.rs`, `crates/vault/src/vault_io/mirror.rs` |
 | Commands and events | `crates/app/src/commands/sync.rs`, `docs/ipc.md` |
 | Interface | `src/features/vault-sync/`, `src/widgets/sync-settings/` |
 

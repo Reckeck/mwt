@@ -2,13 +2,13 @@
 //! only with the user's consent — and keep the finding for them to apply.
 
 use crate::ipc::events::{AppEvent, EnrichmentReady};
+use mwt_usecases::ipc_contract::events::EnrichmentReadyPayload;
 use tauri::{AppHandle, Manager, State};
-use trade_core::ipc_contract::events::EnrichmentReadyPayload;
 
-use trade_core::model::enrichment::EnrichmentRecord;
-use trade_core::money::enrichment as enrichment_reads;
-use trade_core::txinfo::TxInfoService;
-use trade_core::usecases::money::enrichment as enrichment_cases;
+use mwt_money::enrichment as enrichment_reads;
+use mwt_usecases::model::enrichment::EnrichmentRecord;
+use mwt_usecases::txinfo::TxInfoService;
+use mwt_usecases::usecases::money::enrichment as enrichment_cases;
 
 use crate::commands::app_settings::current_settings;
 use crate::commands::{AppState, require_vault};

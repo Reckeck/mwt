@@ -11,7 +11,7 @@
 
 use tauri::State;
 
-use trade_core::ipc_contract::cryptotrack::operations::{
+use mwt_usecases::ipc_contract::cryptotrack::operations::{
     CryptoListOperationsInput, CryptoOperationDetail, CryptoOperationDetailInput, CryptoOpsPage,
     CryptoSetOverrideInput, CryptoSetOverrideResult,
 };
@@ -20,7 +20,7 @@ use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::usecases::cryptotrack::operations;
+use mwt_usecases::usecases::cryptotrack::operations;
 
 /// The operations of the followed accounts, one page of the filtered list.
 #[tauri::command]
@@ -48,7 +48,7 @@ pub async fn crypto_operation_detail(
 /// Put a correction over an operation: its kind, its categories, its comment,
 /// the counterparty it went through, hiding it, or the chain it is in. The
 /// event itself is left as it came, so a refetch keeps the correction
-/// (`trade_core::model::cryptotrack::CryptoOverride`).
+/// (`mwt_usecases::model::cryptotrack::CryptoOverride`).
 #[tauri::command]
 pub async fn crypto_set_override(
     input: CryptoSetOverrideInput,

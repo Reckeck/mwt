@@ -8,14 +8,14 @@ use tauri::{AppHandle, Manager, State};
 use crate::commands::{AppState, lock_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::ipc_contract::{
+use mwt_usecases::ipc_contract::{
     DeleteVaultFileInput, DeleteVaultFileOutput, ExportVaultCopyInput, PickedVault, RecentVault,
     RelocateRecentVaultInput, RestoreRecentVaultInput, SelectVaultInput, VaultStorage,
 };
-use trade_core::vault_io::delete::{
+use mwt_usecases::vault_io::delete::{
     Protected, delete_in_app_folder, ensure_vault_file, inside_folder, read_vault_bytes,
 };
-use trade_core::vault_io::display_name_of;
+use mwt_usecases::vault_io::display_name_of;
 
 const RECENTS_FILE: &str = "recent_vaults.json";
 const MAX_RECENTS: usize = 10;
@@ -39,14 +39,14 @@ fn save_recents(app: &AppHandle, recents: &[RecentVault]) {
 }
 
 /// The list as it is on disk: no file yet means no recents, an unreadable
-/// one is kept aside and said so (`trade_core::jsonstore`).
+/// one is kept aside and said so (`mwt_usecases::jsonstore`).
 fn read_recents(path: &Path) -> Vec<RecentVault> {
-    trade_core::jsonstore::read::<Vec<RecentVault>>(path).or_default_logged("recent vaults")
+    mwt_usecases::jsonstore::read::<Vec<RecentVault>>(path).or_default_logged("recent vaults")
 }
 
 /// Write the list atomically: a half-written file would read as "no recents".
 fn write_recents(path: &Path, recents: &[RecentVault]) {
-    if let Err(err) = trade_core::jsonstore::write(path, recents) {
+    if let Err(err) = mwt_usecases::jsonstore::write(path, recents) {
         eprintln!("recent vaults: not saved: {err}");
     }
 }
@@ -59,7 +59,7 @@ pub fn rebase_paths(config_dir: &Path, moves: &[(PathBuf, PathBuf)]) {
     let mut recents = read_recents(&path);
     let mut changed = false;
     for recent in &mut recents {
-        if let Some(rebased) = trade_core::app_dirs::rebase_path(&recent.path, moves) {
+        if let Some(rebased) = mwt_usecases::app_dirs::rebase_path(&recent.path, moves) {
             recent.exists = Path::new(&rebased).exists();
             recent.path = rebased;
             changed = true;
@@ -80,7 +80,7 @@ fn stored_vaults(dir: &Path, known: &[RecentVault]) -> Vec<RecentVault> {
         .map(|entry| entry.path())
         .filter(|path| {
             path.extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case(trade_core::storage::VAULT_EXT))
+                .is_some_and(|ext| ext.eq_ignore_ascii_case(mwt_usecases::storage::VAULT_EXT))
         })
         .map(|path| {
             let modified = std::fs::metadata(&path)
@@ -124,7 +124,7 @@ fn opened(
     mut recents: Vec<RecentVault>,
     path: &str,
     now: u64,
-    sandbox: Option<&trade_core::sandbox::SandboxDir>,
+    sandbox: Option<&mwt_usecases::sandbox::SandboxDir>,
 ) -> Vec<RecentVault> {
     if sandbox.is_some_and(|dir| Path::new(path).starts_with(dir.root())) {
         return recents;
@@ -202,7 +202,7 @@ pub async fn recent_vaults(app: AppHandle) -> Result<Vec<RecentVault>, IpcError>
             .is_some_and(|dir| inside_folder(dir, Path::new(&recent.path)).is_some());
         recent.display_name = display_name_of(&recent.path);
         recent.linked = crate::platform_fs::links::is_linked(&app, &recent.path);
-        recent.encrypted = trade_core::crypto::file_is_encrypted(Path::new(&recent.path));
+        recent.encrypted = mwt_crypto::file_is_encrypted(Path::new(&recent.path));
     }
     Ok(recents)
 }
@@ -285,9 +285,9 @@ pub async fn delete_vault_file(
 
 /// Write the open vault's batched changes when `source` is that vault.
 fn flush_if_open(
-    open: Option<&mut trade_core::service::Session>,
+    open: Option<&mut mwt_usecases::service::Session>,
     source: &Path,
-) -> trade_core::error::Result<()> {
+) -> mwt_base::error::Result<()> {
     match open {
         Some(vault) if vault.path == source => vault.flush_pending(),
         _ => Ok(()),
@@ -335,8 +335,8 @@ ipc_commands!(vault_recents_commands, VAULT_RECENTS_NAMES, commands::vault_recen
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trade_core::kernel::session::SaveHook;
-    use trade_core::service::Session;
+    use mwt_usecases::kernel::session::SaveHook;
+    use mwt_usecases::service::Session;
 
     struct NoWake;
 
@@ -345,7 +345,7 @@ mod tests {
     }
 
     fn decimals_on_disk(path: &Path) -> u32 {
-        trade_core::storage::VaultFile::open(path, "pw")
+        mwt_usecases::storage::VaultFile::open(path, "pw")
             .unwrap()
             .0
             .settings
@@ -387,7 +387,7 @@ mod tests {
     #[test]
     fn the_sandbox_is_not_a_recent_vault() {
         let cache = std::path::Path::new("/cache/app");
-        let sandbox = trade_core::sandbox::SandboxDir::in_cache(cache);
+        let sandbox = mwt_usecases::sandbox::SandboxDir::in_cache(cache);
         let file = sandbox.file().to_string_lossy().into_owned();
         let before = vec![rv("/home/me/main.wallet")];
         let after = opened(before.clone(), &file, 1, Some(&sandbox));
@@ -448,7 +448,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("relocate-check-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let vault = dir.join("found.wallet");
-        let mut bytes = trade_core::VAULT_MAGIC.to_vec();
+        let mut bytes = mwt_crypto::VAULT_MAGIC.to_vec();
         bytes.extend_from_slice(b"rest");
         std::fs::write(&vault, bytes).unwrap();
         let other = dir.join("notes.txt");

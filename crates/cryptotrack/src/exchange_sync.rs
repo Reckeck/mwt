@@ -20,7 +20,7 @@
 //! The store tree belongs to `money`, which the crypto module may not name
 //! (arch layer table). The three reads of it that the rules need
 //! ([`root_of`], [`find_store`], [`children_of`]) are the only places that
-//! reach it, through `Books::vault()`.
+//! reach it, through `Books::doc()`.
 
 use std::collections::HashSet;
 
