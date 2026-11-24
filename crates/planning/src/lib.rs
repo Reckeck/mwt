@@ -15,6 +15,7 @@ mod budget_props;
 pub mod daily_budget;
 pub mod datasources;
 pub mod debt_load;
+pub mod distribution;
 pub mod emergency;
 pub mod envelopes;
 pub mod flows;
