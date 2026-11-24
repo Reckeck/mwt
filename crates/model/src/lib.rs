@@ -2,8 +2,7 @@
 //! `mwt-model`: the data model stored inside the encrypted vault (`VaultDoc` and
 //! every type it holds), the record kinds, the sync registry table, the coin tables
 //! and the typed ids. It depends on `mwt-base` only. Modules are private; this root
-//! re-lists every public item, and `trade-core` keeps the old module paths as
-//! re-exports of the same items.
+//! re-lists every public item, and nothing else is public.
 
 mod attachment;
 mod automation_facts;

@@ -68,7 +68,6 @@ crates/contract/      # mwt-contract: command DTOs (IPC inputs/outputs) shared w
 crates/usecases/      # mwt-usecases: Session (service/), scenarios (usecases/<area>/), ports, sandbox, appconfig, bin/gen_types.rs (generator of src/shared/api/ipc.gen.d.ts); NO Tauri
   src/service/        # Session: the open vault, transact, saving, sync, backups, exchange keys
   src/usecases/       # the scenarios: money, household, planning, reports, cryptotrack, sync, workflow, react
-crates/core           # trade-core facade: no logic, re-exports mwt-usecases only
 crates/testkit/       # mwt-testkit: property strategies, in-memory persistence, record builders (dev-only)
 crates/plugin-saf/    # Android: document picker with a persistent grant (Kotlin), android target only
 crates/plugin-net/    # Android: LAN sync multicast lock + Keystore-wrapped device key
@@ -266,7 +265,7 @@ docs/                 # architecture, data-model, ipc, security, roadmap, ui-des
   inputs). Never commit `*.snap.new`.
 - **CI never writes snapshots:** a changed snapshot fails the run
   (`INSTA_UPDATE=no`); the fix is a reviewed `.snap` in the commit.
-- The libraries are `[dev-dependencies]` only; `trade-core` has none of them in its
+- The libraries are `[dev-dependencies]` only; `mwt-usecases` has none of them in its
   normal dependency tree.
 
 ## CI/CD (GitHub Actions)
@@ -335,8 +334,8 @@ check it with `mise x actionlint@1.7.12 -- actionlint`. GitLab is only a mirror 
   it while anyone may still have the old installation.
 - **Name.** The app is Multi Wallet Tracker (MWT): `productName`, binary and packages
   `multi-wallet-tracker`, AUR `multi-wallet-tracker-bin`; the dev channel —
-  "Multi Wallet Tracker Dev", `multi-wallet-tracker-dev`. The Rust crates `trade-core`/`trade-app`
-  remain internal names. Do not touch the vault magic bytes and the export format
+  "Multi Wallet Tracker Dev", `multi-wallet-tracker-dev`. The Rust crate `trade-app`
+  remains an internal name. Do not touch the vault magic bytes and the export format
   `trade-app-workflow` — reading old files depends on them.
 - **Release — tag `vX.Y.Z`,** plus `release-base/vX.Y.Z` on the tip of the release
   branch, which version accounting counts from. The version is the same in `crates/app/tauri.conf.json`,

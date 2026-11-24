@@ -1,5 +1,5 @@
 //! Multi Wallet Tracker use cases: the scenarios over the domain crates, the service shim, the sandbox,
-//! the app config and the test kit. The facade `trade-core` re-exports every module of this crate.
+//! the app config and the test kit.
 //! This crate MUST NOT depend on Tauri or any UI runtime so it stays fast
 //! to compile and fully unit-testable (`cargo test -p mwt-usecases`).
 

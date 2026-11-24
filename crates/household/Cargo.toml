@@ -10,7 +10,7 @@ description = "Multi Wallet Tracker household: attachments, contacts, debts, los
 workspace = true
 
 [features]
-# `ts-rs` derives of the household view and input types; off by default, `trade-core` turns them on.
+# `ts-rs` derives of the household view and input types; off by default, `mwt-usecases` turns them on.
 ts = ["dep:ts-rs", "mwt-model/ts", "mwt-base/ts", "mwt-money/ts"]
 
 [dependencies]

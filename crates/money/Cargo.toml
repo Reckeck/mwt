@@ -10,11 +10,11 @@ description = "Multi Wallet Tracker money: pure money rules, the books, ledger, 
 workspace = true
 
 [features]
-# `ts-rs` derives of the money view types; off by default, `trade-core` turns them on.
+# `ts-rs` derives of the money view types; off by default, `mwt-usecases` turns them on.
 ts = ["dep:ts-rs", "mwt-model/ts", "mwt-base/ts"]
 schema = ["mwt-model/schema", "mwt-base/schema"]
 
-# Test support for the tests of `trade-core`: the counter `books::BUILDS`.
+# Test support for the tests of `mwt-usecases`: the counter `books::BUILDS`.
 testing = []
 
 [dependencies]

@@ -54,7 +54,7 @@ Acceptance criteria (all verifiable):
 - [ ] ...
 - [ ] quick checks are green: pnpm biome check --write src scripts;
       pnpm vue-tsc --noEmit; mise run check-ui; mise run check-fsd
-      (+ cargo test -p trade-core <module> if core changed)
+      (+ cargo test -p <owning crate> <module> if Rust changed)
 
 Forbidden: committing (jj describe/new/commit), git commit/add/stash, touching
 files outside the list without a reason, changing AGENTS.md/the plan/skills, running

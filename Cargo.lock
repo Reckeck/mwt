@@ -6647,13 +6647,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "trade-core"
-version = "0.1.0"
-dependencies = [
- "mwt-usecases",
-]
-
-[[package]]
 name = "tray-icon"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

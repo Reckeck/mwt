@@ -35,7 +35,7 @@ use mwt_model::{CryptoDirection, TrackingRef};
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "ts", ts(rename = "CryptoPositionAsset"))]
 pub struct PositionAssetView {
-    /// The module's own key (`trade_core::model::cryptotrack::CryptoAsset::key`).
+    /// The module's own key (`mwt_model::cryptotrack::CryptoAsset::key`).
     pub asset_key: String,
     pub symbol: String,
     /// A supply is `in`, a debt `out`.

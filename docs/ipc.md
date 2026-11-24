@@ -15,11 +15,11 @@ A command is a plain function in `crates/app/src/commands/<context>.rs`, registe
 
    ```rust
    #[ipc(read)]
-   pub fn list_stores(vault: &Session) -> trade_core::Result<Vec<Store>> { .. }
+   pub fn list_stores(vault: &Session) -> mwt_usecases::Result<Vec<Store>> { .. }
    #[ipc(write, sandbox = deny)]
-   pub fn delete_store(vault: &mut Session, id: String) -> trade_core::Result<()> { .. }
+   pub fn delete_store(vault: &mut Session, id: String) -> mwt_usecases::Result<()> { .. }
    #[ipc(locked_ok)]
-   pub fn vault_status(state: &AppState) -> trade_core::Result<VaultStatus> { .. }
+   pub fn vault_status(state: &AppState) -> mwt_usecases::Result<VaultStatus> { .. }
    ```
 
    Flags: `read` or `write` (the type of the first parameter must match), `sandbox = deny`, `locked_ok`

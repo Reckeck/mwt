@@ -10,7 +10,7 @@ rules are functions of the domain crates, and every command is one scenario in `
 
 ## Crates
 
-The workspace is `crates/*`: 24 members, 23 without the facade `trade-core`, whose fate is still open. The edges are a table in `crates/xtask/src/arch/crates.rs`;
+The workspace is `crates/*`: 23 members. The edges are a table in `crates/xtask/src/arch/crates.rs`;
 `cargo xtask check arch` fails on an edge that is not in it.
 
 | Crate | What it holds | May depend on |
@@ -31,9 +31,8 @@ The workspace is `crates/*`: 24 members, 23 without the facade `trade-core`, who
 | `mwt-contract` | the command input/output types shared with the frontend (`#[dto]`) | the domain crates, sync, crypto, vault, net |
 | `mwt-usecases` | `Session`, the scenarios (`usecases/`), the service shim, ports, sandbox, app config, the type generator `gen_types` (`src/bin`) | everything above |
 | `mwt-testkit` | property strategies, an in-memory persistence, model-only builders (dev-only) | base, model, vault |
-| `trade-core` | the facade: re-exports `mwt-usecases` only | usecases |
 | `mwt-app-macros` | the `#[ipc]` attribute for `crates/app` commands | nothing |
-| `trade-app` | the Tauri shell | trade-core, app-macros, the plugins |
+| `trade-app` | the Tauri shell | usecases, app-macros, the plugins |
 | `tauri-plugin-saf`, `-net`, `-biometric`, `-insets` | Android plugins (below) | Tauri only |
 | `xtask` | the build and check engine (`cargo xtask`) | nothing |
 
@@ -184,7 +183,7 @@ reason in the PR (`crates/xtask/arch-allow.toml`, empty today). An entry that no
 | 2 | `mwt-model` |
 | 3 | `mwt-vault`, `mwt-sync`, `mwt-net` |
 | 4 | `mwt-money`, `mwt-household`, `mwt-planning`, `mwt-reports`, `mwt-cryptotrack`, `mwt-workflow` |
-| 5 | `mwt-contract`, `mwt-usecases` (and the facade `trade-core`) |
+| 5 | `mwt-contract`, `mwt-usecases` |
 | 6 | `mwt-testkit` (dev-only) |
 
 The kernel (`crates/vault/src/kernel/`, re-exported as `kernel::` by `mwt-usecases`) is the one place where a change of the open

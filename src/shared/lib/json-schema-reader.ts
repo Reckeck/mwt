@@ -1,4 +1,4 @@
-/// Reader for the JSON Schema that `trade-core` derives from `VaultDoc`.
+/// Reader for the JSON Schema that `mwt-usecases` derives from `VaultDoc`.
 ///
 /// The document shape lives in exactly one place — the Rust structs — and the
 /// editor asks for it over IPC (`vault_schema`). This file only interprets
