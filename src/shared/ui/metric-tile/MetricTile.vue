@@ -5,7 +5,7 @@ import { ArrowRight, TrendingDown, TrendingUp } from 'lucide-vue-next'
 
 import { SIGN_TONE_CLASS, formatPct, signTone } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
-import { Sparkline } from '@/shared/ui/sparkline'
+import { Sparkline, type SparklineTone } from '@/shared/ui/sparkline'
 import { useWidgetSize } from '@/shared/ui/widget-frame'
 
 import type { MetricTileProps } from './metric-tile.types'
@@ -30,11 +30,9 @@ const level = computed(() => props.size ?? cellSize.value)
 
 const direction = computed(() => signTone(props.deltaPct))
 /** Green when the change goes the good way; a flat or unknown change stays neutral. */
-const toneClass = computed(() => {
-  if (direction.value === 'neutral') return 'text-muted-foreground'
-  const good = (direction.value === 'positive') === (props.goodWhen === 'up')
-  return SIGN_TONE_CLASS[good ? 'positive' : 'negative']
-})
+const isGood = computed(() => (direction.value === 'positive') === (props.goodWhen === 'up'))
+const toneClass = computed(() => (direction.value === 'neutral' ? 'text-muted-foreground' : SIGN_TONE_CLASS[isGood.value ? 'positive' : 'negative']))
+const sparkTone = computed<SparklineTone>(() => (direction.value === 'neutral' ? 'actual' : isGood.value ? 'income' : 'over'))
 </script>
 
 <template>
@@ -60,9 +58,7 @@ const toneClass = computed(() => {
       </template>
       <span v-if="props.baseLabel" class="truncate text-muted-foreground">{{ props.baseLabel }}</span>
     </p>
-    <div v-if="level !== 's' && props.series.length > 1" :class="direction === 'neutral' ? 'text-primary' : toneClass">
-      <Sparkline :values="props.series" />
-    </div>
+    <Sparkline v-if="level !== 's' && props.series.length > 1" :values="props.series" :tone="sparkTone" :label="props.label" />
     <p v-if="level !== 's' && props.insight" class="line-clamp-2 text-xs text-muted-foreground">{{ props.insight }}</p>
     <slot name="detail" :level="level" />
     <Button v-if="level !== 's' && props.action" variant="link" size="sm" class="h-auto self-start p-0" as-child>

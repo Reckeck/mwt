@@ -14,6 +14,8 @@ import type { StatCardProps } from './stat-card.types'
 const props = withDefaults(defineProps<StatCardProps>(), {
   value: undefined,
   hint: undefined,
+  delta: undefined,
+  deltaTone: 'neutral',
   tone: 'neutral',
   loading: false,
 })
@@ -30,6 +32,9 @@ const FIGURE_CLASS = 'figure truncate @max-[9rem]:text-base @max-[9rem]:whitespa
       <Skeleton v-if="props.loading" class="h-7 w-28" />
       <p v-else :class="cn(FIGURE_CLASS, SIGN_TONE_CLASS[props.tone])">
         <slot>{{ props.value }}</slot>
+      </p>
+      <p v-if="props.delta || $slots.delta" :class="cn('truncate text-xs tabular-nums', SIGN_TONE_CLASS[props.deltaTone])">
+        <slot name="delta">{{ props.delta }}</slot>
       </p>
       <p v-if="props.hint || $slots.hint" class="truncate text-xs text-muted-foreground">
         <slot name="hint">{{ props.hint }}</slot>

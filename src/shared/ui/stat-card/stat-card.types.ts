@@ -9,6 +9,9 @@ export interface StatCardProps {
   hint?: string
   /** Colours a plain-text `value` by direction. */
   tone?: SignTone
+  /** Change against a base as text (`+4.2%`); `deltaTone` colours it. */
+  delta?: string
+  deltaTone?: SignTone
   /** Shows a placeholder instead of a figure that would read as zero. */
   loading?: boolean
 }
