@@ -8,7 +8,7 @@
 
 use tauri::State;
 
-use trade_core::ipc_contract::cryptotrack::links::{
+use mwt_usecases::ipc_contract::cryptotrack::links::{
     CryptoLinkCandidatesInput, CryptoLinkInput, CryptoLinkOption, CryptoPair, CryptoPairsInput,
     CryptoUnlinkInput,
 };
@@ -17,7 +17,7 @@ use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::usecases::cryptotrack::links;
+use mwt_usecases::usecases::cryptotrack::links;
 
 /// The crypto operations that look like the same movement of money as a fiat
 /// record: close in time, and matching in value at the rate of that day. Read

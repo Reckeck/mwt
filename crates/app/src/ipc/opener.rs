@@ -6,8 +6,8 @@
 
 use std::path::Path;
 
-use trade_core::error::Error;
-use trade_core::external_url::{check_attachment_url, check_external_url};
+use mwt_base::error::Error;
+use mwt_usecases::external_url::{check_attachment_url, check_external_url};
 
 use super::IpcError;
 

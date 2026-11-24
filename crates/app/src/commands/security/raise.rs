@@ -1,11 +1,11 @@
 use crate::ipc::events::{AppEvent, SecurityRaiseProgress};
-use tauri::{AppHandle, State};
-use trade_core::error::Error;
-use trade_core::ipc_contract::security::{
+use mwt_base::error::Error;
+use mwt_usecases::ipc_contract::security::{
     PasswordStrengthReport, RaiseProgress, RaiseToCryptoInput, RaiseToCryptoReport, SecurityLevel,
     ValidatePasswordStrengthInput,
 };
-use trade_core::service::security_level::password_strength;
+use mwt_usecases::service::security_level::password_strength;
+use tauri::{AppHandle, State};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;

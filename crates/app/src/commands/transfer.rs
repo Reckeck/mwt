@@ -2,10 +2,10 @@
 //! receiving works without a vault open, sending needs the vault and its
 //! password typed again. The work is in `crate::sync::handover`.
 
-use tauri::AppHandle;
-use trade_core::ipc_contract::{
+use mwt_usecases::ipc_contract::{
     TransferNearby, TransferReceiveView, TransferSendInput, TransferSendView,
 };
+use tauri::AppHandle;
 
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;

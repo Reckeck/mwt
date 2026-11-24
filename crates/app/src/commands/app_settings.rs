@@ -11,11 +11,11 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager, State};
 
-use trade_core::appconfig::{
+use mwt_usecases::appconfig::{
     AppSettings, UpdateAppSettingsInput, build_currency_catalog, load_or_init_settings,
     save_settings,
 };
-use trade_core::ipc_contract::CurrencyCatalogOutput;
+use mwt_usecases::ipc_contract::CurrencyCatalogOutput;
 
 use crate::commands::{AppState, lock_vault};
 use crate::ipc::IpcError;
@@ -38,7 +38,7 @@ static CACHE: std::sync::Mutex<Option<Seen>> = std::sync::Mutex::new(None);
 
 /// Write the app settings and drop the cached copy (a same-size rewrite within
 /// the file system's time resolution would otherwise look unchanged).
-pub fn save(dir: &std::path::Path, settings: &AppSettings) -> trade_core::Result<()> {
+pub fn save(dir: &std::path::Path, settings: &AppSettings) -> mwt_base::Result<()> {
     let result = save_settings(dir, settings);
     if let Ok(mut cache) = CACHE.lock() {
         *cache = None;
@@ -52,7 +52,7 @@ pub fn save(dir: &std::path::Path, settings: &AppSettings) -> trade_core::Result
 /// and by the phone's sync poll: the parsed file is kept and re-read only when
 /// its size or time changed (any writer, anywhere, invalidates it that way).
 fn load(dir: &std::path::Path) -> AppSettings {
-    let path = trade_core::appconfig::settings_path(dir);
+    let path = mwt_usecases::appconfig::settings_path(dir);
     let stamp = std::fs::metadata(&path)
         .ok()
         .and_then(|meta| Some((meta.modified().ok()?, meta.len())));
@@ -129,11 +129,12 @@ pub async fn update_app_settings(
 /// Can the app own a system-wide key here, and what should a compositor
 /// binding run otherwise.
 #[tauri::command]
-pub async fn get_shortcut_support() -> Result<trade_core::ipc_contract::ShortcutSupport, IpcError> {
+pub async fn get_shortcut_support() -> Result<mwt_usecases::ipc_contract::ShortcutSupport, IpcError>
+{
     let exe = std::env::current_exe()
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_else(|_| "multi-wallet-tracker".into());
-    Ok(trade_core::ipc_contract::ShortcutSupport {
+    Ok(mwt_usecases::ipc_contract::ShortcutSupport {
         global_keys: crate::shortcut::global_keys_supported(),
         launch_command: format!("{exe} {}", crate::shortcut::QUICK_ADD_FLAG),
     })
@@ -203,9 +204,10 @@ pub fn sync_base_currency(state: &AppState, app: &AppHandle) {
         // The flat inflation rates used to be kept per device; they are the
         // group's now, so the first open after the update copies this device's
         // own into the vault (once, never over a rate the group already has).
-        if let Err(err) =
-            trade_core::usecases::money::inflation::adopt_flat_inflation(vault, &settings.inflation)
-        {
+        if let Err(err) = mwt_usecases::usecases::money::inflation::adopt_flat_inflation(
+            vault,
+            &settings.inflation,
+        ) {
             eprintln!("inflation rates were not adopted: {err}");
         }
         drop(guard);

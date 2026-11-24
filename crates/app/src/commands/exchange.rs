@@ -7,14 +7,14 @@
 
 use tauri::State;
 
-use trade_core::calendar::now_secs;
-use trade_core::cryptotrack::exchange_sync::ImportedTransactions;
-use trade_core::cryptotrack::{exchange_import as import_reads, exchange_sync as sync_reads};
-use trade_core::error::Error;
-use trade_core::exchange::bybit::KeyCheck;
-use trade_core::exchange::staging::PendingImportExt;
-use trade_core::exchange::{BybitClient, Category};
-use trade_core::ipc_contract::{
+use mwt_base::calendar::now_secs;
+use mwt_base::error::Error;
+use mwt_cryptotrack::exchange_sync::ImportedTransactions;
+use mwt_cryptotrack::{exchange_import as import_reads, exchange_sync as sync_reads};
+use mwt_usecases::exchange::bybit::KeyCheck;
+use mwt_usecases::exchange::staging::PendingImportExt;
+use mwt_usecases::exchange::{BybitClient, Category};
+use mwt_usecases::ipc_contract::{
     BybitExecution, BybitExecutionsInput, BybitExecutionsResult, ClearExchangeKeyInput,
     ConfirmPendingImportsInput, ConfirmPendingImportsOutput, CreateBybitAccountsInput,
     DiscardPendingImportsInput, DiscardPendingImportsOutput, ExchangeAccountBalance,
@@ -24,11 +24,11 @@ use trade_core::ipc_contract::{
     SetExchangeTargetsInput, SetImportIntervalInput, SetImportSettingsInput, TxFieldHint,
     UpdateTerminalStateInput,
 };
-use trade_core::model::store::{ImportSettings, TerminalState};
-use trade_core::model::vault::{ImportRun, ImportSource, PendingImport};
-use trade_core::txinfo::{TxInfo, TxInfoService};
-use trade_core::usecases::cryptotrack::{exchange_import, exchange_sync};
-use trade_core::vault_io::device_secrets::DeviceKey;
+use mwt_usecases::model::store::{ImportSettings, TerminalState};
+use mwt_usecases::model::vault::{ImportRun, ImportSource, PendingImport};
+use mwt_usecases::txinfo::{TxInfo, TxInfoService};
+use mwt_usecases::usecases::cryptotrack::{exchange_import, exchange_sync};
+use mwt_usecases::vault_io::device_secrets::DeviceKey;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
@@ -345,7 +345,7 @@ pub async fn clear_exchange_key(
 
 // -- Bybit import staging (D2.4) -----------------------------------------
 //
-// All staging/dedup/confirm logic lives in `trade_core::service` so it is unit
+// All staging/dedup/confirm logic lives in `mwt_usecases::service` so it is unit
 // tested; these handlers only move data across the IPC boundary.
 
 /// Machine-readable reason for a soft failure (never surfaces as an error).
@@ -376,7 +376,7 @@ pub async fn create_bybit_accounts(
                 .balances(&key.keys.api_key, &key.keys.api_secret)
                 .await
         {
-            wanted = trade_core::exchange::bybit::accounts_in_use(&balances);
+            wanted = mwt_usecases::exchange::bybit::accounts_in_use(&balances);
         }
     }
     let mut guard = require_vault(&state)?;
@@ -651,7 +651,7 @@ mod tests {
     fn info_with_amounts() -> TxInfo {
         TxInfo {
             tx_hash: "abc".into(),
-            network: Some(trade_core::model::chain::Chain::Bitcoin),
+            network: Some(mwt_usecases::model::chain::Chain::Bitcoin),
             amount_in: Some("1.0".into()),
             asset_in: Some("BTC".into()),
             amount_out: Some("65000".into()),
@@ -693,7 +693,10 @@ mod tests {
     fn offline_classification_produces_no_field_hints() {
         let info =
             TxInfo::from_hash("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
-        assert_eq!(info.network, Some(trade_core::model::chain::Chain::Bitcoin));
+        assert_eq!(
+            info.network,
+            Some(mwt_usecases::model::chain::Chain::Bitcoin)
+        );
         assert!(hints_from(&info).is_empty());
     }
 }

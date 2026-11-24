@@ -3,8 +3,8 @@
 
 use std::fmt;
 
+use mwt_base::Error;
 use serde::{Serialize, Serializer};
-use trade_core::Error;
 
 /// Code reported for an error that did not come from core.
 const UNKNOWN_CODE: &str = "UNKNOWN";
@@ -63,7 +63,7 @@ impl From<&str> for IpcError {
 #[cfg(test)]
 mod tests {
 
-    use trade_core::error::{PeerSyncFailure, StoreTreeViolation, WalletRule};
+    use mwt_base::error::{PeerSyncFailure, StoreTreeViolation, WalletRule};
 
     use super::*;
 

@@ -27,6 +27,16 @@ base64 = "0.23"
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-fs = { workspace = true }
 trade-core = { path = "../core" }
+mwt-usecases = { path = "../usecases" }
+mwt-base = { path = "../base" }
+mwt-crypto = { path = "../crypto" }
+mwt-cryptotrack = { path = "../cryptotrack" }
+mwt-household = { path = "../household" }
+mwt-money = { path = "../money" }
+mwt-planning = { path = "../planning" }
+mwt-reports = { path = "../reports" }
+mwt-sync = { path = "../sync" }
+mwt-workflow = { path = "../workflow" }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -74,8 +84,8 @@ tauri-plugin-updater = "2"
 
 [features]
 # Off by default: TypeScript printing (ts-rs) and the vault JSON schema (schemars).
-ts = ["dep:ts-rs", "trade-core/ts"]
-schema = ["trade-core/schema"]
+ts = ["dep:ts-rs", "trade-core/ts", "mwt-usecases/ts"]
+schema = ["trade-core/schema", "mwt-usecases/schema"]
 
 [dev-dependencies]
 # The feature-gated tests (client_gen, events, vault_schema) keep running in

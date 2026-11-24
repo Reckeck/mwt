@@ -27,8 +27,8 @@ mod vault_writer;
 
 use commands::{AppState, app_settings, sandbox};
 use ipc::events::AppEvent;
+use mwt_usecases::ipc_contract::events::VaultSaveFailedPayload;
 use tauri::Manager;
-use trade_core::ipc_contract::events::VaultSaveFailedPayload;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -164,7 +164,7 @@ pub fn run() {
             // saved theme's, so a dark theme does not open white.
             #[cfg(desktop)]
             if let Some(window) = app.get_webview_window("main") {
-                use trade_core::appconfig::Theme;
+                use mwt_usecases::appconfig::Theme;
                 let dark = match app_settings::current_settings(app.handle()).theme {
                     Theme::Dark => true,
                     Theme::Light => false,

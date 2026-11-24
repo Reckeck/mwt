@@ -1,15 +1,15 @@
 use crate::ipc::events::{AppEvent, PricesUpdated};
 use tauri::{AppHandle, State};
 
-use trade_core::ipc_contract::{
+use mwt_money::rates as rate_reads;
+use mwt_usecases::ipc_contract::{
     AssetPriceInput, CachedPrice, CandlePoint, ConvertAmountInput, ConvertedAmount, EnsureFxInput,
     EnsureFxOutput, GetCandlesInput, GetCandlesOutput, RefreshResult,
 };
-use trade_core::model::cryptotrack::{CryptoToken, TokenId};
-use trade_core::model::store::AssetRef;
-use trade_core::money::rates as rate_reads;
-use trade_core::pricing::AssetSearchHit;
-use trade_core::usecases::money::rates;
+use mwt_usecases::model::cryptotrack::{CryptoToken, TokenId};
+use mwt_usecases::model::store::AssetRef;
+use mwt_usecases::pricing::AssetSearchHit;
+use mwt_usecases::usecases::money::rates;
 
 use crate::commands::{AppState, require_vault};
 use crate::commands::{with_vault, with_vault_mut};
@@ -125,7 +125,7 @@ pub async fn refresh_all(
     rates::apply_prices(vault, &prices);
     rates::apply_fx(vault, &fx);
     let restamped = rates::restamp_missing(vault);
-    let updated_at = trade_core::model::vault::now_iso();
+    let updated_at = mwt_usecases::model::vault::now_iso();
     let _ = vault.persist();
 
     let result = RefreshResult {
@@ -216,7 +216,7 @@ pub async fn ensure_fx(
                 prices: 0,
                 fx: points.len(),
                 restamped,
-                updated_at: trade_core::model::vault::now_iso(),
+                updated_at: mwt_usecases::model::vault::now_iso(),
             }),
         );
     }
@@ -226,7 +226,7 @@ pub async fn ensure_fx(
 /// Open a URL (typically an explorer tx link) in the default browser.
 ///
 /// The string is checked before it reaches the desktop
-/// ([`trade_core::external_url::check_external_url`]): an explorer address can
+/// ([`mwt_usecases::external_url::check_external_url`]): an explorer address can
 /// come from the vault and so from another device, and `open_url` would hand a
 /// `file:` or a program's own scheme straight to the system. Neither the
 /// refusal nor the failure repeats the link, which may carry a key.
@@ -239,8 +239,8 @@ pub async fn open_explorer(state: State<'_, AppState>, url: String) -> Result<()
 /// No vault access required — pure public data.
 #[tauri::command]
 pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, IpcError> {
+    use mwt_usecases::market::fetch_candles;
     use reqwest::Client;
-    use trade_core::market::fetch_candles;
 
     let symbol = input.symbol.trim().to_uppercase();
     if symbol.is_empty() {
@@ -270,7 +270,7 @@ pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, Ipc
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trade_core::model::chain::Chain;
+    use mwt_usecases::model::chain::Chain;
 
     const CONTRACT: &str = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
 

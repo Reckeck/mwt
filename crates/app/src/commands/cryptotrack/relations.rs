@@ -6,13 +6,13 @@
 
 use tauri::State;
 
-use trade_core::ipc_contract::cryptotrack::relations::{CryptoRelations, CryptoRelationsInput};
+use mwt_usecases::ipc_contract::cryptotrack::relations::{CryptoRelations, CryptoRelationsInput};
 
 use crate::commands::AppState;
 use crate::commands::with_vault;
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::usecases::cryptotrack::relations;
+use mwt_usecases::usecases::cryptotrack::relations;
 
 /// The relations of one account, each row carrying the operation filter it
 /// opens. Read only.

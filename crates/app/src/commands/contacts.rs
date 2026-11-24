@@ -1,12 +1,12 @@
 use tauri::State;
 
-use trade_core::household::contacts::{
+use mwt_household::contacts::{
     ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft, debt_terms,
 };
-use trade_core::ipc_contract::{ContactTurnoverInput, UpdateContactInput};
-use trade_core::model::contact::{Contact, DebtTerms};
-use trade_core::usecases::household::contacts;
-use trade_core::usecases::money::rebase::rebase_contact_input;
+use mwt_usecases::ipc_contract::{ContactTurnoverInput, UpdateContactInput};
+use mwt_usecases::model::contact::{Contact, DebtTerms};
+use mwt_usecases::usecases::household::contacts;
+use mwt_usecases::usecases::money::rebase::rebase_contact_input;
 
 use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};

@@ -4,26 +4,24 @@
 //! [`current_zone`].
 
 use crate::ipc::events::{AppEvent, AutomationCreated, WorkflowsRan};
+use mwt_usecases::ipc_contract::events::{AutomationCreatedPayload, WorkflowsRanPayload};
 use tauri::{AppHandle, State};
-use trade_core::ipc_contract::events::{AutomationCreatedPayload, WorkflowsRanPayload};
 
-use trade_core::calendar::now_secs;
-use trade_core::ipc_contract::{
+use mwt_base::calendar::now_secs;
+use mwt_usecases::ipc_contract::{
     AnswerWorkflowWaitInput, DeleteWorkflowTestInput, DeleteWorkflowVarInput, DryRunWorkflowInput,
     ImportWorkflowInput, ListWorkflowRunsInput, RestoreWorkflowVersionInput, RunWorkflowInput,
     SaveWorkflowDraftInput, SaveWorkflowInput, SaveWorkflowTestInput, SetWorkflowActiveInput,
     SetWorkflowVarInput, ValidateWorkflowInput, WorkflowFromTemplateInput,
 };
-use trade_core::model::transaction::Transaction;
-use trade_core::service::Session;
-use trade_core::usecases::workflow::{records, runs};
-use trade_core::workflow::service::records::{SavedWorkflow, WorkflowImportPreview};
-use trade_core::workflow::service::tests_def::WorkflowTestResult;
-use trade_core::workflow::service::{
-    records as record_reads, runs as run_reads, vars as var_reads,
-};
-use trade_core::workflow::templates::WorkflowTemplateInfo;
-use trade_core::workflow::{
+use mwt_usecases::model::transaction::Transaction;
+use mwt_usecases::service::Session;
+use mwt_usecases::usecases::workflow::{records, runs};
+use mwt_workflow::service::records::{SavedWorkflow, WorkflowImportPreview};
+use mwt_workflow::service::tests_def::WorkflowTestResult;
+use mwt_workflow::service::{records as record_reads, runs as run_reads, vars as var_reads};
+use mwt_workflow::templates::WorkflowTemplateInfo;
+use mwt_workflow::{
     GraphIssue, NodeDef, QueuedActions, RunReport, Workflow, WorkflowRun, WorkflowVar,
     WorkflowWait, catalog, graph::Graph, validate,
 };
@@ -50,12 +48,12 @@ pub async fn validate_workflow(input: ValidateWorkflowInput) -> Result<Vec<Graph
 }
 
 #[ipc(read)]
-pub fn list_workflows(vault: &Session) -> trade_core::Result<Vec<Workflow>> {
+pub fn list_workflows(vault: &Session) -> mwt_base::Result<Vec<Workflow>> {
     Ok(record_reads::workflows(&vault.doc))
 }
 
 #[ipc(read)]
-pub fn get_workflow(vault: &Session, id: String) -> trade_core::Result<Workflow> {
+pub fn get_workflow(vault: &Session, id: String) -> mwt_base::Result<Workflow> {
     record_reads::workflow(&vault.doc, &id)
 }
 
@@ -63,7 +61,7 @@ pub fn get_workflow(vault: &Session, id: String) -> trade_core::Result<Workflow>
 pub fn save_workflow(
     vault: &mut Session,
     input: SaveWorkflowInput,
-) -> trade_core::Result<SavedWorkflow> {
+) -> mwt_base::Result<SavedWorkflow> {
     records::save_workflow(
         vault,
         input.id.as_deref().filter(|id| !id.is_empty()),
@@ -77,12 +75,12 @@ pub fn save_workflow(
 pub fn save_workflow_draft(
     vault: &mut Session,
     input: SaveWorkflowDraftInput,
-) -> trade_core::Result<Workflow> {
+) -> mwt_base::Result<Workflow> {
     records::save_workflow_draft(vault, &input.id, &input.graph, now_secs())
 }
 
 #[ipc(write)]
-pub fn discard_workflow_draft(vault: &mut Session, id: String) -> trade_core::Result<Workflow> {
+pub fn discard_workflow_draft(vault: &mut Session, id: String) -> mwt_base::Result<Workflow> {
     records::discard_workflow_draft(vault, &id)
 }
 
@@ -90,12 +88,12 @@ pub fn discard_workflow_draft(vault: &mut Session, id: String) -> trade_core::Re
 pub fn set_workflow_active(
     vault: &mut Session,
     input: SetWorkflowActiveInput,
-) -> trade_core::Result<Workflow> {
+) -> mwt_base::Result<Workflow> {
     records::set_workflow_active(vault, &input.id, input.active, now_secs())
 }
 
 #[ipc(write)]
-pub fn delete_workflow(vault: &mut Session, id: String) -> trade_core::Result<()> {
+pub fn delete_workflow(vault: &mut Session, id: String) -> mwt_base::Result<()> {
     records::delete_workflow(vault, &id)
 }
 
@@ -103,7 +101,7 @@ pub fn delete_workflow(vault: &mut Session, id: String) -> trade_core::Result<()
 pub fn restore_workflow_version(
     vault: &mut Session,
     input: RestoreWorkflowVersionInput,
-) -> trade_core::Result<SavedWorkflow> {
+) -> mwt_base::Result<SavedWorkflow> {
     records::restore_workflow_version(vault, &input.id, &input.saved_at, now_secs())
 }
 
@@ -113,7 +111,7 @@ pub fn dry_run_workflow(
     vault: &Session,
     app: &AppHandle,
     input: DryRunWorkflowInput,
-) -> trade_core::Result<RunReport> {
+) -> mwt_base::Result<RunReport> {
     runs::dry_run_workflow(
         vault,
         &input.graph,
@@ -160,7 +158,7 @@ pub async fn run_workflow_now(
 pub fn list_workflow_runs(
     vault: &Session,
     input: ListWorkflowRunsInput,
-) -> trade_core::Result<Vec<WorkflowRun>> {
+) -> mwt_base::Result<Vec<WorkflowRun>> {
     let limit = input.limit.unwrap_or(DEFAULT_RUNS) as usize;
     Ok(run_reads::runs(
         &vault.doc,
@@ -170,7 +168,7 @@ pub fn list_workflow_runs(
 }
 
 #[ipc(read)]
-pub fn list_workflow_queue(vault: &Session) -> trade_core::Result<Vec<QueuedActions>> {
+pub fn list_workflow_queue(vault: &Session) -> mwt_base::Result<Vec<QueuedActions>> {
     Ok(run_reads::queue(&vault.doc))
 }
 
@@ -192,13 +190,13 @@ pub async fn confirm_workflow_queued(
 }
 
 #[ipc(write)]
-pub fn discard_workflow_queued(vault: &mut Session, id: String) -> trade_core::Result<()> {
+pub fn discard_workflow_queued(vault: &mut Session, id: String) -> mwt_base::Result<()> {
     records::discard_queued(vault, &id)
 }
 
 /// Runs asleep: timers and questions waiting for an answer.
 #[ipc(read)]
-pub fn list_workflow_waits(vault: &Session) -> trade_core::Result<Vec<WorkflowWait>> {
+pub fn list_workflow_waits(vault: &Session) -> mwt_base::Result<Vec<WorkflowWait>> {
     Ok(run_reads::waits(&vault.doc))
 }
 
@@ -229,12 +227,12 @@ pub async fn answer_workflow_wait(
 }
 
 #[ipc(read)]
-pub fn list_workflow_vars(vault: &Session) -> trade_core::Result<Vec<WorkflowVar>> {
+pub fn list_workflow_vars(vault: &Session) -> mwt_base::Result<Vec<WorkflowVar>> {
     Ok(var_reads::variables(&vault.doc))
 }
 
 #[ipc(write)]
-pub fn set_workflow_var(vault: &mut Session, input: SetWorkflowVarInput) -> trade_core::Result<()> {
+pub fn set_workflow_var(vault: &mut Session, input: SetWorkflowVarInput) -> mwt_base::Result<()> {
     records::set_workflow_var(vault, input.scope, &input.name, &input.value)
 }
 
@@ -242,13 +240,13 @@ pub fn set_workflow_var(vault: &mut Session, input: SetWorkflowVarInput) -> trad
 pub fn delete_workflow_var(
     vault: &mut Session,
     input: DeleteWorkflowVarInput,
-) -> trade_core::Result<()> {
+) -> mwt_base::Result<()> {
     records::delete_workflow_var(vault, &input.scope, &input.name)
 }
 
 /// The workflow as a file's text.
 #[ipc(read)]
-pub fn export_workflow(vault: &Session, id: String) -> trade_core::Result<String> {
+pub fn export_workflow(vault: &Session, id: String) -> mwt_base::Result<String> {
     record_reads::export_workflow(&vault.doc, &id)
 }
 
@@ -257,7 +255,7 @@ pub fn export_workflow(vault: &Session, id: String) -> trade_core::Result<String
 pub fn import_workflow(
     vault: &mut Session,
     input: ImportWorkflowInput,
-) -> trade_core::Result<SavedWorkflow> {
+) -> mwt_base::Result<SavedWorkflow> {
     records::import_workflow(vault, &input.json, &input.stores, now_secs())
 }
 
@@ -266,13 +264,13 @@ pub fn import_workflow(
 pub fn preview_workflow_import(
     vault: &Session,
     json: String,
-) -> trade_core::Result<WorkflowImportPreview> {
+) -> mwt_base::Result<WorkflowImportPreview> {
     record_reads::preview_import(&vault.doc, &json)
 }
 
 /// The gallery of ready-made workflows with defaults from the vault.
 #[ipc(read)]
-pub fn workflow_templates(vault: &Session) -> trade_core::Result<Vec<WorkflowTemplateInfo>> {
+pub fn workflow_templates(vault: &Session) -> mwt_base::Result<Vec<WorkflowTemplateInfo>> {
     Ok(records::workflow_templates(&vault.books()))
 }
 
@@ -282,7 +280,7 @@ pub fn workflow_from_template(
     vault: &mut Session,
     app: &AppHandle,
     input: WorkflowFromTemplateInput,
-) -> trade_core::Result<SavedWorkflow> {
+) -> mwt_base::Result<SavedWorkflow> {
     let locale = if crate::scheduler::russian(app) {
         "ru"
     } else {
@@ -295,7 +293,7 @@ pub fn workflow_from_template(
 pub fn save_workflow_test(
     vault: &mut Session,
     input: SaveWorkflowTestInput,
-) -> trade_core::Result<Workflow> {
+) -> mwt_base::Result<Workflow> {
     records::save_workflow_test(vault, &input.workflow_id, input.test)
 }
 
@@ -303,7 +301,7 @@ pub fn save_workflow_test(
 pub fn delete_workflow_test(
     vault: &mut Session,
     input: DeleteWorkflowTestInput,
-) -> trade_core::Result<Workflow> {
+) -> mwt_base::Result<Workflow> {
     records::delete_workflow_test(vault, &input.workflow_id, &input.test_id)
 }
 
@@ -313,7 +311,7 @@ pub fn run_workflow_tests(
     vault: &Session,
     app: &AppHandle,
     id: String,
-) -> trade_core::Result<Vec<WorkflowTestResult>> {
+) -> mwt_base::Result<Vec<WorkflowTestResult>> {
     runs::run_workflow_tests(vault, &id, now_secs(), &current_zone(app))
 }
 

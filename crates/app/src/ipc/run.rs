@@ -2,10 +2,10 @@
 //! blocking thread, the vault lock and error conversion, in one fixed order.
 //! They are plain functions over [`VaultHost`], so tests need no Tauri runtime.
 
+use mwt_base::Error;
+use mwt_usecases::service::Session;
 use tauri::{AppHandle, Manager};
 use tracing::{Instrument, field, info_span};
-use trade_core::Error;
-use trade_core::service::Session;
 
 use crate::commands::sandbox::refuse;
 use crate::commands::{AppState, lock_vault};

@@ -6,9 +6,9 @@ use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
-use trade_core::model::notify::{NoticeCategory, NoticeRecord, notice, notice_title};
-use trade_core::planning::notifications as notification_reads;
-use trade_core::usecases::planning::notifications;
+use mwt_planning::notifications as notification_reads;
+use mwt_usecases::model::notify::{NoticeCategory, NoticeRecord, notice, notice_title};
+use mwt_usecases::usecases::planning::notifications;
 
 use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};
@@ -41,7 +41,7 @@ pub async fn send_test_notification(app: AppHandle) -> Result<(), IpcError> {
     let ru = crate::scheduler::russian(&app);
     let record = notice(
         NoticeCategory::Reminder,
-        format!("test:{}", trade_core::calendar::now_secs()),
+        format!("test:{}", mwt_base::calendar::now_secs()),
         notice_title(NoticeCategory::Reminder, ru),
         if ru {
             "Уведомления работают".into()
@@ -49,7 +49,7 @@ pub async fn send_test_notification(app: AppHandle) -> Result<(), IpcError> {
             "Notifications work".into()
         },
         None,
-        trade_core::model::vault::now_iso(),
+        mwt_usecases::model::vault::now_iso(),
     );
     crate::scheduler::deliver(&app, vec![record], true);
     Ok(())
