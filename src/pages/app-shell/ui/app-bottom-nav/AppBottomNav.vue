@@ -7,6 +7,7 @@ import { Plus } from 'lucide-vue-next'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/utils'
 
+import { BOTTOM_FAB_CLASS } from '../../lib/bottom-fab'
 import { NAV_SECTIONS } from '../../lib/nav-sections'
 
 /**
@@ -54,7 +55,7 @@ const PILL = 'flex h-7 w-12 items-center justify-center rounded-full transition-
     </RouterLink>
     <Button
       size="icon"
-      class="absolute right-3 bottom-full mb-3 rounded-full"
+      :class="BOTTOM_FAB_CLASS"
       :aria-label="t('quickAdd.title')"
       data-bottom-fab
       @click="emit('quickAdd')"

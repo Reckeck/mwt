@@ -28,6 +28,7 @@ import { provideTxGlances } from '@/shared/lib/tx-glances'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
 
+import { BOTTOM_FAB_CLEARANCE_CLASS } from './lib/bottom-fab'
 import { NAV_SECTIONS } from './lib/nav-sections'
 import { useBackButton } from './model/use-back-button'
 import { useBackendNotices } from './model/use-backend-notices'
@@ -117,7 +118,7 @@ const pageClass = computed(() => {
   if (fullscreen.value) return ['overflow-hidden p-0 pb-safe', !vault.sandbox && 'pt-safe']
   // Side insets keep a landscape cutout off the content; the gutter is stable (no double scrollbar).
   const sides = 'pl-[calc(0.75rem+var(--safe-left))] pr-[calc(0.75rem+var(--safe-right))] md:pl-[calc(1rem+var(--safe-left))] md:pr-[calc(1rem+var(--safe-right))]'
-  if (bottomNav.value) return ['overflow-y-auto pt-3 pb-3', sides]
+  if (bottomNav.value) return ['overflow-y-auto pt-3', BOTTOM_FAB_CLEARANCE_CLASS, sides]
   return ['overflow-y-auto pt-3 pb-[calc(0.75rem+var(--safe-bottom))] md:pt-4 md:pb-[calc(1rem+var(--safe-bottom))]', sides]
 })
 </script>
