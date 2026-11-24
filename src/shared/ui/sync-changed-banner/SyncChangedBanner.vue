@@ -15,12 +15,12 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <Alert class="border-warning/40 bg-warning/10 text-foreground" data-sync-changed>
-    <TriangleAlert class="text-warning" />
+  <Alert variant="warning" data-sync-changed>
+    <TriangleAlert />
     <div class="flex flex-col items-start gap-2 md:flex-row md:items-center md:justify-between md:gap-4">
       <div class="min-w-0">
         <AlertTitle class="line-clamp-none">{{ t('sync.changed.title') }}</AlertTitle>
-        <AlertDescription class="text-foreground/80">{{ t('sync.changed.body') }}</AlertDescription>
+        <AlertDescription>{{ t('sync.changed.body') }}</AlertDescription>
       </div>
       <Button type="button" variant="outline" size="sm" class="shrink-0" @click="emit('refresh')">
         {{ t('sync.changed.refresh') }}
