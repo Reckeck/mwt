@@ -14,7 +14,12 @@ import { Kbd } from '@/shared/ui/kbd'
 import { hotkeyLabel } from '@/shared/lib/hotkeys'
 import { pluralForm } from '@/shared/lib/format'
 
-/** The top bar: where you are, whether the app is online, the net worth, and the global actions. */
+import { ProfileMenu } from '../profile-menu'
+
+/**
+ * The top bar: the page title, whether the app is online, the net worth, search (a field with the
+ * `Ctrl K` hint on a desktop, an icon on a phone) and the profile menu that took over from «More».
+ */
 const props = defineProps<{
   title: string
   summary: PortfolioSummary | undefined
@@ -54,9 +59,9 @@ const { t, locale } = useI18n()
       <Money :amount="props.summary.net_worth_base" :currency="props.summary.base_currency" :decimals="2" />
     </RouterLink>
 
+    <slot name="search" />
     <SyncIndicator />
     <NotificationBell />
-    <slot name="search" />
     <Button size="sm" class="shrink-0 max-md:hidden" :title="t('quickAdd.title')" data-tour="quick-add" @click="emit('quickAdd')">
       <Plus class="size-4" />
       <span class="hidden sm:inline">{{ t('quickAdd.button') }}</span>
@@ -90,5 +95,7 @@ const { t, locale } = useI18n()
         </span>
       </DropdownMenuItem>
     </DropdownMenu>
+
+    <ProfileMenu />
   </header>
 </template>

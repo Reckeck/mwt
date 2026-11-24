@@ -6747,5 +6747,12 @@
   "utilities.outOfOrderHint": "After sync this reading is lower than the previous one. Check its date or value.",
   "loyalty.symbolClash": "Another program already uses this symbol. Rename it so prices do not mix.",
   "sharedEvents.items.rateNeeded": "Rate needed",
-  "sharedEvents.items.rateNeededHint": "The purchase currency differs from the event's. Enter a rate."
+  "sharedEvents.items.rateNeededHint": "The purchase currency differs from the event's. Enter a rate.",
+  "profile.open": "Profile and vault",
+  "profile.hint": "The vault's actions, automations, reminders and settings",
+  "profile.switch": "Switch vault",
+  "profile.switchHint": "lock and pick another on the unlock screen",
+  "profile.forget": "Forget vault",
+  "profile.forgetHint": "remove from history, the file stays",
+  "profile.automationsHint": "repeats, schemes, alerts"
 }
