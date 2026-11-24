@@ -8,6 +8,9 @@ pub const MIN_PIN_DIGITS: usize = 6;
 /// wallet → sub-account.
 pub const MAX_STORE_DEPTH: usize = 1;
 
+/// Longest `range` operation period, in days (op-period P2).
+pub const MAX_PERIOD_DAYS: i64 = 366;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -16,5 +19,6 @@ mod tests {
     fn limits_keep_their_values() {
         assert_eq!(MIN_PIN_DIGITS, 6);
         assert_eq!(MAX_STORE_DEPTH, 1);
+        assert_eq!(MAX_PERIOD_DAYS, 366);
     }
 }
