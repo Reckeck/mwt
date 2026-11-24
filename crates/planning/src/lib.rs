@@ -18,6 +18,8 @@ pub mod debt_load;
 pub mod emergency;
 pub mod envelopes;
 pub mod flows;
+#[cfg(test)]
+mod flows_basis_tests;
 pub mod goals;
 pub mod health;
 pub mod my_automations;
