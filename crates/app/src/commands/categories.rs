@@ -1,13 +1,13 @@
 use tauri::State;
 
-use trade_core::ipc_contract::{
+use mwt_money::categories::categorization_rules;
+use mwt_usecases::ipc_contract::{
     CreateCategoryInput, CreateRuleInput, UpdateCategoryInput, UpdateRuleInput,
 };
-use trade_core::model::category::Category;
-use trade_core::model::planning::CategorizationRule;
-use trade_core::money::categories::categorization_rules;
-use trade_core::usecases::household::categories;
-use trade_core::usecases::money::rebase::rebase_category_input;
+use mwt_usecases::model::category::Category;
+use mwt_usecases::model::planning::CategorizationRule;
+use mwt_usecases::usecases::household::categories;
+use mwt_usecases::usecases::money::rebase::rebase_category_input;
 
 use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};

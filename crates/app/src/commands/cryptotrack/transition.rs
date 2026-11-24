@@ -6,7 +6,7 @@
 
 use tauri::State;
 
-use trade_core::ipc_contract::cryptotrack::transition::{
+use mwt_usecases::ipc_contract::cryptotrack::transition::{
     CryptoArchiveReport, CryptoTransitionPlan,
 };
 
@@ -14,7 +14,7 @@ use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::usecases::cryptotrack::transition;
+use mwt_usecases::usecases::cryptotrack::transition;
 
 /// What entering the module would change: the hand-kept crypto wallets the
 /// move archives and how much capital leaves the totals with them. This is

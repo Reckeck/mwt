@@ -1,5 +1,5 @@
 //! The sandbox (docs/ipc.md, «sandbox»): a temporary vault with demo data to try
-//! the app without touching real data. The work is in `trade_core::sandbox`;
+//! the app without touching real data. The work is in `mwt_usecases::sandbox`;
 //! this file opens and closes it, erases it, and says what is switched off
 //! while it is open.
 //!
@@ -10,10 +10,10 @@
 
 use std::sync::atomic::Ordering;
 
+use mwt_base::Error;
+use mwt_usecases::ipc_contract::VaultInfo;
+use mwt_usecases::sandbox::SandboxDir;
 use tauri::{AppHandle, Manager, State};
-use trade_core::Error;
-use trade_core::ipc_contract::VaultInfo;
-use trade_core::sandbox::SandboxDir;
 
 use crate::commands::auth::info_of;
 use crate::commands::{AppState, app_settings, lock_vault};
@@ -180,7 +180,7 @@ ipc_commands!(sandbox_commands, SANDBOX_NAMES, commands::sandbox: [open_sandbox,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trade_core::service::Session;
+    use mwt_usecases::service::Session;
 
     fn state_with_vault(dir: &std::path::Path, sandbox: bool) -> AppState {
         let state = AppState::new();

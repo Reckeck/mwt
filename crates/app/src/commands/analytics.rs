@@ -4,25 +4,25 @@
 
 use tauri::{AppHandle, State};
 
-use trade_core::Amount;
-use trade_core::calendar::{Calendar, month_key, now_secs};
-use trade_core::household::relations::{EntityCard, EntityRef};
-use trade_core::model::entity_ref::Pinned;
-use trade_core::model::transaction::Transaction;
-use trade_core::model::vault::DashPeriod;
-use trade_core::money::month_balance::MonthBalance;
-use trade_core::money::search::{PinnedView, SearchEntry};
-use trade_core::reports::dashboard::SpendingOverview;
-use trade_core::reports::dashboard_tiles::{MonthPace, NetWorthTrend};
-use trade_core::reports::dashboard_today::{DashboardToday, ScenarioStatus};
-use trade_core::reports::health::HealthReport;
-use trade_core::reports::insights::ReportOverview;
-use trade_core::reports::overview::{CalendarMonth, Report, ReportFilter, ReportKind, report_csv};
+use mwt_base::Amount;
+use mwt_base::calendar::{Calendar, month_key, now_secs};
+use mwt_household::relations::{EntityCard, EntityRef};
+use mwt_money::month_balance::MonthBalance;
+use mwt_money::search::{PinnedView, SearchEntry};
+use mwt_reports::dashboard::SpendingOverview;
+use mwt_reports::dashboard_tiles::{MonthPace, NetWorthTrend};
+use mwt_reports::dashboard_today::{DashboardToday, ScenarioStatus};
+use mwt_reports::health::HealthReport;
+use mwt_reports::insights::ReportOverview;
+use mwt_reports::overview::{CalendarMonth, Report, ReportFilter, ReportKind, report_csv};
+use mwt_usecases::model::entity_ref::Pinned;
+use mwt_usecases::model::transaction::Transaction;
+use mwt_usecases::model::vault::DashPeriod;
 
-use trade_core::money::search;
-use trade_core::reports::{dashboard, dashboard_tiles, dashboard_today, insights, overview};
-use trade_core::usecases::household::{month_balance, relations, search as search_scenarios};
-use trade_core::usecases::planning::health;
+use mwt_money::search;
+use mwt_reports::{dashboard, dashboard_tiles, dashboard_today, insights, overview};
+use mwt_usecases::usecases::household::{month_balance, relations, search as search_scenarios};
+use mwt_usecases::usecases::planning::health;
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
@@ -75,7 +75,7 @@ pub async fn capital_health(
 ) -> Result<HealthReport, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        trade_core::reports::health::capital_health(&vault.books(), now_secs(), &zone)
+        mwt_reports::health::capital_health(&vault.books(), now_secs(), &zone)
     })
 }
 

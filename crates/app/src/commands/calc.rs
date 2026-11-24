@@ -1,15 +1,15 @@
 use tauri::{AppHandle, State};
 
-use trade_core::Amount;
-use trade_core::calc::invest::{
+use mwt_base::Amount;
+use mwt_base::calc::invest::{
     self, InvestCompare, InvestInput, InvestResult, SolveResult, SolveUnknown,
 };
-use trade_core::calc::{self, CalcInput, CalcResult};
-use trade_core::calendar::now_secs;
-use trade_core::model::planning::{CalcScenario, ScenarioSource};
-use trade_core::planning::scenarios as scenario_reads;
-use trade_core::planning::scenarios::{CalcScenarioDeleted, CalcScenarioDraft, ScenarioPrefill};
-use trade_core::usecases::planning::scenarios;
+use mwt_base::calc::{self, CalcInput, CalcResult};
+use mwt_base::calendar::now_secs;
+use mwt_planning::scenarios as scenario_reads;
+use mwt_planning::scenarios::{CalcScenarioDeleted, CalcScenarioDraft, ScenarioPrefill};
+use mwt_usecases::model::planning::{CalcScenario, ScenarioSource};
+use mwt_usecases::usecases::planning::scenarios;
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;
@@ -18,7 +18,7 @@ use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 
 /// Pure calculator preview (converter / position). Needs no vault state —
-/// the whole computation happens in `trade_core::calc`.
+/// the whole computation happens in `mwt_base::calc`.
 #[tauri::command]
 pub async fn calc_preview(
     input: CalcInput,

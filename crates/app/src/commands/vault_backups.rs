@@ -1,9 +1,9 @@
 //! Backup copies of the vault file: list, take one now, restore one, show
-//! the folder. Logic lives in `trade_core::vault_io::backups` and
+//! the folder. Logic lives in `mwt_usecases::vault_io::backups` and
 //! `Session`; these are the IPC wrappers.
 
+use mwt_usecases::ipc_contract::{RestoreVaultBackupInput, VaultBackup};
 use tauri::State;
-use trade_core::ipc_contract::{RestoreVaultBackupInput, VaultBackup};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;

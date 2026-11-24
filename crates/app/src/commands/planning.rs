@@ -4,47 +4,47 @@
 
 use tauri::{AppHandle, State};
 
-use trade_core::Amount;
-use trade_core::calendar::now_secs;
-use trade_core::household::loyalty::{CashbackReport, cashback_report};
-use trade_core::household::utilities as utility_reads;
-use trade_core::household::utilities::{
+use mwt_base::Amount;
+use mwt_base::calendar::now_secs;
+use mwt_household::loyalty::{CashbackReport, cashback_report};
+use mwt_household::utilities as utility_reads;
+use mwt_household::utilities::{
     PayUtilityBillInput, PropertySummary, UtilityBill, UtilityPaymentDraft, UtilityTrend,
 };
-use trade_core::ipc_contract::{
+use mwt_money::interest as interest_reads;
+use mwt_money::interest::{DepositReport, InterestTaxReport};
+use mwt_planning::agenda::UpcomingItem;
+use mwt_planning::automations::AutomationSimulation;
+use mwt_planning::budget::{BudgetStatus, DailyBudget, MonthSummary};
+use mwt_planning::emergency::EmergencyStatus;
+use mwt_planning::goals::{GoalCalendar, GoalDeleted, GoalProgress};
+use mwt_planning::{
+    agenda as agenda_reads, budget as budget_reads, daily_budget as daily_reads,
+    goals as goal_reads, upcoming as upcoming_reads,
+};
+use mwt_usecases::ipc_contract::{
     AdjustPointsInput, AutomationInput, BudgetInput, ConfirmEstimatedInput,
     CreateLoyaltyProgramInput, GoalInput, MeterReadingInput, PriceAlertInput, ReminderInput,
     SetDepositTermsInput, SetLoyaltyInfoInput, SimulateAutomationsInput, SnoozeReminderInput,
     UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput,
     UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
-use trade_core::model::ids::StoreId;
-use trade_core::model::planning::{
+use mwt_usecases::model::ids::StoreId;
+use mwt_usecases::model::planning::{
     Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, PriceAlert, Reminder,
     UtilityItem,
 };
-use trade_core::model::store::Store;
-use trade_core::model::transaction::Transaction;
-use trade_core::money::interest as interest_reads;
-use trade_core::money::interest::{DepositReport, InterestTaxReport};
-use trade_core::planning::agenda::UpcomingItem;
-use trade_core::planning::automations::AutomationSimulation;
-use trade_core::planning::budget::{BudgetStatus, DailyBudget, MonthSummary};
-use trade_core::planning::emergency::EmergencyStatus;
-use trade_core::planning::goals::{GoalCalendar, GoalDeleted, GoalProgress};
-use trade_core::planning::{
-    agenda as agenda_reads, budget as budget_reads, daily_budget as daily_reads,
-    goals as goal_reads, upcoming as upcoming_reads,
-};
-use trade_core::service::Session;
-use trade_core::usecases::household::{loyalty, utilities};
-use trade_core::usecases::money::interest;
-use trade_core::usecases::money::rebase;
-use trade_core::usecases::planning::{
+use mwt_usecases::model::store::Store;
+use mwt_usecases::model::transaction::Transaction;
+use mwt_usecases::service::Session;
+use mwt_usecases::usecases::household::{loyalty, utilities};
+use mwt_usecases::usecases::money::interest;
+use mwt_usecases::usecases::money::rebase;
+use mwt_usecases::usecases::planning::{
     agenda, auto_reminders, automation_card, automation_rules, automations, budget, emergency,
     goals, my_automations, scenarios,
 };
-use trade_core::workflow::Workflow;
+use mwt_workflow::Workflow;
 
 use crate::commands::app_settings::current_zone;
 use crate::commands::{AppState, with_vault, with_vault_mut};
@@ -237,8 +237,8 @@ pub async fn get_month_summary(
 ) -> Result<MonthSummary, IpcError> {
     let zone = current_zone(&app);
     let month = month.unwrap_or_else(|| {
-        let date = trade_core::calendar::Calendar::new(&zone).date_of(now_secs());
-        trade_core::calendar::month_key(date)
+        let date = mwt_base::calendar::Calendar::new(&zone).date_of(now_secs());
+        mwt_base::calendar::month_key(date)
     });
     with_vault(&state, |vault| {
         budget::month_summary(&vault.books(), &month, &zone)
@@ -331,7 +331,7 @@ pub async fn emergency_fund_get(
 ) -> Result<EmergencyStatus, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        Ok(trade_core::planning::emergency::emergency_fund_status(
+        Ok(mwt_planning::emergency::emergency_fund_status(
             &vault.books(),
             now_secs(),
             &zone,
@@ -495,7 +495,7 @@ pub async fn get_upcoming(
 pub async fn list_my_automations(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<trade_core::planning::my_automations::MineItem>, IpcError> {
+) -> Result<Vec<mwt_planning::my_automations::MineItem>, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
         Ok(my_automations::my_automations(vault, now_secs(), &zone))
@@ -505,7 +505,7 @@ pub async fn list_my_automations(
 /// The "On" switch of a "Mine" row, whatever kind it is.
 #[tauri::command]
 pub async fn set_my_automation_active(
-    input: trade_core::ipc_contract::SetMyAutomationActiveInput,
+    input: mwt_usecases::ipc_contract::SetMyAutomationActiveInput,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     with_vault_mut(&state, |vault| {
@@ -525,7 +525,7 @@ pub async fn get_automation_card(
     id: String,
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<trade_core::planning::automation_card::AutomationCard, IpcError> {
+) -> Result<mwt_planning::automation_card::AutomationCard, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
         automation_card::automation_card(vault, &id, now_secs(), &zone)
@@ -535,7 +535,7 @@ pub async fn get_automation_card(
 /// The next three dates a repeat would fire on: the form shows them as it is filled.
 #[tauri::command]
 pub async fn preview_automation_dates(
-    input: trade_core::ipc_contract::AutomationDatesInput,
+    input: mwt_usecases::ipc_contract::AutomationDatesInput,
     app: AppHandle,
 ) -> Result<Vec<String>, IpcError> {
     Ok(input.upcoming(now_secs(), &current_zone(&app)))
@@ -546,7 +546,7 @@ pub async fn preview_automation_dates(
 pub async fn list_automation_journal(
     limit: Option<usize>,
     state: State<'_, AppState>,
-) -> Result<Vec<trade_core::planning::automation_card::JournalEntry>, IpcError> {
+) -> Result<Vec<mwt_planning::automation_card::JournalEntry>, IpcError> {
     with_vault(&state, |vault| {
         Ok(automation_card::automation_journal(
             vault,
@@ -561,7 +561,7 @@ pub async fn list_automation_journal(
 pub async fn set_deposit_terms(
     input: SetDepositTermsInput,
     state: State<'_, AppState>,
-) -> Result<trade_core::model::store::Store, IpcError> {
+) -> Result<mwt_usecases::model::store::Store, IpcError> {
     with_vault_mut(&state, |vault| {
         interest::set_deposit_terms(vault, &StoreId::from(input.store_id.as_str()), input.terms)
     })
@@ -574,7 +574,7 @@ pub async fn get_deposit_report(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<DepositReport, IpcError> {
-    let today = trade_core::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
+    let today = mwt_base::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
     with_vault(&state, |vault| {
         interest_reads::deposit_report(&vault.books(), &StoreId::from(store_id.as_str()), today)
     })
@@ -588,7 +588,7 @@ pub async fn get_interest_tax(
     state: State<'_, AppState>,
 ) -> Result<InterestTaxReport, IpcError> {
     use chrono::Datelike;
-    let today = trade_core::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
+    let today = mwt_base::calendar::Calendar::new(&current_zone(&app)).date_of(now_secs());
     with_vault(&state, |vault| {
         Ok(interest_reads::interest_tax(
             &vault.books(),
@@ -603,7 +603,7 @@ pub async fn get_interest_tax(
 pub fn set_loyalty_info(
     vault: &mut Session,
     input: SetLoyaltyInfoInput,
-) -> trade_core::Result<Store> {
+) -> mwt_base::Result<Store> {
     loyalty::set_loyalty_info(vault, &StoreId::from(input.store_id), input.info)
 }
 
@@ -611,7 +611,7 @@ pub fn set_loyalty_info(
 pub fn create_loyalty_program(
     vault: &mut Session,
     input: CreateLoyaltyProgramInput,
-) -> trade_core::Result<Store> {
+) -> mwt_base::Result<Store> {
     loyalty::create_loyalty_program(
         vault,
         &input.name,
@@ -625,7 +625,7 @@ pub fn create_loyalty_program(
 pub fn adjust_points(
     vault: &mut Session,
     input: AdjustPointsInput,
-) -> trade_core::Result<Transaction> {
+) -> mwt_base::Result<Transaction> {
     loyalty::adjust_points(
         vault,
         &StoreId::from(input.store_id),
@@ -642,9 +642,9 @@ pub fn get_cashback_report(
     vault: &Session,
     app: &AppHandle,
     period: Option<String>,
-) -> trade_core::Result<CashbackReport> {
+) -> mwt_base::Result<CashbackReport> {
     use chrono::Datelike;
-    let today = trade_core::calendar::Calendar::new(&current_zone(app)).date_of(now_secs());
+    let today = mwt_base::calendar::Calendar::new(&current_zone(app)).date_of(now_secs());
     let from = if period.as_deref() == Some("year") {
         format!("{}-01-01T00:00:00Z", today.year())
     } else {
@@ -727,12 +727,10 @@ pub async fn get_utility_bill(
 ) -> Result<UtilityBill, IpcError> {
     let zone = current_zone(&app);
     let period = period.unwrap_or_else(|| {
-        trade_core::calendar::month_key(
-            trade_core::calendar::Calendar::new(&zone).date_of(now_secs()),
-        )
+        mwt_base::calendar::month_key(mwt_base::calendar::Calendar::new(&zone).date_of(now_secs()))
     });
     with_vault(&state, |vault| {
-        trade_core::household::utilities::utility_bill(
+        mwt_household::utilities::utility_bill(
             &vault.books(),
             &property_id,
             &period,
@@ -788,11 +786,9 @@ pub async fn get_property_summary(
 /// What a meter's bill would be by its formula (or tariff); needs no vault.
 #[tauri::command]
 pub async fn preview_utility_formula(
-    input: trade_core::household::utilities::UtilityFormulaInput,
-) -> Result<trade_core::household::utilities::UtilityFormulaPreview, IpcError> {
-    Ok(trade_core::household::utilities::preview_utility_formula(
-        &input,
-    ))
+    input: mwt_household::utilities::UtilityFormulaInput,
+) -> Result<mwt_household::utilities::UtilityFormulaPreview, IpcError> {
+    Ok(mwt_household::utilities::preview_utility_formula(&input))
 }
 
 /// The "Pay" for one month (`YYYY-MM`, default: this month).
@@ -805,9 +801,7 @@ pub async fn get_utility_payment_draft(
 ) -> Result<UtilityPaymentDraft, IpcError> {
     let zone = current_zone(&app);
     let period = period.unwrap_or_else(|| {
-        trade_core::calendar::month_key(
-            trade_core::calendar::Calendar::new(&zone).date_of(now_secs()),
-        )
+        mwt_base::calendar::month_key(mwt_base::calendar::Calendar::new(&zone).date_of(now_secs()))
     });
     with_vault(&state, |vault| {
         utilities::utility_payment_draft(vault, &item_id, &period, &zone)

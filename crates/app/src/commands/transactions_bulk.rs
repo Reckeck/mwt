@@ -4,8 +4,8 @@
 
 use tauri::State;
 
-use trade_core::money::bulk::{DeletedTransaction, TxCategories, TxStore};
-use trade_core::usecases::money::bulk;
+use mwt_money::bulk::{DeletedTransaction, TxCategories, TxStore};
+use mwt_usecases::usecases::money::bulk;
 
 use crate::commands::AppState;
 use crate::commands::with_vault_mut;

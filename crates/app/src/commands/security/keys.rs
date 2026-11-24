@@ -1,8 +1,8 @@
 //! Where an exchange key stands on this device (H2).
 
+use mwt_usecases::ipc_contract::ExchangeKeyStatusInput;
+use mwt_usecases::ipc_contract::security::ExchangeKeyState;
 use tauri::State;
-use trade_core::ipc_contract::ExchangeKeyStatusInput;
-use trade_core::ipc_contract::security::ExchangeKeyState;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;

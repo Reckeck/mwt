@@ -8,10 +8,10 @@
 use std::ops::Deref;
 use std::sync::MutexGuard;
 
+use mwt_usecases::service::Session;
 use tauri::Manager;
 use tauri::Runtime;
 use tauri::ipc::{CommandArg, CommandItem, InvokeError};
-use trade_core::service::Session;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
@@ -46,7 +46,7 @@ impl<'guard, R: Runtime> CommandArg<'guard, R> for Unlocked<'guard> {
 
 #[cfg(test)]
 mod tests {
-    use trade_core::error::Error;
+    use mwt_base::error::Error;
 
     use super::*;
     use crate::commands::AppState;

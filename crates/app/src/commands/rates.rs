@@ -3,13 +3,13 @@
 
 use crate::ipc::events::{AppEvent, RatesUpdated};
 use chrono::{Datelike, Months, NaiveDate};
+use mwt_money::inflation as inflation_reads;
+use mwt_money::inflation::{FetchedRates, InflationCurrency};
+use mwt_usecases::model::inflation::{InflationMode, InflationSource};
+use mwt_usecases::pricing::PricingService;
+use mwt_usecases::usecases::money::inflation;
+use mwt_usecases::usecases::planning::notifications;
 use tauri::{AppHandle, Manager, State};
-use trade_core::model::inflation::{InflationMode, InflationSource};
-use trade_core::money::inflation as inflation_reads;
-use trade_core::money::inflation::{FetchedRates, InflationCurrency};
-use trade_core::pricing::PricingService;
-use trade_core::usecases::money::inflation;
-use trade_core::usecases::planning::notifications;
 
 use crate::commands::{AppState, require_vault};
 use crate::commands::{with_vault, with_vault_mut};
@@ -47,7 +47,7 @@ pub async fn refresh_rates_now(app: &AppHandle) -> Result<Vec<InflationCurrency>
     let today = chrono::Utc::now().date_naive();
     let fetched = fetch_rates(&state.pricing, today).await;
     if fetched.key_rates.is_none() && fetched.inflation.is_empty() {
-        return Err(IpcError::from(trade_core::Error::Network(
+        return Err(IpcError::from(mwt_base::Error::Network(
             "no rate source answered".into(),
         )));
     }

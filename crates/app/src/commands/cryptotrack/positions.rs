@@ -11,15 +11,15 @@
 
 use tauri::State;
 
-use trade_core::ipc_contract::cryptotrack::positions::PositionView;
-use trade_core::model::vault::now_iso;
+use mwt_usecases::ipc_contract::cryptotrack::positions::PositionView;
+use mwt_usecases::model::vault::now_iso;
 
 use crate::commands::AppState;
 use crate::commands::with_vault;
 use crate::cryptotrack::jobs;
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::usecases::cryptotrack::positions;
+use mwt_usecases::usecases::cryptotrack::positions;
 
 /// The positions of the followed accounts, open ones first. Read only.
 ///

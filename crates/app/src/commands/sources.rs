@@ -3,14 +3,14 @@
 //! Fetching happens without the vault lock (rule 3).
 
 use crate::ipc::events::{AppEvent, PricesUpdated, RatesUpdated, SourcesUpdated};
+use mwt_planning::datasources as source_reads;
+use mwt_planning::datasources::{DataSourceDraft, DataSourceView};
+use mwt_usecases::datasource::{self, Extracted, SourcePreview};
+use mwt_usecases::model::datasource::DataSource;
+use mwt_usecases::model::notify::NoticeRecord;
+use mwt_usecases::usecases::money::inflation;
+use mwt_usecases::usecases::planning::datasources;
 use tauri::{AppHandle, Manager, State};
-use trade_core::datasource::{self, Extracted, SourcePreview};
-use trade_core::model::datasource::DataSource;
-use trade_core::model::notify::NoticeRecord;
-use trade_core::planning::datasources as source_reads;
-use trade_core::planning::datasources::{DataSourceDraft, DataSourceView};
-use trade_core::usecases::money::inflation;
-use trade_core::usecases::planning::datasources;
 
 use crate::commands::{AppState, require_vault};
 use crate::commands::{with_vault, with_vault_mut};
@@ -94,7 +94,7 @@ async fn preview_page(state: &AppState, url: &str) -> Result<SourcePreview, IpcE
         .await
         .map_err(IpcError::from)?;
     datasource::preview(url, &body)
-        .map_err(|message| IpcError::from(trade_core::Error::InvalidInput(message)))
+        .map_err(|message| IpcError::from(mwt_base::Error::InvalidInput(message)))
 }
 
 async fn test_method(state: &AppState, draft: &DataSourceDraft) -> Result<Extracted, IpcError> {
@@ -105,7 +105,7 @@ async fn test_method(state: &AppState, draft: &DataSourceDraft) -> Result<Extrac
         .await
         .map_err(IpcError::from)?;
     datasource::extract(&draft.method, draft.output, &draft.number, &body)
-        .map_err(|message| IpcError::from(trade_core::Error::InvalidInput(message)))
+        .map_err(|message| IpcError::from(mwt_base::Error::InvalidInput(message)))
 }
 
 /// The page at `url` for the picker: safe HTML, JSON text or file rows.
@@ -182,7 +182,7 @@ pub async fn datasource_refresh(
     let source = with_vault::<_, IpcError>(&state, |vault| {
         source_reads::data_source(&vault.doc, &id)
             .cloned()
-            .ok_or_else(|| trade_core::Error::NotFound(format!("data source {id}")))
+            .ok_or_else(|| mwt_base::Error::NotFound(format!("data source {id}")))
     })?;
     let notices = refresh_one(&app, &source).await?;
     announce(&app, notices);
@@ -190,7 +190,7 @@ pub async fn datasource_refresh(
         datasources::data_sources_list(&vault.doc)
             .into_iter()
             .find(|view| view.source.id == id)
-            .ok_or_else(|| trade_core::Error::NotFound(format!("data source {id}")))
+            .ok_or_else(|| mwt_base::Error::NotFound(format!("data source {id}")))
     })
 }
 

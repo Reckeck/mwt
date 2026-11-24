@@ -1,6 +1,6 @@
+use mwt_usecases::appconfig::validate_autolock;
+use mwt_usecases::ipc_contract::security::AutolockSettings;
 use tauri::AppHandle;
-use trade_core::appconfig::validate_autolock;
-use trade_core::ipc_contract::security::AutolockSettings;
 
 use crate::commands::app_settings;
 use crate::ipc::IpcError;

@@ -7,7 +7,7 @@
 use serde::Serialize;
 use tauri::{Emitter, Runtime};
 
-pub use trade_core::ipc_contract::events::VaultLockedPayload;
+pub use mwt_usecases::ipc_contract::events::VaultLockedPayload;
 
 /// One event of the registry, as the generators see it.
 pub struct EventMeta {
@@ -72,45 +72,45 @@ macro_rules! app_events {
 }
 
 app_events! {
-    "prices-updated" => PricesUpdated(Option<trade_core::ipc_contract::RefreshResult>),
+    "prices-updated" => PricesUpdated(Option<mwt_usecases::ipc_contract::RefreshResult>),
     "rates-updated" => RatesUpdated(()),
     "sources-updated" => SourcesUpdated(()),
-    "bybit-import-pending" => BybitImportPending(trade_core::ipc_contract::events::BybitImportPendingPayload),
-    "crypto-updated" => CryptoUpdated(trade_core::ipc_contract::events::CryptoUpdatedPayload),
-    "automation-created" => AutomationCreated(trade_core::ipc_contract::events::AutomationCreatedPayload),
-    "automation-rejected" => AutomationRejected(trade_core::ipc_contract::AutomationRejectedEvent),
-    "automation-skipped" => AutomationSkipped(trade_core::ipc_contract::events::AutomationSkippedPayload),
-    "workflows-ran" => WorkflowsRan(trade_core::ipc_contract::events::WorkflowsRanPayload),
-    "price-alert" => PriceAlert(trade_core::ipc_contract::events::PriceAlertPayload),
-    "reminder-due" => ReminderDue(trade_core::ipc_contract::events::EmptyPayload),
-    "reminders-changed" => RemindersChanged(trade_core::ipc_contract::events::EmptyPayload),
-    "notification" => Notification(trade_core::model::notify::NoticeRecord),
-    "enrichment-ready" => EnrichmentReady(trade_core::ipc_contract::events::EnrichmentReadyPayload),
+    "bybit-import-pending" => BybitImportPending(mwt_usecases::ipc_contract::events::BybitImportPendingPayload),
+    "crypto-updated" => CryptoUpdated(mwt_usecases::ipc_contract::events::CryptoUpdatedPayload),
+    "automation-created" => AutomationCreated(mwt_usecases::ipc_contract::events::AutomationCreatedPayload),
+    "automation-rejected" => AutomationRejected(mwt_usecases::ipc_contract::AutomationRejectedEvent),
+    "automation-skipped" => AutomationSkipped(mwt_usecases::ipc_contract::events::AutomationSkippedPayload),
+    "workflows-ran" => WorkflowsRan(mwt_usecases::ipc_contract::events::WorkflowsRanPayload),
+    "price-alert" => PriceAlert(mwt_usecases::ipc_contract::events::PriceAlertPayload),
+    "reminder-due" => ReminderDue(mwt_usecases::ipc_contract::events::EmptyPayload),
+    "reminders-changed" => RemindersChanged(mwt_usecases::ipc_contract::events::EmptyPayload),
+    "notification" => Notification(mwt_usecases::model::notify::NoticeRecord),
+    "enrichment-ready" => EnrichmentReady(mwt_usecases::ipc_contract::events::EnrichmentReadyPayload),
     "quick-add" => QuickAdd(()),
     "refresh-prices" => RefreshPrices(()),
     "toggle-lock" => ToggleLock(()),
     "tray-navigate" => TrayNavigate(String),
-    "vault-changed" => VaultChanged(trade_core::ipc_contract::VaultStatus),
+    "vault-changed" => VaultChanged(mwt_usecases::ipc_contract::VaultStatus),
     "vault-locked" => VaultLocked(VaultLockedPayload),
     // Fires when persisting the vault fails; `exiting` is set when the app is closing.
-    "vault-save-failed" => VaultSaveFailed(trade_core::ipc_contract::events::VaultSaveFailedPayload),
+    "vault-save-failed" => VaultSaveFailed(mwt_usecases::ipc_contract::events::VaultSaveFailedPayload),
     // Fires after the vault is written to disk.
     "vault-saved" => VaultSaved(()),
     // Fires when mirroring the vault to its backup location fails.
     "vault-mirror-failed" => VaultMirrorFailed(String),
     // Fires when the updater state changes.
-    "update-state" => UpdateState(trade_core::ipc_contract::UpdateStatusDto),
-    "security-raise-progress" => SecurityRaiseProgress(trade_core::ipc_contract::security::RaiseProgress),
-    "sync-status" => SyncStatusChanged(trade_core::ipc_contract::SyncStatus),
-    "sync-offer" => SyncOffer(trade_core::ipc_contract::SyncOfferEvent),
-    "sync-pairing" => SyncPairing(trade_core::ipc_contract::SyncPairingEvent),
-    "sync-plan-ready" => SyncPlanReady(trade_core::ipc_contract::SyncPlanEvent),
-    "vault-synced" => VaultSynced(trade_core::ipc_contract::VaultSyncedEvent),
-    "sync-clock" => SyncClock(trade_core::ipc_contract::SyncClockEvent),
-    "sync-error" => SyncError(trade_core::ipc_contract::SyncErrorEvent),
-    "transfer-receive" => TransferReceive(trade_core::ipc_contract::TransferReceiveView),
-    "transfer-send" => TransferSend(trade_core::ipc_contract::TransferSendView),
-    "transfer-nearby" => TransferNearby(Vec<trade_core::ipc_contract::TransferNearby>),
+    "update-state" => UpdateState(mwt_usecases::ipc_contract::UpdateStatusDto),
+    "security-raise-progress" => SecurityRaiseProgress(mwt_usecases::ipc_contract::security::RaiseProgress),
+    "sync-status" => SyncStatusChanged(mwt_usecases::ipc_contract::SyncStatus),
+    "sync-offer" => SyncOffer(mwt_usecases::ipc_contract::SyncOfferEvent),
+    "sync-pairing" => SyncPairing(mwt_usecases::ipc_contract::SyncPairingEvent),
+    "sync-plan-ready" => SyncPlanReady(mwt_usecases::ipc_contract::SyncPlanEvent),
+    "vault-synced" => VaultSynced(mwt_usecases::ipc_contract::VaultSyncedEvent),
+    "sync-clock" => SyncClock(mwt_usecases::ipc_contract::SyncClockEvent),
+    "sync-error" => SyncError(mwt_usecases::ipc_contract::SyncErrorEvent),
+    "transfer-receive" => TransferReceive(mwt_usecases::ipc_contract::TransferReceiveView),
+    "transfer-send" => TransferSend(mwt_usecases::ipc_contract::TransferSendView),
+    "transfer-nearby" => TransferNearby(Vec<mwt_usecases::ipc_contract::TransferNearby>),
 }
 
 #[cfg(test)]

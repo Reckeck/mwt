@@ -11,7 +11,7 @@
 
 use tauri::{AppHandle, State};
 
-use trade_core::ipc_contract::cryptotrack::wipe::{
+use mwt_usecases::ipc_contract::cryptotrack::wipe::{
     CryptoWipeInput, CryptoWipePreview, CryptoWipeReport,
 };
 
@@ -20,7 +20,7 @@ use crate::commands::app_settings;
 use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::usecases::cryptotrack::wipe;
+use mwt_usecases::usecases::cryptotrack::wipe;
 
 /// What a wipe would remove: the records per collection, the wallets that lose
 /// their link to the module and are archived, what the capital loses and the

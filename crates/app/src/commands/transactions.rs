@@ -1,21 +1,21 @@
 use tauri::{AppHandle, State};
 
-use trade_core::ipc_contract::{
+use mwt_usecases::ipc_contract::{
     AddLinkedTransactionsInput, AdjustmentDraftInput, PreviewTransactionInput, TransactionInput,
     TransactionKinds, UpdateTransactionInput,
 };
-use trade_core::model::store::StoreKind;
-use trade_core::model::transaction::Transaction;
-use trade_core::model::vault::TxProperty;
+use mwt_usecases::model::store::StoreKind;
+use mwt_usecases::model::transaction::Transaction;
+use mwt_usecases::model::vault::TxProperty;
 
-use trade_core::household::property_links::tx_property_links as property_link_reads;
-use trade_core::money::adjustments::AdjustmentDraft;
-use trade_core::money::ledger::{TxFilter, TxGraph, TxPage};
-use trade_core::money::preview::TxPreview;
-use trade_core::money::{preview, rebase};
-use trade_core::usecases::household::ledger;
-use trade_core::usecases::money::adjustments::adjustment_draft;
-use trade_core::usecases::money::{rates, transactions};
+use mwt_household::property_links::tx_property_links as property_link_reads;
+use mwt_money::adjustments::AdjustmentDraft;
+use mwt_money::ledger::{TxFilter, TxGraph, TxPage};
+use mwt_money::preview::TxPreview;
+use mwt_money::{preview, rebase};
+use mwt_usecases::usecases::household::ledger;
+use mwt_usecases::usecases::money::adjustments::adjustment_draft;
+use mwt_usecases::usecases::money::{rates, transactions};
 
 use crate::commands::AppState;
 use crate::commands::app_settings::current_zone;

@@ -1,7 +1,7 @@
 use tauri::State;
 
-use trade_core::ipc_contract::UpdateSettingsInput;
-use trade_core::model::vault::Settings;
+use mwt_usecases::ipc_contract::UpdateSettingsInput;
+use mwt_usecases::model::vault::Settings;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
@@ -11,7 +11,7 @@ use crate::ipc::commands::ipc_commands;
 #[cfg(debug_assertions)]
 fn vault_json(state: &AppState) -> Result<String, IpcError> {
     let guard = require_vault(state)?;
-    let json = trade_core::storage::VaultFile::export_json(&guard.as_ref().unwrap().doc)
+    let json = mwt_usecases::storage::VaultFile::export_json(&guard.as_ref().unwrap().doc)
         .map_err(|err| format!("{}: {}", err.code(), err))?;
     Ok(json)
 }
@@ -67,8 +67,8 @@ pub async fn update_settings(
 #[tauri::command]
 pub async fn dev_dump_vault(
     state: State<'_, AppState>,
-) -> Result<trade_core::ipc_contract::DevDumpVaultOutput, IpcError> {
-    Ok(trade_core::ipc_contract::DevDumpVaultOutput {
+) -> Result<mwt_usecases::ipc_contract::DevDumpVaultOutput, IpcError> {
+    Ok(mwt_usecases::ipc_contract::DevDumpVaultOutput {
         json: vault_json(&state)?,
     })
 }
@@ -124,11 +124,9 @@ pub async fn dev_apply_vault_json(
     // An edit that does not fit the schema is a typo in the editor, not an old
     // file: report it as a parse error, not as an incompatible vault.
     let decode = |text: &str| {
-        trade_core::storage::decode(text.as_bytes(), trade_core::storage::SnapshotFormat::Json)
+        mwt_usecases::storage::decode(text.as_bytes(), mwt_usecases::storage::SnapshotFormat::Json)
             .map_err(|err| match err {
-                trade_core::Error::IncompatibleVault(detail) => {
-                    trade_core::Error::Deserialize(detail)
-                }
+                mwt_base::Error::IncompatibleVault(detail) => mwt_base::Error::Deserialize(detail),
                 other => other,
             })
             .map_err(|err| format!("{}: {}", err.code(), err))
@@ -139,13 +137,13 @@ pub async fn dev_apply_vault_json(
 
     let mut guard = require_vault(&state)?;
     let vault = guard.as_mut().unwrap();
-    trade_core::storage::VaultFile::backup(&vault.path)?;
+    mwt_usecases::storage::VaultFile::backup(&vault.path)?;
     match base {
         Some(base) => vault.apply_document_edit(&base, decoded),
         None => vault.replace_doc(decoded),
     }?;
 
-    trade_core::storage::VaultFile::export_json(&vault.doc).map_err(IpcError::from)
+    mwt_usecases::storage::VaultFile::export_json(&vault.doc).map_err(IpcError::from)
 }
 
 /// JSON Schema of the vault document, for the raw JSON editor.
@@ -155,7 +153,7 @@ pub async fn dev_apply_vault_json(
 #[cfg(all(debug_assertions, feature = "schema"))]
 #[tauri::command]
 pub async fn vault_schema() -> Result<serde_json::Value, IpcError> {
-    Ok(trade_core::model::vault::json_schema())
+    Ok(mwt_usecases::model::vault::json_schema())
 }
 
 /// Write the current document to a scratch file and hand it to `$EDITOR`.

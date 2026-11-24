@@ -4,12 +4,12 @@
 
 use std::path::Path;
 
-use tauri::{AppHandle, State};
-use trade_core::ipc_contract::security::{
+use mwt_usecases::ipc_contract::security::{
     BiometricEnableInput, BiometricState, BiometricUnlockInput, SecurityLevel,
 };
-use trade_core::ipc_contract::{UnlockInput, VaultInfo};
-use trade_core::service::security_level::level_of_vault_file;
+use mwt_usecases::ipc_contract::{UnlockInput, VaultInfo};
+use mwt_usecases::service::security_level::level_of_vault_file;
+use tauri::{AppHandle, State};
 
 use crate::biometric::{BioError, system_gate};
 use crate::commands::{AppState, app_settings, require_vault};

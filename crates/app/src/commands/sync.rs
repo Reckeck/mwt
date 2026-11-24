@@ -1,25 +1,25 @@
 //! Device-to-device vault sync (docs/sync.md): status, settings, pairing,
 //! confirmations, trusted devices, history and undo. The work is in
-//! `crate::sync` (network) and `trade_core` (merge).
+//! `crate::sync` (network) and `mwt_usecases` and `mwt_sync` (merge).
 
-use tauri::{AppHandle, State};
-use trade_core::appconfig::{UpdateAppSettingsInput, load_settings};
-use trade_core::ipc_contract::{
+use mwt_sync::history::AppliedBatch;
+use mwt_sync::journal::SyncJournalEntry;
+use mwt_usecases::appconfig::{UpdateAppSettingsInput, load_settings};
+use mwt_usecases::ipc_contract::{
     AllowMergingInput, SyncDecisionInput, SyncPeerView, SyncSettingsInput, SyncStatus,
 };
-use trade_core::service::UndoReport;
-use trade_core::sync::history::AppliedBatch;
-use trade_core::sync::journal::SyncJournalEntry;
-use trade_core::usecases::sync::peer_sync;
+use mwt_usecases::service::UndoReport;
+use mwt_usecases::usecases::sync::peer_sync;
+use tauri::{AppHandle, State};
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
 use crate::sync::{self, Order};
-use trade_core::sync::history as history_reads;
-use trade_core::usecases::sync::repair as sync_repair;
-use trade_core::usecases::sync::sync_journal as journal_cases;
-use trade_core::usecases::sync::trust as sync_trust;
+use mwt_sync::history as history_reads;
+use mwt_usecases::usecases::sync::repair as sync_repair;
+use mwt_usecases::usecases::sync::sync_journal as journal_cases;
+use mwt_usecases::usecases::sync::trust as sync_trust;
 
 #[tauri::command]
 pub async fn sync_status(app: AppHandle) -> Result<SyncStatus, IpcError> {
@@ -101,7 +101,7 @@ pub async fn sync_open_notification_settings(app: AppHandle) -> Result<(), IpcEr
         return Ok(());
     }
     let _ = &app;
-    Err(IpcError::from(trade_core::Error::Unsupported))
+    Err(IpcError::from(mwt_base::Error::Unsupported))
 }
 
 /// "Pair" on the banner: both screens show the code. With a `device_id`
@@ -116,7 +116,7 @@ pub async fn sync_pair(
     match (session_id, device_id) {
         (Some(session_id), _) => send(&app, &session_id, Order::StartPairing),
         (None, Some(device_id)) => sync::pair_again(&app, &device_id).map_err(IpcError::from),
-        (None, None) => Err(IpcError::from(trade_core::Error::InvalidInput(
+        (None, None) => Err(IpcError::from(mwt_base::Error::InvalidInput(
             "a session or a device is needed".into(),
         ))),
     }
@@ -147,7 +147,7 @@ fn send(app: &AppHandle, session_id: &str, order: Order) -> Result<(), IpcError>
     if sync::send(app, session_id, order) {
         Ok(())
     } else {
-        Err(IpcError::from(trade_core::Error::NotFound(
+        Err(IpcError::from(mwt_base::Error::NotFound(
             "the other device is no longer connected".into(),
         )))
     }
@@ -166,7 +166,7 @@ pub async fn sync_peers(
         .map(|session| session.device_id)
         .collect();
     let guard = require_vault(&state)?;
-    let vault = guard.as_ref().ok_or(trade_core::Error::RequiresUnlock)?;
+    let vault = guard.as_ref().ok_or(mwt_base::Error::RequiresUnlock)?;
     Ok(peer_sync::sync_state(vault)
         .peers
         .iter()
@@ -194,7 +194,7 @@ pub async fn sync_forget_peer(
 ) -> Result<(), IpcError> {
     {
         let mut guard = require_vault(&state)?;
-        let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
+        let vault = guard.as_mut().ok_or(mwt_base::Error::RequiresUnlock)?;
         sync_trust::sync_forget_peer(vault, &device_id)?;
     }
     sync::forget_device(&app, &device_id);
@@ -212,7 +212,7 @@ pub async fn sync_resume_peer(
 ) -> Result<(), IpcError> {
     {
         let mut guard = require_vault(&state)?;
-        let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
+        let vault = guard.as_mut().ok_or(mwt_base::Error::RequiresUnlock)?;
         peer_sync::sync_resume_peer(vault, &device_id)?;
     }
     sync::reconnect(&app);
@@ -223,7 +223,7 @@ pub async fn sync_resume_peer(
 #[tauri::command]
 pub async fn sync_history(state: State<'_, AppState>) -> Result<Vec<AppliedBatch>, IpcError> {
     let guard = require_vault(&state)?;
-    let vault = guard.as_ref().ok_or(trade_core::Error::RequiresUnlock)?;
+    let vault = guard.as_ref().ok_or(mwt_base::Error::RequiresUnlock)?;
     Ok(history_reads::history(&vault.doc))
 }
 
@@ -231,7 +231,7 @@ pub async fn sync_history(state: State<'_, AppState>) -> Result<Vec<AppliedBatch
 #[tauri::command]
 pub async fn sync_journal(state: State<'_, AppState>) -> Result<Vec<SyncJournalEntry>, IpcError> {
     let guard = require_vault(&state)?;
-    let vault = guard.as_ref().ok_or(trade_core::Error::RequiresUnlock)?;
+    let vault = guard.as_ref().ok_or(mwt_base::Error::RequiresUnlock)?;
     Ok(journal_cases::sync_journal(vault))
 }
 
@@ -242,7 +242,7 @@ pub async fn sync_undo(
     state: State<'_, AppState>,
 ) -> Result<UndoReport, IpcError> {
     let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
+    let vault = guard.as_mut().ok_or(mwt_base::Error::RequiresUnlock)?;
     peer_sync::sync_undo(vault, &batch_id).map_err(IpcError::from)
 }
 
@@ -253,7 +253,7 @@ pub async fn allow_merging(
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
     let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
+    let vault = guard.as_mut().ok_or(mwt_base::Error::RequiresUnlock)?;
     sync_repair::allow_merging(vault, input.target, &input.id).map_err(IpcError::from)
 }
 
@@ -261,7 +261,7 @@ pub async fn allow_merging(
 #[tauri::command]
 pub async fn sync_restore_backup(state: State<'_, AppState>) -> Result<(), IpcError> {
     let mut guard = require_vault(&state)?;
-    let vault = guard.as_mut().ok_or(trade_core::Error::RequiresUnlock)?;
+    let vault = guard.as_mut().ok_or(mwt_base::Error::RequiresUnlock)?;
     peer_sync::sync_restore_backup(vault).map_err(IpcError::from)
 }
 

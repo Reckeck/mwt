@@ -5,15 +5,17 @@
 
 use tauri::State;
 
-use trade_core::cryptotrack::tokens::TokenStatus;
-use trade_core::ipc_contract::cryptotrack::tokens::{SetTokenBasisInput, TokenRefInput, TokenView};
-use trade_core::model::cryptotrack::TokenId;
+use mwt_cryptotrack::tokens::TokenStatus;
+use mwt_usecases::ipc_contract::cryptotrack::tokens::{
+    SetTokenBasisInput, TokenRefInput, TokenView,
+};
+use mwt_usecases::model::cryptotrack::TokenId;
 
 use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
-use trade_core::usecases::cryptotrack::tokens;
+use mwt_usecases::usecases::cryptotrack::tokens;
 
 /// The known and the quarantined tokens of the followed accounts.
 #[tauri::command]
