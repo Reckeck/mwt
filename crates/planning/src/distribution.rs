@@ -2,7 +2,10 @@
 //! diff the result against the parts already stored, so the usecase only touches what changed.
 
 use mwt_base::{Amount, Error, Result};
-use mwt_model::{DistKind, DistributionPart, DistributionRow, EffectRef, PartStatus};
+use mwt_model::{
+    DistKind, DistributionPart, DistributionRow, DistributionRule, EffectRef, OnOtherAmount,
+    PartStatus,
+};
 use rust_decimal::Decimal;
 
 /// The rows resolved against a payout.
@@ -109,6 +112,124 @@ pub fn plan_distribution(
     }
 }
 
+/// Minor-unit digits the rule resolution rounds to.
+const MINOR_UNITS: u32 = 2;
+
+/// One rule row with the amount it resolved to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedRow {
+    pub row: DistributionRow,
+    pub amount: Amount,
+}
+
+/// A rule resolved against an actual payout (spec D8).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ResolvedDistribution {
+    /// Every rule row in order (the remainder row included); empty on `over` and `ask`.
+    pub rows: Vec<ResolvedRow>,
+    /// What the remainder row took.
+    pub remainder: Amount,
+    /// By how much the fixed and percent rows exceed the payout: the run does not distribute (Q11).
+    pub over: Option<Amount>,
+    /// The rule asks for a confirmation instead of distributing (D9).
+    pub ask: bool,
+    /// Rows cut by `keep_on_card_min` as `(row_index, by)` (D10).
+    pub cut: Vec<(usize, Amount)>,
+}
+
+/// Resolves `rule` for an `actual` payout against the `expected` one (spec D8-D10).
+/// `card_balance_after` is the card balance once the payout and all rows (before any cut) are booked.
+pub fn resolve_distribution(
+    rule: &DistributionRule,
+    actual: Amount,
+    expected: Amount,
+    card_balance_after: Amount,
+) -> Result<ResolvedDistribution> {
+    let differs = actual != expected;
+    if differs && rule.on_other_amount == OnOtherAmount::Ask {
+        return Ok(ResolvedDistribution {
+            ask: true,
+            ..ResolvedDistribution::default()
+        });
+    }
+    let scale = differs && rule.on_other_amount == OnOtherAmount::ShrinkAll && !expected.is_zero();
+    let asked: Vec<DistributionRow> = rule
+        .rows
+        .iter()
+        .map(|row| match &row.kind {
+            DistKind::Sum { amount } if scale => DistributionRow {
+                kind: DistKind::Sum {
+                    amount: (*amount * actual / expected).round(MINOR_UNITS),
+                },
+                target: row.target.clone(),
+            },
+            _ => row.clone(),
+        })
+        .collect();
+    let resolved = resolve_rows(actual, &asked, MINOR_UNITS)?;
+    if resolved.over.is_some() {
+        return Ok(ResolvedDistribution {
+            over: resolved.over,
+            ..ResolvedDistribution::default()
+        });
+    }
+    let mut rows: Vec<ResolvedRow> = asked
+        .into_iter()
+        .zip(&resolved.parts)
+        .map(|(row, part)| ResolvedRow {
+            row,
+            amount: part.amount,
+        })
+        .collect();
+    let mut remainder = rows
+        .iter()
+        .find(|resolved_row| matches!(resolved_row.row.kind, DistKind::Remainder))
+        .map_or(Amount::ZERO, |resolved_row| resolved_row.amount);
+    let cut = rule
+        .keep_on_card_min
+        .map(|floor| cut_to_floor(&mut rows, floor - card_balance_after))
+        .unwrap_or_default();
+    for (_, by) in &cut {
+        remainder += *by;
+    }
+    for resolved_row in &mut rows {
+        if matches!(resolved_row.row.kind, DistKind::Remainder) {
+            resolved_row.amount = remainder;
+        }
+    }
+    Ok(ResolvedDistribution {
+        rows,
+        remainder,
+        over: None,
+        ask: false,
+        cut,
+    })
+}
+
+/// Cuts `missing` from the last non-remainder row upwards (spec D10, Q13).
+fn cut_to_floor(rows: &mut [ResolvedRow], mut missing: Amount) -> Vec<(usize, Amount)> {
+    let mut cut = Vec::new();
+    for (index, resolved_row) in rows.iter_mut().enumerate().rev() {
+        if !missing.is_positive() {
+            break;
+        }
+        if matches!(resolved_row.row.kind, DistKind::Remainder)
+            || !resolved_row.amount.is_positive()
+        {
+            continue;
+        }
+        let by = resolved_row.amount.min(missing);
+        resolved_row.amount -= by;
+        missing -= by;
+        cut.push((index, by));
+    }
+    cut
+}
+
 #[cfg(test)]
 #[path = "distribution_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "distribution_rule_tests.rs"]
+mod rule_tests;
