@@ -725,4 +725,25 @@ const report = REPORT_NAMES.flatMap((name) => {
   return found ? [{ ...found, scenarios: ['year'], canvas: undefined }] : []
 })
 
-export const SETS = { defi, together, pack2b, pack2c, fixx3, fixx2, salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges, batch3, report }
+/**
+ * W2 · the redesigned component library (redesign-components): buttons, fields, rows, cards, sheets, tabs, toast
+ * and the empty state, on the mock only, in the screens that use them. Phone and desktop, both themes.
+ */
+const TOAST_ACTION = `
+  const { notify } = await import('/src/shared/lib/notify/index.ts')
+  notify.success('Проверка: тост с действием', { description: 'Кошелёк и дата остались', action: { label: 'Отменить', onClick: () => {} } })
+  await new Promise((done) => setTimeout(done, 600)); return true`
+/** The phone's quick add is the bottom nav's one button without a label. */
+const PHONE_QUICK_ADD = `const nav = document.querySelector('[data-tour="bottom-nav"]'); [...nav.querySelectorAll('button, a')].find((el) => !el.textContent.trim())?.click(); return true`
+const redesignComponents = [
+  { name: 'rc-buttons-fields', route: 'settings:general', steps: [{ wait: 900 }] },
+  { name: 'rc-fields-form', route: '/', steps: [{ wait: 800 }, ...QUICK_ADD, { phone: [{ eval: PHONE_QUICK_ADD }] }, { wait: 900 }] },
+  { name: 'rc-rows', route: '/transactions', steps: [{ wait: 900 }] },
+  { name: 'rc-cards', route: '/', steps: [{ wait: 900 }] },
+  { name: 'rc-sheet', route: '/transactions', steps: [{ wait: 800 }, { eval: `document.querySelector('[data-tx-open]').click(); return true` }, { wait: 900 }] },
+  { name: 'rc-tabs', route: '/money', steps: [{ wait: 900 }] },
+  { name: 'rc-toast', route: '/', steps: [{ wait: 800 }, { eval: TOAST_ACTION }] },
+  { name: 'rc-empty-state', route: '/transactions', scenarios: ['empty'], steps: [{ wait: 900 }] },
+]
+
+export const SETS = { 'redesign-components': redesignComponents, defi, together, pack2b, pack2c, fixx3, fixx2, salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges, batch3, report }
