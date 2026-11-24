@@ -37,7 +37,9 @@ export function useAmountExpression(context: Context) {
       return null
     }
     if (!allowNegative && result.value.startsWith('-')) return { kind: 'error', code: 'negative' }
-    return { kind: 'result', text: normalizeAmount(result.value, { decimals, allowNegative, decimalMark }).display }
+    const next = normalizeAmount(result.value, { decimals, allowNegative, decimalMark })
+    if (next.overflow) return { kind: 'error', code: 'too_long' }
+    return { kind: 'result', text: next.display }
   })
 
   function onFocus() {
@@ -66,6 +68,8 @@ export function useAmountExpression(context: Context) {
     const result = evaluateAmountExpr(text, { decimals })
     if (!result.ok || (!allowNegative && result.value.startsWith('-'))) return false
     const next = normalizeAmount(result.value, { decimals, allowNegative, decimalMark })
+    // A result past the digit cap would be cut to a wrong amount: refuse it, the hint says why.
+    if (next.overflow) return false
     context.display.value = next.display
     context.setModel(next.canonical)
     context.emitExpression({ expr: compactExpr(text), result: next.canonical })

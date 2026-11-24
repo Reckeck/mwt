@@ -20,4 +20,4 @@ export interface AmountExpression {
 /** What the hint under the field shows for the expression being typed. */
 export type AmountExprOutcome =
   | { kind: 'result'; text: string }
-  | { kind: 'error'; code: 'divByZero' | 'syntax' | 'negative' }
+  | { kind: 'error'; code: 'divByZero' | 'syntax' | 'negative' | 'too_long' }

@@ -141,6 +141,14 @@ describe('AmountInput', () => {
     expect(model()).toBe('1')
   })
 
+  it('refuses a result past the digit cap instead of cutting it', async () => {
+    const { input, type, hint, model } = setup({}, '1')
+    await type('999999999999999999*10')
+    expect(hint().text()).toBe('Результат слишком длинный')
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(model()).toBe('1')
+  })
+
   it('rounds a result to the field decimals', async () => {
     const { input, type, model } = setup({ decimals: 2 })
     await type('2/3')

@@ -176,7 +176,7 @@ const phoneLine = computed(() => {
       <p v-if="phone" class="pointer-events-none relative truncate text-xs text-muted-foreground">
         {{ phoneLine.filter(Boolean).join(' · ') }}
       </p>
-      <p v-else class="pointer-events-none relative truncate text-xs text-muted-foreground" :title="notes || undefined">
+      <p v-else class="pointer-events-none relative truncate text-xs text-muted-foreground">
         <template v-if="props.dated">{{ formatDateTime(meta.timestamp) }} · </template>
         <!-- A two-sided route already names the wallet. -->
         <template v-if="!route.includes('→') || route.startsWith('→')">{{ `${where} ` }}</template>
@@ -201,6 +201,7 @@ const phoneLine = computed(() => {
             />
           </span>
         </template>
+        <template v-if="notes">{{ ' · ' }}<span data-tx-notes>{{ notes }}</span></template>
       </p>
     </div>
 
