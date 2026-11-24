@@ -1,4 +1,4 @@
-//! IPC command layer — thin translation between `trade-core` services and
+//! IPC command layer — thin translation between the `mwt-usecases` services and
 //! the frontend. See `docs/ipc.md` for the full contract.
 
 pub mod analytics;
