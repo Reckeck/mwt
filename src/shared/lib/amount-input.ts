@@ -1,6 +1,12 @@
 /** Thousands separator shown while typing: a narrow no-break space, never `,` or `.`. */
 export const GROUP_SEPARATOR = ' '
 
+/**
+ * Most integer digits an amount may have (the Rust `Amount` input bound is 1e18).
+ * Local until `src/shared/lib/limits.ts` exists (T46), which will own it.
+ */
+export const MAX_INTEGER_DIGITS = 18
+
 export interface AmountNormalizeOptions {
   /** Most fraction digits kept; `undefined` keeps everything typed. */
   decimals?: number
@@ -14,6 +20,8 @@ export interface NormalizedAmount {
   canonical: string
   /** What the field shows: `-12 345,67`. */
   display: string
+  /** True when the text had more than `MAX_INTEGER_DIGITS` integer digits; `canonical`/`display` then hold the first ones only. */
+  overflow?: boolean
 }
 
 /**
@@ -48,6 +56,16 @@ export function normalizeAmount(text: string, opts: AmountNormalizeOptions = {})
   }
   if (!intPart && fracPart === null) {
     return negative ? { canonical: '-', display: '-' } : { canonical: '', display: '' }
+  }
+  if (intPart.length > MAX_INTEGER_DIGITS) {
+    // Cut before grouping: grouping a pasted 5000-digit string is quadratic.
+    const kept = intPart.slice(0, MAX_INTEGER_DIGITS)
+    const signKept = negative ? '-' : ''
+    return {
+      canonical: `${signKept}${kept}`,
+      display: `${signKept}${kept.replace(/\B(?=(\d{3})+(?!\d))/g, GROUP_SEPARATOR)}`,
+      overflow: true,
+    }
   }
   const intDigits = intPart || '0'
   const sign = negative ? '-' : ''

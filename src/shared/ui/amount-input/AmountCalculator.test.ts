@@ -2,7 +2,7 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 
-import AmountKeypad from './AmountKeypad.vue'
+import AmountCalculator from './AmountCalculator.vue'
 
 function key(name: string) {
   const button = document.querySelector<HTMLButtonElement>(`[data-calc-key="${name}"]`)
@@ -14,7 +14,7 @@ const text = (selector: string) => document.querySelector(selector)?.textContent
 let mounted: VueWrapper | undefined
 
 async function open(initial = '') {
-  const wrapper = mount(AmountKeypad, {
+  const wrapper = mount(AmountCalculator, {
     props: { open: true, text: initial, decimalMark: ',', decimals: 2 },
     attachTo: document.body,
   })
@@ -24,7 +24,7 @@ async function open(initial = '') {
   return wrapper
 }
 
-describe('AmountKeypad', () => {
+describe('AmountCalculator', () => {
   afterEach(() => {
     // Before the DOM goes: unmounting later would look for nodes that are no longer there.
     mounted?.unmount()

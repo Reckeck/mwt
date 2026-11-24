@@ -15,7 +15,7 @@ import { useIsPhone } from '@/shared/lib/phone'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 
-import AmountKeypad from './AmountKeypad.vue'
+import AmountCalculator from './AmountCalculator.vue'
 import type { AmountExpression, AmountInputProps } from './amount-input.types'
 import { useAmountExpression } from './use-amount-expression'
 
@@ -31,7 +31,7 @@ import { useAmountExpression } from './use-amount-expression'
  * Text with an operator (`1200+350*2`) is an expression: the hint under the
  * field shows `= 1 900`, Enter or leaving the field makes it the amount (and
  * emits `expression`), Esc puts the old value back. A plain number takes the
- * old path untouched. On a phone a calculator key opens `AmountKeypad`.
+ * old path untouched. On a phone a calculator key opens `AmountCalculator`.
  */
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<AmountInputProps>(), {
@@ -96,6 +96,13 @@ function onInput(event: Event) {
   const caret = target.selectionStart ?? target.value.length
   const keep = significantBefore(target.value, caret)
   const next = normalizeAmount(target.value, options.value)
+  if (next.overflow) {
+    // Typing or pasting past the digit cap leaves the field as it was.
+    target.value = display.value
+    const end = Math.min(caret, display.value.length)
+    void nextTick(() => target.setSelectionRange(end, end))
+    return
+  }
   display.value = next.display
   target.value = next.display
   model.value = next.canonical
@@ -130,6 +137,7 @@ function fromKeypad(text: string) {
     return
   }
   const next = normalizeAmount(text, options.value)
+  if (next.overflow) return
   display.value = next.display
   model.value = next.canonical
 }
@@ -152,6 +160,7 @@ const hintText = computed(() => {
       cn(
         '@container/amount flex h-9 w-full min-w-0 items-center rounded-md border border-input bg-transparent transition-colors focus-within:ring-1 focus-within:ring-ring has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50',
         props.size === 'lg' && 'h-12',
+        props.size === 'hero' && 'h-16 border-transparent px-1',
         cls,
       )
     "
@@ -171,6 +180,7 @@ const hintText = computed(() => {
           'h-full w-0 min-w-0 flex-1 bg-transparent px-3 py-1 text-sm tabular-nums outline-none placeholder:text-muted-foreground',
           $slots.prefix && 'pl-1.5',
           props.size === 'lg' && 'text-xl font-semibold',
+          props.size === 'hero' && 'text-hero text-right',
         )
       "
       v-bind="rest"
@@ -203,10 +213,14 @@ const hintText = computed(() => {
     >
       <Calculator class="size-4" />
     </Button>
-    <div v-if="$slots.suffix" class="flex shrink-0 items-center pr-1">
+    <div
+      v-if="$slots.suffix"
+      class="flex shrink-0 items-center pr-1"
+      :class="props.size === 'hero' && 'pr-3 text-xl text-muted-foreground'"
+    >
       <slot name="suffix" />
     </div>
-    <AmountKeypad
+    <AmountCalculator
       v-if="phone && props.calculator"
       v-model:open="keypadOpen"
       :text="display"

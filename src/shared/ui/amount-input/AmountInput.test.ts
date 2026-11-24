@@ -160,4 +160,14 @@ describe('AmountInput', () => {
     await wrapper.setProps({ modelValue: '12345.67' })
     expect((input.element as HTMLInputElement).value).toMatch(/^12\u202f345[.,]67$/)
   })
+
+  it('rejects a paste past 18 integer digits and keeps the old value', async () => {
+    const { input, type, model } = setup()
+    await type('1234')
+    await type('9'.repeat(5000))
+    expect(model()).toBe('1234')
+    expect((input.element as HTMLInputElement).value).toMatch(/^1\u202f234$/)
+    await type('9'.repeat(18))
+    expect(model()).toBe('9'.repeat(18))
+  })
 })
