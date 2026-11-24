@@ -4,7 +4,28 @@ use mwt_base::Amount;
 use mwt_base::error::Error;
 use mwt_model::{MonthShare, OpPeriod, PeriodKind, Spread, SpreadMode, TxKind, TxMeta};
 
-use super::{check_period_meta, derive_shares};
+use super::check_period_meta;
+use chrono::NaiveDate;
+use mwt_base::calendar::period::months_touched;
+use mwt_base::calendar::period::{by_days_shares, days_in_month_within, even_shares};
+
+/// The shares of `amount` over `q4()` as the base helpers give them.
+fn derived_over_q4(mode: SpreadMode) -> Vec<MonthShare> {
+    let start = NaiveDate::from_ymd_opt(2026, 10, 16).unwrap();
+    let end = NaiveDate::from_ymd_opt(2026, 12, 15).unwrap();
+    let months = months_touched(start, end);
+    let values = match mode {
+        SpreadMode::ByDays => {
+            by_days_shares(amount("100.00"), &days_in_month_within(start, end), 2)
+        }
+        _ => even_shares(amount("100.00"), months.len(), 2),
+    };
+    months
+        .into_iter()
+        .zip(values)
+        .map(|(month, amount)| MonthShare { month, amount })
+        .collect()
+}
 
 fn amount(raw: &str) -> Amount {
     Amount::parse(raw).unwrap()
@@ -135,7 +156,7 @@ fn a_spread_needs_a_period_over_several_months() {
 
 #[test]
 fn even_spread_gives_the_rest_to_the_last_month() {
-    let derived = derive_shares(amount("100.00"), &q4(), SpreadMode::Even, 2).unwrap();
+    let derived = derived_over_q4(SpreadMode::Even);
     assert_eq!(
         derived,
         shares(&[
@@ -156,7 +177,7 @@ fn even_spread_gives_the_rest_to_the_last_month() {
 
 #[test]
 fn by_days_spread_sums_to_the_amount() {
-    let derived = derive_shares(amount("100.00"), &q4(), SpreadMode::ByDays, 2).unwrap();
+    let derived = derived_over_q4(SpreadMode::ByDays);
     assert_eq!(derived.len(), 3);
     let total = derived.iter().fold(Amount::ZERO, |sum, share| {
         sum.checked_add(share.amount).unwrap()

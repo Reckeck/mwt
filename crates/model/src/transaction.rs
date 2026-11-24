@@ -319,6 +319,14 @@ pub struct Leg {
 }
 
 impl Leg {
+    /// When this leg's money moved, in seconds: its own date when it has one,
+    /// else the transaction's `tx_secs`.
+    pub fn secs(&self, tx_secs: i64) -> i64 {
+        self.timestamp
+            .as_deref()
+            .map_or(tx_secs, mwt_base::time::secs_or_now)
+    }
+
     fn new(
         store_id: &str,
         asset: &AssetRef,

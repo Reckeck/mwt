@@ -13,6 +13,7 @@ use mwt_model::{Transaction, TxOrigin};
 /// Fill what the user does not type: the purchase price of property
 /// (its unit price is in the base currency at the time of buying).
 pub fn complete_transaction(books: &Books, tx: &mut Transaction) {
+    normalize_parts(tx);
     let Transaction::Topup(inner) = tx else {
         return;
     };

@@ -203,3 +203,37 @@ fn a_replacing_edit_never_drops_the_flow_link() {
 
     assert_eq!(updated.meta().flow_id.as_deref(), Some("flow-1"));
 }
+
+fn parted_income(card: &str, cash: &str) -> Transaction {
+    use mwt_model::ReceivedPart;
+    let mut tx = income_of(cash, usd(), "120", "1", "salary");
+    let Transaction::Topup(inner) = &mut tx else {
+        unreachable!()
+    };
+    let part = |store: &str, raw: &str| ReceivedPart {
+        store_id: store.into(),
+        amount: amount(raw),
+        timestamp: None,
+    };
+    inner.parts = vec![part(cash, "0"), part(card, "100"), part(cash, "20")];
+    tx
+}
+
+#[test]
+fn saving_an_income_in_parts_drops_zero_parts_and_keeps_the_first_store() {
+    let (_dir, mut vault) = empty_vault();
+    let card = store(&mut vault, "Card", StoreKind::Bank, None);
+    let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
+
+    let saved = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        parted_income(&card, &cash),
+    )
+    .unwrap();
+
+    let Transaction::Topup(inner) = &saved else {
+        unreachable!()
+    };
+    assert_eq!(inner.parts.len(), 2);
+    assert_eq!(inner.store_id, card);
+}
