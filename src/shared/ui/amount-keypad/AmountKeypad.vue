@@ -5,7 +5,14 @@ import { useI18n } from 'vue-i18n'
 import { useIsPhone } from '@/shared/lib/phone'
 import { Button } from '@/shared/ui/button'
 
-import { KEYPAD_ROWS, type KeypadKey } from './keypad-keys'
+import { KEYPAD_ROWS, type KeypadKey, type KeypadOperator } from './keypad-keys'
+
+const OPERATOR_LABEL_KEY: Record<KeypadOperator, string> = {
+  '+': 'amount.calc.op.plus',
+  '-': 'amount.calc.op.minus',
+  '*': 'amount.calc.op.multiply',
+  '/': 'amount.calc.op.divide',
+}
 
 /**
  * The on-screen number pad of a phone (quick add, amount forms): digits, the
@@ -18,7 +25,7 @@ const emit = defineEmits<{
   digit: [digit: string]
   decimal: []
   backspace: []
-  operator: [operator: '+' | '-' | '*' | '/']
+  operator: [operator: KeypadOperator]
 }>()
 const { t } = useI18n()
 const phone = useIsPhone()
@@ -35,6 +42,11 @@ function label(key: KeypadKey): string {
   if (key.kind === 'backspace') return t('amount.calc.back')
   return key.label
 }
+
+function ariaLabel(key: KeypadKey): string {
+  if (key.kind === 'operator') return t(OPERATOR_LABEL_KEY[key.value])
+  return label(key)
+}
 </script>
 
 <template>
@@ -46,7 +58,7 @@ function label(key: KeypadKey): string {
         type="button"
         :variant="key.kind === 'operator' ? 'secondary' : 'outline'"
         class="text-keypad h-14 min-w-10"
-        :aria-label="label(key)"
+        :aria-label="ariaLabel(key)"
         :data-pad-key="key.id"
         @click="press(key)"
       >

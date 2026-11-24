@@ -38,7 +38,7 @@ export function useAmountExpression(context: Context) {
     }
     if (!allowNegative && result.value.startsWith('-')) return { kind: 'error', code: 'negative' }
     const next = normalizeAmount(result.value, { decimals, allowNegative, decimalMark })
-    if (next.overflow) return { kind: 'error', code: 'too_long' }
+    if (next.overflow) return { kind: 'error', code: 'tooLong' }
     return { kind: 'result', text: next.display }
   })
 

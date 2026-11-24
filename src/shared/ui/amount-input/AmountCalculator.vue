@@ -57,7 +57,7 @@ const resultText = computed(() => {
   return ''
 })
 const errorText = computed(() => {
-  if (tooLong.value) return t('amount.calc.too_long')
+  if (tooLong.value) return t('amount.calc.tooLong')
   const outcome = evaluated.value
   if (!outcome || outcome.ok) return ''
   return outcome.code === 'divByZero' ? t('amount.calc.divByZero') : ''

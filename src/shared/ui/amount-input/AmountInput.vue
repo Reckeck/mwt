@@ -157,7 +157,7 @@ function openKeypadFromHint() {
   if (phone.value && props.calculator && !props.disabled) keypadOpen.value = true
 }
 
-const hint = computed<AmountExprOutcome | null>(() => calc.outcome.value ?? (tooLong.value ? { kind: 'error', code: 'too_long' } : null))
+const hint = computed<AmountExprOutcome | null>(() => calc.outcome.value ?? (tooLong.value ? { kind: 'error', code: 'tooLong' } : null))
 const onBlur = () => {
   tooLong.value = false
   calc.onBlur()
