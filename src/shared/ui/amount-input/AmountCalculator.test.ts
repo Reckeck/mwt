@@ -76,4 +76,16 @@ describe('AmountCalculator', () => {
     await nextTick()
     expect(text('[data-keypad-expr]')).toBe('4')
   })
+
+  it('says «too long» for a result past the digit cap and refuses Done', async () => {
+    const wrapper = await open('999999999999999999')
+    for (const name of ['×', '1', '0']) {
+      key(name).click()
+      await nextTick()
+    }
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
+    document.querySelector<HTMLButtonElement>('[data-calc-done]')?.click()
+    expect(wrapper.emitted('done')).toBeUndefined()
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
+  })
 })

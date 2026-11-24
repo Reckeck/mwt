@@ -109,7 +109,7 @@ const phoneLine = computed(() => {
 
 <template>
   <!-- 64 px on the phone, 52 px on desktop: two lines, an icon circle, the signed amount (Ops row). -->
-  <div class="group/row flex items-center gap-x-3 gap-y-1 py-2" :class="phone ? 'min-h-16' : 'min-h-[52px]'">
+  <div class="group/row flex items-center gap-x-3 gap-y-1 py-2" :class="phone ? 'min-h-16' : 'min-h-13'">
     <!-- On the phone a square mark instead of the word, so the amount keeps its line. -->
     <span v-if="phone && props.selected !== null" class="flex size-9 shrink-0 items-center justify-center">
       <span
@@ -143,8 +143,8 @@ const phoneLine = computed(() => {
         data-tx-open
         @click="emit('open', props.tx)"
       />
-      <div class="pointer-events-none relative flex min-w-0 items-center gap-x-2 gap-y-1 overflow-hidden">
-        <span class="font-medium" data-tx-title>{{ title.text }}</span>
+      <div class="pointer-events-none relative flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden">
+        <span class="min-w-0 max-w-full truncate font-medium" data-tx-title>{{ title.text }}</span>
         <span
           v-if="attached"
           class="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground"
@@ -205,7 +205,7 @@ const phoneLine = computed(() => {
       </p>
     </div>
 
-    <!-- On a narrow screen the amounts and actions wrap under the text instead of squeezing it. -->
+    <!-- The amounts keep their width and sit at the right edge; the text column is the one that shrinks. -->
     <div class="ml-auto shrink-0 text-right">
       <p
         v-for="leg in shownLegs"

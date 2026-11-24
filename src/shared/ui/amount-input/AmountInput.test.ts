@@ -178,4 +178,19 @@ describe('AmountInput', () => {
     await type('9'.repeat(18))
     expect(model()).toBe('9'.repeat(18))
   })
+
+  it('says «too long» when a number past the cap is typed, and clears it on the next valid input', async () => {
+    const { type, hint } = setup({}, '1')
+    await type('9'.repeat(19))
+    expect(hint().text()).toBe('Результат слишком длинный')
+    await type('12')
+    expect(hint().exists()).toBe(false)
+  })
+
+  it('shows an outside value past the cap in full', async () => {
+    const { wrapper, input } = setup()
+    const long = '1'.repeat(25)
+    await wrapper.setProps({ modelValue: long })
+    expect((input.element as HTMLInputElement).value.replace(/\D/g, '')).toBe(long)
+  })
 })

@@ -16,7 +16,7 @@ import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 
 import AmountCalculator from './AmountCalculator.vue'
-import type { AmountExpression, AmountInputProps } from './amount-input.types'
+import type { AmountExprOutcome, AmountExpression, AmountInputProps } from './amount-input.types'
 import { useAmountExpression } from './use-amount-expression'
 
 /**
@@ -67,6 +67,8 @@ const display = ref('')
 const { t } = useI18n()
 const phone = useIsPhone()
 const keypadOpen = ref(false)
+/** The last typed or handed-back number was past the digit cap: said in the hint, not dropped silently. */
+const tooLong = ref(false)
 const calc = useAmountExpression({
   display,
   setModel: (canonical) => {
@@ -81,8 +83,13 @@ watch(
   [() => model.value, options],
   ([value]) => {
     if (calc.expr.value !== null) return
-    const text = value === null || value === undefined ? '' : String(value)
+    const text = String(value ?? '')
     const next = normalizeAmount(text, options.value)
+    if (next.overflow) {
+      // An outside value past the cap is shown whole, never as its cut head.
+      display.value = text
+      return
+    }
     if (next.canonical !== normalizeAmount(display.value, options.value).canonical || !display.value) {
       display.value = next.display
     }
@@ -92,12 +99,14 @@ watch(
 
 function onInput(event: Event) {
   const target = event.target as HTMLInputElement
+  tooLong.value = false
   if (calc.track(target.value)) return
   const caret = target.selectionStart ?? target.value.length
   const keep = significantBefore(target.value, caret)
   const next = normalizeAmount(target.value, options.value)
   if (next.overflow) {
-    // Typing or pasting past the digit cap leaves the field as it was.
+    // Typing or pasting past the digit cap leaves the field as it was, and says why.
+    tooLong.value = true
     target.value = display.value
     const end = Math.min(caret, display.value.length)
     void nextTick(() => target.setSelectionRange(end, end))
@@ -137,6 +146,7 @@ function fromKeypad(text: string) {
     return
   }
   const next = normalizeAmount(text, options.value)
+  tooLong.value = Boolean(next.overflow)
   if (next.overflow) return
   display.value = next.display
   model.value = next.canonical
@@ -147,7 +157,11 @@ function openKeypadFromHint() {
   if (phone.value && props.calculator && !props.disabled) keypadOpen.value = true
 }
 
-const hint = calc.outcome
+const hint = computed<AmountExprOutcome | null>(() => calc.outcome.value ?? (tooLong.value ? { kind: 'error', code: 'too_long' } : null))
+const onBlur = () => {
+  tooLong.value = false
+  calc.onBlur()
+}
 const hintText = computed(() => {
   if (!hint.value) return ''
   return hint.value.kind === 'result' ? `= ${hint.value.text}` : t(`amount.calc.${hint.value.code}`)
@@ -187,7 +201,7 @@ const hintText = computed(() => {
       @focus="calc.onFocus"
       @input="onInput"
       @keydown="onKeydown"
-      @blur="calc.onBlur"
+      @blur="onBlur"
     />
     <!-- Inside the border, between the text and the suffix: it appears without moving anything around the field (rule 17). -->
     <!-- biome-ignore lint/a11y/useKeyWithClickEvents: a touch shortcut; the calculator button next to it is the keyboard path -->
