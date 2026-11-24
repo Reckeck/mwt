@@ -1,7 +1,7 @@
 #![warn(unreachable_pub)]
 //! IPC command boundary types shared with the frontend.
-//! These are exported to TypeScript by the `gen-types` binary of `trade-core`
-//! (`crates/core/src/bin/gen_types.rs`).
+//! These are exported to TypeScript by the `gen-types` binary of `mwt-usecases`
+//! (`crates/usecases/src/bin/gen_types.rs`).
 //! Commands in the `app` crate only translate between these DTOs and the
 //! domain services — never expose internal model directly.
 

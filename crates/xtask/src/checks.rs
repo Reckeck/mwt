@@ -219,7 +219,7 @@ fn gen_types(_root: &Path) -> Task {
         let cmd = Cmd::new("cargo").args([
             "run",
             "-p",
-            "trade-core",
+            "mwt-usecases",
             "--features",
             "ts",
             "--bin",
