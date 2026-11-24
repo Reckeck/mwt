@@ -6650,12 +6650,7 @@ dependencies = [
 name = "trade-core"
 version = "0.1.0"
 dependencies = [
- "mwt-cryptotrack",
- "mwt-money",
- "mwt-reports",
  "mwt-usecases",
- "serde_json",
- "ts-rs",
 ]
 
 [[package]]

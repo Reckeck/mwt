@@ -78,3 +78,8 @@ tempfile = "3"
 insta.workspace = true
 proptest.workspace = true
 pretty_assertions.workspace = true
+
+[[bin]]
+name = "gen-types"
+path = "src/bin/gen_types.rs"
+required-features = ["ts"]

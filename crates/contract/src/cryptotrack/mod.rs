@@ -4,7 +4,7 @@
 //! domain of the module here once and no later spec has to touch a shared
 //! file. Each file below names the spec that owns it: that spec writes its
 //! DTOs, its commands in `crates/app/src/commands/cryptotrack/<domain>.rs`
-//! and its own `export!` block in `crates/core/src/bin/gen_types.rs`.
+//! and its own `export!` block in `crates/usecases/src/bin/gen_types.rs`.
 //!
 //! E0 names no DTO of its own: a shape invented before the screen that uses
 //! it would only be rewritten. What E0 fixes is the command names (they are

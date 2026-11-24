@@ -112,7 +112,7 @@ mise run gen-types
 
 Check the diff of `src/shared/api/ipc.gen.d.ts`: the new type **must** appear.
 No diff means no `#[derive(TS)]` or the DTO is not exported in
-`src/bin/gen_types.rs`.
+`crates/usecases/src/bin/gen_types.rs`.
 
 ### 6. Call from the frontend
 

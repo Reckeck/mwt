@@ -65,10 +65,10 @@ crates/planning/      # mwt-planning: budgets, envelopes, goals, agenda, automat
 crates/reports/       # mwt-reports: overview, dashboard, insights, comparison, where-went
 crates/cryptotrack/   # mwt-cryptotrack: the crypto module (chains, protocols, engine, sources, tokens)
 crates/contract/      # mwt-contract: command DTOs (IPC inputs/outputs) shared with the frontend
-crates/usecases/      # mwt-usecases: Session (service/), scenarios (usecases/<area>/), ports, sandbox, appconfig; NO Tauri
+crates/usecases/      # mwt-usecases: Session (service/), scenarios (usecases/<area>/), ports, sandbox, appconfig, bin/gen_types.rs (generator of src/shared/api/ipc.gen.d.ts); NO Tauri
   src/service/        # Session: the open vault, transact, saving, sync, backups, exchange keys
   src/usecases/       # the scenarios: money, household, planning, reports, cryptotrack, sync, workflow, react
-crates/core           # trade-core facade: no logic, re-exports mwt-usecases + bin/gen_types.rs (generator of src/shared/api/ipc.gen.d.ts)
+crates/core           # trade-core facade: no logic, re-exports mwt-usecases only
 crates/testkit/       # mwt-testkit: property strategies, in-memory persistence, record builders (dev-only)
 crates/plugin-saf/    # Android: document picker with a persistent grant (Kotlin), android target only
 crates/plugin-net/    # Android: LAN sync multicast lock + Keystore-wrapped device key

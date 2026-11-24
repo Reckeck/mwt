@@ -29,9 +29,9 @@ The workspace is `crates/*`: 24 members, 23 without the facade `trade-core`, who
 | `mwt-reports` | overview, dashboard, insights, health, comparison, where-went, notification snapshot | planning, household, money, model, base |
 | `mwt-cryptotrack` | the crypto module: chains, protocols, engine, sources, tokens, the pure service rules | base, model, money |
 | `mwt-contract` | the command input/output types shared with the frontend (`#[dto]`) | the domain crates, sync, crypto, vault, net |
-| `mwt-usecases` | `Session`, the scenarios (`usecases/`), the service shim, ports, sandbox, app config | everything above |
+| `mwt-usecases` | `Session`, the scenarios (`usecases/`), the service shim, ports, sandbox, app config, the type generator `gen_types` (`src/bin`) | everything above |
 | `mwt-testkit` | property strategies, an in-memory persistence, model-only builders (dev-only) | base, model, vault |
-| `trade-core` | the facade: re-exports `mwt-usecases` and holds the type generator `gen_types` (its fate is open) | usecases, money, reports, cryptotrack |
+| `trade-core` | the facade: re-exports `mwt-usecases` only | usecases |
 | `mwt-app-macros` | the `#[ipc]` attribute for `crates/app` commands | nothing |
 | `trade-app` | the Tauri shell | trade-core, app-macros, the plugins |
 | `tauri-plugin-saf`, `-net`, `-biometric`, `-insets` | Android plugins (below) | Tauri only |
