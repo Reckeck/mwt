@@ -68,6 +68,7 @@ records! {
     super::enrichment::EnrichmentRecord => enrichments, false;
     super::planning::Envelope => envelopes, false;
     super::contact::DebtTerms => debt_terms, false;
+    super::template::OperationTemplate => operation_templates, false;
     super::workflow::Workflow => workflows, false;
     super::workflow::WorkflowRun => workflow_runs, false;
     super::workflow::QueuedActions => workflow_queue, false;

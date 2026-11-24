@@ -34,6 +34,7 @@ mod schedule_moments;
 mod shared_event;
 mod store;
 mod sync_state;
+mod template;
 mod transaction;
 mod vault;
 mod workflow;
@@ -113,6 +114,10 @@ pub use sync_state::{
     RecordStamps, RecordState, Stamp, SyncBatch, SyncCutReason, SyncJournalCount, SyncJournalEntry,
     SyncJournalOutcome, SyncState, SyncSummary, TOMBSTONE_DAYS, TransferRecord, TrustedPeer,
     acked_through, device_tag, is_own_device,
+};
+pub use template::{
+    DistributionRow, DistributionRule, OnOtherAmount, OperationTemplate, PeriodRule, RuleHalf,
+    TemplateKind,
 };
 pub use transaction::{
     AccountRef, AdjustmentLine, AdjustmentTx, AssetSellTx, CashNote, ConvertSide, ConvertTx,

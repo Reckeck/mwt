@@ -298,6 +298,7 @@ pub fn full_doc() -> VaultDoc {
                 time: None,
                 asks: false,
                 for_month_offset: None,
+                operation_template_id: None,
                 preset: (index == 0).then_some(AutomationPreset::Salary),
                 schedule: *schedule,
                 starts_at: "2026-01-01T09:00:00Z".into(),
@@ -546,6 +547,7 @@ pub fn full_doc() -> VaultDoc {
         archived: true,
         essential: Some(false),
         passive: Some(true),
+        period_rule: None,
     });
     doc.emergency_fund = crate::model::planning::EmergencyFund {
         scope: crate::model::store::StoreScope {

@@ -55,6 +55,7 @@ impl AutomationDraft {
             time: self.time.clone(),
             asks: self.asks,
             for_month_offset: self.for_month_offset,
+            operation_template_id: None,
         }
     }
 }
@@ -71,6 +72,7 @@ pub fn spec_of(automation: &Automation) -> AutomationSpec {
         time: automation.time.clone(),
         asks: automation.asks,
         for_month_offset: automation.for_month_offset,
+        operation_template_id: automation.operation_template_id.clone(),
     }
 }
 

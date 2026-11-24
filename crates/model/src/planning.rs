@@ -161,6 +161,11 @@ pub struct AutomationSpec {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month_offset: Option<i8>,
+    /// The operation template whose period and distribution rules a run
+    /// uses; `None` — the old behaviour (spec T5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub operation_template_id: Option<String>,
 }
 
 /// An automation as the app shows it: a workflow built from an
@@ -205,6 +210,11 @@ pub struct Automation {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month_offset: Option<i8>,
+    /// The operation template whose period and distribution rules a run
+    /// uses; `None` — the old behaviour (spec T5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub operation_template_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

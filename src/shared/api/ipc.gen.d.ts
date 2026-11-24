@@ -507,7 +507,12 @@ asks: boolean,
  * An income only: the month it is for, in months from the one it is
  * planned in (-1 — the previous, 0 — this one); `None` — not set.
  */
-for_month_offset?: number, };
+for_month_offset?: number, 
+/**
+ * The operation template whose period and distribution rules a run
+ * uses; `None` — the old behaviour (spec T5).
+ */
+operation_template_id?: string, };
 
 /**
  * The card of a scheme or a repeat.
@@ -651,7 +656,12 @@ asks: boolean,
  * An income only: the month it is for, in months from the one it is
  * planned in (-1 — the previous, 0 — this one); `None` — not set.
  */
-for_month_offset?: number, };
+for_month_offset?: number, 
+/**
+ * The operation template whose period and distribution rules a run
+ * uses; `None` — the old behaviour (spec T5).
+ */
+operation_template_id?: string, };
 
 /**
  * What a dashboard number is measured against (plan H1, decision 57): the
@@ -1142,7 +1152,12 @@ essential: boolean | null,
  * `None` takes the default by key ([`DEFAULT_PASSIVE`]); only `Income`
  * reads it.
  */
-passive: boolean | null, };
+passive: boolean | null, 
+/**
+ * The default «за причину» of an operation in this category (spec D1);
+ * applied at creation only.
+ */
+period_rule?: PeriodRule, };
 
 type CategoryGroup = "income" | "fixed" | "daily" | "savings" | "service";
 
@@ -2995,6 +3010,20 @@ type DistributionPart = { kind: DistKind, target: DistTarget,
  * Resolved amount in the income's asset, a stored snapshot.
  */
 amount: Amount, status: PartStatus, effect?: EffectRef, };
+
+/**
+ * One row of a distribution rule: what is asked and where it goes (spec S6, D7).
+ */
+type DistributionRow = { kind: DistKind, target: DistTarget, };
+
+/**
+ * «Куда раскладывать»: the rows applied to a regular income (spec D6).
+ */
+type DistributionRule = { rows: Array<DistributionRow>, on_other_amount: OnOtherAmount, 
+/**
+ * Least balance left on the card after the rows (spec D10).
+ */
+keep_on_card_min?: Amount, };
 
 /**
  * Emulate a graph — saved or still in the editor — on a copy of the vault.
@@ -5066,6 +5095,11 @@ multiplier: Amount,
 strip: string, };
 
 /**
+ * What to do when the payout differs from the expected amount (spec D9).
+ */
+type OnOtherAmount = "shrink_remainder" | "shrink_all" | "ask";
+
+/**
  * What an operation is «for»: a span of days in the user's zone (spec P1).
  * `start` and `end` are plain dates `YYYY-MM-DD`, both inclusive.
  */
@@ -5081,6 +5115,16 @@ type OpeningBalance = { asset: AssetRef, amount: Amount,
  * wallet's history from starting with today's balance.
  */
 at?: string, };
+
+/**
+ * A saved operation shape with its period rule and, for an income, its
+ * distribution rule (spec 5.0). Store, asset and amount only prefill quick-add.
+ */
+type OperationTemplate = { id: string, name: string, archived: boolean, created_at: string, kind: TemplateKind, store_id?: string, asset?: AssetRef, amount?: Amount, categories: Array<string>, comment: string, contact_id?: string, period_rule?: PeriodRule, 
+/**
+ * Income only (spec T2).
+ */
+distribution?: DistributionRule, };
 
 /**
  * A field of a correction.
@@ -5369,6 +5413,23 @@ from_account: string | null, to_account: string | null, };
  * The kind of an operation period (spec op-period P1, P2).
  */
 type PeriodKind = "month" | "half" | "quarter" | "year" | "range";
+
+/**
+ * A default «за что» for an operation, resolved from its money date (spec D1, D2).
+ */
+type PeriodRule = "prev_month" | "prev_half_second" | "this_half_first" | "this_month" | "next_month" | { "custom": { 
+/**
+ * `month`, `half`, `quarter` or `year`; `range` is not a rule kind.
+ */
+kind: PeriodKind, 
+/**
+ * Units from the unit of the money date (half-months for `half`).
+ */
+offset: number, 
+/**
+ * For `half`: which half; none keeps the half the date is in.
+ */
+half?: RuleHalf, } };
 
 type PersonKind = "me" | "contact" | "guest";
 
@@ -6145,6 +6206,11 @@ pct_per_year: Amount | null,
  */
 floor: RevalueFloor | null, };
 
+/**
+ * Which half of a month a custom period rule picks (spec D1).
+ */
+type RuleHalf = "first" | "second";
+
 type RunMode = "live" | "dry_run";
 
 type RunOutcome = "done" | { "stopped": { reason: string, } } | { "failed": { message: string, } } | { "waiting": { until: string, } } | { "asking": { node_id: string, question: string, until: string | null, } } | { "partial": { failed: Array<string>, } } | { "rejected": { reason: RejectReason, trigger_node: string, planned_at: string | null, } } | { "dropped": { reason: string, } };
@@ -6540,7 +6606,11 @@ schedule_timezone: string | null,
  * by an open. The device's own: a peer's mark says nothing about a raise
  * that was cut short here (`sync::registry::SETTINGS_SCOPE`).
  */
-crypto_raise_pending: boolean, };
+crypto_raise_pending: boolean, 
+/**
+ * One-time fixups already run on this vault, by name (spec M6, Q14).
+ */
+migrations_done?: Array<string>, };
 
 /**
  * Which way the money of a settlement went, relative to the organizer.
@@ -7552,6 +7622,11 @@ default: string, };
  * What a form field picks.
  */
 type TemplateFieldKind = "store" | "category" | "number" | "currency" | "budget" | "weekday" | "day";
+
+/**
+ * The kind of operation a template makes: topup or payment only.
+ */
+type TemplateKind = "income" | "expense";
 
 /**
  * Terminal panels' layout, as the UI left it.
@@ -8811,6 +8886,10 @@ workflows: Array<Workflow>, workflow_runs: Array<WorkflowRun>, workflow_vars: Ar
  * Runs asleep at a "Wait" node.
  */
 workflow_waits: Array<WorkflowWait>, 
+/**
+ * Saved operation shapes with their period and distribution rules (spec T1).
+ */
+operation_templates: Array<OperationTemplate>, 
 /**
  * Syncs with exchanges, newest last.
  */

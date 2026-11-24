@@ -880,6 +880,55 @@ mod tests {
         assert_eq!(join(coll, &fields), tx);
     }
 
+    /// M1/M4: the op-period fields of a transaction are fields of their own, each one
+    /// merged on its own, and join back unchanged (`parts` and `distribution` are arrays
+    /// kept whole as one field).
+    #[test]
+    fn m1_op_period_fields_of_a_transaction_split_and_join_back() {
+        let coll = find("transactions").expect("rule");
+        let tx = json!({"topup": {
+            "meta": {
+                "id": "t1",
+                "period": {"kind": "half", "start": "2026-10-16", "end": "2026-10-31"},
+                "spread": {"mode": "even", "shares": []},
+                "income_ref": "t0"
+            },
+            "amount": "5",
+            "parts": [{"store_id": "s1", "amount": "2"}, {"store_id": "s2", "amount": "3"}],
+            "distribution": [{"kind": "remainder", "target": "none", "amount": "5", "status": "done"}]
+        }});
+        let fields = split(coll, &tx);
+        for name in [
+            "meta.period",
+            "meta.spread",
+            "meta.income_ref",
+            "parts",
+            "distribution",
+        ] {
+            assert!(fields.fields.contains_key(name), "no field `{name}`");
+        }
+        assert_eq!(join(coll, &fields), tx);
+    }
+
+    /// T1: an operation template is a record of its own, keyed by its id.
+    #[test]
+    fn t1_operation_templates_are_records_keyed_by_id() {
+        let coll = find("operation_templates").expect("rule");
+        let template = json!({"id": "tpl1", "name": "Salary", "kind": "income"});
+        assert_eq!(record_key(coll, &template).as_deref(), Some("tpl1"));
+        assert_eq!(join(coll, &split(coll, &template)), template);
+    }
+
+    /// Q14: the migration marker travels with the group's settings.
+    #[test]
+    fn q14_migrations_done_travels_in_settings() {
+        let doc = json!({"settings": {"minimize_to_tray": false, "migrations_done": ["m6"]}});
+        assert_eq!(
+            read(&doc, "settings:").expect("settings"),
+            json!({"migrations_done": ["m6"]})
+        );
+    }
+
     /// A crypto record is named by its own words, never by its key: a token
     /// by its symbol, an operation by what it did and when.
     #[test]

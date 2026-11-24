@@ -3166,6 +3166,7 @@ mod persist_tests {
             onboarding_checklist_hidden: true,
             schedule_timezone: Some("Asia/Bangkok".into()),
             crypto_raise_pending: true,
+            migrations_done: vec!["m6".into()],
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.
