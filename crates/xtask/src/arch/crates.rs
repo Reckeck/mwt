@@ -172,10 +172,10 @@ pub const TABLE: &[Row] = &[
             MACROS,
         ],
     },
-    // The facade: re-exports `mwt-usecases`; the type generator names the view types of three crates.
+    // The facade: re-exports `mwt-usecases` only.
     Row {
         name: FACADE,
-        uses: &[USECASES, MONEY, REPORTS, CRYPTOTRACK],
+        uses: &[USECASES],
     },
     Row {
         name: APP,

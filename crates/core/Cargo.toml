@@ -4,29 +4,16 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Multi Wallet Tracker core facade: re-exports of mwt-usecases and the type generator (no Tauri deps)"
+description = "Multi Wallet Tracker core facade: re-exports of mwt-usecases (no Tauri deps)"
 
 [lints]
 workspace = true
 
 [features]
-# Test kit (`trade_core::testkit`): the one of `mwt-usecases`.
-testkit = ["mwt-usecases/testkit"]
-# Forwarded to the use-case crate (which forwards it down); the generator names `ts_rs` itself.
-ts = ["dep:ts-rs", "mwt-usecases/ts", "mwt-money/ts", "mwt-reports/ts", "mwt-cryptotrack/ts"]
+# Forwarded to the use-case crate (which forwards it down).
+ts = ["mwt-usecases/ts"]
 schema = ["mwt-usecases/schema"]
 
 [dependencies]
 # Everything the facade re-exports: the scenarios, the service shim, sandbox, app config, the IPC contract shim.
 mwt-usecases = { path = "../usecases" }
-# The type generator (`gen-types`) lists the view types of these crates.
-mwt-money = { path = "../money" }
-mwt-reports = { path = "../reports" }
-mwt-cryptotrack = { path = "../cryptotrack" }
-serde_json.workspace = true
-ts-rs = { workspace = true, optional = true }
-
-[[bin]]
-name = "gen-types"
-path = "src/bin/gen_types.rs"
-required-features = ["ts"]
