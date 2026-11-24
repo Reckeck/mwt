@@ -5,6 +5,7 @@ import { Money } from '@/entities/currency'
 import { Check, ExternalLink, Paperclip } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
+import { IconBadge } from '@/shared/ui/icon-badge'
 import { KeptMark } from '@/shared/ui/kept-mark'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { Button } from '@/shared/ui/button'
@@ -121,13 +122,8 @@ const phoneLine = computed(() => {
     </span>
     <!-- One grey icon for every kind, PC and phone: a word mark (`Correction`) overflowed its column.
          The colour of the amount already tells in from out; the kind's name is in the title. -->
-    <span
-      v-else
-      class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
-      :title="t(`tx.kindNoun.${kind}`)"
-      data-tx-kind
-    >
-      <component :is="TX_KIND_ICON[kind]" class="size-4" aria-hidden="true" />
+    <span v-else class="shrink-0" :title="t(`tx.kindNoun.${kind}`)" data-tx-kind>
+      <IconBadge :icon="TX_KIND_ICON[kind]" :size="phone ? 'md' : 'sm'" />
       <span class="sr-only">{{ t(`tx.kindNoun.${kind}`) }}</span>
     </span>
 

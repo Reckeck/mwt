@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { cn } from '@/shared/lib/utils'
 
+import { IconBadge } from '@/shared/ui/icon-badge'
+
 import { LIST_ROW_TONE_CLASS } from './list-row.constants'
 import type { ListRowProps } from './list-row.types'
 
@@ -15,9 +17,7 @@ defineSlots<{ value?(): unknown }>()
 
 <template>
   <div class="flex min-h-14 items-center gap-3 py-2">
-    <span v-if="props.icon" class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground" data-list-row-icon>
-      <component :is="props.icon" class="size-4" aria-hidden="true" />
-    </span>
+    <IconBadge v-if="props.icon" :icon="props.icon" size="md" data-list-row-icon />
     <div class="min-w-0 flex-1">
       <p class="truncate text-sm font-medium" data-list-row-title>{{ props.title }}</p>
       <p v-if="props.subtitle" class="truncate text-xs text-muted-foreground" data-list-row-subtitle>{{ props.subtitle }}</p>

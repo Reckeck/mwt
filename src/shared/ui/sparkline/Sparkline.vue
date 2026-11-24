@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { cn } from '@/shared/lib/utils'
+
+import { SPARKLINE_TONE_CLASS } from './sparkline.constants'
 import type { SparklineProps } from './sparkline.types'
 
 /**
- * A trend without axes: a plain SVG line in `currentColor`, so a tile can draw
+ * A trend without axes: a plain SVG line in `currentColor` (a `--chart-*` token by `tone`), so a tile can draw
  * dozens of them without a chart instance each. Width follows the box, height the class.
  */
-const props = withDefaults(defineProps<SparklineProps>(), { area: true, label: undefined })
+const props = withDefaults(defineProps<SparklineProps>(), { area: true, tone: 'actual', label: undefined })
 
 const VIEW_W = 100
 const VIEW_H = 30
@@ -25,13 +28,14 @@ const points = computed(() => {
 <template>
   <svg
     v-if="points"
-    class="block h-8 w-full overflow-visible"
+    :class="cn('block h-8 w-full overflow-visible', SPARKLINE_TONE_CLASS[props.tone])"
     :viewBox="`0 0 ${VIEW_W} ${VIEW_H}`"
     preserveAspectRatio="none"
     role="img"
+    :aria-label="props.label"
     :aria-hidden="props.label ? undefined : 'true'"
   >
-    <title>{{ props.label ?? '' }}</title>
+    <title v-if="props.label">{{ props.label }}</title>
     <polygon v-if="props.area" :points="`0,${VIEW_H} ${points} ${VIEW_W},${VIEW_H}`" fill="currentColor" opacity="0.12" />
     <polyline :points="points" fill="none" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
   </svg>

@@ -6,6 +6,7 @@ import { Calculator } from 'lucide-vue-next'
 import {
   GROUP_SEPARATOR,
   caretAfterSignificant,
+  growsPastCap,
   normalizeAmount,
   significantBefore,
 } from '@/shared/lib/amount-input'
@@ -84,10 +85,10 @@ watch(
   ([value]) => {
     if (calc.expr.value !== null) return
     const text = String(value ?? '')
-    const next = normalizeAmount(text, options.value)
+    // An outside value past the cap is shown whole (grouped), never as its cut head.
+    const next = normalizeAmount(text, { ...options.value, keepOverflow: true })
     if (next.overflow) {
-      // An outside value past the cap is shown whole, never as its cut head.
-      display.value = text
+      display.value = next.display
       return
     }
     if (next.canonical !== normalizeAmount(display.value, options.value).canonical || !display.value) {
@@ -103,14 +104,15 @@ function onInput(event: Event) {
   if (calc.track(target.value)) return
   const caret = target.selectionStart ?? target.value.length
   const keep = significantBefore(target.value, caret)
-  const next = normalizeAmount(target.value, options.value)
+  const next = normalizeAmount(target.value, { ...options.value, keepOverflow: true })
   if (next.overflow) {
-    // Typing or pasting past the digit cap leaves the field as it was, and says why.
     tooLong.value = true
-    target.value = display.value
-    const end = Math.min(caret, display.value.length)
-    void nextTick(() => target.setSelectionRange(end, end))
-    return
+    // Past the cap, only a shorter text (Backspace, Delete, a cut) is accepted; more is undone, and the hint says why.
+    if (growsPastCap(next.canonical, display.value, options.value)) {
+      target.value = display.value
+      void nextTick(() => target.setSelectionRange(Math.min(caret, display.value.length), Math.min(caret, display.value.length)))
+      return
+    }
   }
   display.value = next.display
   target.value = next.display
@@ -157,7 +159,7 @@ function openKeypadFromHint() {
   if (phone.value && props.calculator && !props.disabled) keypadOpen.value = true
 }
 
-const hint = computed<AmountExprOutcome | null>(() => calc.outcome.value ?? (tooLong.value ? { kind: 'error', code: 'too_long' } : null))
+const hint = computed<AmountExprOutcome | null>(() => calc.outcome.value ?? (tooLong.value ? { kind: 'error', code: 'tooLong' } : null))
 const onBlur = () => {
   tooLong.value = false
   calc.onBlur()

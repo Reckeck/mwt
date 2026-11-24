@@ -12,6 +12,8 @@ import { Drawer, DrawerContent, DrawerTitle } from '@/shared/ui/drawer'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 
 import MonthPanel from './MonthPanel.vue'
+import RangeSwitch from './RangeSwitch.vue'
+import { RANGE_PRESETS } from './range-presets'
 import type { PeriodPickerProps } from './period-picker.types'
 
 /**
@@ -42,6 +44,7 @@ function label(value: MonthRange): string {
   return `${short(value.from)} — ${short(value.to)}`
 }
 const active = computed(() => presetOf(open.value ? draft.value : range.value))
+const chipPresets = PERIOD_PRESETS.filter((preset) => !RANGE_PRESETS.includes(preset))
 const atEnd = computed(() => range.value.to >= currentMonth())
 
 function choose(preset: PeriodPreset) {
@@ -107,9 +110,10 @@ const TRIGGER =
             <DrawerTitle class="flex-1 text-[17px] font-semibold">{{ t('period.title') }}</DrawerTitle>
             <Button variant="link" size="sm" class="px-0" @click="reset">{{ t('period.reset') }}</Button>
           </div>
+          <RangeSwitch :model-value="active" class="w-full" @update:model-value="choose" />
           <div class="flex flex-wrap gap-1.5">
             <button
-              v-for="preset in PERIOD_PRESETS"
+              v-for="preset in chipPresets"
               :key="preset"
               type="button"
               :class="cn('h-8 rounded-full border px-3 text-sm', active === preset ? 'border-primary bg-primary text-primary-foreground' : 'border-border')"

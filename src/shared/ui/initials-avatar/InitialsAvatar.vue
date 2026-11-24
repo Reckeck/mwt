@@ -15,7 +15,7 @@ const text = computed(() => initialsOf(props.name))
 
 <template>
   <span
-    :class="cn('inline-flex shrink-0 select-none items-center justify-center rounded-full bg-secondary font-semibold text-secondary-foreground', SIZE_CLASS[props.size])"
+    :class="cn('inline-flex shrink-0 select-none items-center justify-center rounded-full bg-muted font-medium text-muted-foreground', SIZE_CLASS[props.size])"
     aria-hidden="true"
   >
     {{ text }}

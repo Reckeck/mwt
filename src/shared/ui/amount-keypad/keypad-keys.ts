@@ -1,11 +1,13 @@
+export type KeypadOperator = '+' | '-' | '*' | '/'
+
 export type KeypadKey =
   | { kind: 'digit'; id: string; value: string; label: string }
-  | { kind: 'operator'; id: string; value: '+' | '-' | '*' | '/'; label: string }
+  | { kind: 'operator'; id: string; value: KeypadOperator; label: string }
   | { kind: 'decimal'; id: string }
   | { kind: 'backspace'; id: string }
 
 const digit = (value: string): KeypadKey => ({ kind: 'digit', id: value, value, label: value })
-const operator = (value: '+' | '-' | '*' | '/', label: string): KeypadKey => ({
+const operator = (value: KeypadOperator, label: string): KeypadKey => ({
   kind: 'operator',
   id: value,
   value,

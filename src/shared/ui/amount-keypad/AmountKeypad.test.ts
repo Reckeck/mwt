@@ -31,6 +31,13 @@ describe('AmountKeypad', () => {
     }
   })
 
+  it('shows operator symbols and speaks their names', () => {
+    const wrapper = mount(AmountKeypad, { props: { decimalMark: '.' } })
+    const plus = wrapper.get('[data-pad-key="+"]')
+    expect(plus.text()).toBe('+')
+    expect(plus.attributes('aria-label')).toBe('Плюс')
+  })
+
   it('renders nothing on desktop', () => {
     phone.value = false
     const wrapper = mount(AmountKeypad, { props: { decimalMark: '.' } })
