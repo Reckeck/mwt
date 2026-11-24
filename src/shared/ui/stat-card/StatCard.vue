@@ -2,6 +2,7 @@
 import { SIGN_TONE_CLASS } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 import { Card } from '@/shared/ui/card'
+import { Delta } from '@/shared/ui/delta'
 import { Skeleton } from '@/shared/ui/skeleton'
 
 import type { StatCardProps } from './stat-card.types'
@@ -15,7 +16,8 @@ const props = withDefaults(defineProps<StatCardProps>(), {
   value: undefined,
   hint: undefined,
   delta: undefined,
-  deltaTone: 'neutral',
+  deltaText: undefined,
+  deltaInverse: false,
   tone: 'neutral',
   loading: false,
 })
@@ -33,8 +35,8 @@ const FIGURE_CLASS = 'figure truncate @max-[9rem]:text-base @max-[9rem]:whitespa
       <p v-else :class="cn(FIGURE_CLASS, SIGN_TONE_CLASS[props.tone])">
         <slot>{{ props.value }}</slot>
       </p>
-      <p v-if="props.delta || $slots.delta" :class="cn('truncate text-xs tabular-nums', SIGN_TONE_CLASS[props.deltaTone])">
-        <slot name="delta">{{ props.delta }}</slot>
+      <p v-if="props.delta !== undefined || $slots.delta" class="truncate text-xs">
+        <slot name="delta"><Delta :value="props.delta ?? 0" :text="props.deltaText" :inverse="props.deltaInverse" /></slot>
       </p>
       <p v-if="props.hint || $slots.hint" class="truncate text-xs text-muted-foreground">
         <slot name="hint">{{ props.hint }}</slot>
