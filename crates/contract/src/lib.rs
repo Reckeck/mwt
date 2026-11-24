@@ -663,6 +663,8 @@ impl TransactionInput {
                 from,
                 details,
             } => Transaction::Topup(TopupTx {
+                parts: Vec::new(),
+                distribution: None,
                 meta: common.meta(),
                 store_id: store_id.clone(),
                 asset: asset.to_asset(),

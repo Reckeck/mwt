@@ -196,6 +196,8 @@ pub fn transaction_for_import(books: &Books<'_>, imp: &PendingImport) -> Transac
         ImportKind::EarnIncome => {
             meta.categories = import_categories(books, imp, "deposit_interest");
             return Transaction::Topup(TopupTx {
+                parts: Vec::new(),
+                distribution: None,
                 meta,
                 store_id: import_target(books, imp),
                 asset: asset_for_import(doc, &imp.asset_bought),

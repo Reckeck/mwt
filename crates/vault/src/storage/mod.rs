@@ -485,6 +485,8 @@ mod tests {
         let mut meta = TxMeta::new("first buy");
         meta.categories = vec!["salary".into()];
         let tx = Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta,
             store_id: store.id.clone(),
             asset: btc.clone(),

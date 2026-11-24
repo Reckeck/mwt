@@ -305,6 +305,8 @@ impl Executor<'_> {
         }
         Ok(match kind.as_str() {
             "topup" => Transaction::Topup(TopupTx {
+                parts: Vec::new(),
+                distribution: None,
                 meta,
                 store_id: store_of(account, "the account to top up")?,
                 asset,

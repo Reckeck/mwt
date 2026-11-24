@@ -987,6 +987,8 @@ mod tests {
         };
         let buy = |unit_price: Option<&str>| {
             Transaction::Topup(TopupTx {
+                parts: Vec::new(),
+                distribution: None,
                 meta: meta("bought", &["income_other"]),
                 store_id: flat.clone(),
                 asset: thing.clone(),

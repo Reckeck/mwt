@@ -2978,6 +2978,25 @@ exec_ids: Array<string>, };
 type DiscardPendingImportsOutput = { discarded: number, };
 
 /**
+ * What the user (or the rule) asked for in a distribution part (spec S6).
+ */
+type DistKind = { "sum": { amount: Amount, } } | { "percent": { pct: Amount, } } | "remainder";
+
+/**
+ * Where a distribution part goes; `None` only for the remainder (spec S6).
+ */
+type DistTarget = { "store": { id: string, } } | { "envelope": { id: string, } } | { "goal": { goal_id: string, store_id: string, } } | "none";
+
+/**
+ * One stored part of a distributed income (spec S6).
+ */
+type DistributionPart = { kind: DistKind, target: DistTarget, 
+/**
+ * Resolved amount in the income's asset, a stored snapshot.
+ */
+amount: Amount, status: PartStatus, effect?: EffectRef, };
+
+/**
  * Emulate a graph — saved or still in the editor — on a copy of the vault.
  */
 type DryRunWorkflowInput = { 
@@ -2994,6 +3013,11 @@ trigger_node: string | null,
  * without one pauses the emulation (outcome `asking`).
  */
 answers?: { [key in string]: boolean }, };
+
+/**
+ * The record a distribution part produced; a back-pointer for integrity checks (spec S6).
+ */
+type EffectRef = { "transfer": { tx_id: string, } } | { "envelope_move": { envelope_id: string, move_id: string, } };
 
 /**
  * The emergency fund (plan C1): savings accounts set aside for bad times,
@@ -5118,6 +5142,11 @@ required: boolean, };
 type ParamKind = { "kind": "number" } | { "kind": "text" } | { "kind": "long_text" } | { "kind": "bool" } | { "kind": "store" } | { "kind": "account" } | { "kind": "asset" } | { "kind": "currency" } | { "kind": "category" } | { "kind": "day" } | { "kind": "weekday" } | { "kind": "time" } | { "kind": "date" } | { "kind": "budget" } | { "kind": "goal" } | { "kind": "workflow" } | { "kind": "source" } | { "kind": "select", options: Array<[string, LocalizedText]>, } | { "kind": "targets" };
 
 /**
+ * State of a distribution part; `planned` is an additive variant of v3.4 (spec S15).
+ */
+type PartStatus = "done";
+
+/**
  * A person in the event: a contact of the directory, or a guest (no
  * `contact_id`). The owner is not listed; they are [`ME`].
  */
@@ -5844,6 +5873,15 @@ type RealizedPnl = { total_base: Amount,
  * Fees paid in scope, at their stamped price; not part of `total_base`.
  */
 fees_base: Amount, legs: Array<PnlLeg>, };
+
+/**
+ * One receiving part of an income that arrived in parts (spec S1).
+ */
+type ReceivedPart = { store_id: string, amount: Amount, 
+/**
+ * The part's own date; `None` = the income's `timestamp`.
+ */
+timestamp?: string, };
 
 /**
  * A recently opened vault file.
@@ -7697,7 +7735,16 @@ type TopupTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount
 /**
  * Who paid; never one of the user's stores (that is a transfer).
  */
-from: AccountRef | null, details: KindDetails, price: PriceStamp, };
+from: AccountRef | null, details: KindDetails, price: PriceStamp, 
+/**
+ * «Arrived in parts» (spec S1): empty = a single-store income. When set,
+ * `amount` is the total and `store_id` is the first part's store.
+ */
+parts?: Array<ReceivedPart>, 
+/**
+ * «Distribute myself» (spec S6): `None` = not distributed.
+ */
+distribution?: Array<DistributionPart>, };
 
 /**
  * One node of a run, in words.

@@ -116,10 +116,11 @@ pub use sync_state::{
 };
 pub use transaction::{
     AccountRef, AdjustmentLine, AdjustmentTx, AssetSellTx, CashNote, ConvertSide, ConvertTx,
-    DebtEffect, DefiAction, DefiTx, Fee, FuturesAction, FuturesCategory, FuturesDirection,
-    KindDetails, Leg, LegRole, Liquidity, MonthShare, OpPeriod, PaymentTx, PeriodKind, PriceStamp,
-    Spread, SpreadMode, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TransferTx,
-    TxKind, TxMeta, TxOrigin, allowed_kinds, default_kind,
+    DebtEffect, DefiAction, DefiTx, DistKind, DistTarget, DistributionPart, EffectRef, Fee,
+    FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Leg, LegRole, Liquidity,
+    MonthShare, OpPeriod, PartStatus, PaymentTx, PeriodKind, PriceStamp, ReceivedPart, Spread,
+    SpreadMode, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TransferTx, TxKind,
+    TxMeta, TxOrigin, allowed_kinds, default_kind,
 };
 #[cfg(feature = "schema")]
 pub use vault::json_schema;

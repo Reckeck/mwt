@@ -766,6 +766,8 @@ mod tests {
 
     fn topup(id: &str, store: &str, raw: &str, timestamp: &str) -> Transaction {
         Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta: meta(id, timestamp),
             store_id: store.into(),
             asset: rub(),

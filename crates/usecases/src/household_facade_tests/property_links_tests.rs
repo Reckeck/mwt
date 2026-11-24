@@ -46,6 +46,8 @@ fn thing(symbol: &str) -> AssetRef {
 
 fn buy(vault: &mut Session, store_id: &str, symbol: &str, price: &str, when: &str) {
     let mut tx = Transaction::Topup(TopupTx {
+        parts: Vec::new(),
+        distribution: None,
         meta: meta("bought", &["income_other"]),
         store_id: store_id.to_string(),
         asset: thing(symbol),

@@ -118,6 +118,8 @@ pub fn income_of(
     comment: &str,
 ) -> Transaction {
     Transaction::Topup(TopupTx {
+        parts: Vec::new(),
+        distribution: None,
         meta: meta(comment, &["salary"]),
         store_id: store.into(),
         asset,

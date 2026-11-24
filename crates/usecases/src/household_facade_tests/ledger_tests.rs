@@ -263,6 +263,8 @@ fn the_event_refuses_what_it_cannot_follow() {
     let tx = edited(&scenario, &purchase_tx, |tx| {
         if let Transaction::Payment(inner) = tx {
             *tx = Transaction::Topup(crate::model::transaction::TopupTx {
+                parts: Vec::new(),
+                distribution: None,
                 meta: inner.meta.clone(),
                 store_id: inner.store_id.clone(),
                 asset: inner.asset.clone(),

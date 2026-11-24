@@ -71,6 +71,8 @@ pub(crate) fn opening_topup(store_id: &str, opening: OpeningBalance) -> Transact
         meta.timestamp = at;
     }
     Transaction::Topup(TopupTx {
+        parts: Vec::new(),
+        distribution: None,
         meta,
         store_id: store_id.to_string(),
         asset: opening.asset,

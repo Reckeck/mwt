@@ -60,6 +60,8 @@ fn meta(comment: &str) -> TxMeta {
 
 fn topup() -> TopupTx {
     TopupTx {
+        parts: Vec::new(),
+        distribution: None,
         meta: meta("salary"),
         store_id: "bank".into(),
         asset: usd(),

@@ -67,6 +67,8 @@ impl Builder<'_> {
     ) {
         let meta = self.meta(&at, comment, &[category]);
         let tx = Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta,
             store_id: store.to_string(),
             asset,

@@ -270,6 +270,8 @@ fn seed(host: &TestHost, comment: &str) {
         let mut meta = TxMeta::new(comment);
         meta.categories = vec!["salary".into()];
         let tx = Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta,
             store_id: vault.doc.stores[0].id.clone(),
             asset: AssetRef::fiat("USD", "US Dollar"),
