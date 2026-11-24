@@ -212,7 +212,7 @@ const phoneLine = computed(() => {
         :key="leg.store_id + leg.asset.symbol"
         class="whitespace-nowrap font-medium tabular-nums"
       >
-        <Money :amount="leg.amount" :currency="leg.asset.symbol" :at="meta.timestamp" :flow="txLegFlow(kind, ownMove, leg.amount)" />
+        <Money :amount="leg.amount" :currency="leg.asset.symbol" :at="meta.timestamp" :flow="txLegFlow(kind, ownMove, leg.amount, Boolean(props.storeId))" />
       </p>
       <p v-if="fee" class="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
         {{ t('tx.fee') }} <Money :amount="fee.amount" :currency="fee.asset" />

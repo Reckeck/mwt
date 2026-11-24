@@ -65,6 +65,7 @@ const sinceText = computed(() => formatDayMonth(`${props.since}T12:00`))
       </div>
     </template>
     <SectionState
+      skeleton="operations"
       class="pt-1"
       :loading="txs.isPending.value"
       :error="txs.error.value"

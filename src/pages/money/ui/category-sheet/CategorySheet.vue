@@ -119,7 +119,7 @@ const journal = computed(() =>
         />
         <!-- min-w-0: a grid cell is as wide as its widest row otherwise, and the amount is cut by the sheet's edge. -->
         <div class="min-w-0">
-        <SectionState :loading="txs.isPending.value" :error="txs.error.value" skeleton="list" :rows="3" compact @retry="txs.refetch()">
+        <SectionState :loading="txs.isPending.value" :error="txs.error.value" skeleton="operations" :rows="3" compact @retry="txs.refetch()">
           <TransactionsList
             :transactions="rows"
             :total="total"

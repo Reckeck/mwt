@@ -66,6 +66,7 @@ const rowMenu = useTxRowMenu({ storeId: () => props.storeId, duplicate: true })
       </div>
     </template>
     <SectionState
+      skeleton="operations"
       :loading="txs.isPending.value || summary.isPending.value || namesPending"
       :error="txs.error.value"
       :empty="!rows.length"
