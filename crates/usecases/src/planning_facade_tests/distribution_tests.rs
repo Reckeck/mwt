@@ -303,3 +303,58 @@ fn s14_parts_and_distribution_are_mutually_exclusive() {
     assert!(apply_distribution(&mut fixture.vault, &id, &rows).is_err());
     assert_eq!(serde_json::to_string(&fixture.vault.doc).unwrap(), before);
 }
+
+fn salary_with(fixture: &Fixture, deposit_sum: &str) -> Transaction {
+    let mut salary = income_of(&fixture.card, rub(), "50000", "0.01", "bonus");
+    if let Transaction::Topup(topup) = &mut salary {
+        topup.distribution = Some(
+            rows(fixture, deposit_sum)
+                .into_iter()
+                .map(|row| mwt_model::DistributionPart {
+                    kind: row.kind,
+                    target: row.target,
+                    amount: Amount::ZERO,
+                    status: mwt_model::PartStatus::Done,
+                    effect: None,
+                })
+                .collect(),
+        );
+    }
+    salary
+}
+
+/// S11: a topup added with a distribution is distributed by the usecase and passes V1-V4.
+#[test]
+fn s11_add_transaction_with_distribution_applies_it() {
+    let mut fixture = fixture();
+    let salary = salary_with(&fixture, "20000");
+    let stored = add_transaction(&mut fixture.vault, salary).unwrap();
+    let id = stored.meta().id.clone();
+    let Transaction::Topup(topup) = &stored else {
+        panic!("a topup")
+    };
+    assert_eq!(topup.distribution.as_ref().map(Vec::len), Some(4));
+    assert!(verify_distribution(&fixture.vault.books(), &id).is_empty());
+    assert_eq!(transfers(&fixture), 1);
+}
+
+/// S11: a distribution that fails leaves nothing booked, not even the income.
+#[test]
+fn s11_failed_distribution_on_add_books_nothing() {
+    let mut fixture = fixture();
+    let before = fixture.vault.doc.transactions.len();
+    let salary = salary_with(&fixture, "900000");
+    let err = add_transaction(&mut fixture.vault, salary).unwrap_err();
+    assert!(matches!(err, Error::InvalidInput(_)), "{err:?}");
+    assert_eq!(fixture.vault.doc.transactions.len(), before);
+}
+
+/// S9: a caller cannot link an operation to an income itself.
+#[test]
+fn s9_add_transaction_refuses_a_supplied_income_ref() {
+    let mut fixture = fixture();
+    let mut salary = income_of(&fixture.card, rub(), "10", "0.01", "x");
+    salary.meta_mut().income_ref = Some(fixture.income_id.clone());
+    let err = add_transaction(&mut fixture.vault, salary).unwrap_err();
+    assert!(err.to_string().contains("INCOME_REF_RESERVED"), "{err}");
+}

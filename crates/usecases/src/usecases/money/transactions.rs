@@ -14,6 +14,9 @@ use crate::money::transactions::{
 use crate::service::Session;
 use crate::usecases::household::property_links::{check_property_link, set_property_link};
 use crate::usecases::household::shared_events::cascade_shared_delete;
+use crate::usecases::money::portfolio::recompute_holdings;
+use crate::usecases::planning::distribution::apply_distribution;
+use mwt_model::DistributionRow;
 
 use super::stores::rebase_and_commit;
 
@@ -59,16 +62,66 @@ pub fn add_transaction_for(
     mut tx: Transaction,
     property_id: Option<&str>,
 ) -> Result<Transaction> {
+    if tx.meta().income_ref.is_some() {
+        return Err(Error::InvalidInput(format!(
+            "{INCOME_REF_RESERVED}: only a distribution may link an operation to an income"
+        )));
+    }
     check_property_link(vault, property_id)?;
+    let rows = take_distribution_rows(&mut tx);
     prepare_transaction(vault, &mut tx)?;
     ensure_fresh_id(&vault.doc, &mut tx);
+    let backup = vault.doc.clone();
     vault.run(|run| {
         run.doc_mut().transactions.push(tx.clone());
         Ok(())
     })?;
     set_property_link(vault, &tx.meta().id, property_id);
-    rebase_and_commit(vault)?;
+    match rows {
+        // The distribution commits once, with the income.
+        Some(rows) => {
+            if let Err(err) = apply_distribution(vault, &tx.meta().id, &rows) {
+                vault.doc = backup;
+                recompute_holdings(vault);
+                return Err(err);
+            }
+            return Ok(stored_income(vault, &tx));
+        }
+        None => rebase_and_commit(vault)?,
+    }
     Ok(tx)
+}
+
+/// Stable code of an operation that arrives already linked to an income.
+pub const INCOME_REF_RESERVED: &str = "INCOME_REF_RESERVED";
+
+/// The rows of a topup that arrives with a distribution; the list itself is taken off, as the
+/// distribution usecase writes it (spec S11).
+fn take_distribution_rows(tx: &mut Transaction) -> Option<Vec<DistributionRow>> {
+    let Transaction::Topup(topup) = tx else {
+        return None;
+    };
+    let parts = topup.distribution.take()?;
+    Some(
+        parts
+            .into_iter()
+            .map(|part| DistributionRow {
+                kind: part.kind,
+                target: part.target,
+            })
+            .collect(),
+    )
+}
+
+/// The income as stored once its distribution is applied.
+fn stored_income(vault: &Session, income: &Transaction) -> Transaction {
+    vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == income.meta().id)
+        .cloned()
+        .unwrap_or_else(|| income.clone())
 }
 
 /// Save several operations as one movement of money (an exchange split
