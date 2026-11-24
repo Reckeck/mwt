@@ -2,10 +2,8 @@
 import { computed, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Lock, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-vue-next'
+import { Lock, PanelLeftClose, PanelLeftOpen, Plus, Settings } from 'lucide-vue-next'
 
-import { SidebarEvents } from '@/widgets/sidebar-events'
-import { SidebarPinned } from '@/widgets/sidebar-pinned'
 import {
   Sidebar,
   SidebarContent,
@@ -17,18 +15,19 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator,
   useSidebar,
 } from '@/shared/ui/sidebar'
 import { hotkeyLabel } from '@/shared/lib/hotkeys'
+import { openQuickAdd } from '@/shared/lib/quick-add'
 import { BrandMark } from '@/shared/ui/brand-mark'
 import { useVaultStore } from '@/shared/store/vault'
 
-import { CONTACTS_ITEM, NAV_ITEMS, type NavItem } from '../../app-shell.constants'
+import { NAV_SECTIONS, sectionOfRoute } from '../../lib/nav-sections'
 
 /**
- * Shell · 7: the five sections, the favourites, then settings, lock and
- * `Collapse · Ctrl B`. Folded to icons, every row keeps a tooltip.
+ * Shell · 7: the brand block, «New operation», the five sections, then settings, lock and
+ * `Collapse · Ctrl B`. Folded to icons, every row keeps a tooltip. The wallet, pinned and events
+ * groups are gone (spec D9): wallets live in Капитал, events in Люди, pinned items in the palette.
  */
 const emit = defineEmits<{ lock: []; openSettings: [] }>()
 
@@ -54,7 +53,10 @@ watch(
   },
 )
 
-const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.prefix) : route.name === item.name)
+const activeSection = computed(() => sectionOfRoute(String(route.name ?? ''))?.id)
+
+/** Section ids whose tour anchor stays on the item. */
+const TOUR_TARGETS: Partial<Record<string, string>> = { people: 'open-contacts' }
 </script>
 
 <template>
@@ -79,33 +81,37 @@ const isActive = (item: NavItem) => (item.prefix ? route.path.startsWith(item.pr
       <SidebarGroup class="py-1">
         <SidebarGroupContent>
           <SidebarMenu>
-            <SidebarMenuItem v-for="item in NAV_ITEMS" :key="item.name">
-              <SidebarMenuButton as-child :is-active="isActive(item)" :tooltip="t(item.key)">
-                <RouterLink :to="{ name: item.name }">
-                  <component :is="item.icon" />
-                  <span>{{ t(item.key) }}</span>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                class="mb-1 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                :tooltip="`${t('quickAdd.title')} · ${hotkeyLabel('quickAdd')}`"
+                @click="openQuickAdd()"
+              >
+                <Plus />
+                <span class="flex-1">{{ t('quickAdd.title') }}</span>
+                <kbd class="text-xs opacity-80">{{ hotkeyLabel('quickAdd') }}</kbd>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem v-for="section in NAV_SECTIONS" :key="section.id">
+              <SidebarMenuButton
+                as-child
+                :is-active="activeSection === section.id"
+                :tooltip="t(section.key)"
+                :data-tour="TOUR_TARGETS[section.id]"
+              >
+                <RouterLink :to="{ name: section.root }" :aria-current="activeSection === section.id ? 'page' : undefined">
+                  <component :is="section.icon" />
+                  <span>{{ t(section.key) }}</span>
                 </RouterLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
-
-      <SidebarSeparator v-if="collapsed" class="my-1" />
-      <SidebarPinned />
-      <SidebarEvents />
     </SidebarContent>
 
     <SidebarFooter>
       <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton as-child :is-active="isActive(CONTACTS_ITEM)" :tooltip="t(CONTACTS_ITEM.key)" data-tour="open-contacts">
-            <RouterLink :to="{ name: CONTACTS_ITEM.name }">
-              <component :is="CONTACTS_ITEM.icon" />
-              <span>{{ t(CONTACTS_ITEM.key) }}</span>
-            </RouterLink>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton :tooltip="t('settingsShell.title')" data-tour="open-settings" @click="emit('openSettings')">
             <Settings />
