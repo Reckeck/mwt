@@ -111,7 +111,7 @@ header = u32 version | u8 kdf_id | u32 mem_kib | u32 iters | u8 par
 
 The level is not stored: it is the vault container's `kdf_id` (0 = level 2,
 PIN; 1 = level 1, plain; 2 = level 3, crypto). Code:
-`crates/core/src/service/security_level.rs`, the rule is mirrored in
+`crates/usecases/src/service/security_level.rs`, the rule is mirrored in
 `src/shared/lib/vault-password.ts`.
 
 - **A new secret.** Level 2: a PIN of at least 6 digits, digits only

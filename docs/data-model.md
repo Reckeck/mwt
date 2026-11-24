@@ -56,7 +56,7 @@ vault: they survive opening another vault and are read **before** unlock
 encrypted and not duplicated in each vault — they live as plain JSON in
 `app_config_dir`.
 
-`crates/core/src/appconfig.rs`, two files:
+`crates/usecases/src/appconfig.rs`, two files:
 
 | File | What |
 |---|---|
@@ -505,7 +505,7 @@ it cannot read a new v1 file as its old v1. Container 2 with any other payload v
 and container 1 with a version of 5 or more or 0, is `UNSUPPORTED`.
 
 **The transition.** The only path from an old file is a frozen copy of the last old
-schema, `crates/core/src/storage/legacy_v4.rs` (`VaultDocV4`). A container 1 file with
+schema, `crates/vault/src/storage/legacy_v4.rs` (`VaultDocV4`). A container 1 file with
 payload version 4 (JSON or MessagePack) is parsed by it and converted to the live
 `VaultDoc` (`transition`): the Bybit import queue is converted once, the workflow graphs
 are brought to graph version 1, and the dropped `settings.crypto` is discarded;
@@ -548,9 +548,9 @@ down as operations of their own.
 
 ### The engine and its sources
 
-`crates/core/src/cryptotrack/` is pure: a source reads the network and returns a batch, the engine
+`crates/cryptotrack/src/` is pure: a source reads the network and returns a batch, the engine
 (`normalize` -> `overrides` -> `basis` -> `reconcile` -> `snapshot`) turns raw facts into operations and figures, and
-only `service/cryptotrack/recompute.rs` and `apply.rs` touch the document (AGENTS.md rules 3 and 4).
+only `crates/usecases/src/service/cryptotrack/recompute.rs` and `apply.rs` touch the document (AGENTS.md rules 3 and 4).
 
 - **EVM** (`sources/evm`): history and held tokens from Blockscout API v2, balances from a node over JSON-RPC
   (`rpc/`, with a per-host limiter and a privacy rule: one address per request batch, different addresses are spaced

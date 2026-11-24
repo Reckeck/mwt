@@ -169,14 +169,14 @@ reuses the existing `Bye { reason }` variant.
 
 ## Tests that pin it down
 
-In `crates/core/src/sync/protocol.rs` and `crates/app/src/sync/tests.rs`:
+In `crates/sync/src/protocol.rs` and `crates/app/src/sync/tests.rs`:
 
 - an older `Hello` without the newer fields decodes, with an empty version;
 - an unknown message variant is an error, not a panic;
 - a different protocol or format is refused on both sides once, the peer stays
   trusted and the address is not marked failing;
 - marks from an old peer do not erase another trigger's mark, and a double run
-  from an old peer converges (`crates/core/src/service/peer_sync/marks_tests.rs`,
+  from an old peer converges (`crates/usecases/src/service/peer_sync/marks_tests.rs`,
   `run_key_tests.rs`).
 
 The locked-screen notification snapshot gained a `role_client` field. It lives

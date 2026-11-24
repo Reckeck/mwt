@@ -9,7 +9,7 @@ in the app: Settings, Sync, Transfer on the device that has the vault ("Send to
 a new device"), and on the new device either Settings, Sync or, on the unlock
 screen, **Receive from another device**.
 
-Code: `trade_core::sync::transfer` (the protocol, SPAKE2, the file check),
+Code: `crates/sync/src/transfer.rs` (`mwt_sync::transfer`) (the protocol, SPAKE2, the file check),
 `crates/app/src/sync/transfer.rs` (sessions), `crates/app/src/sync/handover.rs`
 (mDNS, screens, saving), `crates/app/src/sync/pending.rs` (pending trust).
 
@@ -110,8 +110,9 @@ A transfer is a **fresh trust on both sides**.
 
 ### Sender bookkeeping in the copy
 
-The file carries the sender's `doc.sync` as it was written. The core has a
-function for starting clean, `Session::adopt_received_copy`: it keeps the
+The file carries the sender's `doc.sync` as it was written. `mwt-usecases` has a
+free scenario function for starting clean, `adopt_received_copy(&mut Session)` in
+`crates/usecases/src/usecases/sync/peer_sync.rs`: it keeps the
 record metadata and the trusted devices, and drops undo batches, the journal,
 transfers, pauses, cut-offs and the peers' last-sync times (the same set
 `take_records_from` keeps local for a pulled external copy).

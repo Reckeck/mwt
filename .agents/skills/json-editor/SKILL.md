@@ -5,7 +5,7 @@ description: >
   document schema from Rust, JSON-path autocomplete, Ctrl+S, .bak before
   writing, $EDITOR. Use when editing crates/app/src/commands/settings.rs
   (vault_schema (needs --features schema), dev_dump_vault, dev_apply_vault_json, dev_open_vault_json_in_editor,
-  dev_reload_vault_json_from_editor), crates/core/src/model/vault.rs (json_schema),
+  dev_reload_vault_json_from_editor), crates/model/src/vault.rs (json_schema),
   src/shared/lib/editor.ts, src/shared/lib/json.ts, src/shared/lib/json-schema-reader.ts,
   src/widgets/vault-json-editor/VaultJsonEditor.vue, and for tasks like
   "редактор vault", "JSON vault", "правка документа", "подсказки полей",
@@ -37,7 +37,7 @@ the schema comes from Rust over IPC. The full description is in
 
 | Layer | File |
 |---|---|
-| Schema (`schemars` over `VaultDoc`) | `crates/core/src/model/vault.rs` → `json_schema()` |
+| Schema (`schemars` over `VaultDoc`) | `crates/model/src/vault.rs` → `json_schema()` |
 | IPC handlers | `crates/app/src/commands/settings.rs` |
 | Backup before writing | `VaultFile::backup` (called only by `dev_apply_vault_json`) |
 | `$ref` / `anyOf` / `oneOf` parsing | `src/shared/lib/json-schema-reader.ts` |
@@ -47,7 +47,7 @@ the schema comes from Rust over IPC. The full description is in
 
 ## What to change and where
 
-**A new vault field** → `crates/core/src/model/vault.rs`. Nothing else: the
+**A new vault field** → `crates/model/src/vault.rs`. Nothing else: the
 schema and hints pick it up by themselves. If you change only a DTO — `mise run
 gen-types` and `mise run test`.
 

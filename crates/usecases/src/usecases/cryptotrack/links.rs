@@ -50,8 +50,8 @@ pub fn crypto_link_candidates(
     options
 }
 
-/// The row of one operation, as the list shows it. The detail is built by the
-/// operations area, which has not moved yet: one `Books::vault()` call.
+/// The row of one operation, as the list shows it. The detail is built by
+/// `crypto_operation_detail` over the same `Books`.
 fn crypto_row_of(books: &Books<'_>, event_id: &str) -> Option<CryptoOpRow> {
     crypto_operation_detail(
         books,
