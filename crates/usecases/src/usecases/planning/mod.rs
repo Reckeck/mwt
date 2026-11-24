@@ -8,6 +8,7 @@ pub mod automation_rules;
 pub mod automations;
 pub mod budget;
 pub mod datasources;
+pub mod distribution;
 pub mod emergency;
 pub mod goals;
 pub mod health;
