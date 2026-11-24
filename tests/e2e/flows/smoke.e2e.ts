@@ -22,3 +22,10 @@ test('unlock, home, open the new transaction form and close it', async ({ app })
   })
   await app.waitFor(`return document.querySelector('[role="dialog"]') === null`, 'the dialog to close')
 })
+
+test('the sidebar settings button opens the settings window', async ({ app }) => {
+  await app.unlock()
+  await app.at('/')
+  await app.click('[data-tour="open-settings"]')
+  await app.waitFor(`return document.querySelector('[role="dialog"]') !== null`, 'the settings window to open')
+})

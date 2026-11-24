@@ -1,12 +1,11 @@
 import { computed, ref, watch } from 'vue'
-import { useMutation } from '@tanstack/vue-query'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Bell, Copy, EyeOff, Lock, Repeat, Settings, Trash2, Workflow } from 'lucide-vue-next'
+import { Bell, Copy, EyeOff, Lock, Repeat, Settings, Workflow } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
+import { useVaultDelete } from '@/features/vault-delete'
 import { useVaultForget } from '@/features/vault-forget'
-import { call } from '@/shared/api/ipc'
 import { settingsQuery } from '@/shared/lib/settings-link'
 import { useVaultStore } from '@/shared/store/vault'
 
@@ -24,26 +23,18 @@ export interface ProfileEntry {
 /**
  * The profile menu's model: the vault actions of the open vault, then Automations, Reminders and
  * Settings. Every entry goes where it went before (spec D10): the same routes, the settings
- * window, the lock, the delete dialog.
+ * window, the lock.
  */
 export function useProfileMenu() {
   const { t } = useI18n()
   const router = useRouter()
   const vault = useVaultStore()
   const { forget } = useVaultForget()
-  /** The system dialog picks the place; `null` means it was closed (same command and texts as the delete dialog). */
-  const saveCopy = useMutation({
-    mutationFn: (path: string) => call<string | null>('export_vault_copy', { input: { path } }),
-    meta: {
-      error: 'vaultDelete.copyFailed',
-      success: (data: unknown) => (data ? t('vaultDelete.copySaved', { where: String(data) }) : ''),
-    },
-  })
+  const { saveCopy } = useVaultDelete()
 
   const open = ref(false)
-  const deleteOpen = ref(false)
 
-  // The history is read when the menu opens: the row of the open vault gives forget, copy and delete.
+  // The history is read when the menu opens: the row of the open vault gives forget and copy; the open vault is never deleted from here (the backend refuses it).
   watch(open, (isOpen) => {
     if (isOpen && !vault.sandbox) void vault.loadRecents().catch(() => {})
   })
@@ -86,13 +77,6 @@ export function useProfileMenu() {
       hint: t('profile.forgetHint'),
       run: () => close(() => current.value && forget.mutate({ path: current.value.path, name: vaultName.value })),
     },
-    delete: {
-      id: 'delete',
-      icon: Trash2,
-      label: t('actions.delete'),
-      destructive: true,
-      run: () => close(() => (deleteOpen.value = true)),
-    },
   }
 
   const vaultEntries = computed<ProfileEntry[]>(() =>
@@ -121,5 +105,5 @@ export function useProfileMenu() {
     },
   ])
 
-  return { open, deleteOpen, current, vaultName, vaultEntries, appEntries }
+  return { open, current, vaultName, vaultEntries, appEntries }
 }

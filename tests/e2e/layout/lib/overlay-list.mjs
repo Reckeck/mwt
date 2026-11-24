@@ -69,6 +69,7 @@ export const OVERLAYS = [
     open: [{ eval: PINIA("settings", "enrichmentConsentOpen = true") }],
     layer: overlay('enrichment-consent'),
   },
+  { id: 'profile-menu', route: '/', phone: true, open: [{ click: '[data-profile-trigger]' }], layer: overlay('profile-menu') },
   { id: 'notifications', route: '/', phone: true, open: [{ click: '[data-tour="notification-bell"]' }], layer: overlay('notifications') },
   { id: 'entity-tx', route: '/transactions', phone: true, open: [{ click: '[data-tx-open]' }], layer: '[data-tx-card]', keys: ['open'] },
   { id: 'entity-goal', route: '/money/plan', phone: true, open: [{ query: { open: 'goal:{goal}' } }], layer: '[data-goal-card]', keys: ['open'] },

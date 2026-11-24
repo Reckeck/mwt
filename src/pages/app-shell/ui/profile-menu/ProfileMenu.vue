@@ -2,7 +2,6 @@
 import { useI18n } from 'vue-i18n'
 import { CircleUserRound } from 'lucide-vue-next'
 
-import { VaultDeleteDialog } from '@/features/vault-delete'
 import { Button } from '@/shared/ui/button'
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/shared/ui/drawer'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -17,7 +16,7 @@ import { useProfileMenu } from './use-profile-menu'
  */
 const { t } = useI18n()
 const phone = useIsPhone()
-const { open, deleteOpen, current, vaultName, vaultEntries, appEntries } = useProfileMenu()
+const { open, vaultName, vaultEntries, appEntries } = useProfileMenu()
 </script>
 
 <template>
@@ -45,5 +44,4 @@ const { open, deleteOpen, current, vaultName, vaultEntries, appEntries } = usePr
       <ProfileMenuList :vault-name="vaultName" :vault-entries="vaultEntries" :app-entries="appEntries" />
     </DrawerContent>
   </Drawer>
-  <VaultDeleteDialog v-model:open="deleteOpen" :recent="current ?? null" />
 </template>

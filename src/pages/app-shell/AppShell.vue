@@ -28,7 +28,7 @@ import { provideTxGlances } from '@/shared/lib/tx-glances'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
 
-import { NAV_ITEMS } from './app-shell.constants'
+import { NAV_SECTIONS } from './lib/nav-sections'
 import { useBackButton } from './model/use-back-button'
 import { useBackendNotices } from './model/use-backend-notices'
 import { useCacheEvents } from './model/use-cache-events'
@@ -93,7 +93,7 @@ onScopeDispose(
   })),
 )
 /** Alt 1…5: a section without the search (Paths 1 · 7). */
-for (const [index, id] of SECTION_HOTKEYS.entries()) useHotkey(id, () => void router.push({ name: NAV_ITEMS[index]?.name ?? 'dashboard' }))
+for (const [index, id] of SECTION_HOTKEYS.entries()) useHotkey(id, () => void router.push({ name: NAV_SECTIONS[index]?.root ?? 'dashboard' }))
 
 /** The shell's child page and its params: a section's own sub-routes do not change it. */
 const pageKey = computed(() => `${route.matched[1]?.path ?? route.path}?${JSON.stringify(route.params)}`)
@@ -124,7 +124,7 @@ const pageClass = computed(() => {
 
 <template>
   <SidebarProvider class="h-full min-h-0">
-    <AppSidebar />
+    <AppSidebar @lock="lock" @open-settings="openSettings()" />
 
     <SidebarInset class="min-h-0 min-w-0 overflow-hidden">
       <SandboxBar v-if="vault.sandbox" />
