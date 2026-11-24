@@ -28,13 +28,13 @@ const count = computed(() => history.data.value?.length ?? 0)
 
 <template>
   <SectionState
+    skeleton="operations"
     :loading="history.isPending.value"
     :error="history.error.value"
     :empty="!count"
     :empty-icon="ScrollText"
     :empty-title="t('contacts.noHistory')"
     :empty-description="t('contacts.sheet.noHistoryHint')"
-    skeleton="list"
     :rows="4"
     compact
     @retry="history.refetch()"

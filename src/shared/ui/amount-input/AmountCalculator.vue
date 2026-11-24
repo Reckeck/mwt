@@ -45,11 +45,19 @@ const opts = computed(() => ({
   allowNegative: props.allowNegative,
   decimalMark: props.decimalMark,
 }))
+/** The digit cap is a message, never a cut: a result or a plain number past it cannot be handed back. */
+const tooLong = computed(() => {
+  if (!typed.value) return false
+  const outcome = evaluated.value
+  if (outcome) return outcome.ok && normalizeAmount(outcome.value, opts.value).overflow === true
+  return normalizeAmount(typed.value, opts.value).overflow === true
+})
 const resultText = computed(() => {
   if (evaluated.value?.ok) return `= ${normalizeAmount(evaluated.value.value, opts.value).display}`
   return ''
 })
 const errorText = computed(() => {
+  if (tooLong.value) return t('amount.calc.too_long')
   const outcome = evaluated.value
   if (!outcome || outcome.ok) return ''
   return outcome.code === 'divByZero' ? t('amount.calc.divByZero') : ''
@@ -68,6 +76,10 @@ function press(key: string) {
 
 function equals() {
   const outcome = evaluated.value
+  if (tooLong.value) {
+    failed.value = true
+    return
+  }
   if (!outcome?.ok) {
     failed.value = Boolean(typed.value)
     return
@@ -78,6 +90,10 @@ function equals() {
 function done() {
   if (!typed.value) {
     open.value = false
+    return
+  }
+  if (tooLong.value) {
+    failed.value = true
     return
   }
   const text = hasOperator(typed.value) ? compactExpr(typed.value) : typed.value

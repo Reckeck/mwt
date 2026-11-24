@@ -200,6 +200,7 @@
   "amount.calc.divByZero": "Division by zero",
   "amount.calc.syntax": "Could not calculate",
   "amount.calc.negative": "The amount cannot be negative",
+  "amount.calc.too_long": "The result is too long",
   "amount.calc.open": "Calculator",
   "amount.calc.title": "Calculator",
   "amount.calc.hint": "Enter an expression and tap Done: the result goes into the field.",

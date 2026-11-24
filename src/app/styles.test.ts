@@ -1,5 +1,4 @@
-import { execSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -166,7 +165,15 @@ describe('type', () => {
     ]) {
       expect(css).toMatch(new RegExp(`--radius-${name}:\\s*${size};`))
     }
-    const sources = execSync('grep -rEl "var\\(--radius\\)|calc\\(var\\(--radius" src || true', { encoding: 'utf8' })
-    expect(sources.split('\n').filter((file) => file && !file.endsWith('styles.test.ts'))).toEqual([])
+    const sourceRoot = resolve(process.cwd(), 'src')
+    expect(existsSync(sourceRoot)).toBe(true)
+    const legacyRadius = /var\(--radius\)|calc\(var\(--radius/
+    const offenders = (readdirSync(sourceRoot, { recursive: true }) as string[]).filter((file) => {
+      const path = resolve(sourceRoot, file)
+      return (
+        !file.endsWith('styles.test.ts') && statSync(path).isFile() && legacyRadius.test(readFileSync(path, 'utf8'))
+      )
+    })
+    expect(offenders).toEqual([])
   })
 })

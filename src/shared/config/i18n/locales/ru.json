@@ -200,6 +200,7 @@
   "amount.calc.divByZero": "Деление на ноль",
   "amount.calc.syntax": "Не получилось посчитать",
   "amount.calc.negative": "Сумма не может быть отрицательной",
+  "amount.calc.too_long": "Результат слишком длинный",
   "amount.calc.open": "Калькулятор",
   "amount.calc.title": "Калькулятор",
   "amount.calc.hint": "Введите выражение и нажмите «Готово»: в поле попадёт результат.",

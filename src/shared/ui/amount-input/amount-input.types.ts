@@ -5,8 +5,8 @@ export interface AmountInputProps {
   placeholder?: string
   disabled?: boolean
   id?: string
-  /** `lg` — the one big sum of a form (limit, goal): taller, bigger digits. */
-  size?: 'default' | 'lg'
+  /** `lg` — the one big sum of a form (limit, goal): taller, bigger digits. `hero` — the screen's amount at display size (quick add). */
+  size?: 'default' | 'lg' | 'hero'
   /** The «calculator» key on a phone; off for fields where a sum never makes sense. */
   calculator?: boolean
 }
@@ -20,4 +20,4 @@ export interface AmountExpression {
 /** What the hint under the field shows for the expression being typed. */
 export type AmountExprOutcome =
   | { kind: 'result'; text: string }
-  | { kind: 'error'; code: 'divByZero' | 'syntax' | 'negative' }
+  | { kind: 'error'; code: 'divByZero' | 'syntax' | 'negative' | 'too_long' }

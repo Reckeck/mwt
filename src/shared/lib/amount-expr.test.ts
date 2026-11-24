@@ -111,3 +111,10 @@ describe('expression note', () => {
     expect(withExpressionNote('lunch', '1+2 = 3', '1+3 = 4')).toBe('lunch\n1+3 = 4')
   })
 })
+
+describe('evaluateAmountExpr digit cap', () => {
+  it('does not return a value cut by the integer digit cap', () => {
+    const result = evaluateAmountExpr(`${'1'.repeat(19)}/10`)
+    expect(result.ok).toBe(false)
+  })
+})

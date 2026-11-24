@@ -131,7 +131,7 @@ function onBackspace() {
     @update:model-value="onPick"
   >
     <ComboboxAnchor
-      class="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-1 text-sm transition-colors focus-within:ring-1 focus-within:ring-ring data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+      class="flex min-h-10 w-full flex-wrap items-center gap-1 rounded-md border border-strong bg-card px-2 py-1 text-sm transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-background data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
     >
       <template v-if="props.multiple">
         <span

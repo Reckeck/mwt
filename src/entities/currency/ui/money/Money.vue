@@ -5,6 +5,7 @@ import { isFiatCode, moneyParts, signClass } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { MONEY_FLOW_CLASS, flowAmount } from '@/shared/lib/money-flow'
 import { moneyMoment } from '../../lib/money-moment'
 import { useFavoriteCurrencies } from '../../model/favorites'
 import type { MoneyProps } from './money.types'
@@ -25,6 +26,7 @@ const props = withDefaults(defineProps<MoneyProps>(), {
   decimals: undefined,
   signed: false,
   colored: false,
+  flow: undefined,
   compact: false,
   bare: false,
   convert: undefined,
@@ -36,15 +38,16 @@ const settings = useSettingsStore()
 const favorites = useFavoriteCurrencies()
 
 const code = computed(() => (props.currency || settings.baseCurrency).toLowerCase())
+const shownAmount = computed(() => (props.flow ? flowAmount(props.amount, props.flow) : props.amount))
 const parts = computed(() =>
-  moneyParts(props.amount, {
+  moneyParts(shownAmount.value, {
     currency: code.value,
     decimals: props.decimals,
-    signed: props.signed || props.colored,
+    signed: props.signed || props.colored || props.flow === 'income',
     compact: props.compact,
   }),
 )
-const tone = computed(() => (props.colored ? signClass(props.amount) : ''))
+const tone = computed(() => (props.flow ? MONEY_FLOW_CLASS[props.flow] : props.colored ? signClass(props.amount) : ''))
 const numeric = computed(() => Number(props.amount))
 const known = computed(
   () =>

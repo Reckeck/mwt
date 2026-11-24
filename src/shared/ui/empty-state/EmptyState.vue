@@ -21,9 +21,9 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <Empty :class="cn('border border-dashed border-border', props.compact ? 'gap-3 p-4 md:p-6' : 'p-6 md:p-8')">
+  <Empty :class="cn('border border-solid border-border bg-card', props.compact ? 'gap-3 p-4 md:p-6' : 'p-6 md:p-8')">
     <EmptyHeader>
-      <EmptyMedia v-if="props.icon" variant="icon">
+      <EmptyMedia v-if="props.icon" variant="icon" class="size-14 rounded-full">
         <component :is="props.icon" />
       </EmptyMedia>
       <EmptyTitle class="text-base">{{ props.title ?? t('ui.empty') }}</EmptyTitle>

@@ -118,6 +118,7 @@ function rowActions(tx: Transaction): UiAction[] {
 
     <Card>
       <SectionState
+        skeleton="operations"
         :loading="txs.isPending.value"
         :error="txs.error.value"
         :empty="!rows.length"

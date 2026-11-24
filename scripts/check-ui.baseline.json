@@ -40,7 +40,6 @@
   "long-line src/shared/ui/sidebar/Sidebar.vue": 1,
   "long-line src/shared/ui/sidebar/SidebarGroupAction.vue": 1,
   "long-line src/shared/ui/sidebar/SidebarGroupLabel.vue": 1,
-  "long-line src/shared/ui/sidebar/SidebarInset.vue": 1,
   "long-line src/shared/ui/sidebar/SidebarMenuAction.vue": 2,
   "long-line src/shared/ui/sidebar/SidebarMenuSubButton.vue": 1,
   "long-line src/shared/ui/sidebar/SidebarRail.vue": 1,

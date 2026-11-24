@@ -49,7 +49,10 @@ function align(left: Dec, right: Dec): [bigint, bigint, number] {
 }
 
 function parseNumber(raw: string): Dec {
-  const canonical = normalizeAmount(raw).canonical.replace(/\.$/, '')
+  const normalized = normalizeAmount(raw)
+  // The digit cap would cut the operand silently: a wrong amount must not come back as ok.
+  if (normalized.overflow) throw new ExprError('syntax')
+  const canonical = normalized.canonical.replace(/\.$/, '')
   if (!/^\d+(\.\d+)?$/.test(canonical)) throw new ExprError('syntax')
   const [whole, fraction = ''] = canonical.split('.')
   return { int: BigInt(whole + fraction), scale: fraction.length }

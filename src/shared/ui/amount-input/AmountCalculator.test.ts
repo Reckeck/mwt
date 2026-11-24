@@ -2,7 +2,7 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 
-import AmountKeypad from './AmountKeypad.vue'
+import AmountCalculator from './AmountCalculator.vue'
 
 function key(name: string) {
   const button = document.querySelector<HTMLButtonElement>(`[data-calc-key="${name}"]`)
@@ -14,7 +14,7 @@ const text = (selector: string) => document.querySelector(selector)?.textContent
 let mounted: VueWrapper | undefined
 
 async function open(initial = '') {
-  const wrapper = mount(AmountKeypad, {
+  const wrapper = mount(AmountCalculator, {
     props: { open: true, text: initial, decimalMark: ',', decimals: 2 },
     attachTo: document.body,
   })
@@ -24,7 +24,7 @@ async function open(initial = '') {
   return wrapper
 }
 
-describe('AmountKeypad', () => {
+describe('AmountCalculator', () => {
   afterEach(() => {
     // Before the DOM goes: unmounting later would look for nodes that are no longer there.
     mounted?.unmount()
@@ -75,5 +75,17 @@ describe('AmountKeypad', () => {
     key('=').click()
     await nextTick()
     expect(text('[data-keypad-expr]')).toBe('4')
+  })
+
+  it('says «too long» for a result past the digit cap and refuses Done', async () => {
+    const wrapper = await open('999999999999999999')
+    for (const name of ['×', '1', '0']) {
+      key(name).click()
+      await nextTick()
+    }
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
+    document.querySelector<HTMLButtonElement>('[data-calc-done]')?.click()
+    expect(wrapper.emitted('done')).toBeUndefined()
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
   })
 })
