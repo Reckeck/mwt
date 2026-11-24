@@ -1,6 +1,11 @@
 {
   "app.title": "Multi Wallet Tracker",
   "nav.dashboard": "Dashboard",
+  "nav.section.home": "Home",
+  "nav.section.operations": "Operations",
+  "nav.section.budget": "Budget",
+  "nav.section.people": "People",
+  "nav.section.capital": "Capital",
   "nav.stores": "Wallets",
   "nav.wallets": "Wallets",
   "nav.addWallet": "Add wallet",

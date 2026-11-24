@@ -1,6 +1,11 @@
 {
   "app.title": "Multi Wallet Tracker",
   "nav.dashboard": "Главная",
+  "nav.section.home": "Главная",
+  "nav.section.operations": "Операции",
+  "nav.section.budget": "Бюджет",
+  "nav.section.people": "Люди",
+  "nav.section.capital": "Капитал",
   "nav.stores": "Кошельки",
   "nav.wallets": "Кошельки",
   "nav.addWallet": "Добавить кошелёк",
