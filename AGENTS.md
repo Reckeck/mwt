@@ -334,8 +334,8 @@ check it with `mise x actionlint@1.7.12 -- actionlint`. GitLab is only a mirror 
   it while anyone may still have the old installation.
 - **Name.** The app is Multi Wallet Tracker (MWT): `productName`, binary and packages
   `multi-wallet-tracker`, AUR `multi-wallet-tracker-bin`; the dev channel —
-  "Multi Wallet Tracker Dev", `multi-wallet-tracker-dev`. The Rust crates `mwt-usecases`/`trade-app`
-  remain internal names. Do not touch the vault magic bytes and the export format
+  "Multi Wallet Tracker Dev", `multi-wallet-tracker-dev`. The Rust crate `trade-app`
+  remains an internal name. Do not touch the vault magic bytes and the export format
   `trade-app-workflow` — reading old files depends on them.
 - **Release — tag `vX.Y.Z`,** plus `release-base/vX.Y.Z` on the tip of the release
   branch, which version accounting counts from. The version is the same in `crates/app/tauri.conf.json`,

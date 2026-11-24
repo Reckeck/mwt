@@ -3,7 +3,7 @@
 //! dev-only crate: no crate lists it as a normal dependency (`mwt-usecases` reaches
 //! it through its `testkit` feature and its dev-dependencies).
 //!
-//! The helpers that need `Session` or `service::test_support` stay in the facade's
+//! The helpers that need `Session` or `service::test_support` stay in `mwt-usecases`'s
 //! `testkit` module, which re-exports this crate.
 
 pub mod builders;
