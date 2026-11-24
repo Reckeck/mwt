@@ -6,6 +6,7 @@ import type { Component } from 'vue'
 
 import { useVaultDelete } from '@/features/vault-delete'
 import { useVaultForget } from '@/features/vault-forget'
+import { notify } from '@/shared/lib/notify'
 import { settingsQuery } from '@/shared/lib/settings-link'
 import { useVaultStore } from '@/shared/store/vault'
 
@@ -36,7 +37,7 @@ export function useProfileMenu() {
 
   // The history is read when the menu opens: the row of the open vault gives forget and copy; the open vault is never deleted from here (the backend refuses it).
   watch(open, (isOpen) => {
-    if (isOpen && !vault.sandbox) void vault.loadRecents().catch(() => {})
+    if (isOpen && !vault.sandbox) void vault.loadRecents().catch((err: unknown) => notify.error(err))
   })
 
   const current = computed(() => vault.recents.find((recent: RecentVault) => recent.path === vault.status?.path))
@@ -49,7 +50,7 @@ export function useProfileMenu() {
     open.value = false
     run()
   }
-  const vaultActions: Record<VaultActionId, ProfileEntry> = {
+  const vaultActions = computed<Record<VaultActionId, ProfileEntry>>(() => ({
     lock: {
       id: 'lock',
       icon: Lock,
@@ -77,10 +78,10 @@ export function useProfileMenu() {
       hint: t('profile.forgetHint'),
       run: () => close(() => current.value && forget.mutate({ path: current.value.path, name: vaultName.value })),
     },
-  }
+  }))
 
   const vaultEntries = computed<ProfileEntry[]>(() =>
-    vault.sandbox ? [] : vaultActionIds(vault.encrypted, current.value).map((id) => vaultActions[id]),
+    vault.sandbox ? [] : vaultActionIds(vault.encrypted, current.value).map((id) => vaultActions.value[id]),
   )
   const appEntries = computed<ProfileEntry[]>(() => [
     {

@@ -1,8 +1,12 @@
 import { type App, expect, test } from '../harness/app'
 
-/** Opens the quick-add form and waits for the amount field. */
+/**
+ * Opens the quick-add form and waits for the amount field. A previous test may have left it open
+ * (the phone's «+» is hidden under an open sheet, and the desktop button is in the sidebar, not the header).
+ */
 async function openForm(app: App) {
-  await app.click('[data-tour="quick-add"]')
+  const open = await app.exists('#tx-amount')
+  if (!open) await app.click('[data-tour="quick-add"]')
   await app.waitFor(`return document.querySelector('#tx-amount') !== null`, 'the amount field')
 }
 

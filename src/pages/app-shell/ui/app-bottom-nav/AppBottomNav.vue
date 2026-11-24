@@ -58,6 +58,7 @@ const PILL = 'flex h-7 w-12 items-center justify-center rounded-full transition-
       :class="BOTTOM_FAB_CLASS"
       :aria-label="t('quickAdd.title')"
       data-bottom-fab
+      data-tour="quick-add"
       @click="emit('quickAdd')"
     >
       <Plus class="size-6" />

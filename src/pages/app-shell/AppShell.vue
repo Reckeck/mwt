@@ -137,7 +137,6 @@ const pageClass = computed(() => {
         :has-tour="tour.hasTour(routeTour)"
         :tour-steps="tour.stepCount(routeTour)"
         :covered="vault.sandbox"
-        @quick-add="quickAddOpen = true"
         @start-tour="tour.start(routeTour)"
         @all-tours="openSettings('help')"
       >

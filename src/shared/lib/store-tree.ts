@@ -15,16 +15,6 @@ export function flattenStoreTree(roots: StoreTreeNode[]): StoreTreeNode[] {
   return roots.flatMap((node) => [node, ...flattenStoreTree(node.children)])
 }
 
-/** Ids from the top-level wallet down to `id`'s parent; empty for a root or an unknown id. */
-export function storeAncestorIds(roots: StoreTreeNode[], id: string): string[] {
-  for (const node of roots) {
-    if (node.store.id === id) return []
-    const below = storeAncestorIds(node.children, id)
-    if (below.length || node.children.some((child) => child.store.id === id)) return [node.store.id, ...below]
-  }
-  return []
-}
-
 /** Every node below `node`, without `node` itself. */
 export function storeDescendants(node: StoreTreeNode): StoreTreeNode[] {
   return flattenStoreTree(node.children)

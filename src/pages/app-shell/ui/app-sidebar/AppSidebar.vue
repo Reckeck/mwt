@@ -85,6 +85,7 @@ const TOUR_TARGETS: Partial<Record<string, string>> = { people: 'open-contacts' 
               <SidebarMenuButton
                 class="mb-1 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
                 :tooltip="`${t('quickAdd.title')} · ${hotkeyLabel('quickAdd')}`"
+                data-tour="quick-add"
                 @click="openQuickAdd()"
               >
                 <Plus />

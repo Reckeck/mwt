@@ -30,7 +30,7 @@ function later(sessionId: string) {
 
 <template>
   <!-- Placed by the shell's banner stack: an offer arriving must not push the page down (rule 17). -->
-  <Alert v-for="offer in shown" :key="offer.session_id" class="pointer-events-auto bg-card shadow-lg">
+  <Alert v-for="offer in shown" :key="offer.session_id" class="pointer-events-auto border bg-card">
     <MonitorSmartphone />
     <AlertTitle>{{ t('sync.offer.title', { name: offer.name }) }}</AlertTitle>
     <AlertDescription>
