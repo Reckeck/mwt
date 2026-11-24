@@ -129,7 +129,7 @@ fn too_heavy(mem_kib: u32, ceiling_kib: u32) -> Error {
 
 /// Compute a fresh random salt + nonce header at the standard cost. Tests
 /// only: outside them a header comes from a [`SealKey`], which carries the
-/// vault's cost. Test support: `trade-core` tests reach it through feature `testing`.
+/// vault's cost. Test support: `mwt-usecases` tests reach it through feature `testing`.
 #[cfg(any(test, feature = "testing"))]
 pub fn random_header(
     payload_fmt: SnapshotFormat,
@@ -249,7 +249,7 @@ pub fn seal_with(key: &SealKey, payload_fmt: SnapshotFormat, plaintext: &[u8]) -
 }
 
 /// A plain file in an older container, as the builds before the format reset
-/// wrote it: for tests of the reader table. Test support: `trade-core` tests
+/// wrote it: for tests of the reader table. Test support: `mwt-usecases` tests
 /// reach it through feature `testing`.
 #[cfg(any(test, feature = "testing"))]
 pub fn seal_plain_in_container(

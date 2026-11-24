@@ -10,10 +10,10 @@ description = "Multi Wallet Tracker crypto: vault container codec, key derivatio
 workspace = true
 
 [features]
-# `ts-rs` derive of `SecurityLevel` / `RaiseStage`; off by default, `trade-core` turns it on.
+# `ts-rs` derive of `SecurityLevel` / `RaiseStage`; off by default, `mwt-usecases` turns it on.
 ts = ["dep:ts-rs"]
 
-# Test support (`random_header`, `seal_plain_in_container`) for the tests of `trade-core`.
+# Test support (`random_header`, `seal_plain_in_container`) for the tests of `mwt-usecases`.
 testing = []
 
 [dependencies]

@@ -69,13 +69,13 @@ impl Default for DashboardWidgetCfg {
     }
 }
 
-/// Serde default shared with the v4 vault reader of `trade-core`.
+/// Serde default shared with the v4 vault reader of `mwt-usecases`.
 #[doc(hidden)]
 pub fn default_fx_interval() -> u32 {
     300
 }
 
-/// Serde default shared with the v4 vault reader of `trade-core`.
+/// Serde default shared with the v4 vault reader of `mwt-usecases`.
 #[doc(hidden)]
 pub fn default_minimize_to_tray() -> bool {
     true

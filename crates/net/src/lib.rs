@@ -3,8 +3,7 @@
 //! price and FX sources (`PricingService`), the exchange clients, the data-source
 //! extraction, market candles, the update manifest and the external-link checks.
 //! It depends on `mwt-base` and `mwt-model` only. Modules are private; this root
-//! re-lists every public item, and `trade-core` keeps the old module paths as
-//! re-exports of the same items.
+//! re-lists every public item, and nothing else is public.
 
 mod chain;
 mod datasource;

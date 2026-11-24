@@ -33,7 +33,7 @@ describe('check-routes', () => {
       const text = readFileSync(file, 'utf8')
       for (const match of text.matchAll(bare)) {
         if (routes.has(match[1]) || /^(planning|analytics)-/.test(match[1])) {
-          errors.push(`${file.slice(ROOT.length)}: route "${match[1]}" as a string, use trade_core::routes`)
+          errors.push(`${file.slice(ROOT.length)}: route "${match[1]}" as a string, use mwt_base::routes`)
         }
       }
     }

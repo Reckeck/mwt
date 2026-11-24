@@ -10,7 +10,7 @@ description = "Multi Wallet Tracker base: Amount, errors, limits, time and calen
 workspace = true
 
 [features]
-# `ts-rs` / `schemars` derives of the DTO types; off by default, `trade-core` turns them on.
+# `ts-rs` / `schemars` derives of the DTO types; off by default, `mwt-usecases` turns them on.
 ts = ["dep:ts-rs"]
 schema = ["dep:schemars"]
 

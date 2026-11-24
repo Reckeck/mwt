@@ -4,8 +4,8 @@
 //! `fixtures/v4.json.wallet` and `fixtures/v4.pack.wallet` are the same document sealed in the
 //! two payload formats, `fixtures/v4.expected.json` is that document as JSON. Their password is
 //! [`V4_PASSWORD`] (`v4-fixture-password`); it and the exchange keys inside are throwaway values,
-//! never real secrets. The generator that made them needs the full fixture document of the
-//! facade, so it lives in `trade-core` (`vault_facade_tests/v4_fixtures_gen.rs`).
+//! never real secrets. The generator that made them needs the full fixture document of
+//! `mwt-usecases`, so it lives there (`vault_facade_tests/v4_fixtures_gen.rs`).
 
 /// The password of both fixtures.
 pub(super) const V4_PASSWORD: &str = "v4-fixture-password";

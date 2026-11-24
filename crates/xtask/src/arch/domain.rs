@@ -1,5 +1,5 @@
-//! The domain crates must not reach back into the facade: no `Session` from the `service` module, no top-level
-//! `crate::service::` path, no `trade_core::` path and no `Books::vault` in their non-test code
+//! The domain crates must not reach back into the use-case layer: no `Session` from the `service` module, no top-level
+//! `crate::service::` path and no `Books::vault` in their non-test code
 //! (core-strangler Z6/D5, core-dismantle D14). `cryptotrack::service` is the crate's own module.
 //! A few uses are exempt until the task named in the exemption moves them; entries may only be removed.
 
@@ -18,7 +18,7 @@ pub const DOMAIN_CRATES: &[&str] = &[
     "cryptotrack",
 ];
 
-/// Crates with a `service` module of their own: there `crate::service` is theirs, not the facade's.
+/// Crates with a `service` module of their own: there `crate::service` is theirs, not the use-case layer's.
 const OWN_SERVICE: &[&str] = &["cryptotrack", "workflow"];
 
 const SESSION_TYPE: &str = "Session";
@@ -26,7 +26,6 @@ const BOOKS_VAULT: &str = "Books::vault";
 const VAULT_CALL: &str = ".vault()";
 const SERVICE: &str = "service";
 const SERVICE_SESSION_PREFIX: &str = "service::";
-const FACADE_PATH: &str = "trade_core::";
 
 /// One use that stays until `until` moves it: the file, and the last segment of the `crate::service` path.
 pub struct Exemption {
@@ -99,19 +98,6 @@ fn word_offsets(text: &str, needle: &str) -> Vec<usize> {
         .collect()
 }
 
-/// The occurrences of `needle` not preceded by an identifier character.
-fn word_start_offsets(text: &str, needle: &str) -> Vec<usize> {
-    text.match_indices(needle)
-        .map(|(offset, _)| offset)
-        .filter(|&offset| {
-            !text[..offset]
-                .chars()
-                .next_back()
-                .is_some_and(scan::is_ident_char)
-        })
-        .collect()
-}
-
 /// The path after the module name at `offset`, as `a::b::Item`; a `{` group is `{..}`.
 fn path_from(text: &str, offset: usize) -> String {
     let mut path = String::new();
@@ -148,9 +134,6 @@ fn forbidden_in(text: &str, own_service: bool) -> Vec<(usize, String, Option<Str
             let what = format!("`{SERVICE_SESSION_PREFIX}{SESSION_TYPE}`");
             found.push((line_of(&cleaned, offset), what, None));
         }
-    }
-    for offset in word_start_offsets(&cleaned, FACADE_PATH) {
-        found.push((line_of(&cleaned, offset), format!("`{FACADE_PATH}`"), None));
     }
     for needle in [BOOKS_VAULT, VAULT_CALL] {
         for (offset, _) in cleaned.match_indices(needle) {
@@ -277,15 +260,6 @@ mod tests {
         );
         let other = "use crate::clock::Session;\nlet session = Session::new();\n";
         assert!(messages(&[source("money/a.rs", other)], NONE).is_empty());
-    }
-
-    #[test]
-    fn the_facade_crate_path_fails_and_a_longer_name_does_not() {
-        let found = messages(&[source("money/a.rs", "use trade_core::Amount;\n")], NONE);
-        assert_eq!(found.len(), 1, "{found:?}");
-        assert!(found[0].contains("crates/money/a.rs:1"));
-        let text = "use my_trade_core::X;\n";
-        assert!(messages(&[source("money/a.rs", text)], NONE).is_empty());
     }
 
     #[test]

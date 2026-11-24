@@ -75,7 +75,7 @@ pub struct CryptoWipePreview {
 
 /// The word the user types to confirm. The window asks for it in the user's
 /// language; what reaches the vault is the one fixed token `WIPE_CONFIRM`
-/// (`trade_core::service::cryptotrack::wipe`), so a stray call with no argument
+/// (`mwt_usecases::service::cryptotrack::wipe`), so a stray call with no argument
 /// cannot wipe anything.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

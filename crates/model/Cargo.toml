@@ -10,7 +10,7 @@ description = "Multi Wallet Tracker model: the vault document and the types it h
 workspace = true
 
 [features]
-# `ts-rs` / `schemars` derives of the model types; off by default, `trade-core` turns them on.
+# `ts-rs` / `schemars` derives of the model types; off by default, `mwt-usecases` turns them on.
 ts = ["dep:ts-rs", "mwt-base/ts"]
 schema = ["dep:schemars", "mwt-base/schema"]
 

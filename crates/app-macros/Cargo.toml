@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "The #[ipc] attribute for crates/app commands (no Tauri, no trade-core)"
+description = "The #[ipc] attribute for crates/app commands (no Tauri, no mwt-usecases)"
 publish = false
 
 [lib]

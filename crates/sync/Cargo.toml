@@ -10,10 +10,10 @@ description = "Multi Wallet Tracker sync: device-to-device merge of one vault, t
 workspace = true
 
 [features]
-# The `ts-rs` derive of `AppliedBatch`; off by default, `trade-core` turns it on.
+# The `ts-rs` derive of `AppliedBatch`; off by default, `mwt-usecases` turns it on.
 ts = ["dep:ts-rs", "mwt-model/ts"]
 
-# Test support for the tests of `trade-core`: `crypto_gate::override_for_tests`, `view::item_key_for_tests`, `repair_restore::{event_names_participant, money_names_record}`.
+# Test support for the tests of `mwt-usecases`: `crypto_gate::override_for_tests`, `view::item_key_for_tests`, `repair_restore::{event_names_participant, money_names_record}`.
 testing = []
 
 [dependencies]

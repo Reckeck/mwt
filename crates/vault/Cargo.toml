@@ -10,7 +10,7 @@ description = "Multi Wallet Tracker vault: the encrypted file codec, the open-va
 workspace = true
 
 [features]
-# Test support for the tests of `trade-core`: `VaultFile::{create, save, save_sealed}` (and the crypto test helpers they use).
+# Test support for the tests of `mwt-usecases`: `VaultFile::{create, save, save_sealed}` (and the crypto test helpers they use).
 testing = ["mwt-crypto/testing"]
 
 [dependencies]
