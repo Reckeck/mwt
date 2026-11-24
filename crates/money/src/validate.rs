@@ -5,12 +5,15 @@
 
 use std::collections::HashSet;
 
+use chrono::{Datelike, NaiveDate};
 use mwt_base::Amount;
+use mwt_base::calendar::{first_of_month, month_key, next_month};
 use mwt_base::error::{Error, Result, WalletRule};
+use mwt_base::limits::MAX_PERIOD_DAYS;
 use mwt_model::CategoryGroup;
 use mwt_model::{
-    AccountRef, AdjustmentTx, DebtEffect, FuturesAction, KindDetails, LegRole, Transaction, TxKind,
-    allowed_kinds,
+    AccountRef, AdjustmentTx, DebtEffect, FuturesAction, KindDetails, LegRole, MonthShare,
+    OpPeriod, PeriodKind, Spread, SpreadMode, Transaction, TxKind, TxMeta, allowed_kinds,
 };
 use mwt_model::{Store, StoreKind};
 use mwt_model::{VaultDoc, iso_to_millis};
@@ -446,5 +449,174 @@ fn check_meta(doc: &VaultDoc, tx: &Transaction, now_ms: i64) -> Result<()> {
     {
         return Err(Error::Missing(format!("contact {contact_id}")));
     }
+    check_period(tx)
+}
+
+fn period_date(raw: &str) -> Result<NaiveDate> {
+    NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+        .ok()
+        .filter(|date| date.format("%Y-%m-%d").to_string() == raw)
+        .ok_or_else(|| invalid("a period date must look like YYYY-MM-DD"))
+}
+
+fn last_of_month(date: NaiveDate) -> NaiveDate {
+    next_month(date).pred_opt().unwrap_or(date)
+}
+
+/// P2: the dates of `period` match the normal form of its kind.
+fn check_period_form(period: &OpPeriod) -> Result<(NaiveDate, NaiveDate)> {
+    let start = period_date(&period.start)?;
+    let end = period_date(&period.end)?;
+    if end < start {
+        return Err(invalid("a period must not end before it starts"));
+    }
+    let same_month = first_of_month(start) == first_of_month(end);
+    let normal = match period.kind {
+        PeriodKind::Month => start.day() == 1 && same_month && end == last_of_month(start),
+        PeriodKind::Half => {
+            same_month
+                && ((start.day() == 1 && end.day() == 15)
+                    || (start.day() == 16 && end == last_of_month(end)))
+        }
+        PeriodKind::Quarter => {
+            let quarter_end = next_month(next_month(start));
+            start.day() == 1 && (start.month() - 1) % 3 == 0 && end == last_of_month(quarter_end)
+        }
+        PeriodKind::Year => {
+            start.ordinal() == 1
+                && end.month() == 12
+                && end.day() == 31
+                && start.year() == end.year()
+        }
+        PeriodKind::Range => (end - start).num_days() < MAX_PERIOD_DAYS,
+    };
+    if normal {
+        Ok((start, end))
+    } else {
+        Err(invalid("the period does not match its kind"))
+    }
+}
+
+/// P4: the first days of the months from `start` to `end`.
+fn months_touched(start: NaiveDate, end: NaiveDate) -> Vec<NaiveDate> {
+    let mut months = Vec::new();
+    let mut month = first_of_month(start);
+    while month <= end {
+        months.push(month);
+        month = next_month(month);
+    }
+    months
+}
+
+/// P6: shares of `amount` over the months of `period` for `even` and `by_days`:
+/// every month rounded down to `places`, the rest to the last month. `manual`
+/// shares come from the user, so there is nothing to derive.
+pub fn derive_shares(
+    amount: Amount,
+    period: &OpPeriod,
+    mode: SpreadMode,
+    places: u32,
+) -> Result<Vec<MonthShare>> {
+    let (start, end) = check_period_form(period)?;
+    let months = months_touched(start, end);
+    let days: Vec<i64> = months
+        .iter()
+        .map(|month| (last_of_month(*month).min(end) - (*month).max(start)).num_days() + 1)
+        .collect();
+    let total_days: i64 = days.iter().sum();
+    let too_large = || invalid("the amount is too large to spread");
+    let count = i64::try_from(months.len()).map_err(|_| too_large())?;
+    let mut shares = Vec::with_capacity(months.len());
+    let mut given = Amount::ZERO;
+    for (index, month) in months.iter().enumerate() {
+        let share = if index + 1 == months.len() {
+            amount.checked_sub(given).ok_or_else(too_large)?
+        } else {
+            let (numerator, denominator) = match mode {
+                SpreadMode::Even => (1, count),
+                SpreadMode::ByDays => (days[index], total_days),
+                SpreadMode::Manual => return Err(invalid("manual shares are not derived")),
+            };
+            let scaled = amount
+                .checked_mul(Amount::new(numerator.into()))
+                .and_then(|value| value.checked_div(Amount::new(denominator.into())))
+                .ok_or_else(too_large)?;
+            Amount::new(
+                scaled
+                    .into_inner()
+                    .round_dp_with_strategy(places, rust_decimal::RoundingStrategy::ToZero),
+            )
+        };
+        given = given.checked_add(share).ok_or_else(too_large)?;
+        shares.push(MonthShare {
+            month: month_key(*month),
+            amount: share,
+        });
+    }
+    Ok(shares)
+}
+
+/// P5, P6: one share per month touched, none negative, summing to `amount`.
+fn check_shares(spread: &Spread, months: &[NaiveDate], amount: Amount) -> Result<()> {
+    let one_each = spread.shares.len() == months.len()
+        && spread
+            .shares
+            .iter()
+            .zip(months)
+            .all(|(share, month)| share.month == month_key(*month));
+    if !one_each {
+        return Err(invalid(
+            "a spread needs one share for each month of the period",
+        ));
+    }
+    let mut sum = Amount::ZERO;
+    for share in &spread.shares {
+        if share.amount.is_negative() {
+            return Err(invalid("a share must not be negative"));
+        }
+        sum = sum
+            .checked_add(share.amount)
+            .ok_or_else(|| invalid("the shares are too large"))?;
+    }
+    if sum != amount {
+        return Err(invalid("the shares do not add up to the amount"));
+    }
     Ok(())
 }
+
+/// P1, P2, P5, P6: the period of an operation and its spread. A period over
+/// several months with no spread passes (Q3): it stays a label.
+pub fn check_period_meta(kind: TxKind, meta: &TxMeta, amount: Option<Amount>) -> Result<()> {
+    let Some(period) = &meta.period else {
+        return match meta.spread {
+            Some(_) => Err(invalid("a spread needs a period")),
+            None => Ok(()),
+        };
+    };
+    if !matches!(kind, TxKind::Topup | TxKind::Payment) {
+        return Err(invalid("only an income or an expense has a period"));
+    }
+    let (start, end) = check_period_form(period)?;
+    let Some(spread) = &meta.spread else {
+        return Ok(());
+    };
+    let months = months_touched(start, end);
+    if months.len() < 2 {
+        return Err(invalid("a spread needs a period over more than one month"));
+    }
+    let amount = amount.ok_or_else(|| invalid("this operation has no amount to spread"))?;
+    check_shares(spread, &months, amount)
+}
+
+fn check_period(tx: &Transaction) -> Result<()> {
+    let amount = match tx {
+        Transaction::Topup(inner) => Some(inner.amount),
+        Transaction::Payment(inner) => Some(inner.amount),
+        _ => None,
+    };
+    check_period_meta(tx.kind(), tx.meta(), amount)
+}
+
+#[cfg(test)]
+#[path = "validate_tests.rs"]
+mod tests;
