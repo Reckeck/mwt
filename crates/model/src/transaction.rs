@@ -117,6 +117,61 @@ impl TxOrigin {
     }
 }
 
+/// The kind of an operation period (spec op-period P1, P2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum PeriodKind {
+    Month,
+    Half,
+    Quarter,
+    Year,
+    Range,
+}
+
+/// What an operation is «for»: a span of days in the user's zone (spec P1).
+/// `start` and `end` are plain dates `YYYY-MM-DD`, both inclusive.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct OpPeriod {
+    pub kind: PeriodKind,
+    pub start: String,
+    pub end: String,
+}
+
+/// How the user got the shares of a spread (spec P5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum SpreadMode {
+    Even,
+    ByDays,
+    Manual,
+}
+
+/// One month's share of a spread operation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct MonthShare {
+    /// Month key `YYYY-MM`.
+    pub month: String,
+    pub amount: Amount,
+}
+
+/// An operation spread over the months of its period. `shares` is always
+/// stored, so a later reading never depends on a changed rounding rule.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct Spread {
+    pub mode: SpreadMode,
+    pub shares: Vec<MonthShare>,
+}
+
 /// Fields every transaction carries, whatever it is.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -145,6 +200,19 @@ pub struct TxMeta {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
     pub keep: bool,
+    /// What the operation is «for» (spec P1); none means the month of the date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period: Option<OpPeriod>,
+    /// Per-month shares of the amount over `period` (spec P5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub spread: Option<Spread>,
+    /// The income whose distribution made this operation: a back-reference
+    /// for integrity checks only (spec S9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub income_ref: Option<String>,
 }
 
 impl TxMeta {
@@ -159,6 +227,9 @@ impl TxMeta {
             origin: TxOrigin::Manual,
             utility_item_id: None,
             keep: false,
+            period: None,
+            spread: None,
+            income_ref: None,
         }
     }
 }
@@ -1410,5 +1481,60 @@ mod tests {
             let back: Transaction = serde_json::from_str(&json).unwrap();
             assert_eq!(back, tx);
         }
+    }
+
+    fn meta_with_period() -> TxMeta {
+        let mut meta = TxMeta::new("rent");
+        meta.id = "tx-1".into();
+        meta.timestamp = "2026-11-05T10:00:00Z".into();
+        meta.period = Some(OpPeriod {
+            kind: PeriodKind::Range,
+            start: "2026-10-16".into(),
+            end: "2026-12-15".into(),
+        });
+        meta.spread = Some(Spread {
+            mode: SpreadMode::Even,
+            shares: vec![
+                MonthShare {
+                    month: "2026-10".into(),
+                    amount: amount("50"),
+                },
+                MonthShare {
+                    month: "2026-11".into(),
+                    amount: amount("50"),
+                },
+            ],
+        });
+        meta.income_ref = Some("income-1".into());
+        meta
+    }
+
+    /// op-period M1: the new fields round-trip through JSON and MessagePack.
+    #[test]
+    fn op_period_meta_round_trips_json_and_msgpack() {
+        for meta in [TxMeta::new("plain"), meta_with_period()] {
+            let json = serde_json::to_string(&meta).unwrap();
+            assert_eq!(serde_json::from_str::<TxMeta>(&json).unwrap(), meta);
+            let packed = rmp_serde::to_vec_named(&meta).unwrap();
+            assert_eq!(rmp_serde::from_slice::<TxMeta>(&packed).unwrap(), meta);
+        }
+    }
+
+    /// op-period M1/M2: an old JSON without the new fields reads as today's value.
+    #[test]
+    fn op_period_old_json_deserialises_without_new_fields() {
+        let old = r#"{"id":"a","timestamp":"2026-01-01T00:00:00Z","comment":"c",
+            "categories":[],"flow_id":null,"contact_id":null,"origin":"manual"}"#;
+        let meta: TxMeta = serde_json::from_str(old).unwrap();
+        assert_eq!(meta.period, None);
+        assert_eq!(meta.spread, None);
+        assert_eq!(meta.income_ref, None);
+    }
+
+    /// op-period S9: `income_ref` is not written when none.
+    #[test]
+    fn op_period_income_ref_skipped_when_none() {
+        let json = serde_json::to_string(&TxMeta::new("x")).unwrap();
+        assert!(!json.contains("income_ref"));
     }
 }

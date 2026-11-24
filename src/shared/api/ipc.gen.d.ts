@@ -3228,7 +3228,12 @@ id: string, delta: Amount,
 /**
  * RFC3339.
  */
-at: string, };
+at: string, 
+/**
+ * The income whose distribution made this entry: a back-reference for
+ * integrity checks only (spec S9).
+ */
+income_ref?: string, };
 
 /**
  * An envelope with what its store can still give it.
@@ -4732,6 +4737,15 @@ forecast_spent: Amount,
 growth: Array<CategoryGrowth>, };
 
 /**
+ * One month's share of a spread operation.
+ */
+type MonthShare = { 
+/**
+ * Month key `YYYY-MM`.
+ */
+month: string, amount: Amount, };
+
+/**
  * Totals of one calendar month in the budget currency.
  */
 type MonthSummary = { 
@@ -5028,6 +5042,12 @@ multiplier: Amount,
 strip: string, };
 
 /**
+ * What an operation is «for»: a span of days in the user's zone (spec P1).
+ * `start` and `end` are plain dates `YYYY-MM-DD`, both inclusive.
+ */
+type OpPeriod = { kind: PeriodKind, start: string, end: string, };
+
+/**
  * What a new wallet already holds. Booked as a top-up in the service
  * category `opening_balance`, so it is neither income nor spending.
  */
@@ -5315,6 +5335,11 @@ closed_pnl: Amount | null, kind: ImportKind,
  * Transfer: Bybit account types, e.g. `FUND` → `UNIFIED`.
  */
 from_account: string | null, to_account: string | null, };
+
+/**
+ * The kind of an operation period (spec op-period P1, P2).
+ */
+type PeriodKind = "month" | "half" | "quarter" | "year" | "range";
 
 type PersonKind = "me" | "contact" | "guest";
 
@@ -6844,6 +6869,17 @@ week_total: Comparison,
  */
 allowance: Amount | null, };
 
+/**
+ * An operation spread over the months of its period. `shares` is always
+ * stored, so a later reading never depends on a changed rounding rule.
+ */
+type Spread = { mode: SpreadMode, shares: Array<MonthShare>, };
+
+/**
+ * How the user got the shares of a spread (spec P5).
+ */
+type SpreadMode = "even" | "by_days" | "manual";
+
 type StepStatus = "ok" | "skipped" | "queued" | "error" | "stopped" | "waiting";
 
 /**
@@ -8041,7 +8077,20 @@ utility_item_id?: string,
  * merged it away, so the dedupe never removes it again. Synced like any
  * other field; only «Allow merging» (or deleting the record) clears it.
  */
-keep?: boolean, };
+keep?: boolean, 
+/**
+ * What the operation is «for» (spec P1); none means the month of the date.
+ */
+period?: OpPeriod, 
+/**
+ * Per-month shares of the amount over `period` (spec P5).
+ */
+spread?: Spread, 
+/**
+ * The income whose distribution made this operation: a back-reference
+ * for integrity checks only (spec S9).
+ */
+income_ref?: string, };
 
 /**
  * How a transaction came to exist.
