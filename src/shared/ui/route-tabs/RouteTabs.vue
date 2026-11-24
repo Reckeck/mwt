@@ -7,6 +7,7 @@ import { ChevronDown } from 'lucide-vue-next'
 import { ActionSheet } from '@/shared/ui/action-menu'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { MENU_ITEM_CLASS } from '@/shared/ui/context-menu'
+import { TAB_CLASS as TAB, TAB_LIST_CLASS } from '@/shared/ui/tabs'
 import { useIsPhone } from '@/shared/lib/phone'
 import { cn } from '@/shared/lib/utils'
 
@@ -53,14 +54,12 @@ watch(
   { immediate: true },
 )
 
-const TAB =
-  'flex h-[1.875rem] shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground'
 </script>
 
 <template>
   <TabsRoot :model-value="current" activation-mode="manual" @update:model-value="(value) => open(String(value))">
-    <TabsList ref="list" class="scrollbar-none inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-[0.625rem] bg-muted p-[3px]">
-      <TabsTrigger v-for="tab in props.tabs" :key="tab.name" :value="tab.name" :class="TAB">
+    <TabsList ref="list" :class="TAB_LIST_CLASS">
+      <TabsTrigger v-for="tab in props.tabs" :key="tab.name" :value="tab.name" :class="TAB" :aria-current="tab.name === current ? 'page' : undefined">
         {{ tab.label }}
       </TabsTrigger>
       <button

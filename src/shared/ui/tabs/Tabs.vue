@@ -8,6 +8,7 @@ import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { MENU_ITEM_CLASS } from '@/shared/ui/context-menu'
 import { cn } from '@/shared/lib/utils'
 
+import { TAB_CLASS as TAB, TAB_LIST_CLASS } from './tab-classes'
 import type { TabsProps } from './tabs.types'
 
 const props = withDefaults(defineProps<TabsProps>(), { more: () => [], moreLabel: '', fill: false })
@@ -22,8 +23,6 @@ const slots = useSlots()
 // Only tabs with their own slot get a pane: a bare strip (content outside) renders none.
 const panes = computed(() => [...props.tabs, ...props.more].filter((tab) => slots[tab.value]))
 
-const TAB =
-  'flex h-[1.875rem] shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground'
 </script>
 
 <template>
@@ -32,13 +31,13 @@ const TAB =
     @update:model-value="(value) => emit('update:modelValue', String(value))"
   >
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <TabsList :class="cn('scrollbar-none inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-[0.625rem] bg-muted p-[3px]', props.fill && 'w-full')">
+      <TabsList :class="cn(TAB_LIST_CLASS, props.fill && 'w-full')">
         <TabsTrigger v-for="tab in props.tabs" :key="tab.value" :value="tab.value" :class="cn(TAB, props.fill && 'flex-1 justify-center max-md:px-2 pointer-coarse:h-10')">
           {{ tab.label }}
         </TabsTrigger>
         <DropdownMenu v-if="props.more.length" align="start">
           <template #trigger>
-            <Button variant="ghost" :class="cn(TAB, 'touch-hit hover:bg-transparent')" :data-state="openMore ? 'active' : 'inactive'" data-tabs-more>
+            <Button variant="ghost" :class="cn(TAB, 'touch-hit hover:bg-transparent')" :data-state="openMore ? 'active' : 'inactive'" :aria-current="openMore ? 'true' : undefined" data-tabs-more>
               {{ openMore?.label ?? props.moreLabel }}
               <ChevronDown class="size-3.5" aria-hidden="true" />
             </Button>

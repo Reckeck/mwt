@@ -8,7 +8,8 @@ import { inject } from "vue"
 import { cn } from '@/shared/lib/utils'
 import { toggleVariants } from '@/shared/ui/toggle'
 
-type ToggleGroupVariants = VariantProps<typeof toggleVariants> & {
+type ToggleGroupVariants = Omit<VariantProps<typeof toggleVariants>, 'variant'> & {
+  variant?: NonNullable<VariantProps<typeof toggleVariants>['variant']> | 'range'
   spacing?: number
 }
 
@@ -19,6 +20,9 @@ const props = defineProps<ToggleGroupItemProps & {
 }>()
 
 const context = inject<ToggleGroupVariants>("toggleGroup")
+
+/** The range switch looks like `segmented` plus the pill classes below. */
+const base = (value: ToggleGroupVariants['variant']) => (value === 'range' ? 'segmented' : value)
 
 const delegatedProps = reactiveOmit(props, "class", "size", "variant")
 const forwardedProps = useForwardProps(delegatedProps)
@@ -34,9 +38,10 @@ const forwardedProps = useForwardProps(delegatedProps)
     v-bind="forwardedProps"
     :class="cn(
       toggleVariants({
-        variant: context?.variant || variant,
+        variant: base(context?.variant || variant),
         size: context?.size || size,
       }),
+      'data-[variant=range]:rounded-full data-[variant=range]:text-xs',
       'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10',
       'data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l',
       props.class)"
