@@ -23,7 +23,7 @@ const slots = useSlots()
 const panes = computed(() => [...props.tabs, ...props.more].filter((tab) => slots[tab.value]))
 
 const TAB =
-  'flex h-[1.875rem] shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm'
+  'flex h-[1.875rem] shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground'
 </script>
 
 <template>

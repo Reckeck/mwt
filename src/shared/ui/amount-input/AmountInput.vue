@@ -150,7 +150,7 @@ const hintText = computed(() => {
   <div
     :class="
       cn(
-        '@container/amount flex h-9 w-full min-w-0 items-center rounded-md border border-input bg-transparent shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50',
+        '@container/amount flex h-9 w-full min-w-0 items-center rounded-md border border-input bg-transparent transition-colors focus-within:ring-1 focus-within:ring-ring has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50',
         props.size === 'lg' && 'h-12',
         cls,
       )

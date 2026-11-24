@@ -39,6 +39,25 @@ the component variant.
 <span :class="signClass(delta)">{{ formatPct(delta, { signed: true }) }}</span>
 ```
 
+### Redesign tokens (part A)
+
+The palette is warm paper and ink; `--primary` is ink (no longer blue). Hex values live in `:root` / `.dark`
+of `src/app/styles.css`; a vitest (`src/app/styles.test.ts`) keeps WCAG AA for text on canvas and surface.
+
+| New name | Utility | Use |
+|---|---|---|
+| `--surface-inverse`, `--inverse-foreground` | `bg-inverse`, `text-inverse-foreground` | toast, inverted surface |
+| `--success-soft`, `--warning-soft`, `--destructive-soft` | `bg-success-soft` ... | tinted chip/row backgrounds |
+| `--scrim` | `bg-scrim` | dialog overlay |
+| `--text-tertiary` | `text-tertiary` | placeholders only (3.5:1). Deviation from the spec: Light is `#7A807B` (spec `#7B817C`) and Dark `#767D78`, nudged so the vitest reaches 3.5:1 on canvas and surface |
+| `--border-strong` | `border-strong` | emphasised borders |
+| `--chart-actual`, `-reference`, `-bank`, `-crypto`, `-property`, `-accent`, `-income`, `-over`, `-grid`, `-band`, `-wash`, `-heat-0..4` | `bg-chart-*` | read by `chart-theme.ts` |
+
+Old to new: `--background` white to canvas `#F3F0E8` / `#111312`; `--card`, `--popover`, `--sidebar` to surface;
+`--muted`, `--secondary`, `--accent` to sunken `#EAE6DB` / `#262A28`; `--primary`, `--ring`, `--sidebar-primary*`
+from blue to ink; `--syntax-active-line`/`--syntax-selection` from blue tint to ink tint; `--chart-1..5`
+stay until the charts move to the `--chart-*` names. Workflow `--port-*`/`--node-*`/`--wire-flow` are unchanged.
+
 ## Text
 
 | Level | Class | Where |
@@ -75,10 +94,18 @@ The Tailwind scale (1 = 4px). Conventions:
 
 ## Radii
 
-`--radius` = 10px. `rounded-md` — fields and buttons (set by the components),
-`rounded-lg` — nested blocks inside a card, `rounded-xl` — `Card` and
-`Dialog`, `rounded-full` — dots and avatars. A nested block is not rounder
-than its parent.
+An explicit scale (8/12/16/24):
+
+| Class | Size | Where |
+|---|---|---|
+| `rounded-sm` | 8 | popovers and menus |
+| `rounded-md` | 12 | fields and buttons (set by the components) |
+| `rounded-lg` | 16 | `Card` and card-like blocks |
+| `rounded-xl` | 24 | `Sheet`, `Drawer`, `Dialog` |
+| `rounded-full` | - | chips, dots and avatars |
+
+A nested block is not rounder than its parent. Surfaces are flat: shared
+components keep `shadow-*` only on popovers and menus.
 
 ## Theme
 
@@ -86,3 +113,9 @@ than its parent.
   `<html>`; `Sonner` gets the theme from `App.vue`.
 - Check the screen in both themes: the dark one is not an "inverted light
   one", the contrast of secondary text is lower there.
+
+## Workflow accents (`--port-*`, `--node-*`)
+
+Kept unchanged and theme independent. Checked against the new canvas in `src/app/styles.test.ts`: every accent
+(except `--port-flow`, a neutral line) reaches at least 1.8:1 against both the Light and the Dark `--background`.
+They are graphical accents (ports, node headers); labels use the text tokens. Note this in the PR.
