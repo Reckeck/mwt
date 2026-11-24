@@ -112,9 +112,6 @@ pub fn plan_distribution(
     }
 }
 
-/// Minor-unit digits the rule resolution rounds to.
-const MINOR_UNITS: u32 = 2;
-
 /// One rule row with the amount it resolved to.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedRow {
@@ -144,6 +141,7 @@ pub fn resolve_distribution(
     actual: Amount,
     expected: Amount,
     card_balance_after: Amount,
+    places: u32,
 ) -> Result<ResolvedDistribution> {
     let differs = actual != expected;
     if differs && rule.on_other_amount == OnOtherAmount::Ask {
@@ -159,14 +157,14 @@ pub fn resolve_distribution(
         .map(|row| match &row.kind {
             DistKind::Sum { amount } if scale => DistributionRow {
                 kind: DistKind::Sum {
-                    amount: (*amount * actual / expected).round(MINOR_UNITS),
+                    amount: (*amount * actual / expected).round(places),
                 },
                 target: row.target.clone(),
             },
             _ => row.clone(),
         })
         .collect();
-    let resolved = resolve_rows(actual, &asked, MINOR_UNITS)?;
+    let resolved = resolve_rows(actual, &asked, places)?;
     if resolved.over.is_some() {
         return Ok(ResolvedDistribution {
             over: resolved.over,

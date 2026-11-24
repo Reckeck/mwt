@@ -2,13 +2,14 @@
 
 use crate::Amount;
 use crate::calendar::Calendar;
+use crate::error::Error;
 use crate::model::store::StoreKind;
 use crate::money::distribution::verify_distribution;
 use crate::money::worth::FlowClass;
 use crate::planning::envelopes::EnvelopeDraft;
 use crate::service::Session;
 use crate::service::test_support::{amount, empty_vault, income_of, store};
-use crate::usecases::household::envelopes::create_envelope;
+use crate::usecases::household::envelopes::{create_envelope, fund_envelope};
 use crate::usecases::money::transactions::add_transaction;
 use crate::usecases::planning::distribution::{
     apply_distribution, remove_distribution, replace_distribution,
@@ -176,19 +177,20 @@ fn a2_over_allocation_is_rejected_and_writes_nothing() {
     assert_eq!(serde_json::to_string(&fixture.vault.doc).unwrap(), before);
 }
 
-/// A2b (Q15): not enough free balance for an envelope row leaves the vault byte-identical.
+/// A2b (Q15): the transfer is booked, then an envelope row finds no free balance: nothing is kept.
 #[test]
 fn a2b_q15_not_enough_free_balance_leaves_the_vault_identical() {
     let mut fixture = fixture();
-    // 110 000 to the deposit leaves 10 000 on the card, the envelopes ask 9 000 + more.
-    let mut rows = rows(&fixture, "110000");
-    rows[2].kind = DistKind::Sum {
-        amount: amount("9000"),
-    };
+    // 98 000 of the 120 000 are earmarked by another envelope: 22 000 free, the transfer takes
+    // 20 000, so the 6 000 envelope row finds only 2 000.
+    let reserve = envelope_on(&mut fixture.vault, &fixture.card.clone(), "Reserve");
+    fund_envelope(&mut fixture.vault, &reserve, amount("98000")).unwrap();
+    let rows = rows(&fixture, "20000");
     let before = serde_json::to_string(&fixture.vault.doc).unwrap();
     let err = apply_distribution(&mut fixture.vault, &fixture.income_id.clone(), &rows);
-    assert!(err.is_err());
+    assert!(matches!(err, Err(Error::InsufficientFunds(_))), "{err:?}");
     assert_eq!(serde_json::to_string(&fixture.vault.doc).unwrap(), before);
+    assert_eq!(transfers(&fixture), 0);
 }
 
 /// A2b (S11): editing 20 000 to 25 000 removes the old transfer, creates the new one, list clean.

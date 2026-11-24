@@ -43,7 +43,7 @@ fn rule(on_other_amount: OnOtherAmount, floor: Option<&str>) -> DistributionRule
 }
 
 fn amounts(rule: &DistributionRule, actual: &str, card: &str) -> Vec<Amount> {
-    resolve_distribution(rule, amount(actual), amount("120000"), amount(card))
+    resolve_distribution(rule, amount(actual), amount("120000"), amount(card), 2)
         .unwrap()
         .rows
         .iter()
@@ -56,7 +56,7 @@ fn amounts(rule: &DistributionRule, actual: &str, card: &str) -> Vec<Amount> {
 fn a3_shrink_remainder() {
     let rule = rule(OnOtherAmount::ShrinkRemainder, None);
     let resolved =
-        resolve_distribution(&rule, amount("118500"), amount("120000"), amount("0")).unwrap();
+        resolve_distribution(&rule, amount("118500"), amount("120000"), amount("0"), 2).unwrap();
     assert_eq!(
         amounts(&rule, "118500", "0"),
         [
@@ -94,7 +94,7 @@ fn a3_shrink_all() {
 fn a3_ask() {
     let rule = rule(OnOtherAmount::Ask, None);
     let resolved =
-        resolve_distribution(&rule, amount("118500"), amount("120000"), amount("0")).unwrap();
+        resolve_distribution(&rule, amount("118500"), amount("120000"), amount("0"), 2).unwrap();
     assert!(resolved.ask);
     assert!(resolved.rows.is_empty());
 }
@@ -104,7 +104,7 @@ fn a3_ask() {
 fn equal_payout_resolves_under_ask() {
     let rule = rule(OnOtherAmount::Ask, None);
     let resolved =
-        resolve_distribution(&rule, amount("120000"), amount("120000"), amount("0")).unwrap();
+        resolve_distribution(&rule, amount("120000"), amount("120000"), amount("0"), 2).unwrap();
     assert!(!resolved.ask);
     assert_eq!(resolved.remainder, amount("90000") + amount("1000"));
 }
@@ -114,7 +114,7 @@ fn equal_payout_resolves_under_ask() {
 fn q11_over() {
     let rule = rule(OnOtherAmount::ShrinkRemainder, None);
     let resolved =
-        resolve_distribution(&rule, amount("20000"), amount("120000"), amount("0")).unwrap();
+        resolve_distribution(&rule, amount("20000"), amount("120000"), amount("0"), 2).unwrap();
     assert_eq!(resolved.over, Some(amount("4000")));
     assert!(resolved.rows.is_empty());
 }
@@ -124,11 +124,17 @@ fn q11_over() {
 fn a7_cut_from_the_bottom() {
     let rule = rule(OnOtherAmount::ShrinkRemainder, Some("1000"));
     let resolved =
-        resolve_distribution(&rule, amount("120000"), amount("120000"), amount("400")).unwrap();
+        resolve_distribution(&rule, amount("120000"), amount("120000"), amount("400"), 2).unwrap();
     assert_eq!(resolved.cut, [(2, amount("600"))]);
     assert_eq!(resolved.rows[2].amount, amount("2400"));
-    let deep =
-        resolve_distribution(&rule, amount("120000"), amount("120000"), amount("-3500")).unwrap();
+    let deep = resolve_distribution(
+        &rule,
+        amount("120000"),
+        amount("120000"),
+        amount("-3500"),
+        2,
+    )
+    .unwrap();
     assert_eq!(deep.cut, [(2, amount("3000")), (1, amount("1500"))]);
     assert_eq!(deep.rows[1].amount, amount("4500"));
 }
@@ -138,7 +144,7 @@ fn a7_cut_from_the_bottom() {
 fn a7_unreachable_floor() {
     let rule = rule(OnOtherAmount::ShrinkRemainder, Some("1000000"));
     let resolved =
-        resolve_distribution(&rule, amount("120000"), amount("120000"), amount("0")).unwrap();
+        resolve_distribution(&rule, amount("120000"), amount("120000"), amount("0"), 2).unwrap();
     assert!(resolved.rows[..3].iter().all(|one| one.amount.is_zero()));
     assert_eq!(resolved.remainder, amount("120000"));
 }

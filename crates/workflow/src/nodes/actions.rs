@@ -16,7 +16,6 @@ use crate::model::{QueuedActions, WaitKind, WorkflowWait};
 use crate::types::WfValue;
 use mwt_base::Amount;
 use mwt_base::calendar::Calendar;
-use mwt_model::AssetRef;
 use mwt_model::NoticeCategory;
 use mwt_model::{
     AccountRef, ConvertSide, ConvertTx, PaymentTx, TopupTx, Transaction, TransferTx, TxMeta,
@@ -28,10 +27,6 @@ use super::{json_account, json_number};
 
 /// A planned moment this close to the run still dates the operation.
 const SAME_RUN_WINDOW_SECS: i64 = 24 * 3600;
-
-fn places_for(asset: &AssetRef) -> u32 {
-    if asset.is_fiat() { 2 } else { 8 }
-}
 
 /// The longest wait a node may ask for: 100 years of hours.
 const MAX_WAIT_HOURS: i64 = 876_000;
@@ -376,7 +371,7 @@ impl Executor<'_> {
         let from = self
             .account_input(node, "from")?
             .ok_or("choose where the money comes from")?;
-        let places = places_for(&asset);
+        let places = asset.minor_places();
         let fixed = self.text_param(node, "mode") == "fixed";
         let targets: Vec<(AccountRef, Amount)> = match self.raw_param(node, "targets") {
             Value::Array(items) => items

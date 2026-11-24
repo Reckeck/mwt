@@ -125,8 +125,7 @@ fn resolve(
     income: &Income,
     rows: &[DistributionRow],
 ) -> Result<Vec<DistributionPart>> {
-    let places = if income.asset.is_fiat() { 2 } else { 8 };
-    let resolved = resolve_rows(income.amount, rows, places)?;
+    let resolved = resolve_rows(income.amount, rows, income.asset.minor_places())?;
     if let Some(over) = resolved.over {
         return Err(Error::InvalidInput(format!(
             "{OVER_ALLOCATED}: the rows ask {over} more than the income"
