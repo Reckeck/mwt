@@ -3,12 +3,12 @@
 //! given a lock and `.bak` files next to it, so the vault the app works on is
 //! a copy in app storage.
 
+use mwt_base::error::{Error, Result};
+use mwt_usecases::ipc_contract::PickedVault;
+use mwt_usecases::vault_io::VaultLocation;
+use mwt_usecases::vault_io::import::import_into;
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
-use trade_core::error::{Error, Result};
-use trade_core::ipc_contract::PickedVault;
-use trade_core::vault_io::VaultLocation;
-use trade_core::vault_io::import::import_into;
 
 use super::{location_of, read_location, vaults_dir};
 

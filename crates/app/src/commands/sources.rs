@@ -3,11 +3,11 @@
 //! Fetching happens without the vault lock (rule 3).
 
 use crate::ipc::events::{AppEvent, PricesUpdated, RatesUpdated, SourcesUpdated};
+use mwt_model::DataSource;
+use mwt_model::NoticeRecord;
 use mwt_planning::datasources as source_reads;
 use mwt_planning::datasources::{DataSourceDraft, DataSourceView};
 use mwt_usecases::datasource::{self, Extracted, SourcePreview};
-use mwt_usecases::model::datasource::DataSource;
-use mwt_usecases::model::notify::NoticeRecord;
 use mwt_usecases::usecases::money::inflation;
 use mwt_usecases::usecases::planning::datasources;
 use tauri::{AppHandle, Manager, State};

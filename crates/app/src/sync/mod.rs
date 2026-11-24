@@ -3,7 +3,7 @@
 //! The hub keeps who this device is in its group (main or client), the open
 //! links to other devices and whose window has focus. Discovery
 //! (`discovery`) finds the devices with the same vault; each connection runs
-//! as a `link` task. The merge itself is in `trade_core::sync`.
+//! as a `link` task. The merge itself is in `mwt_sync`.
 //!
 //! Lock order: the hub's mutex is never held while taking the vault's; a
 //! vault save may call into the hub (the sync tap), never the other way.
@@ -32,13 +32,13 @@ use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, Manager};
-use tokio::sync::mpsc;
-use trade_core::ipc_contract::{
+use mwt_usecases::ipc_contract::{
     SyncNetworkView, SyncPhase, SyncProgress, SyncRole, SyncSessionView, SyncStatus,
 };
-use trade_core::service::SyncTap;
-use trade_core::usecases::sync::peer_sync;
+use mwt_usecases::service::SyncTap;
+use mwt_usecases::usecases::sync::peer_sync;
+use tauri::{AppHandle, Manager};
+use tokio::sync::mpsc;
 
 use crate::commands::AppState;
 use crate::ipc::events::{SyncError, SyncStatusChanged};
@@ -450,11 +450,10 @@ pub fn reconnect(app: &AppHandle) {
 /// "Pair again" for a device that cut this one off: forget what it told
 /// us, remember that the user asked for a pairing, and dial it once with the
 /// request. Needs the device to be in sight (discovery saw it in this run).
-pub(crate) fn pair_again<H: Host>(app: &H, device_id: &str) -> trade_core::Result<()> {
+pub(crate) fn pair_again<H: Host>(app: &H, device_id: &str) -> mwt_base::Result<()> {
     let (generation, addrs) = {
         let mut hub = Host::hub(app);
-        let not_in_sight =
-            || trade_core::Error::NotFound("the other device is not in sight".into());
+        let not_in_sight = || mwt_base::Error::NotFound("the other device is not in sight".into());
         let run = hub.run.as_mut().ok_or_else(not_in_sight)?;
         let instance = run.peer_instances.get(device_id).ok_or_else(not_in_sight)?;
         let addrs = run
@@ -594,7 +593,7 @@ pub(crate) fn emit_status<H: Host>(app: &H) {
     app.emit_event::<SyncStatusChanged>(&status(app));
 }
 
-pub(crate) fn emit_error<H: Host>(app: &H, err: &trade_core::Error, peer: Option<(&str, &str)>) {
+pub(crate) fn emit_error<H: Host>(app: &H, err: &mwt_base::Error, peer: Option<(&str, &str)>) {
     emit_error_with(app, err, peer, None);
 }
 
@@ -602,7 +601,7 @@ pub(crate) fn emit_error<H: Host>(app: &H, err: &trade_core::Error, peer: Option
 /// incompatible versions (`(peer, own)`; the peer's is empty for an old build).
 pub(crate) fn emit_error_with<H: Host>(
     app: &H,
-    err: &trade_core::Error,
+    err: &mwt_base::Error,
     peer: Option<(&str, &str)>,
     versions: Option<(&str, &str)>,
 ) {
@@ -625,7 +624,7 @@ pub(crate) fn emit_error_with<H: Host>(
     if repeated {
         return;
     }
-    app.emit_event::<SyncError>(&trade_core::ipc_contract::SyncErrorEvent {
+    app.emit_event::<SyncError>(&mwt_usecases::ipc_contract::SyncErrorEvent {
         code,
         message: err.to_string(),
         peer_name: peer.map(|(_, name)| name.to_string()),
@@ -635,7 +634,7 @@ pub(crate) fn emit_error_with<H: Host>(
 }
 
 /// The name other devices see: the chosen one, else the host name.
-pub fn device_name(settings: &trade_core::appconfig::AppSettings) -> String {
+pub fn device_name(settings: &mwt_usecases::appconfig::AppSettings) -> String {
     settings
         .device_name
         .clone()

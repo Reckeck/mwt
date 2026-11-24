@@ -12,17 +12,17 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+use mwt_base::error::{Error, PeerSyncFailure, Result};
+use mwt_sync::stamp::now_ms;
+use mwt_sync::transfer::{
+    CODE_ATTEMPTS, Offer, RECEIVE_WINDOW_SECS, TRANSFER_PROTOCOL, is_code, safe_file_name, sha256,
+};
+use mwt_usecases::ipc_contract::{
+    TransferNearby, TransferPhase, TransferReceiveView, TransferSendInput, TransferSendView,
+};
 use tauri::{AppHandle, Manager};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use trade_core::error::{Error, PeerSyncFailure, Result};
-use trade_core::ipc_contract::{
-    TransferNearby, TransferPhase, TransferReceiveView, TransferSendInput, TransferSendView,
-};
-use trade_core::sync::stamp::now_ms;
-use trade_core::sync::transfer::{
-    CODE_ATTEMPTS, Offer, RECEIVE_WINDOW_SECS, TRANSFER_PROTOCOL, is_code, safe_file_name, sha256,
-};
 
 use super::transfer::{Incoming, Me, Outgoing, fingerprint_of, receive, send};
 use crate::commands::AppState;
@@ -172,7 +172,7 @@ pub async fn receive_start(app: &AppHandle) -> Result<TransferReceiveView> {
     let listener = listen().await?;
     let port = listener.local_addr()?.port();
     let daemon = ServiceDaemon::new().map_err(network)?;
-    let instance = trade_core::sync::session::hex(&rand::random::<[u8; 6]>());
+    let instance = mwt_sync::session::hex(&rand::random::<[u8; 6]>());
     let fingerprint = fingerprint_of(&key.public_hex());
     let props = [
         ("n", me.device_name.as_str()),
@@ -334,7 +334,7 @@ async fn serve(
     generation: u64,
     stream: TcpStream,
     addr: SocketAddr,
-    key: &trade_core::sync::session::DeviceKey,
+    key: &mwt_sync::session::DeviceKey,
     me: &Me,
 ) {
     let (decide, mut decisions) = mpsc::unbounded_channel();
@@ -440,18 +440,18 @@ fn save(app: &AppHandle, received: super::transfer::Received) -> Result<PathBuf>
         path = first.with_file_name(format!("{stem} ({index}).wallet"));
         index += 1;
     }
-    trade_core::vault_io::local::atomic_write(&path, &received.bytes)?;
+    mwt_usecases::vault_io::local::atomic_write(&path, &received.bytes)?;
     crate::commands::vault_recents::add_recent(app, &path.to_string_lossy());
     // The new device syncs with the one it came from.
     let dir = crate::commands::app_settings::config_dir(app);
-    let mut settings = trade_core::appconfig::load_settings(&dir);
+    let mut settings = mwt_usecases::appconfig::load_settings(&dir);
     if !settings.sync.enabled {
         settings.sync.enabled = true;
         crate::commands::app_settings::save(&dir, &settings).ok();
     }
     // Written down, not held in memory: the process may be killed before the
     // first unlock (Android).
-    let mut settings = trade_core::appconfig::load_settings(&dir);
+    let mut settings = mwt_usecases::appconfig::load_settings(&dir);
     super::pending::remember(
         &mut settings,
         &path,
@@ -474,7 +474,7 @@ pub fn trust_sender(app: &AppHandle) {
     let Some(vault) = guard.as_mut() else {
         return;
     };
-    let mut settings = trade_core::appconfig::load_settings(&dir);
+    let mut settings = mwt_usecases::appconfig::load_settings(&dir);
     let waiting = settings.pending_trusts.len();
     let mine = super::pending::take(&mut settings, &vault.path, now_ms());
     for pending in &mine {

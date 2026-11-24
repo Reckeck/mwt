@@ -1,7 +1,7 @@
 //! The open vault's writer: changes are batched and written in one go.
 //!
 //! A mutation only marks the vault dirty (`Session::persist` with a
-//! hook installed, see `trade_core::service::saving`). This thread waits for
+//! hook installed, see `mwt_usecases::service::saving`). This thread waits for
 //! a quiet moment — [`IDLE`] after the last change, at most [`CAP`] after the
 //! first — then snapshots the document under the vault lock and seals and
 //! writes it outside, so a burst of edits costs one write and no command waits
@@ -9,17 +9,17 @@
 //! hidden) write at once through [`flush_now`].
 
 use crate::ipc::events::{AppEvent, VaultSaveFailed, VaultSaved};
+use mwt_usecases::ipc_contract::events::VaultSaveFailedPayload;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use trade_core::ipc_contract::events::VaultSaveFailedPayload;
 
+use mwt_usecases::service::Session;
+use mwt_usecases::{Error, Result};
+use mwt_vault::kernel::session::SaveHook;
 use tauri::{AppHandle, Manager};
-use trade_core::kernel::session::SaveHook;
-use trade_core::service::Session;
-use trade_core::{Error, Result};
 
 use crate::commands::AppState;
 

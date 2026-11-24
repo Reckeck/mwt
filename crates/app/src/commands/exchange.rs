@@ -11,6 +11,8 @@ use mwt_base::calendar::now_secs;
 use mwt_base::error::Error;
 use mwt_cryptotrack::exchange_sync::ImportedTransactions;
 use mwt_cryptotrack::{exchange_import as import_reads, exchange_sync as sync_reads};
+use mwt_model::{ImportRun, ImportSource, PendingImport};
+use mwt_model::{ImportSettings, TerminalState};
 use mwt_usecases::exchange::bybit::KeyCheck;
 use mwt_usecases::exchange::staging::PendingImportExt;
 use mwt_usecases::exchange::{BybitClient, Category};
@@ -24,8 +26,6 @@ use mwt_usecases::ipc_contract::{
     SetExchangeTargetsInput, SetImportIntervalInput, SetImportSettingsInput, TxFieldHint,
     UpdateTerminalStateInput,
 };
-use mwt_usecases::model::store::{ImportSettings, TerminalState};
-use mwt_usecases::model::vault::{ImportRun, ImportSource, PendingImport};
 use mwt_usecases::txinfo::{TxInfo, TxInfoService};
 use mwt_usecases::usecases::cryptotrack::{exchange_import, exchange_sync};
 use mwt_usecases::vault_io::device_secrets::DeviceKey;
@@ -651,7 +651,7 @@ mod tests {
     fn info_with_amounts() -> TxInfo {
         TxInfo {
             tx_hash: "abc".into(),
-            network: Some(mwt_usecases::model::chain::Chain::Bitcoin),
+            network: Some(mwt_model::Chain::Bitcoin),
             amount_in: Some("1.0".into()),
             asset_in: Some("BTC".into()),
             amount_out: Some("65000".into()),
@@ -693,10 +693,7 @@ mod tests {
     fn offline_classification_produces_no_field_hints() {
         let info =
             TxInfo::from_hash("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
-        assert_eq!(
-            info.network,
-            Some(mwt_usecases::model::chain::Chain::Bitcoin)
-        );
+        assert_eq!(info.network, Some(mwt_model::Chain::Bitcoin));
         assert!(hints_from(&info).is_empty());
     }
 }

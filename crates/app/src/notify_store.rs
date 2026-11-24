@@ -13,8 +13,8 @@ use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use tauri::{AppHandle, Manager};
 
-use trade_core::model::notify::NoticeRecord;
-use trade_core::reports::notify_snapshot::{AlertBase, NotificationSnapshot};
+use mwt_model::NoticeRecord;
+use mwt_reports::notify_snapshot::{AlertBase, NotificationSnapshot};
 
 /// Where the key lived while the app was TradeApp; moved on first use.
 #[cfg(desktop)]
@@ -184,7 +184,7 @@ pub fn save(app: &AppHandle, memory: &mut NotifyMemory) {
     }
     let mut bytes = nonce.to_vec();
     bytes.extend_from_slice(&sealed);
-    let _ = trade_core::vault_io::local::atomic_write(&path, &bytes);
+    let _ = mwt_usecases::vault_io::local::atomic_write(&path, &bytes);
 }
 
 #[cfg(test)]

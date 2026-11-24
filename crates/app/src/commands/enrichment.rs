@@ -5,8 +5,8 @@ use crate::ipc::events::{AppEvent, EnrichmentReady};
 use mwt_usecases::ipc_contract::events::EnrichmentReadyPayload;
 use tauri::{AppHandle, Manager, State};
 
+use mwt_model::EnrichmentRecord;
 use mwt_money::enrichment as enrichment_reads;
-use mwt_usecases::model::enrichment::EnrichmentRecord;
 use mwt_usecases::txinfo::TxInfoService;
 use mwt_usecases::usecases::money::enrichment as enrichment_cases;
 

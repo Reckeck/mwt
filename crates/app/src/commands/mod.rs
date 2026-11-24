@@ -40,7 +40,7 @@ use std::sync::atomic::AtomicBool;
 
 use mwt_base::error::Error;
 use mwt_cryptotrack::tokens::known;
-use mwt_usecases::pricing::PricingService;
+use mwt_net::PricingService;
 use mwt_usecases::service::Session;
 use tauri::State;
 

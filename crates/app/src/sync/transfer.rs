@@ -1,6 +1,6 @@
 //! One vault transfer over one TCP connection, from the Noise handshake to
 //! the last byte (docs/sync.md, "Vault transfer"). The rules and the
-//! crypto are in `trade_core::sync::transfer`; the app side (discovery, the
+//! crypto are in `mwt_sync::transfer`; the app side (discovery, the
 //! screens, saving the file) is in `handover`.
 //!
 //! Both sessions take the user's answers through channels and report what
@@ -9,15 +9,15 @@
 
 use std::time::Duration;
 
-use tokio::net::TcpStream;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::sync::mpsc;
-use trade_core::error::{Error, PeerSyncFailure, Result};
-use trade_core::sync::session::{Channel, DeviceKey, Handshake};
-use trade_core::sync::transfer::{
+use mwt_base::error::{Error, PeerSyncFailure, Result};
+use mwt_sync::session::{Channel, DeviceKey, Handshake};
+use mwt_sync::transfer::{
     Assembler, CODE_ATTEMPTS, CodeAttempt, Offer, TransferMessage, chunks, confirmation, decode,
     encode, new_code, verify_confirmation,
 };
+use tokio::net::TcpStream;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::sync::mpsc;
 
 use super::link::{read_frame, write_frame};
 
@@ -316,6 +316,6 @@ pub(crate) async fn send(
 /// What a receiving device announces of its key: the first 8 bytes of its
 /// SHA-256, hex.
 pub(crate) fn fingerprint_of(public_hex: &str) -> String {
-    let digest = trade_core::sync::transfer::sha256(public_hex.as_bytes());
-    trade_core::sync::session::hex(&digest[..8])
+    let digest = mwt_sync::transfer::sha256(public_hex.as_bytes());
+    mwt_sync::session::hex(&digest[..8])
 }

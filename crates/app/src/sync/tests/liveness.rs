@@ -7,7 +7,7 @@ use super::*;
 /// A trusted peer driven by hand: connected and through the hellos.
 struct RawPeer {
     reader: tokio::net::tcp::OwnedReadHalf,
-    channel: trade_core::sync::session::Channel,
+    channel: mwt_sync::session::Channel,
 }
 
 async fn raw_peer(main: &TestHost) -> RawPeer {
@@ -38,7 +38,7 @@ async fn raw_peer(main: &TestHost) -> RawPeer {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_silent_peer_in_the_exchange_is_ended_with_a_timeout_bye() {
-    use trade_core::sync::protocol::{Message, decode};
+    use mwt_sync::protocol::{Message, decode};
 
     let dir = tempfile::tempdir().unwrap();
     let (left, _right) = same_vault(dir.path());

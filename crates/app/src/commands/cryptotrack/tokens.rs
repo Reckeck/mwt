@@ -6,10 +6,10 @@
 use tauri::State;
 
 use mwt_cryptotrack::tokens::TokenStatus;
+use mwt_model::TokenId;
 use mwt_usecases::ipc_contract::cryptotrack::tokens::{
     SetTokenBasisInput, TokenRefInput, TokenView,
 };
-use mwt_usecases::model::cryptotrack::TokenId;
 
 use crate::commands::AppState;
 use crate::commands::{with_vault, with_vault_mut};

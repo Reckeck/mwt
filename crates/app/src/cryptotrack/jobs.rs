@@ -33,40 +33,38 @@
 //!   node, their Blockscout instance and its optional key (decision R8, spec
 //!   E17). Nothing assumes a key exists, and the node never sees the key.
 //!
-//! [`crypto_tracking_allowed`]: trade_core::appconfig::AppSettings::crypto_tracking_allowed
+//! [`crypto_tracking_allowed`]: mwt_usecases::appconfig::AppSettings::crypto_tracking_allowed
 
 use crate::ipc::events::{AppEvent, CryptoUpdated};
+use mwt_usecases::ipc_contract::events::CryptoUpdatedPayload;
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use trade_core::ipc_contract::events::CryptoUpdatedPayload;
 
 use chrono::NaiveDate;
-use tauri::{AppHandle, Manager};
-use trade_core::chain::{RpcClient, RpcConfig};
-use trade_core::cryptotrack::prices;
-use trade_core::cryptotrack::protocols::{
-    PositionReading, ProtocolRequest, ProtocolReview, Registry,
-};
-use trade_core::cryptotrack::service::network::NetworkRequest;
-use trade_core::cryptotrack::sources::evm::{
+use mwt_base::error::{Error, Result};
+use mwt_cryptotrack::prices;
+use mwt_cryptotrack::protocols::{PositionReading, ProtocolRequest, ProtocolReview, Registry};
+use mwt_cryptotrack::service::network::NetworkRequest;
+use mwt_cryptotrack::sources::evm::{
     BalanceRequest, Cursor, EvmSource, HistoryRequest, RawAsset, SourceBatch, Stream,
 };
-use trade_core::cryptotrack::tokens::known;
-use trade_core::error::{Error, Result};
-use trade_core::ipc_contract::cryptotrack::sync::{
+use mwt_cryptotrack::tokens::known;
+use mwt_model::Chain;
+use mwt_model::now_iso;
+use mwt_model::{CryptoAsset, CryptoPricePoint, CryptoTx};
+use mwt_net::PricingService;
+use mwt_sync::stamp::now_ms;
+use mwt_usecases::chain::{RpcClient, RpcConfig};
+use mwt_usecases::ipc_contract::cryptotrack::sync::{
     CryptoPages, CryptoSyncAccountStatus, CryptoSyncState, CryptoSyncStatus, CryptoSyncTarget,
 };
-use trade_core::kernel::events::EventBus;
-use trade_core::model::chain::Chain;
-use trade_core::model::cryptotrack::{CryptoAsset, CryptoPricePoint, CryptoTx};
-use trade_core::model::vault::now_iso;
-use trade_core::pricing::PricingService;
-use trade_core::service::{RpcChain, Session};
-use trade_core::sync::stamp::now_ms;
-use trade_core::vault_io::device_secrets::BlockscoutKey;
+use mwt_usecases::service::{RpcChain, Session};
+use mwt_usecases::vault_io::device_secrets::BlockscoutKey;
+use mwt_vault::kernel::events::EventBus;
+use tauri::{AppHandle, Manager};
 
 use crate::commands::{AppState, lock_vault};
 use crate::state::on_vault_locked;
@@ -437,7 +435,7 @@ pub async fn run_pass<H: Host, R: Reader>(
     let Ok((vault_id, targets)) = host.with_vault(|vault| {
         Ok((
             vault.doc.id.clone(),
-            trade_core::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc),
+            mwt_usecases::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc),
         ))
     }) else {
         report.cancelled = true;
@@ -585,7 +583,7 @@ async fn read_account<H: Host, R: Reader>(
             if vault.doc.id != vault_id {
                 return Err(Error::RequiresUnlock);
             }
-            trade_core::usecases::cryptotrack::apply::crypto_apply_pages(
+            mwt_usecases::usecases::cryptotrack::apply::crypto_apply_pages(
                 vault,
                 &CryptoPages {
                     account_id: &target.account_id,
@@ -651,14 +649,14 @@ async fn read_positions<H: Host, R: Reader>(
         if vault.doc.id != vault_id {
             return Err(Error::RequiresUnlock);
         }
-        let applied = trade_core::usecases::cryptotrack::positions::crypto_apply_positions(
+        let applied = mwt_usecases::usecases::cryptotrack::positions::crypto_apply_positions(
             vault,
             &target.account_id,
             &read.readings,
             &read.events,
             &read.reviewed,
         )?;
-        trade_core::usecases::cryptotrack::apply::crypto_remember_protocols(
+        mwt_usecases::usecases::cryptotrack::apply::crypto_remember_protocols(
             vault,
             &target.account_id,
             &read.memory,
@@ -720,7 +718,7 @@ async fn fill_prices<H: Host, R: Reader>(
             if vault.doc.id != vault_id {
                 return Err(Error::RequiresUnlock);
             }
-            trade_core::usecases::cryptotrack::apply::crypto_apply_prices(vault, &fetched)
+            mwt_usecases::usecases::cryptotrack::apply::crypto_apply_prices(vault, &fetched)
         })?;
         if stored > 0 {
             host.updated(&target.account_id);
@@ -794,7 +792,7 @@ impl EvmReader {
         AppHost(self.app.clone())
             .with_vault(|vault| {
                 Ok(
-                    trade_core::cryptotrack::service::network::crypto_network_for_request(
+                    mwt_cryptotrack::service::network::crypto_network_for_request(
                         &vault.books(),
                         chain,
                     ),
@@ -927,7 +925,7 @@ async fn read_protocols(
 /// protocol's other positions kept — a reading of one token id says nothing
 /// about the next.
 async fn read_one_protocol(
-    adapter: &dyn trade_core::cryptotrack::protocols::ProtocolAdapter,
+    adapter: &dyn mwt_cryptotrack::protocols::ProtocolAdapter,
     request: ProtocolRequest<'_>,
 ) -> Result<ProtocolsRead> {
     let mut out = ProtocolsRead::default();
@@ -963,7 +961,7 @@ async fn read_one_protocol(
             protocol: adapter.protocol().to_string(),
             chain: request.chain,
             kept,
-            read_at: trade_core::model::vault::now_iso(),
+            read_at: mwt_model::now_iso(),
         });
     } else {
         // The scan could not see all of the history: what it found is read
@@ -1065,7 +1063,7 @@ pub fn status(app: &AppHandle) -> Result<CryptoSyncStatus> {
     let host = AppHost(app.clone());
     let ids = host.with_vault(|vault| {
         Ok(
-            trade_core::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)
+            mwt_usecases::usecases::cryptotrack::apply::crypto_sync_targets(&vault.doc)
                 .into_iter()
                 .map(|target| target.account_id)
                 .collect::<Vec<_>>(),
@@ -1083,18 +1081,18 @@ pub fn status(app: &AppHandle) -> Result<CryptoSyncStatus> {
 mod tests {
     use std::collections::HashMap;
 
+    use mwt_vault::kernel::events::{LockReason, VaultLocked};
     use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
-    use trade_core::kernel::events::{LockReason, VaultLocked};
 
-    use trade_core::Amount;
-    use trade_core::cryptotrack::protocols::{
+    use mwt_base::Amount;
+    use mwt_cryptotrack::protocols::{
         AdapterFuture, Discovery, FeeReading, PositionKey, PositionKind, PositionStatus,
         ProtocolAdapter, ProtocolReview,
     };
-    use trade_core::cryptotrack::sources::evm::{RawEvent, RawKind, Uint256};
-    use trade_core::model::chain::Chain;
-    use trade_core::model::cryptotrack::{CryptoAccount, CryptoAsset, CryptoDirection, CryptoLeg};
+    use mwt_cryptotrack::sources::evm::{RawEvent, RawKind, Uint256};
+    use mwt_model::Chain;
+    use mwt_model::{CryptoAccount, CryptoAsset, CryptoDirection, CryptoLeg};
 
     use super::*;
 
@@ -1778,7 +1776,8 @@ mod tests {
         let host = TestHost::new(vault_with(dir.path(), "a.wallet", &[("acc-a", ME)]), true);
         host.with_vault(|vault| {
             let kept = quote(&[(eth(), NaiveDate::from_ymd_opt(2026, 1, 5).unwrap())])?;
-            trade_core::usecases::cryptotrack::apply::crypto_apply_prices(vault, &kept).map(|_| ())
+            mwt_usecases::usecases::cryptotrack::apply::crypto_apply_prices(vault, &kept)
+                .map(|_| ())
         })
         .unwrap();
         let stub = Stub::new(&host.vault, |address, _| one_page(address, 1))
@@ -2151,7 +2150,7 @@ mod tests {
         run_pass(host, &stub, &Tracker::new(), true).await;
     }
 
-    fn stored_supply(host: &TestHost) -> Option<trade_core::model::cryptotrack::CryptoPosition> {
+    fn stored_supply(host: &TestHost) -> Option<mwt_model::CryptoPosition> {
         host.with_vault(|vault| Ok(vault.doc.crypto_positions.first().cloned()))
             .unwrap()
     }

@@ -2,6 +2,11 @@ use tauri::{AppHandle, State};
 
 use mwt_base::Amount;
 use mwt_base::calendar::now_secs;
+use mwt_model::AssetClass;
+use mwt_model::AssetRef;
+use mwt_model::ManualPrice;
+use mwt_model::StoreId;
+use mwt_model::Valuation;
 use mwt_money::asset_holdings::AssetHoldings;
 use mwt_money::investments::Investments;
 use mwt_money::portfolio::{HistoryPoint, PortfolioSummary, RealizedPnl};
@@ -12,11 +17,6 @@ use mwt_money::{asset_holdings, investments, portfolio, valuation as valuation_r
 use mwt_planning::allocation as allocation_reads;
 use mwt_planning::allocation::{AssetClassTarget, AssetClassesView, TopupAdvice};
 use mwt_usecases::ipc_contract::SetManualPriceInput;
-use mwt_usecases::model::ids::StoreId;
-use mwt_usecases::model::planning::AssetClass;
-use mwt_usecases::model::store::AssetRef;
-use mwt_usecases::model::vault::ManualPrice;
-use mwt_usecases::model::vault::Valuation;
 use mwt_usecases::usecases::household::store_months;
 use mwt_usecases::usecases::money::{capital, valuation};
 use mwt_usecases::usecases::planning::allocation;

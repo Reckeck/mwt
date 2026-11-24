@@ -2,8 +2,8 @@
 //! side's vault proof, the dialer's nonce committed before the listener's,
 //! and how a protocol 4 build is refused both ways.
 
-use trade_core::sync::protocol::{Hello, Message, PROTOCOL_VERSION};
-use trade_core::sync::session::{commit_to, new_nonce};
+use mwt_sync::protocol::{Hello, Message, PROTOCOL_VERSION};
+use mwt_sync::session::{commit_to, new_nonce};
 
 use super::*;
 
@@ -31,12 +31,12 @@ async fn rest(raw: &mut RawLink) -> Vec<Message> {
 fn hello_v4(proof: Vec<u8>) -> Vec<u8> {
     let first = Hello::first(
         4,
-        trade_core::VAULT_FORMAT_VERSION,
+        mwt_model::VAULT_FORMAT_VERSION,
         proof,
         "0.1.0-30".into(),
         commit_to(&new_nonce()),
     );
-    trade_core::sync::protocol::encode(&Message::Hello(first)).unwrap()
+    mwt_sync::protocol::encode(&Message::Hello(first)).unwrap()
 }
 
 fn field(payload: &Value, name: &str) -> String {
@@ -68,7 +68,7 @@ async fn a_device_without_the_vault_learns_no_name() {
     let mut raw = RawLink::dial(addr, &DeviceKey::generate().unwrap()).await;
     raw.send(&Message::Hello(Hello::first(
         PROTOCOL_VERSION,
-        trade_core::VAULT_FORMAT_VERSION,
+        mwt_model::VAULT_FORMAT_VERSION,
         raw.channel.proof("some-other-vault"),
         String::new(),
         commit_to(&new_nonce()),
@@ -105,7 +105,7 @@ async fn a_wrong_nonce_ends_the_session() {
     let mut raw = RawLink::dial(addr, &raw_key).await;
     raw.send(&Message::Hello(Hello::first(
         PROTOCOL_VERSION,
-        trade_core::VAULT_FORMAT_VERSION,
+        mwt_model::VAULT_FORMAT_VERSION,
         raw.channel.proof(&vault_id),
         String::new(),
         commit_to(&new_nonce()),
@@ -120,7 +120,7 @@ async fn a_wrong_nonce_ends_the_session() {
         panic!("no identity");
     };
     assert_eq!(theirs.device_name, "Laptop");
-    assert_eq!(theirs.nonce.len(), trade_core::sync::session::NONCE_LEN);
+    assert_eq!(theirs.nonce.len(), mwt_sync::session::NONCE_LEN);
     // A nonce other than the committed one, chosen after seeing theirs.
     raw.send(&Message::Identity(raw_identity("raw-device", "Raw")))
         .await;

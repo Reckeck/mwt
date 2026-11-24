@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Multi Wallet Tracker (MWT) — encrypted finance & crypto portfolio (Tauri shell over trade-core)"
+description = "Multi Wallet Tracker (MWT) — encrypted finance & crypto portfolio (Tauri shell over the mwt crates)"
 
 [lib]
 name = "trade_app_lib"
@@ -26,9 +26,11 @@ tauri-plugin-opener = "2"
 base64 = "0.23"
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-fs = { workspace = true }
-trade-core = { path = "../core" }
 mwt-usecases = { path = "../usecases" }
 mwt-base = { path = "../base" }
+mwt-net = { path = "../net" }
+mwt-vault = { path = "../vault" }
+mwt-model = { path = "../model" }
 mwt-crypto = { path = "../crypto" }
 mwt-cryptotrack = { path = "../cryptotrack" }
 mwt-household = { path = "../household" }
@@ -84,8 +86,8 @@ tauri-plugin-updater = "2"
 
 [features]
 # Off by default: TypeScript printing (ts-rs) and the vault JSON schema (schemars).
-ts = ["dep:ts-rs", "trade-core/ts", "mwt-usecases/ts"]
-schema = ["trade-core/schema", "mwt-usecases/schema"]
+ts = ["dep:ts-rs", "mwt-usecases/ts"]
+schema = ["mwt-usecases/schema"]
 
 [dev-dependencies]
 # The feature-gated tests (client_gen, events, vault_schema) keep running in

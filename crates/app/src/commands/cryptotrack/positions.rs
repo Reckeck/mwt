@@ -11,8 +11,8 @@
 
 use tauri::State;
 
+use mwt_model::now_iso;
 use mwt_usecases::ipc_contract::cryptotrack::positions::PositionView;
-use mwt_usecases::model::vault::now_iso;
 
 use crate::commands::AppState;
 use crate::commands::with_vault;

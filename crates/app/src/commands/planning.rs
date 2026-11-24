@@ -11,6 +11,13 @@ use mwt_household::utilities as utility_reads;
 use mwt_household::utilities::{
     PayUtilityBillInput, PropertySummary, UtilityBill, UtilityPaymentDraft, UtilityTrend,
 };
+use mwt_model::Store;
+use mwt_model::StoreId;
+use mwt_model::Transaction;
+use mwt_model::{
+    Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, PriceAlert, Reminder,
+    UtilityItem,
+};
 use mwt_money::interest as interest_reads;
 use mwt_money::interest::{DepositReport, InterestTaxReport};
 use mwt_planning::agenda::UpcomingItem;
@@ -29,13 +36,6 @@ use mwt_usecases::ipc_contract::{
     UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput,
     UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
-use mwt_usecases::model::ids::StoreId;
-use mwt_usecases::model::planning::{
-    Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, PriceAlert, Reminder,
-    UtilityItem,
-};
-use mwt_usecases::model::store::Store;
-use mwt_usecases::model::transaction::Transaction;
 use mwt_usecases::service::Session;
 use mwt_usecases::usecases::household::{loyalty, utilities};
 use mwt_usecases::usecases::money::interest;
@@ -561,7 +561,7 @@ pub async fn list_automation_journal(
 pub async fn set_deposit_terms(
     input: SetDepositTermsInput,
     state: State<'_, AppState>,
-) -> Result<mwt_usecases::model::store::Store, IpcError> {
+) -> Result<mwt_model::Store, IpcError> {
     with_vault_mut(&state, |vault| {
         interest::set_deposit_terms(vault, &StoreId::from(input.store_id.as_str()), input.terms)
     })

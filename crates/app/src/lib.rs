@@ -1,5 +1,5 @@
 //! Tauri entrypoint for the Multi Wallet Tracker shell. All business logic and
-//! data lives in `trade-core`; this crate only wires IPC + windows.
+//! data lives in the `mwt-*` crates; this crate only wires IPC + windows.
 
 mod app_id;
 mod autolock;

@@ -9,40 +9,40 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 
+use mwt_base::error::{Error, PeerSyncFailure, Result};
+use mwt_sync::RecordState;
+use mwt_sync::journal::SyncJournalOutcome;
+use mwt_sync::manifest::Manifest;
+use mwt_sync::plan::SyncSummaryExt;
+use mwt_sync::protocol::{
+    Hello, Identity, MANIFEST_PER_MESSAGE, Message, RECORDS_PER_MESSAGE, decode, encode,
+};
+use mwt_sync::registry::UNION_DAYS;
+use mwt_sync::session::{
+    Channel, ClockWatch, Handshake, Skew, check_commit, commit_to, new_nonce, skew_of,
+};
+use mwt_sync::stamp::{device_tag, now_ms};
+use mwt_usecases::ipc_contract::security::SecurityLevel;
+use mwt_usecases::ipc_contract::{
+    SyncClockEvent, SyncConfirmReason, SyncCutReason, SyncOfferEvent, SyncPairingEvent,
+    SyncPendingPlan, SyncPhase, SyncPlanEvent, SyncProgress, SyncRole, SyncSessionView,
+    VaultSyncedEvent,
+};
+use mwt_usecases::service::PeerRef;
+use mwt_usecases::usecases::sync::peer_sync;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::mpsc;
 use tokio::time::Instant;
-use trade_core::error::{Error, PeerSyncFailure, Result};
-use trade_core::ipc_contract::security::SecurityLevel;
-use trade_core::ipc_contract::{
-    SyncClockEvent, SyncConfirmReason, SyncCutReason, SyncOfferEvent, SyncPairingEvent,
-    SyncPendingPlan, SyncPhase, SyncPlanEvent, SyncProgress, SyncRole, SyncSessionView,
-    VaultSyncedEvent,
-};
-use trade_core::service::PeerRef;
-use trade_core::sync::RecordState;
-use trade_core::sync::journal::SyncJournalOutcome;
-use trade_core::sync::manifest::Manifest;
-use trade_core::sync::plan::SyncSummaryExt;
-use trade_core::sync::protocol::{
-    Hello, Identity, MANIFEST_PER_MESSAGE, Message, RECORDS_PER_MESSAGE, decode, encode,
-};
-use trade_core::sync::registry::UNION_DAYS;
-use trade_core::sync::session::{
-    Channel, ClockWatch, Handshake, Skew, check_commit, commit_to, new_nonce, skew_of,
-};
-use trade_core::sync::stamp::{device_tag, now_ms};
-use trade_core::usecases::sync::peer_sync;
 
 use super::host::Host;
 use super::{Link, Order, set_phase, set_progress, update_link};
 use crate::ipc::events::{SyncClock, SyncOffer, SyncPairing, SyncPlanReady, VaultSynced};
-use trade_core::sync::history as history_reads;
-use trade_core::usecases::sync::read as sync_read;
-use trade_core::usecases::sync::sync_journal as journal_cases;
-use trade_core::usecases::sync::trust as sync_trust;
+use mwt_sync::history as history_reads;
+use mwt_usecases::usecases::sync::read as sync_read;
+use mwt_usecases::usecases::sync::sync_journal as journal_cases;
+use mwt_usecases::usecases::sync::trust as sync_trust;
 
 /// The largest place in the queue to take over the main role.
 pub(crate) const MAX_RANK: u32 = 5;
@@ -316,7 +316,7 @@ pub(super) struct Peer {
 fn with_peer_vault<H: Host, T>(
     app: &H,
     peer: &Peer,
-    work: impl FnOnce(&mut trade_core::service::Session) -> Result<T>,
+    work: impl FnOnce(&mut mwt_usecases::service::Session) -> Result<T>,
 ) -> Flow<T> {
     let outcome = app.with_vault(|vault| {
         if vault.doc.id != peer.vault_id {
@@ -330,11 +330,7 @@ fn with_peer_vault<H: Host, T>(
 /// Merge the other side's trusted devices and tell the other links; whether
 /// the other side's own key is revoked now. Refuses (quietly) when the open
 /// vault is no longer the session's.
-fn take_peers<H: Host>(
-    app: &H,
-    peer: &Peer,
-    peers: &[trade_core::sync::TrustedPeer],
-) -> Flow<bool> {
+fn take_peers<H: Host>(app: &H, peer: &Peer, peers: &[mwt_sync::TrustedPeer]) -> Flow<bool> {
     let taken = app.with_vault(|vault| {
         if vault.doc.id != peer.vault_id {
             return Ok(None);
@@ -744,7 +740,7 @@ async fn pair<H: Host>(
     // The other side's list of devices is not merged from a device nobody has
     // confirmed yet (that would let it add trusted devices): kept, and taken
     // in once the pairing is through.
-    let mut held_peers: Option<Vec<trade_core::sync::TrustedPeer>> = None;
+    let mut held_peers: Option<Vec<mwt_sync::TrustedPeer>> = None;
     // The pairing was asked for before this point: the user's ("Pair
     // again") or the other side's request that opened the session.
     if ask_now || asked {
@@ -1381,9 +1377,7 @@ async fn apply_shown<H: Host>(
         let fresh_after = i64::try_from(now_ms()).unwrap_or(i64::MAX) - FRESH_NOTICE_MS;
         let fresh: Vec<_> = notices
             .into_iter()
-            .filter(|notice| {
-                trade_core::model::vault::iso_to_millis(&notice.delivered_at) >= fresh_after
-            })
+            .filter(|notice| mwt_model::iso_to_millis(&notice.delivered_at) >= fresh_after)
             .collect();
         app.deliver(fresh);
         super::broadcast(app, &keys, Some(&peer.session_id));
@@ -1545,7 +1539,7 @@ fn hand_over_if_preferred<H: Host>(app: &H, peer: &Peer) -> bool {
 
 #[cfg(test)]
 mod wire_tests {
-    use trade_core::sync::session::DeviceKey;
+    use mwt_sync::session::DeviceKey;
 
     use super::*;
 

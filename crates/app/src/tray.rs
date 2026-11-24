@@ -11,37 +11,37 @@ use tauri::{AppHandle, Manager};
 const SCREENS: [(&str, &str, &str, &str); 6] = [
     (
         "nav_dashboard",
-        trade_core::routes::DASHBOARD,
+        mwt_base::routes::DASHBOARD,
         "Дашборд",
         "Dashboard",
     ),
     (
         "nav_stores",
-        trade_core::routes::STORES,
+        mwt_base::routes::STORES,
         "Кошельки",
         "Wallets",
     ),
     (
         "nav_transactions",
-        trade_core::routes::TRANSACTIONS,
+        mwt_base::routes::TRANSACTIONS,
         "Операции",
         "Transactions",
     ),
     (
         "nav_calendar",
-        trade_core::routes::TRANSACTIONS_CALENDAR,
+        mwt_base::routes::TRANSACTIONS_CALENDAR,
         "Календарь",
         "Calendar",
     ),
     (
         "nav_analytics",
-        trade_core::routes::MONEY,
+        mwt_base::routes::MONEY,
         "Аналитика",
         "Analytics",
     ),
     (
         "nav_planning",
-        trade_core::routes::AUTOMATIONS,
+        mwt_base::routes::AUTOMATIONS,
         "Планирование",
         "Planning",
     ),
