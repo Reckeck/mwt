@@ -2,6 +2,9 @@ use tauri::State;
 
 use mwt_base::Amount;
 use mwt_base::calendar::{Calendar, now_secs};
+use mwt_model::Envelope;
+use mwt_model::StoreId;
+use mwt_model::{Store, StoreKind};
 use mwt_money::portfolio;
 use mwt_money::portfolio::{StoreOverview, StoreTreeNode};
 use mwt_money::store_change::{StoreChangeInput, StoreChangePlan};
@@ -12,9 +15,6 @@ use mwt_usecases::ipc_contract::{
     UpdateEnvelopeInput, UpdateStoreInput, VehicleMileageInput, VehicleServiceDoneInput,
     WalletCatalog,
 };
-use mwt_usecases::model::ids::StoreId;
-use mwt_usecases::model::planning::Envelope;
-use mwt_usecases::model::store::{Store, StoreKind};
 use mwt_usecases::service::StoreExtras;
 use mwt_usecases::usecases::household::{envelopes, vehicle};
 use mwt_usecases::usecases::money::rebase::{rebase_envelope_input, rebase_store_input};
@@ -297,7 +297,7 @@ pub async fn vehicle_service_done(
 #[tauri::command]
 pub async fn property_set_revalue(
     store_id: String,
-    rule: Option<mwt_usecases::model::store::RevalueRule>,
+    rule: Option<mwt_model::RevalueRule>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {

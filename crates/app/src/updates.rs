@@ -11,11 +11,11 @@ use crate::ipc::events::AppEvent;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use tauri::{AppHandle, Manager};
-use trade_core::ipc_contract::{UpdatePhase, UpdateStatusDto};
-use trade_core::updates::{
+use mwt_usecases::ipc_contract::{UpdatePhase, UpdateStatusDto};
+use mwt_usecases::updates::{
     AppVersion, Channel, InstallKind, fetch_manifest, manifest_url, offer_from_manifest,
 };
+use tauri::{AppHandle, Manager};
 
 use crate::commands::app_settings::{config_dir, current_settings, save};
 
@@ -223,7 +223,7 @@ async fn check_self_update(app: &AppHandle) -> Result<UpdatePhase, String> {
                 AppVersion::parse(&remote.version.to_string()),
             ) {
                 (Ok(current), Ok(offered)) => {
-                    trade_core::updates::is_newer(&current, &offered, channel)
+                    mwt_usecases::updates::is_newer(&current, &offered, channel)
                 }
                 _ => false,
             }

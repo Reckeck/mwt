@@ -3,8 +3,8 @@
 //! Owner: spec E6, with the tick in `crates/app/src/cryptotrack/jobs.rs` and
 //! `service/cryptotrack/apply.rs`.
 
+use mwt_model::now_iso;
 use mwt_usecases::ipc_contract::cryptotrack::sync::CryptoSyncStatus;
-use mwt_usecases::model::vault::now_iso;
 use tauri::AppHandle;
 
 use crate::commands::app_settings::{config_dir, current_settings, save};

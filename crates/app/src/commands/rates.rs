@@ -3,10 +3,10 @@
 
 use crate::ipc::events::{AppEvent, RatesUpdated};
 use chrono::{Datelike, Months, NaiveDate};
+use mwt_model::{InflationMode, InflationSource};
 use mwt_money::inflation as inflation_reads;
 use mwt_money::inflation::{FetchedRates, InflationCurrency};
-use mwt_usecases::model::inflation::{InflationMode, InflationSource};
-use mwt_usecases::pricing::PricingService;
+use mwt_net::PricingService;
 use mwt_usecases::usecases::money::inflation;
 use mwt_usecases::usecases::planning::notifications;
 use tauri::{AppHandle, Manager, State};

@@ -6,8 +6,8 @@ use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
+use mwt_model::{NoticeCategory, NoticeRecord, notice, notice_title};
 use mwt_planning::notifications as notification_reads;
-use mwt_usecases::model::notify::{NoticeCategory, NoticeRecord, notice, notice_title};
 use mwt_usecases::usecases::planning::notifications;
 
 use crate::commands::AppState;
@@ -49,7 +49,7 @@ pub async fn send_test_notification(app: AppHandle) -> Result<(), IpcError> {
             "Notifications work".into()
         },
         None,
-        mwt_usecases::model::vault::now_iso(),
+        mwt_model::now_iso(),
     );
     crate::scheduler::deliver(&app, vec![record], true);
     Ok(())

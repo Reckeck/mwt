@@ -8,13 +8,13 @@ use mwt_usecases::ipc_contract::events::{AutomationCreatedPayload, WorkflowsRanP
 use tauri::{AppHandle, State};
 
 use mwt_base::calendar::now_secs;
+use mwt_model::Transaction;
 use mwt_usecases::ipc_contract::{
     AnswerWorkflowWaitInput, DeleteWorkflowTestInput, DeleteWorkflowVarInput, DryRunWorkflowInput,
     ImportWorkflowInput, ListWorkflowRunsInput, RestoreWorkflowVersionInput, RunWorkflowInput,
     SaveWorkflowDraftInput, SaveWorkflowInput, SaveWorkflowTestInput, SetWorkflowActiveInput,
     SetWorkflowVarInput, ValidateWorkflowInput, WorkflowFromTemplateInput,
 };
-use mwt_usecases::model::transaction::Transaction;
 use mwt_usecases::service::Session;
 use mwt_usecases::usecases::workflow::{records, runs};
 use mwt_workflow::service::records::{SavedWorkflow, WorkflowImportPreview};

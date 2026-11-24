@@ -9,9 +9,9 @@
 use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::Duration;
 
+use mwt_usecases::ipc_contract::SyncPhase;
 use tauri::AppHandle;
 use tauri_plugin_net::Background;
-use trade_core::ipc_contract::SyncPhase;
 
 use super::lock_policy::{self, Since};
 use crate::platform_net;

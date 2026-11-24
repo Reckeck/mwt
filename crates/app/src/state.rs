@@ -1,7 +1,7 @@
 //! Process-wide state that is not the vault: the bus of lock events (spec D5).
 
+use mwt_vault::kernel::events::{DomainEvent, EventBus, VaultLocked};
 use tauri::Manager;
-use trade_core::kernel::events::{DomainEvent, EventBus, VaultLocked};
 
 use crate::ipc::events::{AppEvent, VaultLockedPayload};
 
@@ -51,10 +51,10 @@ pub fn register_lock_subscribers(app: &tauri::AppHandle) {
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use trade_core::kernel::events::LockReason;
+    use mwt_vault::kernel::events::LockReason;
 
     use super::*;
-    use trade_core::ipc_contract::events::VaultLockedReason;
+    use mwt_usecases::ipc_contract::events::VaultLockedReason;
 
     fn recorded(bus: &EventBus) -> Arc<Mutex<Vec<VaultLockedPayload>>> {
         let seen = Arc::new(Mutex::new(vec![]));

@@ -180,16 +180,18 @@ pub const TABLE: &[Row] = &[
     Row {
         name: APP,
         uses: &[
-            FACADE,
             BASE,
             CRYPTO,
             CRYPTOTRACK,
             HOUSEHOLD,
+            MODEL,
             MONEY,
+            NET,
             PLANNING,
             REPORTS,
             SYNC,
             USECASES,
+            VAULT,
             WORKFLOW,
             "mwt-app-macros",
             "tauri-plugin-biometric",
@@ -533,7 +535,7 @@ mod tests {
     fn trade_app_and_plugins_are_named_by_trade_app_only() {
         let found = run(&[
             package(FACADE, vec![normal(APP), normal("tauri-plugin-saf")]),
-            package(APP, vec![normal(FACADE), normal("tauri-plugin-saf")]),
+            package(APP, vec![normal(USECASES), normal("tauri-plugin-saf")]),
             package("tauri-plugin-saf", vec![]),
         ]);
         assert_eq!(found.len(), 2, "{found:?}");
@@ -562,7 +564,7 @@ mod tests {
                 ],
             ),
             package(USECASES, vec![normal(MONEY)]),
-            package(APP, vec![normal("reqwest"), normal(FACADE)]),
+            package(APP, vec![normal("reqwest"), normal(USECASES)]),
             package(NET, vec![normal("reqwest"), normal("csv")]),
             package(SYNC, vec![normal("snow")]),
         ];

@@ -1,7 +1,7 @@
 use tauri::State;
 
+use mwt_model::Settings;
 use mwt_usecases::ipc_contract::UpdateSettingsInput;
-use mwt_usecases::model::vault::Settings;
 
 use crate::commands::{AppState, require_vault};
 use crate::ipc::IpcError;
@@ -153,7 +153,7 @@ pub async fn dev_apply_vault_json(
 #[cfg(all(debug_assertions, feature = "schema"))]
 #[tauri::command]
 pub async fn vault_schema() -> Result<serde_json::Value, IpcError> {
-    Ok(mwt_usecases::model::vault::json_schema())
+    Ok(mwt_model::json_schema())
 }
 
 /// Write the current document to a scratch file and hand it to `$EDITOR`.

@@ -1,11 +1,11 @@
 use tauri::State;
 
+use mwt_model::CategorizationRule;
+use mwt_model::Category;
 use mwt_money::categories::categorization_rules;
 use mwt_usecases::ipc_contract::{
     CreateCategoryInput, CreateRuleInput, UpdateCategoryInput, UpdateRuleInput,
 };
-use mwt_usecases::model::category::Category;
-use mwt_usecases::model::planning::CategorizationRule;
 use mwt_usecases::usecases::household::categories;
 use mwt_usecases::usecases::money::rebase::rebase_category_input;
 

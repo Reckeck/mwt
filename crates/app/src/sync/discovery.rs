@@ -12,13 +12,13 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+use mwt_base::error::{Error, Result};
+use mwt_sync::session::{day_of, discovery_tag};
+use mwt_sync::stamp::now_ms;
+use mwt_usecases::ipc_contract::SyncRole;
+use mwt_usecases::usecases::sync::peer_sync;
 use tauri::AppHandle;
 use tokio::net::{TcpListener, TcpStream};
-use trade_core::error::{Error, Result};
-use trade_core::ipc_contract::SyncRole;
-use trade_core::sync::session::{day_of, discovery_tag};
-use trade_core::sync::stamp::now_ms;
-use trade_core::usecases::sync::peer_sync;
 
 use super::host::Host;
 use super::{Hub, Order, Run};
@@ -157,7 +157,7 @@ impl Announcer {
 
 fn random_instance() -> String {
     let bytes: [u8; 6] = rand::random();
-    trade_core::sync::session::hex(&bytes)
+    mwt_sync::session::hex(&bytes)
 }
 
 fn current<H: Host>(app: &H, generation: u64) -> bool {

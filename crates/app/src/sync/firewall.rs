@@ -7,8 +7,8 @@
 
 use std::net::IpAddr;
 
-use trade_core::error::{Error, PeerSyncFailure, Result};
-use trade_core::ipc_contract::SyncFirewallFix;
+use mwt_base::error::{Error, PeerSyncFailure, Result};
+use mwt_usecases::ipc_contract::SyncFirewallFix;
 
 use super::discovery::local_address;
 #[cfg(all(target_os = "linux", not(target_os = "android")))]
@@ -131,7 +131,7 @@ mod platform {
     use std::process::Command;
 
     use super::{PRIVATE_RANGES, RULE_FIRST, RULE_LAST, SyncFirewallFix, refused};
-    use trade_core::error::Result;
+    use mwt_base::error::Result;
 
     const COMMENT: &str = "Multi Wallet Tracker sync";
 
@@ -211,7 +211,7 @@ mod platform {
     use std::process::Command;
 
     use super::{SyncFirewallFix, add_rule, open_script, refused};
-    use trade_core::error::Result;
+    use mwt_base::error::Result;
 
     /// Without a console window flashing up.
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -244,7 +244,7 @@ mod platform {
 #[cfg(not(any(windows, all(target_os = "linux", not(target_os = "android")))))]
 mod platform {
     use super::{SyncFirewallFix, refused};
-    use trade_core::error::Result;
+    use mwt_base::error::Result;
 
     pub fn fix(_subnets: &[String]) -> (SyncFirewallFix, Vec<String>) {
         (SyncFirewallFix::None, Vec::new())

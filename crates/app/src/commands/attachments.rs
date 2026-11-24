@@ -4,13 +4,13 @@ use tauri::{AppHandle, Manager, State};
 
 use mwt_household::attachments as attachment_reads;
 use mwt_household::attachments::NewFile;
+use mwt_model::{Attachment, AttachmentKind};
 use mwt_usecases::ipc_contract::{
     AddAttachmentFileInput, AddAttachmentLinkInput, AttachmentIdInput, ListAttachmentsInput,
     RenameAttachmentInput,
 };
-use mwt_usecases::kernel::events::EventBus;
-use mwt_usecases::model::attachment::{Attachment, AttachmentKind};
 use mwt_usecases::usecases::household::attachments;
+use mwt_vault::kernel::events::EventBus;
 
 use crate::commands::{AppState, require_vault};
 use crate::commands::{with_vault, with_vault_mut};

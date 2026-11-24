@@ -1,12 +1,12 @@
 use tauri::{AppHandle, State};
 
+use mwt_model::StoreKind;
+use mwt_model::Transaction;
+use mwt_model::TxProperty;
 use mwt_usecases::ipc_contract::{
     AddLinkedTransactionsInput, AdjustmentDraftInput, PreviewTransactionInput, TransactionInput,
     TransactionKinds, UpdateTransactionInput,
 };
-use mwt_usecases::model::store::StoreKind;
-use mwt_usecases::model::transaction::Transaction;
-use mwt_usecases::model::vault::TxProperty;
 
 use mwt_household::property_links::tx_property_links as property_link_reads;
 use mwt_money::adjustments::AdjustmentDraft;

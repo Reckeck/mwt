@@ -1,4 +1,4 @@
-//! IPC command layer — thin translation between `trade-core` services and
+//! IPC command layer — thin translation between the `mwt-usecases` services and
 //! the frontend. See `docs/ipc.md` for the full contract.
 
 pub mod analytics;
@@ -40,7 +40,7 @@ use std::sync::atomic::AtomicBool;
 
 use mwt_base::error::Error;
 use mwt_cryptotrack::tokens::known;
-use mwt_usecases::pricing::PricingService;
+use mwt_net::PricingService;
 use mwt_usecases::service::Session;
 use tauri::State;
 

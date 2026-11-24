@@ -2,7 +2,7 @@
 //! where vaults live — for Linux, Windows, macOS, Android and iOS. (Plain app
 //! files — settings, recents, notices — stay in `app_config_dir()`.)
 //!
-//! Core works on a local vault file only (`trade_core::vault_io`). This module
+//! Core works on a local vault file only (`mwt_usecases::vault_io`). This module
 //! gets one there: on desktops the picked file is used where it lies, on
 //! Android/iOS a picked document is copied into app storage, and a document
 //! can be linked to receive a copy after every save (`links`, `mirror_sink`).
@@ -24,14 +24,14 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use mwt_base::error::{Error, Result};
+use mwt_usecases::ipc_contract::{PickedVault, VaultStorage};
+use mwt_usecases::storage::ensure_wallet_ext;
+use mwt_usecases::vault_io::VaultLocation;
+use mwt_usecases::vault_io::import::{import_into, safe_file_name};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use tauri_plugin_fs::{FsExt, OpenOptions};
-use trade_core::error::{Error, Result};
-use trade_core::ipc_contract::{PickedVault, VaultStorage};
-use trade_core::storage::ensure_wallet_ext;
-use trade_core::vault_io::VaultLocation;
-use trade_core::vault_io::import::{import_into, safe_file_name};
 
 pub use mirror_sink::attach_mirror;
 
@@ -141,7 +141,7 @@ pub fn save_vault_copy_dialog(
     if let VaultLocation::Path(path) = &location
         && keep
             .iter()
-            .any(|file| trade_core::vault_io::delete::is_same_file(file, path))
+            .any(|file| mwt_usecases::vault_io::delete::is_same_file(file, path))
     {
         return Err(Error::InvalidInput(
             "the copy cannot replace a vault that is in use".into(),
@@ -169,7 +169,7 @@ pub fn read_location(app: &AppHandle, location: &VaultLocation) -> Result<Vec<u8
 /// a document is truncated and rewritten (the platform offers nothing else).
 pub fn write_location(app: &AppHandle, location: &VaultLocation, bytes: &[u8]) -> Result<()> {
     if let VaultLocation::Path(path) = location {
-        return trade_core::vault_io::local::atomic_write(path, bytes);
+        return mwt_usecases::vault_io::local::atomic_write(path, bytes);
     }
     let mut options = OpenOptions::new();
     options.read(false).write(true).truncate(true);

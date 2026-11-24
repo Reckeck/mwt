@@ -9,9 +9,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 
+use mwt_usecases::service::Session;
+use mwt_usecases::vault_io::VaultMirror;
 use tauri::AppHandle;
-use trade_core::service::Session;
-use trade_core::vault_io::VaultMirror;
 
 use super::links;
 

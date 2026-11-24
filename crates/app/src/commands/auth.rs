@@ -7,9 +7,9 @@ use mwt_usecases::ipc_contract::{
     ChangePasswordInput, CreateVaultInput, RemoveVaultPasswordInput, SetVaultPasswordInput,
     SetVaultPasswordResult, UnlockInput, VaultInfo, VaultStatus,
 };
-use mwt_usecases::kernel::events::{LockReason, VaultLocked};
 use mwt_usecases::service::security_level::{check_new_secret, level_of_vault_file};
 use mwt_usecases::service::{CopyPolicy, Session};
+use mwt_vault::kernel::events::{LockReason, VaultLocked};
 
 use crate::commands::{AppState, app_settings, lock_vault, require_vault};
 use crate::ipc::IpcError;
@@ -104,7 +104,7 @@ pub async fn create_vault(
             .doc
             .stores
             .iter()
-            .find(|store| store.kind == mwt_usecases::model::store::StoreKind::Cash)
+            .find(|store| store.kind == mwt_model::StoreKind::Cash)
             .map(|store| store.id.clone())
     {
         mwt_usecases::usecases::money::stores::update_store(
