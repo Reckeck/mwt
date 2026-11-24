@@ -193,4 +193,17 @@ describe('AmountInput', () => {
     await wrapper.setProps({ modelValue: long })
     expect((input.element as HTMLInputElement).value.replace(/\D/g, '')).toBe(long)
   })
+
+  it('shows an outside value past the cap grouped, and lets Backspace shorten it', async () => {
+    const { wrapper, input, type, hint, model } = setup()
+    await wrapper.setProps({ modelValue: `${'1'.repeat(25)}.5` })
+    const field = input.element as HTMLInputElement
+    expect(field.value).toMatch(/^1\u202f111\u202f111\u202f111\u202f111\u202f111\u202f111\u202f111\u202f111[.,]5$/)
+    await type(`${'1'.repeat(24)}.5`)
+    expect(field.value.replace(/\D/g, '')).toBe(`${'1'.repeat(24)}5`)
+    expect(model()).toBe(`${'1'.repeat(24)}.5`)
+    expect(hint().text()).toBe('Результат слишком длинный')
+    await type(`${'1'.repeat(25)}.5`)
+    expect(model()).toBe(`${'1'.repeat(24)}.5`)
+  })
 })
