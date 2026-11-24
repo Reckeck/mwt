@@ -115,8 +115,10 @@ const bottomNav = computed(() => phone.value && !fullscreen.value && !typing.val
 const pageClass = computed(() => {
   // The sandbox bar above takes the status bar's inset itself.
   if (fullscreen.value) return ['overflow-hidden p-0 pb-safe', !vault.sandbox && 'pt-safe']
-  if (bottomNav.value) return 'overflow-y-auto p-3'
-  return 'overflow-y-auto p-3 pb-[calc(0.75rem+var(--safe-bottom))] md:p-4 md:pb-[calc(1rem+var(--safe-bottom))]'
+  // Side insets keep a landscape cutout off the content; the gutter is stable (no double scrollbar).
+  const sides = 'pl-[calc(0.75rem+var(--safe-left))] pr-[calc(0.75rem+var(--safe-right))] md:pl-[calc(1rem+var(--safe-left))] md:pr-[calc(1rem+var(--safe-right))]'
+  if (bottomNav.value) return ['overflow-y-auto pt-3 pb-3', sides]
+  return ['overflow-y-auto pt-3 pb-[calc(0.75rem+var(--safe-bottom))] md:pt-4 md:pb-[calc(1rem+var(--safe-bottom))]', sides]
 })
 </script>
 
@@ -155,7 +157,7 @@ const pageClass = computed(() => {
         <!-- Keyed by the page and its params, not the path: /stores/a → /stores/b gets a fresh
              page (its widgets keep local state per wallet), while a sub-tab of a section
              (/transactions → /transactions/calendar) keeps the section mounted (rule 17). -->
-        <div class="mx-auto w-full" :class="route.meta.fullscreen ? 'h-full' : 'min-h-full max-w-page'">
+        <div class="mx-auto w-full" :class="route.meta.fullscreen ? 'h-full' : 'min-h-full max-w-(--container-page)'">
           <RouterView :key="pageKey" />
         </div>
       </div>
