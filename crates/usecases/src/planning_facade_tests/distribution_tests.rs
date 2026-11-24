@@ -283,6 +283,65 @@ fn s8_a_goal_row_funds_the_goal_envelope() {
     clean(&fixture);
 }
 
+/// Q15: a goal funded by `fund_goal` and then distributed to keeps one envelope.
+#[test]
+fn s8_distributing_to_a_funded_goal_reuses_its_envelope() {
+    use crate::model::ids::StoreId;
+    use crate::model::store::StoreScope;
+    use crate::planning::goals::GoalDraft;
+    let mut fixture = fixture();
+    let goal = crate::usecases::planning::goals::create_goal(
+        &mut fixture.vault,
+        GoalDraft {
+            name: "Cushion".into(),
+            active: true,
+            target_amount: amount("500000"),
+            currency: "rub".into(),
+            starts_at: "2026-01-01T00:00:00Z".into(),
+            deadline: None,
+            priority: 3,
+            monthly_commitment: None,
+            scope: StoreScope {
+                store_ids: vec![fixture.card.clone()],
+                include_children: true,
+            },
+            scenario_id: None,
+            expected_return: None,
+        },
+    )
+    .unwrap();
+    crate::usecases::household::envelopes::fund_goal(
+        &mut fixture.vault,
+        &goal.id,
+        &StoreId::from(&fixture.card),
+        amount("1000"),
+    )
+    .unwrap();
+    let rows = vec![
+        row(
+            DistKind::Sum {
+                amount: amount("7000"),
+            },
+            DistTarget::Goal {
+                goal_id: goal.id.clone(),
+                store_id: fixture.card.clone(),
+            },
+        ),
+        row(DistKind::Remainder, DistTarget::None),
+    ];
+    let id = fixture.income_id.clone();
+    apply_distribution(&mut fixture.vault, &id, &rows).unwrap();
+    let of_goal: Vec<_> = fixture
+        .vault
+        .doc
+        .envelopes
+        .iter()
+        .filter(|envelope| envelope.goal_id.as_deref() == Some(&goal.id))
+        .collect();
+    assert_eq!(of_goal.len(), 1);
+    assert_eq!(of_goal[0].allocated, amount("8000"));
+}
+
 /// S14: parts and a distribution together are refused.
 #[test]
 fn s14_parts_and_distribution_are_mutually_exclusive() {

@@ -13,8 +13,9 @@ use crate::money::distribution::{
 };
 use crate::money::transactions::ensure_fresh_id;
 use crate::planning::distribution::{plan_distribution, resolve_rows};
-use crate::planning::envelopes::{EnvelopeDraft, free_balance, new_envelope, plan_fund_goal};
+use crate::planning::envelopes::{EnvelopeDraft, new_envelope, plan_fund_envelope, plan_fund_goal};
 use crate::service::Session;
+use crate::usecases::household::envelopes::goal_envelope_for;
 use crate::usecases::money::portfolio::recompute_holdings;
 use crate::usecases::money::stores::rebase_and_commit;
 use crate::usecases::money::transactions::prepare_transaction;
@@ -265,10 +266,10 @@ fn goal_envelope(
     if funding.take < amount {
         return Err(not_enough_free(funding.take, &funding.asset.symbol));
     }
-    if let Some(id) = funding.envelope_id {
+    let id = goal_envelope_for(&vault.doc, &funding, goal_id, store_id);
+    if funding.envelope_id.is_some() {
         return Ok(id);
     }
-    let id = crate::sync::sync_ids::goal_envelope_id(goal_id, store_id, &funding.asset.key());
     let draft = EnvelopeDraft {
         store_id: store_id.to_string(),
         name: funding.goal_name,
@@ -300,10 +301,7 @@ fn fill_envelope(
             "the envelope must sit on the card and the asset of the income".into(),
         ));
     }
-    let free = free_balance(&vault.doc, &StoreId::from(&income.store_id), &income.asset);
-    if free < amount {
-        return Err(not_enough_free(free, &income.asset.symbol));
-    }
+    plan_fund_envelope(&vault.doc, envelope_id, amount)?;
     let envelope = vault
         .doc
         .envelopes
