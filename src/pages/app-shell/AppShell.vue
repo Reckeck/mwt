@@ -122,7 +122,7 @@ const pageClass = computed(() => {
 
 <template>
   <SidebarProvider class="h-full min-h-0">
-    <AppSidebar @lock="lock" @open-settings="openSettings()" />
+    <AppSidebar />
 
     <SidebarInset class="min-h-0 min-w-0 overflow-hidden">
       <SandboxBar v-if="vault.sandbox" />
@@ -159,7 +159,7 @@ const pageClass = computed(() => {
           <RouterView :key="pageKey" />
         </div>
       </div>
-      <AppBottomNav v-if="bottomNav" @quick-add="quickAddOpen = true" @lock="lock" @open-settings="openSettings()" />
+      <AppBottomNav v-if="bottomNav" @quick-add="quickAddOpen = true" />
     </SidebarInset>
 
     <SettingsShell />

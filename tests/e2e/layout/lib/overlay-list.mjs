@@ -70,7 +70,6 @@ export const OVERLAYS = [
     layer: overlay('enrichment-consent'),
   },
   { id: 'notifications', route: '/', phone: true, open: [{ click: '[data-tour="notification-bell"]' }], layer: overlay('notifications') },
-  { id: 'bottom-more', route: '/', phone: 'only', open: [{ click: '[data-bottom-more]' }], layer: overlay('bottom-more') },
   { id: 'entity-tx', route: '/transactions', phone: true, open: [{ click: '[data-tx-open]' }], layer: '[data-tx-card]', keys: ['open'] },
   { id: 'entity-goal', route: '/money/plan', phone: true, open: [{ query: { open: 'goal:{goal}' } }], layer: '[data-goal-card]', keys: ['open'] },
   { id: 'entity-automation', route: '/automations', phone: true, open: [{ query: { open: 'automation:{automation}' } }], layer: '[data-automation-card]', keys: ['open'] },

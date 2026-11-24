@@ -10,7 +10,6 @@
   "long-line src/features/utility-bill/BillLineRow.vue": 1,
   "long-line src/features/vault-transfer/ui/SendVaultDialog/SendVaultCode.vue": 1,
   "long-line src/features/vault-transfer/ui/SendVaultDialog/SendVaultPick.vue": 1,
-  "long-line src/pages/app-shell/ui/app-bottom-nav/AppBottomNav.vue": 1,
   "long-line src/shared/ui/action-menu/ActionMenu.vue": 1,
   "long-line src/shared/ui/alert/index.ts": 1,
   "long-line src/shared/ui/amount-input/AmountInput.vue": 1,
@@ -62,7 +61,6 @@
   "row-repeat-call src/entities/transaction/ui/transactions-list/TransactionsList.vue": 1,
   "row-repeat-call src/features/store-adjust/ui/adjustment-rows-table/AdjustmentRowsTable.vue": 1,
   "row-repeat-call src/features/transaction-link/TransactionLinkDialog.vue": 1,
-  "row-repeat-call src/pages/app-shell/ui/app-bottom-nav/AppBottomNav.vue": 1,
   "row-repeat-call src/widgets/analytics-reports/ui/month-table/MonthTable.vue": 3,
   "row-repeat-call src/widgets/onboarding-checklist/OnboardingChecklist.vue": 1,
   "to-fixed src/features/utility-bill/UtilityBillDialog.vue": 1
