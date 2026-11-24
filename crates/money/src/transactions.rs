@@ -32,6 +32,21 @@ pub fn complete_transaction(books: &Books, tx: &mut Transaction) {
         .map(|rate| unit_price / rate);
 }
 
+/// S2, S1: an income in parts drops its zero parts and keeps `store_id` on the
+/// first part's store. No parts: nothing changes.
+pub fn normalize_parts(tx: &mut Transaction) {
+    let Transaction::Topup(inner) = tx else {
+        return;
+    };
+    if inner.parts.is_empty() {
+        return;
+    }
+    inner.parts.retain(|part| !part.amount.is_zero());
+    if let Some(first) = inner.parts.first() {
+        inner.store_id.clone_from(&first.store_id);
+    }
+}
+
 /// An edit of one operation that names only what it changes (F4): the new
 /// content of the operation, and the links it carries. A link the patch does
 /// not name keeps its stored value; naming `Some(None)` clears it.
