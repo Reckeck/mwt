@@ -23,8 +23,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime};
 
+use mwt_usecases::ipc_contract::security::AutolockSettings;
 use tauri::AppHandle;
-use trade_core::ipc_contract::security::AutolockSettings;
 
 use crate::commands::{AppState, app_settings};
 use tauri::Manager;
@@ -186,7 +186,7 @@ pub fn has_device_keys(app: &AppHandle) -> bool {
     let Ok(path) = state.vault_path.lock() else {
         return false;
     };
-    trade_core::vault_io::device_secrets::secrets_path(&path).exists()
+    mwt_usecases::vault_io::device_secrets::secrets_path(&path).exists()
 }
 
 /// Windows the app opened itself (the file picker, the biometric prompt) take

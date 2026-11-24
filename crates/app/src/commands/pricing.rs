@@ -1,14 +1,14 @@
 use crate::ipc::events::{AppEvent, PricesUpdated};
 use tauri::{AppHandle, State};
 
+use mwt_model::AssetRef;
+use mwt_model::{CryptoToken, TokenId};
 use mwt_money::rates as rate_reads;
+use mwt_net::AssetSearchHit;
 use mwt_usecases::ipc_contract::{
     AssetPriceInput, CachedPrice, CandlePoint, ConvertAmountInput, ConvertedAmount, EnsureFxInput,
     EnsureFxOutput, GetCandlesInput, GetCandlesOutput, RefreshResult,
 };
-use mwt_usecases::model::cryptotrack::{CryptoToken, TokenId};
-use mwt_usecases::model::store::AssetRef;
-use mwt_usecases::pricing::AssetSearchHit;
 use mwt_usecases::usecases::money::rates;
 
 use crate::commands::{AppState, require_vault};
@@ -125,7 +125,7 @@ pub async fn refresh_all(
     rates::apply_prices(vault, &prices);
     rates::apply_fx(vault, &fx);
     let restamped = rates::restamp_missing(vault);
-    let updated_at = mwt_usecases::model::vault::now_iso();
+    let updated_at = mwt_model::now_iso();
     let _ = vault.persist();
 
     let result = RefreshResult {
@@ -216,7 +216,7 @@ pub async fn ensure_fx(
                 prices: 0,
                 fx: points.len(),
                 restamped,
-                updated_at: mwt_usecases::model::vault::now_iso(),
+                updated_at: mwt_model::now_iso(),
             }),
         );
     }
@@ -270,7 +270,7 @@ pub async fn get_candles(input: GetCandlesInput) -> Result<GetCandlesOutput, Ipc
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mwt_usecases::model::chain::Chain;
+    use mwt_model::Chain;
 
     const CONTRACT: &str = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
 

@@ -1,12 +1,12 @@
 //! Linux, Windows, macOS: native dialogs return paths, and a vault is
 //! opened and written where it lies.
 
+use mwt_base::error::Result;
+use mwt_usecases::ipc_contract::PickedVault;
+use mwt_usecases::storage::ensure_wallet_ext;
+use mwt_usecases::vault_io::VaultLocation;
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
-use trade_core::error::Result;
-use trade_core::ipc_contract::PickedVault;
-use trade_core::storage::ensure_wallet_ext;
-use trade_core::vault_io::VaultLocation;
 
 use super::location_of;
 

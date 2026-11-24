@@ -12,9 +12,9 @@
 use std::path::Path;
 use std::sync::Mutex;
 
+use mwt_base::error::Result;
+use mwt_sync::session::{DeviceKey, hex, unhex};
 use tauri::AppHandle;
-use trade_core::error::Result;
-use trade_core::sync::session::{DeviceKey, hex, unhex};
 
 /// Where the key lives, as `SyncStatus::key_storage` reports it.
 #[cfg(target_os = "android")]

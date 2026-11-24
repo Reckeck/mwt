@@ -35,7 +35,7 @@ pub fn migrate_dirs() {
             continue;
         }
         let old = base.join(LEGACY_IDENTIFIER);
-        match trade_core::app_dirs::move_legacy_dir(&old, &new) {
+        match mwt_usecases::app_dirs::move_legacy_dir(&old, &new) {
             Ok(true) => moves.push((old, new)),
             Ok(false) => {}
             Err(err) => eprintln!("moving {} to {}: {err}", old.display(), new.display()),

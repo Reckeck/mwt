@@ -2,12 +2,12 @@
 
 use std::sync::{Arc, Mutex};
 
+use mwt_base::error::{Error, PeerSyncFailure, Result};
+use mwt_sync::session::DeviceKey;
+use mwt_sync::transfer::{Offer, TRANSFER_PROTOCOL, sha256};
+use mwt_usecases::service::Session;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use trade_core::error::{Error, PeerSyncFailure, Result};
-use trade_core::service::Session;
-use trade_core::sync::session::DeviceKey;
-use trade_core::sync::transfer::{Offer, TRANSFER_PROTOCOL, sha256};
 
 use super::transfer::{Delivered, Incoming, Me, Outgoing, Received, fingerprint_of, receive, send};
 
@@ -174,7 +174,7 @@ async fn a_device_with_another_key_gets_nothing() {
 #[tokio::test(start_paused = true)]
 async fn a_silent_peer_after_the_offer_ends_the_send_with_channel() {
     use super::link::{read_frame, write_frame};
-    use trade_core::sync::session::Handshake;
+    use mwt_sync::session::Handshake;
 
     let (_dir, bytes) = vault_file();
     let peer_key = DeviceKey::generate().unwrap();

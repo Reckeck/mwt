@@ -6,9 +6,9 @@ use mwt_base::calc::invest::{
 };
 use mwt_base::calc::{self, CalcInput, CalcResult};
 use mwt_base::calendar::now_secs;
+use mwt_model::{CalcScenario, ScenarioSource};
 use mwt_planning::scenarios as scenario_reads;
 use mwt_planning::scenarios::{CalcScenarioDeleted, CalcScenarioDraft, ScenarioPrefill};
-use mwt_usecases::model::planning::{CalcScenario, ScenarioSource};
 use mwt_usecases::usecases::planning::scenarios;
 
 use crate::commands::AppState;

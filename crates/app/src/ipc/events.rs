@@ -84,7 +84,7 @@ app_events! {
     "price-alert" => PriceAlert(mwt_usecases::ipc_contract::events::PriceAlertPayload),
     "reminder-due" => ReminderDue(mwt_usecases::ipc_contract::events::EmptyPayload),
     "reminders-changed" => RemindersChanged(mwt_usecases::ipc_contract::events::EmptyPayload),
-    "notification" => Notification(mwt_usecases::model::notify::NoticeRecord),
+    "notification" => Notification(mwt_model::NoticeRecord),
     "enrichment-ready" => EnrichmentReady(mwt_usecases::ipc_contract::events::EnrichmentReadyPayload),
     "quick-add" => QuickAdd(()),
     "refresh-prices" => RefreshPrices(()),

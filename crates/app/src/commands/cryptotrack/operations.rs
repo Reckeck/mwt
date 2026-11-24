@@ -48,7 +48,7 @@ pub async fn crypto_operation_detail(
 /// Put a correction over an operation: its kind, its categories, its comment,
 /// the counterparty it went through, hiding it, or the chain it is in. The
 /// event itself is left as it came, so a refetch keeps the correction
-/// (`mwt_usecases::model::cryptotrack::CryptoOverride`).
+/// (`mwt_model::CryptoOverride`).
 #[tauri::command]
 pub async fn crypto_set_override(
     input: CryptoSetOverrideInput,

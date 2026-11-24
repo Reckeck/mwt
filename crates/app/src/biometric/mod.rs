@@ -26,8 +26,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use mwt_usecases::ipc_contract::security::BiometricState;
 use serde::{Deserialize, Serialize};
-use trade_core::ipc_contract::security::BiometricState;
 use zeroize::Zeroizing;
 
 #[cfg(target_os = "android")]

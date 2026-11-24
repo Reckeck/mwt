@@ -8,6 +8,7 @@ use mwt_household::shared_events::view::{self as event_views};
 use mwt_household::shared_events::view::{
     ContactEventBalance, SharedEventSummary, SharedEventView, SharedTxLink,
 };
+use mwt_model::{Contact, DebtTerms};
 use mwt_usecases::ipc_contract::{
     AddSharedPurchaseInput, ArchiveSharedEventInput, AttachPaymentInput, SetShareOverrideInput,
     SetSharedDueInput, SetSharedItemSplitInput, SettleSharedInput, SharedEventDraft,
@@ -16,7 +17,6 @@ use mwt_usecases::ipc_contract::{
     SharedShareTextInput, UpdateSharedEventInput, UpdateSharedItemInput,
     UpdateSharedParticipantInput, UpdateSharedPurchaseInput,
 };
-use mwt_usecases::model::contact::{Contact, DebtTerms};
 use mwt_usecases::usecases::household::shared_events;
 
 use crate::commands::AppState;

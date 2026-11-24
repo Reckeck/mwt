@@ -3,8 +3,8 @@ use tauri::State;
 use mwt_household::contacts::{
     ContactBalance, ContactDraft, ContactSummary, ContactTurnover, DebtTermsDraft, debt_terms,
 };
+use mwt_model::{Contact, DebtTerms};
 use mwt_usecases::ipc_contract::{ContactTurnoverInput, UpdateContactInput};
-use mwt_usecases::model::contact::{Contact, DebtTerms};
 use mwt_usecases::usecases::household::contacts;
 use mwt_usecases::usecases::money::rebase::rebase_contact_input;
 

@@ -8,21 +8,21 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
-use trade_core::crypto::{self, SealKey};
-use trade_core::error::{Error, Result};
-use trade_core::ipc_contract::{ConflictSide, VaultLinkStatus};
-use trade_core::service::{ExternalMerge, Session};
-use trade_core::storage::VaultFile;
-use trade_core::usecases::sync::peer_sync;
-use trade_core::vault_io::mirror::{
+use mwt_base::error::{Error, Result};
+use mwt_crypto::{self as crypto, SealKey};
+use mwt_usecases::ipc_contract::{ConflictSide, VaultLinkStatus};
+use mwt_usecases::service::{ExternalMerge, Session};
+use mwt_usecases::storage::VaultFile;
+use mwt_usecases::usecases::sync::peer_sync;
+use mwt_usecases::vault_io::mirror::{
     PushOutcome, SyncAction, compare_and_push, content_hash, reconcile,
 };
-use trade_core::vault_io::{
+use mwt_usecases::vault_io::{
     VaultLocation,
     import::{probe_open, validate_vault_bytes},
 };
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
 
 use super::{read_location, release_link_target, shown, write_location};
 
@@ -112,7 +112,7 @@ fn update<T>(app: &AppHandle, change: impl FnOnce(&mut Links) -> T) -> T {
     if links != before
         && let Ok(json) = serde_json::to_string_pretty(&links)
     {
-        let _ = trade_core::vault_io::local::atomic_write(&file, json.as_bytes());
+        let _ = mwt_usecases::vault_io::local::atomic_write(&file, json.as_bytes());
     }
     out
 }
@@ -382,14 +382,14 @@ fn replace_local(vault: &Path, remote: &[u8], key: Option<&SealKey>) -> Result<(
     }
     refuse_cheaper(&std::fs::read(vault)?, remote)?;
     VaultFile::backup(vault)?;
-    trade_core::vault_io::local::atomic_write(vault, remote)?;
+    mwt_usecases::vault_io::local::atomic_write(vault, remote)?;
     Ok(())
 }
 
 /// A pull never lowers the protection: an external copy at a lower level
 /// than the vault here (an old level-2 copy of a level-3 vault) is refused.
 fn refuse_cheaper(local: &[u8], remote: &[u8]) -> Result<()> {
-    if trade_core::service::security_level::container_is_cheaper(local, remote) {
+    if mwt_usecases::service::security_level::container_is_cheaper(local, remote) {
         return Err(Error::SecurityDowngradeRefused);
     }
     Ok(())

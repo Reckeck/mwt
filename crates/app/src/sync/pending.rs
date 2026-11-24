@@ -4,12 +4,12 @@
 
 use std::path::Path;
 
-use trade_core::appconfig::{AppSettings, PendingTrustPref};
-use trade_core::error::Result;
-use trade_core::model::notify::NoticeRecord;
-use trade_core::service::Session;
-use trade_core::usecases::sync::peer_sync;
-use trade_core::usecases::sync::trust as sync_trust;
+use mwt_base::error::Result;
+use mwt_model::NoticeRecord;
+use mwt_usecases::appconfig::{AppSettings, PendingTrustPref};
+use mwt_usecases::service::Session;
+use mwt_usecases::usecases::sync::peer_sync;
+use mwt_usecases::usecases::sync::trust as sync_trust;
 
 use super::transfer::Delivered;
 

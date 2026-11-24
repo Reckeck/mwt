@@ -335,8 +335,8 @@ ipc_commands!(vault_recents_commands, VAULT_RECENTS_NAMES, commands::vault_recen
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mwt_usecases::kernel::session::SaveHook;
     use mwt_usecases::service::Session;
+    use mwt_vault::kernel::session::SaveHook;
 
     struct NoWake;
 

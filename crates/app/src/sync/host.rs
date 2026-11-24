@@ -3,13 +3,13 @@
 
 use std::sync::MutexGuard;
 
+use mwt_base::error::{Error, Result};
+use mwt_model::NoticeRecord;
+use mwt_sync::session::DeviceKey;
+use mwt_usecases::appconfig::AppSettings;
+use mwt_usecases::service::Session;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
-use trade_core::appconfig::AppSettings;
-use trade_core::error::{Error, Result};
-use trade_core::model::notify::NoticeRecord;
-use trade_core::service::Session;
-use trade_core::sync::session::DeviceKey;
 
 use super::{Hub, SyncHub};
 use crate::commands::{AppState, require_vault};
@@ -43,8 +43,8 @@ pub(crate) trait Host: Clone + Send + Sync + 'static {
     /// A method only so a test can play an older or newer build.
     fn versions(&self) -> (u32, u32) {
         (
-            trade_core::sync::protocol::PROTOCOL_VERSION,
-            trade_core::VAULT_FORMAT_VERSION,
+            mwt_sync::protocol::PROTOCOL_VERSION,
+            mwt_model::VAULT_FORMAT_VERSION,
         )
     }
     /// The app version this device announces (informational, a test may change it).

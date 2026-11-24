@@ -5,19 +5,19 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use mwt_base::Amount;
+use mwt_base::error::{Error, Result};
+use mwt_model::AssetRef;
+use mwt_model::NoticeRecord;
+use mwt_model::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta};
+use mwt_sync::session::DeviceKey;
+use mwt_usecases::appconfig::AppSettings;
+use mwt_usecases::ipc_contract::{SyncPhase, SyncRole};
+use mwt_usecases::service::{Session, SyncTap};
 use serde::Serialize;
 use serde_json::Value;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use trade_core::Amount;
-use trade_core::appconfig::AppSettings;
-use trade_core::error::{Error, Result};
-use trade_core::ipc_contract::{SyncPhase, SyncRole};
-use trade_core::model::notify::NoticeRecord;
-use trade_core::model::store::AssetRef;
-use trade_core::model::transaction::{KindDetails, PriceStamp, TopupTx, Transaction, TxMeta};
-use trade_core::service::{Session, SyncTap};
-use trade_core::sync::session::DeviceKey;
 
 mod dialing;
 mod handshake;
@@ -27,9 +27,9 @@ mod liveness;
 use super::host::{Host, lock_hub};
 use super::{Hub, Order, Run, SyncHub};
 use crate::ipc::events::{AppEvent, SyncError, SyncOffer, SyncPairing, SyncPlanReady};
-use trade_core::usecases::sync::peer_sync;
-use trade_core::usecases::sync::read as sync_read;
-use trade_core::usecases::sync::trust as sync_trust;
+use mwt_usecases::usecases::sync::peer_sync;
+use mwt_usecases::usecases::sync::read as sync_read;
+use mwt_usecases::usecases::sync::trust as sync_trust;
 
 struct Inner {
     hub: SyncHub,
@@ -126,8 +126,8 @@ fn device(name: &str, mut vault: Session, role: SyncRole) -> (TestHost, Events) 
         events,
         lost: Mutex::new(Vec::new()),
         versions: Mutex::new((
-            trade_core::sync::protocol::PROTOCOL_VERSION,
-            trade_core::VAULT_FORMAT_VERSION,
+            mwt_sync::protocol::PROTOCOL_VERSION,
+            mwt_model::VAULT_FORMAT_VERSION,
         )),
         app_version: Mutex::new(env!("CARGO_PKG_VERSION").to_string()),
         took_main: Default::default(),
@@ -282,7 +282,7 @@ fn seed(host: &TestHost, comment: &str) {
                 ..PriceStamp::default()
             },
         });
-        trade_core::usecases::money::transactions::add_transaction(vault, tx)?;
+        mwt_usecases::usecases::money::transactions::add_transaction(vault, tx)?;
         Ok(())
     })
     .unwrap();
@@ -294,13 +294,13 @@ fn seed(host: &TestHost, comment: &str) {
 struct RawLink {
     reader: tokio::net::tcp::OwnedReadHalf,
     writer: tokio::net::tcp::OwnedWriteHalf,
-    channel: trade_core::sync::session::Channel,
+    channel: mwt_sync::session::Channel,
 }
 
 impl RawLink {
     /// Finish the Noise handshake on `stream` with `key`, as the dialer or not.
     async fn handshake(stream: TcpStream, key: &DeviceKey, dialer: bool) -> Self {
-        use trade_core::sync::session::Handshake;
+        use mwt_sync::session::Handshake;
         let (mut reader, mut writer) = stream.into_split();
         let mut handshake = if dialer {
             Handshake::initiator(key).unwrap()
@@ -329,8 +329,8 @@ impl RawLink {
         Self::handshake(TcpStream::connect(addr).await.unwrap(), key, true).await
     }
 
-    async fn send(&mut self, message: &trade_core::sync::protocol::Message) {
-        let bytes = trade_core::sync::protocol::encode(message).unwrap();
+    async fn send(&mut self, message: &mwt_sync::protocol::Message) {
+        let bytes = mwt_sync::protocol::encode(message).unwrap();
         for frame in self.channel.seal(&bytes).unwrap() {
             super::link::write_frame(&mut self.writer, &frame)
                 .await
@@ -347,12 +347,12 @@ impl RawLink {
     }
 
     /// The next message; `None` once the connection closed (or after 10 s).
-    async fn next(&mut self) -> Option<trade_core::sync::protocol::Message> {
+    async fn next(&mut self) -> Option<mwt_sync::protocol::Message> {
         tokio::time::timeout(Duration::from_secs(10), async {
             loop {
                 let frame = super::link::read_frame(&mut self.reader).await.ok()?;
                 if let Some(bytes) = self.channel.open(&frame).unwrap() {
-                    return Some(trade_core::sync::protocol::decode(&bytes).unwrap());
+                    return Some(mwt_sync::protocol::decode(&bytes).unwrap());
                 }
             }
         })
@@ -367,13 +367,13 @@ impl RawLink {
     async fn introduce(
         &mut self,
         vault_id: &str,
-        ours: trade_core::sync::protocol::Identity,
-    ) -> trade_core::sync::protocol::Identity {
-        use trade_core::sync::protocol::{Hello, Message};
-        use trade_core::sync::session::commit_to;
+        ours: mwt_sync::protocol::Identity,
+    ) -> mwt_sync::protocol::Identity {
+        use mwt_sync::protocol::{Hello, Message};
+        use mwt_sync::session::commit_to;
         let hello = Hello::first(
-            trade_core::sync::protocol::PROTOCOL_VERSION,
-            trade_core::VAULT_FORMAT_VERSION,
+            mwt_sync::protocol::PROTOCOL_VERSION,
+            mwt_model::VAULT_FORMAT_VERSION,
             self.channel.proof(vault_id),
             String::new(),
             commit_to(&ours.nonce),
@@ -389,19 +389,19 @@ impl RawLink {
 }
 
 /// The identity of a hand-driven client that trusts the other side.
-fn raw_identity(device_id: &str, name: &str) -> trade_core::sync::protocol::Identity {
-    trade_core::sync::protocol::Identity {
+fn raw_identity(device_id: &str, name: &str) -> mwt_sync::protocol::Identity {
+    mwt_sync::protocol::Identity {
         device_id: device_id.into(),
         device_name: name.into(),
-        now_ms: trade_core::sync::stamp::now_ms(),
+        now_ms: mwt_sync::stamp::now_ms(),
         main: false,
         prefer_main: false,
         needs_pairing: false,
         rank: 0,
         instance: String::new(),
         unreached: false,
-        nonce: trade_core::sync::session::new_nonce(),
-        security_level: trade_core::ipc_contract::security::SecurityLevel::Ledger,
+        nonce: mwt_sync::session::new_nonce(),
+        security_level: mwt_usecases::ipc_contract::security::SecurityLevel::Ledger,
     }
 }
 
@@ -584,7 +584,7 @@ fn forgotten_pair(dir: &std::path::Path) -> (TestHost, Events, TestHost, Events)
     let (main, main_events) = device("Laptop", left, SyncRole::Main);
     let (client, client_events) = device("Phone", right, SyncRole::Client);
     let client_id = client.settings().device_id;
-    let client_key = trade_core::sync::session::hex(&client.0.key.public);
+    let client_key = mwt_sync::session::hex(&client.0.key.public);
     main.with_vault(|vault| {
         sync_trust::sync_trust_peer(vault, &client_id, "Phone", &client_key)?;
         sync_trust::sync_forget_peer(vault, &client_id)
@@ -612,7 +612,7 @@ async fn a_forgotten_device_stays_untrusted_when_the_pairing_is_declined() {
     assert!(comments(&client).is_empty());
     let (trusted, revoked) = main
         .with_vault(|vault| {
-            let key = trade_core::sync::session::hex(&client.0.key.public);
+            let key = mwt_sync::session::hex(&client.0.key.public);
             Ok((
                 peer_sync::sync_state(vault).trusted(&key).is_some(),
                 peer_sync::sync_state(vault).is_revoked(&key),
@@ -633,7 +633,7 @@ async fn a_forgotten_device_returns_through_a_confirmed_pairing() {
     connect(&main, &client).await;
     until("both links live", || live(&main) && live(&client)).await;
     assert_eq!(comments(&client), comments(&main));
-    let key = trade_core::sync::session::hex(&client.0.key.public);
+    let key = mwt_sync::session::hex(&client.0.key.public);
     let trusted = main
         .with_vault(|vault| Ok(peer_sync::sync_state(vault).trusted(&key).is_some()))
         .unwrap();
@@ -743,7 +743,7 @@ fn fake_link(
     host.hub().links.insert(
         session.into(),
         super::Link {
-            view: trade_core::ipc_contract::SyncSessionView {
+            view: mwt_usecases::ipc_contract::SyncSessionView {
                 session_id: session.into(),
                 phase,
                 ..Default::default()
@@ -1171,23 +1171,23 @@ async fn assert_refused_on_both_sides(odd_versions: (u32, u32)) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_different_protocol_is_refused_on_both_sides() {
-    let current = trade_core::sync::protocol::PROTOCOL_VERSION;
-    assert_refused_on_both_sides((current + 1, trade_core::VAULT_FORMAT_VERSION)).await;
+    let current = mwt_sync::protocol::PROTOCOL_VERSION;
+    assert_refused_on_both_sides((current + 1, mwt_model::VAULT_FORMAT_VERSION)).await;
 }
 
 /// Protocol 5 does not sync with protocol 2 builds.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_protocol_two_peer_is_refused_on_both_sides() {
-    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 5);
-    assert_refused_on_both_sides((2, trade_core::VAULT_FORMAT_VERSION)).await;
+    assert_eq!(mwt_sync::protocol::PROTOCOL_VERSION, 5);
+    assert_refused_on_both_sides((2, mwt_model::VAULT_FORMAT_VERSION)).await;
 }
 
 /// Protocol 5 (format reset) does not sync with protocol 4 builds; a hand-played
 /// protocol 4 hello is in `handshake.rs`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_protocol_four_peer_is_refused_on_both_sides() {
-    assert_eq!(trade_core::sync::protocol::PROTOCOL_VERSION, 5);
-    assert_refused_on_both_sides((4, trade_core::VAULT_FORMAT_VERSION)).await;
+    assert_eq!(mwt_sync::protocol::PROTOCOL_VERSION, 5);
+    assert_refused_on_both_sides((4, mwt_model::VAULT_FORMAT_VERSION)).await;
 }
 
 /// The `sync-error` payloads of a device, in order.
@@ -1207,9 +1207,9 @@ fn error_payloads(mut events: Events) -> Arc<Mutex<Vec<Value>>> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_version_mismatch_names_the_peer_and_both_versions() {
     let dir = tempfile::tempdir().unwrap();
-    let current = trade_core::sync::protocol::PROTOCOL_VERSION;
+    let current = mwt_sync::protocol::PROTOCOL_VERSION;
     let (main, main_events, client, client_events) =
-        trusting_pair(dir.path(), (current + 1, trade_core::VAULT_FORMAT_VERSION));
+        trusting_pair(dir.path(), (current + 1, mwt_model::VAULT_FORMAT_VERSION));
     *client.0.app_version.lock().unwrap() = "9.9.9".into();
     let main_errors = error_payloads(main_events);
     let client_errors = error_payloads(client_events);
@@ -1239,8 +1239,8 @@ async fn a_version_mismatch_names_the_peer_and_both_versions() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_different_format_is_refused_on_both_sides() {
-    let current = trade_core::sync::protocol::PROTOCOL_VERSION;
-    assert_refused_on_both_sides((current, trade_core::VAULT_FORMAT_VERSION + 1)).await;
+    let current = mwt_sync::protocol::PROTOCOL_VERSION;
+    assert_refused_on_both_sides((current, mwt_model::VAULT_FORMAT_VERSION + 1)).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -1293,7 +1293,7 @@ async fn an_unknown_message_variant_closes_the_session_without_a_panic() {
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use trade_core::ipc_contract::SyncCutReason;
+use mwt_usecases::ipc_contract::SyncCutReason;
 
 /// Serves `host` on localhost; the counter says how many times it was dialed.
 async fn serve(host: TestHost) -> (std::net::SocketAddr, Arc<AtomicUsize>) {
@@ -1315,8 +1315,8 @@ async fn serve(host: TestHost) -> (std::net::SocketAddr, Arc<AtomicUsize>) {
 
 fn current_versions() -> (u32, u32) {
     (
-        trade_core::sync::protocol::PROTOCOL_VERSION,
-        trade_core::VAULT_FORMAT_VERSION,
+        mwt_sync::protocol::PROTOCOL_VERSION,
+        mwt_model::VAULT_FORMAT_VERSION,
     )
 }
 
@@ -1731,7 +1731,7 @@ fn trusted(host: &TestHost, device_id: &str) -> bool {
 
 #[test]
 fn pending_trust_survives_a_restart() {
-    use trade_core::appconfig::{load_settings, save_settings};
+    use mwt_usecases::appconfig::{load_settings, save_settings};
     let dir = tempfile::tempdir().unwrap();
     let (mut vault, _) = same_vault(dir.path());
     let path = dir.path().join("left.wallet");
@@ -1801,7 +1801,7 @@ async fn a_new_transfer_after_a_decline_links_again() {
         .unwrap();
     assert_eq!(cut_reason(&main, &client_id), None);
     assert!(!paused(&main, &client_id));
-    let pending = trade_core::appconfig::PendingTrustPref {
+    let pending = mwt_usecases::appconfig::PendingTrustPref {
         path: String::new(),
         device_id: main_id.clone(),
         device_name: "Laptop".into(),
@@ -1907,7 +1907,7 @@ async fn a_revocation_during_the_question_is_not_lost() {
         |_| {},
         Duration::from_millis(800),
         |laptop, phone| {
-            let laptop_key = trade_core::sync::session::hex(&laptop.0.key.public);
+            let laptop_key = mwt_sync::session::hex(&laptop.0.key.public);
             let mut entry = phone
                 .with_vault(|vault| {
                     Ok(peer_sync::sync_state(vault)
@@ -1918,11 +1918,8 @@ async fn a_revocation_during_the_question_is_not_lost() {
                 })
                 .unwrap()
                 .expect("the phone trusts the laptop after pairing");
-            let stamp = trade_core::sync::stamp::Stamp::new(
-                trade_core::sync::stamp::now_ms() + 60_000,
-                0,
-                "zzzzzzzz",
-            );
+            let stamp =
+                mwt_sync::stamp::Stamp::new(mwt_sync::stamp::now_ms() + 60_000, 0, "zzzzzzzz");
             entry.revoked = Some(stamp.clone());
             entry.stamp = stamp;
             laptop
@@ -2021,7 +2018,7 @@ fn peer_of(session: &str, device_id: &str) -> super::link::Peer {
         take_main_heard: Default::default(),
         take_main_ordered: Default::default(),
         stable_reports: Default::default(),
-        security_level: trade_core::ipc_contract::security::SecurityLevel::Ledger,
+        security_level: mwt_usecases::ipc_contract::security::SecurityLevel::Ledger,
     }
 }
 
@@ -2041,15 +2038,15 @@ fn single_device_host() -> (tempfile::TempDir, TestHost) {
 
 #[tokio::test]
 async fn relayed_future_stamp_does_not_mark_relay_unreliable() {
-    use trade_core::sync::RecordState;
-    use trade_core::sync::session::ClockWatch;
-    use trade_core::sync::stamp::{Stamp, device_tag, now_ms};
+    use mwt_sync::RecordState;
+    use mwt_sync::session::ClockWatch;
+    use mwt_sync::stamp::{Stamp, device_tag, now_ms};
 
     let (_dir, host) = single_device_host();
     let _orders = fake_link(&host, "relay", "key", SyncPhase::Live);
     let peer = peer_of("relay", "relay-device-1234567890");
     let watch = ClockWatch::new(now_ms(), now_ms());
-    let future = now_ms() + trade_core::sync::session::SKEW_FINE_MS * 4;
+    let future = now_ms() + mwt_sync::session::SKEW_FINE_MS * 4;
     let stamped = |device: &str| {
         vec![(
             "key".to_string(),
@@ -2070,7 +2067,7 @@ async fn relayed_future_stamp_does_not_mark_relay_unreliable() {
 
 #[tokio::test]
 async fn unreliable_clears_after_stable_time_reports() {
-    use trade_core::sync::session::{ClockWatch, DRIFT_MS};
+    use mwt_sync::session::{ClockWatch, DRIFT_MS};
 
     let (_dir, host) = single_device_host();
     let _orders = fake_link(&host, "link", "key", SyncPhase::Live);
@@ -2097,7 +2094,7 @@ async fn unreliable_clears_after_stable_time_reports() {
 
 #[tokio::test]
 async fn clock_skew_refusal_is_not_retried() {
-    use trade_core::sync::session::SKEW_REFUSE_MS;
+    use mwt_sync::session::SKEW_REFUSE_MS;
 
     let dir = tempfile::tempdir().unwrap();
     let (left, _right) = same_vault(dir.path());
@@ -2119,7 +2116,7 @@ async fn clock_skew_refusal_is_not_retried() {
     let mut raw = RawLink::dial(addr, &raw_key).await;
     let vault_id = main.with_vault(|vault| Ok(vault.doc.id.clone())).unwrap();
     let mut skewed = raw_identity("raw-device", "Raw");
-    skewed.now_ms = trade_core::sync::stamp::now_ms() + SKEW_REFUSE_MS + 3_600_000;
+    skewed.now_ms = mwt_sync::stamp::now_ms() + SKEW_REFUSE_MS + 3_600_000;
     skewed.instance = "skewed-instance".into();
     raw.introduce(&vault_id, skewed).await;
     let joined = tokio::time::timeout(Duration::from_secs(10), session)
