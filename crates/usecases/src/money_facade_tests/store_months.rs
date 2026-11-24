@@ -139,3 +139,34 @@ fn a_part_moves_its_store_in_its_own_month() {
     assert_eq!(card_rows[0].inflow, amount("100"));
     assert_eq!(card_rows[1].inflow, Amount::ZERO);
 }
+
+/// op-period A5: a part moves its store's balance curve on the part's own date.
+#[test]
+fn a_part_moves_its_store_history_on_its_own_date() {
+    let (_dir, mut vault) = empty_vault();
+    let card = store(&mut vault, "Card", StoreKind::Bank, None);
+    let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
+    let mut salary = income_of(&card, usd(), "120", "1", "salary");
+    at(&mut salary, "2026-09-30T12:00:00Z");
+    let Transaction::Topup(inner) = &mut salary else {
+        unreachable!()
+    };
+    inner.parts = vec![
+        ReceivedPart {
+            store_id: card.clone(),
+            amount: amount("100"),
+            timestamp: None,
+        },
+        ReceivedPart {
+            store_id: cash.clone(),
+            amount: amount("20"),
+            timestamp: Some("2026-10-02T12:00:00Z".into()),
+        },
+    ];
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
+
+    let points = crate::money::portfolio::store_history(&vault.books(), &cash, false, "usd");
+    let stamps: Vec<&str> = points.iter().map(|point| point.ts.as_str()).collect();
+    assert!(stamps.contains(&"2026-10-02T12:00:00Z"));
+    assert!(!stamps.contains(&"2026-09-30T12:00:00Z"));
+}
