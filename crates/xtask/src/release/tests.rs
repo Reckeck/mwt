@@ -85,12 +85,11 @@ fn cargo_versions_follow_their_anchor() {
         "[package]\nversion = \"9.9.9\"\n\n[workspace.package]\nversion = \"0.2.0\"\n"
     );
     assert!(set_workspace_version("[package]\nversion = \"1\"\n", "0.2.0").is_err());
-    let lock =
-        "name = \"trade-core\"\nversion = \"0.1.0\"\n\nname = \"trade-app\"\nversion = \"0.1.0\"\n";
+    let lock = "name = \"mwt-usecases\"\nversion = \"0.1.0\"\n\nname = \"trade-app\"\nversion = \"0.1.0\"\n";
     let out = set_lock_version(lock, "trade-app", "0.2.0").unwrap();
     assert_eq!(
         out,
-        "name = \"trade-core\"\nversion = \"0.1.0\"\n\nname = \"trade-app\"\nversion = \"0.2.0\"\n"
+        "name = \"mwt-usecases\"\nversion = \"0.1.0\"\n\nname = \"trade-app\"\nversion = \"0.2.0\"\n"
     );
     assert!(set_lock_version(lock, "other", "0.2.0").is_err());
 }

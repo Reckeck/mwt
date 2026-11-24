@@ -10,7 +10,7 @@ description = "Multi Wallet Tracker planning: budgets, envelopes, goals, allocat
 workspace = true
 
 [features]
-# `ts-rs` derives of the planning view and input types; off by default, `trade-core` turns them on.
+# `ts-rs` derives of the planning view and input types; off by default, `mwt-usecases` turns them on.
 ts = ["dep:ts-rs", "mwt-model/ts", "mwt-base/ts", "mwt-money/ts", "mwt-household/ts"]
 schema = ["mwt-model/schema", "mwt-money/schema", "mwt-base/schema"]
 

@@ -10,7 +10,7 @@ description = "Multi Wallet Tracker reports: overview, dashboard, insights, heal
 workspace = true
 
 [features]
-# `ts-rs` derives of the report types (`schema` only forwards; no report type derives `JsonSchema`); off by default, `trade-core` turns them on.
+# `ts-rs` derives of the report types (`schema` only forwards; no report type derives `JsonSchema`); off by default, `mwt-usecases` turns them on.
 ts = ["dep:ts-rs", "mwt-model/ts", "mwt-base/ts", "mwt-money/ts", "mwt-household/ts", "mwt-planning/ts"]
 schema = ["mwt-model/schema", "mwt-money/schema", "mwt-base/schema", "mwt-planning/schema"]
 

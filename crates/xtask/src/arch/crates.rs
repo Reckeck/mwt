@@ -69,7 +69,6 @@ const REPORTS: &str = "mwt-reports";
 const CRYPTOTRACK: &str = "mwt-cryptotrack";
 const CONTRACT: &str = "mwt-contract";
 const TESTKIT: &str = "mwt-testkit";
-const FACADE: &str = "trade-core";
 const USECASES: &str = "mwt-usecases";
 const APP: &str = "trade-app";
 const PLUGIN_PREFIX: &str = "tauri-plugin-";
@@ -171,11 +170,6 @@ pub const TABLE: &[Row] = &[
             CONTRACT,
             MACROS,
         ],
-    },
-    // The facade: re-exports `mwt-usecases` only.
-    Row {
-        name: FACADE,
-        uses: &[USECASES],
     },
     Row {
         name: APP,
@@ -534,13 +528,13 @@ mod tests {
     #[test]
     fn trade_app_and_plugins_are_named_by_trade_app_only() {
         let found = run(&[
-            package(FACADE, vec![normal(APP), normal("tauri-plugin-saf")]),
+            package(USECASES, vec![normal(APP), normal("tauri-plugin-saf")]),
             package(APP, vec![normal(USECASES), normal("tauri-plugin-saf")]),
             package("tauri-plugin-saf", vec![]),
         ]);
         assert_eq!(found.len(), 2, "{found:?}");
-        assert!(found[0].contains("`trade-core` -> `trade-app`"));
-        assert!(found[1].contains("`trade-core` -> `tauri-plugin-saf`"));
+        assert!(found[0].contains("`mwt-usecases` -> `trade-app`"));
+        assert!(found[1].contains("`mwt-usecases` -> `tauri-plugin-saf`"));
         let found = run(&[package(MONEY, vec![normal("tauri-plugin-fs")])]);
         only(&found, &["`mwt-money` -> `tauri-plugin-fs`"]);
     }

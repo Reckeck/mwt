@@ -1,5 +1,5 @@
 //! The domain crates must not reach back into the facade: no `Session` from the `service` module, no top-level
-//! `crate::service::` path, no `trade_core::` path and no `Books::vault` in their non-test code
+//! `crate::service::` path, no `trade_core::` path (the crate is gone; the ban stays) and no `Books::vault` in their non-test code
 //! (core-strangler Z6/D5, core-dismantle D14). `cryptotrack::service` is the crate's own module.
 //! A few uses are exempt until the task named in the exemption moves them; entries may only be removed.
 

@@ -129,7 +129,7 @@ const CALC_ZERO: CalcResult = {
   reward_risk: '0',
 }
 
-/** `calc_preview` in floats: the same formulas as `trade_core::calc::preview`. */
+/** `calc_preview` in floats: the same formulas as `mwt_base::calc::preview`. */
 export function mockCalc(input: CalcInput): CalcResult {
   const num = (value: string | null | undefined) => Number(value ?? 0)
   const amount = num(input.amount)

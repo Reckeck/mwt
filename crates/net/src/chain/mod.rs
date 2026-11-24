@@ -1,5 +1,5 @@
 //! A JSON-RPC client for chain nodes and explorers (stage 2, spec E1). The crypto module's
-//! `ChainSource` port is implemented for it in the facade (`trade-core`, `service/ports.rs`).
+//! `ChainSource` port is implemented for it in `mwt-usecases` (`service/ports.rs`).
 //!
 //! What it guarantees, beyond "sends requests":
 //!

@@ -1,6 +1,6 @@
 //! Household: attachments, contacts, debts, losses, loyalty, property links, relations, shared events,
 //! utilities and vehicles (spec crate-split, `mwt-household`). Pure rules over the vault document; the
-//! scenarios that write live in `trade-core` (`usecases::household`).
+//! scenarios that write live in `mwt-usecases` (`usecases::household`).
 #![warn(unreachable_pub)]
 
 pub mod attachments;
