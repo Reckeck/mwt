@@ -8,7 +8,7 @@ import { normalizeAmount } from './amount-input'
  * postfix `%`. After `+` or `-` a bare percent is relative to the left side
  * (`a+10%` = a·1.1); anywhere else it is just a hundredth (`a*10%` = a·0.1).
  */
-export type AmountExprErrorCode = 'empty' | 'syntax' | 'divByZero'
+export type AmountExprErrorCode = 'empty' | 'syntax' | 'divByZero' | 'tooLong'
 export type AmountExprResult = { ok: true; value: string } | { ok: false; code: AmountExprErrorCode }
 
 export interface AmountExprOptions {
@@ -51,7 +51,7 @@ function align(left: Dec, right: Dec): [bigint, bigint, number] {
 function parseNumber(raw: string): Dec {
   const normalized = normalizeAmount(raw)
   // The digit cap would cut the operand silently: a wrong amount must not come back as ok.
-  if (normalized.overflow) throw new ExprError('syntax')
+  if (normalized.overflow) throw new ExprError('tooLong')
   const canonical = normalized.canonical.replace(/\.$/, '')
   if (!/^\d+(\.\d+)?$/.test(canonical)) throw new ExprError('syntax')
   const [whole, fraction = ''] = canonical.split('.')

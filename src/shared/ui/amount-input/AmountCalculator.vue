@@ -60,6 +60,7 @@ const errorText = computed(() => {
   if (tooLong.value) return t('amount.calc.tooLong')
   const outcome = evaluated.value
   if (!outcome || outcome.ok) return ''
+  if (outcome.code === 'tooLong') return t('amount.calc.tooLong')
   return outcome.code === 'divByZero' ? t('amount.calc.divByZero') : ''
 })
 /** What `Done` would hand back is shown as the field's own number once there is no operator. */

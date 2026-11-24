@@ -31,9 +31,8 @@ export function useAmountExpression(context: Context) {
     const result = evaluateAmountExpr(expr.value, { decimals })
     if (!result.ok) {
       // Half-typed text («1200+») is not an error until the user tries to finish it.
-      if (result.code === 'divByZero' || attempted.value) {
-        return { kind: 'error', code: result.code === 'divByZero' ? 'divByZero' : 'syntax' }
-      }
+      if (result.code === 'divByZero' || result.code === 'tooLong') return { kind: 'error', code: result.code }
+      if (attempted.value) return { kind: 'error', code: 'syntax' }
       return null
     }
     if (!allowNegative && result.value.startsWith('-')) return { kind: 'error', code: 'negative' }

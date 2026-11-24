@@ -88,4 +88,24 @@ describe('AmountCalculator', () => {
     expect(wrapper.emitted('done')).toBeUndefined()
     expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
   })
+
+  it('says «too long» for a plain number past the digit cap and refuses Done', async () => {
+    const wrapper = await open()
+    for (let count = 0; count < 19; count += 1) {
+      key('9').click()
+      await nextTick()
+    }
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
+    document.querySelector<HTMLButtonElement>('[data-calc-done]')?.click()
+    expect(wrapper.emitted('done')).toBeUndefined()
+  })
+
+  it('says «too long» for an operand past the cap inside an expression', async () => {
+    await open('9999999999999999999')
+    for (const name of ['+', '1']) {
+      key(name).click()
+      await nextTick()
+    }
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
+  })
 })
