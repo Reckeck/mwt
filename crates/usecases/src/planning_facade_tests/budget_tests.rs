@@ -513,3 +513,158 @@ fn the_budget_currency_is_not_touched_without_a_manual_figure() {
         .unwrap();
     assert_eq!(vault.doc.settings.budget_currency, "thb");
 }
+
+// -- op-period T9: budget readers by basis (R1, R3, R4) ---------------------
+
+use crate::planning::flows::{Basis, flows_between};
+use mwt_model::{OpPeriod, PeriodKind};
+
+/// March card: an income of 1000 on 5 March and spending of 200 on 10 March.
+/// With `with_period` the income is «for» February.
+fn period_vault(with_period: bool) -> (tempfile::TempDir, Session) {
+    let (dir, mut vault, card) = budget_vault();
+    let mut salary = earn(&card, "1000", "2026-03-05T10:00:00Z");
+    if with_period {
+        salary.meta_mut().period = Some(OpPeriod {
+            kind: PeriodKind::Month,
+            start: "2026-02-01".into(),
+            end: "2026-02-28".into(),
+        });
+    }
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
+    crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        spend(&card, "200", "2026-03-10T10:00:00Z"),
+    )
+    .unwrap();
+    (dir, vault)
+}
+
+fn summary_by(vault: &Session, month: &str, basis: Option<Basis>) -> MonthSummary {
+    crate::usecases::planning::budget::month_summary_with_basis(&vault.books(), month, "UTC", basis)
+        .unwrap()
+}
+
+/// R1, R4: the month summary follows the basis; none means `period`.
+#[test]
+fn r4_month_summary_reads_the_period_by_default_and_the_money_date_on_request() {
+    let (_dir, vault) = period_vault(true);
+    let default = summary_by(&vault, "2026-03", None);
+    assert_eq!(default, summary_by(&vault, "2026-03", Some(Basis::Period)));
+    assert_eq!(default.income, amount("0"));
+    assert_eq!(default.daily, amount("200"));
+    let by_date = summary_by(&vault, "2026-03", Some(Basis::MoneyDate));
+    assert_eq!(by_date.income, amount("1000"));
+    assert_eq!(
+        summary_by(&vault, "2026-02", None).income,
+        amount("1000"),
+        "the income counts in the month it is for"
+    );
+}
+
+/// R1, R8: without any period the two readings give equal summaries.
+#[test]
+fn r1_without_a_period_both_bases_give_equal_summaries() {
+    let (_dir, vault) = period_vault(false);
+    for month in ["2026-02", "2026-03", "2026-04"] {
+        assert_eq!(
+            summary_by(&vault, month, Some(Basis::Period)),
+            summary_by(&vault, month, Some(Basis::MoneyDate)),
+        );
+    }
+}
+
+fn month_budget_status(vault: &mut Session, period: BudgetPeriod, basis: Basis) -> BudgetStatus {
+    vault
+        .transact(|tx| {
+            tx.doc_mut().budgets.clear();
+            Ok(())
+        })
+        .unwrap();
+    crate::usecases::planning::budget::create_budget(
+        vault,
+        BudgetDraft {
+            target: BudgetTarget::Total,
+            period,
+            limit: amount("1000"),
+            currency: "usd".into(),
+            active: true,
+            warn: false,
+        },
+    )
+    .unwrap();
+    let mut statuses = crate::usecases::planning::budget::budget_status_by(
+        &vault.books(),
+        secs("2026-03-12T12:00:00Z"),
+        "UTC",
+        Some(basis),
+    );
+    statuses.remove(0)
+}
+
+/// R4, R3: a `Month` limit follows the basis, a `Day` limit stays on the money date.
+#[test]
+fn r4_month_budget_follows_the_basis_but_day_budget_stays_on_the_money_date() {
+    let (_dir, mut vault, card) = budget_vault();
+    // Spending on 12 March that is «for» February.
+    let mut lunch = spend(&card, "50", "2026-03-12T09:00:00Z");
+    lunch.meta_mut().period = Some(OpPeriod {
+        kind: PeriodKind::Month,
+        start: "2026-02-01".into(),
+        end: "2026-02-28".into(),
+    });
+    crate::usecases::money::transactions::add_transaction(&mut vault, lunch).unwrap();
+
+    let month_period = month_budget_status(&mut vault, BudgetPeriod::Month, Basis::Period);
+    let month_date = month_budget_status(&mut vault, BudgetPeriod::Month, Basis::MoneyDate);
+    assert_eq!(month_period.spent, amount("0"));
+    assert_eq!(month_date.spent, amount("50"));
+    let day_period = month_budget_status(&mut vault, BudgetPeriod::Day, Basis::Period);
+    assert_eq!(day_period.spent, amount("50"));
+}
+
+/// R3: the time-bound readers give identical numbers with and without a period.
+#[test]
+fn r3_time_bound_readers_ignore_the_period() {
+    let (_dir_a, with_period) = period_vault(true);
+    let (_dir_b, without) = period_vault(false);
+    let now = secs("2026-03-20T12:00:00Z");
+
+    assert_eq!(
+        daily_budget(&with_period.books(), now, "UTC"),
+        daily_budget(&without.books(), now, "UTC"),
+        "daily_budget, month_allowance and left_today"
+    );
+    let allowance = |vault: &Session| {
+        let cal = crate::calendar::Calendar::new("UTC");
+        let (from, to) = cal.month_bounds(cal.date_of(now));
+        let books = vault.books();
+        let flows = flows_between(&books, &cal, "USD", from, to);
+        crate::planning::daily_budget::month_allowance(
+            &books,
+            &cal,
+            cal.date_of(now),
+            "USD",
+            &flows,
+        )
+    };
+    assert_eq!(allowance(&with_period), allowance(&without));
+    assert_eq!(
+        crate::planning::upcoming::upcoming(&with_period.books(), 30, now, "UTC"),
+        crate::planning::upcoming::upcoming(&without.books(), 30, now, "UTC"),
+    );
+    let balance = |vault: &Session| {
+        crate::usecases::household::month_balance::month_balance(
+            vault,
+            &mwt_reports::overview::ReportFilter::default(),
+            now,
+            "UTC",
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        balance(&with_period),
+        balance(&without),
+        "month_balance.forecast"
+    );
+}
