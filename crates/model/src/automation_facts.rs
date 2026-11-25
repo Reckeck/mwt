@@ -95,8 +95,13 @@ pub fn workflow_mark(doc: &VaultDoc, workflow_id: &str, key: &str) -> Option<Str
 }
 
 /// Whether a workflow (or the automation it was migrated from, which kept its
-/// id) made the operation.
+/// id) booked the operation itself. An operation with `income_ref` is an effect
+/// of an income (a distribution's transfer), not something the automation
+/// booked: it carries the workflow's origin but is never read as its own.
 pub fn made_by(tx: &Transaction, workflow_id: &str) -> bool {
+    if tx.meta().income_ref.is_some() {
+        return false;
+    }
     match &tx.meta().origin {
         TxOrigin::Workflow {
             workflow_id: maker, ..

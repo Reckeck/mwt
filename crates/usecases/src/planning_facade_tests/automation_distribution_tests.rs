@@ -155,6 +155,7 @@ fn a4_the_advance_takes_the_period_and_the_distribution_in_one_commit() {
     let id = advance(&mut vault, &card, Some(&template));
     let revision = vault.session.revision();
     let pass = run_on_20_nov(&mut vault);
+    let delta = vault.session.revision() - revision;
     assert_eq!(pass.created.len(), 1);
     let income = vault
         .doc
@@ -196,7 +197,11 @@ fn a4_the_advance_takes_the_period_and_the_distribution_in_one_commit() {
         AutomationOutcome::Created { .. }
     ));
     // The run, the income and the distribution are one write of the pass.
-    assert!(vault.session.revision() > revision);
+    let (_other, mut plain, plain_card, _) = setup();
+    advance(&mut plain, &plain_card, None);
+    let before = plain.session.revision();
+    run_on_20_nov(&mut plain);
+    assert_eq!(delta, plain.session.revision() - before);
 }
 
 #[test]
@@ -891,4 +896,77 @@ fn create_now_keeps_the_error_of_a_refused_preparation() {
         "{refusal} / {plain}"
     );
     assert_eq!(refusal.to_string(), plain.to_string());
+}
+
+#[test]
+fn a_distribution_transfer_never_counts_toward_the_estimate_of_the_next_run() {
+    let (_dir, mut vault, card, _vacation) = setup();
+    let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
+    let template = template_on_other(
+        &mut vault,
+        vec![row(
+            DistKind::Sum {
+                amount: amount("20000"),
+            },
+            DistTarget::Store { id: savings },
+        )],
+        OnOtherAmount::ShrinkAll,
+    );
+    let id = advance_with(
+        &mut vault,
+        &card,
+        Some(&template),
+        false,
+        AmountMode::Varies,
+    );
+    let mut past = income(&card, "120000", "past");
+    at(&mut past, "2026-10-20T12:00:00Z");
+    past.meta_mut().origin = mwt_model::TxOrigin::Workflow {
+        workflow_id: id.clone(),
+        run_id: "old".into(),
+        planned_at: None,
+        planned_date: None,
+        estimated: false,
+        run_key: None,
+    };
+    vault.doc.transactions.push(past);
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
+    let first = run_on_20_nov(&mut vault);
+    assert_eq!(first.created.len(), 1);
+    let transfer = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| matches!(tx, Transaction::Transfer(_)))
+        .expect("the store row made a transfer");
+    assert!(transfer.meta().income_ref.is_some());
+    let december = unix_secs("2026-12-19T12:00:00Z").unwrap();
+    let preview = |vault: &Session| {
+        preview_distribution_rule(vault, &id, None, december)
+            .unwrap()
+            .amount
+    };
+    // Still approximate: the estimate is the past corrected 120 000, not the 20 000 transfer.
+    assert_eq!(preview(&vault), amount("120000"));
+    crate::usecases::planning::automations::confirm_estimated_amount(
+        &mut vault,
+        &first.created[0],
+        amount("120000"),
+    )
+    .unwrap();
+    assert_eq!(preview(&vault), amount("120000"));
+    let second = run_on(&mut vault, "2026-12-20T12:00:00Z");
+    let Some(Transaction::Topup(topup)) = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| second.created.first() == Some(&tx.meta().id))
+    else {
+        panic!("the second income")
+    };
+    assert_eq!(topup.amount, amount("120000"));
+}
+
+fn run_on(vault: &mut Session, moment: &str) -> crate::workflow::service::runs::WorkflowPass {
+    run_due_workflows(vault, unix_secs(moment).unwrap(), "UTC").unwrap()
 }
