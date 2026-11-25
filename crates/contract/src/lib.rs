@@ -1164,6 +1164,7 @@ pub struct CreateFromTemplateInput {
     pub comment: Option<String>,
     /// «Really none»: the operation takes no period rule.
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
     pub no_period_rule: bool,
 }
 
@@ -3517,6 +3518,13 @@ mod period_input_tests {
             details: KindDetails::default(),
             parts,
         }
+    }
+
+    #[test]
+    fn a_template_input_without_no_period_rule_reads_as_false() {
+        let input: CreateFromTemplateInput =
+            serde_json::from_value(serde_json::json!({ "template_id": "t1" })).unwrap();
+        assert!(!input.no_period_rule);
     }
 
     #[test]

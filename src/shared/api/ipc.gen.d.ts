@@ -1528,7 +1528,7 @@ timestamp?: string, amount?: Amount, store_id?: string, comment?: string,
 /**
  * «Really none»: the operation takes no period rule.
  */
-no_period_rule: boolean, };
+no_period_rule?: boolean, };
 
 /**
  * Create a bonus programme with its points in one action.
