@@ -118,18 +118,33 @@ pub fn check_distribution(doc: &VaultDoc, income_id: &str) -> Vec<Violation> {
     found
 }
 
+fn remainder_count<'a>(kinds: impl Iterator<Item = &'a DistKind>) -> usize {
+    kinds
+        .filter(|kind| matches!(kind, DistKind::Remainder))
+        .count()
+}
+
+fn remainder_message(count: usize) -> String {
+    format!("a distribution needs exactly one remainder, got {count}")
+}
+
+/// V1: a distribution of `kinds` has exactly one remainder; the error carries `REMAINDER_COUNT`.
+pub fn check_single_remainder<'a>(kinds: impl Iterator<Item = &'a DistKind>) -> Result<()> {
+    match remainder_count(kinds) {
+        1 => Ok(()),
+        count => Err(Error::InvalidInput(format!(
+            "{REMAINDER_COUNT}: {}",
+            remainder_message(count)
+        ))),
+    }
+}
+
 /// V1: sum, exactly one remainder, every other part positive.
 fn check_amounts(topup: &TopupTx, parts: &[DistributionPart]) -> Vec<Violation> {
     let mut found = Vec::new();
-    let remainders = parts
-        .iter()
-        .filter(|part| matches!(part.kind, DistKind::Remainder))
-        .count();
+    let remainders = remainder_count(parts.iter().map(|part| &part.kind));
     if remainders != 1 {
-        found.push(violation(
-            REMAINDER_COUNT,
-            format!("a distribution needs exactly one remainder, got {remainders}"),
-        ));
+        found.push(violation(REMAINDER_COUNT, remainder_message(remainders)));
     }
     let total = parts
         .iter()

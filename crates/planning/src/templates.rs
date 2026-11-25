@@ -4,10 +4,10 @@
 
 use mwt_base::error::{Error, Result};
 use mwt_model::{
-    Automation, DistKind, DistributionPart, DistributionRule, OperationTemplate, PartStatus,
-    PeriodRule, TemplateKind, TxKind, VaultDoc,
+    Automation, DistributionPart, DistributionRule, OperationTemplate, PartStatus, PeriodRule,
+    TemplateKind, TxKind, VaultDoc,
 };
-use mwt_money::distribution::{REMAINDER_COUNT, validate_distribution_targets};
+use mwt_money::distribution::{check_single_remainder, validate_distribution_targets};
 
 /// What the user saves; the id, the archive mark and the creation time are not theirs to set.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -83,16 +83,7 @@ fn check_references(doc: &VaultDoc, template: &OperationTemplate) -> Result<()> 
 
 /// D7: ordered rows, exactly one remainder, targets that exist and are own (S6, S7).
 fn check_distribution_rule(doc: &VaultDoc, rule: &DistributionRule) -> Result<()> {
-    let remainders = rule
-        .rows
-        .iter()
-        .filter(|row| matches!(row.kind, DistKind::Remainder))
-        .count();
-    if remainders != 1 {
-        return Err(Error::InvalidInput(format!(
-            "{REMAINDER_COUNT}: a distribution needs exactly one remainder, got {remainders}"
-        )));
-    }
+    check_single_remainder(rule.rows.iter().map(|row| &row.kind))?;
     let parts: Vec<DistributionPart> = rule
         .rows
         .iter()

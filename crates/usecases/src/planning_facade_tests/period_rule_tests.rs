@@ -365,3 +365,27 @@ fn a_batch_save_applies_the_period_rule_and_derives_the_spread() {
         ["2026-10=33.33", "2026-11=33.33", "2026-12=33.34"]
     );
 }
+
+/// D2/P3: the money date of the rule is the day in the user's zone, not in UTC.
+#[test]
+fn d2_period_rule_uses_the_date_in_the_users_zone() {
+    let stamp = "2026-10-31T22:00:00Z";
+    let (_dir, mut vault, card) = vault_with_card();
+    rule_on_salary(&mut vault, Some(PeriodRule::PrevHalfSecond));
+    vault.doc.settings.schedule_timezone = Some("Europe/Moscow".into());
+    let mut tx = salary(&card, "100");
+    at(&mut tx, stamp);
+    let local = add_transaction(&mut vault, tx).unwrap();
+    assert_eq!(
+        period_of(&local),
+        Some((PeriodKind::Half, "2026-10-16".into(), "2026-10-31".into()))
+    );
+    vault.doc.settings.schedule_timezone = None;
+    let mut tx = salary(&card, "100");
+    at(&mut tx, stamp);
+    let utc = add_transaction(&mut vault, tx).unwrap();
+    assert_eq!(
+        period_of(&utc),
+        Some((PeriodKind::Half, "2026-09-16".into(), "2026-09-30".into()))
+    );
+}

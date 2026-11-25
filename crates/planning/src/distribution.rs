@@ -1,11 +1,12 @@
 //! Pure planning of an income split (spec S6, S7, S11): resolve the asked rows against the payout and
 //! diff the result against the parts already stored, so the usecase only touches what changed.
 
-use mwt_base::{Amount, Error, Result};
+use mwt_base::{Amount, Result};
 use mwt_model::{
     DistKind, DistributionPart, DistributionRow, DistributionRule, EffectRef, OnOtherAmount,
     PartStatus,
 };
+use mwt_money::distribution::check_single_remainder;
 use rust_decimal::Decimal;
 
 /// The rows resolved against a payout.
@@ -32,15 +33,7 @@ pub struct DistributionPlan {
 /// digits, the single `remainder` row takes what is left (spec S6). Over-allocation is reported in
 /// `over` and leaves the remainder at zero (spec S7).
 pub fn resolve_rows(payout: Amount, rows: &[DistributionRow], places: u32) -> Result<ResolvedRows> {
-    let remainders = rows
-        .iter()
-        .filter(|row| matches!(row.kind, DistKind::Remainder))
-        .count();
-    if remainders != 1 {
-        return Err(Error::InvalidInput(format!(
-            "a distribution needs exactly one remainder row, got {remainders}"
-        )));
-    }
+    check_single_remainder(rows.iter().map(|row| &row.kind))?;
     let hundred = Amount::new(Decimal::ONE_HUNDRED);
     let amounts: Vec<Option<Amount>> = rows
         .iter()
